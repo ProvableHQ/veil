@@ -12,8 +12,8 @@ A viem-like TypeScript interface for the Aleo blockchain. Wraps existing Aleo wa
 ## Non-Goals
 
 - No Leo compiler — users bring compiled programs
-- No proof generation implementation — delegated to prover implementations
-- No record indexing — delegated to record scanner implementations
+- No proof generation implementation — delegated to proving implementations
+- No record indexing — delegated to record scanning implementations
 - No wallet UI or connect modals — that's a layer above
 - No React hooks in core — future `@aleo-viem/react` package
 
@@ -36,6 +36,10 @@ A viem-like TypeScript interface for the Aleo blockchain. Wraps existing Aleo wa
 │  getBlockNumber             signMessage              │
 │  getRecords                 transfer, decrypt        │
 │  getTransitionViewKeys      requestRecords           │
+│                                                      │
+│     Contract Instances (getContract)                 │
+│  Binds program + client(s), provides typed           │
+│  read/write methods from parsed program source       │
 ├─────────────────────────────────────────────────────┤
 │                   Account Layer                      │
 │                                                      │
@@ -61,15 +65,14 @@ A viem-like TypeScript interface for the Aleo blockchain. Wraps existing Aleo wa
 │  │  API)    │  or any)  │                          │ │
 │  └──────────┴───────────┴──────────────────────────┘ │
 ├─────────────────────────────────────────────────────┤
-│              Optional Providers                      │
-│  ┌─────────────────────┬──────────────────────────┐ │
-│  │ Prover              │ RecordScanner            │ │
-│  │ delegated() | local()│ network() | local()     │ │
-│  └─────────────────────┴──────────────────────────┘ │
+│              Client Configuration                    │
 │                                                      │
-│  Optional, overridable. Wallets handle internally    │
-│  by default. SDK users configure explicitly.         │
-│  Implementors can provide their own.                 │
+│  proving: { mode, url, apiKey, buildTransaction? }   │
+│  records: config object or custom implementation     │
+│                                                      │
+│  Wallets handle both internally by default.          │
+│  SDK/local users configure explicitly.               │
+│  Proving config excluded from type for RPC accounts. │
 ├─────────────────────────────────────────────────────┤
 │         Aleo Network (REST API / Wallet)             │
 └─────────────────────────────────────────────────────┘
@@ -77,12 +80,12 @@ A viem-like TypeScript interface for the Aleo blockchain. Wraps existing Aleo wa
 
 ## Core Interfaces
 
-aleo-viem defines interfaces. Implementations plug in.
+aleo-viem defines interfaces. Implementations plug in. No `Aleo` prefix on types — use import namespacing to avoid collisions.
 
 ### Transport
 
 ```ts
-interface AleoTransport {
+interface Transport {
   request(method: string, params?: unknown): Promise<unknown>
 }
 ```
@@ -92,32 +95,31 @@ Reference implementations: `http(url)`, `custom(provider)`, `fallback([...transp
 ### Account
 
 ```ts
-// Common base
-interface AleoAccount {
+// Common base — address only, no sensitive material
+interface Account {
   address: string        // aleo1...
-  viewKey?: string       // AViewKey1... (optional, not all accounts expose this)
 }
 
 // Can sign — either locally or via RPC
-interface AleoSignableAccount extends AleoAccount {
+interface SignerAccount extends Account {
   sign(message: Uint8Array): Promise<Uint8Array>
   signMessage(message: Uint8Array): Promise<Uint8Array>
 }
 
 // Signing happens locally — has private key material
-interface AleoLocalAccount extends AleoSignableAccount {
+interface LocalAccount extends SignerAccount {
   type: 'local'
   privateKey: string
   viewKey: string
 }
 
-// Signing delegated externally
-interface AleoRpcAccount extends AleoSignableAccount {
+// Signing delegated externally (wallet)
+interface RpcAccount extends SignerAccount {
   type: 'rpc'
 }
 
-// Read and decrypt only
-interface AleoViewOnlyAccount extends AleoAccount {
+// Read and decrypt only — cannot sign, cannot build transactions
+interface ViewOnlyAccount extends Account {
   type: 'viewOnly'
   viewKey: string
 }
@@ -125,29 +127,45 @@ interface AleoViewOnlyAccount extends AleoAccount {
 
 Account type describes capabilities, not origin. A wallet can return any type.
 
-### Prover
+`viewKey` is only present on `LocalAccount` (has full key material) and `ViewOnlyAccount` (exists solely to decrypt). It is never on the base `Account` interface.
+
+If an account is not a `SignerAccount`, no transactions can be built with it. TypeScript enforces this — `WalletClient` requires a `SignerAccount`.
+
+### Contract Instance (getContract)
 
 ```ts
-interface AleoProver {
-  buildTransaction(options: BuildTransactionOptions): Promise<AleoTransaction>
-}
+const contract = getContract({
+  program: 'my_program.aleo',
+  client: publicClient,
+  // or: client: walletClient,
+  // or: client: { public: publicClient, wallet: walletClient },
+})
+
+// Read a mapping value — typed from parsed program source
+const balance = await contract.read.balances({ key: 'aleo1...' })
+
+// Execute a transition — typed from parsed program source
+const txId = await contract.write.transfer({ inputs: ['aleo1...', '100u64'] })
 ```
 
-Reference implementations: `delegated({ url, apiKey })`, `local()`.
+`getContract` binds a program identifier and client(s), returning an object with typed `read` and `write` methods derived from parsing the program source. Which methods are available depends on which client(s) are provided (public enables `read`, wallet enables `write`, both enables both).
 
-Optional. Wallets typically handle proving internally. Required for LocalAccount users who need to build transactions directly.
+Program source is parsed to generate typed method signatures. This gives developers autocomplete and type checking for program functions and mappings.
 
 ### RecordScanner
 
+Records can be configured via a config object for common cases, or by passing a custom implementation for advanced use cases:
+
 ```ts
-interface AleoRecordScanner {
-  getRecords(params: RecordSearchParams): Promise<AleoRecord[]>
-}
+// Config object — common cases
+records: { mode: 'network', url: '...' }
+records: { mode: 'local' }
+
+// Custom implementation — advanced use cases
+records: { getRecords: async (params: RecordSearchParams) => AleoRecord[] }
 ```
 
-Reference implementations: `networkScanner({ url })`, `localScanner()`.
-
-Optional. Wallets typically manage record state internally.
+Optional. Wallets typically manage record state internally. Only needed for SDK/local account users.
 
 ## Actions
 
@@ -169,17 +187,19 @@ If viem has a name for the concept, use it. Only invent names for Aleo-specific 
 | `getRecords` | Fetch records for a program (Aleo-native) |
 | `getTransitionViewKeys` | Get transition view keys for a transaction (Aleo-native) |
 
-### Wallet Actions (account required)
+### Wallet Actions (account required — must be SignerAccount)
 
 | Method | Aleo Operation |
 |--------|---------------|
 | `sendTransaction` | Submit an already-built transaction |
-| `writeContract` | Execute a program transition |
+| `writeContract` | Execute a program transition (alias: `executeTransaction`) |
 | `deployContract` | Deploy a program to the network |
 | `signMessage` | Sign an arbitrary message |
 | `transfer` | Convenience wrapper for credits.aleo transfers |
 | `decrypt` | Decrypt a ciphertext (Aleo-native) |
 | `requestRecords` | Request records from wallet/scanner (Aleo-native) |
+
+`writeContract` is the primary name for viem familiarity. `executeTransaction` is provided as an alias for consistency with Aleo wallet adapter terminology. Both call the same implementation.
 
 ## Client Creation API
 
@@ -197,22 +217,36 @@ const value = await publicClient.readContract({
   key: 'aleo1...',
 })
 
-// Wallet — via RPC account (signing delegated)
+// Wallet — via RPC account (wallet handles proving internally)
+// No proving config accepted — type excludes it for RPC accounts
 const walletClient = createWalletClient({
   account: rpcAccount(walletAdapter),
   transport: custom(walletAdapter),
 })
 
-// Wallet — local account (signing local)
+// Wallet — local account (must configure proving)
 const walletClient = createWalletClient({
   account: privateKeyToAccount('APrivateKey1...'),
   transport: http('https://api.provable.com/v2'),
-  prover: delegated({ url: '...', apiKey: '...' }),
-  records: networkScanner({ url: '...' }),
+  proving: {
+    mode: 'delegated',
+    url: '...',
+    apiKey: '...',
+  },
+  records: { mode: 'network', url: '...' },
 })
 
 // Write operations — same API regardless of account type
+// Proving is handled internally based on client config
 const txId = await walletClient.writeContract({
+  program: 'my_program.aleo',
+  function: 'transfer',
+  inputs: ['aleo1...', '100u64'],
+  fee: 1000n,
+})
+
+// Same thing using the alias
+const txId = await walletClient.executeTransaction({
   program: 'my_program.aleo',
   function: 'transfer',
   inputs: ['aleo1...', '100u64'],
@@ -223,7 +257,37 @@ const txId = await walletClient.deployContract({
   program: myProgramSource,
   fee: 5000n,
 })
+
+// Contract instance — typed convenience
+const contract = getContract({
+  program: 'my_program.aleo',
+  client: { public: publicClient, wallet: walletClient },
+})
+await contract.read.balances({ key: 'aleo1...' })
+await contract.write.transfer({ inputs: ['aleo1...', '100u64'] })
 ```
+
+### Proving Configuration
+
+Proving is a client-level configuration concern, not a separate provider. The `writeContract`/`executeTransaction` action handles proving internally based on the client's config.
+
+| Account Type | Proving Behavior |
+|---|---|
+| `RpcAccount` | Wallet handles proving internally. `proving` config is excluded from the type — dapps cannot override user's wallet preference. |
+| `LocalAccount` | Must provide `proving` config. Supports `mode: 'delegated'` (remote proving service) or `mode: 'local'` (local WASM proving). |
+| `ViewOnlyAccount` | Cannot build transactions. Write actions are excluded at the type level. |
+
+```ts
+// Proving config shape
+interface ProvingConfig {
+  mode: 'delegated' | 'local'
+  url?: string                    // Required for delegated
+  apiKey?: string                 // Optional for delegated
+  buildTransaction?: (options: BuildTransactionOptions) => Promise<Transaction>  // Optional override
+}
+```
+
+The optional `buildTransaction` override is an escape hatch for custom proving implementations that don't fit the delegated/local model.
 
 ## Cryptographic Primitives
 
@@ -242,6 +306,7 @@ aleo-viem/
 │   │   │   ├── accounts/      # LocalAccount, RpcAccount, ViewOnlyAccount
 │   │   │   ├── transports/    # http, custom, fallback
 │   │   │   ├── actions/       # public/ and wallet/ actions
+│   │   │   ├── contract/      # getContract, program parsing
 │   │   │   ├── types/         # core type definitions
 │   │   │   └── utils/         # encoding, address validation
 │   │   └── package.json
@@ -271,3 +336,5 @@ Any of these can back any interface. The wallet adapter can produce RpcAccounts 
 3. **Accounts describe capabilities, not origin** — a wallet can produce any account type
 4. **Convention over configuration** — sensible defaults, everything overridable
 5. **Aim for full abstraction, accept pragmatism where forced** — don't invent bad metaphors for Aleo concepts that have no EVM equivalent
+6. **Type safety from program source** — parse Aleo programs to generate typed contract interfaces
+7. **Proving is configuration, not a provider** — proving strategy is a client config concern, not a separate abstraction

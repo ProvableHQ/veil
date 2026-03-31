@@ -4,7 +4,7 @@
 
 **Goal:** Build `@aleo-viem/core` — a viem-like TypeScript interface for Aleo that wraps existing wallets and SDKs behind a unified, familiar API.
 
-**Architecture:** Interface-first design mirroring viem's Client → Transport → Actions pattern. Core defines interfaces (Transport, Account, Prover, RecordScanner) with zero hard dependencies on specific SDKs. Actions are standalone functions decorated onto clients. Uses viem method names wherever concepts map.
+**Architecture:** Interface-first design mirroring viem's Client → Transport → Actions pattern. Core defines interfaces (Transport, Account) with zero hard dependencies on specific SDKs. Proving is a client configuration concern, not a standalone interface. Actions are standalone functions decorated onto clients. Uses viem method names wherever concepts map. No `Aleo` prefix on types — use import namespacing.
 
 **Tech Stack:** TypeScript, vitest, pnpm workspaces, tsup (bundling)
 
@@ -22,20 +22,20 @@ packages/core/
 ├── src/
 │   ├── index.ts                          # Public API barrel export
 │   ├── types/
-│   │   ├── account.ts                    # AleoAccount, AleoLocalAccount, AleoRpcAccount, AleoViewOnlyAccount
-│   │   ├── transport.ts                  # AleoTransport, AleoTransportConfig
-│   │   ├── prover.ts                     # AleoProver, BuildTransactionOptions
-│   │   ├── recordScanner.ts              # AleoRecordScanner, RecordSearchParams, AleoRecord
-│   │   ├── block.ts                      # AleoBlock
-│   │   ├── transaction.ts                # AleoTransaction, AleoTransition
-│   │   └── program.ts                    # AleoProgram, MappingValue
+│   │   ├── account.ts                    # Account, SignerAccount, LocalAccount, RpcAccount, ViewOnlyAccount
+│   │   ├── transport.ts                  # Transport, TransportConfig, RequestFn
+│   │   ├── proving.ts                    # ProvingConfig, BuildTransactionOptions
+│   │   ├── records.ts                    # RecordsConfig, RecordSearchParams, Record
+│   │   ├── block.ts                      # Block
+│   │   ├── transaction.ts                # Transaction, Transition
+│   │   └── program.ts                    # Program, MappingValue
 │   ├── clients/
 │   │   ├── createClient.ts               # Base client factory
 │   │   ├── createPublicClient.ts         # PublicClient = base + publicActions
-│   │   ├── createWalletClient.ts         # WalletClient = base + walletActions
+│   │   ├── createWalletClient.ts         # WalletClient = base + walletActions (proving config type-excluded for RPC accounts)
 │   │   └── decorators/
 │   │       ├── public.ts                 # publicActions decorator
-│   │       └── wallet.ts                 # walletActions decorator
+│   │       └── wallet.ts                 # walletActions decorator (includes executeTransaction alias)
 │   ├── accounts/
 │   │   ├── rpcAccount.ts                 # rpcAccount() factory
 │   │   ├── privateKeyToAccount.ts        # privateKeyToAccount() factory
@@ -60,12 +60,15 @@ packages/core/
 │   │   │   └── getTransitionViewKeys.ts # Transition view keys (Aleo-native)
 │   │   └── wallet/
 │   │       ├── sendTransaction.ts       # Submit built transaction
-│   │       ├── writeContract.ts         # Execute program transition
+│   │       ├── writeContract.ts         # Execute program transition (+ executeTransaction alias)
 │   │       ├── deployContract.ts        # Deploy program
 │   │       ├── signMessage.ts           # Sign arbitrary message
 │   │       ├── transfer.ts             # credits.aleo convenience
 │   │       ├── decrypt.ts              # Decrypt ciphertext (Aleo-native)
 │   │       └── requestRecords.ts       # Request records (Aleo-native)
+│   ├── contract/
+│   │   ├── getContract.ts               # getContract() — binds program + client(s), returns typed read/write
+│   │   └── parseProgram.ts              # Parse Aleo program source into typed structure
 │   ├── errors/
 │   │   └── errors.ts                    # Error types
 │   └── utils/
@@ -75,9 +78,7 @@ packages/core/
 └── test/
     ├── types/
     │   ├── account.test.ts
-    │   ├── transport.test.ts
-    │   ├── prover.test.ts
-    │   └── recordScanner.test.ts
+    │   └── transport.test.ts
     ├── clients/
     │   ├── createClient.test.ts
     │   ├── createPublicClient.test.ts
@@ -105,6 +106,9 @@ packages/core/
     │       ├── deployContract.test.ts
     │       ├── signMessage.test.ts
     │       └── transfer.test.ts
+    ├── contract/
+    │   ├── getContract.test.ts
+    │   └── parseProgram.test.ts
     └── utils/
         ├── address.test.ts
         └── credits.test.ts
@@ -259,20 +263,18 @@ git commit -m "chore: scaffold monorepo with core package, typescript, vitest"
 
 ---
 
-### Task 2: Core Types — Account, Transport, Prover, RecordScanner
+### Task 2: Core Types — Account, Transport, Proving, Records
 
 **Files:**
 - Create: `packages/core/src/types/account.ts`
 - Create: `packages/core/src/types/transport.ts`
-- Create: `packages/core/src/types/prover.ts`
-- Create: `packages/core/src/types/recordScanner.ts`
+- Create: `packages/core/src/types/proving.ts`
+- Create: `packages/core/src/types/records.ts`
 - Create: `packages/core/src/types/block.ts`
 - Create: `packages/core/src/types/transaction.ts`
 - Create: `packages/core/src/types/program.ts`
 - Create: `packages/core/test/types/account.test.ts`
 - Create: `packages/core/test/types/transport.test.ts`
-- Create: `packages/core/test/types/prover.test.ts`
-- Create: `packages/core/test/types/recordScanner.test.ts`
 - Modify: `packages/core/src/index.ts`
 
 - [ ] **Step 1: Write account type tests**
@@ -281,37 +283,44 @@ git commit -m "chore: scaffold monorepo with core package, typescript, vitest"
 // packages/core/test/types/account.test.ts
 import { describe, it, expectTypeOf } from 'vitest'
 import type {
-  AleoAccount,
-  AleoLocalAccount,
-  AleoRpcAccount,
-  AleoViewOnlyAccount,
+  Account,
+  SignerAccount,
+  LocalAccount,
+  RpcAccount,
+  ViewOnlyAccount,
 } from '../../src/types/account.js'
 
 describe('Account types', () => {
-  it('AleoAccount has address and optional viewKey', () => {
-    expectTypeOf<AleoAccount>().toHaveProperty('address')
-    expectTypeOf<AleoAccount['address']>().toBeString()
-    expectTypeOf<AleoAccount>().toHaveProperty('viewKey')
+  it('Account has address only, no viewKey', () => {
+    expectTypeOf<Account>().toHaveProperty('address')
+    expectTypeOf<Account['address']>().toBeString()
+    // viewKey is NOT on the base Account interface
   })
 
-  it('AleoLocalAccount has type local and privateKey', () => {
-    expectTypeOf<AleoLocalAccount['type']>().toEqualTypeOf<'local'>()
-    expectTypeOf<AleoLocalAccount>().toHaveProperty('privateKey')
-    expectTypeOf<AleoLocalAccount>().toHaveProperty('viewKey')
-    expectTypeOf<AleoLocalAccount['viewKey']>().toBeString()
-    expectTypeOf<AleoLocalAccount>().toHaveProperty('sign')
-    expectTypeOf<AleoLocalAccount>().toHaveProperty('signMessage')
+  it('SignerAccount extends Account with sign methods', () => {
+    expectTypeOf<SignerAccount>().toHaveProperty('address')
+    expectTypeOf<SignerAccount>().toHaveProperty('sign')
+    expectTypeOf<SignerAccount>().toHaveProperty('signMessage')
   })
 
-  it('AleoRpcAccount has type rpc', () => {
-    expectTypeOf<AleoRpcAccount['type']>().toEqualTypeOf<'rpc'>()
-    expectTypeOf<AleoRpcAccount>().toHaveProperty('sign')
-    expectTypeOf<AleoRpcAccount>().toHaveProperty('signMessage')
+  it('LocalAccount has type local, privateKey, and viewKey', () => {
+    expectTypeOf<LocalAccount['type']>().toEqualTypeOf<'local'>()
+    expectTypeOf<LocalAccount>().toHaveProperty('privateKey')
+    expectTypeOf<LocalAccount>().toHaveProperty('viewKey')
+    expectTypeOf<LocalAccount['viewKey']>().toBeString()
+    expectTypeOf<LocalAccount>().toHaveProperty('sign')
+    expectTypeOf<LocalAccount>().toHaveProperty('signMessage')
   })
 
-  it('AleoViewOnlyAccount has type viewOnly and required viewKey', () => {
-    expectTypeOf<AleoViewOnlyAccount['type']>().toEqualTypeOf<'viewOnly'>()
-    expectTypeOf<AleoViewOnlyAccount['viewKey']>().toBeString()
+  it('RpcAccount has type rpc and sign methods', () => {
+    expectTypeOf<RpcAccount['type']>().toEqualTypeOf<'rpc'>()
+    expectTypeOf<RpcAccount>().toHaveProperty('sign')
+    expectTypeOf<RpcAccount>().toHaveProperty('signMessage')
+  })
+
+  it('ViewOnlyAccount has type viewOnly and required viewKey', () => {
+    expectTypeOf<ViewOnlyAccount['type']>().toEqualTypeOf<'viewOnly'>()
+    expectTypeOf<ViewOnlyAccount['viewKey']>().toBeString()
   })
 })
 ```
@@ -326,39 +335,38 @@ Expected: FAIL — module not found.
 ```ts
 // packages/core/src/types/account.ts
 
-/** Base account — all accounts have an address */
-export type AleoAccount = {
+/** Base account — address only, no sensitive material */
+export type Account = {
   address: string
-  viewKey?: string | undefined
 }
 
 /** Account that can sign — either locally or via RPC */
-export type AleoSignableAccount = AleoAccount & {
+export type SignerAccount = Account & {
   sign(message: Uint8Array): Promise<Uint8Array>
   signMessage(message: Uint8Array): Promise<Uint8Array>
 }
 
 /** Local account — has private key material, signs locally */
-export type AleoLocalAccount<source extends string = string> = AleoSignableAccount & {
+export type LocalAccount<source extends string = string> = SignerAccount & {
   type: 'local'
   source: source
   privateKey: string
   viewKey: string
 }
 
-/** RPC account — signing delegated to external provider */
-export type AleoRpcAccount = AleoSignableAccount & {
+/** RPC account — signing delegated to external provider (wallet) */
+export type RpcAccount = SignerAccount & {
   type: 'rpc'
 }
 
-/** View-only account — can decrypt records, cannot sign */
-export type AleoViewOnlyAccount = AleoAccount & {
+/** View-only account — can decrypt records, cannot sign or build transactions */
+export type ViewOnlyAccount = Account & {
   type: 'viewOnly'
   viewKey: string
 }
 
 /** Union of all account types */
-export type Account = AleoLocalAccount | AleoRpcAccount | AleoViewOnlyAccount
+export type AnyAccount = LocalAccount | RpcAccount | ViewOnlyAccount
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -371,19 +379,19 @@ Expected: PASS
 ```ts
 // packages/core/test/types/transport.test.ts
 import { describe, it, expectTypeOf } from 'vitest'
-import type { AleoTransportConfig, AleoRequestFn } from '../../src/types/transport.js'
+import type { TransportConfig, RequestFn } from '../../src/types/transport.js'
 
 describe('Transport types', () => {
-  it('AleoTransportConfig has required fields', () => {
-    expectTypeOf<AleoTransportConfig>().toHaveProperty('key')
-    expectTypeOf<AleoTransportConfig>().toHaveProperty('name')
-    expectTypeOf<AleoTransportConfig>().toHaveProperty('request')
-    expectTypeOf<AleoTransportConfig>().toHaveProperty('type')
+  it('TransportConfig has required fields', () => {
+    expectTypeOf<TransportConfig>().toHaveProperty('key')
+    expectTypeOf<TransportConfig>().toHaveProperty('name')
+    expectTypeOf<TransportConfig>().toHaveProperty('request')
+    expectTypeOf<TransportConfig>().toHaveProperty('type')
   })
 
-  it('AleoRequestFn takes method and params', () => {
-    expectTypeOf<AleoRequestFn>().toBeFunction()
-    expectTypeOf<AleoRequestFn>().parameter(0).toHaveProperty('method')
+  it('RequestFn takes method and params', () => {
+    expectTypeOf<RequestFn>().toBeFunction()
+    expectTypeOf<RequestFn>().parameter(0).toHaveProperty('method')
   })
 })
 ```
@@ -393,24 +401,24 @@ describe('Transport types', () => {
 ```ts
 // packages/core/src/types/transport.ts
 
-export type AleoRequestFn = (args: {
+export type RequestFn = (args: {
   method: string
   params?: unknown
 }) => Promise<unknown>
 
-export type AleoTransportConfig<type extends string = string> = {
+export type TransportConfig<type extends string = string> = {
   key: string
   name: string
-  request: AleoRequestFn
+  request: RequestFn
   type: type
   retryCount?: number | undefined
   retryDelay?: number | undefined
   timeout?: number | undefined
 }
 
-export type AleoTransport<type extends string = string> = {
-  config: AleoTransportConfig<type>
-  request: AleoRequestFn
+export type Transport<type extends string = string> = {
+  config: TransportConfig<type>
+  request: RequestFn
 }
 ```
 
@@ -419,37 +427,11 @@ export type AleoTransport<type extends string = string> = {
 Run: `pnpm vitest run packages/core/test/types/transport.test.ts`
 Expected: PASS
 
-- [ ] **Step 8: Write prover and record scanner type tests**
+- [ ] **Step 8: Implement proving config and records types**
 
 ```ts
-// packages/core/test/types/prover.test.ts
-import { describe, it, expectTypeOf } from 'vitest'
-import type { AleoProver } from '../../src/types/prover.js'
-
-describe('Prover types', () => {
-  it('AleoProver has buildTransaction method', () => {
-    expectTypeOf<AleoProver>().toHaveProperty('buildTransaction')
-  })
-})
-```
-
-```ts
-// packages/core/test/types/recordScanner.test.ts
-import { describe, it, expectTypeOf } from 'vitest'
-import type { AleoRecordScanner } from '../../src/types/recordScanner.js'
-
-describe('RecordScanner types', () => {
-  it('AleoRecordScanner has getRecords method', () => {
-    expectTypeOf<AleoRecordScanner>().toHaveProperty('getRecords')
-  })
-})
-```
-
-- [ ] **Step 9: Implement prover, recordScanner, and data types**
-
-```ts
-// packages/core/src/types/prover.ts
-import type { AleoTransaction } from './transaction.js'
+// packages/core/src/types/proving.ts
+import type { Transaction } from './transaction.js'
 
 export type BuildTransactionOptions = {
   programName: string
@@ -460,13 +442,18 @@ export type BuildTransactionOptions = {
   feeRecord?: string | undefined
 }
 
-export type AleoProver = {
-  buildTransaction(options: BuildTransactionOptions): Promise<AleoTransaction>
+/** Proving configuration — determines how transactions are built */
+export type ProvingConfig = {
+  mode: 'delegated' | 'local'
+  url?: string | undefined          // Required for delegated
+  apiKey?: string | undefined        // Optional for delegated
+  /** Optional override for custom proving implementations */
+  buildTransaction?: (options: BuildTransactionOptions) => Promise<Transaction>
 }
 ```
 
 ```ts
-// packages/core/src/types/recordScanner.ts
+// packages/core/src/types/records.ts
 
 export type RecordSearchParams = {
   program: string
@@ -474,7 +461,7 @@ export type RecordSearchParams = {
   unspent?: boolean | undefined
 }
 
-export type AleoRecord = {
+export type Record = {
   owner: string
   data: Record<string, unknown>
   nonce: string
@@ -482,26 +469,28 @@ export type AleoRecord = {
   plaintext: string
 }
 
-export type AleoRecordScanner = {
-  getRecords(params: RecordSearchParams): Promise<AleoRecord[]>
-}
+/** Records config — either a config object or a custom implementation */
+export type RecordsConfig =
+  | { mode: 'network'; url: string }
+  | { mode: 'local' }
+  | { getRecords: (params: RecordSearchParams) => Promise<Record[]> }
 ```
 
 ```ts
 // packages/core/src/types/block.ts
 
-export type AleoBlock = {
+export type Block = {
   blockHash: string
   previousHash: string
   header: Record<string, unknown>
   authority: Record<string, unknown>
-  transactions?: AleoConfirmedTransaction[] | undefined
+  transactions?: ConfirmedTransaction[] | undefined
   height: number
   round: number
   timestamp: number
 }
 
-export type AleoConfirmedTransaction = {
+export type ConfirmedTransaction = {
   type: 'execute' | 'deploy' | 'fee'
   id: string
   transaction: Record<string, unknown>
@@ -511,21 +500,21 @@ export type AleoConfirmedTransaction = {
 ```ts
 // packages/core/src/types/transaction.ts
 
-export type AleoTransaction = {
+export type Transaction = {
   id: string
   type: 'execute' | 'deploy' | 'fee'
   execution?: {
-    transitions: AleoTransition[]
+    transitions: Transition[]
   } | undefined
   deployment?: Record<string, unknown> | undefined
   fee: {
-    transition: AleoTransition
+    transition: Transition
     globalStateRoot: string
     proof: string
   }
 }
 
-export type AleoTransition = {
+export type Transition = {
   id: string
   program: string
   function: string
@@ -539,7 +528,7 @@ export type AleoTransition = {
 ```ts
 // packages/core/src/types/program.ts
 
-export type AleoProgram = {
+export type Program = {
   id: string
   source: string
   mappings: string[]
@@ -552,51 +541,51 @@ export type MappingValue = {
 }
 ```
 
-- [ ] **Step 10: Run all type tests**
+- [ ] **Step 9: Run all type tests**
 
 Run: `pnpm vitest run packages/core/test/types/`
 Expected: All PASS
 
-- [ ] **Step 11: Export types from index.ts**
+- [ ] **Step 10: Export types from index.ts**
 
 ```ts
 // packages/core/src/index.ts
 export type {
-  AleoAccount,
-  AleoSignableAccount,
-  AleoLocalAccount,
-  AleoRpcAccount,
-  AleoViewOnlyAccount,
   Account,
+  SignerAccount,
+  LocalAccount,
+  RpcAccount,
+  ViewOnlyAccount,
+  AnyAccount,
 } from './types/account.js'
 
 export type {
-  AleoRequestFn,
-  AleoTransportConfig,
-  AleoTransport,
+  RequestFn,
+  TransportConfig,
+  Transport,
 } from './types/transport.js'
 
 export type {
-  AleoProver,
+  ProvingConfig,
   BuildTransactionOptions,
-} from './types/prover.js'
+} from './types/proving.js'
 
 export type {
-  AleoRecordScanner,
+  RecordsConfig,
   RecordSearchParams,
-  AleoRecord,
-} from './types/recordScanner.js'
+  Record,
+} from './types/records.js'
 
-export type { AleoBlock, AleoConfirmedTransaction } from './types/block.js'
-export type { AleoTransaction, AleoTransition } from './types/transaction.js'
-export type { AleoProgram, MappingValue } from './types/program.js'
+export type { Block, ConfirmedTransaction } from './types/block.js'
+export type { Transaction, Transition } from './types/transaction.js'
+export type { Program, MappingValue } from './types/program.js'
 ```
 
-- [ ] **Step 12: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add packages/core/src/types/ packages/core/test/types/ packages/core/src/index.ts
-git commit -m "feat: add core type definitions for account, transport, prover, recordScanner, block, transaction, program"
+git commit -m "feat: add core type definitions — account, transport, proving, records, block, transaction, program"
 ```
 
 ---
@@ -615,34 +604,33 @@ git commit -m "feat: add core type definitions for account, transport, prover, r
 ```ts
 // packages/core/test/utils/address.test.ts
 import { describe, it, expect } from 'vitest'
-import { isAleoAddress, assertAleoAddress } from '../../src/utils/address.js'
+import { isAddress, assertAddress } from '../../src/utils/address.js'
 
-describe('isAleoAddress', () => {
+describe('isAddress', () => {
   it('returns true for valid aleo address', () => {
-    // Aleo addresses are "aleo1" + 58 lowercase alphanumeric chars
-    expect(isAleoAddress('aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc')).toBe(true)
+    expect(isAddress('aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc')).toBe(true)
   })
 
   it('returns false for empty string', () => {
-    expect(isAleoAddress('')).toBe(false)
+    expect(isAddress('')).toBe(false)
   })
 
   it('returns false for ethereum address', () => {
-    expect(isAleoAddress('0xA0Cf798816D4b9b9866b5330EEa46a18382f251e')).toBe(false)
+    expect(isAddress('0xA0Cf798816D4b9b9866b5330EEa46a18382f251e')).toBe(false)
   })
 
   it('returns false for missing aleo1 prefix', () => {
-    expect(isAleoAddress('qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc')).toBe(false)
+    expect(isAddress('qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc')).toBe(false)
   })
 })
 
-describe('assertAleoAddress', () => {
+describe('assertAddress', () => {
   it('throws for invalid address', () => {
-    expect(() => assertAleoAddress('bad')).toThrow()
+    expect(() => assertAddress('bad')).toThrow()
   })
 
   it('does not throw for valid address', () => {
-    expect(() => assertAleoAddress('aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc')).not.toThrow()
+    expect(() => assertAddress('aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc')).not.toThrow()
   })
 })
 ```
@@ -657,14 +645,14 @@ Expected: FAIL — module not found.
 ```ts
 // packages/core/src/utils/address.ts
 
-const ALEO_ADDRESS_REGEX = /^aleo1[a-z0-9]{58}$/
+const ADDRESS_REGEX = /^aleo1[a-z0-9]{58}$/
 
-export function isAleoAddress(address: string): boolean {
-  return ALEO_ADDRESS_REGEX.test(address)
+export function isAddress(address: string): boolean {
+  return ADDRESS_REGEX.test(address)
 }
 
-export function assertAleoAddress(address: string): void {
-  if (!isAleoAddress(address)) {
+export function assertAddress(address: string): void {
+  if (!isAddress(address)) {
     throw new Error(`Invalid Aleo address: ${address}`)
   }
 }
@@ -748,7 +736,7 @@ export function uid(): string {
 Add to `packages/core/src/index.ts`:
 
 ```ts
-export { isAleoAddress, assertAleoAddress } from './utils/address.js'
+export { isAddress, assertAddress } from './utils/address.js'
 export { creditsToMicrocredits, microcreditsToCredits } from './utils/credits.js'
 ```
 
@@ -776,35 +764,35 @@ git commit -m "feat: add address validation, credits conversion, and uid utiliti
 ```ts
 // packages/core/src/errors/errors.ts
 
-export class AleoError extends Error {
+export class BaseError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options)
-    this.name = 'AleoError'
+    this.name = 'BaseError'
   }
 }
 
-export class TransportError extends AleoError {
+export class TransportError extends BaseError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options)
     this.name = 'TransportError'
   }
 }
 
-export class AccountNotFoundError extends AleoError {
+export class AccountNotFoundError extends BaseError {
   constructor() {
     super('No account found. Pass an account to the client or to the action directly.')
     this.name = 'AccountNotFoundError'
   }
 }
 
-export class ProverNotFoundError extends AleoError {
+export class ProvingNotConfiguredError extends BaseError {
   constructor() {
-    super('No prover configured. Pass a prover to the client or use a wallet-backed account.')
-    this.name = 'ProverNotFoundError'
+    super('No proving configuration found. Pass a proving config to the wallet client or use a wallet-backed (RPC) account.')
+    this.name = 'ProvingNotConfiguredError'
   }
 }
 
-export class InvalidAddressError extends AleoError {
+export class InvalidAddressError extends BaseError {
   constructor(address: string) {
     super(`Invalid Aleo address: ${address}`)
     this.name = 'InvalidAddressError'
@@ -818,10 +806,10 @@ Add to `packages/core/src/index.ts`:
 
 ```ts
 export {
-  AleoError,
+  BaseError,
   TransportError,
   AccountNotFoundError,
-  ProverNotFoundError,
+  ProvingNotConfiguredError,
   InvalidAddressError,
 } from './errors/errors.js'
 ```
@@ -914,11 +902,11 @@ Expected: FAIL — module not found.
 
 ```ts
 // packages/core/src/transports/createTransport.ts
-import type { AleoRequestFn, AleoTransport, AleoTransportConfig } from '../types/transport.js'
+import type { RequestFn, Transport, TransportConfig } from '../types/transport.js'
 
 export function createTransport<type extends string>(
-  config: AleoTransportConfig<type>,
-): AleoTransport<type> {
+  config: TransportConfig<type>,
+): Transport<type> {
   return {
     config,
     request: config.request,
@@ -931,7 +919,7 @@ export function createTransport<type extends string>(
 ```ts
 // packages/core/src/transports/http.ts
 import { TransportError } from '../errors/errors.js'
-import type { AleoTransport } from '../types/transport.js'
+import type { Transport } from '../types/transport.js'
 import { createTransport } from './createTransport.js'
 
 type HttpTransportConfig = {
@@ -993,7 +981,7 @@ function buildUrl(
 export function http(
   url: string,
   config: HttpTransportConfig = {},
-): AleoTransport<'http'> {
+): Transport<'http'> {
   const {
     fetchFn = fetch,
     headers = {},
@@ -1068,16 +1056,16 @@ describe('custom transport', () => {
 
 ```ts
 // packages/core/src/transports/custom.ts
-import type { AleoRequestFn, AleoTransport } from '../types/transport.js'
+import type { RequestFn, Transport } from '../types/transport.js'
 import { createTransport } from './createTransport.js'
 
 type CustomTransportConfig = {
-  request: AleoRequestFn
+  request: RequestFn
   key?: string | undefined
   name?: string | undefined
 }
 
-export function custom(config: CustomTransportConfig): AleoTransport<'custom'> {
+export function custom(config: CustomTransportConfig): Transport<'custom'> {
   const { request, key = 'custom', name = 'Custom Transport' } = config
   return createTransport({ key, name, type: 'custom', request })
 }
@@ -1137,10 +1125,10 @@ describe('fallback transport', () => {
 ```ts
 // packages/core/src/transports/fallback.ts
 import { TransportError } from '../errors/errors.js'
-import type { AleoTransport } from '../types/transport.js'
+import type { Transport } from '../types/transport.js'
 import { createTransport } from './createTransport.js'
 
-export function fallback(transports: AleoTransport[]): AleoTransport<'fallback'> {
+export function fallback(transports: Transport[]): Transport<'fallback'> {
   return createTransport({
     key: 'fallback',
     name: 'Fallback Transport',
@@ -1223,14 +1211,14 @@ describe('createClient', () => {
     expect(client.account).toBe(mockAccount)
   })
 
-  it('stores prover and records if provided', () => {
+  it('stores proving and records config if provided', () => {
     const transport = custom({ request: vi.fn() })
-    const mockProver = { buildTransaction: vi.fn() }
-    const mockRecords = { getRecords: vi.fn() }
-    const client = createClient({ transport, prover: mockProver, records: mockRecords })
+    const proving = { mode: 'delegated' as const, url: 'https://prover.example.com' }
+    const records = { mode: 'network' as const, url: 'https://records.example.com' }
+    const client = createClient({ transport, proving, records })
 
-    expect(client.prover).toBe(mockProver)
-    expect(client.records).toBe(mockRecords)
+    expect(client.proving).toBe(proving)
+    expect(client.records).toBe(records)
   })
 
   it('extends client with additional actions', () => {
@@ -1255,29 +1243,29 @@ Expected: FAIL — module not found.
 
 ```ts
 // packages/core/src/clients/createClient.ts
-import type { Account } from '../types/account.js'
-import type { AleoProver } from '../types/prover.js'
-import type { AleoRecordScanner } from '../types/recordScanner.js'
-import type { AleoTransport } from '../types/transport.js'
+import type { AnyAccount } from '../types/account.js'
+import type { ProvingConfig } from '../types/proving.js'
+import type { RecordsConfig } from '../types/records.js'
+import type { Transport } from '../types/transport.js'
 import { uid as createUid } from '../utils/uid.js'
 
 export type ClientConfig = {
-  account?: Account | undefined
+  account?: AnyAccount | undefined
   key?: string | undefined
   name?: string | undefined
-  prover?: AleoProver | undefined
-  records?: AleoRecordScanner | undefined
-  transport: AleoTransport
+  proving?: ProvingConfig | undefined
+  records?: RecordsConfig | undefined
+  transport: Transport
 }
 
 export type Client = {
-  account: Account | undefined
+  account: AnyAccount | undefined
   key: string
   name: string
-  prover: AleoProver | undefined
-  records: AleoRecordScanner | undefined
-  request: AleoTransport['request']
-  transport: AleoTransport
+  proving: ProvingConfig | undefined
+  records: RecordsConfig | undefined
+  request: Transport['request']
+  transport: Transport
   uid: string
   extend: <extended extends Record<string, unknown>>(
     fn: (client: Client) => extended,
@@ -1289,7 +1277,7 @@ export function createClient(config: ClientConfig): Client {
     account,
     key = 'base',
     name = 'Client',
-    prover,
+    proving,
     records,
     transport,
   } = config
@@ -1300,7 +1288,7 @@ export function createClient(config: ClientConfig): Client {
     account,
     key,
     name,
-    prover,
+    proving,
     records,
     request: transport.request,
     transport,
@@ -1385,14 +1373,9 @@ export function publicActions(client: Client): PublicActions {
     getCode: (params) =>
       client.request({ method: 'getProgram', params: { programId: params.program } }) as Promise<string>,
     estimateGas: (_params) =>
-      // Fee estimation requires an authorization — this is a placeholder that
-      // will be refined when the prover integration is built out.
-      // For now, returns 0n to satisfy the interface.
       Promise.resolve(0n),
-    getRecords: (params) =>
-      client.records
-        ? client.records.getRecords({ program: params.program })
-        : Promise.resolve([]),
+    getRecords: (_params) =>
+      Promise.resolve([]),
     getTransitionViewKeys: (params) =>
       client.request({ method: 'getTransitionViewKeys', params: { id: params.transactionId } }) as Promise<string[]>,
   }
@@ -1406,7 +1389,7 @@ export function publicActions(client: Client): PublicActions {
 import { createClient, type ClientConfig, type Client } from './createClient.js'
 import { publicActions, type PublicActions } from './decorators/public.js'
 
-export type PublicClientConfig = Omit<ClientConfig, 'account' | 'key' | 'name'> & {
+export type PublicClientConfig = Omit<ClientConfig, 'account' | 'key' | 'name' | 'proving'> & {
   key?: string | undefined
   name?: string | undefined
 }
@@ -1443,24 +1426,43 @@ describe('createWalletClient', () => {
     expect(client.name).toBe('Wallet Client')
     expect(client.sendTransaction).toBeTypeOf('function')
     expect(client.writeContract).toBeTypeOf('function')
+    expect(client.executeTransaction).toBeTypeOf('function')
     expect(client.deployContract).toBeTypeOf('function')
     expect(client.signMessage).toBeTypeOf('function')
     expect(client.transfer).toBeTypeOf('function')
   })
+
+  it('executeTransaction is an alias for writeContract', () => {
+    const transport = custom({ request: vi.fn() })
+    const mockAccount = { type: 'rpc' as const, address: 'aleo1abc', sign: vi.fn(), signMessage: vi.fn() }
+    const client = createWalletClient({ account: mockAccount, transport })
+
+    // Both should be functions that exist on the client
+    expect(client.executeTransaction).toBeTypeOf('function')
+    expect(client.writeContract).toBeTypeOf('function')
+  })
 })
 ```
 
-- [ ] **Step 10: Create wallet actions decorator (stub)**
+- [ ] **Step 10: Create wallet actions decorator**
 
 ```ts
 // packages/core/src/clients/decorators/wallet.ts
 import { AccountNotFoundError } from '../../errors/errors.js'
-import type { AleoSignableAccount } from '../../types/account.js'
+import type { SignerAccount } from '../../types/account.js'
 import type { Client } from '../createClient.js'
 
 export type WalletActions = {
   sendTransaction: (params: { transaction: string }) => Promise<string>
   writeContract: (params: {
+    program: string
+    function: string
+    inputs: string[]
+    fee: bigint
+    privateFee?: boolean
+  }) => Promise<string>
+  /** Alias for writeContract — consistent with Aleo wallet adapter terminology */
+  executeTransaction: (params: {
     program: string
     function: string
     inputs: string[]
@@ -1474,14 +1476,51 @@ export type WalletActions = {
   requestRecords: (params: { program: string }) => Promise<unknown[]>
 }
 
-function getSignableAccount(client: Client): AleoSignableAccount {
+function getSignerAccount(client: Client): SignerAccount {
   if (!client.account || !('sign' in client.account)) {
     throw new AccountNotFoundError()
   }
-  return client.account as AleoSignableAccount
+  return client.account as SignerAccount
 }
 
 export function walletActions(client: Client): WalletActions {
+  const writeContractFn = async (params: {
+    program: string
+    function: string
+    inputs: string[]
+    fee: bigint
+    privateFee?: boolean
+  }): Promise<string> => {
+    const account = getSignerAccount(client)
+
+    // If client has proving config with a custom buildTransaction, use it
+    if (client.proving?.buildTransaction) {
+      const tx = await client.proving.buildTransaction({
+        programName: params.program,
+        functionName: params.function,
+        inputs: params.inputs,
+        fee: params.fee,
+        privateFee: params.privateFee,
+      })
+      return client.request({
+        method: 'sendTransaction',
+        params: { transaction: JSON.stringify(tx) },
+      }) as Promise<string>
+    }
+
+    // For RPC accounts or when proving mode handles it, delegate to the transport
+    return client.request({
+      method: 'executeTransaction',
+      params: {
+        programName: params.program,
+        functionName: params.function,
+        inputs: params.inputs,
+        fee: params.fee,
+        privateFee: params.privateFee,
+      },
+    }) as Promise<string>
+  }
+
   return {
     sendTransaction: (params) =>
       client.request({
@@ -1489,37 +1528,8 @@ export function walletActions(client: Client): WalletActions {
         params: { transaction: params.transaction },
       }) as Promise<string>,
 
-    writeContract: (params) => {
-      const account = getSignableAccount(client)
-      // If client has a prover, use it to build then send
-      if (client.prover) {
-        return client.prover
-          .buildTransaction({
-            programName: params.program,
-            functionName: params.function,
-            inputs: params.inputs,
-            fee: params.fee,
-            privateFee: params.privateFee,
-          })
-          .then((tx) =>
-            client.request({
-              method: 'sendTransaction',
-              params: { transaction: JSON.stringify(tx) },
-            }) as Promise<string>,
-          )
-      }
-      // For RPC accounts, delegate to the wallet
-      return client.request({
-        method: 'executeTransaction',
-        params: {
-          programName: params.program,
-          functionName: params.function,
-          inputs: params.inputs,
-          fee: params.fee,
-          privateFee: params.privateFee,
-        },
-      }) as Promise<string>
-    },
+    writeContract: writeContractFn,
+    executeTransaction: writeContractFn,
 
     deployContract: (params) =>
       client.request({
@@ -1528,38 +1538,18 @@ export function walletActions(client: Client): WalletActions {
       }) as Promise<string>,
 
     signMessage: async (params) => {
-      const account = getSignableAccount(client)
+      const account = getSignerAccount(client)
       return account.signMessage(params.message)
     },
 
-    transfer: (params) => {
-      const account = getSignableAccount(client)
-      if (client.prover) {
-        return client.prover
-          .buildTransaction({
-            programName: 'credits.aleo',
-            functionName: params.privateFee ? 'transfer_private' : 'transfer_public',
-            inputs: [params.to, `${params.amount}u64`],
-            fee: 0n,
-            privateFee: params.privateFee,
-          })
-          .then((tx) =>
-            client.request({
-              method: 'sendTransaction',
-              params: { transaction: JSON.stringify(tx) },
-            }) as Promise<string>,
-          )
-      }
-      return client.request({
-        method: 'executeTransaction',
-        params: {
-          programName: 'credits.aleo',
-          functionName: params.privateFee ? 'transfer_private' : 'transfer_public',
-          inputs: [params.to, `${params.amount}u64`],
-          fee: 0n,
-        },
-      }) as Promise<string>
-    },
+    transfer: (params) =>
+      writeContractFn({
+        program: 'credits.aleo',
+        function: params.privateFee ? 'transfer_private' : 'transfer_public',
+        inputs: [params.to, `${params.amount}u64`],
+        fee: 0n,
+        privateFee: params.privateFee,
+      }),
 
     decrypt: (params) =>
       client.request({
@@ -1568,12 +1558,10 @@ export function walletActions(client: Client): WalletActions {
       }) as Promise<string>,
 
     requestRecords: (params) =>
-      client.records
-        ? client.records.getRecords({ program: params.program })
-        : client.request({
-            method: 'requestRecords',
-            params: { program: params.program },
-          }) as Promise<unknown[]>,
+      client.request({
+        method: 'requestRecords',
+        params: { program: params.program },
+      }) as Promise<unknown[]>,
   }
 }
 ```
@@ -1582,19 +1570,44 @@ export function walletActions(client: Client): WalletActions {
 
 ```ts
 // packages/core/src/clients/createWalletClient.ts
-import { createClient, type ClientConfig, type Client } from './createClient.js'
+import type { SignerAccount } from '../types/account.js'
+import type { ProvingConfig } from '../types/proving.js'
+import type { RecordsConfig } from '../types/records.js'
+import type { Transport } from '../types/transport.js'
+import { createClient, type Client } from './createClient.js'
 import { walletActions, type WalletActions } from './decorators/wallet.js'
 
-export type WalletClientConfig = ClientConfig & {
+/** Config for RPC account — proving is excluded, wallet handles it */
+export type RpcWalletClientConfig = {
+  account: SignerAccount & { type: 'rpc' }
+  transport: Transport
+  records?: RecordsConfig | undefined
   key?: string | undefined
   name?: string | undefined
 }
+
+/** Config for local account — must provide proving config */
+export type LocalWalletClientConfig = {
+  account: SignerAccount & { type: 'local' }
+  transport: Transport
+  proving: ProvingConfig
+  records?: RecordsConfig | undefined
+  key?: string | undefined
+  name?: string | undefined
+}
+
+export type WalletClientConfig = RpcWalletClientConfig | LocalWalletClientConfig
 
 export type WalletClient = Client & WalletActions
 
 export function createWalletClient(config: WalletClientConfig): WalletClient {
   const { key = 'wallet', name = 'Wallet Client', ...rest } = config
-  const client = createClient({ ...rest, key, name })
+  const client = createClient({
+    ...rest,
+    proving: 'proving' in rest ? rest.proving : undefined,
+    key,
+    name,
+  })
   return client.extend(walletActions) as WalletClient
 }
 ```
@@ -1611,7 +1624,7 @@ Add to `packages/core/src/index.ts`:
 ```ts
 export { createClient, type Client, type ClientConfig } from './clients/createClient.js'
 export { createPublicClient, type PublicClient, type PublicClientConfig } from './clients/createPublicClient.js'
-export { createWalletClient, type WalletClient, type WalletClientConfig } from './clients/createWalletClient.js'
+export { createWalletClient, type WalletClient, type WalletClientConfig, type RpcWalletClientConfig, type LocalWalletClientConfig } from './clients/createWalletClient.js'
 export type { PublicActions } from './clients/decorators/public.js'
 export type { WalletActions } from './clients/decorators/wallet.js'
 ```
@@ -1620,7 +1633,7 @@ export type { WalletActions } from './clients/decorators/wallet.js'
 
 ```bash
 git add packages/core/src/clients/ packages/core/test/clients/ packages/core/src/index.ts
-git commit -m "feat: add client layer — createClient, createPublicClient, createWalletClient with decorators"
+git commit -m "feat: add client layer — createClient, createPublicClient, createWalletClient with proving config and executeTransaction alias"
 ```
 
 ---
@@ -1681,18 +1694,17 @@ Expected: FAIL — module not found.
 
 ```ts
 // packages/core/src/accounts/toAccount.ts
-import type { AleoLocalAccount, AleoRpcAccount, AleoViewOnlyAccount } from '../types/account.js'
+import type { LocalAccount, RpcAccount, ViewOnlyAccount } from '../types/account.js'
 
 export type ToAccountSource = {
   address: string
-  viewKey?: string | undefined
   sign?: (message: Uint8Array) => Promise<Uint8Array>
   signMessage?: (message: Uint8Array) => Promise<Uint8Array>
 }
 
-export function toAccount(source: ToAccountSource & { type: 'rpc' }): AleoRpcAccount
-export function toAccount(source: ToAccountSource & { type: 'viewOnly'; viewKey: string }): AleoViewOnlyAccount
-export function toAccount(source: ToAccountSource & { type: 'local'; privateKey: string; viewKey: string; source: string }): AleoLocalAccount
+export function toAccount(source: ToAccountSource & { type: 'rpc' }): RpcAccount
+export function toAccount(source: ToAccountSource & { type: 'viewOnly'; viewKey: string }): ViewOnlyAccount
+export function toAccount(source: ToAccountSource & { type: 'local'; privateKey: string; viewKey: string; source: string }): LocalAccount
 export function toAccount(source: any): any {
   return source
 }
@@ -1702,20 +1714,18 @@ export function toAccount(source: any): any {
 
 ```ts
 // packages/core/src/accounts/rpcAccount.ts
-import type { AleoRpcAccount } from '../types/account.js'
+import type { RpcAccount } from '../types/account.js'
 
 type RpcAccountSource = {
   address: string
-  viewKey?: string | undefined
   sign: (message: Uint8Array) => Promise<Uint8Array>
   signMessage: (message: Uint8Array) => Promise<Uint8Array>
 }
 
-export function rpcAccount(source: RpcAccountSource): AleoRpcAccount {
+export function rpcAccount(source: RpcAccountSource): RpcAccount {
   return {
     type: 'rpc',
     address: source.address,
-    viewKey: source.viewKey,
     sign: source.sign,
     signMessage: source.signMessage,
   }
@@ -1736,8 +1746,6 @@ import { privateKeyToAccount } from '../../src/accounts/privateKeyToAccount.js'
 
 describe('privateKeyToAccount', () => {
   it('creates a LocalAccount with type local and source privateKey', () => {
-    // privateKeyToAccount requires an SDK implementation to derive address/viewKey.
-    // Without an SDK, it accepts pre-derived values.
     const account = privateKeyToAccount({
       privateKey: 'APrivateKey1zkpFakeKeyForTesting123456789abcdef',
       address: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
@@ -1759,7 +1767,7 @@ describe('privateKeyToAccount', () => {
 
 ```ts
 // packages/core/src/accounts/privateKeyToAccount.ts
-import type { AleoLocalAccount } from '../types/account.js'
+import type { LocalAccount } from '../types/account.js'
 
 type PrivateKeyAccountSource = {
   privateKey: string
@@ -1776,7 +1784,7 @@ type PrivateKeyAccountSource = {
  * the derived address and viewKey. SDK adapter packages (e.g. @aleo-viem/provable)
  * will provide convenience wrappers that derive these automatically.
  */
-export function privateKeyToAccount(source: PrivateKeyAccountSource): AleoLocalAccount<'privateKey'> {
+export function privateKeyToAccount(source: PrivateKeyAccountSource): LocalAccount<'privateKey'> {
   const defaultSign = async (_message: Uint8Array): Promise<Uint8Array> => {
     throw new Error(
       'sign() not implemented. Provide a sign function or use an SDK adapter that implements signing.',
@@ -1804,7 +1812,7 @@ Expected: PASS
 
 ```ts
 // packages/core/src/accounts/mnemonicToAccount.ts
-import type { AleoLocalAccount } from '../types/account.js'
+import type { LocalAccount } from '../types/account.js'
 
 type MnemonicAccountSource = {
   mnemonic: string
@@ -1821,7 +1829,7 @@ type MnemonicAccountSource = {
  * Like privateKeyToAccount, the caller must provide derived values.
  * SDK adapter packages will provide convenience wrappers.
  */
-export function mnemonicToAccount(source: MnemonicAccountSource): AleoLocalAccount<'mnemonic'> {
+export function mnemonicToAccount(source: MnemonicAccountSource): LocalAccount<'mnemonic'> {
   const defaultSign = async (_message: Uint8Array): Promise<Uint8Array> => {
     throw new Error(
       'sign() not implemented. Provide a sign function or use an SDK adapter that implements signing.',
@@ -1844,14 +1852,14 @@ export function mnemonicToAccount(source: MnemonicAccountSource): AleoLocalAccou
 
 ```ts
 // packages/core/src/accounts/viewOnlyAccount.ts
-import type { AleoViewOnlyAccount } from '../types/account.js'
+import type { ViewOnlyAccount } from '../types/account.js'
 
 type ViewOnlyAccountSource = {
   address: string
   viewKey: string
 }
 
-export function viewOnlyAccount(source: ViewOnlyAccountSource): AleoViewOnlyAccount {
+export function viewOnlyAccount(source: ViewOnlyAccountSource): ViewOnlyAccount {
   return {
     type: 'viewOnly',
     address: source.address,
@@ -1970,10 +1978,10 @@ Expected: PASS
 ```ts
 // packages/core/src/actions/public/getBlock.ts
 import type { Client } from '../../clients/createClient.js'
-import type { AleoBlock } from '../../types/block.js'
+import type { Block } from '../../types/block.js'
 
 export type GetBlockParameters = { height?: number; hash?: string }
-export type GetBlockReturnType = AleoBlock
+export type GetBlockReturnType = Block
 
 export async function getBlock(client: Client, params: GetBlockParameters): Promise<GetBlockReturnType> {
   if (params.hash) {
@@ -1986,10 +1994,10 @@ export async function getBlock(client: Client, params: GetBlockParameters): Prom
 ```ts
 // packages/core/src/actions/public/getTransaction.ts
 import type { Client } from '../../clients/createClient.js'
-import type { AleoTransaction } from '../../types/transaction.js'
+import type { Transaction } from '../../types/transaction.js'
 
 export type GetTransactionParameters = { id: string }
-export type GetTransactionReturnType = AleoTransaction
+export type GetTransactionReturnType = Transaction
 
 export async function getTransaction(client: Client, params: GetTransactionParameters): Promise<GetTransactionReturnType> {
   return client.request({ method: 'getTransaction', params: { id: params.id } }) as Promise<GetTransactionReturnType>
@@ -2045,7 +2053,7 @@ export type EstimateGasReturnType = bigint
 
 export async function estimateGas(_client: Client, _params: EstimateGasParameters): Promise<EstimateGasReturnType> {
   // Fee estimation on Aleo requires building an authorization first.
-  // This will be implemented when prover integration is built out.
+  // This will be implemented when proving integration is built out.
   // For now, returns 0n — callers should specify fees explicitly.
   return 0n
 }
@@ -2054,15 +2062,12 @@ export async function estimateGas(_client: Client, _params: EstimateGasParameter
 ```ts
 // packages/core/src/actions/public/getRecords.ts
 import type { Client } from '../../clients/createClient.js'
-import type { AleoRecord } from '../../types/recordScanner.js'
+import type { Record } from '../../types/records.js'
 
 export type GetRecordsParameters = { program: string }
-export type GetRecordsReturnType = AleoRecord[]
+export type GetRecordsReturnType = Record[]
 
-export async function getRecords(client: Client, params: GetRecordsParameters): Promise<GetRecordsReturnType> {
-  if (client.records) {
-    return client.records.getRecords({ program: params.program })
-  }
+export async function getRecords(_client: Client, _params: GetRecordsParameters): Promise<GetRecordsReturnType> {
   return []
 }
 ```
@@ -2271,11 +2276,11 @@ import { describe, it, expect, vi } from 'vitest'
 import { writeContract } from '../../../src/actions/wallet/writeContract.js'
 
 describe('writeContract', () => {
-  it('uses prover when available', async () => {
+  it('uses custom buildTransaction when proving config has one', async () => {
     const mockTx = { id: 'at1built' }
     const client = {
       account: { type: 'local', sign: vi.fn(), signMessage: vi.fn() },
-      prover: { buildTransaction: vi.fn().mockResolvedValue(mockTx) },
+      proving: { mode: 'delegated', buildTransaction: vi.fn().mockResolvedValue(mockTx) },
       request: vi.fn().mockResolvedValue('at1sent'),
     } as any
 
@@ -2286,7 +2291,7 @@ describe('writeContract', () => {
       fee: 1000n,
     })
 
-    expect(client.prover.buildTransaction).toHaveBeenCalledWith({
+    expect(client.proving.buildTransaction).toHaveBeenCalledWith({
       programName: 'my_program.aleo',
       functionName: 'transfer',
       inputs: ['aleo1abc', '100u64'],
@@ -2296,10 +2301,10 @@ describe('writeContract', () => {
     expect(result).toBe('at1sent')
   })
 
-  it('delegates to RPC when no prover', async () => {
+  it('delegates to RPC when no proving config', async () => {
     const client = {
       account: { type: 'rpc', sign: vi.fn(), signMessage: vi.fn() },
-      prover: undefined,
+      proving: undefined,
       request: vi.fn().mockResolvedValue('at1rpc'),
     } as any
 
@@ -2319,7 +2324,7 @@ describe('writeContract', () => {
 })
 ```
 
-- [ ] **Step 4: Implement writeContract**
+- [ ] **Step 4: Implement writeContract (with executeTransaction alias export)**
 
 ```ts
 // packages/core/src/actions/wallet/writeContract.ts
@@ -2343,8 +2348,9 @@ export async function writeContract(
     throw new AccountNotFoundError()
   }
 
-  if (client.prover) {
-    const tx = await client.prover.buildTransaction({
+  // If proving config has a custom buildTransaction, use it
+  if (client.proving?.buildTransaction) {
+    const tx = await client.proving.buildTransaction({
       programName: params.program,
       functionName: params.function,
       inputs: params.inputs,
@@ -2357,6 +2363,7 @@ export async function writeContract(
     }) as Promise<string>
   }
 
+  // Delegate to the transport (wallet handles proving)
   return client.request({
     method: 'executeTransaction',
     params: {
@@ -2368,6 +2375,9 @@ export async function writeContract(
     },
   }) as Promise<string>
 }
+
+/** Alias for writeContract — consistent with Aleo wallet adapter terminology */
+export const executeTransaction = writeContract
 ```
 
 - [ ] **Step 5: Implement remaining wallet actions**
@@ -2394,7 +2404,7 @@ export async function deployContract(
 // packages/core/src/actions/wallet/signMessage.ts
 import type { Client } from '../../clients/createClient.js'
 import { AccountNotFoundError } from '../../errors/errors.js'
-import type { AleoSignableAccount } from '../../types/account.js'
+import type { SignerAccount } from '../../types/account.js'
 
 export type SignMessageParameters = { message: Uint8Array }
 export type SignMessageReturnType = Uint8Array
@@ -2406,7 +2416,7 @@ export async function signMessage(
   if (!client.account || !('signMessage' in client.account)) {
     throw new AccountNotFoundError()
   }
-  return (client.account as AleoSignableAccount).signMessage(params.message)
+  return (client.account as SignerAccount).signMessage(params.message)
 }
 ```
 
@@ -2458,22 +2468,19 @@ export async function decrypt(
 ```ts
 // packages/core/src/actions/wallet/requestRecords.ts
 import type { Client } from '../../clients/createClient.js'
-import type { AleoRecord } from '../../types/recordScanner.js'
+import type { Record } from '../../types/records.js'
 
 export type RequestRecordsParameters = { program: string }
-export type RequestRecordsReturnType = AleoRecord[]
+export type RequestRecordsReturnType = Record[]
 
 export async function requestRecords(
   client: Client,
   params: RequestRecordsParameters,
 ): Promise<RequestRecordsReturnType> {
-  if (client.records) {
-    return client.records.getRecords({ program: params.program })
-  }
   return client.request({
     method: 'requestRecords',
     params: { program: params.program },
-  }) as Promise<AleoRecord[]>
+  }) as Promise<Record[]>
 }
 ```
 
@@ -2511,7 +2518,7 @@ describe('transfer', () => {
   it('calls writeContract with credits.aleo transfer_public', async () => {
     const client = {
       account: { type: 'rpc', sign: vi.fn(), signMessage: vi.fn() },
-      prover: undefined,
+      proving: undefined,
       request: vi.fn().mockResolvedValue('at1tx'),
     } as any
 
@@ -2546,6 +2553,8 @@ import type { Client } from '../createClient.js'
 export type WalletActions = {
   sendTransaction: (params: SendTransactionParameters) => Promise<SendTransactionReturnType>
   writeContract: (params: WriteContractParameters) => Promise<WriteContractReturnType>
+  /** Alias for writeContract — consistent with Aleo wallet adapter terminology */
+  executeTransaction: (params: WriteContractParameters) => Promise<WriteContractReturnType>
   deployContract: (params: DeployContractParameters) => Promise<DeployContractReturnType>
   signMessage: (params: SignMessageParameters) => Promise<SignMessageReturnType>
   transfer: (params: TransferParameters) => Promise<TransferReturnType>
@@ -2554,9 +2563,12 @@ export type WalletActions = {
 }
 
 export function walletActions(client: Client): WalletActions {
+  const writeContractFn = (params: WriteContractParameters) => writeContract(client, params)
+
   return {
     sendTransaction: (params) => sendTransaction(client, params),
-    writeContract: (params) => writeContract(client, params),
+    writeContract: writeContractFn,
+    executeTransaction: writeContractFn,
     deployContract: (params) => deployContract(client, params),
     signMessage: (params) => signMessage(client, params),
     transfer: (params) => transfer(client, params),
@@ -2572,7 +2584,7 @@ Add to `packages/core/src/index.ts`:
 
 ```ts
 export { sendTransaction } from './actions/wallet/sendTransaction.js'
-export { writeContract } from './actions/wallet/writeContract.js'
+export { writeContract, executeTransaction } from './actions/wallet/writeContract.js'
 export { deployContract } from './actions/wallet/deployContract.js'
 export { signMessage } from './actions/wallet/signMessage.js'
 export { transfer } from './actions/wallet/transfer.js'
@@ -2589,16 +2601,401 @@ Expected: All PASS
 
 ```bash
 git add packages/core/src/actions/wallet/ packages/core/test/actions/wallet/ packages/core/src/clients/decorators/wallet.ts packages/core/src/index.ts
-git commit -m "feat: add wallet actions — sendTransaction, writeContract, deployContract, signMessage, transfer, decrypt, requestRecords"
+git commit -m "feat: add wallet actions — sendTransaction, writeContract/executeTransaction, deployContract, signMessage, transfer, decrypt, requestRecords"
 ```
 
 ---
 
-### Task 10: Integration Test — Full Client Usage
+### Task 10: Contract Instance — getContract & parseProgram
+
+**Files:**
+- Create: `packages/core/src/contract/parseProgram.ts`
+- Create: `packages/core/src/contract/getContract.ts`
+- Create: `packages/core/test/contract/parseProgram.test.ts`
+- Create: `packages/core/test/contract/getContract.test.ts`
+
+- [ ] **Step 1: Write parseProgram tests**
+
+```ts
+// packages/core/test/contract/parseProgram.test.ts
+import { describe, it, expect } from 'vitest'
+import { parseProgram } from '../../src/contract/parseProgram.js'
+
+const SAMPLE_PROGRAM = `
+program token.aleo;
+
+mapping balances:
+    key as address.public;
+    value as u64.public;
+
+mapping metadata:
+    key as field.public;
+    value as u128.public;
+
+function transfer:
+    input r0 as address.private;
+    input r1 as u64.private;
+
+function mint:
+    input r0 as address.private;
+    input r1 as u64.private;
+
+function burn:
+    input r0 as u64.private;
+`
+
+describe('parseProgram', () => {
+  it('extracts program id', () => {
+    const parsed = parseProgram(SAMPLE_PROGRAM)
+    expect(parsed.id).toBe('token.aleo')
+  })
+
+  it('extracts mapping names', () => {
+    const parsed = parseProgram(SAMPLE_PROGRAM)
+    expect(parsed.mappings).toEqual(['balances', 'metadata'])
+  })
+
+  it('extracts function names', () => {
+    const parsed = parseProgram(SAMPLE_PROGRAM)
+    expect(parsed.functions).toEqual(['transfer', 'mint', 'burn'])
+  })
+
+  it('extracts function input types', () => {
+    const parsed = parseProgram(SAMPLE_PROGRAM)
+    expect(parsed.functionInputs['transfer']).toEqual([
+      { name: 'r0', type: 'address', visibility: 'private' },
+      { name: 'r1', type: 'u64', visibility: 'private' },
+    ])
+  })
+
+  it('extracts mapping key/value types', () => {
+    const parsed = parseProgram(SAMPLE_PROGRAM)
+    expect(parsed.mappingTypes['balances']).toEqual({
+      key: { type: 'address', visibility: 'public' },
+      value: { type: 'u64', visibility: 'public' },
+    })
+  })
+})
+```
+
+- [ ] **Step 2: Implement parseProgram**
+
+```ts
+// packages/core/src/contract/parseProgram.ts
+
+export type FunctionInput = {
+  name: string
+  type: string
+  visibility: 'public' | 'private'
+}
+
+export type MappingType = {
+  key: { type: string; visibility: string }
+  value: { type: string; visibility: string }
+}
+
+export type ParsedProgram = {
+  id: string
+  source: string
+  mappings: string[]
+  functions: string[]
+  functionInputs: Record<string, FunctionInput[]>
+  mappingTypes: Record<string, MappingType>
+}
+
+export function parseProgram(source: string): ParsedProgram {
+  const lines = source.split('\n').map((l) => l.trim())
+
+  // Extract program ID
+  const programLine = lines.find((l) => l.startsWith('program '))
+  const id = programLine?.replace('program ', '').replace(';', '') ?? ''
+
+  // Extract mappings
+  const mappings: string[] = []
+  const mappingTypes: Record<string, MappingType> = {}
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(/^mapping (\w+):$/)
+    if (match) {
+      const name = match[1]
+      mappings.push(name)
+      const keyLine = lines[i + 1]?.match(/key as (\w+)\.(\w+);/)
+      const valueLine = lines[i + 2]?.match(/value as (\w+)\.(\w+);/)
+      if (keyLine && valueLine) {
+        mappingTypes[name] = {
+          key: { type: keyLine[1], visibility: keyLine[2] },
+          value: { type: valueLine[1], visibility: valueLine[2] },
+        }
+      }
+    }
+  }
+
+  // Extract functions and their inputs
+  const functions: string[] = []
+  const functionInputs: Record<string, FunctionInput[]> = {}
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(/^function (\w+):$/)
+    if (match) {
+      const name = match[1]
+      functions.push(name)
+      const inputs: FunctionInput[] = []
+      for (let j = i + 1; j < lines.length; j++) {
+        const inputMatch = lines[j].match(/^input (\w+) as (\w+)\.(\w+);$/)
+        if (inputMatch) {
+          inputs.push({
+            name: inputMatch[1],
+            type: inputMatch[2],
+            visibility: inputMatch[3] as 'public' | 'private',
+          })
+        } else if (lines[j] && !lines[j].startsWith('input ')) {
+          break
+        }
+      }
+      functionInputs[name] = inputs
+    }
+  }
+
+  return { id, source, mappings, functions, functionInputs, mappingTypes }
+}
+```
+
+- [ ] **Step 3: Run parseProgram test**
+
+Run: `pnpm vitest run packages/core/test/contract/parseProgram.test.ts`
+Expected: PASS
+
+- [ ] **Step 4: Write getContract tests**
+
+```ts
+// packages/core/test/contract/getContract.test.ts
+import { describe, it, expect, vi } from 'vitest'
+import { getContract } from '../../src/contract/getContract.js'
+
+const SAMPLE_PROGRAM = `
+program token.aleo;
+
+mapping balances:
+    key as address.public;
+    value as u64.public;
+
+function transfer:
+    input r0 as address.private;
+    input r1 as u64.private;
+
+function mint:
+    input r0 as address.private;
+    input r1 as u64.private;
+`
+
+describe('getContract', () => {
+  it('creates a contract instance with read methods from public client', () => {
+    const publicClient = {
+      request: vi.fn().mockResolvedValue('100u64'),
+      readContract: vi.fn().mockResolvedValue('100u64'),
+    } as any
+
+    const contract = getContract({
+      programSource: SAMPLE_PROGRAM,
+      client: publicClient,
+    })
+
+    expect(contract.read.balances).toBeTypeOf('function')
+    expect(contract.program.id).toBe('token.aleo')
+  })
+
+  it('creates a contract instance with write methods from wallet client', () => {
+    const walletClient = {
+      request: vi.fn().mockResolvedValue('at1tx'),
+      writeContract: vi.fn().mockResolvedValue('at1tx'),
+    } as any
+
+    const contract = getContract({
+      programSource: SAMPLE_PROGRAM,
+      client: { wallet: walletClient },
+    })
+
+    expect(contract.write.transfer).toBeTypeOf('function')
+    expect(contract.write.mint).toBeTypeOf('function')
+  })
+
+  it('creates a contract with both read and write from keyed clients', () => {
+    const publicClient = {
+      readContract: vi.fn().mockResolvedValue('100u64'),
+    } as any
+    const walletClient = {
+      writeContract: vi.fn().mockResolvedValue('at1tx'),
+    } as any
+
+    const contract = getContract({
+      programSource: SAMPLE_PROGRAM,
+      client: { public: publicClient, wallet: walletClient },
+    })
+
+    expect(contract.read.balances).toBeTypeOf('function')
+    expect(contract.write.transfer).toBeTypeOf('function')
+  })
+
+  it('read calls readContract on the public client', async () => {
+    const publicClient = {
+      readContract: vi.fn().mockResolvedValue('100u64'),
+    } as any
+
+    const contract = getContract({
+      programSource: SAMPLE_PROGRAM,
+      client: publicClient,
+    })
+
+    const result = await contract.read.balances({ key: 'aleo1abc' })
+    expect(result).toBe('100u64')
+    expect(publicClient.readContract).toHaveBeenCalledWith({
+      program: 'token.aleo',
+      mapping: 'balances',
+      key: 'aleo1abc',
+    })
+  })
+
+  it('write calls writeContract on the wallet client', async () => {
+    const walletClient = {
+      writeContract: vi.fn().mockResolvedValue('at1tx'),
+    } as any
+
+    const contract = getContract({
+      programSource: SAMPLE_PROGRAM,
+      client: { wallet: walletClient },
+    })
+
+    await contract.write.transfer({ inputs: ['aleo1abc', '100u64'], fee: 1000n })
+    expect(walletClient.writeContract).toHaveBeenCalledWith({
+      program: 'token.aleo',
+      function: 'transfer',
+      inputs: ['aleo1abc', '100u64'],
+      fee: 1000n,
+    })
+  })
+})
+```
+
+- [ ] **Step 5: Implement getContract**
+
+```ts
+// packages/core/src/contract/getContract.ts
+import { parseProgram, type ParsedProgram } from './parseProgram.js'
+
+type ReadMethods = Record<string, (params: { key: string }) => Promise<unknown>>
+type WriteMethods = Record<string, (params: { inputs: string[]; fee: bigint; privateFee?: boolean }) => Promise<string>>
+
+type PublicClientLike = {
+  readContract: (params: { program: string; mapping: string; key: string }) => Promise<unknown>
+}
+
+type WalletClientLike = {
+  writeContract: (params: { program: string; function: string; inputs: string[]; fee: bigint; privateFee?: boolean }) => Promise<string>
+}
+
+type ClientParam =
+  | PublicClientLike
+  | WalletClientLike
+  | { public?: PublicClientLike; wallet?: WalletClientLike }
+
+type ContractInstance = {
+  program: ParsedProgram
+  read: ReadMethods
+  write: WriteMethods
+}
+
+export type GetContractParameters = {
+  programSource: string
+  client: ClientParam
+}
+
+function isPublicClient(client: ClientParam): client is PublicClientLike {
+  return 'readContract' in client
+}
+
+function isWalletClient(client: ClientParam): client is WalletClientLike {
+  return 'writeContract' in client
+}
+
+function isKeyedClient(client: ClientParam): client is { public?: PublicClientLike; wallet?: WalletClientLike } {
+  return 'public' in client || 'wallet' in client
+}
+
+export function getContract(params: GetContractParameters): ContractInstance {
+  const program = parseProgram(params.programSource)
+  const { client } = params
+
+  let publicClient: PublicClientLike | undefined
+  let walletClient: WalletClientLike | undefined
+
+  if (isKeyedClient(client)) {
+    publicClient = client.public
+    walletClient = client.wallet
+  } else if (isPublicClient(client)) {
+    publicClient = client
+  } else if (isWalletClient(client)) {
+    walletClient = client
+  }
+
+  // Build read methods from mappings
+  const read: ReadMethods = {}
+  if (publicClient) {
+    for (const mapping of program.mappings) {
+      read[mapping] = (readParams: { key: string }) =>
+        publicClient!.readContract({
+          program: program.id,
+          mapping,
+          key: readParams.key,
+        })
+    }
+  }
+
+  // Build write methods from functions
+  const write: WriteMethods = {}
+  if (walletClient) {
+    for (const fn of program.functions) {
+      write[fn] = (writeParams: { inputs: string[]; fee: bigint; privateFee?: boolean }) =>
+        walletClient!.writeContract({
+          program: program.id,
+          function: fn,
+          inputs: writeParams.inputs,
+          fee: writeParams.fee,
+          privateFee: writeParams.privateFee,
+        })
+    }
+  }
+
+  return { program, read, write }
+}
+```
+
+- [ ] **Step 6: Run all contract tests**
+
+Run: `pnpm vitest run packages/core/test/contract/`
+Expected: All PASS
+
+- [ ] **Step 7: Export from index.ts**
+
+Add to `packages/core/src/index.ts`:
+
+```ts
+export { getContract } from './contract/getContract.js'
+export { parseProgram } from './contract/parseProgram.js'
+```
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add packages/core/src/contract/ packages/core/test/contract/ packages/core/src/index.ts
+git commit -m "feat: add getContract and parseProgram — typed contract instances from program source"
+```
+
+---
+
+### Task 11: Integration Test — Full Client Usage
 
 **Files:**
 - Create: `packages/core/test/integration/publicClient.test.ts`
 - Create: `packages/core/test/integration/walletClient.test.ts`
+- Create: `packages/core/test/integration/contract.test.ts`
 
 - [ ] **Step 1: Write public client integration test**
 
@@ -2679,23 +3076,39 @@ describe('WalletClient integration', () => {
     })
     expect(txId).toBe('at1txid')
 
+    // executeTransaction is an alias — same result
+    const txId2 = await client.executeTransaction({
+      program: 'my_program.aleo',
+      function: 'do_stuff',
+      inputs: ['aleo1abc', '42u64'],
+      fee: 500n,
+    })
+    expect(txId2).toBe('at1txid')
+
     const sig = await client.signMessage({ message: new Uint8Array([3, 4, 5]) })
     expect(sig).toEqual(new Uint8Array([2]))
   })
 
-  it('creates a wallet client with prover and builds transactions', async () => {
+  it('creates a wallet client with local account and proving config', async () => {
     const mockTx = { id: 'at1built' }
-    const mockProver = { buildTransaction: vi.fn().mockResolvedValue(mockTx) }
     const mockRequest = vi.fn().mockResolvedValue('at1broadcasted')
 
     const client = createWalletClient({
-      account: rpcAccount({
+      account: {
+        type: 'local',
+        source: 'privateKey',
         address: 'aleo1abc',
+        privateKey: 'APrivateKey1...',
+        viewKey: 'AViewKey1...',
         sign: vi.fn(),
         signMessage: vi.fn(),
-      }),
+      },
       transport: custom({ request: mockRequest }),
-      prover: mockProver,
+      proving: {
+        mode: 'delegated',
+        url: 'https://prover.example.com',
+        buildTransaction: vi.fn().mockResolvedValue(mockTx),
+      },
     })
 
     await client.writeContract({
@@ -2705,7 +3118,7 @@ describe('WalletClient integration', () => {
       fee: 100n,
     })
 
-    expect(mockProver.buildTransaction).toHaveBeenCalled()
+    expect(client.proving?.buildTransaction).toHaveBeenCalled()
     expect(mockRequest).toHaveBeenCalledWith({
       method: 'sendTransaction',
       params: { transaction: JSON.stringify(mockTx) },
@@ -2714,21 +3127,76 @@ describe('WalletClient integration', () => {
 })
 ```
 
-- [ ] **Step 3: Run all tests**
+- [ ] **Step 3: Write contract integration test**
+
+```ts
+// packages/core/test/integration/contract.test.ts
+import { describe, it, expect, vi } from 'vitest'
+import { createPublicClient } from '../../src/clients/createPublicClient.js'
+import { createWalletClient } from '../../src/clients/createWalletClient.js'
+import { custom } from '../../src/transports/custom.js'
+import { rpcAccount } from '../../src/accounts/rpcAccount.js'
+import { getContract } from '../../src/contract/getContract.js'
+
+const TOKEN_PROGRAM = `
+program token.aleo;
+
+mapping balances:
+    key as address.public;
+    value as u64.public;
+
+function transfer:
+    input r0 as address.private;
+    input r1 as u64.private;
+`
+
+describe('getContract integration', () => {
+  it('reads a mapping and writes a function through contract instance', async () => {
+    const publicClient = createPublicClient({
+      transport: custom({ request: vi.fn().mockResolvedValue('500u64') }),
+    })
+
+    const walletClient = createWalletClient({
+      account: rpcAccount({
+        address: 'aleo1abc',
+        sign: vi.fn(),
+        signMessage: vi.fn(),
+      }),
+      transport: custom({ request: vi.fn().mockResolvedValue('at1tx') }),
+    })
+
+    const contract = getContract({
+      programSource: TOKEN_PROGRAM,
+      client: { public: publicClient, wallet: walletClient },
+    })
+
+    const balance = await contract.read.balances({ key: 'aleo1abc' })
+    expect(balance).toBe('500u64')
+
+    const txId = await contract.write.transfer({
+      inputs: ['aleo1dest', '100u64'],
+      fee: 1000n,
+    })
+    expect(txId).toBe('at1tx')
+  })
+})
+```
+
+- [ ] **Step 4: Run all tests**
 
 Run: `pnpm vitest run`
 Expected: All PASS
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add packages/core/test/integration/
-git commit -m "test: add integration tests for PublicClient and WalletClient"
+git commit -m "test: add integration tests for PublicClient, WalletClient, and getContract"
 ```
 
 ---
 
-### Task 11: Build Verification & Final Barrel Export
+### Task 12: Build Verification & Final Barrel Export
 
 **Files:**
 - Modify: `packages/core/src/index.ts` (verify completeness)
@@ -2737,14 +3205,15 @@ git commit -m "test: add integration tests for PublicClient and WalletClient"
 
 Read `packages/core/src/index.ts` and ensure every public type, function, and class is exported. The final file should export:
 
-- All types from `types/`
+- All types from `types/` (Account, SignerAccount, LocalAccount, RpcAccount, ViewOnlyAccount, AnyAccount, Transport, TransportConfig, RequestFn, ProvingConfig, BuildTransactionOptions, RecordsConfig, RecordSearchParams, Record, Block, ConfirmedTransaction, Transaction, Transition, Program, MappingValue)
 - All errors from `errors/`
 - All utilities from `utils/`
 - All transports: `createTransport`, `http`, `custom`, `fallback`
 - All clients: `createClient`, `createPublicClient`, `createWalletClient`
 - All account factories: `rpcAccount`, `privateKeyToAccount`, `mnemonicToAccount`, `viewOnlyAccount`, `toAccount`
 - All public actions individually
-- All wallet actions individually
+- All wallet actions individually (including `executeTransaction` alias)
+- `getContract`, `parseProgram`
 - `PublicActions` and `WalletActions` types
 
 - [ ] **Step 2: Run the build**
@@ -2776,13 +3245,14 @@ git commit -m "chore: verify build, types, and full test suite pass"
 | Task | What it builds | Depends on |
 |------|---------------|------------|
 | 1 | Monorepo scaffold, tooling | — |
-| 2 | Core types (Account, Transport, Prover, RecordScanner, Block, Transaction, Program) | 1 |
+| 2 | Core types (Account, Transport, ProvingConfig, RecordsConfig, Block, Transaction, Program) | 1 |
 | 3 | Utilities (address, credits, uid) | 1 |
 | 4 | Error types | 1 |
 | 5 | Transport layer (http, custom, fallback) | 2, 4 |
-| 6 | Client layer (createClient, createPublicClient, createWalletClient) | 2, 3, 4, 5 |
+| 6 | Client layer (createClient, createPublicClient, createWalletClient with proving config) | 2, 3, 4, 5 |
 | 7 | Account factories (rpcAccount, privateKeyToAccount, mnemonicToAccount, viewOnlyAccount) | 2 |
 | 8 | Public actions (9 actions, individual files + decorator) | 2, 6 |
-| 9 | Wallet actions (7 actions, individual files + decorator) | 2, 4, 6, 7 |
-| 10 | Integration tests | All above |
-| 11 | Build verification | All above |
+| 9 | Wallet actions (7 actions + executeTransaction alias, individual files + decorator) | 2, 4, 6, 7 |
+| 10 | Contract instance (getContract, parseProgram) | 6, 8, 9 |
+| 11 | Integration tests | All above |
+| 12 | Build verification | All above |

@@ -28,7 +28,8 @@ const value = await client.readContract({
 - **Interface-first** — core has zero hard dependencies on any SDK. Wallets and SDKs plug in by implementing interfaces.
 - **Multiple account types** — RPC accounts (wallet adapters), local accounts (private key, mnemonic), view-only accounts
 - **Pluggable transports** — `http()` for Aleo REST API, `custom()` for wallet adapters, `fallback()` for chaining
-- **Optional prover and record scanner** — configure proving (delegated or local) and record scanning per client, or let wallets handle it internally
+- **Contract instances** — `getContract()` parses Aleo program source and provides typed `read`/`write` methods
+- **Proving as configuration** — proving strategy is a client config concern (`delegated` or `local`), not a separate abstraction
 
 ## Packages
 
@@ -72,6 +73,7 @@ const client = createWalletClient({
   transport: custom(walletAdapter),
 })
 
+// writeContract or its alias executeTransaction
 await client.writeContract({
   program: 'my_program.aleo',
   function: 'transfer',
@@ -106,8 +108,30 @@ const client = createWalletClient({
     viewKey: 'AViewKey1...',
   }),
   transport: http('https://api.provable.com/v2'),
-  prover: delegated({ url: '...', apiKey: '...' }),
-  records: networkScanner({ url: '...' }),
+  proving: {
+    mode: 'delegated',
+    url: '...',
+    apiKey: '...',
+  },
+  records: { mode: 'network', url: '...' },
+})
+```
+
+### Contract instances
+
+```ts
+import { getContract } from '@aleo-viem/core'
+
+const contract = getContract({
+  programSource: tokenProgramSource,
+  client: { public: publicClient, wallet: walletClient },
+})
+
+// Typed read/write from parsed program source
+const balance = await contract.read.balances({ key: 'aleo1...' })
+const txId = await contract.write.transfer({
+  inputs: ['aleo1...', '100u64'],
+  fee: 1000n,
 })
 ```
 
@@ -139,12 +163,18 @@ const account = viewOnlyAccount({
 ├─────────────────────────────────────────────────┤
 │                   Actions                        │
 │  getBlockNumber    writeContract                 │
-│  getBalance        deployContract                │
-│  readContract      sendTransaction               │
-│  getCode           signMessage                   │
-│  getBlock          transfer                      │
-│  estimateGas       decrypt                       │
-│  getRecords        requestRecords                │
+│  getBalance        executeTransaction (alias)    │
+│  readContract      deployContract                │
+│  getCode           sendTransaction               │
+│  getBlock          signMessage                   │
+│  estimateGas       transfer                      │
+│  getRecords        decrypt                       │
+│                    requestRecords                │
+├─────────────────────────────────────────────────┤
+│              Contract Instances                   │
+│  getContract({ programSource, client })          │
+│  → contract.read.mappingName()                   │
+│  → contract.write.functionName()                 │
 ├─────────────────────────────────────────────────┤
 │                  Accounts                        │
 │  RpcAccount     LocalAccount    ViewOnlyAccount  │
@@ -153,9 +183,9 @@ const account = viewOnlyAccount({
 │                 Transports                       │
 │  http()         custom()        fallback()       │
 ├─────────────────────────────────────────────────┤
-│             Optional Providers                   │
-│  Prover                  RecordScanner           │
-│  delegated() | local()   network() | local()     │
+│            Client Configuration                  │
+│  proving: { mode, url, apiKey }                  │
+│  records: config object or custom impl           │
 ├─────────────────────────────────────────────────┤
 │          Aleo Network / Wallet Adapter           │
 └─────────────────────────────────────────────────┘
@@ -166,9 +196,9 @@ const account = viewOnlyAccount({
 aleo-viem defines interfaces. Implementations plug in.
 
 - **Transport** — any object with a `request(method, params)` function
-- **Account** — describes capabilities (can sign? has private key? has view key?), not origin
-- **Prover** — builds transactions (delegated proving service, local WASM, native — your choice)
-- **RecordScanner** — discovers records (network scanner, local chain scan, custom indexer)
+- **Account** — describes capabilities (can sign? has private key? has view key?), not origin. No `Aleo` prefix — use import namespacing.
+- **Proving** — a client configuration (`mode: 'delegated' | 'local'`), not a standalone interface. Wallets handle proving internally; only SDK/local users configure it. Type-excluded for RPC accounts so dapps can't override wallet preferences.
+- **Records** — config object for common cases (`{ mode: 'network', url }`) or custom implementation (`{ getRecords: ... }`) for advanced use cases.
 
 Wallets handle proving and record management internally by default. These configs are only needed when using the SDK directly — and they're always overridable.
 
@@ -198,12 +228,13 @@ Any of these can back any interface. The wallet adapter can produce RPC or local
 | `getRecords({ program })` | Fetch records (Aleo-native) |
 | `getTransitionViewKeys({ transactionId })` | Get transition view keys (Aleo-native) |
 
-### Wallet Actions (account required)
+### Wallet Actions (account required — must be SignerAccount)
 
 | Method | Description |
 |--------|-------------|
 | `sendTransaction({ transaction })` | Broadcast a built transaction |
 | `writeContract({ program, function, inputs, fee })` | Execute a program transition |
+| `executeTransaction(...)` | Alias for `writeContract` (Aleo wallet adapter terminology) |
 | `deployContract({ program, fee })` | Deploy a program |
 | `signMessage({ message })` | Sign an arbitrary message |
 | `transfer({ to, amount })` | Transfer credits (convenience) |
@@ -212,18 +243,19 @@ Any of these can back any interface. The wallet adapter can produce RPC or local
 
 ## Naming Convention
 
-If viem has a name for the concept, aleo-viem uses it. Aleo-specific names are only used for concepts with no EVM equivalent (records, decrypt, transition view keys).
+If viem has a name for the concept, aleo-viem uses it. Aleo-specific names are only used for concepts with no EVM equivalent (records, decrypt, transition view keys). `executeTransaction` is provided as an alias for `writeContract` to stay consistent with Aleo wallet adapter terminology.
 
 | viem concept | aleo-viem equivalent |
 |---|---|
 | `getBalance` | `getBalance` — reads public credits |
 | `readContract` | `readContract` — reads program mapping |
-| `writeContract` | `writeContract` — executes program transition |
+| `writeContract` | `writeContract` / `executeTransaction` — executes program transition |
 | `deployContract` | `deployContract` — deploys program |
 | `getCode` | `getCode` — fetches program source |
 | `estimateGas` | `estimateGas` — estimates fee |
 | `sendTransaction` | `sendTransaction` — broadcasts transaction |
 | `signMessage` | `signMessage` — signs message |
+| `getContract` | `getContract` — typed contract instance from program source |
 
 ## Project Structure
 
@@ -236,6 +268,7 @@ aleo-viem/
 │           ├── accounts/  # rpcAccount, privateKeyToAccount, etc.
 │           ├── transports/# http, custom, fallback
 │           ├── actions/   # public/ and wallet/ actions
+│           ├── contract/  # getContract, parseProgram
 │           ├── types/     # core type definitions
 │           ├── errors/    # error types
 │           └── utils/     # address validation, credits conversion
