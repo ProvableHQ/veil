@@ -8,6 +8,7 @@ A viem-like TypeScript interface for the Aleo blockchain. Wraps existing Aleo wa
 - Interface-first: core depends on interfaces, not specific SDK implementations
 - Any wallet, SDK, or service can plug in by implementing the interfaces
 - Use viem method names wherever the concept maps; Aleo-native names only for concepts with no EVM equivalent
+- Agent-first: every action is exposed as an MCP tool, with structured JSON output and actionable errors, updated incrementally as the library grows
 
 ## Non-Goals
 
@@ -289,6 +290,158 @@ interface ProvingConfig {
 
 The optional `buildTransaction` override is an escape hatch for custom proving implementations that don't fit the delegated/local model.
 
+## Agent Tooling
+
+aleo-viem is designed for two audiences equally: human developers who write code against the TypeScript library, and AI agents that either write code using viem patterns or call tools directly. Agent tooling is built incrementally — every time a new action ships in core, its corresponding MCP tool, tool schema, and structured output are shipped alongside it.
+
+### MCP Server (`@aleo-viem/mcp`)
+
+An MCP server exposing every aleo-viem action as a tool. This is the primary interface for tool-calling agents (Claude, GPT, autonomous DeFi agents, etc.).
+
+Each tool has a rich description that explains the Aleo concept in terms an agent already understands from Ethereum/viem:
+
+```json
+{
+  "name": "aleo_read_mapping",
+  "description": "Read a value from an Aleo program's public mapping. Equivalent to viem's readContract, but Aleo programs are identified by name (e.g. 'credits.aleo') rather than address. Returns structured JSON with parsed Aleo values.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "program": { "type": "string", "description": "Program ID, e.g. 'credits.aleo'" },
+      "mapping": { "type": "string", "description": "Mapping name, e.g. 'account'" },
+      "key": { "type": "string", "description": "Key to look up, e.g. 'aleo1...'" }
+    },
+    "required": ["program", "mapping", "key"]
+  }
+}
+```
+
+```json
+{
+  "name": "aleo_execute",
+  "description": "Execute a transition on an Aleo program. Equivalent to viem's writeContract. Requires a connected wallet. Returns transaction ID.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "program": { "type": "string" },
+      "function": { "type": "string" },
+      "inputs": { "type": "array", "items": { "type": "string" } },
+      "fee": { "type": "number", "description": "Fee in microcredits" }
+    },
+    "required": ["program", "function", "inputs"]
+  }
+}
+```
+
+The MCP server wraps a configured aleo-viem client. It can be run as a standalone process or embedded in an agent framework.
+
+### Agent Tool Schemas (`@aleo-viem/core/agent`)
+
+Framework-agnostic agent tool definitions that any agent framework can consume. Exposed via subpath export so integrations (LangChain, Vercel AI SDK, etc.) can import and use them directly:
+
+```ts
+import { aleoAgentTools } from '@aleo-viem/core/agent'
+
+// Returns agent tool definitions + execution handlers
+const tools = aleoAgentTools({
+  client: publicClient,
+  walletClient: walletClient,
+})
+```
+
+Each agent tool definition includes:
+- Input/output JSON schemas
+- Rich descriptions explaining Aleo concepts via Ethereum analogies
+- Execution handler that calls the corresponding aleo-viem action
+
+### Structured JSON Output
+
+All actions return structured JSON rather than Aleo's native string-encoded values. Value parsing utilities convert between formats:
+
+```ts
+import { parseValue, encodeValue } from '@aleo-viem/core'
+
+parseValue('100u64')       // → { value: 100n, type: 'u64' }
+parseValue('aleo1abc...')  // → { value: 'aleo1abc...', type: 'address' }
+encodeValue(100n, 'u64')   // → '100u64'
+```
+
+MCP tools and tool schemas use parsed output by default — agents receive `{ value: 100, type: "u64" }` instead of `"100u64"`.
+
+### Program Introspection
+
+Agents need to answer "what can I do with this program?" without reading source code. The `describeProgram` action and MCP tool return a structured description:
+
+```ts
+const description = await client.describeProgram({ program: 'token.aleo' })
+// {
+//   id: 'token.aleo',
+//   functions: [
+//     { name: 'transfer', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'u64' }] },
+//     { name: 'mint', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'u64' }] },
+//   ],
+//   mappings: [
+//     { name: 'balances', keyType: 'address', valueType: 'u64' },
+//   ],
+// }
+```
+
+This is `getCode` + `parseProgram` combined into one call, returning structured data an agent can reason about.
+
+### Actionable Errors
+
+Every error message is written as an instruction an agent can act on:
+
+```
+Program "my_program.aleo" not found on mainnet.
+Verify the program ID is correct and has been deployed:
+  await client.getCode({ program: 'my_program.aleo' })
+```
+
+```
+No account configured. To read data, use createPublicClient.
+To sign transactions, use createWalletClient with an account:
+  createWalletClient({ account: rpcAccount(walletAdapter), transport: custom(walletAdapter) })
+```
+
+```
+Invalid input type for function 'transfer' parameter 'amount':
+expected u64 (e.g. '100u64'), received '100'.
+Use encodeValue(100n, 'u64') or pass '100u64' directly.
+```
+
+### Transaction Confirmation
+
+Agents operating autonomously need to know when transactions complete. `waitForTransaction` polls until confirmed or rejected:
+
+```ts
+const txId = await walletClient.writeContract({ ... })
+const result = await publicClient.waitForTransaction({ id: txId })
+// { status: 'confirmed', blockHeight: 12345 }
+// or: { status: 'rejected', reason: '...' }
+```
+
+Exposed as an MCP tool (`aleo_wait_for_transaction`) so autonomous agents can wait for confirmation before proceeding.
+
+### Incremental Development
+
+Agent tooling ships with each phase of core development:
+
+| Core ships... | Agent tooling ships alongside... |
+|---|---|
+| `getBlockNumber`, `getBalance`, `readContract` | MCP tools + agent tool schemas for each, structured JSON output, `describeProgram` |
+| `writeContract`, `executeTransaction` | MCP execute tool + agent tool schema, transaction confirmation tool |
+| `getContract`, `parseProgram` | MCP introspection tool + agent tool schema, program description in tool metadata |
+| New action | New MCP tool + agent tool schema + structured output |
+
+The MCP server and agent tool schemas are never more than one commit behind core.
+
+### Skills and Agent Documentation
+
+In addition to MCP tools, aleo-viem provides skill definitions for code-writing agents (Claude Code, Cursor, Copilot). These are markdown files that explain how to use the library, with complete examples and Aleo-specific context at every decision point.
+
+Skills are updated alongside MCP tools — when a new action ships, its skill documentation ships too.
+
 ## Cryptographic Primitives
 
 aleo-viem will expose cryptographic primitives as interfaces, surfacing the underlying SDK's capabilities through a consistent API. Advanced users can access hashing, signing, field/group operations, and record encryption/decryption directly.
@@ -307,15 +460,28 @@ aleo-viem/
 │   │   │   ├── transports/    # http, custom, fallback
 │   │   │   ├── actions/       # public/ and wallet/ actions
 │   │   │   ├── contract/      # getContract, program parsing
+│   │   │   ├── agent/         # Agent tool schemas + handlers (subpath: @aleo-viem/core/agent)
+│   │   │   ├── mcp/           # MCP server (subpath: @aleo-viem/core/mcp)
 │   │   │   ├── types/         # core type definitions
-│   │   │   └── utils/         # encoding, address validation
+│   │   │   └── utils/         # encoding, address validation, value parsing
 │   │   └── package.json
 │   ├── react/                 # @aleo-viem/react (future)
 │   └── mobile/                # @aleo-viem/mobile (future)
+├── skills/                    # Skill definitions for code-writing agents
 ├── package.json
 ├── pnpm-workspace.yaml
 └── tsconfig.json
 ```
+
+All agent tooling lives in core with subpath exports. No separate packages until the boundaries are proven:
+
+```ts
+import { createPublicClient } from '@aleo-viem/core'           // Library
+import { aleoAgentTools } from '@aleo-viem/core/agent'         // Agent tool schemas + execution handlers
+import { createMcpServer } from '@aleo-viem/core/mcp'          // MCP server
+```
+
+MCP SDK is a lazy/optional dependency — only loaded via the `core/mcp` subpath. Tree-shaking keeps the main entry point lean. Can be extracted into separate packages later if versioning or dependency concerns arise.
 
 Core has zero hard dependencies on any specific SDK. Adapters for wallets/SDKs are either optional imports or separate packages, depending on dependency weight.
 

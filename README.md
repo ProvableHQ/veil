@@ -1,6 +1,6 @@
 # aleo-viem
 
-A TypeScript interface for Aleo, inspired by [viem](https://github.com/wevm/viem). Wraps existing Aleo wallets and SDKs behind a unified, familiar API.
+A TypeScript interface for Aleo, inspired by [viem](https://github.com/wevm/viem). Wraps existing Aleo wallets and SDKs behind a unified, familiar API — for human developers and AI agents alike.
 
 ## Why
 
@@ -30,12 +30,15 @@ const value = await client.readContract({
 - **Pluggable transports** — `http()` for Aleo REST API, `custom()` for wallet adapters, `fallback()` for chaining
 - **Contract instances** — `getContract()` parses Aleo program source and provides typed `read`/`write` methods
 - **Proving as configuration** — proving strategy is a client config concern (`delegated` or `local`), not a separate abstraction
+- **Agent-first** — every action ships with an MCP tool, agent tool schema, and structured JSON output. AI agents can call Aleo directly via tool use or write code against the library using viem patterns they already know.
 
 ## Packages
 
 | Package | Description | Status |
 |---------|-------------|--------|
 | `@aleo-viem/core` | Clients, transports, accounts, actions | In development |
+| `@aleo-viem/core/agent` | Agent tool schemas + execution handlers | In development |
+| `@aleo-viem/core/mcp` | MCP server for tool-calling agents | In development |
 | `@aleo-viem/react` | React hooks (wagmi equivalent) | Planned |
 | `@aleo-viem/mobile` | Shield Mobile SDK helpers | Planned |
 
@@ -152,11 +155,77 @@ const account = viewOnlyAccount({
 // Use the view key to decrypt records without signing authority
 ```
 
+## Agent Usage
+
+aleo-viem is designed for two audiences equally: human developers who write code against the TypeScript library, and AI agents that either write code using viem patterns or call tools directly.
+
+### For tool-calling agents (MCP)
+
+Run the MCP server to expose all aleo-viem actions as tools:
+
+```ts
+import { createMcpServer } from '@aleo-viem/core/mcp'
+import { createPublicClient, http } from '@aleo-viem/core'
+
+const client = createPublicClient({
+  transport: http('https://api.provable.com/v2'),
+})
+
+await createMcpServer({ client })
+```
+
+Agents can then call tools like `aleo_get_balance`, `aleo_read_mapping`, `aleo_execute`, `aleo_describe_program`, etc. All tools return structured JSON with parsed Aleo values.
+
+### For tool-calling agents (framework-agnostic)
+
+Use agent tool schemas and handlers directly in any agent framework:
+
+```ts
+import { aleoAgentTools } from '@aleo-viem/core/agent'
+
+const tools = aleoAgentTools({
+  client: publicClient,
+  walletClient: walletClient,
+})
+
+// Each tool has { schema, handler } — plug into LangChain, Vercel AI SDK, etc.
+```
+
+### For code-writing agents (Claude Code, Cursor, Copilot)
+
+Code-writing agents use the TypeScript library directly. Since it follows viem patterns, agents trained on viem can use it with minimal guidance. Key differences from viem that agents should know:
+
+- Programs are identified by name (`'credits.aleo'`), not address
+- Inputs are Aleo-encoded strings (`'100u64'`), not hex — use `encodeValue(100n, 'u64')`
+- Use `describeProgram` to discover what a program can do before calling it
+- `writeContract` has an alias `executeTransaction` consistent with Aleo wallet adapter terminology
+
+### Structured output
+
+All values are returned as structured JSON rather than Aleo's native string encoding:
+
+```ts
+import { parseValue, encodeValue } from '@aleo-viem/core'
+
+parseValue('100u64')       // → { value: 100n, type: 'u64' }
+parseValue('aleo1abc...')  // → { value: 'aleo1abc...', type: 'address' }
+encodeValue(100n, 'u64')   // → '100u64'
+```
+
+### Actionable errors
+
+Every error message is an instruction an agent can act on:
+
+```
+Program "my_program.aleo" not found. Verify the program ID is correct
+and has been deployed: await client.getCode({ program: 'my_program.aleo' })
+```
+
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                  Your dApp                       │
+│          Your dApp / AI Agent                    │
 ├─────────────────────────────────────────────────┤
 │    PublicClient          WalletClient            │
 │    (read-only)           (sign + execute)        │
@@ -169,12 +238,16 @@ const account = viewOnlyAccount({
 │  getBlock          signMessage                   │
 │  estimateGas       transfer                      │
 │  getRecords        decrypt                       │
-│                    requestRecords                │
+│  describeProgram   requestRecords                │
 ├─────────────────────────────────────────────────┤
 │              Contract Instances                   │
 │  getContract({ programSource, client })          │
 │  → contract.read.mappingName()                   │
 │  → contract.write.functionName()                 │
+├─────────────────────────────────────────────────┤
+│              Agent Tooling                        │
+│  @aleo-viem/core/agent — tool schemas + handlers │
+│  @aleo-viem/core/mcp   — MCP server              │
 ├─────────────────────────────────────────────────┤
 │                  Accounts                        │
 │  RpcAccount     LocalAccount    ViewOnlyAccount  │
@@ -216,30 +289,32 @@ Any of these can back any interface. The wallet adapter can produce RPC or local
 
 ### Public Actions (no account required)
 
-| Method | Description |
-|--------|-------------|
-| `getBlockNumber()` | Current chain height |
-| `getBlock({ height?, hash? })` | Fetch block by height or hash |
-| `getTransaction({ id })` | Fetch transaction by ID |
-| `getBalance({ address })` | Public credits balance |
-| `readContract({ program, mapping, key })` | Read a program mapping value |
-| `getCode({ program })` | Fetch program source code |
-| `estimateGas({ program, function, inputs })` | Estimate execution fee |
-| `getRecords({ program })` | Fetch records (Aleo-native) |
-| `getTransitionViewKeys({ transactionId })` | Get transition view keys (Aleo-native) |
+| Method | Description | Agent Tool |
+|--------|-------------|------------|
+| `getBlockNumber()` | Current chain height | `aleo_get_block_number` |
+| `getBlock({ height?, hash? })` | Fetch block by height or hash | `aleo_get_block` |
+| `getTransaction({ id })` | Fetch transaction by ID | `aleo_get_transaction` |
+| `getBalance({ address })` | Public credits balance | `aleo_get_balance` |
+| `readContract({ program, mapping, key })` | Read a program mapping value | `aleo_read_mapping` |
+| `getCode({ program })` | Fetch program source code | `aleo_get_program_source` |
+| `describeProgram({ program })` | Introspect program functions and mappings | `aleo_describe_program` |
+| `estimateGas({ program, function, inputs })` | Estimate execution fee | `aleo_estimate_gas` |
+| `getRecords({ program })` | Fetch records (Aleo-native) | `aleo_get_records` |
+| `getTransitionViewKeys({ transactionId })` | Get transition view keys (Aleo-native) | `aleo_get_transition_view_keys` |
 
 ### Wallet Actions (account required — must be SignerAccount)
 
-| Method | Description |
-|--------|-------------|
-| `sendTransaction({ transaction })` | Broadcast a built transaction |
-| `writeContract({ program, function, inputs, fee })` | Execute a program transition |
-| `executeTransaction(...)` | Alias for `writeContract` (Aleo wallet adapter terminology) |
-| `deployContract({ program, fee })` | Deploy a program |
-| `signMessage({ message })` | Sign an arbitrary message |
-| `transfer({ to, amount })` | Transfer credits (convenience) |
-| `decrypt({ ciphertext })` | Decrypt a ciphertext (Aleo-native) |
-| `requestRecords({ program })` | Request records (Aleo-native) |
+| Method | Description | Agent Tool |
+|--------|-------------|------------|
+| `sendTransaction({ transaction })` | Broadcast a built transaction | `aleo_send_transaction` |
+| `writeContract({ program, function, inputs, fee })` | Execute a program transition | `aleo_execute` |
+| `executeTransaction(...)` | Alias for `writeContract` | `aleo_execute` |
+| `deployContract({ program, fee })` | Deploy a program | `aleo_deploy` |
+| `signMessage({ message })` | Sign an arbitrary message | — |
+| `transfer({ to, amount })` | Transfer credits (convenience) | `aleo_transfer` |
+| `decrypt({ ciphertext })` | Decrypt a ciphertext (Aleo-native) | — |
+| `requestRecords({ program })` | Request records (Aleo-native) | — |
+| `waitForTransaction({ id })` | Wait for confirmation | `aleo_wait_for_transaction` |
 
 ## Naming Convention
 
@@ -269,9 +344,12 @@ aleo-viem/
 │           ├── transports/# http, custom, fallback
 │           ├── actions/   # public/ and wallet/ actions
 │           ├── contract/  # getContract, parseProgram
+│           ├── agent/     # Agent tool schemas + handlers (@aleo-viem/core/agent)
+│           ├── mcp/       # MCP server (@aleo-viem/core/mcp)
 │           ├── types/     # core type definitions
-│           ├── errors/    # error types
-│           └── utils/     # address validation, credits conversion
+│           ├── errors/    # error types (actionable messages)
+│           └── utils/     # address validation, credits, value parsing
+├── skills/                # Skill definitions for code-writing agents
 ├── docs/
 │   ├── specs/             # Design specifications
 │   └── plans/             # Implementation plans

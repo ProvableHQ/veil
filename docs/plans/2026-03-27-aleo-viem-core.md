@@ -2,11 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build `@aleo-viem/core` — a viem-like TypeScript interface for Aleo that wraps existing wallets and SDKs behind a unified, familiar API.
+**Goal:** Build `@aleo-viem/core` — a viem-like TypeScript interface for Aleo that wraps existing wallets and SDKs behind a unified, familiar API. Every action ships with its corresponding MCP tool, agent tool schema, and structured JSON output.
 
-**Architecture:** Interface-first design mirroring viem's Client → Transport → Actions pattern. Core defines interfaces (Transport, Account) with zero hard dependencies on specific SDKs. Proving is a client configuration concern, not a standalone interface. Actions are standalone functions decorated onto clients. Uses viem method names wherever concepts map. No `Aleo` prefix on types — use import namespacing.
+**Architecture:** Interface-first design mirroring viem's Client → Transport → Actions pattern. Core defines interfaces (Transport, Account) with zero hard dependencies on specific SDKs. Proving is a client configuration concern, not a standalone interface. Actions are standalone functions decorated onto clients. Uses viem method names wherever concepts map. No `Aleo` prefix on types — use import namespacing. Agent tooling (MCP server, agent tool schemas) lives in core via subpath exports (`@aleo-viem/core/mcp`, `@aleo-viem/core/agent`).
 
 **Tech Stack:** TypeScript, vitest, pnpm workspaces, tsup (bundling)
+
+**Agent tooling principle:** Every task that ships a new action also ships its MCP tool definition, agent tool schema, and structured output. Agent tooling is never a separate phase — it's part of the definition of done for each action.
 
 **Spec:** `docs/specs/2026-03-27-aleo-viem-design.md`
 
@@ -69,12 +71,20 @@ packages/core/
 │   ├── contract/
 │   │   ├── getContract.ts               # getContract() — binds program + client(s), returns typed read/write
 │   │   └── parseProgram.ts              # Parse Aleo program source into typed structure
+│   ├── agent/
+│   │   ├── index.ts                     # aleoAgentTools() entry point (subpath: @aleo-viem/core/agent)
+│   │   ├── schemas.ts                   # JSON schemas for each agent tool
+│   │   └── handlers.ts                  # Execution handlers mapping tool calls → actions
+│   ├── mcp/
+│   │   ├── index.ts                     # createMcpServer() entry point (subpath: @aleo-viem/core/mcp)
+│   │   └── tools.ts                     # MCP tool definitions wrapping agent tool schemas
 │   ├── errors/
-│   │   └── errors.ts                    # Error types
+│   │   └── errors.ts                    # Error types (actionable messages for agents)
 │   └── utils/
 │       ├── address.ts                   # Aleo address validation
 │       ├── uid.ts                       # Unique ID generator
-│       └── credits.ts                   # Microcredits <-> credits conversion
+│       ├── credits.ts                   # Microcredits <-> credits conversion
+│       └── values.ts                    # Aleo value parsing: '100u64' → { value: 100n, type: 'u64' }
 └── test/
     ├── types/
     │   ├── account.test.ts
@@ -109,9 +119,15 @@ packages/core/
     ├── contract/
     │   ├── getContract.test.ts
     │   └── parseProgram.test.ts
+    ├── agent/
+    │   ├── schemas.test.ts
+    │   └── handlers.test.ts
+    ├── mcp/
+    │   └── tools.test.ts
     └── utils/
         ├── address.test.ts
-        └── credits.test.ts
+        ├── credits.test.ts
+        └── values.test.ts
 ```
 
 ---
@@ -189,6 +205,14 @@ packages:
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./agent": {
+      "import": "./dist/agent/index.js",
+      "types": "./dist/agent/index.d.ts"
+    },
+    "./mcp": {
+      "import": "./dist/mcp/index.js",
+      "types": "./dist/mcp/index.d.ts"
     }
   },
   "scripts": {
@@ -219,7 +243,11 @@ packages:
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: [
+    'src/index.ts',
+    'src/agent/index.ts',
+    'src/mcp/index.ts',
+  ],
   format: ['esm'],
   dts: true,
   clean: true,
@@ -731,25 +759,104 @@ export function uid(): string {
 }
 ```
 
-- [ ] **Step 9: Export utils from index.ts**
+- [ ] **Step 9: Write Aleo value parsing tests**
+
+```ts
+// packages/core/test/utils/values.test.ts
+import { describe, it, expect } from 'vitest'
+import { parseValue, encodeValue } from '../../src/utils/values.js'
+
+describe('parseValue', () => {
+  it('parses u64 values', () => {
+    expect(parseValue('100u64')).toEqual({ value: 100n, type: 'u64' })
+  })
+
+  it('parses u128 values', () => {
+    expect(parseValue('999u128')).toEqual({ value: 999n, type: 'u128' })
+  })
+
+  it('parses field values', () => {
+    expect(parseValue('42field')).toEqual({ value: 42n, type: 'field' })
+  })
+
+  it('parses boolean values', () => {
+    expect(parseValue('true')).toEqual({ value: true, type: 'boolean' })
+    expect(parseValue('false')).toEqual({ value: false, type: 'boolean' })
+  })
+
+  it('parses address values', () => {
+    const addr = 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc'
+    expect(parseValue(addr)).toEqual({ value: addr, type: 'address' })
+  })
+
+  it('returns raw string for unrecognized formats', () => {
+    expect(parseValue('unknown')).toEqual({ value: 'unknown', type: 'string' })
+  })
+})
+
+describe('encodeValue', () => {
+  it('encodes bigint with type suffix', () => {
+    expect(encodeValue(100n, 'u64')).toBe('100u64')
+  })
+
+  it('encodes boolean', () => {
+    expect(encodeValue(true, 'boolean')).toBe('true')
+  })
+})
+```
+
+- [ ] **Step 10: Implement Aleo value parsing**
+
+```ts
+// packages/core/src/utils/values.ts
+
+export type ParsedValue = {
+  value: bigint | boolean | string
+  type: string
+}
+
+const INTEGER_REGEX = /^(-?\d+)(u8|u16|u32|u64|u128|i8|i16|i32|i64|i128|field|scalar|group)$/
+
+export function parseValue(raw: string): ParsedValue {
+  if (raw === 'true') return { value: true, type: 'boolean' }
+  if (raw === 'false') return { value: false, type: 'boolean' }
+  if (raw.startsWith('aleo1')) return { value: raw, type: 'address' }
+
+  const match = raw.match(INTEGER_REGEX)
+  if (match) {
+    return { value: BigInt(match[1]), type: match[2] }
+  }
+
+  return { value: raw, type: 'string' }
+}
+
+export function encodeValue(value: bigint | boolean | string, type: string): string {
+  if (type === 'boolean') return String(value)
+  if (type === 'address' || type === 'string') return String(value)
+  return `${value}${type}`
+}
+```
+
+- [ ] **Step 11: Export utils from index.ts**
 
 Add to `packages/core/src/index.ts`:
 
 ```ts
 export { isAddress, assertAddress } from './utils/address.js'
 export { creditsToMicrocredits, microcreditsToCredits } from './utils/credits.js'
+export { parseValue, encodeValue, type ParsedValue } from './utils/values.js'
 ```
 
-- [ ] **Step 10: Run all tests**
+- [ ] **Step 12: Run all tests**
 
 Run: `pnpm vitest run`
 Expected: All PASS
 
-- [ ] **Step 11: Commit**
+- [ ] **Step 13: Commit**
 
 ```bash
 git add packages/core/src/utils/ packages/core/test/utils/ packages/core/src/index.ts
-git commit -m "feat: add address validation, credits conversion, and uid utilities"
+git commit -m "feat: add address validation, credits conversion, value parsing, and uid utilities"
 ```
 
 ---
@@ -758,6 +865,8 @@ git commit -m "feat: add address validation, credits conversion, and uid utiliti
 
 **Files:**
 - Create: `packages/core/src/errors/errors.ts`
+
+All error messages are written as actionable instructions — an agent reading the error should know exactly what to do next.
 
 - [ ] **Step 1: Implement error classes**
 
@@ -780,22 +889,54 @@ export class TransportError extends BaseError {
 
 export class AccountNotFoundError extends BaseError {
   constructor() {
-    super('No account found. Pass an account to the client or to the action directly.')
+    super(
+      'No account configured. To read data, use createPublicClient. ' +
+      'To sign transactions, use createWalletClient with an account:\n' +
+      '  createWalletClient({ account: rpcAccount(walletAdapter), transport: custom(walletAdapter) })',
+    )
     this.name = 'AccountNotFoundError'
   }
 }
 
 export class ProvingNotConfiguredError extends BaseError {
   constructor() {
-    super('No proving configuration found. Pass a proving config to the wallet client or use a wallet-backed (RPC) account.')
+    super(
+      'No proving configuration found. Local accounts require a proving config:\n' +
+      '  createWalletClient({ account, transport, proving: { mode: \'delegated\', url: \'...\' } })\n' +
+      'Or use an RPC account (wallet adapter) which handles proving internally.',
+    )
     this.name = 'ProvingNotConfiguredError'
   }
 }
 
 export class InvalidAddressError extends BaseError {
   constructor(address: string) {
-    super(`Invalid Aleo address: ${address}`)
+    super(
+      `Invalid Aleo address: "${address}". ` +
+      'Aleo addresses start with "aleo1" followed by 58 lowercase alphanumeric characters.',
+    )
     this.name = 'InvalidAddressError'
+  }
+}
+
+export class ProgramNotFoundError extends BaseError {
+  constructor(program: string) {
+    super(
+      `Program "${program}" not found. ` +
+      'Verify the program ID is correct and has been deployed. ' +
+      `Check with: await client.getCode({ program: '${program}' })`,
+    )
+    this.name = 'ProgramNotFoundError'
+  }
+}
+
+export class InvalidInputError extends BaseError {
+  constructor(functionName: string, expected: string, received: string) {
+    super(
+      `Invalid input for function "${functionName}": expected ${expected}, received "${received}". ` +
+      'Use encodeValue() to convert values, e.g. encodeValue(100n, \'u64\') → \'100u64\'.',
+    )
+    this.name = 'InvalidInputError'
   }
 }
 ```
@@ -2200,11 +2341,147 @@ export { getRecords } from './actions/public/getRecords.js'
 export { getTransitionViewKeys } from './actions/public/getTransitionViewKeys.js'
 ```
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 9: Add agent tool schemas and handlers for public actions**
+
+Create agent tool schemas for each public action. Each schema describes the tool for AI agents with rich descriptions that explain Aleo concepts via Ethereum analogies.
+
+```ts
+// packages/core/src/agent/schemas/public.ts
+import type { AgentToolSchema } from '../types.js'
+
+export const publicToolSchemas: AgentToolSchema[] = [
+  {
+    name: 'aleo_get_block_number',
+    description: 'Get the current Aleo chain height. Equivalent to viem\'s getBlockNumber / eth_blockNumber.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'aleo_get_balance',
+    description: 'Get the public credits balance for an Aleo address. Equivalent to viem\'s getBalance. Returns structured JSON with the balance in microcredits.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        address: { type: 'string', description: 'Aleo address (starts with aleo1...)' },
+      },
+      required: ['address'],
+    },
+  },
+  {
+    name: 'aleo_read_mapping',
+    description: 'Read a value from an Aleo program\'s public mapping. Equivalent to viem\'s readContract, but Aleo programs are identified by name (e.g. \'credits.aleo\') not by address. Returns structured JSON with parsed Aleo values.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        program: { type: 'string', description: 'Program ID, e.g. \'credits.aleo\'' },
+        mapping: { type: 'string', description: 'Mapping name within the program' },
+        key: { type: 'string', description: 'Key to look up' },
+      },
+      required: ['program', 'mapping', 'key'],
+    },
+  },
+  {
+    name: 'aleo_get_block',
+    description: 'Fetch an Aleo block by height or hash. Equivalent to viem\'s getBlock.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        height: { type: 'number', description: 'Block height' },
+        hash: { type: 'string', description: 'Block hash' },
+      },
+    },
+  },
+  {
+    name: 'aleo_get_transaction',
+    description: 'Fetch an Aleo transaction by ID. Equivalent to viem\'s getTransaction.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Transaction ID (starts with at1...)' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'aleo_get_program_source',
+    description: 'Fetch the source code of a deployed Aleo program. Equivalent to viem\'s getCode, but returns Leo/Aleo source rather than bytecode.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        program: { type: 'string', description: 'Program ID, e.g. \'token.aleo\'' },
+      },
+      required: ['program'],
+    },
+  },
+  {
+    name: 'aleo_describe_program',
+    description: 'Fetch and parse an Aleo program, returning its functions (with input types) and mappings (with key/value types). Use this to discover what a program can do before calling it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        program: { type: 'string', description: 'Program ID, e.g. \'token.aleo\'' },
+      },
+      required: ['program'],
+    },
+  },
+]
+```
+
+```ts
+// packages/core/src/agent/handlers/public.ts
+import type { Client } from '../../clients/createClient.js'
+import type { PublicClient } from '../../clients/createPublicClient.js'
+import { parseValue } from '../../utils/values.js'
+import { parseProgram } from '../../contract/parseProgram.js'
+
+export function createPublicHandlers(client: PublicClient) {
+  return {
+    aleo_get_block_number: async () => {
+      const height = await client.getBlockNumber()
+      return { height: Number(height) }
+    },
+    aleo_get_balance: async (params: { address: string }) => {
+      const balance = await client.getBalance({ address: params.address })
+      return { address: params.address, balance: Number(balance), unit: 'microcredits' }
+    },
+    aleo_read_mapping: async (params: { program: string; mapping: string; key: string }) => {
+      const raw = await client.readContract(params)
+      const parsed = parseValue(String(raw))
+      return { raw: String(raw), ...parsed }
+    },
+    aleo_get_block: async (params: { height?: number; hash?: string }) => {
+      return client.getBlock(params)
+    },
+    aleo_get_transaction: async (params: { id: string }) => {
+      return client.getTransaction(params)
+    },
+    aleo_get_program_source: async (params: { program: string }) => {
+      const source = await client.getCode(params)
+      return { program: params.program, source }
+    },
+    aleo_describe_program: async (params: { program: string }) => {
+      const source = await client.getCode(params)
+      const parsed = parseProgram(source)
+      return {
+        id: parsed.id,
+        functions: parsed.functions.map((fn) => ({
+          name: fn,
+          inputs: parsed.functionInputs[fn] ?? [],
+        })),
+        mappings: parsed.mappings.map((m) => ({
+          name: m,
+          ...(parsed.mappingTypes[m] ?? {}),
+        })),
+      }
+    },
+  }
+}
+```
+
+- [ ] **Step 10: Commit**
 
 ```bash
-git add packages/core/src/actions/public/ packages/core/test/actions/ packages/core/src/clients/decorators/public.ts packages/core/src/index.ts
-git commit -m "feat: add public actions — getBlockNumber, getBlock, getTransaction, getBalance, readContract, getCode, estimateGas, getRecords, getTransitionViewKeys"
+git add packages/core/src/actions/public/ packages/core/test/actions/ packages/core/src/clients/decorators/public.ts packages/core/src/agent/ packages/core/src/index.ts
+git commit -m "feat: add public actions with agent tool schemas — getBlockNumber, getBalance, readContract, getBlock, getTransaction, getCode, describeProgram"
 ```
 
 ---
@@ -2597,11 +2874,136 @@ export { requestRecords } from './actions/wallet/requestRecords.js'
 Run: `pnpm vitest run`
 Expected: All PASS
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 10: Add agent tool schemas and handlers for wallet actions**
+
+```ts
+// packages/core/src/agent/schemas/wallet.ts
+import type { AgentToolSchema } from '../types.js'
+
+export const walletToolSchemas: AgentToolSchema[] = [
+  {
+    name: 'aleo_execute',
+    description: 'Execute a transition on an Aleo program. Equivalent to viem\'s writeContract. Requires a connected wallet. The wallet handles proving internally. Returns a transaction ID.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        program: { type: 'string', description: 'Program ID, e.g. \'token.aleo\'' },
+        function: { type: 'string', description: 'Function name to execute' },
+        inputs: { type: 'array', items: { type: 'string' }, description: 'Function inputs as Aleo-encoded strings, e.g. [\'aleo1...\', \'100u64\']' },
+        fee: { type: 'number', description: 'Fee in microcredits. If omitted, uses a default estimate.' },
+      },
+      required: ['program', 'function', 'inputs'],
+    },
+  },
+  {
+    name: 'aleo_deploy',
+    description: 'Deploy an Aleo program to the network. Equivalent to viem\'s deployContract. Requires a connected wallet.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        program: { type: 'string', description: 'Program source code to deploy' },
+        fee: { type: 'number', description: 'Fee in microcredits' },
+      },
+      required: ['program', 'fee'],
+    },
+  },
+  {
+    name: 'aleo_transfer',
+    description: 'Transfer Aleo credits to an address. Convenience wrapper around credits.aleo/transfer_public. Equivalent to a simple ETH transfer in viem.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        to: { type: 'string', description: 'Recipient Aleo address' },
+        amount: { type: 'number', description: 'Amount in microcredits' },
+      },
+      required: ['to', 'amount'],
+    },
+  },
+  {
+    name: 'aleo_send_transaction',
+    description: 'Broadcast an already-built transaction to the network. Equivalent to viem\'s sendRawTransaction.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        transaction: { type: 'string', description: 'Serialized transaction JSON' },
+      },
+      required: ['transaction'],
+    },
+  },
+  {
+    name: 'aleo_wait_for_transaction',
+    description: 'Wait for a transaction to be confirmed or rejected. Equivalent to viem\'s waitForTransactionReceipt. Polls until the transaction appears in a block.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Transaction ID to wait for' },
+        timeout: { type: 'number', description: 'Timeout in milliseconds (default: 60000)' },
+      },
+      required: ['id'],
+    },
+  },
+]
+```
+
+```ts
+// packages/core/src/agent/handlers/wallet.ts
+import type { WalletClient } from '../../clients/createWalletClient.js'
+import type { PublicClient } from '../../clients/createPublicClient.js'
+
+export function createWalletHandlers(walletClient: WalletClient, publicClient?: PublicClient) {
+  return {
+    aleo_execute: async (params: { program: string; function: string; inputs: string[]; fee?: number }) => {
+      const txId = await walletClient.writeContract({
+        program: params.program,
+        function: params.function,
+        inputs: params.inputs,
+        fee: BigInt(params.fee ?? 0),
+      })
+      return { transactionId: txId }
+    },
+    aleo_deploy: async (params: { program: string; fee: number }) => {
+      const txId = await walletClient.deployContract({
+        program: params.program,
+        fee: BigInt(params.fee),
+      })
+      return { transactionId: txId }
+    },
+    aleo_transfer: async (params: { to: string; amount: number }) => {
+      const txId = await walletClient.transfer({
+        to: params.to,
+        amount: BigInt(params.amount),
+      })
+      return { transactionId: txId }
+    },
+    aleo_send_transaction: async (params: { transaction: string }) => {
+      const txId = await walletClient.sendTransaction(params)
+      return { transactionId: txId }
+    },
+    aleo_wait_for_transaction: async (params: { id: string; timeout?: number }) => {
+      // Poll getTransaction until found or timeout
+      const timeout = params.timeout ?? 60_000
+      const start = Date.now()
+      while (Date.now() - start < timeout) {
+        try {
+          if (!publicClient) throw new Error('Public client required for waitForTransaction')
+          const tx = await publicClient.getTransaction({ id: params.id })
+          if (tx) return { status: 'confirmed', transaction: tx }
+        } catch {
+          // Not found yet, keep polling
+        }
+        await new Promise((r) => setTimeout(r, 3000))
+      }
+      return { status: 'timeout', transactionId: params.id }
+    },
+  }
+}
+```
+
+- [ ] **Step 11: Commit**
 
 ```bash
-git add packages/core/src/actions/wallet/ packages/core/test/actions/wallet/ packages/core/src/clients/decorators/wallet.ts packages/core/src/index.ts
-git commit -m "feat: add wallet actions — sendTransaction, writeContract/executeTransaction, deployContract, signMessage, transfer, decrypt, requestRecords"
+git add packages/core/src/actions/wallet/ packages/core/test/actions/wallet/ packages/core/src/clients/decorators/wallet.ts packages/core/src/agent/ packages/core/src/index.ts
+git commit -m "feat: add wallet actions with agent tool schemas — writeContract/executeTransaction, deploy, transfer, sendTransaction, waitForTransaction"
 ```
 
 ---
@@ -2990,7 +3392,227 @@ git commit -m "feat: add getContract and parseProgram — typed contract instanc
 
 ---
 
-### Task 11: Integration Test — Full Client Usage
+### Task 11: Agent Tooling — Entry Points, MCP Server, aleoAgentTools
+
+**Files:**
+- Create: `packages/core/src/agent/types.ts`
+- Create: `packages/core/src/agent/index.ts`
+- Create: `packages/core/src/mcp/index.ts`
+- Create: `packages/core/src/mcp/tools.ts`
+- Create: `packages/core/test/agent/schemas.test.ts`
+- Create: `packages/core/test/agent/handlers.test.ts`
+- Create: `packages/core/test/mcp/tools.test.ts`
+
+This task wires together all the agent tool schemas and handlers from Tasks 8-10 into the `@aleo-viem/core/agent` and `@aleo-viem/core/mcp` subpath exports.
+
+- [ ] **Step 1: Create agent tool types**
+
+```ts
+// packages/core/src/agent/types.ts
+
+export type AgentToolSchema = {
+  name: string
+  description: string
+  inputSchema: {
+    type: 'object'
+    properties: Record<string, unknown>
+    required?: string[]
+  }
+}
+
+export type AgentToolHandler = (params: any) => Promise<unknown>
+
+export type AgentTool = {
+  schema: AgentToolSchema
+  handler: AgentToolHandler
+}
+```
+
+- [ ] **Step 2: Create agent entry point**
+
+```ts
+// packages/core/src/agent/index.ts
+import type { PublicClient } from '../clients/createPublicClient.js'
+import type { WalletClient } from '../clients/createWalletClient.js'
+import type { AgentTool, AgentToolSchema } from './types.js'
+import { publicToolSchemas } from './schemas/public.js'
+import { walletToolSchemas } from './schemas/wallet.js'
+import { createPublicHandlers } from './handlers/public.js'
+import { createWalletHandlers } from './handlers/wallet.js'
+
+export type AleoAgentToolsConfig = {
+  client?: PublicClient
+  walletClient?: WalletClient
+}
+
+/**
+ * Returns agent tool definitions with execution handlers.
+ * Framework-agnostic — works with LangChain, Vercel AI SDK, or any tool-calling system.
+ */
+export function aleoAgentTools(config: AleoAgentToolsConfig): AgentTool[] {
+  const tools: AgentTool[] = []
+
+  if (config.client) {
+    const handlers = createPublicHandlers(config.client)
+    for (const schema of publicToolSchemas) {
+      const handler = handlers[schema.name as keyof typeof handlers]
+      if (handler) tools.push({ schema, handler })
+    }
+  }
+
+  if (config.walletClient) {
+    const handlers = createWalletHandlers(config.walletClient, config.client)
+    for (const schema of walletToolSchemas) {
+      const handler = handlers[schema.name as keyof typeof handlers]
+      if (handler) tools.push({ schema, handler })
+    }
+  }
+
+  return tools
+}
+
+/** Export all schemas for consumers that only need the definitions */
+export function aleoAgentToolSchemas(): AgentToolSchema[] {
+  return [...publicToolSchemas, ...walletToolSchemas]
+}
+
+export type { AgentTool, AgentToolSchema, AgentToolHandler } from './types.js'
+```
+
+- [ ] **Step 3: Create MCP server entry point**
+
+```ts
+// packages/core/src/mcp/index.ts
+import type { PublicClient } from '../clients/createPublicClient.js'
+import type { WalletClient } from '../clients/createWalletClient.js'
+import { aleoAgentTools } from '../agent/index.js'
+
+export type McpServerConfig = {
+  client?: PublicClient
+  walletClient?: WalletClient
+}
+
+/**
+ * Creates an MCP server that exposes aleo-viem actions as tools.
+ * MCP SDK is imported lazily to keep it out of the main bundle.
+ */
+export async function createMcpServer(config: McpServerConfig) {
+  // Dynamic import — MCP SDK is only loaded when this subpath is used
+  const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js')
+  const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js')
+
+  const server = new McpServer({
+    name: 'aleo-viem',
+    version: '0.0.1',
+  })
+
+  const tools = aleoAgentTools(config)
+
+  for (const tool of tools) {
+    server.tool(
+      tool.schema.name,
+      tool.schema.description,
+      tool.schema.inputSchema.properties,
+      async (params: any) => {
+        const result = await tool.handler(params)
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+      },
+    )
+  }
+
+  const transport = new StdioServerTransport()
+  await server.connect(transport)
+  return server
+}
+```
+
+- [ ] **Step 4: Write agent tools integration test**
+
+```ts
+// packages/core/test/agent/handlers.test.ts
+import { describe, it, expect, vi } from 'vitest'
+import { aleoAgentTools } from '../../src/agent/index.js'
+
+describe('aleoAgentTools', () => {
+  it('creates public tools when client is provided', () => {
+    const client = {
+      getBlockNumber: vi.fn().mockResolvedValue(100n),
+      getBalance: vi.fn().mockResolvedValue(5000000n),
+      readContract: vi.fn().mockResolvedValue('100u64'),
+      getBlock: vi.fn(),
+      getTransaction: vi.fn(),
+      getCode: vi.fn().mockResolvedValue('program test.aleo;'),
+      estimateGas: vi.fn(),
+      getRecords: vi.fn(),
+      getTransitionViewKeys: vi.fn(),
+    } as any
+
+    const tools = aleoAgentTools({ client })
+    const names = tools.map((t) => t.schema.name)
+
+    expect(names).toContain('aleo_get_block_number')
+    expect(names).toContain('aleo_get_balance')
+    expect(names).toContain('aleo_read_mapping')
+    expect(names).toContain('aleo_describe_program')
+  })
+
+  it('creates wallet tools when walletClient is provided', () => {
+    const walletClient = {
+      writeContract: vi.fn().mockResolvedValue('at1tx'),
+      deployContract: vi.fn(),
+      transfer: vi.fn(),
+      sendTransaction: vi.fn(),
+    } as any
+
+    const tools = aleoAgentTools({ walletClient })
+    const names = tools.map((t) => t.schema.name)
+
+    expect(names).toContain('aleo_execute')
+    expect(names).toContain('aleo_transfer')
+    expect(names).toContain('aleo_deploy')
+  })
+
+  it('handlers return structured JSON', async () => {
+    const client = {
+      getBlockNumber: vi.fn().mockResolvedValue(12345n),
+      getBalance: vi.fn().mockResolvedValue(5000000n),
+      readContract: vi.fn().mockResolvedValue('100u64'),
+      getBlock: vi.fn(),
+      getTransaction: vi.fn(),
+      getCode: vi.fn(),
+      estimateGas: vi.fn(),
+      getRecords: vi.fn(),
+      getTransitionViewKeys: vi.fn(),
+    } as any
+
+    const tools = aleoAgentTools({ client })
+    const getBalance = tools.find((t) => t.schema.name === 'aleo_get_balance')!
+    const result = await getBalance.handler({ address: 'aleo1abc' })
+
+    expect(result).toEqual({
+      address: 'aleo1abc',
+      balance: 5000000,
+      unit: 'microcredits',
+    })
+  })
+})
+```
+
+- [ ] **Step 5: Run all tests**
+
+Run: `pnpm vitest run`
+Expected: All PASS
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add packages/core/src/agent/ packages/core/src/mcp/ packages/core/test/agent/ packages/core/test/mcp/
+git commit -m "feat: add agent tooling — aleoAgentTools entry point, MCP server, structured JSON output"
+```
+
+---
+
+### Task 12: Integration Tests — Full Client Usage
 
 **Files:**
 - Create: `packages/core/test/integration/publicClient.test.ts`
@@ -3196,7 +3818,7 @@ git commit -m "test: add integration tests for PublicClient, WalletClient, and g
 
 ---
 
-### Task 12: Build Verification & Final Barrel Export
+### Task 13: Build Verification & Final Barrel Export
 
 **Files:**
 - Modify: `packages/core/src/index.ts` (verify completeness)
@@ -3214,12 +3836,15 @@ Read `packages/core/src/index.ts` and ensure every public type, function, and cl
 - All public actions individually
 - All wallet actions individually (including `executeTransaction` alias)
 - `getContract`, `parseProgram`
+- `parseValue`, `encodeValue`
 - `PublicActions` and `WalletActions` types
+- Subpath `@aleo-viem/core/agent` exports: `aleoAgentTools`, `aleoAgentToolSchemas`, `AgentTool`, `AgentToolSchema`
+- Subpath `@aleo-viem/core/mcp` exports: `createMcpServer`
 
 - [ ] **Step 2: Run the build**
 
 Run: `cd /Users/privacydaddy/dev/aleo-viem && pnpm build`
-Expected: Build succeeds, `packages/core/dist/` contains `index.js` and `index.d.ts`.
+Expected: Build succeeds, `packages/core/dist/` contains `index.js`, `index.d.ts`, `agent/index.js`, `agent/index.d.ts`, `mcp/index.js`, `mcp/index.d.ts`.
 
 - [ ] **Step 3: Run type check**
 
@@ -3251,8 +3876,9 @@ git commit -m "chore: verify build, types, and full test suite pass"
 | 5 | Transport layer (http, custom, fallback) | 2, 4 |
 | 6 | Client layer (createClient, createPublicClient, createWalletClient with proving config) | 2, 3, 4, 5 |
 | 7 | Account factories (rpcAccount, privateKeyToAccount, mnemonicToAccount, viewOnlyAccount) | 2 |
-| 8 | Public actions (9 actions, individual files + decorator) | 2, 6 |
-| 9 | Wallet actions (7 actions + executeTransaction alias, individual files + decorator) | 2, 4, 6, 7 |
+| 8 | Public actions (9 actions + agent tool schemas/handlers) | 2, 3, 6 |
+| 9 | Wallet actions (7 actions + executeTransaction alias + agent tool schemas/handlers) | 2, 3, 4, 6, 7 |
 | 10 | Contract instance (getContract, parseProgram) | 6, 8, 9 |
-| 11 | Integration tests | All above |
-| 12 | Build verification | All above |
+| 11 | Agent tooling entry points (aleoAgentTools, MCP server, subpath exports) | 8, 9, 10 |
+| 12 | Integration tests | All above |
+| 13 | Build verification (including agent/mcp subpath exports) | All above |
