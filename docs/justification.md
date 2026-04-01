@@ -220,6 +220,12 @@ Without a unified interface, every MCP server would need to be built against a s
 - **We lose the AI game** — every agent integration is bespoke (bespoke MCP servers, CLIs) and flakey
 - **Churn** — maintenance of bespoke integration code is difficult, developers leave
 
+## The Time Is Now
+
+Developers are already arriving. Monthly downloads of `@provablehq/sdk` have grown 12x in the past year — from ~800/month to ~9,400/month — and accelerating. But right now, every one of those developers hits fragmented, bespoke APIs with no shared standard.
+
+The window to establish a standard interface is while adoption is growing, not after it stalls. Give developers a standard before they leave.
+
 ## Q2 Scope
 
 Three packages ship in Q2. Core has zero hard dependencies. Adapter packages bridge to the ecosystem.
