@@ -25,7 +25,7 @@ const value = await client.readContract({
 ## Features
 
 - **Viem-compatible API** — `getBalance`, `readContract`, `writeContract`, `deployContract`, `sendTransaction`, `signMessage`, and more
-- **Interface-first** — core has zero hard dependencies on any SDK. Wallets and SDKs plug in by implementing interfaces.
+- **Interface-first** — core has zero hard dependencies on any SDK. Wallets and SDKs plug in via adapter packages.
 - **Multiple account types** — RPC accounts (wallet adapters), local accounts (private key, mnemonic), view-only accounts
 - **Pluggable transports** — `http()` for Aleo REST API, `custom()` for wallet adapters, `fallback()` for chaining
 - **Contract instances** — `getContract()` parses Aleo program source and provides typed `read`/`write` methods
@@ -36,11 +36,48 @@ const value = await client.readContract({
 
 | Package | Description | Status |
 |---------|-------------|--------|
-| `@aleo-viem/core` | Clients, transports, accounts, actions | In development |
-| `@aleo-viem/core/agent` | Agent tool schemas + execution handlers | In development |
-| `@aleo-viem/core/mcp` | MCP server for tool-calling agents | In development |
+| `@aleo-viem/core` | Clients, transports, accounts, actions, agent tools, MCP server | In development |
+| `@aleo-viem/wallet-adapter` | Wraps `@provablehq/aleo-wallet-standard` — connects any Aleo wallet | In development |
+| `@aleo-viem/provable` | Wraps `@provablehq/sdk` — key derivation, local signing, proving | In development |
 | `@aleo-viem/react` | React hooks (wagmi equivalent) | Planned |
 | `@aleo-viem/mobile` | Shield Mobile SDK helpers | Planned |
+
+## Roadmap
+
+### Q2 2026 — Core + Adapter Packages
+
+**`@aleo-viem/core`** — zero hard dependencies
+- Clients, transports, accounts, all public and wallet actions
+- `getContract` + `parseProgram` for typed contract instances
+- Agent tool schemas, MCP server, structured JSON output
+- 2-3 example skills and dApps
+
+**`@aleo-viem/wallet-adapter`** — wraps `@provablehq/aleo-wallet-standard`
+- `rpcAccount()` and `custom()` transport for any Aleo wallet
+- Validated with Leo, Puzzle, Fox, Shield wallets
+
+**`@aleo-viem/provable`** — wraps `@provablehq/sdk`
+- `privateKeyToAccount()` with key derivation
+- Local signing and proving
+
+**Q2 success criteria** — demonstrated, not measured:
+- A viem developer builds a working Aleo dApp without Aleo-specific docs
+- Same code works across wallets and SDKs — swap the adapter, everything else is identical
+- An agent builds a working dApp first try; MCP tools work zero config
+
+### Q3 2026 — Ecosystem Expansion
+
+- Skills and example dApps for developer onboarding
+- Agentic ecosystem integrations (Coinbase AgentKit, MPC Protocol, Near Intents)
+- 3rd-party wallet integrations
+- React hooks (`@aleo-viem/react`)
+- Mobile SDK helpers (`@aleo-viem/mobile`)
+
+**Q3 adoption metrics:**
+- npm weekly downloads and growth rate across all packages
+- Programs deployed and actively used on mainnet
+- Agent tool invocations and success rate
+- 3rd-party integrations shipped and their downstream usage
 
 ## Quick Start
 
@@ -260,6 +297,9 @@ and has been deployed: await client.getCode({ program: 'my_program.aleo' })
 │  proving: { mode, url, apiKey }                  │
 │  records: config object or custom impl           │
 ├─────────────────────────────────────────────────┤
+│             Adapter Packages                     │
+│  @aleo-viem/wallet-adapter  @aleo-viem/provable  │
+├─────────────────────────────────────────────────┤
 │          Aleo Network / Wallet Adapter           │
 └─────────────────────────────────────────────────┘
 ```
@@ -269,21 +309,19 @@ and has been deployed: await client.getCode({ program: 'my_program.aleo' })
 aleo-viem defines interfaces. Implementations plug in.
 
 - **Transport** — any object with a `request(method, params)` function
-- **Account** — describes capabilities (can sign? has private key? has view key?), not origin. No `Aleo` prefix — use import namespacing.
-- **Proving** — a client configuration (`mode: 'delegated' | 'local'`), not a standalone interface. Wallets handle proving internally; only SDK/local users configure it. Type-excluded for RPC accounts so dapps can't override wallet preferences.
+- **Account** — describes capabilities (can sign? has private key? has view key?), not origin
+- **Proving** — a client configuration (`mode: 'delegated' | 'local'`), not a standalone interface. Wallets handle proving internally; only SDK/local users configure it.
 - **Records** — config object for common cases (`{ mode: 'network', url }`) or custom implementation (`{ getRecords: ... }`) for advanced use cases.
 
-Wallets handle proving and record management internally by default. These configs are only needed when using the SDK directly — and they're always overridable.
+Core has zero hard dependencies. Adapter packages (`@aleo-viem/wallet-adapter`, `@aleo-viem/provable`) bridge to the ecosystem's existing SDKs.
 
 ### Supported backends
 
-aleo-viem wraps these existing tools through its interfaces:
+aleo-viem wraps these existing tools through its adapter packages:
 
 - **[Aleo Wallet Adapter](https://github.com/ProvableHQ/aleo-dev-toolkit/tree/master/packages/aleo-wallet-adaptor)** — Leo Wallet, Puzzle Wallet, Fox Wallet, Shield Mobile Wallet
 - **[@provablehq/sdk](https://www.npmjs.com/package/@provablehq/sdk)** — WASM-based SDK for browser/node
 - **[Shield Mobile SDK](https://github.com/ProvableHQ/shield-mobile-sdk)** — Native SDK for React Native
-
-Any of these can back any interface. The wallet adapter can produce RPC or local accounts. Either SDK can back signing, proving, or record scanning. aleo-viem doesn't care what's behind the interface.
 
 ## Actions Reference
 
@@ -337,22 +375,24 @@ If viem has a name for the concept, aleo-viem uses it. Aleo-specific names are o
 ```
 aleo-viem/
 ├── packages/
-│   └── core/              # @aleo-viem/core
-│       └── src/
-│           ├── clients/   # createPublicClient, createWalletClient
-│           ├── accounts/  # rpcAccount, privateKeyToAccount, etc.
-│           ├── transports/# http, custom, fallback
-│           ├── actions/   # public/ and wallet/ actions
-│           ├── contract/  # getContract, parseProgram
-│           ├── agent/     # Agent tool schemas + handlers (@aleo-viem/core/agent)
-│           ├── mcp/       # MCP server (@aleo-viem/core/mcp)
-│           ├── types/     # core type definitions
-│           ├── errors/    # error types (actionable messages)
-│           └── utils/     # address validation, credits, value parsing
-├── skills/                # Skill definitions for code-writing agents
+│   ├── core/                # @aleo-viem/core (zero dependencies)
+│   │   └── src/
+│   │       ├── clients/     # createPublicClient, createWalletClient
+│   │       ├── accounts/    # rpcAccount, privateKeyToAccount, etc.
+│   │       ├── transports/  # http, custom, fallback
+│   │       ├── actions/     # public/ and wallet/ actions
+│   │       ├── contract/    # getContract, parseProgram
+│   │       ├── agent/       # Agent tool schemas + handlers (@aleo-viem/core/agent)
+│   │       ├── mcp/         # MCP server (@aleo-viem/core/mcp)
+│   │       ├── types/       # core type definitions
+│   │       ├── errors/      # error types (actionable messages)
+│   │       └── utils/       # address validation, credits, value parsing
+│   ├── wallet-adapter/      # @aleo-viem/wallet-adapter (wraps wallet standard)
+│   └── provable/            # @aleo-viem/provable (wraps @provablehq/sdk)
+├── skills/                  # Skill definitions for code-writing agents
 ├── docs/
-│   ├── specs/             # Design specifications
-│   └── plans/             # Implementation plans
+│   ├── specs/               # Design specifications
+│   └── plans/               # Implementation plans
 └── package.json
 ```
 

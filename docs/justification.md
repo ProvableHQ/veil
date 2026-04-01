@@ -4,10 +4,10 @@
 
 Aleo's developer ecosystem is fragmented. Every surface — the WASM SDK, Shield Mobile SDK, Leo Wallet, Puzzle Wallet, Fox Wallet — has its own bespoke API, its own patterns, and its own mental model. A developer who learns one doesn't know the other. There is no shared language across the ecosystem.
 
-This isn't just inconvenient. It's a structural barrier to adoption — and the results are visible. 
+This isn't just inconvenient. It's a structural barrier to adoption — and the results are visible.
 * Mainnet has under 1000 deployed programs
 * Few active developers are building applications
-* Partners struggle to integrate. 
+* Partners struggle to integrate.
 * Very little chain volume. The token's slide to > $0.10 reflects this: markets price ecosystems on usage and adoption, not just capability.
 
 Meanwhile, AI agents are becoming the primary way software gets built — and they can't build on Aleo either. Agents trained on Ethereum's standardized tooling hit a wall when they encounter Aleo's fragmented, bespoke APIs. In a world where "easy for agents to build on" increasingly means "easy to build on, period," this is a compounding disadvantage.
@@ -147,7 +147,14 @@ await walletClient.writeContract({
 
 A developer who has used viem on Ethereum can read this immediately. An agent trained on viem can write it. The learning curve is the delta between Ethereum and Aleo's unique concepts — not the delta between zero and an entirely unfamiliar SDK.
 
-aleo-viem is the foundation of a broader developer ecosystem strategy. A parallel initiative will provide a robust set of skills and example projects (in the vein of [Aleo Skills](https://github.com/ProvableHQ/aleo-skills)) built on top of aleo-viem, giving developers and agents concrete starting points for building on Aleo. The library provides the rails; the skills and examples drive adoption.
+### Put Aleo where Web3 usage is
+
+aleo-viem is the foundation of a broader developer ecosystem strategy. Each layer expands where Aleo is accessible:
+
+1. **Skills & example dApps** — pre-built templates and example applications (in the vein of [Aleo Skills](https://github.com/ProvableHQ/aleo-skills)) built on aleo-viem. Developers vibe code immediately. Agents build dApps out of the box.
+2. **Agent tools & MCP server** — agent tool schemas and an MCP server give any agent framework direct Aleo access. Works with LangChain, Vercel AI SDK, and any tool-calling system.
+3. **Agentic ecosystem integrations** — plug into 3rd-party agent platforms where agents already operate: Coinbase AgentKit, MPC Protocol, Near intent swap agents. Developers use agents in any surface.
+4. **3rd-party wallet integrations** — integrate into wallets where users already are, bringing Aleo's privacy use-cases to established platforms.
 
 ## Why This Matters for AI-Driven Development
 
@@ -208,68 +215,52 @@ Without a unified interface, every MCP server would need to be built against a s
 
 ## What We Lose Without It
 
-### Developer adoption slows
+- **No adoption** — developers never adopt, no dApps get built, no chain activity
+- **Integrations remain painful** — difficult, costly, and fail to be maintained
+- **We lose the AI game** — every agent integration is bespoke (bespoke MCP servers, CLIs) and flakey
+- **Churn** — maintenance of bespoke integration code is difficult, developers leave
 
-Every Ethereum developer who evaluates Aleo must learn not just Aleo's concepts, but multiple bespoke tool APIs. The ones who stay are the ones willing to accept that cost. The rest build on chains where they can reuse what they know.
+## Q2 Scope
 
-### Wallet ecosystem stays siloed
+Three packages ship in Q2. Core has zero hard dependencies. Adapter packages bridge to the ecosystem.
 
-Without a shared interface for wallets to implement, each new wallet is an island. dApp developers must integrate each one individually. The practical result: dApps support 1-2 wallets at launch and rarely add more. This limits wallet competition and user choice.
+**`@aleo-viem/core`** — zero hard dependencies
+- Clients, transports, accounts, all public and wallet actions
+- `getContract` + `parseProgram` for typed contract instances
+- Agent tool schemas, MCP server, structured JSON output
+- 2-3 example skills and dApps
 
-### AI ecosystem disadvantage
+**`@aleo-viem/wallet-adapter`** — wraps `@provablehq/aleo-wallet-standard`
+- `rpcAccount()` and `custom()` transport for any Aleo wallet
+- Required for dApp wallet connection
 
-Chains with viem, ethers.js, and similar standardized tooling are easier for agents to build on. As AI-assisted development becomes dominant, Aleo's lack of a standardized interface becomes a competitive disadvantage that grows over time. Developers will default to chains where their agents are most effective.
+**`@aleo-viem/provable`** — wraps `@provablehq/sdk`
+- `privateKeyToAccount()` with key derivation, local signing, proving
+- Required for local account usage
 
-### Integration burden falls on every team separately
+## Measuring Success
 
-Without aleo-viem, every team building on Aleo — internal or external — solves the same integration problems independently. This is duplicated effort across the ecosystem that a shared library eliminates once.
+### Q2: Proving the core promises
 
-## Scope and Cost
+Success in Q2 is demonstrated, not measured. Three promises, each proven with live demonstrations:
 
-```mermaid
-graph BT
-    CORE["aleo-viem core"]
-    SKILLS["Skills & Example Projects"]
-    AGENT["MCP Server &\nAgent Tools"]
-    REACT["React / Mobile"]
-    DEVS["Developer\nApplications"]
-    AGENTS["AI Agents"]
-    PARTNERS["Partner\nIntegrations"]
+| Promise | Demonstration |
+|---|---|
+| **Ease of use** | `npm install` to reading chain state in under 5 minutes. A viem developer builds a working Aleo dApp without Aleo-specific docs. |
+| **Write once** | Same dApp code works across Leo Wallet, Puzzle Wallet, and Provable SDK — swap the adapter import, everything else is identical. |
+| **Agent accessible** | An agent builds a working dApp on first try from a simple prompt. MCP tools work with zero config — balance checks, transfers, program execution all succeed. |
 
-    CORE --> SKILLS
-    CORE --> AGENT
-    CORE --> REACT
-    SKILLS --> DEVS
-    AGENT --> AGENTS
-    REACT --> PARTNERS
-    SKILLS --> AGENTS
+### Q3: Measuring adoption
 
-    style CORE fill:#00C2FF,stroke:#00C2FF,color:#000,font-weight:bold
-    style SKILLS fill:#1a1a2e,stroke:#00C2FF,color:#fff
-    style AGENT fill:#1a1a2e,stroke:#00C2FF,color:#fff
-    style REACT fill:#1a1a2e,stroke:#00C2FF,color:#fff
-    style DEVS fill:#0d3b66,stroke:#00C2FF,color:#fff
-    style AGENTS fill:#0d3b66,stroke:#00C2FF,color:#fff
-    style PARTNERS fill:#0d3b66,stroke:#00C2FF,color:#fff
-```
-*aleo-viem as foundation — the library provides the rails, everything else builds on top.*
-
-aleo-viem core is a TypeScript library with zero hard dependencies on any specific SDK. It defines interfaces and ships reference implementations for:
-
-- Public read operations (blocks, transactions, balances, program state)
-- Wallet operations (execute, deploy, sign, transfer)
-- Transport layer (HTTP to Aleo nodes, wallet adapter wrapping)
-- Account abstraction (local signing, RPC-delegated signing, view-only)
-- Contract instances with typed methods from parsed program source
-- MCP server and agent tool schemas, shipped incrementally with every action
-- Structured JSON output and value parsing utilities
-
-It wraps the existing wallet adapter, @provablehq/sdk, and Shield Mobile SDK. It does not replace any of these — it provides a unified surface above them.
-
-The core library is a focused, bounded project that serves as the foundation for a broader developer ecosystem strategy. Future packages (`@aleo-viem/react`, `@aleo-viem/mobile`) extend it for specific platforms. A parallel skills and example projects initiative will build on top of it to give developers and agents concrete starting points.
+| Metric | What we measure |
+|---|---|
+| **npm weekly downloads** | Weekly installs per package, week-over-week growth, unique consuming packages |
+| **Programs deployed & used** | New programs on mainnet, programs with active weekly transactions, unique interacting addresses |
+| **Agent tool calls** | MCP server installs and active connections, total tool invocations per month, agent success rate |
+| **3rd-party integrations** | Number of integrations shipped, downstream usage per integration, community-contributed adapters |
 
 ## The Ask
 
-Fund the development of `@aleo-viem/core` as the standard developer interface for Aleo. Position it as the recommended way to build dApps on Aleo, the foundation for AI agent tooling, and the integration target for new wallets entering the ecosystem.
+Fund the development of `@aleo-viem/core`, `@aleo-viem/wallet-adapter`, and `@aleo-viem/provable` as the standard developer interface for Aleo. Position it as the recommended way to build dApps on Aleo, the foundation for AI agent tooling, and the integration target for new wallets entering the ecosystem.
 
 The alternative is continuing to ask every developer, every agent, and every new wallet to solve the same fragmentation problems independently — a cost that grows with every participant we add to the ecosystem.
