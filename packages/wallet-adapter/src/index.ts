@@ -1,84 +1,82 @@
 /**
  * @aleo-viem/wallet-adapter
  *
- * Wraps the Aleo wallet adapter standard (@provablehq/aleo-wallet-adaptor-core)
- * into aleo-viem's Account and Transport interfaces.
+ * Wraps @provablehq/aleo-wallet-adaptor-core into aleo-viem's
+ * Account and Transport interfaces.
  *
- * Usage with Leo Wallet:
+ * Usage with any wallet adapter (Leo, Puzzle, Fox, Shield):
+ *
  *   import { LeoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-leo'
  *   import { fromWalletAdapter } from '@aleo-viem/wallet-adapter'
  *   import { createWalletClient, http, fallback } from '@aleo-viem/core'
  *
  *   const leoWallet = new LeoWalletAdapter()
- *   await leoWallet.connect(DecryptPermission.UponRequest, WalletAdapterNetwork.Mainnet)
+ *   await leoWallet.connect(Network.MAINNET, DecryptPermission.UponRequest)
  *
  *   const { account, transport } = fromWalletAdapter(leoWallet)
  *
- *   // Wallet transport handles signing/execution, http handles reads
  *   const walletClient = createWalletClient({
  *     account,
- *     transport: fallback([transport, http('https://api.provable.com/v2')]),
+ *     transport: fallback([transport, http('https://api.explorer.provable.com/v1')]),
  *   })
  */
 
 import { custom } from '@aleo-viem/core'
 import type { RpcAccount, Transport } from '@aleo-viem/core'
 
+// Import the real types from the Provable ecosystem
+import type { TransactionOptions, TransactionStatusResponse } from '@provablehq/aleo-types'
+import type { AleoDeployment } from '@provablehq/aleo-wallet-standard'
+
+// Re-export useful types so consumers don't need extra imports
+export type { TransactionOptions, TransactionStatusResponse } from '@provablehq/aleo-types'
+export { Network } from '@provablehq/aleo-types'
+
 // --------------------------------------------------------------------------
-// Wallet adapter interface
+// Wallet adapter interface — matches BaseAleoWalletAdapter from
+// @provablehq/aleo-wallet-adaptor-core
 // --------------------------------------------------------------------------
-// Matches the shape of @provablehq/aleo-wallet-adaptor-core SignerWalletAdapter
-// without importing it directly (interface-first).
-
-export type DecryptPermission = 'NoDecrypt' | 'UponRequest' | 'AutoDecrypt' | 'OnChainHistory'
-
-export type WalletAdapterNetwork = 'mainnet' | 'testnet' | 'localnet'
-
-/** Aleo transaction structure as expected by wallet adapters */
-export type AleoTransaction = {
-  address: string
-  chainId: string
-  transitions: Array<{
-    program: string
-    functionName: string
-    inputs: unknown[]
-  }>
-  fee: number
-  privateFee: boolean
-}
-
-/** Aleo deployment structure as expected by wallet adapters */
-export type AleoDeployment = {
-  address: string
-  chainId: string
-  program: string
-  fee: number
-}
 
 /**
- * Minimal interface matching @provablehq/aleo-wallet-adaptor-core.
- * Wallets (Leo, Puzzle, Fox, Shield) all implement this.
+ * The interface any Aleo wallet adapter must implement.
+ * Matches the shape of BaseAleoWalletAdapter from
+ * @provablehq/aleo-wallet-adaptor-core without requiring it as a dependency.
+ *
+ * All official adapters (Leo, Puzzle, Fox, Shield) implement this.
  */
-export type WalletAdapterLike = {
-  publicKey: string
+export interface AleoWalletAdapter {
+  /** The connected account — available after connect() */
+  account?: { address: string; viewKey?: string; privateKey?: string }
+
+  /** Whether the wallet is currently connected */
   connected: boolean
 
-  // Signing
-  signMessage(message: Uint8Array): Promise<{ signature: Uint8Array }>
+  /** Sign an arbitrary message — returns raw signature bytes */
+  signMessage(message: Uint8Array): Promise<Uint8Array>
 
-  // Transactions
-  requestExecution(transaction: AleoTransaction): Promise<{ transactionId?: string }>
-  requestDeploy(deployment: AleoDeployment): Promise<{ transactionId?: string }>
-  requestTransaction(transaction: AleoTransaction): Promise<{ transactionId?: string }>
+  /** Execute a program function — returns temporary transaction ID */
+  executeTransaction(options: TransactionOptions): Promise<{ transactionId: string }>
 
-  // Records & decryption
-  decrypt(cipherText: string, tpk?: string, programId?: string, functionName?: string, index?: number): Promise<string>
-  requestRecords(program: string): Promise<unknown[]>
+  /** Deploy a program — returns temporary transaction ID */
+  executeDeployment(deployment: AleoDeployment): Promise<{ transactionId: string }>
 
-  // Optional — not all wallets support these
-  requestBulkTransactions?(transactions: AleoTransaction[]): Promise<{ transactionIds?: string[] }>
-  transactionStatus?(transactionId: string): Promise<string>
-  getExecution?(transactionId: string): Promise<unknown>
+  /** Get the status of a submitted transaction */
+  transactionStatus(transactionId: string): Promise<TransactionStatusResponse>
+
+  /** Decrypt a record ciphertext using the wallet's view key */
+  decrypt(
+    cipherText: string,
+    tpk?: string,
+    programId?: string,
+    functionName?: string,
+    index?: number,
+  ): Promise<string>
+
+  /** Request records for a program */
+  requestRecords(program: string, includePlaintext: boolean): Promise<unknown[]>
+
+  /** Get transition view keys for a transaction */
+  transitionViewKeys(transactionId: string): Promise<string[]>
 }
 
 // --------------------------------------------------------------------------
@@ -86,20 +84,25 @@ export type WalletAdapterLike = {
 // --------------------------------------------------------------------------
 
 /**
- * Creates an aleo-viem RpcAccount from any wallet adapter.
+ * Creates an aleo-viem RpcAccount from a connected wallet adapter.
+ *
+ * The adapter must be connected (adapter.account must exist).
+ * Sign operations are delegated to the wallet.
  */
-export function rpcAccountFromAdapter(adapter: WalletAdapterLike): RpcAccount {
+export function rpcAccountFromAdapter(adapter: AleoWalletAdapter): RpcAccount {
+  if (!adapter.account) {
+    throw new Error(
+      'Wallet adapter is not connected. Call adapter.connect() before creating an account.',
+    )
+  }
+
+  const address = adapter.account.address
+
   return {
     type: 'rpc',
-    address: adapter.publicKey,
-    sign: async (message: Uint8Array) => {
-      const { signature } = await adapter.signMessage(message)
-      return signature
-    },
-    signMessage: async (message: Uint8Array) => {
-      const { signature } = await adapter.signMessage(message)
-      return signature
-    },
+    address,
+    sign: (message: Uint8Array) => adapter.signMessage(message),
+    signMessage: (message: Uint8Array) => adapter.signMessage(message),
   }
 }
 
@@ -108,21 +111,24 @@ export function rpcAccountFromAdapter(adapter: WalletAdapterLike): RpcAccount {
 // --------------------------------------------------------------------------
 
 /**
- * Creates an aleo-viem transport that routes wallet-specific methods
- * through the adapter.
+ * Creates an aleo-viem custom transport that routes wallet-specific
+ * operations through the adapter.
  *
- * This transport handles signing/execution operations. Read operations
- * (getBlock, getBalance, etc.) are NOT handled — pair with http()
- * via fallback() for full coverage:
+ * This transport handles:
+ * - executeTransaction → adapter.executeTransaction()
+ * - deployProgram → adapter.executeDeployment()
+ * - signMessage → adapter.signMessage()
+ * - decrypt → adapter.decrypt()
+ * - requestRecords → adapter.requestRecords()
+ * - transactionStatus → adapter.transactionStatus()
+ * - transitionViewKeys → adapter.transitionViewKeys()
  *
- *   fallback([transportFromAdapter(adapter), http('https://api.provable.com/v2')])
+ * Read operations (getBlock, getBalance, etc.) are NOT handled — pair
+ * with http() via fallback() for full coverage:
+ *
+ *   fallback([transportFromAdapter(adapter), http(url)])
  */
-export function transportFromAdapter(
-  adapter: WalletAdapterLike,
-  options: { chainId?: string } = {},
-): Transport<'custom'> {
-  const chainId = options.chainId ?? '1'
-
+export function transportFromAdapter(adapter: AleoWalletAdapter): Transport<'custom'> {
   return custom({
     key: 'walletAdapter',
     name: 'Wallet Adapter Transport',
@@ -131,14 +137,10 @@ export function transportFromAdapter(
 
       switch (method) {
         case 'executeTransaction': {
-          const result = await adapter.requestExecution({
-            address: adapter.publicKey,
-            chainId,
-            transitions: [{
-              program: p?.programName as string,
-              functionName: p?.functionName as string,
-              inputs: p?.inputs as unknown[],
-            }],
+          const result = await adapter.executeTransaction({
+            program: p?.programName as string,
+            function: p?.functionName as string,
+            inputs: p?.inputs as string[],
             fee: Number(p?.fee ?? 0),
             privateFee: (p?.privateFee as boolean) ?? false,
           })
@@ -146,18 +148,15 @@ export function transportFromAdapter(
         }
 
         case 'deployProgram': {
-          const result = await adapter.requestDeploy({
-            address: adapter.publicKey,
-            chainId,
+          const result = await adapter.executeDeployment({
             program: p?.program as string,
             fee: Number(p?.fee ?? 0),
-          })
+          } as AleoDeployment)
           return result.transactionId
         }
 
         case 'signMessage': {
-          const { signature } = await adapter.signMessage(p?.message as Uint8Array)
-          return signature
+          return adapter.signMessage(p?.message as Uint8Array)
         }
 
         case 'decrypt':
@@ -169,13 +168,14 @@ export function transportFromAdapter(
           )
 
         case 'requestRecords':
-          return adapter.requestRecords(p?.program as string)
+          return adapter.requestRecords(p?.program as string, true)
 
         case 'transactionStatus': {
-          if (!adapter.transactionStatus) {
-            throw new Error('Wallet adapter does not support transactionStatus.')
-          }
           return adapter.transactionStatus(p?.transactionId as string)
+        }
+
+        case 'getTransitionViewKeys': {
+          return adapter.transitionViewKeys(p?.id as string)
         }
 
         default:
@@ -193,17 +193,18 @@ export function transportFromAdapter(
 // --------------------------------------------------------------------------
 
 /**
- * Creates both an aleo-viem account and transport from a wallet adapter.
+ * Creates both an aleo-viem account and transport from a connected
+ * wallet adapter. This is the primary entry point.
  *
  *   const { account, transport } = fromWalletAdapter(leoWallet)
  *   const client = createWalletClient({ account, transport })
  */
-export function fromWalletAdapter(
-  adapter: WalletAdapterLike,
-  options: { chainId?: string } = {},
-): { account: RpcAccount; transport: Transport<'custom'> } {
+export function fromWalletAdapter(adapter: AleoWalletAdapter): {
+  account: RpcAccount
+  transport: Transport<'custom'>
+} {
   return {
     account: rpcAccountFromAdapter(adapter),
-    transport: transportFromAdapter(adapter, options),
+    transport: transportFromAdapter(adapter),
   }
 }

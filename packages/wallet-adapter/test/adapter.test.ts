@@ -1,17 +1,26 @@
 import { describe, it, expect, vi } from 'vitest'
-import { rpcAccountFromAdapter, transportFromAdapter, fromWalletAdapter } from '../src/index.js'
-import type { WalletAdapterLike } from '../src/index.js'
+import {
+  rpcAccountFromAdapter,
+  transportFromAdapter,
+  fromWalletAdapter,
+  type AleoWalletAdapter,
+} from '../src/index.js'
 
-function createMockAdapter(overrides?: Partial<WalletAdapterLike>): WalletAdapterLike {
+/**
+ * Creates a mock that matches the real BaseAleoWalletAdapter interface
+ * from @provablehq/aleo-wallet-adaptor-core
+ */
+function createMockAdapter(overrides?: Partial<AleoWalletAdapter>): AleoWalletAdapter {
   return {
-    publicKey: 'aleo1mockaddress',
+    account: { address: 'aleo1mockaddress123456789012345678901234567890123456789012345678' },
     connected: true,
-    signMessage: vi.fn().mockResolvedValue({ signature: new Uint8Array([1, 2, 3]) }),
-    requestExecution: vi.fn().mockResolvedValue({ transactionId: 'at1txid123' }),
-    requestDeploy: vi.fn().mockResolvedValue({ transactionId: 'at1deploy456' }),
-    requestTransaction: vi.fn().mockResolvedValue({ transactionId: 'at1tx789' }),
+    signMessage: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+    executeTransaction: vi.fn().mockResolvedValue({ transactionId: 'at1txid123' }),
+    executeDeployment: vi.fn().mockResolvedValue({ transactionId: 'at1deploy456' }),
+    transactionStatus: vi.fn().mockResolvedValue({ status: 'accepted', transactionId: 'at1final' }),
     decrypt: vi.fn().mockResolvedValue('{ owner: aleo1..., data: {} }'),
     requestRecords: vi.fn().mockResolvedValue([{ owner: 'aleo1mock' }]),
+    transitionViewKeys: vi.fn().mockResolvedValue(['tvk1abc', 'tvk1def']),
     ...overrides,
   }
 }
@@ -22,23 +31,39 @@ describe('rpcAccountFromAdapter', () => {
     const account = rpcAccountFromAdapter(adapter)
 
     expect(account.type).toBe('rpc')
-    expect(account.address).toBe('aleo1mockaddress')
+    expect(account.address).toBe('aleo1mockaddress123456789012345678901234567890123456789012345678')
   })
 
-  it('delegates signMessage to adapter', async () => {
+  it('delegates sign to adapter.signMessage', async () => {
     const adapter = createMockAdapter()
     const account = rpcAccountFromAdapter(adapter)
 
     const message = new Uint8Array([104, 101, 108, 108, 111])
-    const sig = await account.signMessage(message)
+    const sig = await account.sign(message)
 
     expect(adapter.signMessage).toHaveBeenCalledWith(message)
     expect(sig).toEqual(new Uint8Array([1, 2, 3]))
   })
+
+  it('delegates signMessage to adapter.signMessage', async () => {
+    const adapter = createMockAdapter()
+    const account = rpcAccountFromAdapter(adapter)
+
+    const message = new Uint8Array([1, 2])
+    await account.signMessage(message)
+
+    expect(adapter.signMessage).toHaveBeenCalledWith(message)
+  })
+
+  it('throws when adapter is not connected', () => {
+    const adapter = createMockAdapter({ account: undefined })
+
+    expect(() => rpcAccountFromAdapter(adapter)).toThrow('not connected')
+  })
 })
 
 describe('transportFromAdapter', () => {
-  it('routes executeTransaction to adapter.requestExecution', async () => {
+  it('routes executeTransaction to adapter.executeTransaction', async () => {
     const adapter = createMockAdapter()
     const transport = transportFromAdapter(adapter)
 
@@ -54,20 +79,16 @@ describe('transportFromAdapter', () => {
     })
 
     expect(result).toBe('at1txid123')
-    expect(adapter.requestExecution).toHaveBeenCalledWith({
-      address: 'aleo1mockaddress',
-      chainId: '1',
-      transitions: [{
-        program: 'token.aleo',
-        functionName: 'transfer',
-        inputs: ['aleo1recipient', '100u64'],
-      }],
+    expect(adapter.executeTransaction).toHaveBeenCalledWith({
+      program: 'token.aleo',
+      function: 'transfer',
+      inputs: ['aleo1recipient', '100u64'],
       fee: 1000,
       privateFee: false,
     })
   })
 
-  it('routes deployProgram to adapter.requestDeploy', async () => {
+  it('routes deployProgram to adapter.executeDeployment', async () => {
     const adapter = createMockAdapter()
     const transport = transportFromAdapter(adapter)
 
@@ -77,18 +98,45 @@ describe('transportFromAdapter', () => {
     })
 
     expect(result).toBe('at1deploy456')
+    expect(adapter.executeDeployment).toHaveBeenCalledWith(
+      expect.objectContaining({ program: 'my_program.aleo', fee: 5000 }),
+    )
   })
 
-  it('routes decrypt to adapter.decrypt', async () => {
+  it('routes signMessage to adapter.signMessage', async () => {
+    const adapter = createMockAdapter()
+    const transport = transportFromAdapter(adapter)
+
+    const message = new Uint8Array([1, 2, 3])
+    const result = await transport.request({
+      method: 'signMessage',
+      params: { message },
+    })
+
+    expect(adapter.signMessage).toHaveBeenCalledWith(message)
+    expect(result).toEqual(new Uint8Array([1, 2, 3]))
+  })
+
+  it('routes decrypt to adapter.decrypt with all params', async () => {
     const adapter = createMockAdapter()
     const transport = transportFromAdapter(adapter)
 
     await transport.request({
       method: 'decrypt',
-      params: { ciphertext: 'record1cipher...' },
+      params: {
+        ciphertext: 'record1cipher...',
+        tpk: 'tpk1...',
+        programId: 'token.aleo',
+        functionName: 'transfer',
+      },
     })
 
-    expect(adapter.decrypt).toHaveBeenCalledWith('record1cipher...', undefined, undefined, undefined)
+    expect(adapter.decrypt).toHaveBeenCalledWith(
+      'record1cipher...',
+      'tpk1...',
+      'token.aleo',
+      'transfer',
+    )
   })
 
   it('routes requestRecords to adapter.requestRecords', async () => {
@@ -100,11 +148,37 @@ describe('transportFromAdapter', () => {
       params: { program: 'token.aleo' },
     })
 
-    expect(adapter.requestRecords).toHaveBeenCalledWith('token.aleo')
+    expect(adapter.requestRecords).toHaveBeenCalledWith('token.aleo', true)
     expect(records).toEqual([{ owner: 'aleo1mock' }])
   })
 
-  it('throws on unknown methods', async () => {
+  it('routes transactionStatus to adapter.transactionStatus', async () => {
+    const adapter = createMockAdapter()
+    const transport = transportFromAdapter(adapter)
+
+    const status = await transport.request({
+      method: 'transactionStatus',
+      params: { transactionId: 'at1tx123' },
+    })
+
+    expect(adapter.transactionStatus).toHaveBeenCalledWith('at1tx123')
+    expect(status).toEqual({ status: 'accepted', transactionId: 'at1final' })
+  })
+
+  it('routes getTransitionViewKeys to adapter.transitionViewKeys', async () => {
+    const adapter = createMockAdapter()
+    const transport = transportFromAdapter(adapter)
+
+    const keys = await transport.request({
+      method: 'getTransitionViewKeys',
+      params: { id: 'at1tx456' },
+    })
+
+    expect(adapter.transitionViewKeys).toHaveBeenCalledWith('at1tx456')
+    expect(keys).toEqual(['tvk1abc', 'tvk1def'])
+  })
+
+  it('throws on unknown methods with helpful message', async () => {
     const adapter = createMockAdapter()
     const transport = transportFromAdapter(adapter)
 
@@ -113,28 +187,60 @@ describe('transportFromAdapter', () => {
     ).rejects.toThrow('does not handle method "getBlock"')
   })
 
-  it('supports custom chainId', async () => {
+  it('defaults privateFee to false', async () => {
     const adapter = createMockAdapter()
-    const transport = transportFromAdapter(adapter, { chainId: '3' })
+    const transport = transportFromAdapter(adapter)
 
     await transport.request({
       method: 'executeTransaction',
-      params: { programName: 'test.aleo', functionName: 'run', inputs: [], fee: 0 },
+      params: {
+        programName: 'test.aleo',
+        functionName: 'run',
+        inputs: [],
+        fee: 0,
+      },
     })
 
-    expect(adapter.requestExecution).toHaveBeenCalledWith(
-      expect.objectContaining({ chainId: '3' }),
+    expect(adapter.executeTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ privateFee: false }),
     )
   })
 })
 
 describe('fromWalletAdapter', () => {
-  it('returns both account and transport', () => {
+  it('returns both account and transport from a connected adapter', () => {
     const adapter = createMockAdapter()
     const { account, transport } = fromWalletAdapter(adapter)
 
     expect(account.type).toBe('rpc')
-    expect(account.address).toBe('aleo1mockaddress')
+    expect(account.address).toBe('aleo1mockaddress123456789012345678901234567890123456789012345678')
     expect(transport.config.key).toBe('walletAdapter')
+    expect(transport.config.name).toBe('Wallet Adapter Transport')
+  })
+
+  it('throws when adapter is not connected', () => {
+    const adapter = createMockAdapter({ account: undefined })
+    expect(() => fromWalletAdapter(adapter)).toThrow('not connected')
+  })
+
+  it('integrates with createWalletClient pattern', async () => {
+    // This test demonstrates the full wiring:
+    // fromWalletAdapter → createWalletClient → walletClient.writeContract
+    const adapter = createMockAdapter()
+    const { account, transport } = fromWalletAdapter(adapter)
+
+    // Manually wire like createWalletClient does
+    const result = await transport.request({
+      method: 'executeTransaction',
+      params: {
+        programName: 'token.aleo',
+        functionName: 'transfer',
+        inputs: ['aleo1dest', '50u64'],
+        fee: 500,
+      },
+    })
+
+    expect(result).toBe('at1txid123')
+    expect(account.address).toBe('aleo1mockaddress123456789012345678901234567890123456789012345678')
   })
 })

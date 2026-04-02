@@ -1,18 +1,19 @@
 import { describe, it, expect, vi } from 'vitest'
 import { fromWalletAdapter } from '@aleo-viem/wallet-adapter'
 import { createWalletClient, fallback, custom } from '@aleo-viem/core'
-import type { WalletAdapterLike } from '@aleo-viem/wallet-adapter'
+import type { AleoWalletAdapter } from '@aleo-viem/wallet-adapter'
 
-function createMockAdapter(overrides?: Partial<WalletAdapterLike>): WalletAdapterLike {
+function createMockAdapter(overrides?: Partial<AleoWalletAdapter>): AleoWalletAdapter {
   return {
-    publicKey: 'aleo1walletowner',
+    account: { address: 'aleo1walletowner12345678901234567890123456789012345678901234567890' },
     connected: true,
-    signMessage: vi.fn().mockResolvedValue({ signature: new Uint8Array([10, 20, 30]) }),
-    requestExecution: vi.fn().mockResolvedValue({ transactionId: 'at1exec_tx' }),
-    requestDeploy: vi.fn().mockResolvedValue({ transactionId: 'at1deploy_tx' }),
-    requestTransaction: vi.fn().mockResolvedValue({ transactionId: 'at1req_tx' }),
+    signMessage: vi.fn().mockResolvedValue(new Uint8Array([10, 20, 30])),
+    executeTransaction: vi.fn().mockResolvedValue({ transactionId: 'at1exec_tx' }),
+    executeDeployment: vi.fn().mockResolvedValue({ transactionId: 'at1deploy_tx' }),
+    transactionStatus: vi.fn().mockResolvedValue({ status: 'accepted' }),
     decrypt: vi.fn().mockResolvedValue('{ owner: aleo1..., data: {} }'),
     requestRecords: vi.fn().mockResolvedValue([{ owner: 'aleo1walletowner' }]),
+    transitionViewKeys: vi.fn().mockResolvedValue(['tvk1abc']),
     ...overrides,
   }
 }
@@ -32,16 +33,13 @@ describe('integration: wallet adapter full pattern', () => {
     })
 
     expect(txId).toBe('at1exec_tx')
-    expect(adapter.requestExecution).toHaveBeenCalledWith(
-      expect.objectContaining({
-        address: 'aleo1walletowner',
-        transitions: [{
-          program: 'token.aleo',
-          functionName: 'transfer',
-          inputs: ['aleo1recipient', '100u64'],
-        }],
-      }),
-    )
+    expect(adapter.executeTransaction).toHaveBeenCalledWith({
+      program: 'token.aleo',
+      function: 'transfer',
+      inputs: ['aleo1recipient', '100u64'],
+      fee: 5000,
+      privateFee: false,
+    })
   })
 
   it('fromWalletAdapter -> createWalletClient -> transfer', async () => {
@@ -55,15 +53,13 @@ describe('integration: wallet adapter full pattern', () => {
     })
 
     expect(txId).toBe('at1exec_tx')
-    expect(adapter.requestExecution).toHaveBeenCalledWith(
-      expect.objectContaining({
-        transitions: [{
-          program: 'credits.aleo',
-          functionName: 'transfer_public',
-          inputs: ['aleo1recipient', '1000000u64'],
-        }],
-      }),
-    )
+    expect(adapter.executeTransaction).toHaveBeenCalledWith({
+      program: 'credits.aleo',
+      function: 'transfer_public',
+      inputs: ['aleo1recipient', '1000000u64'],
+      fee: 0,
+      privateFee: false,
+    })
   })
 
   it('fromWalletAdapter -> createWalletClient -> deployContract', async () => {
@@ -77,11 +73,8 @@ describe('integration: wallet adapter full pattern', () => {
     })
 
     expect(txId).toBe('at1deploy_tx')
-    expect(adapter.requestDeploy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        address: 'aleo1walletowner',
-        program: 'my_program.aleo',
-      }),
+    expect(adapter.executeDeployment).toHaveBeenCalledWith(
+      expect.objectContaining({ program: 'my_program.aleo', fee: 10000 }),
     )
   })
 
@@ -126,7 +119,7 @@ describe('integration: wallet adapter full pattern', () => {
     const records = await client.requestRecords({ program: 'token.aleo' })
 
     expect(records).toEqual([{ owner: 'aleo1walletowner' }])
-    expect(adapter.requestRecords).toHaveBeenCalledWith('token.aleo')
+    expect(adapter.requestRecords).toHaveBeenCalledWith('token.aleo', true)
   })
 
   it('wallet adapter transport with fallback for read operations', async () => {
@@ -150,6 +143,6 @@ describe('integration: wallet adapter full pattern', () => {
       fee: 5000n,
     })
     expect(txId).toBe('at1exec_tx')
-    expect(adapter.requestExecution).toHaveBeenCalled()
+    expect(adapter.executeTransaction).toHaveBeenCalled()
   })
 })
