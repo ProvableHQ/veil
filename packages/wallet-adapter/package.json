@@ -1,0 +1,27 @@
+{
+  "name": "@aleo-viem/wallet-adapter",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "files": ["dist"],
+  "peerDependencies": {
+    "@aleo-viem/core": "workspace:*",
+    "@provablehq/aleo-wallet-adaptor-core": ">=0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@provablehq/aleo-wallet-adaptor-core": {
+      "optional": true
+    }
+  }
+}

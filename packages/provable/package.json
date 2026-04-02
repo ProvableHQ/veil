@@ -1,0 +1,24 @@
+{
+  "name": "@aleo-viem/provable",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "@provablehq/sdk": "^0.9.15"
+  },
+  "peerDependencies": {
+    "@aleo-viem/core": "workspace:*"
+  }
+}

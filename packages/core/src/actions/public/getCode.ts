@@ -1,0 +1,8 @@
+import type { Client } from '../../clients/createClient.js'
+
+export type GetCodeParameters = { program: string }
+export type GetCodeReturnType = string
+
+export async function getCode(client: Client, params: GetCodeParameters): Promise<GetCodeReturnType> {
+  return client.request({ method: 'getProgram', params: { programId: params.program } }) as Promise<string>
+}
