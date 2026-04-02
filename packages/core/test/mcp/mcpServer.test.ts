@@ -35,8 +35,12 @@ describe('createMcpServer', () => {
     const names = server.tools.map((t) => t.name)
     expect(names).toContain('aleo_get_block_number')
     expect(names).toContain('aleo_get_balance')
+    expect(names).toContain('aleo_get_block')
+    expect(names).toContain('aleo_get_transaction')
+    expect(names).toContain('aleo_describe_program')
     expect(names).toContain('aleo_execute')
     expect(names).toContain('aleo_transfer')
+    expect(names).toContain('aleo_deploy')
   })
 
   it('handleToolCall dispatches to the correct handler', async () => {
@@ -54,7 +58,45 @@ describe('createMcpServer', () => {
     const server = createMcpServer({ client })
 
     const result = await server.handleToolCall('aleo_get_balance', { address: 'aleo1test' })
-    expect(result).toEqual({ balance: '5000000', unit: 'microcredits' })
+    expect(result).toEqual({ balance: '5000000', unit: 'microcredits', address: 'aleo1test' })
+  })
+
+  it('handleToolCall dispatches aleo_get_block correctly', async () => {
+    const mockBlock = { header: { height: 42 } }
+    const request = vi.fn().mockResolvedValue(mockBlock)
+    const client = createPublicClient({ transport: custom({ request }) })
+    const server = createMcpServer({ client })
+
+    const result = await server.handleToolCall('aleo_get_block', { height: 42 })
+    expect(result).toEqual({ block: mockBlock })
+  })
+
+  it('handleToolCall dispatches aleo_get_transaction correctly', async () => {
+    const mockTx = { id: 'at1abc' }
+    const request = vi.fn().mockResolvedValue(mockTx)
+    const client = createPublicClient({ transport: custom({ request }) })
+    const server = createMcpServer({ client })
+
+    const result = await server.handleToolCall('aleo_get_transaction', { id: 'at1abc' })
+    expect(result).toEqual({ transaction: mockTx })
+  })
+
+  it('handleToolCall dispatches aleo_deploy correctly', async () => {
+    const request = vi.fn().mockResolvedValue('at1deploy999')
+    const account = {
+      type: 'rpc' as const,
+      address: 'aleo1sender',
+      sign: vi.fn(),
+      signMessage: vi.fn(),
+    }
+    const walletClient = createWalletClient({ account, transport: custom({ request }) })
+    const server = createMcpServer({ walletClient })
+
+    const result = await server.handleToolCall('aleo_deploy', {
+      program: 'program test.aleo;',
+      fee: 5000,
+    })
+    expect(result).toEqual({ transactionId: 'at1deploy999' })
   })
 
   it('handleToolCall throws helpful error for unknown tool', async () => {
