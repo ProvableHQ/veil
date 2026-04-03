@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { deployContract } from '../../../src/actions/wallet/deployContract.js'
-import { AccountNotFoundError } from '../../../src/errors/errors.js'
+import { AccountNotFoundError, ProvingNotConfiguredError } from '../../../src/errors/errors.js'
 
 describe('deployContract', () => {
   it('throws AccountNotFoundError when no account', async () => {
@@ -10,7 +10,7 @@ describe('deployContract', () => {
     ).rejects.toThrow(AccountNotFoundError)
   })
 
-  it('delegates to transport with program and fee', async () => {
+  it('RPC account — delegates to wallet via transport', async () => {
     const request = vi.fn().mockResolvedValue('at1deploy')
     const client = {
       account: { type: 'rpc', address: 'aleo1abc', sign: vi.fn() },
@@ -23,5 +23,35 @@ describe('deployContract', () => {
       method: 'deployProgram',
       params: { program: 'program token.aleo; ...', fee: 5000n },
     })
+  })
+
+  it('local account — builds transaction then broadcasts', async () => {
+    const builtTx = { type: 'deploy', id: 'at1built' }
+    const buildTransaction = vi.fn().mockResolvedValue(builtTx)
+    const request = vi.fn().mockResolvedValue('at1deployed')
+    const client = {
+      account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
+      proving: { buildTransaction },
+      request,
+    } as any
+
+    const result = await deployContract(client, { program: 'my_program.aleo', fee: 10000n })
+    expect(result).toBe('at1deployed')
+    expect(buildTransaction).toHaveBeenCalled()
+    expect(request).toHaveBeenCalledWith({
+      method: 'sendTransaction',
+      params: { transaction: JSON.stringify(builtTx) },
+    })
+  })
+
+  it('local account without proving config throws ProvingNotConfiguredError', async () => {
+    const client = {
+      account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
+      proving: undefined,
+      request: vi.fn(),
+    } as any
+    await expect(
+      deployContract(client, { program: 'test.aleo', fee: 1000n }),
+    ).rejects.toThrow(ProvingNotConfiguredError)
   })
 })

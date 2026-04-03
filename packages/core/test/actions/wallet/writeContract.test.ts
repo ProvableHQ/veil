@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { writeContract, executeTransaction } from '../../../src/actions/wallet/writeContract.js'
-import { AccountNotFoundError } from '../../../src/errors/errors.js'
+import { AccountNotFoundError, ProvingNotConfiguredError } from '../../../src/errors/errors.js'
 
 describe('writeContract', () => {
   const baseParams = {
@@ -64,6 +64,15 @@ describe('writeContract', () => {
       method: 'sendTransaction',
       params: { transaction: JSON.stringify(builtTx) },
     })
+  })
+
+  it('throws ProvingNotConfiguredError for local account without proving config', async () => {
+    const client = {
+      account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
+      proving: undefined,
+      request: vi.fn(),
+    } as any
+    await expect(writeContract(client, baseParams)).rejects.toThrow(ProvingNotConfiguredError)
   })
 
   it('executeTransaction is an alias for writeContract', () => {

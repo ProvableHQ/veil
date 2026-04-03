@@ -12,9 +12,14 @@ export async function signMessage(
   client: Client,
   params: SignMessageParameters,
 ): Promise<SignMessageReturnType> {
-  if (!client.account || !('signMessage' in client.account)) {
+  const account = client.account
+  if (!account || !('signMessage' in account)) {
     throw new AccountNotFoundError()
   }
 
-  return (client.account as SignerAccount).signMessage(params.message)
+  // Like viem: if the account has signMessage, call it directly.
+  // Both local and RPC accounts implement signMessage —
+  // local accounts sign with the private key,
+  // RPC accounts delegate to the wallet.
+  return (account as SignerAccount).signMessage(params.message)
 }

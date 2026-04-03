@@ -150,8 +150,10 @@ export function transportFromAdapter(adapter: AleoWalletAdapter): Transport<'cus
         case 'deployProgram': {
           const result = await adapter.executeDeployment({
             program: p?.program as string,
-            fee: Number(p?.fee ?? 0),
-          } as AleoDeployment)
+            address: adapter.account?.address ?? '',
+            priorityFee: Number(p?.fee ?? 0),
+            privateFee: false,
+          })
           return result.transactionId
         }
 

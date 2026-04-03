@@ -1,4 +1,4 @@
-import type { SignerAccount } from '../types/account.js'
+import type { RpcAccount, LocalAccount } from '../types/account.js'
 import type { ProvingConfig } from '../types/proving.js'
 import type { RecordsConfig } from '../types/records.js'
 import type { Transport } from '../types/transport.js'
@@ -7,7 +7,7 @@ import { walletActions, type WalletActions } from './decorators/wallet.js'
 
 /** Config for RPC account — proving is excluded, wallet handles it */
 export type RpcWalletClientConfig = {
-  account: SignerAccount & { type: 'rpc' }
+  account: RpcAccount
   transport: Transport
   records?: RecordsConfig | undefined
   key?: string | undefined
@@ -16,7 +16,7 @@ export type RpcWalletClientConfig = {
 
 /** Config for local account — must provide proving config */
 export type LocalWalletClientConfig = {
-  account: SignerAccount & { type: 'local' }
+  account: LocalAccount
   transport: Transport
   proving: ProvingConfig
   records?: RecordsConfig | undefined

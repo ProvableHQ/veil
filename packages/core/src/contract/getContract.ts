@@ -14,13 +14,9 @@ export type GetContractParameters = {
     | { public: PublicClient; wallet: WalletClient }
 }
 
-export type ContractReadMethods = {
-  [key: string]: (params: { key: string }) => Promise<unknown>
-}
+export type ContractReadMethods = Record<string, (params: { key: string }) => Promise<unknown>>
 
-export type ContractWriteMethods = {
-  [key: string]: (params: { inputs: string[]; fee?: bigint }) => Promise<string>
-}
+export type ContractWriteMethods = Record<string, (params: { inputs: string[]; fee?: bigint }) => Promise<string>>
 
 export type ContractInstance = {
   program: string

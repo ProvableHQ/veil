@@ -1,4 +1,4 @@
-import { AccountNotFoundError } from '../../errors/errors.js'
+import { AccountNotFoundError, ProvingNotConfiguredError } from '../../errors/errors.js'
 import type { Client } from '../../clients/createClient.js'
 
 export type DeployContractParameters = {
@@ -12,12 +12,38 @@ export async function deployContract(
   client: Client,
   params: DeployContractParameters,
 ): Promise<DeployContractReturnType> {
-  if (!client.account || !('sign' in client.account)) {
+  const account = client.account
+  if (!account || !('sign' in account)) {
     throw new AccountNotFoundError()
   }
 
-  return client.request({
-    method: 'deployProgram',
-    params: { program: params.program, fee: params.fee },
-  }) as Promise<string>
+  if (account.type === 'rpc') {
+    // RPC account — wallet handles deployment
+    return client.request({
+      method: 'deployProgram',
+      params: { program: params.program, fee: params.fee },
+    }) as Promise<string>
+  }
+
+  if (account.type === 'local') {
+    // Local account — must build deployment transaction locally
+    if (!client.proving?.buildTransaction) {
+      throw new ProvingNotConfiguredError()
+    }
+
+    // Use buildTransaction with a deploy-specific convention
+    const tx = await client.proving.buildTransaction({
+      programName: params.program,
+      functionName: '__deploy__',
+      inputs: [],
+      fee: params.fee,
+    })
+
+    return client.request({
+      method: 'sendTransaction',
+      params: { transaction: JSON.stringify(tx) },
+    }) as Promise<string>
+  }
+
+  throw new AccountNotFoundError()
 }

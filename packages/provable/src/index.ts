@@ -27,9 +27,17 @@ import {
   ProgramManager,
   AleoNetworkClient,
   AleoKeyProvider,
+  NetworkRecordProvider,
 } from '@provablehq/sdk'
 import type { LocalAccount } from '@aleo-viem/core'
 import type { ProvingConfig, BuildTransactionOptions } from '@aleo-viem/core'
+import type { RecordsConfig, RecordSearchParams, AleoRecord } from '@aleo-viem/core'
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+} from '@aleo-viem/core'
+import type { PublicClient, WalletClient } from '@aleo-viem/core'
 
 /**
  * Creates a LocalAccount from an Aleo private key string.
@@ -85,6 +93,8 @@ export function createProvingConfig(options: {
   networkUrl: string
   /** Required for delegated proving — the prover service URL */
   proverUrl?: string
+  /** Account to use for proving — sets the signer on the ProgramManager */
+  account?: LocalAccount<'privateKey'>
 }): ProvingConfig {
   const keyProvider = new AleoKeyProvider()
   keyProvider.useCache(true)
@@ -100,10 +110,16 @@ export function createProvingConfig(options: {
         undefined,
       )
 
+      // Bind the account so ProgramManager can sign transactions
+      if (options.account) {
+        const sdkAccount = new Account({ privateKey: options.account.privateKey })
+        programManager.setAccount(sdkAccount)
+      }
+
       const tx = await programManager.buildExecutionTransaction({
         programName: txOptions.programName,
         functionName: txOptions.functionName,
-        fee: Number(txOptions.fee),
+        priorityFee: Number(txOptions.fee),
         privateFee: txOptions.privateFee ?? false,
         inputs: txOptions.inputs,
       })
@@ -144,4 +160,116 @@ export function verifySignature(
  */
 export function createNetworkClient(url: string): AleoNetworkClient {
   return new AleoNetworkClient(url)
+}
+
+/**
+ * Creates a RecordsConfig backed by @provablehq/sdk's NetworkRecordProvider.
+ *
+ * The returned config provides a `getRecords` function that scans the network
+ * for records owned by the given account. This plugs directly into
+ * createWalletClient({ records: ... }) or createPublicClient({ records: ... }).
+ */
+export function createRecordsConfig(options: {
+  networkUrl: string
+  account: LocalAccount<'privateKey'>
+}): RecordsConfig {
+  const sdkAccount = new Account({ privateKey: options.account.privateKey })
+  const networkClient = new AleoNetworkClient(options.networkUrl)
+  const recordProvider = new NetworkRecordProvider(sdkAccount, networkClient)
+
+  return {
+    getRecords: async (params: RecordSearchParams): Promise<AleoRecord[]> => {
+      const ownedRecords = await recordProvider.findRecords({
+        unspent: params.unspent ?? true,
+        programName: params.program,
+      })
+
+      return ownedRecords.map((record) => ({
+        owner: record.owner ?? '',
+        data: record.record_plaintext
+          ? parseRecordPlaintext(record.record_plaintext)
+          : {},
+        nonce: extractNonce(record.record_plaintext),
+        programId: record.program_name ?? params.program,
+        plaintext: record.record_plaintext ?? '',
+      }))
+    },
+  }
+}
+
+/**
+ * Parse an Aleo record plaintext string into a key-value data object.
+ * Format: "{ key1: value1.private, key2: value2.public }"
+ */
+function parseRecordPlaintext(plaintext: string): Record<string, unknown> {
+  const data: Record<string, unknown> = {}
+  // Strip outer braces and split on commas
+  const inner = plaintext.replace(/^\{|\}$/g, '').trim()
+  const pairs = inner.split(',')
+  for (const pair of pairs) {
+    const colonIdx = pair.indexOf(':')
+    if (colonIdx === -1) continue
+    const key = pair.slice(0, colonIdx).trim()
+    const value = pair.slice(colonIdx + 1).trim()
+    // Skip internal fields like _nonce and _version
+    if (key.startsWith('_')) continue
+    data[key] = value
+  }
+  return data
+}
+
+/**
+ * Extract the nonce from an Aleo record plaintext string.
+ */
+function extractNonce(plaintext: string | undefined): string {
+  if (!plaintext) return ''
+  const match = plaintext.match(/_nonce:\s*(\S+)/)
+  return match?.[1] ?? ''
+}
+
+/**
+ * Creates a fully-wired Aleo client from just a private key and network URL.
+ *
+ * This is the "I just want it to work" entry point that sets up:
+ * - A LocalAccount from the private key
+ * - A PublicClient with HTTP transport
+ * - A WalletClient with proving config and record scanning
+ *
+ * @example
+ * ```ts
+ * const { publicClient, walletClient, account } = createAleoClient({
+ *   privateKey: 'APrivateKey1...',
+ *   networkUrl: 'https://api.explorer.provable.com/v1',
+ * })
+ * ```
+ */
+export function createAleoClient(options: {
+  privateKey: string
+  networkUrl: string
+  provingMode?: 'delegated' | 'local'
+}): { publicClient: PublicClient; walletClient: WalletClient; account: LocalAccount<'privateKey'> } {
+  const account = privateKeyToAccount(options.privateKey)
+  const transport = http(options.networkUrl)
+
+  const proving = createProvingConfig({
+    mode: options.provingMode ?? 'delegated',
+    networkUrl: options.networkUrl,
+    account,
+  })
+
+  const records = createRecordsConfig({
+    networkUrl: options.networkUrl,
+    account,
+  })
+
+  const publicClient = createPublicClient({ transport })
+
+  const walletClient = createWalletClient({
+    account,
+    transport,
+    proving,
+    records,
+  })
+
+  return { publicClient, walletClient, account }
 }

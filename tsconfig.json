@@ -12,6 +12,14 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+    "paths": {
+      "@aleo-viem/core": ["./packages/core/src/index.ts"],
+      "@aleo-viem/core/agent": ["./packages/core/src/agent/index.ts"],
+      "@aleo-viem/core/mcp": ["./packages/core/src/mcp/index.ts"],
+      "@aleo-viem/wallet-adapter": ["./packages/wallet-adapter/src/index.ts"],
+      "@aleo-viem/provable": ["./packages/provable/src/index.ts"]
+    },
+    "types": ["node"]
   }
 }

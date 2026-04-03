@@ -1,5 +1,4 @@
-import { AccountNotFoundError } from '../../errors/errors.js'
-import type { SignerAccount } from '../../types/account.js'
+import { AccountNotFoundError, ProvingNotConfiguredError } from '../../errors/errors.js'
 import type { Client } from '../../clients/createClient.js'
 
 export type WriteContractParameters = {
@@ -16,12 +15,31 @@ export async function writeContract(
   client: Client,
   params: WriteContractParameters,
 ): Promise<WriteContractReturnType> {
-  if (!client.account || !('sign' in client.account)) {
+  const account = client.account
+  if (!account || !('sign' in account)) {
     throw new AccountNotFoundError()
   }
 
-  // If client has proving config with a custom buildTransaction, use it
-  if (client.proving?.buildTransaction) {
+  if (account.type === 'rpc') {
+    // RPC account — wallet handles proving, signing, and broadcasting
+    return client.request({
+      method: 'executeTransaction',
+      params: {
+        programName: params.program,
+        functionName: params.function,
+        inputs: params.inputs,
+        fee: params.fee,
+        privateFee: params.privateFee,
+      },
+    }) as Promise<string>
+  }
+
+  if (account.type === 'local') {
+    // Local account — must prove locally, then broadcast the raw transaction
+    if (!client.proving?.buildTransaction) {
+      throw new ProvingNotConfiguredError()
+    }
+
     const tx = await client.proving.buildTransaction({
       programName: params.program,
       functionName: params.function,
@@ -29,23 +47,14 @@ export async function writeContract(
       fee: params.fee,
       privateFee: params.privateFee,
     })
+
     return client.request({
       method: 'sendTransaction',
       params: { transaction: JSON.stringify(tx) },
     }) as Promise<string>
   }
 
-  // For RPC accounts or when proving mode handles it, delegate to the transport
-  return client.request({
-    method: 'executeTransaction',
-    params: {
-      programName: params.program,
-      functionName: params.function,
-      inputs: params.inputs,
-      fee: params.fee,
-      privateFee: params.privateFee,
-    },
-  }) as Promise<string>
+  throw new AccountNotFoundError()
 }
 
 /** Alias for writeContract — consistent with Aleo wallet adapter terminology */

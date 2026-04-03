@@ -98,9 +98,12 @@ describe('transportFromAdapter', () => {
     })
 
     expect(result).toBe('at1deploy456')
-    expect(adapter.executeDeployment).toHaveBeenCalledWith(
-      expect.objectContaining({ program: 'my_program.aleo', fee: 5000 }),
-    )
+    expect(adapter.executeDeployment).toHaveBeenCalledWith({
+      program: 'my_program.aleo',
+      address: 'aleo1mockaddress123456789012345678901234567890123456789012345678',
+      priorityFee: 5000,
+      privateFee: false,
+    })
   })
 
   it('routes signMessage to adapter.signMessage', async () => {

@@ -73,9 +73,12 @@ describe('integration: wallet adapter full pattern', () => {
     })
 
     expect(txId).toBe('at1deploy_tx')
-    expect(adapter.executeDeployment).toHaveBeenCalledWith(
-      expect.objectContaining({ program: 'my_program.aleo', fee: 10000 }),
-    )
+    expect(adapter.executeDeployment).toHaveBeenCalledWith({
+      program: 'my_program.aleo',
+      address: 'aleo1walletowner12345678901234567890123456789012345678901234567890',
+      priorityFee: 10000,
+      privateFee: false,
+    })
   })
 
   it('fromWalletAdapter -> createWalletClient -> signMessage', async () => {

@@ -48,8 +48,8 @@ export function createClient(config: ClientConfig): Client {
     request: transport.request,
     transport,
     uid,
-    extend(fn) {
-      return Object.assign(Object.create(client), fn(client)) as Client & typeof fn extends (c: Client) => infer R ? R : never
+    extend<extended extends Record<string, unknown>>(fn: (client: Client) => extended) {
+      return Object.assign(Object.create(client), fn(client)) as Client & extended
     },
   }
 
