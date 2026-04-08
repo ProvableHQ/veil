@@ -308,6 +308,27 @@
   <div class="diagram-sub">No standard interface, separate codebases per platform</div>
 </section>
 
+<!-- Slide 3b: Ethereum Has This Figured Out -->
+<section data-background-color="#0a0a12">
+  <h2 style="text-align:center; font-size:1.3em; margin-bottom:0.2em;">Ethereum Has This Figured Out</h2>
+  <p style="text-align:center; font-size:0.55em; color:var(--text-muted); margin-bottom:12px;">A mature, layered ecosystem where every piece has a standard</p>
+  <div id="mermaid-ethereum" style="text-align:center; max-height:55vh; overflow:auto;"></div>
+</section>
+
+<!-- Slide 3c: Aleo's Gaps -->
+<section data-background-color="#0a0a12">
+  <h2 style="text-align:center; font-size:1.3em; margin-bottom:0.2em;">Aleo Today: Missing Layers</h2>
+  <p style="text-align:center; font-size:0.55em; color:var(--text-muted); margin-bottom:12px;">Red nodes = gaps that block developer and agent adoption</p>
+  <div id="mermaid-gaps" style="text-align:center; max-height:55vh; overflow:auto;"></div>
+</section>
+
+<!-- Slide 3d: The Path Forward -->
+<section data-background-color="#0a0a12">
+  <h2 style="text-align:center; font-size:1.3em; margin-bottom:0.2em;">Filling the Gaps</h2>
+  <p style="text-align:center; font-size:0.55em; color:var(--text-muted); margin-bottom:12px;">Cyan nodes = what we're building to close the gap with Ethereum</p>
+  <div id="mermaid-solution" style="text-align:center; max-height:55vh; overflow:auto;"></div>
+</section>
+
 <!-- Slide 4: The Solution (After) -->
 <section class="diagram-slide" data-background-color="#0a0a12">
   <h2 style="text-align:center; font-size:1.4em; margin-bottom:0.3em;">The Solution</h2>
@@ -734,18 +755,244 @@
 </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
 <script>
-Reveal.initialize({
-  hash: true,
-  slideNumber: 'c/t',
-  transition: 'fade',
-  transitionSpeed: 'default',
-  center: true,
-  width: 1100,
-  height: 700,
-  margin: 0.08
-});
+async function init() {
+  mermaid.initialize({ startOnLoad: false, theme: 'dark', themeVariables: {
+    darkMode: true, background: '#0a0a12', primaryColor: '#818cf8',
+    primaryTextColor: '#fff', lineColor: '#555', fontSize: '14px'
+  }});
+
+  const diagrams = {
+    'mermaid-ethereum': `graph LR
+classDef frontend fill:#818cf8,stroke:#6366f1,color:#fff
+classDef walletkit fill:#d8b4fe,stroke:#a855f7,color:#fff
+classDef lib fill:#38bdf8,stroke:#0ea5e9,color:#fff
+classDef framework fill:#34d399,stroke:#10b981,color:#fff
+classDef testing fill:#6ee7b7,stroke:#34d399,color:#fff
+classDef infra fill:#fb923c,stroke:#f97316,color:#fff
+classDef chain fill:#f472b6,stroke:#ec4899,color:#fff
+subgraph Frontend_dApp["Frontend / dApp"]
+RK["RainbowKit"]:::frontend
+CK["ConnectKit"]:::frontend
+WG["wagmi"]:::frontend
+WC["WalletConnect"]:::frontend
+MM["MetaMask SDK"]:::frontend
+end
+subgraph Wallet_Kits["Wallet Kits"]
+Privy:::walletkit
+Dynamic:::walletkit
+TW["Thirdweb Connect"]:::walletkit
+Web3Auth:::walletkit
+Magic:::walletkit
+end
+subgraph Client_Libraries["Client Libraries"]
+VI["viem"]:::lib
+EJ["ethers.js"]:::lib
+AL["alloy Rust"]:::lib
+end
+subgraph Dev_Frameworks["Dev Frameworks / Local Testing"]
+HH["Hardhat"]:::framework
+FO["Foundry"]:::framework
+AN["Anvil"]:::testing
+HN["Hardhat Node"]:::testing
+end
+subgraph RPC_Ethereum["RPC to Ethereum"]
+RPC["Alchemy / Infura / QuickNode"]:::infra
+ETH["EVM"]:::chain
+end
+RK --> WG
+CK --> WG
+WG --> VI
+Privy --> WG
+Dynamic --> VI
+WC --> EJ
+MM --> EJ
+TW --> EJ
+Web3Auth --> EJ
+Magic --> EJ
+HH --> EJ
+FO --> AL
+FO --> AN
+HH --> HN
+VI --> RPC
+EJ --> RPC
+AL --> RPC
+RPC --> ETH
+AN -. simulates .-> ETH
+HN -. simulates .-> ETH`,
+
+    'mermaid-gaps': `graph TB
+classDef frontend fill:#818cf8,stroke:#6366f1,color:#fff
+classDef walletkit fill:#d8b4fe,stroke:#a855f7,color:#fff
+classDef lib fill:#38bdf8,stroke:#0ea5e9,color:#fff
+classDef framework fill:#34d399,stroke:#10b981,color:#fff
+classDef testing fill:#6ee7b7,stroke:#34d399,color:#fff
+classDef infra fill:#fb923c,stroke:#f97316,color:#fff
+classDef chain fill:#f472b6,stroke:#ec4899,color:#fff
+classDef missing fill:#ef4444,stroke:#dc2626,color:#fff
+classDef mobile fill:#facc15,stroke:#eab308,color:#000
+subgraph Frontend_dApp["Frontend / dApp"]
+AH["aleo-hooks"]:::frontend
+WA["Wallet Adapter React"]:::frontend
+end
+subgraph Wallet_Kits["Wallet Kits"]
+NONE1["No Privy / Dynamic equivalent"]:::missing
+end
+subgraph Agents
+NONE4["No AgentKit / MCP provider"]:::missing
+end
+subgraph Wallets
+LEO["Leo Wallet"]:::walletkit
+GAL["Galileo"]:::walletkit
+PUZ["Puzzle Wallet"]:::walletkit
+FOX["Fox Wallet"]:::walletkit
+SHIELDW["Shield Wallet"]:::walletkit
+end
+subgraph Mobile
+SHIELDMW["Shield Mobile Wallet"]:::mobile
+end
+subgraph Client_Libraries["Client Libraries"]
+NONE5["No viem / ethers.js equivalent"]:::missing
+SDK["provablehq/sdk TS"]:::lib
+WASM["provablehq/wasm"]:::lib
+LEOSDK["Leo SDK"]:::lib
+PSDK["Puzzle SDK"]:::lib
+MSDK["Shield Mobile SDK"]:::mobile
+end
+subgraph Dev_Frameworks["Dev Frameworks / Local Testing"]
+LEOCLI["Leo CLI"]:::framework
+DEVNET["snarkOS devnet"]:::testing
+NONE3["No Foundry / Hardhat equivalent"]:::missing
+end
+subgraph RPC_Aleo["RPC to Aleo"]
+RPC["Provable / Lavender Five"]:::infra
+ALEO["snarkOS AleoBFT"]:::chain
+end
+AH --> WA
+WA --> LEO
+WA --> GAL
+WA --> PUZ
+WA --> FOX
+WA --> SHIELDW
+LEO --> LEOSDK
+GAL --> SDK
+FOX --> SDK
+SHIELDW --> NONE1
+SHIELDMW --> NONE1
+PUZ --> PSDK
+SDK --> WASM
+LEOCLI --> DEVNET
+LEOSDK --> RPC
+PSDK --> RPC
+MSDK --> RPC
+SDK --> RPC
+WASM --> RPC
+RPC --> ALEO
+DEVNET -. simulates .-> ALEO`,
+
+    'mermaid-solution': `graph TB
+classDef frontend fill:#818cf8,stroke:#6366f1,color:#fff
+classDef walletkit fill:#d8b4fe,stroke:#a855f7,color:#fff
+classDef lib fill:#38bdf8,stroke:#0ea5e9,color:#fff
+classDef framework fill:#34d399,stroke:#10b981,color:#fff
+classDef testing fill:#6ee7b7,stroke:#34d399,color:#fff
+classDef infra fill:#fb923c,stroke:#f97316,color:#fff
+classDef chain fill:#f472b6,stroke:#ec4899,color:#fff
+classDef missing fill:#ef4444,stroke:#dc2626,color:#fff
+classDef mobile fill:#facc15,stroke:#eab308,color:#000
+classDef new fill:#22d3ee,stroke:#06b6d4,color:#fff
+subgraph Frontend_dApp["Frontend / dApp"]
+AH["aleo-hooks"]:::frontend
+WA["Wallet Adapter React"]:::frontend
+end
+subgraph Wallet_Kits["Wallet Kits"]
+SC["Shield Core"]:::new
+end
+subgraph Agents
+AGT["Agent Toolkit"]:::new
+end
+subgraph Wallets
+LEO["Leo Wallet"]:::walletkit
+GAL["Galileo"]:::walletkit
+PUZ["Puzzle Wallet"]:::walletkit
+FOX["Fox Wallet"]:::walletkit
+SHIELDW["Shield Wallet"]:::walletkit
+end
+subgraph Mobile
+SHIELDMW["Shield Mobile Wallet"]:::mobile
+end
+subgraph Client_Libraries["Client Libraries"]
+VEIL["Veil - viem equivalent"]:::new
+SDK["provablehq/sdk TS"]:::lib
+WASM["provablehq/wasm"]:::lib
+LEOSDK["Leo SDK"]:::lib
+PSDK["Puzzle SDK"]:::lib
+MSDK["Shield Mobile SDK"]:::mobile
+end
+subgraph Dev_Frameworks["Dev Frameworks / Local Testing"]
+LEOCLI["Leo CLI"]:::framework
+DEVNET["snarkOS devnet"]:::testing
+NONE3["No Foundry / Hardhat equivalent"]:::missing
+end
+subgraph RPC_Aleo["RPC to Aleo"]
+RPC["Provable / Lavender Five"]:::infra
+ALEO["snarkOS AleoBFT"]:::chain
+end
+AH --> VEIL
+AGT --> VEIL
+SC --> MSDK
+SC --> WASM
+VEIL --> WA
+VEIL --> SDK
+VEIL --> MSDK
+WA --> LEO
+WA --> GAL
+WA --> PUZ
+WA --> FOX
+WA --> SHIELDW
+LEO --> LEOSDK
+GAL --> SDK
+FOX --> SDK
+SHIELDW --> SC
+SHIELDMW --> SC
+PUZ --> PSDK
+SDK --> WASM
+LEOCLI --> DEVNET
+LEOSDK --> RPC
+PSDK --> RPC
+MSDK --> RPC
+SDK --> RPC
+WASM --> RPC
+RPC --> ALEO
+DEVNET -. simulates .-> ALEO`
+  };
+
+  for (const [id, diagram] of Object.entries(diagrams)) {
+    const { svg } = await mermaid.render(id + '-svg', diagram);
+    const el = document.getElementById(id);
+    el.innerHTML = svg;
+    const svgEl = el.querySelector('svg');
+    if (svgEl) {
+      svgEl.style.maxWidth = '100%';
+      svgEl.style.maxHeight = '55vh';
+      svgEl.style.height = 'auto';
+    }
+  }
+
+  Reveal.initialize({
+    hash: true,
+    slideNumber: 'c/t',
+    transition: 'fade',
+    transitionSpeed: 'default',
+    center: true,
+    width: 1100,
+    height: 700,
+    margin: 0.08
+  });
+}
+init();
 </script>
 </body>
 </html>
