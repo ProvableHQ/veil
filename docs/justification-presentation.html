@@ -934,7 +934,7 @@ end
 subgraph Dev_Frameworks["Dev Frameworks / Local Testing"]
 LEOCLI["Leo CLI"]:::framework
 DEVNET["snarkOS devnet"]:::testing
-NONE3["No Foundry / Hardhat equivalent"]:::missing
+VTST["Veil Test Client"]:::new
 end
 subgraph RPC_Aleo["RPC to Aleo"]
 RPC["Provable / Lavender Five"]:::infra
@@ -947,6 +947,8 @@ SC --> WASM
 VEIL --> WA
 VEIL --> SDK
 VEIL --> MSDK
+VTST --> VEIL
+VTST --> DEVNET
 WA --> LEO
 WA --> GAL
 WA --> PUZ
