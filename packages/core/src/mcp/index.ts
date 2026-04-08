@@ -19,12 +19,12 @@ export type McpServer = {
 }
 
 /**
- * Creates an MCP server exposing aleo-viem actions as tools.
+ * Creates an MCP server exposing veil actions as tools.
  *
  * This is a lightweight wrapper around aleoAgentTools that formats
  * the output for MCP protocol consumption.
  *
- * Exposed via subpath export: import { createMcpServer } from '@aleo-viem/core/mcp'
+ * Exposed via subpath export: import { createMcpServer } from '@veil/core/mcp'
  */
 export function createMcpServer(config: McpServerConfig): McpServer {
   const agentTools = aleoAgentTools(config)

@@ -1,5 +1,5 @@
 {
-  "name": "@aleo-viem/wallet-adapter",
+  "name": "@veil/wallet-adapter",
   "version": "0.0.1",
   "type": "module",
   "main": "dist/index.js",
@@ -18,7 +18,7 @@
     "dist"
   ],
   "peerDependencies": {
-    "@aleo-viem/core": "workspace:*",
+    "@veil/core": "workspace:*",
     "@provablehq/aleo-wallet-adaptor-core": "*"
   },
   "peerDependenciesMeta": {

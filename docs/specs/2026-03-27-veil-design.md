@@ -1,4 +1,4 @@
-# aleo-viem Design Spec
+# veil Design Spec
 
 A viem-like TypeScript interface for the Aleo blockchain. Wraps existing Aleo wallets and SDKs behind a unified, familiar API surface.
 
@@ -16,7 +16,7 @@ A viem-like TypeScript interface for the Aleo blockchain. Wraps existing Aleo wa
 - No proof generation implementation — delegated to proving implementations
 - No record indexing — delegated to record scanning implementations
 - No wallet UI or connect modals — that's a layer above
-- No React hooks in core — future `@aleo-viem/react` package
+- No React hooks in core — future `@veil/react` package
 
 ## Architecture Overview
 
@@ -81,7 +81,7 @@ A viem-like TypeScript interface for the Aleo blockchain. Wraps existing Aleo wa
 
 ## Core Interfaces
 
-aleo-viem defines interfaces. Implementations plug in. No `Aleo` prefix on types — use import namespacing to avoid collisions.
+veil defines interfaces. Implementations plug in. No `Aleo` prefix on types — use import namespacing to avoid collisions.
 
 ### Transport
 
@@ -292,11 +292,11 @@ The optional `buildTransaction` override is an escape hatch for custom proving i
 
 ## Agent Tooling
 
-aleo-viem is designed for two audiences equally: human developers who write code against the TypeScript library, and AI agents that either write code using viem patterns or call tools directly. Agent tooling is built incrementally — every time a new action ships in core, its corresponding MCP tool, tool schema, and structured output are shipped alongside it.
+veil is designed for two audiences equally: human developers who write code against the TypeScript library, and AI agents that either write code using viem patterns or call tools directly. Agent tooling is built incrementally — every time a new action ships in core, its corresponding MCP tool, tool schema, and structured output are shipped alongside it.
 
-### MCP Server (`@aleo-viem/mcp`)
+### MCP Server (`@veil/mcp`)
 
-An MCP server exposing every aleo-viem action as a tool. This is the primary interface for tool-calling agents (Claude, GPT, autonomous DeFi agents, etc.).
+An MCP server exposing every veil action as a tool. This is the primary interface for tool-calling agents (Claude, GPT, autonomous DeFi agents, etc.).
 
 Each tool has a rich description that explains the Aleo concept in terms an agent already understands from Ethereum/viem:
 
@@ -333,14 +333,14 @@ Each tool has a rich description that explains the Aleo concept in terms an agen
 }
 ```
 
-The MCP server wraps a configured aleo-viem client. It can be run as a standalone process or embedded in an agent framework.
+The MCP server wraps a configured veil client. It can be run as a standalone process or embedded in an agent framework.
 
-### Agent Tool Schemas (`@aleo-viem/core/agent`)
+### Agent Tool Schemas (`@veil/core/agent`)
 
 Framework-agnostic agent tool definitions that any agent framework can consume. Exposed via subpath export so integrations (LangChain, Vercel AI SDK, etc.) can import and use them directly:
 
 ```ts
-import { aleoAgentTools } from '@aleo-viem/core/agent'
+import { aleoAgentTools } from '@veil/core/agent'
 
 // Returns agent tool definitions + execution handlers
 const tools = aleoAgentTools({
@@ -352,14 +352,14 @@ const tools = aleoAgentTools({
 Each agent tool definition includes:
 - Input/output JSON schemas
 - Rich descriptions explaining Aleo concepts via Ethereum analogies
-- Execution handler that calls the corresponding aleo-viem action
+- Execution handler that calls the corresponding veil action
 
 ### Structured JSON Output
 
 All actions return structured JSON rather than Aleo's native string-encoded values. Value parsing utilities convert between formats:
 
 ```ts
-import { parseValue, encodeValue } from '@aleo-viem/core'
+import { parseValue, encodeValue } from '@veil/core'
 
 parseValue('100u64')       // → { value: 100n, type: 'u64' }
 parseValue('aleo1abc...')  // → { value: 'aleo1abc...', type: 'address' }
@@ -438,35 +438,35 @@ The MCP server and agent tool schemas are never more than one commit behind core
 
 ### Skills and Agent Documentation
 
-In addition to MCP tools, aleo-viem provides skill definitions for code-writing agents (Claude Code, Cursor, Copilot). These are markdown files that explain how to use the library, with complete examples and Aleo-specific context at every decision point.
+In addition to MCP tools, veil provides skill definitions for code-writing agents (Claude Code, Cursor, Copilot). These are markdown files that explain how to use the library, with complete examples and Aleo-specific context at every decision point.
 
 Skills are updated alongside MCP tools — when a new action ships, its skill documentation ships too.
 
 ## Cryptographic Primitives
 
-aleo-viem will expose cryptographic primitives as interfaces, surfacing the underlying SDK's capabilities through a consistent API. Advanced users can access hashing, signing, field/group operations, and record encryption/decryption directly.
+veil will expose cryptographic primitives as interfaces, surfacing the underlying SDK's capabilities through a consistent API. Advanced users can access hashing, signing, field/group operations, and record encryption/decryption directly.
 
 The cryptographic primitives interface will be fleshed out more in the future.
 
 ## Package Structure
 
 ```
-aleo-viem/
+veil/
 ├── packages/
-│   ├── core/                  # @aleo-viem/core
+│   ├── core/                  # @veil/core
 │   │   ├── src/
 │   │   │   ├── clients/       # createPublicClient, createWalletClient
 │   │   │   ├── accounts/      # LocalAccount, RpcAccount, ViewOnlyAccount
 │   │   │   ├── transports/    # http, custom, fallback
 │   │   │   ├── actions/       # public/ and wallet/ actions
 │   │   │   ├── contract/      # getContract, program parsing
-│   │   │   ├── agent/         # Agent tool schemas + handlers (subpath: @aleo-viem/core/agent)
-│   │   │   ├── mcp/           # MCP server (subpath: @aleo-viem/core/mcp)
+│   │   │   ├── agent/         # Agent tool schemas + handlers (subpath: @veil/core/agent)
+│   │   │   ├── mcp/           # MCP server (subpath: @veil/core/mcp)
 │   │   │   ├── types/         # core type definitions
 │   │   │   └── utils/         # encoding, address validation, value parsing
 │   │   └── package.json
-│   ├── react/                 # @aleo-viem/react (future)
-│   └── mobile/                # @aleo-viem/mobile (future)
+│   ├── react/                 # @veil/react (future)
+│   └── mobile/                # @veil/mobile (future)
 ├── skills/                    # Skill definitions for code-writing agents
 ├── package.json
 ├── pnpm-workspace.yaml
@@ -476,9 +476,9 @@ aleo-viem/
 All agent tooling lives in core with subpath exports. No separate packages until the boundaries are proven:
 
 ```ts
-import { createPublicClient } from '@aleo-viem/core'           // Library
-import { aleoAgentTools } from '@aleo-viem/core/agent'         // Agent tool schemas + execution handlers
-import { createMcpServer } from '@aleo-viem/core/mcp'          // MCP server
+import { createPublicClient } from '@veil/core'           // Library
+import { aleoAgentTools } from '@veil/core/agent'         // Agent tool schemas + execution handlers
+import { createMcpServer } from '@veil/core/mcp'          // MCP server
 ```
 
 MCP SDK is a lazy/optional dependency — only loaded via the `core/mcp` subpath. Tree-shaking keeps the main entry point lean. Can be extracted into separate packages later if versioning or dependency concerns arise.
@@ -487,13 +487,13 @@ Core has zero hard dependencies on any specific SDK. Adapters for wallets/SDKs a
 
 ## Underlying Ecosystem
 
-aleo-viem wraps and unifies these existing tools:
+veil wraps and unifies these existing tools:
 
 - **Aleo Wallet Adapter** (`@provablehq/aleo-wallet-standard`) — standard interface for all Aleo wallets (Leo, Puzzle, Fox, Shield Mobile Wallet)
 - **@provablehq/sdk** — WASM-based Aleo SDK for browser/node environments
 - **shield-mobile-sdk** — native Aleo SDK for React Native environments
 
-Any of these can back any interface. The wallet adapter can produce RpcAccounts or LocalAccounts. Either SDK can back local signing, proving, or record scanning. aleo-viem is agnostic — it only cares about the interface contract.
+Any of these can back any interface. The wallet adapter can produce RpcAccounts or LocalAccounts. Either SDK can back local signing, proving, or record scanning. veil is agnostic — it only cares about the interface contract.
 
 ## Design Principles
 

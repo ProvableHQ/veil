@@ -1,10 +1,10 @@
 /**
- * End-to-end demo: aleo-viem against the live Aleo network
+ * End-to-end demo: veil against the live Aleo network
  *
  * Run with: npx vitest run examples/
  *
  * This file doubles as both documentation and a live integration test.
- * Each section demonstrates a real aleo-viem API call hitting the Aleo mainnet.
+ * Each section demonstrates a real veil API call hitting the Aleo mainnet.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -20,7 +20,7 @@ import { privateKeyToAccount, generateAccount, verifySignature } from '../packag
 
 const API_URL = 'https://api.explorer.provable.com/v1'
 
-describe('E2E: aleo-viem against live Aleo mainnet', () => {
+describe('E2E: veil against live Aleo mainnet', () => {
   // Create a shared public client for all tests
   const publicClient = createPublicClient({
     transport: http(API_URL, { network: 'mainnet' }),
@@ -119,7 +119,7 @@ describe('E2E: aleo-viem against live Aleo mainnet', () => {
     expect(account.privateKey.startsWith('APrivateKey1')).toBe(true)
 
     // Sign a message
-    const message = new TextEncoder().encode('Hello from aleo-viem!')
+    const message = new TextEncoder().encode('Hello from veil!')
     const signature = await account.sign(message)
     expect(signature.length).toBeGreaterThan(0)
 

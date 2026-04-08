@@ -1,14 +1,14 @@
 /**
- * @aleo-viem/wallet-adapter
+ * @veil/wallet-adapter
  *
- * Wraps @provablehq/aleo-wallet-adaptor-core into aleo-viem's
+ * Wraps @provablehq/aleo-wallet-adaptor-core into veil's
  * Account and Transport interfaces.
  *
  * Usage with any wallet adapter (Leo, Puzzle, Fox, Shield):
  *
  *   import { LeoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-leo'
- *   import { fromWalletAdapter } from '@aleo-viem/wallet-adapter'
- *   import { createWalletClient, http, fallback } from '@aleo-viem/core'
+ *   import { fromWalletAdapter } from '@veil/wallet-adapter'
+ *   import { createWalletClient, http, fallback } from '@veil/core'
  *
  *   const leoWallet = new LeoWalletAdapter()
  *   await leoWallet.connect(Network.MAINNET, DecryptPermission.UponRequest)
@@ -21,8 +21,8 @@
  *   })
  */
 
-import { custom } from '@aleo-viem/core'
-import type { RpcAccount, Transport } from '@aleo-viem/core'
+import { custom } from '@veil/core'
+import type { RpcAccount, Transport } from '@veil/core'
 
 // Import the real types from the Provable ecosystem
 import type { TransactionOptions, TransactionStatusResponse } from '@provablehq/aleo-types'
@@ -84,7 +84,7 @@ export interface AleoWalletAdapter {
 // --------------------------------------------------------------------------
 
 /**
- * Creates an aleo-viem RpcAccount from a connected wallet adapter.
+ * Creates an veil RpcAccount from a connected wallet adapter.
  *
  * The adapter must be connected (adapter.account must exist).
  * Sign operations are delegated to the wallet.
@@ -111,7 +111,7 @@ export function rpcAccountFromAdapter(adapter: AleoWalletAdapter): RpcAccount {
 // --------------------------------------------------------------------------
 
 /**
- * Creates an aleo-viem custom transport that routes wallet-specific
+ * Creates an veil custom transport that routes wallet-specific
  * operations through the adapter.
  *
  * This transport handles:
@@ -195,7 +195,7 @@ export function transportFromAdapter(adapter: AleoWalletAdapter): Transport<'cus
 // --------------------------------------------------------------------------
 
 /**
- * Creates both an aleo-viem account and transport from a connected
+ * Creates both an veil account and transport from a connected
  * wallet adapter. This is the primary entry point.
  *
  *   const { account, transport } = fromWalletAdapter(leoWallet)

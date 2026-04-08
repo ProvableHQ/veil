@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "types": ["vite/client"],
+    "paths": {
+      "@veil/core": ["../../packages/core/src/index.ts"],
+      "@veil/wallet-adapter": ["../../packages/wallet-adapter/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

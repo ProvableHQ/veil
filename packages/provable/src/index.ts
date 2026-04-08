@@ -1,5 +1,5 @@
 /**
- * @aleo-viem/provable
+ * @veil/provable
  *
  * Wraps @provablehq/sdk to provide:
  * - privateKeyToAccount() with real key derivation and signing
@@ -8,8 +8,8 @@
  * - Record decryption and signature verification utilities
  *
  * Usage:
- *   import { privateKeyToAccount, createProvingConfig } from '@aleo-viem/provable'
- *   import { createWalletClient, createPublicClient, http } from '@aleo-viem/core'
+ *   import { privateKeyToAccount, createProvingConfig } from '@veil/provable'
+ *   import { createWalletClient, createPublicClient, http } from '@veil/core'
  *
  *   const account = privateKeyToAccount('APrivateKey1...')
  *   const walletClient = createWalletClient({
@@ -29,15 +29,15 @@ import {
   AleoKeyProvider,
   NetworkRecordProvider,
 } from '@provablehq/sdk'
-import type { LocalAccount } from '@aleo-viem/core'
-import type { ProvingConfig, BuildTransactionOptions } from '@aleo-viem/core'
-import type { RecordsConfig, RecordSearchParams, AleoRecord } from '@aleo-viem/core'
+import type { LocalAccount } from '@veil/core'
+import type { ProvingConfig, BuildTransactionOptions } from '@veil/core'
+import type { RecordsConfig, RecordSearchParams, AleoRecord } from '@veil/core'
 import {
   createPublicClient,
   createWalletClient,
   http,
-} from '@aleo-viem/core'
-import type { PublicClient, WalletClient } from '@aleo-viem/core'
+} from '@veil/core'
+import type { PublicClient, WalletClient } from '@veil/core'
 
 /**
  * Creates a LocalAccount from an Aleo private key string.
@@ -47,7 +47,7 @@ import type { PublicClient, WalletClient } from '@aleo-viem/core'
  *
  * The sign() method returns the Signature serialized as a string encoded
  * to bytes. Use signMessage() for the same behavior. Both are compatible
- * with aleo-viem's SignerAccount interface.
+ * with veil's SignerAccount interface.
  */
 export function privateKeyToAccount(privateKey: string): LocalAccount<'privateKey'> {
   const sdkAccount = new Account({ privateKey })
@@ -156,7 +156,7 @@ export function verifySignature(
 
 /**
  * Creates an AleoNetworkClient from @provablehq/sdk.
- * Useful for direct SDK access when aleo-viem's transport layer isn't sufficient.
+ * Useful for direct SDK access when veil's transport layer isn't sufficient.
  */
 export function createNetworkClient(url: string): AleoNetworkClient {
   return new AleoNetworkClient(url)

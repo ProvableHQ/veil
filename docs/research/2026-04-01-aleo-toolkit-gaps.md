@@ -1,14 +1,14 @@
 # Aleo Developer Toolkit Gap Analysis
 
 **Date:** 2026-04-01
-**Author:** Research synthesis for aleo-viem planning
+**Author:** Research synthesis for veil planning
 **Status:** Draft
 
 ## Summary Table
 
 | Gap Area | Priority | Ethereum Equivalent | Solana Equivalent | Aleo Status |
 |---|---|---|---|---|
-| Unified TypeScript SDK | P0 | viem / ethers.js | @solana/web3.js | aleo-viem (in dev) |
+| Unified TypeScript SDK | P0 | viem / ethers.js | @solana/web3.js | veil (in dev) |
 | Wallet Connect Kit (React) | P0 | RainbowKit / ConnectKit | Solana Wallet Adapter UI | None (adapter exists, no UI) |
 | Contract/Program Testing Framework | P0 | Hardhat / Foundry | Anchor test | Leo test (basic), Leology (early) |
 | Indexer / Subgraph Service | P0 | The Graph / Ponder | Helius / GenesysGo | Aleoscan API (limited) |
@@ -44,7 +44,7 @@
 - Account display with address truncation and copy
 - Mobile-responsive design
 
-This should be built on top of a hooks layer (`@aleo-dev-toolkit/react` or `@aleo-viem/react`) that provides `useWallet()`, `useBalance()`, `useRecords()`, etc.
+This should be built on top of a hooks layer (`@aleo-dev-toolkit/react` or `@veil/react`) that provides `useWallet()`, `useBalance()`, `useRecords()`, etc.
 
 ---
 
@@ -65,7 +65,7 @@ This should be built on top of a hooks layer (`@aleo-dev-toolkit/react` or `@ale
 - Snapshot testing for mapping state
 - Fuzz testing for Leo program inputs (especially important for ZK circuits where edge cases cause proving failures)
 - Coverage reporting at the Leo source level
-- Integration with aleo-viem so tests can use the same API surface as production code
+- Integration with veil so tests can use the same API surface as production code
 
 ---
 
@@ -84,7 +84,7 @@ This should be built on top of a hooks layer (`@aleo-dev-toolkit/react` or `@ale
 - **Shyft:** GraphQL API for Solana program data
 
 **Recommendation:** The toolkit needs:
-1. **Transition event listener** (P1): A library that polls or subscribes to new blocks and emits typed events when specific program transitions occur. This could live in aleo-viem as `watchTransition()`.
+1. **Transition event listener** (P1): A library that polls or subscribes to new blocks and emits typed events when specific program transitions occur. This could live in veil as `watchTransition()`.
 2. **Lightweight indexer SDK** (P1): A TypeScript framework for defining indexing handlers that process Aleo transitions and store results in a local database (SQLite/Postgres). Think Ponder for Aleo.
 3. **Hosted indexing service** (P2): A managed service (like The Graph) where developers deploy indexing configurations and get a GraphQL endpoint. This is a larger infrastructure investment.
 
@@ -119,10 +119,10 @@ This should be built on top of a hooks layer (`@aleo-dev-toolkit/react` or `@ale
 **What Solana has:**
 - **Anchor IDL:** Generates TypeScript client from program IDL, with full type safety
 
-**Recommendation:** The aleo-viem `getContract()` function (already in the design spec) partially addresses this by parsing program source to generate typed methods. Additionally:
+**Recommendation:** The veil `getContract()` function (already in the design spec) partially addresses this by parsing program source to generate typed methods. Additionally:
 - Build a standalone CLI tool that generates TypeScript types from `.leo` source files or deployed program interfaces
 - Output should include function parameter types, record types, and mapping key/value types
-- Integration with aleo-viem's `getContract()` for runtime type checking
+- Integration with veil's `getContract()` for runtime type checking
 
 ---
 
@@ -132,7 +132,7 @@ This should be built on top of a hooks layer (`@aleo-dev-toolkit/react` or `@ale
 
 **What Ethereum has:** wagmi provides `useBalance()`, `useContractRead()`, `useContractWrite()`, `useSendTransaction()`, `useWaitForTransaction()`, etc. -- all with caching, automatic refetching, and error handling via TanStack Query.
 
-**Recommendation:** Build `@aleo-viem/react` (already a stated non-goal for core, but planned as a separate package):
+**Recommendation:** Build `@veil/react` (already a stated non-goal for core, but planned as a separate package):
 - `usePublicClient()`, `useWalletClient()`
 - `useBalance()`, `useRecords()`
 - `useReadContract()`, `useWriteContract()`
@@ -214,7 +214,7 @@ This should be built on top of a hooks layer (`@aleo-dev-toolkit/react` or `@ale
 
 Each tool must return **structured JSON** (not human-readable strings) with consistent error schemas. This is the single most important difference between agent-friendly and human-friendly APIs.
 
-**Architecture:** The MCP server should wrap aleo-viem, so tool implementations are thin adapters over the unified SDK. As aleo-viem grows, MCP tools grow automatically.
+**Architecture:** The MCP server should wrap veil, so tool implementations are thin adapters over the unified SDK. As veil grows, MCP tools grow automatically.
 
 ---
 
@@ -243,7 +243,7 @@ The key insight: tool *definitions* (name, description, parameters, output schem
 
 ---
 
-### 2.3 Agent-Friendly vs Human-Friendly API Design (P0 -- built into aleo-viem)
+### 2.3 Agent-Friendly vs Human-Friendly API Design (P0 -- built into veil)
 
 **The gap:** Most blockchain APIs are designed for human developers reading docs and writing code. Agents need different things.
 
@@ -257,7 +257,7 @@ The key insight: tool *definitions* (name, description, parameters, output schem
 | Confirmation | Visual feedback (UI) | Polling endpoint or webhook callback |
 | Context | Knows what they're doing | Needs descriptions on every parameter and return field |
 
-**Recommendation:** aleo-viem should natively support an agent mode:
+**Recommendation:** veil should natively support an agent mode:
 - All errors include a machine-readable `code`, `field`, and `suggestion` property
 - All responses have a stable JSON schema (no polymorphic return types)
 - Batch method variants: `batchReadMapping(keys[])`, `batchGetBalance(addresses[])`
@@ -331,16 +331,16 @@ This depends on bridge infrastructure maturing and is lower priority.
 
 ### Q2 2026 (P0 -- Must Have)
 
-1. **aleo-viem core** -- unified TypeScript SDK (already in development)
-2. **MCP server** -- wrap aleo-viem in MCP tools for agent access
+1. **veil core** -- unified TypeScript SDK (already in development)
+2. **MCP server** -- wrap veil in MCP tools for agent access
 3. **Agent tool schemas** -- OpenAI / LangChain / Vercel AI format exports
 4. **Wallet Connect Kit** -- React components for wallet connection UI
-5. **Enhanced testing** -- TypeScript test runner integrated with aleo-viem
+5. **Enhanced testing** -- TypeScript test runner integrated with veil
 
 ### Q3 2026 (P1 -- Should Have)
 
-6. **React hooks** (`@aleo-viem/react`) -- wagmi-equivalent hooks
-7. **Transition event listener** -- `watchTransition()` in aleo-viem
+6. **React hooks** (`@veil/react`) -- wagmi-equivalent hooks
+7. **Transition event listener** -- `watchTransition()` in veil
 8. **Program codegen CLI** -- TypeScript bindings from Leo source
 9. **Agent transaction guard** -- spending limits, allowlists, audit logging
 10. **Deployment pipeline** -- scripted deploys with environment management
@@ -360,7 +360,7 @@ This depends on bridge infrastructure maturing and is lower priority.
 
 Aleo is behind Ethereum and Solana in developer tooling maturity. But it has an opportunity to leapfrog on agent tooling -- a category where no chain has a dominant position yet. By building MCP tools, structured agent schemas, and agent-safe transaction guards from day one (rather than retrofitting them later), the Aleo toolkit can become the most agent-friendly blockchain development platform.
 
-The aleo-viem design already embraces this with its "every action ships with MCP tool + agent tool schema" philosophy. The gap analysis above extends this into a full ecosystem strategy.
+The veil design already embraces this with its "every action ships with MCP tool + agent tool schema" philosophy. The gap analysis above extends this into a full ecosystem strategy.
 
 ---
 

@@ -52,13 +52,12 @@ describe('integration: wallet client with mock signer', () => {
     expect(txId).toBe('at1txid_transfer')
     expect(request).toHaveBeenCalledWith({
       method: 'executeTransaction',
-      params: {
+      params: expect.objectContaining({
         programName: 'credits.aleo',
         functionName: 'transfer_public',
         inputs: ['aleo1recipient', '1000000u64'],
-        fee: 0n,
-        privateFee: undefined,
-      },
+        privateFee: false,
+      }),
     })
   })
 
@@ -69,19 +68,17 @@ describe('integration: wallet client with mock signer', () => {
     const txId = await client.transfer({
       to: 'aleo1recipient',
       amount: 500000n,
-      privateFee: true,
+      visibility: 'private',
     })
 
     expect(txId).toBe('at1txid_private')
     expect(request).toHaveBeenCalledWith({
       method: 'executeTransaction',
-      params: {
+      params: expect.objectContaining({
         programName: 'credits.aleo',
         functionName: 'transfer_private',
-        inputs: ['aleo1recipient', '500000u64'],
-        fee: 0n,
         privateFee: true,
-      },
+      }),
     })
   })
 

@@ -1,5 +1,5 @@
 let count = 0
 
 export function uid(): string {
-  return `aleo-viem-${count++}`
+  return `veil-${count++}`
 }

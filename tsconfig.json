@@ -14,11 +14,11 @@
     "isolatedModules": true,
     "noUncheckedIndexedAccess": true,
     "paths": {
-      "@aleo-viem/core": ["./packages/core/src/index.ts"],
-      "@aleo-viem/core/agent": ["./packages/core/src/agent/index.ts"],
-      "@aleo-viem/core/mcp": ["./packages/core/src/mcp/index.ts"],
-      "@aleo-viem/wallet-adapter": ["./packages/wallet-adapter/src/index.ts"],
-      "@aleo-viem/provable": ["./packages/provable/src/index.ts"]
+      "@veil/core": ["./packages/core/src/index.ts"],
+      "@veil/core/agent": ["./packages/core/src/agent/index.ts"],
+      "@veil/core/mcp": ["./packages/core/src/mcp/index.ts"],
+      "@veil/wallet-adapter": ["./packages/wallet-adapter/src/index.ts"],
+      "@veil/provable": ["./packages/provable/src/index.ts"]
     },
     "types": ["node"]
   }

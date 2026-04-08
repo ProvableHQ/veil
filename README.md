@@ -1,13 +1,13 @@
-# aleo-viem
+# veil
 
 A TypeScript interface for Aleo, inspired by [viem](https://github.com/wevm/viem). Wraps existing Aleo wallets and SDKs behind a unified, familiar API — for human developers and AI agents alike.
 
 ## Why
 
-Aleo's developer ecosystem is fragmented across multiple SDKs and wallets, each with its own API. If you've built on Ethereum with viem, you already know how to use aleo-viem — same patterns, same method names, applied to Aleo.
+Aleo's developer ecosystem is fragmented across multiple SDKs and wallets, each with its own API. If you've built on Ethereum with viem, you already know how to use veil — same patterns, same method names, applied to Aleo.
 
 ```ts
-import { createPublicClient, http } from '@aleo-viem/core'
+import { createPublicClient, http } from '@veil/core'
 
 const client = createPublicClient({
   transport: http('https://api.provable.com/v2'),
@@ -36,27 +36,27 @@ const value = await client.readContract({
 
 | Package | Description | Status |
 |---------|-------------|--------|
-| `@aleo-viem/core` | Clients, transports, accounts, actions, agent tools, MCP server | In development |
-| `@aleo-viem/wallet-adapter` | Wraps `@provablehq/aleo-wallet-standard` — connects any Aleo wallet | In development |
-| `@aleo-viem/provable` | Wraps `@provablehq/sdk` — key derivation, local signing, proving | In development |
-| `@aleo-viem/react` | React hooks (wagmi equivalent) | Planned |
-| `@aleo-viem/mobile` | Shield Mobile SDK helpers | Planned |
+| `@veil/core` | Clients, transports, accounts, actions, agent tools, MCP server | In development |
+| `@veil/wallet-adapter` | Wraps `@provablehq/aleo-wallet-standard` — connects any Aleo wallet | In development |
+| `@veil/provable` | Wraps `@provablehq/sdk` — key derivation, local signing, proving | In development |
+| `@veil/react` | React hooks (wagmi equivalent) | Planned |
+| `@veil/mobile` | Shield Mobile SDK helpers | Planned |
 
 ## Roadmap
 
 ### Q2 2026 — Core + Adapter Packages
 
-**`@aleo-viem/core`** — zero hard dependencies
+**`@veil/core`** — zero hard dependencies
 - Clients, transports, accounts, all public and wallet actions
 - `getContract` + `parseProgram` for typed contract instances
 - Agent tool schemas, MCP server, structured JSON output
 - 2-3 example skills and dApps
 
-**`@aleo-viem/wallet-adapter`** — wraps `@provablehq/aleo-wallet-standard`
+**`@veil/wallet-adapter`** — wraps `@provablehq/aleo-wallet-standard`
 - `rpcAccount()` and `custom()` transport for any Aleo wallet
 - Validated with Leo, Puzzle, Fox, Shield wallets
 
-**`@aleo-viem/provable`** — wraps `@provablehq/sdk`
+**`@veil/provable`** — wraps `@provablehq/sdk`
 - `privateKeyToAccount()` with key derivation
 - Local signing and proving
 
@@ -70,8 +70,8 @@ const value = await client.readContract({
 - Skills and example dApps for developer onboarding
 - Agentic ecosystem integrations (Coinbase AgentKit, MPC Protocol, Near Intents)
 - 3rd-party wallet integrations
-- React hooks (`@aleo-viem/react`)
-- Mobile SDK helpers (`@aleo-viem/mobile`)
+- React hooks (`@veil/react`)
+- Mobile SDK helpers (`@veil/mobile`)
 
 **Q3 adoption metrics:**
 - npm weekly downloads and growth rate across all packages
@@ -84,7 +84,7 @@ const value = await client.readContract({
 ### Read-only (no account needed)
 
 ```ts
-import { createPublicClient, http } from '@aleo-viem/core'
+import { createPublicClient, http } from '@veil/core'
 
 const client = createPublicClient({
   transport: http('https://api.provable.com/v2'),
@@ -106,7 +106,7 @@ const value = await client.readContract({
 ### Wallet (signing delegated to wallet adapter)
 
 ```ts
-import { createWalletClient, custom, rpcAccount } from '@aleo-viem/core'
+import { createWalletClient, custom, rpcAccount } from '@veil/core'
 
 const client = createWalletClient({
   account: rpcAccount(walletAdapter),
@@ -139,7 +139,7 @@ import {
   createWalletClient,
   http,
   privateKeyToAccount,
-} from '@aleo-viem/core'
+} from '@veil/core'
 
 const client = createWalletClient({
   account: privateKeyToAccount({
@@ -160,7 +160,7 @@ const client = createWalletClient({
 ### Contract instances
 
 ```ts
-import { getContract } from '@aleo-viem/core'
+import { getContract } from '@veil/core'
 
 const contract = getContract({
   programSource: tokenProgramSource,
@@ -178,7 +178,7 @@ const txId = await contract.write.transfer({
 ### View-only (decrypt records, no signing)
 
 ```ts
-import { createPublicClient, http, viewOnlyAccount } from '@aleo-viem/core'
+import { createPublicClient, http, viewOnlyAccount } from '@veil/core'
 
 const client = createPublicClient({
   transport: http('https://api.provable.com/v2'),
@@ -194,15 +194,15 @@ const account = viewOnlyAccount({
 
 ## Agent Usage
 
-aleo-viem is designed for two audiences equally: human developers who write code against the TypeScript library, and AI agents that either write code using viem patterns or call tools directly.
+veil is designed for two audiences equally: human developers who write code against the TypeScript library, and AI agents that either write code using viem patterns or call tools directly.
 
 ### For tool-calling agents (MCP)
 
-Run the MCP server to expose all aleo-viem actions as tools:
+Run the MCP server to expose all veil actions as tools:
 
 ```ts
-import { createMcpServer } from '@aleo-viem/core/mcp'
-import { createPublicClient, http } from '@aleo-viem/core'
+import { createMcpServer } from '@veil/core/mcp'
+import { createPublicClient, http } from '@veil/core'
 
 const client = createPublicClient({
   transport: http('https://api.provable.com/v2'),
@@ -218,7 +218,7 @@ Agents can then call tools like `aleo_get_balance`, `aleo_read_mapping`, `aleo_e
 Use agent tool schemas and handlers directly in any agent framework:
 
 ```ts
-import { aleoAgentTools } from '@aleo-viem/core/agent'
+import { aleoAgentTools } from '@veil/core/agent'
 
 const tools = aleoAgentTools({
   client: publicClient,
@@ -242,7 +242,7 @@ Code-writing agents use the TypeScript library directly. Since it follows viem p
 All values are returned as structured JSON rather than Aleo's native string encoding:
 
 ```ts
-import { parseValue, encodeValue } from '@aleo-viem/core'
+import { parseValue, encodeValue } from '@veil/core'
 
 parseValue('100u64')       // → { value: 100n, type: 'u64' }
 parseValue('aleo1abc...')  // → { value: 'aleo1abc...', type: 'address' }
@@ -283,8 +283,8 @@ and has been deployed: await client.getCode({ program: 'my_program.aleo' })
 │  → contract.write.functionName()                 │
 ├─────────────────────────────────────────────────┤
 │              Agent Tooling                        │
-│  @aleo-viem/core/agent — tool schemas + handlers │
-│  @aleo-viem/core/mcp   — MCP server              │
+│  @veil/core/agent — tool schemas + handlers │
+│  @veil/core/mcp   — MCP server              │
 ├─────────────────────────────────────────────────┤
 │                  Accounts                        │
 │  RpcAccount     LocalAccount    ViewOnlyAccount  │
@@ -298,7 +298,7 @@ and has been deployed: await client.getCode({ program: 'my_program.aleo' })
 │  records: config object or custom impl           │
 ├─────────────────────────────────────────────────┤
 │             Adapter Packages                     │
-│  @aleo-viem/wallet-adapter  @aleo-viem/provable  │
+│  @veil/wallet-adapter  @veil/provable  │
 ├─────────────────────────────────────────────────┤
 │          Aleo Network / Wallet Adapter           │
 └─────────────────────────────────────────────────┘
@@ -306,18 +306,18 @@ and has been deployed: await client.getCode({ program: 'my_program.aleo' })
 
 ### Interface-first design
 
-aleo-viem defines interfaces. Implementations plug in.
+veil defines interfaces. Implementations plug in.
 
 - **Transport** — any object with a `request(method, params)` function
 - **Account** — describes capabilities (can sign? has private key? has view key?), not origin
 - **Proving** — a client configuration (`mode: 'delegated' | 'local'`), not a standalone interface. Wallets handle proving internally; only SDK/local users configure it.
 - **Records** — config object for common cases (`{ mode: 'network', url }`) or custom implementation (`{ getRecords: ... }`) for advanced use cases.
 
-Core has zero hard dependencies. Adapter packages (`@aleo-viem/wallet-adapter`, `@aleo-viem/provable`) bridge to the ecosystem's existing SDKs.
+Core has zero hard dependencies. Adapter packages (`@veil/wallet-adapter`, `@veil/provable`) bridge to the ecosystem's existing SDKs.
 
 ### Supported backends
 
-aleo-viem wraps these existing tools through its adapter packages:
+veil wraps these existing tools through its adapter packages:
 
 - **[Aleo Wallet Adapter](https://github.com/ProvableHQ/aleo-dev-toolkit/tree/master/packages/aleo-wallet-adaptor)** — Leo Wallet, Puzzle Wallet, Fox Wallet, Shield Mobile Wallet
 - **[@provablehq/sdk](https://www.npmjs.com/package/@provablehq/sdk)** — WASM-based SDK for browser/node
@@ -356,9 +356,9 @@ aleo-viem wraps these existing tools through its adapter packages:
 
 ## Naming Convention
 
-If viem has a name for the concept, aleo-viem uses it. Aleo-specific names are only used for concepts with no EVM equivalent (records, decrypt, transition view keys). `executeTransaction` is provided as an alias for `writeContract` to stay consistent with Aleo wallet adapter terminology.
+If viem has a name for the concept, veil uses it. Aleo-specific names are only used for concepts with no EVM equivalent (records, decrypt, transition view keys). `executeTransaction` is provided as an alias for `writeContract` to stay consistent with Aleo wallet adapter terminology.
 
-| viem concept | aleo-viem equivalent |
+| viem concept | veil equivalent |
 |---|---|
 | `getBalance` | `getBalance` — reads public credits |
 | `readContract` | `readContract` — reads program mapping |
@@ -373,22 +373,22 @@ If viem has a name for the concept, aleo-viem uses it. Aleo-specific names are o
 ## Project Structure
 
 ```
-aleo-viem/
+veil/
 ├── packages/
-│   ├── core/                # @aleo-viem/core (zero dependencies)
+│   ├── core/                # @veil/core (zero dependencies)
 │   │   └── src/
 │   │       ├── clients/     # createPublicClient, createWalletClient
 │   │       ├── accounts/    # rpcAccount, privateKeyToAccount, etc.
 │   │       ├── transports/  # http, custom, fallback
 │   │       ├── actions/     # public/ and wallet/ actions
 │   │       ├── contract/    # getContract, parseProgram
-│   │       ├── agent/       # Agent tool schemas + handlers (@aleo-viem/core/agent)
-│   │       ├── mcp/         # MCP server (@aleo-viem/core/mcp)
+│   │       ├── agent/       # Agent tool schemas + handlers (@veil/core/agent)
+│   │       ├── mcp/         # MCP server (@veil/core/mcp)
 │   │       ├── types/       # core type definitions
 │   │       ├── errors/      # error types (actionable messages)
 │   │       └── utils/       # address validation, credits, value parsing
-│   ├── wallet-adapter/      # @aleo-viem/wallet-adapter (wraps wallet standard)
-│   └── provable/            # @aleo-viem/provable (wraps @provablehq/sdk)
+│   ├── wallet-adapter/      # @veil/wallet-adapter (wraps wallet standard)
+│   └── provable/            # @veil/provable (wraps @provablehq/sdk)
 ├── skills/                  # Skill definitions for code-writing agents
 ├── docs/
 │   ├── specs/               # Design specifications

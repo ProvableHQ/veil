@@ -1,4 +1,4 @@
-# aleo-viem vs viem Conformance Audit
+# veil vs viem Conformance Audit
 
 **Date:** 2026-04-01
 **Status:** Deferred — prototype works, these are the fixes needed before release
@@ -11,27 +11,27 @@ The prototype gets the API shape right (same method names, concepts, decorator p
 
 ### 1. Transport Factory Pattern
 - **viem:** `http()` returns a *function* `(params) => { config, request, value }`. The client calls it during init, passing chain/account context. This lets the transport resolve URLs per-chain.
-- **aleo-viem:** Returns a flat `{ config, request }` object. Can't adapt to the client that consumes it. The `network` param on `http()` is a workaround.
+- **veil:** Returns a flat `{ config, request }` object. Can't adapt to the client that consumes it. The `network` param on `http()` is a workaround.
 - **Fix:** Make transports return `(clientParams: { chain, account, pollingInterval }) => TransportConfig`. Update `createClient` to call the transport function.
 
 ### 2. Chain Type Missing
 - **viem:** `Chain` type with `id`, `name`, `nativeCurrency`, `rpcUrls`, `blockExplorers`, `contracts`, `testnet`. Created with `defineChain()`. Used as `chain: mainnet` on the client. HTTP transport gets its URL from `chain.rpcUrls.default.http[0]`.
-- **aleo-viem:** No Chain type. Network is `'mainnet' | 'testnet'` string on `http()` config.
+- **veil:** No Chain type. Network is `'mainnet' | 'testnet'` string on `http()` config.
 - **Fix:** Define `Chain` type, create `aleoMainnet`/`aleoTestnet`/`aleoLocalnet` chain definitions. Add `chain` to Client. Transport derives URL from chain.
 
 ### 3. Client Generics
 - **viem:** `Client<Transport, Chain, Account, RpcSchema, Extended>` — five generics flowing through `PublicActions<Transport, Chain, Account>`, every action, and the `extend()` return type.
-- **aleo-viem:** Plain `Client` with no generics. No type narrowing anywhere.
+- **veil:** Plain `Client` with no generics. No type narrowing anywhere.
 - **Fix:** Add generics to Client, PublicClient, WalletClient, all decorators, and all action functions. This is the most invasive change.
 
 ### 4. Error Structure
 - **viem:** `BaseError` has `shortMessage`, `details`, `metaMessages: string[]`, `docsPath`, `docsBaseUrl`, `version`, and `walk()` method for traversing error cause chains.
-- **aleo-viem:** `BaseError` extends `Error` with just message + ErrorOptions. Plain concatenated strings.
+- **veil:** `BaseError` extends `Error` with just message + ErrorOptions. Plain concatenated strings.
 - **Fix:** Add `shortMessage`, `details`, `metaMessages`, `docsPath`, `walk()` to BaseError. Update all error subclasses.
 
 ### 5. Typed RPC Schema
 - **viem:** `request({ method, params })` where method is a union of known RPC methods with typed params/returns per method. `RpcSchema` generic enables autocomplete.
-- **aleo-viem:** `method: string`, `params?: unknown`, `Promise<unknown>` — fully untyped. Custom method names (`'getBalance'`, `'getBlock'`) don't correspond to any standard.
+- **veil:** `method: string`, `params?: unknown`, `Promise<unknown>` — fully untyped. Custom method names (`'getBalance'`, `'getBlock'`) don't correspond to any standard.
 - **Fix:** Define an Aleo RPC schema type mapping method names to param/return types. Consider aligning method names with the actual Aleo REST API paths or a future Aleo JSON-RPC spec.
 
 ## Yellow — Address Eventually

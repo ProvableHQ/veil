@@ -11,8 +11,8 @@ type PrivateKeyAccountSource = {
 /**
  * Creates a LocalAccount from a private key.
  *
- * Since aleo-viem has no hard dependency on any SDK, the caller must provide
- * the derived address and viewKey. SDK adapter packages (e.g. @aleo-viem/provable)
+ * Since veil has no hard dependency on any SDK, the caller must provide
+ * the derived address and viewKey. SDK adapter packages (e.g. @veil/provable)
  * will provide convenience wrappers that derive these automatically.
  */
 export function privateKeyToAccount(source: PrivateKeyAccountSource): LocalAccount<'privateKey'> {

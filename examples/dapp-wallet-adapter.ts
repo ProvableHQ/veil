@@ -1,7 +1,7 @@
 /**
  * Example: Aleo dApp using a Wallet Adapter
  *
- * This shows how a frontend dApp would use aleo-viem with a browser wallet
+ * This shows how a frontend dApp would use veil with a browser wallet
  * (Leo Wallet, Puzzle, Fox, Shield). The wallet handles proving and signing —
  * the dApp just sends intents.
  *
@@ -18,11 +18,11 @@ import {
   fallback,
   getContract,
   parseProgram,
-} from '@aleo-viem/core'
+} from '@veil/core'
 import {
   fromWalletAdapter,
   type AleoWalletAdapter,
-} from '@aleo-viem/wallet-adapter'
+} from '@veil/wallet-adapter'
 
 // ---------------------------------------------------------------------------
 // Mock wallet adapter — simulates a real browser wallet like Leo Wallet
@@ -116,7 +116,7 @@ describe('Example dApp: Token Manager with Wallet Adapter', () => {
     // Step 1: User connects their Leo Wallet
     leoWallet = createMockLeoWallet()
 
-    // Step 2: Create aleo-viem clients
+    // Step 2: Create veil clients
     // The wallet adapter provides the account and a transport for writes.
     // HTTP transport handles reads (chain state queries).
     const { account, transport: walletTransport } = fromWalletAdapter(leoWallet)

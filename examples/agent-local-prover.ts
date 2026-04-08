@@ -2,7 +2,7 @@
  * Example: Autonomous Agent with Local Proving
  *
  * This shows how an AI agent (like a Coinbase AgentKit action, LangChain tool,
- * or autonomous bot) would use aleo-viem with a local private key and proving.
+ * or autonomous bot) would use veil with a local private key and proving.
  *
  * Key difference from the wallet adapter example:
  * - No wallet popup. No user approval. The agent holds the key.
@@ -23,15 +23,15 @@ import {
   custom,
   getContract,
   parseProgram,
-} from '@aleo-viem/core'
-import { aleoAgentTools, createAgentTools } from '@aleo-viem/core/agent'
+} from '@veil/core'
+import { aleoAgentTools, createAgentTools } from '@veil/core/agent'
 
 // ---------------------------------------------------------------------------
 // Mock proving infrastructure
 // ---------------------------------------------------------------------------
 
 // In production, this would be:
-//   import { privateKeyToAccount, createProvingConfig } from '@aleo-viem/provable'
+//   import { privateKeyToAccount, createProvingConfig } from '@veil/provable'
 //
 // The provable package wraps @provablehq/sdk and handles:
 // - Key derivation from private key
@@ -128,7 +128,7 @@ finalize add_liquidity:
 }
 
 // ---------------------------------------------------------------------------
-// Pattern 1: Agent using aleo-viem clients directly
+// Pattern 1: Agent using veil clients directly
 // (like a backend service or autonomous bot)
 // ---------------------------------------------------------------------------
 
@@ -247,7 +247,7 @@ describe('Example: Autonomous Agent with Local Proving', () => {
 // ---------------------------------------------------------------------------
 
 describe('Example: AgentKit-style Tool Integration', () => {
-  it('registers aleo-viem tools in an agent framework', async () => {
+  it('registers veil tools in an agent framework', async () => {
     const transport = custom({ request: createMockHttpRequest() })
     const publicClient = createPublicClient({ transport })
 
@@ -311,10 +311,10 @@ describe('Example: AgentKit-style Tool Integration', () => {
   })
 
   it('shows the AgentKit registration pattern', () => {
-    // This is how you'd wire aleo-viem into Coinbase AgentKit:
+    // This is how you'd wire veil into Coinbase AgentKit:
     //
     //   import { CdpAgentkit } from '@coinbase/cdp-agentkit-core'
-    //   import { aleoAgentTools } from '@aleo-viem/core/agent'
+    //   import { aleoAgentTools } from '@veil/core/agent'
     //
     //   const aleoTools = aleoAgentTools({ client: publicClient, walletClient })
     //

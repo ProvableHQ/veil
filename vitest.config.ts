@@ -8,11 +8,11 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@aleo-viem/core/agent': path.resolve(__dirname, 'packages/core/src/agent/index.ts'),
-      '@aleo-viem/core/mcp': path.resolve(__dirname, 'packages/core/src/mcp/index.ts'),
-      '@aleo-viem/core': path.resolve(__dirname, 'packages/core/src/index.ts'),
-      '@aleo-viem/wallet-adapter': path.resolve(__dirname, 'packages/wallet-adapter/src/index.ts'),
-      '@aleo-viem/provable': path.resolve(__dirname, 'packages/provable/src/index.ts'),
+      '@veil/core/agent': path.resolve(__dirname, 'packages/core/src/agent/index.ts'),
+      '@veil/core/mcp': path.resolve(__dirname, 'packages/core/src/mcp/index.ts'),
+      '@veil/core': path.resolve(__dirname, 'packages/core/src/index.ts'),
+      '@veil/wallet-adapter': path.resolve(__dirname, 'packages/wallet-adapter/src/index.ts'),
+      '@veil/provable': path.resolve(__dirname, 'packages/provable/src/index.ts'),
     },
   },
 })

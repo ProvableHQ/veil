@@ -9,7 +9,7 @@ import {
   createAleoClient,
 } from '../src/index.js'
 
-describe('@aleo-viem/provable', () => {
+describe('@veil/provable', () => {
   describe('generateAccount', () => {
     it('creates a random account with all fields', () => {
       const account = generateAccount()

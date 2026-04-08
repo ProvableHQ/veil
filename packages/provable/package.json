@@ -1,5 +1,5 @@
 {
-  "name": "@aleo-viem/provable",
+  "name": "@veil/provable",
   "version": "0.0.1",
   "type": "module",
   "main": "dist/index.js",
@@ -19,6 +19,6 @@
     "@provablehq/sdk": "^0.9.15"
   },
   "peerDependencies": {
-    "@aleo-viem/core": "workspace:*"
+    "@veil/core": "workspace:*"
   }
 }

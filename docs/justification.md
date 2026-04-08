@@ -1,4 +1,4 @@
-# aleo-viem: A Unified Developer Interface for Aleo
+# veil: A Unified Developer Interface for Aleo
 
 ## The Problem
 
@@ -72,9 +72,9 @@ graph LR
 
 ## The Solution
 
-**aleo-viem** is a TypeScript interface library that wraps Aleo's existing wallets and SDKs behind a unified, viem-compatible API — for both human developers and AI agents.
+**veil** is a TypeScript interface library that wraps Aleo's existing wallets and SDKs behind a unified, viem-compatible API — for both human developers and AI agents.
 
-It does not replace any existing tool. It sits above them, providing a single interface that any wallet, SDK, or service can implement. Developers write their dApp once, against the aleo-viem interface, and it works with every wallet and SDK that plugs in. Agents call the same interface through MCP tools and structured agent tool schemas, shipped incrementally with every feature.
+It does not replace any existing tool. It sits above them, providing a single interface that any wallet, SDK, or service can implement. Developers write their dApp once, against the veil interface, and it works with every wallet and SDK that plugs in. Agents call the same interface through MCP tools and structured agent tool schemas, shipped incrementally with every feature.
 
 ```mermaid
 graph LR
@@ -85,7 +85,7 @@ graph LR
         A1[AI Agent]
     end
 
-    AV[aleo-viem]
+    AV[veil]
 
     subgraph Wallets & SDKs
         W1[Leo Wallet]
@@ -116,13 +116,13 @@ graph LR
     style S1 fill:#1a1a2e,stroke:#00C2FF,color:#fff
     style S2 fill:#1a1a2e,stroke:#00C2FF,color:#fff
 ```
-*With aleo-viem: write once, works everywhere. Every new participant plugs in.*
+*With veil: write once, works everywhere. Every new participant plugs in.*
 
 <details>
 <summary>Code example: reading and writing on Aleo</summary>
 
 ```ts
-import { createPublicClient, createWalletClient, http, custom, rpcAccount } from '@aleo-viem/core'
+import { createPublicClient, createWalletClient, http, custom, rpcAccount } from '@veil/core'
 
 // Read from the chain — same patterns as viem on Ethereum
 const publicClient = createPublicClient({
@@ -149,9 +149,9 @@ A developer who has used viem on Ethereum can read this immediately. An agent tr
 
 ### Put Aleo where Web3 usage is
 
-aleo-viem is the foundation of a broader developer ecosystem strategy. Each layer expands where Aleo is accessible:
+veil is the foundation of a broader developer ecosystem strategy. Each layer expands where Aleo is accessible:
 
-1. **Skills & example dApps** — pre-built templates and example applications (in the vein of [Aleo Skills](https://github.com/ProvableHQ/aleo-skills)) built on aleo-viem. Developers vibe code immediately. Agents build dApps out of the box.
+1. **Skills & example dApps** — pre-built templates and example applications (in the vein of [Aleo Skills](https://github.com/ProvableHQ/aleo-skills)) built on veil. Developers vibe code immediately. Agents build dApps out of the box.
 2. **Agent tools & MCP server** — agent tool schemas and an MCP server give any agent framework direct Aleo access. Works with LangChain, Vercel AI SDK, and any tool-calling system.
 3. **Agentic ecosystem integrations** — plug into 3rd-party agent platforms where agents already operate: Coinbase AgentKit, MPC Protocol, Near intent swap agents. Developers use agents in any surface.
 4. **3rd-party wallet integrations** — integrate into wallets where users already are, bringing Aleo's privacy use-cases to established platforms.
@@ -176,7 +176,7 @@ graph TD
         FAIL -->|developer corrects| DEV1
     end
 
-    subgraph With aleo-viem
+    subgraph With veil
         DEV2[Developer] -->|"build an Aleo dApp"| AGENT2[AI Agent]
         AGENT2 -->|uses viem patterns\nit already knows| CODE[Working Code ✓]
         AGENT3[AI Agent] -->|calls MCP tools\ndirectly| CHAIN[Reads & writes\non-chain ✓]
@@ -203,15 +203,15 @@ This friction compounds. It makes Aleo harder to build on with AI assistance tha
 
 ### Agent tooling is built in, not bolted on
 
-aleo-viem doesn't just provide a library and hope agents figure it out. Agent tooling is a first-class output of every development phase:
+veil doesn't just provide a library and hope agents figure it out. Agent tooling is a first-class output of every development phase:
 
-- **MCP server** — exposes every aleo-viem action as a tool that AI agents can call directly. An agent can read balances, execute transitions, deploy programs, and wait for confirmations without writing any code. Shipped incrementally: when a new action lands in the library, its MCP tool ships in the same commit.
+- **MCP server** — exposes every veil action as a tool that AI agents can call directly. An agent can read balances, execute transitions, deploy programs, and wait for confirmations without writing any code. Shipped incrementally: when a new action lands in the library, its MCP tool ships in the same commit.
 - **Agent tool schemas** — framework-agnostic tool definitions with rich descriptions that explain Aleo concepts via Ethereum analogies. Plug directly into LangChain, Vercel AI SDK, or any tool-calling system.
 - **Structured JSON output** — all values returned as parsed structured data, not Aleo's native string encoding. Agents parse `{ value: 100, type: "u64" }` instead of `"100u64"`.
 - **Program introspection** — agents can ask "what can this program do?" and get back a structured description of functions and mappings, before they call anything.
 - **Actionable errors** — every error message is an instruction an agent can act on, not a stack trace.
 
-Without a unified interface, every MCP server would need to be built against a specific SDK, fragmenting the agent ecosystem the same way the developer ecosystem is fragmented today. aleo-viem solves this once.
+Without a unified interface, every MCP server would need to be built against a specific SDK, fragmenting the agent ecosystem the same way the developer ecosystem is fragmented today. veil solves this once.
 
 ## What We Lose Without It
 
@@ -230,17 +230,17 @@ The window to establish a standard interface is while adoption is growing, not a
 
 Three packages ship in Q2. Core has zero hard dependencies. Adapter packages bridge to the ecosystem.
 
-**`@aleo-viem/core`** — zero hard dependencies
+**`@veil/core`** — zero hard dependencies
 - Clients, transports, accounts, all public and wallet actions
 - `getContract` + `parseProgram` for typed contract instances
 - Agent tool schemas, MCP server, structured JSON output
 - 2-3 example skills and dApps
 
-**`@aleo-viem/wallet-adapter`** — wraps `@provablehq/aleo-wallet-standard`
+**`@veil/wallet-adapter`** — wraps `@provablehq/aleo-wallet-standard`
 - `rpcAccount()` and `custom()` transport for any Aleo wallet
 - Required for dApp wallet connection
 
-**`@aleo-viem/provable`** — wraps `@provablehq/sdk`
+**`@veil/provable`** — wraps `@provablehq/sdk`
 - `privateKeyToAccount()` with key derivation, local signing, proving
 - Required for local account usage
 
@@ -267,6 +267,6 @@ Success in Q2 is demonstrated, not measured. Three promises, each proven with li
 
 ## The Ask
 
-Fund the development of `@aleo-viem/core`, `@aleo-viem/wallet-adapter`, and `@aleo-viem/provable` as the standard developer interface for Aleo. Position it as the recommended way to build dApps on Aleo, the foundation for AI agent tooling, and the integration target for new wallets entering the ecosystem.
+Fund the development of `@veil/core`, `@veil/wallet-adapter`, and `@veil/provable` as the standard developer interface for Aleo. Position it as the recommended way to build dApps on Aleo, the foundation for AI agent tooling, and the integration target for new wallets entering the ecosystem.
 
 The alternative is continuing to ask every developer, every agent, and every new wallet to solve the same fragmentation problems independently — a cost that grows with every participant we add to the ecosystem.

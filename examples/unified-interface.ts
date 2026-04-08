@@ -1,7 +1,7 @@
 /**
  * Unified Interface: Same application code, different backends
  *
- * This example demonstrates aleo-viem's core design principle:
+ * This example demonstrates veil's core design principle:
  * your application code stays IDENTICAL regardless of how the
  * user connects to Aleo. Only the client setup changes.
  *
@@ -23,8 +23,8 @@ import {
   rpcAccount,
   getContract,
   parseProgram,
-} from '@aleo-viem/core'
-import type { PublicClient, WalletClient, Transport } from '@aleo-viem/core'
+} from '@veil/core'
+import type { PublicClient, WalletClient, Transport } from '@veil/core'
 
 // ---------------------------------------------------------------------------
 // Shared mock data — all backends return the same responses
@@ -52,7 +52,7 @@ finalize transfer_public:
 `
 
 /**
- * Creates a mock request handler that responds to aleo-viem's
+ * Creates a mock request handler that responds to veil's
  * internal RPC methods. This simulates the network layer.
  */
 function createMockRequest() {
@@ -80,7 +80,7 @@ function createMockRequest() {
 // ---------------------------------------------------------------------------
 // Backend A: Wallet Adapter
 //
-// In production, you'd use @aleo-viem/wallet-adapter's fromWalletAdapter()
+// In production, you'd use @veil/wallet-adapter's fromWalletAdapter()
 // with a real browser wallet (Leo, Puzzle, Fox, etc). Here we simulate the
 // same shape: an RPC account where the wallet handles signing/proving.
 // ---------------------------------------------------------------------------
@@ -105,7 +105,7 @@ function setupWalletAdapterClient(): { publicClient: PublicClient; walletClient:
 // ---------------------------------------------------------------------------
 // Backend B: Local Account (Provable SDK)
 //
-// In production, you'd use @aleo-viem/provable's privateKeyToAccount()
+// In production, you'd use @veil/provable's privateKeyToAccount()
 // and createProvingConfig(). Here we simulate a local account with
 // a mock proving config.
 // ---------------------------------------------------------------------------
@@ -126,7 +126,7 @@ function setupLocalAccountClient(): { publicClient: PublicClient; walletClient: 
   }
 
   // Proving config — in production this would be createProvingConfig()
-  // from @aleo-viem/provable, using the SDK's ProgramManager
+  // from @veil/provable, using the SDK's ProgramManager
   const proving = {
     mode: 'delegated' as const,
     buildTransaction: async (opts: unknown) => ({ mockTx: true }),
@@ -142,7 +142,7 @@ function setupLocalAccountClient(): { publicClient: PublicClient; walletClient: 
 // Backend C: Custom Service
 //
 // A hypothetical third-party service that handles proving and submission.
-// This shows that aleo-viem is not locked to Provable SDK or any specific
+// This shows that veil is not locked to Provable SDK or any specific
 // wallet — you can plug in any backend that speaks the transport protocol.
 // ---------------------------------------------------------------------------
 
@@ -284,7 +284,7 @@ describe('Unified Interface: same code, different backends', () => {
     //     client.writeContract({ program, function, inputs, fee })
     //     getContract({ program, abi, client })
     //
-    // This is the core value proposition of aleo-viem.
+    // This is the core value proposition of veil.
     expect(true).toBe(true)
   })
 })

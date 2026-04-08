@@ -11,7 +11,7 @@ type HttpTransportConfig = {
 }
 
 /**
- * Maps aleo-viem method names + params to Aleo REST API paths.
+ * Maps veil method names + params to Aleo REST API paths.
  * Aleo uses REST, not JSON-RPC, so each method maps to a URL path.
  */
 function buildUrl(

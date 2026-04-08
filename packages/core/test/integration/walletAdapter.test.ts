@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { fromWalletAdapter } from '@aleo-viem/wallet-adapter'
-import { createWalletClient, fallback, custom } from '@aleo-viem/core'
-import type { AleoWalletAdapter } from '@aleo-viem/wallet-adapter'
+import { fromWalletAdapter } from '@veil/wallet-adapter'
+import { createWalletClient, fallback, custom } from '@veil/core'
+import type { AleoWalletAdapter } from '@veil/wallet-adapter'
 
 function createMockAdapter(overrides?: Partial<AleoWalletAdapter>): AleoWalletAdapter {
   return {

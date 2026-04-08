@@ -1,7 +1,7 @@
 /**
- * Agent Usage: how an AI agent interacts with Aleo through aleo-viem
+ * Agent Usage: how an AI agent interacts with Aleo through veil
  *
- * This example shows the agent-first design of aleo-viem. An agent:
+ * This example shows the agent-first design of veil. An agent:
  *   1. Never imports @provablehq/sdk or any wallet adapter
  *   2. Gets a set of tools with structured JSON schemas
  *   3. Calls tools by name with JSON input, gets JSON output
@@ -15,13 +15,13 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   createPublicClient,
   custom,
-} from '@aleo-viem/core'
+} from '@veil/core'
 import {
   aleoAgentTools,
   aleoAgentToolSchemas,
   createAgentTools,
   publicToolSchemas,
-} from '@aleo-viem/core/agent'
+} from '@veil/core/agent'
 
 // ---------------------------------------------------------------------------
 // Mock transport — simulates Aleo network responses

@@ -33,7 +33,7 @@ export function aleoAgentToolSchemas(config?: AgentToolsConfig): AgentToolSchema
  * Returns AgentTool[] with both schema and handler for all available actions.
  * Framework-agnostic — can be consumed by LangChain, Vercel AI SDK, etc.
  *
- * Exposed via subpath export: import { aleoAgentTools } from '@aleo-viem/core/agent'
+ * Exposed via subpath export: import { aleoAgentTools } from '@veil/core/agent'
  */
 export function aleoAgentTools(config: AgentToolsConfig): AgentToolDefinition[] {
   const tools: AgentToolDefinition[] = []
