@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useWallet } from './hooks/useWallet'
+import { useVeilWallet } from './hooks/useVeilWallet'
 import { useLoyalty } from './hooks/useLoyalty'
 import { WalletButton } from './components/WalletButton'
 import { LoyaltyCard } from './components/LoyaltyCard'
@@ -8,7 +8,16 @@ import { Stats } from './components/Stats'
 import './app.css'
 
 export function App() {
-  const { connected, address, walletClient, connecting, connect, disconnect } = useWallet()
+  const {
+    connected,
+    address,
+    walletClient,
+    connecting,
+    connect,
+    disconnect,
+    wallets,
+    selectWallet,
+  } = useVeilWallet()
   const {
     card,
     stats,
@@ -28,11 +37,6 @@ export function App() {
 
   return (
     <div className="app">
-      {/* Demo mode banner */}
-      <div className="demo-banner">
-        Demo Mode — using mock wallet adapter. In production, swap for LeoWalletAdapter / PuzzleWalletAdapter.
-      </div>
-
       {/* Header */}
       <header className="header">
         <div className="header-left">
@@ -42,9 +46,11 @@ export function App() {
         <WalletButton
           connected={connected}
           connecting={connecting}
-          address={address}
+          address={address ?? undefined}
           onConnect={connect}
           onDisconnect={disconnect}
+          wallets={wallets}
+          onSelectWallet={selectWallet}
         />
       </header>
 
@@ -101,7 +107,7 @@ export function App() {
 
       {/* Footer */}
       <footer className="footer">
-        <a href="https://github.com/your-org/veil" target="_blank" rel="noopener">
+        <a href="https://github.com/ProvableHQ/aleo-viem" target="_blank" rel="noopener">
           github.com/veil
         </a>
         <span className="sep">|</span>

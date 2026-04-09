@@ -69,8 +69,8 @@ export function useLoyalty(walletClient: WalletClient | undefined): UseLoyaltyRe
         key: '0u8',
       })
       setStats({
-        totalCards: totalCards ?? '0',
-        totalPoints: totalPoints ?? '0',
+        totalCards: String(totalCards ?? '0'),
+        totalPoints: String(totalPoints ?? '0'),
       })
     } catch {
       // Mappings may not exist yet — that's OK
@@ -94,7 +94,7 @@ export function useLoyalty(walletClient: WalletClient | undefined): UseLoyaltyRe
         program: LOYALTY_PROGRAM,
         function: 'mint_card',
         inputs: ['1u64'],  // card_id
-        fee: 0.5,
+        fee: 500_000n,
       })
       setLastTxId(txId)
 
@@ -123,7 +123,7 @@ export function useLoyalty(walletClient: WalletClient | undefined): UseLoyaltyRe
         program: LOYALTY_PROGRAM,
         function: 'add_points',
         inputs: [`${amount}u64`],
-        fee: 0.25,
+        fee: 250_000n,
       })
       setLastTxId(txId)
 
@@ -160,7 +160,7 @@ export function useLoyalty(walletClient: WalletClient | undefined): UseLoyaltyRe
         program: LOYALTY_PROGRAM,
         function: 'redeem_voucher',
         inputs: [`${voucherType}`, `${cost}u64`],
-        fee: 0.25,
+        fee: 250_000n,
       })
       setLastTxId(txId)
 
