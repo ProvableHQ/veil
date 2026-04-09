@@ -28,9 +28,10 @@ import {
   AleoNetworkClient,
   AleoKeyProvider,
   NetworkRecordProvider,
+  OfflineQuery,
 } from '@provablehq/sdk'
 import type { LocalAccount } from '@aleo-viem/core'
-import type { ProvingConfig, BuildTransactionOptions } from '@aleo-viem/core'
+import type { ProvingConfig, BuildTransactionOptions, SimulateOptions, SimulateResult } from '@aleo-viem/core'
 import type { RecordsConfig, RecordSearchParams, AleoRecord } from '@aleo-viem/core'
 import {
   createPublicClient,
@@ -93,38 +94,99 @@ export function createProvingConfig(options: {
   networkUrl: string
   /** Required for delegated proving — the prover service URL */
   proverUrl?: string
+  /** API key for delegated proving service */
+  apiKey?: string
+  /** Consumer ID for DPS/RSS authentication */
+  consumerId?: string
+  /** Enable TEE-encrypted proving */
+  privacy?: boolean
   /** Account to use for proving — sets the signer on the ProgramManager */
   account?: LocalAccount<'privateKey'>
 }): ProvingConfig {
   const keyProvider = new AleoKeyProvider()
   keyProvider.useCache(true)
 
+  /** Create a configured ProgramManager instance */
+  function makeProgramManager(): ProgramManager {
+    const programManager = new ProgramManager(
+      options.networkUrl,
+      keyProvider,
+      undefined,
+    )
+    if (options.account) {
+      const sdkAccount = new Account({ privateKey: options.account.privateKey })
+      programManager.setAccount(sdkAccount)
+    }
+    return programManager
+  }
+
   return {
     mode: options.mode,
     url: options.proverUrl,
+    apiKey: options.apiKey,
 
     buildTransaction: async (txOptions: BuildTransactionOptions) => {
-      const programManager = new ProgramManager(
-        options.networkUrl,
-        keyProvider,
-        undefined,
-      )
+      const programManager = makeProgramManager()
 
-      // Bind the account so ProgramManager can sign transactions
-      if (options.account) {
-        const sdkAccount = new Account({ privateKey: options.account.privateKey })
-        programManager.setAccount(sdkAccount)
+      if (options.mode === 'delegated' && options.proverUrl) {
+        // Delegated: build proving request, submit to DPS, return tx
+        const networkClient = new AleoNetworkClient(options.networkUrl)
+        if (options.proverUrl) networkClient.setProverUri(options.proverUrl)
+
+        const provingRequest = await programManager.provingRequest({
+          programName: txOptions.programName,
+          functionName: txOptions.functionName,
+          priorityFee: Number(txOptions.fee),
+          privateFee: txOptions.privateFee ?? false,
+          inputs: txOptions.inputs,
+          programSource: txOptions.programSource,
+          programImports: txOptions.programImports,
+          broadcast: true,
+        })
+
+        const response = await networkClient.submitProvingRequest({
+          provingRequest,
+          url: options.proverUrl,
+          apiKey: options.apiKey,
+        })
+
+        return JSON.parse(JSON.stringify(response))
       }
 
+      // Local: build execution transaction directly
       const tx = await programManager.buildExecutionTransaction({
         programName: txOptions.programName,
         functionName: txOptions.functionName,
         priorityFee: Number(txOptions.fee),
         privateFee: txOptions.privateFee ?? false,
         inputs: txOptions.inputs,
+        program: txOptions.programSource,
+        imports: txOptions.programImports,
       })
 
       return JSON.parse(tx.toString())
+    },
+
+    simulate: async (simOptions: SimulateOptions): Promise<SimulateResult> => {
+      const programManager = makeProgramManager()
+
+      // Build imports map if provided
+      const imports: Record<string, string> | undefined = simOptions.programImports
+
+      const executionResponse = await programManager.run(
+        simOptions.programSource ?? simOptions.programName,
+        simOptions.functionName,
+        simOptions.inputs,
+        false, // proveExecution
+        imports,
+        undefined, // keySearchParams
+        undefined, // provingKey
+        undefined, // verifyingKey
+        undefined, // privateKey
+        new OfflineQuery(0, 'sr1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gk0xu'),
+      )
+
+      return { outputs: executionResponse.getOutputs() }
     },
   }
 }

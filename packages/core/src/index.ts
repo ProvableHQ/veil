@@ -17,6 +17,8 @@ export type {
 export type {
   ProvingConfig,
   BuildTransactionOptions,
+  SimulateOptions,
+  SimulateResult,
 } from './types/proving.js'
 
 export type {
@@ -27,7 +29,10 @@ export type {
 
 export type { Block, ConfirmedTransaction } from './types/block.js'
 export type { Transaction, Transition } from './types/transaction.js'
-export type { Program, ProgramFunction, ProgramMapping, MappingValue } from './types/program.js'
+export type {
+  Program, ProgramFunction, ProgramMapping, ProgramRecord, ProgramRecordField,
+  ProgramStruct, MappingValue, AleoAbi,
+} from './types/program.js'
 
 // Errors
 export {
@@ -43,7 +48,7 @@ export {
 // Utils
 export { isAddress, assertAddress } from './utils/address.js'
 export { creditsToMicrocredits, microcreditsToCredits } from './utils/credits.js'
-export { parseValue, encodeValue, type ParsedValue } from './utils/values.js'
+export { parseValue, encodeValue, parseRecord, encodeInputs, parseOutputs, type ParsedValue } from './utils/values.js'
 
 // Transports
 export { createTransport } from './transports/createTransport.js'
@@ -91,6 +96,16 @@ export { transfer } from './actions/wallet/transfer.js'
 export { decrypt } from './actions/wallet/decrypt.js'
 export { requestRecords } from './actions/wallet/requestRecords.js'
 
+// Wallet Actions (standalone) — simulation
+export { simulateContract, type SimulateContractParameters, type SimulateContractReturnType } from './actions/wallet/simulateContract.js'
+
 // Contract
 export { getContract, type ContractInstance } from './contract/getContract.js'
 export { parseProgram } from './contract/parseProgram.js'
+export { parseAbi, defineAbi } from './contract/parseAbi.js'
+
+// ABI type utilities
+export type {
+  ParsedOutput, ParsedRecordOutput, ParsedValueOutput,
+  InputValue, TypedSimulateReturn,
+} from './types/abi-types.js'

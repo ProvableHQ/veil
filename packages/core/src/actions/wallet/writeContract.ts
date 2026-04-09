@@ -7,6 +7,8 @@ export type WriteContractParameters = {
   inputs: string[]
   fee: bigint
   privateFee?: boolean
+  programSource?: string
+  imports?: Record<string, string>
 }
 
 export type WriteContractReturnType = string
@@ -46,6 +48,8 @@ export async function writeContract(
       inputs: params.inputs,
       fee: params.fee,
       privateFee: params.privateFee,
+      programSource: params.programSource,
+      programImports: params.imports,
     })
 
     return client.request({

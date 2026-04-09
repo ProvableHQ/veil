@@ -1,15 +1,21 @@
-import type { Program, ProgramFunction, ProgramMapping } from '../types/program.js'
+import type { Program, ProgramFunction, ProgramMapping, ProgramRecord, ProgramStruct } from '../types/program.js'
 
 /**
  * Parses Aleo program source code into a structured Program object.
- * Extracts function signatures, mapping types, and closure names.
+ * Extracts function signatures, mapping types, closure names, imports, records, and structs.
+ *
+ * Prefer `parseAbi()` with compiler-generated abi.json when build artifacts are available.
+ * This function is the fallback for on-chain programs where only source is available.
  */
 export function parseProgram(source: string): Program {
   const idMatch = source.match(/program\s+([\w.]+)\s*;/)
   const id = idMatch ? idMatch[1]! : 'unknown.aleo'
 
+  const imports = parseImports(source)
   const functions = parseFunctions(source)
   const mappings = parseMappings(source)
+  const records = parseRecords(source)
+  const structs = parseStructs(source)
   const closures = parseClosures(source)
 
   // Mark functions that have a corresponding finalize block
@@ -23,7 +29,7 @@ export function parseProgram(source: string): Program {
     fn.hasFinalize = finalizeNames.has(fn.name)
   }
 
-  return { id, source, functions, mappings, closures }
+  return { id, source, imports, functions, mappings, records, structs, closures }
 }
 
 function parseFunctions(source: string): ProgramFunction[] {
@@ -90,4 +96,68 @@ function parseClosures(source: string): string[] {
   }
 
   return closures
+}
+
+function parseImports(source: string): string[] {
+  const imports: string[] = []
+  const importRegex = /import\s+([\w.]+)\s*;/g
+  let match: RegExpExecArray | null
+
+  while ((match = importRegex.exec(source)) !== null) {
+    imports.push(match[1]!)
+  }
+
+  return imports
+}
+
+function parseRecords(source: string): ProgramRecord[] {
+  const records: ProgramRecord[] = []
+  const recordRegex = /record\s+(\w+)\s*:([\s\S]*?)(?=\n(?:record|struct|function|finalize|closure|mapping)\s|\n*$)/g
+  let match: RegExpExecArray | null
+
+  while ((match = recordRegex.exec(source)) !== null) {
+    const name = match[1]!
+    const body = match[2]!
+    const fields: ProgramRecord['fields'] = []
+
+    const fieldRegex = /(\w+)\s+as\s+(\w+(?:\.\w+)?)\.(\w+)\s*;/g
+    let fieldMatch: RegExpExecArray | null
+    while ((fieldMatch = fieldRegex.exec(body)) !== null) {
+      if (fieldMatch[1]!.startsWith('_')) continue
+      fields.push({
+        name: fieldMatch[1]!,
+        type: fieldMatch[2]!,
+        visibility: fieldMatch[3] as 'public' | 'private',
+      })
+    }
+
+    records.push({ name, fields })
+  }
+
+  return records
+}
+
+function parseStructs(source: string): ProgramStruct[] {
+  const structs: ProgramStruct[] = []
+  const structRegex = /struct\s+(\w+)\s*:([\s\S]*?)(?=\n(?:record|struct|function|finalize|closure|mapping)\s|\n*$)/g
+  let match: RegExpExecArray | null
+
+  while ((match = structRegex.exec(source)) !== null) {
+    const name = match[1]!
+    const body = match[2]!
+    const fields: ProgramStruct['fields'] = []
+
+    const fieldRegex = /(\w+)\s+as\s+(\w+(?:\.\w+)?)\s*;/g
+    let fieldMatch: RegExpExecArray | null
+    while ((fieldMatch = fieldRegex.exec(body)) !== null) {
+      fields.push({
+        name: fieldMatch[1]!,
+        type: fieldMatch[2]!,
+      })
+    }
+
+    structs.push({ name, fields })
+  }
+
+  return structs
 }

@@ -28,6 +28,9 @@ describe('getContract', () => {
       mappings: [{ name: 'balances', keyType: 'address', valueType: 'u64' }],
       functions: [{ name: 'transfer', inputs: [], outputs: [], hasFinalize: true }],
       closures: [],
+      imports: [],
+      records: [],
+      structs: [],
     }
 
     const contract = getContract({ program: 'token.aleo', abi, client })
@@ -47,6 +50,9 @@ describe('getContract', () => {
       mappings: [],
       functions: [{ name: 'transfer', inputs: [], outputs: [], hasFinalize: false }],
       closures: [],
+      imports: [],
+      records: [],
+      structs: [],
     }
 
     // getContract needs a wallet client for write — test the error path

@@ -1,13 +1,24 @@
-import type { Client } from '../clients/createClient.js'
 import type { PublicClient } from '../clients/createPublicClient.js'
 import type { WalletClient } from '../clients/createWalletClient.js'
-import type { Program, ProgramFunction, ProgramMapping } from '../types/program.js'
+import type { Program, AleoAbi } from '../types/program.js'
+import type {
+  InputValue,
+  TypedSimulateReturn,
+} from '../types/abi-types.js'
 import { parseProgram } from './parseProgram.js'
+import { parseAbi } from './parseAbi.js'
+import { encodeInputs, parseOutputs } from '../utils/values.js'
+
+// ── Parameter & return types ──────────────────────────────────────────
 
 export type GetContractParameters = {
   program: string
-  /** Pre-parsed program — if not provided, getContract creates dynamic proxies */
-  abi?: Program | undefined
+  /** Pre-parsed program or compiler ABI JSON — if not provided, getContract creates dynamic proxies */
+  abi?: Program | AleoAbi | undefined
+  /** Program source code — needed for proving/simulation (snarkvm requires source) */
+  programSource?: string | undefined
+  /** Import program sources — map of program ID to source code */
+  imports?: Record<string, string> | undefined
   client:
     | PublicClient
     | WalletClient
@@ -16,15 +27,28 @@ export type GetContractParameters = {
 
 export type ContractReadMethods = Record<string, (params: { key: string }) => Promise<unknown>>
 
-export type ContractWriteMethods = Record<string, (params: { inputs: string[]; fee?: bigint }) => Promise<string>>
+export type ContractWriteParams = { inputs: InputValue[]; fee?: bigint; imports?: Record<string, string> }
+export type ContractWriteMethods = Record<string, (params: ContractWriteParams) => Promise<string>>
+
+export type ContractSimulateParams = { inputs: InputValue[]; imports?: Record<string, string> }
+export type ContractSimulateMethods = Record<string, (params: ContractSimulateParams) => Promise<TypedSimulateReturn>>
 
 export type ContractInstance = {
   program: string
   abi: Program | undefined
   read: ContractReadMethods
   write: ContractWriteMethods
+  /** Execute locally and return outputs without broadcasting */
+  simulate: ContractSimulateMethods
   /** Fetch and parse the on-chain program source, populating the abi */
   fetchAbi: () => Promise<Program>
+}
+
+// ── Implementation ────────────────────────────────────────────────────
+
+/** Detect whether an object is a raw AleoAbi JSON (has `transitions`) vs a parsed Program (has `functions`) */
+function isAleoAbi(abi: Program | AleoAbi): abi is AleoAbi {
+  return 'transitions' in abi
 }
 
 /**
@@ -32,13 +56,22 @@ export type ContractInstance = {
  *
  * Read methods map to program mappings via readContract.
  * Write methods map to program functions via writeContract.
+ * Simulate methods execute locally and return parsed outputs.
  *
- * If an `abi` (parsed Program) is provided, method access is validated
- * against the actual program definition. Otherwise, dynamic proxies
- * allow any method name (useful for quick prototyping).
+ * When an ABI is provided:
+ * - Method names are validated against the program definition
+ * - Inputs are auto-encoded (bigint/boolean → Aleo string format)
+ * - Outputs are auto-parsed (record strings → typed objects)
+ *
+ * Without an ABI, dynamic proxies allow any method name with raw string I/O.
  */
 export function getContract(params: GetContractParameters): ContractInstance {
-  const { program, abi } = params
+  const { program, programSource, imports: contractImports } = params
+
+  // Normalize ABI: accept either compiler JSON or parsed Program
+  const resolvedAbi: Program | undefined = params.abi
+    ? isAleoAbi(params.abi) ? parseAbi(params.abi) : params.abi
+    : undefined
 
   const publicClient = 'getBlockNumber' in params.client
     ? params.client as PublicClient
@@ -53,8 +86,23 @@ export function getContract(params: GetContractParameters): ContractInstance {
       : undefined
 
   // Build known names from ABI if available
-  const mappingNames = abi ? new Set(abi.mappings.map((m: ProgramMapping) => m.name)) : null
-  const functionNames = abi ? new Set(abi.functions.map((f: ProgramFunction) => f.name)) : null
+  const mappingNames = resolvedAbi ? new Set(resolvedAbi.mappings.map((m) => m.name)) : null
+  const functionNames = resolvedAbi ? new Set(resolvedAbi.functions.map((f) => f.name)) : null
+
+  /** Find the function definition for a given name */
+  function findFunction(name: string) {
+    return resolvedAbi?.functions.find((f) => f.name === name)
+  }
+
+  /** Auto-encode inputs if ABI is available, otherwise pass through */
+  function resolveInputs(inputs: InputValue[], fnName: string): string[] {
+    const fnDef = findFunction(fnName)
+    if (fnDef) {
+      return encodeInputs(inputs, fnDef.inputs)
+    }
+    // No ABI — assume all inputs are already strings
+    return inputs.map(String)
+  }
 
   const read = new Proxy({} as ContractReadMethods, {
     get(_target, prop: string) {
@@ -103,23 +151,73 @@ export function getContract(params: GetContractParameters): ContractInstance {
           )
         }
       }
-      return (writeParams: { inputs: string[]; fee?: bigint }) =>
+      return (writeParams: ContractWriteParams) =>
         walletClient.writeContract({
           program,
           function: prop,
-          inputs: writeParams.inputs,
+          inputs: resolveInputs(writeParams.inputs, prop),
           fee: writeParams.fee ?? 0n,
+          programSource,
+          imports: { ...contractImports, ...writeParams.imports },
         })
     },
   })
 
-  let cachedAbi = abi
+  const simulate = new Proxy({} as ContractSimulateMethods, {
+    get(_target, prop: string) {
+      if (typeof prop === 'symbol') return undefined
+      if (!walletClient) {
+        return () => {
+          throw new Error(
+            `Cannot simulate function "${prop}" — no wallet client provided. ` +
+            'Pass a WalletClient or { wallet: walletClient } to getContract.',
+          )
+        }
+      }
+      if (functionNames && !functionNames.has(prop)) {
+        return () => {
+          throw new Error(
+            `Function "${prop}" does not exist on program "${program}". ` +
+            `Available functions: ${[...functionNames].join(', ') || 'none'}`,
+          )
+        }
+      }
+      return async (simParams: ContractSimulateParams): Promise<TypedSimulateReturn> => {
+        const result = await walletClient.simulateContract({
+          program,
+          function: prop,
+          inputs: resolveInputs(simParams.inputs, prop),
+          programSource,
+          imports: { ...contractImports, ...simParams.imports },
+        })
+
+        // Auto-parse outputs if ABI is available
+        const fnDef = findFunction(prop)
+        if (fnDef && resolvedAbi) {
+          return {
+            outputs: parseOutputs(result.outputs, fnDef.outputs, resolvedAbi.records),
+          }
+        }
+
+        // No ABI — wrap raw strings as value outputs
+        return {
+          outputs: result.outputs.map((raw) => ({
+            type: 'value' as const,
+            data: { value: raw, type: 'string' },
+          })),
+        }
+      }
+    },
+  })
+
+  let cachedAbi = resolvedAbi
 
   return {
     program,
     get abi() { return cachedAbi },
     read,
     write,
+    simulate,
     async fetchAbi() {
       if (!publicClient) {
         throw new Error('Cannot fetch ABI — no public client provided.')
