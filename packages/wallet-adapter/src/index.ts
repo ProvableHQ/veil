@@ -17,7 +17,7 @@
  *
  *   const walletClient = createWalletClient({
  *     account,
- *     transport: fallback([transport, http('https://api.explorer.provable.com/v1')]),
+ *     transport: fallback([transport, http('https://api.provable.com/v2')]),
  *   })
  */
 
@@ -27,10 +27,12 @@ import type { RpcAccount, Transport } from '@veil/core'
 // Import the real types from the Provable ecosystem
 import type { TransactionOptions, TransactionStatusResponse } from '@provablehq/aleo-types'
 import type { AleoDeployment } from '@provablehq/aleo-wallet-standard'
+import type { BaseAleoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-core'
 
 // Re-export useful types so consumers don't need extra imports
 export type { TransactionOptions, TransactionStatusResponse } from '@provablehq/aleo-types'
 export { Network } from '@provablehq/aleo-types'
+export type { BaseAleoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-core'
 
 // --------------------------------------------------------------------------
 // Wallet adapter interface — matches BaseAleoWalletAdapter from
@@ -79,6 +81,13 @@ export interface AleoWalletAdapter {
   transitionViewKeys(transactionId: string): Promise<string[]>
 }
 
+/**
+ * Union of our minimal interface and the real BaseAleoWalletAdapter.
+ * All public functions accept either shape — duck-typing handles
+ * the differences since both expose the same method signatures.
+ */
+export type AnyWalletAdapter = AleoWalletAdapter | BaseAleoWalletAdapter
+
 // --------------------------------------------------------------------------
 // Account adapter
 // --------------------------------------------------------------------------
@@ -89,7 +98,7 @@ export interface AleoWalletAdapter {
  * The adapter must be connected (adapter.account must exist).
  * Sign operations are delegated to the wallet.
  */
-export function rpcAccountFromAdapter(adapter: AleoWalletAdapter): RpcAccount {
+export function rpcAccountFromAdapter(adapter: AnyWalletAdapter): RpcAccount {
   if (!adapter.account) {
     throw new Error(
       'Wallet adapter is not connected. Call adapter.connect() before creating an account.',
@@ -128,7 +137,7 @@ export function rpcAccountFromAdapter(adapter: AleoWalletAdapter): RpcAccount {
  *
  *   fallback([transportFromAdapter(adapter), http(url)])
  */
-export function transportFromAdapter(adapter: AleoWalletAdapter): Transport<'custom'> {
+export function transportFromAdapter(adapter: AnyWalletAdapter): Transport<'custom'> {
   return custom({
     key: 'walletAdapter',
     name: 'Wallet Adapter Transport',
@@ -137,13 +146,16 @@ export function transportFromAdapter(adapter: AleoWalletAdapter): Transport<'cus
 
       switch (method) {
         case 'executeTransaction': {
-          const result = await adapter.executeTransaction({
+          const options: Record<string, unknown> = {
             program: p?.programName as string,
             function: p?.functionName as string,
             inputs: p?.inputs as string[],
-            fee: Number(p?.fee ?? 0),
             privateFee: (p?.privateFee as boolean) ?? false,
-          })
+          }
+          if (p?.fee != null) {
+            options.fee = Number(p.fee)
+          }
+          const result = await adapter.executeTransaction(options as any)
           return result.transactionId
         }
 
@@ -201,7 +213,7 @@ export function transportFromAdapter(adapter: AleoWalletAdapter): Transport<'cus
  *   const { account, transport } = fromWalletAdapter(leoWallet)
  *   const client = createWalletClient({ account, transport })
  */
-export function fromWalletAdapter(adapter: AleoWalletAdapter): {
+export function fromWalletAdapter(adapter: AnyWalletAdapter): {
   account: RpcAccount
   transport: Transport<'custom'>
 } {

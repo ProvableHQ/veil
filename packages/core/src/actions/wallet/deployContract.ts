@@ -3,7 +3,7 @@ import type { Client } from '../../clients/createClient.js'
 
 export type DeployContractParameters = {
   program: string
-  fee: bigint
+  fee?: bigint
 }
 
 export type DeployContractReturnType = string

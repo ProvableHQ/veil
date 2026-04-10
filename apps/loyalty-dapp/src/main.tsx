@@ -1,12 +1,12 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { WalletProvider } from './providers/WalletProvider'
+import { VeilProvider } from '@veil/react'
 import { App } from './App'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <WalletProvider>
+    <VeilProvider network="testnet" programs={['loyalty_rewards.aleo', 'loyalty_token.aleo', 'credits.aleo']}>
       <App />
-    </WalletProvider>
+    </VeilProvider>
   </StrictMode>,
 )

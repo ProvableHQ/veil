@@ -5,7 +5,7 @@ export type WriteContractParameters = {
   program: string
   function: string
   inputs: string[]
-  fee: bigint
+  fee?: bigint
   privateFee?: boolean
 }
 

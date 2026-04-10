@@ -107,7 +107,7 @@ describe('@veil/provable', () => {
     it('creates a delegated proving config', () => {
       const config = createProvingConfig({
         mode: 'delegated',
-        networkUrl: 'https://api.explorer.provable.com/v1',
+        networkUrl: 'https://api.provable.com/v2',
         proverUrl: 'https://prover.example.com',
       })
 
@@ -119,7 +119,7 @@ describe('@veil/provable', () => {
     it('creates a local proving config', () => {
       const config = createProvingConfig({
         mode: 'local',
-        networkUrl: 'https://api.explorer.provable.com/v1',
+        networkUrl: 'https://api.provable.com/v2',
       })
 
       expect(config.mode).toBe('local')
@@ -130,7 +130,7 @@ describe('@veil/provable', () => {
 
   describe('createNetworkClient', () => {
     it('creates an AleoNetworkClient', () => {
-      const client = createNetworkClient('https://api.explorer.provable.com/v1')
+      const client = createNetworkClient('https://api.provable.com/v2')
       expect(client).toBeDefined()
       expect(client.getLatestHeight).toBeTypeOf('function')
     })
@@ -141,7 +141,7 @@ describe('@veil/provable', () => {
       const account = generateAccount()
       const config = createProvingConfig({
         mode: 'local',
-        networkUrl: 'https://api.explorer.provable.com/v1',
+        networkUrl: 'https://api.provable.com/v2',
         account,
       })
 
@@ -152,7 +152,7 @@ describe('@veil/provable', () => {
     it('works without account (backwards compatible)', () => {
       const config = createProvingConfig({
         mode: 'delegated',
-        networkUrl: 'https://api.explorer.provable.com/v1',
+        networkUrl: 'https://api.provable.com/v2',
         proverUrl: 'https://prover.example.com',
       })
 
@@ -165,7 +165,7 @@ describe('@veil/provable', () => {
     it('returns a config with getRecords function', () => {
       const account = generateAccount()
       const config = createRecordsConfig({
-        networkUrl: 'https://api.explorer.provable.com/v1',
+        networkUrl: 'https://api.provable.com/v2',
         account,
       })
 
@@ -179,7 +179,7 @@ describe('@veil/provable', () => {
     it('getRecords returns AleoRecord array shape', async () => {
       const account = generateAccount()
       const config = createRecordsConfig({
-        networkUrl: 'https://api.explorer.provable.com/v1',
+        networkUrl: 'https://api.provable.com/v2',
         account,
       })
 
@@ -198,7 +198,7 @@ describe('@veil/provable', () => {
       const account = generateAccount()
       const result = createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.explorer.provable.com/v1',
+        networkUrl: 'https://api.provable.com/v2',
       })
 
       expect(result.account).toBeDefined()
@@ -212,7 +212,7 @@ describe('@veil/provable', () => {
       const account = generateAccount()
       const result = createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.explorer.provable.com/v1',
+        networkUrl: 'https://api.provable.com/v2',
       })
 
       // walletClient should exist and have wallet actions
@@ -224,7 +224,7 @@ describe('@veil/provable', () => {
       const account = generateAccount()
       const result = createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.explorer.provable.com/v1',
+        networkUrl: 'https://api.provable.com/v2',
         provingMode: 'local',
       })
 
@@ -236,7 +236,7 @@ describe('@veil/provable', () => {
       const account = generateAccount()
       const { publicClient } = createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.explorer.provable.com/v1',
+        networkUrl: 'https://api.provable.com/v2',
       })
 
       expect(publicClient.getBlockNumber).toBeTypeOf('function')
@@ -249,7 +249,7 @@ describe('@veil/provable', () => {
       const account = generateAccount()
       const { walletClient } = createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.explorer.provable.com/v1',
+        networkUrl: 'https://api.provable.com/v2',
       })
 
       expect(walletClient.writeContract).toBeTypeOf('function')

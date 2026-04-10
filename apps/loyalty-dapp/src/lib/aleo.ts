@@ -15,7 +15,7 @@ import {
 } from '@veil/core'
 import { fromWalletAdapter, type AleoWalletAdapter } from '@veil/wallet-adapter'
 
-const API_URL = 'https://api.explorer.provable.com/v1'
+const API_URL = 'https://api.provable.com/v2'
 
 // ---------------------------------------------------------------------------
 // Public client — always available, no wallet needed
@@ -40,7 +40,7 @@ export function createAleoWalletClient(adapter: AleoWalletAdapter) {
 // ---------------------------------------------------------------------------
 // Loyalty program
 // ---------------------------------------------------------------------------
-export const LOYALTY_PROGRAM = 'loyalty_token_v1.aleo'
+export const LOYALTY_PROGRAM = 'loyalty_rewards.aleo'
 
 /**
  * Create a typed contract instance for the loyalty program.

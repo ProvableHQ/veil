@@ -14,8 +14,8 @@
  *   const account = privateKeyToAccount('APrivateKey1...')
  *   const walletClient = createWalletClient({
  *     account,
- *     transport: http('https://api.explorer.provable.com/v1'),
- *     proving: createProvingConfig({ mode: 'delegated', networkUrl: 'https://api.explorer.provable.com/v1' }),
+ *     transport: http('https://api.provable.com/v2'),
+ *     proving: createProvingConfig({ mode: 'delegated', networkUrl: 'https://api.provable.com/v2' }),
  *   })
  */
 
@@ -239,7 +239,7 @@ function extractNonce(plaintext: string | undefined): string {
  * ```ts
  * const { publicClient, walletClient, account } = createAleoClient({
  *   privateKey: 'APrivateKey1...',
- *   networkUrl: 'https://api.explorer.provable.com/v1',
+ *   networkUrl: 'https://api.provable.com/v2',
  * })
  * ```
  */

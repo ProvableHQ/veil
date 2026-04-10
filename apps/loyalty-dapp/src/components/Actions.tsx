@@ -21,7 +21,7 @@ export function Actions({ connected, hasCard, loading, onMint, onAddPoints, onRe
             {loading ? 'Minting...' : 'Mint Loyalty Card'}
           </button>
           <CodeHint code={`walletClient.writeContract({
-  program: 'loyalty_token_v1.aleo',
+  program: 'loyalty_rewards.aleo',
   function: 'mint_card',
   inputs: ['1u64'],
   fee: 0.5,
@@ -44,7 +44,7 @@ export function Actions({ connected, hasCard, loading, onMint, onAddPoints, onRe
               ))}
             </div>
             <CodeHint code={`walletClient.writeContract({
-  program: 'loyalty_token_v1.aleo',
+  program: 'loyalty_rewards.aleo',
   function: 'add_points',
   inputs: ['100u64'],
   fee: 0.25,

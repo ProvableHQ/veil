@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react'
-import { publicClient, LOYALTY_PROGRAM } from '../lib/aleo'
-import type { WalletClient } from '@veil/core'
+import { useVeilWallet, type WalletClient } from '@veil/react'
+
+const TOKEN_PROGRAM = 'loyalty_token.aleo'
+const REWARDS_PROGRAM = 'loyalty_rewards.aleo'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,7 +29,7 @@ export interface UseLoyaltyReturn {
   lastTxId: string | null
   mintCard: () => Promise<void>
   addPoints: (amount: number) => Promise<void>
-  redeemVoucher: (voucherType: string, cost: number) => Promise<void>
+  redeemVoucher: (rewardType: number, cost: number) => Promise<void>
   refreshStats: () => Promise<void>
 }
 
@@ -36,8 +38,8 @@ export interface UseLoyaltyReturn {
 // ---------------------------------------------------------------------------
 
 function getTier(points: number): Tier {
-  if (points >= 1000) return 'Gold'
-  if (points >= 100) return 'Silver'
+  if (points >= 10000) return 'Gold'
+  if (points >= 1000) return 'Silver'
   return 'Bronze'
 }
 
@@ -46,6 +48,7 @@ function getTier(points: number): Tier {
 // ---------------------------------------------------------------------------
 
 export function useLoyalty(walletClient: WalletClient | undefined): UseLoyaltyReturn {
+  const { publicClient, address } = useVeilWallet()
   const [card, setCard] = useState<LoyaltyCard | null>(null)
   const [stats, setStats] = useState<CardStats>({ totalCards: null, totalPoints: null })
   const [loading, setLoading] = useState(false)
@@ -54,19 +57,19 @@ export function useLoyalty(walletClient: WalletClient | undefined): UseLoyaltyRe
 
   // -------------------------------------------------------------------------
   // Read from public mappings — no wallet needed
+  // Mappings are on loyalty_token.aleo, keyed by 0field
   // -------------------------------------------------------------------------
   const refreshStats = useCallback(async () => {
     try {
-      // readContract reads a single mapping value
       const totalCards = await publicClient.readContract({
-        program: LOYALTY_PROGRAM,
+        program: TOKEN_PROGRAM,
         mapping: 'total_cards',
-        key: '0u8',
+        key: '0field',
       })
       const totalPoints = await publicClient.readContract({
-        program: LOYALTY_PROGRAM,
-        mapping: 'total_points',
-        key: '0u8',
+        program: TOKEN_PROGRAM,
+        mapping: 'total_points_issued',
+        key: '0field',
       })
       setStats({
         totalCards: String(totalCards ?? '0'),
@@ -76,40 +79,45 @@ export function useLoyalty(walletClient: WalletClient | undefined): UseLoyaltyRe
       // Mappings may not exist yet — that's OK
       setStats({ totalCards: '0', totalPoints: '0' })
     }
-  }, [])
+  }, [publicClient])
 
   // -------------------------------------------------------------------------
   // Mint a new loyalty card (private record)
+  // loyalty_token.aleo/mint_card(address, u64, field)
+  //   - address: card owner
+  //   - u64: initial points
+  //   - field: nonce for unique card ID
   // -------------------------------------------------------------------------
   const mintCard = useCallback(async () => {
-    if (!walletClient) {
+    if (!walletClient || !address) {
       setError('Connect wallet first')
       return
     }
     setLoading(true)
     setError(null)
     try {
-      // writeContract calls the program function via the wallet
+      const nonce = `${BigInt(Math.floor(Math.random() * 1e15))}field`
       const txId = await walletClient.writeContract({
-        program: LOYALTY_PROGRAM,
+        program: TOKEN_PROGRAM,
         function: 'mint_card',
-        inputs: ['1u64'],  // card_id
-        fee: 500_000n,
+        inputs: [address, '0u64', nonce],
       })
       setLastTxId(txId)
-
-      // Optimistically update local state
-      setCard({ cardId: '1', points: 0, tier: 'Bronze' })
+      setCard({ cardId: nonce, points: 0, tier: 'Bronze' })
       await refreshStats()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to mint card')
     } finally {
       setLoading(false)
     }
-  }, [walletClient, refreshStats])
+  }, [walletClient, address, refreshStats])
 
   // -------------------------------------------------------------------------
   // Add points to the card
+  // loyalty_token.aleo/add_points(LoyaltyCard.record, u64)
+  //   - record: the user's loyalty card (wallet provides this)
+  //   - u64: points to add
+  // Note: requires a LoyaltyCard record input — the wallet must have one
   // -------------------------------------------------------------------------
   const addPoints = useCallback(async (amount: number) => {
     if (!walletClient) {
@@ -120,14 +128,11 @@ export function useLoyalty(walletClient: WalletClient | undefined): UseLoyaltyRe
     setError(null)
     try {
       const txId = await walletClient.writeContract({
-        program: LOYALTY_PROGRAM,
+        program: TOKEN_PROGRAM,
         function: 'add_points',
         inputs: [`${amount}u64`],
-        fee: 250_000n,
       })
       setLastTxId(txId)
-
-      // Optimistic update
       setCard((prev) => {
         if (!prev) return prev
         const newPoints = prev.points + amount
@@ -142,9 +147,13 @@ export function useLoyalty(walletClient: WalletClient | undefined): UseLoyaltyRe
   }, [walletClient, refreshStats])
 
   // -------------------------------------------------------------------------
-  // Redeem a voucher
+  // Redeem points for a voucher
+  // loyalty_rewards.aleo/redeem_points_for_voucher(LoyaltyCard.record, u8, u64)
+  //   - record: the user's loyalty card
+  //   - u8: reward type (1-3)
+  //   - u64: points to spend (min 100)
   // -------------------------------------------------------------------------
-  const redeemVoucher = useCallback(async (voucherType: string, cost: number) => {
+  const redeemVoucher = useCallback(async (rewardType: number, cost: number) => {
     if (!walletClient) {
       setError('Connect wallet first')
       return
@@ -157,14 +166,11 @@ export function useLoyalty(walletClient: WalletClient | undefined): UseLoyaltyRe
     setError(null)
     try {
       const txId = await walletClient.writeContract({
-        program: LOYALTY_PROGRAM,
-        function: 'redeem_voucher',
-        inputs: [`${voucherType}`, `${cost}u64`],
-        fee: 250_000n,
+        program: REWARDS_PROGRAM,
+        function: 'redeem_points_for_voucher',
+        inputs: [`${rewardType}u8`, `${cost}u64`],
       })
       setLastTxId(txId)
-
-      // Optimistic update
       setCard((prev) => {
         if (!prev) return prev
         const newPoints = Math.max(0, prev.points - cost)

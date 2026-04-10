@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useVeilWallet } from './hooks/useVeilWallet'
+import { useVeilWallet } from '@veil/react'
 import { useLoyalty } from './hooks/useLoyalty'
 import { WalletButton } from './components/WalletButton'
 import { LoyaltyCard } from './components/LoyaltyCard'

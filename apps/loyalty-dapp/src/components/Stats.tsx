@@ -32,7 +32,7 @@ export function Stats({ stats, onRefresh, lastTxId }: StatsProps) {
           <summary>View veil code</summary>
           <pre><code>{`// No wallet needed — public reads
 publicClient.readContract({
-  program: 'loyalty_token_v1.aleo',
+  program: 'loyalty_rewards.aleo',
   mapping: 'total_cards',
   key: '0u8',
 })`}</code></pre>

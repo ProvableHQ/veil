@@ -8,15 +8,20 @@ export function fallback(transports: Transport[]): Transport<'fallback'> {
     name: 'Fallback Transport',
     type: 'fallback',
     request: async (args) => {
-      let lastError: Error | undefined
+      const errors: Error[] = []
       for (const transport of transports) {
         try {
           return await transport.request(args)
         } catch (error) {
-          lastError = error as Error
+          errors.push(error as Error)
         }
       }
-      throw new TransportError('All transports failed.', { cause: lastError })
+      // Surface the first error message (usually the wallet transport's real error)
+      const firstError = errors[0]
+      const message = firstError?.message
+        ? `${firstError.message} (all ${errors.length} transports failed)`
+        : 'All transports failed.'
+      throw new TransportError(message, { cause: firstError })
     },
   })
 }

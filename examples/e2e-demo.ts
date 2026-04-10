@@ -18,7 +18,7 @@ import {
 import { aleoAgentTools } from '../packages/core/src/agent/index.js'
 import { privateKeyToAccount, generateAccount, verifySignature } from '../packages/provable/src/index.js'
 
-const API_URL = 'https://api.explorer.provable.com/v1'
+const API_URL = 'https://api.provable.com/v2'
 
 describe('E2E: veil against live Aleo mainnet', () => {
   // Create a shared public client for all tests

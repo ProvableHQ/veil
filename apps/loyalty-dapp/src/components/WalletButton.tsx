@@ -9,7 +9,7 @@ interface WalletButtonProps {
   connected: boolean
   connecting: boolean
   address?: string
-  onConnect: () => void
+  onConnect: (walletName?: string) => void
   onDisconnect: () => void
   wallets?: Wallet[]
   onSelectWallet?: (name: string) => void
@@ -64,9 +64,8 @@ export function WalletButton({
                 key={w.adapter.name}
                 className="wallet-option"
                 onClick={() => {
-                  onSelectWallet(w.adapter.name)
                   setShowPicker(false)
-                  onConnect()
+                  onConnect(w.adapter.name)
                 }}
               >
                 <img
