@@ -33,6 +33,9 @@ export type ContractWriteMethods = Record<string, (params: ContractWriteParams) 
 export type ContractSimulateParams = { inputs: InputValue[]; imports?: Record<string, string> }
 export type ContractSimulateMethods = Record<string, (params: ContractSimulateParams) => Promise<TypedSimulateReturn>>
 
+export type ContractExecuteParams = { inputs: InputValue[]; fee?: bigint; imports?: Record<string, string> }
+export type ContractExecuteMethods = Record<string, (params: ContractExecuteParams) => Promise<TypedSimulateReturn & { transactionId: string }>>
+
 export type ContractInstance = {
   program: string
   abi: Program | undefined
@@ -40,6 +43,8 @@ export type ContractInstance = {
   write: ContractWriteMethods
   /** Execute locally and return outputs without broadcasting */
   simulate: ContractSimulateMethods
+  /** Build, broadcast, wait for confirmation, and return parsed outputs */
+  execute: ContractExecuteMethods
   /** Fetch and parse the on-chain program source, populating the abi */
   fetchAbi: () => Promise<Program>
 }
@@ -210,6 +215,56 @@ export function getContract(params: GetContractParameters): ContractInstance {
     },
   })
 
+  const execute = new Proxy({} as ContractExecuteMethods, {
+    get(_target, prop: string) {
+      if (typeof prop === 'symbol') return undefined
+      if (!walletClient) {
+        return () => {
+          throw new Error(
+            `Cannot execute function "${prop}" — no wallet client provided. ` +
+            'Pass a WalletClient or { wallet: walletClient } to getContract.',
+          )
+        }
+      }
+      if (functionNames && !functionNames.has(prop)) {
+        return () => {
+          throw new Error(
+            `Function "${prop}" does not exist on program "${program}". ` +
+            `Available functions: ${[...functionNames].join(', ') || 'none'}`,
+          )
+        }
+      }
+      return async (execParams: ContractExecuteParams): Promise<TypedSimulateReturn & { transactionId: string }> => {
+        const result = await walletClient.executeContract({
+          program,
+          function: prop,
+          inputs: resolveInputs(execParams.inputs, prop),
+          fee: execParams.fee,
+          programSource,
+          imports: { ...contractImports, ...execParams.imports },
+        })
+
+        // Auto-parse outputs if ABI is available
+        const fnDef = findFunction(prop)
+        if (fnDef && resolvedAbi) {
+          return {
+            transactionId: result.transactionId,
+            outputs: parseOutputs(result.outputs, fnDef.outputs, resolvedAbi.records),
+          }
+        }
+
+        // No ABI — wrap raw strings as value outputs
+        return {
+          transactionId: result.transactionId,
+          outputs: result.outputs.map((raw) => ({
+            type: 'value' as const,
+            data: { value: raw, type: 'string' },
+          })),
+        }
+      }
+    },
+  })
+
   let cachedAbi = resolvedAbi
 
   return {
@@ -218,6 +273,7 @@ export function getContract(params: GetContractParameters): ContractInstance {
     read,
     write,
     simulate,
+    execute,
     async fetchAbi() {
       if (!publicClient) {
         throw new Error('Cannot fetch ABI — no public client provided.')

@@ -19,6 +19,7 @@ export type {
   BuildTransactionOptions,
   SimulateOptions,
   SimulateResult,
+  ExecuteResult,
 } from './types/proving.js'
 
 export type {
@@ -96,8 +97,9 @@ export { transfer } from './actions/wallet/transfer.js'
 export { decrypt } from './actions/wallet/decrypt.js'
 export { requestRecords } from './actions/wallet/requestRecords.js'
 
-// Wallet Actions (standalone) — simulation
+// Wallet Actions (standalone) — simulation & execution
 export { simulateContract, type SimulateContractParameters, type SimulateContractReturnType } from './actions/wallet/simulateContract.js'
+export { executeContract, type ExecuteContractParameters, type ExecuteContractReturnType } from './actions/wallet/executeContract.js'
 
 // Contract
 export { getContract, type ContractInstance } from './contract/getContract.js'

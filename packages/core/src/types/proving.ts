@@ -23,6 +23,13 @@ export type SimulateResult = {
   outputs: string[]
 }
 
+export type ExecuteResult = {
+  /** Transaction ID on-chain */
+  transactionId: string
+  /** Decoded output strings (record plaintexts and values) */
+  outputs: string[]
+}
+
 /** Proving configuration — determines how transactions are built */
 export type ProvingConfig = {
   mode: 'delegated' | 'local'
@@ -32,4 +39,6 @@ export type ProvingConfig = {
   buildTransaction?: (options: BuildTransactionOptions) => Promise<Transaction>
   /** Local execution without broadcasting — returns outputs */
   simulate?: (options: SimulateOptions) => Promise<SimulateResult>
+  /** Build, broadcast, wait for confirmation, and return parsed outputs */
+  execute?: (options: BuildTransactionOptions) => Promise<ExecuteResult>
 }

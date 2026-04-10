@@ -1,5 +1,6 @@
 import { writeContract, type WriteContractParameters, type WriteContractReturnType } from '../../actions/wallet/writeContract.js'
 import { simulateContract, type SimulateContractParameters, type SimulateContractReturnType } from '../../actions/wallet/simulateContract.js'
+import { executeContract, type ExecuteContractParameters, type ExecuteContractReturnType } from '../../actions/wallet/executeContract.js'
 import { deployContract, type DeployContractParameters, type DeployContractReturnType } from '../../actions/wallet/deployContract.js'
 import { sendTransaction, type SendTransactionParameters, type SendTransactionReturnType } from '../../actions/wallet/sendTransaction.js'
 import { signMessage, type SignMessageParameters, type SignMessageReturnType } from '../../actions/wallet/signMessage.js'
@@ -15,6 +16,8 @@ export type WalletActions = {
   executeTransaction: (params: WriteContractParameters) => Promise<WriteContractReturnType>
   /** Execute locally and return outputs without broadcasting */
   simulateContract: (params: SimulateContractParameters) => Promise<SimulateContractReturnType>
+  /** Build, broadcast, wait for confirmation, and return parsed outputs */
+  executeContract: (params: ExecuteContractParameters) => Promise<ExecuteContractReturnType>
   deployContract: (params: DeployContractParameters) => Promise<DeployContractReturnType>
   signMessage: (params: SignMessageParameters) => Promise<SignMessageReturnType>
   transfer: (params: TransferParameters) => Promise<TransferReturnType>
@@ -28,6 +31,7 @@ export function walletActions(client: Client): WalletActions {
     writeContract: (params) => writeContract(client, params),
     executeTransaction: (params) => writeContract(client, params),
     simulateContract: (params) => simulateContract(client, params),
+    executeContract: (params) => executeContract(client, params),
     deployContract: (params) => deployContract(client, params),
     signMessage: (params) => signMessage(client, params),
     transfer: (params) => transfer(client, params),

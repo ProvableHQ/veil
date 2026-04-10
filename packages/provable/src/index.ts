@@ -28,10 +28,12 @@ import {
   AleoNetworkClient,
   AleoKeyProvider,
   NetworkRecordProvider,
+  RecordScanner,
+  RecordCiphertext,
   OfflineQuery,
 } from '@provablehq/sdk'
 import type { LocalAccount } from '@aleo-viem/core'
-import type { ProvingConfig, BuildTransactionOptions, SimulateOptions, SimulateResult } from '@aleo-viem/core'
+import type { ProvingConfig, BuildTransactionOptions, SimulateOptions, SimulateResult, ExecuteResult } from '@aleo-viem/core'
 import type { RecordsConfig, RecordSearchParams, AleoRecord } from '@aleo-viem/core'
 import {
   createPublicClient,
@@ -148,6 +150,7 @@ export function createProvingConfig(options: {
           provingRequest,
           url: options.proverUrl,
           apiKey: options.apiKey,
+          consumerId: options.consumerId,
         })
 
         return JSON.parse(JSON.stringify(response))
@@ -188,7 +191,116 @@ export function createProvingConfig(options: {
 
       return { outputs: executionResponse.getOutputs() }
     },
+
+    execute: async (txOptions: BuildTransactionOptions): Promise<ExecuteResult> => {
+      const programManager = makeProgramManager()
+
+      if (options.mode === 'delegated' && options.proverUrl) {
+        // Delegated: build proving request, submit to DPS, wait for confirmation, extract outputs
+        const networkClient = new AleoNetworkClient(options.networkUrl)
+        if (options.proverUrl) networkClient.setProverUri(options.proverUrl)
+
+        const provingRequest = await programManager.provingRequest({
+          programName: txOptions.programName,
+          functionName: txOptions.functionName,
+          priorityFee: Number(txOptions.fee),
+          privateFee: txOptions.privateFee ?? false,
+          inputs: txOptions.inputs,
+          programSource: txOptions.programSource,
+          programImports: txOptions.programImports,
+          broadcast: true,
+        })
+
+        const response = await networkClient.submitProvingRequest({
+          provingRequest,
+          url: options.proverUrl,
+          apiKey: options.apiKey,
+          consumerId: options.consumerId,
+        })
+
+        // Extract transaction ID from DPS response
+        const txId = (response as any)?.transaction?.id ?? (response as any)?.id
+        if (!txId) {
+          throw new Error('DPS response did not contain a transaction ID')
+        }
+
+        // Wait for confirmation and extract outputs
+        const explorerClient = new AleoNetworkClient('https://api.explorer.provable.com/v1')
+        const confirmedTx = await waitForTransaction(explorerClient, txId)
+        const outputs = extractOutputs(confirmedTx, options.account)
+
+        return { transactionId: txId, outputs }
+      }
+
+      // Local mode: simulate locally (same as simulate, but matches the execute interface)
+      const imports: Record<string, string> | undefined = txOptions.programImports
+
+      const executionResponse = await programManager.run(
+        txOptions.programSource ?? txOptions.programName,
+        txOptions.functionName,
+        txOptions.inputs,
+        false,
+        imports,
+        undefined, undefined, undefined, undefined,
+        new OfflineQuery(0, 'sr1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gk0xu'),
+      )
+
+      return { transactionId: '', outputs: executionResponse.getOutputs() }
+    },
   }
+}
+
+/** Poll explorer API until transaction is confirmed */
+async function waitForTransaction(
+  client: AleoNetworkClient,
+  txId: string,
+  timeoutMs = 300_000,
+  pollIntervalMs = 5_000,
+): Promise<any> {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const tx = await client.getTransaction(txId)
+      if (tx) return tx
+    } catch {
+      // Not found yet
+    }
+    await new Promise((r) => setTimeout(r, pollIntervalMs))
+  }
+  throw new Error(`Transaction ${txId} not confirmed within ${timeoutMs / 1000}s`)
+}
+
+/** Extract and decrypt output records from a confirmed transaction */
+function extractOutputs(
+  transaction: any,
+  account?: LocalAccount<'privateKey'>,
+): string[] {
+  const outputs: string[] = []
+  if (!transaction?.execution?.transitions) return outputs
+
+  for (const transition of transaction.execution.transitions) {
+    if (!transition.outputs) continue
+    for (const output of transition.outputs) {
+      if (!output.value) continue
+      if (output.type === 'record' && output.value.startsWith('record1') && account) {
+        // Decrypt record ciphertext
+        try {
+          const ciphertext = RecordCiphertext.fromString(output.value)
+          const sdkAccount = new Account({ privateKey: account.privateKey })
+          if (ciphertext.isOwner(sdkAccount.viewKey())) {
+            const plaintext = ciphertext.decrypt(sdkAccount.viewKey())
+            outputs.push(plaintext.toString())
+          }
+        } catch {
+          // Not our record or decryption failed — skip
+        }
+      } else {
+        outputs.push(output.value)
+      }
+    }
+  }
+
+  return outputs
 }
 
 /**
@@ -289,6 +401,184 @@ function extractNonce(plaintext: string | undefined): string {
   return match?.[1] ?? ''
 }
 
+// ── Record Scanner ────────────────────────────────────────────────────
+
+export type RecordScannerConfig = {
+  /** Record scanning service URL (e.g. "https://api.provable.com/scanner") */
+  url: string
+  /** Account to scan for — view key is used for registration and decryption */
+  account: LocalAccount<'privateKey'>
+  /** API key for DPS authentication (used to fetch JWT if consumerId is also set) */
+  apiKey?: string
+  /** Consumer ID for automatic JWT fetching */
+  consumerId?: string
+  /** Enable TEE-encrypted registration */
+  privacy?: boolean
+}
+
+export type RecordScannerFilter = {
+  /** Program ID to scan (e.g. "loyalty_token.aleo") */
+  program: string
+  /** Record name to filter for (e.g. "LoyaltyCard") */
+  record?: string
+  /** Block height to start scanning from */
+  startHeight?: number
+  /** Block height to stop scanning at */
+  endHeight?: number
+  /** Only return unspent records (default: true) */
+  unspent?: boolean
+}
+
+export type ScannedRecord = {
+  /** Record owner address */
+  owner: string
+  /** Parsed record fields as key-value pairs */
+  data: Record<string, unknown>
+  /** Record plaintext string (for passing to contract functions) */
+  plaintext: string
+  /** Program ID */
+  programId: string
+  /** Record name (e.g. "LoyaltyCard") */
+  recordName: string
+}
+
+/**
+ * Creates a record scanner that wraps @provablehq/sdk's RecordScanner service.
+ *
+ * Handles registration, filtering, decryption, and JWT auth internally.
+ * Returns parsed records ready for use with contract functions.
+ *
+ * @example
+ * ```ts
+ * const scanner = createRecordScanner({
+ *   url: 'https://api.provable.com/scanner',
+ *   account,
+ *   apiKey: 'your-api-key',
+ *   consumerId: 'your-consumer-id',
+ * })
+ *
+ * const cards = await scanner.findRecords({
+ *   program: 'loyalty_token.aleo',
+ *   record: 'LoyaltyCard',
+ *   startHeight: 0,
+ * })
+ * ```
+ */
+export function createRecordScanner(config: RecordScannerConfig) {
+  const sdkAccount = new Account({ privateKey: config.account.privateKey })
+  const viewKey = sdkAccount.viewKey()
+
+  // Build API key config — handle JWT tokens vs plain API keys
+  const apiKeyConfig = config.apiKey?.startsWith('eyJ')
+    ? { header: 'Authorization', value: `Bearer ${config.apiKey}` }
+    : config.apiKey
+
+  const scanner = new RecordScanner({
+    url: config.url,
+    apiKey: apiKeyConfig,
+  })
+
+  let registered = false
+
+  /** Register with the scanner service if not already registered */
+  async function ensureRegistered(startHeight: number): Promise<void> {
+    if (registered) return
+
+    if (config.privacy) {
+      await scanner.registerEncrypted(viewKey, startHeight)
+    } else {
+      await scanner.register(viewKey, startHeight)
+    }
+    registered = true
+  }
+
+  /** Fetch JWT from Provable API using consumer ID + API key */
+  async function fetchJwt(): Promise<string | undefined> {
+    if (!config.consumerId || !config.apiKey) return undefined
+    if (config.apiKey.startsWith('eyJ')) return config.apiKey // Already a JWT
+
+    // Derive base URL from scanner URL
+    let baseUrl = 'https://api.provable.com'
+    try {
+      const url = new URL(config.url)
+      baseUrl = `${url.protocol}//${url.host}`
+    } catch { /* use default */ }
+
+    try {
+      const response = await fetch(`${baseUrl}/jwts/${config.consumerId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Provable-API-Key': config.apiKey,
+        },
+      })
+      if (!response.ok) return undefined
+      const authHeader = response.headers.get('authorization')
+      if (!authHeader) return undefined
+      return authHeader.replace(/^Bearer\s+/i, '')
+    } catch {
+      return undefined
+    }
+  }
+
+  return {
+    /**
+     * Find records owned by this account matching the given filter.
+     *
+     * Handles registration and decryption automatically.
+     * Returns parsed records with plaintext strings for use in contract calls.
+     */
+    async findRecords(filter: RecordScannerFilter): Promise<ScannedRecord[]> {
+      // Fetch JWT if needed
+      if (config.consumerId && config.apiKey && !config.apiKey.startsWith('eyJ')) {
+        const jwt = await fetchJwt()
+        if (jwt) {
+          scanner.setApiKey({ header: 'Authorization', value: `Bearer ${jwt}` })
+        }
+      }
+
+      // Register with scanner service
+      await ensureRegistered(filter.startHeight ?? 0)
+
+      // Query for records
+      const records = await scanner.findRecords({
+        decrypt: true,
+        unspent: filter.unspent ?? true,
+        filter: {
+          start: filter.startHeight ?? 0,
+          end: filter.endHeight,
+          program: filter.program,
+          record: filter.record,
+        },
+      })
+
+      // Parse and return
+      return records
+        .filter((r) => {
+          if (filter.record && r.record_name !== filter.record) return false
+          return r.record_plaintext || r.record_ciphertext
+        })
+        .map((r) => {
+          let plaintext: string
+          if (r.record_plaintext) {
+            plaintext = r.record_plaintext
+          } else {
+            const ciphertext = RecordCiphertext.fromString(r.record_ciphertext!)
+            plaintext = ciphertext.decrypt(viewKey).toString()
+          }
+
+          return {
+            owner: config.account.address,
+            data: parseRecordPlaintext(plaintext),
+            plaintext,
+            programId: filter.program,
+            recordName: r.record_name ?? filter.record ?? 'unknown',
+          }
+        })
+    },
+  }
+}
+
 /**
  * Creates a fully-wired Aleo client from just a private key and network URL.
  *
@@ -309,6 +599,9 @@ export function createAleoClient(options: {
   privateKey: string
   networkUrl: string
   provingMode?: 'delegated' | 'local'
+  proverUrl?: string
+  apiKey?: string
+  consumerId?: string
 }): { publicClient: PublicClient; walletClient: WalletClient; account: LocalAccount<'privateKey'> } {
   const account = privateKeyToAccount(options.privateKey)
   const transport = http(options.networkUrl)
@@ -316,6 +609,9 @@ export function createAleoClient(options: {
   const proving = createProvingConfig({
     mode: options.provingMode ?? 'delegated',
     networkUrl: options.networkUrl,
+    proverUrl: options.proverUrl,
+    apiKey: options.apiKey,
+    consumerId: options.consumerId,
     account,
   })
 
