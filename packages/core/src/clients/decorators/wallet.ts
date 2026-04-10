@@ -5,6 +5,7 @@ import { signMessage, type SignMessageParameters, type SignMessageReturnType } f
 import { transfer, type TransferParameters, type TransferReturnType } from '../../actions/wallet/transfer.js'
 import { decrypt, type DecryptParameters, type DecryptReturnType } from '../../actions/wallet/decrypt.js'
 import { requestRecords, type RequestRecordsParameters, type RequestRecordsReturnType } from '../../actions/wallet/requestRecords.js'
+import { transactionStatus, type TransactionStatusParameters, type TransactionStatusReturnType } from '../../actions/wallet/transactionStatus.js'
 import type { Client } from '../createClient.js'
 
 export type WalletActions = {
@@ -17,6 +18,7 @@ export type WalletActions = {
   transfer: (params: TransferParameters) => Promise<TransferReturnType>
   decrypt: (params: DecryptParameters) => Promise<DecryptReturnType>
   requestRecords: (params: RequestRecordsParameters) => Promise<RequestRecordsReturnType>
+  transactionStatus: (params: TransactionStatusParameters) => Promise<TransactionStatusReturnType>
 }
 
 export function walletActions(client: Client): WalletActions {
@@ -29,5 +31,6 @@ export function walletActions(client: Client): WalletActions {
     transfer: (params) => transfer(client, params),
     decrypt: (params) => decrypt(client, params),
     requestRecords: (params) => requestRecords(client, params),
+    transactionStatus: (params) => transactionStatus(client, params),
   }
 }

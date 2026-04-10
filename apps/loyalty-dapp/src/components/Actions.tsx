@@ -4,7 +4,7 @@ interface ActionsProps {
   loading: boolean
   onMint: () => void
   onAddPoints: (amount: number) => void
-  onRedeem: (type: string, cost: number) => void
+  onRedeem: (type: number, cost: number) => void
 }
 
 export function Actions({ connected, hasCard, loading, onMint, onAddPoints, onRedeem }: ActionsProps) {
@@ -20,12 +20,6 @@ export function Actions({ connected, hasCard, loading, onMint, onAddPoints, onRe
           <button className="action-btn mint" onClick={onMint} disabled={loading}>
             {loading ? 'Minting...' : 'Mint Loyalty Card'}
           </button>
-          <CodeHint code={`walletClient.writeContract({
-  program: 'loyalty_rewards.aleo',
-  function: 'mint_card',
-  inputs: ['1u64'],
-  fee: 0.5,
-})`} />
         </div>
       ) : (
         <>
@@ -43,12 +37,6 @@ export function Actions({ connected, hasCard, loading, onMint, onAddPoints, onRe
                 </button>
               ))}
             </div>
-            <CodeHint code={`walletClient.writeContract({
-  program: 'loyalty_rewards.aleo',
-  function: 'add_points',
-  inputs: ['100u64'],
-  fee: 0.25,
-})`} />
           </div>
 
           <div className="action-group">
@@ -56,42 +44,29 @@ export function Actions({ connected, hasCard, loading, onMint, onAddPoints, onRe
             <div className="action-row">
               <button
                 className="action-btn redeem"
-                onClick={() => onRedeem('coffee', 50)}
+                onClick={() => onRedeem(1, 100)}
                 disabled={loading}
               >
-                Coffee (50 pts)
+                Type 1 (100 pts)
               </button>
               <button
                 className="action-btn redeem"
-                onClick={() => onRedeem('merch', 200)}
+                onClick={() => onRedeem(2, 200)}
                 disabled={loading}
               >
-                Merch (200 pts)
+                Type 2 (200 pts)
               </button>
               <button
                 className="action-btn redeem"
-                onClick={() => onRedeem('vip', 500)}
+                onClick={() => onRedeem(3, 500)}
                 disabled={loading}
               >
-                VIP Pass (500 pts)
+                Type 3 (500 pts)
               </button>
             </div>
           </div>
         </>
       )}
     </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Collapsible code hint — shows the veil call behind each action
-// ---------------------------------------------------------------------------
-
-function CodeHint({ code }: { code: string }) {
-  return (
-    <details className="code-hint">
-      <summary>View veil code</summary>
-      <pre><code>{code}</code></pre>
-    </details>
   )
 }

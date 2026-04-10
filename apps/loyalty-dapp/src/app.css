@@ -502,3 +502,293 @@ body {
     align-items: flex-start;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Transaction status indicator
+   -------------------------------------------------------------------------- */
+
+.tx-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  margin-bottom: 1rem;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tx-status-pending {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+}
+
+.tx-status-accepted {
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  color: #4ade80;
+  animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-in 2.5s forwards;
+}
+
+.tx-status-failed {
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: #f87171;
+  animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-in 4.5s forwards;
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.tx-status-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(251, 191, 36, 0.3);
+  border-top-color: #fbbf24;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.checkmark {
+  font-size: 20px;
+  font-weight: bold;
+  color: #4ade80;
+}
+
+.xmark {
+  font-size: 20px;
+  font-weight: bold;
+  color: #f87171;
+}
+
+.tx-status-text {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.tx-status-id {
+  margin-left: auto;
+  font-family: monospace;
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+/* --------------------------------------------------------------------------
+   Cards list
+   -------------------------------------------------------------------------- */
+
+.loyalty-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cards-header {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cards-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.loyalty-card.selected {
+  box-shadow: 0 0 0 2px var(--accent), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.card-selected-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.loyalty-card {
+  position: relative;
+  transition: opacity 0.2s, box-shadow 0.2s;
+}
+
+.loyalty-card:hover {
+  opacity: 1 !important;
+}
+
+/* --------------------------------------------------------------------------
+   Code comparison
+   -------------------------------------------------------------------------- */
+
+.code-compare {
+  margin-top: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.code-compare-tabs {
+  display: flex;
+  background: rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.code-tab {
+  flex: 1;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.code-tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.code-tab.active {
+  color: var(--accent);
+  background: rgba(0, 194, 255, 0.06);
+  border-bottom: 2px solid var(--accent);
+}
+
+.code-compare-panels {
+  display: flex;
+  gap: 0;
+}
+
+.code-compare-panels.before .code-panel,
+.code-compare-panels.after .code-panel {
+  flex: 1;
+}
+
+.code-compare-panels.both .code-panel {
+  flex: 1;
+}
+
+.code-panel {
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.code-panel pre {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+.code-panel code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+.code-panel-before {
+  background: rgba(239, 68, 68, 0.04);
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.code-panel-before code {
+  color: #e8a0a0;
+}
+
+.code-panel-after {
+  background: rgba(0, 194, 255, 0.04);
+}
+
+.code-panel-after code {
+  color: #a0dde8;
+}
+
+.code-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 16px;
+}
+
+.code-example {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.code-example-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  color: #ccc;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.code-example-toggle:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.code-example-arrow {
+  font-size: 0.6rem;
+  transition: transform 0.2s;
+  color: var(--text-muted);
+}
+
+.code-example-arrow.open {
+  transform: rotate(90deg);
+}
+
+.code-panel-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.code-panel-before .code-panel-label {
+  color: #e8a0a0;
+}
+
+.code-panel-after .code-panel-label {
+  color: #a0dde8;
+}

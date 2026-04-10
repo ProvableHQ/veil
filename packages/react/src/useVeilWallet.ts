@@ -66,12 +66,12 @@ export interface UseVeilWalletReturn {
  * ```
  */
 export function useVeilWallet(config?: UseVeilWalletConfig): UseVeilWalletReturn {
-  const {
-    rpcUrl = DEFAULT_API_URL,
-    network = 'mainnet',
-  } = config ?? {}
+  const { rpcUrl = DEFAULT_API_URL } = config ?? {}
 
   const wallet = useWallet()
+
+  // Derive network from the wallet provider context, with config override
+  const network = config?.network ?? (wallet.network === 'testnet' ? 'testnet' : 'mainnet')
 
   const publicClient = useMemo(
     () => createPublicClient({ transport: http(rpcUrl, { network }) }),
