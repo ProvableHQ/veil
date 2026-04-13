@@ -29,6 +29,9 @@ export type { Block, ConfirmedTransaction } from './types/block.js'
 export type { Transaction, Transition } from './types/transaction.js'
 export type { Program, ProgramFunction, ProgramMapping, MappingValue } from './types/program.js'
 
+export type { Primitive, Plaintext, PlaintextValue, RecordValue, RecordFieldValue, FutureValue, Literal } from './types/primitives.js'
+export type { ABI, AbiFunction, Input, Output, Mode, FunctionInput, FunctionOutput, StructDef, RecordDef, StructField, RecordField, Mapping, StorageVariable, StorageType } from './types/abi.js'
+
 // Errors
 export {
   BaseError,
@@ -44,6 +47,8 @@ export {
 export { isAddress, assertAddress } from './utils/address.js'
 export { creditsToMicrocredits, microcreditsToCredits } from './utils/credits.js'
 export { parseValue, encodeValue, type ParsedValue } from './utils/values.js'
+export { parsePrimitive, parsePlaintext } from './utils/parsePrimitives.js'
+export { parseAbi } from './utils/parseAbi.js'
 
 // Transports
 export { createTransport } from './transports/createTransport.js'
