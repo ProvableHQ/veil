@@ -212,6 +212,62 @@ describe('parseAbi — storage_var', () => {
   })
 })
 
+// ---- Bytecode disassembler ABI (no storage_variables, must reconstruct from mappings) ----
+// This is what you get from `leo abi <file.aleo>` rather than `leo build`.
+const BYTECODE_STORAGE_ABI = {
+  program: 'storage_var.aleo',
+  structs: [],
+  records: [],
+  // Storage variables have been lowered to mappings:
+  //   storage counter: u32       →  mapping counter__: boolean => u32
+  //   storage items: Vector<u64> →  mapping items__: u32 => u64
+  //                                 mapping items__len__: boolean => u32
+  // Plus a regular mapping that should NOT be treated as a storage variable.
+  mappings: [
+    { name: 'counter__',    key: { Primitive: 'Boolean' }, value: { Primitive: { UInt: 'U32' } } },
+    { name: 'items__',      key: { Primitive: { UInt: 'U32' } }, value: { Primitive: { UInt: 'U64' } } },
+    { name: 'items__len__', key: { Primitive: 'Boolean' }, value: { Primitive: { UInt: 'U32' } } },
+    { name: 'scores',       key: { Primitive: 'Address' }, value: { Primitive: { UInt: 'U64' } } },
+  ],
+  storage_variables: [],
+  functions: [],
+}
+
+describe('parseAbi — storage variable reconstruction from bytecode ABI', () => {
+  it('reconstructs a simple storage variable from __ mapping', () => {
+    const abi = parseAbi(BYTECODE_STORAGE_ABI)
+    expect(abi.storageVariables).toContainEqual({
+      name: 'counter',
+      type: { kind: 'plaintext', type: { kind: 'primitive', primitive: 'u32' } },
+    })
+  })
+
+  it('reconstructs a vector storage variable from __ and __len__ mappings', () => {
+    const abi = parseAbi(BYTECODE_STORAGE_ABI)
+    expect(abi.storageVariables).toContainEqual({
+      name: 'items',
+      type: {
+        kind: 'vector',
+        element: { kind: 'plaintext', type: { kind: 'primitive', primitive: 'u64' } },
+      },
+    })
+  })
+
+  it('filters storage mappings out of regular mappings', () => {
+    const abi = parseAbi(BYTECODE_STORAGE_ABI)
+    const names = abi.mappings.map((m) => m.name)
+    expect(names).not.toContain('counter__')
+    expect(names).not.toContain('items__')
+    expect(names).not.toContain('items__len__')
+  })
+
+  it('keeps regular mappings intact', () => {
+    const abi = parseAbi(BYTECODE_STORAGE_ABI)
+    expect(abi.mappings).toHaveLength(1)
+    expect(abi.mappings[0]!.name).toBe('scores')
+  })
+})
+
 describe('parseAbi — error cases', () => {
   it('throws on non-object input', () => {
     expect(() => parseAbi('not an object')).toThrow('Invalid ABI')
