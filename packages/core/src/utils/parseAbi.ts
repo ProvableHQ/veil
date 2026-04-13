@@ -1,9 +1,6 @@
 // Parses the Leo ABI JSON format (Rust serde default serialization) into
 // veil's internal TypeScript ABI types.
 //
-// The Leo JSON uses PascalCase keys and nested objects for enum variants.
-// This module normalises that into veil's discriminated unions.
-//
 // Example input (from `leo abi <program.aleo>`):
 //   {
 //     "program": "tictactoe.aleo",
@@ -192,6 +189,73 @@ function parseStorageVariable(raw: unknown): StorageVariable {
   return { name: obj.name, type: parseStorageType(obj.ty) }
 }
 
+// ---- Storage variable reconstruction from mappings ----
+//
+// When an ABI comes from `leo abi <file.aleo>` (bytecode disassembler) rather
+// than `leo build`, storage variables are absent — they've been lowered to
+// mappings with a `__` suffix:
+//
+//   storage counter: u32     →  mapping counter__: boolean => u32
+//   storage items: Vector<u64> →  mapping items__: u32 => u64
+//                                 mapping items__len__: boolean => u32
+//
+// This function scans the parsed mappings, detects these patterns, and returns:
+//   - storageVariables: reconstructed storage variables
+//   - mappings: remaining mappings with storage mappings filtered out
+
+function reconstructStorageVariables(mappings: Mapping[]): {
+  storageVariables: StorageVariable[]
+  mappings: Mapping[]
+} {
+  // Collect names of vector length mappings (name__len__ with boolean key)
+  // so we can match them to their corresponding element mapping (name__ with u32 key)
+  const vectorLenNames = new Set<string>()
+  for (const m of mappings) {
+    if (
+      m.name.endsWith('__len__') &&
+      m.key.kind === 'primitive' &&
+      m.key.primitive === 'boolean'
+    ) {
+      // e.g. "items__len__" → "items__" is the element mapping name
+      vectorLenNames.add(m.name.slice(0, -'len__'.length))
+    }
+  }
+
+  const storageVariables: StorageVariable[] = []
+  const regularMappings: Mapping[] = []
+
+  for (const m of mappings) {
+    if (m.name.endsWith('__len__') && m.key.kind === 'primitive' && m.key.primitive === 'boolean') {
+      // Vector length mapping — consumed as part of the vector, not a regular mapping
+      continue
+    }
+
+    if (m.name.endsWith('__') && m.key.kind === 'primitive' && m.key.primitive === 'boolean') {
+      // Simple storage variable: counter__ (bool key) → storage counter: T
+      const name = m.name.slice(0, -2)
+      storageVariables.push({
+        name,
+        type: { kind: 'plaintext', type: m.value },
+      })
+      continue
+    }
+
+    if (m.name.endsWith('__') && m.key.kind === 'primitive' && m.key.primitive === 'u32' && vectorLenNames.has(m.name)) {
+      // Vector element mapping: items__ (u32 key) → storage items: Vector<T>
+      const name = m.name.slice(0, -2)
+      storageVariables.push({
+        name,
+        type: { kind: 'vector', element: { kind: 'plaintext', type: m.value } },
+      })
+      continue
+    }
+
+    regularMappings.push(m)
+  }
+
+  return { storageVariables, mappings: regularMappings }
+}
+
 // ---- Program (full ABI) ----
 
 export function parseAbi(raw: unknown): ABI {
@@ -208,12 +272,25 @@ export function parseAbi(raw: unknown): ABI {
     functions: unknown[]
   }
 
+  const parsedMappings = obj.mappings.map(parseMapping)
+
+  // If storage_variables are present in the JSON (from `leo build`), use them.
+  // Otherwise reconstruct from the __ suffix convention (from `leo abi <file.aleo>`).
+  const hasStorageVars = Array.isArray(obj.storage_variables) && obj.storage_variables.length > 0
+
+  const { storageVariables, mappings } = hasStorageVars
+    ? {
+        storageVariables: obj.storage_variables.map(parseStorageVariable),
+        mappings: parsedMappings,
+      }
+    : reconstructStorageVariables(parsedMappings)
+
   return {
     program: obj.program,
     structs: obj.structs.map(parseStruct),
     records: obj.records.map(parseRecord),
-    mappings: obj.mappings.map(parseMapping),
-    storageVariables: obj.storage_variables.map(parseStorageVariable),
+    mappings,
+    storageVariables,
     functions: obj.functions.map(parseFunction),
   }
 }
