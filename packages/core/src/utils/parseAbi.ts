@@ -207,50 +207,48 @@ function reconstructStorageVariables(mappings: Mapping[]): {
   storageVariables: StorageVariable[]
   mappings: Mapping[]
 } {
-  // Collect names of vector length mappings (name__len__ with boolean key)
-  // so we can match them to their corresponding element mapping (name__ with u32 key)
-  const vectorLenNames = new Set<string>()
-  for (const m of mappings) {
-    if (
-      m.name.endsWith('__len__') &&
-      m.key.kind === 'primitive' &&
-      m.key.primitive === 'boolean'
-    ) {
-      // e.g. "items__len__" → "items__" is the element mapping name
-      vectorLenNames.add(m.name.slice(0, -'len__'.length))
-    }
-  }
-
   const storageVariables: StorageVariable[] = []
   const regularMappings: Mapping[] = []
 
+  // Candidates: mappings ending with __ and a u32 key that might be vectors.
+  // We collect them separately and resolve after the main pass once we know
+  // which ones have a corresponding __len__ mapping.
+  const vectorCandidates = new Map<string, Mapping>() // name__ → mapping
+  const lenMappingNames = new Set<string>()            // name__ of confirmed vectors
+
   for (const m of mappings) {
     if (m.name.endsWith('__len__') && m.key.kind === 'primitive' && m.key.primitive === 'boolean') {
-      // Vector length mapping — consumed as part of the vector, not a regular mapping
+      // e.g. "items__len__" → record that "items__" has a length mapping
+      lenMappingNames.add(m.name.slice(0, -'len__'.length))
       continue
     }
 
     if (m.name.endsWith('__') && m.key.kind === 'primitive' && m.key.primitive === 'boolean') {
       // Simple storage variable: counter__ (bool key) → storage counter: T
-      const name = m.name.slice(0, -2)
-      storageVariables.push({
-        name,
-        type: { kind: 'plaintext', type: m.value },
-      })
+      storageVariables.push({ name: m.name.slice(0, -2), type: { kind: 'plaintext', type: m.value } })
       continue
     }
 
-    if (m.name.endsWith('__') && m.key.kind === 'primitive' && m.key.primitive === 'u32' && vectorLenNames.has(m.name)) {
-      // Vector element mapping: items__ (u32 key) → storage items: Vector<T>
-      const name = m.name.slice(0, -2)
-      storageVariables.push({
-        name,
-        type: { kind: 'vector', element: { kind: 'plaintext', type: m.value } },
-      })
+    if (m.name.endsWith('__') && m.key.kind === 'primitive' && m.key.primitive === 'u32') {
+      // Possible vector — defer until we've seen all mappings
+      vectorCandidates.set(m.name, m)
       continue
     }
 
     regularMappings.push(m)
+  }
+
+  // Resolve vector candidates — only confirmed if a __len__ mapping was also seen
+  for (const [name, m] of vectorCandidates) {
+    if (lenMappingNames.has(name)) {
+      storageVariables.push({
+        name: name.slice(0, -2),
+        type: { kind: 'vector', element: { kind: 'plaintext', type: m.value } },
+      })
+    } else {
+      // No corresponding __len__ — treat as a regular mapping
+      regularMappings.push(m)
+    }
   }
 
   return { storageVariables, mappings: regularMappings }
