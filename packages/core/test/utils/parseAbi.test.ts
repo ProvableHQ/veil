@@ -1,0 +1,245 @@
+import { describe, it, expect } from 'vitest'
+import { parseAbi } from '../../src/utils/parseAbi.js'
+
+// Fixtures derived from real `leo abi` output on tictactoe.aleo and storage_var.aleo.
+// These cover the main variants you'll encounter in practice.
+
+// ---- tictactoe.aleo ----
+// A simple game contract with structs, a record, mappings, and functions.
+const TICTACTOE_ABI = {
+  program: 'tictactoe.aleo',
+  structs: [
+    {
+      path: ['Row'],
+      fields: [
+        { name: 'c1', ty: { Primitive: { UInt: 'U8' } } },
+        { name: 'c2', ty: { Primitive: { UInt: 'U8' } } },
+        { name: 'c3', ty: { Primitive: { UInt: 'U8' } } },
+      ],
+    },
+    {
+      path: ['Board'],
+      fields: [
+        { name: 'r1', ty: { Struct: { path: ['Row'], program: 'tictactoe.aleo' } } },
+        { name: 'r2', ty: { Struct: { path: ['Row'], program: 'tictactoe.aleo' } } },
+        { name: 'r3', ty: { Struct: { path: ['Row'], program: 'tictactoe.aleo' } } },
+      ],
+    },
+  ],
+  records: [
+    {
+      path: ['BoardState'],
+      fields: [
+        { name: 'player_1', ty: { Primitive: 'Address' }, mode: 'Private' },
+        { name: 'player_2', ty: { Primitive: 'Address' }, mode: 'Private' },
+        { name: 'board',    ty: { Struct: { path: ['Board'], program: 'tictactoe.aleo' } }, mode: 'Private' },
+        { name: 'game_started', ty: { Primitive: 'Boolean' }, mode: 'Private' },
+      ],
+    },
+  ],
+  mappings: [
+    {
+      name: 'boards',
+      key:   { Primitive: 'Address' },
+      value: { Struct: { path: ['Board'], program: 'tictactoe.aleo' } },
+    },
+  ],
+  storage_variables: [],
+  functions: [
+    {
+      name: 'start_game',
+      is_final: false,
+      inputs: [
+        { name: 'player_2', ty: { Plaintext: { Primitive: 'Address' } }, mode: 'Public' },
+      ],
+      outputs: [
+        { ty: { Record: { path: ['BoardState'], program: 'tictactoe.aleo' } }, mode: 'Private' },
+      ],
+    },
+    {
+      name: 'make_move',
+      is_final: true,
+      inputs: [
+        { name: 'board_state', ty: { Record: { path: ['BoardState'], program: 'tictactoe.aleo' } }, mode: 'None' },
+        { name: 'row', ty: { Plaintext: { Primitive: { UInt: 'U8' } } }, mode: 'Public' },
+        { name: 'col', ty: { Plaintext: { Primitive: { UInt: 'U8' } } }, mode: 'Public' },
+      ],
+      outputs: [
+        { ty: { Record: { path: ['BoardState'], program: 'tictactoe.aleo' } }, mode: 'Private' },
+        { ty: 'Final', mode: 'None' },
+      ],
+    },
+  ],
+}
+
+// ---- storage_var.aleo ----
+// Exercises storage variables and the StorageType variants.
+const STORAGE_VAR_ABI = {
+  program: 'storage_var.aleo',
+  structs: [],
+  records: [],
+  mappings: [],
+  storage_variables: [
+    {
+      name: 'counter',
+      ty: { Plaintext: { Primitive: { UInt: 'U32' } } },
+    },
+    {
+      name: 'items',
+      ty: { Vector: { Plaintext: { Primitive: { UInt: 'U64' } } } },
+    },
+  ],
+  functions: [
+    {
+      name: 'increment',
+      is_final: true,
+      inputs: [],
+      outputs: [{ ty: 'Final', mode: 'None' }],
+    },
+  ],
+}
+
+// ---- Tests ----
+
+describe('parseAbi — tictactoe', () => {
+  it('parses program identifier', () => {
+    const abi = parseAbi(TICTACTOE_ABI)
+    expect(abi.program).toBe('tictactoe.aleo')
+  })
+
+  it('parses struct definitions', () => {
+    const abi = parseAbi(TICTACTOE_ABI)
+    expect(abi.structs).toHaveLength(2)
+    expect(abi.structs[0]).toEqual({
+      path: ['Row'],
+      fields: [
+        { name: 'c1', type: { kind: 'primitive', primitive: 'u8' } },
+        { name: 'c2', type: { kind: 'primitive', primitive: 'u8' } },
+        { name: 'c3', type: { kind: 'primitive', primitive: 'u8' } },
+      ],
+    })
+    expect(abi.structs[1]).toEqual({
+      path: ['Board'],
+      fields: [
+        { name: 'r1', type: { kind: 'struct', path: ['Row'], program: 'tictactoe.aleo' } },
+        { name: 'r2', type: { kind: 'struct', path: ['Row'], program: 'tictactoe.aleo' } },
+        { name: 'r3', type: { kind: 'struct', path: ['Row'], program: 'tictactoe.aleo' } },
+      ],
+    })
+  })
+
+  it('parses record definitions', () => {
+    const abi = parseAbi(TICTACTOE_ABI)
+    expect(abi.records).toHaveLength(1)
+    expect(abi.records[0]!.path).toEqual(['BoardState'])
+    expect(abi.records[0]!.fields[0]).toEqual({
+      name: 'player_1',
+      type: { kind: 'primitive', primitive: 'address' },
+      mode: 'private',
+    })
+  })
+
+  it('parses mappings', () => {
+    const abi = parseAbi(TICTACTOE_ABI)
+    expect(abi.mappings).toHaveLength(1)
+    expect(abi.mappings[0]).toEqual({
+      name: 'boards',
+      key:   { kind: 'primitive', primitive: 'address' },
+      value: { kind: 'struct', path: ['Board'], program: 'tictactoe.aleo' },
+    })
+  })
+
+  it('parses a non-final function with plaintext and record I/O', () => {
+    const abi = parseAbi(TICTACTOE_ABI)
+    const fn0 = abi.functions[0]!
+    expect(fn0.name).toBe('start_game')
+    expect(fn0.isFinal).toBe(false)
+    expect(fn0.inputs[0]).toEqual({
+      name: 'player_2',
+      type: { kind: 'plaintext', type: { kind: 'primitive', primitive: 'address' } },
+      mode: 'public',
+    })
+    expect(fn0.outputs[0]).toEqual({
+      type: { kind: 'record', path: ['BoardState'], program: 'tictactoe.aleo' },
+      mode: 'private',
+    })
+  })
+
+  it('parses a final function with a record input and Final output', () => {
+    const abi = parseAbi(TICTACTOE_ABI)
+    const fn1 = abi.functions[1]!
+    expect(fn1.name).toBe('make_move')
+    expect(fn1.isFinal).toBe(true)
+    expect(fn1.inputs[0]).toEqual({
+      name: 'board_state',
+      type: { kind: 'record', path: ['BoardState'], program: 'tictactoe.aleo' },
+      mode: 'none',
+    })
+    expect(fn1.outputs[1]).toEqual({
+      type: { kind: 'final' },
+      mode: 'none',
+    })
+  })
+})
+
+describe('parseAbi — storage_var', () => {
+  it('parses plaintext storage variable', () => {
+    const abi = parseAbi(STORAGE_VAR_ABI)
+    expect(abi.storageVariables[0]).toEqual({
+      name: 'counter',
+      type: { kind: 'plaintext', type: { kind: 'primitive', primitive: 'u32' } },
+    })
+  })
+
+  it('parses vector storage variable', () => {
+    const abi = parseAbi(STORAGE_VAR_ABI)
+    expect(abi.storageVariables[1]).toEqual({
+      name: 'items',
+      type: {
+        kind: 'vector',
+        element: { kind: 'plaintext', type: { kind: 'primitive', primitive: 'u64' } },
+      },
+    })
+  })
+
+  it('parses final-only function', () => {
+    const abi = parseAbi(STORAGE_VAR_ABI)
+    const fn0 = abi.functions[0]!
+    expect(fn0.name).toBe('increment')
+    expect(fn0.isFinal).toBe(true)
+    expect(fn0.inputs).toHaveLength(0)
+    expect(fn0.outputs[0]).toEqual({ type: { kind: 'final' }, mode: 'none' })
+  })
+})
+
+describe('parseAbi — error cases', () => {
+  it('throws on non-object input', () => {
+    expect(() => parseAbi('not an object')).toThrow('Invalid ABI')
+  })
+
+  it('throws on unknown Mode', () => {
+    const bad = {
+      ...STORAGE_VAR_ABI,
+      functions: [{
+        name: 'bad',
+        is_final: false,
+        inputs: [{ name: 'x', ty: { Plaintext: { Primitive: 'Boolean' } }, mode: 'Invalid' }],
+        outputs: [],
+      }],
+    }
+    expect(() => parseAbi(bad)).toThrow('Unknown Mode variant: Invalid')
+  })
+
+  it('throws on unknown FunctionInput variant', () => {
+    const bad = {
+      ...STORAGE_VAR_ABI,
+      functions: [{
+        name: 'bad',
+        is_final: false,
+        inputs: [{ name: 'x', ty: { Unknown: {} }, mode: 'None' }],
+        outputs: [],
+      }],
+    }
+    expect(() => parseAbi(bad)).toThrow('Unknown FunctionInput variant')
+  })
+})

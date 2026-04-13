@@ -24,8 +24,8 @@ describe('parseValue', () => {
     expect(parseValue(addr)).toEqual({ value: addr, type: 'address' })
   })
 
-  it('returns raw string for unrecognized formats', () => {
-    expect(parseValue('unknown')).toEqual({ value: 'unknown', type: 'string' })
+  it('throws on unrecognized formats', () => {
+    expect(() => parseValue('unknown')).toThrow('Cannot parse value: unknown')
   })
 })
 
