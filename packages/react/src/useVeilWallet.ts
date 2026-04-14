@@ -81,9 +81,14 @@ export function useVeilWallet(config?: UseVeilWalletConfig): UseVeilWalletReturn
   const walletClient = useMemo(() => {
     if (!wallet.connected || !wallet.address) return undefined
 
-    const adapter: AleoWalletAdapter = {
+    const adapter: AleoWalletAdapter & {
+      switchNetwork?: (network: string) => Promise<unknown>
+      requestTransactionHistory?: (program: string) => Promise<unknown>
+      network?: string | null
+    } = {
       account: { address: wallet.address },
       connected: wallet.connected,
+      network: wallet.network,
       signMessage: (message: Uint8Array) =>
         wallet.signMessage(message).then((r) => r ?? new Uint8Array()),
       executeTransaction: (options) =>
@@ -94,6 +99,8 @@ export function useVeilWallet(config?: UseVeilWalletConfig): UseVeilWalletReturn
       requestRecords: (program, includePlaintext) =>
         wallet.requestRecords(program, includePlaintext),
       transitionViewKeys: (txId) => wallet.transitionViewKeys(txId),
+      switchNetwork: (network) => wallet.switchNetwork(network as any),
+      requestTransactionHistory: (program) => wallet.requestTransactionHistory(program),
     }
 
     const { account, transport: walletTransport } = fromWalletAdapter(adapter)

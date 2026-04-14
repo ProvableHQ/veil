@@ -6,6 +6,9 @@ import { transfer, type TransferParameters, type TransferReturnType } from '../.
 import { decrypt, type DecryptParameters, type DecryptReturnType } from '../../actions/wallet/decrypt.js'
 import { requestRecords, type RequestRecordsParameters, type RequestRecordsReturnType } from '../../actions/wallet/requestRecords.js'
 import { transactionStatus, type TransactionStatusParameters, type TransactionStatusReturnType } from '../../actions/wallet/transactionStatus.js'
+import { switchChain, type SwitchChainParameters, type SwitchChainReturnType } from '../../actions/wallet/switchChain.js'
+import { requestTransactionHistory, type RequestTransactionHistoryParameters, type RequestTransactionHistoryReturnType } from '../../actions/wallet/requestTransactionHistory.js'
+import { getChainId, type GetChainIdReturnType } from '../../actions/wallet/getChainId.js'
 import type { Client } from '../createClient.js'
 
 export type WalletActions = {
@@ -19,6 +22,13 @@ export type WalletActions = {
   decrypt: (params: DecryptParameters) => Promise<DecryptReturnType>
   requestRecords: (params: RequestRecordsParameters) => Promise<RequestRecordsReturnType>
   transactionStatus: (params: TransactionStatusParameters) => Promise<TransactionStatusReturnType>
+  switchChain: (params: SwitchChainParameters) => Promise<SwitchChainReturnType>
+  /** Alias for switchChain — matches Aleo wallet adapter terminology */
+  switchNetwork: (params: SwitchChainParameters) => Promise<SwitchChainReturnType>
+  requestTransactionHistory: (params: RequestTransactionHistoryParameters) => Promise<RequestTransactionHistoryReturnType>
+  getChainId: () => Promise<GetChainIdReturnType>
+  /** Alias for getChainId — matches Aleo terminology */
+  getNetwork: () => Promise<GetChainIdReturnType>
 }
 
 export function walletActions(client: Client): WalletActions {
@@ -32,5 +42,10 @@ export function walletActions(client: Client): WalletActions {
     decrypt: (params) => decrypt(client, params),
     requestRecords: (params) => requestRecords(client, params),
     transactionStatus: (params) => transactionStatus(client, params),
+    switchChain: (params) => switchChain(client, params),
+    switchNetwork: (params) => switchChain(client, params),
+    requestTransactionHistory: (params) => requestTransactionHistory(client, params),
+    getChainId: () => getChainId(client),
+    getNetwork: () => getChainId(client),
   }
 }

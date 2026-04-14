@@ -55,7 +55,11 @@ const { walletClient } = useVeilWallet()
 | `sendTransaction({ transaction })` | Broadcast a raw transaction |
 | `decrypt({ ciphertext })` | Decrypt a record ciphertext |
 | `requestRecords({ program })` | Fetch records owned by the connected account |
+| `requestTransactionHistory({ program })` | Get transaction history for a program |
 | `transactionStatus({ transactionId })` | Check transaction status |
+| `switchChain({ network })` | Switch the wallet's connected network |
+| `switchNetwork({ network })` | Alias for `switchChain` |
+| `getChainId()` | Get the current network from the connected wallet |
 
 ## Account Types
 
@@ -120,6 +124,14 @@ const txId = await walletClient.writeContract({
 })
 ```
 
+### Get transaction history
+
+```ts
+const history = await walletClient.requestTransactionHistory({
+  program: 'loyalty_token.aleo',
+})
+```
+
 ### Track transaction status
 
 ```ts
@@ -127,4 +139,20 @@ const status = await walletClient.transactionStatus({
   transactionId: txId,
 })
 // { status: 'Accepted', transactionId: 'at1...' }
+```
+
+### Switch network
+
+```ts
+await walletClient.switchChain({ network: 'testnet' })
+
+// or use the alias
+await walletClient.switchNetwork({ network: 'mainnet' })
+```
+
+### Get current network
+
+```ts
+const network = await walletClient.getChainId()
+// 'mainnet'
 ```

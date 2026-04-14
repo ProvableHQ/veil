@@ -36,7 +36,7 @@ export async function deployContract(
       programName: params.program,
       functionName: '__deploy__',
       inputs: [],
-      fee: params.fee,
+      fee: params.fee ?? 0n,
     })
 
     return client.request({

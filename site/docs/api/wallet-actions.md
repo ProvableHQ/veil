@@ -63,6 +63,19 @@ const records = await walletClient.requestRecords({
 **Parameters:** `{ program: string }`
 **Returns:** `unknown[]` (record objects from the wallet)
 
+## requestTransactionHistory
+
+Gets transaction history for a program from the wallet.
+
+```ts
+const history = await walletClient.requestTransactionHistory({
+  program: 'loyalty_token.aleo',
+})
+```
+
+**Parameters:** `{ program: string }`
+**Returns:** `unknown`
+
 ## transactionStatus
 
 Checks the status of a submitted transaction.
@@ -101,6 +114,40 @@ const plaintext = await walletClient.decrypt({
 ```
 
 **Parameters:** `{ ciphertext: string; tpk?: string; programId?: string; functionName?: string }`
+**Returns:** `string`
+
+## switchChain
+
+Switches the wallet's connected network.
+
+```ts
+await walletClient.switchChain({ network: 'testnet' })
+```
+
+**Parameters:** `{ network: 'mainnet' | 'testnet' }`
+**Returns:** `void`
+
+## switchNetwork
+
+Alias for [`switchChain`](#switchchain).
+
+```ts
+await walletClient.switchNetwork({ network: 'mainnet' })
+```
+
+**Parameters:** `{ network: 'mainnet' | 'testnet' }`
+**Returns:** `void`
+
+## getChainId
+
+Returns the current network string from the connected wallet.
+
+```ts
+const network = await walletClient.getChainId()
+// 'mainnet'
+```
+
+**Parameters:** none
 **Returns:** `string`
 
 ## sendTransaction

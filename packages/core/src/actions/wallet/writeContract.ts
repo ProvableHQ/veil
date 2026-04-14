@@ -44,7 +44,7 @@ export async function writeContract(
       programName: params.program,
       functionName: params.function,
       inputs: params.inputs,
-      fee: params.fee,
+      fee: params.fee ?? 0n,
       privateFee: params.privateFee,
     })
 

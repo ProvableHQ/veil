@@ -79,6 +79,15 @@ export interface AleoWalletAdapter {
 
   /** Get transition view keys for a transaction */
   transitionViewKeys(transactionId: string): Promise<string[]>
+
+  /** Switch the connected network (optional — not all adapters support this) */
+  switchNetwork?(network: string): Promise<unknown>
+
+  /** Get transaction history for a program (optional — not all adapters support this) */
+  requestTransactionHistory?(program: string): Promise<unknown>
+
+  /** The current network (optional — used by getChainId) */
+  network?: string | null
 }
 
 /**
@@ -190,6 +199,27 @@ export function transportFromAdapter(adapter: AnyWalletAdapter): Transport<'cust
 
         case 'getTransitionViewKeys': {
           return adapter.transitionViewKeys(p?.id as string)
+        }
+
+        case 'switchNetwork': {
+          if ('switchNetwork' in adapter && typeof adapter.switchNetwork === 'function') {
+            return adapter.switchNetwork(p?.network as any)
+          }
+          throw new Error('Wallet adapter does not support switchNetwork')
+        }
+
+        case 'requestTransactionHistory': {
+          if ('requestTransactionHistory' in adapter && typeof adapter.requestTransactionHistory === 'function') {
+            return adapter.requestTransactionHistory(p?.program as string)
+          }
+          throw new Error('Wallet adapter does not support requestTransactionHistory')
+        }
+
+        case 'getChainId': {
+          if ('network' in adapter) {
+            return (adapter as any).network
+          }
+          throw new Error('Wallet adapter does not expose network/chainId')
         }
 
         default:

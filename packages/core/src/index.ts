@@ -170,6 +170,10 @@ export { signMessage } from './actions/wallet/signMessage.js'
 export { transfer } from './actions/wallet/transfer.js'
 export { decrypt } from './actions/wallet/decrypt.js'
 export { requestRecords } from './actions/wallet/requestRecords.js'
+export { transactionStatus } from './actions/wallet/transactionStatus.js'
+export { switchChain, switchNetwork } from './actions/wallet/switchChain.js'
+export { requestTransactionHistory } from './actions/wallet/requestTransactionHistory.js'
+export { getChainId, getNetwork } from './actions/wallet/getChainId.js'
 
 // Contract
 export { getContract, type ContractInstance } from './contract/getContract.js'
