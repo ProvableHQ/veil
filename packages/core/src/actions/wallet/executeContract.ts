@@ -1,0 +1,80 @@
+import { AccountNotFoundError, ProvingNotConfiguredError } from '../../errors/errors.js'
+import type { Client } from '../../clients/createClient.js'
+import type { RawExecuteResult } from '../../types/proving.js'
+
+export type ExecuteContractParameters = {
+  program: string
+  function: string
+  inputs: string[]
+  fee?: bigint
+  privateFee?: boolean
+  programSource?: string
+  imports?: Record<string, string>
+}
+
+export type ExecuteContractReturnType = RawExecuteResult
+
+/**
+ * Executes a program function end-to-end: build, prove, broadcast, wait for
+ * confirmation, and return raw output strings.
+ *
+ * Behavior by account type:
+ * - Local account, local proving: proves on-device, broadcasts, waits, returns outputs
+ * - Local account, delegated proving: submits to DPS, waits, decrypts outputs
+ * - Local account, fallback: if execute not available, falls back to simulate (no broadcast)
+ * - RPC account: delegates entire flow to the connected wallet
+ */
+export async function executeContract(
+  client: Client,
+  params: ExecuteContractParameters,
+): Promise<ExecuteContractReturnType> {
+  const account = client.account
+  if (!account || !('sign' in account)) {
+    throw new AccountNotFoundError()
+  }
+
+  if (account.type === 'rpc') {
+    // RPC account — wallet handles everything
+    return client.request({
+      method: 'executeTransaction',
+      params: {
+        programName: params.program,
+        functionName: params.function,
+        inputs: params.inputs,
+        fee: params.fee,
+        programSource: params.programSource,
+        imports: params.imports,
+      },
+    }) as Promise<ExecuteContractReturnType>
+  }
+
+  if (account.type === 'local') {
+    if (client.proving?.execute) {
+      return client.proving.execute({
+        programName: params.program,
+        functionName: params.function,
+        inputs: params.inputs,
+        fee: params.fee ?? 0n,
+        privateFee: params.privateFee,
+        programSource: params.programSource,
+        programImports: params.imports,
+      })
+    }
+
+    // Fall back to simulate if execute not available
+    if (client.proving?.simulate) {
+      const result = await client.proving.simulate({
+        programName: params.program,
+        functionName: params.function,
+        inputs: params.inputs,
+        programSource: params.programSource,
+        programImports: params.imports,
+      })
+      return { transactionId: '', outputs: result.outputs }
+    }
+
+    throw new ProvingNotConfiguredError()
+  }
+
+  throw new AccountNotFoundError()
+}

@@ -17,6 +17,10 @@ export type {
 export type {
   ProvingConfig,
   BuildTransactionOptions,
+  SimulateOptions,
+  ExecuteOptions,
+  RawSimulateResult,
+  RawExecuteResult,
 } from './types/proving.js'
 
 export type {
@@ -31,6 +35,10 @@ export type { Program, ProgramFunction, ProgramMapping, MappingValue } from './t
 
 export type { Primitive, Plaintext, PlaintextValue, RecordValue, RecordFieldValue, FutureValue, Literal } from './types/primitives.js'
 export type { ABI, AbiFunction, Input, Output, Mode, FunctionInput, FunctionOutput, StructDef, RecordDef, StructField, RecordField, Mapping, StorageVariable, StorageType } from './types/abi.js'
+export type {
+  ParsedOutput, ParsedRecordOutput, ParsedPlaintextOutput, EncryptedRecordOutput, ParsedFutureOutput,
+  InputValue, TransitionResult, ExecuteResult, SimulateResult,
+} from './types/contract.js'
 
 // Errors
 export {
@@ -47,6 +55,7 @@ export {
 export { isAddress, assertAddress } from './utils/address.js'
 export { creditsToMicrocredits, microcreditsToCredits } from './utils/credits.js'
 export { parseValue, encodeValue, type ParsedValue } from './utils/values.js'
+export { parseRecordPlaintext, parseRecordPlaintextLoose, toPlaintext, encodeInputs } from './utils/records.js'
 export { parsePrimitive, parsePlaintext } from './utils/parsePrimitives.js'
 export { parseAbi } from './utils/parseAbi.js'
 
@@ -88,6 +97,8 @@ export { getRecords } from './actions/public/getRecords.js'
 export { getTransitionViewKeys } from './actions/public/getTransitionViewKeys.js'
 
 // Wallet Actions (standalone)
+export { simulateContract, type SimulateContractParameters, type SimulateContractReturnType } from './actions/wallet/simulateContract.js'
+export { executeContract, type ExecuteContractParameters, type ExecuteContractReturnType } from './actions/wallet/executeContract.js'
 export { writeContract, executeTransaction } from './actions/wallet/writeContract.js'
 export { deployContract } from './actions/wallet/deployContract.js'
 export { sendTransaction } from './actions/wallet/sendTransaction.js'

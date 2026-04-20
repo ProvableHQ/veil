@@ -1,4 +1,6 @@
 import { writeContract, type WriteContractParameters, type WriteContractReturnType } from '../../actions/wallet/writeContract.js'
+import { simulateContract, type SimulateContractParameters, type SimulateContractReturnType } from '../../actions/wallet/simulateContract.js'
+import { executeContract, type ExecuteContractParameters, type ExecuteContractReturnType } from '../../actions/wallet/executeContract.js'
 import { deployContract, type DeployContractParameters, type DeployContractReturnType } from '../../actions/wallet/deployContract.js'
 import { sendTransaction, type SendTransactionParameters, type SendTransactionReturnType } from '../../actions/wallet/sendTransaction.js'
 import { signMessage, type SignMessageParameters, type SignMessageReturnType } from '../../actions/wallet/signMessage.js'
@@ -12,6 +14,10 @@ export type WalletActions = {
   writeContract: (params: WriteContractParameters) => Promise<WriteContractReturnType>
   /** Alias for writeContract — consistent with Aleo wallet adapter terminology */
   executeTransaction: (params: WriteContractParameters) => Promise<WriteContractReturnType>
+  /** Execute locally and return outputs without broadcasting (local accounts only) */
+  simulateContract: (params: SimulateContractParameters) => Promise<SimulateContractReturnType>
+  /** Build, broadcast, wait for confirmation, and return outputs */
+  executeContract: (params: ExecuteContractParameters) => Promise<ExecuteContractReturnType>
   deployContract: (params: DeployContractParameters) => Promise<DeployContractReturnType>
   signMessage: (params: SignMessageParameters) => Promise<SignMessageReturnType>
   transfer: (params: TransferParameters) => Promise<TransferReturnType>
@@ -24,6 +30,8 @@ export function walletActions(client: Client): WalletActions {
     sendTransaction: (params) => sendTransaction(client, params),
     writeContract: (params) => writeContract(client, params),
     executeTransaction: (params) => writeContract(client, params),
+    simulateContract: (params) => simulateContract(client, params),
+    executeContract: (params) => executeContract(client, params),
     deployContract: (params) => deployContract(client, params),
     signMessage: (params) => signMessage(client, params),
     transfer: (params) => transfer(client, params),
