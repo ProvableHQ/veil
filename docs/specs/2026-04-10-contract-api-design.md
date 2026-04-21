@@ -65,6 +65,8 @@ type PlaintextValue = Literal | StructValue | ArrayValue
 
 type RecordValue = {
   owner: Address
+  program: string       // program this record belongs to (e.g. "loyalty_token.aleo")
+  recordName: string    // record type name (e.g. "LoyaltyCard")
   fields: { [name: string]: { value: PlaintextValue; mode: 'public' | 'private' } }
   nonce: string
   toString(): string   // serializes back to "{ owner: aleo1...private, points: 1000u64.private, ... }"
