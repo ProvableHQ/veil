@@ -26,7 +26,11 @@ import { parseValue, encodeValue } from './values.js'
  * // record.fields.points.type === { kind: 'primitive', primitive: 'u64' }
  * ```
  */
-export function parseRecordPlaintext(plaintext: string, recordDef: RecordDef): RecordValue {
+export function parseRecordPlaintext(
+  plaintext: string,
+  recordDef: RecordDef,
+  program: string,
+): RecordValue {
   const rawFields = parseRawFields(plaintext)
 
   // Build a lookup from field name to its Plaintext type from the RecordDef
@@ -59,15 +63,20 @@ export function parseRecordPlaintext(plaintext: string, recordDef: RecordDef): R
   const nonceRaw = rawFields['_nonce'] ?? ''
   const nonce = nonceRaw.replace(/\.public$/, '').trim()
 
-  return { owner, fields, nonce }
+  const recordName = recordDef.path[recordDef.path.length - 1] ?? 'unknown'
+  return { owner, program, recordName, fields, nonce }
 }
 
 /**
  * Parses a record plaintext string without a RecordDef.
  * Fields will have their type inferred from the value suffix (e.g. "1000u64" → u64).
- * Less precise than parseRecordPlaintext(plaintext, recordDef) but works when no ABI is available.
+ * Less precise than parseRecordPlaintext(plaintext, recordDef, program) but works when no ABI is available.
  */
-export function parseRecordPlaintextLoose(plaintext: string): RecordValue {
+export function parseRecordPlaintextLoose(
+  plaintext: string,
+  program = 'unknown',
+  recordName = 'unknown',
+): RecordValue {
   const rawFields = parseRawFields(plaintext)
 
   const fields: { [name: string]: RecordFieldValue } = {}
@@ -94,7 +103,7 @@ export function parseRecordPlaintextLoose(plaintext: string): RecordValue {
   const nonceRaw = rawFields['_nonce'] ?? ''
   const nonce = nonceRaw.replace(/\.public$/, '').trim()
 
-  return { owner, fields, nonce }
+  return { owner, program, recordName, fields, nonce }
 }
 
 // ── toString ───────────────────────────────────────────────────────

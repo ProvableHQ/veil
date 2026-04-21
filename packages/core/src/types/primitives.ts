@@ -72,6 +72,8 @@ export type RecordFieldValue = {
 
 export type RecordValue = {
   owner: Address
+  program: string       // program this record belongs to (e.g. "loyalty_token.aleo")
+  recordName: string    // record type name (e.g. "LoyaltyCard")
   fields: { [name: string]: RecordFieldValue }
   nonce: string
 }
