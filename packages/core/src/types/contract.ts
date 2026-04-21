@@ -2,7 +2,6 @@
 // These describe the shapes that flow through the contract API at runtime.
 
 import type { RecordValue, PlaintextValue, FutureValue, Plaintext } from './primitives.js'
-import type { ABI } from './abi.js'
 
 // ── Parsed output types ───────────────────────────────────────────────
 
@@ -59,7 +58,7 @@ export type TransitionResult = {
 export type ExecuteResult = {
   transactionId: string
   transitions: TransitionResult[]
-  /** Flattened outputs across all transitions (convenience) */
+  /** Top-level function's outputs (what the called function returns per its ABI) */
   outputs: ParsedOutput[]
 }
 

@@ -13,7 +13,7 @@ import { parseValue, encodeValue } from './values.js'
  * Parses an Aleo record plaintext string into a typed RecordValue.
  *
  * Requires the RecordDef from the ABI so that each field's Aleo type
- * is embedded in the resulting RecordFieldValue (enabling toPlaintext()
+ * is embedded in the resulting RecordFieldValue (enabling toString()
  * to serialize back without needing the RecordDef again).
  *
  * @example
@@ -97,7 +97,7 @@ export function parseRecordPlaintextLoose(plaintext: string): RecordValue {
   return { owner, fields, nonce }
 }
 
-// ── toPlaintext ───────────────────────────────────────────────────────
+// ── toString ───────────────────────────────────────────────────────
 
 /**
  * Serializes a RecordValue back to Aleo record plaintext format.
@@ -108,11 +108,11 @@ export function parseRecordPlaintextLoose(plaintext: string): RecordValue {
  *
  * @example
  * ```ts
- * const plaintext = toPlaintext(record)
+ * const plaintext = toString(record)
  * // "{\n  owner: aleo1abc.private,\n  points: 1000u64.private,\n  _nonce: 123group.public\n}"
  * ```
  */
-export function toPlaintext(record: RecordValue): string {
+export function toString(record: RecordValue): string {
   const lines: string[] = []
 
   // Owner is always address.private
@@ -140,7 +140,7 @@ export function toPlaintext(record: RecordValue): string {
  *   encoded (contain type suffix) pass through unchanged.
  * - BigInts/numbers are encoded with the ABI's type suffix.
  * - Booleans become "true"/"false".
- * - RecordValue objects are serialized via toPlaintext().
+ * - RecordValue objects are serialized via toString().
  */
 export function encodeInputs(
   values: (bigint | number | boolean | string | RecordValue)[],
@@ -149,7 +149,7 @@ export function encodeInputs(
   return values.map((value, i) => {
     // RecordValue — serialize to plaintext
     if (typeof value === 'object' && value !== null && 'owner' in value && 'fields' in value) {
-      return toPlaintext(value as RecordValue)
+      return toString(value as RecordValue)
     }
 
     // Already a string — pass through (pre-encoded or record plaintext)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseRecordPlaintext, parseRecordPlaintextLoose, toPlaintext, encodeInputs } from '../../src/utils/records.js'
+import { parseRecordPlaintext, parseRecordPlaintextLoose, toString, encodeInputs } from '../../src/utils/records.js'
 import type { RecordDef } from '../../src/types/abi.js'
 import type { RecordValue, Plaintext } from '../../src/types/primitives.js'
 
@@ -68,9 +68,9 @@ describe('parseRecordPlaintextLoose', () => {
   })
 })
 
-// ── toPlaintext ───────────────────────────────────────────────────────
+// ── toString ───────────────────────────────────────────────────────
 
-describe('toPlaintext', () => {
+describe('toString', () => {
   it('serializes a RecordValue back to plaintext format', () => {
     const record: RecordValue = {
       owner: 'aleo1abc',
@@ -81,7 +81,7 @@ describe('toPlaintext', () => {
       nonce: '789group',
     }
 
-    const result = toPlaintext(record)
+    const result = toString(record)
 
     expect(result).toContain('owner: aleo1abc.private')
     expect(result).toContain('points: 1000u64.private')
@@ -89,9 +89,9 @@ describe('toPlaintext', () => {
     expect(result).toContain('_nonce: 789group.public')
   })
 
-  it('round-trips: parseRecordPlaintext → toPlaintext produces equivalent output', () => {
+  it('round-trips: parseRecordPlaintext → toString produces equivalent output', () => {
     const parsed = parseRecordPlaintext(SAMPLE_PLAINTEXT, loyaltyCardDef)
-    const serialized = toPlaintext(parsed)
+    const serialized = toString(parsed)
 
     expect(serialized).toContain('owner: aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px.private')
     expect(serialized).toContain('card_id: 123field.private')
@@ -144,14 +144,14 @@ describe('RecordFieldValue.type proves necessary for serialization', () => {
       type: { kind: 'primitive', primitive: 'field' },
     }
 
-    // Same runtime value, but toPlaintext produces different results
+    // Same runtime value, but toString produces different results
     const recordU64: RecordValue = { owner: 'aleo1x', fields: { val: fieldU64 }, nonce: '0group' }
     const recordU128: RecordValue = { owner: 'aleo1x', fields: { val: fieldU128 }, nonce: '0group' }
     const recordField: RecordValue = { owner: 'aleo1x', fields: { val: fieldField }, nonce: '0group' }
 
-    expect(toPlaintext(recordU64)).toContain('val: 1000u64.private')
-    expect(toPlaintext(recordU128)).toContain('val: 1000u128.private')
-    expect(toPlaintext(recordField)).toContain('val: 1000field.private')
+    expect(toString(recordU64)).toContain('val: 1000u64.private')
+    expect(toString(recordU128)).toContain('val: 1000u128.private')
+    expect(toString(recordField)).toContain('val: 1000field.private')
   })
 })
 
@@ -196,7 +196,7 @@ describe('encodeInputs', () => {
     expect(encoded[1]).toBe('100u64')
   })
 
-  it('serializes RecordValue inputs via toPlaintext', () => {
+  it('serializes RecordValue inputs via toString', () => {
     const record: RecordValue = {
       owner: 'aleo1abc',
       fields: {
