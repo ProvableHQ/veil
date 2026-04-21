@@ -26,12 +26,19 @@ const client = createWalletClient({
 
 ```ts
 import { createWalletClient, http } from '@veil/core'
-import { privateKeyToAccount, createProvingConfig } from '@veil/provable'
+import {
+  privateKeyToAccount,
+  createProvingConfig,
+  createLocalScanner,
+} from '@veil/provable'
 
 const client = createWalletClient({
   account: privateKeyToAccount('APrivateKey1...'),
   transport: http('https://api.provable.com/v2', { network: 'testnet' }),
   proving: createProvingConfig({ mode: 'delegated' }),
+  recordProvider: createLocalScanner({
+    url: 'https://api.provable.com/v2',
+  }),
 })
 ```
 
@@ -54,7 +61,7 @@ const { walletClient } = useVeilWallet()
 | `signMessage({ message })` | Sign an arbitrary message |
 | `sendTransaction({ transaction })` | Broadcast a raw transaction |
 | `decrypt({ ciphertext })` | Decrypt a record ciphertext |
-| `requestRecords({ program })` | Fetch records owned by the connected account |
+| `requestRecords({ program })` | Fetch records owned by the connected account ([routing details](#requestrecords-routing)) |
 | `requestTransactionHistory({ program })` | Get transaction history for a program |
 | `transactionStatus({ transactionId })` | Check transaction status |
 | `switchChain({ network })` | Switch the wallet's connected network |
@@ -121,6 +128,44 @@ const txId = await walletClient.writeContract({
   program: 'loyalty_token.aleo',
   function: 'add_points',
   inputs: [card.recordPlaintext, '100u64'],
+})
+```
+
+## `requestRecords` Routing
+
+How `requestRecords` resolves depends on account type:
+
+| Account type | Source | Config required |
+|---|---|---|
+| RPC (wallet) | Wallet adapter transport | None |
+| Local (SDK) | `recordProvider` in wallet client config | `recordProvider` |
+
+**RPC account** — The wallet handles record scanning internally. No extra config.
+
+**Local account** — You must supply a `recordProvider`. Without one, `requestRecords` throws.
+
+```ts
+import { createLocalScanner, createRemoteScanner } from '@veil/provable'
+
+// Option 1: Local scanner — scans blocks + decrypts locally
+const walletClient = createWalletClient({
+  account: privateKeyToAccount('APrivateKey1...'),
+  transport,
+  proving: createProvingConfig({ mode: 'delegated' }),
+  recordProvider: createLocalScanner({
+    url: 'https://api.provable.com/v2',
+  }),
+})
+
+// Option 2: Remote scanner — uses Record Scanning Service (RSS)
+const walletClient = createWalletClient({
+  account: privateKeyToAccount('APrivateKey1...'),
+  transport,
+  proving: createProvingConfig({ mode: 'delegated' }),
+  recordProvider: createRemoteScanner({
+    url: 'https://rss.provable.com',
+    consumerId: 'my-app',
+  }),
 })
 ```
 

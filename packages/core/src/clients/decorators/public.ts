@@ -12,7 +12,6 @@ import {
   type GetProgramParameters,
   type GetProgramReturnType,
 } from '../../actions/public/getCode.js'
-import { getRecords, type GetRecordsParameters, type GetRecordsReturnType } from '../../actions/public/getRecords.js'
 import { getTransitionViewKeys, type GetTransitionViewKeysParameters, type GetTransitionViewKeysReturnType } from '../../actions/public/getTransitionViewKeys.js'
 import { getBlockHash, type GetBlockHashReturnType } from '../../actions/public/getBlockHash.js'
 import { getBlockTransactions, type GetBlockTransactionsParameters, type GetBlockTransactionsReturnType } from '../../actions/public/getBlockTransactions.js'
@@ -70,7 +69,6 @@ export type PublicActions = {
   readContract: (params: ReadContractParameters) => Promise<ReadContractReturnType>
   getCode: (params: GetCodeParameters) => Promise<GetCodeReturnType>
   getProgram: (params: GetProgramParameters) => Promise<GetProgramReturnType>
-  getRecords: (params: GetRecordsParameters) => Promise<GetRecordsReturnType>
   getTransitionViewKeys: (params: GetTransitionViewKeysParameters) => Promise<GetTransitionViewKeysReturnType>
   getBlockHash: () => Promise<GetBlockHashReturnType>
   getBlockTransactions: (params: GetBlockTransactionsParameters) => Promise<GetBlockTransactionsReturnType>
@@ -129,7 +127,6 @@ export function publicActions(client: Client): PublicActions {
     readContract: (params) => readContract(client, params),
     getCode: (params) => getCode(client, params),
     getProgram: (params) => getProgram(client, params),
-    getRecords: (params) => getRecords(client, params),
     getTransitionViewKeys: (params) => getTransitionViewKeys(client, params),
     getBlockHash: () => getBlockHash(client),
     getBlockTransactions: (params) => getBlockTransactions(client, params),

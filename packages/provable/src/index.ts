@@ -28,10 +28,11 @@ import {
   AleoNetworkClient,
   AleoKeyProvider,
   NetworkRecordProvider,
+  RecordScanner,
 } from '@provablehq/sdk'
 import type { LocalAccount } from '@veil/core'
 import type { ProvingConfig, BuildTransactionOptions } from '@veil/core'
-import type { RecordsConfig, RecordSearchParams, AleoRecord } from '@veil/core'
+import type { OwnedRecord, RecordProvider, StandaloneRecordScanner, RequestRecordsParameters } from '@veil/core'
 import {
   createPublicClient,
   createWalletClient,
@@ -162,69 +163,149 @@ export function createNetworkClient(url: string): AleoNetworkClient {
   return new AleoNetworkClient(url)
 }
 
+// ---------------------------------------------------------------------------
+// Record scanner factories
+// ---------------------------------------------------------------------------
+
+function mapSdkRecords(records: any[], program: string, unspent: boolean): OwnedRecord[] {
+  return records.map((record) => ({
+    programName: record.program_name ?? program,
+    tag: '',
+    recordName: undefined,
+    spent: !unspent,
+    owner: record.owner,
+    recordPlaintext: record.record_plaintext ?? '',
+    recordCiphertext: record.record_ciphertext,
+    transactionId: record.transaction_id,
+    transitionId: record.transition_id,
+  }))
+}
+
 /**
- * Creates a RecordsConfig backed by @provablehq/sdk's NetworkRecordProvider.
+ * Creates a local record scanner backed by @provablehq/sdk's NetworkRecordProvider.
  *
- * The returned config provides a `getRecords` function that scans the network
- * for records owned by the given account. This plugs directly into
- * createWalletClient({ records: ... }) or createPublicClient({ records: ... }).
+ * Used with LocalWalletClientConfig. The scanner manages the active account
+ * internally — setAccount() is called by createWalletClient on initialization
+ * and can be called again on account switch.
  */
-export function createRecordsConfig(options: {
-  networkUrl: string
-  account: LocalAccount<'privateKey'>
-}): RecordsConfig {
-  const sdkAccount = new Account({ privateKey: options.account.privateKey })
-  const networkClient = new AleoNetworkClient(options.networkUrl)
-  const recordProvider = new NetworkRecordProvider(sdkAccount, networkClient)
+export function createLocalScanner(options: {
+  /** Node URL to fetch encrypted records from */
+  url: string
+}): RecordProvider {
+  let sdkAccount: InstanceType<typeof Account> | undefined
 
   return {
-    getRecords: async (params: RecordSearchParams): Promise<AleoRecord[]> => {
+    setAccount: (account: { viewKey: string }) => {
+      // Create a full SDK account for the NetworkRecordProvider
+      // The SDK derives what it needs from the view key internally
+      const viewKey = ViewKey.from_string(account.viewKey)
+      sdkAccount = new Account({ viewKey: viewKey.to_string() })
+    },
+
+    requestRecords: async (params: RequestRecordsParameters): Promise<OwnedRecord[]> => {
+      if (!sdkAccount) {
+        throw new Error('No active account set on record scanner. Call setAccount() first.')
+      }
+
+      const networkClient = new AleoNetworkClient(options.url)
+      const recordProvider = new NetworkRecordProvider(sdkAccount, networkClient)
+
+      const unspent = params.statusFilter !== 'spent'
       const ownedRecords = await recordProvider.findRecords({
-        unspent: params.unspent ?? true,
-        programName: params.programId,
+        unspent,
+        programName: params.program,
       })
 
-      return ownedRecords.map((record) => ({
-        owner: record.owner ?? '',
-        data: record.record_plaintext
-          ? parseRecordPlaintext(record.record_plaintext)
-          : {},
-        nonce: extractNonce(record.record_plaintext),
-        programId: record.program_name ?? params.programId,
-        plaintext: record.record_plaintext ?? '',
-      }))
+      return mapSdkRecords(ownedRecords, params.program, unspent)
     },
   }
 }
 
 /**
- * Parse an Aleo record plaintext string into a key-value data object.
- * Format: "{ key1: value1.private, key2: value2.public }"
+ * Creates a remote record scanner backed by Provable's RSS (Record Scanning Service).
+ *
+ * Used with LocalWalletClientConfig. Uses the SDK's RecordScanner class which
+ * handles UUID derivation from the view key, registration, and record fetching.
  */
-function parseRecordPlaintext(plaintext: string): Record<string, unknown> {
-  const data: Record<string, unknown> = {}
-  // Strip outer braces and split on commas
-  const inner = plaintext.replace(/^\{|\}$/g, '').trim()
-  const pairs = inner.split(',')
-  for (const pair of pairs) {
-    const colonIdx = pair.indexOf(':')
-    if (colonIdx === -1) continue
-    const key = pair.slice(0, colonIdx).trim()
-    const value = pair.slice(colonIdx + 1).trim()
-    // Skip internal fields like _nonce and _version
-    if (key.startsWith('_')) continue
-    data[key] = value
+export function createRemoteScanner(options: {
+  /** RSS endpoint URL */
+  url: string
+  /** Consumer ID for RSS authentication */
+  consumerId: string
+}): RecordProvider {
+  let scanner: InstanceType<typeof RecordScanner> | undefined
+
+  return {
+    setAccount: (account: { viewKey: string }) => {
+      const viewKey = ViewKey.from_string(account.viewKey)
+      scanner = new RecordScanner({
+        url: options.url,
+        consumerId: options.consumerId,
+        viewKeys: [viewKey],
+        decryptEnabled: true,
+        autoReRegister: true,
+      })
+    },
+
+    requestRecords: async (params: RequestRecordsParameters): Promise<OwnedRecord[]> => {
+      if (!scanner) {
+        throw new Error('No active account set on record scanner. Call setAccount() first.')
+      }
+
+      const records = await scanner.owned({
+        unspent: params.statusFilter !== 'spent',
+        filter: {
+          programs: [params.program],
+        },
+      })
+
+      return (records ?? []) as OwnedRecord[]
+    },
   }
-  return data
 }
 
 /**
- * Extract the nonce from an Aleo record plaintext string.
+ * Creates a standalone record scanner with an explicit view key.
+ *
+ * For view-only use cases (dashboards, auditing) outside a wallet client.
+ * NOT pluggable into a wallet client — use createLocalScanner or
+ * createRemoteScanner for that.
+ *
+ * Can be used with the `withRecords` extension:
+ * ```ts
+ * const client = createPublicClient({ transport })
+ *   .extend(withRecords({ scanner: createStandaloneScanner({ ... }) }))
+ * ```
  */
-function extractNonce(plaintext: string | undefined): string {
-  if (!plaintext) return ''
-  const match = plaintext.match(/_nonce:\s*(\S+)/)
-  return match?.[1] ?? ''
+export function createStandaloneScanner(options: {
+  /** RSS endpoint URL */
+  url: string
+  /** Consumer ID for RSS authentication */
+  consumerId: string
+  /** View key for record scanning */
+  viewKey: string
+}): StandaloneRecordScanner {
+  const viewKey = ViewKey.from_string(options.viewKey)
+  const scanner = new RecordScanner({
+    url: options.url,
+    consumerId: options.consumerId,
+    viewKeys: [viewKey],
+    decryptEnabled: true,
+    autoReRegister: true,
+  })
+
+  return {
+    requestRecords: async (params: RequestRecordsParameters): Promise<OwnedRecord[]> => {
+      const records = await scanner.owned({
+        unspent: params.statusFilter !== 'spent',
+        filter: {
+          programs: [params.program],
+        },
+      })
+
+      return (records ?? []) as OwnedRecord[]
+    },
+  }
 }
 
 /**
@@ -257,18 +338,12 @@ export function createAleoClient(options: {
     account,
   })
 
-  const records = createRecordsConfig({
-    networkUrl: options.networkUrl,
-    account,
-  })
-
   const publicClient = createPublicClient({ transport })
 
   const walletClient = createWalletClient({
     account,
     transport,
     proving,
-    records,
   })
 
   return { publicClient, walletClient, account }

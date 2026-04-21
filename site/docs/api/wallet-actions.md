@@ -61,7 +61,14 @@ const records = await walletClient.requestRecords({
 ```
 
 **Parameters:** `{ program: string }`
-**Returns:** `unknown[]` (record objects from the wallet)
+**Returns:** `OwnedRecord[]`
+
+**Routing by account type:**
+
+- **RPC account** (wallet adapter) — delegates to the wallet adapter transport. No extra config.
+- **Local account** (SDK) — delegates to the `recordProvider` set in wallet client config. Throws if no `recordProvider` is configured.
+
+See [Working with Records](/guides/working-with-records) for scanner setup.
 
 ## requestTransactionHistory
 

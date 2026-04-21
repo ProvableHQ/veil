@@ -20,9 +20,15 @@ export type {
 } from './types/proving.js'
 
 export type {
-  RecordsConfig,
-  RecordSearchParams,
-  AleoRecord,
+  OwnedRecord,
+  OwnedRecordEncrypted,
+  RecordStatusFilter,
+  RequestRecordsParameters,
+  RecordProvider,
+  StandaloneRecordScanner,
+  ResponseFilter,
+  RecordFilter,
+  OwnedRecordsRequest,
 } from './types/records.js'
 
 export type {
@@ -114,7 +120,6 @@ export { getTransactionByTransition } from './actions/public/getTransactionByTra
 export { getBalance } from './actions/public/getBalance.js'
 export { readContract } from './actions/public/readContract.js'
 export { getCode, getProgram } from './actions/public/getCode.js'
-export { getRecords } from './actions/public/getRecords.js'
 export { getTransitionViewKeys } from './actions/public/getTransitionViewKeys.js'
 export { getBlockHash } from './actions/public/getBlockHash.js'
 export { getBlockTransactions } from './actions/public/getBlockTransactions.js'
@@ -174,6 +179,9 @@ export { transactionStatus } from './actions/wallet/transactionStatus.js'
 export { switchChain, switchNetwork } from './actions/wallet/switchChain.js'
 export { requestTransactionHistory } from './actions/wallet/requestTransactionHistory.js'
 export { getChainId, getNetwork } from './actions/wallet/getChainId.js'
+
+// Extensions
+export { withRecords } from './extensions/withRecords.js'
 
 // Contract
 export { getContract, type ContractInstance } from './contract/getContract.js'

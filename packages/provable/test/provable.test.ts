@@ -5,7 +5,9 @@ import {
   verifySignature,
   createProvingConfig,
   createNetworkClient,
-  createRecordsConfig,
+  createLocalScanner,
+  createRemoteScanner,
+  createStandaloneScanner,
   createAleoClient,
 } from '../src/index.js'
 
@@ -161,35 +163,40 @@ describe('@veil/provable', () => {
     })
   })
 
-  describe('createRecordsConfig', () => {
-    it('returns a config with getRecords function', () => {
-      const account = generateAccount()
-      const config = createRecordsConfig({
-        networkUrl: 'https://api.provable.com/v2',
-        account,
+  describe('createLocalScanner', () => {
+    it('returns a RecordProvider with requestRecords function', () => {
+      const scanner = createLocalScanner({
+        url: 'https://api.provable.com/v2',
       })
 
-      expect(config).toBeDefined()
-      expect('getRecords' in config).toBe(true)
-      if ('getRecords' in config) {
-        expect(config.getRecords).toBeTypeOf('function')
-      }
+      expect(scanner).toBeDefined()
+      expect(scanner.requestRecords).toBeTypeOf('function')
     })
+  })
 
-    it('getRecords returns AleoRecord array shape', async () => {
-      const account = generateAccount()
-      const config = createRecordsConfig({
-        networkUrl: 'https://api.provable.com/v2',
-        account,
+  describe('createRemoteScanner', () => {
+    it('returns a RecordProvider with requestRecords function', () => {
+      const scanner = createRemoteScanner({
+        url: 'https://rss.provable.com',
+        consumerId: 'test-consumer',
       })
 
-      // Mock the internal NetworkRecordProvider.findRecords to avoid network calls
-      // We test the mapping logic by verifying it doesn't throw with empty results
-      if ('getRecords' in config) {
-        // The SDK will try to hit the network and fail in test,
-        // but we can verify the function exists and has the right shape
-        expect(config.getRecords).toBeTypeOf('function')
-      }
+      expect(scanner).toBeDefined()
+      expect(scanner.requestRecords).toBeTypeOf('function')
+    })
+  })
+
+  describe('createStandaloneScanner', () => {
+    it('returns a StandaloneRecordScanner with requestRecords function', () => {
+      const account = generateAccount()
+      const scanner = createStandaloneScanner({
+        url: 'https://rss.provable.com',
+        consumerId: 'test-consumer',
+        viewKey: account.viewKey!,
+      })
+
+      expect(scanner).toBeDefined()
+      expect(scanner.requestRecords).toBeTypeOf('function')
     })
   })
 

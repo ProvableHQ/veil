@@ -191,7 +191,10 @@ export function transportFromAdapter(adapter: AnyWalletAdapter): Transport<'cust
           )
 
         case 'requestRecords':
-          return adapter.requestRecords(p?.program as string, true)
+          return adapter.requestRecords(
+            p?.program as string,
+            (p?.includePlaintext as boolean) ?? true,
+          )
 
         case 'transactionStatus': {
           return adapter.transactionStatus(p?.transactionId as string)

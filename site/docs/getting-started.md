@@ -85,7 +85,11 @@ Use `@veil/provable` for local key management without a browser wallet.
 
 ```ts
 import { createPublicClient, createWalletClient, http } from '@veil/core'
-import { privateKeyToAccount, createProvingConfig } from '@veil/provable'
+import {
+  privateKeyToAccount,
+  createProvingConfig,
+  createLocalScanner,
+} from '@veil/provable'
 
 const transport = http('https://api.provable.com/v2', { network: 'testnet' })
 
@@ -95,11 +99,14 @@ const publicClient = createPublicClient({ transport })
 // Local account from private key
 const account = privateKeyToAccount('APrivateKey1...')
 
-// Wallet client with local proving
+// Wallet client with local proving + record scanning
 const walletClient = createWalletClient({
   account,
   transport,
   proving: createProvingConfig({ mode: 'delegated' }),
+  recordProvider: createLocalScanner({
+    url: 'https://api.provable.com/v2',
+  }),
 })
 
 // Same interface as the React version
@@ -107,6 +114,11 @@ const txId = await walletClient.writeContract({
   program: 'my_program.aleo',
   function: 'my_function',
   inputs: ['arg1', 'arg2'],
+})
+
+// Fetch records (uses the configured recordProvider)
+const records = await walletClient.requestRecords({
+  program: 'my_program.aleo',
 })
 ```
 
