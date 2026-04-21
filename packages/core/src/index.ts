@@ -98,8 +98,8 @@ export { getTransitionViewKeys } from './actions/public/getTransitionViewKeys.js
 
 // Wallet Actions (standalone)
 export { simulateContract, type SimulateContractParameters, type SimulateContractReturnType } from './actions/wallet/simulateContract.js'
-export { executeContract, type ExecuteContractParameters, type ExecuteContractReturnType } from './actions/wallet/executeContract.js'
-export { writeContract, executeTransaction } from './actions/wallet/writeContract.js'
+export { executeContract as executeTransaction, type ExecuteContractParameters, type ExecuteContractReturnType } from './actions/wallet/executeContract.js'
+export { writeContract } from './actions/wallet/writeContract.js'
 export { deployContract } from './actions/wallet/deployContract.js'
 export { sendTransaction } from './actions/wallet/sendTransaction.js'
 export { signMessage } from './actions/wallet/signMessage.js'
