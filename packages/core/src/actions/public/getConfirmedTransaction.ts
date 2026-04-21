@@ -1,7 +1,8 @@
 import type { Client } from '../../clients/createClient.js'
+import type { ConfirmedTransaction } from '../../types/block.js'
 
 export type GetConfirmedTransactionParameters = { id: string }
-export type GetConfirmedTransactionReturnType = unknown
+export type GetConfirmedTransactionReturnType = ConfirmedTransaction
 
 export async function getConfirmedTransaction(
   client: Client,
@@ -10,5 +11,5 @@ export async function getConfirmedTransaction(
   return client.request({
     method: 'getConfirmedTransaction',
     params: { id: params.id },
-  })
+  }) as Promise<GetConfirmedTransactionReturnType>
 }

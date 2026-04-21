@@ -1,7 +1,9 @@
 import type { Client } from '../../clients/createClient.js'
+import type { BlockSummary } from '../../types/network.js'
 
-export type GetBlockSummaryReturnType = unknown
+/** Array of recent block summaries, newest first. */
+export type GetBlockSummaryReturnType = BlockSummary[]
 
 export async function getBlockSummary(client: Client): Promise<GetBlockSummaryReturnType> {
-  return client.request({ method: 'getBlockSummary' })
+  return client.request({ method: 'getBlockSummary' }) as Promise<GetBlockSummaryReturnType>
 }

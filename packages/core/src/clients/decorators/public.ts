@@ -3,8 +3,14 @@ import { getBlock, type GetBlockParameters, type GetBlockReturnType } from '../.
 import { getTransaction, type GetTransactionParameters, type GetTransactionReturnType } from '../../actions/public/getTransaction.js'
 import { getBalance, type GetBalanceParameters, type GetBalanceReturnType } from '../../actions/public/getBalance.js'
 import { readContract, type ReadContractParameters, type ReadContractReturnType } from '../../actions/public/readContract.js'
-import { getCode, type GetCodeParameters, type GetCodeReturnType } from '../../actions/public/getCode.js'
-import { estimateGas, type EstimateGasParameters, type EstimateGasReturnType } from '../../actions/public/estimateGas.js'
+import {
+  getCode,
+  type GetCodeParameters,
+  type GetCodeReturnType,
+  getProgram,
+  type GetProgramParameters,
+  type GetProgramReturnType,
+} from '../../actions/public/getCode.js'
 import { getRecords, type GetRecordsParameters, type GetRecordsReturnType } from '../../actions/public/getRecords.js'
 import { getTransitionViewKeys, type GetTransitionViewKeysParameters, type GetTransitionViewKeysReturnType } from '../../actions/public/getTransitionViewKeys.js'
 import { getBlockHash, type GetBlockHashReturnType } from '../../actions/public/getBlockHash.js'
@@ -45,7 +51,7 @@ export type PublicActions = {
   getBalance: (params: GetBalanceParameters) => Promise<GetBalanceReturnType>
   readContract: (params: ReadContractParameters) => Promise<ReadContractReturnType>
   getCode: (params: GetCodeParameters) => Promise<GetCodeReturnType>
-  estimateGas: (params: EstimateGasParameters) => Promise<EstimateGasReturnType>
+  getProgram: (params: GetProgramParameters) => Promise<GetProgramReturnType>
   getRecords: (params: GetRecordsParameters) => Promise<GetRecordsReturnType>
   getTransitionViewKeys: (params: GetTransitionViewKeysParameters) => Promise<GetTransitionViewKeysReturnType>
   getBlockHash: () => Promise<GetBlockHashReturnType>
@@ -87,7 +93,7 @@ export function publicActions(client: Client): PublicActions {
     getBalance: (params) => getBalance(client, params),
     readContract: (params) => readContract(client, params),
     getCode: (params) => getCode(client, params),
-    estimateGas: (params) => estimateGas(client, params),
+    getProgram: (params) => getProgram(client, params),
     getRecords: (params) => getRecords(client, params),
     getTransitionViewKeys: (params) => getTransitionViewKeys(client, params),
     getBlockHash: () => getBlockHash(client),

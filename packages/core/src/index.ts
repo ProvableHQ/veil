@@ -25,9 +25,44 @@ export type {
   AleoRecord,
 } from './types/records.js'
 
-export type { Block, ConfirmedTransaction } from './types/block.js'
-export type { Transaction, Transition } from './types/transaction.js'
+export type {
+  Block,
+  Header,
+  Metadata,
+  Ratification,
+  Solutions,
+  Solution,
+  PartialSolution,
+  Finalize,
+  ConfirmedTransaction,
+} from './types/block.js'
+export type {
+  Transaction,
+  Transition,
+  Input,
+  Output,
+  Execution,
+  FeeExecution,
+  Deployment,
+  VerifyingKey,
+  Owner,
+} from './types/transaction.js'
 export type { Program, ProgramFunction, ProgramMapping, MappingValue } from './types/program.js'
+export type {
+  BlockSummary,
+  TransactionSummary,
+  TransitionSummary,
+  Committee,
+  CommitteeMember,
+  StakingEarnings,
+  TransactionMetricPoint,
+  ProgramMetricPoint,
+  ValidatorApy,
+  TvlEntry,
+  Pagination,
+  TokenInfo,
+  TokenPage,
+} from './types/network.js'
 
 // Errors
 export {
@@ -77,8 +112,7 @@ export { getBlock } from './actions/public/getBlock.js'
 export { getTransaction } from './actions/public/getTransaction.js'
 export { getBalance } from './actions/public/getBalance.js'
 export { readContract } from './actions/public/readContract.js'
-export { getCode } from './actions/public/getCode.js'
-export { estimateGas } from './actions/public/estimateGas.js'
+export { getCode, getProgram } from './actions/public/getCode.js'
 export { getRecords } from './actions/public/getRecords.js'
 export { getTransitionViewKeys } from './actions/public/getTransitionViewKeys.js'
 export { getBlockHash } from './actions/public/getBlockHash.js'
