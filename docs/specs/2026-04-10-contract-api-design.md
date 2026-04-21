@@ -67,7 +67,7 @@ type RecordValue = {
   owner: Address
   fields: { [name: string]: { value: PlaintextValue; mode: 'public' | 'private' } }
   nonce: string
-  toPlaintext(): string   // serializes back to "{ owner: aleo1...private, points: 1000u64.private, ... }"
+  toString(): string   // serializes back to "{ owner: aleo1...private, points: 1000u64.private, ... }"
 }
 
 type FutureValue = {
@@ -254,40 +254,28 @@ type EncryptedRecord = {
 }
 ```
 
-The top-level `outputs` helper flattens the common case:
+`result.outputs` returns the **top-level function's** outputs (what the called function declared in its ABI). `result.transitions` gives the full call chain when you need to trace internal cross-program calls.
 
 ```ts
-const result = await contract.execute.mint_card({ inputs: [...] })
-result.transitions[0].outputs   // outputs from this specific transition
-result.outputs                  // flattened across all transitions (convenience)
+const result = await contract.execute.redeem_points_for_voucher({ inputs: [...] })
+result.outputs                  // outputs of redeem_points_for_voucher specifically (card + voucher)
+result.transitions              // full list: [spend_points transition, redeem_points_for_voucher transition]
+result.transitions[0].outputs   // outputs from the internal spend_points call
 ```
 
 ### Decryption policy
 
-Not every record can or should be decrypted:
-- Records sent to other owners can't be decrypted (not ours)
-- The dApp may not have decryption permission from the wallet
-- The user may explicitly opt out of decryption for privacy
+Only owned records are ever decryptable — if you don't own a record, it stays as `EncryptedRecord` regardless. The real question is whether the dApp has **permission** to decrypt, which is set at wallet connect-time.
 
-`execute` accepts a `decrypt` option; a default can also be set on the client.
+The wallet adapter standard already defines `WalletDecryptPermission` levels:
+- `NoDecrypt` — dApp cannot decrypt any records
+- `UponRequest` — dApp can decrypt records when it asks (wallet prompts user)
+- `AutoDecrypt` — dApp can auto-decrypt any requested records
+- `ViewKeyAccess` — dApp can request on-chain record plaintext and transaction IDs but cannot decrypt
 
-```ts
-type DecryptPolicy =
-  | 'auto'         // decrypt records this account owns, leave others as EncryptedRecord (default)
-  | 'owned-only'   // same as 'auto' but throw if any of our records fail to decrypt
-  | 'none'         // skip decryption — all records returned as EncryptedRecord
+Veil respects whatever permission level the wallet grants. For local accounts (no wallet), all owned records are decrypted by default.
 
-// Per-call
-await contract.execute.mint_card({
-  inputs: [...],
-  decrypt: 'none',      // never decrypt — privacy-preserving read
-})
-
-// Client-level default
-createWalletClient({ account, transport, proving, decrypt: 'auto' })
-```
-
-For RPC (wallet) accounts, the wallet controls decryption — Veil surfaces what the wallet returns. Wallets may themselves prompt for decrypt permission; Veil passes the `decrypt` option through as a hint but the wallet has final say.
+> The full decrypt permission model and its interaction with RecordRef is being specified in a separate ARC (RecordRef + decrypt permissions). This spec defers to that document for the detailed permission design.
 
 ### execute — full lifecycle (recommended)
 
@@ -296,12 +284,11 @@ const result = await contract.execute.mint_card({
   inputs: [recipient, 1000n, 42n],    // auto-encoded via ABI types
   fee: 10000n,                         // optional, auto-estimated if omitted
   privateFee: false,                   // pay from record or public balance
-  decrypt: 'auto',                     // optional, default inherits from client
 })
 
 // result.transactionId — the on-chain tx ID (empty in local mode)
-// result.transitions    — per-transition breakdown
-// result.outputs        — flattened outputs across all transitions
+// result.transitions    — full call chain (all transitions including internal cross-program calls)
+// result.outputs        — the top-level function's outputs only (what this function returns per its ABI)
 
 // Example output structure for mint_card:
 // {
@@ -338,7 +325,6 @@ The choice between `local` and `delegated` proving is meaningful only when veil 
 ```ts
 const result = await contract.simulate.mint_card({
   inputs: [recipient, 1000n, 42n],
-  decrypt: 'auto',                     // same semantics as execute
 })
 ```
 
@@ -384,7 +370,7 @@ contract.execute.mint_card({ inputs: ['aleo1...', 1000n, 42n] })
 
 For record inputs (consuming a record), pass either a `RecordValue` (Veil serializes it to plaintext) or the raw plaintext string directly. The ABI's `FunctionInput.kind === 'record'` tells Veil how to handle it.
 
-`RecordValue` provides a `toPlaintext()` method that serializes fields back to the Aleo record plaintext format on demand. No cached `raw` field — avoids stale data and memory overhead while keeping `RecordValue` a clean data type.
+`RecordValue` provides a `toString()` method that serializes fields back to the Aleo record plaintext format. Follows standard JS/SnarkVM conventions — the data is already plaintext (just in object form), so `toString()` is more accurate than `toPlaintext()` which would imply decryption.
 
 ### Output parsing
 
@@ -428,7 +414,7 @@ result.outputs[2]  // PlaintextValue — bigint (U64)
 
 #### Multi transition transactions
 
-Cross program calls produce multiple transitions. Each appears as its own entry in `result.transitions`, with outputs scoped to that transition. The flattened `result.outputs` is a convenience for the common single transition case; complex flows should iterate `result.transitions`.
+Cross program calls produce multiple transitions. Each appears as its own entry in `result.transitions`, with outputs scoped to that transition. `result.outputs` returns the top-level function's outputs (what the caller asked for); `result.transitions` provides the full call chain for tracing and debugging.
 
 ```ts
 // redeem_points_for_voucher in loyalty_rewards calls loyalty_token/spend_points internally
@@ -454,7 +440,7 @@ result.transitions  // [
 
 #### Records sent to other owners
 
-When a function produces a record owned by someone else (e.g., `transfer_card` mints a record for the recipient), the output is returned as `EncryptedRecord` rather than `RecordValue`. The decryption policy decides this; see [Decryption policy](#decryption-policy).
+When a function produces a record owned by someone else (e.g., `transfer_card` mints a record for the recipient), the output is returned as `EncryptedRecord` rather than `RecordValue`. Only owned records are decryptable; records for other owners always come back encrypted.
 
 ```ts
 // transfer_card outputs a LoyaltyCard owned by the recipient
@@ -478,6 +464,10 @@ const result = await contract.execute.mint_card({ inputs: [...] })
 ```
 
 Requires TypeScript type-level programming over the ABI (similar to viem's abitype).
+
+Two approaches for preserving literal types from ABI JSON (both planned):
+1. **`defineAbi()` wrapper** — users call `defineAbi(abiJson)` to preserve literal types via `const` generic. Works at runtime without tooling.
+2. **CLI code generation** — generate `.d.ts` files from `abi.json` at build time (wagmi-cli approach). Stronger guarantees, integrates with build pipelines.
 
 ### Type mapping: Aleo Primitive → TypeScript runtime
 
@@ -504,7 +494,7 @@ Records are Aleo's private state — encrypted UTXOs consumed on use. The contra
 1. **Creation** — `execute` returns outputs per transition; each output is a `RecordValue` (if decryptable and we own it), an `EncryptedRecord` (if not ours or decryption skipped), or a plaintext value / future
 2. **Consumption** — Pass a `RecordInput` as an input to consume the record
 3. **Discovery** — `createRecordScanner()` to find records on-chain
-4. **Decryption policy** — controlled by the `decrypt` option on execute/simulate, or the client default. See [Executing Programs](#executing-programs).
+4. **Decryption** — controlled by the wallet's decrypt permission level (set at connect-time). See [Decryption policy](#decryption-policy).
 
 ### Record input forms
 
@@ -545,7 +535,7 @@ await contract.execute.add_points({
 await contract.execute.transfer_card({ inputs: [card, recipientAddress] })
 ```
 
-**Proving requires the raw plaintext** — Veil calls `record.toPlaintext()` to serialize `RecordValue` inputs. For `RecordRef` inputs, the wallet handles the resolution and serialization internally.
+**Proving requires the raw plaintext** — Veil calls `record.toString()` to serialize `RecordValue` inputs. For `RecordRef` inputs, the wallet handles the resolution and serialization internally.
 
 ### Non-decryptable outputs
 
