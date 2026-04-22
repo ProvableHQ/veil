@@ -47,14 +47,14 @@ describe('@veil/devnode', () => {
  *   })
  *
  *   it('REST API responds to health check', async () => {
- *     const res = await fetch(`http://${devnode.socketAddr}/mainnet/block/height/latest`)
+ *     const res = await fetch(`http://${devnode.socketAddr}/testnet/block/height/latest`)
  *     expect(res.ok).toBe(true)
  *   })
  *
  *   it('stop() terminates the process', async () => {
  *     await devnode.stop()
  *     await expect(
- *       fetch(`http://${devnode.socketAddr}/mainnet/block/height/latest`)
+ *       fetch(`http://${devnode.socketAddr}/testnet/block/height/latest`)
  *     ).rejects.toThrow()
  *   })
  * })

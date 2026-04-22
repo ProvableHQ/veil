@@ -268,7 +268,7 @@ export function createDevnodeClient(options?: {
   const url = `http://${options?.socketAddr ?? DEVNODE_ADDR}`
   const account = privateKeyToAccount(options?.privateKey ?? DEVNODE_PRIVATE_KEY)
   const sdkAccount = new Account({ privateKey: account.privateKey })
-  const transport = http(url)
+  const transport = http(url, { network: 'testnet' })
 
   getOrInitConsensusVersionTestHeights(DEVNODE_CONSENSUS_HEIGHTS)
 
