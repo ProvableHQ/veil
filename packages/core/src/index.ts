@@ -16,6 +16,7 @@ export type {
 
 export type {
   ProvingConfig,
+  DevnodeConfig,
   BuildTransactionOptions,
 } from './types/proving.js'
 
@@ -69,6 +70,7 @@ export {
   BaseError,
   TransportError,
   AccountNotFoundError,
+  FeeRequiredError,
   ProvingNotConfiguredError,
   InvalidAddressError,
   ProgramNotFoundError,

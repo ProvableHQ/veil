@@ -1,4 +1,4 @@
-import { AccountNotFoundError, ProvingNotConfiguredError } from '../../errors/errors.js'
+import { AccountNotFoundError, FeeRequiredError, ProvingNotConfiguredError } from '../../errors/errors.js'
 import type { Client } from '../../clients/createClient.js'
 
 export type WriteContractParameters = {
@@ -35,12 +35,15 @@ export async function writeContract(
   }
 
   if (account.type === 'local') {
-    // Local account — must prove locally, then broadcast the raw transaction
-    if (!client.proving?.buildTransaction) {
+    const buildTransaction = client.devnode?.buildTransaction ?? client.proving?.buildTransaction
+    if (!buildTransaction) {
       throw new ProvingNotConfiguredError()
     }
+    if (params.fee === undefined) {
+      throw new FeeRequiredError()
+    }
 
-    const tx = await client.proving.buildTransaction({
+    const tx = await buildTransaction({
       programName: params.program,
       functionName: params.function,
       inputs: params.inputs,

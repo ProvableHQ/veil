@@ -7,6 +7,9 @@ import {
   createNetworkClient,
   createRecordsConfig,
   createAleoClient,
+  createDevnodeClient,
+  DEVNODE_PRIVATE_KEY,
+  DEVNODE_ADDR,
 } from '../src/index.js'
 
 describe('@veil/provable', () => {
@@ -190,6 +193,65 @@ describe('@veil/provable', () => {
         // but we can verify the function exists and has the right shape
         expect(config.getRecords).toBeTypeOf('function')
       }
+    })
+  })
+
+  describe('createDevnodeClient', () => {
+    it('uses the seeded key and 127.0.0.1:3030 by default', () => {
+      const { account } = createDevnodeClient()
+
+      expect(account.privateKey).toBe(DEVNODE_PRIVATE_KEY)
+      expect(account.type).toBe('local')
+      expect(account.address).toMatch(/^aleo1/)
+    })
+
+    it('accepts a custom private key', () => {
+      const custom = generateAccount()
+      const { account } = createDevnodeClient({ privateKey: custom.privateKey })
+
+      expect(account.privateKey).toBe(custom.privateKey)
+      expect(account.address).toBe(custom.address)
+    })
+
+    it('accepts a custom socket address', () => {
+      const { publicClient, walletClient } = createDevnodeClient({
+        socketAddr: '127.0.0.1:4040',
+      })
+
+      expect(publicClient).toBeDefined()
+      expect(walletClient).toBeDefined()
+    })
+
+    it('publicClient has read actions', () => {
+      const { publicClient } = createDevnodeClient()
+
+      expect(publicClient.getBlockNumber).toBeTypeOf('function')
+      expect(publicClient.getBalance).toBeTypeOf('function')
+      expect(publicClient.readContract).toBeTypeOf('function')
+    })
+
+    it('walletClient has write actions', () => {
+      const { walletClient } = createDevnodeClient()
+
+      expect(walletClient.writeContract).toBeTypeOf('function')
+      expect(walletClient.deployContract).toBeTypeOf('function')
+      expect(walletClient.transfer).toBeTypeOf('function')
+    })
+
+    it('walletClient uses a devnode config, not a proving config', () => {
+      const { walletClient } = createDevnodeClient()
+
+      expect((walletClient as any).devnode).toBeDefined()
+      expect((walletClient as any).devnode.buildTransaction).toBeTypeOf('function')
+      expect((walletClient as any).proving).toBeUndefined()
+    })
+
+    it('DEVNODE_ADDR is 127.0.0.1:3030', () => {
+      expect(DEVNODE_ADDR).toBe('127.0.0.1:3030')
+    })
+
+    it('DEVNODE_PRIVATE_KEY has correct format', () => {
+      expect(DEVNODE_PRIVATE_KEY).toMatch(/^APrivateKey1/)
     })
   })
 
