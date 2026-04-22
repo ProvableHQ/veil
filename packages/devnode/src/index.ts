@@ -6,7 +6,7 @@ export const DEVNODE_PRIVATE_KEY = 'APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZ
 /** Default local devnode socket address */
 export const DEVNODE_ADDR = '127.0.0.1:3030'
 
-const HEALTH_CHECK_PATH = '/mainnet/block/height/latest'
+const HEALTH_CHECK_PATH = '/testnet/block/height/latest'
 const HEALTH_CHECK_INTERVAL_MS = 250
 const HEALTH_CHECK_REQUEST_TIMEOUT_MS = 1_000
 
