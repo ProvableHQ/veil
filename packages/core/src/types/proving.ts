@@ -17,3 +17,11 @@ export type ProvingConfig = {
   /** Optional override for custom proving implementations */
   buildTransaction?: (options: BuildTransactionOptions) => Promise<Transaction>
 }
+
+/**
+ * Devnode configuration — builds transactions without ZK proof generation.
+ * For use with a local Aleo Devnode, which does not verify proofs.
+ */
+export type DevnodeConfig = {
+  buildTransaction: (options: BuildTransactionOptions) => Promise<Transaction>
+}

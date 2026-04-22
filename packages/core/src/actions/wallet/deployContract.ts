@@ -1,4 +1,4 @@
-import { AccountNotFoundError, ProvingNotConfiguredError } from '../../errors/errors.js'
+import { AccountNotFoundError, FeeRequiredError, ProvingNotConfiguredError } from '../../errors/errors.js'
 import type { Client } from '../../clients/createClient.js'
 
 export type DeployContractParameters = {
@@ -26,13 +26,15 @@ export async function deployContract(
   }
 
   if (account.type === 'local') {
-    // Local account — must build deployment transaction locally
-    if (!client.proving?.buildTransaction) {
+    const buildTransaction = client.devnode?.buildTransaction ?? client.proving?.buildTransaction
+    if (!buildTransaction) {
       throw new ProvingNotConfiguredError()
     }
+    if (params.fee === undefined) {
+      throw new FeeRequiredError()
+    }
 
-    // Use buildTransaction with a deploy-specific convention
-    const tx = await client.proving.buildTransaction({
+    const tx = await buildTransaction({
       programName: params.program,
       functionName: '__deploy__',
       inputs: [],
