@@ -26,15 +26,15 @@ export async function deployContract(
   }
 
   if (account.type === 'local') {
-    const buildTransaction = client.devnode?.buildTransaction ?? client.proving?.buildTransaction
-    if (!buildTransaction) {
+    // Local account — must build deployment transaction locally
+    if (!client.proving?.buildTransaction) {
       throw new ProvingNotConfiguredError()
     }
     if (params.fee === undefined) {
       throw new FeeRequiredError()
     }
 
-    const tx = await buildTransaction({
+    const tx = await client.proving.buildTransaction({
       programName: params.program,
       functionName: '__deploy__',
       inputs: [],
