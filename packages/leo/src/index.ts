@@ -108,7 +108,7 @@ export async function startDevnode(options?: DevnodeOptions): Promise<DevnodeIns
   })
 
   proc.on('exit', (code, signal) => {
-    if (signal === 'SIGTERM') return
+    if (signal === 'SIGINT' || signal === 'SIGTERM') return
     if (code !== 0 && code !== null) {
       startError = startError ?? new Error(`leo devnode exited unexpectedly with code ${code}`)
     }
@@ -120,7 +120,7 @@ export async function startDevnode(options?: DevnodeOptions): Promise<DevnodeIns
     socketAddr,
     stop: () =>
       new Promise<void>((resolve) => {
-        proc.kill('SIGTERM')
+        proc.kill('SIGINT')
         proc.once('exit', () => resolve())
       }),
   }
