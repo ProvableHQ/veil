@@ -126,6 +126,132 @@ export async function startDevnode(options?: DevnodeOptions): Promise<DevnodeIns
   }
 }
 
+// ---------------------------------------------------------------------------
+// Leo CLI wrappers
+// ---------------------------------------------------------------------------
+
+export type LeoBuildOptions = {
+  /** Path to the Leo project directory. Defaults to the current working directory. */
+  cwd?: string
+}
+
+export type LeoStartOptions = {
+  /** Leo program name/path to run. */
+  program: string
+  /** Function name to call. */
+  function: string
+  /** Inputs to pass to the function. */
+  inputs?: string[]
+  /** Path to the Leo project directory. Defaults to the current working directory. */
+  cwd?: string
+}
+
+export type LeoCleanOptions = {
+  /** Path to the Leo project directory. Defaults to the current working directory. */
+  cwd?: string
+}
+
+export type LeoAbiOptions = {
+  /** Path to the Leo project directory. Defaults to the current working directory. */
+  cwd?: string
+}
+
+/**
+ * Compiles a Leo program by running `leo build`.
+ *
+ * Resolves when compilation succeeds. Throws if the Leo CLI is not found
+ * or compilation fails.
+ */
+export async function build(options?: LeoBuildOptions): Promise<void> {
+  await runLeo(['build'], options?.cwd)
+}
+
+/**
+ * Compiles multiple Leo programs sequentially.
+ *
+ * Each entry is either a path string (cwd for that build) or a LeoBuildOptions object.
+ */
+export async function buildBatch(projects: Array<string | LeoBuildOptions>): Promise<void> {
+  for (const project of projects) {
+    const opts = typeof project === 'string' ? { cwd: project } : project
+    await build(opts)
+  }
+}
+
+/**
+ * Returns the compiled Aleo program source by running `leo build` and capturing stdout.
+ *
+ * Resolves with the program output string. Throws if the CLI is not found or compilation fails.
+ */
+export async function abi(options?: LeoAbiOptions): Promise<string> {
+  return runLeoCapture(['build'], options?.cwd)
+}
+
+/**
+ * Executes a Leo program function by running `leo run`.
+ */
+export async function start(options: LeoStartOptions): Promise<void> {
+  const args = ['run', options.function, ...(options.inputs ?? [])]
+  await runLeo(args, options.cwd)
+}
+
+/**
+ * Cleans the Leo build artifacts by running `leo clean`.
+ */
+export async function clean(options?: LeoCleanOptions): Promise<void> {
+  await runLeo(['clean'], options?.cwd)
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+function runLeo(args: string[], cwd?: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('leo', args, { stdio: 'pipe', cwd })
+
+    let stderr = ''
+    proc.stderr?.on('data', (chunk: { toString(): string }) => { stderr += chunk.toString() })
+
+    proc.on('error', (err: Error) => {
+      reject(new Error(
+        `Failed to run leo ${args[0]}: ${err.message}. ` +
+        'Ensure the Leo CLI is installed: https://developer.aleo.org/leo/installation',
+      ))
+    })
+
+    proc.on('exit', (code: number | null, signal: string | null) => {
+      if (signal === 'SIGTERM') return resolve()
+      if (code === 0) return resolve()
+      reject(new Error(`leo ${args[0]} exited with code ${code}${stderr ? `:\n${stderr}` : ''}`))
+    })
+  })
+}
+
+function runLeoCapture(args: string[], cwd?: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('leo', args, { stdio: 'pipe', cwd })
+
+    let stdout = ''
+    let stderr = ''
+    proc.stdout?.on('data', (chunk: { toString(): string }) => { stdout += chunk.toString() })
+    proc.stderr?.on('data', (chunk: { toString(): string }) => { stderr += chunk.toString() })
+
+    proc.on('error', (err: Error) => {
+      reject(new Error(
+        `Failed to run leo ${args[0]}: ${err.message}. ` +
+        'Ensure the Leo CLI is installed: https://developer.aleo.org/leo/installation',
+      ))
+    })
+
+    proc.on('exit', (code: number | null, signal: string | null) => {
+      if (signal === 'SIGTERM') return resolve(stdout)
+      if (code === 0) return resolve(stdout)
+      reject(new Error(`leo ${args[0]} exited with code ${code}${stderr ? `:\n${stderr}` : ''}`))
+    })
+  })
+}
+
 async function waitForReady(
   baseUrl: string,
   timeout: number,
