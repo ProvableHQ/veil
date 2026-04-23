@@ -1,0 +1,22 @@
+{
+  "name": "@veil/loyalty-node",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "local": "tsx src/index.ts local",
+    "delegated": "tsx src/index.ts delegated",
+    "start:mint": "tsx src/index.ts mint_card",
+    "start:add": "tsx src/index.ts add_points",
+    "start:redeem": "tsx src/index.ts redeem_for_voucher"
+  },
+  "dependencies": {
+    "@veil/core": "workspace:*",
+    "@veil/provable": "workspace:*",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0"
+  }
+}
