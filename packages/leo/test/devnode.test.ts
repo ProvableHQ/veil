@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR, startDevnode } from '../src/index.js'
 
-describe('@veil/devnode', () => {
+describe('@veil/leo', () => {
   describe('constants', () => {
     it('DEVNODE_PRIVATE_KEY has correct format', () => {
       expect(DEVNODE_PRIVATE_KEY).toMatch(/^APrivateKey1/)
