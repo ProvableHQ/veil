@@ -1,11 +1,11 @@
 import "dotenv/config";
-import { parseAbi, parseRecordPlaintext, encodeInputs, simulateContract, toString as recordToString } from "@veil/core";
+import { parseAbi, parseRecordPlaintext, encodeInputs, simulateContract, serializeRecord, getRecordDef } from "@veil/core";
 import type { ABI, RecordDef } from "@veil/core";
+import type { RecordValue } from "@veil/core";
 import { createAleoClient } from "@veil/provable";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import type { RecordValue } from "@veil/core";
 
 // ============================================================================
 // Types
@@ -47,50 +47,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Load ABIs and program sources
-// Note: Leo compiler outputs "transitions" but parseAbi expects "functions" (the canonical name).
-// Normalize here until the compiler output aligns.
-function loadAbi(path: string) {
-    const raw = JSON.parse(readFileSync(path, "utf-8"));
-    if (raw.transitions && !raw.functions) {
-        raw.functions = raw.transitions;
-        delete raw.transitions;
-    }
-    // Normalize field names between Leo compiler versions
-    if (raw.functions) {
-        for (const fn of raw.functions) {
-            // is_async → is_final
-            if ('is_async' in fn && !('is_final' in fn)) {
-                fn.is_final = fn.is_async;
-            }
-            // "Future" → "Final" in output types
-            if (fn.outputs) {
-                for (const output of fn.outputs) {
-                    if (output.ty === 'Future') output.ty = 'Final';
-                }
-            }
-        }
-    }
-    return raw;
-}
-const tokenAbi: ABI = parseAbi(loadAbi(join(__dirname, "../loyalty_token/build/abi.json")));
-const rewardsAbi: ABI = parseAbi(loadAbi(join(__dirname, "../loyalty_rewards/build/abi.json")));
+const tokenAbi: ABI = parseAbi(JSON.parse(readFileSync(join(__dirname, "../loyalty_token/build/abi.json"), "utf-8")));
+const rewardsAbi: ABI = parseAbi(JSON.parse(readFileSync(join(__dirname, "../loyalty_rewards/build/abi.json"), "utf-8")));
 const tokenSource = readFileSync(join(__dirname, "../loyalty_token/build/main.aleo"), "utf-8").trim();
 const rewardsSource = readFileSync(join(__dirname, "../loyalty_rewards/build/main.aleo"), "utf-8").trim();
-
-// Look up RecordDefs from ABI for parsing outputs
-const loyaltyCardDef: RecordDef = tokenAbi.records.find(r => r.path[r.path.length - 1] === 'LoyaltyCard')!;
-const rewardVoucherDef: RecordDef = rewardsAbi.records.find(r => r.path[r.path.length - 1] === 'RewardVoucher')!;
-
-// Look up function input types for encoding
-function getInputTypes(abi: ABI, fnName: string) {
-    const fn = abi.functions.find(f => f.name === fnName);
-    if (!fn) throw new Error(`Function ${fnName} not found in ABI`);
-    return fn.inputs.map(input => {
-        if (input.type.kind === 'plaintext') return input.type.type;
-        // Record inputs — return a placeholder, will be passed as string
-        return { kind: 'primitive' as const, primitive: 'field' as const };
-    });
-}
 
 // Read configuration from environment
 const provingMode = process.env.ALEO_PROVING_MODE === "delegated" ? "delegated" : "local" as const;
@@ -113,11 +73,11 @@ const { walletClient, account } = createAleoClient({
 });
 
 // ============================================================================
-// Record helpers — parse output strings into typed interfaces
+// Record helpers
 // ============================================================================
 
 function toLoyaltyCard(outputStr: string): LoyaltyCard {
-    const record = parseRecordPlaintext(outputStr, loyaltyCardDef, 'loyalty_token.aleo');
+    const record = parseRecordPlaintext(outputStr, tokenAbi, 'LoyaltyCard');
     return {
         owner: record.owner,
         cardId: String(record.fields.card_id?.value ?? ''),
@@ -128,7 +88,7 @@ function toLoyaltyCard(outputStr: string): LoyaltyCard {
 }
 
 function toRewardVoucher(outputStr: string): RewardVoucher {
-    const record = parseRecordPlaintext(outputStr, rewardVoucherDef, 'loyalty_rewards.aleo');
+    const record = parseRecordPlaintext(outputStr, rewardsAbi, 'RewardVoucher');
     return {
         owner: record.owner,
         voucherId: String(record.fields.voucher_id?.value ?? ''),
@@ -139,7 +99,7 @@ function toRewardVoucher(outputStr: string): RewardVoucher {
 }
 
 // ============================================================================
-// Execute helper — uses simulateContract for local, executeTransaction for delegated
+// Execute helper
 // ============================================================================
 
 async function execute(
@@ -165,15 +125,13 @@ async function execute(
 
 async function mintCard(recipient: string, initialPoints: number): Promise<LoyaltyCard> {
     const nonce = Math.floor(Math.random() * 1e9);
-    const inputTypes = getInputTypes(tokenAbi, 'mint_card');
-    const encoded = encodeInputs([recipient, BigInt(initialPoints), BigInt(nonce)], inputTypes);
+    const encoded = encodeInputs([recipient, BigInt(initialPoints), BigInt(nonce)], tokenAbi, 'mint_card');
     const outputs = await execute('loyalty_token.aleo', tokenSource, 'mint_card', encoded);
     return toLoyaltyCard(outputs[0]);
 }
 
 async function addPoints(card: LoyaltyCard, pointsToAdd: number): Promise<LoyaltyCard> {
-    const inputTypes = getInputTypes(tokenAbi, 'add_points');
-    const encoded = encodeInputs([recordToString(card.record), BigInt(pointsToAdd)], inputTypes);
+    const encoded = encodeInputs([serializeRecord(card.record), BigInt(pointsToAdd)], tokenAbi, 'add_points');
     const outputs = await execute('loyalty_token.aleo', tokenSource, 'add_points', encoded);
     return toLoyaltyCard(outputs[0]);
 }
@@ -182,8 +140,7 @@ async function splitCardV2(card: LoyaltyCard, pointsToKeep: number): Promise<{ k
     if (pointsToKeep >= card.points) {
         throw new Error(`pointsToKeep (${pointsToKeep}) must be less than card points (${card.points})`);
     }
-    const inputTypes = getInputTypes(tokenAbi, 'split_card_v2');
-    const encoded = encodeInputs([recordToString(card.record), BigInt(pointsToKeep)], inputTypes);
+    const encoded = encodeInputs([serializeRecord(card.record), BigInt(pointsToKeep)], tokenAbi, 'split_card_v2');
     const outputs = await execute('loyalty_token.aleo', tokenSource, 'split_card_v2', encoded);
     return { keptCard: toLoyaltyCard(outputs[0]), splitCard: toLoyaltyCard(outputs[1]) };
 }
@@ -200,8 +157,7 @@ async function redeemForVoucher(
     if (card.points < pointsCost) {
         throw new Error(`Insufficient points: have ${card.points}, need ${pointsCost}`);
     }
-    const inputTypes = getInputTypes(rewardsAbi, 'redeem_points_for_voucher');
-    const encoded = encodeInputs([recordToString(card.record), BigInt(rewardType), BigInt(pointsCost)], inputTypes);
+    const encoded = encodeInputs([serializeRecord(card.record), BigInt(rewardType), BigInt(pointsCost)], rewardsAbi, 'redeem_points_for_voucher');
     const outputs = await execute(
         'loyalty_rewards.aleo', rewardsSource, 'redeem_points_for_voucher', encoded,
         { 'loyalty_token.aleo': tokenSource },
@@ -210,8 +166,7 @@ async function redeemForVoucher(
 }
 
 async function useVoucher(voucher: RewardVoucher): Promise<void> {
-    const inputTypes = getInputTypes(rewardsAbi, 'use_voucher');
-    const encoded = encodeInputs([recordToString(voucher.record)], inputTypes);
+    const encoded = encodeInputs([serializeRecord(voucher.record)], rewardsAbi, 'use_voucher');
     await execute(
         'loyalty_rewards.aleo', rewardsSource, 'use_voucher', encoded,
         { 'loyalty_token.aleo': tokenSource },
