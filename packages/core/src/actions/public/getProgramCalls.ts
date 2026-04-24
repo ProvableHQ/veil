@@ -1,6 +1,6 @@
 import type { Client } from '../../clients/createClient.js'
 
-export type GetProgramCallsParameters = { program: string }
+export type GetProgramCallsParameters = { programId: string }
 export type GetProgramCallsReturnType = unknown[]
 
 export async function getProgramCalls(
@@ -9,6 +9,6 @@ export async function getProgramCalls(
 ): Promise<GetProgramCallsReturnType> {
   return client.request({
     method: 'getProgramCalls',
-    params: { programId: params.program },
+    params: { programId: params.programId },
   }) as Promise<GetProgramCallsReturnType>
 }

@@ -8,7 +8,7 @@ describe('readContract', () => {
     } as any
 
     const result = await readContract(client, {
-      program: 'credits.aleo',
+      programId: 'credits.aleo',
       mapping: 'account',
       key: 'aleo1abc',
     })

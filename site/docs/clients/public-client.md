@@ -110,7 +110,7 @@ const value = await client.readMapping({
 ```ts
 const height = await client.getBlockNumber()
 const block = await client.getBlock({ height: Number(height) })
-console.log(block.blockHash, block.timestamp)
+console.log(block.block_hash, block.header.metadata.timestamp)
 ```
 
 ### Query staking state

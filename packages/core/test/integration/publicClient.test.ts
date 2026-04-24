@@ -42,7 +42,7 @@ describe('integration: public client with http transport', () => {
 
     expect(height).toBe(12345n)
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://api.example.com/v2/mainnet/latest/height',
+      'https://api.example.com/v2/mainnet/block/height/latest',
       expect.objectContaining({ method: 'GET' }),
     )
   })
@@ -58,7 +58,7 @@ describe('integration: public client with http transport', () => {
     const client = createPublicClient({ transport })
 
     const value = await client.readContract({
-      program: 'token.aleo',
+      programId: 'token.aleo',
       mapping: 'balances',
       key: 'aleo1addr',
     })
@@ -95,7 +95,7 @@ finalize transfer:
     const transport = http('https://api.example.com/v2', { fetchFn: mockFetch })
     const client = createPublicClient({ transport })
 
-    const source = await client.getCode({ program: 'token.aleo' })
+    const source = await client.getCode({ programId: 'token.aleo' })
     expect(source).toBe(programSource)
     expect(mockFetch).toHaveBeenCalledWith(
       'https://api.example.com/v2/mainnet/program/token.aleo',
@@ -133,7 +133,7 @@ finalize transfer:
     await client.getBlockNumber()
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://api.example.com/v2/testnet/latest/height',
+      'https://api.example.com/v2/testnet/block/height/latest',
       expect.anything(),
     )
   })
@@ -173,7 +173,7 @@ finalize transfer:
     const client = createPublicClient({ transport })
 
     // Step 1: getCode
-    const source = await client.getCode({ program: 'token.aleo' })
+    const source = await client.getCode({ programId: 'token.aleo' })
 
     // Step 2: parseProgram
     const abi = parseProgram(source)

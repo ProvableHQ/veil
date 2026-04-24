@@ -181,7 +181,7 @@ export function createRecordsConfig(options: {
     getRecords: async (params: RecordSearchParams): Promise<AleoRecord[]> => {
       const ownedRecords = await recordProvider.findRecords({
         unspent: params.unspent ?? true,
-        programName: params.program,
+        programName: params.programId,
       })
 
       return ownedRecords.map((record) => ({
@@ -190,7 +190,7 @@ export function createRecordsConfig(options: {
           ? parseRecordPlaintext(record.record_plaintext)
           : {},
         nonce: extractNonce(record.record_plaintext),
-        programId: record.program_name ?? params.program,
+        programId: record.program_name ?? params.programId,
         plaintext: record.record_plaintext ?? '',
       }))
     },

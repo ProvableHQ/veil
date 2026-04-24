@@ -11,6 +11,16 @@ type HttpTransportConfig = {
 }
 
 /**
+ * Encodes a user-supplied value for safe inclusion in a URL path segment.
+ * Returns an empty string for null/undefined — the resulting malformed URL
+ * fails informatively at the server instead of being misrouted.
+ */
+function enc(v: unknown): string {
+  if (v === null || v === undefined) return ''
+  return encodeURIComponent(String(v))
+}
+
+/**
  * Maps veil method names + params to Aleo REST API paths.
  * Aleo uses REST, not JSON-RPC, so each method maps to a URL path.
  */
@@ -32,73 +42,135 @@ function buildUrl(
     case 'getBlockHashLatest':
       return { url: `${base}/block/hash/latest`, httpMethod: 'GET' }
     case 'getBlock':
-      return { url: `${base}/block/${params?.height ?? params?.hash}`, httpMethod: 'GET' }
+      return { url: `${base}/block/${enc(params?.height ?? params?.hash)}`, httpMethod: 'GET' }
     case 'getBlockByHash':
-      return { url: `${base}/block/${params?.hash}`, httpMethod: 'GET' }
+      return { url: `${base}/block/${enc(params?.hash)}`, httpMethod: 'GET' }
     case 'getBlockTransactions':
     case 'getTransactions':
-      return { url: `${base}/block/${params?.height}/transactions`, httpMethod: 'GET' }
-    case 'getBlocks':
-      return { url: `${base}/blocks?start=${params?.start}&end=${params?.end}`, httpMethod: 'GET' }
+      return { url: `${base}/block/${enc(params?.height)}/transactions`, httpMethod: 'GET' }
+    case 'getBlocks': {
+      const q = new URLSearchParams()
+      if (params?.start != null) q.set('start', String(params.start))
+      if (params?.end != null) q.set('end', String(params.end))
+      return { url: `${base}/blocks?${q.toString()}`, httpMethod: 'GET' }
+    }
     case 'getBlockSummary':
       return { url: `${base}/blocks/summary/latest`, httpMethod: 'GET' }
     case 'getStateRoot':
       return params?.height != null
-        ? { url: `${base}/stateRoot/${params.height}`, httpMethod: 'GET' }
+        ? { url: `${base}/stateRoot/${enc(params.height)}`, httpMethod: 'GET' }
         : { url: `${base}/stateRoot/latest`, httpMethod: 'GET' }
     case 'getStatePath':
-      return { url: `${base}/statePath/${params?.commitment}`, httpMethod: 'GET' }
+      return { url: `${base}/statePath/${enc(params?.commitment)}`, httpMethod: 'GET' }
     case 'findBlockHash':
-      return { url: `${base}/find/blockHash/${params?.transactionId}`, httpMethod: 'GET' }
+      return { url: `${base}/find/blockHash/${enc(params?.transactionId)}`, httpMethod: 'GET' }
 
     // --- Transaction ---
     case 'getTransaction':
-      return { url: `${base}/transaction/${params?.id}`, httpMethod: 'GET' }
+      return { url: `${base}/transaction/${enc(params?.id)}`, httpMethod: 'GET' }
     case 'getConfirmedTransaction':
-      return { url: `${base}/transaction/confirmed/${params?.id}`, httpMethod: 'GET' }
+      return { url: `${base}/transaction/confirmed/${enc(params?.id)}`, httpMethod: 'GET' }
     case 'getUnconfirmedTransaction':
-      return { url: `${base}/transaction/unconfirmed/${params?.id}`, httpMethod: 'GET' }
+      return { url: `${base}/transaction/unconfirmed/${enc(params?.id)}`, httpMethod: 'GET' }
     case 'getTransactionsByAddress':
-      return { url: `${base}/transactions/address/${params?.address}`, httpMethod: 'GET' }
+      return { url: `${base}/transactions/address/${enc(params?.address)}`, httpMethod: 'GET' }
     case 'getTransactionSummary':
       return { url: `${base}/transactions/summary/latest`, httpMethod: 'GET' }
     case 'findTransactionId':
-      return { url: `${base}/find/transactionID/${params?.transitionId}`, httpMethod: 'GET' }
+      return { url: `${base}/find/transactionID/${enc(params?.transitionId)}`, httpMethod: 'GET' }
     case 'sendTransaction':
       return { url: `${base}/transaction/broadcast`, httpMethod: 'POST', body: JSON.stringify(params?.transaction) }
 
     // --- Transition ---
     case 'getTransitions':
-      return { url: `${base}/transitions/${params?.address}`, httpMethod: 'GET' }
+      return { url: `${base}/transitions/${enc(params?.address)}`, httpMethod: 'GET' }
     case 'findTransitionId':
     case 'getTransitionId':
-      return { url: `${base}/find/transitionID/${params?.inputOrOutputId ?? params?.id}`, httpMethod: 'GET' }
+      return { url: `${base}/find/transitionID/${enc(params?.inputOrOutputId ?? params?.id)}`, httpMethod: 'GET' }
 
     // --- Program ---
     case 'getProgram':
-      return { url: `${base}/program/${params?.programId}`, httpMethod: 'GET' }
+      return { url: `${base}/program/${enc(params?.programId)}`, httpMethod: 'GET' }
     case 'getMappingValue':
-      return { url: `${base}/program/${params?.programId}/mapping/${params?.mapping}/${params?.key}`, httpMethod: 'GET' }
+      return { url: `${base}/program/${enc(params?.programId)}/mapping/${enc(params?.mapping)}/${enc(params?.key)}`, httpMethod: 'GET' }
     case 'getMappingNames':
-      return { url: `${base}/program/${params?.programId}/mappings`, httpMethod: 'GET' }
+      return { url: `${base}/program/${enc(params?.programId)}/mappings`, httpMethod: 'GET' }
     case 'getDeploymentTransaction':
-      return { url: `${base}/find/transactionID/deployment/${params?.programId}`, httpMethod: 'GET' }
+      return { url: `${base}/find/transactionID/deployment/${enc(params?.programId)}`, httpMethod: 'GET' }
     case 'getProgramCalls':
-      return { url: `${base}/programs/${params?.programId}/latest-calls`, httpMethod: 'GET' }
+      return { url: `${base}/programs/${enc(params?.programId)}/latest-calls`, httpMethod: 'GET' }
+    case 'getProgramCallsPaginated': {
+      const q = new URLSearchParams()
+      if (params?.limit != null) q.set('limit', String(params.limit))
+      if (params?.cursorBlockNumber != null) q.set('cursor_block_number', String(params.cursorBlockNumber))
+      if (params?.cursorTransitionId != null) q.set('cursor_transition_id', String(params.cursorTransitionId))
+      if (params?.direction != null) q.set('direction', String(params.direction))
+      if (params?.sort != null) q.set('sort', String(params.sort))
+      const qs = q.toString()
+      return {
+        url: `${base}/programs/${enc(params?.programId)}/latest-calls/paginated${qs ? `?${qs}` : ''}`,
+        httpMethod: 'GET',
+      }
+    }
+    case 'getLatestEdition':
+      return { url: `${base}/program/${enc(params?.programId)}/latest_edition`, httpMethod: 'GET' }
+    case 'getProgramByEdition':
+      return { url: `${base}/program/${enc(params?.programId)}/${enc(params?.edition)}`, httpMethod: 'GET' }
+    case 'getAmendmentCount':
+      return { url: `${base}/program/${enc(params?.programId)}/amendment_count`, httpMethod: 'GET' }
+    case 'getAmendmentCountByEdition':
+      return { url: `${base}/program/${enc(params?.programId)}/${enc(params?.edition)}/amendment_count`, httpMethod: 'GET' }
+    case 'getDeploymentTransactionByEdition':
+      return { url: `${base}/find/transactionID/deployment/${enc(params?.programId)}/${enc(params?.edition)}`, httpMethod: 'GET' }
+    case 'getOriginalDeploymentTransaction':
+      return { url: `${base}/find/transactionID/deployment/${enc(params?.programId)}/${enc(params?.edition)}/original`, httpMethod: 'GET' }
+    case 'getAmendmentDeploymentTransaction':
+      return {
+        url: `${base}/find/transactionID/deployment/${enc(params?.programId)}/${enc(params?.edition)}/${enc(params?.amendment)}`,
+        httpMethod: 'GET',
+      }
+    case 'getProgramIdByAddress':
+      return { url: `${base}/programs/${enc(params?.address)}`, httpMethod: 'GET' }
+    case 'getProgramAddress':
+      return { url: `${base}/programs/address/${enc(params?.programId)}`, httpMethod: 'GET' }
+    case 'findBlockHeightByStateRoot':
+      return { url: `${base}/find/blockHeight/${enc(params?.stateRoot)}`, httpMethod: 'GET' }
+    case 'getStatePaths': {
+      const commitments = Array.isArray(params?.commitments) ? (params.commitments as string[]).join(',') : ''
+      const q = new URLSearchParams()
+      q.set('commitments', commitments)
+      return { url: `${base}/statePaths?${q.toString()}`, httpMethod: 'GET' }
+    }
+    case 'getBlockHeightByHash':
+      return { url: `${base}/height/${enc(params?.hash)}`, httpMethod: 'GET' }
+    case 'getBlockTransactionsByHash':
+      return { url: `${base}/transactions/block/${enc(params?.hash)}`, httpMethod: 'GET' }
+    case 'getTokenDetails': {
+      const q = new URLSearchParams()
+      if (params?.programId != null) q.set('program_id', String(params.programId))
+      if (params?.tokenId != null) q.set('token_id', String(params.tokenId))
+      if (params?.limit != null) q.set('limit', String(params.limit))
+      if (params?.offset != null) q.set('offset', String(params.offset))
+      if (params?.granularity != null) q.set('granularity', String(params.granularity))
+      const qs = q.toString()
+      return { url: `${base}/tokens/details${qs ? `?${qs}` : ''}`, httpMethod: 'GET' }
+    }
+    case 'getProgramMetricsByRange':
+      return { url: `${base}/metrics/program/${enc(params?.programId)}/range/${enc(params?.days)}`, httpMethod: 'GET' }
 
     // --- Account ---
     case 'getBalance':
-      return { url: `${base}/program/credits.aleo/mapping/account/${params?.address}`, httpMethod: 'GET' }
+      return { url: `${base}/program/credits.aleo/mapping/account/${enc(params?.address)}`, httpMethod: 'GET' }
 
     // --- Committee / Staking ---
     case 'getCommittee':
       return params?.height != null
-        ? { url: `${base}/committee/${params.height}`, httpMethod: 'GET' }
+        ? { url: `${base}/committee/${enc(params.height)}`, httpMethod: 'GET' }
         : { url: `${base}/committee/latest`, httpMethod: 'GET' }
     case 'getDelegators':
-      return { url: `${base}/delegators/${params?.validator}`, httpMethod: 'GET' }
+      return { url: `${base}/delegators/${enc(params?.validator)}`, httpMethod: 'GET' }
     case 'getStakingEarnings':
-      return { url: `${base}/earnings/${params?.address}`, httpMethod: 'GET' }
+      return { url: `${base}/earnings/${enc(params?.address)}`, httpMethod: 'GET' }
 
     // --- Metrics ---
     case 'getTransactionMetrics':

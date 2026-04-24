@@ -1,7 +1,8 @@
 import type { Client } from '../../clients/createClient.js'
 
 export type GetDelegatorsParameters = { validator: string }
-export type GetDelegatorsReturnType = unknown
+/** Array of delegator addresses (aleo1...) bonded to the validator. */
+export type GetDelegatorsReturnType = string[]
 
 export async function getDelegators(
   client: Client,
@@ -10,5 +11,5 @@ export async function getDelegators(
   return client.request({
     method: 'getDelegators',
     params: { validator: params.validator },
-  })
+  }) as Promise<GetDelegatorsReturnType>
 }

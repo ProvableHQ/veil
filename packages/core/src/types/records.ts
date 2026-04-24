@@ -1,5 +1,5 @@
 export type RecordSearchParams = {
-  program: string
+  programId: string
   account?: { viewKey: string } | undefined
   unspent?: boolean | undefined
 }

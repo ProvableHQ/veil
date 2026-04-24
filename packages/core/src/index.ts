@@ -25,9 +25,44 @@ export type {
   AleoRecord,
 } from './types/records.js'
 
-export type { Block, ConfirmedTransaction } from './types/block.js'
-export type { Transaction, Transition } from './types/transaction.js'
+export type {
+  Block,
+  Header,
+  Metadata,
+  Ratification,
+  Solutions,
+  Solution,
+  PartialSolution,
+  Finalize,
+  ConfirmedTransaction,
+} from './types/block.js'
+export type {
+  Transaction,
+  Transition,
+  Input,
+  Output,
+  Execution,
+  FeeExecution,
+  Deployment,
+  VerifyingKey,
+  Owner,
+} from './types/transaction.js'
 export type { Program, ProgramFunction, ProgramMapping, MappingValue } from './types/program.js'
+export type {
+  BlockSummary,
+  TransactionSummary,
+  TransitionSummary,
+  Committee,
+  CommitteeMember,
+  StakingEarnings,
+  TransactionMetricPoint,
+  ProgramMetricPoint,
+  ValidatorApy,
+  TvlEntry,
+  Pagination,
+  TokenInfo,
+  TokenPage,
+} from './types/network.js'
 
 // Errors
 export {
@@ -75,10 +110,10 @@ export { toAccount } from './accounts/toAccount.js'
 export { getBlockNumber } from './actions/public/getBlockNumber.js'
 export { getBlock } from './actions/public/getBlock.js'
 export { getTransaction } from './actions/public/getTransaction.js'
+export { getTransactionByTransition } from './actions/public/getTransactionByTransition.js'
 export { getBalance } from './actions/public/getBalance.js'
 export { readContract } from './actions/public/readContract.js'
-export { getCode } from './actions/public/getCode.js'
-export { estimateGas } from './actions/public/estimateGas.js'
+export { getCode, getProgram } from './actions/public/getCode.js'
 export { getRecords } from './actions/public/getRecords.js'
 export { getTransitionViewKeys } from './actions/public/getTransitionViewKeys.js'
 export { getBlockHash } from './actions/public/getBlockHash.js'
@@ -98,6 +133,22 @@ export { findTransitionId } from './actions/public/findTransitionId.js'
 export { getMappingNames } from './actions/public/getMappingNames.js'
 export { getDeploymentTransaction } from './actions/public/getDeploymentTransaction.js'
 export { getProgramCalls } from './actions/public/getProgramCalls.js'
+export { getProgramCallsPaginated } from './actions/public/getProgramCallsPaginated.js'
+export { getLatestEdition } from './actions/public/getLatestEdition.js'
+export { getProgramByEdition } from './actions/public/getProgramByEdition.js'
+export { getAmendmentCount } from './actions/public/getAmendmentCount.js'
+export { getAmendmentCountByEdition } from './actions/public/getAmendmentCountByEdition.js'
+export { getDeploymentTransactionByEdition } from './actions/public/getDeploymentTransactionByEdition.js'
+export { getOriginalDeploymentTransaction } from './actions/public/getOriginalDeploymentTransaction.js'
+export { getAmendmentDeploymentTransaction } from './actions/public/getAmendmentDeploymentTransaction.js'
+export { getProgramIdByAddress } from './actions/public/getProgramIdByAddress.js'
+export { getProgramAddress } from './actions/public/getProgramAddress.js'
+export { findBlockHeightByStateRoot } from './actions/public/findBlockHeightByStateRoot.js'
+export { getStatePaths } from './actions/public/getStatePaths.js'
+export { getBlockHeightByHash } from './actions/public/getBlockHeightByHash.js'
+export { getBlockTransactionsByHash } from './actions/public/getBlockTransactionsByHash.js'
+export { getTokenDetails } from './actions/public/getTokenDetails.js'
+export { getProgramMetricsByRange } from './actions/public/getProgramMetricsByRange.js'
 export { getCommittee } from './actions/public/getCommittee.js'
 export { getDelegators } from './actions/public/getDelegators.js'
 export { getStakingEarnings } from './actions/public/getStakingEarnings.js'

@@ -15,6 +15,5 @@ describe('createPublicClient', () => {
     expect(client.getTransaction).toBeTypeOf('function')
     expect(client.readContract).toBeTypeOf('function')
     expect(client.getCode).toBeTypeOf('function')
-    expect(client.estimateGas).toBeTypeOf('function')
   })
 })

@@ -273,9 +273,9 @@ and has been deployed: await client.getCode({ program: 'my_program.aleo' })
 │  readContract      deployContract                │
 │  getCode           sendTransaction               │
 │  getBlock          signMessage                   │
-│  estimateGas       transfer                      │
-│  getRecords        decrypt                       │
-│  describeProgram   requestRecords                │
+│  getRecords        transfer                      │
+│  describeProgram   decrypt                       │
+│                    requestRecords                │
 ├─────────────────────────────────────────────────┤
 │              Contract Instances                   │
 │  getContract({ programSource, client })          │
@@ -336,7 +336,6 @@ veil wraps these existing tools through its adapter packages:
 | `readContract({ program, mapping, key })` | Read a program mapping value | `aleo_read_mapping` |
 | `getCode({ program })` | Fetch program source code | `aleo_get_program_source` |
 | `describeProgram({ program })` | Introspect program functions and mappings | `aleo_describe_program` |
-| `estimateGas({ program, function, inputs })` | Estimate execution fee | `aleo_estimate_gas` |
 | `getRecords({ program })` | Fetch records (Aleo-native) | `aleo_get_records` |
 | `getTransitionViewKeys({ transactionId })` | Get transition view keys (Aleo-native) | `aleo_get_transition_view_keys` |
 
@@ -365,7 +364,6 @@ If viem has a name for the concept, veil uses it. Aleo-specific names are only u
 | `writeContract` | `writeContract` / `executeTransaction` — executes program transition |
 | `deployContract` | `deployContract` — deploys program |
 | `getCode` | `getCode` — fetches program source |
-| `estimateGas` | `estimateGas` — estimates fee |
 | `sendTransaction` | `sendTransaction` — broadcasts transaction |
 | `signMessage` | `signMessage` — signs message |
 | `getContract` | `getContract` — typed contract instance from program source |

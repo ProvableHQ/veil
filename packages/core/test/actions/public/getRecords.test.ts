@@ -13,10 +13,10 @@ describe('getRecords', () => {
       request: vi.fn(),
     } as any
 
-    const result = await getRecords(client, { program: 'token.aleo' })
+    const result = await getRecords(client, { programId: 'token.aleo' })
 
     expect(result).toEqual(mockRecords)
-    expect(customGetRecords).toHaveBeenCalledWith({ program: 'token.aleo' })
+    expect(customGetRecords).toHaveBeenCalledWith({ programId: 'token.aleo' })
     expect(client.request).not.toHaveBeenCalled()
   })
 
@@ -30,12 +30,12 @@ describe('getRecords', () => {
       request: vi.fn().mockResolvedValue(mockRecords),
     } as any
 
-    const result = await getRecords(client, { program: 'token.aleo' })
+    const result = await getRecords(client, { programId: 'token.aleo' })
 
     expect(result).toEqual(mockRecords)
     expect(client.request).toHaveBeenCalledWith({
       method: 'getRecords',
-      params: { program: 'token.aleo' },
+      params: { programId: 'token.aleo' },
     })
   })
 
@@ -47,12 +47,12 @@ describe('getRecords', () => {
       request: vi.fn().mockResolvedValue(mockRecords),
     } as any
 
-    const result = await getRecords(client, { program: 'token.aleo' })
+    const result = await getRecords(client, { programId: 'token.aleo' })
 
     expect(result).toEqual(mockRecords)
     expect(client.request).toHaveBeenCalledWith({
       method: 'requestRecords',
-      params: { program: 'token.aleo' },
+      params: { programId: 'token.aleo' },
     })
   })
 
@@ -62,7 +62,7 @@ describe('getRecords', () => {
       request: vi.fn().mockRejectedValue(new Error('Unknown method')),
     } as any
 
-    const result = await getRecords(client, { program: 'token.aleo' })
+    const result = await getRecords(client, { programId: 'token.aleo' })
 
     expect(result).toEqual([])
   })
@@ -75,12 +75,12 @@ describe('getRecords', () => {
       request: vi.fn().mockResolvedValue(mockRecords),
     } as any
 
-    const result = await getRecords(client, { program: 'token.aleo' })
+    const result = await getRecords(client, { programId: 'token.aleo' })
 
     expect(result).toEqual(mockRecords)
     expect(client.request).toHaveBeenCalledWith({
       method: 'requestRecords',
-      params: { program: 'token.aleo' },
+      params: { programId: 'token.aleo' },
     })
   })
 })

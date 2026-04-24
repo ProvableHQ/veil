@@ -1,7 +1,8 @@
 import type { Client } from '../../clients/createClient.js'
+import type { Transaction } from '../../types/transaction.js'
 
-export type GetDeploymentTransactionParameters = { program: string }
-export type GetDeploymentTransactionReturnType = unknown
+export type GetDeploymentTransactionParameters = { programId: string }
+export type GetDeploymentTransactionReturnType = Transaction
 
 export async function getDeploymentTransaction(
   client: Client,
@@ -9,6 +10,6 @@ export async function getDeploymentTransaction(
 ): Promise<GetDeploymentTransactionReturnType> {
   return client.request({
     method: 'getDeploymentTransaction',
-    params: { programId: params.program },
-  })
+    params: { programId: params.programId },
+  }) as Promise<GetDeploymentTransactionReturnType>
 }
