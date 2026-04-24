@@ -4,36 +4,101 @@
 // representation used by snarkvm) and Veil's typed RecordValue objects.
 
 import type { Primitive, Plaintext, RecordValue, RecordFieldValue } from '../types/primitives.js'
-import type { RecordDef } from '../types/abi.js'
+import type { ABI, RecordDef, FunctionInput } from '../types/abi.js'
 import { parseValue, encodeValue } from './values.js'
+
+// ── getRecordDef ──────────────────────────────────────────────────────
+
+/**
+ * Looks up a RecordDef by name from an ABI.
+ *
+ * @example
+ * ```ts
+ * const cardDef = getRecordDef(tokenAbi, 'LoyaltyCard')
+ * ```
+ */
+export function getRecordDef(abi: ABI, recordName: string): RecordDef {
+  const def = abi.records.find(
+    (r) => r.path[r.path.length - 1] === recordName,
+  )
+  if (!def) {
+    const available = abi.records.map((r) => r.path[r.path.length - 1]).join(', ')
+    throw new Error(
+      `Record "${recordName}" not found in program "${abi.program}". ` +
+      `Available records: ${available || 'none'}`,
+    )
+  }
+  return def
+}
+
+// ── getInputTypes ─────────────────────────────────────────────────────
+
+/**
+ * Extracts the Plaintext types for a function's inputs from an ABI.
+ * Used by encodeInputs to auto-encode native values.
+ *
+ * @example
+ * ```ts
+ * const types = getInputTypes(tokenAbi, 'mint_card')
+ * const encoded = encodeInputs([recipient, 1000n, 42n], types)
+ * ```
+ */
+export function getInputTypes(abi: ABI, functionName: string): Plaintext[] {
+  const fn = abi.functions.find((f) => f.name === functionName)
+  if (!fn) {
+    const available = abi.functions.map((f) => f.name).join(', ')
+    throw new Error(
+      `Function "${functionName}" not found in program "${abi.program}". ` +
+      `Available functions: ${available || 'none'}`,
+    )
+  }
+  return fn.inputs.map((input) => {
+    if (input.type.kind === 'plaintext') return input.type.type
+    // Record inputs are passed as pre-serialized strings; return a placeholder type
+    return { kind: 'primitive' as const, primitive: 'field' as const }
+  })
+}
 
 // ── parseRecordPlaintext ──────────────────────────────────────────────
 
 /**
  * Parses an Aleo record plaintext string into a typed RecordValue.
  *
- * Requires the RecordDef from the ABI so that each field's Aleo type
- * is embedded in the resulting RecordFieldValue (enabling toString()
- * to serialize back without needing the RecordDef again).
+ * Accepts either a RecordDef directly or an ABI + record name (convenience).
+ * Each field's Aleo type is embedded in the resulting RecordFieldValue,
+ * enabling toString() to serialize back without needing the RecordDef again.
  *
  * @example
  * ```ts
- * const record = parseRecordPlaintext(
- *   '{ owner: aleo1abc.private, points: 1000u64.private, _nonce: 123group.public }',
- *   loyaltyCardDef,
- * )
- * // record.fields.points.value === 1000n
- * // record.fields.points.type === { kind: 'primitive', primitive: 'u64' }
+ * // With ABI (recommended — no manual RecordDef lookup)
+ * const record = parseRecordPlaintext(plaintext, tokenAbi, 'LoyaltyCard', 'loyalty_token.aleo')
+ *
+ * // With RecordDef directly
+ * const record = parseRecordPlaintext(plaintext, loyaltyCardDef, 'loyalty_token.aleo')
  * ```
  */
 export function parseRecordPlaintext(
   plaintext: string,
-  recordDef: RecordDef,
-  program: string,
+  abiOrRecordDef: ABI | RecordDef,
+  recordNameOrProgram: string,
+  program?: string,
 ): RecordValue {
+  let recordDef: RecordDef
+  let resolvedProgram: string
+
+  if ('functions' in abiOrRecordDef) {
+    // ABI overload: parseRecordPlaintext(plaintext, abi, recordName, program)
+    const abi = abiOrRecordDef as ABI
+    recordDef = getRecordDef(abi, recordNameOrProgram)
+    resolvedProgram = program ?? abi.program
+  } else {
+    // RecordDef overload: parseRecordPlaintext(plaintext, recordDef, program)
+    recordDef = abiOrRecordDef as RecordDef
+    resolvedProgram = recordNameOrProgram
+  }
+
   const rawFields = parseRawFields(plaintext)
 
-  // Build a lookup from field name to its Plaintext type from the RecordDef
   const fieldTypeLookup = new Map(
     recordDef.fields.map((f) => [f.name, { type: f.type, mode: f.mode }]),
   )
@@ -43,7 +108,6 @@ export function parseRecordPlaintext(
   for (const [key, rawValue] of Object.entries(rawFields)) {
     if (key === 'owner' || key.startsWith('_')) continue
 
-    // Strip visibility suffix before parsing the value
     const cleaned = rawValue.replace(/\.(private|public)$/, '').trim()
     const parsed = parseValue(cleaned)
     const defInfo = fieldTypeLookup.get(key)
@@ -55,22 +119,20 @@ export function parseRecordPlaintext(
     }
   }
 
-  // Extract owner
   const ownerRaw = rawFields['owner'] ?? ''
   const owner = ownerRaw.replace(/\.private$/, '').trim()
 
-  // Extract nonce
   const nonceRaw = rawFields['_nonce'] ?? ''
   const nonce = nonceRaw.replace(/\.public$/, '').trim()
 
   const recordName = recordDef.path[recordDef.path.length - 1] ?? 'unknown'
-  return { owner, program, recordName, fields, nonce }
+  return { owner, program: resolvedProgram, recordName, fields, nonce }
 }
 
 /**
  * Parses a record plaintext string without a RecordDef.
  * Fields will have their type inferred from the value suffix (e.g. "1000u64" → u64).
- * Less precise than parseRecordPlaintext(plaintext, recordDef, program) but works when no ABI is available.
+ * Less precise than parseRecordPlaintext with ABI but works when no ABI is available.
  */
 export function parseRecordPlaintextLoose(
   plaintext: string,
@@ -84,7 +146,6 @@ export function parseRecordPlaintextLoose(
   for (const [key, rawValue] of Object.entries(rawFields)) {
     if (key === 'owner' || key.startsWith('_')) continue
 
-    // Detect visibility from suffix
     const isPublic = rawValue.endsWith('.public')
     const cleaned = rawValue.replace(/\.(private|public)$/, '').trim()
 
@@ -106,7 +167,7 @@ export function parseRecordPlaintextLoose(
   return { owner, program, recordName, fields, nonce }
 }
 
-// ── toString ───────────────────────────────────────────────────────
+// ── toString ──────────────────────────────────────────────────────────
 
 /**
  * Serializes a RecordValue back to Aleo record plaintext format.
@@ -114,6 +175,9 @@ export function parseRecordPlaintextLoose(
  * Uses the `type` field on each RecordFieldValue to determine the correct
  * Aleo type suffix. This is why RecordFieldValue carries `type: Plaintext` —
  * without it, a bigint value of 1000n could be u64, u128, field, or i64.
+ *
+ * Also exported as `serializeRecord` for contexts where `toString` collides
+ * with the global.
  *
  * @example
  * ```ts
@@ -124,37 +188,59 @@ export function parseRecordPlaintextLoose(
 export function toString(record: RecordValue): string {
   const lines: string[] = []
 
-  // Owner is always address.private
   lines.push(`  owner: ${record.owner}.private`)
 
-  // Fields
   for (const [name, field] of Object.entries(record.fields)) {
     const primitive = extractPrimitive(field.type)
     const encoded = encodeValue(field.value as bigint | boolean | string, primitive)
     lines.push(`  ${name}: ${encoded}.${field.mode}`)
   }
 
-  // Nonce is always group.public
   lines.push(`  _nonce: ${record.nonce}.public`)
 
   return `{\n${lines.join(',\n')}\n}`
 }
 
-// ── encodeInputs ──────────────────────────────────────────────────────
+/** Alias for toString — avoids collision with the global in standalone usage */
+export const serializeRecord = toString
+
+// ── encodeInputs ─────────────────────────────────────────────────────
 
 /**
- * Encodes native JS values into Aleo input strings using ABI type information.
+ * Encodes native JS values into Aleo input strings.
  *
- * - Strings that look like record plaintext (start with '{') or are already
- *   encoded (contain type suffix) pass through unchanged.
- * - BigInts/numbers are encoded with the ABI's type suffix.
- * - Booleans become "true"/"false".
- * - RecordValue objects are serialized via toString().
+ * Accepts either raw Plaintext types or an ABI + function name (convenience).
+ *
+ * - Strings pass through unchanged (pre-encoded or record plaintext)
+ * - BigInts/numbers are encoded with the ABI's type suffix
+ * - Booleans become "true"/"false"
+ * - RecordValue objects are serialized via toString()
+ *
+ * @example
+ * ```ts
+ * // With ABI (recommended — no manual type extraction)
+ * const encoded = encodeInputs([recipient, 1000n, 42n], tokenAbi, 'mint_card')
+ *
+ * // With raw Plaintext types
+ * const encoded = encodeInputs([recipient, 1000n, 42n], inputTypes)
+ * ```
  */
 export function encodeInputs(
   values: (bigint | number | boolean | string | RecordValue)[],
-  inputTypes: Plaintext[],
+  abiOrTypes: ABI | Plaintext[],
+  functionName?: string,
 ): string[] {
+  let inputTypes: Plaintext[]
+
+  if (Array.isArray(abiOrTypes)) {
+    inputTypes = abiOrTypes
+  } else {
+    if (!functionName) {
+      throw new Error('functionName is required when passing an ABI to encodeInputs')
+    }
+    inputTypes = getInputTypes(abiOrTypes as ABI, functionName)
+  }
+
   return values.map((value, i) => {
     // RecordValue — serialize to plaintext
     if (typeof value === 'object' && value !== null && 'owner' in value && 'fields' in value) {
@@ -190,7 +276,6 @@ export function encodeInputs(
 /** Extract the Primitive string from a Plaintext type descriptor */
 function extractPrimitive(pt: Plaintext): Primitive {
   if (pt.kind === 'primitive') return pt.primitive
-  // For non-primitive types (struct, array, optional), fall back to 'field'
   return 'field'
 }
 

@@ -55,7 +55,7 @@ export {
 export { isAddress, assertAddress } from './utils/address.js'
 export { creditsToMicrocredits, microcreditsToCredits } from './utils/credits.js'
 export { parseValue, encodeValue, type ParsedValue } from './utils/values.js'
-export { parseRecordPlaintext, parseRecordPlaintextLoose, toString, encodeInputs } from './utils/records.js'
+export { parseRecordPlaintext, parseRecordPlaintextLoose, toString, serializeRecord, encodeInputs, getRecordDef, getInputTypes } from './utils/records.js'
 export { parsePrimitive, parsePlaintext } from './utils/parsePrimitives.js'
 export { parseAbi } from './utils/parseAbi.js'
 
