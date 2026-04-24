@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR, startDevnode } from '../src/index.js'
+import {
+  DEVNODE_PRIVATE_KEY,
+  DEVNODE_ADDR,
+  createLeoClient,
+} from '../src/index.js'
 
 describe('@veil/leo', () => {
   describe('constants', () => {
@@ -12,16 +16,26 @@ describe('@veil/leo', () => {
     })
   })
 
-  describe('startDevnode', () => {
-    it('is a function', () => {
-      expect(startDevnode).toBeTypeOf('function')
+  describe('createLeoClient', () => {
+    it('returns a client with the expected surface', () => {
+      const client = createLeoClient()
+      expect(client.build).toBeTypeOf('function')
+      expect(client.abi).toBeTypeOf('function')
+      expect(client.deploy).toBeTypeOf('function')
+      expect(client.synthesize).toBeTypeOf('function')
+      expect(client.devnode.start).toBeTypeOf('function')
+      expect(client.devnode.advance).toBeTypeOf('function')
     })
 
-    it('rejects quickly when Leo CLI is not found', async () => {
-      // Uses a very short timeout to avoid hanging; the spawn error fires synchronously
-      await expect(
-        startDevnode({ readyTimeout: 100 }),
-      ).rejects.toThrow()
+    it('exposes the constructor config', () => {
+      const client = createLeoClient({ cwd: '/tmp/foo', network: 'testnet' })
+      expect(client.config.cwd).toBe('/tmp/foo')
+      expect(client.config.network).toBe('testnet')
+    })
+
+    it('devnode.start rejects quickly when the leo binary path is invalid', async () => {
+      const client = createLeoClient({ leoPath: '/does/not/exist/leo' })
+      await expect(client.devnode.start({ readyTimeout: 100 })).rejects.toThrow()
     }, 5_000)
   })
 })
@@ -29,33 +43,17 @@ describe('@veil/leo', () => {
 /**
  * Integration tests — require a running Leo CLI.
  *
- * Run with: DEVNODE_INTEGRATION=1 vitest run
+ * Run with: VEIL_DEVNODE_INTEGRATION=1 vitest run
  *
- * describe('startDevnode (integration)', () => {
- *   let devnode: DevnodeInstance
+ * describe.runIf(process.env.VEIL_DEVNODE_INTEGRATION === '1')('createLeoClient (integration)', () => {
+ *   const client = createLeoClient()
  *
- *   beforeAll(async () => {
- *     devnode = await startDevnode()
- *   }, 30_000)
- *
- *   afterAll(async () => {
- *     await devnode.stop()
- *   })
- *
- *   it('returns the correct socket address', () => {
+ *   it('starts and stops a devnode', async () => {
+ *     const devnode = await client.devnode.start()
  *     expect(devnode.socketAddr).toBe(DEVNODE_ADDR)
- *   })
- *
- *   it('REST API responds to health check', async () => {
  *     const res = await fetch(`http://${devnode.socketAddr}/testnet/block/height/latest`)
  *     expect(res.ok).toBe(true)
- *   })
- *
- *   it('stop() terminates the process', async () => {
  *     await devnode.stop()
- *     await expect(
- *       fetch(`http://${devnode.socketAddr}/testnet/block/height/latest`)
- *     ).rejects.toThrow()
- *   })
+ *   }, 45_000)
  * })
  */

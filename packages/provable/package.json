@@ -19,6 +19,7 @@
     "@provablehq/sdk": "^0.9.15"
   },
   "peerDependencies": {
-    "@veil/core": "workspace:*"
+    "@veil/core": "workspace:*",
+    "@veil/leo": "workspace:*"
   }
 }

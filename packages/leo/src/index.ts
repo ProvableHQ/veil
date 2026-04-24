@@ -1,114 +1,427 @@
 import { spawn } from 'node:child_process'
 
-/** The well-known seeded private key used by Aleo Devnode */
+// =============================================================================
+// Constants
+// =============================================================================
+
+/** The well-known seeded private key used by Aleo Devnode. */
 export const DEVNODE_PRIVATE_KEY = 'APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH'
 
-/** Default local devnode socket address */
+/** Default devnode REST socket address. */
 export const DEVNODE_ADDR = '127.0.0.1:3030'
 
 const HEALTH_CHECK_PATH = '/testnet/block/height/latest'
 const HEALTH_CHECK_INTERVAL_MS = 250
 const HEALTH_CHECK_REQUEST_TIMEOUT_MS = 1_000
 
-export type DevnodeOptions = {
-  /** Aleo private key for the genesis account. Defaults to the well-known seeded key. */
-  privateKey?: string
-  /** Socket address for the REST API. Defaults to "127.0.0.1:3030". */
-  socketAddr?: string
-  /** Log verbosity (0–2). Defaults to 2. */
-  verbosity?: 0 | 1 | 2
-  /** Path to a custom genesis block file. */
-  genesisPath?: string
+// =============================================================================
+// Client-level config (defaults shared across every command)
+// =============================================================================
+
+export type LeoClientConfig = {
   /**
-   * Directory for persistent ledger storage.
-   * - Omit for in-memory (ephemeral, no persistence across restarts).
-   * - Pass an empty string to use the default "./devnode" directory.
-   * - Pass a path string for a custom directory.
+   * Default project root (equivalent to `--path`). Commands can still override
+   * per-call via their `cwd` option.
    */
-  storagePath?: string
-  /** Clear the storage directory before starting. Requires storagePath. */
-  clearStorage?: boolean
-  /** Disable automatic block creation after broadcast. */
+  cwd?: string
+  /** Path to the leo binary. Defaults to `'leo'` (resolved on PATH). */
+  leoPath?: string
+  /** Default `--network`. */
+  network?: 'mainnet' | 'testnet' | 'canary'
+  /** Default `--endpoint` URL. */
+  endpoint?: string
+  /** Default `--private-key`. */
+  privateKey?: string
+  /** Default `--devnet` (mark target as a devnet). */
+  devnet?: boolean
+  /** Default `--home` (path to the Aleo program registry). */
+  home?: string
+  /** Default `-q`. Suppress leo CLI output. */
+  quiet?: boolean
+  /** Default `-d`. Print additional debug info. */
+  debug?: boolean
+  /** Default `--disable-update-check`. */
+  disableUpdateCheck?: boolean
+  /** Default `--network-retries`. */
+  networkRetries?: number
+  /** Default `--consensus-heights`. */
+  consensusHeights?: string
+  /** Default `--offline`. */
+  offline?: boolean
+}
+
+// =============================================================================
+// Shared option mixins
+// =============================================================================
+
+/** Compiler-phase options shared by build/deploy/synthesize. */
+export type LeoCompilerOptions = {
+  enableAstSpans?: boolean
+  enableDce?: boolean
+  conditionalBlockMaxDepth?: number
+  disableConditionalBranchTypeChecking?: boolean
+  enableInitialAstSnapshot?: boolean
+  enableAllAstSnapshots?: boolean
+  astSnapshots?: string[]
+  buildTests?: boolean
+  noCache?: boolean
+  noLocal?: boolean
+}
+
+/** Transaction-shape options shared by deploy/synthesize. */
+export type LeoTransactionOptions = {
+  /** `--priority-fees` (microcredit amounts delimited by `|`). */
+  priorityFees?: string
+  /** `-f, --fee-records`. */
+  feeRecords?: string
+  /** `--print` the transaction. */
+  print?: boolean
+  /** `--broadcast` the transaction to the network. */
+  broadcast?: boolean
+  /** `--save` the transaction to the given directory. */
+  save?: string
+  /** `-y, --yes`. Skip confirmation prompts. */
+  yes?: boolean
+  /** `--consensus-version`. */
+  consensusVersion?: string
+  /** `--max-wait` seconds when searching for the tx. */
+  maxWait?: number
+  /** `--blocks-to-check` window when searching for the tx. */
+  blocksToCheck?: number
+}
+
+// =============================================================================
+// Per-command option types
+// =============================================================================
+
+export type LeoBuildOptions = LeoCompilerOptions & Partial<LeoClientConfig>
+
+export type LeoAbiOptions = {
+  /** Path to the `.aleo` bytecode file (required positional). */
+  file: string
+  /** Network context for parsing. Defaults server-side to `'testnet'`. */
+  network?: 'mainnet' | 'testnet' | 'canary'
+  /** `-o, --output`. Write to path instead of returning stdout. */
+  output?: string
+} & Partial<Omit<LeoClientConfig, 'network'>>
+
+export type LeoDeployOptions = {
+  /** `--skip` deployment of any program whose name contains these substrings. */
+  skip?: string[]
+} & LeoCompilerOptions &
+  LeoTransactionOptions &
+  Partial<LeoClientConfig>
+
+export type LeoSynthesizeOptions = {
+  /** Program name (required positional), e.g. `'helloworld.aleo'`. */
+  name: string
+  /** `-l, --local`. Use the local Leo project. */
+  local?: boolean
+  /** `-s, --skip` functions whose names contain these substrings. */
+  skip?: string[]
+} & LeoCompilerOptions &
+  LeoTransactionOptions &
+  Partial<LeoClientConfig>
+
+// =============================================================================
+// Devnode options
+// =============================================================================
+
+export type DevnodeStartOptions = {
+  /** `--socket-addr` for the devnode REST server. Defaults to `DEVNODE_ADDR`. */
+  socketAddr?: string
+  /** `-v, --verbosity` (0–2). Defaults to 2. */
+  verbosity?: 0 | 1 | 2
+  /** `--genesis-path`. */
+  genesisPath?: string
+  /** `--manual-block-creation`. Disable automatic block creation after broadcast. */
   manualBlockCreation?: boolean
   /** Milliseconds to wait for the devnode REST API to become ready. Defaults to 30000. */
   readyTimeout?: number
-}
+} & Partial<LeoClientConfig>
+
+export type DevnodeAdvanceOptions = {
+  /** Number of blocks to advance (default `1`). */
+  numBlocks?: number
+  /** Target devnode socket. Defaults to `DEVNODE_ADDR`. */
+  socketAddr?: string
+} & Partial<LeoClientConfig>
 
 export type DevnodeInstance = {
-  /** The socket address the devnode is listening on. */
+  /** Socket address the devnode is listening on. */
   socketAddr: string
-  /** Terminates the devnode process. */
+  /** Terminates the devnode process (SIGTERM). */
   stop: () => Promise<void>
 }
 
+// =============================================================================
+// Client
+// =============================================================================
+
+export type LeoClient = {
+  /** Config the client was constructed with. */
+  readonly config: LeoClientConfig
+  /** `leo build` — compile the current package. */
+  build: (options?: LeoBuildOptions) => Promise<void>
+  /** `leo abi` — generate ABI from a `.aleo` bytecode file. Returns the ABI as a string (or empty string if `output` was given). */
+  abi: (options: LeoAbiOptions) => Promise<string>
+  /** `leo deploy` — deploy the current package. */
+  deploy: (options?: LeoDeployOptions) => Promise<void>
+  /** `leo synthesize` — synthesize individual proving/verifying keys for a program. */
+  synthesize: (options: LeoSynthesizeOptions) => Promise<void>
+  /** Devnode lifecycle helpers. */
+  devnode: {
+    /** `leo devnode start` — spawns a devnode and resolves once the REST API is ready. */
+    start: (options?: DevnodeStartOptions) => Promise<DevnodeInstance>
+    /** `leo devnode advance` — advance the ledger by N blocks via the devnode CLI. */
+    advance: (options?: DevnodeAdvanceOptions) => Promise<void>
+  }
+}
+
 /**
- * Starts a local Aleo Devnode by invoking the Leo CLI.
+ * Extension helper that attaches a {@link LeoClient} to any veil client under
+ * the `.leo` property. Pass to `.extend()`:
  *
- * Devnode bypasses consensus and skips ZK proof verification, enabling rapid
- * program iteration. It does charge fees — the genesis account (seeded with
- * DEVNODE_PRIVATE_KEY) is pre-funded for this purpose.
- *
- * Resolves once the devnode REST API is accepting requests. Throws if the Leo CLI
- * is not found, the process exits unexpectedly, or the ready timeout is exceeded.
- *
- * Requires the Leo CLI to be installed: https://developer.aleo.org/leo/installation
- *
- * @example
  * ```ts
- * const devnode = await startDevnode()
- * // ... run tests against http://127.0.0.1:3030 ...
- * await devnode.stop()
+ * const testClient = createTestClient({ transport }).extend(leoActions({ cwd }))
+ * await testClient.leo.build()
+ * await testClient.advanceBlock()
  * ```
  *
- * @example
- * ```ts
- * // Vitest integration suite
- * let devnode: DevnodeInstance
- *
- * beforeAll(async () => { devnode = await startDevnode() })
- * afterAll(async () => { await devnode.stop() })
- * ```
+ * The extension ignores the host client — leo operations don't need a transport —
+ * so this works equally well on publicClient, walletClient, or testClient.
  */
-export async function startDevnode(options?: DevnodeOptions): Promise<DevnodeInstance> {
-  const privateKey = options?.privateKey ?? DEVNODE_PRIVATE_KEY
-  const socketAddr = options?.socketAddr ?? DEVNODE_ADDR
-  const verbosity = options?.verbosity ?? 2
-  const readyTimeout = options?.readyTimeout ?? 30_000
+export function leoActions(config: LeoClientConfig = {}) {
+  return (_client: unknown): { leo: LeoClient } => ({
+    leo: createLeoClient(config),
+  })
+}
 
-  const args = [
-    'devnode', 'start',
-    '--private-key', privateKey,
-    '--socket-addr', socketAddr,
-    '--verbosity', String(verbosity),
-  ]
-
-  if (options?.genesisPath !== undefined) {
-    args.push('--genesis-path', options.genesisPath)
-  }
-  if (options?.storagePath !== undefined) {
-    // --storage accepts an optional path; passing empty string uses the CLI default ("devnode")
-    args.push(options.storagePath === '' ? '--storage' : `--storage=${options.storagePath}`)
-  }
-  if (options?.clearStorage) {
-    args.push('--clear-storage')
-  }
-  if (options?.manualBlockCreation) {
-    args.push('--manual-block-creation')
-  }
-
-  const proc = spawn('leo', args, { stdio: 'pipe' })
-
-  let startError: Error | undefined
-
-  proc.on('error', (err) => {
-    startError = new Error(
-      `Failed to start leo devnode: ${err.message}. ` +
-      'Ensure the Leo CLI is installed: https://developer.aleo.org/leo/installation',
-    )
+export function createLeoClient(config: LeoClientConfig = {}): LeoClient {
+  const merge = <T extends Partial<LeoClientConfig>>(opts: T): T & LeoClientConfig => ({
+    ...config,
+    ...opts,
   })
 
+  return {
+    config,
+
+    build: async (options = {}) => {
+      const m = merge(options)
+      const args = [
+        'build',
+        ...buildGlobalFlags(m),
+        ...buildNetworkFlags(m),
+        ...buildCompilerFlags(options),
+      ]
+      await runLeo(args, m.cwd, m.leoPath)
+    },
+
+    abi: async (options) => {
+      const m = merge(options)
+      const args = ['abi', options.file]
+      if (options.network) args.push('--network', options.network)
+      if (options.output) args.push('--output', options.output)
+      args.push(...buildGlobalFlags(m))
+      return runLeoCapture(args, m.cwd, m.leoPath)
+    },
+
+    deploy: async (options = {}) => {
+      const m = merge(options)
+      const args = [
+        'deploy',
+        ...buildGlobalFlags(m),
+        ...buildNetworkFlags(m),
+        ...buildCompilerFlags(options),
+        ...buildTransactionFlags(options),
+      ]
+      if (options.skip) for (const s of options.skip) args.push('--skip', s)
+      await runLeo(args, m.cwd, m.leoPath)
+    },
+
+    synthesize: async (options) => {
+      const m = merge(options)
+      const args = ['synthesize', options.name]
+      if (options.local) args.push('--local')
+      if (options.skip) for (const s of options.skip) args.push('--skip', s)
+      args.push(
+        ...buildGlobalFlags(m),
+        ...buildNetworkFlags(m),
+        ...buildCompilerFlags(options),
+        ...buildTransactionFlags(options),
+      )
+      await runLeo(args, m.cwd, m.leoPath)
+    },
+
+    devnode: {
+      start: async (options = {}) => {
+        const m = merge(options)
+        const socketAddr = options.socketAddr ?? DEVNODE_ADDR
+        const privateKey = m.privateKey ?? DEVNODE_PRIVATE_KEY
+        const verbosity = options.verbosity ?? 2
+        const readyTimeout = options.readyTimeout ?? 30_000
+
+        const args = [
+          'devnode',
+          'start',
+          '--private-key',
+          privateKey,
+          '--socket-addr',
+          socketAddr,
+          '--verbosity',
+          String(verbosity),
+        ]
+        if (options.genesisPath !== undefined) args.push('--genesis-path', options.genesisPath)
+        if (options.manualBlockCreation) args.push('--manual-block-creation')
+        args.push(...buildGlobalFlags(m), ...buildDevnodeNetworkFlags(m))
+
+        return spawnDevnode(m.leoPath ?? 'leo', args, socketAddr, readyTimeout)
+      },
+
+      advance: async (options = {}) => {
+        const m = merge(options)
+        const args = ['devnode', 'advance']
+        if (options.numBlocks !== undefined) args.push(String(options.numBlocks))
+        if (options.socketAddr) args.push('--socket-addr', options.socketAddr)
+        args.push(...buildGlobalFlags(m), ...buildDevnodeNetworkFlags(m))
+        await runLeo(args, m.cwd, m.leoPath)
+      },
+    },
+  }
+}
+
+// =============================================================================
+// Flag builders
+// =============================================================================
+
+function buildGlobalFlags(c: LeoClientConfig): string[] {
+  const a: string[] = []
+  if (c.debug) a.push('-d')
+  if (c.quiet) a.push('-q')
+  if (c.disableUpdateCheck) a.push('--disable-update-check')
+  if (c.cwd) a.push('--path', c.cwd)
+  if (c.home) a.push('--home', c.home)
+  return a
+}
+
+function buildNetworkFlags(c: LeoClientConfig): string[] {
+  const a: string[] = []
+  if (c.privateKey) a.push('--private-key', c.privateKey)
+  if (c.network) a.push('--network', c.network)
+  if (c.endpoint) a.push('--endpoint', c.endpoint)
+  if (c.devnet) a.push('--devnet')
+  if (c.consensusHeights) a.push('--consensus-heights', c.consensusHeights)
+  if (c.networkRetries !== undefined) a.push('--network-retries', String(c.networkRetries))
+  if (c.offline) a.push('--offline')
+  return a
+}
+
+/**
+ * Devnode commands accept a narrower set of network flags — no `--offline` or
+ * `--network-retries`.
+ */
+function buildDevnodeNetworkFlags(c: LeoClientConfig): string[] {
+  const a: string[] = []
+  if (c.network) a.push('--network', c.network)
+  if (c.endpoint) a.push('--endpoint', c.endpoint)
+  if (c.devnet) a.push('--devnet')
+  if (c.consensusHeights) a.push('--consensus-heights', c.consensusHeights)
+  return a
+}
+
+function buildCompilerFlags(o: LeoCompilerOptions): string[] {
+  const a: string[] = []
+  if (o.enableAstSpans) a.push('--enable-ast-spans')
+  if (o.enableDce) a.push('--enable-dce')
+  if (o.conditionalBlockMaxDepth !== undefined) {
+    a.push('--conditional-block-max-depth', String(o.conditionalBlockMaxDepth))
+  }
+  if (o.disableConditionalBranchTypeChecking) {
+    a.push('--disable-conditional-branch-type-checking')
+  }
+  if (o.enableInitialAstSnapshot) a.push('--enable-initial-ast-snapshot')
+  if (o.enableAllAstSnapshots) a.push('--enable-all-ast-snapshots')
+  if (o.astSnapshots && o.astSnapshots.length) {
+    a.push('--ast-snapshots', o.astSnapshots.join(','))
+  }
+  if (o.buildTests) a.push('--build-tests')
+  if (o.noCache) a.push('--no-cache')
+  if (o.noLocal) a.push('--no-local')
+  return a
+}
+
+function buildTransactionFlags(o: LeoTransactionOptions): string[] {
+  const a: string[] = []
+  if (o.priorityFees) a.push('--priority-fees', o.priorityFees)
+  if (o.feeRecords) a.push('--fee-records', o.feeRecords)
+  if (o.print) a.push('--print')
+  if (o.broadcast) a.push('--broadcast')
+  if (o.save) a.push('--save', o.save)
+  if (o.yes) a.push('-y')
+  if (o.consensusVersion) a.push('--consensus-version', o.consensusVersion)
+  if (o.maxWait !== undefined) a.push('--max-wait', String(o.maxWait))
+  if (o.blocksToCheck !== undefined) a.push('--blocks-to-check', String(o.blocksToCheck))
+  return a
+}
+
+// =============================================================================
+// Subprocess helpers
+// =============================================================================
+
+function runLeo(args: string[], cwd?: string, leoPath = 'leo'): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(leoPath, args, { stdio: 'inherit', cwd })
+    proc.on('error', (err) =>
+      reject(
+        new Error(
+          `Failed to run ${leoPath}: ${err.message}. Ensure the Leo CLI is installed: https://developer.aleo.org/leo/installation`,
+        ),
+      ),
+    )
+    proc.on('exit', (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`${leoPath} ${args[0]} exited with code ${code}`))
+    })
+  })
+}
+
+function runLeoCapture(args: string[], cwd?: string, leoPath = 'leo'): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(leoPath, args, { stdio: ['ignore', 'pipe', 'inherit'], cwd })
+    let stdout = ''
+    proc.stdout?.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString()
+    })
+    proc.on('error', (err) =>
+      reject(
+        new Error(
+          `Failed to run ${leoPath}: ${err.message}. Ensure the Leo CLI is installed: https://developer.aleo.org/leo/installation`,
+        ),
+      ),
+    )
+    proc.on('exit', (code) => {
+      if (code === 0) resolve(stdout)
+      else reject(new Error(`${leoPath} ${args[0]} exited with code ${code}`))
+    })
+  })
+}
+
+async function spawnDevnode(
+  leoPath: string,
+  args: string[],
+  socketAddr: string,
+  readyTimeout: number,
+): Promise<DevnodeInstance> {
+  const proc = spawn(leoPath, args, { stdio: 'pipe' })
+
+  let startError: Error | undefined
+  proc.on('error', (err) => {
+    startError = new Error(
+      `Failed to start leo devnode: ${err.message}. Ensure the Leo CLI is installed: https://developer.aleo.org/leo/installation`,
+    )
+  })
   proc.on('exit', (code, signal) => {
-    if (signal === 'SIGINT' || signal === 'SIGTERM') return
+    if (signal === 'SIGTERM') return
     if (code !== 0 && code !== null) {
       startError = startError ?? new Error(`leo devnode exited unexpectedly with code ${code}`)
     }
@@ -120,136 +433,10 @@ export async function startDevnode(options?: DevnodeOptions): Promise<DevnodeIns
     socketAddr,
     stop: () =>
       new Promise<void>((resolve) => {
-        proc.kill('SIGINT')
+        proc.kill('SIGTERM')
         proc.once('exit', () => resolve())
       }),
   }
-}
-
-// ---------------------------------------------------------------------------
-// Leo CLI wrappers
-// ---------------------------------------------------------------------------
-
-export type LeoBuildOptions = {
-  /** Path to the Leo project directory. Defaults to the current working directory. */
-  cwd?: string
-}
-
-export type LeoStartOptions = {
-  /** Leo program name/path to run. */
-  program: string
-  /** Function name to call. */
-  function: string
-  /** Inputs to pass to the function. */
-  inputs?: string[]
-  /** Path to the Leo project directory. Defaults to the current working directory. */
-  cwd?: string
-}
-
-export type LeoCleanOptions = {
-  /** Path to the Leo project directory. Defaults to the current working directory. */
-  cwd?: string
-}
-
-export type LeoAbiOptions = {
-  /** Path to the Leo project directory. Defaults to the current working directory. */
-  cwd?: string
-}
-
-/**
- * Compiles a Leo program by running `leo build`.
- *
- * Resolves when compilation succeeds. Throws if the Leo CLI is not found
- * or compilation fails.
- */
-export async function build(options?: LeoBuildOptions): Promise<void> {
-  await runLeo(['build'], options?.cwd)
-}
-
-/**
- * Compiles multiple Leo programs sequentially.
- *
- * Each entry is either a path string (cwd for that build) or a LeoBuildOptions object.
- */
-export async function buildBatch(projects: Array<string | LeoBuildOptions>): Promise<void> {
-  for (const project of projects) {
-    const opts = typeof project === 'string' ? { cwd: project } : project
-    await build(opts)
-  }
-}
-
-/**
- * Returns the compiled Aleo program source by running `leo build` and capturing stdout.
- *
- * Resolves with the program output string. Throws if the CLI is not found or compilation fails.
- */
-export async function abi(options?: LeoAbiOptions): Promise<string> {
-  return runLeoCapture(['build'], options?.cwd)
-}
-
-/**
- * Executes a Leo program function by running `leo run`.
- */
-export async function start(options: LeoStartOptions): Promise<void> {
-  const args = ['run', options.function, ...(options.inputs ?? [])]
-  await runLeo(args, options.cwd)
-}
-
-/**
- * Cleans the Leo build artifacts by running `leo clean`.
- */
-export async function clean(options?: LeoCleanOptions): Promise<void> {
-  await runLeo(['clean'], options?.cwd)
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-function runLeo(args: string[], cwd?: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn('leo', args, { stdio: 'pipe', cwd })
-
-    let stderr = ''
-    proc.stderr?.on('data', (chunk: { toString(): string }) => { stderr += chunk.toString() })
-
-    proc.on('error', (err: Error) => {
-      reject(new Error(
-        `Failed to run leo ${args[0]}: ${err.message}. ` +
-        'Ensure the Leo CLI is installed: https://developer.aleo.org/leo/installation',
-      ))
-    })
-
-    proc.on('exit', (code: number | null, signal: string | null) => {
-      if (signal === 'SIGTERM') return resolve()
-      if (code === 0) return resolve()
-      reject(new Error(`leo ${args[0]} exited with code ${code}${stderr ? `:\n${stderr}` : ''}`))
-    })
-  })
-}
-
-function runLeoCapture(args: string[], cwd?: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn('leo', args, { stdio: 'pipe', cwd })
-
-    let stdout = ''
-    let stderr = ''
-    proc.stdout?.on('data', (chunk: { toString(): string }) => { stdout += chunk.toString() })
-    proc.stderr?.on('data', (chunk: { toString(): string }) => { stderr += chunk.toString() })
-
-    proc.on('error', (err: Error) => {
-      reject(new Error(
-        `Failed to run leo ${args[0]}: ${err.message}. ` +
-        'Ensure the Leo CLI is installed: https://developer.aleo.org/leo/installation',
-      ))
-    })
-
-    proc.on('exit', (code: number | null, signal: string | null) => {
-      if (signal === 'SIGTERM') return resolve(stdout)
-      if (code === 0) return resolve(stdout)
-      reject(new Error(`leo ${args[0]} exited with code ${code}${stderr ? `:\n${stderr}` : ''}`))
-    })
-  })
 }
 
 async function waitForReady(
@@ -278,6 +465,6 @@ async function waitForReady(
 
   throw new Error(
     `Devnode at ${baseUrl} did not become ready within ${timeout}ms. ` +
-    'Try increasing readyTimeout or check that the Leo CLI is installed and working.',
+      'Try increasing readyTimeout or check that the Leo CLI is installed and working.',
   )
 }
