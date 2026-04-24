@@ -1,0 +1,15 @@
+{
+  "transactions": [
+    {
+      "id": "at1vm6w4xvrn7ljysyg49p70p4uterdlu6new9wk0a7ag646nazsuqsfgthwe",
+      "fee": 2725,
+      "status": "Accepted",
+      "block_height": 17957000,
+      "block_timestamp": "1776996858",
+      "block_hash": "ab1y2vn7rt6wht5kzsncj97c43hm6r9canfdqmls3dca8wmqmjjn58qg7xyfc",
+      "transaction_type": "Execute",
+      "program_id": "credits.aleo",
+      "function_id": "transfer_public"
+    }
+  ]
+}

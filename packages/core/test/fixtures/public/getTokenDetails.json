@@ -1,0 +1,42 @@
+{
+  "token": {
+    "token_id": "3491859903473482085250871387962132231204352466326026409883548131580582527809",
+    "token_id_datatype": "field",
+    "symbol": "WBTC",
+    "display": "Wrapped BTC",
+    "program_name": "token_registry.aleo",
+    "decimals": 8,
+    "total_supply": "0",
+    "verified": true,
+    "token_icon_url": "https://storage.googleapis.com/verified-token-logos/mainnet/WBTC-logo.svg",
+    "compliance_freeze_list": null,
+    "price": "78388.000000000",
+    "price_change_percentage_24h": "0.25",
+    "fully_diluted_value": "1569538202419",
+    "total_market_cap": "1569538202419",
+    "volume_24h": "40042522753"
+  },
+  "price_history": {
+    "pagination": {
+      "limit": 2,
+      "offset": 0,
+      "total_count": 80,
+      "has_next": true,
+      "has_previous": false
+    },
+    "data": [
+      {
+        "day": "2026-04-24T00:00:00.000Z",
+        "price_usd": "78388.000000000",
+        "volume_24h": "40042522753",
+        "total_market_cap": "1569538202419"
+      },
+      {
+        "day": "2026-04-23T00:00:00.000Z",
+        "price_usd": "78295.000000000",
+        "volume_24h": "42015056606",
+        "total_market_cap": "1567301540312"
+      }
+    ]
+  }
+}
