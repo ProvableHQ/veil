@@ -1,6 +1,6 @@
 import type { Client } from '../../clients/createClient.js'
 
-export type GetMappingNamesParameters = { program: string }
+export type GetMappingNamesParameters = { programId: string }
 export type GetMappingNamesReturnType = string[]
 
 export async function getMappingNames(
@@ -9,6 +9,6 @@ export async function getMappingNames(
 ): Promise<GetMappingNamesReturnType> {
   return client.request({
     method: 'getMappingNames',
-    params: { programId: params.program },
+    params: { programId: params.programId },
   }) as Promise<GetMappingNamesReturnType>
 }

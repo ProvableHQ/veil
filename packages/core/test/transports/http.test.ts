@@ -20,7 +20,7 @@ describe('http transport', () => {
 
     expect(result).toBe(100)
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://api.provable.com/v2/mainnet/latest/height',
+      'https://api.provable.com/v2/mainnet/block/height/latest',
       expect.objectContaining({ method: 'GET' }),
     )
   })

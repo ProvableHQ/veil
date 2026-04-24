@@ -1,6 +1,6 @@
 import type { Client } from '../../clients/createClient.js'
 
-export type ReadContractParameters = { program: string; mapping: string; key: string }
+export type ReadContractParameters = { programId: string; mapping: string; key: string }
 
 /**
  * Raw mapping value as an Aleo literal string (e.g. `"5000000u64"`, `"true"`, or a
@@ -12,6 +12,6 @@ export type ReadContractReturnType = string
 export async function readContract(client: Client, params: ReadContractParameters): Promise<ReadContractReturnType> {
   return client.request({
     method: 'getMappingValue',
-    params: { programId: params.program, mapping: params.mapping, key: params.key },
+    params: { programId: params.programId, mapping: params.mapping, key: params.key },
   }) as Promise<ReadContractReturnType>
 }

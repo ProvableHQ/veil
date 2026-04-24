@@ -77,7 +77,7 @@ export function getContract(params: GetContractParameters): ContractInstance {
       }
       return (readParams: { key: string }) =>
         publicClient.readContract({
-          program,
+          programId: program,
           mapping: prop,
           key: readParams.key,
         })
@@ -124,7 +124,7 @@ export function getContract(params: GetContractParameters): ContractInstance {
       if (!publicClient) {
         throw new Error('Cannot fetch ABI — no public client provided.')
       }
-      const source = await publicClient.getCode({ program })
+      const source = await publicClient.getCode({ programId: program })
       cachedAbi = parseProgram(source)
       return cachedAbi
     },

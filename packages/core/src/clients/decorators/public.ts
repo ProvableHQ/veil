@@ -1,6 +1,7 @@
 import { getBlockNumber, type GetBlockNumberReturnType } from '../../actions/public/getBlockNumber.js'
 import { getBlock, type GetBlockParameters, type GetBlockReturnType } from '../../actions/public/getBlock.js'
 import { getTransaction, type GetTransactionParameters, type GetTransactionReturnType } from '../../actions/public/getTransaction.js'
+import { getTransactionByTransition, type GetTransactionByTransitionParameters, type GetTransactionByTransitionReturnType } from '../../actions/public/getTransactionByTransition.js'
 import { getBalance, type GetBalanceParameters, type GetBalanceReturnType } from '../../actions/public/getBalance.js'
 import { readContract, type ReadContractParameters, type ReadContractReturnType } from '../../actions/public/readContract.js'
 import {
@@ -42,12 +43,29 @@ import { getCirculatingSupply, type GetCirculatingSupplyReturnType } from '../..
 import { getTvl, type GetTvlReturnType } from '../../actions/public/getTvl.js'
 import { getTokens, type GetTokensReturnType } from '../../actions/public/getTokens.js'
 import { readMapping, type ReadMappingParameters, type ReadMappingReturnType } from '../../actions/public/readMapping.js'
+import { getLatestEdition, type GetLatestEditionParameters, type GetLatestEditionReturnType } from '../../actions/public/getLatestEdition.js'
+import { getProgramByEdition, type GetProgramByEditionParameters, type GetProgramByEditionReturnType } from '../../actions/public/getProgramByEdition.js'
+import { getAmendmentCount, type GetAmendmentCountParameters, type GetAmendmentCountReturnType } from '../../actions/public/getAmendmentCount.js'
+import { getAmendmentCountByEdition, type GetAmendmentCountByEditionParameters, type GetAmendmentCountByEditionReturnType } from '../../actions/public/getAmendmentCountByEdition.js'
+import { getDeploymentTransactionByEdition, type GetDeploymentTransactionByEditionParameters, type GetDeploymentTransactionByEditionReturnType } from '../../actions/public/getDeploymentTransactionByEdition.js'
+import { getOriginalDeploymentTransaction, type GetOriginalDeploymentTransactionParameters, type GetOriginalDeploymentTransactionReturnType } from '../../actions/public/getOriginalDeploymentTransaction.js'
+import { getAmendmentDeploymentTransaction, type GetAmendmentDeploymentTransactionParameters, type GetAmendmentDeploymentTransactionReturnType } from '../../actions/public/getAmendmentDeploymentTransaction.js'
+import { getProgramCallsPaginated, type GetProgramCallsPaginatedParameters, type GetProgramCallsPaginatedReturnType } from '../../actions/public/getProgramCallsPaginated.js'
+import { getProgramIdByAddress, type GetProgramIdByAddressParameters, type GetProgramIdByAddressReturnType } from '../../actions/public/getProgramIdByAddress.js'
+import { getProgramAddress, type GetProgramAddressParameters, type GetProgramAddressReturnType } from '../../actions/public/getProgramAddress.js'
+import { findBlockHeightByStateRoot, type FindBlockHeightByStateRootParameters, type FindBlockHeightByStateRootReturnType } from '../../actions/public/findBlockHeightByStateRoot.js'
+import { getStatePaths, type GetStatePathsParameters, type GetStatePathsReturnType } from '../../actions/public/getStatePaths.js'
+import { getBlockHeightByHash, type GetBlockHeightByHashParameters, type GetBlockHeightByHashReturnType } from '../../actions/public/getBlockHeightByHash.js'
+import { getBlockTransactionsByHash, type GetBlockTransactionsByHashParameters, type GetBlockTransactionsByHashReturnType } from '../../actions/public/getBlockTransactionsByHash.js'
+import { getTokenDetails, type GetTokenDetailsParameters, type GetTokenDetailsReturnType } from '../../actions/public/getTokenDetails.js'
+import { getProgramMetricsByRange, type GetProgramMetricsByRangeParameters, type GetProgramMetricsByRangeReturnType } from '../../actions/public/getProgramMetricsByRange.js'
 import type { Client } from '../createClient.js'
 
 export type PublicActions = {
   getBlockNumber: () => Promise<GetBlockNumberReturnType>
   getBlock: (params: GetBlockParameters) => Promise<GetBlockReturnType>
   getTransaction: (params: GetTransactionParameters) => Promise<GetTransactionReturnType>
+  getTransactionByTransition: (params: GetTransactionByTransitionParameters) => Promise<GetTransactionByTransitionReturnType>
   getBalance: (params: GetBalanceParameters) => Promise<GetBalanceReturnType>
   readContract: (params: ReadContractParameters) => Promise<ReadContractReturnType>
   getCode: (params: GetCodeParameters) => Promise<GetCodeReturnType>
@@ -83,6 +101,22 @@ export type PublicActions = {
   getTvl: () => Promise<GetTvlReturnType>
   getTokens: () => Promise<GetTokensReturnType>
   readMapping: (params: ReadMappingParameters) => Promise<ReadMappingReturnType>
+  getLatestEdition: (params: GetLatestEditionParameters) => Promise<GetLatestEditionReturnType>
+  getProgramByEdition: (params: GetProgramByEditionParameters) => Promise<GetProgramByEditionReturnType>
+  getAmendmentCount: (params: GetAmendmentCountParameters) => Promise<GetAmendmentCountReturnType>
+  getAmendmentCountByEdition: (params: GetAmendmentCountByEditionParameters) => Promise<GetAmendmentCountByEditionReturnType>
+  getDeploymentTransactionByEdition: (params: GetDeploymentTransactionByEditionParameters) => Promise<GetDeploymentTransactionByEditionReturnType>
+  getOriginalDeploymentTransaction: (params: GetOriginalDeploymentTransactionParameters) => Promise<GetOriginalDeploymentTransactionReturnType>
+  getAmendmentDeploymentTransaction: (params: GetAmendmentDeploymentTransactionParameters) => Promise<GetAmendmentDeploymentTransactionReturnType>
+  getProgramCallsPaginated: (params: GetProgramCallsPaginatedParameters) => Promise<GetProgramCallsPaginatedReturnType>
+  getProgramIdByAddress: (params: GetProgramIdByAddressParameters) => Promise<GetProgramIdByAddressReturnType>
+  getProgramAddress: (params: GetProgramAddressParameters) => Promise<GetProgramAddressReturnType>
+  findBlockHeightByStateRoot: (params: FindBlockHeightByStateRootParameters) => Promise<FindBlockHeightByStateRootReturnType>
+  getStatePaths: (params: GetStatePathsParameters) => Promise<GetStatePathsReturnType>
+  getBlockHeightByHash: (params: GetBlockHeightByHashParameters) => Promise<GetBlockHeightByHashReturnType>
+  getBlockTransactionsByHash: (params: GetBlockTransactionsByHashParameters) => Promise<GetBlockTransactionsByHashReturnType>
+  getTokenDetails: (params: GetTokenDetailsParameters) => Promise<GetTokenDetailsReturnType>
+  getProgramMetricsByRange: (params: GetProgramMetricsByRangeParameters) => Promise<GetProgramMetricsByRangeReturnType>
 }
 
 export function publicActions(client: Client): PublicActions {
@@ -90,6 +124,7 @@ export function publicActions(client: Client): PublicActions {
     getBlockNumber: () => getBlockNumber(client),
     getBlock: (params) => getBlock(client, params),
     getTransaction: (params) => getTransaction(client, params),
+    getTransactionByTransition: (params) => getTransactionByTransition(client, params),
     getBalance: (params) => getBalance(client, params),
     readContract: (params) => readContract(client, params),
     getCode: (params) => getCode(client, params),
@@ -125,5 +160,21 @@ export function publicActions(client: Client): PublicActions {
     getTvl: () => getTvl(client),
     getTokens: () => getTokens(client),
     readMapping: (params) => readMapping(client, params),
+    getLatestEdition: (params) => getLatestEdition(client, params),
+    getProgramByEdition: (params) => getProgramByEdition(client, params),
+    getAmendmentCount: (params) => getAmendmentCount(client, params),
+    getAmendmentCountByEdition: (params) => getAmendmentCountByEdition(client, params),
+    getDeploymentTransactionByEdition: (params) => getDeploymentTransactionByEdition(client, params),
+    getOriginalDeploymentTransaction: (params) => getOriginalDeploymentTransaction(client, params),
+    getAmendmentDeploymentTransaction: (params) => getAmendmentDeploymentTransaction(client, params),
+    getProgramCallsPaginated: (params) => getProgramCallsPaginated(client, params),
+    getProgramIdByAddress: (params) => getProgramIdByAddress(client, params),
+    getProgramAddress: (params) => getProgramAddress(client, params),
+    findBlockHeightByStateRoot: (params) => findBlockHeightByStateRoot(client, params),
+    getStatePaths: (params) => getStatePaths(client, params),
+    getBlockHeightByHash: (params) => getBlockHeightByHash(client, params),
+    getBlockTransactionsByHash: (params) => getBlockTransactionsByHash(client, params),
+    getTokenDetails: (params) => getTokenDetails(client, params),
+    getProgramMetricsByRange: (params) => getProgramMetricsByRange(client, params),
   }
 }

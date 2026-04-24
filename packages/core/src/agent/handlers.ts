@@ -21,7 +21,7 @@ export function createPublicHandlers(client: PublicClient): Record<string, Agent
 
     aleo_read_mapping: async (input) => {
       const value = await client.readContract({
-        program: input.program as string,
+        programId: input.program as string,
         mapping: input.mapping as string,
         key: input.key as string,
       })
@@ -34,7 +34,7 @@ export function createPublicHandlers(client: PublicClient): Record<string, Agent
     },
 
     aleo_get_program: async (input) => {
-      const source = await client.getCode({ program: input.program as string })
+      const source = await client.getCode({ programId: input.program as string })
       return { source, program: input.program }
     },
 
@@ -52,7 +52,7 @@ export function createPublicHandlers(client: PublicClient): Record<string, Agent
     },
 
     aleo_describe_program: async (input) => {
-      const source = await client.getCode({ program: input.program as string })
+      const source = await client.getCode({ programId: input.program as string })
       const parsed = parseProgram(source)
       return {
         program: parsed.id,

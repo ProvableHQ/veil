@@ -75,7 +75,11 @@ describe('integration: fallback transport switching', () => {
     expect(calls).toEqual(['t1', 't2', 't3'])
   })
 
-  it('preserves the error from the last failing transport', async () => {
+  it('preserves the error from the first failing transport', async () => {
+    // The fallback transport surfaces the FIRST transport's error as the cause,
+    // since that transport is usually the most caller-relevant one (e.g. the wallet
+    // adapter's real user-facing error). Subsequent failures are summarized in the
+    // message suffix.
     const t1 = custom({
       request: vi.fn().mockRejectedValue(new Error('first error')),
     })
@@ -89,8 +93,8 @@ describe('integration: fallback transport switching', () => {
       await transport.request({ method: 'test' })
       expect.fail('should have thrown')
     } catch (err: any) {
-      expect(err.message).toBe('All transports failed.')
-      expect(err.cause.message).toBe('second error')
+      expect(err.message).toBe('first error (all 2 transports failed)')
+      expect(err.cause.message).toBe('first error')
     }
   })
 })

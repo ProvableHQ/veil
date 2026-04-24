@@ -49,7 +49,7 @@ export class ProgramNotFoundError extends BaseError {
     super(
       `Program "${program}" not found. ` +
       'Verify the program ID is correct and has been deployed. ' +
-      `Check with: await client.getCode({ program: '${program}' })`,
+      `Check with: await client.getCode({ programId: '${program}' })`,
     )
     this.name = 'ProgramNotFoundError'
   }
