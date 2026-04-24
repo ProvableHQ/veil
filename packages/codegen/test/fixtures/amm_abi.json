@@ -1,0 +1,140 @@
+{
+  "program": "amm.aleo",
+  "structs": [
+    {
+      "path": [
+        "reserves"
+      ],
+      "fields": [
+        {
+          "name": "token_a",
+          "ty": {
+            "Primitive": {
+              "UInt": "U64"
+            }
+          }
+        },
+        {
+          "name": "token_b",
+          "ty": {
+            "Primitive": {
+              "UInt": "U64"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "records": [],
+  "mappings": [
+    {
+      "name": "reserves_mapping",
+      "key": {
+        "Primitive": "Address"
+      },
+      "value": {
+        "Struct": {
+          "path": [
+            "reserves"
+          ],
+          "program": "amm.aleo"
+        }
+      }
+    }
+  ],
+  "storage_variables": [],
+  "functions": [
+    {
+      "name": "buy_token_b",
+      "is_final": true,
+      "inputs": [
+        {
+          "name": "arg1",
+          "ty": {
+            "Plaintext": {
+              "Primitive": "Field"
+            }
+          },
+          "mode": "Public"
+        },
+        {
+          "name": "arg2",
+          "ty": {
+            "Plaintext": {
+              "Primitive": "Field"
+            }
+          },
+          "mode": "Public"
+        },
+        {
+          "name": "arg3",
+          "ty": {
+            "Plaintext": {
+              "Primitive": "Field"
+            }
+          },
+          "mode": "Public"
+        },
+        {
+          "name": "arg4",
+          "ty": {
+            "Plaintext": {
+              "Primitive": "Field"
+            }
+          },
+          "mode": "Public"
+        },
+        {
+          "name": "arg5",
+          "ty": {
+            "Plaintext": {
+              "Primitive": "Field"
+            }
+          },
+          "mode": "Public"
+        },
+        {
+          "name": "arg6",
+          "ty": "DynamicRecord",
+          "mode": "None"
+        },
+        {
+          "name": "arg7",
+          "ty": {
+            "Plaintext": {
+              "Primitive": {
+                "UInt": "U64"
+              }
+            }
+          },
+          "mode": "Public"
+        },
+        {
+          "name": "arg8",
+          "ty": {
+            "Plaintext": {
+              "Primitive": {
+                "UInt": "U64"
+              }
+            }
+          },
+          "mode": "Public"
+        }
+      ],
+      "outputs": [
+        {
+          "ty": "DynamicRecord",
+          "mode": "None"
+        },
+        {
+          "ty": "DynamicRecord",
+          "mode": "None"
+        },
+        {
+          "ty": "Final",
+          "mode": "None"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "name": "@veil/codegen",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Generate TypeScript types from Aleo program ABIs",
+  "bin": {
+    "veil-codegen": "./dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run"
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "@veil/core": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0"
+  }
+}
