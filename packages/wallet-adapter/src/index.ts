@@ -22,16 +22,17 @@
  */
 
 import { custom } from '@veil/core'
-import type { RpcAccount, Transport } from '@veil/core'
+import type { Network, RpcAccount, Transport, TransactionStatusResponse, TxHistoryResult } from '@veil/core'
 
 // Import the real types from the Provable ecosystem
-import type { TransactionOptions, TransactionStatusResponse } from '@provablehq/aleo-types'
+import type { TransactionOptions } from '@provablehq/aleo-types'
 import type { AleoDeployment } from '@provablehq/aleo-wallet-standard'
+import type { RecordStatusFilter } from '@veil/core'
 import type { BaseAleoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-core'
 
 // Re-export useful types so consumers don't need extra imports
-export type { TransactionOptions, TransactionStatusResponse } from '@provablehq/aleo-types'
-export { Network } from '@provablehq/aleo-types'
+export type { TransactionOptions } from '@provablehq/aleo-types'
+export type { Network, TransactionStatusResponse, TxHistoryResult } from '@veil/core'
 export type { BaseAleoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-core'
 
 // --------------------------------------------------------------------------
@@ -75,19 +76,23 @@ export interface AleoWalletAdapter {
   ): Promise<string>
 
   /** Request records for a program */
-  requestRecords(program: string, includePlaintext: boolean): Promise<unknown[]>
+  requestRecords(
+    program: string,
+    includePlaintext: boolean,
+    statusFilter?: RecordStatusFilter,
+  ): Promise<unknown[]>
 
   /** Get transition view keys for a transaction */
   transitionViewKeys(transactionId: string): Promise<string[]>
 
   /** Switch the connected network (optional — not all adapters support this) */
-  switchNetwork?(network: string): Promise<unknown>
+  switchNetwork?(network: Network): Promise<void>
 
   /** Get transaction history for a program (optional — not all adapters support this) */
-  requestTransactionHistory?(program: string): Promise<unknown>
+  requestTransactionHistory?(program: string): Promise<TxHistoryResult>
 
   /** The current network (optional — used by getChainId) */
-  network?: string | null
+  network?: Network | null
 }
 
 /**
@@ -184,16 +189,18 @@ export function transportFromAdapter(adapter: AnyWalletAdapter): Transport<'cust
 
         case 'decrypt':
           return adapter.decrypt(
-            p?.ciphertext as string,
+            p?.cipherText as string,
             p?.tpk as string | undefined,
             p?.programId as string | undefined,
             p?.functionName as string | undefined,
+            p?.index as number | undefined,
           )
 
         case 'requestRecords':
           return adapter.requestRecords(
             p?.program as string,
             (p?.includePlaintext as boolean) ?? true,
+            p?.statusFilter as RecordStatusFilter | undefined,
           )
 
         case 'transactionStatus': {
@@ -206,7 +213,10 @@ export function transportFromAdapter(adapter: AnyWalletAdapter): Transport<'cust
 
         case 'switchNetwork': {
           if ('switchNetwork' in adapter && typeof adapter.switchNetwork === 'function') {
-            return adapter.switchNetwork(p?.network as any)
+            // Cast: BaseAleoWalletAdapter expects @provablehq/aleo-types' Network
+            // enum, AleoWalletAdapter expects @veil/core's string-union Network.
+            // Runtime values are identical strings.
+            return (adapter.switchNetwork as (n: unknown) => Promise<void>)(p?.network)
           }
           throw new Error('Wallet adapter does not support switchNetwork')
         }

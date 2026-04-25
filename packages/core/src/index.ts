@@ -20,6 +20,12 @@ export type {
 } from './types/proving.js'
 
 export type {
+  Network,
+  TransactionStatusResponse,
+  TxHistoryResult,
+} from './types/wallet.js'
+
+export type {
   OwnedRecord,
   OwnedRecordEncrypted,
   RecordStatusFilter,

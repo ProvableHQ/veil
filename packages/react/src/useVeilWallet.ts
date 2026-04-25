@@ -5,7 +5,9 @@ import {
   createWalletClient,
   http,
   fallback,
+  type Network,
   type PublicClient,
+  type TxHistoryResult,
   type WalletClient,
 } from '@veil/core'
 import { fromWalletAdapter, type AleoWalletAdapter } from '@veil/wallet-adapter'
@@ -82,9 +84,9 @@ export function useVeilWallet(config?: UseVeilWalletConfig): UseVeilWalletReturn
     if (!wallet.connected || !wallet.address) return undefined
 
     const adapter: AleoWalletAdapter & {
-      switchNetwork?: (network: string) => Promise<unknown>
-      requestTransactionHistory?: (program: string) => Promise<unknown>
-      network?: string | null
+      switchNetwork?: (network: Network) => Promise<void>
+      requestTransactionHistory?: (program: string) => Promise<TxHistoryResult>
+      network?: Network | null
     } = {
       account: { address: wallet.address },
       connected: wallet.connected,
@@ -99,7 +101,9 @@ export function useVeilWallet(config?: UseVeilWalletConfig): UseVeilWalletReturn
       requestRecords: (program, includePlaintext) =>
         wallet.requestRecords(program, includePlaintext),
       transitionViewKeys: (txId) => wallet.transitionViewKeys(txId),
-      switchNetwork: (network) => wallet.switchNetwork(network as any),
+      switchNetwork: async (network) => {
+        await wallet.switchNetwork(network as any)
+      },
       requestTransactionHistory: (program) => wallet.requestTransactionHistory(program),
     }
 

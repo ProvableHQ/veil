@@ -127,7 +127,7 @@ describe('transportFromAdapter', () => {
     await transport.request({
       method: 'decrypt',
       params: {
-        ciphertext: 'record1cipher...',
+        cipherText: 'record1cipher...',
         tpk: 'tpk1...',
         programId: 'token.aleo',
         functionName: 'transfer',
@@ -139,6 +139,7 @@ describe('transportFromAdapter', () => {
       'tpk1...',
       'token.aleo',
       'transfer',
+      undefined,
     )
   })
 
@@ -151,7 +152,7 @@ describe('transportFromAdapter', () => {
       params: { program: 'token.aleo' },
     })
 
-    expect(adapter.requestRecords).toHaveBeenCalledWith('token.aleo', true)
+    expect(adapter.requestRecords).toHaveBeenCalledWith('token.aleo', true, undefined)
     expect(records).toEqual([{ owner: 'aleo1mock' }])
   })
 

@@ -1,7 +1,8 @@
 import type { Client } from '../../clients/createClient.js'
+import type { Network } from '../../types/wallet.js'
 
 export type SwitchChainParameters = {
-  network: 'mainnet' | 'testnet'
+  network: Network
 }
 
 export type SwitchChainReturnType = void

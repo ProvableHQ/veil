@@ -126,7 +126,7 @@ describe('error paths in wallet actions', () => {
     } as any
 
     await expect(decrypt(client, {
-      ciphertext: 'record1...',
+      cipherText: 'record1...',
     })).rejects.toThrow(AccountNotFoundError)
   })
 })

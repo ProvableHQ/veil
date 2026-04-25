@@ -2,10 +2,11 @@ import { AccountNotFoundError } from '../../errors/errors.js'
 import type { Client } from '../../clients/createClient.js'
 
 export type DecryptParameters = {
-  ciphertext: string
+  cipherText: string
   tpk?: string
   programId?: string
   functionName?: string
+  index?: number
 }
 
 export type DecryptReturnType = string

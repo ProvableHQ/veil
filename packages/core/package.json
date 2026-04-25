@@ -23,5 +23,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
-  "files": ["dist"]
+  "files": ["dist"],
+  "devDependencies": {
+    "@provablehq/aleo-types": "0.3.0-alpha.3"
+  }
 }

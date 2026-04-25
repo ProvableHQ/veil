@@ -99,7 +99,7 @@ describe('integration: wallet adapter full pattern', () => {
     const client = createWalletClient({ account, transport })
 
     const plaintext = await client.decrypt({
-      ciphertext: 'record1cipher...',
+      cipherText: 'record1cipher...',
       tpk: 'tpk1...',
       programId: 'token.aleo',
       functionName: 'transfer',
@@ -111,6 +111,7 @@ describe('integration: wallet adapter full pattern', () => {
       'tpk1...',
       'token.aleo',
       'transfer',
+      undefined,
     )
   })
 
@@ -122,7 +123,7 @@ describe('integration: wallet adapter full pattern', () => {
     const records = await client.requestRecords({ program: 'token.aleo' })
 
     expect(records).toEqual([{ owner: 'aleo1walletowner' }])
-    expect(adapter.requestRecords).toHaveBeenCalledWith('token.aleo', true)
+    expect(adapter.requestRecords).toHaveBeenCalledWith('token.aleo', true, 'all')
   })
 
   it('wallet adapter transport with fallback for read operations', async () => {
