@@ -58,6 +58,8 @@ describe('getContract', () => {
     const request = vi.fn()
     const mockWallet = {
       writeContract: vi.fn(),
+      simulateContract: vi.fn(),
+      executeTransaction: vi.fn(),
       key: 'wallet',
       name: 'test',
       request,
@@ -68,7 +70,6 @@ describe('getContract', () => {
       proving: undefined,
       records: undefined,
       sendTransaction: vi.fn(),
-      executeTransaction: vi.fn(),
       deployContract: vi.fn(),
       signMessage: vi.fn(),
       transfer: vi.fn(),
@@ -78,5 +79,104 @@ describe('getContract', () => {
 
     const contract = getContract({ program: 'token.aleo', client: mockWallet as any })
     expect(() => contract.read.balances({ key: 'aleo1abc' })).toThrow('no public client provided')
+  })
+
+  it('simulate proxy delegates to walletClient.simulateContract', async () => {
+    const simulateContract = vi.fn().mockResolvedValue({ outputs: ['100u64'] })
+    const mockWallet = {
+      writeContract: vi.fn(),
+      simulateContract,
+      executeTransaction: vi.fn(),
+      key: 'wallet', name: 'test',
+      request: vi.fn(), transport: { config: {} as any, request: vi.fn() },
+      uid: 'test', extend: vi.fn(),
+      account: { type: 'local' as const, source: 'privateKey', address: 'aleo1abc', privateKey: 'pk', viewKey: 'vk', sign: vi.fn(), signMessage: vi.fn() },
+      proving: { mode: 'local' as const, simulate: vi.fn() },
+      records: undefined,
+      sendTransaction: vi.fn(), deployContract: vi.fn(), signMessage: vi.fn(),
+      transfer: vi.fn(), decrypt: vi.fn(), requestRecords: vi.fn(),
+    }
+
+    const contract = getContract({
+      program: 'token.aleo',
+      programSource: 'program token.aleo;',
+      imports: { 'credits.aleo': 'program credits.aleo;' },
+      client: mockWallet as any,
+    })
+
+    await contract.simulate.mint({ inputs: ['aleo1abc', '100u64'] })
+
+    expect(simulateContract).toHaveBeenCalledWith({
+      program: 'token.aleo',
+      function: 'mint',
+      inputs: ['aleo1abc', '100u64'],
+      programSource: 'program token.aleo;',
+      imports: { 'credits.aleo': 'program credits.aleo;' },
+    })
+  })
+
+  it('execute proxy delegates to walletClient.executeTransaction', async () => {
+    const executeTransaction = vi.fn().mockResolvedValue({ transactionId: 'tx1', outputs: ['100u64'] })
+    const mockWallet = {
+      writeContract: vi.fn(),
+      simulateContract: vi.fn(),
+      executeTransaction,
+      key: 'wallet', name: 'test',
+      request: vi.fn(), transport: { config: {} as any, request: vi.fn() },
+      uid: 'test', extend: vi.fn(),
+      account: { type: 'local' as const, source: 'privateKey', address: 'aleo1abc', privateKey: 'pk', viewKey: 'vk', sign: vi.fn(), signMessage: vi.fn() },
+      proving: { mode: 'local' as const },
+      records: undefined,
+      sendTransaction: vi.fn(), deployContract: vi.fn(), signMessage: vi.fn(),
+      transfer: vi.fn(), decrypt: vi.fn(), requestRecords: vi.fn(),
+    }
+
+    const contract = getContract({
+      program: 'token.aleo',
+      programSource: 'program token.aleo;',
+      client: mockWallet as any,
+    })
+
+    await contract.execute.mint({ inputs: ['aleo1abc', '100u64'], fee: 1000n })
+
+    expect(executeTransaction).toHaveBeenCalledWith({
+      program: 'token.aleo',
+      function: 'mint',
+      inputs: ['aleo1abc', '100u64'],
+      fee: 1000n,
+      programSource: 'program token.aleo;',
+      imports: {},
+    })
+  })
+
+  it('simulate validates function names against ABI', () => {
+    const mockWallet = {
+      writeContract: vi.fn(), simulateContract: vi.fn(), executeTransaction: vi.fn(),
+      key: 'wallet', name: 'test',
+      request: vi.fn(), transport: { config: {} as any, request: vi.fn() },
+      uid: 'test', extend: vi.fn(),
+      account: { type: 'local' as const, source: 'privateKey', address: 'aleo1abc', privateKey: 'pk', viewKey: 'vk', sign: vi.fn(), signMessage: vi.fn() },
+      proving: { mode: 'local' as const },
+      records: undefined,
+      sendTransaction: vi.fn(), deployContract: vi.fn(), signMessage: vi.fn(),
+      transfer: vi.fn(), decrypt: vi.fn(), requestRecords: vi.fn(),
+    }
+
+    const abi: Program = {
+      id: 'token.aleo', source: '', closures: [],
+      mappings: [], functions: [{ name: 'mint', inputs: [], outputs: [], hasFinalize: false }],
+    }
+
+    const contract = getContract({ program: 'token.aleo', abi, client: mockWallet as any })
+    expect(() => contract.simulate.nonexistent({ inputs: [] })).toThrow('Function "nonexistent" does not exist')
+  })
+
+  it('simulate and execute throw without wallet client', () => {
+    const request = vi.fn()
+    const client = createPublicClient({ transport: custom({ request }) })
+    const contract = getContract({ program: 'token.aleo', client })
+
+    expect(() => contract.simulate.mint({ inputs: [] })).toThrow('no wallet client provided')
+    expect(() => contract.execute.mint({ inputs: [] })).toThrow('no wallet client provided')
   })
 })
