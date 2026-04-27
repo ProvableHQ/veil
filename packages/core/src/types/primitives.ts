@@ -58,14 +58,22 @@ export type ArrayValue = PlaintextValue[]
 export type PlaintextValue = Literal | StructValue | ArrayValue
 
 // Record value at runtime. Always has owner + nonce, plus named fields
-// with their visibility mode.
+// with their visibility mode and Aleo type descriptor.
+//
+// The `type` field carries the Aleo type (e.g. { kind: 'primitive', primitive: 'u64' })
+// so that RecordValue can self-serialize back to plaintext without needing the RecordDef.
+// Without it, a bigint value of 1000n could be u64, u128, field, or i64 —
+// indistinguishable at runtime since TypeScript type aliases (U64 = bigint) erase.
 export type RecordFieldValue = {
   value: PlaintextValue
   mode: 'public' | 'private'
+  type: Plaintext
 }
 
 export type RecordValue = {
   owner: Address
+  program: string       // program this record belongs to (e.g. "loyalty_token.aleo")
+  recordName: string    // record type name (e.g. "LoyaltyCard")
   fields: { [name: string]: RecordFieldValue }
   nonce: string
 }

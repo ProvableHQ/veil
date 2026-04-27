@@ -17,6 +17,10 @@ export type {
   ProvingConfig,
   BuildTransactionOptions,
   BuildDeploymentOptions,
+  SimulateOptions,
+  ExecuteOptions,
+  RawSimulateResult,
+  RawExecuteResult,
 } from './types/proving.js'
 
 export type {
@@ -78,6 +82,10 @@ export type {
 
 export type { Primitive, Plaintext, PlaintextValue, RecordValue, RecordFieldValue, FutureValue, Literal } from './types/primitives.js'
 export type { ABI, AbiFunction, Input, Output, Mode, FunctionInput, FunctionOutput, StructDef, RecordDef, StructField, RecordField, Mapping, StorageVariable, StorageType } from './types/abi.js'
+export type {
+  ParsedOutput, ParsedRecordOutput, ParsedPlaintextOutput, EncryptedRecordOutput, ParsedFutureOutput,
+  InputValue, TransitionResult, ExecuteResult, SimulateResult,
+} from './types/contract.js'
 
 // Errors
 export {
@@ -95,6 +103,7 @@ export {
 export { isAddress, assertAddress } from './utils/address.js'
 export { creditsToMicrocredits, microcreditsToCredits } from './utils/credits.js'
 export { parseValue, encodeValue, type ParsedValue } from './utils/values.js'
+export { parseRecordPlaintext, parseRecordPlaintextLoose, toString, serializeRecord, encodeInputs, getRecordDef, getInputTypes } from './utils/records.js'
 export { parsePrimitive, parsePlaintext } from './utils/parsePrimitives.js'
 export { parseAbi } from './utils/parseAbi.js'
 
@@ -177,7 +186,9 @@ export { getTokens } from './actions/public/getTokens.js'
 export { readMapping } from './actions/public/readMapping.js'
 
 // Wallet Actions (standalone)
-export { writeContract, executeTransaction } from './actions/wallet/writeContract.js'
+export { simulateContract, type SimulateContractParameters, type SimulateContractReturnType } from './actions/wallet/simulateContract.js'
+export { executeContract as executeTransaction, type ExecuteContractParameters, type ExecuteContractReturnType } from './actions/wallet/executeContract.js'
+export { writeContract } from './actions/wallet/writeContract.js'
 export { deployContract } from './actions/wallet/deployContract.js'
 export { sendTransaction } from './actions/wallet/sendTransaction.js'
 export { signMessage } from './actions/wallet/signMessage.js'
