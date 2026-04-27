@@ -261,6 +261,27 @@ export function parseAbi(raw: unknown): ABI {
     throw new Error('Invalid ABI: expected an object')
   }
 
+  // Normalize Leo compiler format differences:
+  // - `transitions` → `functions` (leo build uses transitions, leo abi uses functions)
+  // - `is_async` → `is_final` (same concept, different naming)
+  // - `"Future"` → `"Final"` in output types
+  const r = raw as Record<string, unknown>
+  if (r.transitions && !r.functions) {
+    r.functions = r.transitions
+  }
+  if (Array.isArray(r.functions)) {
+    for (const fn of r.functions as Record<string, unknown>[]) {
+      if ('is_async' in fn && !('is_final' in fn)) {
+        fn.is_final = fn.is_async
+      }
+      if (Array.isArray(fn.outputs)) {
+        for (const output of fn.outputs as Record<string, unknown>[]) {
+          if (output.ty === 'Future') output.ty = 'Final'
+        }
+      }
+    }
+  }
+
   const obj = raw as {
     program: string
     structs: unknown[]
