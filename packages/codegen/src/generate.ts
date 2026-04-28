@@ -32,8 +32,7 @@ export function generate(options: GenerateOptions): string {
   lines.push(`// Do not edit manually.`)
   lines.push('')
   lines.push(`import { getContract } from '${coreImport}'`)
-  lines.push(`import type { RecordValue, PublicClient, WalletClient, ContractInstance, ABI } from '${coreImport}'`)
-  lines.push(`import type { InputValue, ParsedOutput } from '${coreImport}'`)
+  lines.push(`import type { RecordValue, PublicClient, WalletClient, ABI } from '${coreImport}'`)
   lines.push('')
 
   // Program ID constant
@@ -494,15 +493,16 @@ function generateContractFactory(abi: ABI): string[] {
   lines.push(`  programSource?: string,`)
   lines.push(`  imports?: Record<string, string>,`)
   lines.push(`}): ${factoryName}Contract {`)
+  lines.push(`  if (!options.publicClient && !options.walletClient) throw new Error('At least one of publicClient or walletClient is required')`)
   lines.push(`  const client = options.publicClient && options.walletClient`)
   lines.push(`    ? { public: options.publicClient, wallet: options.walletClient }`)
-  lines.push(`    : options.publicClient ?? options.walletClient!`)
+  lines.push(`    : (options.publicClient ?? options.walletClient)!`)
   lines.push(`  const raw = getContract({ program: PROGRAM_ID, abi: PROGRAM_ABI, client, programSource: options.programSource, imports: options.imports })`)
   lines.push('')
   lines.push(`  return {`)
   lines.push(`    program: raw.program,`)
   lines.push(`    abi: raw.abi as ABI,`)
-  lines.push(`    read: raw.read as any,`)
+  lines.push(`    read: raw.read as ${factoryName}Contract['read'],`)
 
   // write wrappers — convert named params to positional inputs
   if (abi.functions.length > 0) {
@@ -532,7 +532,12 @@ function generateContractFactory(abi: ABI): string[] {
       lines.push(`      ${fn.name}: async (params: any) => {`)
       lines.push(`        const ${destructure} = params`)
       for (const line of resolveLines) lines.push(line)
-      lines.push(`        const result = await raw.simulate.${fn.name}({ inputs: [${resolvedNames.join(', ')}] })`)
+
+      if (dataOutputs.length === 0) {
+        lines.push(`        await raw.simulate.${fn.name}({ inputs: [${resolvedNames.join(', ')}] })`)
+      } else {
+        lines.push(`        const result = await raw.simulate.${fn.name}({ inputs: [${resolvedNames.join(', ')}] })`)
+      }
 
       if (dataOutputs.length === 0) {
         // void return
@@ -576,7 +581,7 @@ function generateContractFactory(abi: ABI): string[] {
     lines.push(`    },`)
   }
 
-  lines.push(`    fetchAbi: raw.fetchAbi as any,`)
+  lines.push(`    fetchAbi: raw.fetchAbi as ${factoryName}Contract['fetchAbi'],`)
   lines.push(`  }`)
   lines.push(`}`)
 
