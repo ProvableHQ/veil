@@ -3,6 +3,7 @@ import { getContract } from '../../src/contract/getContract.js'
 import { createPublicClient } from '../../src/clients/createPublicClient.js'
 import { custom } from '../../src/transports/custom.js'
 import type { Program } from '../../src/types/program.js'
+import type { RecordValue } from '../../src/types/primitives.js'
 
 describe('getContract', () => {
   it('allows any method when no abi provided', async () => {
@@ -149,7 +150,7 @@ describe('getContract', () => {
     })
   })
 
-  it('simulate validates function names against ABI', () => {
+  it('simulate validates function names against ABI', async () => {
     const mockWallet = {
       writeContract: vi.fn(), simulateContract: vi.fn(), executeTransaction: vi.fn(),
       key: 'wallet', name: 'test',
@@ -168,7 +169,7 @@ describe('getContract', () => {
     }
 
     const contract = getContract({ program: 'token.aleo', abi, client: mockWallet as any })
-    expect(() => contract.simulate.nonexistent({ inputs: [] })).toThrow('Function "nonexistent" does not exist')
+    await expect(contract.simulate.nonexistent({ inputs: [] })).rejects.toThrow('Function "nonexistent" does not exist')
   })
 
   it('simulate and execute throw without wallet client', () => {
@@ -176,7 +177,238 @@ describe('getContract', () => {
     const client = createPublicClient({ transport: custom({ request }) })
     const contract = getContract({ program: 'token.aleo', client })
 
+    // These throw synchronously because the wallet check is before the async body
     expect(() => contract.simulate.mint({ inputs: [] })).toThrow('no wallet client provided')
     expect(() => contract.execute.mint({ inputs: [] })).toThrow('no wallet client provided')
+  })
+
+  it('simulate auto-encodes native inputs and auto-parses record outputs', async () => {
+    const simulateContract = vi.fn().mockResolvedValue({
+      outputs: ['{ owner: aleo1abc.private, amount: 500u64.private, _nonce: 0group.public }'],
+    })
+    const mockWallet = {
+      writeContract: vi.fn(), simulateContract, executeTransaction: vi.fn(),
+      key: 'wallet', name: 'test',
+      request: vi.fn(), transport: { config: {} as any, request: vi.fn() },
+      uid: 'test', extend: vi.fn(),
+      account: { type: 'local' as const, source: 'privateKey', address: 'aleo1abc', privateKey: 'pk', viewKey: 'vk', sign: vi.fn(), signMessage: vi.fn() },
+      proving: { mode: 'local' as const, simulate: vi.fn() },
+      records: undefined,
+      sendTransaction: vi.fn(), deployContract: vi.fn(), signMessage: vi.fn(),
+      transfer: vi.fn(), decrypt: vi.fn(), requestRecords: vi.fn(),
+    }
+
+    const abi: Program = {
+      id: 'token.aleo', source: '', closures: [],
+      mappings: [],
+      functions: [{
+        name: 'mint',
+        inputs: [
+          { name: 'recipient', type: 'address', visibility: 'private' as const },
+          { name: 'amount', type: 'u64', visibility: 'private' as const },
+        ],
+        outputs: [{ type: 'Token', visibility: 'private' as const }],
+        hasFinalize: false,
+      }],
+    }
+
+    const contract = getContract({
+      program: 'token.aleo',
+      abi,
+      programSource: 'program token.aleo;',
+      client: mockWallet as any,
+    })
+
+    // Pass native values — should be auto-encoded
+    const result = await contract.simulate.mint({
+      inputs: ['aleo1abc', 1000n],
+    })
+
+    // Inputs should have been encoded
+    expect(simulateContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputs: ['aleo1abc', '1000u64'],
+      }),
+    )
+
+    // Output should be a parsed RecordValue, not a raw string
+    const output = result.outputs[0]
+    expect(typeof output).not.toBe('string')
+    expect((output as RecordValue).owner).toBe('aleo1abc')
+    expect((output as RecordValue).fields.amount?.value).toBe(500n)
+  })
+
+  it('auto-encodes RecordValue inputs via serializeRecord', async () => {
+    const simulateContract = vi.fn().mockResolvedValue({ outputs: [] })
+    const mockWallet = {
+      writeContract: vi.fn(), simulateContract, executeTransaction: vi.fn(),
+      key: 'wallet', name: 'test',
+      request: vi.fn(), transport: { config: {} as any, request: vi.fn() },
+      uid: 'test', extend: vi.fn(),
+      account: { type: 'local' as const, source: 'privateKey', address: 'aleo1abc', privateKey: 'pk', viewKey: 'vk', sign: vi.fn(), signMessage: vi.fn() },
+      proving: { mode: 'local' as const },
+      records: undefined,
+      sendTransaction: vi.fn(), deployContract: vi.fn(), signMessage: vi.fn(),
+      transfer: vi.fn(), decrypt: vi.fn(), requestRecords: vi.fn(),
+    }
+
+    const record: RecordValue = {
+      owner: 'aleo1abc',
+      program: 'token.aleo',
+      recordName: 'Token',
+      fields: {
+        amount: { value: 500n, mode: 'private', type: { kind: 'primitive', primitive: 'u64' } },
+      },
+      nonce: '0group',
+    }
+
+    const contract = getContract({ program: 'token.aleo', client: mockWallet as any })
+    await contract.simulate.transfer({ inputs: [record, 'aleo1xyz'] })
+
+    const calledInputs = simulateContract.mock.calls[0][0].inputs
+    expect(calledInputs[0]).toContain('owner: aleo1abc.private')
+    expect(calledInputs[0]).toContain('amount: 500u64.private')
+    expect(calledInputs[1]).toBe('aleo1xyz')
+  })
+
+  it('auto-encodes booleans and numbers', async () => {
+    const simulateContract = vi.fn().mockResolvedValue({ outputs: [] })
+    const mockWallet = {
+      writeContract: vi.fn(), simulateContract, executeTransaction: vi.fn(),
+      key: 'wallet', name: 'test',
+      request: vi.fn(), transport: { config: {} as any, request: vi.fn() },
+      uid: 'test', extend: vi.fn(),
+      account: { type: 'local' as const, source: 'privateKey', address: 'aleo1abc', privateKey: 'pk', viewKey: 'vk', sign: vi.fn(), signMessage: vi.fn() },
+      proving: { mode: 'local' as const },
+      records: undefined,
+      sendTransaction: vi.fn(), deployContract: vi.fn(), signMessage: vi.fn(),
+      transfer: vi.fn(), decrypt: vi.fn(), requestRecords: vi.fn(),
+    }
+
+    const abi: Program = {
+      id: 'token.aleo', source: '', closures: [],
+      mappings: [],
+      functions: [{
+        name: 'set_active',
+        inputs: [
+          { name: 'active', type: 'boolean', visibility: 'private' as const },
+          { name: 'tier', type: 'u8', visibility: 'private' as const },
+        ],
+        outputs: [],
+        hasFinalize: false,
+      }],
+    }
+
+    const contract = getContract({ program: 'token.aleo', abi, client: mockWallet as any })
+    await contract.simulate.set_active({ inputs: [true, 2] })
+
+    const calledInputs = simulateContract.mock.calls[0][0].inputs
+    expect(calledInputs[0]).toBe('true')
+    expect(calledInputs[1]).toBe('2u8')
+  })
+
+  it('non-record outputs stay as strings', async () => {
+    const simulateContract = vi.fn().mockResolvedValue({
+      outputs: ['42u64', 'true'],
+    })
+    const mockWallet = {
+      writeContract: vi.fn(), simulateContract, executeTransaction: vi.fn(),
+      key: 'wallet', name: 'test',
+      request: vi.fn(), transport: { config: {} as any, request: vi.fn() },
+      uid: 'test', extend: vi.fn(),
+      account: { type: 'local' as const, source: 'privateKey', address: 'aleo1abc', privateKey: 'pk', viewKey: 'vk', sign: vi.fn(), signMessage: vi.fn() },
+      proving: { mode: 'local' as const },
+      records: undefined,
+      sendTransaction: vi.fn(), deployContract: vi.fn(), signMessage: vi.fn(),
+      transfer: vi.fn(), decrypt: vi.fn(), requestRecords: vi.fn(),
+    }
+
+    const contract = getContract({ program: 'token.aleo', client: mockWallet as any })
+    const result = await contract.simulate.check({ inputs: [] })
+
+    expect(result.outputs[0]).toBe('42u64')
+    expect(result.outputs[1]).toBe('true')
+  })
+
+  it('execute auto-parses outputs with transactionId', async () => {
+    const executeTransaction = vi.fn().mockResolvedValue({
+      transactionId: 'tx123',
+      outputs: ['{ owner: aleo1abc.private, points: 1000u64.private, _nonce: 0group.public }'],
+    })
+    const mockWallet = {
+      writeContract: vi.fn(), simulateContract: vi.fn(), executeTransaction,
+      key: 'wallet', name: 'test',
+      request: vi.fn(), transport: { config: {} as any, request: vi.fn() },
+      uid: 'test', extend: vi.fn(),
+      account: { type: 'local' as const, source: 'privateKey', address: 'aleo1abc', privateKey: 'pk', viewKey: 'vk', sign: vi.fn(), signMessage: vi.fn() },
+      proving: { mode: 'local' as const },
+      records: undefined,
+      sendTransaction: vi.fn(), deployContract: vi.fn(), signMessage: vi.fn(),
+      transfer: vi.fn(), decrypt: vi.fn(), requestRecords: vi.fn(),
+    }
+
+    const contract = getContract({ program: 'token.aleo', client: mockWallet as any })
+    const result = await contract.execute.mint({ inputs: ['aleo1abc', '1000u64'], fee: 100n })
+
+    expect(result.transactionId).toBe('tx123')
+    expect(typeof result.outputs[0]).not.toBe('string')
+    expect((result.outputs[0] as RecordValue).owner).toBe('aleo1abc')
+    expect((result.outputs[0] as RecordValue).fields.points?.value).toBe(1000n)
+  })
+
+  it('write returns raw tx ID without auto-parsing', async () => {
+    const writeContract = vi.fn().mockResolvedValue('txid_abc')
+    const mockWallet = {
+      writeContract, simulateContract: vi.fn(), executeTransaction: vi.fn(),
+      key: 'wallet', name: 'test',
+      request: vi.fn(), transport: { config: {} as any, request: vi.fn() },
+      uid: 'test', extend: vi.fn(),
+      account: { type: 'local' as const, source: 'privateKey', address: 'aleo1abc', privateKey: 'pk', viewKey: 'vk', sign: vi.fn(), signMessage: vi.fn() },
+      proving: { mode: 'local' as const },
+      records: undefined,
+      sendTransaction: vi.fn(), deployContract: vi.fn(), signMessage: vi.fn(),
+      transfer: vi.fn(), decrypt: vi.fn(), requestRecords: vi.fn(),
+    }
+
+    const contract = getContract({ program: 'token.aleo', client: mockWallet as any })
+    const result = await contract.write.mint({ inputs: ['aleo1abc', '1000u64'], fee: 100n })
+
+    expect(result).toBe('txid_abc')
+  })
+
+  it('accepts ABI type and uses encodeInputs with Plaintext types', async () => {
+    const simulateContract = vi.fn().mockResolvedValue({ outputs: [] })
+    const mockWallet = {
+      writeContract: vi.fn(), simulateContract, executeTransaction: vi.fn(),
+      key: 'wallet', name: 'test',
+      request: vi.fn(), transport: { config: {} as any, request: vi.fn() },
+      uid: 'test', extend: vi.fn(),
+      account: { type: 'local' as const, source: 'privateKey', address: 'aleo1abc', privateKey: 'pk', viewKey: 'vk', sign: vi.fn(), signMessage: vi.fn() },
+      proving: { mode: 'local' as const },
+      records: undefined,
+      sendTransaction: vi.fn(), deployContract: vi.fn(), signMessage: vi.fn(),
+      transfer: vi.fn(), decrypt: vi.fn(), requestRecords: vi.fn(),
+    }
+
+    const { parseAbi } = await import('../../src/utils/parseAbi.js')
+    const { readFileSync } = await import('fs')
+    const { join, dirname } = await import('path')
+    const { fileURLToPath } = await import('url')
+    const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), '../../../codegen/test/fixtures')
+    const tokenAbiRaw = JSON.parse(readFileSync(join(fixturesDir, 'loyalty_token_abi.json'), 'utf-8'))
+    const tokenAbi = parseAbi(tokenAbiRaw)
+
+    const contract = getContract({
+      program: 'loyalty_token.aleo',
+      abi: tokenAbi,
+      client: mockWallet as any,
+    })
+
+    await contract.simulate.mint_card({ inputs: ['aleo1abc', 1000n, 42n] })
+
+    const calledInputs = simulateContract.mock.calls[0][0].inputs
+    expect(calledInputs[0]).toBe('aleo1abc')
+    expect(calledInputs[1]).toBe('1000u64')
+    expect(calledInputs[2]).toBe('42field')
   })
 })
