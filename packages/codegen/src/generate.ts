@@ -346,17 +346,71 @@ function generateAbiConstant(abi: ABI): string[] {
   ]
 }
 
+/** Generate named param type string for a function's inputs */
+function namedParamsType(fn: AbiFunction, _abi: ABI): string {
+  if (fn.inputs.length === 0) return '{}'
+  const params = fn.inputs.map((input) => {
+    const name = input.name ?? `arg${fn.inputs.indexOf(input)}`
+    let tsType: string
+    if (input.type.kind === 'plaintext') {
+      tsType = plaintextToTsType(input.type.type)
+    } else if (input.type.kind === 'record') {
+      tsType = 'RecordValue | string'
+    } else {
+      tsType = 'RecordValue | string'
+    }
+    return `${name}: ${tsType}`
+  })
+  return `{ ${params.join(', ')} }`
+}
+
+/** Generate the typed return type for simulate (filters out Final outputs) */
+function simulateReturnType(fn: AbiFunction, abi: ABI): string {
+  const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'final')
+  if (dataOutputs.length === 0) return 'void'
+  if (dataOutputs.length === 1) return outputToTsType(dataOutputs[0].type, abi)
+  return `[${dataOutputs.map((o) => outputToTsType(o.type, abi)).join(', ')}]`
+}
+
+/** Generate the typed return type for execute (includes transactionId) */
+function executeReturnType(fn: AbiFunction, abi: ABI): string {
+  const simType = simulateReturnType(fn, abi)
+  if (simType === 'void') return '{ transactionId: string }'
+  return `{ transactionId: string, result: ${simType} }`
+}
+
+/** Generate the input names array for converting named params to positional */
+function inputNames(fn: AbiFunction): string[] {
+  return fn.inputs.map((input, i) => input.name ?? `arg${i}`)
+}
+
+/** Generate output mapper expression for a single output at index i */
+function outputMapperExpr(output: AbiFunction['outputs'][number], i: number, abi: ABI): string {
+  if (output.type.kind === 'record') {
+    const recName = output.type.path[output.type.path.length - 1] ?? ''
+    const isLocal = !output.type.program || output.type.program === abi.program.replace('.aleo', '')
+    if (isLocal && recName) {
+      return `to${recName}(raw.outputs[${i}] as RecordValue)`
+    }
+    return `raw.outputs[${i}] as RecordValue`
+  }
+  if (output.type.kind === 'plaintext') {
+    return `raw.outputs[${i}] as ${plaintextToTsType(output.type.type)}`
+  }
+  return `raw.outputs[${i}]`
+}
+
 function generateContractFactory(abi: ABI): string[] {
   const programName = abi.program
   const factoryName = pascalCase(programName.replace('.aleo', ''))
   const lines: string[] = []
 
-  // Generate typed interface with explicit method names
+  // Generate typed interface with named params and typed returns
   lines.push(`export interface ${factoryName}Contract {`)
   lines.push(`  program: string`)
   lines.push(`  abi: ABI | undefined`)
 
-  // read methods — one per mapping
+  // read methods
   if (abi.mappings.length > 0) {
     lines.push(`  read: {`)
     for (const mapping of abi.mappings) {
@@ -368,42 +422,43 @@ function generateContractFactory(abi: ABI): string[] {
     lines.push(`  read: Record<string, (params: { key: string }) => Promise<unknown>>`)
   }
 
-  // write methods — one per function
+  // write methods — named params, returns tx ID
   if (abi.functions.length > 0) {
     lines.push(`  write: {`)
     for (const fn of abi.functions) {
-      lines.push(`    ${fn.name}: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>`)
+      const params = namedParamsType(fn, abi)
+      lines.push(`    ${fn.name}: (params: ${params} & { fee?: bigint }) => Promise<string>`)
     }
     lines.push(`  }`)
   }
 
-  // simulate methods — one per function
+  // simulate methods — named params, typed return
   if (abi.functions.length > 0) {
     lines.push(`  simulate: {`)
     for (const fn of abi.functions) {
-      lines.push(`    ${fn.name}: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>`)
+      const params = namedParamsType(fn, abi)
+      const retType = simulateReturnType(fn, abi)
+      lines.push(`    ${fn.name}: (params: ${params}) => Promise<${retType}>`)
     }
     lines.push(`  }`)
   }
 
-  // execute methods — one per function
+  // execute methods — named params, typed return + transactionId
   if (abi.functions.length > 0) {
     lines.push(`  execute: {`)
     for (const fn of abi.functions) {
-      lines.push(`    ${fn.name}: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>`)
+      const params = namedParamsType(fn, abi)
+      const retType = executeReturnType(fn, abi)
+      lines.push(`    ${fn.name}: (params: ${params} & { fee?: bigint }) => Promise<${retType}>`)
     }
     lines.push(`  }`)
   }
 
-  lines.push(`  fetchAbi: () => Promise<ReturnType<typeof parseAbi>>`)
+  lines.push(`  fetchAbi: () => Promise<ABI>`)
   lines.push(`}`)
   lines.push('')
 
-  // Generate factory function
-  lines.push(`/**`)
-  lines.push(` * Creates a typed contract instance for ${programName}.`)
-  lines.push(` * Provides autocomplete for all function and mapping names.`)
-  lines.push(` */`)
+  // Generate factory with wrapper methods
   lines.push(`export function create${factoryName}Contract(options: {`)
   lines.push(`  publicClient?: PublicClient,`)
   lines.push(`  walletClient?: WalletClient,`)
@@ -413,7 +468,81 @@ function generateContractFactory(abi: ABI): string[] {
   lines.push(`  const client = options.publicClient && options.walletClient`)
   lines.push(`    ? { public: options.publicClient, wallet: options.walletClient }`)
   lines.push(`    : options.publicClient ?? options.walletClient!`)
-  lines.push(`  return getContract({ program: PROGRAM_ID, abi: PROGRAM_ABI, client, programSource: options.programSource, imports: options.imports }) as unknown as ${factoryName}Contract`)
+  lines.push(`  const raw = getContract({ program: PROGRAM_ID, abi: PROGRAM_ABI, client, programSource: options.programSource, imports: options.imports })`)
+  lines.push('')
+  lines.push(`  return {`)
+  lines.push(`    program: raw.program,`)
+  lines.push(`    abi: raw.abi,`)
+  lines.push(`    read: raw.read as any,`)
+
+  // write wrappers — convert named params to positional inputs
+  if (abi.functions.length > 0) {
+    lines.push(`    write: {`)
+    for (const fn of abi.functions) {
+      const names = inputNames(fn)
+      const destructure = names.length > 0 ? `{ ${names.join(', ')}, fee }` : '{ fee }'
+      lines.push(`      ${fn.name}: (params: any) => {`)
+      lines.push(`        const ${destructure} = params`)
+      lines.push(`        return raw.write.${fn.name}({ inputs: [${names.join(', ')}], fee })`)
+      lines.push(`      },`)
+    }
+    lines.push(`    },`)
+  }
+
+  // simulate wrappers — convert named params to positional, map outputs to typed returns
+  if (abi.functions.length > 0) {
+    lines.push(`    simulate: {`)
+    for (const fn of abi.functions) {
+      const names = inputNames(fn)
+      const destructure = names.length > 0 ? `{ ${names.join(', ')} }` : '{}'
+      const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'final')
+
+      lines.push(`      ${fn.name}: async (params: any) => {`)
+      lines.push(`        const ${destructure} = params`)
+      lines.push(`        const result = await raw.simulate.${fn.name}({ inputs: [${names.join(', ')}] })`)
+
+      if (dataOutputs.length === 0) {
+        // void return
+      } else if (dataOutputs.length === 1) {
+        lines.push(`        return ${outputMapperExpr(dataOutputs[0], 0, abi)}`)
+      } else {
+        const mappers = dataOutputs.map((o, i) => outputMapperExpr(o, i, abi))
+        lines.push(`        return [${mappers.join(', ')}] as const`)
+      }
+
+      lines.push(`      },`)
+    }
+    lines.push(`    },`)
+  }
+
+  // execute wrappers — same as simulate but includes transactionId
+  if (abi.functions.length > 0) {
+    lines.push(`    execute: {`)
+    for (const fn of abi.functions) {
+      const names = inputNames(fn)
+      const destructure = names.length > 0 ? `{ ${names.join(', ')}, fee }` : '{ fee }'
+      const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'final')
+
+      lines.push(`      ${fn.name}: async (params: any) => {`)
+      lines.push(`        const ${destructure} = params`)
+      lines.push(`        const result = await raw.execute.${fn.name}({ inputs: [${names.join(', ')}], fee })`)
+
+      if (dataOutputs.length === 0) {
+        lines.push(`        return { transactionId: result.transactionId }`)
+      } else if (dataOutputs.length === 1) {
+        lines.push(`        return { transactionId: result.transactionId, result: ${outputMapperExpr(dataOutputs[0], 0, abi)} }`)
+      } else {
+        const mappers = dataOutputs.map((o, i) => outputMapperExpr(o, i, abi))
+        lines.push(`        return { transactionId: result.transactionId, result: [${mappers.join(', ')}] as const }`)
+      }
+
+      lines.push(`      },`)
+    }
+    lines.push(`    },`)
+  }
+
+  lines.push(`    fetchAbi: raw.fetchAbi as any,`)
+  lines.push(`  }`)
   lines.push(`}`)
 
   return lines

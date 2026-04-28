@@ -425,18 +425,17 @@ describe('generate', () => {
       expect(output).toContain('"program": "test.aleo"')
     })
 
-    it('generates typed interface with explicit method names', () => {
+    it('generates typed interface with named params and typed returns', () => {
       const output = generate({ abi: minimalAbi })
       expect(output).toContain('export interface TestContract {')
       // read methods — mapping names
       expect(output).toContain('    balances: (params: { key: string }) => Promise<unknown>')
-      // write methods — function names
-      expect(output).toContain('    mint: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>')
-      expect(output).toContain('    transfer_to: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>')
-      // simulate methods
-      expect(output).toContain('    mint: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>')
-      // execute methods
-      expect(output).toContain('    mint: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>')
+      // write methods — named params + fee
+      expect(output).toContain('mint: (params: { recipient: string, amount: bigint } & { fee?: bigint }) => Promise<string>')
+      // simulate methods — named params, typed return
+      expect(output).toContain('mint: (params: { recipient: string, amount: bigint }) => Promise<Token>')
+      // execute methods — named params + fee, typed return + transactionId
+      expect(output).toContain('mint: (params: { recipient: string, amount: bigint } & { fee?: bigint }) => Promise<{ transactionId: string, result: Token }>')
     })
 
     it('generates factory returning typed interface', () => {
@@ -456,8 +455,11 @@ describe('generate', () => {
     it('generates correct typed interface for loyalty token', () => {
       const output = generate({ abi: tokenAbi })
       expect(output).toContain('export interface LoyaltyTokenContract {')
-      expect(output).toContain('    mint_card: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>')
-      expect(output).toContain('    add_points: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>')
+      // simulate: named params, returns LoyaltyCard
+      expect(output).toContain('mint_card: (params: { recipient: string, initial_points: bigint, nonce: string }) => Promise<LoyaltyCard>')
+      // execute: named params + fee, returns typed result
+      expect(output).toContain('mint_card: (params: { recipient: string, initial_points: bigint, nonce: string } & { fee?: bigint }) => Promise<{ transactionId: string, result: LoyaltyCard }>')
+      // read
       expect(output).toContain('    card_exists: (params: { key: string }) => Promise<unknown>')
       expect(output).toContain('): LoyaltyTokenContract {')
     })
@@ -556,21 +558,27 @@ describe('generate', () => {
       expect(source).toContain('record.fields.card_id?.value as string')
     })
 
-    it('generated typed interface matches getContract proxy signatures', () => {
+    it('generated typed interface uses named params and typed returns (not raw arrays)', () => {
       const source = generate({ abi: tokenAbi })
 
-      // Interface must use InputValue (accepts bigint, RecordValue, etc.) not string[]
-      expect(source).toContain("import type { InputValue, ParsedOutput } from '@veil/core'")
-      expect(source).toContain('inputs: InputValue[]')
+      // Should NOT use positional InputValue[] arrays
+      expect(source).not.toContain('inputs: InputValue[]')
       expect(source).not.toContain('inputs: string[]')
 
-      // Simulate returns parsed outputs, not RawSimulateResult
-      expect(source).toContain('Promise<{ outputs: ParsedOutput[] }>')
+      // Should use named params from ABI
+      expect(source).toContain('recipient: string')
+      expect(source).toContain('initial_points: bigint')
+
+      // Simulate returns typed records, not ParsedOutput[]
+      expect(source).toContain('=> Promise<LoyaltyCard>')
       expect(source).not.toContain('RawSimulateResult')
 
-      // Execute returns transactionId + parsed outputs, not RawExecuteResult
-      expect(source).toContain('Promise<{ transactionId: string; outputs: ParsedOutput[] }>')
+      // Execute returns typed result + transactionId
+      expect(source).toContain('result: LoyaltyCard')
       expect(source).not.toContain('RawExecuteResult')
+
+      // Factory generates wrapper that calls toLoyaltyCard on output
+      expect(source).toContain('toLoyaltyCard(')
     })
   })
 })
