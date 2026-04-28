@@ -212,6 +212,18 @@ const demos: Record<string, () => Promise<void>> = {
         logVoucher(voucher);
     },
 
+    async read_state() {
+        logHeader("Reading Public Mappings");
+
+        // card_exists and total_points_issued are public mappings updated by finalize blocks
+        const cardField = "1field";
+        const exists = await tokenContract.read.card_exists({ key: cardField });
+        console.log(`  card_exists(${cardField}): ${exists ?? "not set"}`);
+
+        const totalPoints = await tokenContract.read.total_points_issued({ key: cardField });
+        console.log(`  total_points_issued(${cardField}): ${totalPoints ?? "not set"}`);
+    },
+
     async local() {
         await demos.full_flow();
     },
