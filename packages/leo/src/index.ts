@@ -150,7 +150,7 @@ export type DevnodeAdvanceOptions = {
 export type DevnodeInstance = {
   /** Socket address the devnode is listening on. */
   socketAddr: string
-  /** Terminates the devnode process (SIGTERM). */
+  /** Terminates the devnode process (SIGINT). */
   stop: () => Promise<void>
 }
 
@@ -421,7 +421,7 @@ async function spawnDevnode(
     )
   })
   proc.on('exit', (code, signal) => {
-    if (signal === 'SIGTERM') return
+    if (signal === 'SIGINT' || signal === 'SIGTERM') return
     if (code !== 0 && code !== null) {
       startError = startError ?? new Error(`leo devnode exited unexpectedly with code ${code}`)
     }
@@ -433,7 +433,7 @@ async function spawnDevnode(
     socketAddr,
     stop: () =>
       new Promise<void>((resolve) => {
-        proc.kill('SIGTERM')
+        proc.kill('SIGINT')
         proc.once('exit', () => resolve())
       }),
   }
