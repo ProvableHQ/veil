@@ -5,7 +5,7 @@
 
 import type { Primitive, Plaintext, RecordValue, RecordFieldValue } from '../types/primitives.js'
 import type { ABI, RecordDef, FunctionInput } from '../types/abi.js'
-import { parseValue, encodeValue } from './values.js'
+import { parseValue, encodeValue, type ParsedValue } from './values.js'
 
 // ── getRecordDef ──────────────────────────────────────────────────────
 
@@ -149,7 +149,13 @@ export function parseRecordPlaintextLoose(
     const isPublic = rawValue.endsWith('.public')
     const cleaned = rawValue.replace(/\.(private|public)$/, '').trim()
 
-    const parsed = parseValue(cleaned)
+    let parsed: ParsedValue
+    try {
+      parsed = parseValue(cleaned)
+    } catch {
+      // Unrecognized value format (e.g. program IDs like "loyalty_token.aleo") — store as string
+      parsed = { value: cleaned, type: 'field' as Primitive }
+    }
 
     fields[key] = {
       value: parsed.value,
