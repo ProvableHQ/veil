@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "generate": "veil-codegen --abi loyalty_token/build/abi.json --out src/generated/loyalty_token.ts && veil-codegen --abi loyalty_rewards/build/abi.json --out src/generated/loyalty_rewards.ts",
     "start": "tsx src/index.ts",
     "local": "tsx src/index.ts local",
     "delegated": "tsx src/index.ts delegated",
@@ -11,6 +12,7 @@
     "start:redeem": "tsx src/index.ts redeem_for_voucher"
   },
   "dependencies": {
+    "@veil/codegen": "workspace:*",
     "@veil/core": "workspace:*",
     "@veil/provable": "workspace:*",
     "dotenv": "^16.4.5"

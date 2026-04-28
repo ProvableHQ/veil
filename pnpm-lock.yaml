@@ -57,6 +57,9 @@ importers:
 
   apps/loyalty-node:
     dependencies:
+      '@veil/codegen':
+        specifier: workspace:*
+        version: link:../../packages/codegen
       '@veil/core':
         specifier: workspace:*
         version: link:../../packages/core
