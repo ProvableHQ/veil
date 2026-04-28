@@ -424,7 +424,7 @@ function outputMapperExpr(output: AbiFunction['outputs'][number], i: number, abi
     return `result.outputs[${i}] as RecordValue`
   }
   if (output.type.kind === 'plaintext') {
-    return `result.outputs[${i}] as ${plaintextToTsType(output.type.type)}`
+    return `result.outputs[${i}] as unknown as ${plaintextToTsType(output.type.type)}`
   }
   return `result.outputs[${i}]`
 }
@@ -437,7 +437,7 @@ function generateContractFactory(abi: ABI): string[] {
   // Generate typed interface with named params and typed returns
   lines.push(`export interface ${factoryName}Contract {`)
   lines.push(`  program: string`)
-  lines.push(`  abi: ABI | undefined`)
+  lines.push(`  abi: ABI`)
 
   // read methods
   if (abi.mappings.length > 0) {
@@ -501,7 +501,7 @@ function generateContractFactory(abi: ABI): string[] {
   lines.push('')
   lines.push(`  return {`)
   lines.push(`    program: raw.program,`)
-  lines.push(`    abi: raw.abi,`)
+  lines.push(`    abi: raw.abi as ABI,`)
   lines.push(`    read: raw.read as any,`)
 
   // write wrappers — convert named params to positional inputs
