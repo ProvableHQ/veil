@@ -179,12 +179,13 @@ describe('generate', () => {
   })
 
   describe('record interfaces', () => {
-    it('generates interface with correct field types', () => {
+    it('generates interface with correct field types and _record', () => {
       const output = generate({ abi: minimalAbi })
       expect(output).toContain('export interface Token {')
       expect(output).toContain('  owner: string')
       expect(output).toContain('  amount: bigint')
       expect(output).toContain('  active: boolean')
+      expect(output).toContain('  _record: RecordValue')
     })
 
     it('maps u8/u16/u32 to number', () => {
@@ -205,12 +206,13 @@ describe('generate', () => {
   })
 
   describe('record mappers', () => {
-    it('generates toX mapper function', () => {
+    it('generates toX mapper function with _record', () => {
       const output = generate({ abi: minimalAbi })
       expect(output).toContain('export function toToken(record: RecordValue): Token {')
       expect(output).toContain('owner: record.owner')
       expect(output).toContain('record.fields.amount?.value as bigint')
       expect(output).toContain('record.fields.active?.value as boolean')
+      expect(output).toContain('_record: record,')
     })
   })
 
@@ -579,6 +581,38 @@ describe('generate', () => {
 
       // Factory generates wrapper that calls toLoyaltyCard on output
       expect(source).toContain('toLoyaltyCard(')
+    })
+
+    it('generated wrappers reference result.outputs, not raw.outputs', () => {
+      const source = generate({ abi: tokenAbi })
+
+      // Output mappers must reference the call result, not the contract instance
+      expect(source).not.toContain('raw.outputs[')
+      expect(source).toContain('result.outputs[')
+    })
+
+    it('generated record interface includes _record for re-consumption', () => {
+      const source = generate({ abi: tokenAbi })
+      expect(source).toContain('_record: RecordValue')
+    })
+
+    it('generated mapper includes _record for round-trip', () => {
+      const source = generate({ abi: tokenAbi })
+      expect(source).toContain('_record: record,')
+    })
+
+    it('generated wrappers resolve record inputs via _record', () => {
+      const source = generate({ abi: tokenAbi })
+
+      // add_points takes a LoyaltyCard record — wrapper must extract _record
+      expect(source).toContain('const _card = card?._record ?? card')
+    })
+
+    it('generated interface accepts typed record for record inputs', () => {
+      const source = generate({ abi: tokenAbi })
+
+      // Interface should accept LoyaltyCard | RecordValue | string for local record inputs
+      expect(source).toContain('card: LoyaltyCard | RecordValue | string')
     })
   })
 })

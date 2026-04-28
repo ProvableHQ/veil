@@ -115,6 +115,8 @@ function generateRecordInterface(record: RecordDef): string[] {
     lines.push(`  ${field.name}: ${tsType}`)
   }
 
+  // Carry the underlying RecordValue so typed records can be passed back as inputs
+  lines.push(`  _record: RecordValue`)
   lines.push(`}`)
   return lines
 }
@@ -134,6 +136,7 @@ function generateRecordMapper(record: RecordDef): string[] {
     lines.push(`    ${field.name}: record.fields.${field.name}?.value${cast} ?? ${plaintextDefault(field.type)},`)
   }
 
+  lines.push(`    _record: record,`)
   lines.push(`  }`)
   lines.push(`}`)
   return lines
@@ -347,7 +350,7 @@ function generateAbiConstant(abi: ABI): string[] {
 }
 
 /** Generate named param type string for a function's inputs */
-function namedParamsType(fn: AbiFunction, _abi: ABI): string {
+function namedParamsType(fn: AbiFunction, abi: ABI): string {
   if (fn.inputs.length === 0) return '{}'
   const params = fn.inputs.map((input) => {
     const name = input.name ?? `arg${fn.inputs.indexOf(input)}`
@@ -355,7 +358,9 @@ function namedParamsType(fn: AbiFunction, _abi: ABI): string {
     if (input.type.kind === 'plaintext') {
       tsType = plaintextToTsType(input.type.type)
     } else if (input.type.kind === 'record') {
-      tsType = 'RecordValue | string'
+      const recName = input.type.path[input.type.path.length - 1] ?? 'RecordValue'
+      const isLocal = !input.type.program || input.type.program === abi.program.replace('.aleo', '')
+      tsType = isLocal ? `${recName} | RecordValue | string` : 'RecordValue | string'
     } else {
       tsType = 'RecordValue | string'
     }
@@ -384,20 +389,44 @@ function inputNames(fn: AbiFunction): string[] {
   return fn.inputs.map((input, i) => input.name ?? `arg${i}`)
 }
 
+/**
+ * For record inputs, generate resolution lines that extract _record from typed records.
+ * Returns { resolveLines: string[], resolvedNames: string[] }.
+ * resolvedNames replaces record input names with their resolved versions.
+ */
+function resolveRecordInputs(fn: AbiFunction): { resolveLines: string[], resolvedNames: string[] } {
+  const resolveLines: string[] = []
+  const resolvedNames: string[] = []
+
+  for (let i = 0; i < fn.inputs.length; i++) {
+    const input = fn.inputs[i]
+    const name = input.name ?? `arg${i}`
+
+    if (input.type.kind === 'record' || input.type.kind === 'dynamicRecord') {
+      resolveLines.push(`        const _${name} = ${name}?._record ?? ${name}`)
+      resolvedNames.push(`_${name}`)
+    } else {
+      resolvedNames.push(name)
+    }
+  }
+
+  return { resolveLines, resolvedNames }
+}
+
 /** Generate output mapper expression for a single output at index i */
 function outputMapperExpr(output: AbiFunction['outputs'][number], i: number, abi: ABI): string {
   if (output.type.kind === 'record') {
     const recName = output.type.path[output.type.path.length - 1] ?? ''
     const isLocal = !output.type.program || output.type.program === abi.program.replace('.aleo', '')
     if (isLocal && recName) {
-      return `to${recName}(raw.outputs[${i}] as RecordValue)`
+      return `to${recName}(result.outputs[${i}] as RecordValue)`
     }
-    return `raw.outputs[${i}] as RecordValue`
+    return `result.outputs[${i}] as RecordValue`
   }
   if (output.type.kind === 'plaintext') {
-    return `raw.outputs[${i}] as ${plaintextToTsType(output.type.type)}`
+    return `result.outputs[${i}] as ${plaintextToTsType(output.type.type)}`
   }
-  return `raw.outputs[${i}]`
+  return `result.outputs[${i}]`
 }
 
 function generateContractFactory(abi: ABI): string[] {
@@ -480,10 +509,12 @@ function generateContractFactory(abi: ABI): string[] {
     lines.push(`    write: {`)
     for (const fn of abi.functions) {
       const names = inputNames(fn)
+      const { resolveLines, resolvedNames } = resolveRecordInputs(fn)
       const destructure = names.length > 0 ? `{ ${names.join(', ')}, fee }` : '{ fee }'
       lines.push(`      ${fn.name}: (params: any) => {`)
       lines.push(`        const ${destructure} = params`)
-      lines.push(`        return raw.write.${fn.name}({ inputs: [${names.join(', ')}], fee })`)
+      for (const line of resolveLines) lines.push(line)
+      lines.push(`        return raw.write.${fn.name}({ inputs: [${resolvedNames.join(', ')}], fee })`)
       lines.push(`      },`)
     }
     lines.push(`    },`)
@@ -494,12 +525,14 @@ function generateContractFactory(abi: ABI): string[] {
     lines.push(`    simulate: {`)
     for (const fn of abi.functions) {
       const names = inputNames(fn)
+      const { resolveLines, resolvedNames } = resolveRecordInputs(fn)
       const destructure = names.length > 0 ? `{ ${names.join(', ')} }` : '{}'
       const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'final')
 
       lines.push(`      ${fn.name}: async (params: any) => {`)
       lines.push(`        const ${destructure} = params`)
-      lines.push(`        const result = await raw.simulate.${fn.name}({ inputs: [${names.join(', ')}] })`)
+      for (const line of resolveLines) lines.push(line)
+      lines.push(`        const result = await raw.simulate.${fn.name}({ inputs: [${resolvedNames.join(', ')}] })`)
 
       if (dataOutputs.length === 0) {
         // void return
@@ -520,12 +553,14 @@ function generateContractFactory(abi: ABI): string[] {
     lines.push(`    execute: {`)
     for (const fn of abi.functions) {
       const names = inputNames(fn)
+      const { resolveLines, resolvedNames } = resolveRecordInputs(fn)
       const destructure = names.length > 0 ? `{ ${names.join(', ')}, fee }` : '{ fee }'
       const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'final')
 
       lines.push(`      ${fn.name}: async (params: any) => {`)
       lines.push(`        const ${destructure} = params`)
-      lines.push(`        const result = await raw.execute.${fn.name}({ inputs: [${names.join(', ')}], fee })`)
+      for (const line of resolveLines) lines.push(line)
+      lines.push(`        const result = await raw.execute.${fn.name}({ inputs: [${resolvedNames.join(', ')}], fee })`)
 
       if (dataOutputs.length === 0) {
         lines.push(`        return { transactionId: result.transactionId }`)
