@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { parseRecordPlaintextLoose, serializeRecord } from "@veil/core";
 import type { RecordValue } from "@veil/core";
+import type { ParsedOutput } from "@veil/core";
 import { createAleoClient } from "@veil/provable";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
@@ -14,7 +14,6 @@ import {
 } from "./generated/loyalty_token.js";
 import {
     createLoyaltyRewardsContract, toRewardVoucher,
-    PROGRAM_ID as REWARDS_PROGRAM,
     type RewardVoucher,
 } from "./generated/loyalty_rewards.js";
 
@@ -32,14 +31,6 @@ enum CardTier {
     Bronze = 0,
     Silver = 1,
     Gold = 2,
-}
-
-interface CardWithRecord extends LoyaltyCard {
-    record: RecordValue;
-}
-
-interface VoucherWithRecord extends RewardVoucher {
-    record: RecordValue;
 }
 
 // ============================================================================
@@ -73,7 +64,7 @@ const { publicClient, walletClient, account } = createAleoClient({
     ...(consumerId && { consumerId }),
 });
 
-// Create typed contracts — autocomplete on function and mapping names
+// Create typed contracts — auto-encode inputs, auto-parse outputs
 const tokenContract = createLoyaltyTokenContract({
     publicClient,
     walletClient,
@@ -88,69 +79,74 @@ const rewardsContract = createLoyaltyRewardsContract({
 });
 
 // ============================================================================
-// Record helpers — generated mappers + RecordValue for re-consumption
+// Helpers — extract RecordValue from auto-parsed output
 // ============================================================================
 
-function parseCard(outputStr: string): CardWithRecord {
-    const record = parseRecordPlaintextLoose(outputStr, TOKEN_PROGRAM, 'LoyaltyCard');
+function asRecord(output: ParsedOutput): RecordValue {
+    if (typeof output === 'string') throw new Error(`Expected record, got string: ${output}`);
+    return output;
+}
+
+function toCard(output: ParsedOutput): LoyaltyCard & { record: RecordValue } {
+    const record = asRecord(output);
     return { ...toLoyaltyCard(record), record };
 }
 
-function parseVoucher(outputStr: string): VoucherWithRecord {
-    const record = parseRecordPlaintextLoose(outputStr, REWARDS_PROGRAM, 'RewardVoucher');
+function toVoucher(output: ParsedOutput): RewardVoucher & { record: RecordValue } {
+    const record = asRecord(output);
     return { ...toRewardVoucher(record), record };
 }
 
 // ============================================================================
-// Card Operations — using contract.simulate proxy
+// Card Operations — native values in, typed records out
 // ============================================================================
 
-async function mintCard(recipient: string, initialPoints: number): Promise<CardWithRecord> {
+async function mintCard(recipient: string, initialPoints: number) {
     const nonce = Math.floor(Math.random() * 1e9);
     const result = await tokenContract.simulate.mint_card({
-        inputs: [recipient, `${initialPoints}u64`, `${nonce}field`],
+        inputs: [recipient, BigInt(initialPoints), BigInt(nonce)],
     });
-    return parseCard(result.outputs[0]);
+    return toCard(result.outputs[0]);
 }
 
-async function addPoints(card: CardWithRecord, pointsToAdd: number): Promise<CardWithRecord> {
+async function addPoints(card: LoyaltyCard & { record: RecordValue }, pointsToAdd: number) {
     const result = await tokenContract.simulate.add_points({
-        inputs: [serializeRecord(card.record), `${pointsToAdd}u64`],
+        inputs: [card.record, BigInt(pointsToAdd)],
     });
-    return parseCard(result.outputs[0]);
+    return toCard(result.outputs[0]);
 }
 
-async function splitCardV2(card: CardWithRecord, pointsToKeep: number): Promise<{ keptCard: CardWithRecord; splitCard: CardWithRecord }> {
+async function splitCardV2(card: LoyaltyCard & { record: RecordValue }, pointsToKeep: number) {
     if (pointsToKeep >= Number(card.points)) {
         throw new Error(`pointsToKeep (${pointsToKeep}) must be less than card points (${card.points})`);
     }
     const result = await tokenContract.simulate.split_card_v2({
-        inputs: [serializeRecord(card.record), `${pointsToKeep}u64`],
+        inputs: [card.record, BigInt(pointsToKeep)],
     });
-    return { keptCard: parseCard(result.outputs[0]), splitCard: parseCard(result.outputs[1]) };
+    return { keptCard: toCard(result.outputs[0]), splitCard: toCard(result.outputs[1]) };
 }
 
 // ============================================================================
-// Voucher Operations — imports configured on contract, no per-call setup
+// Voucher Operations
 // ============================================================================
 
 async function redeemForVoucher(
-    card: CardWithRecord,
+    card: LoyaltyCard & { record: RecordValue },
     rewardType: RewardType,
     pointsCost: number,
-): Promise<{ card: CardWithRecord; voucher: VoucherWithRecord }> {
+) {
     if (Number(card.points) < pointsCost) {
         throw new Error(`Insufficient points: have ${card.points}, need ${pointsCost}`);
     }
     const result = await rewardsContract.simulate.redeem_points_for_voucher({
-        inputs: [serializeRecord(card.record), `${rewardType}u8`, `${pointsCost}u64`],
+        inputs: [card.record, BigInt(rewardType), BigInt(pointsCost)],
     });
-    return { card: parseCard(result.outputs[0]), voucher: parseVoucher(result.outputs[1]) };
+    return { card: toCard(result.outputs[0]), voucher: toVoucher(result.outputs[1]) };
 }
 
-async function useVoucher(voucher: VoucherWithRecord): Promise<void> {
+async function useVoucher(voucher: RewardVoucher & { record: RecordValue }) {
     await rewardsContract.simulate.use_voucher({
-        inputs: [serializeRecord(voucher.record)],
+        inputs: [voucher.record],
     });
 }
 
@@ -169,12 +165,12 @@ function logHeader(title: string): void {
     console.log(`${C.cyan}${"═".repeat(60)}${C.reset}`);
 }
 
-function logCard(card: CardWithRecord, label?: string): void {
+function logCard(card: LoyaltyCard, label?: string): void {
     if (label) console.log(`  ${C.dim}${label}${C.reset}`);
     console.log(`  ${C.dim}├─${C.reset} Points: ${C.bright}${card.points}${C.reset}, Tier: ${C.bright}${CardTier[Number(card.tier)]}${C.reset}`);
 }
 
-function logVoucher(voucher: VoucherWithRecord): void {
+function logVoucher(voucher: RewardVoucher): void {
     console.log(`  ${C.dim}├─${C.reset} Type: ${C.bright}${RewardType[Number(voucher.reward_type)]}${C.reset}, Value: ${C.bright}${voucher.amount}${C.reset}`);
 }
 

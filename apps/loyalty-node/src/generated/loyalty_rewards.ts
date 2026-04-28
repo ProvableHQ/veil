@@ -3,7 +3,7 @@
 
 import { getContract } from '@veil/core'
 import type { RecordValue, PublicClient, WalletClient, ContractInstance, ABI } from '@veil/core'
-import type { RawSimulateResult, RawExecuteResult } from '@veil/core'
+import type { InputValue, ParsedOutput } from '@veil/core'
 
 export const PROGRAM_ID = 'loyalty_rewards.aleo' as const
 
@@ -390,25 +390,25 @@ export interface LoyaltyRewardsContract {
     approved_upgrades: (params: { key: string }) => Promise<unknown>
   }
   write: {
-    approve_upgrade: (params: { inputs: string[]; fee?: bigint }) => Promise<string>
-    redeem_points_for_voucher: (params: { inputs: string[]; fee?: bigint }) => Promise<string>
-    use_voucher: (params: { inputs: string[]; fee?: bigint }) => Promise<string>
-    check_voucher: (params: { inputs: string[]; fee?: bigint }) => Promise<string>
-    transfer_voucher: (params: { inputs: string[]; fee?: bigint }) => Promise<string>
+    approve_upgrade: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>
+    redeem_points_for_voucher: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>
+    use_voucher: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>
+    check_voucher: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>
+    transfer_voucher: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>
   }
   simulate: {
-    approve_upgrade: (params: { inputs: string[] }) => Promise<RawSimulateResult>
-    redeem_points_for_voucher: (params: { inputs: string[] }) => Promise<RawSimulateResult>
-    use_voucher: (params: { inputs: string[] }) => Promise<RawSimulateResult>
-    check_voucher: (params: { inputs: string[] }) => Promise<RawSimulateResult>
-    transfer_voucher: (params: { inputs: string[] }) => Promise<RawSimulateResult>
+    approve_upgrade: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>
+    redeem_points_for_voucher: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>
+    use_voucher: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>
+    check_voucher: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>
+    transfer_voucher: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>
   }
   execute: {
-    approve_upgrade: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>
-    redeem_points_for_voucher: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>
-    use_voucher: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>
-    check_voucher: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>
-    transfer_voucher: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>
+    approve_upgrade: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>
+    redeem_points_for_voucher: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>
+    use_voucher: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>
+    check_voucher: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>
+    transfer_voucher: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>
   }
   fetchAbi: () => Promise<ReturnType<typeof parseAbi>>
 }

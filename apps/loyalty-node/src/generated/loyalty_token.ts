@@ -3,7 +3,7 @@
 
 import { getContract } from '@veil/core'
 import type { RecordValue, PublicClient, WalletClient, ContractInstance, ABI } from '@veil/core'
-import type { RawSimulateResult, RawExecuteResult } from '@veil/core'
+import type { InputValue, ParsedOutput } from '@veil/core'
 
 export const PROGRAM_ID = 'loyalty_token.aleo' as const
 
@@ -577,34 +577,34 @@ export interface LoyaltyTokenContract {
     approved_upgrades: (params: { key: string }) => Promise<unknown>
   }
   write: {
-    approve_upgrade: (params: { inputs: string[]; fee?: bigint }) => Promise<string>
-    mint_card: (params: { inputs: string[]; fee?: bigint }) => Promise<string>
-    add_points: (params: { inputs: string[]; fee?: bigint }) => Promise<string>
-    check_points: (params: { inputs: string[]; fee?: bigint }) => Promise<string>
-    transfer_card: (params: { inputs: string[]; fee?: bigint }) => Promise<string>
-    split_card: (params: { inputs: string[]; fee?: bigint }) => Promise<string>
-    split_card_v2: (params: { inputs: string[]; fee?: bigint }) => Promise<string>
-    spend_points: (params: { inputs: string[]; fee?: bigint }) => Promise<string>
+    approve_upgrade: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>
+    mint_card: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>
+    add_points: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>
+    check_points: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>
+    transfer_card: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>
+    split_card: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>
+    split_card_v2: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>
+    spend_points: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>
   }
   simulate: {
-    approve_upgrade: (params: { inputs: string[] }) => Promise<RawSimulateResult>
-    mint_card: (params: { inputs: string[] }) => Promise<RawSimulateResult>
-    add_points: (params: { inputs: string[] }) => Promise<RawSimulateResult>
-    check_points: (params: { inputs: string[] }) => Promise<RawSimulateResult>
-    transfer_card: (params: { inputs: string[] }) => Promise<RawSimulateResult>
-    split_card: (params: { inputs: string[] }) => Promise<RawSimulateResult>
-    split_card_v2: (params: { inputs: string[] }) => Promise<RawSimulateResult>
-    spend_points: (params: { inputs: string[] }) => Promise<RawSimulateResult>
+    approve_upgrade: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>
+    mint_card: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>
+    add_points: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>
+    check_points: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>
+    transfer_card: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>
+    split_card: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>
+    split_card_v2: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>
+    spend_points: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>
   }
   execute: {
-    approve_upgrade: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>
-    mint_card: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>
-    add_points: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>
-    check_points: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>
-    transfer_card: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>
-    split_card: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>
-    split_card_v2: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>
-    spend_points: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>
+    approve_upgrade: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>
+    mint_card: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>
+    add_points: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>
+    check_points: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>
+    transfer_card: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>
+    split_card: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>
+    split_card_v2: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>
+    spend_points: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>
   }
   fetchAbi: () => Promise<ReturnType<typeof parseAbi>>
 }
