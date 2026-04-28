@@ -1,6 +1,4 @@
 import "dotenv/config";
-import type { RecordValue } from "@veil/core";
-import type { ParsedOutput } from "@veil/core";
 import { createAleoClient } from "@veil/provable";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
@@ -13,7 +11,7 @@ import {
     type LoyaltyCard,
 } from "./generated/loyalty_token.js";
 import {
-    createLoyaltyRewardsContract, toRewardVoucher,
+    createLoyaltyRewardsContract,
     type RewardVoucher,
 } from "./generated/loyalty_rewards.js";
 
@@ -64,7 +62,7 @@ const { publicClient, walletClient, account } = createAleoClient({
     ...(consumerId && { consumerId }),
 });
 
-// Create typed contracts — auto-encode inputs, auto-parse outputs
+// Create typed contracts — named params, typed returns, autocomplete
 const tokenContract = createLoyaltyTokenContract({
     publicClient,
     walletClient,
@@ -79,75 +77,54 @@ const rewardsContract = createLoyaltyRewardsContract({
 });
 
 // ============================================================================
-// Helpers — extract RecordValue from auto-parsed output
-// ============================================================================
-
-function asRecord(output: ParsedOutput): RecordValue {
-    if (typeof output === 'string') throw new Error(`Expected record, got string: ${output}`);
-    return output;
-}
-
-function toCard(output: ParsedOutput): LoyaltyCard & { record: RecordValue } {
-    const record = asRecord(output);
-    return { ...toLoyaltyCard(record), record };
-}
-
-function toVoucher(output: ParsedOutput): RewardVoucher & { record: RecordValue } {
-    const record = asRecord(output);
-    return { ...toRewardVoucher(record), record };
-}
-
-// ============================================================================
-// Card Operations — native values in, typed records out
+// Card Operations — named params in, typed records out
 // ============================================================================
 
 async function mintCard(recipient: string, initialPoints: number) {
     const nonce = Math.floor(Math.random() * 1e9);
-    const result = await tokenContract.simulate.mint_card({
-        inputs: [recipient, BigInt(initialPoints), BigInt(nonce)],
+    return tokenContract.simulate.mint_card({
+        recipient,
+        initial_points: BigInt(initialPoints),
+        nonce: `${nonce}field`,
     });
-    return toCard(result.outputs[0]);
 }
 
-async function addPoints(card: LoyaltyCard & { record: RecordValue }, pointsToAdd: number) {
-    const result = await tokenContract.simulate.add_points({
-        inputs: [card.record, BigInt(pointsToAdd)],
+async function addPoints(card: LoyaltyCard, pointsToAdd: number) {
+    return tokenContract.simulate.add_points({
+        card,
+        points_earned: BigInt(pointsToAdd),
     });
-    return toCard(result.outputs[0]);
 }
 
-async function splitCardV2(card: LoyaltyCard & { record: RecordValue }, pointsToKeep: number) {
+async function splitCardV2(card: LoyaltyCard, pointsToKeep: number) {
     if (pointsToKeep >= Number(card.points)) {
         throw new Error(`pointsToKeep (${pointsToKeep}) must be less than card points (${card.points})`);
     }
-    const result = await tokenContract.simulate.split_card_v2({
-        inputs: [card.record, BigInt(pointsToKeep)],
+    return tokenContract.simulate.split_card_v2({
+        card,
+        points_to_keep: BigInt(pointsToKeep),
     });
-    return { keptCard: toCard(result.outputs[0]), splitCard: toCard(result.outputs[1]) };
 }
 
 // ============================================================================
 // Voucher Operations
 // ============================================================================
 
-async function redeemForVoucher(
-    card: LoyaltyCard & { record: RecordValue },
-    rewardType: RewardType,
-    pointsCost: number,
-) {
+async function redeemForVoucher(card: LoyaltyCard, rewardType: RewardType, pointsCost: number) {
     if (Number(card.points) < pointsCost) {
         throw new Error(`Insufficient points: have ${card.points}, need ${pointsCost}`);
     }
-    const result = await rewardsContract.simulate.redeem_points_for_voucher({
-        inputs: [card.record, BigInt(rewardType), BigInt(pointsCost)],
+    // Cross-program call: pass _record for foreign record input, returns [RecordValue, RewardVoucher]
+    const [updatedCardRecord, voucher] = await rewardsContract.simulate.redeem_points_for_voucher({
+        card: card._record,
+        reward_type: rewardType,
+        points_to_spend: BigInt(pointsCost),
     });
-    return { card: toCard(result.outputs[0]), voucher: toVoucher(result.outputs[1]) };
+    return { card: toLoyaltyCard(updatedCardRecord), voucher };
 }
 
-async function useVoucher(voucher: RewardVoucher & { record: RecordValue }) {
-    await rewardsContract.simulate.use_voucher({
-        inputs: [voucher.record],
-    });
+async function useVoucher(voucher: RewardVoucher) {
+    await rewardsContract.simulate.use_voucher({ voucher });
 }
 
 // ============================================================================
@@ -197,7 +174,7 @@ const demos: Record<string, () => Promise<void>> = {
         logCard(card);
 
         console.log("\n4. Splitting card (keep 3000)...");
-        const { keptCard, splitCard } = await splitCardV2(card, 3000);
+        const [keptCard, splitCard] = await splitCardV2(card, 3000);
         logCard(keptCard, "Kept:");
         logCard(splitCard, "Split:");
 
