@@ -7,12 +7,10 @@ import { parseProgram } from './parseProgram.js'
 import { encodeValue } from '../utils/values.js'
 import { encodeInputs, getRecordDef, parseRecordPlaintext, parseRecordPlaintextLoose, toString as serializeRecord } from '../utils/records.js'
 
-// ── Input/Output value types ──────────────────────────────────────────
+import type { InputValue } from '../types/contract.js'
+export type { InputValue } from '../types/contract.js'
 
-/** Native JS values that the proxy accepts — auto-encoded when ABI is available */
-export type InputValue = bigint | number | boolean | string | RecordValue
-
-/** Parsed output — either a RecordValue (if it looks like a record) or the raw string */
+/** Parsed output from the proxy — either a RecordValue (if it looks like a record) or the raw string */
 export type ParsedOutput = RecordValue | string
 
 // ── Parameter types ───────────────────────────────────────────────────

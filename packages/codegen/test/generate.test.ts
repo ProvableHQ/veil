@@ -431,12 +431,12 @@ describe('generate', () => {
       // read methods — mapping names
       expect(output).toContain('    balances: (params: { key: string }) => Promise<unknown>')
       // write methods — function names
-      expect(output).toContain('    mint: (params: { inputs: string[]; fee?: bigint }) => Promise<string>')
-      expect(output).toContain('    transfer_to: (params: { inputs: string[]; fee?: bigint }) => Promise<string>')
+      expect(output).toContain('    mint: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>')
+      expect(output).toContain('    transfer_to: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>')
       // simulate methods
-      expect(output).toContain('    mint: (params: { inputs: string[] }) => Promise<RawSimulateResult>')
+      expect(output).toContain('    mint: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>')
       // execute methods
-      expect(output).toContain('    mint: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>')
+      expect(output).toContain('    mint: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>')
     })
 
     it('generates factory returning typed interface', () => {
@@ -456,8 +456,8 @@ describe('generate', () => {
     it('generates correct typed interface for loyalty token', () => {
       const output = generate({ abi: tokenAbi })
       expect(output).toContain('export interface LoyaltyTokenContract {')
-      expect(output).toContain('    mint_card: (params: { inputs: string[] }) => Promise<RawSimulateResult>')
-      expect(output).toContain('    add_points: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>')
+      expect(output).toContain('    mint_card: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>')
+      expect(output).toContain('    add_points: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>')
       expect(output).toContain('    card_exists: (params: { key: string }) => Promise<unknown>')
       expect(output).toContain('): LoyaltyTokenContract {')
     })
@@ -554,6 +554,23 @@ describe('generate', () => {
       expect(source).toContain('record.fields.points?.value as bigint')
       expect(source).toContain('record.fields.tier?.value as number')
       expect(source).toContain('record.fields.card_id?.value as string')
+    })
+
+    it('generated typed interface matches getContract proxy signatures', () => {
+      const source = generate({ abi: tokenAbi })
+
+      // Interface must use InputValue (accepts bigint, RecordValue, etc.) not string[]
+      expect(source).toContain("import type { InputValue, ParsedOutput } from '@veil/core'")
+      expect(source).toContain('inputs: InputValue[]')
+      expect(source).not.toContain('inputs: string[]')
+
+      // Simulate returns parsed outputs, not RawSimulateResult
+      expect(source).toContain('Promise<{ outputs: ParsedOutput[] }>')
+      expect(source).not.toContain('RawSimulateResult')
+
+      // Execute returns transactionId + parsed outputs, not RawExecuteResult
+      expect(source).toContain('Promise<{ transactionId: string; outputs: ParsedOutput[] }>')
+      expect(source).not.toContain('RawExecuteResult')
     })
   })
 })

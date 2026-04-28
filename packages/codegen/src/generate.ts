@@ -33,7 +33,7 @@ export function generate(options: GenerateOptions): string {
   lines.push('')
   lines.push(`import { getContract } from '${coreImport}'`)
   lines.push(`import type { RecordValue, PublicClient, WalletClient, ContractInstance, ABI } from '${coreImport}'`)
-  lines.push(`import type { RawSimulateResult, RawExecuteResult } from '${coreImport}'`)
+  lines.push(`import type { InputValue, ParsedOutput } from '${coreImport}'`)
   lines.push('')
 
   // Program ID constant
@@ -372,7 +372,7 @@ function generateContractFactory(abi: ABI): string[] {
   if (abi.functions.length > 0) {
     lines.push(`  write: {`)
     for (const fn of abi.functions) {
-      lines.push(`    ${fn.name}: (params: { inputs: string[]; fee?: bigint }) => Promise<string>`)
+      lines.push(`    ${fn.name}: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<string>`)
     }
     lines.push(`  }`)
   }
@@ -381,7 +381,7 @@ function generateContractFactory(abi: ABI): string[] {
   if (abi.functions.length > 0) {
     lines.push(`  simulate: {`)
     for (const fn of abi.functions) {
-      lines.push(`    ${fn.name}: (params: { inputs: string[] }) => Promise<RawSimulateResult>`)
+      lines.push(`    ${fn.name}: (params: { inputs: InputValue[] }) => Promise<{ outputs: ParsedOutput[] }>`)
     }
     lines.push(`  }`)
   }
@@ -390,7 +390,7 @@ function generateContractFactory(abi: ABI): string[] {
   if (abi.functions.length > 0) {
     lines.push(`  execute: {`)
     for (const fn of abi.functions) {
-      lines.push(`    ${fn.name}: (params: { inputs: string[]; fee?: bigint }) => Promise<RawExecuteResult>`)
+      lines.push(`    ${fn.name}: (params: { inputs: InputValue[]; fee?: bigint }) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>`)
     }
     lines.push(`  }`)
   }
