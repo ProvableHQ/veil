@@ -49,8 +49,8 @@ const dpsUrl = process.env.ALEO_DPS_URL;
 const dpsApiKey = process.env.ALEO_DPS_API_KEY;
 const consumerId = process.env.ALEO_CONSUMER_ID;
 
-// Demo account
-const DEMO_PRIVATE_KEY = "APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH";
+// Account — set ALEO_PRIVATE_KEY for on-chain execution, or use the default for simulate-only
+const DEMO_PRIVATE_KEY = process.env.ALEO_PRIVATE_KEY ?? "APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH";
 
 // Create clients
 const { publicClient, walletClient, account } = createAleoClient({
@@ -77,7 +77,7 @@ const rewardsContract = createLoyaltyRewardsContract({
 });
 
 // ============================================================================
-// Card Operations — named params in, typed records out
+// Simulate helpers — local execution, no broadcast, instant results
 // ============================================================================
 
 async function mintCard(recipient: string, initialPoints: number) {
@@ -105,10 +105,6 @@ async function splitCardV2(card: LoyaltyCard, pointsToKeep: number) {
         points_to_keep: BigInt(pointsToKeep),
     });
 }
-
-// ============================================================================
-// Voucher Operations
-// ============================================================================
 
 async function redeemForVoucher(card: LoyaltyCard, rewardType: RewardType, pointsCost: number) {
     if (Number(card.points) < pointsCost) {
@@ -152,14 +148,17 @@ function logVoucher(voucher: RewardVoucher): void {
 }
 
 // ============================================================================
-// Demo
+// Demos
 // ============================================================================
 
 const address = account.address;
 
 const demos: Record<string, () => Promise<void>> = {
-    async full_flow() {
-        logHeader("Full Loyalty Program Flow");
+
+    // ── simulate: local execution, no network, instant ────────────────
+
+    async simulate() {
+        logHeader("Simulate: Full Loyalty Program Flow");
 
         console.log("\n1. Minting card with 100 points...");
         let card = await mintCard(address, 100);
@@ -188,14 +187,56 @@ const demos: Record<string, () => Promise<void>> = {
         console.log(`  ${C.green}✓${C.reset} Voucher consumed!`);
     },
 
+    // ── execute: prove, broadcast, confirm on-chain ───────────────────
+
+    async execute() {
+        logHeader(`Execute: On-Chain Flow (${provingMode} proving)`);
+
+        const nonce = Math.floor(Math.random() * 1e9);
+
+        console.log("\n1. Minting card with 1000 points...");
+        const mint = await tokenContract.execute.mint_card({
+            recipient: address,
+            initial_points: 1000n,
+            nonce: `${nonce}field`,
+            fee: 500_000n,
+        });
+        console.log(`  ${C.dim}tx:${C.reset} ${mint.transactionId}`);
+        logCard(mint.result);
+
+        console.log("\n2. Adding 500 points...");
+        const add = await tokenContract.execute.add_points({
+            card: mint.result,
+            points_earned: 500n,
+            fee: 500_000n,
+        });
+        console.log(`  ${C.dim}tx:${C.reset} ${add.transactionId}`);
+        logCard(add.result);
+    },
+
+    // ── read: public mapping lookups ──────────────────────────────────
+
+    async read() {
+        logHeader("Read: Public Mappings");
+
+        const cardField = "1field";
+        const exists = await tokenContract.read.card_exists({ key: cardField });
+        console.log(`  card_exists(${cardField}): ${exists ?? "not set"}`);
+
+        const totalPoints = await tokenContract.read.total_points_issued({ key: cardField });
+        console.log(`  total_points_issued(${cardField}): ${totalPoints ?? "not set"}`);
+    },
+
+    // ── shortcuts ─────────────────────────────────────────────────────
+
     async mint_card() {
-        logHeader("Minting Loyalty Card");
+        logHeader("Simulate: Mint Card");
         const card = await mintCard(address, 1000);
         logCard(card);
     },
 
     async add_points() {
-        logHeader("Adding Points");
+        logHeader("Simulate: Add Points");
         const card = await mintCard(address, 500);
         console.log("  Initial card:");
         logCard(card);
@@ -205,40 +246,16 @@ const demos: Record<string, () => Promise<void>> = {
     },
 
     async redeem_for_voucher() {
-        logHeader("Redeeming Points for Voucher");
+        logHeader("Simulate: Redeem for Voucher");
         const card = await mintCard(address, 1000);
         const { card: updated, voucher } = await redeemForVoucher(card, RewardType.Discount, 500);
         logCard(updated, "Card:");
         logVoucher(voucher);
     },
-
-    async read_state() {
-        logHeader("Reading Public Mappings");
-
-        // card_exists and total_points_issued are public mappings updated by finalize blocks
-        const cardField = "1field";
-        const exists = await tokenContract.read.card_exists({ key: cardField });
-        console.log(`  card_exists(${cardField}): ${exists ?? "not set"}`);
-
-        const totalPoints = await tokenContract.read.total_points_issued({ key: cardField });
-        console.log(`  total_points_issued(${cardField}): ${totalPoints ?? "not set"}`);
-    },
-
-    async local() {
-        await demos.full_flow();
-    },
-
-    async delegated() {
-        if (!dpsUrl) {
-            console.error(`\n${C.yellow}Delegated proving requires ALEO_DPS_URL${C.reset}`);
-            process.exit(1);
-        }
-        await demos.full_flow();
-    },
 };
 
 async function main() {
-    const selected = process.argv[2] ?? "full_flow";
+    const selected = process.argv[2] ?? "simulate";
     const fn = demos[selected];
 
     if (!fn) {
