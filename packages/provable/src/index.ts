@@ -31,6 +31,7 @@ import {
   RecordCiphertext,
   OfflineQuery,
 } from '@provablehq/sdk'
+import type { TransactionJSON } from '@provablehq/sdk'
 import type { LocalAccount } from '@veil/core'
 import type { ProvingConfig, BuildTransactionOptions, ExecuteOptions, SimulateOptions, RawSimulateResult, RawExecuteResult } from '@veil/core'
 import type { RecordsConfig, RecordSearchParams, AleoRecord } from '@veil/core'
@@ -124,9 +125,6 @@ export function createProvingConfig(options: {
     return pm
   }
 
-  /** Shape of a transaction returned by getTransaction — used for output extraction */
-  type TransactionShape = { execution?: { transitions: Array<{ outputs?: Array<{ type: string; value: string }> }> } }
-
   /** Shared network client for confirmation polling */
   const pollingClient = new AleoNetworkClient(options.networkUrl)
 
@@ -138,7 +136,7 @@ export function createProvingConfig(options: {
    * AleoNetworkClient.waitForTransactionConfirmation because the SDK's
    * Node build has inconsistent timeout behavior.
    */
-  async function waitForConfirmation(txId: string): Promise<TransactionShape> {
+  async function waitForConfirmation(txId: string): Promise<TransactionJSON> {
     const startTime = Date.now()
 
     while (Date.now() - startTime < txConfirmationTimeout) {
@@ -164,7 +162,7 @@ export function createProvingConfig(options: {
    *
    * Transaction shape: { execution: { transitions: [{ outputs: [{ type, value }] }] } }
    */
-  function extractOutputs(tx: TransactionShape): string[] {
+  function extractOutputs(tx: TransactionJSON): string[] {
     const outputs: string[] = []
     const transitions = tx.execution?.transitions
     if (!transitions) return outputs
