@@ -28,9 +28,11 @@ import {
   AleoNetworkClient,
   AleoKeyProvider,
   NetworkRecordProvider,
+  RecordCiphertext,
+  OfflineQuery,
 } from '@provablehq/sdk'
 import type { LocalAccount } from '@veil/core'
-import type { ProvingConfig, BuildTransactionOptions } from '@veil/core'
+import type { ProvingConfig, BuildTransactionOptions, ExecuteOptions, SimulateOptions, RawSimulateResult, RawExecuteResult } from '@veil/core'
 import type { RecordsConfig, RecordSearchParams, AleoRecord } from '@veil/core'
 import {
   createPublicClient,
@@ -93,38 +95,188 @@ export function createProvingConfig(options: {
   networkUrl: string
   /** Required for delegated proving — the prover service URL */
   proverUrl?: string
+  /** API key for DPS authentication */
+  apiKey?: string
+  /** Provable consumer ID */
+  consumerId?: string
   /** Account to use for proving — sets the signer on the ProgramManager */
   account?: LocalAccount<'privateKey'>
+  /** Timeout in ms for waiting for transaction confirmation (default: 300_000 = 5 min) */
+  txConfirmationTimeout?: number
 }): ProvingConfig {
   const keyProvider = new AleoKeyProvider()
   keyProvider.useCache(true)
 
+  const txConfirmationTimeout = options.txConfirmationTimeout ?? 300_000
+  const txPollInterval = 5_000
+
+  /** Convert microcredits (Veil API) to credits (SDK API) for priority fee */
+  function toCredits(microcredits: bigint): number {
+    return Number(microcredits / 1_000_000n)
+  }
+
+  /** Create a ProgramManager bound to the configured account */
+  function createProgramManager(): ProgramManager {
+    const pm = new ProgramManager(options.networkUrl, keyProvider, undefined)
+    if (options.account) {
+      pm.setAccount(new Account({ privateKey: options.account.privateKey }))
+    }
+    return pm
+  }
+
+  /** Shape of a transaction returned by getTransaction — used for output extraction */
+  type TransactionShape = { execution?: { transitions: Array<{ outputs?: Array<{ type: string; value: string }> }> } }
+
+  /** Shared network client for confirmation polling */
+  const pollingClient = new AleoNetworkClient(options.networkUrl)
+
+  /** Pre-computed view key for record decryption (avoids re-parsing per output) */
+  const accountViewKey = options.account ? ViewKey.from_string(options.account.viewKey) : undefined
+
+  /**
+   * Poll for transaction confirmation. Implemented here instead of using
+   * AleoNetworkClient.waitForTransactionConfirmation because the SDK's
+   * Node build has inconsistent timeout behavior.
+   */
+  async function waitForConfirmation(txId: string): Promise<TransactionShape> {
+    const startTime = Date.now()
+
+    while (Date.now() - startTime < txConfirmationTimeout) {
+      try {
+        const tx = await pollingClient.getTransaction(txId)
+        if (tx) return tx
+      } catch {
+        // Transaction not found yet, continue polling
+      }
+      await new Promise((resolve) => setTimeout(resolve, txPollInterval))
+    }
+
+    throw new Error(
+      `Transaction ${txId} not confirmed within ${txConfirmationTimeout / 1000}s`,
+    )
+  }
+
+  /**
+   * Extract output strings from a confirmed transaction.
+   * Iterates all transitions (including inner cross-program calls) and decrypts
+   * record outputs owned by this account. Unowned records are silently skipped
+   * (e.g. transfers that create records for other addresses).
+   *
+   * Transaction shape: { execution: { transitions: [{ outputs: [{ type, value }] }] } }
+   */
+  function extractOutputs(tx: TransactionShape): string[] {
+    const outputs: string[] = []
+    const transitions = tx.execution?.transitions
+    if (!transitions) return outputs
+
+    for (const transition of transitions) {
+      if (!transition.outputs) continue
+      for (const output of transition.outputs) {
+        if (!output.value) continue
+        if (output.type === 'record' && output.value.startsWith('record1') && accountViewKey) {
+          const ciphertext = RecordCiphertext.fromString(output.value)
+          if (ciphertext.isOwner(accountViewKey)) {
+            outputs.push(ciphertext.decrypt(accountViewKey).toString())
+          }
+        } else {
+          outputs.push(output.value)
+        }
+      }
+    }
+    return outputs
+  }
+
   return {
     mode: options.mode,
     url: options.proverUrl,
+    apiKey: options.apiKey,
 
     buildTransaction: async (txOptions: BuildTransactionOptions) => {
-      const programManager = new ProgramManager(
-        options.networkUrl,
-        keyProvider,
-        undefined,
-      )
-
-      // Bind the account so ProgramManager can sign transactions
-      if (options.account) {
-        const sdkAccount = new Account({ privateKey: options.account.privateKey })
-        programManager.setAccount(sdkAccount)
-      }
-
+      const programManager = createProgramManager()
       const tx = await programManager.buildExecutionTransaction({
         programName: txOptions.programName,
         functionName: txOptions.functionName,
-        priorityFee: Number(txOptions.fee),
+        priorityFee: toCredits(txOptions.fee),
         privateFee: txOptions.privateFee ?? false,
         inputs: txOptions.inputs,
       })
-
       return JSON.parse(tx.toString())
+    },
+
+    simulate: async (simOptions: SimulateOptions): Promise<RawSimulateResult> => {
+      const programManager = createProgramManager()
+      const executionResponse = await programManager.run(
+        simOptions.programSource ?? simOptions.programName,
+        simOptions.functionName,
+        simOptions.inputs,
+        false,
+        simOptions.programImports,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        new OfflineQuery(0, 'sr1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gk0xu'),
+      )
+      return { outputs: executionResponse.getOutputs() }
+    },
+
+    execute: async (execOptions: ExecuteOptions): Promise<RawExecuteResult> => {
+      const programManager = createProgramManager()
+
+      if (options.mode === 'delegated') {
+        // ── Delegated: build proving request → submit to DPS → wait → extract ──
+        if (!options.proverUrl) {
+          throw new Error('Delegated execution requires proverUrl')
+        }
+
+        const provingRequest = await programManager.provingRequest({
+          programName: execOptions.programName,
+          programSource: execOptions.programSource,
+          programImports: execOptions.programImports,
+          functionName: execOptions.functionName,
+          inputs: execOptions.inputs,
+          priorityFee: toCredits(execOptions.fee),
+          privateFee: execOptions.privateFee ?? false,
+          broadcast: true,
+        })
+
+        const dpsClient = new AleoNetworkClient(options.proverUrl)
+        const response = await dpsClient.submitProvingRequest({
+          provingRequest,
+          url: options.proverUrl,
+          apiKey: options.apiKey,
+          consumerId: options.consumerId,
+        })
+
+        const txId = response.transaction?.id
+        if (!txId) throw new Error('DPS response did not contain a transaction ID')
+
+        const confirmedTx = await waitForConfirmation(txId)
+
+        return { transactionId: txId, outputs: extractOutputs(confirmedTx) }
+
+      } else {
+        // ── Local: build + prove → broadcast → wait → extract ──
+        const tx = await programManager.buildExecutionTransaction({
+          programName: execOptions.programName,
+          functionName: execOptions.functionName,
+          inputs: execOptions.inputs,
+          priorityFee: toCredits(execOptions.fee),
+          privateFee: execOptions.privateFee ?? false,
+          program: execOptions.programSource,
+          imports: execOptions.programImports,
+        })
+
+        const networkClient = new AleoNetworkClient(options.networkUrl)
+        // Disable check_transaction — the pre-broadcast balance check has false positives
+        // for public fee transactions. The transaction is still validated by the node on inclusion.
+        networkClient.setVerboseErrors(false)
+        const txId = await networkClient.submitTransaction(tx)
+
+        const confirmedTx = await waitForConfirmation(txId)
+
+        return { transactionId: txId, outputs: extractOutputs(confirmedTx) }
+      }
     },
   }
 }
@@ -247,6 +399,12 @@ export function createAleoClient(options: {
   privateKey: string
   networkUrl: string
   provingMode?: 'delegated' | 'local'
+  /** Required for delegated proving — the prover service URL */
+  proverUrl?: string
+  /** API key for DPS authentication */
+  apiKey?: string
+  /** Provable consumer ID */
+  consumerId?: string
 }): { publicClient: PublicClient; walletClient: WalletClient; account: LocalAccount<'privateKey'> } {
   const account = privateKeyToAccount(options.privateKey)
   const transport = http(options.networkUrl)
@@ -254,6 +412,9 @@ export function createAleoClient(options: {
   const proving = createProvingConfig({
     mode: options.provingMode ?? 'delegated',
     networkUrl: options.networkUrl,
+    proverUrl: options.proverUrl,
+    apiKey: options.apiKey,
+    consumerId: options.consumerId,
     account,
   })
 
