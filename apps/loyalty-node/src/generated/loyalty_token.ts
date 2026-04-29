@@ -2,8 +2,7 @@
 // Do not edit manually.
 
 import { getContract } from '@veil/core'
-import type { RecordValue, PublicClient, WalletClient, ContractInstance, ABI } from '@veil/core'
-import type { InputValue, ParsedOutput } from '@veil/core'
+import type { RecordValue, PublicClient, WalletClient, ABI } from '@veil/core'
 
 export const PROGRAM_ID = 'loyalty_token.aleo' as const
 
@@ -617,15 +616,16 @@ export function createLoyaltyTokenContract(options: {
   programSource?: string,
   imports?: Record<string, string>,
 }): LoyaltyTokenContract {
+  if (!options.publicClient && !options.walletClient) throw new Error('At least one of publicClient or walletClient is required')
   const client = options.publicClient && options.walletClient
     ? { public: options.publicClient, wallet: options.walletClient }
-    : options.publicClient ?? options.walletClient!
+    : (options.publicClient ?? options.walletClient)!
   const raw = getContract({ program: PROGRAM_ID, abi: PROGRAM_ABI, client, programSource: options.programSource, imports: options.imports })
 
   return {
     program: raw.program,
     abi: raw.abi as ABI,
-    read: raw.read as any,
+    read: raw.read as LoyaltyTokenContract['read'],
     write: {
       approve_upgrade: (params: any) => {
         const { checksum, fee } = params
@@ -669,7 +669,7 @@ export function createLoyaltyTokenContract(options: {
     simulate: {
       approve_upgrade: async (params: any) => {
         const { checksum } = params
-        const result = await raw.simulate.approve_upgrade({ inputs: [checksum] })
+        await raw.simulate.approve_upgrade({ inputs: [checksum] })
       },
       mint_card: async (params: any) => {
         const { recipient, initial_points, nonce } = params
@@ -761,6 +761,6 @@ export function createLoyaltyTokenContract(options: {
         return { transactionId: result.transactionId, result: toLoyaltyCard(result.outputs[0] as RecordValue) }
       },
     },
-    fetchAbi: raw.fetchAbi as any,
+    fetchAbi: raw.fetchAbi as unknown as LoyaltyTokenContract['fetchAbi'],
   }
 }

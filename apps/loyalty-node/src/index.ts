@@ -49,8 +49,8 @@ const dpsUrl = process.env.ALEO_DPS_URL;
 const dpsApiKey = process.env.ALEO_DPS_API_KEY;
 const consumerId = process.env.ALEO_CONSUMER_ID;
 
-// Account — set ALEO_PRIVATE_KEY for on-chain execution, or use the default for simulate-only
-const DEMO_PRIVATE_KEY = process.env.ALEO_PRIVATE_KEY ?? "APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH";
+// Account — set ALEO_PRIVATE_KEY to override, or use the SDK demo account (funded on testnet)
+const DEMO_PRIVATE_KEY = process.env.ALEO_PRIVATE_KEY ?? "APrivateKey1zkp6aEqdUdRpZs1fnfGBEitWZNzxNhPz4kb2W382nuX8G42";
 
 // Create clients
 const { publicClient, walletClient, account } = createAleoClient({
@@ -194,7 +194,7 @@ const demos: Record<string, () => Promise<void>> = {
 
         const nonce = Math.floor(Math.random() * 1e9);
 
-        console.log("\n1. Minting card with 1000 points...");
+        console.log("\n  Minting card with 1000 points on-chain...");
         const mint = await tokenContract.execute.mint_card({
             recipient: address,
             initial_points: 1000n,
@@ -203,15 +203,6 @@ const demos: Record<string, () => Promise<void>> = {
         });
         console.log(`  ${C.dim}tx:${C.reset} ${mint.transactionId}`);
         logCard(mint.result);
-
-        console.log("\n2. Adding 500 points...");
-        const add = await tokenContract.execute.add_points({
-            card: mint.result,
-            points_earned: 500n,
-            fee: 500_000n,
-        });
-        console.log(`  ${C.dim}tx:${C.reset} ${add.transactionId}`);
-        logCard(add.result);
     },
 
     // ── read: public mapping lookups ──────────────────────────────────

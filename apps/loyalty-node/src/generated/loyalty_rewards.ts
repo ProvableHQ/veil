@@ -2,8 +2,7 @@
 // Do not edit manually.
 
 import { getContract } from '@veil/core'
-import type { RecordValue, PublicClient, WalletClient, ContractInstance, ABI } from '@veil/core'
-import type { InputValue, ParsedOutput } from '@veil/core'
+import type { RecordValue, PublicClient, WalletClient, ABI } from '@veil/core'
 
 export const PROGRAM_ID = 'loyalty_rewards.aleo' as const
 
@@ -421,15 +420,16 @@ export function createLoyaltyRewardsContract(options: {
   programSource?: string,
   imports?: Record<string, string>,
 }): LoyaltyRewardsContract {
+  if (!options.publicClient && !options.walletClient) throw new Error('At least one of publicClient or walletClient is required')
   const client = options.publicClient && options.walletClient
     ? { public: options.publicClient, wallet: options.walletClient }
-    : options.publicClient ?? options.walletClient!
+    : (options.publicClient ?? options.walletClient)!
   const raw = getContract({ program: PROGRAM_ID, abi: PROGRAM_ABI, client, programSource: options.programSource, imports: options.imports })
 
   return {
     program: raw.program,
     abi: raw.abi as ABI,
-    read: raw.read as any,
+    read: raw.read as LoyaltyRewardsContract['read'],
     write: {
       approve_upgrade: (params: any) => {
         const { checksum, fee } = params
@@ -459,7 +459,7 @@ export function createLoyaltyRewardsContract(options: {
     simulate: {
       approve_upgrade: async (params: any) => {
         const { checksum } = params
-        const result = await raw.simulate.approve_upgrade({ inputs: [checksum] })
+        await raw.simulate.approve_upgrade({ inputs: [checksum] })
       },
       redeem_points_for_voucher: async (params: any) => {
         const { card, reward_type, points_to_spend } = params
@@ -470,7 +470,7 @@ export function createLoyaltyRewardsContract(options: {
       use_voucher: async (params: any) => {
         const { voucher } = params
         const _voucher = voucher?._record ?? voucher
-        const result = await raw.simulate.use_voucher({ inputs: [_voucher] })
+        await raw.simulate.use_voucher({ inputs: [_voucher] })
       },
       check_voucher: async (params: any) => {
         const { voucher } = params
@@ -516,6 +516,6 @@ export function createLoyaltyRewardsContract(options: {
         return { transactionId: result.transactionId, result: toRewardVoucher(result.outputs[0] as RecordValue) }
       },
     },
-    fetchAbi: raw.fetchAbi as any,
+    fetchAbi: raw.fetchAbi as unknown as LoyaltyRewardsContract['fetchAbi'],
   }
 }

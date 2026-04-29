@@ -581,7 +581,7 @@ function generateContractFactory(abi: ABI): string[] {
     lines.push(`    },`)
   }
 
-  lines.push(`    fetchAbi: raw.fetchAbi as ${factoryName}Contract['fetchAbi'],`)
+  lines.push(`    fetchAbi: raw.fetchAbi as unknown as ${factoryName}Contract['fetchAbi'],`)
   lines.push(`  }`)
   lines.push(`}`)
 
