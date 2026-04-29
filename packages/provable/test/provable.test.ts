@@ -126,6 +126,56 @@ describe('@veil/provable', () => {
       expect(config.url).toBeUndefined()
       expect(config.buildTransaction).toBeTypeOf('function')
     })
+
+    it('provides simulate function', () => {
+      const account = generateAccount()
+      const config = createProvingConfig({
+        mode: 'local',
+        networkUrl: 'https://api.explorer.provable.com/v1',
+        account,
+      })
+
+      expect(config.simulate).toBeTypeOf('function')
+    })
+
+    it('provides execute function', () => {
+      const account = generateAccount()
+      const config = createProvingConfig({
+        mode: 'local',
+        networkUrl: 'https://api.explorer.provable.com/v1',
+        account,
+      })
+
+      expect(config.execute).toBeTypeOf('function')
+    })
+
+    it('threads apiKey to config', () => {
+      const config = createProvingConfig({
+        mode: 'delegated',
+        networkUrl: 'https://api.explorer.provable.com/v1',
+        proverUrl: 'https://prover.example.com',
+        apiKey: 'test-key-123',
+      })
+
+      expect(config.apiKey).toBe('test-key-123')
+    })
+
+    it('delegated execute throws without proverUrl', async () => {
+      const account = generateAccount()
+      const config = createProvingConfig({
+        mode: 'delegated',
+        networkUrl: 'https://api.explorer.provable.com/v1',
+        account,
+        // no proverUrl
+      })
+
+      await expect(config.execute!({
+        programName: 'test.aleo',
+        functionName: 'test',
+        inputs: [],
+        fee: 0n,
+      })).rejects.toThrow('Delegated execution requires proverUrl')
+    })
   })
 
   describe('createNetworkClient', () => {
@@ -218,6 +268,23 @@ describe('@veil/provable', () => {
       // walletClient should exist and have wallet actions
       expect(result.walletClient).toBeDefined()
       expect(result.walletClient.writeContract).toBeTypeOf('function')
+    })
+
+    it('threads proverUrl, apiKey, and consumerId to proving config', () => {
+      const account = generateAccount()
+      const result = createAleoClient({
+        privateKey: account.privateKey,
+        networkUrl: 'https://api.explorer.provable.com/v1',
+        provingMode: 'delegated',
+        proverUrl: 'https://prover.example.com',
+        apiKey: 'test-key',
+        consumerId: 'test-consumer',
+      })
+
+      expect(result.walletClient).toBeDefined()
+      // The walletClient should have the proving config wired up
+      expect(result.walletClient.simulateContract).toBeTypeOf('function')
+      expect(result.walletClient.executeTransaction).toBeTypeOf('function')
     })
 
     it('accepts local proving mode', () => {

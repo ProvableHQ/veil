@@ -4,6 +4,7 @@ export type BuildTransactionOptions = {
   programName: string
   functionName: string
   inputs: string[]
+  /** Priority fee in microcredits (1 credit = 1_000_000 microcredits) */
   fee: bigint
   privateFee?: boolean | undefined
   feeRecord?: string | undefined
@@ -23,6 +24,7 @@ export type ExecuteOptions = {
   programName: string
   functionName: string
   inputs: string[]
+  /** Priority fee in microcredits (1 credit = 1_000_000 microcredits) */
   fee: bigint
   privateFee?: boolean | undefined
   programSource?: string | undefined
