@@ -6,6 +6,7 @@ export type ExecuteContractParameters = {
   program: string
   function: string
   inputs: string[]
+  /** Priority fee in microcredits (1 credit = 1_000_000 microcredits) */
   fee?: bigint
   privateFee?: boolean
   programSource?: string
@@ -19,10 +20,11 @@ export type ExecuteContractReturnType = RawExecuteResult
  * confirmation, and return raw output strings.
  *
  * Behavior by account type:
- * - Local account, local proving: proves on-device, broadcasts, waits, returns outputs
- * - Local account, delegated proving: submits to DPS, waits, decrypts outputs
- * - Local account, fallback: if execute not available, falls back to simulate (no broadcast)
+ * - Local account: proves (locally or via DPS), broadcasts, waits, returns outputs
  * - RPC account: delegates entire flow to the connected wallet
+ *
+ * Throws if execute is not configured on the proving config.
+ * Use simulateContract for local-only execution without broadcasting.
  */
 export async function executeContract(
   client: Client,
@@ -59,18 +61,6 @@ export async function executeContract(
         programSource: params.programSource,
         programImports: params.imports,
       })
-    }
-
-    // Fall back to simulate if execute not available
-    if (client.proving?.simulate) {
-      const result = await client.proving.simulate({
-        programName: params.program,
-        functionName: params.function,
-        inputs: params.inputs,
-        programSource: params.programSource,
-        programImports: params.imports,
-      })
-      return { transactionId: '', outputs: result.outputs }
     }
 
     throw new ProvingNotConfiguredError()
