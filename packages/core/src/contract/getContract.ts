@@ -17,7 +17,7 @@ export type ParsedOutput = RecordValue | string
 
 export type GetContractParameters = {
   program: string
-  /** Parsed ABI (Mia's ABI type) or legacy Program — if not provided, dynamic proxies are used */
+  /** Parsed ABI or legacy Program — if not provided, dynamic proxies are used */
   abi?: ABI | Program | undefined
   /** Program source code — needed for proving/simulation (snarkvm requires source) */
   programSource?: string | undefined
@@ -55,10 +55,9 @@ export type ContractInstance = {
 
 // ── ABI detection ─────────────────────────────────────────────────────
 
-/** Detect whether the abi is Mia's ABI type (has `functions` with `isFinal`) vs legacy Program */
+/** Detect whether the abi is a parsed ABI (has `structs`) vs legacy Program */
 function isABI(abi: ABI | Program): abi is ABI {
-  const first = (abi as ABI).functions?.[0]
-  return first !== undefined && 'isFinal' in first
+  return 'structs' in abi
 }
 
 // ── Implementation ────────────────────────────────────────────────────
