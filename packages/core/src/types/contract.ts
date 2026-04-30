@@ -44,7 +44,7 @@ export type ParsedOutput =
 // ── Input types ───────────────────────────────────────────────────────
 
 /** Input value — either a pre-encoded string or a native JS value for auto-encoding */
-export type InputValue = bigint | number | boolean | string
+export type InputValue = bigint | number | boolean | string | RecordValue
 
 // ── Execute / simulate result types ───────────────────────────────────
 
