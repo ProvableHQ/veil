@@ -17,6 +17,7 @@ export type {
 export type {
   ProvingConfig,
   BuildTransactionOptions,
+  BuildDeploymentOptions,
 } from './types/proving.js'
 
 export type {
@@ -85,6 +86,7 @@ export {
   InvalidAddressError,
   ProgramNotFoundError,
   InvalidInputError,
+  TransactionHistoryNotSupportedError,
 } from './errors/errors.js'
 
 // Utils

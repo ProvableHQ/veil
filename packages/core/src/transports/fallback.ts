@@ -3,10 +3,16 @@ import type { Transport } from '../types/transport.js'
 import { createTransport } from './createTransport.js'
 
 export function fallback(transports: Transport[]): Transport<'fallback'> {
+  // Inherit network from the first transport that declares one — typical
+  // pairing is [walletAdapter, http(url, { network })] where the wallet
+  // adapter's transport doesn't carry a network, but http does.
+  const network = transports.find((t) => t.config.network != null)?.config.network ?? null
+
   return createTransport({
     key: 'fallback',
     name: 'Fallback Transport',
     type: 'fallback',
+    network,
     request: async (args) => {
       const errors: Error[] = []
       for (const transport of transports) {

@@ -14,6 +14,7 @@ function createMockAdapter(overrides?: Partial<AleoWalletAdapter>): AleoWalletAd
   return {
     account: { address: 'aleo1mockaddress123456789012345678901234567890123456789012345678' },
     connected: true,
+    network: 'mainnet',
     signMessage: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
     executeTransaction: vi.fn().mockResolvedValue({ transactionId: 'at1txid123' }),
     executeDeployment: vi.fn().mockResolvedValue({ transactionId: 'at1deploy456' }),
@@ -21,6 +22,8 @@ function createMockAdapter(overrides?: Partial<AleoWalletAdapter>): AleoWalletAd
     decrypt: vi.fn().mockResolvedValue('{ owner: aleo1..., data: {} }'),
     requestRecords: vi.fn().mockResolvedValue([{ owner: 'aleo1mock' }]),
     transitionViewKeys: vi.fn().mockResolvedValue(['tvk1abc', 'tvk1def']),
+    switchNetwork: vi.fn().mockResolvedValue(undefined),
+    requestTransactionHistory: vi.fn().mockResolvedValue({ transactions: [] }),
     ...overrides,
   }
 }

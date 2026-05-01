@@ -25,26 +25,29 @@ describe('deployContract', () => {
     })
   })
 
-  it('local account — builds transaction then broadcasts', async () => {
+  it('local account — builds deployment then broadcasts', async () => {
     const builtTx = { type: 'deploy', id: 'at1built' }
-    const buildTransaction = vi.fn().mockResolvedValue(builtTx)
+    const buildDeployment = vi.fn().mockResolvedValue(builtTx)
     const request = vi.fn().mockResolvedValue('at1deployed')
     const client = {
       account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
-      proving: { buildTransaction },
+      proving: { buildDeployment },
       request,
     } as any
 
-    const result = await deployContract(client, { program: 'my_program.aleo', fee: 10000n })
+    const result = await deployContract(client, { program: 'program my_program.aleo;', fee: 10000n })
     expect(result).toBe('at1deployed')
-    expect(buildTransaction).toHaveBeenCalled()
+    expect(buildDeployment).toHaveBeenCalledWith({
+      program: 'program my_program.aleo;',
+      fee: 10000n,
+    })
     expect(request).toHaveBeenCalledWith({
       method: 'sendTransaction',
       params: { transaction: JSON.stringify(builtTx) },
     })
   })
 
-  it('local account without proving config throws ProvingNotConfiguredError', async () => {
+  it('local account without buildDeployment throws ProvingNotConfiguredError', async () => {
     const client = {
       account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
       proving: undefined,

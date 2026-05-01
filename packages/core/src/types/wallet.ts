@@ -5,8 +5,12 @@
  * structural compatibility against `@provablehq/aleo-types` at typecheck time.
  */
 
-/** Supported Aleo networks. */
-export type Network = 'mainnet' | 'testnet' | 'canary'
+/**
+ * Aleo network identifier. Known values are autocompleted; arbitrary strings
+ * are accepted so new networks (or wallet-specific aliases) don't require a
+ * type bump.
+ */
+export type Network = 'mainnet' | 'testnet' | (string & {})
 
 /** Response shape returned when querying a transaction's status. */
 export interface TransactionStatusResponse {

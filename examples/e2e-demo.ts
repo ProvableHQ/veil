@@ -7,7 +7,7 @@
  * Each section demonstrates a real veil API call hitting the Aleo mainnet.
  */
 
-import { describe, it, expect } from 'vitest'
+import { beforeAll, describe, it, expect } from 'vitest'
 import {
   createPublicClient,
   http,
@@ -16,7 +16,7 @@ import {
   isAddress,
 } from '../packages/core/src/index.js'
 import { aleoAgentTools } from '../packages/core/src/agent/index.js'
-import { privateKeyToAccount, generateAccount, verifySignature } from '../packages/provable/src/index.js'
+import { loadNetwork, type AleoSdk } from '../packages/provable/src/index.js'
 
 const API_URL = 'https://api.provable.com/v2'
 
@@ -24,6 +24,11 @@ describe('E2E: veil against live Aleo mainnet', () => {
   // Create a shared public client for all tests
   const publicClient = createPublicClient({
     transport: http(API_URL, { network: 'mainnet' }),
+  })
+
+  let aleo: AleoSdk
+  beforeAll(async () => {
+    aleo = await loadNetwork('mainnet')
   })
 
   it('getBlockNumber() returns the current chain height', async () => {
@@ -41,7 +46,7 @@ describe('E2E: veil against live Aleo mainnet', () => {
   })
 
   it('getCode() fetches program source and parseProgram() parses it', async () => {
-    const source = await publicClient.getCode({ program: 'credits.aleo' })
+    const source = await publicClient.getCode({ programId: 'credits.aleo' })
     expect(source.length).toBeGreaterThan(1000)
 
     const parsed = parseProgram(source)
@@ -67,7 +72,7 @@ describe('E2E: veil against live Aleo mainnet', () => {
     // Note: 404 means the key doesn't exist in the mapping — handle gracefully
     try {
       const result = await publicClient.readContract({
-        program: 'credits.aleo',
+        programId: 'credits.aleo',
         mapping: 'account',
         key: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
       })
@@ -82,7 +87,7 @@ describe('E2E: veil against live Aleo mainnet', () => {
   })
 
   it('getContract() creates a typed contract instance', async () => {
-    const source = await publicClient.getCode({ program: 'credits.aleo' })
+    const source = await publicClient.getCode({ programId: 'credits.aleo' })
     const abi = parseProgram(source)
 
     const credits = getContract({
@@ -110,7 +115,7 @@ describe('E2E: veil against live Aleo mainnet', () => {
   })
 
   it('privateKeyToAccount() derives keys and signs messages', async () => {
-    const account = generateAccount()
+    const account = aleo.generateAccount()
 
     expect(account.type).toBe('local')
     expect(account.source).toBe('privateKey')
@@ -125,7 +130,7 @@ describe('E2E: veil against live Aleo mainnet', () => {
 
     // Verify the signature
     const sigString = new TextDecoder().decode(signature)
-    const verified = verifySignature(account.address, message, sigString)
+    const verified = aleo.verifySignature(account.address, message, sigString)
     expect(verified).toBe(true)
 
     console.log('  Address:', account.address)
@@ -133,8 +138,8 @@ describe('E2E: veil against live Aleo mainnet', () => {
   })
 
   it('privateKeyToAccount() restores from existing key', () => {
-    const original = generateAccount()
-    const restored = privateKeyToAccount(original.privateKey)
+    const original = aleo.generateAccount()
+    const restored = aleo.privateKeyToAccount(original.privateKey)
 
     expect(restored.address).toBe(original.address)
     expect(restored.viewKey).toBe(original.viewKey)

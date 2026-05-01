@@ -20,9 +20,19 @@ export async function decrypt(
     throw new AccountNotFoundError()
   }
 
-  // RPC accounts — delegate to wallet which has the view key
-  // Local/viewOnly accounts — also delegate to transport, which may
-  // be backed by an SDK decrypt function or a wallet adapter
+  // Local accounts — use the SDK-backed decrypt on the proving config.
+  // The wallet adapter transport doesn't apply; we have the view key locally.
+  if (account.type === 'local' && client.proving?.decrypt) {
+    return client.proving.decrypt(
+      params.cipherText,
+      params.tpk,
+      params.programId,
+      params.functionName,
+      params.index,
+    )
+  }
+
+  // RPC accounts — delegate to the wallet adapter via the transport.
   return client.request({
     method: 'decrypt',
     params,
