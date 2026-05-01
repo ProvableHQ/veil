@@ -5,7 +5,9 @@ import {
   createWalletClient,
   http,
   fallback,
+  type Network,
   type PublicClient,
+  type TxHistoryResult,
   type WalletClient,
 } from '@veil/core'
 import { fromWalletAdapter, type AleoWalletAdapter } from '@veil/wallet-adapter'
@@ -79,11 +81,14 @@ export function useVeilWallet(config?: UseVeilWalletConfig): UseVeilWalletReturn
   )
 
   const walletClient = useMemo(() => {
-    if (!wallet.connected || !wallet.address) return undefined
+    if (!wallet.connected || !wallet.address || !wallet.network) return undefined
+
+    const walletNetwork: Network = wallet.network === 'testnet' ? 'testnet' : 'mainnet'
 
     const adapter: AleoWalletAdapter = {
       account: { address: wallet.address },
       connected: wallet.connected,
+      network: walletNetwork,
       signMessage: (message: Uint8Array) =>
         wallet.signMessage(message).then((r) => r ?? new Uint8Array()),
       executeTransaction: (options) =>
@@ -94,6 +99,11 @@ export function useVeilWallet(config?: UseVeilWalletConfig): UseVeilWalletReturn
       requestRecords: (program, includePlaintext) =>
         wallet.requestRecords(program, includePlaintext),
       transitionViewKeys: (txId) => wallet.transitionViewKeys(txId),
+      switchNetwork: async (network) => {
+        await wallet.switchNetwork(network as any)
+      },
+      requestTransactionHistory: (program) =>
+        wallet.requestTransactionHistory(program) as Promise<TxHistoryResult>,
     }
 
     const { account, transport: walletTransport } = fromWalletAdapter(adapter)
@@ -102,7 +112,7 @@ export function useVeilWallet(config?: UseVeilWalletConfig): UseVeilWalletReturn
       account,
       transport: fallback([walletTransport, http(rpcUrl, { network })]),
     })
-  }, [wallet.connected, wallet.address, rpcUrl, network])
+  }, [wallet.connected, wallet.address, wallet.network, rpcUrl, network])
 
   const connect = async (walletName?: string) => {
     if (walletName) {

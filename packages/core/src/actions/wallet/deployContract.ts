@@ -1,9 +1,18 @@
 import { AccountNotFoundError, ProvingNotConfiguredError } from '../../errors/errors.js'
 import type { Client } from '../../clients/createClient.js'
 
+/**
+ * Parameters for `walletClient.deployContract`.
+ *
+ * Imports are not exposed here — the deployer auto-discovers them from the
+ * program source.
+ *
+ * @property {string} program - Aleo program source (`program X.aleo; ...`).
+ * @property {boolean} [privateFee] - If true, pay the deployment fee from a private record instead of the public credits balance. Defaults to `false`. The fee record is resolved via the wallet client's record provider; callers do not supply one.
+ */
 export type DeployContractParameters = {
   program: string
-  fee?: bigint
+  privateFee?: boolean
 }
 
 export type DeployContractReturnType = string
@@ -21,22 +30,19 @@ export async function deployContract(
     // RPC account — wallet handles deployment
     return client.request({
       method: 'deployProgram',
-      params: { program: params.program, fee: params.fee },
+      params: { program: params.program, privateFee: params.privateFee },
     }) as Promise<string>
   }
 
   if (account.type === 'local') {
     // Local account — must build deployment transaction locally
-    if (!client.proving?.buildTransaction) {
+    if (!client.proving?.buildDeployment) {
       throw new ProvingNotConfiguredError()
     }
 
-    // Use buildTransaction with a deploy-specific convention
-    const tx = await client.proving.buildTransaction({
-      programName: params.program,
-      functionName: '__deploy__',
-      inputs: [],
-      fee: params.fee,
+    const tx = await client.proving.buildDeployment({
+      program: params.program,
+      privateFee: params.privateFee,
     })
 
     return client.request({

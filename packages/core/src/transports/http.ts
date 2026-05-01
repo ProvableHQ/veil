@@ -1,5 +1,6 @@
 import { TransportError } from '../errors/errors.js'
-import type { Transport } from '../types/transport.js'
+import type { Transport, TransportConfig } from '../types/transport.js'
+import type { Network } from '../types/wallet.js'
 import { createTransport } from './createTransport.js'
 
 type HttpTransportConfig = {
@@ -7,7 +8,7 @@ type HttpTransportConfig = {
   headers?: Record<string, string> | undefined
   key?: string | undefined
   name?: string | undefined
-  network?: 'mainnet' | 'testnet' | undefined
+  network?: Network | undefined
 }
 
 /**
@@ -215,14 +216,19 @@ export function http(
     network = 'mainnet',
   } = config
 
-  return createTransport({
+  // Build the config object first so the request closure can read
+  // `transportConfig.network` on every call. `switchChain` for local accounts
+  // mutates this field to re-route reads at the new network's path segment.
+  const transportConfig: TransportConfig<'http'> = {
     key,
     name,
     type: 'http',
+    network,
     request: async ({ method, params }) => {
+      const currentNetwork = String(transportConfig.network ?? 'mainnet')
       const { url: requestUrl, httpMethod, body } = buildUrl(
         url,
-        network,
+        currentNetwork,
         method,
         params as Record<string, unknown> | undefined,
       )
@@ -243,5 +249,7 @@ export function http(
 
       return response.json()
     },
-  })
+  }
+
+  return createTransport(transportConfig)
 }

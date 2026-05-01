@@ -1,6 +1,5 @@
 import type { AnyAccount } from '../types/account.js'
 import type { ProvingConfig } from '../types/proving.js'
-import type { RecordsConfig } from '../types/records.js'
 import type { Transport } from '../types/transport.js'
 import { uid as createUid } from '../utils/uid.js'
 
@@ -9,7 +8,6 @@ export type ClientConfig = {
   key?: string | undefined
   name?: string | undefined
   proving?: ProvingConfig | undefined
-  records?: RecordsConfig | undefined
   transport: Transport
 }
 
@@ -18,7 +16,6 @@ export type Client = {
   key: string
   name: string
   proving: ProvingConfig | undefined
-  records: RecordsConfig | undefined
   request: Transport['request']
   transport: Transport
   uid: string
@@ -33,7 +30,6 @@ export function createClient(config: ClientConfig): Client {
     key = 'base',
     name = 'Client',
     proving,
-    records,
     transport,
   } = config
 
@@ -44,7 +40,6 @@ export function createClient(config: ClientConfig): Client {
     key,
     name,
     proving,
-    records,
     request: transport.request,
     transport,
     uid,

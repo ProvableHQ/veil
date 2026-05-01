@@ -6,7 +6,7 @@ describe('deployContract', () => {
   it('throws AccountNotFoundError when no account', async () => {
     const client = { account: undefined, request: vi.fn() } as any
     await expect(
-      deployContract(client, { program: 'token.aleo', fee: 1000n }),
+      deployContract(client, { program: 'token.aleo' }),
     ).rejects.toThrow(AccountNotFoundError)
   })
 
@@ -17,41 +17,44 @@ describe('deployContract', () => {
       request,
     } as any
 
-    const result = await deployContract(client, { program: 'program token.aleo; ...', fee: 5000n })
+    const result = await deployContract(client, { program: 'program token.aleo; ...' })
     expect(result).toBe('at1deploy')
     expect(request).toHaveBeenCalledWith({
       method: 'deployProgram',
-      params: { program: 'program token.aleo; ...', fee: 5000n },
+      params: { program: 'program token.aleo; ...', privateFee: undefined },
     })
   })
 
-  it('local account — builds transaction then broadcasts', async () => {
+  it('local account — builds deployment then broadcasts', async () => {
     const builtTx = { type: 'deploy', id: 'at1built' }
-    const buildTransaction = vi.fn().mockResolvedValue(builtTx)
+    const buildDeployment = vi.fn().mockResolvedValue(builtTx)
     const request = vi.fn().mockResolvedValue('at1deployed')
     const client = {
       account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
-      proving: { buildTransaction },
+      proving: { buildDeployment },
       request,
     } as any
 
-    const result = await deployContract(client, { program: 'my_program.aleo', fee: 10000n })
+    const result = await deployContract(client, { program: 'program my_program.aleo;' })
     expect(result).toBe('at1deployed')
-    expect(buildTransaction).toHaveBeenCalled()
+    expect(buildDeployment).toHaveBeenCalledWith({
+      program: 'program my_program.aleo;',
+      privateFee: undefined,
+    })
     expect(request).toHaveBeenCalledWith({
       method: 'sendTransaction',
       params: { transaction: JSON.stringify(builtTx) },
     })
   })
 
-  it('local account without proving config throws ProvingNotConfiguredError', async () => {
+  it('local account without buildDeployment throws ProvingNotConfiguredError', async () => {
     const client = {
       account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
       proving: undefined,
       request: vi.fn(),
     } as any
     await expect(
-      deployContract(client, { program: 'test.aleo', fee: 1000n }),
+      deployContract(client, { program: 'test.aleo' }),
     ).rejects.toThrow(ProvingNotConfiguredError)
   })
 })

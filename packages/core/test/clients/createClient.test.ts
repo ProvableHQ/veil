@@ -20,14 +20,12 @@ describe('createClient', () => {
     expect(client.account).toBe(mockAccount)
   })
 
-  it('stores proving and records config if provided', () => {
+  it('stores proving config if provided', () => {
     const transport = custom({ request: vi.fn() })
     const proving = { mode: 'delegated' as const, url: 'https://prover.example.com' }
-    const records = { mode: 'network' as const, url: 'https://records.example.com' }
-    const client = createClient({ transport, proving, records })
+    const client = createClient({ transport, proving })
 
     expect(client.proving).toBe(proving)
-    expect(client.records).toBe(records)
   })
 
   it('extends client with additional actions', () => {

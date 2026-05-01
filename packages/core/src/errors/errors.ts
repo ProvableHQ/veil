@@ -64,3 +64,15 @@ export class InvalidInputError extends BaseError {
     this.name = 'InvalidInputError'
   }
 }
+
+export class TransactionHistoryNotSupportedError extends BaseError {
+  constructor() {
+    super(
+      'requestTransactionHistory is not supported for local accounts — the ' +
+      'Aleo network REST API has no per-program history endpoint, and the ' +
+      'SDK does not provide one. This call only works with RPC accounts ' +
+      '(connected wallet adapter), where the wallet keeps its own history.',
+    )
+    this.name = 'TransactionHistoryNotSupportedError'
+  }
+}

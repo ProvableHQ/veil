@@ -38,7 +38,7 @@ describe('integration: fallback transport switching', () => {
     // Direct transport call for executeTransaction
     const result = await transport.request({
       method: 'executeTransaction',
-      params: { programName: 'test.aleo', functionName: 'run', inputs: [], fee: 0n },
+      params: { programName: 'test.aleo', functionName: 'run', inputs: [] },
     })
 
     expect(result).toBe('at1txid123')

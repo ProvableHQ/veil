@@ -191,7 +191,6 @@ describe('aleoAgentTools', () => {
         program: 'token.aleo',
         function: 'mint',
         inputs: ['aleo1recipient', '100u64'],
-        fee: 5000,
       })
 
       expect(result).toEqual({ transactionId: 'at1txid123' })
@@ -221,7 +220,6 @@ describe('aleoAgentTools', () => {
 
       const result = await tool.handler({
         program: 'program my_token.aleo;',
-        fee: 10000,
       })
 
       expect(result).toEqual({ transactionId: 'at1deploy789' })

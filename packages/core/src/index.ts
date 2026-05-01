@@ -17,12 +17,25 @@ export type {
 export type {
   ProvingConfig,
   BuildTransactionOptions,
+  BuildDeploymentOptions,
 } from './types/proving.js'
 
 export type {
-  RecordsConfig,
-  RecordSearchParams,
-  AleoRecord,
+  Network,
+  TransactionStatusResponse,
+  TxHistoryResult,
+} from './types/wallet.js'
+
+export type {
+  OwnedRecord,
+  OwnedRecordEncrypted,
+  RecordStatusFilter,
+  RequestRecordsParameters,
+  RecordProvider,
+  StandaloneRecordScanner,
+  ResponseFilter,
+  RecordFilter,
+  OwnedRecordsRequest,
 } from './types/records.js'
 
 export type {
@@ -73,6 +86,7 @@ export {
   InvalidAddressError,
   ProgramNotFoundError,
   InvalidInputError,
+  TransactionHistoryNotSupportedError,
 } from './errors/errors.js'
 
 // Utils
@@ -114,7 +128,6 @@ export { getTransactionByTransition } from './actions/public/getTransactionByTra
 export { getBalance } from './actions/public/getBalance.js'
 export { readContract } from './actions/public/readContract.js'
 export { getCode, getProgram } from './actions/public/getCode.js'
-export { getRecords } from './actions/public/getRecords.js'
 export { getTransitionViewKeys } from './actions/public/getTransitionViewKeys.js'
 export { getBlockHash } from './actions/public/getBlockHash.js'
 export { getBlockTransactions } from './actions/public/getBlockTransactions.js'
@@ -170,6 +183,13 @@ export { signMessage } from './actions/wallet/signMessage.js'
 export { transfer } from './actions/wallet/transfer.js'
 export { decrypt } from './actions/wallet/decrypt.js'
 export { requestRecords } from './actions/wallet/requestRecords.js'
+export { transactionStatus } from './actions/wallet/transactionStatus.js'
+export { switchChain, switchNetwork } from './actions/wallet/switchChain.js'
+export { requestTransactionHistory } from './actions/wallet/requestTransactionHistory.js'
+export { getChainId, getNetwork } from './actions/wallet/getChainId.js'
+
+// Extensions
+export { withRecords } from './extensions/withRecords.js'
 
 // Contract
 export { getContract, type ContractInstance } from './contract/getContract.js'

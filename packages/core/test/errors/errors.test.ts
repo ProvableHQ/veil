@@ -78,7 +78,6 @@ describe('error paths in wallet actions', () => {
       program: 'token.aleo',
       function: 'transfer',
       inputs: [],
-      fee: 0n,
     })).rejects.toThrow(AccountNotFoundError)
   })
 
@@ -92,7 +91,6 @@ describe('error paths in wallet actions', () => {
       program: 'token.aleo',
       function: 'transfer',
       inputs: [],
-      fee: 0n,
     })).rejects.toThrow(AccountNotFoundError)
   })
 
@@ -104,7 +102,6 @@ describe('error paths in wallet actions', () => {
 
     await expect(deployContract(client, {
       program: 'my_program.aleo',
-      fee: 10000n,
     })).rejects.toThrow(AccountNotFoundError)
   })
 
@@ -126,7 +123,7 @@ describe('error paths in wallet actions', () => {
     } as any
 
     await expect(decrypt(client, {
-      ciphertext: 'record1...',
+      cipherText: 'record1...',
     })).rejects.toThrow(AccountNotFoundError)
   })
 })

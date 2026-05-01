@@ -6,19 +6,102 @@ sidebar_position: 3
 
 Records are Aleo's private state. Unlike mappings (public), records are encrypted and owned by a specific address. Many program functions require records as inputs.
 
-## Fetching Records
+## Three Paths to Records
+
+| Path | Scanner | Use case |
+|---|---|---|
+| **Wallet** | Built into wallet adapter | Browser dApps via `walletClient.requestRecords()` |
+| **SDK** | `createLocalScanner` or `createRemoteScanner` | Server-side via `walletClient.requestRecords()` |
+| **Standalone** | `createStandaloneScanner` + `withRecords` | View-only / no wallet client needed |
+
+## Path 1: Wallet (RPC Account)
+
+No config needed. The wallet handles scanning internally.
 
 ```ts
+const { account, transport } = fromWalletAdapter(connectedAdapter)
+const walletClient = createWalletClient({ account, transport })
+
 const records = await walletClient.requestRecords({
   program: 'loyalty_token.aleo',
 })
 ```
 
-The wallet returns all records it knows about for that program, including spent ones.
+## Path 2: SDK (Local Account)
+
+Requires a `recordProvider` in the wallet client config. Two scanner factories are available:
+
+### Local scanner
+
+Scans blocks and decrypts records locally. No key material in config — the wallet client derives keys from the account.
+
+```ts
+import {
+  privateKeyToAccount,
+  createProvingConfig,
+  createLocalScanner,
+} from '@veil/provable'
+
+const walletClient = createWalletClient({
+  account: privateKeyToAccount('APrivateKey1...'),
+  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  proving: createProvingConfig({ mode: 'delegated' }),
+  recordProvider: createLocalScanner({
+    url: 'https://api.provable.com/v2',
+  }),
+})
+
+const records = await walletClient.requestRecords({
+  program: 'loyalty_token.aleo',
+})
+```
+
+### Remote scanner (RSS)
+
+Delegates scanning to a Record Scanning Service. Faster than local scanning for large block ranges.
+
+```ts
+import { createRemoteScanner } from '@veil/provable'
+
+const walletClient = createWalletClient({
+  account: privateKeyToAccount('APrivateKey1...'),
+  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  proving: createProvingConfig({ mode: 'delegated' }),
+  recordProvider: createRemoteScanner({
+    url: 'https://rss.provable.com',
+    consumerId: 'my-app',
+  }),
+})
+```
+
+## Path 3: Standalone (No Wallet Client)
+
+For view-only use cases where you need records but don't need to sign transactions. Uses the `withRecords` extension on a public client.
+
+```ts
+import { createPublicClient, http } from '@veil/core'
+import { createStandaloneScanner, withRecords } from '@veil/provable'
+
+const scanner = createStandaloneScanner({
+  url: 'https://api.provable.com/v2',
+  consumerId: 'my-app',
+  viewKey: 'AViewKey1...',
+})
+
+const client = createPublicClient({
+  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+}).extend(withRecords({ scanner }))
+
+const records = await client.requestRecords({
+  program: 'loyalty_token.aleo',
+})
+```
+
+The standalone scanner requires an explicit `viewKey` and is **not** pluggable into wallet client config.
 
 ## Record Shape
 
-Each record returned by the wallet looks like:
+Each record returned looks like:
 
 ```ts
 {
@@ -26,7 +109,6 @@ Each record returned by the wallet looks like:
   spent: false,
   programName: 'loyalty_token.aleo',
   recordPlaintext: '{\n  owner: aleo1....private,\n  card_id: 123field.private,\n  points: 500u64.private,\n  tier: 1u8.private,\n  _nonce: ...group.public\n}',
-  // ... additional metadata
 }
 ```
 

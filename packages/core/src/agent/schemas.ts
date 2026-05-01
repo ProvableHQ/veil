@@ -119,7 +119,20 @@ export const executeSchema: AgentToolSchema = {
         items: { type: 'string' },
         description: "Array of input arguments as strings, e.g. ['aleo1...', '100u64']",
       },
-      fee: { type: 'number', description: 'Fee in microcredits (optional, defaults to 0)' },
+      privateFee: {
+        type: 'boolean',
+        description:
+          'If true, pay the fee from a private record instead of public credits. ' +
+          "The fee record is selected by the wallet's record provider.",
+      },
+      imports: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Names of programs reached via dynamic dispatch that the prover or wallet ' +
+          "can't discover from the program's static `import` block. Static imports " +
+          'are auto-discovered and should not be listed here.',
+      },
     },
     required: ['program', 'function', 'inputs'],
   },
@@ -145,14 +158,19 @@ export const deploySchema: AgentToolSchema = {
   description:
     'Deploy an Aleo program to the network. ' +
     'Requires a wallet client with a signing account. ' +
-    'Provide the full program source code and a fee. Returns a transaction ID.',
+    'Provide the full program source code. Returns a transaction ID.',
   inputSchema: {
     type: 'object',
     properties: {
       program: { type: 'string', description: 'Full Aleo program source code to deploy' },
-      fee: { type: 'number', description: 'Deployment fee in microcredits' },
+      privateFee: {
+        type: 'boolean',
+        description:
+          'If true, pay the deployment fee from a private record instead of public credits. ' +
+          "The fee record is selected by the wallet's record provider.",
+      },
     },
-    required: ['program', 'fee'],
+    required: ['program'],
   },
 }
 

@@ -7,6 +7,7 @@ function createMockAdapter(overrides?: Partial<AleoWalletAdapter>): AleoWalletAd
   return {
     account: { address: 'aleo1walletowner12345678901234567890123456789012345678901234567890' },
     connected: true,
+    network: 'mainnet',
     signMessage: vi.fn().mockResolvedValue(new Uint8Array([10, 20, 30])),
     executeTransaction: vi.fn().mockResolvedValue({ transactionId: 'at1exec_tx' }),
     executeDeployment: vi.fn().mockResolvedValue({ transactionId: 'at1deploy_tx' }),
@@ -14,6 +15,8 @@ function createMockAdapter(overrides?: Partial<AleoWalletAdapter>): AleoWalletAd
     decrypt: vi.fn().mockResolvedValue('{ owner: aleo1..., data: {} }'),
     requestRecords: vi.fn().mockResolvedValue([{ owner: 'aleo1walletowner' }]),
     transitionViewKeys: vi.fn().mockResolvedValue(['tvk1abc']),
+    switchNetwork: vi.fn().mockResolvedValue(undefined),
+    requestTransactionHistory: vi.fn().mockResolvedValue({ transactions: [] }),
     ...overrides,
   }
 }
@@ -29,7 +32,6 @@ describe('integration: wallet adapter full pattern', () => {
       program: 'token.aleo',
       function: 'transfer',
       inputs: ['aleo1recipient', '100u64'],
-      fee: 5000n,
     })
 
     expect(txId).toBe('at1exec_tx')
@@ -37,7 +39,6 @@ describe('integration: wallet adapter full pattern', () => {
       program: 'token.aleo',
       function: 'transfer',
       inputs: ['aleo1recipient', '100u64'],
-      fee: 5000,
       privateFee: false,
     })
   })
@@ -57,7 +58,6 @@ describe('integration: wallet adapter full pattern', () => {
       program: 'credits.aleo',
       function: 'transfer_public',
       inputs: ['aleo1recipient', '1000000u64'],
-      fee: 0,
       privateFee: false,
     })
   })
@@ -69,14 +69,13 @@ describe('integration: wallet adapter full pattern', () => {
 
     const txId = await client.deployContract({
       program: 'my_program.aleo',
-      fee: 10000n,
     })
 
     expect(txId).toBe('at1deploy_tx')
     expect(adapter.executeDeployment).toHaveBeenCalledWith({
       program: 'my_program.aleo',
       address: 'aleo1walletowner12345678901234567890123456789012345678901234567890',
-      priorityFee: 10000,
+      priorityFee: 0,
       privateFee: false,
     })
   })
@@ -99,7 +98,7 @@ describe('integration: wallet adapter full pattern', () => {
     const client = createWalletClient({ account, transport })
 
     const plaintext = await client.decrypt({
-      ciphertext: 'record1cipher...',
+      cipherText: 'record1cipher...',
       tpk: 'tpk1...',
       programId: 'token.aleo',
       functionName: 'transfer',
@@ -111,6 +110,7 @@ describe('integration: wallet adapter full pattern', () => {
       'tpk1...',
       'token.aleo',
       'transfer',
+      undefined,
     )
   })
 
@@ -122,7 +122,7 @@ describe('integration: wallet adapter full pattern', () => {
     const records = await client.requestRecords({ program: 'token.aleo' })
 
     expect(records).toEqual([{ owner: 'aleo1walletowner' }])
-    expect(adapter.requestRecords).toHaveBeenCalledWith('token.aleo', true)
+    expect(adapter.requestRecords).toHaveBeenCalledWith('token.aleo', true, 'all')
   })
 
   it('wallet adapter transport with fallback for read operations', async () => {
@@ -143,7 +143,6 @@ describe('integration: wallet adapter full pattern', () => {
       program: 'token.aleo',
       function: 'transfer',
       inputs: ['aleo1recipient', '100u64'],
-      fee: 5000n,
     })
     expect(txId).toBe('at1exec_tx')
     expect(adapter.executeTransaction).toHaveBeenCalled()

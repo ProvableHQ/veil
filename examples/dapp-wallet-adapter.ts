@@ -34,6 +34,7 @@ function createMockLeoWallet(): AleoWalletAdapter {
       address: 'aleo1user7qxz5drmf9vz5hn4dxrk3ws9k8gczqn0wpcafnj0mrc7g58q6zh0gn',
     },
     connected: true,
+    network: 'mainnet',
 
     signMessage: vi.fn().mockImplementation(async (message: Uint8Array) => {
       // In a real wallet, this shows a popup asking the user to approve
@@ -65,6 +66,8 @@ function createMockLeoWallet(): AleoWalletAdapter {
       { owner: 'aleo1user...', data: { amount: '500u64' }, nonce: '123', programId: 'credits.aleo', plaintext: '' },
     ]),
     transitionViewKeys: vi.fn().mockResolvedValue(['tvk1abc']),
+    switchNetwork: vi.fn().mockResolvedValue(undefined),
+    requestTransactionHistory: vi.fn().mockResolvedValue({ transactions: [] }),
   }
 }
 
@@ -185,7 +188,6 @@ describe('Example dApp: Token Manager with Wallet Adapter', () => {
       program: 'token.aleo',
       function: 'transfer',
       inputs: ['aleo1recipient...', '500u64'],
-      fee: 10000n,
     })
 
     expect(txId).toBe('at1wallet_tx_abc123')
@@ -196,7 +198,6 @@ describe('Example dApp: Token Manager with Wallet Adapter', () => {
       program: 'token.aleo',
       function: 'transfer',
       inputs: ['aleo1recipient...', '500u64'],
-      fee: 10000,
       privateFee: false,
     })
   })

@@ -14,6 +14,7 @@ function createMockAdapter(overrides?: Partial<AleoWalletAdapter>): AleoWalletAd
   return {
     account: { address: 'aleo1mockaddress123456789012345678901234567890123456789012345678' },
     connected: true,
+    network: 'mainnet',
     signMessage: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
     executeTransaction: vi.fn().mockResolvedValue({ transactionId: 'at1txid123' }),
     executeDeployment: vi.fn().mockResolvedValue({ transactionId: 'at1deploy456' }),
@@ -21,6 +22,8 @@ function createMockAdapter(overrides?: Partial<AleoWalletAdapter>): AleoWalletAd
     decrypt: vi.fn().mockResolvedValue('{ owner: aleo1..., data: {} }'),
     requestRecords: vi.fn().mockResolvedValue([{ owner: 'aleo1mock' }]),
     transitionViewKeys: vi.fn().mockResolvedValue(['tvk1abc', 'tvk1def']),
+    switchNetwork: vi.fn().mockResolvedValue(undefined),
+    requestTransactionHistory: vi.fn().mockResolvedValue({ transactions: [] }),
     ...overrides,
   }
 }
@@ -73,7 +76,6 @@ describe('transportFromAdapter', () => {
         programName: 'token.aleo',
         functionName: 'transfer',
         inputs: ['aleo1recipient', '100u64'],
-        fee: 1000,
         privateFee: false,
       },
     })
@@ -83,7 +85,6 @@ describe('transportFromAdapter', () => {
       program: 'token.aleo',
       function: 'transfer',
       inputs: ['aleo1recipient', '100u64'],
-      fee: 1000,
       privateFee: false,
     })
   })
@@ -94,14 +95,14 @@ describe('transportFromAdapter', () => {
 
     const result = await transport.request({
       method: 'deployProgram',
-      params: { program: 'my_program.aleo', fee: 5000 },
+      params: { program: 'my_program.aleo' },
     })
 
     expect(result).toBe('at1deploy456')
     expect(adapter.executeDeployment).toHaveBeenCalledWith({
       program: 'my_program.aleo',
       address: 'aleo1mockaddress123456789012345678901234567890123456789012345678',
-      priorityFee: 5000,
+      priorityFee: 0,
       privateFee: false,
     })
   })
@@ -127,7 +128,7 @@ describe('transportFromAdapter', () => {
     await transport.request({
       method: 'decrypt',
       params: {
-        ciphertext: 'record1cipher...',
+        cipherText: 'record1cipher...',
         tpk: 'tpk1...',
         programId: 'token.aleo',
         functionName: 'transfer',
@@ -139,6 +140,7 @@ describe('transportFromAdapter', () => {
       'tpk1...',
       'token.aleo',
       'transfer',
+      undefined,
     )
   })
 
@@ -151,7 +153,7 @@ describe('transportFromAdapter', () => {
       params: { program: 'token.aleo' },
     })
 
-    expect(adapter.requestRecords).toHaveBeenCalledWith('token.aleo', true)
+    expect(adapter.requestRecords).toHaveBeenCalledWith('token.aleo', true, undefined)
     expect(records).toEqual([{ owner: 'aleo1mock' }])
   })
 
@@ -200,7 +202,6 @@ describe('transportFromAdapter', () => {
         programName: 'test.aleo',
         functionName: 'run',
         inputs: [],
-        fee: 0,
       },
     })
 
@@ -239,7 +240,6 @@ describe('fromWalletAdapter', () => {
         programName: 'token.aleo',
         functionName: 'transfer',
         inputs: ['aleo1dest', '50u64'],
-        fee: 500,
       },
     })
 

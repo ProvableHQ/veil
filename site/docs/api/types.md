@@ -48,3 +48,33 @@ import type {
 ```
 
 `AnyWalletAdapter` is the type accepted by `fromWalletAdapter()`. Pass any official wallet adapter (Shield, Leo, Puzzle, Fox) directly, or implement `AleoWalletAdapter` for custom adapters.
+
+## Records
+
+```ts
+import type {
+  RecordProvider,
+  StandaloneRecordScanner,
+  OwnedRecord,
+  OwnedRecordEncrypted,
+} from '@veil/core'
+```
+
+- **`RecordProvider`** — Interface for record scanning. Plugs into `recordProvider` on `LocalWalletClientConfig`. Implemented by `createLocalScanner()` and `createRemoteScanner()`.
+- **`StandaloneRecordScanner`** — Scanner with an explicit view key. Used with `withRecords()` on a public client. Implemented by `createStandaloneScanner()`.
+- **`OwnedRecord`** — A decrypted record with `recordName`, `programName`, `recordPlaintext`, and `spent`.
+- **`OwnedRecordEncrypted`** — An encrypted record ciphertext before decryption.
+
+## RSS Types
+
+```ts
+import type {
+  RecordFilter,
+  ResponseFilter,
+  OwnedRecordsRequest,
+} from '@veil/core'
+```
+
+- **`RecordFilter`** — Filter criteria for record scanning (program, record name).
+- **`ResponseFilter`** — Controls what fields are included in the response.
+- **`OwnedRecordsRequest`** — Full request shape for RSS-backed scanners.

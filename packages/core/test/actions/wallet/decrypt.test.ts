@@ -10,16 +10,16 @@ describe('decrypt', () => {
       request,
     } as any
 
-    const result = await decrypt(client, { ciphertext: 'record1cipher...' })
+    const result = await decrypt(client, { cipherText: 'record1cipher...' })
     expect(result).toBe('{ owner: aleo1..., data: {} }')
     expect(request).toHaveBeenCalledWith({
       method: 'decrypt',
-      params: { ciphertext: 'record1cipher...' },
+      params: { cipherText: 'record1cipher...' },
     })
   })
 
   it('throws without account', async () => {
     const client = { account: undefined, request: vi.fn() } as any
-    await expect(decrypt(client, { ciphertext: 'test' })).rejects.toThrow(AccountNotFoundError)
+    await expect(decrypt(client, { cipherText: 'test' })).rejects.toThrow(AccountNotFoundError)
   })
 })

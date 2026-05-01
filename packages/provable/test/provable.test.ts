@@ -1,18 +1,32 @@
-import { describe, it, expect, vi } from 'vitest'
-import {
-  privateKeyToAccount,
-  generateAccount,
-  verifySignature,
-  createProvingConfig,
-  createNetworkClient,
-  createRecordsConfig,
-  createAleoClient,
-} from '../src/index.js'
+import { beforeAll, describe, it, expect } from 'vitest'
+import { loadNetwork, type AleoSdk } from '../src/index.js'
 
 describe('@veil/provable', () => {
+  let aleo: AleoSdk
+
+  beforeAll(async () => {
+    aleo = await loadNetwork('testnet')
+  })
+
+  describe('loadNetwork', () => {
+    it('returns a handle bound to the named network', async () => {
+      expect(aleo.network).toBe('testnet')
+    })
+
+    it('memoizes the SDK module load', async () => {
+      const a = await loadNetwork('testnet')
+      const b = await loadNetwork('testnet')
+      // Each call returns a fresh handle wrapping the same memoized SDK module.
+      // Methods exist on both handles; calling them gives matching results.
+      const acc1 = a.generateAccount()
+      const acc2 = b.privateKeyToAccount(acc1.privateKey)
+      expect(acc2.address).toBe(acc1.address)
+    })
+  })
+
   describe('generateAccount', () => {
     it('creates a random account with all fields', () => {
-      const account = generateAccount()
+      const account = aleo.generateAccount()
 
       expect(account.type).toBe('local')
       expect(account.source).toBe('privateKey')
@@ -24,8 +38,8 @@ describe('@veil/provable', () => {
     })
 
     it('generates unique accounts each time', () => {
-      const a1 = generateAccount()
-      const a2 = generateAccount()
+      const a1 = aleo.generateAccount()
+      const a2 = aleo.generateAccount()
       expect(a1.address).not.toBe(a2.address)
       expect(a1.privateKey).not.toBe(a2.privateKey)
     })
@@ -33,8 +47,8 @@ describe('@veil/provable', () => {
 
   describe('privateKeyToAccount', () => {
     it('derives address and viewKey from private key', () => {
-      const original = generateAccount()
-      const restored = privateKeyToAccount(original.privateKey)
+      const original = aleo.generateAccount()
+      const restored = aleo.privateKeyToAccount(original.privateKey)
 
       expect(restored.address).toBe(original.address)
       expect(restored.viewKey).toBe(original.viewKey)
@@ -43,25 +57,23 @@ describe('@veil/provable', () => {
     })
 
     it('provides working sign function', async () => {
-      const account = generateAccount()
+      const account = aleo.generateAccount()
       const message = new TextEncoder().encode('test message')
       const signature = await account.sign(message)
 
       expect(signature).toBeInstanceOf(Uint8Array)
       expect(signature.length).toBeGreaterThan(0)
 
-      // Signature is a serialized string
       const sigString = new TextDecoder().decode(signature)
       expect(sigString).toMatch(/^sign1/)
     })
 
     it('sign and signMessage produce identical results', async () => {
-      const account = generateAccount()
+      const account = aleo.generateAccount()
       const message = new TextEncoder().encode('identical')
       const sig1 = await account.sign(message)
       const sig2 = await account.signMessage(message)
 
-      // Both should be valid signatures (may differ due to randomness in signing)
       expect(sig1).toBeInstanceOf(Uint8Array)
       expect(sig2).toBeInstanceOf(Uint8Array)
     })
@@ -69,32 +81,32 @@ describe('@veil/provable', () => {
 
   describe('verifySignature', () => {
     it('verifies a valid signature', async () => {
-      const account = generateAccount()
+      const account = aleo.generateAccount()
       const message = new TextEncoder().encode('verify me')
       const sigBytes = await account.sign(message)
       const sigString = new TextDecoder().decode(sigBytes)
 
-      const verified = verifySignature(account.address, message, sigString)
+      const verified = aleo.verifySignature(account.address, message, sigString)
       expect(verified).toBe(true)
     })
 
     it('rejects signature from different account', async () => {
-      const signer = generateAccount()
-      const other = generateAccount()
+      const signer = aleo.generateAccount()
+      const other = aleo.generateAccount()
       const message = new TextEncoder().encode('wrong signer')
       const sigBytes = await signer.sign(message)
       const sigString = new TextDecoder().decode(sigBytes)
 
-      const verified = verifySignature(other.address, message, sigString)
+      const verified = aleo.verifySignature(other.address, message, sigString)
       expect(verified).toBe(false)
     })
 
     it('rejects signature for different message', async () => {
-      const account = generateAccount()
+      const account = aleo.generateAccount()
       const sigBytes = await account.sign(new TextEncoder().encode('original'))
       const sigString = new TextDecoder().decode(sigBytes)
 
-      const verified = verifySignature(
+      const verified = aleo.verifySignature(
         account.address,
         new TextEncoder().encode('tampered'),
         sigString,
@@ -105,7 +117,7 @@ describe('@veil/provable', () => {
 
   describe('createProvingConfig', () => {
     it('creates a delegated proving config', () => {
-      const config = createProvingConfig({
+      const config = aleo.createProvingConfig({
         mode: 'delegated',
         networkUrl: 'https://api.provable.com/v2',
         proverUrl: 'https://prover.example.com',
@@ -117,7 +129,7 @@ describe('@veil/provable', () => {
     })
 
     it('creates a local proving config', () => {
-      const config = createProvingConfig({
+      const config = aleo.createProvingConfig({
         mode: 'local',
         networkUrl: 'https://api.provable.com/v2',
       })
@@ -126,11 +138,29 @@ describe('@veil/provable', () => {
       expect(config.url).toBeUndefined()
       expect(config.buildTransaction).toBeTypeOf('function')
     })
+
+    it('exposes switchNetwork for runtime SDK rebinding', () => {
+      const config = aleo.createProvingConfig({
+        mode: 'delegated',
+        networkUrl: 'https://api.provable.com/v2',
+      })
+
+      expect(config.switchNetwork).toBeTypeOf('function')
+    })
+
+    it('switchNetwork rejects unsupported network names', async () => {
+      const config = aleo.createProvingConfig({
+        mode: 'delegated',
+        networkUrl: 'https://api.provable.com/v2',
+      })
+
+      await expect(config.switchNetwork!('canary')).rejects.toThrow(/mainnet.*testnet/)
+    })
   })
 
   describe('createNetworkClient', () => {
     it('creates an AleoNetworkClient', () => {
-      const client = createNetworkClient('https://api.provable.com/v2')
+      const client = aleo.createNetworkClient('https://api.provable.com/v2')
       expect(client).toBeDefined()
       expect(client.getLatestHeight).toBeTypeOf('function')
     })
@@ -138,8 +168,8 @@ describe('@veil/provable', () => {
 
   describe('createProvingConfig with account', () => {
     it('accepts an account option', () => {
-      const account = generateAccount()
-      const config = createProvingConfig({
+      const account = aleo.generateAccount()
+      const config = aleo.createProvingConfig({
         mode: 'local',
         networkUrl: 'https://api.provable.com/v2',
         account,
@@ -149,8 +179,8 @@ describe('@veil/provable', () => {
       expect(config.buildTransaction).toBeTypeOf('function')
     })
 
-    it('works without account (backwards compatible)', () => {
-      const config = createProvingConfig({
+    it('works without account', () => {
+      const config = aleo.createProvingConfig({
         mode: 'delegated',
         networkUrl: 'https://api.provable.com/v2',
         proverUrl: 'https://prover.example.com',
@@ -161,42 +191,47 @@ describe('@veil/provable', () => {
     })
   })
 
-  describe('createRecordsConfig', () => {
-    it('returns a config with getRecords function', () => {
-      const account = generateAccount()
-      const config = createRecordsConfig({
-        networkUrl: 'https://api.provable.com/v2',
-        account,
+  describe('createLocalScanner', () => {
+    it('returns a RecordProvider with requestRecords function', () => {
+      const scanner = aleo.createLocalScanner({
+        url: 'https://api.provable.com/v2',
       })
 
-      expect(config).toBeDefined()
-      expect('getRecords' in config).toBe(true)
-      if ('getRecords' in config) {
-        expect(config.getRecords).toBeTypeOf('function')
-      }
+      expect(scanner).toBeDefined()
+      expect(scanner.requestRecords).toBeTypeOf('function')
     })
+  })
 
-    it('getRecords returns AleoRecord array shape', async () => {
-      const account = generateAccount()
-      const config = createRecordsConfig({
-        networkUrl: 'https://api.provable.com/v2',
-        account,
+  describe('createRemoteScanner', () => {
+    it('returns a RecordProvider with requestRecords function', () => {
+      const scanner = aleo.createRemoteScanner({
+        url: 'https://rss.provable.com',
+        consumerId: 'test-consumer',
       })
 
-      // Mock the internal NetworkRecordProvider.findRecords to avoid network calls
-      // We test the mapping logic by verifying it doesn't throw with empty results
-      if ('getRecords' in config) {
-        // The SDK will try to hit the network and fail in test,
-        // but we can verify the function exists and has the right shape
-        expect(config.getRecords).toBeTypeOf('function')
-      }
+      expect(scanner).toBeDefined()
+      expect(scanner.requestRecords).toBeTypeOf('function')
+    })
+  })
+
+  describe('createStandaloneScanner', () => {
+    it('returns a StandaloneRecordScanner with requestRecords function', () => {
+      const account = aleo.generateAccount()
+      const scanner = aleo.createStandaloneScanner({
+        url: 'https://rss.provable.com',
+        consumerId: 'test-consumer',
+        viewKey: account.viewKey!,
+      })
+
+      expect(scanner).toBeDefined()
+      expect(scanner.requestRecords).toBeTypeOf('function')
     })
   })
 
   describe('createAleoClient', () => {
     it('returns publicClient, walletClient, and account', () => {
-      const account = generateAccount()
-      const result = createAleoClient({
+      const account = aleo.generateAccount()
+      const result = aleo.createAleoClient({
         privateKey: account.privateKey,
         networkUrl: 'https://api.provable.com/v2',
       })
@@ -208,21 +243,30 @@ describe('@veil/provable', () => {
       expect(result.walletClient).toBeDefined()
     })
 
-    it('uses delegated proving by default', () => {
-      const account = generateAccount()
-      const result = createAleoClient({
+    it('binds the transport to the loaded network', () => {
+      const account = aleo.generateAccount()
+      const { publicClient } = aleo.createAleoClient({
         privateKey: account.privateKey,
         networkUrl: 'https://api.provable.com/v2',
       })
 
-      // walletClient should exist and have wallet actions
+      expect(publicClient.transport.config.network).toBe('testnet')
+    })
+
+    it('uses delegated proving by default', () => {
+      const account = aleo.generateAccount()
+      const result = aleo.createAleoClient({
+        privateKey: account.privateKey,
+        networkUrl: 'https://api.provable.com/v2',
+      })
+
       expect(result.walletClient).toBeDefined()
       expect(result.walletClient.writeContract).toBeTypeOf('function')
     })
 
     it('accepts local proving mode', () => {
-      const account = generateAccount()
-      const result = createAleoClient({
+      const account = aleo.generateAccount()
+      const result = aleo.createAleoClient({
         privateKey: account.privateKey,
         networkUrl: 'https://api.provable.com/v2',
         provingMode: 'local',
@@ -233,8 +277,8 @@ describe('@veil/provable', () => {
     })
 
     it('publicClient has read actions', () => {
-      const account = generateAccount()
-      const { publicClient } = createAleoClient({
+      const account = aleo.generateAccount()
+      const { publicClient } = aleo.createAleoClient({
         privateKey: account.privateKey,
         networkUrl: 'https://api.provable.com/v2',
       })
@@ -246,8 +290,8 @@ describe('@veil/provable', () => {
     })
 
     it('walletClient has write actions', () => {
-      const account = generateAccount()
-      const { walletClient } = createAleoClient({
+      const account = aleo.generateAccount()
+      const { walletClient } = aleo.createAleoClient({
         privateKey: account.privateKey,
         networkUrl: 'https://api.provable.com/v2',
       })
@@ -256,6 +300,40 @@ describe('@veil/provable', () => {
       expect(walletClient.deployContract).toBeTypeOf('function')
       expect(walletClient.signMessage).toBeTypeOf('function')
       expect(walletClient.transfer).toBeTypeOf('function')
+    })
+
+    it('does not wire a recordProvider by default', () => {
+      const account = aleo.generateAccount()
+      const { walletClient } = aleo.createAleoClient({
+        privateKey: account.privateKey,
+        networkUrl: 'https://api.provable.com/v2',
+      })
+
+      expect(walletClient.recordProvider).toBeUndefined()
+    })
+
+    it('accepts a RecordProvider via records option', () => {
+      const account = aleo.generateAccount()
+      const scanner = aleo.createLocalScanner({ url: 'https://api.provable.com/v2' })
+      const { walletClient } = aleo.createAleoClient({
+        privateKey: account.privateKey,
+        networkUrl: 'https://api.provable.com/v2',
+        records: scanner,
+      })
+
+      expect(walletClient.recordProvider).toBe(scanner)
+    })
+
+    it('requestRecords throws without a configured records provider', async () => {
+      const account = aleo.generateAccount()
+      const { walletClient } = aleo.createAleoClient({
+        privateKey: account.privateKey,
+        networkUrl: 'https://api.provable.com/v2',
+      })
+
+      await expect(
+        walletClient.requestRecords({ program: 'token.aleo' }),
+      ).rejects.toThrow(/recordProvider/)
     })
   })
 })

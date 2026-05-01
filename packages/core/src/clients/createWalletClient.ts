@@ -1,32 +1,35 @@
 import type { RpcAccount, LocalAccount } from '../types/account.js'
 import type { ProvingConfig } from '../types/proving.js'
-import type { RecordsConfig } from '../types/records.js'
+import type { RecordProvider } from '../types/records.js'
 import type { Transport } from '../types/transport.js'
 import { createClient, type Client } from './createClient.js'
 import { walletActions, type WalletActions } from './decorators/wallet.js'
 
-/** Config for RPC account — proving is excluded, wallet handles it */
+/** Config for RPC account — wallet handles proving and records */
 export type RpcWalletClientConfig = {
   account: RpcAccount
   transport: Transport
-  records?: RecordsConfig | undefined
   key?: string | undefined
   name?: string | undefined
+  // No recordProvider — RPC wallets handle records via the wallet adapter
 }
 
-/** Config for local account — must provide proving config */
+/** Config for local account — must provide proving config, optionally a record provider */
 export type LocalWalletClientConfig = {
   account: LocalAccount
   transport: Transport
   proving: ProvingConfig
-  records?: RecordsConfig | undefined
+  /** Record provider for fetching records. Required if you need requestRecords with a local account. */
+  recordProvider?: RecordProvider
   key?: string | undefined
   name?: string | undefined
 }
 
 export type WalletClientConfig = RpcWalletClientConfig | LocalWalletClientConfig
 
-export type WalletClient = Client & WalletActions
+export type WalletClient = Client & WalletActions & {
+  recordProvider: RecordProvider | undefined
+}
 
 export function createWalletClient(config: WalletClientConfig): WalletClient {
   const { key = 'wallet', name = 'Wallet Client', ...rest } = config
@@ -36,5 +39,15 @@ export function createWalletClient(config: WalletClientConfig): WalletClient {
     key,
     name,
   })
-  return client.extend(walletActions) as WalletClient
+
+  const recordProvider = 'recordProvider' in rest ? rest.recordProvider : undefined
+
+  // Initialize the record provider with the active account
+  if (recordProvider && rest.account && 'viewKey' in rest.account && rest.account.viewKey) {
+    recordProvider.setAccount({ viewKey: rest.account.viewKey })
+  }
+
+  const walletClient = client.extend(walletActions) as WalletClient
+  ;(walletClient as any).recordProvider = recordProvider
+  return walletClient
 }

@@ -1,275 +1,422 @@
 /**
  * @veil/provable
  *
- * Wraps @provablehq/sdk to provide:
- * - privateKeyToAccount() with real key derivation and signing
- * - generateAccount() for new random accounts
- * - createProvingConfig() for plugging into WalletClient
- * - Record decryption and signature verification utilities
+ * Loads `@provablehq/sdk` for a specific Aleo network and exposes the SDK's
+ * functionality bound to that network's setup parameters.
  *
  * Usage:
- *   import { privateKeyToAccount, createProvingConfig } from '@veil/provable'
- *   import { createWalletClient, createPublicClient, http } from '@veil/core'
+ *   import { loadNetwork } from '@veil/provable'
+ *   import { http } from '@veil/core'
  *
- *   const account = privateKeyToAccount('APrivateKey1...')
- *   const walletClient = createWalletClient({
- *     account,
- *     transport: http('https://api.provable.com/v2'),
- *     proving: createProvingConfig({ mode: 'delegated', networkUrl: 'https://api.provable.com/v2' }),
+ *   const aleo = await loadNetwork('mainnet')
+ *
+ *   const account = aleo.privateKeyToAccount('APrivateKey1...')
+ *   const { publicClient, walletClient } = aleo.createAleoClient({
+ *     privateKey: 'APrivateKey1...',
+ *     networkUrl: 'https://api.provable.com/v2',
  *   })
+ *
+ * Switching networks: load a new handle. Existing accounts remain valid —
+ * Aleo private keys, view keys, and addresses are network-agnostic.
  */
 
-import {
-  Account,
-  Signature,
-  Address,
-  ViewKey,
-  ProgramManager,
-  AleoNetworkClient,
-  AleoKeyProvider,
-  NetworkRecordProvider,
-} from '@provablehq/sdk'
+import { loadNetwork as loadSdk } from '@provablehq/sdk/dynamic.js'
 import type { LocalAccount } from '@veil/core'
-import type { ProvingConfig, BuildTransactionOptions } from '@veil/core'
-import type { RecordsConfig, RecordSearchParams, AleoRecord } from '@veil/core'
+import type { ProvingConfig, BuildTransactionOptions, BuildDeploymentOptions } from '@veil/core'
+import type { OwnedRecord, RecordProvider, StandaloneRecordScanner, RequestRecordsParameters } from '@veil/core'
+import type { Network, PublicClient, WalletClient } from '@veil/core'
 import {
   createPublicClient,
   createWalletClient,
   http,
 } from '@veil/core'
-import type { PublicClient, WalletClient } from '@veil/core'
+
+/** Networks supported by `@provablehq/sdk/dynamic.js`. */
+export type SupportedNetwork = 'mainnet' | 'testnet'
+
+// `loadSdk('testnet')` and `loadSdk('mainnet')` return modules whose runtime
+// classes have the same shape. The narrowed-to-testnet type is used as the
+// canonical handle so we don't pass through TS's union-of-modules confusion.
+type SdkModule = Awaited<ReturnType<typeof loadSdk<'testnet'>>>
 
 /**
- * Creates a LocalAccount from an Aleo private key string.
+ * A network-bound SDK handle. All functions on this handle use the binary
+ * set loaded for the named network.
  *
- * Uses @provablehq/sdk to derive address and view key automatically,
- * and provides real signing via the SDK's Account class.
- *
- * The sign() method returns the Signature serialized as a string encoded
- * to bytes. Use signMessage() for the same behavior. Both are compatible
- * with veil's SignerAccount interface.
+ * Most key/account operations (`privateKeyToAccount`, `generateAccount`,
+ * `decryptRecord`, `verifySignature`) are mathematically network-agnostic —
+ * the same private key derives the same address and view key regardless of
+ * which network's binary was loaded. Proving and program operations
+ * (`createProvingConfig`, `createAleoClient`, scanners) are network-bound.
  */
-export function privateKeyToAccount(privateKey: string): LocalAccount<'privateKey'> {
-  const sdkAccount = new Account({ privateKey })
+export interface AleoSdk {
+  /** The network this handle is bound to. */
+  readonly network: SupportedNetwork
 
-  const address = sdkAccount.address().to_string()
-  const viewKey = sdkAccount.viewKey().to_string()
+  /** Creates a `LocalAccount` from an Aleo private key. */
+  privateKeyToAccount(privateKey: string): LocalAccount<'privateKey'>
 
-  const signFn = async (message: Uint8Array): Promise<Uint8Array> => {
-    const sig = sdkAccount.sign(message)
-    // Serialize Signature to string, then to bytes for the interface
-    return new TextEncoder().encode(sig.to_string())
+  /** Creates a new random Aleo account. */
+  generateAccount(): LocalAccount<'privateKey'>
+
+  /** Decrypts a record ciphertext using a view key. */
+  decryptRecord(viewKey: string, ciphertext: string): string
+
+  /** Verifies a signature against a message and address. */
+  verifySignature(address: string, message: Uint8Array, signature: string): boolean
+
+  /** Creates an `AleoNetworkClient` for direct SDK access. */
+  createNetworkClient(url: string): InstanceType<SdkModule['AleoNetworkClient']>
+
+  /** Creates a `ProvingConfig` for `createWalletClient({ proving })`. */
+  createProvingConfig(options: {
+    mode: 'delegated' | 'local'
+    networkUrl: string
+    proverUrl?: string
+    account?: LocalAccount<'privateKey'>
+  }): ProvingConfig
+
+  /** Creates a record scanner backed by `NetworkRecordProvider`. */
+  createLocalScanner(options: { url: string }): RecordProvider
+
+  /** Creates a record scanner backed by Provable's RSS. */
+  createRemoteScanner(options: { url: string; consumerId: string }): RecordProvider
+
+  /** Creates a standalone record scanner with an explicit view key. */
+  createStandaloneScanner(options: {
+    url: string
+    consumerId: string
+    viewKey: string
+  }): StandaloneRecordScanner
+
+  /** Creates a fully-wired Aleo client from a private key and network URL. */
+  createAleoClient(options: {
+    privateKey: string
+    networkUrl: string
+    provingMode?: 'delegated' | 'local'
+    /**
+     * Record provider for `requestRecords`. Not wired by default — pass
+     * `aleo.createLocalScanner(...)`, `aleo.createRemoteScanner(...)`, or any
+     * custom `RecordProvider`. `requestRecords` throws with a setup hint
+     * when no provider is configured.
+     */
+    records?: RecordProvider
+  }): { publicClient: PublicClient; walletClient: WalletClient; account: LocalAccount<'privateKey'> }
+}
+
+/**
+ * Loads `@provablehq/sdk` for the named network and returns a network-bound
+ * handle. The SDK module cache memoizes the load — calling twice for the
+ * same network returns the same binary set without re-instantiating.
+ */
+export async function loadNetwork(name: SupportedNetwork): Promise<AleoSdk> {
+  const sdk = (await loadSdk(name)) as SdkModule
+  return buildSdk(name, sdk)
+}
+
+function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): AleoSdk {
+  // Mutable handle so `createProvingConfig().switchNetwork()` can swap the
+  // underlying binary set without rebuilding the wallet client.
+  let currentSdk: SdkModule = initialSdk
+  const network = initialNetwork
+  const {
+    Account,
+    Signature,
+    Address,
+    ViewKey,
+    AleoNetworkClient,
+    NetworkRecordProvider,
+    RecordScanner,
+  } = initialSdk
+
+  function privateKeyToAccount(privateKey: string): LocalAccount<'privateKey'> {
+    const sdkAccount = new Account({ privateKey })
+
+    const address = sdkAccount.address().to_string()
+    const viewKey = sdkAccount.viewKey().to_string()
+
+    const signFn = async (message: Uint8Array): Promise<Uint8Array> => {
+      const sig = sdkAccount.sign(message)
+      return new TextEncoder().encode(sig.to_string())
+    }
+
+    return {
+      type: 'local',
+      source: 'privateKey',
+      address,
+      privateKey,
+      viewKey,
+      sign: signFn,
+      signMessage: signFn,
+    }
+  }
+
+  function generateAccount(): LocalAccount<'privateKey'> {
+    const sdkAccount = new Account()
+    return privateKeyToAccount(sdkAccount.privateKey().to_string())
+  }
+
+  function decryptRecord(viewKeyString: string, ciphertext: string): string {
+    return ViewKey.from_string(viewKeyString).decrypt(ciphertext)
+  }
+
+  function verifySignature(
+    addressString: string,
+    message: Uint8Array,
+    signatureString: string,
+  ): boolean {
+    const sig = Signature.from_string(signatureString)
+    const addr = Address.from_string(addressString)
+    return sig.verify(addr, message)
+  }
+
+  function createNetworkClient(url: string): InstanceType<SdkModule['AleoNetworkClient']> {
+    return new AleoNetworkClient(url)
+  }
+
+  function createProvingConfig(options: {
+    mode: 'delegated' | 'local'
+    networkUrl: string
+    proverUrl?: string
+    account?: LocalAccount<'privateKey'>
+  }): ProvingConfig {
+    // Each call reads from currentSdk so switchNetwork can swap the binary set
+    // without rebuilding the wallet client.
+    let networkUrl = options.networkUrl
+    let keyProvider = new currentSdk.AleoKeyProvider()
+    keyProvider.useCache(true)
+
+    return {
+      mode: options.mode,
+      url: options.proverUrl,
+
+      buildTransaction: async (txOptions: BuildTransactionOptions) => {
+        const programManager = new currentSdk.ProgramManager(
+          networkUrl,
+          keyProvider,
+          undefined,
+        )
+
+        if (options.account) {
+          const sdkAccount = new currentSdk.Account({ privateKey: options.account.privateKey })
+          programManager.setAccount(sdkAccount)
+        }
+
+        // The user-facing API takes dynamic-dispatch import names (`string[]`);
+        // the SDK needs a name → source map covering BOTH the program's static
+        // imports (declared in the `import` block) and the user's dynamic ones.
+        // Auto-discover static imports first, then add the user-provided
+        // dynamic ones on top. The SDK's ProgramImports values can be string
+        // or Program; we mirror its return type instead of reconstructing it.
+        type SdkProgramImports = Awaited<
+          ReturnType<InstanceType<SdkModule['AleoNetworkClient']>['getProgramImports']>
+        >
+        let resolvedImports: SdkProgramImports | undefined
+        if (txOptions.imports && txOptions.imports.length > 0) {
+          const programSource = await programManager.networkClient.getProgram(txOptions.programName)
+          const staticImports = await programManager.networkClient.getProgramImports(programSource)
+          const merged: SdkProgramImports = { ...staticImports }
+          for (const name of txOptions.imports) {
+            merged[name] = await programManager.networkClient.getProgram(name)
+          }
+          resolvedImports = merged
+        }
+
+        const tx = await programManager.buildExecutionTransaction({
+          programName: txOptions.programName,
+          functionName: txOptions.functionName,
+          priorityFee: 0,
+          privateFee: txOptions.privateFee ?? false,
+          inputs: txOptions.inputs,
+          ...(resolvedImports ? { imports: resolvedImports } : {}),
+        })
+
+        return JSON.parse(tx.toString())
+      },
+
+      buildDeployment: async (deployOptions: BuildDeploymentOptions) => {
+        const programManager = new currentSdk.ProgramManager(
+          networkUrl,
+          keyProvider,
+          undefined,
+        )
+
+        if (options.account) {
+          const sdkAccount = new currentSdk.Account({ privateKey: options.account.privateKey })
+          programManager.setAccount(sdkAccount)
+        }
+
+        const tx = await programManager.buildDeploymentTransaction(
+          deployOptions.program,
+          0,
+          deployOptions.privateFee ?? false,
+        )
+
+        return JSON.parse(tx.toString())
+      },
+
+      decrypt: async (cipherText) => {
+        if (!options.account?.viewKey) {
+          throw new Error(
+            'decrypt requires an account with a viewKey on the proving config.',
+          )
+        }
+        return currentSdk.ViewKey.from_string(options.account.viewKey).decrypt(cipherText)
+      },
+
+      switchNetwork: async (newNetwork) => {
+        if (newNetwork !== 'mainnet' && newNetwork !== 'testnet') {
+          throw new Error(
+            `loadNetwork supports 'mainnet' or 'testnet' (received '${newNetwork}').`,
+          )
+        }
+        currentSdk = (await loadSdk(newNetwork as SupportedNetwork)) as SdkModule
+        keyProvider = new currentSdk.AleoKeyProvider()
+        keyProvider.useCache(true)
+      },
+    }
+  }
+
+  function mapSdkRecords(records: any[], program: string, unspent: boolean): OwnedRecord[] {
+    return records.map((record) => ({
+      programName: record.program_name ?? program,
+      tag: '',
+      recordName: undefined,
+      spent: !unspent,
+      owner: record.owner,
+      recordPlaintext: record.record_plaintext ?? '',
+      recordCiphertext: record.record_ciphertext,
+      transactionId: record.transaction_id,
+      transitionId: record.transition_id,
+    }))
+  }
+
+  function createLocalScanner(options: { url: string }): RecordProvider {
+    let sdkAccount: InstanceType<SdkModule['Account']> | undefined
+
+    return {
+      setAccount: (account: { viewKey: string }) => {
+        const viewKey = ViewKey.from_string(account.viewKey)
+        sdkAccount = new Account({ viewKey: viewKey.to_string() })
+      },
+
+      requestRecords: async (params: RequestRecordsParameters): Promise<OwnedRecord[]> => {
+        if (!sdkAccount) {
+          throw new Error('No active account set on record scanner. Call setAccount() first.')
+        }
+
+        const networkClient = new AleoNetworkClient(options.url)
+        const recordProvider = new NetworkRecordProvider(sdkAccount, networkClient)
+
+        const unspent = params.statusFilter !== 'spent'
+        const ownedRecords = await recordProvider.findRecords({
+          unspent,
+          programName: params.program,
+        })
+
+        return mapSdkRecords(ownedRecords, params.program, unspent)
+      },
+    }
+  }
+
+  function createRemoteScanner(options: { url: string; consumerId: string }): RecordProvider {
+    let scanner: InstanceType<SdkModule['RecordScanner']> | undefined
+
+    return {
+      setAccount: (account: { viewKey: string }) => {
+        const viewKey = ViewKey.from_string(account.viewKey)
+        scanner = new RecordScanner({
+          url: options.url,
+          consumerId: options.consumerId,
+          viewKeys: [viewKey],
+          decryptEnabled: true,
+          autoReRegister: true,
+        })
+      },
+
+      requestRecords: async (params: RequestRecordsParameters): Promise<OwnedRecord[]> => {
+        if (!scanner) {
+          throw new Error('No active account set on record scanner. Call setAccount() first.')
+        }
+
+        const records = await scanner.owned({
+          unspent: params.statusFilter !== 'spent',
+          filter: {
+            programs: [params.program],
+          },
+        })
+
+        return (records ?? []) as OwnedRecord[]
+      },
+    }
+  }
+
+  function createStandaloneScanner(options: {
+    url: string
+    consumerId: string
+    viewKey: string
+  }): StandaloneRecordScanner {
+    const viewKey = ViewKey.from_string(options.viewKey)
+    const scanner = new RecordScanner({
+      url: options.url,
+      consumerId: options.consumerId,
+      viewKeys: [viewKey],
+      decryptEnabled: true,
+      autoReRegister: true,
+    })
+
+    return {
+      requestRecords: async (params: RequestRecordsParameters): Promise<OwnedRecord[]> => {
+        const records = await scanner.owned({
+          unspent: params.statusFilter !== 'spent',
+          filter: {
+            programs: [params.program],
+          },
+        })
+
+        return (records ?? []) as OwnedRecord[]
+      },
+    }
+  }
+
+  function createAleoClient(options: {
+    privateKey: string
+    networkUrl: string
+    provingMode?: 'delegated' | 'local'
+    records?: RecordProvider
+  }): { publicClient: PublicClient; walletClient: WalletClient; account: LocalAccount<'privateKey'> } {
+    const account = privateKeyToAccount(options.privateKey)
+    const transport = http(options.networkUrl, { network: network as Network })
+
+    const proving = createProvingConfig({
+      mode: options.provingMode ?? 'delegated',
+      networkUrl: options.networkUrl,
+      account,
+    })
+
+    const publicClient = createPublicClient({ transport })
+
+    const walletClient = createWalletClient({
+      account,
+      transport,
+      proving,
+      ...(options.records ? { recordProvider: options.records } : {}),
+    })
+
+    return { publicClient, walletClient, account }
   }
 
   return {
-    type: 'local',
-    source: 'privateKey',
-    address,
-    privateKey,
-    viewKey,
-    sign: signFn,
-    signMessage: signFn,
+    network,
+    privateKeyToAccount,
+    generateAccount,
+    decryptRecord,
+    verifySignature,
+    createNetworkClient,
+    createProvingConfig,
+    createLocalScanner,
+    createRemoteScanner,
+    createStandaloneScanner,
+    createAleoClient,
   }
-}
-
-/**
- * Creates a new random Aleo account.
- * Returns a LocalAccount with a freshly generated private key.
- */
-export function generateAccount(): LocalAccount<'privateKey'> {
-  const sdkAccount = new Account()
-  const privateKey = sdkAccount.privateKey().to_string()
-  return privateKeyToAccount(privateKey)
-}
-
-/**
- * Creates a ProvingConfig that uses @provablehq/sdk's ProgramManager
- * for building transactions locally or via delegation.
- *
- * This plugs directly into createWalletClient({ proving: ... })
- */
-export function createProvingConfig(options: {
-  mode: 'delegated' | 'local'
-  networkUrl: string
-  /** Required for delegated proving — the prover service URL */
-  proverUrl?: string
-  /** Account to use for proving — sets the signer on the ProgramManager */
-  account?: LocalAccount<'privateKey'>
-}): ProvingConfig {
-  const keyProvider = new AleoKeyProvider()
-  keyProvider.useCache(true)
-
-  return {
-    mode: options.mode,
-    url: options.proverUrl,
-
-    buildTransaction: async (txOptions: BuildTransactionOptions) => {
-      const programManager = new ProgramManager(
-        options.networkUrl,
-        keyProvider,
-        undefined,
-      )
-
-      // Bind the account so ProgramManager can sign transactions
-      if (options.account) {
-        const sdkAccount = new Account({ privateKey: options.account.privateKey })
-        programManager.setAccount(sdkAccount)
-      }
-
-      const tx = await programManager.buildExecutionTransaction({
-        programName: txOptions.programName,
-        functionName: txOptions.functionName,
-        priorityFee: Number(txOptions.fee),
-        privateFee: txOptions.privateFee ?? false,
-        inputs: txOptions.inputs,
-      })
-
-      return JSON.parse(tx.toString())
-    },
-  }
-}
-
-/**
- * Decrypts a record ciphertext using a view key.
- */
-export function decryptRecord(viewKeyString: string, ciphertext: string): string {
-  const vk = ViewKey.from_string(viewKeyString)
-  return vk.decrypt(ciphertext)
-}
-
-/**
- * Verifies a signature against a message and address.
- *
- * @param address - The Aleo address that allegedly signed the message
- * @param message - The original message bytes
- * @param signatureString - The signature as a string (sign1...)
- */
-export function verifySignature(
-  addressString: string,
-  message: Uint8Array,
-  signatureString: string,
-): boolean {
-  const sig = Signature.from_string(signatureString)
-  const addr = Address.from_string(addressString)
-  return sig.verify(addr, message)
-}
-
-/**
- * Creates an AleoNetworkClient from @provablehq/sdk.
- * Useful for direct SDK access when veil's transport layer isn't sufficient.
- */
-export function createNetworkClient(url: string): AleoNetworkClient {
-  return new AleoNetworkClient(url)
-}
-
-/**
- * Creates a RecordsConfig backed by @provablehq/sdk's NetworkRecordProvider.
- *
- * The returned config provides a `getRecords` function that scans the network
- * for records owned by the given account. This plugs directly into
- * createWalletClient({ records: ... }) or createPublicClient({ records: ... }).
- */
-export function createRecordsConfig(options: {
-  networkUrl: string
-  account: LocalAccount<'privateKey'>
-}): RecordsConfig {
-  const sdkAccount = new Account({ privateKey: options.account.privateKey })
-  const networkClient = new AleoNetworkClient(options.networkUrl)
-  const recordProvider = new NetworkRecordProvider(sdkAccount, networkClient)
-
-  return {
-    getRecords: async (params: RecordSearchParams): Promise<AleoRecord[]> => {
-      const ownedRecords = await recordProvider.findRecords({
-        unspent: params.unspent ?? true,
-        programName: params.programId,
-      })
-
-      return ownedRecords.map((record) => ({
-        owner: record.owner ?? '',
-        data: record.record_plaintext
-          ? parseRecordPlaintext(record.record_plaintext)
-          : {},
-        nonce: extractNonce(record.record_plaintext),
-        programId: record.program_name ?? params.programId,
-        plaintext: record.record_plaintext ?? '',
-      }))
-    },
-  }
-}
-
-/**
- * Parse an Aleo record plaintext string into a key-value data object.
- * Format: "{ key1: value1.private, key2: value2.public }"
- */
-function parseRecordPlaintext(plaintext: string): Record<string, unknown> {
-  const data: Record<string, unknown> = {}
-  // Strip outer braces and split on commas
-  const inner = plaintext.replace(/^\{|\}$/g, '').trim()
-  const pairs = inner.split(',')
-  for (const pair of pairs) {
-    const colonIdx = pair.indexOf(':')
-    if (colonIdx === -1) continue
-    const key = pair.slice(0, colonIdx).trim()
-    const value = pair.slice(colonIdx + 1).trim()
-    // Skip internal fields like _nonce and _version
-    if (key.startsWith('_')) continue
-    data[key] = value
-  }
-  return data
-}
-
-/**
- * Extract the nonce from an Aleo record plaintext string.
- */
-function extractNonce(plaintext: string | undefined): string {
-  if (!plaintext) return ''
-  const match = plaintext.match(/_nonce:\s*(\S+)/)
-  return match?.[1] ?? ''
-}
-
-/**
- * Creates a fully-wired Aleo client from just a private key and network URL.
- *
- * This is the "I just want it to work" entry point that sets up:
- * - A LocalAccount from the private key
- * - A PublicClient with HTTP transport
- * - A WalletClient with proving config and record scanning
- *
- * @example
- * ```ts
- * const { publicClient, walletClient, account } = createAleoClient({
- *   privateKey: 'APrivateKey1...',
- *   networkUrl: 'https://api.provable.com/v2',
- * })
- * ```
- */
-export function createAleoClient(options: {
-  privateKey: string
-  networkUrl: string
-  provingMode?: 'delegated' | 'local'
-}): { publicClient: PublicClient; walletClient: WalletClient; account: LocalAccount<'privateKey'> } {
-  const account = privateKeyToAccount(options.privateKey)
-  const transport = http(options.networkUrl)
-
-  const proving = createProvingConfig({
-    mode: options.provingMode ?? 'delegated',
-    networkUrl: options.networkUrl,
-    account,
-  })
-
-  const records = createRecordsConfig({
-    networkUrl: options.networkUrl,
-    account,
-  })
-
-  const publicClient = createPublicClient({ transport })
-
-  const walletClient = createWalletClient({
-    account,
-    transport,
-    proving,
-    records,
-  })
-
-  return { publicClient, walletClient, account }
 }
