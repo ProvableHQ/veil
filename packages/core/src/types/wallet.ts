@@ -14,7 +14,7 @@ export type Network = 'mainnet' | 'testnet' | (string & {})
 
 /** Response shape returned when querying a transaction's status. */
 export interface TransactionStatusResponse {
-  /** Current transaction status (e.g. 'pending', 'finalized', 'rejected'). */
+  /** Current transaction status (e.g. 'accepted', 'rejected', 'pending', 'not_found'). */
   status: string
   /** The on-chain transaction id, if the transaction has been accepted. */
   transactionId?: string

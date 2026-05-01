@@ -16,7 +16,22 @@ export type GetContractParameters = {
 
 export type ContractReadMethods = Record<string, (params: { key: string }) => Promise<unknown>>
 
-export type ContractWriteMethods = Record<string, (params: { inputs: string[]; fee?: bigint }) => Promise<string>>
+/**
+ * Per-call parameters accepted by `contract.write.<functionName>(...)`. Mirrors
+ * the subset of `WriteContractParameters` that varies per call — `program` and
+ * `function` are bound by the contract instance and the proxy key.
+ *
+ * @property {string[]} inputs - Function inputs as Aleo-encoded strings.
+ * @property {boolean} [privateFee] - If true, pay the fee from a private record. The fee record is resolved via the wallet client's record provider.
+ * @property {string[]} [imports] - Names of programs reached via dynamic dispatch that the prover or wallet can't discover statically. Static imports declared in the program's `import` block are auto-discovered.
+ */
+export type ContractWriteCallParameters = {
+  inputs: string[]
+  privateFee?: boolean
+  imports?: string[]
+}
+
+export type ContractWriteMethods = Record<string, (params: ContractWriteCallParameters) => Promise<string>>
 
 export type ContractInstance = {
   program: string
@@ -103,12 +118,13 @@ export function getContract(params: GetContractParameters): ContractInstance {
           )
         }
       }
-      return (writeParams: { inputs: string[]; fee?: bigint }) =>
+      return (writeParams: ContractWriteCallParameters) =>
         walletClient.writeContract({
           program,
           function: prop,
           inputs: writeParams.inputs,
-          fee: writeParams.fee ?? 0n,
+          privateFee: writeParams.privateFee,
+          imports: writeParams.imports,
         })
     },
   })

@@ -7,7 +7,6 @@ describe('writeContract', () => {
     program: 'token.aleo',
     function: 'mint',
     inputs: ['aleo1abc', '100u64'],
-    fee: 1000n,
   }
 
   it('throws AccountNotFoundError when no account', async () => {
@@ -35,8 +34,8 @@ describe('writeContract', () => {
         programName: 'token.aleo',
         functionName: 'mint',
         inputs: ['aleo1abc', '100u64'],
-        fee: 1000n,
         privateFee: undefined,
+        imports: undefined,
       },
     })
   })
@@ -57,8 +56,8 @@ describe('writeContract', () => {
       programName: 'token.aleo',
       functionName: 'mint',
       inputs: ['aleo1abc', '100u64'],
-      fee: 1000n,
       privateFee: undefined,
+      imports: undefined,
     })
     expect(request).toHaveBeenCalledWith({
       method: 'sendTransaction',

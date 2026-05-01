@@ -196,7 +196,6 @@ async function applicationLogic(publicClient: PublicClient, walletClient: Wallet
     program: 'credits.aleo',
     function: 'transfer_public',
     inputs: [MOCK_ADDRESS, '1000000u64'],
-    fee: 0n,
   })
 
   return { height, balance, mappingValue, txId }

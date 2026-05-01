@@ -201,7 +201,6 @@ describe('Example: Autonomous Agent with Local Proving', () => {
         '1000000u64',              // amount (private)
         'aleo1counterparty...',     // recipient (private)
       ],
-      fee: 50000n,
     })
 
     console.log('  Swap tx:', txId)
@@ -212,8 +211,8 @@ describe('Example: Autonomous Agent with Local Proving', () => {
       programName: 'private_swap.aleo',
       functionName: 'swap_private',
       inputs: [account.address, '1000000u64', 'aleo1counterparty...'],
-      fee: 50000n,
       privateFee: undefined,
+      imports: undefined,
     })
   })
 
@@ -234,7 +233,6 @@ describe('Example: Autonomous Agent with Local Proving', () => {
     // Write through contract — typed function call
     const txId = await swap.write.add_liquidity({
       inputs: ['5000000u64', '5000000u64'],
-      fee: 25000n,
     })
     console.log('  Add liquidity tx:', txId)
     expect(txId).toBe('at1confirmed_abc123')

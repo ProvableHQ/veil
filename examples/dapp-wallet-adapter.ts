@@ -188,7 +188,6 @@ describe('Example dApp: Token Manager with Wallet Adapter', () => {
       program: 'token.aleo',
       function: 'transfer',
       inputs: ['aleo1recipient...', '500u64'],
-      fee: 10000n,
     })
 
     expect(txId).toBe('at1wallet_tx_abc123')
@@ -199,7 +198,6 @@ describe('Example dApp: Token Manager with Wallet Adapter', () => {
       program: 'token.aleo',
       function: 'transfer',
       inputs: ['aleo1recipient...', '500u64'],
-      fee: 10000,
       privateFee: false,
     })
   })

@@ -32,7 +32,6 @@ describe('integration: wallet adapter full pattern', () => {
       program: 'token.aleo',
       function: 'transfer',
       inputs: ['aleo1recipient', '100u64'],
-      fee: 5000n,
     })
 
     expect(txId).toBe('at1exec_tx')
@@ -40,7 +39,6 @@ describe('integration: wallet adapter full pattern', () => {
       program: 'token.aleo',
       function: 'transfer',
       inputs: ['aleo1recipient', '100u64'],
-      fee: 5000,
       privateFee: false,
     })
   })
@@ -60,7 +58,6 @@ describe('integration: wallet adapter full pattern', () => {
       program: 'credits.aleo',
       function: 'transfer_public',
       inputs: ['aleo1recipient', '1000000u64'],
-      fee: 0,
       privateFee: false,
     })
   })
@@ -72,14 +69,13 @@ describe('integration: wallet adapter full pattern', () => {
 
     const txId = await client.deployContract({
       program: 'my_program.aleo',
-      fee: 10000n,
     })
 
     expect(txId).toBe('at1deploy_tx')
     expect(adapter.executeDeployment).toHaveBeenCalledWith({
       program: 'my_program.aleo',
       address: 'aleo1walletowner12345678901234567890123456789012345678901234567890',
-      priorityFee: 10000,
+      priorityFee: 0,
       privateFee: false,
     })
   })
@@ -147,7 +143,6 @@ describe('integration: wallet adapter full pattern', () => {
       program: 'token.aleo',
       function: 'transfer',
       inputs: ['aleo1recipient', '100u64'],
-      fee: 5000n,
     })
     expect(txId).toBe('at1exec_tx')
     expect(adapter.executeTransaction).toHaveBeenCalled()

@@ -47,7 +47,6 @@ export async function transfer(
     program: asset,
     function: functionName,
     inputs: [params.to, `${params.amount}u64`],
-    fee: 0n,
     privateFee: visibility === 'private' || visibility === 'unshield',
   })
 }

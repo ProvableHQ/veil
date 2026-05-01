@@ -202,12 +202,33 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           programManager.setAccount(sdkAccount)
         }
 
+        // The user-facing API takes dynamic-dispatch import names (`string[]`);
+        // the SDK needs a name → source map covering BOTH the program's static
+        // imports (declared in the `import` block) and the user's dynamic ones.
+        // Auto-discover static imports first, then add the user-provided
+        // dynamic ones on top. The SDK's ProgramImports values can be string
+        // or Program; we mirror its return type instead of reconstructing it.
+        type SdkProgramImports = Awaited<
+          ReturnType<InstanceType<SdkModule['AleoNetworkClient']>['getProgramImports']>
+        >
+        let resolvedImports: SdkProgramImports | undefined
+        if (txOptions.imports && txOptions.imports.length > 0) {
+          const programSource = await programManager.networkClient.getProgram(txOptions.programName)
+          const staticImports = await programManager.networkClient.getProgramImports(programSource)
+          const merged: SdkProgramImports = { ...staticImports }
+          for (const name of txOptions.imports) {
+            merged[name] = await programManager.networkClient.getProgram(name)
+          }
+          resolvedImports = merged
+        }
+
         const tx = await programManager.buildExecutionTransaction({
           programName: txOptions.programName,
           functionName: txOptions.functionName,
-          priorityFee: Number(txOptions.fee),
+          priorityFee: 0,
           privateFee: txOptions.privateFee ?? false,
           inputs: txOptions.inputs,
+          ...(resolvedImports ? { imports: resolvedImports } : {}),
         })
 
         return JSON.parse(tx.toString())
@@ -227,7 +248,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 
         const tx = await programManager.buildDeploymentTransaction(
           deployOptions.program,
-          Number(deployOptions.fee),
+          0,
           deployOptions.privateFee ?? false,
         )
 

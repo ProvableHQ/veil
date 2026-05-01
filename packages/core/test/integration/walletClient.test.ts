@@ -24,7 +24,6 @@ describe('integration: wallet client with mock signer', () => {
       program: 'token.aleo',
       function: 'transfer',
       inputs: ['aleo1recipient', '100u64'],
-      fee: 5000n,
     })
 
     expect(txId).toBe('at1txid_write')
@@ -34,8 +33,8 @@ describe('integration: wallet client with mock signer', () => {
         programName: 'token.aleo',
         functionName: 'transfer',
         inputs: ['aleo1recipient', '100u64'],
-        fee: 5000n,
         privateFee: undefined,
+        imports: undefined,
       },
     })
   })
@@ -88,7 +87,6 @@ describe('integration: wallet client with mock signer', () => {
 
     const txId = await client.deployContract({
       program: 'my_program.aleo',
-      fee: 10000n,
     })
 
     expect(txId).toBe('at1deploy123')
@@ -96,7 +94,7 @@ describe('integration: wallet client with mock signer', () => {
       method: 'deployProgram',
       params: {
         program: 'my_program.aleo',
-        fee: 10000n,
+        privateFee: undefined,
       },
     })
   })
@@ -155,15 +153,14 @@ describe('integration: wallet client with mock signer', () => {
       program: 'token.aleo',
       function: 'mint',
       inputs: ['aleo1recipient', '1000u64'],
-      fee: 5000n,
     })
 
     expect(mockBuildTransaction).toHaveBeenCalledWith({
       programName: 'token.aleo',
       functionName: 'mint',
       inputs: ['aleo1recipient', '1000u64'],
-      fee: 5000n,
       privateFee: undefined,
+      imports: undefined,
     })
     expect(request).toHaveBeenCalledWith({
       method: 'sendTransaction',

@@ -6,7 +6,7 @@ describe('deployContract', () => {
   it('throws AccountNotFoundError when no account', async () => {
     const client = { account: undefined, request: vi.fn() } as any
     await expect(
-      deployContract(client, { program: 'token.aleo', fee: 1000n }),
+      deployContract(client, { program: 'token.aleo' }),
     ).rejects.toThrow(AccountNotFoundError)
   })
 
@@ -17,11 +17,11 @@ describe('deployContract', () => {
       request,
     } as any
 
-    const result = await deployContract(client, { program: 'program token.aleo; ...', fee: 5000n })
+    const result = await deployContract(client, { program: 'program token.aleo; ...' })
     expect(result).toBe('at1deploy')
     expect(request).toHaveBeenCalledWith({
       method: 'deployProgram',
-      params: { program: 'program token.aleo; ...', fee: 5000n },
+      params: { program: 'program token.aleo; ...', privateFee: undefined },
     })
   })
 
@@ -35,11 +35,11 @@ describe('deployContract', () => {
       request,
     } as any
 
-    const result = await deployContract(client, { program: 'program my_program.aleo;', fee: 10000n })
+    const result = await deployContract(client, { program: 'program my_program.aleo;' })
     expect(result).toBe('at1deployed')
     expect(buildDeployment).toHaveBeenCalledWith({
       program: 'program my_program.aleo;',
-      fee: 10000n,
+      privateFee: undefined,
     })
     expect(request).toHaveBeenCalledWith({
       method: 'sendTransaction',
@@ -54,7 +54,7 @@ describe('deployContract', () => {
       request: vi.fn(),
     } as any
     await expect(
-      deployContract(client, { program: 'test.aleo', fee: 1000n }),
+      deployContract(client, { program: 'test.aleo' }),
     ).rejects.toThrow(ProvingNotConfiguredError)
   })
 })

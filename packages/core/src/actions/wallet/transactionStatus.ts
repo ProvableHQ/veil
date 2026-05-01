@@ -1,4 +1,5 @@
 import type { Client } from '../../clients/createClient.js'
+import type { ConfirmedTransaction } from '../../types/block.js'
 import type { TransactionStatusResponse } from '../../types/wallet.js'
 
 export type TransactionStatusParameters = {
@@ -13,8 +14,13 @@ export type TransactionStatusReturnType = TransactionStatusResponse
  * - **RPC accounts**: forwards to the wallet adapter (which queries its
  *   indexer).
  * - **Local accounts (or no account)**: derives status from the network's
- *   REST API. Confirmed → `'finalized'`; unconfirmed → `'pending'`; missing
- *   → `'rejected'`.
+ *   REST API.
+ *
+ * Possible statuses:
+ * - `'accepted'`  — present in `/transaction/confirmed/{id}` with `status: 'accepted'`
+ * - `'rejected'`  — present in `/transaction/confirmed/{id}` with `status: 'rejected'`
+ * - `'pending'`   — present in `/transaction/unconfirmed/{id}`
+ * - `'not_found'` — present in neither pool (never submitted, dropped, or expired)
  */
 export async function transactionStatus(
   client: Client,
@@ -29,14 +35,16 @@ export async function transactionStatus(
 
   // Derive status from the chain. Confirmed transactions live at
   // `/transaction/confirmed/{id}`, unconfirmed at `/transaction/unconfirmed/{id}`.
+  // A "confirmed" transaction can still be rejected — the envelope carries
+  // its own `status: 'accepted' | 'rejected'`, which we surface verbatim.
   try {
-    await client.request({
+    const confirmed = await client.request({
       method: 'getConfirmedTransaction',
       params: { id: params.transactionId },
-    })
-    return { status: 'finalized', transactionId: params.transactionId }
+    }) as ConfirmedTransaction
+    return { status: confirmed.status, transactionId: params.transactionId }
   } catch {
-    // Not yet confirmed — check unconfirmed pool.
+    // Not in the confirmed pool — fall through to unconfirmed.
   }
 
   try {
@@ -45,11 +53,7 @@ export async function transactionStatus(
       params: { id: params.transactionId },
     })
     return { status: 'pending', transactionId: params.transactionId }
-  } catch (err) {
-    return {
-      status: 'rejected',
-      transactionId: params.transactionId,
-      error: err instanceof Error ? err.message : String(err),
-    }
+  } catch {
+    return { status: 'not_found', transactionId: params.transactionId }
   }
 }

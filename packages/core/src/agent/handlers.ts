@@ -84,7 +84,8 @@ export function createWalletHandlers(walletClient: WalletClient): Record<string,
         program: input.program as string,
         function: input.function as string,
         inputs: input.inputs as string[],
-        fee: BigInt((input.fee as number) ?? 0),
+        privateFee: input.privateFee as boolean | undefined,
+        imports: input.imports as string[] | undefined,
       })
       return { transactionId: txId }
     },
@@ -100,7 +101,7 @@ export function createWalletHandlers(walletClient: WalletClient): Record<string,
     aleo_deploy: async (input) => {
       const txId = await walletClient.deployContract({
         program: input.program as string,
-        fee: BigInt(input.fee as number),
+        privateFee: input.privateFee as boolean | undefined,
       })
       return { transactionId: txId }
     },

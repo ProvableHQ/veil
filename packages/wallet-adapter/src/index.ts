@@ -164,26 +164,30 @@ export function transportFromAdapter(adapter: AnyWalletAdapter): Transport<'cust
 
       switch (method) {
         case 'executeTransaction': {
-          const options: Record<string, unknown> = {
+          const options: TransactionOptions = {
             program: p?.programName as string,
             function: p?.functionName as string,
             inputs: p?.inputs as string[],
             privateFee: (p?.privateFee as boolean) ?? false,
           }
-          if (p?.fee != null) {
-            options.fee = Number(p.fee)
+          if (p?.imports != null) {
+            options.imports = p.imports as string[]
           }
-          const result = await adapter.executeTransaction(options as any)
+          const result = await adapter.executeTransaction(options)
           return result.transactionId
         }
 
         case 'deployProgram': {
-          const result = await adapter.executeDeployment({
+          // The wallet-standard `AleoDeployment` shape requires `priorityFee`,
+          // but our user-facing API treats fees as auto-estimated; pass 0 so
+          // the wallet uses its own default.
+          const deployment: AleoDeployment = {
             program: p?.program as string,
             address: adapter.account?.address ?? '',
-            priorityFee: Number(p?.fee ?? 0),
-            privateFee: false,
-          })
+            priorityFee: 0,
+            privateFee: (p?.privateFee as boolean) ?? false,
+          }
+          const result = await adapter.executeDeployment(deployment)
           return result.transactionId
         }
 
