@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { createAleoClient } from "@veil/provable";
+import { loadNetwork } from "@veil/provable";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -52,8 +52,9 @@ const consumerId = process.env.ALEO_CONSUMER_ID;
 // Account — set ALEO_PRIVATE_KEY to override, or use the SDK demo account (funded on testnet)
 const DEMO_PRIVATE_KEY = process.env.ALEO_PRIVATE_KEY ?? "APrivateKey1zkp6aEqdUdRpZs1fnfGBEitWZNzxNhPz4kb2W382nuX8G42";
 
-// Create clients
-const { publicClient, walletClient, account } = createAleoClient({
+// Load the SDK for testnet and create clients
+const aleo = await loadNetwork("testnet");
+const { publicClient, walletClient, account } = aleo.createAleoClient({
     privateKey: DEMO_PRIVATE_KEY,
     networkUrl,
     provingMode,
