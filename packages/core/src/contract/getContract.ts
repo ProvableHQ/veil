@@ -195,7 +195,6 @@ export function getContract(params: GetContractParameters): ContractInstance {
       if (!walletClient) {
         return () => { throw new Error(`Cannot call function "${prop}" — no wallet client provided.`) }
       }
-<<<<<<< HEAD
       if (functionNames && !functionNames.has(prop)) {
         return () => {
           throw new Error(

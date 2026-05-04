@@ -12,12 +12,8 @@
  *
  * Skipped by default in CI / normal test runs.
  */
-import { describe, it, expect } from 'vitest'
-import {
-  createAleoClient,
-  createProvingConfig,
-  privateKeyToAccount,
-} from '../src/index.js'
+import { describe, it, expect, beforeAll } from 'vitest'
+import { loadNetwork, type AleoSdk } from '../src/index.js'
 
 // SDK demo account — funded on testnet
 const DEMO_PRIVATE_KEY = 'APrivateKey1zkp6aEqdUdRpZs1fnfGBEitWZNzxNhPz4kb2W382nuX8G42'
@@ -41,10 +37,19 @@ function hello:
     add r0 r1 into r2;
     output r2 as u32.private;`
 
+// Load the SDK once for all tests
+let aleo: AleoSdk
+
+beforeAll(async () => {
+  if (shouldRun) {
+    aleo = await loadNetwork('testnet')
+  }
+})
+
 describe.skipIf(!shouldRun)('simulate (integration)', () => {
   it('simulate runs program locally and returns typed outputs', async () => {
-    const account = privateKeyToAccount(DEMO_PRIVATE_KEY)
-    const config = createProvingConfig({
+    const account = aleo.privateKeyToAccount(DEMO_PRIVATE_KEY)
+    const config = aleo.createProvingConfig({
       mode: 'local',
       networkUrl: NETWORK_URL,
       account,
@@ -62,7 +67,7 @@ describe.skipIf(!shouldRun)('simulate (integration)', () => {
   }, 120_000)
 
   it('simulateContract via createAleoClient works end-to-end', async () => {
-    const { walletClient } = createAleoClient({
+    const { walletClient } = aleo.createAleoClient({
       privateKey: DEMO_PRIVATE_KEY,
       networkUrl: NETWORK_URL,
       provingMode: 'local',
@@ -83,17 +88,10 @@ describe.skipIf(!shouldRun)('simulate (integration)', () => {
 describe.skipIf(!shouldRun)('execute lifecycle (integration)', () => {
   // Uses credits.aleo transfer_public — self-transfer of 1 microcredit.
   // Requires the demo account to have a public balance (1 microcredit transfer + ~2,725 base fee).
-  //
-  // To fund: use the testnet faucet at https://faucet.provable.com to send
-  // public credits to aleo1vskzxa2qqgnhznxsqh6tgq93c30sfkj6xqwe7sr85lgjkexjlcxs3lxhy3
-  //
-  // The prove → build → submit flow is validated even when the account is unfunded:
-  // an "insufficient balance" error from the network confirms the transaction was
-  // properly constructed (format and program verification passed).
 
   it('local execute: prove, broadcast, confirm, return outputs', async () => {
-    const account = privateKeyToAccount(DEMO_PRIVATE_KEY)
-    const config = createProvingConfig({
+    const account = aleo.privateKeyToAccount(DEMO_PRIVATE_KEY)
+    const config = aleo.createProvingConfig({
       mode: 'local',
       networkUrl: NETWORK_URL,
       account,
@@ -111,7 +109,7 @@ describe.skipIf(!shouldRun)('execute lifecycle (integration)', () => {
   }, 300_000)
 
   it('createAleoClient wires execute end-to-end', async () => {
-    const { walletClient } = createAleoClient({
+    const { walletClient } = aleo.createAleoClient({
       privateKey: DEMO_PRIVATE_KEY,
       networkUrl: NETWORK_URL,
       provingMode: 'local',
@@ -130,13 +128,9 @@ describe.skipIf(!shouldRun)('execute lifecycle (integration)', () => {
 })
 
 describe.skipIf(!shouldRun || !hasDpsCredentials)('delegated execute (integration)', () => {
-  // Uses DPS (Delegated Proving Service) to prove + broadcast.
-  // The DPS handles proving remotely and broadcasts the transaction.
-  // We wait for confirmation and extract outputs.
-
   it('delegated execute: submit to DPS, confirm, return outputs', async () => {
-    const account = privateKeyToAccount(DEMO_PRIVATE_KEY)
-    const config = createProvingConfig({
+    const account = aleo.privateKeyToAccount(DEMO_PRIVATE_KEY)
+    const config = aleo.createProvingConfig({
       mode: 'delegated',
       networkUrl: NETWORK_URL,
       proverUrl: DPS_URL,
@@ -157,7 +151,7 @@ describe.skipIf(!shouldRun || !hasDpsCredentials)('delegated execute (integratio
   }, 300_000)
 
   it('createAleoClient delegated execute end-to-end', async () => {
-    const { walletClient } = createAleoClient({
+    const { walletClient } = aleo.createAleoClient({
       privateKey: DEMO_PRIVATE_KEY,
       networkUrl: NETWORK_URL,
       provingMode: 'delegated',
