@@ -174,8 +174,8 @@ function generateFunctionOutputType(fn: AbiFunction, abi: ABI): string[] {
   const typeName = pascalCase(fn.name) + 'Outputs'
   const lines: string[] = []
 
-  // Filter out 'final' outputs since they're finalize handles, not user-facing data
-  const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'final')
+  // Filter out 'future' outputs since they're finalize handles, not user-facing data
+  const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'future')
 
   if (dataOutputs.length === 0) {
     lines.push(`export type ${typeName} = void`)
@@ -205,7 +205,7 @@ function outputToTsType(output: AbiFunction['outputs'][number]['type'], abi: ABI
     return isLocal ? recName : 'RecordValue'
   } else if (output.kind === 'dynamicRecord') {
     return 'RecordValue'
-  } else if (output.kind === 'final') {
+  } else if (output.kind === 'future' || output.kind === 'dynamicFuture') {
     return 'void'
   }
   return 'unknown'
@@ -370,7 +370,7 @@ function namedParamsType(fn: AbiFunction, abi: ABI): string {
 
 /** Generate the typed return type for simulate (filters out Final outputs) */
 function simulateReturnType(fn: AbiFunction, abi: ABI): string {
-  const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'final')
+  const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'future')
   if (dataOutputs.length === 0) return 'void'
   if (dataOutputs.length === 1) return outputToTsType(dataOutputs[0].type, abi)
   return `[${dataOutputs.map((o) => outputToTsType(o.type, abi)).join(', ')}]`
@@ -527,7 +527,7 @@ function generateContractFactory(abi: ABI): string[] {
       const names = inputNames(fn)
       const { resolveLines, resolvedNames } = resolveRecordInputs(fn)
       const destructure = names.length > 0 ? `{ ${names.join(', ')} }` : '{}'
-      const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'final')
+      const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'future')
 
       lines.push(`      ${fn.name}: async (params: any) => {`)
       lines.push(`        const ${destructure} = params`)
@@ -560,7 +560,7 @@ function generateContractFactory(abi: ABI): string[] {
       const names = inputNames(fn)
       const { resolveLines, resolvedNames } = resolveRecordInputs(fn)
       const destructure = names.length > 0 ? `{ ${names.join(', ')}, fee }` : '{ fee }'
-      const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'final')
+      const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'future')
 
       lines.push(`      ${fn.name}: async (params: any) => {`)
       lines.push(`        const ${destructure} = params`)

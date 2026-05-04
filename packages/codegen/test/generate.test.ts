@@ -57,7 +57,7 @@ const minimalAbi: ABI = {
       ],
       outputs: [
         { type: { kind: 'record', path: ['Token'], program: 'test' }, mode: 'private' },
-        { type: { kind: 'final' }, mode: 'none' },
+        { type: { kind: 'future' }, mode: 'none' },
       ],
     },
     {
@@ -71,7 +71,7 @@ const minimalAbi: ABI = {
       outputs: [
         { type: { kind: 'record', path: ['Token'], program: 'test' }, mode: 'private' },
         { type: { kind: 'record', path: ['Token'], program: 'test' }, mode: 'private' },
-        { type: { kind: 'final' }, mode: 'none' },
+        { type: { kind: 'future' }, mode: 'none' },
       ],
     },
     {
@@ -81,7 +81,7 @@ const minimalAbi: ABI = {
         { name: 'token', type: { kind: 'record', path: ['Token'], program: 'test' }, mode: 'private' },
       ],
       outputs: [
-        { type: { kind: 'final' }, mode: 'none' },
+        { type: { kind: 'future' }, mode: 'none' },
       ],
     },
     {

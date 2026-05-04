@@ -50,7 +50,8 @@ export type FunctionOutput =
   | { kind: 'plaintext'; type: Plaintext }
   | { kind: 'record'; path: string[]; program?: string }
   | { kind: 'dynamicRecord' }
-  | { kind: 'final' }           // handle for an on-chain finalize block
+  | { kind: 'future' }           // handle for an on-chain finalize block
+  | { kind: 'dynamicFuture' }    // dynamic dispatch finalize handle
 
 // ---- Function ----
 

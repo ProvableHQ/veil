@@ -79,7 +79,8 @@ function parseFunctionInput(raw: unknown): FunctionInput {
 
 function parseFunctionOutput(raw: unknown): FunctionOutput {
   if (raw === 'DynamicRecord') return { kind: 'dynamicRecord' }
-  if (raw === 'Final') return { kind: 'final' }
+  if (raw === 'Final' || raw === 'Future') return { kind: 'future' }
+  if (raw === 'DynamicFuture') return { kind: 'dynamicFuture' }
 
   if (typeof raw === 'object' && raw !== null) {
     const obj = raw as Record<string, unknown>

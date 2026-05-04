@@ -176,7 +176,7 @@ describe('parseAbi — tictactoe', () => {
       mode: 'none',
     })
     expect(fn1.outputs[1]).toEqual({
-      type: { kind: 'final' },
+      type: { kind: 'future' },
       mode: 'none',
     })
   })
@@ -208,7 +208,7 @@ describe('parseAbi — storage_var', () => {
     expect(fn0.name).toBe('increment')
     expect(fn0.isFinal).toBe(true)
     expect(fn0.inputs).toHaveLength(0)
-    expect(fn0.outputs[0]).toEqual({ type: { kind: 'final' }, mode: 'none' })
+    expect(fn0.outputs[0]).toEqual({ type: { kind: 'future' }, mode: 'none' })
   })
 })
 

@@ -2,6 +2,7 @@ import type { PublicClient } from '../clients/createPublicClient.js'
 import type { WalletClient } from '../clients/createWalletClient.js'
 import type { Program, ProgramFunction, ProgramMapping } from '../types/program.js'
 import type { ABI, AbiFunction, Mapping as AbiMapping } from '../types/abi.js'
+import type { TypedContractInstance } from '../types/inference.js'
 import type { RecordValue, Primitive } from '../types/primitives.js'
 import { parseProgram } from './parseProgram.js'
 import { encodeValue } from '../utils/values.js'
@@ -31,13 +32,13 @@ export type GetContractParameters = {
 
 export type ContractReadMethods = Record<string, (params: { key: string }) => Promise<unknown>>
 
-export type ContractWriteParams = { inputs: InputValue[]; fee?: bigint; imports?: Record<string, string> }
+export type ContractWriteParams = { inputs: InputValue[]; imports?: Record<string, string> }
 export type ContractWriteMethods = Record<string, (params: ContractWriteParams) => Promise<string>>
 
 export type ContractSimulateParams = { inputs: InputValue[]; imports?: Record<string, string> }
 export type ContractSimulateMethods = Record<string, (params: ContractSimulateParams) => Promise<{ outputs: ParsedOutput[] }>>
 
-export type ContractExecuteParams = { inputs: InputValue[]; fee?: bigint; imports?: Record<string, string> }
+export type ContractExecuteParams = { inputs: InputValue[]; imports?: Record<string, string> }
 export type ContractExecuteMethods = Record<string, (params: ContractExecuteParams) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>>
 
 export type ContractInstance = {
@@ -62,6 +63,9 @@ function isABI(abi: ABI | Program): abi is ABI {
 
 // ── Implementation ────────────────────────────────────────────────────
 
+export function getContract<const A extends ABI | Program | undefined = undefined>(
+  params: GetContractParameters & { abi?: A },
+): A extends ABI ? TypedContractInstance<A & ABI> : ContractInstance
 export function getContract(params: GetContractParameters): ContractInstance {
   const { program, abi, programSource, imports: contractImports } = params
 
@@ -246,7 +250,6 @@ export function getContract(params: GetContractParameters): ContractInstance {
           program,
           function: prop,
           inputs: resolveInputs(execParams.inputs, prop),
-          fee: execParams.fee,
           programSource,
           imports: { ...contractImports, ...execParams.imports },
         })
