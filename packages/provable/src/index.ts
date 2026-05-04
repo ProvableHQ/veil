@@ -22,7 +22,7 @@
 
 import { loadNetwork as loadSdk } from '@provablehq/sdk/dynamic.js'
 import type { LocalAccount } from '@veil/core'
-import type { ProvingConfig, BuildTransactionOptions, BuildDeploymentOptions } from '@veil/core'
+import type { ProvingConfig, BuildTransactionOptions, BuildDeploymentOptions, SimulateOptions, ExecuteOptions, RawSimulateResult, RawExecuteResult } from '@veil/core'
 import type { OwnedRecord, RecordProvider, StandaloneRecordScanner, RequestRecordsParameters } from '@veil/core'
 import type { Network, PublicClient, WalletClient } from '@veil/core'
 import {
@@ -73,7 +73,10 @@ export interface AleoSdk {
     mode: 'delegated' | 'local'
     networkUrl: string
     proverUrl?: string
+    apiKey?: string
+    consumerId?: string
     account?: LocalAccount<'privateKey'>
+    confirmationTimeout?: number
   }): ProvingConfig
 
   /** Creates a record scanner backed by `NetworkRecordProvider`. */
@@ -94,6 +97,9 @@ export interface AleoSdk {
     privateKey: string
     networkUrl: string
     provingMode?: 'delegated' | 'local'
+    proverUrl?: string
+    apiKey?: string
+    consumerId?: string
     /**
      * Record provider for `requestRecords`. Not wired by default — pass
      * `aleo.createLocalScanner(...)`, `aleo.createRemoteScanner(...)`, or any
@@ -127,6 +133,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     AleoNetworkClient,
     NetworkRecordProvider,
     RecordScanner,
+    OfflineQuery,
+    RecordCiphertext,
   } = initialSdk
 
   function privateKeyToAccount(privateKey: string): LocalAccount<'privateKey'> {
@@ -178,7 +186,11 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     mode: 'delegated' | 'local'
     networkUrl: string
     proverUrl?: string
+    apiKey?: string
+    consumerId?: string
     account?: LocalAccount<'privateKey'>
+    /** Timeout in ms for waiting for transaction confirmation (default: 300_000 = 5 min) */
+    confirmationTimeout?: number
   }): ProvingConfig {
     // Each call reads from currentSdk so switchNetwork can swap the binary set
     // without rebuilding the wallet client.
@@ -253,6 +265,120 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         )
 
         return JSON.parse(tx.toString())
+      },
+
+      simulate: async (simOptions: SimulateOptions): Promise<RawSimulateResult> => {
+        const programManager = new currentSdk.ProgramManager(networkUrl, keyProvider, undefined)
+        if (options.account) {
+          programManager.setAccount(new currentSdk.Account({ privateKey: options.account.privateKey }))
+        }
+        const executionResponse = await programManager.run(
+          simOptions.programSource ?? simOptions.programName,
+          simOptions.functionName,
+          simOptions.inputs,
+          false,
+          simOptions.programImports,
+          undefined, undefined, undefined, undefined,
+          new OfflineQuery(0, 'sr1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gk0xu'),
+        )
+        return { outputs: executionResponse.getOutputs() }
+      },
+
+      execute: async (execOptions: ExecuteOptions): Promise<RawExecuteResult> => {
+        const programManager = new currentSdk.ProgramManager(networkUrl, keyProvider, undefined)
+        if (options.account) {
+          programManager.setAccount(new currentSdk.Account({ privateKey: options.account.privateKey }))
+        }
+
+        /** Convert microcredits (Veil API) to credits (SDK API) for priority fee */
+        const priorityFee = Number(execOptions.fee) / 1_000_000
+
+        /** Extract output strings from a transaction, decrypting owned records */
+        function extractOutputs(tx: any): string[] {
+          const outputs: string[] = []
+          const transitions = tx.execution?.transitions
+          if (!transitions) return outputs
+          const accountViewKey = options.account ? ViewKey.from_string(options.account.viewKey) : undefined
+          for (const transition of transitions) {
+            if (!transition.outputs) continue
+            for (const output of transition.outputs) {
+              if (!output.value) continue
+              if (output.type === 'record' && output.value.startsWith('record1') && accountViewKey) {
+                const ciphertext = RecordCiphertext.fromString(output.value)
+                if (ciphertext.isOwner(accountViewKey)) {
+                  outputs.push(ciphertext.decrypt(accountViewKey).toString())
+                }
+              } else {
+                outputs.push(output.value)
+              }
+            }
+          }
+          return outputs
+        }
+
+        /** Poll for transaction confirmation */
+        async function waitForConfirmation(txId: string): Promise<any> {
+          const pollingClient = new AleoNetworkClient(networkUrl)
+          const timeout = options.confirmationTimeout ?? 300_000
+          const startTime = Date.now()
+          while (Date.now() - startTime < timeout) {
+            try {
+              const tx = await pollingClient.getTransaction(txId)
+              if (tx) return tx
+            } catch {
+              // Transaction not found yet, continue polling
+            }
+            await new Promise((resolve) => setTimeout(resolve, 5_000))
+          }
+          throw new Error(`Transaction ${txId} not confirmed within ${timeout / 1000}s`)
+        }
+
+        if (options.mode === 'delegated') {
+          if (!options.proverUrl) throw new Error('Delegated execution requires proverUrl')
+
+          const provingRequest = await programManager.provingRequest({
+            programName: execOptions.programName,
+            programSource: execOptions.programSource,
+            programImports: execOptions.programImports,
+            functionName: execOptions.functionName,
+            inputs: execOptions.inputs,
+            priorityFee,
+            privateFee: execOptions.privateFee ?? false,
+            broadcast: true,
+          })
+
+          const dpsClient = new AleoNetworkClient(options.proverUrl)
+          const response = await dpsClient.submitProvingRequest({
+            provingRequest,
+            url: options.proverUrl,
+            apiKey: options.apiKey,
+            consumerId: options.consumerId,
+          })
+
+          const txId = response.transaction?.id
+          if (!txId) throw new Error('DPS response did not contain a transaction ID')
+
+          const confirmedTx = await waitForConfirmation(txId)
+          return { transactionId: txId, outputs: extractOutputs(confirmedTx) }
+
+        } else {
+          const tx = await programManager.buildExecutionTransaction({
+            programName: execOptions.programName,
+            functionName: execOptions.functionName,
+            inputs: execOptions.inputs,
+            priorityFee,
+            privateFee: execOptions.privateFee ?? false,
+            program: execOptions.programSource,
+            imports: execOptions.programImports,
+          })
+
+          const submitClient = new AleoNetworkClient(networkUrl)
+          submitClient.setVerboseErrors(false)
+          const txId = await submitClient.submitTransaction(tx)
+
+          const confirmedTx = await waitForConfirmation(txId)
+          return { transactionId: txId, outputs: extractOutputs(confirmedTx) }
+        }
       },
 
       decrypt: async (cipherText) => {
@@ -383,6 +509,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     privateKey: string
     networkUrl: string
     provingMode?: 'delegated' | 'local'
+    proverUrl?: string
+    apiKey?: string
+    consumerId?: string
     records?: RecordProvider
   }): { publicClient: PublicClient; walletClient: WalletClient; account: LocalAccount<'privateKey'> } {
     const account = privateKeyToAccount(options.privateKey)
@@ -391,6 +520,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     const proving = createProvingConfig({
       mode: options.provingMode ?? 'delegated',
       networkUrl: options.networkUrl,
+      proverUrl: options.proverUrl,
+      apiKey: options.apiKey,
+      consumerId: options.consumerId,
       account,
     })
 
