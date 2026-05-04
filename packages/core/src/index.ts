@@ -81,7 +81,7 @@ export type {
 } from './types/network.js'
 
 export type { Primitive, Plaintext, PlaintextValue, RecordValue, RecordFieldValue, FutureValue, Literal } from './types/primitives.js'
-export type { ABI, AbiFunction, Input, Output, Mode, FunctionInput, FunctionOutput, StructDef, RecordDef, StructField, RecordField, Mapping, StorageVariable, StorageType } from './types/abi.js'
+export type { ABI, AbiFunction, Input as AbiInput, Output as AbiOutput, Mode, FunctionInput, FunctionOutput, StructDef, RecordDef, StructField, RecordField, Mapping, StorageVariable, StorageType } from './types/abi.js'
 export type {
   ParsedOutput, ParsedRecordOutput, ParsedPlaintextOutput, EncryptedRecordOutput, ParsedFutureOutput,
   InputValue, TransitionResult, ExecuteResult, SimulateResult,
