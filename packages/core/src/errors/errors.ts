@@ -76,3 +76,176 @@ export class TransactionHistoryNotSupportedError extends BaseError {
     this.name = 'TransactionHistoryNotSupportedError'
   }
 }
+
+// ── Transaction lifecycle errors ─────────────────────────────────────
+
+export class InvalidTransactionError extends BaseError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(
+      `Invalid transaction: ${message}. ` +
+      'Verify that the transaction is well-formed and inputs are valid.',
+      options,
+    )
+    this.name = 'InvalidTransactionError'
+  }
+}
+
+export class DuplicateTransactionError extends BaseError {
+  readonly transactionId?: string
+
+  constructor(transactionId?: string, options?: ErrorOptions) {
+    super(
+      `Transaction${transactionId ? ` ${transactionId}` : ''} already exists in the ledger. ` +
+      'This transaction has already been submitted. ' +
+      'If you intended a new transaction, ensure the inputs differ.',
+      options,
+    )
+    this.name = 'DuplicateTransactionError'
+    this.transactionId = transactionId
+  }
+}
+
+export class RecordAlreadyUsedError extends BaseError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(
+      `Record already consumed: ${message}. ` +
+      'A record input has already been spent in another transaction. ' +
+      'Fetch fresh records with requestRecords() before retrying.',
+      options,
+    )
+    this.name = 'RecordAlreadyUsedError'
+  }
+}
+
+export class BroadcastError extends BaseError {
+  readonly statusCode?: number
+
+  constructor(message: string, statusCode?: number, options?: ErrorOptions) {
+    super(
+      `Transaction broadcast failed${statusCode ? ` (HTTP ${statusCode})` : ''}: ${message}. ` +
+      'The network may be congested. Retry after a short delay.',
+      options,
+    )
+    this.name = 'BroadcastError'
+    this.statusCode = statusCode
+  }
+}
+
+export class TransactionTimeoutError extends BaseError {
+  readonly transactionId: string
+  readonly timeoutMs: number
+
+  constructor(transactionId: string, timeoutMs: number, options?: ErrorOptions) {
+    super(
+      `Transaction ${transactionId} not confirmed within ${timeoutMs / 1000}s. ` +
+      'The transaction may still be pending — check its status with getTransaction() ' +
+      'before resubmitting to avoid a DuplicateTransactionError.',
+      options,
+    )
+    this.name = 'TransactionTimeoutError'
+    this.transactionId = transactionId
+    this.timeoutMs = timeoutMs
+  }
+}
+
+export class FinalizeRevertError extends BaseError {
+  readonly transactionId: string
+
+  constructor(transactionId: string, options?: ErrorOptions) {
+    super(
+      `Transaction ${transactionId} was rejected — the finalize block reverted on-chain. ` +
+      'The base fee has been consumed. Check that on-chain state (mappings, balances) ' +
+      'still matches your expectations and retry with fresh inputs.',
+      options,
+    )
+    this.name = 'FinalizeRevertError'
+    this.transactionId = transactionId
+  }
+}
+
+export class ProvingError extends BaseError {
+  readonly statusCode?: number
+
+  constructor(message: string, statusCode?: number, options?: ErrorOptions) {
+    super(
+      `Proof generation failed${statusCode ? ` (HTTP ${statusCode})` : ''}: ${message}. ` +
+      'If using delegated proving, check the prover service status. ' +
+      'For local proving, ensure sufficient memory and valid program inputs.',
+      options,
+    )
+    this.name = 'ProvingError'
+    this.statusCode = statusCode
+  }
+}
+
+export class SimulateNotSupportedError extends BaseError {
+  constructor() {
+    super(
+      'simulateContract is not available for RPC (wallet) accounts. ' +
+      'Wallets do not expose a local dry-run interface. ' +
+      'Use executeContract for on-chain execution, or switch to a local account for simulation.',
+    )
+    this.name = 'SimulateNotSupportedError'
+  }
+}
+
+// ── Error classification ─────────────────────────────────────────────
+
+/**
+ * Classify a raw SDK error from submitTransaction or submitProvingRequest
+ * into a typed Veil error. Parses error messages since submitTransaction
+ * does not preserve HTTP status codes.
+ */
+export function classifyBroadcastError(
+  error: unknown,
+  transactionId?: string,
+): InvalidTransactionError | DuplicateTransactionError | RecordAlreadyUsedError | BroadcastError {
+  const message = error instanceof Error ? error.message : String(error)
+  const status = (error as any)?.status as number | undefined
+
+  if (/already exists in the ledger/i.test(message)) {
+    return new DuplicateTransactionError(transactionId, { cause: error as Error })
+  }
+
+  if (
+    /duplicate/i.test(message) &&
+    /output id|input id|commitment|nonce|serial.?number/i.test(message)
+  ) {
+    return new RecordAlreadyUsedError(message, { cause: error as Error })
+  }
+
+  if (
+    status === 400 || status === 422 ||
+    /invalid transaction/i.test(message) ||
+    /not well-formed/i.test(message) ||
+    /incorrect transaction id/i.test(message) ||
+    /fee verification failed/i.test(message)
+  ) {
+    return new InvalidTransactionError(message, { cause: error as Error })
+  }
+
+  return new BroadcastError(message, status, { cause: error as Error })
+}
+
+/**
+ * Classify a raw SDK error from proof generation or DPS submission.
+ * Delegates to classifyBroadcastError if the message looks like a
+ * broadcast failure (DPS surfaces broadcast errors through its response).
+ */
+export function classifyProvingError(
+  error: unknown,
+): ProvingError | InvalidTransactionError | DuplicateTransactionError | RecordAlreadyUsedError | BroadcastError {
+  const message = error instanceof Error ? error.message : String(error)
+  const status = (error as any)?.status as number | undefined
+
+  if (
+    /already exists/i.test(message) ||
+    /duplicate.*(?:output id|input id|commitment|nonce|serial)/i.test(message) ||
+    /invalid transaction/i.test(message) ||
+    /not well-formed/i.test(message)
+  ) {
+    return classifyBroadcastError(error)
+  }
+
+  return new ProvingError(message, status, { cause: error as Error })
+}

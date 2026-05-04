@@ -1,4 +1,4 @@
-import { AccountNotFoundError, ProvingNotConfiguredError } from '../../errors/errors.js'
+import { AccountNotFoundError, ProvingNotConfiguredError, SimulateNotSupportedError } from '../../errors/errors.js'
 import type { Client } from '../../clients/createClient.js'
 
 export type SimulateContractParameters = {
@@ -31,10 +31,7 @@ export async function simulateContract(
   }
 
   if (account.type === 'rpc') {
-    throw new Error(
-      'simulateContract is not available for RPC (wallet) accounts. ' +
-      'Wallets do not expose a local dry-run interface. Use executeContract instead.',
-    )
+    throw new SimulateNotSupportedError()
   }
 
   if (account.type === 'local') {

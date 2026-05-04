@@ -97,6 +97,16 @@ export {
   ProgramNotFoundError,
   InvalidInputError,
   TransactionHistoryNotSupportedError,
+  InvalidTransactionError,
+  DuplicateTransactionError,
+  RecordAlreadyUsedError,
+  BroadcastError,
+  TransactionTimeoutError,
+  FinalizeRevertError,
+  ProvingError,
+  SimulateNotSupportedError,
+  classifyBroadcastError,
+  classifyProvingError,
 } from './errors/errors.js'
 
 // Utils
