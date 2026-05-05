@@ -147,7 +147,7 @@ export function useLoyalty(
       setCards(parsedCards)
 
       if (!selectedCardId && parsedCards.length > 0) {
-        setSelectedCardId(parsedCards[0].cardId)
+        setSelectedCardId(parsedCards[0]!.cardId)
       }
 
       // Load RewardVoucher records from loyalty_rewards.aleo
@@ -182,12 +182,12 @@ export function useLoyalty(
   const refreshStats = useCallback(async () => {
     try {
       const totalCards = await publicClient.readContract({
-        program: TOKEN_PROGRAM,
+        programId: TOKEN_PROGRAM,
         mapping: 'total_cards',
         key: '0field',
       })
       const totalPoints = await publicClient.readContract({
-        program: TOKEN_PROGRAM,
+        programId: TOKEN_PROGRAM,
         mapping: 'total_points_issued',
         key: '0field',
       })

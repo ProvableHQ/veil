@@ -49,7 +49,7 @@ export const LOYALTY_PROGRAM = 'loyalty_rewards.aleo'
  * function and mapping in the program — no manual ABI definition needed.
  */
 export async function getLoyaltyContract(walletClient?: ReturnType<typeof createWalletClient>) {
-  const source = await publicClient.getCode({ program: LOYALTY_PROGRAM })
+  const source = await publicClient.getCode({ programId: LOYALTY_PROGRAM })
   const abi = parseProgram(source)
 
   return getContract({
