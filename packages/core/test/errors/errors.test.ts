@@ -83,7 +83,7 @@ describe('error paths in wallet actions', () => {
 
   it('writeContract throws AccountNotFoundError for view-only account', async () => {
     const client = {
-      account: { type: 'viewOnly', address: 'aleo1abc', viewKey: 'AViewKey1...' },
+      account: { address: 'aleo1abc' },
       request: vi.fn(),
     } as any
 

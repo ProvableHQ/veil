@@ -15,7 +15,7 @@ describe('writeContract', () => {
   })
 
   it('throws AccountNotFoundError when account has no sign', async () => {
-    const client = { account: { type: 'viewOnly', address: 'aleo1abc' }, request: vi.fn() } as any
+    const client = { account: { address: 'aleo1abc' }, request: vi.fn() } as any
     await expect(writeContract(client, baseParams)).rejects.toThrow(AccountNotFoundError)
   })
 

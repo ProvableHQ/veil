@@ -146,6 +146,20 @@ describe('E2E: veil against live Aleo mainnet', () => {
     console.log('  Key derivation roundtrip: PASS')
   })
 
+  it('mnemonicToAccount() derives a Shield-compatible account from a mnemonic', () => {
+    const mnemonic =
+      'absurd letter switch already canoe piano wage sock unique all blade coyote'
+    const account = aleo.mnemonicToAccount(mnemonic)
+
+    expect(account.type).toBe('local')
+    expect(account.source).toBe('mnemonic')
+    expect(account.address).toBe(
+      'aleo132x69f77mz7cx2f4s5wykktj73tj8cy7smdvxrgwja9qcmyuysxst42d9m',
+    )
+    console.log('  Mnemonic → address:', account.address)
+    console.log('  Shield-derived account: PASS')
+  })
+
   it('agent tools work against live chain', async () => {
     const tools = aleoAgentTools({ client: publicClient })
     expect(tools.length).toBeGreaterThan(0)

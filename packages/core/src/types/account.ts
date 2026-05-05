@@ -22,11 +22,5 @@ export type RpcAccount = SignerAccount & {
   type: 'rpc'
 }
 
-/** View-only account — can decrypt records, cannot sign or build transactions */
-export type ViewOnlyAccount = Account & {
-  type: 'viewOnly'
-  viewKey: string
-}
-
 /** Union of all account types */
-export type AnyAccount = LocalAccount | RpcAccount | ViewOnlyAccount
+export type AnyAccount = LocalAccount | RpcAccount

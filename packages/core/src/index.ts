@@ -4,7 +4,6 @@ export type {
   SignerAccount,
   LocalAccount,
   RpcAccount,
-  ViewOnlyAccount,
   AnyAccount,
 } from './types/account.js'
 
@@ -115,9 +114,6 @@ export type { WalletActions } from './clients/decorators/wallet.js'
 
 // Accounts
 export { rpcAccount } from './accounts/rpcAccount.js'
-export { privateKeyToAccount } from './accounts/privateKeyToAccount.js'
-export { mnemonicToAccount } from './accounts/mnemonicToAccount.js'
-export { viewOnlyAccount } from './accounts/viewOnlyAccount.js'
 export { toAccount } from './accounts/toAccount.js'
 
 // Public Actions (standalone)
