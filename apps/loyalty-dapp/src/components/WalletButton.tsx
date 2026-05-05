@@ -87,7 +87,7 @@ export function WalletButton({
   }
 
   return (
-    <button className="wallet-btn connect" onClick={onConnect}>
+    <button className="wallet-btn connect" onClick={() => onConnect()}>
       Connect Wallet
     </button>
   )
