@@ -8,13 +8,6 @@ describe('toAccount', () => {
     expect(account.address).toBe('aleo1abc')
   })
 
-  it('creates a viewOnly account', () => {
-    const account = toAccount({ type: 'viewOnly', address: 'aleo1abc', viewKey: 'avk1xyz' })
-    expect(account.type).toBe('viewOnly')
-    expect(account.address).toBe('aleo1abc')
-    expect(account.viewKey).toBe('avk1xyz')
-  })
-
   it('creates a local account', () => {
     const sign = vi.fn()
     const account = toAccount({

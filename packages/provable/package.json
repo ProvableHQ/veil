@@ -16,7 +16,9 @@
   },
   "files": ["dist"],
   "dependencies": {
-    "@provablehq/sdk": "^0.9.15"
+    "@noble/hashes": "^1.7.2",
+    "@provablehq/sdk": "^0.9.15",
+    "@scure/bip39": "^1.4.0"
   },
   "peerDependencies": {
     "@veil/core": "workspace:*"

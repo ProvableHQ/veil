@@ -79,6 +79,81 @@ describe('@veil/provable', () => {
     })
   })
 
+  describe('mnemonicToAccount', () => {
+    // Vectors derived from real Shield wallets, standard path m/44'/683', index 0.
+    // These cross-validate our BLS12-377 HD derivation against shield-core
+    // byte-for-byte. Treat them as immutable — failure here means a real
+    // compatibility regression.
+    const SHIELD_VECTORS = [
+      {
+        mnemonic:
+          'absurd letter switch already canoe piano wage sock unique all blade coyote',
+        privateKey: 'APrivateKey1zkpG8R7dVTThaszJM8b58DcV6zfgCXtaSukMZNuUEKHgFcM',
+        viewKey: 'AViewKey1sqm952gJj1tmAWySYDQvSv2NmfnyEMvU6a9ZBCuyG7PN',
+        address:
+          'aleo132x69f77mz7cx2f4s5wykktj73tj8cy7smdvxrgwja9qcmyuysxst42d9m',
+      },
+      {
+        mnemonic:
+          'route text case hour autumn bomb devote army idle amount trap now',
+        privateKey: 'APrivateKey1zkpJAcRkdFTMoiYA1cqe5NdCWcxWcq8L77vjmskxYfAhBSe',
+        viewKey: 'AViewKey1sbBnjW1rhjpnWjkzPU9ZcYx4SidzVFgKr51bquV7LeE5',
+        address:
+          'aleo1wx6hcq7670n7rutq06z438zrkg2vm4mmu5s0haf7p2d2w90r8q9qeg72fz',
+      },
+    ]
+
+    for (const v of SHIELD_VECTORS) {
+      it(`derives Shield vector: "${v.mnemonic.split(' ').slice(0, 3).join(' ')}…"`, () => {
+        const account = aleo.mnemonicToAccount(v.mnemonic)
+        expect(account.privateKey).toBe(v.privateKey)
+        expect(account.viewKey).toBe(v.viewKey)
+        expect(account.address).toBe(v.address)
+      })
+    }
+
+    it('returns a LocalAccount with source="mnemonic"', () => {
+      const account = aleo.mnemonicToAccount(SHIELD_VECTORS[0].mnemonic)
+      expect(account.type).toBe('local')
+      expect(account.source).toBe('mnemonic')
+      expect(account.sign).toBeTypeOf('function')
+      expect(account.signMessage).toBeTypeOf('function')
+    })
+
+    it('default options match { index: 0, derivation: "standard" }', () => {
+      const a = aleo.mnemonicToAccount(SHIELD_VECTORS[0].mnemonic)
+      const b = aleo.mnemonicToAccount(SHIELD_VECTORS[0].mnemonic, {
+        index: 0,
+        derivation: 'standard',
+      })
+      expect(a.address).toBe(b.address)
+    })
+
+    it('different indices produce different addresses', () => {
+      const a = aleo.mnemonicToAccount(SHIELD_VECTORS[0].mnemonic, { index: 0 })
+      const b = aleo.mnemonicToAccount(SHIELD_VECTORS[0].mnemonic, { index: 1 })
+      expect(a.address).not.toBe(b.address)
+    })
+
+    it('legacy and standard paths produce different addresses', () => {
+      const std = aleo.mnemonicToAccount(SHIELD_VECTORS[0].mnemonic, {
+        derivation: 'standard',
+      })
+      const lgc = aleo.mnemonicToAccount(SHIELD_VECTORS[0].mnemonic, {
+        derivation: 'legacy',
+      })
+      expect(std.address).not.toBe(lgc.address)
+    })
+
+    it('signs messages with the derived account', async () => {
+      const account = aleo.mnemonicToAccount(SHIELD_VECTORS[0].mnemonic)
+      const message = new TextEncoder().encode('test')
+      const sig = await account.sign(message)
+      const sigString = new TextDecoder().decode(sig)
+      expect(aleo.verifySignature(account.address, message, sigString)).toBe(true)
+    })
+  })
+
   describe('verifySignature', () => {
     it('verifies a valid signature', async () => {
       const account = aleo.generateAccount()

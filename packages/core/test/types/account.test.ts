@@ -4,7 +4,6 @@ import type {
   SignerAccount,
   LocalAccount,
   RpcAccount,
-  ViewOnlyAccount,
 } from '../../src/types/account.js'
 
 describe('Account types', () => {
@@ -32,10 +31,5 @@ describe('Account types', () => {
     expectTypeOf<RpcAccount['type']>().toEqualTypeOf<'rpc'>()
     expectTypeOf<RpcAccount>().toHaveProperty('sign')
     expectTypeOf<RpcAccount>().toHaveProperty('signMessage')
-  })
-
-  it('ViewOnlyAccount has type viewOnly and required viewKey', () => {
-    expectTypeOf<ViewOnlyAccount['type']>().toEqualTypeOf<'viewOnly'>()
-    expectTypeOf<ViewOnlyAccount['viewKey']>().toBeString()
   })
 })

@@ -42,11 +42,6 @@ export function createWalletClient(config: WalletClientConfig): WalletClient {
 
   const recordProvider = 'recordProvider' in rest ? rest.recordProvider : undefined
 
-  // Initialize the record provider with the active account
-  if (recordProvider && rest.account && 'viewKey' in rest.account && rest.account.viewKey) {
-    recordProvider.setAccount({ viewKey: rest.account.viewKey })
-  }
-
   const walletClient = client.extend(walletActions) as WalletClient
   ;(walletClient as any).recordProvider = recordProvider
   return walletClient

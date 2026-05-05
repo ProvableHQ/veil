@@ -30,6 +30,19 @@ import {
   createWalletClient,
   http,
 } from '@veil/core'
+import { mnemonicToHDKey, type AleoDerivationId } from './mnemonic.js'
+
+export {
+  BLS12377HDKey,
+  generateMnemonic,
+  validateMnemonic,
+  validateWord,
+  mnemonicToSeed,
+  mnemonicToHDKey,
+  STANDARD_PATH,
+  LEGACY_PATH,
+  type AleoDerivationId,
+} from './mnemonic.js'
 
 /** Networks supported by `@provablehq/sdk/dynamic.js`. */
 export type SupportedNetwork = 'mainnet' | 'testnet'
@@ -43,11 +56,12 @@ type SdkModule = Awaited<ReturnType<typeof loadSdk<'testnet'>>>
  * A network-bound SDK handle. All functions on this handle use the binary
  * set loaded for the named network.
  *
- * Most key/account operations (`privateKeyToAccount`, `generateAccount`,
- * `decryptRecord`, `verifySignature`) are mathematically network-agnostic —
- * the same private key derives the same address and view key regardless of
- * which network's binary was loaded. Proving and program operations
- * (`createProvingConfig`, `createAleoClient`, scanners) are network-bound.
+ * Most key/account operations (`privateKeyToAccount`, `mnemonicToAccount`,
+ * `generateAccount`, `decryptRecord`, `verifySignature`) are mathematically
+ * network-agnostic — the same private key (or mnemonic) derives the same
+ * address and view key regardless of which network's binary was loaded.
+ * Proving and program operations (`createProvingConfig`, `createAleoClient`,
+ * scanners) are network-bound.
  */
 export interface AleoSdk {
   /** The network this handle is bound to. */
@@ -55,6 +69,19 @@ export interface AleoSdk {
 
   /** Creates a `LocalAccount` from an Aleo private key. */
   privateKeyToAccount(privateKey: string): LocalAccount<'privateKey'>
+
+  /**
+   * Creates a `LocalAccount` from a BIP39 mnemonic phrase using Aleo's
+   * BLS12-377 HD derivation (matches Shield wallet derivation).
+   *
+   * Defaults to the SLIP-0044 Aleo coin type path `m/44'/683'`, account
+   * index 0. Pass `derivation: 'legacy'` to use the pre-registration path
+   * `m/44'/0'` for compatibility with older wallets.
+   */
+  mnemonicToAccount(
+    mnemonic: string,
+    options?: { index?: number; derivation?: AleoDerivationId },
+  ): LocalAccount<'mnemonic'>
 
   /** Creates a new random Aleo account. */
   generateAccount(): LocalAccount<'privateKey'>
@@ -121,6 +148,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
   const network = initialNetwork
   const {
     Account,
+    PrivateKey,
     Signature,
     Address,
     ViewKey,
@@ -149,6 +177,18 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       sign: signFn,
       signMessage: signFn,
     }
+  }
+
+  function mnemonicToAccount(
+    mnemonic: string,
+    options?: { index?: number; derivation?: AleoDerivationId },
+  ): LocalAccount<'mnemonic'> {
+    const hd = mnemonicToHDKey(mnemonic, options)
+    // wasm-bindgen exports the snake_case name; it is not a typo.
+    const privateKey = (PrivateKey as unknown as {
+      from_seed_unchecked: (seed: Uint8Array) => InstanceType<SdkModule['PrivateKey']>
+    }).from_seed_unchecked(hd.key).to_string()
+    return { ...privateKeyToAccount(privateKey), source: 'mnemonic' }
   }
 
   function generateAccount(): LocalAccount<'privateKey'> {
@@ -396,6 +436,10 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 
     const publicClient = createPublicClient({ transport })
 
+    if (options.records) {
+      options.records.setAccount({ viewKey: account.viewKey })
+    }
+
     const walletClient = createWalletClient({
       account,
       transport,
@@ -409,6 +453,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
   return {
     network,
     privateKeyToAccount,
+    mnemonicToAccount,
     generateAccount,
     decryptRecord,
     verifySignature,

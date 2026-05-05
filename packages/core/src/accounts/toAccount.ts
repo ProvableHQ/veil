@@ -1,4 +1,4 @@
-import type { LocalAccount, RpcAccount, ViewOnlyAccount } from '../types/account.js'
+import type { LocalAccount, RpcAccount } from '../types/account.js'
 
 export type ToAccountSource = {
   address: string
@@ -7,8 +7,7 @@ export type ToAccountSource = {
 }
 
 export function toAccount(source: ToAccountSource & { type: 'rpc' }): RpcAccount
-export function toAccount(source: ToAccountSource & { type: 'viewOnly'; viewKey: string }): ViewOnlyAccount
 export function toAccount(source: ToAccountSource & { type: 'local'; privateKey: string; viewKey: string; source: string }): LocalAccount
-export function toAccount(source: ToAccountSource & Record<string, unknown>): RpcAccount | ViewOnlyAccount | LocalAccount {
-  return source as RpcAccount | ViewOnlyAccount | LocalAccount
+export function toAccount(source: ToAccountSource & Record<string, unknown>): RpcAccount | LocalAccount {
+  return source as RpcAccount | LocalAccount
 }
