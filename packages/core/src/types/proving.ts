@@ -52,8 +52,19 @@ export type RawSimulateResult = {
   outputs: string[]
 }
 
+/** Raw per-transition result from the proving layer (before ABI parsing) */
+export type RawTransitionResult = {
+  transitionId: string
+  program: string
+  function: string
+  outputs: string[]
+}
+
 export type RawExecuteResult = {
   transactionId: string
+  /** Per-transition results with program/function metadata */
+  transitions: RawTransitionResult[]
+  /** Flat projection of all transition outputs for backwards compatibility */
   outputs: string[]
 }
 

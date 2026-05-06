@@ -21,6 +21,7 @@ export type {
   ExecuteOptions,
   RawSimulateResult,
   RawExecuteResult,
+  RawTransitionResult,
 } from './types/proving.js'
 
 export type {

@@ -22,7 +22,7 @@
 
 import { loadNetwork as loadSdk } from '@provablehq/sdk/dynamic.js'
 import type { LocalAccount } from '@veil/core'
-import type { ProvingConfig, BuildTransactionOptions, BuildDeploymentOptions, SimulateOptions, ExecuteOptions, RawSimulateResult, RawExecuteResult } from '@veil/core'
+import type { ProvingConfig, BuildTransactionOptions, BuildDeploymentOptions, SimulateOptions, ExecuteOptions, RawSimulateResult, RawExecuteResult, RawTransitionResult } from '@veil/core'
 import type { OwnedRecord, RecordProvider, StandaloneRecordScanner, RequestRecordsParameters } from '@veil/core'
 import type { Network, PublicClient, WalletClient } from '@veil/core'
 import {
@@ -340,27 +340,38 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         /** Convert microcredits (Veil API) to credits (SDK API) for priority fee */
         const priorityFee = Number(execOptions.fee) / 1_000_000
 
-        /** Extract output strings from a transaction, decrypting owned records */
-        function extractOutputs(tx: any): string[] {
-          const outputs: string[] = []
-          const transitions = tx.execution?.transitions
-          if (!transitions) return outputs
+        /**
+         * Extract per-transition output strings from a transaction, decrypting owned records.
+         * Returns structured transitions + flat outputs for backwards compat.
+         */
+        function extractTransitions(tx: any): { transitions: RawTransitionResult[]; outputs: string[] } {
+          const rawTransitions: RawTransitionResult[] = []
+          const allOutputs: string[] = []
           const accountViewKey = options.account ? ViewKey.from_string(options.account.viewKey) : undefined
-          for (const transition of transitions) {
-            if (!transition.outputs) continue
-            for (const output of transition.outputs) {
+
+          for (const transition of tx.execution?.transitions ?? []) {
+            const transitionOutputs: string[] = []
+            for (const output of transition.outputs ?? []) {
               if (!output.value) continue
               if (output.type === 'record' && output.value.startsWith('record1') && accountViewKey) {
                 const ciphertext = RecordCiphertext.fromString(output.value)
                 if (ciphertext.isOwner(accountViewKey)) {
-                  outputs.push(ciphertext.decrypt(accountViewKey).toString())
+                  transitionOutputs.push(ciphertext.decrypt(accountViewKey).toString())
                 }
               } else {
-                outputs.push(output.value)
+                transitionOutputs.push(output.value)
               }
             }
+            rawTransitions.push({
+              transitionId: transition.id ?? '',
+              program: transition.program ?? '',
+              function: transition.function ?? '',
+              outputs: transitionOutputs,
+            })
+            allOutputs.push(...transitionOutputs)
           }
-          return outputs
+
+          return { transitions: rawTransitions, outputs: allOutputs }
         }
 
         /** Poll for confirmed transaction and check finalize status */
@@ -419,7 +430,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           if (!txId) throw new ConfigurationError('DPS response did not contain a transaction ID — check prover service configuration.')
 
           const confirmedTx = await waitForConfirmation(txId)
-          return { transactionId: txId, outputs: extractOutputs(confirmedTx) }
+          const { transitions, outputs } = extractTransitions(confirmedTx)
+          return { transactionId: txId, transitions, outputs }
 
         } else {
           let tx: any
@@ -449,7 +461,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           }
 
           const confirmedTx = await waitForConfirmation(txId)
-          return { transactionId: txId, outputs: extractOutputs(confirmedTx) }
+          const { transitions, outputs } = extractTransitions(confirmedTx)
+          return { transactionId: txId, transitions, outputs }
         }
       },
 

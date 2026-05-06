@@ -411,3 +411,110 @@ describe('getContract', () => {
     expect(calledInputs[2]).toBe('42field')
   })
 })
+
+describe('getContract execute proxy — per-transition outputs', () => {
+  it('returns structured transitions from execute result', async () => {
+    const executeTransaction = vi.fn().mockResolvedValue({
+      transactionId: 'at1abc',
+      transitions: [
+        {
+          transitionId: 'au1first',
+          program: 'token.aleo',
+          function: 'mint',
+          outputs: ['{\n  owner: aleo1abc.private,\n  amount: 1000u64.private,\n  _nonce: 123group.public\n}'],
+        },
+      ],
+      outputs: ['{\n  owner: aleo1abc.private,\n  amount: 1000u64.private,\n  _nonce: 123group.public\n}'],
+    })
+    const mockWallet = {
+      account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
+      writeContract: vi.fn(),
+      executeTransaction,
+      simulateContract: vi.fn(),
+    }
+
+    const contract = getContract({
+      program: 'token.aleo',
+      client: mockWallet as any,
+    })
+
+    const result = await contract.execute.mint({ inputs: ['aleo1abc', '1000u64'] })
+
+    expect(result.transactionId).toBe('at1abc')
+    expect(result.transitions).toHaveLength(1)
+    expect(result.transitions[0].transitionId).toBe('au1first')
+    expect(result.transitions[0].program).toBe('token.aleo')
+    expect(result.transitions[0].function).toBe('mint')
+    expect(result.transitions[0].outputs).toHaveLength(1)
+  })
+
+  it('handles cross-program transitions with loose parsing', async () => {
+    const executeTransaction = vi.fn().mockResolvedValue({
+      transactionId: 'at1cross',
+      transitions: [
+        {
+          transitionId: 'au1inner',
+          program: 'loyalty_token.aleo',
+          function: 'spend_points',
+          outputs: ['{\n  owner: aleo1abc.private,\n  points: 500u64.private,\n  _nonce: 456group.public\n}'],
+        },
+        {
+          transitionId: 'au1outer',
+          program: 'loyalty_rewards.aleo',
+          function: 'redeem',
+          outputs: ['{\n  owner: aleo1abc.private,\n  amount: 200u64.private,\n  _nonce: 789group.public\n}'],
+        },
+      ],
+      outputs: [
+        '{\n  owner: aleo1abc.private,\n  points: 500u64.private,\n  _nonce: 456group.public\n}',
+        '{\n  owner: aleo1abc.private,\n  amount: 200u64.private,\n  _nonce: 789group.public\n}',
+      ],
+    })
+    const mockWallet = {
+      account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
+      writeContract: vi.fn(),
+      executeTransaction,
+      simulateContract: vi.fn(),
+    }
+
+    const contract = getContract({
+      program: 'loyalty_rewards.aleo',
+      client: mockWallet as any,
+    })
+
+    const result = await contract.execute.redeem({ inputs: [] })
+
+    expect(result.transitions).toHaveLength(2)
+    // Inner transition from different program — loose parsed
+    expect(result.transitions[0].program).toBe('loyalty_token.aleo')
+    expect(result.transitions[0].outputs[0]).toBeDefined()
+    // Outer transition from same program — loose parsed (no ABI provided)
+    expect(result.transitions[1].program).toBe('loyalty_rewards.aleo')
+    // Top-level outputs match the called function's transition
+    expect(result.outputs).toHaveLength(1)
+  })
+
+  it('falls back to flat outputs when transitions not available', async () => {
+    const executeTransaction = vi.fn().mockResolvedValue({
+      transactionId: 'at1old',
+      outputs: ['100u64'],
+    })
+    const mockWallet = {
+      account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
+      writeContract: vi.fn(),
+      executeTransaction,
+      simulateContract: vi.fn(),
+    }
+
+    const contract = getContract({
+      program: 'token.aleo',
+      client: mockWallet as any,
+    })
+
+    const result = await contract.execute.mint({ inputs: ['aleo1abc', '1000u64'] })
+
+    expect(result.transactionId).toBe('at1old')
+    expect(result.transitions).toHaveLength(0)
+    expect(result.outputs).toEqual(['100u64'])
+  })
+})

@@ -39,7 +39,9 @@ export type ContractSimulateParams = { inputs: InputValue[]; imports?: Record<st
 export type ContractSimulateMethods = Record<string, (params: ContractSimulateParams) => Promise<{ outputs: ParsedOutput[] }>>
 
 export type ContractExecuteParams = { inputs: InputValue[]; imports?: Record<string, string> }
-export type ContractExecuteMethods = Record<string, (params: ContractExecuteParams) => Promise<{ transactionId: string; outputs: ParsedOutput[] }>>
+export type ContractTransitionResult = { transitionId: string; program: string; function: string; outputs: ParsedOutput[] }
+export type ContractExecuteResult = { transactionId: string; transitions: ContractTransitionResult[]; outputs: ParsedOutput[] }
+export type ContractExecuteMethods = Record<string, (params: ContractExecuteParams) => Promise<ContractExecuteResult>>
 
 export type ContractInstance = {
   program: string
@@ -165,6 +167,14 @@ export function getContract(params: GetContractParameters): ContractInstance {
     })
   }
 
+  /** Loose-parse a single output — try record detection, fall back to raw string */
+  function parseLooseOutput(raw: string): ParsedOutput {
+    if (raw.trimStart().startsWith('{')) {
+      return parseRecordPlaintextLoose(raw)
+    }
+    return raw
+  }
+
   const read = new Proxy({} as ContractReadMethods, {
     get(_target, prop: string) {
       if (typeof prop === 'symbol') return undefined
@@ -253,7 +263,23 @@ export function getContract(params: GetContractParameters): ContractInstance {
           programSource,
           imports: { ...contractImports, ...execParams.imports },
         })
-        return { transactionId: result.transactionId, outputs: parseOutputs(result.outputs, prop) }
+
+        // Build per-transition parsed results
+        const transitions: ContractTransitionResult[] = (result.transitions ?? []).map(t => ({
+          transitionId: t.transitionId,
+          program: t.program,
+          function: t.function,
+          // Same-program transitions: parse with local ABI. Foreign: loose parse.
+          outputs: t.program === program
+            ? parseOutputs(t.outputs, t.function)
+            : t.outputs.map(o => parseLooseOutput(o)),
+        }))
+
+        // Top-level outputs: the transition matching the called program/function
+        const topLevel = transitions.find(t => t.program === program && t.function === prop)
+        const outputs = topLevel?.outputs ?? parseOutputs(result.outputs, prop)
+
+        return { transactionId: result.transactionId, transitions, outputs }
       }
     },
   })
