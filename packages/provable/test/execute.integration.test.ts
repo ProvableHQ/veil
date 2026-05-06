@@ -11,6 +11,14 @@
  *   ALEO_DPS_API_KEY, ALEO_CONSUMER_ID (and optionally ALEO_DPS_URL)
  *
  * Skipped by default in CI / normal test runs.
+ *
+ * TODO: Error classifier validation against real SnarkOS responses.
+ * The classifyBroadcastError/classifyProvingError functions match on SnarkOS
+ * error message strings. A SnarkOS upgrade that rephrases error messages
+ * (e.g. "duplicate output id" → "output identifier conflict") would silently
+ * degrade typed errors to BroadcastError. A devnet integration harness that
+ * submits known-bad transactions and asserts the correct typed error class
+ * would catch this drift. See PR #49 review comment #6.
  */
 import { describe, it, expect, beforeAll } from 'vitest'
 import { loadNetwork, type AleoSdk } from '../src/index.js'

@@ -9,11 +9,13 @@ import {
   BaseError,
   InvalidTransactionError,
   DuplicateTransactionError,
-  RecordAlreadyUsedError,
+  RecordSpentError,
+  OutputIdCollisionError,
   BroadcastError,
   TransactionTimeoutError,
   FinalizeRevertError,
   ProvingError,
+  ConfigurationError,
   SimulateNotSupportedError,
   classifyBroadcastError,
   classifyProvingError,
@@ -176,16 +178,31 @@ describe('typed transaction errors', () => {
     expect(err.message).toContain('already exists')
   })
 
-  it('RecordAlreadyUsedError includes message', () => {
-    const err = new RecordAlreadyUsedError('Found a duplicate Output ID')
-    expect(err.name).toBe('RecordAlreadyUsedError')
-    expect(err.message).toContain('duplicate Output ID')
+  it('RecordSpentError includes message', () => {
+    const err = new RecordSpentError('Found a duplicate serial_number')
+    expect(err.name).toBe('RecordSpentError')
+    expect(err.message).toContain('serial_number')
     expect(err.message).toContain('requestRecords')
     expect(err).toBeInstanceOf(BaseError)
   })
 
+  it('OutputIdCollisionError includes message', () => {
+    const err = new OutputIdCollisionError('Found a duplicate Output ID')
+    expect(err.name).toBe('OutputIdCollisionError')
+    expect(err.message).toContain('Output ID')
+    expect(err.message).toContain('program-level')
+    expect(err).toBeInstanceOf(BaseError)
+  })
+
+  it('ConfigurationError includes message', () => {
+    const err = new ConfigurationError('Delegated execution requires proverUrl')
+    expect(err.name).toBe('ConfigurationError')
+    expect(err.message).toContain('proverUrl')
+    expect(err).toBeInstanceOf(BaseError)
+  })
+
   it('BroadcastError includes statusCode', () => {
-    const err = new BroadcastError('service unavailable', 503)
+    const err = new BroadcastError({ message: 'service unavailable', statusCode: 503 })
     expect(err.name).toBe('BroadcastError')
     expect(err.statusCode).toBe(503)
     expect(err.message).toContain('503')
@@ -194,13 +211,13 @@ describe('typed transaction errors', () => {
   })
 
   it('BroadcastError works without statusCode', () => {
-    const err = new BroadcastError('unknown failure')
+    const err = new BroadcastError({ message: 'unknown failure' })
     expect(err.statusCode).toBeUndefined()
     expect(err.message).toContain('unknown failure')
   })
 
   it('TransactionTimeoutError includes txId and timeout', () => {
-    const err = new TransactionTimeoutError('at1xyz', 300_000)
+    const err = new TransactionTimeoutError({ transactionId: 'at1xyz', timeoutMs: 300_000 })
     expect(err.name).toBe('TransactionTimeoutError')
     expect(err.transactionId).toBe('at1xyz')
     expect(err.timeoutMs).toBe(300_000)
@@ -221,7 +238,7 @@ describe('typed transaction errors', () => {
   })
 
   it('ProvingError includes statusCode', () => {
-    const err = new ProvingError('WASM out of memory', 500)
+    const err = new ProvingError({ message: 'WASM out of memory', statusCode: 500 })
     expect(err.name).toBe('ProvingError')
     expect(err.statusCode).toBe(500)
     expect(err.message).toContain('WASM out of memory')
@@ -253,16 +270,22 @@ describe('classifyBroadcastError', () => {
     expect(err.cause).toBe(raw)
   })
 
-  it('classifies "duplicate Output ID" as RecordAlreadyUsedError', () => {
+  it('classifies "duplicate Output ID" as OutputIdCollisionError', () => {
     const raw = new Error('Found a duplicate Output ID in the transaction')
     const err = classifyBroadcastError(raw)
-    expect(err).toBeInstanceOf(RecordAlreadyUsedError)
+    expect(err).toBeInstanceOf(OutputIdCollisionError)
   })
 
-  it('classifies "duplicate serial_number" as RecordAlreadyUsedError', () => {
+  it('classifies "duplicate serial_number" as RecordSpentError', () => {
     const raw = new Error('Found a duplicate serial_number in the transaction')
     const err = classifyBroadcastError(raw)
-    expect(err).toBeInstanceOf(RecordAlreadyUsedError)
+    expect(err).toBeInstanceOf(RecordSpentError)
+  })
+
+  it('classifies "duplicate commitment" as OutputIdCollisionError', () => {
+    const raw = new Error('Found a duplicate commitment in the transaction')
+    const err = classifyBroadcastError(raw)
+    expect(err).toBeInstanceOf(OutputIdCollisionError)
   })
 
   it('classifies "Invalid transaction" as InvalidTransactionError', () => {

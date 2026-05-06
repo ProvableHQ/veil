@@ -33,6 +33,7 @@ import {
   TransactionTimeoutError,
   FinalizeRevertError,
   ProvingError,
+  ConfigurationError,
   classifyBroadcastError,
   classifyProvingError,
 } from '@veil/core'
@@ -367,6 +368,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           const pollingClient = new AleoNetworkClient(networkUrl)
           const timeout = options.confirmationTimeout ?? 300_000
           const startTime = Date.now()
+          let lastError: unknown
           while (Date.now() - startTime < timeout) {
             try {
               const confirmed = await pollingClient.getConfirmedTransaction(txId)
@@ -378,15 +380,15 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               }
             } catch (e) {
               if (e instanceof FinalizeRevertError) throw e
-              // Transaction not found yet, continue polling
+              lastError = e  // capture for timeout cause
             }
             await new Promise((resolve) => setTimeout(resolve, 5_000))
           }
-          throw new TransactionTimeoutError(txId, timeout)
+          throw new TransactionTimeoutError({ transactionId: txId, timeoutMs: timeout, cause: lastError as Error | undefined })
         }
 
         if (options.mode === 'delegated') {
-          if (!options.proverUrl) throw new ProvingError('Delegated execution requires proverUrl')
+          if (!options.proverUrl) throw new ConfigurationError('Delegated execution requires proverUrl. Pass proverUrl to createProvingConfig or createAleoClient.')
 
           let response: any
           try {
@@ -414,7 +416,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           }
 
           const txId = response.transaction?.id
-          if (!txId) throw new ProvingError('DPS response did not contain a transaction ID')
+          if (!txId) throw new ConfigurationError('DPS response did not contain a transaction ID — check prover service configuration.')
 
           const confirmedTx = await waitForConfirmation(txId)
           return { transactionId: txId, outputs: extractOutputs(confirmedTx) }
@@ -433,7 +435,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             })
           } catch (e) {
             if (e instanceof BaseError) throw e
-            throw new ProvingError(e instanceof Error ? e.message : String(e), undefined, { cause: e as Error })
+            throw new ProvingError({ message: e instanceof Error ? e.message : String(e), cause: e as Error })
           }
 
           let txId: string
