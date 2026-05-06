@@ -227,6 +227,15 @@ describe('typed transaction errors', () => {
     expect(err).toBeInstanceOf(BaseError)
   })
 
+  it('TransactionTimeoutError preserves cause chain', () => {
+    const cause = new Error('network unreachable')
+    const err = new TransactionTimeoutError({ transactionId: 'at1test', timeoutMs: 5000, cause })
+    expect(err.cause).toBe(cause)
+    expect(err.transactionId).toBe('at1test')
+    expect(err.timeoutMs).toBe(5000)
+    expect(err.message).toContain('5s')
+  })
+
   it('FinalizeRevertError includes txId', () => {
     const err = new FinalizeRevertError('at1def')
     expect(err.name).toBe('FinalizeRevertError')

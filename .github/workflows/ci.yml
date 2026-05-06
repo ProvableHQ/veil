@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - types
+
+jobs:
+  # ── Unit tests ────────────────────────────────────────────────────────
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm vitest run
+
+  # ── Devnet integration tests ──────────────────────────────────────────
+  devnet:
+    name: Devnet integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # Install Leo CLI (cached via Swatinem/rust-cache)
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Install Leo CLI
+        run: cargo install leo-lang --version 4.0.2
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run devnet tests
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          RUN_DEVNET=true pnpm vitest run packages/provable/test/devnet.test.ts
+        timeout-minutes: 10
+
+      - name: Cleanup devnode
+        if: always()
+        run: pkill -f "leo devnode" || true
