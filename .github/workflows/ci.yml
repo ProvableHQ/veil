@@ -47,7 +47,11 @@ jobs:
           cache-on-failure: true
 
       - name: Install aleo-devnode
-        run: cargo install --git https://github.com/ProvableHQ/aleo-devnode.git
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+        run: |
+          git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
+          cargo install --git https://github.com/ProvableHQ/aleo-devnode.git
 
       - run: pnpm install --frozen-lockfile
 
