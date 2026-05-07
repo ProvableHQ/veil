@@ -17,6 +17,9 @@ import { loadNetwork, type AleoSdk } from '../src/index.js'
 import {
   ConfigurationError,
   InvalidTransactionError,
+  DuplicateTransactionError,
+  RecordSpentError,
+  FinalizeRevertError,
   classifyBroadcastError,
 } from '@veil/core'
 
@@ -163,6 +166,139 @@ describe.skipIf(!shouldRun || !isLeoInstalled())('devnet integration', () => {
     const classified = classifyBroadcastError(new Error(text))
     expect(classified).toBeInstanceOf(InvalidTransactionError)
   })
+
+  it('duplicate transaction submission classifies as DuplicateTransactionError', async () => {
+    // Build a transaction, submit it, then submit the same raw transaction again
+    const account = aleo.privateKeyToAccount(DEVNODE_KEY)
+    const networkClient = aleo.createNetworkClient(DEVNODE_URL)
+    const pm = new (await import('@provablehq/sdk')).ProgramManager(DEVNODE_URL)
+    pm.setAccount(new (await import('@provablehq/sdk')).Account({ privateKey: DEVNODE_KEY }))
+
+    const tx = await pm.buildExecutionTransaction({
+      programName: 'credits.aleo',
+      functionName: 'transfer_public',
+      inputs: [account.address, '1u64'],
+      priorityFee: 0,
+      privateFee: false,
+    })
+
+    const txString = tx.toString()
+
+    // First submission — should succeed
+    networkClient.setVerboseErrors(false)
+    const txId = await networkClient.submitTransaction(txString)
+    expect(txId).toMatch(/^at1/)
+
+    // Wait for confirmation so it's on-chain
+    await new Promise((r) => setTimeout(r, 2_000))
+
+    // Second submission of the same transaction — should fail
+    try {
+      await networkClient.submitTransaction(txString)
+      expect.fail('Should have thrown for duplicate transaction')
+    } catch (e) {
+      const classified = classifyBroadcastError(e, txId)
+      expect(classified).toBeInstanceOf(DuplicateTransactionError)
+    }
+  }, 120_000)
+
+  it('double-spend of private record classifies as RecordSpentError', async () => {
+    const account = aleo.privateKeyToAccount(DEVNODE_KEY)
+    const sdk = await import('@provablehq/sdk')
+    const networkClient = aleo.createNetworkClient(DEVNODE_URL)
+    networkClient.setVerboseErrors(false)
+
+    const pm = new sdk.ProgramManager(DEVNODE_URL)
+    const sdkAccount = new sdk.Account({ privateKey: DEVNODE_KEY })
+    pm.setAccount(sdkAccount)
+
+    // Step 1: transfer_public_to_private to create a private credits record
+    const createRecordTx = await pm.buildDevnodeExecutionTransaction({
+      programName: 'credits.aleo',
+      functionName: 'transfer_public_to_private',
+      inputs: [account.address, '1000u64'],
+      priorityFee: 0,
+      privateFee: false,
+    })
+    await networkClient.submitTransaction(createRecordTx)
+    await new Promise((r) => setTimeout(r, 2_000))
+
+    // Step 2: Find the record we just created by scanning the transaction outputs
+    // The record is the first output of the transition (a credits.record)
+    const txId = createRecordTx.id()
+    const confirmedTx = await networkClient.getTransaction(txId)
+    const transition = confirmedTx?.execution?.transitions?.[0]
+    const recordOutput = transition?.outputs?.find((o: any) => o.type === 'record')
+    expect(recordOutput).toBeDefined()
+
+    // Decrypt the record
+    const recordCiphertext = sdk.RecordCiphertext.fromString(recordOutput.value)
+    const viewKey = sdk.ViewKey.from_string(account.viewKey)
+    expect(recordCiphertext.isOwner(viewKey)).toBe(true)
+    const recordPlaintext = recordCiphertext.decrypt(viewKey)
+
+    // Step 3: Spend the record via transfer_private
+    const spendTx = await pm.buildDevnodeExecutionTransaction({
+      programName: 'credits.aleo',
+      functionName: 'transfer_private',
+      inputs: [recordPlaintext.toString(), account.address, '500u64'],
+      priorityFee: 0,
+      privateFee: false,
+    })
+    await networkClient.submitTransaction(spendTx)
+    await new Promise((r) => setTimeout(r, 2_000))
+
+    // Step 4: Try to spend the SAME record again — should fail with duplicate serial number
+    try {
+      const doubleSpendTx = await pm.buildDevnodeExecutionTransaction({
+        programName: 'credits.aleo',
+        functionName: 'transfer_private',
+        inputs: [recordPlaintext.toString(), account.address, '400u64'],
+        priorityFee: 0,
+        privateFee: false,
+      })
+      await networkClient.submitTransaction(doubleSpendTx)
+      expect.fail('Should have thrown for double-spend')
+    } catch (e) {
+      const classified = classifyBroadcastError(e)
+      expect(classified).toBeInstanceOf(RecordSpentError)
+    }
+  }, 180_000)
+
+  it('finalize revert produces rejected transaction', async () => {
+    // Trigger a finalize revert using credits.aleo transfer_public with an
+    // amount exceeding the balance. The execution proof passes (it's just
+    // arithmetic), but the finalize block does `get account[sender] → sub`
+    // which underflows and reverts.
+    const account = aleo.privateKeyToAccount(DEVNODE_KEY)
+    const sdk = await import('@provablehq/sdk')
+    const networkClient = aleo.createNetworkClient(DEVNODE_URL)
+    networkClient.setVerboseErrors(false)
+
+    const pm = new sdk.ProgramManager(DEVNODE_URL)
+    pm.setAccount(new sdk.Account({ privateKey: DEVNODE_KEY }))
+
+    // Transfer an impossibly large amount — more than any account could have
+    const tx = await pm.buildDevnodeExecutionTransaction({
+      programName: 'credits.aleo',
+      functionName: 'transfer_public',
+      inputs: [account.address, '18446744073709551615u64'], // u64::MAX
+      priorityFee: 0,
+      privateFee: false,
+    })
+    const txId = await networkClient.submitTransaction(tx)
+    await new Promise((r) => setTimeout(r, 2_000))
+
+    // Check the confirmed transaction — finalize should have reverted
+    const confirmed = await networkClient.getConfirmedTransaction(txId)
+    expect(confirmed).toBeDefined()
+    expect(confirmed.status).toBe('rejected')
+  }, 120_000)
+
+  // Note: OutputIdCollisionError is not tested here — it requires crafting a
+  // transaction with duplicate output IDs, which the SDK prevents through normal
+  // APIs. This is a program-level bug scenario, not triggerable through standard
+  // transaction flow. Validated via unit tests against known message patterns.
 
   it('ConfigurationError thrown for missing proverUrl in delegated mode', async () => {
     const account = aleo.privateKeyToAccount(DEVNODE_KEY)

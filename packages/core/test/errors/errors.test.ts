@@ -279,16 +279,22 @@ describe('classifyBroadcastError', () => {
     expect(err.cause).toBe(raw)
   })
 
+  it('classifies "input ID already exists" as RecordSpentError (double-spend)', () => {
+    const raw = new Error("The input ID '123field' already exists in the ledger")
+    const err = classifyBroadcastError(raw)
+    expect(err).toBeInstanceOf(RecordSpentError)
+  })
+
+  it('classifies "serial_number already exists" as RecordSpentError', () => {
+    const raw = new Error("The serial_number already exists in the ledger")
+    const err = classifyBroadcastError(raw)
+    expect(err).toBeInstanceOf(RecordSpentError)
+  })
+
   it('classifies "duplicate Output ID" as OutputIdCollisionError', () => {
     const raw = new Error('Found a duplicate Output ID in the transaction')
     const err = classifyBroadcastError(raw)
     expect(err).toBeInstanceOf(OutputIdCollisionError)
-  })
-
-  it('classifies "duplicate serial_number" as RecordSpentError', () => {
-    const raw = new Error('Found a duplicate serial_number in the transaction')
-    const err = classifyBroadcastError(raw)
-    expect(err).toBeInstanceOf(RecordSpentError)
   })
 
   it('classifies "duplicate commitment" as OutputIdCollisionError', () => {
