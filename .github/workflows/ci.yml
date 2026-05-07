@@ -38,7 +38,6 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # Install Leo CLI (cached via Swatinem/rust-cache)
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -47,8 +46,8 @@ jobs:
         with:
           cache-on-failure: true
 
-      - name: Install Leo CLI
-        run: cargo install leo-lang --version 4.0.2
+      - name: Install aleo-devnode
+        run: cargo install --git https://github.com/ProvableHQ/aleo-devnode.git
 
       - run: pnpm install --frozen-lockfile
 
@@ -60,4 +59,4 @@ jobs:
 
       - name: Cleanup devnode
         if: always()
-        run: pkill -f "leo devnode" || true
+        run: pkill -f "aleo-devnode" || true

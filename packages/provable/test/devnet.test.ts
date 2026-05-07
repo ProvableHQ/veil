@@ -1,8 +1,8 @@
 /**
- * Devnet integration tests — spawns a local Leo devnode for fast,
+ * Devnet integration tests — spawns a local aleo-devnode for fast,
  * deterministic testing without hitting a live network.
  *
- * Requires: `leo` CLI installed (v4.0.0+)
+ * Requires: `aleo-devnode` binary (https://github.com/ProvableHQ/aleo-devnode)
  * Run with: RUN_DEVNET=true pnpm vitest run packages/provable/test/devnet.test.ts
  *
  * The devnode:
@@ -27,7 +27,6 @@ import {
   InvalidTransactionError,
   DuplicateTransactionError,
   RecordSpentError,
-  FinalizeRevertError,
   classifyBroadcastError,
   parseProgram,
 } from '@veil/core'
@@ -59,9 +58,9 @@ const HELLO_PROGRAM = [
 
 // ── Harness ──────────────────────────────────────────────────────────
 
-function isLeoInstalled(): boolean {
+function isDevnodeInstalled(): boolean {
   try {
-    execSync('leo --version', { stdio: 'pipe' })
+    execSync('aleo-devnode --help', { stdio: 'pipe' })
     return true
   } catch {
     return false
@@ -95,28 +94,32 @@ async function waitForDevnode(url: string, timeoutMs: number): Promise<void> {
 
 let devnode: ChildProcess | undefined
 let aleo: AleoSdk
+let sdk: typeof import('@provablehq/sdk')
+let account: ReturnType<AleoSdk['privateKeyToAccount']>
 
-describe.skipIf(!shouldRun || !isLeoInstalled())('devnet integration', () => {
+describe.skipIf(!shouldRun || !isDevnodeInstalled())('devnet integration', () => {
   beforeAll(async () => {
     // Align the SDK's consensus height table with the devnode's test heights.
     // Must be called BEFORE any other SDK operation (OnceLock-based).
-    const sdk = await import('@provablehq/sdk')
+    sdk = await import('@provablehq/sdk')
     sdk.getOrInitConsensusVersionTestHeights()
 
-    devnode = spawn('leo', [
-      'devnode', 'start',
+    devnode = spawn('aleo-devnode', [
+      'start',
       '--private-key', DEVNODE_KEY,
-      '--network', 'testnet',
       '--socket-addr', `127.0.0.1:${DEVNODE_PORT}`,
-      '-q',
+      '-v', '0',
     ], { stdio: 'ignore', detached: false })
 
     await waitForDevnode(DEVNODE_URL, STARTUP_TIMEOUT_MS)
     aleo = await loadNetwork('testnet')
+    account = aleo.privateKeyToAccount(DEVNODE_KEY)
   }, STARTUP_TIMEOUT_MS + 5_000)
 
-  afterAll(() => {
+  afterAll(async () => {
     if (devnode) {
+      // Graceful shutdown via REST, fallback to SIGTERM
+      try { await fetch(`${DEVNODE_URL}/testnet/shutdown`, { method: 'POST' }) } catch {}
       devnode.kill('SIGTERM')
       devnode = undefined
     }
@@ -153,7 +156,6 @@ describe.skipIf(!shouldRun || !isLeoInstalled())('devnet integration', () => {
   // ── Execute ────────────────────────────────────────────────────────
 
   it('execute confirms on devnode', async () => {
-    const account = aleo.privateKeyToAccount(DEVNODE_KEY)
     const { walletClient } = aleo.createAleoClient({
       privateKey: DEVNODE_KEY,
       networkUrl: DEVNODE_URL,
@@ -217,9 +219,7 @@ describe.skipIf(!shouldRun || !isLeoInstalled())('devnet integration', () => {
   // ── Deploy ─────────────────────────────────────────────────────────
 
   it('deploy custom program to devnode', async () => {
-    const sdk = await import('@provablehq/sdk')
     const networkClient = aleo.createNetworkClient(DEVNODE_URL)
-
     const pm = new sdk.ProgramManager(DEVNODE_URL)
     pm.setAccount(new sdk.Account({ privateKey: DEVNODE_KEY }))
 
@@ -271,9 +271,7 @@ describe.skipIf(!shouldRun || !isLeoInstalled())('devnet integration', () => {
   // ── Codegen pipeline: deploy → getContract → simulate ──────────────
 
   it('deploy loyalty program and simulate mint_card via getContract', async () => {
-    const sdk = await import('@provablehq/sdk')
     const networkClient = aleo.createNetworkClient(DEVNODE_URL)
-
     const pm = new sdk.ProgramManager(DEVNODE_URL)
     pm.setAccount(new sdk.Account({ privateKey: DEVNODE_KEY }))
 
@@ -306,8 +304,6 @@ describe.skipIf(!shouldRun || !isLeoInstalled())('devnet integration', () => {
     expect(fnNames).toContain('add_points')
     expect(fnNames).toContain('spend_points')
 
-    // Simulate mint_card via walletClient
-    const account = aleo.privateKeyToAccount(DEVNODE_KEY)
     const result = await walletClient.simulateContract({
       program: 'loyalty_token.aleo',
       function: 'mint_card',
@@ -344,11 +340,9 @@ describe.skipIf(!shouldRun || !isLeoInstalled())('devnet integration', () => {
   })
 
   it('duplicate transaction submission classifies as DuplicateTransactionError', async () => {
-    // Build a transaction, submit it, then submit the same raw transaction again
-    const account = aleo.privateKeyToAccount(DEVNODE_KEY)
     const networkClient = aleo.createNetworkClient(DEVNODE_URL)
-    const pm = new (await import('@provablehq/sdk')).ProgramManager(DEVNODE_URL)
-    pm.setAccount(new (await import('@provablehq/sdk')).Account({ privateKey: DEVNODE_KEY }))
+    const pm = new sdk.ProgramManager(DEVNODE_URL)
+    pm.setAccount(new sdk.Account({ privateKey: DEVNODE_KEY }))
 
     const tx = await pm.buildExecutionTransaction({
       programName: 'credits.aleo',
@@ -379,14 +373,10 @@ describe.skipIf(!shouldRun || !isLeoInstalled())('devnet integration', () => {
   }, 120_000)
 
   it('double-spend of private record classifies as RecordSpentError', async () => {
-    const account = aleo.privateKeyToAccount(DEVNODE_KEY)
-    const sdk = await import('@provablehq/sdk')
     const networkClient = aleo.createNetworkClient(DEVNODE_URL)
     networkClient.setVerboseErrors(false)
-
     const pm = new sdk.ProgramManager(DEVNODE_URL)
-    const sdkAccount = new sdk.Account({ privateKey: DEVNODE_KEY })
-    pm.setAccount(sdkAccount)
+    pm.setAccount(new sdk.Account({ privateKey: DEVNODE_KEY }))
 
     // Step 1: transfer_public_to_private to create a private credits record
     const createRecordTx = await pm.buildDevnodeExecutionTransaction({
@@ -442,15 +432,10 @@ describe.skipIf(!shouldRun || !isLeoInstalled())('devnet integration', () => {
   }, 180_000)
 
   it('finalize revert produces rejected transaction', async () => {
-    // Trigger a finalize revert using credits.aleo transfer_public with an
-    // amount exceeding the balance. The execution proof passes (it's just
-    // arithmetic), but the finalize block does `get account[sender] → sub`
-    // which underflows and reverts.
-    const account = aleo.privateKeyToAccount(DEVNODE_KEY)
-    const sdk = await import('@provablehq/sdk')
+    // The execution proof passes (just arithmetic), but the finalize block
+    // does `get account[sender] → sub` which underflows and reverts.
     const networkClient = aleo.createNetworkClient(DEVNODE_URL)
     networkClient.setVerboseErrors(false)
-
     const pm = new sdk.ProgramManager(DEVNODE_URL)
     pm.setAccount(new sdk.Account({ privateKey: DEVNODE_KEY }))
 
@@ -477,7 +462,6 @@ describe.skipIf(!shouldRun || !isLeoInstalled())('devnet integration', () => {
   // transaction flow. Validated via unit tests against known message patterns.
 
   it('ConfigurationError thrown for missing proverUrl in delegated mode', async () => {
-    const account = aleo.privateKeyToAccount(DEVNODE_KEY)
     const config = aleo.createProvingConfig({
       mode: 'delegated',
       networkUrl: DEVNODE_URL,
