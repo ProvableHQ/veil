@@ -10,9 +10,17 @@
  * - Has instant block finality (automine)
  * - Skips proof verification for speed
  * - Self-contained — no external dependencies
+ *
+ * Important: The devnode uses TEST_CONSENSUS_VERSION_HEIGHTS (V9 at height 12,
+ * V14 at height 17) but the SDK WASM defaults to real testnet heights (V9 at
+ * ~9.8M). We call getOrInitConsensusVersionTestHeights() before any SDK
+ * operations to align the height tables, enabling deployments and other
+ * consensus-version-dependent operations.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { spawn, execSync, type ChildProcess } from 'child_process'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import { loadNetwork, type AleoSdk } from '../src/index.js'
 import {
   ConfigurationError,
@@ -21,6 +29,7 @@ import {
   RecordSpentError,
   FinalizeRevertError,
   classifyBroadcastError,
+  parseProgram,
 } from '@veil/core'
 
 // ── Configuration ────────────────────────────────────────────────────
@@ -30,8 +39,23 @@ const DEVNODE_PORT = 3031 + Math.floor(Math.random() * 100)
 const DEVNODE_URL = `http://127.0.0.1:${DEVNODE_PORT}`
 const STARTUP_TIMEOUT_MS = 15_000
 const POLL_INTERVAL_MS = 200
+// The devnode auto-advances to this height on startup (TEST_CONSENSUS_VERSION_HEIGHTS last entry)
+const DEVNODE_TARGET_HEIGHT = 17
 
 const shouldRun = process.env.RUN_DEVNET === 'true'
+
+const HELLO_PROGRAM = [
+  'program hello_deploy_test.aleo;',
+  '',
+  'constructor:',
+  '    assert.eq true true;',
+  '',
+  'function hello:',
+  '    input r0 as u32.public;',
+  '    input r1 as u32.private;',
+  '    add r0 r1 into r2;',
+  '    output r2 as u32.private;',
+].join('\n')
 
 // ── Harness ──────────────────────────────────────────────────────────
 
@@ -44,18 +68,27 @@ function isLeoInstalled(): boolean {
   }
 }
 
+/**
+ * Wait for the devnode to be ready AND to finish advancing to the latest
+ * consensus version. The devnode auto-creates empty blocks to reach the
+ * target height after the REST API starts, so we poll until the height
+ * reaches the expected value.
+ */
 async function waitForDevnode(url: string, timeoutMs: number): Promise<void> {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
     try {
       const res = await fetch(`${url}/testnet/block/height/latest`)
-      if (res.ok) return
+      if (res.ok) {
+        const height = Number(await res.text())
+        if (height >= DEVNODE_TARGET_HEIGHT) return
+      }
     } catch {
       // Not ready yet
     }
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
   }
-  throw new Error(`Devnode at ${url} did not become ready within ${timeoutMs}ms`)
+  throw new Error(`Devnode at ${url} did not reach height ${DEVNODE_TARGET_HEIGHT} within ${timeoutMs}ms`)
 }
 
 // ── Tests ────────────────────────────────────────────────────────────
@@ -65,6 +98,11 @@ let aleo: AleoSdk
 
 describe.skipIf(!shouldRun || !isLeoInstalled())('devnet integration', () => {
   beforeAll(async () => {
+    // Align the SDK's consensus height table with the devnode's test heights.
+    // Must be called BEFORE any other SDK operation (OnceLock-based).
+    const sdk = await import('@provablehq/sdk')
+    sdk.getOrInitConsensusVersionTestHeights()
+
     devnode = spawn('leo', [
       'devnode', 'start',
       '--private-key', DEVNODE_KEY,
@@ -94,20 +132,18 @@ describe.skipIf(!shouldRun || !isLeoInstalled())('devnet integration', () => {
 
   // ── Simulate ───────────────────────────────────────────────────────
 
-  it('simulate runs program locally against devnode', async () => {
-    const config = aleo.createProvingConfig({
-      mode: 'local',
+  it('simulate runs program locally', async () => {
+    const { walletClient } = aleo.createAleoClient({
+      privateKey: DEVNODE_KEY,
       networkUrl: DEVNODE_URL,
-      account: aleo.privateKeyToAccount(DEVNODE_KEY),
+      provingMode: 'local',
     })
 
-    const HELLO = `program hello_devnet_test.aleo;\n\nfunction hello:\n    input r0 as u32.public;\n    input r1 as u32.private;\n    add r0 r1 into r2;\n    output r2 as u32.private;`
-
-    const result = await config.simulate!({
-      programName: 'hello_devnet_test.aleo',
-      functionName: 'hello',
+    const result = await walletClient.simulateContract({
+      program: 'hello_deploy_test.aleo',
+      function: 'hello',
       inputs: ['5u32', '3u32'],
-      programSource: HELLO,
+      programSource: HELLO_PROGRAM,
     })
 
     expect(result.outputs).toHaveLength(1)
@@ -116,7 +152,7 @@ describe.skipIf(!shouldRun || !isLeoInstalled())('devnet integration', () => {
 
   // ── Execute ────────────────────────────────────────────────────────
 
-  it('execute with instant devnode confirmation', async () => {
+  it('execute confirms on devnode', async () => {
     const account = aleo.privateKeyToAccount(DEVNODE_KEY)
     const { walletClient } = aleo.createAleoClient({
       privateKey: DEVNODE_KEY,
@@ -134,7 +170,7 @@ describe.skipIf(!shouldRun || !isLeoInstalled())('devnet integration', () => {
     expect(result.outputs).toBeDefined()
   }, 120_000)
 
-  // ── fetchAbi end-to-end ────────────────────────────────────────────
+  // ── getCode + parseProgram ────────────────────────────────────────
 
   it('getCode fetches program source from devnode', async () => {
     const { publicClient } = aleo.createAleoClient({
@@ -142,11 +178,151 @@ describe.skipIf(!shouldRun || !isLeoInstalled())('devnet integration', () => {
       networkUrl: DEVNODE_URL,
     })
 
-    // credits.aleo is always on the devnode genesis
     const source = await publicClient.getCode({ programId: 'credits.aleo' })
     expect(source).toContain('program credits.aleo')
     expect(source).toContain('function transfer_public')
   }, 30_000)
+
+  it('parseProgram extracts correct structure from fetched source', async () => {
+    const { publicClient } = aleo.createAleoClient({
+      privateKey: DEVNODE_KEY,
+      networkUrl: DEVNODE_URL,
+    })
+
+    const source = await publicClient.getCode({ programId: 'credits.aleo' })
+    const program = parseProgram(source)
+
+    expect(program.id).toBe('credits.aleo')
+
+    // credits.aleo has transfer_public, transfer_private, etc.
+    const fnNames = program.functions.map((f) => f.name)
+    expect(fnNames).toContain('transfer_public')
+    expect(fnNames).toContain('transfer_private')
+
+    // transfer_public takes (address, u64) and has a finalize block
+    const transferPublic = program.functions.find((f) => f.name === 'transfer_public')!
+    expect(transferPublic.inputs).toHaveLength(2)
+    expect(transferPublic.inputs[0]!.type).toBe('address')
+    expect(transferPublic.inputs[1]!.type).toBe('u64')
+    expect(transferPublic.hasFinalize).toBe(true)
+
+    // credits.aleo has the "account" mapping
+    const mappingNames = program.mappings.map((m) => m.name)
+    expect(mappingNames).toContain('account')
+    const accountMapping = program.mappings.find((m) => m.name === 'account')!
+    expect(accountMapping.keyType).toBe('address')
+    expect(accountMapping.valueType).toBe('u64')
+  }, 30_000)
+
+  // ── Deploy ─────────────────────────────────────────────────────────
+
+  it('deploy custom program to devnode', async () => {
+    const sdk = await import('@provablehq/sdk')
+    const networkClient = aleo.createNetworkClient(DEVNODE_URL)
+
+    const pm = new sdk.ProgramManager(DEVNODE_URL)
+    pm.setAccount(new sdk.Account({ privateKey: DEVNODE_KEY }))
+
+    const tx = await pm.buildDevnodeDeploymentTransaction({
+      program: HELLO_PROGRAM,
+      priorityFee: 0,
+      privateFee: false,
+    })
+
+    const txId = await networkClient.submitTransaction(tx)
+    expect(txId).toMatch(/^at1/)
+    await new Promise((r) => setTimeout(r, 2_000))
+
+    const source = await networkClient.getProgram('hello_deploy_test.aleo')
+    expect(source).toContain('program hello_deploy_test.aleo')
+    expect(source).toContain('function hello')
+  }, 120_000)
+
+  // ── Simulate vs execute consistency ────────────────────────────────
+
+  it('simulate predicts execute output', async () => {
+    // Depends on hello_deploy_test.aleo being deployed above
+    const { walletClient } = aleo.createAleoClient({
+      privateKey: DEVNODE_KEY,
+      networkUrl: DEVNODE_URL,
+      provingMode: 'local',
+    })
+
+    const simResult = await walletClient.simulateContract({
+      program: 'hello_deploy_test.aleo',
+      function: 'hello',
+      inputs: ['5u32', '3u32'],
+      programSource: HELLO_PROGRAM,
+    })
+
+    const execResult = await walletClient.executeTransaction({
+      program: 'hello_deploy_test.aleo',
+      function: 'hello',
+      inputs: ['5u32', '3u32'],
+    })
+
+    // Simulate returns plaintext; execute returns encrypted ciphertext
+    // for private outputs. Both should produce the same number of outputs.
+    expect(simResult.outputs[0]).toBe('8u32')
+    expect(simResult.outputs).toHaveLength(execResult.outputs.length)
+    expect(execResult.transactionId).toMatch(/^at1/)
+  }, 120_000)
+
+  // ── Codegen pipeline: deploy → getContract → simulate ──────────────
+
+  it('deploy loyalty program and simulate mint_card via getContract', async () => {
+    const sdk = await import('@provablehq/sdk')
+    const networkClient = aleo.createNetworkClient(DEVNODE_URL)
+
+    const pm = new sdk.ProgramManager(DEVNODE_URL)
+    pm.setAccount(new sdk.Account({ privateKey: DEVNODE_KEY }))
+
+    // Deploy loyalty_token.aleo
+    const loyaltySource = readFileSync(
+      resolve(__dirname, '../../../apps/loyalty-node/loyalty_token/build/main.aleo'),
+      'utf-8',
+    )
+    const tx = await pm.buildDevnodeDeploymentTransaction({
+      program: loyaltySource,
+      priorityFee: 0,
+      privateFee: false,
+    })
+    const txId = await networkClient.submitTransaction(tx)
+    expect(txId).toMatch(/^at1/)
+    await new Promise((r) => setTimeout(r, 2_000))
+
+    // Fetch the deployed source and parse it into an ABI
+    const { publicClient, walletClient } = aleo.createAleoClient({
+      privateKey: DEVNODE_KEY,
+      networkUrl: DEVNODE_URL,
+      provingMode: 'local',
+    })
+    const fetchedSource = await publicClient.getCode({ programId: 'loyalty_token.aleo' })
+    const program = parseProgram(fetchedSource)
+
+    // Verify parseProgram found the right functions
+    const fnNames = program.functions.map((f) => f.name)
+    expect(fnNames).toContain('mint_card')
+    expect(fnNames).toContain('add_points')
+    expect(fnNames).toContain('spend_points')
+
+    // Simulate mint_card via walletClient
+    const account = aleo.privateKeyToAccount(DEVNODE_KEY)
+    const result = await walletClient.simulateContract({
+      program: 'loyalty_token.aleo',
+      function: 'mint_card',
+      inputs: [account.address, '500u64', '1field'],
+      programSource: fetchedSource,
+    })
+
+    // mint_card outputs: [LoyaltyCard record plaintext, future]
+    expect(result.outputs.length).toBeGreaterThanOrEqual(1)
+    const cardOutput = result.outputs[0]!
+    // Record plaintext contains the field values
+    expect(cardOutput).toContain('owner')
+    expect(cardOutput).toContain('points')
+    expect(cardOutput).toContain('500u64')
+  }, 180_000)
 
   // ── Error classifier validation against real SnarkOS ───────────────
   // These tests submit known-bad transactions and verify that Veil's
