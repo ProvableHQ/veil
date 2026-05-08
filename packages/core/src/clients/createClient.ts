@@ -31,7 +31,6 @@ export function createClient(config: ClientConfig): Client {
     key = 'base',
     name = 'Client',
     proving,
-    recordProvider,
     transport,
   } = config
 
