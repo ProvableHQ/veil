@@ -17,7 +17,6 @@ export type Client = {
   key: string
   name: string
   proving: ProvingConfig | undefined
-  recordProvider: RecordProvider | undefined
   request: Transport['request']
   transport: Transport
   uid: string
