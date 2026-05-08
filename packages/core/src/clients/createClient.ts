@@ -41,7 +41,6 @@ export function createClient(config: ClientConfig): Client {
     key,
     name,
     proving,
-    recordProvider,
     request: transport.request,
     transport,
     uid,
