@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import type { Client } from '@veil/core'
 
 /** The well-known seeded private key used by Aleo Devnode */
 export const DEVNODE_PRIVATE_KEY = 'APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH'
@@ -183,6 +184,40 @@ async function spawnDevnode(
         proc.kill('SIGTERM')
         proc.once('exit', () => resolve())
       }),
+  }
+}
+
+// =============================================================================
+// Test client decorator
+// =============================================================================
+
+export type DevnodeClientActions = {
+  startDevnode: (options?: DevnodeStartOptions) => Promise<DevnodeInstance>
+  advanceDevnode: (options?: DevnodeAdvanceOptions) => Promise<void>
+  restoreDevnode: (options: DevnodeRestoreOptions) => Promise<void>
+}
+
+/**
+ * Adds devnode management actions to a test client via `.extend`.
+ *
+ * @example
+ * ```ts
+ * import { createTestClient, http } from '@veil/core'
+ * import { devnodeActions } from '@veil/devnode'
+ *
+ * const client = createTestClient({ transport: http('http://127.0.0.1:3030', { network: 'testnet' }) })
+ *   .extend(devnodeActions)
+ *
+ * const devnode = await client.startDevnode()
+ * await client.advanceBlock({ count: 1 })
+ * await devnode.stop()
+ * ```
+ */
+export function devnodeActions(_client: Client): DevnodeClientActions {
+  return {
+    startDevnode: (options) => startDevnode(options),
+    advanceDevnode: (options) => advanceDevnode(options),
+    restoreDevnode: (options) => restoreDevnode(options),
   }
 }
 

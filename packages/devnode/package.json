@@ -15,5 +15,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
-  "files": ["dist"]
+  "files": ["dist"],
+  "peerDependencies": {
+    "@veil/core": "workspace:*"
+  }
 }

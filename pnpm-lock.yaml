@@ -61,7 +61,11 @@ importers:
         specifier: 0.3.0-alpha.4
         version: 0.3.0-alpha.4
 
-  packages/devnode: {}
+  packages/devnode:
+    dependencies:
+      '@veil/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/leo: {}
 
