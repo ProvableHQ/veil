@@ -9,7 +9,6 @@ export type ClientConfig = {
   key?: string | undefined
   name?: string | undefined
   proving?: ProvingConfig | undefined
-  recordProvider?: RecordProvider | undefined
   transport: Transport
 }
 
