@@ -81,7 +81,6 @@ export {
   BaseError,
   TransportError,
   AccountNotFoundError,
-  FeeRequiredError,
   ProvingNotConfiguredError,
   InvalidAddressError,
   ProgramNotFoundError,
