@@ -20,7 +20,7 @@ export type LocalWalletClientConfig = {
   transport: Transport
   proving: ProvingConfig
   /** Record provider for fetching records. Required if you need requestRecords with a local account. */
-  recordProvider?: RecordProvider | undefined
+  recordProvider?: RecordProvider
   key?: string | undefined
   name?: string | undefined
 }
