@@ -55,6 +55,7 @@ export class ProgramNotFoundError extends BaseError {
   }
 }
 
+
 export class InvalidInputError extends BaseError {
   constructor(functionName: string, expected: string, received: string) {
     super(

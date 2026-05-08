@@ -35,15 +35,10 @@ export async function deployContract(
   }
 
   if (account.type === 'local') {
-    // Local account — must build deployment transaction locally
-    if (!client.proving?.buildDeployment) {
-      throw new ProvingNotConfiguredError()
-    }
+    const { buildDeployment } = client.proving ?? {}
+    if (!buildDeployment) throw new ProvingNotConfiguredError()
 
-    const tx = await client.proving.buildDeployment({
-      program: params.program,
-      privateFee: params.privateFee,
-    })
+    const tx = await buildDeployment({ program: params.program, privateFee: params.privateFee })
 
     return client.request({
       method: 'sendTransaction',

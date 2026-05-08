@@ -21,6 +21,14 @@
  */
 
 import { loadNetwork as loadSdk } from '@provablehq/sdk/dynamic.js'
+import {
+  Account,
+  AleoKeyProvider,
+  ProgramManager,
+  getOrInitConsensusVersionTestHeights,
+} from '@provablehq/sdk'
+import { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR } from '@veil/devnode'
+export { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR }
 import type { LocalAccount } from '@veil/core'
 import type { ProvingConfig, BuildTransactionOptions, BuildDeploymentOptions } from '@veil/core'
 import type { OwnedRecord, RecordProvider, StandaloneRecordScanner, RequestRecordsParameters } from '@veil/core'
@@ -157,27 +165,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     RecordScanner,
   } = initialSdk
 
-  function privateKeyToAccount(privateKey: string): LocalAccount<'privateKey'> {
-    const sdkAccount = new Account({ privateKey })
 
-    const address = sdkAccount.address().to_string()
-    const viewKey = sdkAccount.viewKey().to_string()
-
-    const signFn = async (message: Uint8Array): Promise<Uint8Array> => {
-      const sig = sdkAccount.sign(message)
-      return new TextEncoder().encode(sig.to_string())
-    }
-
-    return {
-      type: 'local',
-      source: 'privateKey',
-      address,
-      privateKey,
-      viewKey,
-      sign: signFn,
-      signMessage: signFn,
-    }
-  }
 
   function mnemonicToAccount(
     mnemonic: string,
@@ -464,4 +452,107 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     createStandaloneScanner,
     createAleoClient,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Standalone exports — synchronous helpers and devnode client factory.
+// These use the statically-imported SDK (testnet binaries) so they work
+// without an awaited loadNetwork() call.
+// ---------------------------------------------------------------------------
+
+// Consensus version heights required by the WASM layer for devnode transactions.
+// All 14 versions are available from block 0 so devnode builds succeed without a live chain.
+const DEVNODE_CONSENSUS_HEIGHTS = '0,1,2,3,4,5,6,7,8,9,10,11,12,13'
+
+function privateKeyToAccount(privateKey: string): LocalAccount<'privateKey'> {
+  const sdkAccount = new Account({ privateKey })
+  const address = sdkAccount.address().to_string()
+  const viewKey = sdkAccount.viewKey().to_string()
+
+  const signFn = async (message: Uint8Array): Promise<Uint8Array> => {
+    const sig = sdkAccount.sign(message)
+    return new TextEncoder().encode(sig.to_string())
+  }
+
+  return {
+    type: 'local',
+    source: 'privateKey',
+    address,
+    privateKey,
+    viewKey,
+    sign: signFn,
+    signMessage: signFn,
+  }
+}
+
+/** Creates a new random Aleo account (uses static SDK binaries). */
+export function generateAccount(): LocalAccount<'privateKey'> {
+  const sdkAccount = new Account()
+  return privateKeyToAccount(sdkAccount.privateKey().to_string())
+}
+
+/**
+ * Creates a fully-wired client pair pointing at a local Aleo Devnode instance.
+ *
+ * Devnode is a lightweight local Aleo node (similar to Foundry's Anvil) that
+ * bypasses consensus and skips ZK proof generation, enabling rapid program iteration.
+ * The seeded account is pre-funded; both key and socket address can be overridden.
+ *
+ * @example
+ * ```ts
+ * // Zero-config — uses seeded key and localhost:3030
+ * const { publicClient, walletClient, account } = createDevnodeClient()
+ *
+ * // Custom key or socket address
+ * const { publicClient, walletClient, account } = createDevnodeClient({
+ *   privateKey: 'APrivateKey1...',
+ *   socketAddr: '127.0.0.1:4040',
+ * })
+ * ```
+ */
+export function createDevnodeClient(options?: {
+  privateKey?: string
+  /** Socket address of the devnode, e.g. "127.0.0.1:3030" */
+  socketAddr?: string
+}): { publicClient: PublicClient; walletClient: WalletClient; account: LocalAccount<'privateKey'> } {
+  const url = `http://${options?.socketAddr ?? DEVNODE_ADDR}`
+  const account = privateKeyToAccount(options?.privateKey ?? DEVNODE_PRIVATE_KEY)
+  const sdkAccount = new Account({ privateKey: account.privateKey })
+  const transport = http(url, { network: 'testnet' })
+
+  const keyProvider = new AleoKeyProvider()
+  keyProvider.useCache(true)
+
+  const proving: ProvingConfig = {
+    mode: 'devnode',
+    buildDeployment: async (deployOptions: BuildDeploymentOptions) => {
+      getOrInitConsensusVersionTestHeights(DEVNODE_CONSENSUS_HEIGHTS)
+      const programManager = new ProgramManager(url, keyProvider, undefined)
+      programManager.setAccount(sdkAccount)
+      const tx = await programManager.buildDevnodeDeploymentTransaction({
+        program: deployOptions.program,
+        priorityFee: 0,
+        privateFee: deployOptions.privateFee ?? false,
+      })
+      return JSON.parse(tx.toString())
+    },
+    buildTransaction: async (txOptions: BuildTransactionOptions) => {
+      getOrInitConsensusVersionTestHeights(DEVNODE_CONSENSUS_HEIGHTS)
+      const programManager = new ProgramManager(url, keyProvider, undefined)
+      programManager.setAccount(sdkAccount)
+      const tx = await programManager.buildDevnodeExecutionTransaction({
+        programName: txOptions.programName,
+        functionName: txOptions.functionName,
+        priorityFee: 0,
+        privateFee: txOptions.privateFee ?? false,
+        inputs: txOptions.inputs,
+      })
+      return JSON.parse(tx.toString())
+    },
+  }
+
+  const publicClient = createPublicClient({ transport })
+  const walletClient = createWalletClient({ account, transport, proving })
+
+  return { publicClient, walletClient, account }
 }

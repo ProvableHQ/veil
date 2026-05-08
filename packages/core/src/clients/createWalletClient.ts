@@ -14,7 +14,7 @@ export type RpcWalletClientConfig = {
   // No recordProvider — RPC wallets handle records via the wallet adapter
 }
 
-/** Config for local account — must provide proving config, optionally a record provider */
+/** Config for local account — must provide a proving config (use mode: 'devnode' for devnode clients) */
 export type LocalWalletClientConfig = {
   account: LocalAccount
   transport: Transport

@@ -109,8 +109,15 @@ export {
   type RpcWalletClientConfig,
   type LocalWalletClientConfig,
 } from './clients/createWalletClient.js'
+export { createTestClient, type TestClient, type TestClientConfig } from './clients/createTestClient.js'
 export type { PublicActions } from './clients/decorators/public.js'
 export type { WalletActions } from './clients/decorators/wallet.js'
+export type { TestActions } from './clients/decorators/test.js'
+
+// Test Actions (standalone)
+export { advanceBlock } from './actions/test/advanceBlock.js'
+export { shutdown } from './actions/test/shutdown.js'
+export { getMappingKeysValues } from './actions/test/getMappingKeysValues.js'
 
 // Accounts
 export { rpcAccount } from './accounts/rpcAccount.js'

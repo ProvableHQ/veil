@@ -1,5 +1,6 @@
 import type { AnyAccount } from '../types/account.js'
 import type { ProvingConfig } from '../types/proving.js'
+import type { RecordProvider } from '../types/records.js'
 import type { Transport } from '../types/transport.js'
 import { uid as createUid } from '../utils/uid.js'
 

@@ -1,6 +1,6 @@
 {
-  "name": "@veil/provable",
-  "version": "0.1.0",
+  "name": "@veil/devnode",
+  "version": "0.0.1",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,19 +12,11 @@
   },
   "scripts": {
     "build": "tsup",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "files": ["dist"],
-  "dependencies": {
-    "@noble/hashes": "^1.7.2",
-    "@provablehq/sdk": "^0.9.15",
-    "@scure/bip39": "^1.4.0"
-  },
   "peerDependencies": {
-    "@veil/core": "workspace:*",
-    "@veil/devnode": "workspace:*"
-  },
-  "devDependencies": {
-    "@veil/leo": "workspace:*"
+    "@veil/core": "workspace:*"
   }
 }

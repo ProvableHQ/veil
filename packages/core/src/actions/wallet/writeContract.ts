@@ -44,12 +44,12 @@ export async function writeContract(
   }
 
   if (account.type === 'local') {
-    // Local account — must prove locally, then broadcast the raw transaction
-    if (!client.proving?.buildTransaction) {
+    const buildTransaction = client.proving?.buildTransaction
+    if (!buildTransaction) {
       throw new ProvingNotConfiguredError()
     }
 
-    const tx = await client.proving.buildTransaction({
+    const tx = await buildTransaction({
       programName: params.program,
       functionName: params.function,
       inputs: params.inputs,

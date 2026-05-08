@@ -199,6 +199,14 @@ function buildUrl(
     case 'getTransactionsInMempool':
       return { url: `${base}/memoryPool/transactions`, httpMethod: 'GET' }
 
+    // --- Development (devnode only) ---
+    case 'advanceBlock':
+      return { url: `${base}/block/create`, httpMethod: 'POST', body: JSON.stringify({ count: (params as Record<string, unknown>)?.count ?? 1 }) }
+    case 'shutdown':
+      return { url: `${base}/shutdown`, httpMethod: 'POST' }
+    case 'getMappingKeysValues':
+      return { url: `${base}/program/${params?.programId}/mapping/${params?.mapping}?all=true`, httpMethod: 'GET' }
+
     default:
       throw new TransportError(`Unknown method: ${method}`)
   }
