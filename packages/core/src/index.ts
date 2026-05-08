@@ -118,7 +118,7 @@ export type { TestActions } from './clients/decorators/test.js'
 // Test Actions (standalone)
 export { advanceBlock } from './actions/test/advanceBlock.js'
 export { shutdown } from './actions/test/shutdown.js'
-export { getMappingContents } from './actions/test/getMappingContents.js'
+export { getMappingKeysValues } from './actions/test/getMappingKeysValues.js'
 
 // Accounts
 export { rpcAccount } from './accounts/rpcAccount.js'
