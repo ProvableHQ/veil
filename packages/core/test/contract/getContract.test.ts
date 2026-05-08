@@ -138,13 +138,12 @@ describe('getContract', () => {
       client: mockWallet as any,
     })
 
-    await contract.execute.mint({ inputs: ['aleo1abc', '100u64'], fee: 1000n })
+    await contract.execute.mint({ inputs: ['aleo1abc', '100u64'] })
 
     expect(executeTransaction).toHaveBeenCalledWith({
       program: 'token.aleo',
       function: 'mint',
       inputs: ['aleo1abc', '100u64'],
-      fee: 1000n,
       programSource: 'program token.aleo;',
       imports: {},
     })
@@ -348,7 +347,7 @@ describe('getContract', () => {
     }
 
     const contract = getContract({ program: 'token.aleo', client: mockWallet as any })
-    const result = await contract.execute.mint({ inputs: ['aleo1abc', '1000u64'], fee: 100n })
+    const result = await contract.execute.mint({ inputs: ['aleo1abc', '1000u64'] })
 
     expect(result.transactionId).toBe('tx123')
     expect(typeof result.outputs[0]).not.toBe('string')
@@ -371,7 +370,7 @@ describe('getContract', () => {
     }
 
     const contract = getContract({ program: 'token.aleo', client: mockWallet as any })
-    const result = await contract.write.mint({ inputs: ['aleo1abc', '1000u64'], fee: 100n })
+    const result = await contract.write.mint({ inputs: ['aleo1abc', '1000u64'] })
 
     expect(result).toBe('txid_abc')
   })

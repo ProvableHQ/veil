@@ -43,14 +43,15 @@ export type RecordDef = {
 
 export type FunctionInput =
   | { kind: 'plaintext'; type: Plaintext }
-  | { kind: 'record'; path: string[]; program?: string }
+  | { kind: 'record'; path: string[]; program?: string; dynamicId?: string }
   | { kind: 'dynamicRecord' }
 
 export type FunctionOutput =
   | { kind: 'plaintext'; type: Plaintext }
-  | { kind: 'record'; path: string[]; program?: string }
+  | { kind: 'record'; path: string[]; program?: string; dynamicId?: string }
   | { kind: 'dynamicRecord' }
-  | { kind: 'final' }           // handle for an on-chain finalize block
+  | { kind: 'future' }           // handle for an on-chain finalize block
+  | { kind: 'dynamicFuture' }    // dynamic dispatch finalize handle
 
 // ---- Function ----
 

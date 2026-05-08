@@ -68,18 +68,27 @@ function parseFunctionInput(raw: unknown): FunctionInput {
       const r = obj.Record as { path: string[]; program?: string }
       return { kind: 'record', path: r.path, program: r.program }
     }
+
+    if ('RecordWithDynamicId' in obj) {
+      const r = obj.RecordWithDynamicId as { path: string[]; program?: string; dynamic_id: string }
+      return { kind: 'record', path: r.path, program: r.program, dynamicId: r.dynamic_id }
+    }
+
+    if ('ExternalRecordWithDynamicId' in obj) {
+      const r = obj.ExternalRecordWithDynamicId as { program: string; dynamic_id: string }
+      return { kind: 'record', path: [], program: r.program, dynamicId: r.dynamic_id }
+    }
   }
 
   throw new Error(`Unknown FunctionInput variant: ${JSON.stringify(raw)}`)
 }
 
 // ---- FunctionOutput ----
-// Same as FunctionInput plus:
-//   "Final"
 
 function parseFunctionOutput(raw: unknown): FunctionOutput {
   if (raw === 'DynamicRecord') return { kind: 'dynamicRecord' }
-  if (raw === 'Final') return { kind: 'final' }
+  if (raw === 'Final' || raw === 'Future') return { kind: 'future' }
+  if (raw === 'DynamicFuture') return { kind: 'dynamicFuture' }
 
   if (typeof raw === 'object' && raw !== null) {
     const obj = raw as Record<string, unknown>
@@ -91,6 +100,16 @@ function parseFunctionOutput(raw: unknown): FunctionOutput {
     if ('Record' in obj) {
       const r = obj.Record as { path: string[]; program?: string }
       return { kind: 'record', path: r.path, program: r.program }
+    }
+
+    if ('RecordWithDynamicId' in obj) {
+      const r = obj.RecordWithDynamicId as { path: string[]; program?: string; dynamic_id: string }
+      return { kind: 'record', path: r.path, program: r.program, dynamicId: r.dynamic_id }
+    }
+
+    if ('ExternalRecordWithDynamicId' in obj) {
+      const r = obj.ExternalRecordWithDynamicId as { program: string; dynamic_id: string }
+      return { kind: 'record', path: [], program: r.program, dynamicId: r.dynamic_id }
     }
   }
 

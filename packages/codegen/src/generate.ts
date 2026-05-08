@@ -1,7 +1,7 @@
 // Code generator — reads a parsed ABI and produces TypeScript source code.
 
 import type { ABI, RecordDef, StructDef, AbiFunction, Mapping, StorageVariable, StorageType } from '@veil/core'
-import type { Plaintext, Primitive } from '@veil/core'
+import type { Plaintext, Primitive, FutureValue } from '@veil/core'
 
 // ── Public API ────────────────────────────────────────────────────────
 
@@ -32,7 +32,7 @@ export function generate(options: GenerateOptions): string {
   lines.push(`// Do not edit manually.`)
   lines.push('')
   lines.push(`import { getContract } from '${coreImport}'`)
-  lines.push(`import type { RecordValue, PublicClient, WalletClient, ABI } from '${coreImport}'`)
+  lines.push(`import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI } from '${coreImport}'`)
   lines.push('')
 
   // Program ID constant
@@ -174,24 +174,18 @@ function generateFunctionOutputType(fn: AbiFunction, abi: ABI): string[] {
   const typeName = pascalCase(fn.name) + 'Outputs'
   const lines: string[] = []
 
-  // Filter out 'final' outputs since they're finalize handles, not user-facing data
-  const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'final')
-
-  if (dataOutputs.length === 0) {
+  if (fn.outputs.length === 0) {
     lines.push(`export type ${typeName} = void`)
     return lines
   }
 
-  if (dataOutputs.length === 1) {
-    const output = dataOutputs[0]
-    const tsType = outputToTsType(output.type, abi)
+  if (fn.outputs.length === 1) {
+    const tsType = outputToTsType(fn.outputs[0].type, abi)
     lines.push(`export type ${typeName} = ${tsType}`)
     return lines
   }
 
-  // Multiple outputs — generate a tuple type
-  const typeElements = dataOutputs.map((output) => outputToTsType(output.type, abi))
-
+  const typeElements = fn.outputs.map((output) => outputToTsType(output.type, abi))
   lines.push(`export type ${typeName} = [${typeElements.join(', ')}]`)
   return lines
 }
@@ -205,8 +199,8 @@ function outputToTsType(output: AbiFunction['outputs'][number]['type'], abi: ABI
     return isLocal ? recName : 'RecordValue'
   } else if (output.kind === 'dynamicRecord') {
     return 'RecordValue'
-  } else if (output.kind === 'final') {
-    return 'void'
+  } else if (output.kind === 'future' || output.kind === 'dynamicFuture') {
+    return 'FutureValue'
   }
   return 'unknown'
 }
@@ -368,12 +362,11 @@ function namedParamsType(fn: AbiFunction, abi: ABI): string {
   return `{ ${params.join(', ')} }`
 }
 
-/** Generate the typed return type for simulate (filters out Final outputs) */
+/** Generate the typed return type for simulate */
 function simulateReturnType(fn: AbiFunction, abi: ABI): string {
-  const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'final')
-  if (dataOutputs.length === 0) return 'void'
-  if (dataOutputs.length === 1) return outputToTsType(dataOutputs[0].type, abi)
-  return `[${dataOutputs.map((o) => outputToTsType(o.type, abi)).join(', ')}]`
+  if (fn.outputs.length === 0) return 'void'
+  if (fn.outputs.length === 1) return outputToTsType(fn.outputs[0].type, abi)
+  return `[${fn.outputs.map((o) => outputToTsType(o.type, abi)).join(', ')}]`
 }
 
 /** Generate the typed return type for execute (includes transactionId) */
@@ -424,6 +417,9 @@ function outputMapperExpr(output: AbiFunction['outputs'][number], i: number, abi
   }
   if (output.type.kind === 'plaintext') {
     return `result.outputs[${i}] as unknown as ${plaintextToTsType(output.type.type)}`
+  }
+  if (output.type.kind === 'future' || output.type.kind === 'dynamicFuture') {
+    return `result.outputs[${i}] as unknown as FutureValue`
   }
   return `result.outputs[${i}]`
 }
@@ -527,24 +523,22 @@ function generateContractFactory(abi: ABI): string[] {
       const names = inputNames(fn)
       const { resolveLines, resolvedNames } = resolveRecordInputs(fn)
       const destructure = names.length > 0 ? `{ ${names.join(', ')} }` : '{}'
-      const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'final')
-
       lines.push(`      ${fn.name}: async (params: any) => {`)
       lines.push(`        const ${destructure} = params`)
       for (const line of resolveLines) lines.push(line)
 
-      if (dataOutputs.length === 0) {
+      if (fn.outputs.length === 0) {
         lines.push(`        await raw.simulate.${fn.name}({ inputs: [${resolvedNames.join(', ')}] })`)
       } else {
         lines.push(`        const result = await raw.simulate.${fn.name}({ inputs: [${resolvedNames.join(', ')}] })`)
       }
 
-      if (dataOutputs.length === 0) {
+      if (fn.outputs.length === 0) {
         // void return
-      } else if (dataOutputs.length === 1) {
-        lines.push(`        return ${outputMapperExpr(dataOutputs[0], 0, abi)}`)
+      } else if (fn.outputs.length === 1) {
+        lines.push(`        return ${outputMapperExpr(fn.outputs[0], 0, abi)}`)
       } else {
-        const mappers = dataOutputs.map((o, i) => outputMapperExpr(o, i, abi))
+        const mappers = fn.outputs.map((o, i) => outputMapperExpr(o, i, abi))
         lines.push(`        return [${mappers.join(', ')}] as const`)
       }
 
@@ -560,19 +554,17 @@ function generateContractFactory(abi: ABI): string[] {
       const names = inputNames(fn)
       const { resolveLines, resolvedNames } = resolveRecordInputs(fn)
       const destructure = names.length > 0 ? `{ ${names.join(', ')}, fee }` : '{ fee }'
-      const dataOutputs = fn.outputs.filter((o) => o.type.kind !== 'final')
-
       lines.push(`      ${fn.name}: async (params: any) => {`)
       lines.push(`        const ${destructure} = params`)
       for (const line of resolveLines) lines.push(line)
       lines.push(`        const result = await raw.execute.${fn.name}({ inputs: [${resolvedNames.join(', ')}], fee })`)
 
-      if (dataOutputs.length === 0) {
+      if (fn.outputs.length === 0) {
         lines.push(`        return { transactionId: result.transactionId }`)
-      } else if (dataOutputs.length === 1) {
-        lines.push(`        return { transactionId: result.transactionId, result: ${outputMapperExpr(dataOutputs[0], 0, abi)} }`)
+      } else if (fn.outputs.length === 1) {
+        lines.push(`        return { transactionId: result.transactionId, result: ${outputMapperExpr(fn.outputs[0], 0, abi)} }`)
       } else {
-        const mappers = dataOutputs.map((o, i) => outputMapperExpr(o, i, abi))
+        const mappers = fn.outputs.map((o, i) => outputMapperExpr(o, i, abi))
         lines.push(`        return { transactionId: result.transactionId, result: [${mappers.join(', ')}] as const }`)
       }
 

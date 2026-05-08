@@ -86,6 +86,10 @@ export type {
   ParsedOutput, ParsedRecordOutput, ParsedPlaintextOutput, EncryptedRecordOutput, ParsedFutureOutput,
   InputValue, TransitionResult, ExecuteResult, SimulateResult,
 } from './types/contract.js'
+export type {
+  FunctionNames, MappingNames,
+  TypedContractInstance,
+} from './types/inference.js'
 
 // Errors
 export {
