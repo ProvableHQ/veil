@@ -29,6 +29,13 @@ import {
   createPublicClient,
   createWalletClient,
   http,
+  BaseError,
+  TransactionTimeoutError,
+  FinalizeRevertError,
+  ProvingError,
+  ConfigurationError,
+  classifyBroadcastError,
+  classifyProvingError,
 } from '@veil/core'
 import { mnemonicToHDKey, type AleoDerivationId } from './mnemonic.js'
 
@@ -356,65 +363,90 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           return outputs
         }
 
-        /** Poll for transaction confirmation */
+        /** Poll for confirmed transaction and check finalize status */
         async function waitForConfirmation(txId: string): Promise<any> {
           const pollingClient = new AleoNetworkClient(networkUrl)
           const timeout = options.confirmationTimeout ?? 300_000
           const startTime = Date.now()
+          let lastError: unknown
           while (Date.now() - startTime < timeout) {
             try {
-              const tx = await pollingClient.getTransaction(txId)
-              if (tx) return tx
-            } catch {
-              // Transaction not found yet, continue polling
+              const confirmed = await pollingClient.getConfirmedTransaction(txId)
+              if (confirmed) {
+                if (confirmed.status === 'rejected') {
+                  throw new FinalizeRevertError(txId)
+                }
+                return confirmed.transaction
+              }
+            } catch (e) {
+              if (e instanceof FinalizeRevertError) throw e
+              lastError = e  // capture for timeout cause
             }
             await new Promise((resolve) => setTimeout(resolve, 5_000))
           }
-          throw new Error(`Transaction ${txId} not confirmed within ${timeout / 1000}s`)
+          throw new TransactionTimeoutError({ transactionId: txId, timeoutMs: timeout, cause: lastError as Error | undefined })
         }
 
         if (options.mode === 'delegated') {
-          if (!options.proverUrl) throw new Error('Delegated execution requires proverUrl')
+          if (!options.proverUrl) throw new ConfigurationError('Delegated execution requires proverUrl. Pass proverUrl to createProvingConfig or createAleoClient.')
 
-          const provingRequest = await programManager.provingRequest({
-            programName: execOptions.programName,
-            programSource: execOptions.programSource,
-            programImports: execOptions.programImports,
-            functionName: execOptions.functionName,
-            inputs: execOptions.inputs,
-            priorityFee,
-            privateFee: execOptions.privateFee ?? false,
-            broadcast: true,
-          })
+          let response: any
+          try {
+            const provingRequest = await programManager.provingRequest({
+              programName: execOptions.programName,
+              programSource: execOptions.programSource,
+              programImports: execOptions.programImports,
+              functionName: execOptions.functionName,
+              inputs: execOptions.inputs,
+              priorityFee,
+              privateFee: execOptions.privateFee ?? false,
+              broadcast: true,
+            })
 
-          const dpsClient = new AleoNetworkClient(options.proverUrl)
-          const response = await dpsClient.submitProvingRequest({
-            provingRequest,
-            url: options.proverUrl,
-            apiKey: options.apiKey,
-            consumerId: options.consumerId,
-          })
+            const dpsClient = new AleoNetworkClient(options.proverUrl)
+            response = await dpsClient.submitProvingRequest({
+              provingRequest,
+              url: options.proverUrl,
+              apiKey: options.apiKey,
+              consumerId: options.consumerId,
+            })
+          } catch (e) {
+            if (e instanceof BaseError) throw e
+            throw classifyProvingError(e)
+          }
 
           const txId = response.transaction?.id
-          if (!txId) throw new Error('DPS response did not contain a transaction ID')
+          if (!txId) throw new ConfigurationError('DPS response did not contain a transaction ID — check prover service configuration.')
 
           const confirmedTx = await waitForConfirmation(txId)
           return { transactionId: txId, outputs: extractOutputs(confirmedTx) }
 
         } else {
-          const tx = await programManager.buildExecutionTransaction({
-            programName: execOptions.programName,
-            functionName: execOptions.functionName,
-            inputs: execOptions.inputs,
-            priorityFee,
-            privateFee: execOptions.privateFee ?? false,
-            program: execOptions.programSource,
-            imports: execOptions.programImports,
-          })
+          let tx: any
+          try {
+            tx = await programManager.buildExecutionTransaction({
+              programName: execOptions.programName,
+              functionName: execOptions.functionName,
+              inputs: execOptions.inputs,
+              priorityFee,
+              privateFee: execOptions.privateFee ?? false,
+              program: execOptions.programSource,
+              imports: execOptions.programImports,
+            })
+          } catch (e) {
+            if (e instanceof BaseError) throw e
+            throw new ProvingError({ message: e instanceof Error ? e.message : String(e), cause: e as Error })
+          }
 
-          const submitClient = new AleoNetworkClient(networkUrl)
-          submitClient.setVerboseErrors(false)
-          const txId = await submitClient.submitTransaction(tx)
+          let txId: string
+          try {
+            const submitClient = new AleoNetworkClient(networkUrl)
+            submitClient.setVerboseErrors(false)
+            txId = await submitClient.submitTransaction(tx)
+          } catch (e) {
+            if (e instanceof BaseError) throw e
+            throw classifyBroadcastError(e)
+          }
 
           const confirmedTx = await waitForConfirmation(txId)
           return { transactionId: txId, outputs: extractOutputs(confirmedTx) }
