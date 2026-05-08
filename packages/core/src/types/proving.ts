@@ -65,7 +65,7 @@ export type BuildDeploymentOptions = {
  * @property {(network: Network) => Promise<void>} [switchNetwork] - Reload the SDK binaries for a different network. Implementations bound to a specific SDK module (e.g. via @veil/provable) provide this so `walletClient.switchChain` can rebind for a local account.
  */
 export type ProvingConfig = {
-  mode: 'delegated' | 'local'
+  mode: 'delegated' | 'local' | 'devnode'
   url?: string | undefined
   apiKey?: string | undefined
   useFeeMaster?: boolean | undefined
@@ -80,3 +80,4 @@ export type ProvingConfig = {
   ) => Promise<string>
   switchNetwork?: (network: Network) => Promise<void>
 }
+

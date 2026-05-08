@@ -55,6 +55,17 @@ export class ProgramNotFoundError extends BaseError {
   }
 }
 
+export class FeeRequiredError extends BaseError {
+  constructor() {
+    super(
+      'A fee is required when building transactions with a local or devnode account. ' +
+      'Pass a fee in microcredits:\n' +
+      '  writeContract({ program, function: \'fn\', inputs: [], fee: 1000n })',
+    )
+    this.name = 'FeeRequiredError'
+  }
+}
+
 export class InvalidInputError extends BaseError {
   constructor(functionName: string, expected: string, received: string) {
     super(

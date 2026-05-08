@@ -21,6 +21,10 @@
     "@scure/bip39": "^1.4.0"
   },
   "peerDependencies": {
-    "@veil/core": "workspace:*"
+    "@veil/core": "workspace:*",
+    "@veil/devnode": "workspace:*"
+  },
+  "devDependencies": {
+    "@veil/leo": "workspace:*"
   }
 }
