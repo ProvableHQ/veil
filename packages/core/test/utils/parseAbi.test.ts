@@ -299,3 +299,72 @@ describe('parseAbi — error cases', () => {
     expect(() => parseAbi(bad)).toThrow('Unknown FunctionInput variant')
   })
 })
+
+describe('parseAbi — dynamic ID record variants', () => {
+  const makeAbi = (inputs: unknown[], outputs: unknown[]) => ({
+    program: 'dynamic.aleo',
+    structs: [],
+    records: [],
+    mappings: [],
+    storage_variables: [],
+    functions: [{
+      name: 'dispatch',
+      is_final: false,
+      inputs: inputs.map((ty, i) => ({ name: `arg${i}`, ty, mode: 'Private' })),
+      outputs: outputs.map((ty) => ({ ty, mode: 'Private' })),
+    }],
+  })
+
+  it('parses RecordWithDynamicId input as record with dynamicId', () => {
+    const abi = parseAbi(makeAbi(
+      [{ RecordWithDynamicId: { path: ['Token'], program: 'token.aleo', dynamic_id: '123field' } }],
+      [],
+    ))
+    expect(abi.functions[0]!.inputs[0]!.type).toEqual({
+      kind: 'record', path: ['Token'], program: 'token.aleo', dynamicId: '123field',
+    })
+  })
+
+  it('parses ExternalRecordWithDynamicId input as record with dynamicId', () => {
+    const abi = parseAbi(makeAbi(
+      [{ ExternalRecordWithDynamicId: { program: 'foreign.aleo', dynamic_id: '456field' } }],
+      [],
+    ))
+    expect(abi.functions[0]!.inputs[0]!.type).toEqual({
+      kind: 'record', path: [], program: 'foreign.aleo', dynamicId: '456field',
+    })
+  })
+
+  it('parses RecordWithDynamicId output as record with dynamicId', () => {
+    const abi = parseAbi(makeAbi(
+      [],
+      [{ RecordWithDynamicId: { path: ['Token'], program: 'token.aleo', dynamic_id: '789field' } }],
+    ))
+    expect(abi.functions[0]!.outputs[0]!.type).toEqual({
+      kind: 'record', path: ['Token'], program: 'token.aleo', dynamicId: '789field',
+    })
+  })
+
+  it('parses ExternalRecordWithDynamicId output as record with dynamicId', () => {
+    const abi = parseAbi(makeAbi(
+      [],
+      [{ ExternalRecordWithDynamicId: { program: 'foreign.aleo', dynamic_id: '101field' } }],
+    ))
+    expect(abi.functions[0]!.outputs[0]!.type).toEqual({
+      kind: 'record', path: [], program: 'foreign.aleo', dynamicId: '101field',
+    })
+  })
+
+  it('regular Record parsing unchanged (no dynamicId)', () => {
+    const abi = parseAbi(makeAbi(
+      [{ Record: { path: ['Token'], program: 'token.aleo' } }],
+      [{ Record: { path: ['Token'], program: 'token.aleo' } }],
+    ))
+    expect(abi.functions[0]!.inputs[0]!.type).toEqual({
+      kind: 'record', path: ['Token'], program: 'token.aleo',
+    })
+    expect(abi.functions[0]!.outputs[0]!.type).toEqual({
+      kind: 'record', path: ['Token'], program: 'token.aleo',
+    })
+  })
+})
