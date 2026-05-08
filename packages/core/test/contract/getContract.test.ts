@@ -448,6 +448,63 @@ describe('getContract execute proxy — per-transition outputs', () => {
     expect(result.transitions[0].outputs).toHaveLength(1)
   })
 
+  it('parses transition with dynamicId record output', async () => {
+    const executeTransaction = vi.fn().mockResolvedValue({
+      transactionId: 'at1dyn',
+      transitions: [
+        {
+          transitionId: 'au1dyn',
+          program: 'token.aleo',
+          function: 'transfer',
+          outputs: ['{\n  owner: aleo1abc.private,\n  amount: 500u64.private,\n  _nonce: 999group.public\n}'],
+        },
+      ],
+      outputs: ['{\n  owner: aleo1abc.private,\n  amount: 500u64.private,\n  _nonce: 999group.public\n}'],
+    })
+    const mockWallet = {
+      account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
+      writeContract: vi.fn(),
+      executeTransaction,
+      simulateContract: vi.fn(),
+    }
+
+    const { parseAbi } = await import('../../src/utils/parseAbi.js')
+    const abi = parseAbi({
+      program: 'token.aleo',
+      structs: [],
+      records: [{ path: ['Token'], fields: [
+        { name: 'owner', ty: { Primitive: 'Address' }, mode: 'Private' },
+        { name: 'amount', ty: { Primitive: { UInt: 'U64' } }, mode: 'Private' },
+      ] }],
+      mappings: [],
+      storage_variables: [],
+      functions: [{
+        name: 'transfer',
+        is_final: false,
+        inputs: [
+          { name: 'token', ty: { RecordWithDynamicId: { path: ['Token'], program: 'token.aleo', dynamic_id: '123field' } }, mode: 'Private' },
+        ],
+        outputs: [
+          { ty: { RecordWithDynamicId: { path: ['Token'], program: 'token.aleo', dynamic_id: '456field' } }, mode: 'Private' },
+        ],
+      }],
+    })
+
+    // Verify the ABI parsed the dynamicId
+    expect(abi.functions[0]!.inputs[0]!.type).toHaveProperty('dynamicId', '123field')
+    expect(abi.functions[0]!.outputs[0]!.type).toHaveProperty('dynamicId', '456field')
+
+    const contract = getContract({ program: 'token.aleo', abi, client: mockWallet as any })
+    const result = await contract.execute.transfer({ inputs: ['record1...'] })
+
+    // Output should still be parsed as a RecordValue despite dynamicId
+    expect(result.transitions).toHaveLength(1)
+    expect(result.transitions[0].outputs).toHaveLength(1)
+    const output = result.transitions[0].outputs[0] as RecordValue
+    expect(output.owner).toBe('aleo1abc')
+    expect(output.fields.amount?.value).toBe(500n)
+  })
+
   it('handles cross-program transitions with loose parsing', async () => {
     const executeTransaction = vi.fn().mockResolvedValue({
       transactionId: 'at1cross',
