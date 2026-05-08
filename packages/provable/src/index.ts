@@ -353,7 +353,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             const transitionOutputs: string[] = []
             for (const output of transition.outputs ?? []) {
               if (!output.value) continue
-              if (output.type === 'record' && output.value.startsWith('record1') && accountViewKey) {
+              if ((output.type === 'record' || output.type === 'record_with_dynamic_id') && output.value.startsWith('record1') && accountViewKey) {
                 const ciphertext = RecordCiphertext.fromString(output.value)
                 if (ciphertext.isOwner(accountViewKey)) {
                   transitionOutputs.push(ciphertext.decrypt(accountViewKey).toString())
