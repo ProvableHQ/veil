@@ -30,16 +30,16 @@ export type Group = string
 export type Scalar = string
 export type Signature = string
 
-// u8/u16/u32 fit safely in a JS number
-// u64/u128/i64/i128 require bigint for full precision
-export type U8 = number
-export type U16 = number
-export type U32 = number
+// All integer plaintext literals are represented as bigint at runtime
+// to match parsing/encoding behavior consistently across bit widths.
+export type U8 = bigint
+export type U16 = bigint
+export type U32 = bigint
 export type U64 = bigint
 export type U128 = bigint
-export type I8 = number
-export type I16 = number
-export type I32 = number
+export type I8 = bigint
+export type I16 = bigint
+export type I32 = bigint
 export type I64 = bigint
 export type I128 = bigint
 
