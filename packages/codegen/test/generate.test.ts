@@ -188,7 +188,7 @@ describe('generate', () => {
       expect(output).toContain('  _record: RecordValue')
     })
 
-    it('maps u8/u16/u32 to number', () => {
+    it('maps u8/u16/u32 to bigint', () => {
       const abi: ABI = {
         ...minimalAbi,
         records: [{
@@ -200,8 +200,8 @@ describe('generate', () => {
         }],
       }
       const output = generate({ abi })
-      expect(output).toContain('  tier: number')
-      expect(output).toContain('  level: number')
+      expect(output).toContain('  tier: bigint')
+      expect(output).toContain('  level: bigint')
     })
   })
 
@@ -283,7 +283,7 @@ describe('generate', () => {
   describe('advanced types', () => {
     it('generates array types', () => {
       const output = generate({ abi: advancedAbi })
-      expect(output).toContain('  data: number[]')
+      expect(output).toContain('  data: bigint[]')
     })
 
     it('generates optional types', () => {
@@ -300,12 +300,12 @@ describe('generate', () => {
 
     it('generates array input types', () => {
       const output = generate({ abi: advancedAbi })
-      expect(output).toContain('  checksum: number[]')
+      expect(output).toContain('  checksum: bigint[]')
     })
 
     it('generates nested array types', () => {
       const output = generate({ abi: advancedAbi })
-      expect(output).toContain('  nested_array: number[][]')
+      expect(output).toContain('  nested_array: bigint[][]')
     })
 
     it('generates nested optional types', () => {
@@ -322,7 +322,7 @@ describe('generate', () => {
       const output = generate({ abi: advancedAbi })
       expect(output).toContain('export interface Transform {')
       expect(output).toContain('  position: Vector3')
-      expect(output).toContain('  scale: number')
+      expect(output).toContain('  scale: bigint')
     })
 
     it('generates optional input types', () => {
@@ -342,7 +342,7 @@ describe('generate', () => {
       expect(output).toContain("PROGRAM_ID = 'loyalty_token.aleo'")
       expect(output).toContain('export interface LoyaltyCard {')
       expect(output).toContain('  points: bigint')
-      expect(output).toContain('  tier: number')
+      expect(output).toContain('  tier: bigint')
       expect(output).toContain('export function toLoyaltyCard(record: RecordValue): LoyaltyCard {')
       expect(output).toContain('export type MintCardInputs = {')
       expect(output).toContain('export type MintCardOutputs = [LoyaltyCard, FutureValue]')
@@ -362,7 +362,7 @@ describe('generate', () => {
       const output = generate({ abi: rewardsAbi })
       expect(output).toContain("PROGRAM_ID = 'loyalty_rewards.aleo'")
       expect(output).toContain('export interface RewardVoucher {')
-      expect(output).toContain('  reward_type: number')
+      expect(output).toContain('  reward_type: bigint')
       expect(output).toContain('  amount: bigint')
       expect(output).toContain('export function toRewardVoucher(record: RecordValue): RewardVoucher {')
       expect(output).toContain('export type RedeemPointsForVoucherInputs = {')
@@ -556,7 +556,7 @@ describe('generate', () => {
 
       // The mapper should reference record.fields.points?.value etc.
       expect(source).toContain('record.fields.points?.value as bigint')
-      expect(source).toContain('record.fields.tier?.value as number')
+      expect(source).toContain('record.fields.tier?.value as bigint')
       expect(source).toContain('record.fields.card_id?.value as string')
     })
 

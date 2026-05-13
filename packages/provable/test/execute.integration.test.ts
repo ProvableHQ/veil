@@ -123,7 +123,7 @@ describe.skipIf(!shouldRun)('execute lifecycle (integration)', () => {
       provingMode: 'local',
     })
 
-    const result = await walletClient.executeTransaction({
+    const result = await walletClient.executeContract({
       program: 'credits.aleo',
       function: 'transfer_public',
       inputs: [DEMO_ADDRESS, '1u64'],
@@ -168,7 +168,7 @@ describe.skipIf(!shouldRun || !hasDpsCredentials)('delegated execute (integratio
       consumerId: DPS_CONSUMER_ID,
     })
 
-    const result = await walletClient.executeTransaction({
+    const result = await walletClient.executeContract({
       program: 'credits.aleo',
       function: 'transfer_public',
       inputs: [DEMO_ADDRESS, '1u64'],

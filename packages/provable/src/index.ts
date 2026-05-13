@@ -30,13 +30,14 @@ import {
   createWalletClient,
   http,
   BaseError,
-  TransactionTimeoutError,
-  FinalizeRevertError,
   ProvingError,
   ConfigurationError,
   classifyBroadcastError,
   classifyProvingError,
+  waitForConfirmation,
+  extractTransitions,
 } from '@veil/core'
+import type { Decryptor } from '@veil/core'
 import { mnemonicToHDKey, type AleoDerivationId } from './mnemonic.js'
 
 export {
@@ -340,52 +341,18 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         /** Convert microcredits (Veil API) to credits (SDK API) for priority fee */
         const priorityFee = Number(execOptions.fee) / 1_000_000
 
-        /** Extract output strings from a transaction, decrypting owned records */
-        function extractOutputs(tx: any): string[] {
-          const outputs: string[] = []
-          const transitions = tx.execution?.transitions
-          if (!transitions) return outputs
-          const accountViewKey = options.account ? ViewKey.from_string(options.account.viewKey) : undefined
-          for (const transition of transitions) {
-            if (!transition.outputs) continue
-            for (const output of transition.outputs) {
-              if (!output.value) continue
-              if (output.type === 'record' && output.value.startsWith('record1') && accountViewKey) {
-                const ciphertext = RecordCiphertext.fromString(output.value)
-                if (ciphertext.isOwner(accountViewKey)) {
-                  outputs.push(ciphertext.decrypt(accountViewKey).toString())
-                }
-              } else {
-                outputs.push(output.value)
-              }
+        /** Self-custody decryptor: use the local account's view key to decrypt owned record ciphertexts. */
+        const accountViewKey = options.account ? ViewKey.from_string(options.account.viewKey) : undefined
+        const decryptor: Decryptor | undefined = accountViewKey
+          ? (ciphertext: string) => {
+              const ct = RecordCiphertext.fromString(ciphertext)
+              return ct.isOwner(accountViewKey) ? ct.decrypt(accountViewKey).toString() : null
             }
-          }
-          return outputs
-        }
+          : undefined
 
-        /** Poll for confirmed transaction and check finalize status */
-        async function waitForConfirmation(txId: string): Promise<any> {
-          const pollingClient = new AleoNetworkClient(networkUrl)
-          const timeout = options.confirmationTimeout ?? 300_000
-          const startTime = Date.now()
-          let lastError: unknown
-          while (Date.now() - startTime < timeout) {
-            try {
-              const confirmed = await pollingClient.getConfirmedTransaction(txId)
-              if (confirmed) {
-                if (confirmed.status === 'rejected') {
-                  throw new FinalizeRevertError(txId)
-                }
-                return confirmed.transaction
-              }
-            } catch (e) {
-              if (e instanceof FinalizeRevertError) throw e
-              lastError = e  // capture for timeout cause
-            }
-            await new Promise((resolve) => setTimeout(resolve, 5_000))
-          }
-          throw new TransactionTimeoutError({ transactionId: txId, timeoutMs: timeout, cause: lastError as Error | undefined })
-        }
+        /** Build a Veil publicClient bound to the current networkUrl for chain polling. */
+        const buildPollingClient = () =>
+          createPublicClient({ transport: http(networkUrl, { network: network as Network }) })
 
         if (options.mode === 'delegated') {
           if (!options.proverUrl) throw new ConfigurationError('Delegated execution requires proverUrl. Pass proverUrl to createProvingConfig or createAleoClient.')
@@ -418,8 +385,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           const txId = response.transaction?.id
           if (!txId) throw new ConfigurationError('DPS response did not contain a transaction ID — check prover service configuration.')
 
-          const confirmedTx = await waitForConfirmation(txId)
-          return { transactionId: txId, outputs: extractOutputs(confirmedTx) }
+          const confirmedTx = await waitForConfirmation(buildPollingClient(), txId, options.confirmationTimeout)
+          const { transitions, outputs } = extractTransitions(confirmedTx, decryptor)
+          return { transactionId: txId, transitions, outputs }
 
         } else {
           let tx: any
@@ -448,8 +416,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             throw classifyBroadcastError(e)
           }
 
-          const confirmedTx = await waitForConfirmation(txId)
-          return { transactionId: txId, outputs: extractOutputs(confirmedTx) }
+          const confirmedTx = await waitForConfirmation(buildPollingClient(), txId, options.confirmationTimeout)
+          const { transitions, outputs } = extractTransitions(confirmedTx, decryptor)
+          return { transactionId: txId, transitions, outputs }
         }
       },
 
