@@ -267,12 +267,11 @@ function primitiveToTsType(p: Primitive): string {
     case 'u8':
     case 'u16':
     case 'u32':
+    case 'u64':
+    case 'u128':
     case 'i8':
     case 'i16':
     case 'i32':
-      return 'number'
-    case 'u64':
-    case 'u128':
     case 'i64':
     case 'i128':
       return 'bigint'
@@ -287,12 +286,11 @@ function plaintextToCast(pt: Plaintext): string {
     case 'u8':
     case 'u16':
     case 'u32':
+    case 'u64':
+    case 'u128':
     case 'i8':
     case 'i16':
     case 'i32':
-      return ' as number'
-    case 'u64':
-    case 'u128':
     case 'i64':
     case 'i128':
       return ' as bigint'
@@ -316,11 +314,8 @@ function plaintextDefault(pt: Plaintext): string {
   switch (pt.primitive) {
     case 'boolean':
       return 'false'
-    case 'u8': case 'u16': case 'u32':
-    case 'i8': case 'i16': case 'i32':
-      return '0'
-    case 'u64': case 'u128':
-    case 'i64': case 'i128':
+    case 'u8': case 'u16': case 'u32': case 'u64': case 'u128':
+    case 'i8': case 'i16': case 'i32': case 'i64': case 'i128':
       return '0n'
     case 'field': case 'group': case 'scalar':
       return "''"

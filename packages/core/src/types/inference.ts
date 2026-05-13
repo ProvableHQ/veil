@@ -18,8 +18,7 @@ import type { InputValue } from './contract.js'
 export type PrimitiveToTs<P extends Primitive> =
   P extends 'address' | 'field' | 'group' | 'scalar' | 'signature' | 'identifier' ? string :
   P extends 'boolean' ? boolean :
-  P extends 'u8' | 'u16' | 'u32' | 'i8' | 'i16' | 'i32' ? number :
-  P extends 'u64' | 'u128' | 'i64' | 'i128' ? bigint :
+  P extends 'u8' | 'u16' | 'u32' | 'u64' | 'u128' | 'i8' | 'i16' | 'i32' | 'i64' | 'i128' ? bigint :
   unknown
 
 // ── Struct resolution ────────────────────────────────────────────────
