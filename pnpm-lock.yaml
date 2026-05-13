@@ -122,6 +122,9 @@ importers:
       '@veil/devnode':
         specifier: workspace:*
         version: link:../devnode
+      '@veil/leo':
+        specifier: workspace:*
+        version: link:../leo
 
   packages/react:
     dependencies:

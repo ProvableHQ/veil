@@ -24,6 +24,7 @@
     "@veil/core": "workspace:*"
   },
   "devDependencies": {
-    "@veil/devnode": "workspace:*"
+    "@veil/devnode": "workspace:*",
+    "@veil/leo": "workspace:*"
   }
 }

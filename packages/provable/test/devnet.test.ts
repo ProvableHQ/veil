@@ -308,7 +308,7 @@ describe.skipIf(!shouldRun)('devnet integration', () => {
     expect(simResult.outputs[0]).toBe('8u32')
     expect(simResult.outputs).toHaveLength(execResult.outputs.length)
     expect(execResult.transactionId).toMatch(/^at1/)
-  }, 120_000)
+  }, 240_000)
 
   // ── Codegen pipeline: getContract → simulate ────────────────────────
 

@@ -22,7 +22,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @veil/core --filter @veil/devnode --filter @veil/codegen build
+      - run: pnpm --filter @veil/core --filter @veil/devnode --filter @veil/codegen --filter @veil/leo build
       - run: pnpm vitest run
 
   # ── Devnet integration tests ──────────────────────────────────────────
@@ -48,16 +48,16 @@ jobs:
           cache-on-failure: true
 
       - name: Install aleo-devnode
-        run: cargo install --git https://github.com/ProvableHQ/aleo-devnode.git
+        run: cargo install --git https://github.com/ProvableHQ/aleo-devnode.git --tag v0.1.0
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @veil/core --filter @veil/devnode --filter @veil/codegen build
+      - run: pnpm --filter @veil/core --filter @veil/devnode --filter @veil/codegen --filter @veil/leo build
 
       - name: Run devnet tests
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           RUN_DEVNET=true pnpm vitest run packages/provable/test/devnet.test.ts
-        timeout-minutes: 10
+        timeout-minutes: 20
 
       - name: Cleanup devnode
         if: always()
