@@ -22,6 +22,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @veil/core --filter @veil/devnode --filter @veil/codegen build
       - run: pnpm vitest run
 
   # ── Devnet integration tests ──────────────────────────────────────────
@@ -50,6 +51,7 @@ jobs:
         run: cargo install --git https://github.com/ProvableHQ/aleo-devnode.git
 
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @veil/core --filter @veil/devnode --filter @veil/codegen build
 
       - name: Run devnet tests
         run: |
