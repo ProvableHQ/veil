@@ -35,11 +35,13 @@ export type ContractReadMethods = Record<string, (params: { key: string }) => Pr
 export type ContractWriteParams = { inputs: InputValue[]; imports?: Record<string, string> }
 export type ContractWriteMethods = Record<string, (params: ContractWriteParams) => Promise<string>>
 
+export type ContractTransitionResult = { transitionId: string; program: string; function: string; outputs: ParsedOutput[] }
+
 export type ContractSimulateParams = { inputs: InputValue[]; imports?: Record<string, string> }
-export type ContractSimulateMethods = Record<string, (params: ContractSimulateParams) => Promise<{ outputs: ParsedOutput[] }>>
+export type ContractSimulateResult = { transitions: ContractTransitionResult[]; outputs: ParsedOutput[] }
+export type ContractSimulateMethods = Record<string, (params: ContractSimulateParams) => Promise<ContractSimulateResult>>
 
 export type ContractExecuteParams = { inputs: InputValue[]; imports?: Record<string, string> }
-export type ContractTransitionResult = { transitionId: string; program: string; function: string; outputs: ParsedOutput[] }
 export type ContractExecuteResult = { transactionId: string; transitions: ContractTransitionResult[]; outputs: ParsedOutput[] }
 export type ContractExecuteMethods = Record<string, (params: ContractExecuteParams) => Promise<ContractExecuteResult>>
 
@@ -243,7 +245,22 @@ export function getContract(params: GetContractParameters): ContractInstance {
           programSource,
           imports: { ...contractImports, ...simParams.imports },
         })
-        return { outputs: parseOutputs(result.outputs, prop) }
+
+        // Build per-transition parsed results.
+        // Same-program transitions: parse with local ABI. Foreign: loose parse.
+        const transitions: ContractTransitionResult[] = (result.transitions ?? []).map(t => ({
+          transitionId: t.transitionId,
+          program: t.program,
+          function: t.function,
+          outputs: t.program === program
+            ? parseOutputs(t.outputs, t.function)
+            : t.outputs.map(o => parseLooseOutput(o)),
+        }))
+
+        // Raw `outputs` is already the called function's transition outputs.
+        const outputs = parseOutputs(result.outputs, prop)
+
+        return { transitions, outputs }
       }
     },
   })

@@ -1,5 +1,6 @@
 import { AccountNotFoundError, ProvingNotConfiguredError, SimulateNotSupportedError } from '../../errors/errors.js'
 import type { Client } from '../../clients/createClient.js'
+import type { RawSimulateResult } from '../../types/proving.js'
 
 export type SimulateContractParameters = {
   program: string
@@ -9,7 +10,7 @@ export type SimulateContractParameters = {
   imports?: Record<string, string>
 }
 
-export type SimulateContractReturnType = { outputs: string[] }
+export type SimulateContractReturnType = RawSimulateResult
 
 /**
  * Executes a program function locally and returns its outputs without broadcasting.

@@ -165,7 +165,6 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     ViewKey,
     AleoNetworkClient,
     RecordScanner,
-    OfflineQuery,
     RecordCiphertext,
   } = initialSdk
 
@@ -316,16 +315,42 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         if (options.account) {
           programManager.setAccount(new currentSdk.Account({ privateKey: options.account.privateKey }))
         }
-        const executionResponse = await programManager.run(
-          simOptions.programSource ?? simOptions.programName,
-          simOptions.functionName,
-          simOptions.inputs,
-          false,
-          simOptions.programImports,
-          undefined, undefined, undefined, undefined,
-          new OfflineQuery(0, 'sr1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gk0xu'),
-        )
-        return { outputs: executionResponse.getOutputs() }
+
+        // Self-custody decryptor: same view-key-based decryptor as the execute path.
+        const accountViewKey = options.account ? ViewKey.from_string(options.account.viewKey) : undefined
+        const decryptor: Decryptor | undefined = accountViewKey
+          ? (ciphertext: string) => {
+              const ct = RecordCiphertext.fromString(ciphertext)
+              return ct.isOwner(accountViewKey) ? ct.decrypt(accountViewKey).toString() : null
+            }
+          : undefined
+
+        // `buildAuthorization` runs the function (with cross-program calls) and produces an
+        // Authorization whose transitions carry program/function metadata and the actual
+        // outputs — same structure a confirmed Transaction has, minus the proof.
+        const authorization = await programManager.buildAuthorization({
+          programName: simOptions.programName,
+          functionName: simOptions.functionName,
+          inputs: simOptions.inputs,
+          programSource: simOptions.programSource,
+          programImports: simOptions.programImports,
+        })
+
+        // Convert the wasm Transition objects into the wire-shaped tx that extractTransitions
+        // consumes (it expects `tx.execution.transitions[]` with `id`/`program`/`function`/`outputs`).
+        const tx = {
+          execution: {
+            transitions: authorization.transitions().map((t: any) => ({
+              id: t.id(),
+              program: t.programId(),
+              function: t.functionName(),
+              outputs: t.outputs(true),
+            })),
+          },
+        }
+
+        const { transitions, outputs } = extractTransitions(tx, decryptor)
+        return { transitions, outputs }
       },
 
       execute: async (execOptions: ExecuteOptions): Promise<RawExecuteResult> => {

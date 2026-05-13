@@ -49,6 +49,9 @@ export type ExecuteOptions = {
 }
 
 export type RawSimulateResult = {
+  /** Per-transition results with program/function metadata */
+  transitions: RawTransitionResult[]
+  /** Outputs of the called function's transition only — inner cross-program transition outputs live in `transitions[]`. */
   outputs: string[]
 }
 

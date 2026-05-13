@@ -611,3 +611,77 @@ describe('getContract execute proxy — per-transition outputs', () => {
     expect(result.outputs).toEqual(['100u64'])
   })
 })
+
+describe('getContract simulate proxy — per-transition outputs', () => {
+  it('returns structured transitions from simulate result', async () => {
+    const simulateContract = vi.fn().mockResolvedValue({
+      transitions: [
+        {
+          transitionId: 'au1sim',
+          program: 'token.aleo',
+          function: 'mint',
+          outputs: ['{\n  owner: aleo1abc.private,\n  amount: 1000u64.private,\n  _nonce: 123group.public\n}'],
+        },
+      ],
+      outputs: ['{\n  owner: aleo1abc.private,\n  amount: 1000u64.private,\n  _nonce: 123group.public\n}'],
+    })
+    const mockWallet = {
+      account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
+      writeContract: vi.fn(),
+      executeContract: vi.fn(),
+      simulateContract,
+    }
+
+    const contract = getContract({
+      program: 'token.aleo',
+      client: mockWallet as any,
+    })
+
+    const result = await contract.simulate.mint({ inputs: ['aleo1abc', '1000u64'] })
+
+    expect(result.transitions).toHaveLength(1)
+    expect(result.transitions[0]!.transitionId).toBe('au1sim')
+    expect(result.transitions[0]!.program).toBe('token.aleo')
+    expect(result.transitions[0]!.function).toBe('mint')
+    expect(result.transitions[0]!.outputs).toHaveLength(1)
+  })
+
+  it('simulate cross-program: foreign transitions loose-parsed, top-level outputs match called function', async () => {
+    const simulateContract = vi.fn().mockResolvedValue({
+      transitions: [
+        {
+          transitionId: 'au1inner',
+          program: 'loyalty_token.aleo',
+          function: 'spend_points',
+          outputs: ['{\n  owner: aleo1abc.private,\n  points: 500u64.private,\n  _nonce: 456group.public\n}'],
+        },
+        {
+          transitionId: 'au1outer',
+          program: 'loyalty_rewards.aleo',
+          function: 'redeem',
+          outputs: ['{\n  owner: aleo1abc.private,\n  amount: 200u64.private,\n  _nonce: 789group.public\n}'],
+        },
+      ],
+      // Raw outputs is the called function's transition only — inner transitions live in `transitions[]`.
+      outputs: ['{\n  owner: aleo1abc.private,\n  amount: 200u64.private,\n  _nonce: 789group.public\n}'],
+    })
+    const mockWallet = {
+      account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
+      writeContract: vi.fn(),
+      executeContract: vi.fn(),
+      simulateContract,
+    }
+
+    const contract = getContract({
+      program: 'loyalty_rewards.aleo',
+      client: mockWallet as any,
+    })
+
+    const result = await contract.simulate.redeem({ inputs: [] })
+
+    expect(result.transitions).toHaveLength(2)
+    expect(result.transitions[0]!.program).toBe('loyalty_token.aleo')
+    expect(result.transitions[1]!.program).toBe('loyalty_rewards.aleo')
+    expect(result.outputs).toHaveLength(1)
+  })
+})
