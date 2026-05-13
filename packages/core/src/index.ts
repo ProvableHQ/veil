@@ -17,6 +17,11 @@ export type {
   ProvingConfig,
   BuildTransactionOptions,
   BuildDeploymentOptions,
+  SimulateOptions,
+  ExecuteOptions,
+  RawSimulateResult,
+  RawExecuteResult,
+  RawTransitionResult,
 } from './types/proving.js'
 
 export type {
@@ -76,6 +81,17 @@ export type {
   TokenPage,
 } from './types/network.js'
 
+export type { Primitive, Plaintext, PlaintextValue, RecordValue, RecordFieldValue, FutureValue, Literal } from './types/primitives.js'
+export type { ABI, AbiFunction, Input as AbiInput, Output as AbiOutput, Mode, FunctionInput, FunctionOutput, StructDef, RecordDef, StructField, RecordField, Mapping, StorageVariable, StorageType } from './types/abi.js'
+export type {
+  ParsedOutput, ParsedRecordOutput, ParsedPlaintextOutput, EncryptedRecordOutput, ParsedFutureOutput,
+  InputValue, TransitionResult, ExecuteResult, SimulateResult,
+} from './types/contract.js'
+export type {
+  FunctionNames, MappingNames,
+  TypedContractInstance,
+} from './types/inference.js'
+
 // Errors
 export {
   BaseError,
@@ -86,12 +102,29 @@ export {
   ProgramNotFoundError,
   InvalidInputError,
   TransactionHistoryNotSupportedError,
+  InvalidTransactionError,
+  DuplicateTransactionError,
+  RecordSpentError,
+  OutputIdCollisionError,
+  BroadcastError,
+  TransactionTimeoutError,
+  FinalizeRevertError,
+  ProvingError,
+  ConfigurationError,
+  SimulateNotSupportedError,
+  classifyBroadcastError,
+  classifyProvingError,
 } from './errors/errors.js'
 
 // Utils
 export { isAddress, assertAddress } from './utils/address.js'
 export { creditsToMicrocredits, microcreditsToCredits } from './utils/credits.js'
 export { parseValue, encodeValue, type ParsedValue } from './utils/values.js'
+export { parseRecordPlaintext, parseRecordPlaintextLoose, toString, serializeRecord, encodeInputs, getRecordDef, getInputTypes } from './utils/records.js'
+export { parsePrimitive, parsePlaintext } from './utils/parsePrimitives.js'
+export { parseAbi } from './utils/parseAbi.js'
+export { waitForConfirmation } from './utils/waitForConfirmation.js'
+export { extractTransitions, type Decryptor } from './utils/extractTransitions.js'
 
 // Transports
 export { createTransport } from './transports/createTransport.js'
@@ -179,7 +212,9 @@ export { getTokens } from './actions/public/getTokens.js'
 export { readMapping } from './actions/public/readMapping.js'
 
 // Wallet Actions (standalone)
-export { writeContract, executeTransaction } from './actions/wallet/writeContract.js'
+export { simulateContract, type SimulateContractParameters, type SimulateContractReturnType } from './actions/wallet/simulateContract.js'
+export { executeContract, type ExecuteContractParameters, type ExecuteContractReturnType } from './actions/wallet/executeContract.js'
+export { writeContract, executeTransaction, type WriteContractParameters, type WriteContractReturnType } from './actions/wallet/writeContract.js'
 export { deployContract } from './actions/wallet/deployContract.js'
 export { sendTransaction } from './actions/wallet/sendTransaction.js'
 export { signMessage } from './actions/wallet/signMessage.js'

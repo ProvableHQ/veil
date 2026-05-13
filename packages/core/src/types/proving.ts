@@ -29,6 +29,48 @@ export type BuildTransactionOptions = {
   imports?: string[] | undefined
 }
 
+export type SimulateOptions = {
+  programName: string
+  functionName: string
+  inputs: string[]
+  programSource?: string | undefined
+  programImports?: Record<string, string> | undefined
+}
+
+export type ExecuteOptions = {
+  programName: string
+  functionName: string
+  inputs: string[]
+  /** Priority fee in microcredits (1 credit = 1_000_000 microcredits) */
+  fee: bigint
+  privateFee?: boolean | undefined
+  programSource?: string | undefined
+  programImports?: Record<string, string> | undefined
+}
+
+export type RawSimulateResult = {
+  /** Per-transition results with program/function metadata */
+  transitions: RawTransitionResult[]
+  /** Outputs of the called function's transition only — inner cross-program transition outputs live in `transitions[]`. */
+  outputs: string[]
+}
+
+/** Raw per-transition result from the proving layer (before ABI parsing) */
+export type RawTransitionResult = {
+  transitionId: string
+  program: string
+  function: string
+  outputs: string[]
+}
+
+export type RawExecuteResult = {
+  transactionId: string
+  /** Per-transition results with program/function metadata */
+  transitions: RawTransitionResult[]
+  /** Outputs of the called function's transition only — inner cross-program transition outputs live in `transitions[]`. */
+  outputs: string[]
+}
+
 /**
  * Options for building a deployment transaction.
  *
@@ -50,19 +92,14 @@ export type BuildDeploymentOptions = {
 /**
  * SDK-backed adapter for wallet-side operations that need network binaries.
  *
- * Despite the name, this hosts more than transaction proving: it's the
- * single slot a local wallet client uses to reach a network-bound SDK. As
- * of today it carries proving (`buildTransaction`/`buildDeployment`),
- * decryption (`decrypt`), and SDK rebinding (`switchNetwork`).
+ * Hosts proving (`buildTransaction`/`buildDeployment`), execution
+ * (`simulate`/`execute`), decryption (`decrypt`), and SDK rebinding
+ * (`switchNetwork`).
  *
  * @property {'delegated' | 'local'} mode - Where proofs are produced. `'local'` builds in-process via the SDK's WASM binaries; `'delegated'` submits a proving request to a remote prover service (configured via `url`/`apiKey`).
  * @property {string} [url] - Prover service URL. Required for `mode: 'delegated'`, ignored otherwise.
  * @property {string} [apiKey] - API key for the prover service, if it requires one.
  * @property {boolean} [useFeeMaster] - If true, the delegated prover pays transaction fees from its own FeeMaster account on behalf of the caller. Only meaningful when `mode: 'delegated'` — a billing arrangement with the prover service, not a per-transaction flag.
- * @property {(options: BuildTransactionOptions) => Promise<Transaction>} [buildTransaction] - Build an execution transaction for a program function call.
- * @property {(options: BuildDeploymentOptions) => Promise<Transaction>} [buildDeployment] - Build a deployment transaction for an Aleo program.
- * @property {Function} [decrypt] - Decrypt a record ciphertext using the wallet's view key.
- * @property {(network: Network) => Promise<void>} [switchNetwork] - Reload the SDK binaries for a different network. Implementations bound to a specific SDK module (e.g. via @veil/provable) provide this so `walletClient.switchChain` can rebind for a local account.
  */
 export type ProvingConfig = {
   mode: 'delegated' | 'local' | 'devnode'
@@ -79,5 +116,9 @@ export type ProvingConfig = {
     index?: number,
   ) => Promise<string>
   switchNetwork?: (network: Network) => Promise<void>
+  /** Local execution without broadcasting — returns raw output strings */
+  simulate?: (options: SimulateOptions) => Promise<RawSimulateResult>
+  /** Build, broadcast, wait for confirmation, and return raw output strings */
+  execute?: (options: ExecuteOptions) => Promise<RawExecuteResult>
 }
 

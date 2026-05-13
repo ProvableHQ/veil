@@ -273,17 +273,6 @@ describe('@veil/provable', () => {
     })
   })
 
-  describe('createLocalScanner', () => {
-    it('returns a RecordProvider with requestRecords function', () => {
-      const scanner = aleo.createLocalScanner({
-        url: 'https://api.provable.com/v2',
-      })
-
-      expect(scanner).toBeDefined()
-      expect(scanner.requestRecords).toBeTypeOf('function')
-    })
-  })
-
   describe('createRemoteScanner', () => {
     it('returns a RecordProvider with requestRecords function', () => {
       const scanner = aleo.createRemoteScanner({
@@ -456,7 +445,7 @@ describe('@veil/provable', () => {
 
     it('accepts a RecordProvider via records option', () => {
       const account = aleo.generateAccount()
-      const scanner = aleo.createLocalScanner({ url: 'https://api.provable.com/v2' })
+      const scanner = aleo.createRemoteScanner({ url: 'https://rss.provable.com', consumerId: 'test' })
       const { walletClient } = aleo.createAleoClient({
         privateKey: account.privateKey,
         networkUrl: 'https://api.provable.com/v2',

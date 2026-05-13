@@ -104,10 +104,10 @@ describe('parseValue edge cases', () => {
   })
 
   // Unrecognized
-  it('returns string for unrecognized formats', () => {
-    expect(parseValue('hello')).toEqual({ value: 'hello', type: 'string' })
-    expect(parseValue('')).toEqual({ value: '', type: 'string' })
-    expect(parseValue('123')).toEqual({ value: '123', type: 'string' }) // no type suffix
+  it('throws for unrecognized formats', () => {
+    expect(() => parseValue('hello')).toThrow('Cannot parse value: hello')
+    expect(() => parseValue('')).toThrow('Cannot parse value: ')
+    expect(() => parseValue('123')).toThrow('Cannot parse value: 123') // no type suffix
   })
 })
 
@@ -145,8 +145,8 @@ describe('encodeValue edge cases', () => {
     expect(encodeValue(addr, 'address')).toBe(addr)
   })
 
-  it('encodes string type', () => {
-    expect(encodeValue('hello', 'string')).toBe('hello')
+  it('encodes identifier type', () => {
+    expect(encodeValue('hello', 'identifier')).toBe('hello')
   })
 })
 
