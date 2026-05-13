@@ -58,14 +58,20 @@ const HELLO_PROGRAM = [
 
 // ── Harness ──────────────────────────────────────────────────────────
 
-function isDevnodeInstalled(): boolean {
+/** Returns the devnode command: prefers aleo-devnode, falls back to leo devnode */
+function resolveDevnode(): { cmd: string; args: string[] } | null {
   try {
     execSync('aleo-devnode --help', { stdio: 'pipe' })
-    return true
-  } catch {
-    return false
-  }
+    return { cmd: 'aleo-devnode', args: ['start'] }
+  } catch {}
+  try {
+    execSync('leo --version', { stdio: 'pipe' })
+    return { cmd: 'leo', args: ['devnode', 'start', '--network', 'testnet'] }
+  } catch {}
+  return null
 }
+
+const devnodeCmd = resolveDevnode()
 
 /**
  * Wait for the devnode to be ready AND to finish advancing to the latest
@@ -97,18 +103,19 @@ let aleo: AleoSdk
 let sdk: typeof import('@provablehq/sdk')
 let account: ReturnType<AleoSdk['privateKeyToAccount']>
 
-describe.skipIf(!shouldRun || !isDevnodeInstalled())('devnet integration', () => {
+describe.skipIf(!shouldRun || !devnodeCmd)('devnet integration', () => {
   beforeAll(async () => {
     // Align the SDK's consensus height table with the devnode's test heights.
     // Must be called BEFORE any other SDK operation (OnceLock-based).
     sdk = await import('@provablehq/sdk')
     sdk.getOrInitConsensusVersionTestHeights()
 
-    devnode = spawn('aleo-devnode', [
-      'start',
+    const { cmd, args } = devnodeCmd!
+    devnode = spawn(cmd, [
+      ...args,
       '--private-key', DEVNODE_KEY,
       '--socket-addr', `127.0.0.1:${DEVNODE_PORT}`,
-      '-v', '0',
+      ...(cmd === 'aleo-devnode' ? ['-v', '0'] : ['-q']),
     ], { stdio: 'ignore', detached: false })
 
     await waitForDevnode(DEVNODE_URL, STARTUP_TIMEOUT_MS)
@@ -162,13 +169,14 @@ describe.skipIf(!shouldRun || !isDevnodeInstalled())('devnet integration', () =>
       provingMode: 'local',
     })
 
-    const result = await walletClient.executeTransaction({
+    const result = await walletClient.executeContract({
       program: 'credits.aleo',
       function: 'transfer_public',
       inputs: [account.address, '1u64'],
     })
 
     expect(result.transactionId).toMatch(/^at1/)
+    expect(result.transitions).toBeDefined()
     expect(result.outputs).toBeDefined()
   }, 120_000)
 
@@ -255,7 +263,7 @@ describe.skipIf(!shouldRun || !isDevnodeInstalled())('devnet integration', () =>
       programSource: HELLO_PROGRAM,
     })
 
-    const execResult = await walletClient.executeTransaction({
+    const execResult = await walletClient.executeContract({
       program: 'hello_deploy_test.aleo',
       function: 'hello',
       inputs: ['5u32', '3u32'],
@@ -319,6 +327,191 @@ describe.skipIf(!shouldRun || !isDevnodeInstalled())('devnet integration', () =>
     expect(cardOutput).toContain('points')
     expect(cardOutput).toContain('500u64')
   }, 180_000)
+
+  // ── Cross-program per-transition outputs (#13) ─────────────────────
+
+  it('cross-program call returns per-transition outputs', async () => {
+    // Depends on loyalty_token.aleo deployed in the codegen test above
+    const networkClient = aleo.createNetworkClient(DEVNODE_URL)
+    const pm = new sdk.ProgramManager(DEVNODE_URL)
+    pm.setAccount(new sdk.Account({ privateKey: DEVNODE_KEY }))
+
+    // Deploy loyalty_rewards.aleo (imports loyalty_token.aleo)
+    const rewardsSource = readFileSync(
+      resolve(__dirname, '../../../apps/loyalty-node/loyalty_rewards/build/main.aleo'),
+      'utf-8',
+    )
+    const loyaltySource = readFileSync(
+      resolve(__dirname, '../../../apps/loyalty-node/loyalty_token/build/main.aleo'),
+      'utf-8',
+    )
+    const deployTx = await pm.buildDevnodeDeploymentTransaction({
+      program: rewardsSource,
+      priorityFee: 0,
+      privateFee: false,
+    })
+    await networkClient.submitTransaction(deployTx)
+    await new Promise((r) => setTimeout(r, 2_000))
+
+    // Mint a LoyaltyCard with enough points to redeem
+    const mintTx = await pm.buildDevnodeExecutionTransaction({
+      programName: 'loyalty_token.aleo',
+      functionName: 'mint_card',
+      inputs: [account.address, '1000u64', '99field'],
+      priorityFee: 0,
+      privateFee: false,
+    })
+    const mintTxId = await networkClient.submitTransaction(mintTx)
+    await new Promise((r) => setTimeout(r, 2_000))
+
+    // Extract the minted LoyaltyCard record
+    const mintConfirmed = await networkClient.getTransaction(mintTxId)
+    const mintTransition = mintConfirmed?.execution?.transitions?.[0]
+    const cardOutput = mintTransition?.outputs?.find((o: any) => o.type === 'record')
+    expect(cardOutput).toBeDefined()
+
+    const cardCiphertext = sdk.RecordCiphertext.fromString(cardOutput.value)
+    const viewKey = sdk.ViewKey.from_string(account.viewKey)
+    const cardPlaintext = cardCiphertext.decrypt(viewKey).toString()
+
+    // Call redeem_points_for_voucher (cross-program: calls loyalty_token/spend_points)
+    const redeemTx = await pm.buildDevnodeExecutionTransaction({
+      programName: 'loyalty_rewards.aleo',
+      functionName: 'redeem_points_for_voucher',
+      inputs: [cardPlaintext, '1u8', '500u64'],
+      priorityFee: 0,
+      privateFee: false,
+      imports: { 'loyalty_token.aleo': loyaltySource },
+    })
+    const redeemTxId = await networkClient.submitTransaction(redeemTx)
+    await new Promise((r) => setTimeout(r, 2_000))
+
+    // Verify per-transition outputs
+    const confirmed = await networkClient.getTransaction(redeemTxId)
+    const transitions = confirmed?.execution?.transitions ?? []
+
+    // Should have 2+ transitions: inner (loyalty_token/spend_points) then outer (loyalty_rewards/redeem)
+    expect(transitions.length).toBeGreaterThanOrEqual(2)
+
+    const programs = transitions.map((t: any) => t.program)
+    expect(programs).toContain('loyalty_token.aleo')
+    expect(programs).toContain('loyalty_rewards.aleo')
+
+    // Inner transition: loyalty_token/spend_points
+    const innerTransition = transitions.find((t: any) => t.program === 'loyalty_token.aleo')
+    expect(innerTransition.function).toBe('spend_points')
+
+    // Outer transition: loyalty_rewards/redeem_points_for_voucher (last per Aleo semantics)
+    const outerTransition = transitions[transitions.length - 1]
+    expect(outerTransition.program).toBe('loyalty_rewards.aleo')
+    expect(outerTransition.function).toBe('redeem_points_for_voucher')
+  }, 240_000)
+
+  // ── Mapping read/write round-trip ───────────────────────────────────
+
+  it('mapping reflects on-chain state after execution', async () => {
+    // mint_card (from codegen test above) wrote to total_cards[0field]
+    const { publicClient } = aleo.createAleoClient({
+      privateKey: DEVNODE_KEY,
+      networkUrl: DEVNODE_URL,
+    })
+
+    const totalCards = await publicClient.readContract({
+      programId: 'loyalty_token.aleo',
+      mapping: 'total_cards',
+      key: '0field',
+    })
+
+    // At least 1 card was minted (codegen test minted one, cross-program test minted another)
+    expect(totalCards).toBeDefined()
+    expect(totalCards).toContain('u64')
+    const count = BigInt(totalCards.replace('u64', ''))
+    expect(count).toBeGreaterThanOrEqual(1n)
+  }, 30_000)
+
+  // ── Record round-trip as input (#18) ──────────────────────────────
+
+  it('RecordValue output used as input to next execution', async () => {
+    const networkClient = aleo.createNetworkClient(DEVNODE_URL)
+    const pm = new sdk.ProgramManager(DEVNODE_URL)
+    pm.setAccount(new sdk.Account({ privateKey: DEVNODE_KEY }))
+
+    // Mint a fresh card
+    const mintTx = await pm.buildDevnodeExecutionTransaction({
+      programName: 'loyalty_token.aleo',
+      functionName: 'mint_card',
+      inputs: [account.address, '2000u64', '777field'],
+      priorityFee: 0,
+      privateFee: false,
+    })
+    const mintTxId = await networkClient.submitTransaction(mintTx)
+    await new Promise((r) => setTimeout(r, 2_000))
+
+    // Extract and decrypt the minted card record
+    const mintConfirmed = await networkClient.getTransaction(mintTxId)
+    const mintTransition = mintConfirmed?.execution?.transitions?.[0]
+    const cardOutput = mintTransition?.outputs?.find((o: any) => o.type === 'record')
+    expect(cardOutput).toBeDefined()
+
+    const cardCiphertext = sdk.RecordCiphertext.fromString(cardOutput.value)
+    const viewKey = sdk.ViewKey.from_string(account.viewKey)
+    const cardPlaintext = cardCiphertext.decrypt(viewKey).toString()
+
+    // Use the record as input to add_points
+    const addTx = await pm.buildDevnodeExecutionTransaction({
+      programName: 'loyalty_token.aleo',
+      functionName: 'add_points',
+      inputs: [cardPlaintext, '500u64'],
+      priorityFee: 0,
+      privateFee: false,
+    })
+    const addTxId = await networkClient.submitTransaction(addTx)
+    await new Promise((r) => setTimeout(r, 2_000))
+
+    // Verify the updated card has more points
+    const addConfirmed = await networkClient.getTransaction(addTxId)
+    const addTransition = addConfirmed?.execution?.transitions?.[0]
+    const updatedOutput = addTransition?.outputs?.find((o: any) => o.type === 'record')
+    expect(updatedOutput).toBeDefined()
+
+    const updatedCiphertext = sdk.RecordCiphertext.fromString(updatedOutput.value)
+    const updatedCard = updatedCiphertext.decrypt(viewKey).toString()
+
+    // Original 2000 + 500 added = 2500
+    expect(updatedCard).toContain('2500u64')
+  }, 180_000)
+
+  // ── getContract execute with transitions ───────────────────────────
+
+  it('getContract execute proxy returns parsed transitions', async () => {
+    const { getContract } = await import('@veil/core')
+
+    const { publicClient, walletClient } = aleo.createAleoClient({
+      privateKey: DEVNODE_KEY,
+      networkUrl: DEVNODE_URL,
+      provingMode: 'local',
+    })
+
+    const contract = getContract({
+      program: 'credits.aleo',
+      client: { public: publicClient, wallet: walletClient },
+    })
+
+    const result = await contract.execute.transfer_public({
+      inputs: [account.address, '1u64'],
+    })
+
+    expect(result.transactionId).toMatch(/^at1/)
+    expect(result.transitions).toBeDefined()
+    expect(result.transitions.length).toBeGreaterThanOrEqual(1)
+
+    // The called function's transition should be present
+    const creditTransition = result.transitions.find(
+      (t) => t.program === 'credits.aleo' && t.function === 'transfer_public',
+    )
+    expect(creditTransition).toBeDefined()
+    expect(creditTransition!.outputs).toBeDefined()
+  }, 120_000)
 
   // ── Error classifier validation against real SnarkOS ───────────────
   // These tests submit known-bad transactions and verify that Veil's
