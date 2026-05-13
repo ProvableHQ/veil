@@ -337,15 +337,24 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         })
 
         // Convert the wasm Transition objects into the wire-shaped tx that extractTransitions
-        // consumes (it expects `tx.execution.transitions[]` with `id`/`program`/`function`/`outputs`).
+        // consumes. Private outputs come back from an Authorization as TVK-encrypted ciphertexts
+        // (Aleo's on-chain privacy model); decrypt with the caller's TVK first so plaintext
+        // values are visible. `transition.toString()` emits the same wire-format JSON the chain
+        // returns from `/transaction/confirmed/{id}` — Aleo-typed string values like '10u32',
+        // 'aleo1...', or 'record1...' under each output's `value`.
         const tx = {
           execution: {
-            transitions: authorization.transitions().map((t: any) => ({
-              id: t.id(),
-              program: t.programId(),
-              function: t.functionName(),
-              outputs: t.outputs(true),
-            })),
+            transitions: authorization.transitions().map((t: any) => {
+              let source = t
+              if (accountViewKey) {
+                try {
+                  source = t.decryptTransition(t.tvk(accountViewKey))
+                } catch {
+                  // Foreign transition signed by another caller — leave outputs encrypted.
+                }
+              }
+              return JSON.parse(source.toString())
+            }),
           },
         }
 

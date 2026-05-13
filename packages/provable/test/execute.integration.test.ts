@@ -45,6 +45,26 @@ function hello:
     add r0 r1 into r2;
     output r2 as u32.private;`
 
+// Cross-program test vectors taken from the @provablehq/sdk JSDoc examples
+// (see `getProgramImports` in program-manager.d.ts). `double_test.aleo/double_it`
+// calls `multiply_test.aleo/multiply`, yielding a two-transition Authorization.
+const MULTIPLY_TEST_SOURCE = `program multiply_test.aleo;
+
+function multiply:
+    input r0 as u32.public;
+    input r1 as u32.private;
+    mul r0 r1 into r2;
+    output r2 as u32.private;`
+
+const DOUBLE_TEST_SOURCE = `import multiply_test.aleo;
+
+program double_test.aleo;
+
+function double_it:
+    input r0 as u32.private;
+    call multiply_test.aleo/multiply 2u32 r0 into r1;
+    output r1 as u32.private;`
+
 // Load the SDK once for all tests
 let aleo: AleoSdk
 
@@ -90,6 +110,41 @@ describe.skipIf(!shouldRun)('simulate (integration)', () => {
 
     expect(result.outputs).toHaveLength(1)
     expect(result.outputs[0]).toBe('8u32')
+  }, 120_000)
+
+  it('simulate builds a real cross-program Authorization with two transitions', async () => {
+    // Exercises buildAuthorization end-to-end against the wasm SDK via the full
+    // walletClient surface: `double_it(5u32)` internally calls `multiply(2u32, 5u32)`,
+    // so both transitions surface in the Authorization (both outputting `10u32`).
+    // No network needed — both program sources are supplied inline.
+    const { walletClient } = aleo.createAleoClient({
+      privateKey: DEMO_PRIVATE_KEY,
+      networkUrl: NETWORK_URL,
+      provingMode: 'local',
+    })
+
+    const result = await walletClient.simulateContract({
+      program: 'double_test.aleo',
+      function: 'double_it',
+      inputs: ['5u32'],
+      programSource: DOUBLE_TEST_SOURCE,
+      imports: { 'multiply_test.aleo': MULTIPLY_TEST_SOURCE },
+    })
+
+    expect(result.transitions).toHaveLength(2)
+
+    // Inner transition: multiply_test.aleo/multiply(2u32, 5u32) → 10u32
+    expect(result.transitions[0]!.program).toBe('multiply_test.aleo')
+    expect(result.transitions[0]!.function).toBe('multiply')
+    expect(result.transitions[0]!.outputs).toEqual(['10u32'])
+
+    // Outer (top-level) transition: double_test.aleo/double_it(5u32) → 10u32
+    expect(result.transitions[1]!.program).toBe('double_test.aleo')
+    expect(result.transitions[1]!.function).toBe('double_it')
+    expect(result.transitions[1]!.outputs).toEqual(['10u32'])
+
+    // Top-level outputs is the last (outer) transition's outputs.
+    expect(result.outputs).toEqual(['10u32'])
   }, 120_000)
 })
 
