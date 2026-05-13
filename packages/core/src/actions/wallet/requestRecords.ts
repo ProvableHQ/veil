@@ -33,7 +33,7 @@ export async function requestRecords(
     if (!recordProvider) {
       throw new Error(
         'Local account requires a recordProvider for requestRecords. ' +
-        'Pass createLocalScanner() or createRemoteScanner() in your wallet client config.',
+        'Pass createRemoteScanner() or a custom RecordProvider in your wallet client config.',
       )
     }
     return recordProvider.requestRecords(params)

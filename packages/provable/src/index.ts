@@ -114,10 +114,7 @@ export interface AleoSdk {
     confirmationTimeout?: number
   }): ProvingConfig
 
-  /** Creates a record scanner backed by `NetworkRecordProvider`. */
-  createLocalScanner(options: { url: string }): RecordProvider
-
-  /** Creates a record scanner backed by Provable's RSS. */
+  /** Creates a record scanner backed by Provable's Record Scanner Service. */
   createRemoteScanner(options: { url: string; consumerId: string }): RecordProvider
 
   /** Creates a standalone record scanner with an explicit view key. */
@@ -137,7 +134,7 @@ export interface AleoSdk {
     consumerId?: string
     /**
      * Record provider for `requestRecords`. Not wired by default — pass
-     * `aleo.createLocalScanner(...)`, `aleo.createRemoteScanner(...)`, or any
+     * `aleo.createRemoteScanner(...)` or any
      * custom `RecordProvider`. `requestRecords` throws with a setup hint
      * when no provider is configured.
      */
@@ -167,7 +164,6 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     Address,
     ViewKey,
     AleoNetworkClient,
-    NetworkRecordProvider,
     RecordScanner,
     OfflineQuery,
     RecordCiphertext,
@@ -444,48 +440,6 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     }
   }
 
-  function mapSdkRecords(records: any[], program: string, unspent: boolean): OwnedRecord[] {
-    return records.map((record) => ({
-      programName: record.program_name ?? program,
-      tag: '',
-      recordName: undefined,
-      spent: !unspent,
-      owner: record.owner,
-      recordPlaintext: record.record_plaintext ?? '',
-      recordCiphertext: record.record_ciphertext,
-      transactionId: record.transaction_id,
-      transitionId: record.transition_id,
-    }))
-  }
-
-  function createLocalScanner(options: { url: string }): RecordProvider {
-    let sdkAccount: InstanceType<SdkModule['Account']> | undefined
-
-    return {
-      setAccount: (account: { viewKey: string }) => {
-        const viewKey = ViewKey.from_string(account.viewKey)
-        sdkAccount = new Account({ viewKey: viewKey.to_string() })
-      },
-
-      requestRecords: async (params: RequestRecordsParameters): Promise<OwnedRecord[]> => {
-        if (!sdkAccount) {
-          throw new Error('No active account set on record scanner. Call setAccount() first.')
-        }
-
-        const networkClient = new AleoNetworkClient(options.url)
-        const recordProvider = new NetworkRecordProvider(sdkAccount, networkClient)
-
-        const unspent = params.statusFilter !== 'spent'
-        const ownedRecords = await recordProvider.findRecords({
-          unspent,
-          programName: params.program,
-        })
-
-        return mapSdkRecords(ownedRecords, params.program, unspent)
-      },
-    }
-  }
-
   function createRemoteScanner(options: { url: string; consumerId: string }): RecordProvider {
     let scanner: InstanceType<SdkModule['RecordScanner']> | undefined
 
@@ -513,7 +467,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           },
         })
 
-        return (records ?? []) as OwnedRecord[]
+        return (records ?? []) as unknown as OwnedRecord[]
       },
     }
   }
@@ -541,7 +495,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           },
         })
 
-        return (records ?? []) as OwnedRecord[]
+        return (records ?? []) as unknown as OwnedRecord[]
       },
     }
   }
@@ -592,7 +546,6 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     verifySignature,
     createNetworkClient,
     createProvingConfig,
-    createLocalScanner,
     createRemoteScanner,
     createStandaloneScanner,
     createAleoClient,
