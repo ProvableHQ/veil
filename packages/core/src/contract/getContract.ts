@@ -256,7 +256,7 @@ export function getContract(params: GetContractParameters): ContractInstance {
       }
       return async (execParams: ContractExecuteParams) => {
         validateFunction(prop)
-        const result = await walletClient.executeTransaction({
+        const result = await walletClient.executeContract({
           program,
           function: prop,
           inputs: resolveInputs(execParams.inputs, prop),
@@ -264,20 +264,19 @@ export function getContract(params: GetContractParameters): ContractInstance {
           imports: { ...contractImports, ...execParams.imports },
         })
 
-        // Build per-transition parsed results
+        // Build per-transition parsed results.
+        // Same-program transitions: parse with local ABI. Foreign: loose parse.
         const transitions: ContractTransitionResult[] = (result.transitions ?? []).map(t => ({
           transitionId: t.transitionId,
           program: t.program,
           function: t.function,
-          // Same-program transitions: parse with local ABI. Foreign: loose parse.
           outputs: t.program === program
             ? parseOutputs(t.outputs, t.function)
             : t.outputs.map(o => parseLooseOutput(o)),
         }))
 
-        // Top-level outputs: the transition matching the called program/function
-        const topLevel = transitions.find(t => t.program === program && t.function === prop)
-        const outputs = topLevel?.outputs ?? parseOutputs(result.outputs, prop)
+        // Raw `outputs` is already the called function's transition outputs (set by extractTransitions).
+        const outputs = parseOutputs(result.outputs, prop)
 
         return { transactionId: result.transactionId, transitions, outputs }
       }

@@ -123,6 +123,8 @@ export { parseValue, encodeValue, type ParsedValue } from './utils/values.js'
 export { parseRecordPlaintext, parseRecordPlaintextLoose, toString, serializeRecord, encodeInputs, getRecordDef, getInputTypes } from './utils/records.js'
 export { parsePrimitive, parsePlaintext } from './utils/parsePrimitives.js'
 export { parseAbi } from './utils/parseAbi.js'
+export { waitForConfirmation } from './utils/waitForConfirmation.js'
+export { extractTransitions, type Decryptor } from './utils/extractTransitions.js'
 
 // Transports
 export { createTransport } from './transports/createTransport.js'
@@ -204,8 +206,8 @@ export { readMapping } from './actions/public/readMapping.js'
 
 // Wallet Actions (standalone)
 export { simulateContract, type SimulateContractParameters, type SimulateContractReturnType } from './actions/wallet/simulateContract.js'
-export { executeContract as executeTransaction, type ExecuteContractParameters, type ExecuteContractReturnType } from './actions/wallet/executeContract.js'
-export { writeContract } from './actions/wallet/writeContract.js'
+export { executeContract, type ExecuteContractParameters, type ExecuteContractReturnType } from './actions/wallet/executeContract.js'
+export { writeContract, executeTransaction, type WriteContractParameters, type WriteContractReturnType } from './actions/wallet/writeContract.js'
 export { deployContract } from './actions/wallet/deployContract.js'
 export { sendTransaction } from './actions/wallet/sendTransaction.js'
 export { signMessage } from './actions/wallet/signMessage.js'
