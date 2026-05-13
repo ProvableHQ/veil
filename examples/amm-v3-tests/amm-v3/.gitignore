@@ -1,0 +1,12 @@
+.env
+*.avm
+*.prover
+*.verifier
+outputs/
+build
+.logs*
+.ledger*
+.node-data*
+.DS_Store
+CLAUDE.md
+.claude/
