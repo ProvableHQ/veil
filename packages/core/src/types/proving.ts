@@ -64,7 +64,7 @@ export type RawExecuteResult = {
   transactionId: string
   /** Per-transition results with program/function metadata */
   transitions: RawTransitionResult[]
-  /** Flat projection of all transition outputs for backwards compatibility */
+  /** Outputs of the called function's transition only — inner cross-program transition outputs live in `transitions[]`. */
   outputs: string[]
 }
 

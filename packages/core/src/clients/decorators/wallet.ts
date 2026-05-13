@@ -16,10 +16,12 @@ import type { Client } from '../createClient.js'
 export type WalletActions = {
   sendTransaction: (params: SendTransactionParameters) => Promise<SendTransactionReturnType>
   writeContract: (params: WriteContractParameters) => Promise<WriteContractReturnType>
+  /** Alias for writeContract — matches the Aleo wallet adapter spec (submit and return a transaction id). */
+  executeTransaction: (params: WriteContractParameters) => Promise<WriteContractReturnType>
   /** Execute locally and return outputs without broadcasting (local accounts only) */
   simulateContract: (params: SimulateContractParameters) => Promise<SimulateContractReturnType>
-  /** Build, broadcast, wait for confirmation, and return outputs. Matches wallet adapter standard naming. */
-  executeTransaction: (params: ExecuteContractParameters) => Promise<ExecuteContractReturnType>
+  /** Build, broadcast, wait for confirmation, and return per-transition outputs. */
+  executeContract: (params: ExecuteContractParameters) => Promise<ExecuteContractReturnType>
   deployContract: (params: DeployContractParameters) => Promise<DeployContractReturnType>
   signMessage: (params: SignMessageParameters) => Promise<SignMessageReturnType>
   transfer: (params: TransferParameters) => Promise<TransferReturnType>
@@ -39,8 +41,9 @@ export function walletActions(client: Client): WalletActions {
   return {
     sendTransaction: (params) => sendTransaction(client, params),
     writeContract: (params) => writeContract(client, params),
+    executeTransaction: (params) => writeContract(client, params),
     simulateContract: (params) => simulateContract(client, params),
-    executeTransaction: (params) => executeContract(client, params),
+    executeContract: (params) => executeContract(client, params),
     deployContract: (params) => deployContract(client, params),
     signMessage: (params) => signMessage(client, params),
     transfer: (params) => transfer(client, params),

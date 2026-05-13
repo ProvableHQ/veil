@@ -116,12 +116,12 @@ describe('getContract', () => {
     })
   })
 
-  it('execute proxy delegates to walletClient.executeTransaction', async () => {
-    const executeTransaction = vi.fn().mockResolvedValue({ transactionId: 'tx1', outputs: ['100u64'] })
+  it('execute proxy delegates to walletClient.executeContract', async () => {
+    const executeContract = vi.fn().mockResolvedValue({ transactionId: 'tx1', transitions: [], outputs: ['100u64'] })
     const mockWallet = {
       writeContract: vi.fn(),
       simulateContract: vi.fn(),
-      executeTransaction,
+      executeContract,
       key: 'wallet', name: 'test',
       request: vi.fn(), transport: { config: {} as any, request: vi.fn() },
       uid: 'test', extend: vi.fn(),
@@ -140,7 +140,7 @@ describe('getContract', () => {
 
     await contract.execute.mint({ inputs: ['aleo1abc', '100u64'] })
 
-    expect(executeTransaction).toHaveBeenCalledWith({
+    expect(executeContract).toHaveBeenCalledWith({
       program: 'token.aleo',
       function: 'mint',
       inputs: ['aleo1abc', '100u64'],
@@ -330,12 +330,13 @@ describe('getContract', () => {
   })
 
   it('execute auto-parses outputs with transactionId', async () => {
-    const executeTransaction = vi.fn().mockResolvedValue({
+    const executeContract = vi.fn().mockResolvedValue({
       transactionId: 'tx123',
+      transitions: [],
       outputs: ['{ owner: aleo1abc.private, points: 1000u64.private, _nonce: 0group.public }'],
     })
     const mockWallet = {
-      writeContract: vi.fn(), simulateContract: vi.fn(), executeTransaction,
+      writeContract: vi.fn(), simulateContract: vi.fn(), executeContract,
       key: 'wallet', name: 'test',
       request: vi.fn(), transport: { config: {} as any, request: vi.fn() },
       uid: 'test', extend: vi.fn(),
@@ -414,7 +415,7 @@ describe('getContract', () => {
 
 describe('getContract execute proxy — per-transition outputs', () => {
   it('returns structured transitions from execute result', async () => {
-    const executeTransaction = vi.fn().mockResolvedValue({
+    const executeContract = vi.fn().mockResolvedValue({
       transactionId: 'at1abc',
       transitions: [
         {
@@ -429,7 +430,7 @@ describe('getContract execute proxy — per-transition outputs', () => {
     const mockWallet = {
       account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
       writeContract: vi.fn(),
-      executeTransaction,
+      executeContract,
       simulateContract: vi.fn(),
     }
 
@@ -449,7 +450,7 @@ describe('getContract execute proxy — per-transition outputs', () => {
   })
 
   it('parses transition with dynamicId record output', async () => {
-    const executeTransaction = vi.fn().mockResolvedValue({
+    const executeContract = vi.fn().mockResolvedValue({
       transactionId: 'at1dyn',
       transitions: [
         {
@@ -464,7 +465,7 @@ describe('getContract execute proxy — per-transition outputs', () => {
     const mockWallet = {
       account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
       writeContract: vi.fn(),
-      executeTransaction,
+      executeContract,
       simulateContract: vi.fn(),
     }
 
@@ -506,7 +507,7 @@ describe('getContract execute proxy — per-transition outputs', () => {
   })
 
   it('handles cross-program transitions with loose parsing', async () => {
-    const executeTransaction = vi.fn().mockResolvedValue({
+    const executeContract = vi.fn().mockResolvedValue({
       transactionId: 'at1cross',
       transitions: [
         {
@@ -522,15 +523,13 @@ describe('getContract execute proxy — per-transition outputs', () => {
           outputs: ['{\n  owner: aleo1abc.private,\n  amount: 200u64.private,\n  _nonce: 789group.public\n}'],
         },
       ],
-      outputs: [
-        '{\n  owner: aleo1abc.private,\n  points: 500u64.private,\n  _nonce: 456group.public\n}',
-        '{\n  owner: aleo1abc.private,\n  amount: 200u64.private,\n  _nonce: 789group.public\n}',
-      ],
+      // Raw `outputs` is the called function's transition only — inner transitions live in `transitions[]`.
+      outputs: ['{\n  owner: aleo1abc.private,\n  amount: 200u64.private,\n  _nonce: 789group.public\n}'],
     })
     const mockWallet = {
       account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
       writeContract: vi.fn(),
-      executeTransaction,
+      executeContract,
       simulateContract: vi.fn(),
     }
 
@@ -551,15 +550,52 @@ describe('getContract execute proxy — per-transition outputs', () => {
     expect(result.outputs).toHaveLength(1)
   })
 
-  it('falls back to flat outputs when transitions not available', async () => {
-    const executeTransaction = vi.fn().mockResolvedValue({
+  it('outputs is empty when no transition matches the called program/function', async () => {
+    // Defensive case: wallet returns transitions but none match the called program/function.
+    // The raw layer's extractTransitions returns outputs: [] in that case; the proxy must pass through.
+    const executeContract = vi.fn().mockResolvedValue({
+      transactionId: 'at1mismatch',
+      transitions: [
+        {
+          transitionId: 'au1other',
+          program: 'other.aleo',
+          function: 'something_else',
+          outputs: ['{\n  owner: aleo1abc.private,\n  data: 42u64.private,\n  _nonce: 1group.public\n}'],
+        },
+      ],
+      outputs: [],
+    })
+    const mockWallet = {
+      account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
+      writeContract: vi.fn(),
+      executeContract,
+      simulateContract: vi.fn(),
+    }
+
+    const contract = getContract({
+      program: 'token.aleo',
+      client: mockWallet as any,
+    })
+
+    const result = await contract.execute.mint({ inputs: ['aleo1abc', '1000u64'] })
+
+    expect(result.transactionId).toBe('at1mismatch')
+    // The unrelated transition is still surfaced under `transitions` (loose-parsed since it's a foreign program).
+    expect(result.transitions).toHaveLength(1)
+    expect(result.transitions[0].program).toBe('other.aleo')
+    // But top-level `outputs` is empty — we don't claim outputs that don't belong to the called function.
+    expect(result.outputs).toEqual([])
+  })
+
+  it('handles execute result without transitions array', async () => {
+    const executeContract = vi.fn().mockResolvedValue({
       transactionId: 'at1old',
       outputs: ['100u64'],
     })
     const mockWallet = {
       account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
       writeContract: vi.fn(),
-      executeTransaction,
+      executeContract,
       simulateContract: vi.fn(),
     }
 
