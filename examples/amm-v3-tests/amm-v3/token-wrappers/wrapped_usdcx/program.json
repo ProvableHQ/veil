@@ -1,0 +1,14 @@
+{
+  "program": "wrapped_usdcx.aleo",
+  "version": "0.1.0",
+  "description": "ARC-20 wrapper for test_usdcx_stablecoin.aleo",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "test_usdcx_stablecoin.aleo",
+      "location": "network",
+      "network": "testnet"
+    }
+  ],
+  "dev_dependencies": []
+}

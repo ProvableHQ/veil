@@ -1,0 +1,15 @@
+{
+  "program": "test_token_b.aleo",
+  "version": "0.1.0",
+  "description": "ARC-20 MintableToken test wrapper for token_registry",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "token_registry.aleo",
+      "location": "local",
+      "path": "../../imports/token_registry.aleo",
+      "edition": null
+    }
+  ],
+  "dev_dependencies": []
+}

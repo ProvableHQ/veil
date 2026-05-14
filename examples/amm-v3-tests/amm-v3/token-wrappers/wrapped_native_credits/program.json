@@ -1,0 +1,14 @@
+{
+  "program": "wrapped_native_credits.aleo",
+  "version": "0.1.0",
+  "description": "ARC-20 wrapper for native credits.aleo",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "credits.aleo",
+      "location": "network",
+      "network": "testnet"
+    }
+  ],
+  "dev_dependencies": []
+}

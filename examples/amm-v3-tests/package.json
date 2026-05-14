@@ -1,0 +1,8 @@
+{
+  "name": "@veil/amm-v3-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "AMM_V3_E2E=1 pnpm -w exec vitest run examples/amm-v3-tests/tests/amm.test.ts"
+  }
+}

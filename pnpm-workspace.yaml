@@ -1,3 +1,4 @@
 packages:
   - "packages/*"
   - "apps/*"
+  - "examples/amm-v3-tests"
