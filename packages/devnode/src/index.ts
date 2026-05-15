@@ -153,7 +153,10 @@ async function spawnDevnode(
   socketAddr: string,
   readyTimeout: number,
 ): Promise<DevnodeInstance> {
-  const proc = spawn(devnodePath, args, { stdio: 'pipe' })
+  const proc = spawn(devnodePath, args, {
+    stdio: 'pipe',
+    env: { ...process.env, CONSENSUS_VERSION_HEIGHTS: '0,1,2,3,4,5,6,7,8,9,10,11,12,13' },
+  })
   proc.stdout?.resume()
   proc.stderr?.resume()
 

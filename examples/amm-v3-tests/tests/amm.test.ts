@@ -16,16 +16,15 @@ import { fileURLToPath } from 'node:url'
 import { createTestClient, http } from '@veil/core'
 import type { TestClient, WalletClient, PublicClient } from '@veil/core'
 import type { LocalAccount } from '@veil/core'
-import { createDevnodeClient } from '@veil/provable'
 import { startDevnode, type DevnodeInstance } from '@veil/devnode'
 import { createLeoClient } from '@veil/leo'
 
 import { AmmClient, AMM_PROGRAM_ID } from '../src/client/amm-client.js'
-import { TokenRegistryClient, TOKEN_REGISTRY_PROGRAM_ID } from '../src/client/token-registry-client.js'
+import { TokenRegistryClient } from '../src/client/token-registry-client.js'
 import { getSqrtPriceAtTick } from '../src/utils/math.js'
-import { toField, toU128, toU16, toU32, toI32 } from '../src/utils/formatting.js'
+import { toField, toU16, toU32 } from '../src/utils/formatting.js'
 import { FEE_TIERS, TICK_SPACINGS } from '../src/types/index.js'
-import { DEVNODE_KEYS, makeClients } from './helpers/accounts.js'
+import { makeClients } from './helpers/accounts.js'
 import { TOKENS, setupToken } from './helpers/tokens.js'
 
 const RUN = process.env.AMM_V3_E2E === '1'
@@ -58,8 +57,6 @@ let adminWallet:  WalletClient
 let adminAccount: LocalAccount<'privateKey'>
 let user1Wallet:  WalletClient
 let user1Account: LocalAccount<'privateKey'>
-let user2Wallet:  WalletClient
-let user2Account: LocalAccount<'privateKey'>
 let publicClient: PublicClient
 
 let ammClient:           AmmClient
@@ -71,7 +68,7 @@ let poolKeyP3: string
 
 // ── Deployment helpers ────────────────────────────────────────────────────────
 
-async function buildAndDeploy(name: string, aleoPath: string, leoDir?: string) {
+async function buildAndDeploy(_name: string, aleoPath: string, leoDir?: string) {
   if (leoDir) {
     const leo = createLeoClient({ cwd: leoDir })
     await leo.build()
@@ -83,6 +80,8 @@ async function buildAndDeploy(name: string, aleoPath: string, leoDir?: string) {
 }
 
 async function deployAllPrograms() {
+  // Advance to height 13 so all deployments land at height 14+ (ConsensusVersion::V14 activates at height 13).
+  for (let i = 0; i < 13; i++) await testClient.advanceBlock()
   await buildAndDeploy(
     'token_registry',
     resolve(AMM_V3_DIR, 'build/imports/token_registry.aleo'),
@@ -106,11 +105,10 @@ async function deployAllPrograms() {
 async function getPoolKeyFromTx(txId: string): Promise<string> {
   const tx = await publicClient.getTransaction({ id: txId })
   // Walk execution transitions to find the public output field value.
-  const exec = (tx as unknown as { transaction: { execution: { transitions: unknown[] } } })
-    .transaction?.execution
-  for (const t of exec?.transitions ?? []) {
-    const transition = t as { outputs?: Array<{ type: string; value: string }> }
-    for (const out of transition.outputs ?? []) {
+  // getTransaction returns the raw Transaction (not ConfirmedTransaction), so execution is top-level.
+  const transitions = tx.execution?.transitions ?? []
+  for (const t of transitions) {
+    for (const out of t.outputs ?? []) {
       if (out.type === 'public' && out.value?.endsWith('field')) {
         return out.value.replace(/field$/, '')
       }
@@ -138,14 +136,9 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
     user1Wallet  = u1.walletClient
     user1Account = u1.account
 
-    const u2 = makeClients('user2', devnode.socketAddr)
-    user2Wallet  = u2.walletClient
-    user2Account = u2.account
-
     ammClient           = new AmmClient(publicClient)
     tokenRegistryClient = new TokenRegistryClient(publicClient)
 
-    await testClient.advanceBlock()
     await deployAllPrograms()
   }, 300_000)
 
@@ -200,7 +193,7 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
   describe('02 - token setup', () => {
     it('sets up TOKA for admin and user1', async () => {
       await setupToken('TOKA', adminWallet, [adminWallet, user1Wallet], adminAccount.address, TOKEN_AMOUNT, testClient)
-      const meta = await tokenRegistryClient.getTokenMetadata(TOKENS.TOKA.registryTokenId!)
+      const meta = await tokenRegistryClient.getTokenMetadata(TOKENS.TOKA!.registryTokenId!)
       expect(meta).not.toBeNull()
     })
 
@@ -223,8 +216,8 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
         program: AMM_PROGRAM_ID,
         function: 'create_pool',
         inputs: ammClient.formatCreatePoolInputs(
-          TOKENS[p.symbol0].ammTokenId,
-          TOKENS[p.symbol1].ammTokenId,
+          TOKENS[p.symbol0]!.ammTokenId,
+          TOKENS[p.symbol1]!.ammTokenId,
           p.fee, sqrtPrice, p.spacing, 0,
         ),
       })
@@ -240,8 +233,8 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
         program: AMM_PROGRAM_ID,
         function: 'create_pool',
         inputs: ammClient.formatCreatePoolInputs(
-          TOKENS[p.symbol0].ammTokenId,
-          TOKENS[p.symbol1].ammTokenId,
+          TOKENS[p.symbol0]!.ammTokenId,
+          TOKENS[p.symbol1]!.ammTokenId,
           p.fee, sqrtPrice, p.spacing, 0,
         ),
       })
@@ -257,8 +250,8 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
         program: AMM_PROGRAM_ID,
         function: 'create_pool',
         inputs: ammClient.formatCreatePoolInputs(
-          TOKENS[p.symbol0].ammTokenId,
-          TOKENS[p.symbol1].ammTokenId,
+          TOKENS[p.symbol0]!.ammTokenId,
+          TOKENS[p.symbol1]!.ammTokenId,
           p.fee, sqrtPrice, p.spacing, 0,
         ),
       })
@@ -277,7 +270,8 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
 
       await user1Wallet.writeContract({
         program: AMM_PROGRAM_ID,
-        function: 'mint_position',
+        function: 'mint',
+        imports: [TOKENS[p.symbol0]!.programId, TOKENS[p.symbol1]!.programId],
         inputs: ammClient.formatMintInputs(
           user1Account.address,
           {
@@ -291,8 +285,8 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
             tick_lower_hint:  tickLower,
             tick_upper_hint:  tickUpper,
           },
-          TOKENS[p.symbol0].ammTokenId,
-          TOKENS[p.symbol1].ammTokenId,
+          TOKENS[p.symbol0]!.ammTokenId,
+          TOKENS[p.symbol1]!.ammTokenId,
         ),
       })
       await testClient.advanceBlock()
@@ -306,7 +300,8 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
       const p = POOLS.P2
       await user1Wallet.writeContract({
         program: AMM_PROGRAM_ID,
-        function: 'mint_position',
+        function: 'mint',
+        imports: [TOKENS[p.symbol0]!.programId, TOKENS[p.symbol1]!.programId],
         inputs: ammClient.formatMintInputs(
           user1Account.address,
           {
@@ -320,8 +315,8 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
             tick_lower_hint:  TICK_LOWER,
             tick_upper_hint:  TICK_UPPER,
           },
-          TOKENS[p.symbol0].ammTokenId,
-          TOKENS[p.symbol1].ammTokenId,
+          TOKENS[p.symbol0]!.ammTokenId,
+          TOKENS[p.symbol1]!.ammTokenId,
         ),
       })
       await testClient.advanceBlock()
@@ -334,7 +329,8 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
       const p = POOLS.P3
       await user1Wallet.writeContract({
         program: AMM_PROGRAM_ID,
-        function: 'mint_position',
+        function: 'mint',
+        imports: [TOKENS[p.symbol0]!.programId, TOKENS[p.symbol1]!.programId],
         inputs: ammClient.formatMintInputs(
           user1Account.address,
           {
@@ -348,8 +344,8 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
             tick_lower_hint:  TICK_LOWER,
             tick_upper_hint:  TICK_UPPER,
           },
-          TOKENS[p.symbol0].ammTokenId,
-          TOKENS[p.symbol1].ammTokenId,
+          TOKENS[p.symbol0]!.ammTokenId,
+          TOKENS[p.symbol1]!.ammTokenId,
         ),
       })
       await testClient.advanceBlock()
@@ -363,6 +359,8 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
       poolKey: string,
       token0Id: string,
       token1Id: string,
+      token0Program: string,
+      token1Program: string,
       zeroForOne: boolean,
       wallet: WalletClient,
     ) {
@@ -373,7 +371,8 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
 
       const txId = await wallet.writeContract({
         program: AMM_PROGRAM_ID,
-        function: 'swap_exact_input',
+        function: 'swap',
+        imports: [token0Program, token1Program],
         inputs: ammClient.formatSwapInputs(
           {
             pool:             poolKey,
@@ -397,34 +396,34 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
 
     it('S1: TOKA → TOKB (P1, zero_for_one)', async () => {
       const p = POOLS.P1
-      await doSwap(poolKeyP1, TOKENS[p.symbol0].ammTokenId, TOKENS[p.symbol1].ammTokenId, true, adminWallet)
+      await doSwap(poolKeyP1, TOKENS[p.symbol0]!.ammTokenId, TOKENS[p.symbol1]!.ammTokenId, TOKENS[p.symbol0]!.programId, TOKENS[p.symbol1]!.programId, true, adminWallet)
       const slot = await ammClient.getSlot(poolKeyP1)
       expect(slot).not.toBeNull()
     })
 
     it('S2: TOKB → TOKA (P1, one_for_zero)', async () => {
       const p = POOLS.P1
-      await doSwap(poolKeyP1, TOKENS[p.symbol0].ammTokenId, TOKENS[p.symbol1].ammTokenId, false, adminWallet)
+      await doSwap(poolKeyP1, TOKENS[p.symbol0]!.ammTokenId, TOKENS[p.symbol1]!.ammTokenId, TOKENS[p.symbol0]!.programId, TOKENS[p.symbol1]!.programId, false, adminWallet)
     })
 
     it('S3: TOKA → WCRED (P2, zero_for_one)', async () => {
       const p = POOLS.P2
-      await doSwap(poolKeyP2, TOKENS[p.symbol0].ammTokenId, TOKENS[p.symbol1].ammTokenId, true, adminWallet)
+      await doSwap(poolKeyP2, TOKENS[p.symbol0]!.ammTokenId, TOKENS[p.symbol1]!.ammTokenId, TOKENS[p.symbol0]!.programId, TOKENS[p.symbol1]!.programId, true, adminWallet)
     })
 
     it('S4: WCRED → TOKA (P2, one_for_zero)', async () => {
       const p = POOLS.P2
-      await doSwap(poolKeyP2, TOKENS[p.symbol0].ammTokenId, TOKENS[p.symbol1].ammTokenId, false, adminWallet)
+      await doSwap(poolKeyP2, TOKENS[p.symbol0]!.ammTokenId, TOKENS[p.symbol1]!.ammTokenId, TOKENS[p.symbol0]!.programId, TOKENS[p.symbol1]!.programId, false, adminWallet)
     })
 
     it('S5: TOKB → WCRED (P3, zero_for_one)', async () => {
       const p = POOLS.P3
-      await doSwap(poolKeyP3, TOKENS[p.symbol0].ammTokenId, TOKENS[p.symbol1].ammTokenId, true, adminWallet)
+      await doSwap(poolKeyP3, TOKENS[p.symbol0]!.ammTokenId, TOKENS[p.symbol1]!.ammTokenId, TOKENS[p.symbol0]!.programId, TOKENS[p.symbol1]!.programId, true, adminWallet)
     })
 
     it('S6: WCRED → TOKB (P3, one_for_zero)', async () => {
       const p = POOLS.P3
-      await doSwap(poolKeyP3, TOKENS[p.symbol0].ammTokenId, TOKENS[p.symbol1].ammTokenId, false, adminWallet)
+      await doSwap(poolKeyP3, TOKENS[p.symbol0]!.ammTokenId, TOKENS[p.symbol1]!.ammTokenId, TOKENS[p.symbol0]!.programId, TOKENS[p.symbol1]!.programId, false, adminWallet)
     })
   })
 
@@ -437,9 +436,10 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
       await adminWallet.writeContract({
         program: AMM_PROGRAM_ID,
         function: 'swap_multi_hop',
+        imports: [TOKENS.TOKA!.programId, TOKENS.TOKB!.programId, TOKENS.WCRED!.programId],
         inputs: ammClient.formatSwapMultiHopInputs({
-          token_in:       TOKENS.TOKA.ammTokenId,
-          token_out:      TOKENS.WCRED.ammTokenId,
+          token_in:       TOKENS.TOKA!.ammTokenId,
+          token_out:      TOKENS.WCRED!.ammTokenId,
           amount_in:      SWAP_AMOUNT,
           amount_out_min: 0n,
           recipient:      adminAccount.address,

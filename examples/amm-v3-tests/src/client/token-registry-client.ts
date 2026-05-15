@@ -1,5 +1,5 @@
 import type { PublicClient } from '@veil/core'
-import { toField, toU8, parseStruct } from '../utils/formatting.js'
+import { toField, parseStruct } from '../utils/formatting.js'
 
 export const TOKEN_REGISTRY_PROGRAM_ID = 'token_registry.aleo'
 
@@ -45,7 +45,7 @@ export class TokenRegistryClient {
     const bytes = new TextEncoder().encode(str)
     let result = BigInt(0)
     for (let i = 0; i < Math.min(bytes.length, 16); i++) {
-      result |= BigInt(bytes[i]) << BigInt(i * 8)
+      result |= BigInt(bytes[i]!) << BigInt(i * 8)
     }
     return result
   }
@@ -76,7 +76,7 @@ export function encodeIdentifierToField(name: string): string {
   const bytes = new TextEncoder().encode(name)
   let result = BigInt(0)
   for (let i = 0; i < bytes.length; i++) {
-    result |= BigInt(bytes[i]) << (BigInt(i) * 8n)
+    result |= BigInt(bytes[i]!) << (BigInt(i) * 8n)
   }
   return result.toString()
 }

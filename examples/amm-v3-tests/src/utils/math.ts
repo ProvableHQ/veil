@@ -34,10 +34,10 @@ export function getSqrtPriceAtTick(tick: number): bigint {
 
   const absTick = Math.abs(tick)
   const lowBits = absTick & 0x3
-  let ratio = lowBits === 0 ? Q64 : MAGIC[lowBits]
+  let ratio: bigint = lowBits === 0 ? Q64 : MAGIC[lowBits]!
 
   for (const bit of [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288]) {
-    if ((absTick & bit) !== 0) ratio = (ratio * MAGIC[bit]) >> BigInt(63)
+    if ((absTick & bit) !== 0) ratio = (ratio * MAGIC[bit]!) >> BigInt(63)
   }
 
   return tick < 0 ? ratio : (Q64 * Q64) / ratio

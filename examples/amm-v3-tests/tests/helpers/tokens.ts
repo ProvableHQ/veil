@@ -10,7 +10,7 @@ export function identifierToField(name: string): string {
   const bytes = new TextEncoder().encode(name)
   let result = BigInt(0)
   for (let i = 0; i < bytes.length; i++) {
-    result |= BigInt(bytes[i]) << (BigInt(i) * 8n)
+    result |= BigInt(bytes[i]!) << (BigInt(i) * 8n)
   }
   return result.toString()
 }
@@ -62,7 +62,7 @@ function encodeString(str: string): bigint {
   const bytes = new TextEncoder().encode(str)
   let result = BigInt(0)
   for (let i = 0; i < Math.min(bytes.length, 16); i++) {
-    result |= BigInt(bytes[i]) << BigInt(i * 8)
+    result |= BigInt(bytes[i]!) << BigInt(i * 8)
   }
   return result
 }
@@ -119,12 +119,10 @@ export async function depositIntoWrapper(
   testClient: TestClient,
 ): Promise<void> {
   const token = TOKENS[symbol]
-  const fn = token.underlying === 'credits' ? 'deposit_public_as_signer' : 'deposit_public'
-  const inputs = token.underlying === 'credits'
-    ? [toU128(amount)]
-    : [toField(token.registryTokenId!), toU128(amount)]
+  if (!token) return
+  const inputs = [toU128(amount)]
 
-  await userWallet.writeContract({ program: token.programId, function: fn, inputs })
+  await userWallet.writeContract({ program: token.programId, function: 'deposit_public', inputs })
   await testClient.advanceBlock()
 }
 
@@ -136,6 +134,7 @@ export async function approveAmmToSpend(
   testClient: TestClient,
 ): Promise<void> {
   const token = TOKENS[symbol]
+  if (!token) return
   await userWallet.writeContract({
     program: token.programId,
     function: 'approve_public',
@@ -157,7 +156,7 @@ export async function setupToken(
   for (const wallet of userWallets) {
     const addr = (wallet as unknown as { account: { address: string } }).account.address
 
-    if (TOKENS[symbol].underlying === 'credits') {
+    if (TOKENS[symbol]?.underlying === 'credits') {
       // Fund the user with credits before depositing into the wrapper.
       await adminWallet.writeContract({
         program: 'credits.aleo',

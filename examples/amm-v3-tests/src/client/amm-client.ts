@@ -187,9 +187,9 @@ export class AmmClient {
         owner:      strip(p.owner),
         token_id:   strip(p.token_id),
         pool:       strip(p.pool),
-        tick_lower: fromI32(strip(p.tick_lower)),
-        tick_upper: fromI32(strip(p.tick_upper)),
-        _nonce:     p._nonce,
+        tick_lower: fromI32(strip(p.tick_lower ?? '')),
+        tick_upper: fromI32(strip(p.tick_upper ?? '')),
+        _nonce:     p._nonce!,
         _version:   p._version,
       }
     } catch {
@@ -218,65 +218,65 @@ export class AmmClient {
   private parsePoolState(raw: string): PoolState {
     const p = parseStruct(raw)
     return {
-      token0:   fromField(p.token0),
-      token1:   fromField(p.token1),
-      fee:      fromU16(p.fee),
-      enabled:  fromBool(p.enabled),
+      token0:   fromField(p.token0!),
+      token1:   fromField(p.token1!),
+      fee:      fromU16(p.fee!),
+      enabled:  fromBool(p.enabled!),
     }
   }
 
   private parseSlot(raw: string): Slot {
     const p = parseStruct(raw)
     return {
-      tick:                       fromI32(p.tick),
-      tick_spacing:               fromU32(p.tick_spacing),
-      sqrt_price:                 fromU128(p.sqrt_price),
-      fee_protocol:               fromU8(p.fee_protocol),
-      liquidity:                  fromU128(p.liquidity),
-      fee_growth_global0_x_128:   fromU128(p.fee_growth_global0_x_128),
-      fee_growth_global1_x_128:   fromU128(p.fee_growth_global1_x_128),
-      max_liquidity_per_tick:     fromU128(p.max_liquidity_per_tick),
-      protocol_fees0:             fromU128(p.protocol_fees0),
-      protocol_fees1:             fromU128(p.protocol_fees1),
+      tick:                       fromI32(p.tick!),
+      tick_spacing:               fromU32(p.tick_spacing!),
+      sqrt_price:                 fromU128(p.sqrt_price!),
+      fee_protocol:               fromU8(p.fee_protocol!),
+      liquidity:                  fromU128(p.liquidity!),
+      fee_growth_global0_x_128:   fromU128(p.fee_growth_global0_x_128!),
+      fee_growth_global1_x_128:   fromU128(p.fee_growth_global1_x_128!),
+      max_liquidity_per_tick:     fromU128(p.max_liquidity_per_tick!),
+      protocol_fees0:             fromU128(p.protocol_fees0!),
+      protocol_fees1:             fromU128(p.protocol_fees1!),
     }
   }
 
   private parseTick(raw: string): Tick {
     const p = parseStruct(raw)
     return {
-      pool:                     fromField(p.pool),
-      liquidity_net:            BigInt(p.liquidity_net.replace(/i128$/, '')),
-      liquidity_gross:          fromU128(p.liquidity_gross),
-      tick:                     fromI32(p.tick),
-      fee_growth_outside0_128:  fromU128(p.fee_growth_outside0_128),
-      fee_growth_outside1_128:  fromU128(p.fee_growth_outside1_128),
+      pool:                     fromField(p.pool!),
+      liquidity_net:            BigInt(p.liquidity_net!.replace(/i128$/, '')),
+      liquidity_gross:          fromU128(p.liquidity_gross!),
+      tick:                     fromI32(p.tick!),
+      fee_growth_outside0_128:  fromU128(p.fee_growth_outside0_128!),
+      fee_growth_outside1_128:  fromU128(p.fee_growth_outside1_128!),
     }
   }
 
   private parsePosition(raw: string): Position {
     const p = parseStruct(raw)
     return {
-      token_id:                   fromField(p.token_id),
-      pool:                       fromField(p.pool),
-      tick_lower:                 fromI32(p.tick_lower),
-      tick_upper:                 fromI32(p.tick_upper),
-      liquidity:                  fromU128(p.liquidity),
-      fee_growth_inside0_last_128: fromU128(p.fee_growth_inside0_last_128),
-      fee_growth_inside1_last_128: fromU128(p.fee_growth_inside1_last_128),
-      tokens_owed0:               fromU128(p.tokens_owed0),
-      tokens_owed1:               fromU128(p.tokens_owed1),
+      token_id:                   fromField(p.token_id!),
+      pool:                       fromField(p.pool!),
+      tick_lower:                 fromI32(p.tick_lower!),
+      tick_upper:                 fromI32(p.tick_upper!),
+      liquidity:                  fromU128(p.liquidity!),
+      fee_growth_inside0_last_128: fromU128(p.fee_growth_inside0_last_128!),
+      fee_growth_inside1_last_128: fromU128(p.fee_growth_inside1_last_128!),
+      tokens_owed0:               fromU128(p.tokens_owed0!),
+      tokens_owed1:               fromU128(p.tokens_owed1!),
     }
   }
 
   private parseSwapOutput(raw: string): SwapOutput {
     const p = parseStruct(raw)
     return {
-      recipient:        p.recipient,
-      caller:           p.caller,
-      token_in:         fromField(p.token_in),
-      token_out:        fromField(p.token_out),
-      amount_out:       fromU128(p.amount_out),
-      amount_remaining: fromU128(p.amount_remaining),
+      recipient:        p.recipient!,
+      caller:           p.caller!,
+      token_in:         fromField(p.token_in!),
+      token_out:        fromField(p.token_out!),
+      amount_out:       fromU128(p.amount_out!),
+      amount_remaining: fromU128(p.amount_remaining!),
     }
   }
 }
