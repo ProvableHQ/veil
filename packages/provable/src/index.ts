@@ -663,6 +663,8 @@ export function createDevnodeClient(options?: {
 
       // Fetch program sources for any call.dynamic targets the caller declared,
       // and recursively include their static imports as well.
+      // Use direct REST calls instead of the SDK network client to avoid the
+      // /latest_edition endpoint which returns 500 on the devnode.
       let imports: Record<string, string> | undefined
       if (txOptions.imports && txOptions.imports.length > 0) {
         imports = {}
@@ -672,11 +674,12 @@ export function createDevnodeClient(options?: {
           const name = queue.shift()!
           if (seen.has(name)) continue
           seen.add(name)
-          const source = await programManager.networkClient.getProgram(name)
+          const res = await fetch(`${url}/testnet/program/${name}`)
+          if (!res.ok) throw new Error(`Failed to fetch program ${name}: ${res.status} ${res.statusText}`)
+          const source = JSON.parse(await res.text()) as string
           imports[name] = source
-          const transitive = await programManager.networkClient.getProgramImports(source)
-          for (const transitiveName of Object.keys(transitive)) {
-            if (!seen.has(transitiveName)) queue.push(transitiveName)
+          for (const [, dep] of source.matchAll(/^import\s+(\S+\.aleo)\s*;/gm)) {
+            if (dep && !seen.has(dep)) queue.push(dep)
           }
         }
       }

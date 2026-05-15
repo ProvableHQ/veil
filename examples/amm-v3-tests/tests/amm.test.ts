@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { createTestClient, http } from '@veil/core'
 import type { TestClient, WalletClient, PublicClient } from '@veil/core'
 import type { LocalAccount } from '@veil/core'
-import { startDevnode, type DevnodeInstance } from '@veil/devnode'
+import { startDevnode, DEVNODE_ADDR, type DevnodeInstance } from '@veil/devnode'
 import { createLeoClient } from '@veil/leo'
 
 import { AmmClient, AMM_PROGRAM_ID, AMM_PROGRAM_ADDRESS } from '../src/client/amm-client.js'
@@ -70,7 +70,7 @@ let poolKeyP3: string
 
 async function buildAndDeploy(_name: string, aleoPath: string, leoDir?: string) {
   if (leoDir) {
-    const leo = createLeoClient({ cwd: leoDir })
+    const leo = createLeoClient({ cwd: leoDir, quiet: true, network: 'testnet', endpoint: `http://${devnode.socketAddr}` })
     await leo.build()
   }
   const source = readFileSync(aleoPath, 'utf-8')
@@ -121,6 +121,13 @@ async function getPoolKeyFromTx(txId: string): Promise<string> {
 
 describe.runIf(RUN)('AMM v3 E2E', () => {
   beforeAll(async () => {
+    // Gracefully shut down any devnode left over from an interrupted previous run.
+    try {
+      const prev = createTestClient({ transport: http(`http://${DEVNODE_ADDR}`, { network: 'testnet' }) })
+      await prev.shutdown()
+      await new Promise(r => setTimeout(r, 500))
+    } catch {}
+
     devnode = await startDevnode({ readyTimeout: 45_000, manualBlockCreation: true })
 
     testClient = createTestClient({
