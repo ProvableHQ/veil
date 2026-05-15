@@ -19,7 +19,7 @@ import type { LocalAccount } from '@veil/core'
 import { startDevnode, type DevnodeInstance } from '@veil/devnode'
 import { createLeoClient } from '@veil/leo'
 
-import { AmmClient, AMM_PROGRAM_ID } from '../src/client/amm-client.js'
+import { AmmClient, AMM_PROGRAM_ID, AMM_PROGRAM_ADDRESS } from '../src/client/amm-client.js'
 import { TokenRegistryClient } from '../src/client/token-registry-client.js'
 import { getSqrtPriceAtTick } from '../src/utils/math.js'
 import { toField, toU16, toU32 } from '../src/utils/formatting.js'
@@ -192,17 +192,17 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
 
   describe('02 - token setup', () => {
     it('sets up TOKA for admin and user1', async () => {
-      await setupToken('TOKA', adminWallet, [adminWallet, user1Wallet], adminAccount.address, TOKEN_AMOUNT, testClient)
+      await setupToken('TOKA', adminWallet, [adminWallet, user1Wallet], AMM_PROGRAM_ADDRESS, TOKEN_AMOUNT, testClient)
       const meta = await tokenRegistryClient.getTokenMetadata(TOKENS.TOKA!.registryTokenId!)
       expect(meta).not.toBeNull()
     })
 
     it('sets up TOKB for admin and user1', async () => {
-      await setupToken('TOKB', adminWallet, [adminWallet, user1Wallet], adminAccount.address, TOKEN_AMOUNT, testClient)
+      await setupToken('TOKB', adminWallet, [adminWallet, user1Wallet], AMM_PROGRAM_ADDRESS, TOKEN_AMOUNT, testClient)
     })
 
     it('sets up WCRED for admin and user1', async () => {
-      await setupToken('WCRED', adminWallet, [adminWallet, user1Wallet], adminAccount.address, TOKEN_AMOUNT, testClient)
+      await setupToken('WCRED', adminWallet, [adminWallet, user1Wallet], AMM_PROGRAM_ADDRESS, TOKEN_AMOUNT, testClient)
     })
   })
 

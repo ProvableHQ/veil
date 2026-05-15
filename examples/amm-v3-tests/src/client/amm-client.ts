@@ -19,6 +19,8 @@ import {
 } from '../utils/formatting.js'
 
 export const AMM_PROGRAM_ID = 'leo_amm.aleo'
+// Deterministic program address derived from AMM_PROGRAM_ID (Address.fromProgramId).
+export const AMM_PROGRAM_ADDRESS = 'aleo1nqgg0aj6ruk9w67gx4ehg4278uj3sgjlgxlmaf7jdwl4amxy5spq06psk5'
 
 export class AmmClient {
   private publicClient: PublicClient
