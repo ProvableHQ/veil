@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { createTestClient, http, type TestClient } from '@veil/core'
 import type { Client } from '@veil/core'
 
 /** The well-known seeded private key used by Aleo Devnode */
@@ -80,12 +81,14 @@ export type DevnodeInstance = {
 // Public API
 // =============================================================================
 
-export function startDevnode(options?: DevnodeStartOptions): Promise<DevnodeInstance> {
+export async function startDevnode(options?: DevnodeStartOptions): Promise<DevnodeInstance> {
   const privateKey = options?.privateKey ?? DEVNODE_PRIVATE_KEY
   const socketAddr = options?.socketAddr ?? DEVNODE_ADDR
   const verbosity = options?.verbosity ?? 2
   const readyTimeout = options?.readyTimeout ?? 30_000
   const devnodePath = options?.devnodePath ?? 'aleo-devnode'
+
+  await tryShutdownExisting(socketAddr)
 
   const args = [
     'start',
@@ -102,6 +105,16 @@ export function startDevnode(options?: DevnodeStartOptions): Promise<DevnodeInst
   if (options?.manualBlockCreation) args.push('--manual-block-creation')
 
   return spawnDevnode(devnodePath, args, socketAddr, readyTimeout)
+}
+
+/**
+ * Creates a {@link TestClient} pre-wired for a local devnode.
+ * Always uses `testnet` network and the devnode's socket address.
+ */
+export function createDevnodeTestClient(socketAddr: string = DEVNODE_ADDR): TestClient {
+  return createTestClient({
+    transport: http(`http://${socketAddr}`, { network: 'testnet' }),
+  })
 }
 
 export async function advanceDevnode(options?: DevnodeAdvanceOptions): Promise<void> {
@@ -129,6 +142,29 @@ export async function restoreDevnode(options: DevnodeRestoreOptions): Promise<vo
 // =============================================================================
 // Subprocess helpers
 // =============================================================================
+
+async function tryShutdownExisting(socketAddr: string): Promise<void> {
+  const baseUrl = `http://${socketAddr}`
+  try {
+    const res = await fetch(`${baseUrl}/testnet/shutdown`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(2_000),
+    })
+    if (!res.ok) return
+    // Wait up to 5s for the old process to stop responding
+    const deadline = Date.now() + 5_000
+    while (Date.now() < deadline) {
+      try {
+        await fetch(`${baseUrl}${HEALTH_CHECK_PATH}`, { signal: AbortSignal.timeout(500) })
+        await new Promise<void>(r => setTimeout(r, 200))
+      } catch {
+        return // port no longer responding — old devnode is gone
+      }
+    }
+  } catch {
+    // nothing was listening on the port — proceed normally
+  }
+}
 
 function runDevnode(devnodePath: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {

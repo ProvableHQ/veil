@@ -13,10 +13,9 @@ import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { createTestClient, http } from '@veil/core'
 import type { TestClient, WalletClient, PublicClient } from '@veil/core'
 import type { LocalAccount } from '@veil/core'
-import { startDevnode, DEVNODE_ADDR, type DevnodeInstance } from '@veil/devnode'
+import { startDevnode, createDevnodeTestClient, type DevnodeInstance } from '@veil/devnode'
 import { createLeoClient } from '@veil/leo'
 
 import { AmmClient, AMM_PROGRAM_ID, AMM_PROGRAM_ADDRESS } from '../src/client/amm-client.js'
@@ -121,18 +120,9 @@ async function getPoolKeyFromTx(txId: string): Promise<string> {
 
 describe.runIf(RUN)('AMM v3 E2E', () => {
   beforeAll(async () => {
-    // Gracefully shut down any devnode left over from an interrupted previous run.
-    try {
-      const prev = createTestClient({ transport: http(`http://${DEVNODE_ADDR}`, { network: 'testnet' }) })
-      await prev.shutdown()
-      await new Promise(r => setTimeout(r, 500))
-    } catch {}
-
     devnode = await startDevnode({ readyTimeout: 45_000, manualBlockCreation: true })
 
-    testClient = createTestClient({
-      transport: http(`http://${devnode.socketAddr}`, { network: 'testnet' }),
-    })
+    testClient = createDevnodeTestClient(devnode.socketAddr)
 
     const admin = makeClients('admin', devnode.socketAddr)
     adminWallet  = admin.walletClient
