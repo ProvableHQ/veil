@@ -233,15 +233,18 @@ export function classifyBroadcastError(
   const message = error instanceof Error ? error.message : String(error)
   const status = getStatus(error)
 
+  // Double-spend: "input ID ... already exists in the ledger"
+  if (/input id.*already exists/i.test(message) || /serial.?number.*already exists/i.test(message)) {
+    return new RecordSpentError(message, { cause: error as Error })
+  }
+
+  // Duplicate transaction: "Transaction ... already exists in the ledger"
   if (/already exists in the ledger/i.test(message)) {
     return new DuplicateTransactionError(transactionId, { cause: error as Error })
   }
 
-  // Distinguish double-spend (serial number) from output ID collision
-  if (/duplicate/i.test(message) && /serial.?number/i.test(message)) {
-    return new RecordSpentError(message, { cause: error as Error })
-  }
-  if (/duplicate/i.test(message) && /output id|input id|commitment|nonce/i.test(message)) {
+  // Output ID collision (program bug)
+  if (/duplicate/i.test(message) && /output id|commitment|nonce/i.test(message)) {
     return new OutputIdCollisionError(message, { cause: error as Error })
   }
 

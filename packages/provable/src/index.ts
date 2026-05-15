@@ -24,7 +24,10 @@ import { loadNetwork as loadSdk } from '@provablehq/sdk/dynamic.js'
 import {
   Account,
   AleoKeyProvider,
+  AleoNetworkClient,
   ProgramManager,
+  RecordCiphertext,
+  ViewKey,
   getOrInitConsensusVersionTestHeights,
 } from '@provablehq/sdk'
 import { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR } from '@veil/devnode'
@@ -643,6 +646,13 @@ export function createDevnodeClient(options?: {
   const keyProvider = new AleoKeyProvider()
   keyProvider.useCache(true)
 
+  // Self-custody decryptor: unwraps record outputs owned by the seeded account.
+  const accountViewKey = ViewKey.from_string(account.viewKey)
+  const decryptor: Decryptor = (ciphertext: string) => {
+    const ct = RecordCiphertext.fromString(ciphertext)
+    return ct.isOwner(accountViewKey) ? ct.decrypt(accountViewKey).toString() : null
+  }
+
   const proving: ProvingConfig = {
     mode: 'devnode',
     buildDeployment: async (deployOptions: BuildDeploymentOptions) => {
@@ -668,6 +678,72 @@ export function createDevnodeClient(options?: {
         inputs: txOptions.inputs,
       })
       return JSON.parse(tx.toString())
+    },
+    simulate: async (simOptions: SimulateOptions): Promise<RawSimulateResult> => {
+      getOrInitConsensusVersionTestHeights(DEVNODE_CONSENSUS_HEIGHTS)
+      const programManager = new ProgramManager(url, keyProvider, undefined)
+      programManager.setAccount(sdkAccount)
+
+      const authorization = await programManager.buildAuthorization({
+        programName: simOptions.programName,
+        functionName: simOptions.functionName,
+        inputs: simOptions.inputs,
+        programSource: simOptions.programSource,
+        programImports: simOptions.programImports,
+      })
+
+      const tx = {
+        execution: {
+          transitions: authorization.transitions().map((t: any) => {
+            let source = t
+            try {
+              source = t.decryptTransition(t.tvk(accountViewKey))
+            } catch {
+              // Foreign transition — leave outputs encrypted.
+            }
+            return JSON.parse(source.toString())
+          }),
+        },
+      }
+
+      const { transitions, outputs } = extractTransitions(tx, decryptor)
+      return { transitions, outputs }
+    },
+    execute: async (execOptions: ExecuteOptions): Promise<RawExecuteResult> => {
+      getOrInitConsensusVersionTestHeights(DEVNODE_CONSENSUS_HEIGHTS)
+      const programManager = new ProgramManager(url, keyProvider, undefined)
+      programManager.setAccount(sdkAccount)
+
+      let tx: any
+      try {
+        tx = await programManager.buildDevnodeExecutionTransaction({
+          programName: execOptions.programName,
+          functionName: execOptions.functionName,
+          inputs: execOptions.inputs,
+          priorityFee: 0,
+          privateFee: execOptions.privateFee ?? false,
+          program: execOptions.programSource,
+          imports: execOptions.programImports,
+        })
+      } catch (e) {
+        if (e instanceof BaseError) throw e
+        throw new ProvingError({ message: e instanceof Error ? e.message : String(e), cause: e as Error })
+      }
+
+      let txId: string
+      try {
+        const submitClient = new AleoNetworkClient(url)
+        submitClient.setVerboseErrors(false)
+        txId = await submitClient.submitTransaction(tx)
+      } catch (e) {
+        if (e instanceof BaseError) throw e
+        throw classifyBroadcastError(e)
+      }
+
+      const pollingClient = createPublicClient({ transport: http(url, { network: 'testnet' }) })
+      const confirmedTx = await waitForConfirmation(pollingClient, txId)
+      const { transitions, outputs } = extractTransitions(confirmedTx, decryptor)
+      return { transactionId: txId, transitions, outputs }
     },
   }
 

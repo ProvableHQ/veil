@@ -17,14 +17,14 @@
   "files": ["dist"],
   "dependencies": {
     "@noble/hashes": "^1.7.2",
-    "@provablehq/sdk": "^0.10.3",
+    "@provablehq/sdk": "^0.10.5",
     "@scure/bip39": "^1.4.0"
   },
   "peerDependencies": {
-    "@veil/core": "workspace:*",
-    "@veil/devnode": "workspace:*"
+    "@veil/core": "workspace:*"
   },
   "devDependencies": {
+    "@veil/devnode": "workspace:*",
     "@veil/leo": "workspace:*"
   }
 }

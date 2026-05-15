@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - types
+
+jobs:
+  # ── Unit tests ────────────────────────────────────────────────────────
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @veil/core --filter @veil/devnode --filter @veil/codegen --filter @veil/leo build
+      - run: pnpm vitest run
+
+  # ── Devnet integration tests ──────────────────────────────────────────
+  devnet:
+    name: Devnet integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Install aleo-devnode
+        run: cargo install --git https://github.com/ProvableHQ/aleo-devnode.git --tag v0.1.0
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @veil/core --filter @veil/devnode --filter @veil/codegen --filter @veil/leo build
+
+      - name: Run devnet tests
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          RUN_DEVNET=true pnpm vitest run packages/provable/test/devnet.test.ts
+        timeout-minutes: 20
+
+      - name: Cleanup devnode
+        if: always()
+        run: pkill -f "aleo-devnode|leo devnode" || true
