@@ -26,17 +26,20 @@ const txId = await walletClient.writeContract({
 
 | Package | Description |
 |---|---|
-| `@veil/core` | Clients, actions, transports, types |
+| `@veil/core` | Clients (public/wallet/test), actions, transports, types |
 | `@veil/wallet-adapter` | Bridges any Aleo wallet adapter into veil |
 | `@veil/react` | `VeilProvider` + `useVeilWallet()` for React apps |
-| `@veil/provable` | Local accounts, signing, and proving via `@provablehq/sdk` |
+| `@veil/provable` | Local accounts (private key + mnemonic), signing, proving, and record scanning via `@provablehq/sdk` |
+| `@veil/devnode` | Spawn/control a local `aleo-devnode` and bind a test client to it |
+| `@veil/leo` | Programmatic wrapper around the `leo` CLI (build, abi, deploy, synthesize) |
 
 ## Features
 
-- **Public client** — Read blocks, transactions, mappings, balances, programs, committee state, metrics, supply
-- **Wallet client** — Execute programs, deploy, sign, transfer, decrypt records, track transaction status
+- **Public client** — Read blocks, transactions, mappings, balances, programs (and editions), committee state, metrics, supply, tokens
+- **Wallet client** — `writeContract` (submit), `simulateContract` (dry run), `executeContract` (submit + wait + parse outputs), deploy, sign, transfer, decrypt records, track transaction status
 - **Any wallet** — Shield, Leo, Puzzle, Fox, or any adapter implementing the Aleo wallet standard
-- **Any SDK** — Use `@provablehq/sdk` for headless/server-side operations with the same interface
+- **Any SDK** — Use `@provablehq/sdk` (via `@veil/provable`) for headless/server-side operations with the same interface
 - **React** — `VeilProvider` auto-configures all wallets. `useVeilWallet()` returns ready-to-use clients
 - **Records** — Fetch, filter, and use private records as program inputs
-- **Transaction lifecycle** — Submit, poll status, refresh state on confirmation
+- **Transaction lifecycle** — Submit, poll status (`accepted` / `rejected` / `pending` / `not_found`), refresh state on confirmation
+- **Local devnet** — `createDevnodeClient()` returns a fully-wired client pair against `aleo-devnode` (skips ZK proof generation for fast iteration)

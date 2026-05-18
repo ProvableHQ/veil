@@ -25,17 +25,22 @@ const client = createPublicClient({
 | `getBlockNumber()` | Latest block height |
 | `getBlock({ height })` | Block by height or hash |
 | `getBlockHash()` | Latest block hash |
+| `getBlockHeightByHash({ hash })` | Block height for a block hash |
 | `getBlocks({ start, end })` | Range of blocks (max 50) |
 | `getBlockTransactions({ height })` | Transactions in a block |
+| `getBlockTransactionsByHash({ hash })` | Transactions in a block, by hash |
 | `getBlockSummary()` | Summary of latest 1000 blocks |
 | `getStateRoot({ height? })` | State root at height |
 | `getStatePath({ commitment })` | State path for a commitment |
+| `getStatePaths({ commitments })` | Batched state paths |
+| `findBlockHeightByStateRoot({ stateRoot })` | Block height for a state root |
 
 ### Transactions
 
 | Action | Description |
 |---|---|
 | `getTransaction({ id })` | Transaction by ID |
+| `getTransactionByTransition({ transitionId })` | Transaction containing a transition |
 | `getConfirmedTransaction({ id })` | Confirmed transaction from ledger |
 | `getUnconfirmedTransaction({ id })` | Unconfirmed transaction from mempool |
 | `getTransactionsByAddress({ address })` | Transactions for an address |
@@ -54,12 +59,24 @@ const client = createPublicClient({
 
 | Action | Description |
 |---|---|
-| `getCode({ program })` | Program source code |
+| `getCode({ program })` | Program source code (Aleo bytecode) |
+| `getProgram({ program })` | Same as `getCode`, returning a parsed `Program` |
 | `readContract({ program, mapping, key })` | Read a mapping value |
 | `readMapping({ program, mapping, key })` | Alias for `readContract` |
 | `getMappingNames({ program })` | List mapping names for a program |
-| `getDeploymentTransaction({ program })` | Deployment transaction for a program |
+| `getDeploymentTransaction({ program })` | Latest deployment transaction for a program |
+| `getOriginalDeploymentTransaction({ program })` | First (edition 0) deployment transaction |
+| `getDeploymentTransactionByEdition({ program, edition })` | Deployment transaction for a specific edition |
+| `getAmendmentDeploymentTransaction({ program, edition })` | Amendment deployment transaction |
+| `getLatestEdition({ program })` | Latest edition number for a program |
+| `getProgramByEdition({ program, edition })` | Program source at a specific edition |
+| `getAmendmentCount({ program })` | Number of amendments to a program |
+| `getAmendmentCountByEdition({ program, edition })` | Amendment count up to an edition |
+| `getProgramAddress({ program })` | Aleo address for a program |
+| `getProgramIdByAddress({ address })` | Program id for a program address |
 | `getProgramCalls({ program })` | Latest 1000 calls to a program |
+| `getProgramCallsPaginated({ program, page, perPage })` | Paginated calls to a program |
+| `getTransitionViewKeys({ transactionId })` | Transition view keys for a transaction |
 
 ### Account
 
@@ -81,6 +98,7 @@ const client = createPublicClient({
 |---|---|
 | `getTransactionMetrics()` | Daily transaction counts |
 | `getProgramMetrics()` | Program calls (last 7 days) |
+| `getProgramMetricsByRange({ program, start, end })` | Program metrics over a custom range |
 | `getApy()` | Current staking APY |
 | `getValidatorApy()` | Per-validator APY |
 
@@ -92,6 +110,7 @@ const client = createPublicClient({
 | `getCirculatingSupply()` | Circulating ALEO supply |
 | `getTvl()` | Total DeFi TVL |
 | `getTokens()` | Token data |
+| `getTokenDetails({ tokenId })` | Detail for a single token |
 
 ## Examples
 

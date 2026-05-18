@@ -26,21 +26,27 @@ const client = createWalletClient({
 
 ```ts
 import { createWalletClient, http } from '@veil/core'
-import {
-  privateKeyToAccount,
-  createProvingConfig,
-  createLocalScanner,
-} from '@veil/provable'
+import { loadNetwork } from '@veil/provable'
+
+const aleo = await loadNetwork('testnet')
+const networkUrl = 'https://api.provable.com/v2'
 
 const client = createWalletClient({
-  account: privateKeyToAccount('APrivateKey1...'),
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
-  proving: createProvingConfig({ mode: 'delegated' }),
-  recordProvider: createLocalScanner({
-    url: 'https://api.provable.com/v2',
+  account: aleo.privateKeyToAccount('APrivateKey1...'),
+  transport: http(networkUrl, { network: 'testnet' }),
+  proving: aleo.createProvingConfig({
+    mode: 'delegated',
+    networkUrl,
+    proverUrl: 'https://prover.provable.com',
+  }),
+  recordProvider: aleo.createRemoteScanner({
+    url: 'https://rss.provable.com',
+    consumerId: 'my-app',
   }),
 })
 ```
+
+For the common case, `aleo.createAleoClient({ privateKey, networkUrl })` returns the public client, wallet client, and account in one call.
 
 ### From React (recommended)
 
@@ -54,19 +60,22 @@ const { walletClient } = useVeilWallet()
 
 | Action | Description |
 |---|---|
-| `writeContract({ program, function, inputs, fee? })` | Execute a program function |
-| `executeTransaction(...)` | Alias for `writeContract` |
-| `deployContract({ program, fee? })` | Deploy a program |
-| `transfer({ to, amount, visibility? })` | Transfer credits |
+| `writeContract({ program, function, inputs, privateFee?, imports? })` | Submit a program execution. Returns the transaction id only. |
+| `executeTransaction(...)` | Alias for `writeContract` — matches the Aleo wallet adapter spec. |
+| `simulateContract({ program, function, inputs, ... })` | Dry-run a program function locally (local accounts only). Returns parsed outputs without broadcasting. |
+| `executeContract({ program, function, inputs, fee?, ... })` | Build, broadcast, wait for confirmation, and return per-transition outputs. |
+| `deployContract({ program, privateFee? })` | Deploy a program |
+| `transfer({ to, amount, visibility?, asset? })` | Transfer credits (or any token program following the same naming convention) |
 | `signMessage({ message })` | Sign an arbitrary message |
 | `sendTransaction({ transaction })` | Broadcast a raw transaction |
 | `decrypt({ ciphertext })` | Decrypt a record ciphertext |
-| `requestRecords({ program })` | Fetch records owned by the connected account ([routing details](#requestrecords-routing)) |
+| `requestRecords({ program, statusFilter?, includePlaintext? })` | Fetch records owned by the connected account ([routing details](#requestrecords-routing)) |
 | `requestTransactionHistory({ program })` | Get transaction history for a program |
-| `transactionStatus({ transactionId })` | Check transaction status |
+| `transactionStatus({ transactionId })` | Check transaction status (`accepted` / `rejected` / `pending` / `not_found`) |
 | `switchChain({ network })` | Switch the wallet's connected network |
 | `switchNetwork({ network })` | Alias for `switchChain` |
 | `getChainId()` | Get the current network from the connected wallet |
+| `getNetwork()` | Alias for `getChainId` |
 
 ## Account Types
 
@@ -83,7 +92,7 @@ const txId = await walletClient.writeContract({ ... })
 
 ### Local Account (`type: 'local'`)
 
-You provide the private key and proving config. Veil builds the transaction locally and broadcasts it.
+You provide the private key and proving config. Veil builds the transaction locally and broadcasts it. Created by `aleo.privateKeyToAccount(...)` or `aleo.mnemonicToAccount(...)` from `@veil/provable`. The `source` field tags how the account was derived (`'privateKey'` or `'mnemonic'`).
 
 ```ts
 // writeContract routes to: proving.buildTransaction() → sendTransaction()
@@ -91,6 +100,28 @@ const txId = await walletClient.writeContract({ ... })
 ```
 
 The calling code is identical. The routing happens internally based on account type.
+
+## Client Config Variants
+
+`WalletClientConfig` is a discriminated union:
+
+```ts
+// RPC: wallet handles records — no recordProvider here
+type RpcWalletClientConfig = {
+  account: RpcAccount
+  transport: Transport
+}
+
+// Local: must supply a proving config; recordProvider optional
+type LocalWalletClientConfig = {
+  account: LocalAccount
+  transport: Transport
+  proving: ProvingConfig          // required
+  recordProvider?: RecordProvider // required only if you call requestRecords
+}
+```
+
+The proving config's `mode` is one of `'delegated'` (DPS), `'local'` (in-process WASM), or `'devnode'` (for the `createDevnodeClient()` shortcut).
 
 ## Examples
 
@@ -145,29 +176,29 @@ How `requestRecords` resolves depends on account type:
 **Local account** — You must supply a `recordProvider`. Without one, `requestRecords` throws.
 
 ```ts
-import { createLocalScanner, createRemoteScanner } from '@veil/provable'
+import { loadNetwork } from '@veil/provable'
 
-// Option 1: Local scanner — scans blocks + decrypts locally
+const aleo = await loadNetwork('testnet')
+const networkUrl = 'https://api.provable.com/v2'
+
+// Remote scanner — uses Provable's Record Scanning Service (RSS).
+// This is the supported scanner for wallet-client record providers.
 const walletClient = createWalletClient({
-  account: privateKeyToAccount('APrivateKey1...'),
-  transport,
-  proving: createProvingConfig({ mode: 'delegated' }),
-  recordProvider: createLocalScanner({
-    url: 'https://api.provable.com/v2',
+  account: aleo.privateKeyToAccount('APrivateKey1...'),
+  transport: http(networkUrl, { network: 'testnet' }),
+  proving: aleo.createProvingConfig({
+    mode: 'delegated',
+    networkUrl,
+    proverUrl: 'https://prover.provable.com',
   }),
-})
-
-// Option 2: Remote scanner — uses Record Scanning Service (RSS)
-const walletClient = createWalletClient({
-  account: privateKeyToAccount('APrivateKey1...'),
-  transport,
-  proving: createProvingConfig({ mode: 'delegated' }),
-  recordProvider: createRemoteScanner({
+  recordProvider: aleo.createRemoteScanner({
     url: 'https://rss.provable.com',
     consumerId: 'my-app',
   }),
 })
 ```
+
+> For view-only / no-wallet-client use cases, use `aleo.createStandaloneScanner({ url, consumerId, viewKey })` together with the `withRecords` extension on a public client. See [Working with Records](/guides/working-with-records).
 
 ### Get transaction history
 
@@ -183,7 +214,7 @@ const history = await walletClient.requestTransactionHistory({
 const status = await walletClient.transactionStatus({
   transactionId: txId,
 })
-// { status: 'Accepted', transactionId: 'at1...' }
+// { status: 'accepted', transactionId: 'at1...' }
 ```
 
 ### Switch network

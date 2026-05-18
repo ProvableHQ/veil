@@ -6,6 +6,11 @@ sidebar_position: 4
 
 Aleo transactions go through several stages. Veil provides tools to track each one.
 
+## Two Paths
+
+- **Manual** — `writeContract` returns the transaction id, then you poll `transactionStatus` and decide what to refresh.
+- **One-shot** — `executeContract` builds, broadcasts, waits for confirmation, parses per-transition outputs, and returns them. No polling required.
+
 ## Submit
 
 ```ts
@@ -14,32 +19,36 @@ const txId = await walletClient.writeContract({
   function: 'my_function',
   inputs: ['arg1', 'arg2'],
 })
-// txId is an internal wallet ID (not yet on-chain)
+// For RPC accounts, txId starts as an internal wallet id; after acceptance it resolves to an at1... id.
+// For local accounts, txId is the on-chain at1... id.
 ```
 
 ## Poll Status
-
-The wallet tracks the transaction and can report its status:
 
 ```ts
 const result = await walletClient.transactionStatus({
   transactionId: txId,
 })
-// { status: 'pending', transactionId: '...' }
-// { status: 'Accepted', transactionId: 'at1...' }
+// { status: 'pending',   transactionId: '...' }
+// { status: 'accepted',  transactionId: 'at1...' }
+// { status: 'rejected',  transactionId: 'at1...', error?: '...' }
+// { status: 'not_found' }
 ```
 
 Status values:
-- `"pending"` — submitted, waiting for inclusion
-- `"Accepted"` — included in a block
-- `"Failed"` / `"Rejected"` — transaction failed
+- `"pending"` — present in the unconfirmed pool
+- `"accepted"` — present in `/transaction/confirmed/{id}` with `status: 'accepted'`
+- `"rejected"` — present in `/transaction/confirmed/{id}` with `status: 'rejected'`
+- `"not_found"` — present in neither pool (never submitted, dropped, or expired)
+
+> `"finalized"` is **not** an Aleo status — that's an EVM term. Use `"accepted"`.
 
 ## Refresh State
 
 Once the transaction is accepted, refresh both mappings (public state) and records (private state):
 
 ```ts
-if (result.status === 'Accepted') {
+if (result.status === 'accepted') {
   // Public state — read mappings
   const newTotal = await publicClient.readMapping({
     program: 'loyalty_token.aleo',
@@ -65,7 +74,7 @@ const tx = await publicClient.getTransaction({
 })
 ```
 
-## Full Pattern
+## Full Pattern — manual
 
 ```ts
 // 1. Submit
@@ -76,11 +85,30 @@ const poll = setInterval(async () => {
   const result = await walletClient.transactionStatus({
     transactionId: txId,
   })
-  if (result.status === 'Accepted') {
+  if (result.status === 'accepted') {
     clearInterval(poll)
     // 3. Refresh state
     await refreshRecords()
     await refreshMappings()
+  } else if (result.status === 'rejected') {
+    clearInterval(poll)
+    handleRejection(result.error)
   }
 }, 5000)
 ```
+
+## Full Pattern — one-shot
+
+```ts
+const { transactionId, transitions, outputs } = await walletClient.executeContract({
+  program: 'my_program.aleo',
+  function: 'my_function',
+  inputs: ['arg1', 'arg2'],
+})
+
+// At this point the tx is confirmed and outputs are parsed.
+await refreshRecords()
+await refreshMappings()
+```
+
+`executeContract` requires a transport that can reach the chain (an HTTP transport, or a `fallback` that includes one) so the confirmation poll has a route. A wallet-only transport will time out.

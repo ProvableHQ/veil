@@ -11,8 +11,10 @@ Records are Aleo's private state. Unlike mappings (public), records are encrypte
 | Path | Scanner | Use case |
 |---|---|---|
 | **Wallet** | Built into wallet adapter | Browser dApps via `walletClient.requestRecords()` |
-| **SDK** | `createLocalScanner` or `createRemoteScanner` | Server-side via `walletClient.requestRecords()` |
-| **Standalone** | `createStandaloneScanner` + `withRecords` | View-only / no wallet client needed |
+| **SDK** | `aleo.createRemoteScanner` | Server-side via `walletClient.requestRecords()` (RSS-backed) |
+| **Standalone** | `aleo.createStandaloneScanner` + `withRecords` extension on `@veil/core` | View-only / no wallet client needed |
+
+> `aleo` here is the handle returned by `await loadNetwork('mainnet' | 'testnet')` from `@veil/provable`. The standalone scanner extension (`withRecords`) is exported from `@veil/core`.
 
 ## Path 1: Wallet (RPC Account)
 
@@ -29,25 +31,26 @@ const records = await walletClient.requestRecords({
 
 ## Path 2: SDK (Local Account)
 
-Requires a `recordProvider` in the wallet client config. Two scanner factories are available:
-
-### Local scanner
-
-Scans blocks and decrypts records locally. No key material in config — the wallet client derives keys from the account.
+Requires a `recordProvider` in the wallet client config. The supported provider is `createRemoteScanner` (RSS-backed); the active account's view key is wired automatically by the wallet client.
 
 ```ts
-import {
-  privateKeyToAccount,
-  createProvingConfig,
-  createLocalScanner,
-} from '@veil/provable'
+import { createWalletClient, http } from '@veil/core'
+import { loadNetwork } from '@veil/provable'
+
+const aleo = await loadNetwork('testnet')
+const networkUrl = 'https://api.provable.com/v2'
 
 const walletClient = createWalletClient({
-  account: privateKeyToAccount('APrivateKey1...'),
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
-  proving: createProvingConfig({ mode: 'delegated' }),
-  recordProvider: createLocalScanner({
-    url: 'https://api.provable.com/v2',
+  account: aleo.privateKeyToAccount('APrivateKey1...'),
+  transport: http(networkUrl, { network: 'testnet' }),
+  proving: aleo.createProvingConfig({
+    mode: 'delegated',
+    networkUrl,
+    proverUrl: 'https://prover.provable.com',
+  }),
+  recordProvider: aleo.createRemoteScanner({
+    url: 'https://rss.provable.com',
+    consumerId: 'my-app',
   }),
 })
 
@@ -56,34 +59,20 @@ const records = await walletClient.requestRecords({
 })
 ```
 
-### Remote scanner (RSS)
-
-Delegates scanning to a Record Scanning Service. Faster than local scanning for large block ranges.
-
-```ts
-import { createRemoteScanner } from '@veil/provable'
-
-const walletClient = createWalletClient({
-  account: privateKeyToAccount('APrivateKey1...'),
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
-  proving: createProvingConfig({ mode: 'delegated' }),
-  recordProvider: createRemoteScanner({
-    url: 'https://rss.provable.com',
-    consumerId: 'my-app',
-  }),
-})
-```
+Without a `recordProvider`, `walletClient.requestRecords` throws with a setup hint.
 
 ## Path 3: Standalone (No Wallet Client)
 
-For view-only use cases where you need records but don't need to sign transactions. Uses the `withRecords` extension on a public client.
+For view-only use cases where you need records but don't need to sign transactions. Uses the `withRecords` extension (from `@veil/core`) on a public client.
 
 ```ts
-import { createPublicClient, http } from '@veil/core'
-import { createStandaloneScanner, withRecords } from '@veil/provable'
+import { createPublicClient, http, withRecords } from '@veil/core'
+import { loadNetwork } from '@veil/provable'
 
-const scanner = createStandaloneScanner({
-  url: 'https://api.provable.com/v2',
+const aleo = await loadNetwork('mainnet')
+
+const scanner = aleo.createStandaloneScanner({
+  url: 'https://rss.provable.com',
   consumerId: 'my-app',
   viewKey: 'AViewKey1...',
 })
@@ -97,7 +86,7 @@ const records = await client.requestRecords({
 })
 ```
 
-The standalone scanner requires an explicit `viewKey` and is **not** pluggable into wallet client config.
+The standalone scanner requires an explicit `viewKey` and is **not** pluggable into wallet client config — use `createRemoteScanner` for that.
 
 ## Record Shape
 
@@ -114,12 +103,15 @@ Each record returned looks like:
 
 ## Filtering for Usable Records
 
-**Always check `spent: false`** before using a record as input. A spent record will cause the transaction to fail.
+**Always check `spent: false`** before using a record as input. A spent record will cause the transaction to fail. You can also push spent filtering into the request — `statusFilter: 'unspent'` (the default in most flows) hides spent records server-side:
 
 ```ts
-const unspentCards = records.filter(
-  r => r.recordName === 'LoyaltyCard' && !r.spent
-)
+const records = await walletClient.requestRecords({
+  program: 'loyalty_token.aleo',
+  statusFilter: 'unspent', // 'all' | 'spent' | 'unspent'
+})
+
+const unspentCards = records.filter(r => r.recordName === 'LoyaltyCard' && !r.spent)
 ```
 
 ## Using Records as Inputs

@@ -81,31 +81,21 @@ function App() {
 
 ## Quick Start — Node.js / Server-Side
 
-Use `@veil/provable` for local key management without a browser wallet.
+Use `@veil/provable` for local key management without a browser wallet. `loadNetwork` returns a network-bound handle that exposes all of the SDK-backed factories (`privateKeyToAccount`, `createProvingConfig`, scanners, `createAleoClient`).
 
 ```ts
-import { createPublicClient, createWalletClient, http } from '@veil/core'
-import {
-  privateKeyToAccount,
-  createProvingConfig,
-  createLocalScanner,
-} from '@veil/provable'
+import { loadNetwork } from '@veil/provable'
 
-const transport = http('https://api.provable.com/v2', { network: 'testnet' })
+const aleo = await loadNetwork('testnet')
 
-// Public client for reads
-const publicClient = createPublicClient({ transport })
-
-// Local account from private key
-const account = privateKeyToAccount('APrivateKey1...')
-
-// Wallet client with local proving + record scanning
-const walletClient = createWalletClient({
-  account,
-  transport,
-  proving: createProvingConfig({ mode: 'delegated' }),
-  recordProvider: createLocalScanner({
-    url: 'https://api.provable.com/v2',
+// One-step: fully-wired clients pointing at any network URL
+const { publicClient, walletClient, account } = aleo.createAleoClient({
+  privateKey: 'APrivateKey1...',
+  networkUrl: 'https://api.provable.com/v2',
+  // Optional record provider — pass aleo.createRemoteScanner(...) to enable requestRecords
+  records: aleo.createRemoteScanner({
+    url: 'https://rss.provable.com',
+    consumerId: 'my-app',
   }),
 })
 
@@ -122,9 +112,41 @@ const records = await walletClient.requestRecords({
 })
 ```
 
+For finer control, build the pieces yourself with `createPublicClient` / `createWalletClient` and `aleo.createProvingConfig({ mode: 'delegated' | 'local', ... })`.
+
+## Quick Start — Local Devnode
+
+For rapid iteration against a local `aleo-devnode` (no proof generation, no fees). Install the [`aleo-devnode` binary](https://github.com/ProvableHQ/snarkvm-aleo) and put it on your PATH.
+
+```ts
+import { createTestClient, http } from '@veil/core'
+import { devnodeActions, DEVNODE_ADDR } from '@veil/devnode'
+import { createDevnodeClient } from '@veil/provable'
+
+// 1. Spawn a devnode using a test client decorated with @veil/devnode
+const testClient = createTestClient({
+  transport: http(`http://${DEVNODE_ADDR}`, { network: 'testnet' }),
+}).extend(devnodeActions)
+
+const devnode = await testClient.startDevnode()
+
+// 2. Get a fully-wired client pair pointing at it
+const { publicClient, walletClient, account } = createDevnodeClient()
+
+// Same interface as the React/Node versions
+const txId = await walletClient.writeContract({
+  program: 'my_program.aleo',
+  function: 'my_function',
+  inputs: ['arg1', 'arg2'],
+})
+
+await devnode.stop()
+```
+
 ## Next Steps
 
 - [Public Client](/clients/public-client) — All read actions
 - [Wallet Client](/clients/wallet-client) — Writing to the chain
 - [React Integration](/react/overview) — VeilProvider and hooks
 - [Working with Records](/guides/working-with-records) — Private state on Aleo
+- [Devnode + Leo](/clients/test-client) — Local devnet and CLI workflows

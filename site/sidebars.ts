@@ -11,6 +11,7 @@ const sidebars: SidebarsConfig = {
         'clients/public-client',
         'clients/wallet-client',
         'clients/transports',
+        'clients/test-client',
       ],
     },
     {
@@ -22,6 +23,7 @@ const sidebars: SidebarsConfig = {
         'guides/working-with-records',
         'guides/transaction-lifecycle',
         'guides/contract-instances',
+        'guides/devnode',
       ],
     },
     {

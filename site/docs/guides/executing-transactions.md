@@ -6,17 +6,53 @@ sidebar_position: 2
 
 Use the wallet client to call program functions on Aleo.
 
-## Basic Execution
+## Three Surfaces
+
+| Action | What it returns | Use when |
+|---|---|---|
+| `writeContract` (alias `executeTransaction`) | The transaction id only. | You want to fire-and-poll. Matches the Aleo wallet adapter spec. |
+| `executeContract` | Tx id + per-transition outputs (records decrypted for local accounts). | You want to act on the function's return value. |
+| `simulateContract` | Per-transition outputs, no broadcast. **Local accounts only.** | Dry-run / preview before committing on-chain. |
+
+## Submit-and-go (`writeContract`)
 
 ```ts
 const txId = await walletClient.writeContract({
   program: 'my_program.aleo',
   function: 'my_function',
   inputs: ['aleo1...', '100u64'],
+  // privateFee?: pay the fee from a private record (default: false)
+  // imports?: program names reached via dynamic dispatch (static imports auto-discovered)
 })
 ```
 
-The `fee` parameter is optional — the wallet will estimate it if omitted.
+Priority fee is handled by the proving layer / wallet — callers don't pass a microcredit amount on `writeContract`.
+
+## Submit and read outputs (`executeContract`)
+
+```ts
+const { transactionId, transitions, outputs } = await walletClient.executeContract({
+  program: 'my_program.aleo',
+  function: 'my_function',
+  inputs: ['aleo1...', '100u64'],
+  // fee: priority fee in microcredits (local accounts; default 0n)
+  // privateFee, imports as above
+})
+```
+
+For RPC accounts, record outputs surface as raw `record1...` ciphertexts (the SDK doesn't ask the wallet to decrypt). For local accounts, owned record outputs are decrypted with the account's view key.
+
+## Dry-run (`simulateContract`)
+
+```ts
+const { transitions, outputs } = await walletClient.simulateContract({
+  program: 'my_program.aleo',
+  function: 'my_function',
+  inputs: ['aleo1...', '100u64'],
+})
+```
+
+`simulateContract` runs the function locally via the proving config's `simulate` hook and decrypts owned outputs with the account's view key. RPC (wallet) accounts cannot simulate.
 
 ## How It Works
 
@@ -52,12 +88,24 @@ const txId = await walletClient.deployContract({
 
 ## Transfers
 
-A convenience wrapper for credit transfers:
+A convenience wrapper for credit transfers (and any token program that follows the same naming convention):
 
 ```ts
 const txId = await walletClient.transfer({
   to: 'aleo1recipient...',
   amount: 1_000_000n,           // 1 credit
   visibility: 'public',         // 'public' | 'private' | 'shield' | 'unshield'
+  // asset: defaults to 'credits.aleo'; pass a token program id to transfer that token
 })
 ```
+
+Visibility maps to function names:
+
+| `visibility` | Function called |
+|---|---|
+| `'public'` | `transfer_public` |
+| `'private'` | `transfer_private` |
+| `'shield'` | `transfer_public_to_private` |
+| `'unshield'` | `transfer_private_to_public` |
+
+For programs that don't follow this convention, call `writeContract` directly.
