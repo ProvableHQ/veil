@@ -93,7 +93,7 @@ function buildUrl(
     case 'getProgram':
       return { url: `${base}/program/${enc(params?.programId)}`, httpMethod: 'GET' }
     case 'getMappingValue':
-      return { url: `${base}/program/${enc(params?.programId)}/mapping/${enc(params?.mapping)}/${String(params?.key ?? '').replace(/ /g, '%20')}`, httpMethod: 'GET' }
+      return { url: `${base}/program/${enc(params?.programId)}/mapping/${enc(params?.mapping)}/${enc(params?.key)}`, httpMethod: 'GET' }
     case 'getMappingNames':
       return { url: `${base}/program/${enc(params?.programId)}/mappings`, httpMethod: 'GET' }
     case 'getDeploymentTransaction':
