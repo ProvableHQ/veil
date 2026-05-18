@@ -3,7 +3,7 @@ import test_usdcx_multisig_core.aleo;
 import test_usdcx_freezelist.aleo;
 import test_usdcx_stablecoin.aleo;
 import test_usdcx_bridge.aleo;
-program wrapper_demo.aleo;
+program bridge_demo_v1.aleo;
 
 closure get_amount_from_bytes:
     input r0 as [u8; 16u32];
@@ -62,14 +62,13 @@ function mint_and_send_private:
     input r1 as [u8; 65u32].private;
     input r2 as [u8; 32u32].private;
     input r3 as [u8; 32u32].private;
-    input r4 as address.private;
-    cast r0[24u32] r0[25u32] r0[26u32] r0[27u32] r0[28u32] r0[29u32] r0[30u32] r0[31u32] r0[32u32] r0[33u32] r0[34u32] r0[35u32] r0[36u32] r0[37u32] r0[38u32] r0[39u32] into r5 as [u8; 16u32];
-    call get_amount_from_bytes r5 into r6;
-    call test_usdcx_bridge.aleo/mint_public r0 r1 r2 r3 into r7;
-    call test_usdcx_stablecoin.aleo/transfer_public_to_private r4 r6 into r8 r9 r10;
-    async mint_and_send_private r7 r10 into r11;
-    output r9 as test_usdcx_stablecoin.aleo/Token.record;
-    output r11 as wrapper_demo.aleo/mint_and_send_private.future;
+    cast r0[24u32] r0[25u32] r0[26u32] r0[27u32] r0[28u32] r0[29u32] r0[30u32] r0[31u32] r0[32u32] r0[33u32] r0[34u32] r0[35u32] r0[36u32] r0[37u32] r0[38u32] r0[39u32] into r4 as [u8; 16u32];
+    call get_amount_from_bytes r4 into r5;
+    call test_usdcx_bridge.aleo/mint_public r0 r1 r2 r3 into r6;
+    call test_usdcx_stablecoin.aleo/transfer_public_to_private self.signer r5 into r7 r8 r9;
+    async mint_and_send_private r6 r9 into r10;
+    output r8 as test_usdcx_stablecoin.aleo/Token.record;
+    output r10 as bridge_demo_v1.aleo/mint_and_send_private.future;
 
 finalize mint_and_send_private:
     input r0 as test_usdcx_bridge.aleo/mint_public.future;
@@ -88,7 +87,7 @@ function mint_and_send_public:
     call test_usdcx_bridge.aleo/mint_public r0 r1 r2 r3 into r6;
     call test_usdcx_stablecoin.aleo/transfer_public self.signer r5 into r7;
     async mint_and_send_public r6 r7 into r8;
-    output r8 as wrapper_demo.aleo/mint_and_send_public.future;
+    output r8 as bridge_demo_v1.aleo/mint_and_send_public.future;
 
 finalize mint_and_send_public:
     input r0 as test_usdcx_bridge.aleo/mint_public.future;
@@ -98,9 +97,9 @@ finalize mint_and_send_public:
 
 function deposit_public_usdcx_to_vault:
     input r0 as u128.private;
-    call test_usdcx_stablecoin.aleo/transfer_public_as_signer wrapper_demo.aleo r0 into r1;
+    call test_usdcx_stablecoin.aleo/transfer_public_as_signer bridge_demo_v1.aleo r0 into r1;
     async deposit_public_usdcx_to_vault r1 into r2;
-    output r2 as wrapper_demo.aleo/deposit_public_usdcx_to_vault.future;
+    output r2 as bridge_demo_v1.aleo/deposit_public_usdcx_to_vault.future;
 
 finalize deposit_public_usdcx_to_vault:
     input r0 as test_usdcx_stablecoin.aleo/transfer_public_as_signer.future;
@@ -110,9 +109,9 @@ function deposit_private_usdcx_to_vault:
     input r0 as u128.private;
     input r1 as test_usdcx_stablecoin.aleo/Token.record;
     input r2 as [test_usdcx_stablecoin.aleo/MerkleProof; 2u32].private;
-    call test_usdcx_stablecoin.aleo/transfer_private_to_public wrapper_demo.aleo r0 r1 r2 into r3 r4 r5;
+    call test_usdcx_stablecoin.aleo/transfer_private_to_public bridge_demo_v1.aleo r0 r1 r2 into r3 r4 r5;
     async deposit_private_usdcx_to_vault r5 into r6;
-    output r6 as wrapper_demo.aleo/deposit_private_usdcx_to_vault.future;
+    output r6 as bridge_demo_v1.aleo/deposit_private_usdcx_to_vault.future;
 
 finalize deposit_private_usdcx_to_vault:
     input r0 as test_usdcx_stablecoin.aleo/transfer_private_to_public.future;
@@ -122,7 +121,7 @@ function withdraw_from_vault_public:
     input r0 as u128.private;
     call test_usdcx_stablecoin.aleo/transfer_public self.signer r0 into r1;
     async withdraw_from_vault_public r1 into r2;
-    output r2 as wrapper_demo.aleo/withdraw_from_vault_public.future;
+    output r2 as bridge_demo_v1.aleo/withdraw_from_vault_public.future;
 
 finalize withdraw_from_vault_public:
     input r0 as test_usdcx_stablecoin.aleo/transfer_public.future;
@@ -133,7 +132,7 @@ function withdraw_from_vault_private:
     input r1 as address.private;
     call test_usdcx_stablecoin.aleo/transfer_public_to_private self.signer r0 into r2 r3 r4;
     async withdraw_from_vault_private r4 into r5;
-    output r5 as wrapper_demo.aleo/withdraw_from_vault_private.future;
+    output r5 as bridge_demo_v1.aleo/withdraw_from_vault_private.future;
 
 finalize withdraw_from_vault_private:
     input r0 as test_usdcx_stablecoin.aleo/transfer_public_to_private.future;
@@ -143,11 +142,11 @@ function burn_private:
     input r0 as test_usdcx_stablecoin.aleo/Token.record;
     input r1 as u128.private;
     input r2 as [test_usdcx_stablecoin.aleo/MerkleProof; 2u32].private;
-    call test_usdcx_stablecoin.aleo/transfer_private_to_public wrapper_demo.aleo r1 r0 r2 into r3 r4 r5;
+    call test_usdcx_stablecoin.aleo/transfer_private_to_public bridge_demo_v1.aleo r1 r0 r2 into r3 r4 r5;
     cast 0u8 0u8 0u8 0u8 0u8 0u8 0u8 0u8 0u8 0u8 0u8 0u8 30u8 25u8 109u8 10u8 125u8 129u8 137u8 5u8 76u8 77u8 183u8 68u8 171u8 51u8 64u8 195u8 241u8 198u8 139u8 25u8 into r6 as [u8; 32u32];
     call test_usdcx_bridge.aleo/burn_public r1 1002u32 r6 into r7;
     async burn_private r5 r7 into r8;
-    output r8 as wrapper_demo.aleo/burn_private.future;
+    output r8 as bridge_demo_v1.aleo/burn_private.future;
 
 finalize burn_private:
     input r0 as test_usdcx_stablecoin.aleo/transfer_private_to_public.future;

@@ -15,8 +15,8 @@ fn get_amount_from_bytes(amount_bytes: [u8; 16]) -> u128 {
     return sum;
 }
 
-// The 'wrapper demo' program.
-program wrapper_demo.aleo {
+// The 'bridge demo' program.
+program bridge_demo_v1.aleo {
     @custom()
     constructor() {
         if self.edition > 0u16 {
@@ -24,7 +24,7 @@ program wrapper_demo.aleo {
         }
     }
 
-    fn mint_and_send_private(payload: [u8; 240], sig: [u8; 65], hash: [u8; 32], hook_data: [u8; 32], recipient: address) -> (test_usdcx_stablecoin.aleo::Token, Final) {
+    fn mint_and_send_private(payload: [u8; 240], sig: [u8; 65], hash: [u8; 32], hook_data: [u8; 32]) -> (test_usdcx_stablecoin.aleo::Token, Final) {
         let amount_bytes: [u8; 16] =[0u8; 16]; // Initialize an array to hold the amount bytes
         for i in 0u8..16u8{
                 amount_bytes[i] = payload[24u8 + i];
@@ -34,7 +34,7 @@ program wrapper_demo.aleo {
 
         // let mint_to_hyp_vault: Final = hyp_warp_token_usad::process(...);
 
-        let (receipt, token_record, transfer_final) = test_usdcx_stablecoin.aleo::transfer_public_to_private(recipient, amount);
+        let (receipt, token_record, transfer_final) = test_usdcx_stablecoin.aleo::transfer_public_to_private(self.signer, amount);
         return (token_record, final {
             mint_to_vault_final.run();
             transfer_final.run();

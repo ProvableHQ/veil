@@ -101,7 +101,7 @@ describe.runIf(RUN)('PRIVATE MINT E2E', () => {
   afterAll(async () => {
     try { await testClient.shutdown() } catch {}
     try { await devnode.stop() }        catch {}
-  })
+  }, 30_000)
 
   // ── 01 Initialize USDCx stablecoin and bridge ────────────────────────────────
 
@@ -170,11 +170,10 @@ describe.runIf(RUN)('PRIVATE MINT E2E', () => {
 
     it('mints USDCx privately to the recipient', async () => {
       await adminWallet.writeContract({
-        program: 'wrapper_demo.aleo',
+        program: 'bridge_demo_v1.aleo',
         function: 'mint_and_send_private',
-        inputs: [payload, sig, digest, hookData, adminAccount.address],
+        inputs: [payload, sig, digest, hookData],
       })
-
       const nullifierSet = await publicClient.readMapping({
         programId: 'test_usdcx_bridge.aleo',
         mapping: 'nullifier',
