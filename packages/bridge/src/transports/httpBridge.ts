@@ -3,10 +3,10 @@ import type { Transport, TransportConfig } from '@veil/core'
 import { createTransport } from '@veil/core'
 
 type HttpBridgeConfig = {
-  fetchFn?: typeof fetch
-  headers?: Record<string, string>
-  key?: string
-  name?: string
+  fetchFn?: typeof fetch | undefined
+  headers?: Record<string, string> | undefined
+  key?: string | undefined
+  name?: string | undefined
 }
 
 function enc(v: unknown): string {
@@ -63,9 +63,10 @@ function buildRequest(
       return { url: `${baseUrl}/bridge/quotes?${q.toString()}`, httpMethod: 'GET' }
     }
     case 'createBridgeOrder': {
-      const p = (params ?? {}) as Record<string, unknown> & { timezone?: string }
+      const p = (params ?? {}) as Record<string, unknown>
       const headers: Record<string, string> = {}
-      if (p.timezone) headers['x-timezone'] = p.timezone
+      const timezone = p['timezone']
+      if (typeof timezone === 'string' && timezone) headers['x-timezone'] = timezone
       const body: Record<string, unknown> = {}
       for (const key of ORDER_BODY_KEYS) {
         if (p[key] != null) body[key] = p[key]
@@ -112,7 +113,7 @@ export function httpBridge(
       const response = await fetchFn(built.url, {
         method: built.httpMethod,
         headers: {
-          'Content-Type': 'application/json',
+          ...(built.body ? { 'Content-Type': 'application/json' } : {}),
           ...extraHeaders,
           ...built.headers,
         },
