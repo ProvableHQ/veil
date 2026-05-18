@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process'
-import { createTestClient, http, type TestClient } from '@veil/core'
 import type { Client } from '@veil/core'
 
 /** The well-known seeded private key used by Aleo Devnode */
@@ -105,16 +104,6 @@ export async function startDevnode(options?: DevnodeStartOptions): Promise<Devno
   if (options?.manualBlockCreation) args.push('--manual-block-creation')
 
   return spawnDevnode(devnodePath, args, socketAddr, readyTimeout)
-}
-
-/**
- * Creates a {@link TestClient} pre-wired for a local devnode.
- * Always uses `testnet` network and the devnode's socket address.
- */
-export function createDevnodeTestClient(socketAddr: string = DEVNODE_ADDR): TestClient {
-  return createTestClient({
-    transport: http(`http://${socketAddr}`, { network: 'testnet' }),
-  })
 }
 
 export async function advanceDevnode(options?: DevnodeAdvanceOptions): Promise<void> {

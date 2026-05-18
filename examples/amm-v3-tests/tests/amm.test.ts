@@ -13,9 +13,9 @@ import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import type { TestClient, WalletClient, PublicClient } from '@veil/core'
+import { createTestClient, http, type TestClient, type WalletClient, type PublicClient } from '@veil/core'
 import type { LocalAccount } from '@veil/core'
-import { startDevnode, createDevnodeTestClient, type DevnodeInstance } from '@veil/devnode'
+import { startDevnode, type DevnodeInstance } from '@veil/devnode'
 import { createLeoClient } from '@veil/leo'
 
 import { AmmClient, AMM_PROGRAM_ID, AMM_PROGRAM_ADDRESS } from '../src/client/amm-client.js'
@@ -123,7 +123,7 @@ describe.runIf(RUN)('AMM v3 E2E', () => {
   beforeAll(async () => {
     devnode = await startDevnode({ readyTimeout: 45_000, manualBlockCreation: true })
 
-    testClient = createDevnodeTestClient(devnode.socketAddr)
+    testClient = createTestClient({ transport: http(`http://${devnode.socketAddr}`, { network: 'testnet' }) })
 
     const admin = makeClients('admin', devnode.socketAddr)
     adminWallet  = admin.walletClient
