@@ -80,7 +80,7 @@ function buildUrl(
     case 'findTransactionId':
       return { url: `${base}/find/transactionID/${enc(params?.transitionId)}`, httpMethod: 'GET' }
     case 'sendTransaction':
-      return { url: `${base}/transaction/broadcast`, httpMethod: 'POST', body: JSON.stringify(params?.transaction) }
+      return { url: `${base}/transaction/broadcast`, httpMethod: 'POST', body: params?.transaction as string }
 
     // --- Transition ---
     case 'getTransitions':
@@ -93,7 +93,7 @@ function buildUrl(
     case 'getProgram':
       return { url: `${base}/program/${enc(params?.programId)}`, httpMethod: 'GET' }
     case 'getMappingValue':
-      return { url: `${base}/program/${enc(params?.programId)}/mapping/${enc(params?.mapping)}/${enc(params?.key)}`, httpMethod: 'GET' }
+      return { url: `${base}/program/${enc(params?.programId)}/mapping/${enc(params?.mapping)}/${String(params?.key ?? '').replace(/ /g, '%20')}`, httpMethod: 'GET' }
     case 'getMappingNames':
       return { url: `${base}/program/${enc(params?.programId)}/mappings`, httpMethod: 'GET' }
     case 'getDeploymentTransaction':

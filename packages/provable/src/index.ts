@@ -660,12 +660,37 @@ export function createDevnodeClient(options?: {
       getOrInitConsensusVersionTestHeights(DEVNODE_CONSENSUS_HEIGHTS)
       const programManager = new ProgramManager(url, keyProvider, undefined)
       programManager.setAccount(sdkAccount)
+
+      // Fetch program sources for any call.dynamic targets the caller declared,
+      // and recursively include their static imports as well.
+      // Use direct REST calls instead of the SDK network client to avoid the
+      // /latest_edition endpoint which returns 500 on the devnode.
+      let imports: Record<string, string> | undefined
+      if (txOptions.imports && txOptions.imports.length > 0) {
+        imports = {}
+        const queue = [...txOptions.imports]
+        const seen = new Set<string>()
+        while (queue.length > 0) {
+          const name = queue.shift()!
+          if (seen.has(name)) continue
+          seen.add(name)
+          const res = await fetch(`${url}/testnet/program/${name}`)
+          if (!res.ok) throw new Error(`Failed to fetch program ${name}: ${res.status} ${res.statusText}`)
+          const source = JSON.parse(await res.text()) as string
+          imports[name] = source
+          for (const [, dep] of source.matchAll(/^import\s+(\S+\.aleo)\s*;/gm)) {
+            if (dep && !seen.has(dep)) queue.push(dep)
+          }
+        }
+      }
+
       const tx = await programManager.buildDevnodeExecutionTransaction({
         programName: txOptions.programName,
         functionName: txOptions.functionName,
         priorityFee: 0,
         privateFee: txOptions.privateFee ?? false,
         inputs: txOptions.inputs,
+        ...(imports ? { imports } : {}),
       })
       return JSON.parse(tx.toString())
     },
