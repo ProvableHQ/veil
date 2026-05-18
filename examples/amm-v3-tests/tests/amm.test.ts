@@ -84,6 +84,7 @@ async function deployAllPrograms() {
   await buildAndDeploy(
     'token_registry',
     resolve(AMM_V3_DIR, 'build/imports/token_registry.aleo'),
+    AMM_V3_DIR,
   )
   for (const wrapper of ['test_token_a', 'test_token_b', 'wrapped_native_credits']) {
     const wrapperDir = resolve(AMM_V3_DIR, 'token-wrappers', wrapper)
