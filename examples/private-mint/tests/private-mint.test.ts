@@ -24,7 +24,7 @@ const RUN = process.env.PRIVATE_MINT_E2E === '1'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname  = dirname(__filename)
-const WRAPPER_DIR = resolve(__dirname, 'private-mint-wrapper')
+const WRAPPER_DIR = resolve(__dirname, '..', 'private-mint-wrapper')
 
 // ── Test constants ────────────────────────────────────────────────────────────
 
@@ -120,7 +120,7 @@ describe.runIf(RUN)('PRIVATE MINT E2E', () => {
       expect(role).toBe('8u16')
     })
 
-    it('initializes the stablecoin', async () => {
+    it('initializes the USDCX stablecoin program', async () => {
       await adminWallet.writeContract({
         program: 'test_usdcx_stablecoin.aleo',
         function: 'initialize',
@@ -135,7 +135,7 @@ describe.runIf(RUN)('PRIVATE MINT E2E', () => {
     })
 
     it('grants minter/burner role to the bridge', async () => {
-      const bridgeAddress = await publicClient.getProgramAddress({ programId: 'test_usdcx_bridge.aleo' })
+      const bridgeAddress = 'aleo1khwgr8x8f9ywwx2p4w55hm0x7rczcf2weqn7nsxcwqckpcgwvczq3wzkwx'
       await adminWallet.writeContract({
         program: 'test_usdcx_stablecoin.aleo',
         function: 'update_role',
@@ -157,9 +157,8 @@ describe.runIf(RUN)('PRIVATE MINT E2E', () => {
     const sig      = '[19u8, 105u8, 51u8, 13u8, 237u8, 80u8, 138u8, 87u8, 161u8, 185u8, 166u8, 77u8, 142u8, 5u8, 15u8, 79u8, 105u8, 101u8, 86u8, 91u8, 73u8, 88u8, 251u8, 29u8, 230u8, 60u8, 245u8, 68u8, 132u8, 149u8, 166u8, 112u8, 7u8, 24u8, 78u8, 69u8, 194u8, 178u8, 93u8, 35u8, 73u8, 67u8, 114u8, 247u8, 191u8, 1u8, 156u8, 216u8, 15u8, 222u8, 122u8, 52u8, 140u8, 250u8, 209u8, 16u8, 228u8, 5u8, 144u8, 181u8, 64u8, 226u8, 220u8, 212u8, 28u8]'
     const digest   = '[173u8, 0u8, 115u8, 131u8, 217u8, 69u8, 125u8, 6u8, 56u8, 241u8, 5u8, 99u8, 8u8, 32u8, 76u8, 245u8, 109u8, 176u8, 182u8, 163u8, 59u8, 114u8, 149u8, 129u8, 255u8, 60u8, 211u8, 36u8, 253u8, 162u8, 64u8, 155u8]'
     const hookData = '[1u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8]'
-    // Nonce = payload[200:232] — the unique per-mint identifier used as the nullifier key.
-    const nonce    = '[0u8, 1u8, 134u8, 160u8, 180u8, 125u8, 34u8, 77u8, 134u8, 8u8, 93u8, 12u8, 86u8, 236u8, 88u8, 230u8, 162u8, 93u8, 169u8, 246u8, 188u8, 109u8, 110u8, 75u8, 174u8, 134u8, 165u8, 59u8, 62u8, 120u8, 204u8, 241u8]'
-
+    const nonce    = '[180u8, 125u8, 34u8, 77u8, 134u8, 8u8, 93u8, 12u8, 86u8, 236u8, 88u8, 230u8, 162u8, 93u8, 169u8, 246u8, 188u8, 109u8, 110u8, 75u8, 174u8, 134u8, 165u8, 59u8, 62u8, 120u8, 204u8, 241u8, 104u8, 66u8, 113u8, 75u8]'
+    
     it('nullifier is unset before mint', async () => {
       const result = await publicClient.readMapping({
         programId: 'test_usdcx_bridge.aleo',

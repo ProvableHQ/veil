@@ -80,7 +80,7 @@ function buildUrl(
     case 'findTransactionId':
       return { url: `${base}/find/transactionID/${enc(params?.transitionId)}`, httpMethod: 'GET' }
     case 'sendTransaction':
-      return { url: `${base}/transaction/broadcast`, httpMethod: 'POST', body: JSON.stringify(params?.transaction) }
+      return { url: `${base}/transaction/broadcast`, httpMethod: 'POST', body: params?.transaction as string }
 
     // --- Transition ---
     case 'getTransitions':
