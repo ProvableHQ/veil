@@ -1,0 +1,8 @@
+{
+  "name": "@veil/wrapper-program-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "PRIVATE_MINT=1 pnpm -w exec vitest run examples/usdcx-private-mints/wrapper-program-test.ts"
+  }
+}
