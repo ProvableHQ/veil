@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process'
+import { createWriteStream } from 'node:fs'
+import { join } from 'node:path'
 import type { Client } from '@veil/core'
 
 /** The well-known seeded private key used by Aleo Devnode */
@@ -39,7 +41,7 @@ export type DevnodeStartOptions = {
   readyTimeout?: number
   /** Path to the aleo-devnode binary. Defaults to `'aleo-devnode'` (resolved on PATH). */
   devnodePath?: string
-  /** Pipe devnode stdout/stderr to the terminal. Defaults to false. */
+  /** Write devnode stdout/stderr to devnode-<port>.log in the current directory. Defaults to false. */
   verbose?: boolean
 }
 
@@ -183,10 +185,18 @@ async function spawnDevnode(
   verbose: boolean = false,
 ): Promise<DevnodeInstance> {
   const proc = spawn(devnodePath, args, {
-    stdio: verbose ? 'inherit' : 'pipe',
+    stdio: 'pipe',
     env: { ...process.env, CONSENSUS_VERSION_HEIGHTS: '0,1,2,3,4,5,6,7,8,9,10,11,12,13' },
   })
-  if (!verbose) {
+
+  if (verbose) {
+    const port = socketAddr.split(':')[1] ?? socketAddr.replace(/\./g, '-')
+    const logFile = join(process.cwd(), `devnode-${port}.log`)
+    const logStream = createWriteStream(logFile, { flags: 'w' })
+    proc.stdout?.pipe(logStream)
+    proc.stderr?.pipe(logStream)
+    console.log(`[devnode] logs → ${logFile}`)
+  } else {
     proc.stdout?.resume()
     proc.stderr?.resume()
   }
