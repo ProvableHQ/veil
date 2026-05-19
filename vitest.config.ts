@@ -4,7 +4,7 @@ import path from 'path'
 export default defineConfig({
   test: {
     globals: true,
-    include: ['packages/*/test/**/*.test.ts', 'examples/**/*.test.ts'],
+    include: ['packages/*/test/**/*.test.ts', 'examples/*.ts', 'examples/**/*.test.ts'],
     onConsoleLog(log) {
       // Suppress SDK deployment noise: program-existence checks hit /latest_edition
       // which returns 500 on the devnode, causing retries and status spam.
