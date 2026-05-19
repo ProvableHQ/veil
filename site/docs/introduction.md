@@ -28,8 +28,12 @@ const txId = await walletClient.writeContract({
 |---|---|
 | `@veil/core` | Clients, actions, transports, types |
 | `@veil/wallet-adapter` | Bridges any Aleo wallet adapter into veil |
-| `@veil/react` | `VeilProvider` + `useVeilWallet()` for React apps |
 | `@veil/provable` | Local accounts, signing, and proving via `@provablehq/sdk` |
+| `@veil/bridge` | Cross-chain bridge client (Aleo ↔ other) over wallet-services-api |
+| `@veil/devnode` | Test client actions for local devnode (fund, reset, mine) |
+| `@veil/leo` | Leo CLI wrapper — compile, run, build programs locally |
+| `@veil/codegen` | Generate typed contract instances from Aleo programs |
+| `@veil/react` | `VeilProvider` + `useVeilWallet()` for React apps |
 
 ## Features
 
