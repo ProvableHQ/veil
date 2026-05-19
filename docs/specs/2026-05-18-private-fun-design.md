@@ -6,27 +6,33 @@ Built on `@veil/core` and `@veil/bridge`.
 
 ## Goals
 
-- Demonstrate cross-chain bridging between Aleo and Solana/Ethereum, in both directions, using mainnet routes the bridge actually supports.
+### Phase 1
+
+- Demonstrate cross-chain bridging between Aleo and Solana/Ethereum using Aleo as a private vault. Show this in both directions, using mainnet routes the bridge actually supports.
 - Showcase the three ecosystems' multi-wallet abstractions side-by-side: `@veil/wallet-adapter` (Aleo), `@solana/wallet-adapter-react` (Solana), `wagmi` + `viem` (Ethereum).
+- Support pairs that the bridge supports like Ethereum: USDC, ETH (Mainnet, Base or Arbitrum), Solana: Sol, Aleo: USDCX, Aleo, Wrapped Assets
 - Provide one cross-chain applet (anonymous pump.fun launch) that composes the utility flows + an external SDK (`@pump-fun/pump-sdk`).
 - Keep recipes (the cross-chain logic) as pure functions with structured-JSON in/out, so they can be wrapped as MCP tools / skills in a follow-up without rewriting.
+
+### Phase 2
+
+- Polymarket / pUSD integration.
 
 ## Non-Goals
 
 - No new key management primitives. External wallets hold their own keys.
 - No on-chain Aleo programs beyond what already exists (no shielded keystore in v1).
-- No Polymarket / pUSD integration.
-- No MCP / skill tooling in v1. Recipes are shaped to allow it later.
+- No MCP / skill tooling in v1. Recipes should be built on the end result.
 - No testnet support — the bridge does not currently route to or from Aleo testnet.
 - No headless / agent mode UI in v1. Recipes remain callable, but no MCP server ships with the app.
 
-## Networks
+## Networks 
 
-Hardcoded to mainnets:
+No testnet networks, only networks which hold actual value. These may include other L2s the bridge supports like Base or Arbitrum.
 
 - Aleo: mainnet (the only network where the bridge operates).
 - Solana: mainnet-beta.
-- Ethereum: mainnet (chain id 1).
+- Ethereum: mainnet (chain id 1), base, arbitrum, etc.
 
 A user connected to a non-matching network on any wallet sees a "switch network" prompt. wagmi exposes `useSwitchChain`; Solana adapter exposes the cluster endpoint; Shield switches via its own UI.
 
@@ -220,9 +226,7 @@ Recipes throw typed errors from `@veil/bridge` (`BridgeError` family) plus a sma
 
 ## Open Questions (deferred until v1)
 
-- **Bridge support for USDC routes.** Aleo↔Solana for USDC-SPL and Aleo↔Ethereum for USDC-ERC20 depend on the WSA provider catalog. v1 enumerates the asset list but falls back gracefully when no quotes come back. Verified against the live API during implementation.
 - **IPFS pinning key.** Pinata API key lives in env. For local dev, the README explains how to obtain one. Public hosting is out of scope for v1.
-- **Network-aware bridge client config.** Single mainnet endpoint for `httpBridge` baseUrl. If staging/prod URLs differ, env-config later.
 - **Cross-wallet balance aggregation page.** Nice-to-have "portfolio view" combining balances from all three connected wallets. Deferred; the per-page wallet status banner is enough for v1.
 
 ## Reference: how this differs from the original pump-private-demo
