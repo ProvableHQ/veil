@@ -47,3 +47,17 @@ describe('createBridgeClient', () => {
     expect(extended.hello()).toBe('world')
   })
 })
+
+describe('createBridgeClient bound actions', () => {
+  it('exposes getQuotes, createOrder, getOrder, getOrderAudit, waitForOrder', () => {
+    const fetchFn = vi.fn()
+    const client = createBridgeClient({
+      transport: httpBridge('https://wsa.example/api', { fetchFn: fetchFn as unknown as typeof fetch }),
+    })
+    expect(typeof client.getQuotes).toBe('function')
+    expect(typeof client.createOrder).toBe('function')
+    expect(typeof client.getOrder).toBe('function')
+    expect(typeof client.getOrderAudit).toBe('function')
+    expect(typeof client.waitForOrder).toBe('function')
+  })
+})
