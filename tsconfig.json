@@ -23,7 +23,10 @@
       "@veil/devnode": ["./packages/devnode/src/index.ts"],
       "@veil/shield-swap": ["./packages/shield-swap/src/index.ts"],
       "@veil/shield-swap/agent": ["./packages/shield-swap/src/agent/index.ts"],
-      "@veil/shield-swap/mcp": ["./packages/shield-swap/src/mcp/index.ts"]
+      "@veil/shield-swap/mcp": ["./packages/shield-swap/src/mcp/index.ts"],
+      "@veil/bridge": ["./packages/bridge/src/index.ts"],
+      "@veil/bridge/agent": ["./packages/bridge/src/agent/index.ts"],
+      "@veil/bridge/mcp": ["./packages/bridge/src/mcp/index.ts"]
     },
     "types": ["node"]
   }
