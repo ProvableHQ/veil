@@ -22,7 +22,7 @@ export function PrivateFunProviders({ children }: { children: ReactNode }) {
   )
 
   return (
-    <VeilProvider network="mainnet" programs={['credits.aleo']}>
+    <VeilProvider network="mainnet" programs={['credits.aleo']} autoConnect={false}>
       <ConnectionProvider endpoint={solanaEndpoint}>
         <WalletProvider wallets={solanaWallets} autoConnect>
           <WalletModalProvider>

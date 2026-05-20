@@ -3,9 +3,9 @@ import { APPLETS } from '../lib/applets.js'
 
 type Item = { to: string; label: string; icon: string; muted?: boolean; suffix?: string }
 
-const UTILITIES: Item[] = [
-  { to: '/fund-out', label: 'Fund out', icon: '↗' },
-  { to: '/bridge-in', label: 'Bridge in', icon: '↙' },
+const VAULT_ACTIONS: Item[] = [
+  { to: '/shield', label: 'Shield', icon: '↙' },
+  { to: '/unshield', label: 'Unshield', icon: '↗' },
 ]
 
 const APPLET_NAV: Item[] = APPLETS.map((a) => ({
@@ -20,8 +20,8 @@ export function Sidebar() {
   return (
     <aside className="pf-sidebar">
       <div className="pf-side-section">
-        <div className="pf-label">Utilities</div>
-        {UTILITIES.map((item) => (
+        <div className="pf-label">Vault</div>
+        {VAULT_ACTIONS.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

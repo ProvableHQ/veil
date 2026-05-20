@@ -3,7 +3,7 @@ import { Sidebar } from './Sidebar.js'
 import { WalletConnect } from './WalletConnect.js'
 
 export type LayoutProps = {
-  /** e.g. ['Utilities', 'Fund out'] — rendered as breadcrumb. */
+  /** e.g. ['Vault', 'Unshield'] — rendered as breadcrumb. */
   breadcrumb?: string[]
   title: string
   subtitle?: string

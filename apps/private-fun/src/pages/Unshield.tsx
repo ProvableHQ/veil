@@ -16,7 +16,7 @@ const COMPLIANCE_ASSETS = new Set<AleoAssetSymbol>(['USDCX', 'USAD'])
 
 type RuntimeStatus = 'idle' | 'running' | 'completed' | 'failed'
 
-export function FundOut() {
+export function Unshield() {
   const aleo = useAleoSigner()
 
   const [sourceAsset, setSourceAsset] = useState<AleoAssetSymbol>('ALEO')
@@ -76,13 +76,13 @@ export function FundOut() {
 
   return (
     <Layout
-      breadcrumb={['Utilities', 'Fund out']}
-      title="Fund out"
-      subtitle="Send shielded Aleo balances to a fresh external account on Solana, Ethereum, Base, or Arbitrum."
+      breadcrumb={['Vault', 'Unshield']}
+      title="Unshield"
+      subtitle="Move value out of your private Aleo vault to an external account on Solana, Ethereum, Base, or Arbitrum."
     >
       {!aleo && (
         <div className="pf-error" style={{ marginBottom: 16 }}>
-          Connect an Aleo wallet to fund external accounts.
+          Connect an Aleo wallet to unshield to external accounts.
         </div>
       )}
 
@@ -180,7 +180,7 @@ export function FundOut() {
           onClick={onSubmit}
           disabled={!canSubmit}
         >
-          Fund {amount || '?'} {destAsset} on {CHAIN_CONFIGS[destChain].displayName} →
+          Unshield {amount || '?'} {destAsset} to {CHAIN_CONFIGS[destChain].displayName} →
         </button>
       </div>
 

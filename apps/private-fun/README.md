@@ -4,9 +4,11 @@ Demo dapp for cross-chain funding to and from Aleo, with three multi-wallet ecos
 
 ## What it does
 
-- **Fund out** — bridge ALEO / wrapped assets / USDCX / USAD from Aleo to Solana, Ethereum, Base, or Arbitrum.
-- **Bridge in** — bridge SOL / ETH / USDC / USDT / WBTC from any of those chains into a shielded Aleo record.
-- **Pump launch** (applet) — anonymous pump.fun token launch funded by a bridged ALEO → SOL transfer.
+Aleo is the private vault; everything else is a public destination.
+
+- **Shield** — bring SOL / ETH / USDC / USDT / WBTC from Solana, Ethereum, Base, or Arbitrum into your private Aleo vault.
+- **Unshield** — send ALEO / wrapped assets / USDCX / USAD out of the vault to a fresh external account on Solana, Ethereum, Base, or Arbitrum.
+- **Pump launch** (applet) — anonymous pump.fun token launch funded by an unshielded ALEO → SOL transfer.
 
 ## Architecture
 

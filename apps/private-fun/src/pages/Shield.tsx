@@ -16,7 +16,7 @@ const ALEO_ASSETS: AleoAssetSymbol[] = ['ALEO', 'WBTC', 'WETH', 'WUSDC', 'WSOL',
 
 type RuntimeStatus = 'idle' | 'fetching' | 'awaiting-deposit' | 'polling' | 'completed' | 'failed'
 
-export function BridgeIn() {
+export function Shield() {
   const aleo = useAleoSigner()
   const solana = useSolanaSigner()
   const eth = useEthereumSigner()
@@ -107,9 +107,9 @@ export function BridgeIn() {
 
   return (
     <Layout
-      breadcrumb={['Utilities', 'Bridge in']}
-      title="Bridge in"
-      subtitle="Move SOL, ETH, USDC, USDT or WBTC from Solana / Ethereum / Base / Arbitrum into a shielded Aleo record."
+      breadcrumb={['Vault', 'Shield']}
+      title="Shield"
+      subtitle="Move SOL, ETH, USDC, USDT or WBTC from Solana / Ethereum / Base / Arbitrum into your private Aleo vault."
     >
       {!aleo && (
         <div className="pf-error" style={{ marginBottom: 16 }}>
