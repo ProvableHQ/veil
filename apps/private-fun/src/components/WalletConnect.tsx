@@ -3,6 +3,7 @@ import { useVeilWallet } from '@veil/react'
 import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react'
 import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { useAccount, useDisconnect } from 'wagmi'
+import { AleoConnectModal } from './AleoConnectModal.js'
 import { EthereumConnectModal } from './EthereumConnectModal.js'
 
 function truncate(addr: string, head = 4, tail = 4) {
@@ -16,6 +17,7 @@ export function WalletConnect() {
   const solanaModal = useWalletModal()
   const eth = useAccount()
   const { disconnect: disconnectEth } = useDisconnect()
+  const [aleoModalOpen, setAleoModalOpen] = useState(false)
   const [ethModalOpen, setEthModalOpen] = useState(false)
 
   return (
@@ -31,9 +33,12 @@ export function WalletConnect() {
           Aleo <span className="pf-addr">{truncate(aleo.address, 6, 4)}</span>
         </button>
       ) : (
-        <button className="pf-pill disconnected" type="button" onClick={() => aleo.connect()}>
-          Aleo · Connect
-        </button>
+        <>
+          <button className="pf-pill disconnected" type="button" onClick={() => setAleoModalOpen(true)}>
+            Aleo · Connect
+          </button>
+          {aleoModalOpen && <AleoConnectModal onClose={() => setAleoModalOpen(false)} />}
+        </>
       )}
 
       {solana.publicKey ? (
