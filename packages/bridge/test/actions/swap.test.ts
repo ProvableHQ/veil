@@ -24,8 +24,8 @@ function makeStatus(statusValue: string) {
     provider: { id: 'p1', code: 'demo', displayName: 'Demo', capabilities: [] },
     status: statusValue,
     timeline: [],
-    createdAt: '2026-05-18T00:00:00Z',
-    updatedAt: '2026-05-18T00:00:00Z',
+    createdAt: '2026-05-19T00:00:00Z',
+    updatedAt: '2026-05-19T00:00:00Z',
   }
 }
 
@@ -57,7 +57,7 @@ function makeBridgeClient(opts: {
       }
       if (method === 'getBridgeOrder') {
         const stages = opts.pollStages ?? ['COMPLETED']
-        return { data: makeStatus(stages[Math.min(i++, stages.length - 1)]) }
+        return { data: makeStatus(stages[Math.min(i++, stages.length - 1)] as string) }
       }
       throw new Error(`unexpected method ${method}`)
     }),
@@ -65,24 +65,20 @@ function makeBridgeClient(opts: {
 }
 
 function makeWallet(over: Partial<{ address: string; transactionId: string }> = {}): WalletClient {
+  const txId = over.transactionId ?? 'at1deadbeef'
   return {
-    account: { address: over.address ?? 'aleo1sender' },
-    executeContract: vi.fn().mockResolvedValue({
-      transactionId: over.transactionId ?? 'at1deadbeef',
-      transitions: [],
-      outputs: [],
-    }),
+    account: { type: 'rpc', address: over.address ?? 'aleo1sender', sign: vi.fn() },
+    request: vi.fn().mockResolvedValue(txId),
   } as unknown as WalletClient
 }
 
 const baseParams = {
   from: { asset: 'ALEO', amount: '1.5' },
   to: { chain: 'solana', asset: 'SOL', address: '8xJ...' },
-  record: '{ owner: aleo1sender.private, amount: 5000000u64.private, _nonce: 0group.public }',
 }
 
-describe('swap', () => {
-  it('runs quote → select(best=highest amountOut) → order → unshield → poll to COMPLETED', async () => {
+describe('swap (ALEO source)', () => {
+  it('runs quote → select(best) → order → unshield via credits.aleo → poll to COMPLETED', async () => {
     const bridge = makeBridgeClient({
       quotes: [makeQuote({ quoteId: 'a', amountOut: '0.04' }), makeQuote({ quoteId: 'b', amountOut: '0.05' })],
       pollStages: ['WAITING', 'COMPLETED'],
@@ -101,8 +97,7 @@ describe('swap', () => {
     expect(result.finalStatus?.status).toBe('COMPLETED')
 
     // Picked the higher-amountOut quote
-    const requestMock = bridge.request as ReturnType<typeof vi.fn>
-    expect(requestMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(bridge.request).toHaveBeenCalledWith(expect.objectContaining({
       method: 'createBridgeOrder',
       params: expect.objectContaining({
         quoteId: 'b',
@@ -111,13 +106,17 @@ describe('swap', () => {
       }),
     }))
 
-    // Wallet was asked to do transfer_private_to_public with the record + deposit address + u64 amount
-    const executeMock = wallet.executeContract as unknown as ReturnType<typeof vi.fn>
-    expect(executeMock).toHaveBeenCalledWith(expect.objectContaining({
-      program: 'credits.aleo',
-      function: 'transfer_private_to_public',
-      inputs: [baseParams.record, 'aleo1deposit', '1500000u64'],
-    }))
+    // Wallet's writeContract was asked to do transfer_private_to_public on credits.aleo, u64 amount
+    const walletRequest = (wallet as unknown as { request: ReturnType<typeof vi.fn> }).request
+    expect(walletRequest).toHaveBeenCalledWith({
+      method: 'executeTransaction',
+      params: expect.objectContaining({
+        programName: 'credits.aleo',
+        functionName: 'transfer_private_to_public',
+        inputs: ['aleo1deposit', '1500000u64'],
+        privateFee: true,
+      }),
+    })
   })
 
   it('selectQuote=fastest picks the lowest estimatedTimeSeconds', async () => {
@@ -131,8 +130,7 @@ describe('swap', () => {
 
     await swap(bridge, { ...baseParams, wallet, selectQuote: 'fastest', poll: false })
 
-    const requestMock = bridge.request as ReturnType<typeof vi.fn>
-    expect(requestMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(bridge.request).toHaveBeenCalledWith(expect.objectContaining({
       method: 'createBridgeOrder',
       params: expect.objectContaining({ quoteId: 'fast' }),
     }))
@@ -151,8 +149,7 @@ describe('swap', () => {
       poll: false,
     })
 
-    const requestMock = bridge.request as ReturnType<typeof vi.fn>
-    expect(requestMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(bridge.request).toHaveBeenCalledWith(expect.objectContaining({
       method: 'createBridgeOrder',
       params: expect.objectContaining({ quoteId: 'a' }),
     }))
@@ -181,8 +178,76 @@ describe('swap', () => {
 
   it('throws BridgeError when wallet has no account', async () => {
     const bridge = makeBridgeClient({ quotes: [makeQuote()] })
-    const wallet = { executeContract: vi.fn() } as unknown as WalletClient
+    const wallet = { request: vi.fn() } as unknown as WalletClient
 
     await expect(swap(bridge, { ...baseParams, wallet })).rejects.toThrow(BridgeError)
+  })
+})
+
+describe('swap (token_registry source — WBTC)', () => {
+  it('routes deposit through token_registry.aleo with u128 amount', async () => {
+    const bridge = makeBridgeClient({
+      quotes: [makeQuote({ srcAsset: 'WBTC' })],
+    })
+    const wallet = makeWallet()
+
+    await swap(bridge, {
+      from: { asset: 'WBTC', amount: '0.01' },
+      to: { chain: 'ethereum', asset: 'WBTC', address: '0xdest' },
+      wallet,
+      poll: false,
+    })
+
+    const walletRequest = (wallet as unknown as { request: ReturnType<typeof vi.fn> }).request
+    expect(walletRequest).toHaveBeenCalledWith({
+      method: 'executeTransaction',
+      params: expect.objectContaining({
+        programName: 'token_registry.aleo',
+        functionName: 'transfer_private_to_public',
+        inputs: ['aleo1deposit', '1500000u128'],
+        privateFee: true,
+      }),
+    })
+  })
+})
+
+describe('swap (compliance source — USDCX)', () => {
+  it('routes deposit through usdcx_stablecoin.aleo and appends merkleProof', async () => {
+    const bridge = makeBridgeClient({
+      quotes: [makeQuote({ srcAsset: 'USDCX' })],
+    })
+    const wallet = makeWallet()
+
+    await swap(bridge, {
+      from: { asset: 'USDCX', amount: '100' },
+      to: { chain: 'ethereum', asset: 'USDC', address: '0xdest' },
+      wallet,
+      merkleProof: 'mp-input',
+      poll: false,
+    })
+
+    const walletRequest = (wallet as unknown as { request: ReturnType<typeof vi.fn> }).request
+    expect(walletRequest).toHaveBeenCalledWith({
+      method: 'executeTransaction',
+      params: expect.objectContaining({
+        programName: 'usdcx_stablecoin.aleo',
+        functionName: 'transfer_private_to_public',
+        inputs: ['aleo1deposit', '1500000u128', 'mp-input'],
+        privateFee: true,
+      }),
+    })
+  })
+
+  it('throws BridgeError when merkleProof is missing for USDCX', async () => {
+    const bridge = makeBridgeClient({
+      quotes: [makeQuote({ srcAsset: 'USDCX' })],
+    })
+    const wallet = makeWallet()
+
+    await expect(swap(bridge, {
+      from: { asset: 'USDCX', amount: '100' },
+      to: { chain: 'ethereum', asset: 'USDC', address: '0xdest' },
+      wallet,
+    })).rejects.toThrow(/merkleProof/)
   })
 })

@@ -1,8 +1,9 @@
-import type { Client, WalletClient } from '@veil/core'
+import { transfer, type Client, type WalletClient } from '@veil/core'
 import { getQuotes } from './getQuotes.js'
 import { createOrder } from './createOrder.js'
 import { waitForOrder } from './waitForOrder.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
+import { aleoAssetProgram, type AleoAssetConfig } from '../lib/aleo-asset.js'
 import type { BridgeOrderStage, BridgeOrderStatusDto, BridgeQuote } from '../types/bridge.js'
 
 export type SwapParameters = {
@@ -12,11 +13,12 @@ export type SwapParameters = {
   from: { asset: string; amount: string }
   /** Destination side. */
   to: { chain: string; asset: string; address: string }
-  /**
-   * Aleo `credits.record` plaintext to spend for the unshield deposit.
-   * Caller is responsible for selecting a record with sufficient balance.
-   */
-  record: string
+  /** Required only when the source asset's Aleo program requires a merkle proof
+   *  (e.g. USDCX, USAD). Pre-formatted as a single Aleo input string matching
+   *  the program's `[MerkleProof; 2u32].private` shape. */
+  merkleProof?: string | undefined
+  /** Override the default asset → Aleo program map. */
+  aleoAssetMap?: Readonly<Record<string, AleoAssetConfig>> | undefined
   selectQuote?:
     | 'best'
     | 'fastest'
@@ -31,7 +33,7 @@ export type SwapParameters = {
 export type SwapReturnType = {
   quoteRequestId: string
   orderId: string
-  /** Aleo transaction id (`at1...`) for the deposit transition. */
+  /** Aleo transaction id (`at1...`) for the unshield deposit transition. */
   depositTxId: string
   /** Present iff `poll` was truthy. */
   finalStatus?: BridgeOrderStatusDto
@@ -45,17 +47,14 @@ async function pickQuote(
 ): Promise<BridgeQuote> {
   if (typeof strategy === 'function') return strategy(quotes)
   if (strategy === 'fastest') {
-    const sorted = [...quotes].sort(
+    return [...quotes].sort(
       (a, b) =>
         (a.estimatedTimeSeconds ?? Number.POSITIVE_INFINITY) -
         (b.estimatedTimeSeconds ?? Number.POSITIVE_INFINITY),
-    )
-    // quotes.length > 0 is guaranteed by the caller before pickQuote is invoked
-    return sorted[0] as BridgeQuote
+    )[0] as BridgeQuote
   }
   // 'best' (default): maximize amountOut
-  const sorted = [...quotes].sort((a, b) => Number(b.amountOut) - Number(a.amountOut))
-  return sorted[0] as BridgeQuote
+  return [...quotes].sort((a, b) => Number(b.amountOut) - Number(a.amountOut))[0] as BridgeQuote
 }
 
 export async function swap(
@@ -102,12 +101,21 @@ export async function swap(
     throw new BridgeError('Bridge order is missing depositAddress or depositAmount')
   }
 
-  const executeResult = await params.wallet.executeContract({
-    program: 'credits.aleo',
-    function: 'transfer_private_to_public',
-    inputs: [params.record, instructions.depositAddress, `${instructions.depositAmount}u64`],
+  const assetConfig = aleoAssetProgram(params.from.asset, params.aleoAssetMap)
+
+  if (assetConfig.requiresMerkleProof && !params.merkleProof) {
+    throw new BridgeError(
+      `swap source asset ${params.from.asset} requires merkleProof; pass via SwapParameters.merkleProof`,
+    )
+  }
+
+  const depositTxId = await transfer(params.wallet, {
+    asset: assetConfig.program,
+    to: instructions.depositAddress,
+    amount: BigInt(instructions.depositAmount),
+    visibility: 'unshield',
+    merkleProof: params.merkleProof,
   })
-  const depositTxId = executeResult.transactionId
 
   if (!params.poll) {
     return {
