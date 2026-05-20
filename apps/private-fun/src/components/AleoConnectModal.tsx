@@ -40,10 +40,15 @@ export function AleoConnectModal({ onClose }: Props) {
     if (wallet.wallet?.adapter.name !== pending) return
 
     const network = wallet.network ?? Network.MAINNET
-    wallet.connect(network).catch((e: unknown) => {
-      setError(e instanceof Error ? e.message : String(e))
-      setPending(null)
-    })
+    console.log('[AleoConnectModal] firing connect', { name: pending, network })
+    wallet
+      .connect(network)
+      .then(() => console.log('[AleoConnectModal] connect resolved'))
+      .catch((e: unknown) => {
+        console.error('[AleoConnectModal] connect rejected', e)
+        setError(e instanceof Error ? e.message : String(e))
+        setPending(null)
+      })
   }, [
     pending,
     wallet.connected,
