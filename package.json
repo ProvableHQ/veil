@@ -12,5 +12,16 @@
     "tsx": "^4.21.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@provablehq/aleo-wallet-adaptor-react": "0.3.0-alpha.4",
+      "@provablehq/aleo-wallet-adaptor-core": "0.3.0-alpha.4",
+      "@provablehq/aleo-wallet-adaptor-shield": "0.3.0-alpha.4",
+      "@provablehq/aleo-wallet-adaptor-leo": "0.3.0-alpha.4",
+      "@provablehq/aleo-wallet-adaptor-puzzle": "0.3.0-alpha.4",
+      "@provablehq/aleo-wallet-adaptor-fox": "0.3.0-alpha.4",
+      "@provablehq/aleo-wallet-standard": "0.3.0-alpha.4"
+    }
   }
 }

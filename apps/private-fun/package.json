@@ -12,7 +12,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
     "@provablehq/aleo-types": "0.3.0-alpha.4",
-    "@provablehq/aleo-wallet-adaptor-react": "0.3.0-alpha.3",
+    "@provablehq/aleo-wallet-adaptor-react": "0.3.0-alpha.4",
     "@pump-fun/pump-sdk": "^1.35.0",
     "@solana/wallet-adapter-base": "^0.9.23",
     "@solana/wallet-adapter-react": "^0.15.36",
