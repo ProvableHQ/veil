@@ -260,3 +260,56 @@ select.pf-select { background-image: linear-gradient(45deg, transparent 50%, var
   font-family: inherit;
   font-size: 12px;
 }
+
+/* applet grid */
+.pf-applet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 8px;
+}
+.pf-applet-card {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.15s, transform 0.15s;
+}
+.pf-applet-card:hover {
+  border-color: var(--accent);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+.pf-applet-card.disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.pf-applet-card-ico {
+  font-size: 22px;
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pf-applet-card h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.pf-applet-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.pf-applet-card-badge {
+  align-self: flex-start;
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface-2);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.pf-applet-card.add {
+  border-style: dashed;
+  color: var(--muted);
+}
+.pf-applet-card.add:hover {
+  border-color: var(--border-strong);
+  transform: none;
+  text-decoration: none;
+}

@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { APPLETS } from '../lib/applets.js'
 
 type Item = { to: string; label: string; icon: string; muted?: boolean; suffix?: string }
 
@@ -7,10 +8,13 @@ const UTILITIES: Item[] = [
   { to: '/bridge-in', label: 'Bridge in', icon: '↙' },
 ]
 
-const APPLETS: Item[] = [
-  { to: '/applets/pump-launch', label: 'Pump launch', icon: '🚀' },
-  { to: '/applets/polymarket', label: 'Polymarket', icon: '🟣', muted: true, suffix: 'soon' },
-]
+const APPLET_NAV: Item[] = APPLETS.map((a) => ({
+  to: `/applets/${a.slug}`,
+  label: a.title,
+  icon: a.icon,
+  muted: a.disabled,
+  suffix: a.disabled ? 'soon' : undefined,
+}))
 
 export function Sidebar() {
   return (
@@ -31,7 +35,15 @@ export function Sidebar() {
 
       <div className="pf-side-section">
         <div className="pf-label">Applets</div>
-        {APPLETS.map((item) => (
+        <NavLink
+          to="/applets"
+          end
+          className={({ isActive }) => `pf-item${isActive ? ' active' : ''}`}
+        >
+          <span className="pf-ico">▣</span>
+          All applets
+        </NavLink>
+        {APPLET_NAV.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -45,9 +57,9 @@ export function Sidebar() {
             {item.suffix && <span className="pf-side-soon">{item.suffix}</span>}
           </NavLink>
         ))}
-        <div className="pf-add">
+        <NavLink to="/applets" className="pf-add">
           <span>+</span> Add applet
-        </div>
+        </NavLink>
       </div>
     </aside>
   )
