@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useWallet } from '@provablehq/aleo-wallet-adaptor-react'
 import { Network } from '@provablehq/aleo-types'
 
@@ -7,17 +7,24 @@ type Props = { onClose: () => void }
 /**
  * Aleo wallet picker.
  *
- * The underlying adapter splits selection (`selectWallet`) from connection
- * (`connect`), and the connect call requires React to have committed the
- * selection state first. We can't `selectWallet → connect` in the same tick
- * because `connect` reads from the pre-update wallet ref. Instead we mark
- * the selection as "pending" and let a useEffect fire the connect once the
- * adapter's selected-wallet name matches what we picked.
+ * The underlying adapter splits selection (`selectWallet`, sync void) from
+ * connection (`connect`, async, reads the selected wallet from React state).
+ * We can't `selectWallet → connect` in the same event handler — `connect`
+ * captures the pre-update wallet ref and throws `WalletNotSelectedError`.
+ *
+ * Fix: set a `pending` state from the click handler, and fire connect from
+ * a `useEffect` that runs on the *next* render (after React commits the
+ * selectWallet update). `wallet.connect` in that effect's closure is the
+ * fresh function bound to the newly-selected wallet.
+ *
+ * A ref guards against double-firing if the effect re-runs before
+ * `wallet.connecting` flips to true.
  */
 export function AleoConnectModal({ onClose }: Props) {
   const wallet = useWallet()
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const firedRef = useRef(false)
 
   useEffect(() => {
     function handle(e: KeyboardEvent) {
@@ -32,12 +39,14 @@ export function AleoConnectModal({ onClose }: Props) {
     if (wallet.connected) onClose()
   }, [wallet.connected, onClose])
 
-  // When the adapter's selected wallet catches up to our pending pick, fire connect.
+  // Fire connect on the render *after* selectWallet committed.
   useEffect(() => {
-    if (!pending) return
-    if (wallet.connected) return
-    if (wallet.connecting) return
-    if (wallet.wallet?.adapter.name !== pending) return
+    if (!pending) {
+      firedRef.current = false
+      return
+    }
+    if (firedRef.current) return
+    firedRef.current = true
 
     const network = wallet.network ?? Network.MAINNET
     console.log('[AleoConnectModal] firing connect', { name: pending, network })
@@ -48,20 +57,14 @@ export function AleoConnectModal({ onClose }: Props) {
         console.error('[AleoConnectModal] connect rejected', e)
         setError(e instanceof Error ? e.message : String(e))
         setPending(null)
+        firedRef.current = false
       })
-  }, [
-    pending,
-    wallet.connected,
-    wallet.connecting,
-    wallet.wallet?.adapter.name,
-    wallet.network,
-    wallet,
-  ])
+  }, [pending, wallet])
 
   function pick(name: string) {
     setError(null)
-    setPending(name)
     wallet.selectWallet(name as Parameters<typeof wallet.selectWallet>[0])
+    setPending(name)
   }
 
   return (
