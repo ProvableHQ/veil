@@ -246,7 +246,9 @@ export const CHAIN_CONFIGS: Readonly<Record<ExternalChain, ChainConfig>> = Objec
   },
 })
 
-export const ALEO_EXPLORER_TX_PREFIX = 'https://explorer.aleo.org/transaction/'
+// Provable's Aleo explorer (from wallet-services-api's houdini_order_example.txt).
+// If a different Aleo explorer is preferred, override at use-site.
+export const ALEO_EXPLORER_TX_PREFIX = 'https://explorer.provable.com/transaction/'
 
 /** Map an Aleo-side asset symbol to the matching external asset for sanity-check pairing. */
 export const ALEO_TO_EXTERNAL_ASSET: Readonly<Record<AleoAssetSymbol, ExternalAsset | 'ALEO'>> = Object.freeze({
@@ -265,7 +267,12 @@ export const ALEO_TO_EXTERNAL_ASSET: Readonly<Record<AleoAssetSymbol, ExternalAs
 ```typescript
 import { createBridgeClient, httpBridge, type BridgeClient } from '@veil/bridge'
 
-const WSA_BASE_URL = import.meta.env.VITE_WSA_BASE_URL ?? 'https://wallet-services.provable.com/api'
+/**
+ * Bridge base URL. Defaults to Provable's wallet-services-api prod endpoint
+ * (verified from ProvableHQ/private-web3-agents src/tools/bridge.ts).
+ * Override via VITE_WSA_BASE_URL for staging / local dev.
+ */
+const WSA_BASE_URL = import.meta.env.VITE_WSA_BASE_URL ?? 'https://wallet.api.provable.com'
 
 let cached: BridgeClient | null = null
 
@@ -1765,12 +1772,13 @@ Demo dapp for cross-chain funding to and from Aleo, with three multi-wallet ecos
 Create `.env.local`:
 
 \`\`\`
-VITE_WSA_BASE_URL=https://wallet-services.provable.com/api
+VITE_WSA_BASE_URL=https://wallet.api.provable.com
 VITE_PINATA_JWT=<jwt for pinata pin>
 VITE_SOLANA_RPC=https://api.mainnet-beta.solana.com
 VITE_WALLET_CONNECT_PROJECT_ID=<from cloud.walletconnect.com>
 \`\`\`
 
+`VITE_WSA_BASE_URL` defaults to Provable's prod wallet-services-api (`https://wallet.api.provable.com`). Override only for staging / local dev.
 `VITE_PINATA_JWT` is only required to launch tokens (otherwise IPFS pinning fails).
 `VITE_WALLET_CONNECT_PROJECT_ID` is optional — without it, WalletConnect is disabled but injected wallets still work.
 
