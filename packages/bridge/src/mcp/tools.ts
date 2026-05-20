@@ -107,7 +107,7 @@ export function buildBridgeMcpTools(client: BridgeClient): McpTool[] {
     {
       name: 'bridge_swap',
       description:
-        'End-to-end Aleo-source bridge swap: quote → select → order → Aleo `transfer_private_to_public` unshield deposit → optional poll to completion. Requires a @veil/core WalletClient (passed in by the SDK host, not the agent).',
+        'End-to-end Aleo-source bridge swap: quote → select → order → Aleo unshield deposit (routed through the asset\'s Aleo program) → optional poll to completion. Requires a @veil/core WalletClient (passed in by the SDK host, not the agent).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -128,7 +128,7 @@ export function buildBridgeMcpTools(client: BridgeClient): McpTool[] {
             },
             required: ['chain', 'asset', 'address'],
           },
-          record: { type: 'string', description: 'Aleo credits.record plaintext to spend for the unshield deposit.' },
+          merkleProof: { type: 'string', description: 'Pre-formatted [MerkleProof; 2u32] input string. Required only for compliance-bearing source assets (e.g. USDCX, USAD).' },
           selectQuote: {
             description: 'best (highest amountOut), fastest (lowest estimatedTimeSeconds), or a callback (callbacks are only available to in-process callers, not to JSON agents).',
             oneOf: [
@@ -144,7 +144,7 @@ export function buildBridgeMcpTools(client: BridgeClient): McpTool[] {
           },
           timezone: { type: 'string' },
         },
-        required: ['from', 'to', 'record'],
+        required: ['from', 'to'],
       },
       handler: (params) => client.swap(params),
     },
