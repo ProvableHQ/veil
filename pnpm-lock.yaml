@@ -82,6 +82,12 @@ importers:
       '@coral-xyz/anchor':
         specifier: ^0.31.1
         version: 0.31.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@provablehq/aleo-types':
+        specifier: 0.3.0-alpha.4
+        version: 0.3.0-alpha.4
+      '@provablehq/aleo-wallet-adaptor-react':
+        specifier: 0.3.0-alpha.3
+        version: 0.3.0-alpha.3(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@pump-fun/pump-sdk':
         specifier: ^1.35.0
         version: 1.36.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
