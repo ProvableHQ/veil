@@ -39,6 +39,10 @@ const value = await client.readContract({
 | `@veil/core` | Clients, transports, accounts, actions, agent tools, MCP server | In development |
 | `@veil/wallet-adapter` | Wraps `@provablehq/aleo-wallet-standard` — connects any Aleo wallet | In development |
 | `@veil/provable` | Wraps `@provablehq/sdk` — key derivation, local signing, proving | In development |
+| `@veil/bridge` | Cross-chain bridge client (Aleo ↔ other) over wallet-services-api | In development |
+| `@veil/devnode` | Test client actions for local devnode (fund, reset, mine) | In development |
+| `@veil/leo` | Leo CLI wrapper — compile, run, build programs locally | In development |
+| `@veil/codegen` | Generate typed contract instances from Aleo programs | In development |
 | `@veil/react` | React hooks (wagmi equivalent) | Planned |
 | `@veil/mobile` | Shield Mobile SDK helpers | Planned |
 
@@ -386,7 +390,11 @@ veil/
 │   │       ├── errors/      # error types (actionable messages)
 │   │       └── utils/       # address validation, credits, value parsing
 │   ├── wallet-adapter/      # @veil/wallet-adapter (wraps wallet standard)
-│   └── provable/            # @veil/provable (wraps @provablehq/sdk)
+│   ├── provable/            # @veil/provable (wraps @provablehq/sdk)
+│   ├── bridge/              # @veil/bridge (cross-chain bridge client)
+│   ├── devnode/             # @veil/devnode (test client actions)
+│   ├── leo/                 # @veil/leo (Leo CLI wrapper)
+│   └── codegen/             # @veil/codegen (typed contract generation)
 ├── skills/                  # Skill definitions for code-writing agents
 ├── docs/
 │   ├── specs/               # Design specifications

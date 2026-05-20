@@ -17,10 +17,6 @@ export interface VeilProviderProps {
   decryptPermission?: WalletDecryptPermission
   /** Programs to register with the wallet for decrypt permissions. */
   programs?: string[]
-  /** Override the default wallet list. If omitted, all known wallets are included. */
-  wallets?: ConstructorParameters<typeof ShieldWalletAdapter>[0] extends undefined
-    ? never[]
-    : never[]
 }
 
 const networkMap = {

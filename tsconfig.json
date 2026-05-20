@@ -20,7 +20,10 @@
       "@veil/wallet-adapter": ["./packages/wallet-adapter/src/index.ts"],
       "@veil/provable": ["./packages/provable/src/index.ts"],
       "@veil/leo": ["./packages/leo/src/index.ts"],
-      "@veil/devnode": ["./packages/devnode/src/index.ts"]
+      "@veil/devnode": ["./packages/devnode/src/index.ts"],
+      "@veil/bridge": ["./packages/bridge/src/index.ts"],
+      "@veil/bridge/agent": ["./packages/bridge/src/agent/index.ts"],
+      "@veil/bridge/mcp": ["./packages/bridge/src/mcp/index.ts"]
     },
     "types": ["node"]
   }

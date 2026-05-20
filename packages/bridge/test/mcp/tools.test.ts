@@ -1,0 +1,114 @@
+import { describe, it, expect, vi } from 'vitest'
+import { buildBridgeMcpTools } from '../../src/mcp/tools.js'
+import type { BridgeClient } from '../../src/clients/createBridgeClient.js'
+
+function fakeClient() {
+  return {
+    getQuotes: vi.fn().mockResolvedValue({ quotes: [], meta: { count: 0, quoteRequestId: 'r' } }),
+    createOrder: vi.fn().mockResolvedValue({
+      orderId: 'o1',
+      depositAddress: 'a',
+      depositAmount: '1',
+      depositChain: 'aleo',
+      instructions: { type: 'ONCHAIN_DEPOSIT', address: 'a', amount: '1', chain: 'aleo' },
+    }),
+    getOrder: vi.fn().mockResolvedValue({
+      orderId: 'o1',
+      provider: { id: 'p1', code: 'demo', displayName: 'Demo', capabilities: [] },
+      status: 'WAITING',
+      timeline: [],
+      createdAt: '2026-05-18T00:00:00Z',
+      updatedAt: '2026-05-18T00:00:00Z',
+    }),
+    getOrderAudit: vi.fn().mockResolvedValue({
+      orderId: 'o1',
+      provider: { id: 'p1', code: 'demo', displayName: 'Demo', capabilities: [] },
+      status: 'COMPLETED',
+      timeline: [],
+      createdAt: '2026-05-18T00:00:00Z',
+      updatedAt: '2026-05-18T00:00:00Z',
+      steps: [],
+      providerEvents: [],
+    }),
+    waitForOrder: vi.fn().mockResolvedValue({
+      orderId: 'o1',
+      provider: { id: 'p1', code: 'demo', displayName: 'Demo', capabilities: [] },
+      status: 'COMPLETED',
+      timeline: [],
+      createdAt: '2026-05-18T00:00:00Z',
+      updatedAt: '2026-05-18T00:00:00Z',
+    }),
+    swap: vi.fn().mockResolvedValue({
+      quoteRequestId: 'r',
+      orderId: 'o1',
+      depositTxId: 'at1tx',
+    }),
+  } as unknown as BridgeClient
+}
+
+describe('buildBridgeMcpTools', () => {
+  it('returns one tool per action with a non-empty description and an object input schema', () => {
+    const tools = buildBridgeMcpTools(fakeClient())
+    const names = tools.map((t) => t.name)
+    expect(names).toEqual([
+      'bridge_get_quotes',
+      'bridge_create_order',
+      'bridge_get_order',
+      'bridge_get_order_audit',
+      'bridge_wait_for_order',
+      'bridge_swap',
+    ])
+    for (const tool of tools) {
+      expect(tool.description.length).toBeGreaterThan(0)
+      expect(tool.inputSchema.type).toBe('object')
+    }
+  })
+
+  it('bridge_get_quotes schema requires the OpenAPI required fields', () => {
+    const tools = buildBridgeMcpTools(fakeClient())
+    const tool = tools.find((t) => t.name === 'bridge_get_quotes')!
+    expect(tool.inputSchema.required).toEqual(['srcChain', 'srcAsset', 'destChain', 'destAsset', 'amountIn'])
+  })
+
+  it('bridge_create_order schema requires the OpenAPI CreateBridgeOrderRequest required fields', () => {
+    const tools = buildBridgeMcpTools(fakeClient())
+    const tool = tools.find((t) => t.name === 'bridge_create_order')!
+    expect(tool.inputSchema.required).toEqual([
+      'providerId',
+      'srcChain',
+      'srcAsset',
+      'destChain',
+      'destAsset',
+      'amountIn',
+      'walletAddress',
+      'quoteId',
+    ])
+  })
+
+  it('bridge_get_quotes handler proxies to client.getQuotes', async () => {
+    const client = fakeClient()
+    const tools = buildBridgeMcpTools(client)
+    const tool = tools.find((t) => t.name === 'bridge_get_quotes')!
+    const result = await tool.handler({
+      srcChain: 'aleo',
+      srcAsset: 'ALEO',
+      destChain: 'solana',
+      destAsset: 'SOL',
+      amountIn: '1',
+    })
+    expect((client.getQuotes as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+    expect((result as { meta: { quoteRequestId: string } }).meta.quoteRequestId).toBe('r')
+  })
+
+  it('bridge_swap handler proxies to client.swap', async () => {
+    const client = fakeClient()
+    const tools = buildBridgeMcpTools(client)
+    const tool = tools.find((t) => t.name === 'bridge_swap')!
+    const result = await tool.handler({
+      from: { asset: 'ALEO', amount: '1' },
+      to: { chain: 'solana', asset: 'SOL', address: '8xJ...' },
+    })
+    expect((client.swap as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+    expect((result as { orderId: string }).orderId).toBe('o1')
+  })
+})
