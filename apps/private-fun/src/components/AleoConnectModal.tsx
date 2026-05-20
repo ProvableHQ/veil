@@ -34,10 +34,24 @@ export function AleoConnectModal({ onClose }: Props) {
     return () => document.removeEventListener('keydown', handle)
   }, [onClose])
 
-  // Close once the underlying wallet reports connected.
+  // After connect, force mainnet — the bridge only routes mainnet.
   useEffect(() => {
-    if (wallet.connected) onClose()
-  }, [wallet.connected, onClose])
+    if (!wallet.connected) return
+    if (wallet.network === Network.MAINNET) return
+    console.log('[AleoConnectModal] switching wallet to mainnet (was', wallet.network, ')')
+    wallet
+      .switchNetwork(Network.MAINNET)
+      .then(() => console.log('[AleoConnectModal] switched to mainnet'))
+      .catch((e: unknown) => {
+        console.error('[AleoConnectModal] switchNetwork failed', e)
+        setError(e instanceof Error ? e.message : String(e))
+      })
+  }, [wallet.connected, wallet.network, wallet])
+
+  // Close once the underlying wallet reports connected AND on mainnet.
+  useEffect(() => {
+    if (wallet.connected && wallet.network === Network.MAINNET) onClose()
+  }, [wallet.connected, wallet.network, onClose])
 
   // Fire connect on the render *after* selectWallet committed.
   useEffect(() => {
@@ -48,6 +62,10 @@ export function AleoConnectModal({ onClose }: Props) {
     if (firedRef.current) return
     firedRef.current = true
 
+    // Connect on whatever network the wallet is currently on; a separate effect
+    // forces a switch to mainnet immediately after. Some wallets (Shield)
+    // silently no-op the popup when you request a different network than
+    // they're configured for, so we connect-then-switch instead.
     const network = wallet.network ?? Network.MAINNET
     console.log('[AleoConnectModal] firing connect', { name: pending, network })
     wallet
