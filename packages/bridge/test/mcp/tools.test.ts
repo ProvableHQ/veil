@@ -107,7 +107,6 @@ describe('buildBridgeMcpTools', () => {
     const result = await tool.handler({
       from: { asset: 'ALEO', amount: '1' },
       to: { chain: 'solana', asset: 'SOL', address: '8xJ...' },
-      record: '{ owner: aleo1.private, ... }',
     })
     expect((client.swap as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
     expect((result as { orderId: string }).orderId).toBe('o1')
