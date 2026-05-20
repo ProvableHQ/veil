@@ -82,3 +82,10 @@ export {
 
 // Utilities
 export { unwrapEnvelope } from './utils/unwrapEnvelope.js'
+
+// Asset routing
+export {
+  aleoAssetProgram,
+  DEFAULT_ALEO_ASSET_MAP,
+  type AleoAssetConfig,
+} from './lib/aleo-asset.js'
