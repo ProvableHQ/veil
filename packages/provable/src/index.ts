@@ -24,6 +24,7 @@ import { loadNetwork as loadSdk } from '@provablehq/sdk/dynamic.js'
 import {
   Account,
   AleoKeyProvider,
+  Program,
   ProgramManager,
   getOrInitConsensusVersionTestHeights,
 } from '@provablehq/sdk'
@@ -660,12 +661,36 @@ export function createDevnodeClient(options?: {
       getOrInitConsensusVersionTestHeights(DEVNODE_CONSENSUS_HEIGHTS)
       const programManager = new ProgramManager(url, keyProvider, undefined)
       programManager.setAccount(sdkAccount)
+
+      // Fetch program sources for any call.dynamic targets the caller declared,
+      // and recursively include their static imports as well.
+      // Use direct REST calls instead of the SDK network client to avoid the
+      // /latest_edition endpoint which returns 500 on the devnode.
+      let imports: Record<string, string> | undefined
+      if (txOptions.imports && txOptions.imports.length > 0) {
+        imports = {}
+        const queue = [...txOptions.imports]
+        const seen = new Set<string>()
+        while (queue.length > 0) {
+          const name = queue.shift()!
+          if (seen.has(name)) continue
+          seen.add(name)
+          const source = await programManager.networkClient.getProgram(name); // automatically throws.
+          imports[name] = source;
+          const importNames = Program.fromString(source).getImports(); // Invoke `wasm` to avoid regex.
+          for (const dep of importNames) {
+            if (dep && !seen.has(dep)) queue.push(dep)
+          }
+        }
+      }
+
       const tx = await programManager.buildDevnodeExecutionTransaction({
         programName: txOptions.programName,
         functionName: txOptions.functionName,
         priorityFee: 0,
         privateFee: txOptions.privateFee ?? false,
         inputs: txOptions.inputs,
+        ...(imports ? { imports } : {}),
       })
       return JSON.parse(tx.toString())
     },
