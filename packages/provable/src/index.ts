@@ -24,6 +24,7 @@ import { loadNetwork as loadSdk } from '@provablehq/sdk/dynamic.js'
 import {
   Account,
   AleoKeyProvider,
+  Program,
   ProgramManager,
   getOrInitConsensusVersionTestHeights,
 } from '@provablehq/sdk'
@@ -674,11 +675,10 @@ export function createDevnodeClient(options?: {
           const name = queue.shift()!
           if (seen.has(name)) continue
           seen.add(name)
-          const res = await fetch(`${url}/testnet/program/${name}`)
-          if (!res.ok) throw new Error(`Failed to fetch program ${name}: ${res.status} ${res.statusText}`)
-          const source = JSON.parse(await res.text()) as string
-          imports[name] = source
-          for (const [, dep] of source.matchAll(/^import\s+(\S+\.aleo)\s*;/gm)) {
+          const source = await programManager.networkClient.getProgram(name); // automatically throws.
+          imports[name] = source;
+          const importNames = Program.fromString(source).getImports(); // Invoke `wasm` to avoid regex.
+          for (const dep of importNames) {
             if (dep && !seen.has(dep)) queue.push(dep)
           }
         }

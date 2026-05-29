@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process'
+import { createWriteStream } from 'node:fs'
+import { join } from 'node:path'
 import type { Client } from '@veil/core'
 
 /** The well-known seeded private key used by Aleo Devnode */
@@ -39,6 +41,8 @@ export type DevnodeStartOptions = {
   readyTimeout?: number
   /** Path to the aleo-devnode binary. Defaults to `'aleo-devnode'` (resolved on PATH). */
   devnodePath?: string
+  /** Write devnode stdout/stderr to devnode-<port>.log in the current directory. Defaults to false. */
+  verbose?: boolean
 }
 
 export type DevnodeAdvanceOptions = {
@@ -86,6 +90,7 @@ export async function startDevnode(options?: DevnodeStartOptions): Promise<Devno
   const verbosity = options?.verbosity ?? 2
   const readyTimeout = options?.readyTimeout ?? 30_000
   const devnodePath = options?.devnodePath ?? 'aleo-devnode'
+  const verbose = options?.verbose ?? false
 
   await tryShutdownExisting(socketAddr)
 
@@ -103,7 +108,7 @@ export async function startDevnode(options?: DevnodeStartOptions): Promise<Devno
   if (options?.clearStorage) args.push('--clear-storage')
   if (options?.manualBlockCreation) args.push('--manual-block-creation')
 
-  return spawnDevnode(devnodePath, args, socketAddr, readyTimeout)
+  return spawnDevnode(devnodePath, args, socketAddr, readyTimeout, verbose)
 }
 
 export async function advanceDevnode(options?: DevnodeAdvanceOptions): Promise<void> {
@@ -177,13 +182,24 @@ async function spawnDevnode(
   args: string[],
   socketAddr: string,
   readyTimeout: number,
+  verbose: boolean = false,
 ): Promise<DevnodeInstance> {
   const proc = spawn(devnodePath, args, {
     stdio: 'pipe',
-    env: { ...process.env, CONSENSUS_VERSION_HEIGHTS: '0,1,2,3,4,5,6,7,8,9,10,11,12,13' },
+    env: { ...process.env, CONSENSUS_VERSION_HEIGHTS: process.env.CONSENSUS_VERSION_HEIGHTS || '0,1,2,3,4,5,6,7,8,9,10,11,12,13' },
   })
-  proc.stdout?.resume()
-  proc.stderr?.resume()
+
+  if (verbose) {
+    const port = socketAddr.split(':')[1] ?? socketAddr.replace(/\./g, '-')
+    const logFile = join(process.cwd(), `devnode-${port}.log`)
+    const logStream = createWriteStream(logFile, { flags: 'w' })
+    proc.stdout?.pipe(logStream)
+    proc.stderr?.pipe(logStream)
+    console.log(`[devnode] logs → ${logFile}`)
+  } else {
+    proc.stdout?.resume()
+    proc.stderr?.resume()
+  }
 
   let startError: Error | undefined
   proc.on('error', (err) => {
