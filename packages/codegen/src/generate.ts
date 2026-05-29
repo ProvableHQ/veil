@@ -1,7 +1,7 @@
 // Code generator — reads a parsed ABI and produces TypeScript source code.
 
 import type { ABI, RecordDef, StructDef, AbiFunction, Mapping, StorageVariable, StorageType } from '@veil/core'
-import type { Plaintext, Primitive, FutureValue } from '@veil/core'
+import type { Plaintext, Primitive } from '@veil/core'
 
 // ── Public API ────────────────────────────────────────────────────────
 
@@ -157,7 +157,7 @@ function generateFunctionInputType(fn: AbiFunction, abi: ABI): string[] {
       lines.push(`  ${name}: ${tsType}`)
     } else if (input.type.kind === 'record') {
       const recName = input.type.path[input.type.path.length - 1] ?? 'RecordValue'
-      const isLocal = !input.type.program || input.type.program === abi.program.replace('.aleo', '')
+      const isLocal = !input.type.program || input.type.program.replace(/\.aleo$/, '') === abi.program.replace(/\.aleo$/, '')
       lines.push(`  ${name}: ${isLocal ? recName : 'RecordValue'} | RecordValue | string`)
     } else if (input.type.kind === 'dynamicRecord') {
       lines.push(`  ${name}: RecordValue | string`)
@@ -195,7 +195,7 @@ function outputToTsType(output: AbiFunction['outputs'][number]['type'], abi: ABI
     return plaintextToTsType(output.type)
   } else if (output.kind === 'record') {
     const recName = output.path[output.path.length - 1] ?? 'RecordValue'
-    const isLocal = !output.program || output.program === abi.program.replace('.aleo', '')
+    const isLocal = !output.program || output.program.replace(/\.aleo$/, '') === abi.program.replace(/\.aleo$/, '')
     return isLocal ? recName : 'RecordValue'
   } else if (output.kind === 'dynamicRecord') {
     return 'RecordValue'
@@ -347,7 +347,7 @@ function namedParamsType(fn: AbiFunction, abi: ABI): string {
       tsType = plaintextToTsType(input.type.type)
     } else if (input.type.kind === 'record') {
       const recName = input.type.path[input.type.path.length - 1] ?? 'RecordValue'
-      const isLocal = !input.type.program || input.type.program === abi.program.replace('.aleo', '')
+      const isLocal = !input.type.program || input.type.program.replace(/\.aleo$/, '') === abi.program.replace(/\.aleo$/, '')
       tsType = isLocal ? `${recName} | RecordValue | string` : 'RecordValue | string'
     } else {
       tsType = 'RecordValue | string'
@@ -404,7 +404,7 @@ function resolveRecordInputs(fn: AbiFunction): { resolveLines: string[], resolve
 function outputMapperExpr(output: AbiFunction['outputs'][number], i: number, abi: ABI): string {
   if (output.type.kind === 'record') {
     const recName = output.type.path[output.type.path.length - 1] ?? ''
-    const isLocal = !output.type.program || output.type.program === abi.program.replace('.aleo', '')
+    const isLocal = !output.type.program || output.type.program.replace(/\.aleo$/, '') === abi.program.replace(/\.aleo$/, '')
     if (isLocal && recName) {
       return `to${recName}(result.outputs[${i}] as RecordValue)`
     }
@@ -489,11 +489,15 @@ function generateContractFactory(abi: ABI): string[] {
   lines.push(`    ? { public: options.publicClient, wallet: options.walletClient }`)
   lines.push(`    : (options.publicClient ?? options.walletClient)!`)
   lines.push(`  const raw = getContract({ program: PROGRAM_ID, abi: PROGRAM_ABI, client, programSource: options.programSource, imports: options.imports })`)
+  // Proxy method access is typed as Record<string, fn> whose properties are
+  // T | undefined under noUncheckedIndexedAccess. Cast to any for the internal
+  // wrappers — the typed factory interface above is what consumers see.
+  lines.push(`  const _raw = raw as any`)
   lines.push('')
   lines.push(`  return {`)
   lines.push(`    program: raw.program,`)
   lines.push(`    abi: raw.abi as ABI,`)
-  lines.push(`    read: raw.read as ${factoryName}Contract['read'],`)
+  lines.push(`    read: _raw.read as ${factoryName}Contract['read'],`)
 
   // write wrappers — convert named params to positional inputs
   if (abi.functions.length > 0) {
@@ -505,7 +509,7 @@ function generateContractFactory(abi: ABI): string[] {
       lines.push(`      ${fn.name}: (params: any) => {`)
       lines.push(`        const ${destructure} = params`)
       for (const line of resolveLines) lines.push(line)
-      lines.push(`        return raw.write.${fn.name}({ inputs: [${resolvedNames.join(', ')}], fee })`)
+      lines.push(`        return _raw.write.${fn.name}({ inputs: [${resolvedNames.join(', ')}] })`)
       lines.push(`      },`)
     }
     lines.push(`    },`)
@@ -523,9 +527,9 @@ function generateContractFactory(abi: ABI): string[] {
       for (const line of resolveLines) lines.push(line)
 
       if (fn.outputs.length === 0) {
-        lines.push(`        await raw.simulate.${fn.name}({ inputs: [${resolvedNames.join(', ')}] })`)
+        lines.push(`        await _raw.simulate.${fn.name}({ inputs: [${resolvedNames.join(', ')}] })`)
       } else {
-        lines.push(`        const result = await raw.simulate.${fn.name}({ inputs: [${resolvedNames.join(', ')}] })`)
+        lines.push(`        const result = await _raw.simulate.${fn.name}({ inputs: [${resolvedNames.join(', ')}] })`)
       }
 
       if (fn.outputs.length === 0) {
@@ -552,7 +556,7 @@ function generateContractFactory(abi: ABI): string[] {
       lines.push(`      ${fn.name}: async (params: any) => {`)
       lines.push(`        const ${destructure} = params`)
       for (const line of resolveLines) lines.push(line)
-      lines.push(`        const result = await raw.execute.${fn.name}({ inputs: [${resolvedNames.join(', ')}], fee })`)
+      lines.push(`        const result = await _raw.execute.${fn.name}({ inputs: [${resolvedNames.join(', ')}], fee })`)
 
       if (fn.outputs.length === 0) {
         lines.push(`        return { transactionId: result.transactionId }`)
@@ -568,7 +572,7 @@ function generateContractFactory(abi: ABI): string[] {
     lines.push(`    },`)
   }
 
-  lines.push(`    fetchAbi: raw.fetchAbi as unknown as ${factoryName}Contract['fetchAbi'],`)
+  lines.push(`    fetchAbi: _raw.fetchAbi as unknown as ${factoryName}Contract['fetchAbi'],`)
   lines.push(`  }`)
   lines.push(`}`)
 

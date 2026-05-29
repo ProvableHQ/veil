@@ -2,7 +2,7 @@
 // Do not edit manually.
 
 import { getContract } from '@veil/core'
-import type { RecordValue, PublicClient, WalletClient, ABI } from '@veil/core'
+import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI } from '@veil/core'
 
 export const PROGRAM_ID = 'loyalty_token.aleo' as const
 
@@ -10,7 +10,7 @@ export interface LoyaltyCard {
   owner: string
   card_id: string
   points: bigint
-  tier: number
+  tier: bigint
   _record: RecordValue
 }
 
@@ -19,16 +19,16 @@ export function toLoyaltyCard(record: RecordValue): LoyaltyCard {
     owner: record.owner,
     card_id: record.fields.card_id?.value as string ?? '',
     points: record.fields.points?.value as bigint ?? 0n,
-    tier: record.fields.tier?.value as number ?? 0,
+    tier: record.fields.tier?.value as bigint ?? 0n,
     _record: record,
   }
 }
 
 export type ApproveUpgradeInputs = {
-  checksum: number[]
+  checksum: bigint[]
 }
 
-export type ApproveUpgradeOutputs = void
+export type ApproveUpgradeOutputs = FutureValue
 
 export type MintCardInputs = {
   recipient: string
@@ -36,14 +36,14 @@ export type MintCardInputs = {
   nonce: string
 }
 
-export type MintCardOutputs = LoyaltyCard
+export type MintCardOutputs = [LoyaltyCard, FutureValue]
 
 export type AddPointsInputs = {
   card: LoyaltyCard | RecordValue | string
   points_earned: bigint
 }
 
-export type AddPointsOutputs = LoyaltyCard
+export type AddPointsOutputs = [LoyaltyCard, FutureValue]
 
 export type CheckPointsInputs = {
   card: LoyaltyCard | RecordValue | string
@@ -56,7 +56,7 @@ export type TransferCardInputs = {
   new_owner: string
 }
 
-export type TransferCardOutputs = LoyaltyCard
+export type TransferCardOutputs = [LoyaltyCard, FutureValue]
 
 export type SplitCardInputs = {
   card: LoyaltyCard | RecordValue | string
@@ -64,14 +64,14 @@ export type SplitCardInputs = {
   nonce: string
 }
 
-export type SplitCardOutputs = [LoyaltyCard, LoyaltyCard]
+export type SplitCardOutputs = [LoyaltyCard, LoyaltyCard, FutureValue]
 
 export type SplitCardV2Inputs = {
   card: LoyaltyCard | RecordValue | string
   points_to_keep: bigint
 }
 
-export type SplitCardV2Outputs = [LoyaltyCard, LoyaltyCard]
+export type SplitCardV2Outputs = [LoyaltyCard, LoyaltyCard, FutureValue]
 
 export type SpendPointsInputs = {
   card: LoyaltyCard | RecordValue | string
@@ -208,7 +208,7 @@ export const PROGRAM_ABI: ABI = {
       "outputs": [
         {
           "type": {
-            "kind": "final"
+            "kind": "future"
           },
           "mode": "none"
         }
@@ -265,7 +265,7 @@ export const PROGRAM_ABI: ABI = {
         },
         {
           "type": {
-            "kind": "final"
+            "kind": "future"
           },
           "mode": "none"
         }
@@ -311,7 +311,7 @@ export const PROGRAM_ABI: ABI = {
         },
         {
           "type": {
-            "kind": "final"
+            "kind": "future"
           },
           "mode": "none"
         }
@@ -396,7 +396,7 @@ export const PROGRAM_ABI: ABI = {
         },
         {
           "type": {
-            "kind": "final"
+            "kind": "future"
           },
           "mode": "none"
         }
@@ -463,7 +463,7 @@ export const PROGRAM_ABI: ABI = {
         },
         {
           "type": {
-            "kind": "final"
+            "kind": "future"
           },
           "mode": "none"
         }
@@ -519,7 +519,7 @@ export const PROGRAM_ABI: ABI = {
         },
         {
           "type": {
-            "kind": "final"
+            "kind": "future"
           },
           "mode": "none"
         }
@@ -578,7 +578,7 @@ export interface LoyaltyTokenContract {
     approved_upgrades: (params: { key: string }) => Promise<unknown>
   }
   write: {
-    approve_upgrade: (params: { checksum: number[] } & { fee?: bigint }) => Promise<string>
+    approve_upgrade: (params: { checksum: bigint[] } & { fee?: bigint }) => Promise<string>
     mint_card: (params: { recipient: string, initial_points: bigint, nonce: string } & { fee?: bigint }) => Promise<string>
     add_points: (params: { card: LoyaltyCard | RecordValue | string, points_earned: bigint } & { fee?: bigint }) => Promise<string>
     check_points: (params: { card: LoyaltyCard | RecordValue | string } & { fee?: bigint }) => Promise<string>
@@ -588,23 +588,23 @@ export interface LoyaltyTokenContract {
     spend_points: (params: { card: LoyaltyCard | RecordValue | string, points_to_spend: bigint } & { fee?: bigint }) => Promise<string>
   }
   simulate: {
-    approve_upgrade: (params: { checksum: number[] }) => Promise<void>
-    mint_card: (params: { recipient: string, initial_points: bigint, nonce: string }) => Promise<LoyaltyCard>
-    add_points: (params: { card: LoyaltyCard | RecordValue | string, points_earned: bigint }) => Promise<LoyaltyCard>
+    approve_upgrade: (params: { checksum: bigint[] }) => Promise<FutureValue>
+    mint_card: (params: { recipient: string, initial_points: bigint, nonce: string }) => Promise<[LoyaltyCard, FutureValue]>
+    add_points: (params: { card: LoyaltyCard | RecordValue | string, points_earned: bigint }) => Promise<[LoyaltyCard, FutureValue]>
     check_points: (params: { card: LoyaltyCard | RecordValue | string }) => Promise<[LoyaltyCard, bigint]>
-    transfer_card: (params: { card: LoyaltyCard | RecordValue | string, new_owner: string }) => Promise<LoyaltyCard>
-    split_card: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint, nonce: string }) => Promise<[LoyaltyCard, LoyaltyCard]>
-    split_card_v2: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint }) => Promise<[LoyaltyCard, LoyaltyCard]>
+    transfer_card: (params: { card: LoyaltyCard | RecordValue | string, new_owner: string }) => Promise<[LoyaltyCard, FutureValue]>
+    split_card: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint, nonce: string }) => Promise<[LoyaltyCard, LoyaltyCard, FutureValue]>
+    split_card_v2: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint }) => Promise<[LoyaltyCard, LoyaltyCard, FutureValue]>
     spend_points: (params: { card: LoyaltyCard | RecordValue | string, points_to_spend: bigint }) => Promise<LoyaltyCard>
   }
   execute: {
-    approve_upgrade: (params: { checksum: number[] } & { fee?: bigint }) => Promise<{ transactionId: string }>
-    mint_card: (params: { recipient: string, initial_points: bigint, nonce: string } & { fee?: bigint }) => Promise<{ transactionId: string, result: LoyaltyCard }>
-    add_points: (params: { card: LoyaltyCard | RecordValue | string, points_earned: bigint } & { fee?: bigint }) => Promise<{ transactionId: string, result: LoyaltyCard }>
+    approve_upgrade: (params: { checksum: bigint[] } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
+    mint_card: (params: { recipient: string, initial_points: bigint, nonce: string } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, FutureValue] }>
+    add_points: (params: { card: LoyaltyCard | RecordValue | string, points_earned: bigint } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, FutureValue] }>
     check_points: (params: { card: LoyaltyCard | RecordValue | string } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, bigint] }>
-    transfer_card: (params: { card: LoyaltyCard | RecordValue | string, new_owner: string } & { fee?: bigint }) => Promise<{ transactionId: string, result: LoyaltyCard }>
-    split_card: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint, nonce: string } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, LoyaltyCard] }>
-    split_card_v2: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, LoyaltyCard] }>
+    transfer_card: (params: { card: LoyaltyCard | RecordValue | string, new_owner: string } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, FutureValue] }>
+    split_card: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint, nonce: string } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, LoyaltyCard, FutureValue] }>
+    split_card_v2: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, LoyaltyCard, FutureValue] }>
     spend_points: (params: { card: LoyaltyCard | RecordValue | string, points_to_spend: bigint } & { fee?: bigint }) => Promise<{ transactionId: string, result: LoyaltyCard }>
   }
   fetchAbi: () => Promise<ABI>
@@ -621,146 +621,148 @@ export function createLoyaltyTokenContract(options: {
     ? { public: options.publicClient, wallet: options.walletClient }
     : (options.publicClient ?? options.walletClient)!
   const raw = getContract({ program: PROGRAM_ID, abi: PROGRAM_ABI, client, programSource: options.programSource, imports: options.imports })
+  const _raw = raw as any
 
   return {
     program: raw.program,
     abi: raw.abi as ABI,
-    read: raw.read as LoyaltyTokenContract['read'],
+    read: _raw.read as LoyaltyTokenContract['read'],
     write: {
       approve_upgrade: (params: any) => {
         const { checksum, fee } = params
-        return raw.write.approve_upgrade({ inputs: [checksum], fee })
+        return _raw.write.approve_upgrade({ inputs: [checksum] })
       },
       mint_card: (params: any) => {
         const { recipient, initial_points, nonce, fee } = params
-        return raw.write.mint_card({ inputs: [recipient, initial_points, nonce], fee })
+        return _raw.write.mint_card({ inputs: [recipient, initial_points, nonce] })
       },
       add_points: (params: any) => {
         const { card, points_earned, fee } = params
         const _card = card?._record ?? card
-        return raw.write.add_points({ inputs: [_card, points_earned], fee })
+        return _raw.write.add_points({ inputs: [_card, points_earned] })
       },
       check_points: (params: any) => {
         const { card, fee } = params
         const _card = card?._record ?? card
-        return raw.write.check_points({ inputs: [_card], fee })
+        return _raw.write.check_points({ inputs: [_card] })
       },
       transfer_card: (params: any) => {
         const { card, new_owner, fee } = params
         const _card = card?._record ?? card
-        return raw.write.transfer_card({ inputs: [_card, new_owner], fee })
+        return _raw.write.transfer_card({ inputs: [_card, new_owner] })
       },
       split_card: (params: any) => {
         const { card, points_to_keep, nonce, fee } = params
         const _card = card?._record ?? card
-        return raw.write.split_card({ inputs: [_card, points_to_keep, nonce], fee })
+        return _raw.write.split_card({ inputs: [_card, points_to_keep, nonce] })
       },
       split_card_v2: (params: any) => {
         const { card, points_to_keep, fee } = params
         const _card = card?._record ?? card
-        return raw.write.split_card_v2({ inputs: [_card, points_to_keep], fee })
+        return _raw.write.split_card_v2({ inputs: [_card, points_to_keep] })
       },
       spend_points: (params: any) => {
         const { card, points_to_spend, fee } = params
         const _card = card?._record ?? card
-        return raw.write.spend_points({ inputs: [_card, points_to_spend], fee })
+        return _raw.write.spend_points({ inputs: [_card, points_to_spend] })
       },
     },
     simulate: {
       approve_upgrade: async (params: any) => {
         const { checksum } = params
-        await raw.simulate.approve_upgrade({ inputs: [checksum] })
+        const result = await _raw.simulate.approve_upgrade({ inputs: [checksum] })
+        return result.outputs[0] as unknown as FutureValue
       },
       mint_card: async (params: any) => {
         const { recipient, initial_points, nonce } = params
-        const result = await raw.simulate.mint_card({ inputs: [recipient, initial_points, nonce] })
-        return toLoyaltyCard(result.outputs[0] as RecordValue)
+        const result = await _raw.simulate.mint_card({ inputs: [recipient, initial_points, nonce] })
+        return [toLoyaltyCard(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const
       },
       add_points: async (params: any) => {
         const { card, points_earned } = params
         const _card = card?._record ?? card
-        const result = await raw.simulate.add_points({ inputs: [_card, points_earned] })
-        return toLoyaltyCard(result.outputs[0] as RecordValue)
+        const result = await _raw.simulate.add_points({ inputs: [_card, points_earned] })
+        return [toLoyaltyCard(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const
       },
       check_points: async (params: any) => {
         const { card } = params
         const _card = card?._record ?? card
-        const result = await raw.simulate.check_points({ inputs: [_card] })
+        const result = await _raw.simulate.check_points({ inputs: [_card] })
         return [toLoyaltyCard(result.outputs[0] as RecordValue), result.outputs[1] as unknown as bigint] as const
       },
       transfer_card: async (params: any) => {
         const { card, new_owner } = params
         const _card = card?._record ?? card
-        const result = await raw.simulate.transfer_card({ inputs: [_card, new_owner] })
-        return toLoyaltyCard(result.outputs[0] as RecordValue)
+        const result = await _raw.simulate.transfer_card({ inputs: [_card, new_owner] })
+        return [toLoyaltyCard(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const
       },
       split_card: async (params: any) => {
         const { card, points_to_keep, nonce } = params
         const _card = card?._record ?? card
-        const result = await raw.simulate.split_card({ inputs: [_card, points_to_keep, nonce] })
-        return [toLoyaltyCard(result.outputs[0] as RecordValue), toLoyaltyCard(result.outputs[1] as RecordValue)] as const
+        const result = await _raw.simulate.split_card({ inputs: [_card, points_to_keep, nonce] })
+        return [toLoyaltyCard(result.outputs[0] as RecordValue), toLoyaltyCard(result.outputs[1] as RecordValue), result.outputs[2] as unknown as FutureValue] as const
       },
       split_card_v2: async (params: any) => {
         const { card, points_to_keep } = params
         const _card = card?._record ?? card
-        const result = await raw.simulate.split_card_v2({ inputs: [_card, points_to_keep] })
-        return [toLoyaltyCard(result.outputs[0] as RecordValue), toLoyaltyCard(result.outputs[1] as RecordValue)] as const
+        const result = await _raw.simulate.split_card_v2({ inputs: [_card, points_to_keep] })
+        return [toLoyaltyCard(result.outputs[0] as RecordValue), toLoyaltyCard(result.outputs[1] as RecordValue), result.outputs[2] as unknown as FutureValue] as const
       },
       spend_points: async (params: any) => {
         const { card, points_to_spend } = params
         const _card = card?._record ?? card
-        const result = await raw.simulate.spend_points({ inputs: [_card, points_to_spend] })
+        const result = await _raw.simulate.spend_points({ inputs: [_card, points_to_spend] })
         return toLoyaltyCard(result.outputs[0] as RecordValue)
       },
     },
     execute: {
       approve_upgrade: async (params: any) => {
         const { checksum, fee } = params
-        const result = await raw.execute.approve_upgrade({ inputs: [checksum], fee })
-        return { transactionId: result.transactionId }
+        const result = await _raw.execute.approve_upgrade({ inputs: [checksum], fee })
+        return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       mint_card: async (params: any) => {
         const { recipient, initial_points, nonce, fee } = params
-        const result = await raw.execute.mint_card({ inputs: [recipient, initial_points, nonce], fee })
-        return { transactionId: result.transactionId, result: toLoyaltyCard(result.outputs[0] as RecordValue) }
+        const result = await _raw.execute.mint_card({ inputs: [recipient, initial_points, nonce], fee })
+        return { transactionId: result.transactionId, result: [toLoyaltyCard(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
       },
       add_points: async (params: any) => {
         const { card, points_earned, fee } = params
         const _card = card?._record ?? card
-        const result = await raw.execute.add_points({ inputs: [_card, points_earned], fee })
-        return { transactionId: result.transactionId, result: toLoyaltyCard(result.outputs[0] as RecordValue) }
+        const result = await _raw.execute.add_points({ inputs: [_card, points_earned], fee })
+        return { transactionId: result.transactionId, result: [toLoyaltyCard(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
       },
       check_points: async (params: any) => {
         const { card, fee } = params
         const _card = card?._record ?? card
-        const result = await raw.execute.check_points({ inputs: [_card], fee })
+        const result = await _raw.execute.check_points({ inputs: [_card], fee })
         return { transactionId: result.transactionId, result: [toLoyaltyCard(result.outputs[0] as RecordValue), result.outputs[1] as unknown as bigint] as const }
       },
       transfer_card: async (params: any) => {
         const { card, new_owner, fee } = params
         const _card = card?._record ?? card
-        const result = await raw.execute.transfer_card({ inputs: [_card, new_owner], fee })
-        return { transactionId: result.transactionId, result: toLoyaltyCard(result.outputs[0] as RecordValue) }
+        const result = await _raw.execute.transfer_card({ inputs: [_card, new_owner], fee })
+        return { transactionId: result.transactionId, result: [toLoyaltyCard(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
       },
       split_card: async (params: any) => {
         const { card, points_to_keep, nonce, fee } = params
         const _card = card?._record ?? card
-        const result = await raw.execute.split_card({ inputs: [_card, points_to_keep, nonce], fee })
-        return { transactionId: result.transactionId, result: [toLoyaltyCard(result.outputs[0] as RecordValue), toLoyaltyCard(result.outputs[1] as RecordValue)] as const }
+        const result = await _raw.execute.split_card({ inputs: [_card, points_to_keep, nonce], fee })
+        return { transactionId: result.transactionId, result: [toLoyaltyCard(result.outputs[0] as RecordValue), toLoyaltyCard(result.outputs[1] as RecordValue), result.outputs[2] as unknown as FutureValue] as const }
       },
       split_card_v2: async (params: any) => {
         const { card, points_to_keep, fee } = params
         const _card = card?._record ?? card
-        const result = await raw.execute.split_card_v2({ inputs: [_card, points_to_keep], fee })
-        return { transactionId: result.transactionId, result: [toLoyaltyCard(result.outputs[0] as RecordValue), toLoyaltyCard(result.outputs[1] as RecordValue)] as const }
+        const result = await _raw.execute.split_card_v2({ inputs: [_card, points_to_keep], fee })
+        return { transactionId: result.transactionId, result: [toLoyaltyCard(result.outputs[0] as RecordValue), toLoyaltyCard(result.outputs[1] as RecordValue), result.outputs[2] as unknown as FutureValue] as const }
       },
       spend_points: async (params: any) => {
         const { card, points_to_spend, fee } = params
         const _card = card?._record ?? card
-        const result = await raw.execute.spend_points({ inputs: [_card, points_to_spend], fee })
+        const result = await _raw.execute.spend_points({ inputs: [_card, points_to_spend], fee })
         return { transactionId: result.transactionId, result: toLoyaltyCard(result.outputs[0] as RecordValue) }
       },
     },
-    fetchAbi: raw.fetchAbi as unknown as LoyaltyTokenContract['fetchAbi'],
+    fetchAbi: _raw.fetchAbi as unknown as LoyaltyTokenContract['fetchAbi'],
   }
 }
