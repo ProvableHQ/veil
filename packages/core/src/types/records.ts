@@ -98,8 +98,7 @@ export type RecordProvider = {
 /**
  * A standalone record scanner that has its own view key.
  * Used outside of a wallet client (e.g. view-only dashboards, auditing).
- * NOT pluggable into a wallet client — use createLocalScanner or
- * createRemoteScanner for that.
+ * NOT pluggable into a wallet client — use createRemoteScanner for that.
  */
 export type StandaloneRecordScanner = {
   requestRecords: (params: RequestRecordsParameters) => Promise<OwnedRecord[]>

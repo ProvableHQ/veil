@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process'
+import { createWriteStream } from 'node:fs'
+import { join } from 'node:path'
 import type { Client } from '@veil/core'
 
 /** The well-known seeded private key used by Aleo Devnode */
@@ -39,6 +41,8 @@ export type DevnodeStartOptions = {
   readyTimeout?: number
   /** Path to the aleo-devnode binary. Defaults to `'aleo-devnode'` (resolved on PATH). */
   devnodePath?: string
+  /** Write devnode stdout/stderr to devnode-<port>.log in the current directory. Defaults to false. */
+  verbose?: boolean
 }
 
 export type DevnodeAdvanceOptions = {
@@ -80,12 +84,15 @@ export type DevnodeInstance = {
 // Public API
 // =============================================================================
 
-export function startDevnode(options?: DevnodeStartOptions): Promise<DevnodeInstance> {
+export async function startDevnode(options?: DevnodeStartOptions): Promise<DevnodeInstance> {
   const privateKey = options?.privateKey ?? DEVNODE_PRIVATE_KEY
   const socketAddr = options?.socketAddr ?? DEVNODE_ADDR
   const verbosity = options?.verbosity ?? 2
   const readyTimeout = options?.readyTimeout ?? 30_000
   const devnodePath = options?.devnodePath ?? 'aleo-devnode'
+  const verbose = options?.verbose ?? false
+
+  await tryShutdownExisting(socketAddr)
 
   const args = [
     'start',
@@ -101,7 +108,7 @@ export function startDevnode(options?: DevnodeStartOptions): Promise<DevnodeInst
   if (options?.clearStorage) args.push('--clear-storage')
   if (options?.manualBlockCreation) args.push('--manual-block-creation')
 
-  return spawnDevnode(devnodePath, args, socketAddr, readyTimeout)
+  return spawnDevnode(devnodePath, args, socketAddr, readyTimeout, verbose)
 }
 
 export async function advanceDevnode(options?: DevnodeAdvanceOptions): Promise<void> {
@@ -130,6 +137,29 @@ export async function restoreDevnode(options: DevnodeRestoreOptions): Promise<vo
 // Subprocess helpers
 // =============================================================================
 
+async function tryShutdownExisting(socketAddr: string): Promise<void> {
+  const baseUrl = `http://${socketAddr}`
+  try {
+    const res = await fetch(`${baseUrl}/testnet/shutdown`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(2_000),
+    })
+    if (!res.ok) return
+    // Wait up to 5s for the old process to stop responding
+    const deadline = Date.now() + 5_000
+    while (Date.now() < deadline) {
+      try {
+        await fetch(`${baseUrl}${HEALTH_CHECK_PATH}`, { signal: AbortSignal.timeout(500) })
+        await new Promise<void>(r => setTimeout(r, 200))
+      } catch {
+        return // port no longer responding — old devnode is gone
+      }
+    }
+  } catch {
+    // nothing was listening on the port — proceed normally
+  }
+}
+
 function runDevnode(devnodePath: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawn(devnodePath, args, { stdio: 'inherit' })
@@ -152,10 +182,24 @@ async function spawnDevnode(
   args: string[],
   socketAddr: string,
   readyTimeout: number,
+  verbose: boolean = false,
 ): Promise<DevnodeInstance> {
-  const proc = spawn(devnodePath, args, { stdio: 'pipe' })
-  proc.stdout?.resume()
-  proc.stderr?.resume()
+  const proc = spawn(devnodePath, args, {
+    stdio: 'pipe',
+    env: { ...process.env, CONSENSUS_VERSION_HEIGHTS: process.env.CONSENSUS_VERSION_HEIGHTS || '0,1,2,3,4,5,6,7,8,9,10,11,12,13' },
+  })
+
+  if (verbose) {
+    const port = socketAddr.split(':')[1] ?? socketAddr.replace(/\./g, '-')
+    const logFile = join(process.cwd(), `devnode-${port}.log`)
+    const logStream = createWriteStream(logFile, { flags: 'w' })
+    proc.stdout?.pipe(logStream)
+    proc.stderr?.pipe(logStream)
+    console.log(`[devnode] logs → ${logFile}`)
+  } else {
+    proc.stdout?.resume()
+    proc.stderr?.resume()
+  }
 
   let startError: Error | undefined
   proc.on('error', (err) => {
