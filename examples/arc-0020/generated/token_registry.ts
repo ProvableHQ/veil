@@ -1573,26 +1573,26 @@ export interface TokenRegistryContract {
     roles: (params: { key: string }) => Promise<unknown>
   }
   write: {
-    initialize: (params: {} & { fee?: bigint }) => Promise<string>
-    register_token: (params: { token_id: string, name: bigint, symbol: bigint, decimals: bigint, max_supply: bigint, external_authorization_required: boolean, external_authorization_party: string } & { fee?: bigint }) => Promise<string>
-    update_token_management: (params: { token_id: string, admin: string, external_authorization_party: string } & { fee?: bigint }) => Promise<string>
-    set_role: (params: { token_id: string, account: string, role: bigint } & { fee?: bigint }) => Promise<string>
-    remove_role: (params: { token_id: string, account: string } & { fee?: bigint }) => Promise<string>
-    mint_public: (params: { token_id: string, recipient: string, amount: bigint, authorized_until: bigint } & { fee?: bigint }) => Promise<string>
-    mint_private: (params: { token_id: string, recipient: string, amount: bigint, external_authorization_required: boolean, authorized_until: bigint } & { fee?: bigint }) => Promise<string>
-    burn_public: (params: { token_id: string, owner: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    prehook_public: (params: { owner: TokenOwner, amount: bigint, authorized_until: bigint } & { fee?: bigint }) => Promise<string>
-    transfer_public: (params: { token_id: string, recipient: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    transfer_public_as_signer: (params: { token_id: string, recipient: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    approve_public: (params: { token_id: string, spender: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    unapprove_public: (params: { token_id: string, spender: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    transfer_public_to_private: (params: { token_id: string, recipient: string, amount: bigint, external_authorization_required: boolean } & { fee?: bigint }) => Promise<string>
-    transfer_pub_to_priv_as_signer: (params: { token_id: string, recipient: string, amount: bigint, external_authorization_required: boolean } & { fee?: bigint }) => Promise<string>
-    transfer_from_public_to_private: (params: { token_id: string, owner: string, recipient: string, amount: bigint, external_authorization_required: boolean } & { fee?: bigint }) => Promise<string>
-    transfer_from_public: (params: { token_id: string, owner: string, recipient: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    join: (params: { token_1: Token | RecordValue | string, token_2: Token | RecordValue | string } & { fee?: bigint }) => Promise<string>
-    transfer_private: (params: { token: Token | RecordValue | string, to: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    split: (params: { token: Token | RecordValue | string, amount: bigint } & { fee?: bigint }) => Promise<string>
+    initialize: (params: {}) => Promise<string>
+    register_token: (params: { token_id: string, name: bigint, symbol: bigint, decimals: bigint, max_supply: bigint, external_authorization_required: boolean, external_authorization_party: string }) => Promise<string>
+    update_token_management: (params: { token_id: string, admin: string, external_authorization_party: string }) => Promise<string>
+    set_role: (params: { token_id: string, account: string, role: bigint }) => Promise<string>
+    remove_role: (params: { token_id: string, account: string }) => Promise<string>
+    mint_public: (params: { token_id: string, recipient: string, amount: bigint, authorized_until: bigint }) => Promise<string>
+    mint_private: (params: { token_id: string, recipient: string, amount: bigint, external_authorization_required: boolean, authorized_until: bigint }) => Promise<string>
+    burn_public: (params: { token_id: string, owner: string, amount: bigint }) => Promise<string>
+    prehook_public: (params: { owner: TokenOwner, amount: bigint, authorized_until: bigint }) => Promise<string>
+    transfer_public: (params: { token_id: string, recipient: string, amount: bigint }) => Promise<string>
+    transfer_public_as_signer: (params: { token_id: string, recipient: string, amount: bigint }) => Promise<string>
+    approve_public: (params: { token_id: string, spender: string, amount: bigint }) => Promise<string>
+    unapprove_public: (params: { token_id: string, spender: string, amount: bigint }) => Promise<string>
+    transfer_public_to_private: (params: { token_id: string, recipient: string, amount: bigint, external_authorization_required: boolean }) => Promise<string>
+    transfer_pub_to_priv_as_signer: (params: { token_id: string, recipient: string, amount: bigint, external_authorization_required: boolean }) => Promise<string>
+    transfer_from_public_to_private: (params: { token_id: string, owner: string, recipient: string, amount: bigint, external_authorization_required: boolean }) => Promise<string>
+    transfer_from_public: (params: { token_id: string, owner: string, recipient: string, amount: bigint }) => Promise<string>
+    join: (params: { token_1: Token | RecordValue | string, token_2: Token | RecordValue | string }) => Promise<string>
+    transfer_private: (params: { token: Token | RecordValue | string, to: string, amount: bigint }) => Promise<string>
+    split: (params: { token: Token | RecordValue | string, amount: bigint }) => Promise<string>
   }
   simulate: {
     initialize: (params: {}) => Promise<FutureValue>
@@ -1660,86 +1660,85 @@ export function createTokenRegistryContract(options: {
     read: _raw.read as TokenRegistryContract['read'],
     write: {
       initialize: (params: any) => {
-        const { fee } = params
         return _raw.write.initialize({ inputs: [] })
       },
       register_token: (params: any) => {
-        const { token_id, name, symbol, decimals, max_supply, external_authorization_required, external_authorization_party, fee } = params
+        const { token_id, name, symbol, decimals, max_supply, external_authorization_required, external_authorization_party } = params
         return _raw.write.register_token({ inputs: [token_id, name, symbol, decimals, max_supply, external_authorization_required, external_authorization_party] })
       },
       update_token_management: (params: any) => {
-        const { token_id, admin, external_authorization_party, fee } = params
+        const { token_id, admin, external_authorization_party } = params
         return _raw.write.update_token_management({ inputs: [token_id, admin, external_authorization_party] })
       },
       set_role: (params: any) => {
-        const { token_id, account, role, fee } = params
+        const { token_id, account, role } = params
         return _raw.write.set_role({ inputs: [token_id, account, role] })
       },
       remove_role: (params: any) => {
-        const { token_id, account, fee } = params
+        const { token_id, account } = params
         return _raw.write.remove_role({ inputs: [token_id, account] })
       },
       mint_public: (params: any) => {
-        const { token_id, recipient, amount, authorized_until, fee } = params
+        const { token_id, recipient, amount, authorized_until } = params
         return _raw.write.mint_public({ inputs: [token_id, recipient, amount, authorized_until] })
       },
       mint_private: (params: any) => {
-        const { token_id, recipient, amount, external_authorization_required, authorized_until, fee } = params
+        const { token_id, recipient, amount, external_authorization_required, authorized_until } = params
         return _raw.write.mint_private({ inputs: [token_id, recipient, amount, external_authorization_required, authorized_until] })
       },
       burn_public: (params: any) => {
-        const { token_id, owner, amount, fee } = params
+        const { token_id, owner, amount } = params
         return _raw.write.burn_public({ inputs: [token_id, owner, amount] })
       },
       prehook_public: (params: any) => {
-        const { owner, amount, authorized_until, fee } = params
+        const { owner, amount, authorized_until } = params
         return _raw.write.prehook_public({ inputs: [owner, amount, authorized_until] })
       },
       transfer_public: (params: any) => {
-        const { token_id, recipient, amount, fee } = params
+        const { token_id, recipient, amount } = params
         return _raw.write.transfer_public({ inputs: [token_id, recipient, amount] })
       },
       transfer_public_as_signer: (params: any) => {
-        const { token_id, recipient, amount, fee } = params
+        const { token_id, recipient, amount } = params
         return _raw.write.transfer_public_as_signer({ inputs: [token_id, recipient, amount] })
       },
       approve_public: (params: any) => {
-        const { token_id, spender, amount, fee } = params
+        const { token_id, spender, amount } = params
         return _raw.write.approve_public({ inputs: [token_id, spender, amount] })
       },
       unapprove_public: (params: any) => {
-        const { token_id, spender, amount, fee } = params
+        const { token_id, spender, amount } = params
         return _raw.write.unapprove_public({ inputs: [token_id, spender, amount] })
       },
       transfer_public_to_private: (params: any) => {
-        const { token_id, recipient, amount, external_authorization_required, fee } = params
+        const { token_id, recipient, amount, external_authorization_required } = params
         return _raw.write.transfer_public_to_private({ inputs: [token_id, recipient, amount, external_authorization_required] })
       },
       transfer_pub_to_priv_as_signer: (params: any) => {
-        const { token_id, recipient, amount, external_authorization_required, fee } = params
+        const { token_id, recipient, amount, external_authorization_required } = params
         return _raw.write.transfer_pub_to_priv_as_signer({ inputs: [token_id, recipient, amount, external_authorization_required] })
       },
       transfer_from_public_to_private: (params: any) => {
-        const { token_id, owner, recipient, amount, external_authorization_required, fee } = params
+        const { token_id, owner, recipient, amount, external_authorization_required } = params
         return _raw.write.transfer_from_public_to_private({ inputs: [token_id, owner, recipient, amount, external_authorization_required] })
       },
       transfer_from_public: (params: any) => {
-        const { token_id, owner, recipient, amount, fee } = params
+        const { token_id, owner, recipient, amount } = params
         return _raw.write.transfer_from_public({ inputs: [token_id, owner, recipient, amount] })
       },
       join: (params: any) => {
-        const { token_1, token_2, fee } = params
+        const { token_1, token_2 } = params
         const _token_1 = token_1?._record ?? token_1
         const _token_2 = token_2?._record ?? token_2
         return _raw.write.join({ inputs: [_token_1, _token_2] })
       },
       transfer_private: (params: any) => {
-        const { token, to, amount, fee } = params
+        const { token, to, amount } = params
         const _token = token?._record ?? token
         return _raw.write.transfer_private({ inputs: [_token, to, amount] })
       },
       split: (params: any) => {
-        const { token, amount, fee } = params
+        const { token, amount } = params
         const _token = token?._record ?? token
         return _raw.write.split({ inputs: [_token, amount] })
       },

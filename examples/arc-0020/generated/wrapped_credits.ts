@@ -990,22 +990,22 @@ export interface WrappedCreditsContract {
     allowances: (params: { key: TokenAllowance }) => Promise<unknown>
   }
   write: {
-    deposit_credits_public_signer: (params: { amount: bigint } & { fee?: bigint }) => Promise<string>
-    deposit_credits_private: (params: { input_record: RecordValue | string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    withdraw_credits_public: (params: { amount: bigint } & { fee?: bigint }) => Promise<string>
-    withdraw_credits_public_signer: (params: { amount: bigint } & { fee?: bigint }) => Promise<string>
-    withdraw_credits_private: (params: { input_token: Token | RecordValue | string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    transfer_public: (params: { recipient: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    transfer_public_as_signer: (params: { recipient: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    transfer_public_to_private: (params: { recipient: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    transfer_private: (params: { input: Token | RecordValue | string, recipient: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    transfer_private_to_public: (params: { input: Token | RecordValue | string, recipient: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    approve_public: (params: { spender: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    unapprove_public: (params: { spender: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    transfer_from_public: (params: { owner: string, recipient: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    transfer_from_public_to_private: (params: { owner: string, recipient: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    join: (params: { input_1: Token | RecordValue | string, input_2: Token | RecordValue | string } & { fee?: bigint }) => Promise<string>
-    split: (params: { input: Token | RecordValue | string, amount: bigint } & { fee?: bigint }) => Promise<string>
+    deposit_credits_public_signer: (params: { amount: bigint }) => Promise<string>
+    deposit_credits_private: (params: { input_record: RecordValue | string, amount: bigint }) => Promise<string>
+    withdraw_credits_public: (params: { amount: bigint }) => Promise<string>
+    withdraw_credits_public_signer: (params: { amount: bigint }) => Promise<string>
+    withdraw_credits_private: (params: { input_token: Token | RecordValue | string, amount: bigint }) => Promise<string>
+    transfer_public: (params: { recipient: string, amount: bigint }) => Promise<string>
+    transfer_public_as_signer: (params: { recipient: string, amount: bigint }) => Promise<string>
+    transfer_public_to_private: (params: { recipient: string, amount: bigint }) => Promise<string>
+    transfer_private: (params: { input: Token | RecordValue | string, recipient: string, amount: bigint }) => Promise<string>
+    transfer_private_to_public: (params: { input: Token | RecordValue | string, recipient: string, amount: bigint }) => Promise<string>
+    approve_public: (params: { spender: string, amount: bigint }) => Promise<string>
+    unapprove_public: (params: { spender: string, amount: bigint }) => Promise<string>
+    transfer_from_public: (params: { owner: string, recipient: string, amount: bigint }) => Promise<string>
+    transfer_from_public_to_private: (params: { owner: string, recipient: string, amount: bigint }) => Promise<string>
+    join: (params: { input_1: Token | RecordValue | string, input_2: Token | RecordValue | string }) => Promise<string>
+    split: (params: { input: Token | RecordValue | string, amount: bigint }) => Promise<string>
   }
   simulate: {
     deposit_credits_public_signer: (params: { amount: bigint }) => Promise<FutureValue>
@@ -1065,73 +1065,73 @@ export function createWrappedCreditsContract(options: {
     read: _raw.read as WrappedCreditsContract['read'],
     write: {
       deposit_credits_public_signer: (params: any) => {
-        const { amount, fee } = params
+        const { amount } = params
         return _raw.write.deposit_credits_public_signer({ inputs: [amount] })
       },
       deposit_credits_private: (params: any) => {
-        const { input_record, amount, fee } = params
+        const { input_record, amount } = params
         const _input_record = input_record?._record ?? input_record
         return _raw.write.deposit_credits_private({ inputs: [_input_record, amount] })
       },
       withdraw_credits_public: (params: any) => {
-        const { amount, fee } = params
+        const { amount } = params
         return _raw.write.withdraw_credits_public({ inputs: [amount] })
       },
       withdraw_credits_public_signer: (params: any) => {
-        const { amount, fee } = params
+        const { amount } = params
         return _raw.write.withdraw_credits_public_signer({ inputs: [amount] })
       },
       withdraw_credits_private: (params: any) => {
-        const { input_token, amount, fee } = params
+        const { input_token, amount } = params
         const _input_token = input_token?._record ?? input_token
         return _raw.write.withdraw_credits_private({ inputs: [_input_token, amount] })
       },
       transfer_public: (params: any) => {
-        const { recipient, amount, fee } = params
+        const { recipient, amount } = params
         return _raw.write.transfer_public({ inputs: [recipient, amount] })
       },
       transfer_public_as_signer: (params: any) => {
-        const { recipient, amount, fee } = params
+        const { recipient, amount } = params
         return _raw.write.transfer_public_as_signer({ inputs: [recipient, amount] })
       },
       transfer_public_to_private: (params: any) => {
-        const { recipient, amount, fee } = params
+        const { recipient, amount } = params
         return _raw.write.transfer_public_to_private({ inputs: [recipient, amount] })
       },
       transfer_private: (params: any) => {
-        const { input, recipient, amount, fee } = params
+        const { input, recipient, amount } = params
         const _input = input?._record ?? input
         return _raw.write.transfer_private({ inputs: [_input, recipient, amount] })
       },
       transfer_private_to_public: (params: any) => {
-        const { input, recipient, amount, fee } = params
+        const { input, recipient, amount } = params
         const _input = input?._record ?? input
         return _raw.write.transfer_private_to_public({ inputs: [_input, recipient, amount] })
       },
       approve_public: (params: any) => {
-        const { spender, amount, fee } = params
+        const { spender, amount } = params
         return _raw.write.approve_public({ inputs: [spender, amount] })
       },
       unapprove_public: (params: any) => {
-        const { spender, amount, fee } = params
+        const { spender, amount } = params
         return _raw.write.unapprove_public({ inputs: [spender, amount] })
       },
       transfer_from_public: (params: any) => {
-        const { owner, recipient, amount, fee } = params
+        const { owner, recipient, amount } = params
         return _raw.write.transfer_from_public({ inputs: [owner, recipient, amount] })
       },
       transfer_from_public_to_private: (params: any) => {
-        const { owner, recipient, amount, fee } = params
+        const { owner, recipient, amount } = params
         return _raw.write.transfer_from_public_to_private({ inputs: [owner, recipient, amount] })
       },
       join: (params: any) => {
-        const { input_1, input_2, fee } = params
+        const { input_1, input_2 } = params
         const _input_1 = input_1?._record ?? input_1
         const _input_2 = input_2?._record ?? input_2
         return _raw.write.join({ inputs: [_input_1, _input_2] })
       },
       split: (params: any) => {
-        const { input, amount, fee } = params
+        const { input, amount } = params
         const _input = input?._record ?? input
         return _raw.write.split({ inputs: [_input, amount] })
       },

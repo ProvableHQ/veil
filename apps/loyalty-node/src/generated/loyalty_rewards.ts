@@ -391,11 +391,11 @@ export interface LoyaltyRewardsContract {
     approved_upgrades: (params: { key: string }) => Promise<unknown>
   }
   write: {
-    approve_upgrade: (params: { checksum: bigint[] } & { fee?: bigint }) => Promise<string>
-    redeem_points_for_voucher: (params: { card: RecordValue | string, reward_type: bigint, points_to_spend: bigint } & { fee?: bigint }) => Promise<string>
-    use_voucher: (params: { voucher: RewardVoucher | RecordValue | string } & { fee?: bigint }) => Promise<string>
-    check_voucher: (params: { voucher: RewardVoucher | RecordValue | string } & { fee?: bigint }) => Promise<string>
-    transfer_voucher: (params: { voucher: RewardVoucher | RecordValue | string, new_owner: string } & { fee?: bigint }) => Promise<string>
+    approve_upgrade: (params: { checksum: bigint[] }) => Promise<string>
+    redeem_points_for_voucher: (params: { card: RecordValue | string, reward_type: bigint, points_to_spend: bigint }) => Promise<string>
+    use_voucher: (params: { voucher: RewardVoucher | RecordValue | string }) => Promise<string>
+    check_voucher: (params: { voucher: RewardVoucher | RecordValue | string }) => Promise<string>
+    transfer_voucher: (params: { voucher: RewardVoucher | RecordValue | string, new_owner: string }) => Promise<string>
   }
   simulate: {
     approve_upgrade: (params: { checksum: bigint[] }) => Promise<FutureValue>
@@ -433,26 +433,26 @@ export function createLoyaltyRewardsContract(options: {
     read: _raw.read as LoyaltyRewardsContract['read'],
     write: {
       approve_upgrade: (params: any) => {
-        const { checksum, fee } = params
+        const { checksum } = params
         return _raw.write.approve_upgrade({ inputs: [checksum] })
       },
       redeem_points_for_voucher: (params: any) => {
-        const { card, reward_type, points_to_spend, fee } = params
+        const { card, reward_type, points_to_spend } = params
         const _card = card?._record ?? card
         return _raw.write.redeem_points_for_voucher({ inputs: [_card, reward_type, points_to_spend] })
       },
       use_voucher: (params: any) => {
-        const { voucher, fee } = params
+        const { voucher } = params
         const _voucher = voucher?._record ?? voucher
         return _raw.write.use_voucher({ inputs: [_voucher] })
       },
       check_voucher: (params: any) => {
-        const { voucher, fee } = params
+        const { voucher } = params
         const _voucher = voucher?._record ?? voucher
         return _raw.write.check_voucher({ inputs: [_voucher] })
       },
       transfer_voucher: (params: any) => {
-        const { voucher, new_owner, fee } = params
+        const { voucher, new_owner } = params
         const _voucher = voucher?._record ?? voucher
         return _raw.write.transfer_voucher({ inputs: [_voucher, new_owner] })
       },

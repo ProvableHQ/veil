@@ -156,8 +156,8 @@ export interface DummyExchangeContract {
   abi: ABI
   read: Record<string, (params: { key: string }) => Promise<unknown>>
   write: {
-    transfer_from: (params: { token_id: string, owner: string, recipient: string, amount: bigint } & { fee?: bigint }) => Promise<string>
-    swap: (params: { token_in: string, token_out: string, amount_in: bigint, amount_out: bigint } & { fee?: bigint }) => Promise<string>
+    transfer_from: (params: { token_id: string, owner: string, recipient: string, amount: bigint }) => Promise<string>
+    swap: (params: { token_in: string, token_out: string, amount_in: bigint, amount_out: bigint }) => Promise<string>
   }
   simulate: {
     transfer_from: (params: { token_id: string, owner: string, recipient: string, amount: bigint }) => Promise<FutureValue>
@@ -189,11 +189,11 @@ export function createDummyExchangeContract(options: {
     read: _raw.read as DummyExchangeContract['read'],
     write: {
       transfer_from: (params: any) => {
-        const { token_id, owner, recipient, amount, fee } = params
+        const { token_id, owner, recipient, amount } = params
         return _raw.write.transfer_from({ inputs: [token_id, owner, recipient, amount] })
       },
       swap: (params: any) => {
-        const { token_in, token_out, amount_in, amount_out, fee } = params
+        const { token_in, token_out, amount_in, amount_out } = params
         return _raw.write.swap({ inputs: [token_in, token_out, amount_in, amount_out] })
       },
     },

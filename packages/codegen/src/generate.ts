@@ -446,7 +446,7 @@ function generateContractFactory(abi: ABI): string[] {
     lines.push(`  write: {`)
     for (const fn of abi.functions) {
       const params = namedParamsType(fn, abi)
-      lines.push(`    ${fn.name}: (params: ${params} & { fee?: bigint }) => Promise<string>`)
+      lines.push(`    ${fn.name}: (params: ${params}) => Promise<string>`)
     }
     lines.push(`  }`)
   }
@@ -505,9 +505,8 @@ function generateContractFactory(abi: ABI): string[] {
     for (const fn of abi.functions) {
       const names = inputNames(fn)
       const { resolveLines, resolvedNames } = resolveRecordInputs(fn)
-      const destructure = names.length > 0 ? `{ ${names.join(', ')}, fee }` : '{ fee }'
       lines.push(`      ${fn.name}: (params: any) => {`)
-      lines.push(`        const ${destructure} = params`)
+      if (names.length > 0) lines.push(`        const { ${names.join(', ')} } = params`)
       for (const line of resolveLines) lines.push(line)
       lines.push(`        return _raw.write.${fn.name}({ inputs: [${resolvedNames.join(', ')}] })`)
       lines.push(`      },`)

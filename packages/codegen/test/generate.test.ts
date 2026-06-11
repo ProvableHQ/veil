@@ -432,8 +432,8 @@ describe('generate', () => {
       expect(output).toContain('export interface TestContract {')
       // read methods — mapping names
       expect(output).toContain('    balances: (params: { key: string }) => Promise<unknown>')
-      // write methods — named params + fee
-      expect(output).toContain('mint: (params: { recipient: string, amount: bigint } & { fee?: bigint }) => Promise<string>')
+      // write methods — named params, no fee (core writeContract takes no fee amount)
+      expect(output).toContain('mint: (params: { recipient: string, amount: bigint }) => Promise<string>')
       // simulate methods — named params, typed return (includes FutureValue)
       expect(output).toContain('mint: (params: { recipient: string, amount: bigint }) => Promise<[Token, FutureValue]>')
       // execute methods — named params + fee, typed return + transactionId

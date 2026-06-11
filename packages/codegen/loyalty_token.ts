@@ -578,14 +578,14 @@ export interface LoyaltyTokenContract {
     approved_upgrades: (params: { key: string }) => Promise<unknown>
   }
   write: {
-    approve_upgrade: (params: { checksum: bigint[] } & { fee?: bigint }) => Promise<string>
-    mint_card: (params: { recipient: string, initial_points: bigint, nonce: string } & { fee?: bigint }) => Promise<string>
-    add_points: (params: { card: LoyaltyCard | RecordValue | string, points_earned: bigint } & { fee?: bigint }) => Promise<string>
-    check_points: (params: { card: LoyaltyCard | RecordValue | string } & { fee?: bigint }) => Promise<string>
-    transfer_card: (params: { card: LoyaltyCard | RecordValue | string, new_owner: string } & { fee?: bigint }) => Promise<string>
-    split_card: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint, nonce: string } & { fee?: bigint }) => Promise<string>
-    split_card_v2: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint } & { fee?: bigint }) => Promise<string>
-    spend_points: (params: { card: LoyaltyCard | RecordValue | string, points_to_spend: bigint } & { fee?: bigint }) => Promise<string>
+    approve_upgrade: (params: { checksum: bigint[] }) => Promise<string>
+    mint_card: (params: { recipient: string, initial_points: bigint, nonce: string }) => Promise<string>
+    add_points: (params: { card: LoyaltyCard | RecordValue | string, points_earned: bigint }) => Promise<string>
+    check_points: (params: { card: LoyaltyCard | RecordValue | string }) => Promise<string>
+    transfer_card: (params: { card: LoyaltyCard | RecordValue | string, new_owner: string }) => Promise<string>
+    split_card: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint, nonce: string }) => Promise<string>
+    split_card_v2: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint }) => Promise<string>
+    spend_points: (params: { card: LoyaltyCard | RecordValue | string, points_to_spend: bigint }) => Promise<string>
   }
   simulate: {
     approve_upgrade: (params: { checksum: bigint[] }) => Promise<FutureValue>
@@ -629,40 +629,40 @@ export function createLoyaltyTokenContract(options: {
     read: _raw.read as LoyaltyTokenContract['read'],
     write: {
       approve_upgrade: (params: any) => {
-        const { checksum, fee } = params
+        const { checksum } = params
         return _raw.write.approve_upgrade({ inputs: [checksum] })
       },
       mint_card: (params: any) => {
-        const { recipient, initial_points, nonce, fee } = params
+        const { recipient, initial_points, nonce } = params
         return _raw.write.mint_card({ inputs: [recipient, initial_points, nonce] })
       },
       add_points: (params: any) => {
-        const { card, points_earned, fee } = params
+        const { card, points_earned } = params
         const _card = card?._record ?? card
         return _raw.write.add_points({ inputs: [_card, points_earned] })
       },
       check_points: (params: any) => {
-        const { card, fee } = params
+        const { card } = params
         const _card = card?._record ?? card
         return _raw.write.check_points({ inputs: [_card] })
       },
       transfer_card: (params: any) => {
-        const { card, new_owner, fee } = params
+        const { card, new_owner } = params
         const _card = card?._record ?? card
         return _raw.write.transfer_card({ inputs: [_card, new_owner] })
       },
       split_card: (params: any) => {
-        const { card, points_to_keep, nonce, fee } = params
+        const { card, points_to_keep, nonce } = params
         const _card = card?._record ?? card
         return _raw.write.split_card({ inputs: [_card, points_to_keep, nonce] })
       },
       split_card_v2: (params: any) => {
-        const { card, points_to_keep, fee } = params
+        const { card, points_to_keep } = params
         const _card = card?._record ?? card
         return _raw.write.split_card_v2({ inputs: [_card, points_to_keep] })
       },
       spend_points: (params: any) => {
-        const { card, points_to_spend, fee } = params
+        const { card, points_to_spend } = params
         const _card = card?._record ?? card
         return _raw.write.spend_points({ inputs: [_card, points_to_spend] })
       },
