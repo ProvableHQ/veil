@@ -1,0 +1,1 @@
+The Leo source code has to be compile with Leo build from branch `mohammadfawaz/view_functions`

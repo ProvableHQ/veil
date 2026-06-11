@@ -2,14 +2,14 @@
 // Do not edit manually.
 
 import { getContract } from '@veil/core'
-import type { RecordValue, PublicClient, WalletClient, ABI } from '@veil/core'
+import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI } from '@veil/core'
 
 export const PROGRAM_ID = 'loyalty_rewards.aleo' as const
 
 export interface RewardVoucher {
   owner: string
   voucher_id: string
-  reward_type: number
+  reward_type: bigint
   amount: bigint
   _record: RecordValue
 }
@@ -18,44 +18,44 @@ export function toRewardVoucher(record: RecordValue): RewardVoucher {
   return {
     owner: record.owner,
     voucher_id: record.fields.voucher_id?.value as string ?? '',
-    reward_type: record.fields.reward_type?.value as number ?? 0,
+    reward_type: record.fields.reward_type?.value as bigint ?? 0n,
     amount: record.fields.amount?.value as bigint ?? 0n,
     _record: record,
   }
 }
 
 export type ApproveUpgradeInputs = {
-  checksum: number[]
+  checksum: bigint[]
 }
 
-export type ApproveUpgradeOutputs = void
+export type ApproveUpgradeOutputs = FutureValue
 
 export type RedeemPointsForVoucherInputs = {
   card: RecordValue | RecordValue | string
-  reward_type: number
+  reward_type: bigint
   points_to_spend: bigint
 }
 
-export type RedeemPointsForVoucherOutputs = [RecordValue, RewardVoucher]
+export type RedeemPointsForVoucherOutputs = [RecordValue, RewardVoucher, FutureValue]
 
 export type UseVoucherInputs = {
   voucher: RewardVoucher | RecordValue | string
 }
 
-export type UseVoucherOutputs = void
+export type UseVoucherOutputs = FutureValue
 
 export type CheckVoucherInputs = {
   voucher: RewardVoucher | RecordValue | string
 }
 
-export type CheckVoucherOutputs = [RewardVoucher, number, bigint]
+export type CheckVoucherOutputs = [RewardVoucher, bigint, bigint]
 
 export type TransferVoucherInputs = {
   voucher: RewardVoucher | RecordValue | string
   new_owner: string
 }
 
-export type TransferVoucherOutputs = RewardVoucher
+export type TransferVoucherOutputs = [RewardVoucher, FutureValue]
 
 export type VoucherExistsMappingKey = string
 export type VoucherExistsMappingValue = boolean
@@ -185,7 +185,7 @@ export const PROGRAM_ABI: ABI = {
       "outputs": [
         {
           "type": {
-            "kind": "final"
+            "kind": "future"
           },
           "mode": "none"
         }
@@ -252,7 +252,7 @@ export const PROGRAM_ABI: ABI = {
         },
         {
           "type": {
-            "kind": "final"
+            "kind": "future"
           },
           "mode": "none"
         }
@@ -277,7 +277,7 @@ export const PROGRAM_ABI: ABI = {
       "outputs": [
         {
           "type": {
-            "kind": "final"
+            "kind": "future"
           },
           "mode": "none"
         }
@@ -372,7 +372,7 @@ export const PROGRAM_ABI: ABI = {
         },
         {
           "type": {
-            "kind": "final"
+            "kind": "future"
           },
           "mode": "none"
         }
@@ -391,25 +391,25 @@ export interface LoyaltyRewardsContract {
     approved_upgrades: (params: { key: string }) => Promise<unknown>
   }
   write: {
-    approve_upgrade: (params: { checksum: number[] } & { fee?: bigint }) => Promise<string>
-    redeem_points_for_voucher: (params: { card: RecordValue | string, reward_type: number, points_to_spend: bigint } & { fee?: bigint }) => Promise<string>
-    use_voucher: (params: { voucher: RewardVoucher | RecordValue | string } & { fee?: bigint }) => Promise<string>
-    check_voucher: (params: { voucher: RewardVoucher | RecordValue | string } & { fee?: bigint }) => Promise<string>
-    transfer_voucher: (params: { voucher: RewardVoucher | RecordValue | string, new_owner: string } & { fee?: bigint }) => Promise<string>
+    approve_upgrade: (params: { checksum: bigint[] }) => Promise<string>
+    redeem_points_for_voucher: (params: { card: RecordValue | string, reward_type: bigint, points_to_spend: bigint }) => Promise<string>
+    use_voucher: (params: { voucher: RewardVoucher | RecordValue | string }) => Promise<string>
+    check_voucher: (params: { voucher: RewardVoucher | RecordValue | string }) => Promise<string>
+    transfer_voucher: (params: { voucher: RewardVoucher | RecordValue | string, new_owner: string }) => Promise<string>
   }
   simulate: {
-    approve_upgrade: (params: { checksum: number[] }) => Promise<void>
-    redeem_points_for_voucher: (params: { card: RecordValue | string, reward_type: number, points_to_spend: bigint }) => Promise<[RecordValue, RewardVoucher]>
-    use_voucher: (params: { voucher: RewardVoucher | RecordValue | string }) => Promise<void>
-    check_voucher: (params: { voucher: RewardVoucher | RecordValue | string }) => Promise<[RewardVoucher, number, bigint]>
-    transfer_voucher: (params: { voucher: RewardVoucher | RecordValue | string, new_owner: string }) => Promise<RewardVoucher>
+    approve_upgrade: (params: { checksum: bigint[] }) => Promise<FutureValue>
+    redeem_points_for_voucher: (params: { card: RecordValue | string, reward_type: bigint, points_to_spend: bigint }) => Promise<[RecordValue, RewardVoucher, FutureValue]>
+    use_voucher: (params: { voucher: RewardVoucher | RecordValue | string }) => Promise<FutureValue>
+    check_voucher: (params: { voucher: RewardVoucher | RecordValue | string }) => Promise<[RewardVoucher, bigint, bigint]>
+    transfer_voucher: (params: { voucher: RewardVoucher | RecordValue | string, new_owner: string }) => Promise<[RewardVoucher, FutureValue]>
   }
   execute: {
-    approve_upgrade: (params: { checksum: number[] } & { fee?: bigint }) => Promise<{ transactionId: string }>
-    redeem_points_for_voucher: (params: { card: RecordValue | string, reward_type: number, points_to_spend: bigint } & { fee?: bigint }) => Promise<{ transactionId: string, result: [RecordValue, RewardVoucher] }>
-    use_voucher: (params: { voucher: RewardVoucher | RecordValue | string } & { fee?: bigint }) => Promise<{ transactionId: string }>
-    check_voucher: (params: { voucher: RewardVoucher | RecordValue | string } & { fee?: bigint }) => Promise<{ transactionId: string, result: [RewardVoucher, number, bigint] }>
-    transfer_voucher: (params: { voucher: RewardVoucher | RecordValue | string, new_owner: string } & { fee?: bigint }) => Promise<{ transactionId: string, result: RewardVoucher }>
+    approve_upgrade: (params: { checksum: bigint[] } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
+    redeem_points_for_voucher: (params: { card: RecordValue | string, reward_type: bigint, points_to_spend: bigint } & { fee?: bigint }) => Promise<{ transactionId: string, result: [RecordValue, RewardVoucher, FutureValue] }>
+    use_voucher: (params: { voucher: RewardVoucher | RecordValue | string } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
+    check_voucher: (params: { voucher: RewardVoucher | RecordValue | string } & { fee?: bigint }) => Promise<{ transactionId: string, result: [RewardVoucher, bigint, bigint] }>
+    transfer_voucher: (params: { voucher: RewardVoucher | RecordValue | string, new_owner: string } & { fee?: bigint }) => Promise<{ transactionId: string, result: [RewardVoucher, FutureValue] }>
   }
   fetchAbi: () => Promise<ABI>
 }
@@ -425,97 +425,100 @@ export function createLoyaltyRewardsContract(options: {
     ? { public: options.publicClient, wallet: options.walletClient }
     : (options.publicClient ?? options.walletClient)!
   const raw = getContract({ program: PROGRAM_ID, abi: PROGRAM_ABI, client, programSource: options.programSource, imports: options.imports })
+  const _raw = raw as any
 
   return {
     program: raw.program,
     abi: raw.abi as ABI,
-    read: raw.read as LoyaltyRewardsContract['read'],
+    read: _raw.read as LoyaltyRewardsContract['read'],
     write: {
       approve_upgrade: (params: any) => {
-        const { checksum, fee } = params
-        return raw.write.approve_upgrade({ inputs: [checksum], fee })
+        const { checksum } = params
+        return _raw.write.approve_upgrade({ inputs: [checksum] })
       },
       redeem_points_for_voucher: (params: any) => {
-        const { card, reward_type, points_to_spend, fee } = params
+        const { card, reward_type, points_to_spend } = params
         const _card = card?._record ?? card
-        return raw.write.redeem_points_for_voucher({ inputs: [_card, reward_type, points_to_spend], fee })
+        return _raw.write.redeem_points_for_voucher({ inputs: [_card, reward_type, points_to_spend] })
       },
       use_voucher: (params: any) => {
-        const { voucher, fee } = params
+        const { voucher } = params
         const _voucher = voucher?._record ?? voucher
-        return raw.write.use_voucher({ inputs: [_voucher], fee })
+        return _raw.write.use_voucher({ inputs: [_voucher] })
       },
       check_voucher: (params: any) => {
-        const { voucher, fee } = params
+        const { voucher } = params
         const _voucher = voucher?._record ?? voucher
-        return raw.write.check_voucher({ inputs: [_voucher], fee })
+        return _raw.write.check_voucher({ inputs: [_voucher] })
       },
       transfer_voucher: (params: any) => {
-        const { voucher, new_owner, fee } = params
+        const { voucher, new_owner } = params
         const _voucher = voucher?._record ?? voucher
-        return raw.write.transfer_voucher({ inputs: [_voucher, new_owner], fee })
+        return _raw.write.transfer_voucher({ inputs: [_voucher, new_owner] })
       },
     },
     simulate: {
       approve_upgrade: async (params: any) => {
         const { checksum } = params
-        await raw.simulate.approve_upgrade({ inputs: [checksum] })
+        const result = await _raw.simulate.approve_upgrade({ inputs: [checksum] })
+        return result.outputs[0] as unknown as FutureValue
       },
       redeem_points_for_voucher: async (params: any) => {
         const { card, reward_type, points_to_spend } = params
         const _card = card?._record ?? card
-        const result = await raw.simulate.redeem_points_for_voucher({ inputs: [_card, reward_type, points_to_spend] })
-        return [result.outputs[0] as RecordValue, toRewardVoucher(result.outputs[1] as RecordValue)] as const
+        const result = await _raw.simulate.redeem_points_for_voucher({ inputs: [_card, reward_type, points_to_spend] })
+        return [result.outputs[0] as RecordValue, toRewardVoucher(result.outputs[1] as RecordValue), result.outputs[2] as unknown as FutureValue] as const
       },
       use_voucher: async (params: any) => {
         const { voucher } = params
         const _voucher = voucher?._record ?? voucher
-        await raw.simulate.use_voucher({ inputs: [_voucher] })
+        const result = await _raw.simulate.use_voucher({ inputs: [_voucher] })
+        return result.outputs[0] as unknown as FutureValue
       },
       check_voucher: async (params: any) => {
         const { voucher } = params
         const _voucher = voucher?._record ?? voucher
-        const result = await raw.simulate.check_voucher({ inputs: [_voucher] })
-        return [toRewardVoucher(result.outputs[0] as RecordValue), result.outputs[1] as unknown as number, result.outputs[2] as unknown as bigint] as const
+        const result = await _raw.simulate.check_voucher({ inputs: [_voucher] })
+        return [toRewardVoucher(result.outputs[0] as RecordValue), result.outputs[1] as unknown as bigint, result.outputs[2] as unknown as bigint] as const
       },
       transfer_voucher: async (params: any) => {
         const { voucher, new_owner } = params
         const _voucher = voucher?._record ?? voucher
-        const result = await raw.simulate.transfer_voucher({ inputs: [_voucher, new_owner] })
-        return toRewardVoucher(result.outputs[0] as RecordValue)
+        const result = await _raw.simulate.transfer_voucher({ inputs: [_voucher, new_owner] })
+        return [toRewardVoucher(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const
       },
     },
     execute: {
       approve_upgrade: async (params: any) => {
         const { checksum, fee } = params
-        const result = await raw.execute.approve_upgrade({ inputs: [checksum], fee })
-        return { transactionId: result.transactionId }
+        const result = await _raw.execute.approve_upgrade({ inputs: [checksum], fee })
+        return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       redeem_points_for_voucher: async (params: any) => {
         const { card, reward_type, points_to_spend, fee } = params
         const _card = card?._record ?? card
-        const result = await raw.execute.redeem_points_for_voucher({ inputs: [_card, reward_type, points_to_spend], fee })
-        return { transactionId: result.transactionId, result: [result.outputs[0] as RecordValue, toRewardVoucher(result.outputs[1] as RecordValue)] as const }
+        const result = await _raw.execute.redeem_points_for_voucher({ inputs: [_card, reward_type, points_to_spend], fee })
+        return { transactionId: result.transactionId, result: [result.outputs[0] as RecordValue, toRewardVoucher(result.outputs[1] as RecordValue), result.outputs[2] as unknown as FutureValue] as const }
       },
       use_voucher: async (params: any) => {
         const { voucher, fee } = params
         const _voucher = voucher?._record ?? voucher
-        const result = await raw.execute.use_voucher({ inputs: [_voucher], fee })
-        return { transactionId: result.transactionId }
+        const result = await _raw.execute.use_voucher({ inputs: [_voucher], fee })
+        return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       check_voucher: async (params: any) => {
         const { voucher, fee } = params
         const _voucher = voucher?._record ?? voucher
-        const result = await raw.execute.check_voucher({ inputs: [_voucher], fee })
-        return { transactionId: result.transactionId, result: [toRewardVoucher(result.outputs[0] as RecordValue), result.outputs[1] as unknown as number, result.outputs[2] as unknown as bigint] as const }
+        const result = await _raw.execute.check_voucher({ inputs: [_voucher], fee })
+        return { transactionId: result.transactionId, result: [toRewardVoucher(result.outputs[0] as RecordValue), result.outputs[1] as unknown as bigint, result.outputs[2] as unknown as bigint] as const }
       },
       transfer_voucher: async (params: any) => {
         const { voucher, new_owner, fee } = params
         const _voucher = voucher?._record ?? voucher
-        const result = await raw.execute.transfer_voucher({ inputs: [_voucher, new_owner], fee })
-        return { transactionId: result.transactionId, result: toRewardVoucher(result.outputs[0] as RecordValue) }
+        const result = await _raw.execute.transfer_voucher({ inputs: [_voucher, new_owner], fee })
+        return { transactionId: result.transactionId, result: [toRewardVoucher(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
       },
     },
-    fetchAbi: raw.fetchAbi as unknown as LoyaltyRewardsContract['fetchAbi'],
+    fetchAbi: _raw.fetchAbi as unknown as LoyaltyRewardsContract['fetchAbi'],
   }
 }

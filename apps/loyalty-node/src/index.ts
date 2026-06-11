@@ -81,30 +81,33 @@ const rewardsContract = createLoyaltyRewardsContract({
 // Simulate helpers — local execution, no broadcast, instant results
 // ============================================================================
 
-async function mintCard(recipient: string, initialPoints: number) {
+async function mintCard(recipient: string, initialPoints: number): Promise<LoyaltyCard> {
     const nonce = Math.floor(Math.random() * 1e9);
-    return tokenContract.simulate.mint_card({
+    const [card] = await tokenContract.simulate.mint_card({
         recipient,
         initial_points: BigInt(initialPoints),
         nonce: `${nonce}field`,
     });
+    return card;
 }
 
-async function addPoints(card: LoyaltyCard, pointsToAdd: number) {
-    return tokenContract.simulate.add_points({
+async function addPoints(card: LoyaltyCard, pointsToAdd: number): Promise<LoyaltyCard> {
+    const [updated] = await tokenContract.simulate.add_points({
         card,
         points_earned: BigInt(pointsToAdd),
     });
+    return updated;
 }
 
-async function splitCardV2(card: LoyaltyCard, pointsToKeep: number) {
+async function splitCardV2(card: LoyaltyCard, pointsToKeep: number): Promise<[LoyaltyCard, LoyaltyCard]> {
     if (pointsToKeep >= Number(card.points)) {
         throw new Error(`pointsToKeep (${pointsToKeep}) must be less than card points (${card.points})`);
     }
-    return tokenContract.simulate.split_card_v2({
+    const [kept, split] = await tokenContract.simulate.split_card_v2({
         card,
         points_to_keep: BigInt(pointsToKeep),
     });
+    return [kept, split];
 }
 
 async function redeemForVoucher(card: LoyaltyCard, rewardType: RewardType, pointsCost: number) {
@@ -114,7 +117,7 @@ async function redeemForVoucher(card: LoyaltyCard, rewardType: RewardType, point
     // Cross-program call: pass _record for foreign record input, returns [RecordValue, RewardVoucher]
     const [updatedCardRecord, voucher] = await rewardsContract.simulate.redeem_points_for_voucher({
         card: card._record,
-        reward_type: rewardType,
+        reward_type: BigInt(rewardType),
         points_to_spend: BigInt(pointsCost),
     });
     return { card: toLoyaltyCard(updatedCardRecord), voucher };
@@ -203,7 +206,7 @@ const demos: Record<string, () => Promise<void>> = {
             fee: 500_000n,
         });
         console.log(`  ${C.dim}tx:${C.reset} ${mint.transactionId}`);
-        logCard(mint.result);
+        logCard(mint.result[0]);
     },
 
     // ── read: public mapping lookups ──────────────────────────────────

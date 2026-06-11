@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, type ComponentProps, type ReactNode } from 'react'
 import { AleoWalletProvider } from '@provablehq/aleo-wallet-adaptor-react'
 import { ShieldWalletAdapter } from '@provablehq/aleo-wallet-adaptor-shield'
 import { LeoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-leo'
@@ -18,9 +18,7 @@ export interface VeilProviderProps {
   /** Programs to register with the wallet for decrypt permissions. */
   programs?: string[]
   /** Override the default wallet list. If omitted, all known wallets are included. */
-  wallets?: ConstructorParameters<typeof ShieldWalletAdapter>[0] extends undefined
-    ? never[]
-    : never[]
+  wallets?: ComponentProps<typeof AleoWalletProvider>['wallets']
 }
 
 const networkMap = {
@@ -48,15 +46,17 @@ export function VeilProvider({
   autoConnect = true,
   decryptPermission = WalletDecryptPermission.UponRequest,
   programs,
+  wallets: walletsOverride,
 }: VeilProviderProps) {
   const wallets = useMemo(
-    () => [
-      new ShieldWalletAdapter(),
-      new LeoWalletAdapter(),
-      new PuzzleWalletAdapter(),
-      new FoxWalletAdapter(),
-    ],
-    [],
+    () =>
+      walletsOverride ?? [
+        new ShieldWalletAdapter(),
+        new LeoWalletAdapter(),
+        new PuzzleWalletAdapter(),
+        new FoxWalletAdapter(),
+      ],
+    [walletsOverride],
   )
 
   return (
