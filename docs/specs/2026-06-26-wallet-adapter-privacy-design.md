@@ -78,41 +78,42 @@ New `packages/core/src/types/inputRequest.ts`:
 - `RecordFilters = Record<string, { eq?; gte?; lte?; neq? }>`
 - `AlgorithmArg = { type: ArgType; value: string }`, `AlgorithmName` (known +
   open string), known algorithms constant.
-- `RecordView = { fields: Record<string, string> }` — granted field key →
-  Aleo-encoded value string. Keys may be a record-body field name, a dotted
-  struct path (`"data.amount"`), or a `$`-prefixed envelope-metadata token
-  (`"$commitment"`, `"$tag"`, …). Values stay strings for now (see Future
+- `RecordView = { fields: Record<string, string> }` (NEW type) — granted field
+  key → Aleo-encoded value string. Keys may be a record-body field name, a
+  dotted struct path (`"data.amount"`), or a `$`-prefixed envelope-metadata
+  token (`"$commitment"`, `"$tag"`, …). Values stay strings for now (see Future
   enhancements).
-- `RecordEnvelope` — the record shape returned by `requestRecords`:
+- **Reuse, don't duplicate, the record type.** `@veil/core` already has
+  `OwnedRecordEncrypted` and `OwnedRecord` (`extends OwnedRecordEncrypted` with
+  `recordPlaintext: string`) in `types/records.ts`, with `programName`,
+  `recordName`, `owner`, `spent`, `commitment`, `tag`, etc. The only genuinely
+  new fields from the 1.0.0 privacy feature are `uid` and `recordView`, so we
+  **extend the existing type** rather than introduce a parallel `RecordEnvelope`:
   ```ts
-  interface RecordEnvelope {
-    uid?: string             // opaque per-connection handle; pass back as a record InputRequest uid
-    recordView?: RecordView  // granted plaintext fields, or undefined when none granted
-    recordPlaintext?: string // full plaintext, for legacy apps; present only when the grant permits full plaintext
-    recordName?: string      // record type, e.g. "credits"
-    programName?: string     // owning program, e.g. "credits.aleo"
-    spent?: boolean          // whether the record is already spent
-    [legacyField: string]: unknown // catch-all for pre-envelope / future wallet shapes
+  interface OwnedRecordEncrypted {
+    // …existing fields…
+    uid?: string            // opaque per-connection handle; pass back as a record InputRequest `uid`
+    recordView?: RecordView // granted plaintext fields when the wallet withholds full plaintext
   }
   ```
-  `recordPlaintext` is an explicit named field (not left to the index
-  signature) so legacy consumers get a typed, discoverable handle; the index
-  signature only mops up unnamed shapes. Verify the exact upstream `1.0.0` key
-  name (`recordPlaintext` vs `plaintext`/`record`) during implementation and
-  match it so the mirror stays a structural identity.
+  `requestRecords` keeps returning `OwnedRecord[] | OwnedRecordEncrypted[]` (now
+  carrying `uid`/`recordView`). `recordPlaintext` already exists on `OwnedRecord`
+  for full-access/legacy consumers. No separate `RecordEnvelope` type is added.
+  During implementation, verify the upstream `1.0.0` wire field names (`uid`,
+  `recordView`) and match them so the mapping at the shim stays structural.
 - Connect grants: `ConnectOptions`, `RecordAccessGrant`, `ProgramGrant`,
   `RecordGrant`, `FieldGrant`, `AlgorithmGrant`.
 - Reuse existing `RecordStatusFilter`.
 
-**Read type vs. input type (deliberately different).** A `RecordEnvelope` is
+**Read type vs. input type (deliberately different).** An `OwnedRecord` is
 never passed back into `inputs`. The only value that crosses from read → write
-is the `uid` string: read returns `RecordEnvelope[]`, and to spend one you place
-an inline `record` InputRequest carrying its `uid`
-(`{ type: 'record', program, recordname, uid: envelope.uid }`) — program and
-record name come from the caller, since the envelope may omit them. No
-convenience helper is provided in this branch (considered and dropped);
-consumers construct the request inline. Legacy record inputs remain plain
-`string` plaintext literals, already covered by `TransactionInput`.
+is the `uid` string: read returns `OwnedRecord[] | OwnedRecordEncrypted[]`, and
+to spend one you place an inline `record` InputRequest carrying its `uid`
+(`{ type: 'record', program, recordname, uid: rec.uid }`) — program and record
+name come from the caller. No convenience helper is provided in this branch
+(considered and dropped); consumers construct the request inline. Legacy record
+inputs remain plain `string` plaintext literals (e.g. `rec.recordPlaintext`),
+already covered by `TransactionInput`.
 
 Each public type/field documented per the contributor doc-voice rules.
 
@@ -125,7 +126,9 @@ Each public type/field documented per the contributor doc-voice rules.
   `resolveInputs` passes an `InputRequest` through un-encoded (guard: object whose
   `type` is `'address' | 'record' | 'derived'`) and auto-encodes everything else.
   Mirror the same widening in `types/inference.ts`.
-- `actions/wallet/requestRecords.ts`: result type → `RecordEnvelope[]`.
+- `actions/wallet/requestRecords.ts`: result stays
+  `OwnedRecord[] | OwnedRecordEncrypted[]` (now carrying `uid`/`recordView` via
+  the extended type); no signature change needed.
 - Transport request param plumbing passes `inputs` through unchanged to the
   transport (no stringification).
 - **Local-proving guard:** any `InputRequest` reaching the local-proving path
@@ -137,7 +140,8 @@ Each public type/field documented per the contributor doc-voice rules.
 - `executeTransaction` case: build `TransactionOptions` with
   `inputs: p?.inputs as TransactionInput[]` (drop `as string[]`); pass through to
   `adapter.executeTransaction` unchanged.
-- `requestRecords` case: typed to return `RecordEnvelope[]`.
+- `requestRecords` case: surfaces `uid`/`recordView` on the returned records
+  (the extended `OwnedRecord(Encrypted)` shape); passes `statusFilter` through.
 - Add `algorithmsSupported(): Promise<string[]>` to the `AleoWalletAdapter`
   interface mirror and an `algorithmsSupported` transport method →
   `adapter.algorithmsSupported()`.
@@ -173,7 +177,8 @@ Bump to `1.0.0`:
   envelope `uid` → `{type:'record', uid}`), and a `derived` input.
 - New unit tests:
   - wallet-adapter: `InputRequest` passes through the transport to a mock adapter
-    unchanged; `algorithmsSupported` wired; `requestRecords` returns envelopes.
+    unchanged; `algorithmsSupported` wired; `requestRecords` surfaces
+    `uid`/`recordView` on returned records.
   - core: `resolveInputs` passes `InputRequest` through and encodes plain values;
     local-proving path rejects `InputRequest`; action input types accept
     `TransactionInput[]`.
