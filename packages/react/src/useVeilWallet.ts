@@ -104,6 +104,7 @@ export function useVeilWallet(config?: UseVeilWalletConfig): UseVeilWalletReturn
       },
       requestTransactionHistory: (program) =>
         wallet.requestTransactionHistory(program) as Promise<TxHistoryResult>,
+      algorithmsSupported: () => wallet.algorithmsSupported(),
     }
 
     const { account, transport: walletTransport } = fromWalletAdapter(adapter)
