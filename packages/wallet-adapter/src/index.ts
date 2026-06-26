@@ -25,7 +25,7 @@ import { custom } from '@veil/core'
 import type { Network, RpcAccount, Transport, TransactionStatusResponse, TxHistoryResult } from '@veil/core'
 
 // Import the real types from the Provable ecosystem
-import type { TransactionOptions } from '@provablehq/aleo-types'
+import type { TransactionOptions, TransactionInput } from '@provablehq/aleo-types'
 import type { AleoDeployment } from '@provablehq/aleo-wallet-standard'
 import type { RecordStatusFilter } from '@veil/core'
 import type { BaseAleoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-core'
@@ -73,7 +73,12 @@ export interface AleoWalletAdapter {
   /** Get the status of a submitted transaction. */
   transactionStatus(transactionId: string): Promise<TransactionStatusResponse>
 
-  /** Decrypt a record ciphertext using the wallet's view key. */
+  /**
+   * Decrypt a record ciphertext using the wallet's view key.
+   *
+   * Throws `WalletAddressWithheldError` when the connection was made with
+   * `readAddress: false` — decryption would reveal the address.
+   */
   decrypt(
     cipherText: string,
     tpk?: string,
@@ -82,21 +87,39 @@ export interface AleoWalletAdapter {
     index?: number,
   ): Promise<string>
 
-  /** Request records for a program. */
+  /**
+   * Request records for a program.
+   *
+   * Throws `WalletAddressWithheldError` when the connection was made with
+   * `readAddress: false`.
+   */
   requestRecords(
     program: string,
     includePlaintext: boolean,
     statusFilter?: RecordStatusFilter,
   ): Promise<unknown[]>
 
-  /** Get transition view keys for a transaction. */
+  /**
+   * Get transition view keys for a transaction.
+   *
+   * Throws `WalletAddressWithheldError` when the connection was made with
+   * `readAddress: false`.
+   */
   transitionViewKeys(transactionId: string): Promise<string[]>
 
   /** Switch the connected network. May throw if the wallet doesn't support it. */
   switchNetwork(network: Network): Promise<void>
 
-  /** Get transaction history for a program. May throw if the wallet doesn't support it. */
+  /**
+   * Get transaction history for a program. May throw if the wallet doesn't support it.
+   *
+   * Throws `WalletAddressWithheldError` when the connection was made with
+   * `readAddress: false`.
+   */
   requestTransactionHistory(program: string): Promise<TxHistoryResult>
+
+  /** List the derived-input algorithms this wallet supports. Empty if none. */
+  algorithmsSupported(): Promise<string[]>
 }
 
 /**
@@ -167,7 +190,9 @@ export function transportFromAdapter(adapter: AnyWalletAdapter): Transport<'cust
           const options: TransactionOptions = {
             program: p?.programName as string,
             function: p?.functionName as string,
-            inputs: p?.inputs as string[],
+            // Inputs may be Aleo-encoded strings or InputRequest objects the wallet
+            // fulfils (address/record/derived); pass them through untouched.
+            inputs: p?.inputs as TransactionInput[],
             privateFee: (p?.privateFee as boolean) ?? false,
           }
           if (p?.imports != null) {
@@ -217,6 +242,10 @@ export function transportFromAdapter(adapter: AnyWalletAdapter): Transport<'cust
 
         case 'getTransitionViewKeys': {
           return adapter.transitionViewKeys(p?.id as string)
+        }
+
+        case 'algorithmsSupported': {
+          return adapter.algorithmsSupported()
         }
 
         case 'switchNetwork': {

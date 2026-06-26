@@ -24,6 +24,7 @@ function createMockAdapter(overrides?: Partial<AleoWalletAdapter>): AleoWalletAd
     transitionViewKeys: vi.fn().mockResolvedValue(['tvk1abc', 'tvk1def']),
     switchNetwork: vi.fn().mockResolvedValue(undefined),
     requestTransactionHistory: vi.fn().mockResolvedValue({ transactions: [] }),
+    algorithmsSupported: vi.fn().mockResolvedValue([]),
     ...overrides,
   }
 }
@@ -87,6 +88,38 @@ describe('transportFromAdapter', () => {
       inputs: ['aleo1recipient', '100u64'],
       privateFee: false,
     })
+  })
+
+  it('forwards InputRequest inputs to the adapter unchanged', async () => {
+    const adapter = createMockAdapter()
+    const transport = transportFromAdapter(adapter)
+    const recReq = { type: 'record', program: 'amm_v3.aleo', recordname: 'credits', uid: 'u1' }
+
+    await transport.request({
+      method: 'executeTransaction',
+      params: {
+        programName: 'amm_v3.aleo',
+        functionName: 'swap_private',
+        inputs: [recReq, { type: 'address' }, '100u64'],
+      },
+    })
+
+    const opts = (adapter.executeTransaction as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(opts.inputs[0]).toEqual(recReq)
+    expect(opts.inputs[1]).toEqual({ type: 'address' })
+    expect(opts.inputs[2]).toBe('100u64')
+  })
+
+  it('routes algorithmsSupported to adapter.algorithmsSupported', async () => {
+    const adapter = createMockAdapter({
+      algorithmsSupported: vi.fn().mockResolvedValue(['program-scoped-blinding-factor']),
+    })
+    const transport = transportFromAdapter(adapter)
+
+    const result = await transport.request({ method: 'algorithmsSupported', params: {} })
+
+    expect(result).toEqual(['program-scoped-blinding-factor'])
+    expect(adapter.algorithmsSupported).toHaveBeenCalled()
   })
 
   it('routes deployProgram to adapter.executeDeployment', async () => {
