@@ -140,12 +140,10 @@ export interface ConnectOptions {
  * @param input A transaction input — a literal string or an InputRequest.
  * @returns True if the input is an InputRequest (address/record/derived).
  */
-export function isInputRequest(input: TransactionInput): input is InputRequest {
-  return (
-    typeof input === 'object' &&
-    input !== null &&
-    (input.type === 'address' || input.type === 'record' || input.type === 'derived')
-  )
+export function isInputRequest(input: unknown): input is InputRequest {
+  if (typeof input !== 'object' || input === null) return false
+  const type = (input as { type?: unknown }).type
+  return type === 'address' || type === 'record' || type === 'derived'
 }
 
 /**

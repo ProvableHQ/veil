@@ -1,13 +1,15 @@
 import { AccountNotFoundError, ProvingNotConfiguredError } from '../../errors/errors.js'
 import type { Client } from '../../clients/createClient.js'
 import type { RawExecuteResult } from '../../types/proving.js'
+import { assertNoInputRequests } from '../../types/inputRequest.js'
+import type { TransactionInput } from '../../types/inputRequest.js'
 import { waitForConfirmation } from '../../utils/waitForConfirmation.js'
 import { extractTransitions } from '../../utils/extractTransitions.js'
 
 export type ExecuteContractParameters = {
   program: string
   function: string
-  inputs: string[]
+  inputs: TransactionInput[]
   /** Priority fee in microcredits (1 credit = 1_000_000 microcredits) */
   fee?: bigint
   privateFee?: boolean
@@ -69,6 +71,9 @@ export async function executeContract(
   }
 
   if (account.type === 'local') {
+    // Local proving resolves no wallet-side inputs — only encoded strings.
+    assertNoInputRequests(params.inputs)
+
     if (client.proving?.execute) {
       return client.proving.execute({
         programName: params.program,
