@@ -104,7 +104,7 @@ describe('transportFromAdapter', () => {
       },
     })
 
-    const opts = (adapter.executeTransaction as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    const opts = (adapter.executeTransaction as ReturnType<typeof vi.fn>).mock.calls[0]![0]
     expect(opts.inputs[0]).toEqual(recReq)
     expect(opts.inputs[1]).toEqual({ type: 'address' })
     expect(opts.inputs[2]).toBe('100u64')

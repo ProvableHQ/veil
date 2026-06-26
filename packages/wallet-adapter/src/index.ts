@@ -35,6 +35,25 @@ export type { TransactionOptions } from '@provablehq/aleo-types'
 export type { Network, TransactionStatusResponse, TxHistoryResult } from '@veil/core'
 export type { BaseAleoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-core'
 
+// Re-export the privacy-feature types (Veil mirrors) and the upstream error
+// classes a dapp encounters under privacy grants, so consumers can import them
+// from the wallet-adapter boundary alongside fromWalletAdapter.
+export type {
+  TransactionInput,
+  InputRequest,
+  RecordFilters,
+  RecordView,
+  ConnectOptions,
+  RecordAccessGrant,
+  AlgorithmGrant,
+} from '@veil/core'
+export {
+  WalletAddressWithheldError,
+  WalletInputRequestInvalidError,
+  WalletInputRequestNotSupportedError,
+  WalletConnectOptionsNotSupportedError,
+} from '@provablehq/aleo-wallet-adaptor-core'
+
 // --------------------------------------------------------------------------
 // Wallet adapter interface — matches BaseAleoWalletAdapter from
 // @provablehq/aleo-wallet-adaptor-core
@@ -118,8 +137,13 @@ export interface AleoWalletAdapter {
    */
   requestTransactionHistory(program: string): Promise<TxHistoryResult>
 
-  /** List the derived-input algorithms this wallet supports. Empty if none. */
-  algorithmsSupported(): Promise<string[]>
+  /**
+   * List the derived-input algorithms this wallet supports. Empty if none.
+   *
+   * Optional: wallets that predate the privacy feature omit it, in which case
+   * the transport reports no supported algorithms.
+   */
+  algorithmsSupported?(): Promise<string[]>
 }
 
 /**
@@ -245,7 +269,7 @@ export function transportFromAdapter(adapter: AnyWalletAdapter): Transport<'cust
         }
 
         case 'algorithmsSupported': {
-          return adapter.algorithmsSupported()
+          return adapter.algorithmsSupported ? adapter.algorithmsSupported() : []
         }
 
         case 'switchNetwork': {

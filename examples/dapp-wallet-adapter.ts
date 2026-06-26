@@ -306,7 +306,7 @@ describe('Example dApp: Token Manager with Wallet Adapter', () => {
 
     // Derived inputs (e.g. blinding values) are computed by the wallet from its
     // own private state; the dApp only declares which algorithms it expects.
-    const algos = await leoWallet.algorithmsSupported()
+    const algos = (await leoWallet.algorithmsSupported?.()) ?? []
     expect(algos).toContain('program-scoped-blinded-address')
     console.log('  Wallet supports derived algorithms:', algos.join(', '))
   })
