@@ -16,8 +16,11 @@ and document each `@param` / `@returns` / `@throws` by its consequence.
 /**
  * Builds a deployment transaction for submission to the Aleo network.
  *
+ * Signs locally and submits to the configured transport, so it reaches the
+ * network and costs a fee.
+ *
  * @param program Program source code.
- * @param priorityFee Optional priority fee paid for the transaction.
+ * @param priorityFee Optional priority fee in microcredits (u64). Defaults to 0.
  * @param privateFee Use a private record to pay the fee. If false this uses the
  *   account's public credit balance.
  * @param feeRecord Optional fee record to spend for the fee.
@@ -29,8 +32,11 @@ and document each `@param` / `@returns` / `@throws` by its consequence.
  */
 ```
 
-Why it works: the description starts with "Builds"; `privateFee` explains the
-branch its value selects; the `@example` compiles against the documented call.
+Why it works: the description starts with "Builds"; the second sentence names the
+side effect (network + fee); `priorityFee` gives units and a default; `privateFee`
+explains the branch its value selects; the `@example` compiles against the
+documented call. Types are not repeated in the tags — the TypeScript signature
+already carries them.
 
 ### Bad
 
@@ -39,14 +45,82 @@ branch its value selects; the `@example` compiles against the documented call.
  * This function is designed to allow you to easily build a powerful deployment
  * transaction in a seamless way. It's important to note that it returns a result.
  *
- * @param options The options for the deployment transaction.
- * @returns The result.
+ * @param {string} options The options for the deployment transaction.
+ * @param {number} fee The fee.
+ * @returns {string} The result.
  */
 ```
 
 Why it fails: "This function is designed to" is filler (A); "powerful" and
 "seamless" are hype (C); `options — The options for the deployment transaction`
-restates the name (B); "It's important to note" hedges (D); no `@example`.
+restates the name (B); `fee — The fee` gives no units, width, or default (B);
+"It's important to note" hedges (D); the `{string}`/`{number}` types duplicate the
+signature and will drift; no `@example`.
+
+## More JSDoc rules in practice
+
+### Units, widths, and bounds
+
+```ts
+// Good — units, width, and range stated.
+/** @param amount Amount in microcredits (u64), 1..=u64::MAX. */
+// Bad — caller has to guess credits vs microcredits, and the width.
+/** @param amount The amount. */
+```
+
+Use `number` for u64 and smaller, `bigint` for u128 and larger.
+
+### Defaults for optional params
+
+```ts
+// Good.
+/** @param network Optional target network. Defaults to "testnet". */
+// Bad — the default is hidden in the body.
+/** @param network Optional target network. */
+```
+
+### Side effects
+
+```ts
+// Good — the caller learns it hits the network and signs.
+/** Submits the transaction to the configured transport and waits for acceptance. */
+// Good — the caller learns it is pure and local.
+/** Computes the blinded address locally. Does not touch the network. */
+```
+
+### Object-type fields with `@property` on the docblock
+
+```ts
+// Good — fields documented with @property on the type's docblock.
+/**
+ * Parameters for a public transfer.
+ *
+ * @property to Recipient address.
+ * @property amount Amount in microcredits (u64).
+ * @property priorityFee Optional priority fee in microcredits. Defaults to 0.
+ */
+export type transfer_public_params = {
+  to: string;
+  amount: number;
+  priorityFee?: number;
+};
+
+// Bad — inline per-field comments instead of @property.
+export type transfer_public_params = {
+  to: string; // recipient
+  amount: number; // amount
+  priorityFee?: number; // fee
+};
+```
+
+### `@deprecated` carries a migration path
+
+```ts
+// Good — says what to use instead.
+/** @deprecated Use `writeContract` instead; this is removed in 0.3. */
+// Bad — leaves the caller stranded.
+/** @deprecated Do not use. */
+```
 
 ## Prose (guides and tutorials)
 
@@ -82,3 +156,5 @@ record actually is.
 | B. Restating the signature | "`userId` — the user ID" | "`userId` — owner whose unspent records are summed." |
 | C. Hype adjectives | "powerful", "seamless", "robust", "simply", "just" | (delete them) |
 | D. Hedging / obvious | "It's important to note that…" | (state the fact directly) |
+| Types in tags | `@param {string} to …` | `@param to …` (TS carries the type) |
+| Bare optional | `@param fee Optional fee.` | `@param fee Optional fee in microcredits. Defaults to 0.` |
