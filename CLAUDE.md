@@ -1,5 +1,9 @@
 # Veil — Claude Code Instructions
 
+Repo-wide contributor constraints live in `AGENTS.md` and apply here:
+
+@AGENTS.md
+
 ## Git
 
 - Do NOT add `Co-Authored-By` lines to commits
