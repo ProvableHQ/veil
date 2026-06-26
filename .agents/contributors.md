@@ -18,9 +18,9 @@ see the README and `docs/`.
   restating its name. `options — The options for the transaction` is a failure.
 - Do not repeat TypeScript types in tags. The signature already carries them;
   write `@param to …`, not `@param {string} to …`. Repeated types drift.
-- State the default for every optional parameter
+- State the default for every optional parameter if a default applies. Concisely state the case for when one would choose to use it.
   (`@param fee Optional fee in microcredits. Defaults to 0.`).
-- Document units, widths, and bounds: microcredits rather than credits, valid
+- Document units, widths, and bounds: microcredits rather than credits where applicable, valid
   ranges, and the numeric width (`number` for u64 and smaller, `bigint` for u128
   and larger).
 - Note side effects: whether the call hits the network, signs, proves locally, or
@@ -36,6 +36,7 @@ see the README and `docs/`.
 - Do not write: (A) filler or throat-clearing, (B) restatements of the
   signature, (C) hype adjectives ("powerful", "seamless", "robust", "simply",
   "just"), (D) hedging or statements of the obvious ("it's important to note").
+- Write concise, clear comments inside function/closure bodies explaining what blocks of code do.
 
 See `.agents/voice.md` for verbatim good and bad examples.
 
@@ -53,12 +54,6 @@ platform into core action logic.
   or environment-specific globals in core.
 - **Framework.** React and any UI framework stay in `@veil/react`. Core never
   imports or assumes a framework.
-- **Tooling and wallet callers.** Where a capability has more than one
-  platform-specific fulfilment, the platform-specific path is an opt-in,
-  configurable provider behind the interface — never a hard dependency forced on
-  all users, never the assumed default. This covers the portable WASM SDK versus
-  the native Leo CLI, and the mechanism by which a wallet is invoked
-  (browser-extension provider, deep link, native SDK, CLI).
 - **Configuration shape.** When platform-agnosticism needs extra parameters or
   objects, express them as viem-shaped configuration — options objects, client,
   transport, and account config passed at construction, the `extend()` pattern —
@@ -70,7 +65,7 @@ Before changing core, check: does this import a runtime global? assume a specifi
 wallet or wallet-calling mechanism? make a native binary mandatory? add a
 positional parameter where a viem-style config object belongs?
 
-## Changing shared code
+## Repo-wide rules
 
 - **Stop and get sign-off before changing a shared `core` interface or type, or
   before breaking backwards compatibility.** State what you want to change, which
