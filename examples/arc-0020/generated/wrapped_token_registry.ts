@@ -1061,7 +1061,7 @@ export function createWrappedTokenRegistryContract(options: {
       withdraw_token_private: async (params: any) => {
         const { amount } = params
         const result = await _raw.simulate.withdraw_token_private({ inputs: [amount] })
-        return [result.outputs[0] as RecordValue, result.outputs[1] as unknown as FutureValue] as const
+        return [result.outputs[0] as unknown as RecordValue, result.outputs[1] as unknown as FutureValue] as const
       },
       transfer_public: async (params: any) => {
         const { recipient, amount } = params
@@ -1076,19 +1076,19 @@ export function createWrappedTokenRegistryContract(options: {
       transfer_public_to_private: async (params: any) => {
         const { recipient, amount } = params
         const result = await _raw.simulate.transfer_public_to_private({ inputs: [recipient, amount] })
-        return [toToken(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const
+        return [toToken(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const
       },
       transfer_private: async (params: any) => {
         const { input, recipient, amount } = params
         const _input = input?._record ?? input
         const result = await _raw.simulate.transfer_private({ inputs: [_input, recipient, amount] })
-        return [toToken(result.outputs[0] as RecordValue), toToken(result.outputs[1] as RecordValue)] as const
+        return [toToken(result.outputs[0] as unknown as RecordValue), toToken(result.outputs[1] as unknown as RecordValue)] as const
       },
       transfer_private_to_public: async (params: any) => {
         const { input, recipient, amount } = params
         const _input = input?._record ?? input
         const result = await _raw.simulate.transfer_private_to_public({ inputs: [_input, recipient, amount] })
-        return [toToken(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const
+        return [toToken(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const
       },
       approve_public: async (params: any) => {
         const { spender, amount } = params
@@ -1108,102 +1108,102 @@ export function createWrappedTokenRegistryContract(options: {
       transfer_from_public_to_private: async (params: any) => {
         const { owner, recipient, amount } = params
         const result = await _raw.simulate.transfer_from_public_to_private({ inputs: [owner, recipient, amount] })
-        return [toToken(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const
+        return [toToken(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const
       },
       join: async (params: any) => {
         const { input_1, input_2 } = params
         const _input_1 = input_1?._record ?? input_1
         const _input_2 = input_2?._record ?? input_2
         const result = await _raw.simulate.join({ inputs: [_input_1, _input_2] })
-        return toToken(result.outputs[0] as RecordValue)
+        return toToken(result.outputs[0] as unknown as RecordValue)
       },
       split: async (params: any) => {
         const { input, amount } = params
         const _input = input?._record ?? input
         const result = await _raw.simulate.split({ inputs: [_input, amount] })
-        return [toToken(result.outputs[0] as RecordValue), toToken(result.outputs[1] as RecordValue)] as const
+        return [toToken(result.outputs[0] as unknown as RecordValue), toToken(result.outputs[1] as unknown as RecordValue)] as const
       },
     },
     execute: {
       deposit_token_public_signer: async (params: any) => {
-        const { amount, fee } = params
-        const result = await _raw.execute.deposit_token_public_signer({ inputs: [amount], fee })
+        const { amount } = params
+        const result = await _raw.execute.deposit_token_public_signer({ inputs: [amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       withdraw_token_public: async (params: any) => {
-        const { amount, fee } = params
-        const result = await _raw.execute.withdraw_token_public({ inputs: [amount], fee })
+        const { amount } = params
+        const result = await _raw.execute.withdraw_token_public({ inputs: [amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       withdraw_token_public_signer: async (params: any) => {
-        const { amount, fee } = params
-        const result = await _raw.execute.withdraw_token_public_signer({ inputs: [amount], fee })
+        const { amount } = params
+        const result = await _raw.execute.withdraw_token_public_signer({ inputs: [amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       withdraw_token_private: async (params: any) => {
-        const { amount, fee } = params
-        const result = await _raw.execute.withdraw_token_private({ inputs: [amount], fee })
-        return { transactionId: result.transactionId, result: [result.outputs[0] as RecordValue, result.outputs[1] as unknown as FutureValue] as const }
+        const { amount } = params
+        const result = await _raw.execute.withdraw_token_private({ inputs: [amount] })
+        return { transactionId: result.transactionId, result: [result.outputs[0] as unknown as RecordValue, result.outputs[1] as unknown as FutureValue] as const }
       },
       transfer_public: async (params: any) => {
-        const { recipient, amount, fee } = params
-        const result = await _raw.execute.transfer_public({ inputs: [recipient, amount], fee })
+        const { recipient, amount } = params
+        const result = await _raw.execute.transfer_public({ inputs: [recipient, amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       transfer_public_as_signer: async (params: any) => {
-        const { recipient, amount, fee } = params
-        const result = await _raw.execute.transfer_public_as_signer({ inputs: [recipient, amount], fee })
+        const { recipient, amount } = params
+        const result = await _raw.execute.transfer_public_as_signer({ inputs: [recipient, amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       transfer_public_to_private: async (params: any) => {
-        const { recipient, amount, fee } = params
-        const result = await _raw.execute.transfer_public_to_private({ inputs: [recipient, amount], fee })
-        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
+        const { recipient, amount } = params
+        const result = await _raw.execute.transfer_public_to_private({ inputs: [recipient, amount] })
+        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
       },
       transfer_private: async (params: any) => {
-        const { input, recipient, amount, fee } = params
+        const { input, recipient, amount } = params
         const _input = input?._record ?? input
-        const result = await _raw.execute.transfer_private({ inputs: [_input, recipient, amount], fee })
-        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as RecordValue), toToken(result.outputs[1] as RecordValue)] as const }
+        const result = await _raw.execute.transfer_private({ inputs: [_input, recipient, amount] })
+        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as unknown as RecordValue), toToken(result.outputs[1] as unknown as RecordValue)] as const }
       },
       transfer_private_to_public: async (params: any) => {
-        const { input, recipient, amount, fee } = params
+        const { input, recipient, amount } = params
         const _input = input?._record ?? input
-        const result = await _raw.execute.transfer_private_to_public({ inputs: [_input, recipient, amount], fee })
-        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
+        const result = await _raw.execute.transfer_private_to_public({ inputs: [_input, recipient, amount] })
+        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
       },
       approve_public: async (params: any) => {
-        const { spender, amount, fee } = params
-        const result = await _raw.execute.approve_public({ inputs: [spender, amount], fee })
+        const { spender, amount } = params
+        const result = await _raw.execute.approve_public({ inputs: [spender, amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       unapprove_public: async (params: any) => {
-        const { spender, amount, fee } = params
-        const result = await _raw.execute.unapprove_public({ inputs: [spender, amount], fee })
+        const { spender, amount } = params
+        const result = await _raw.execute.unapprove_public({ inputs: [spender, amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       transfer_from_public: async (params: any) => {
-        const { owner, recipient, amount, fee } = params
-        const result = await _raw.execute.transfer_from_public({ inputs: [owner, recipient, amount], fee })
+        const { owner, recipient, amount } = params
+        const result = await _raw.execute.transfer_from_public({ inputs: [owner, recipient, amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       transfer_from_public_to_private: async (params: any) => {
-        const { owner, recipient, amount, fee } = params
-        const result = await _raw.execute.transfer_from_public_to_private({ inputs: [owner, recipient, amount], fee })
-        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
+        const { owner, recipient, amount } = params
+        const result = await _raw.execute.transfer_from_public_to_private({ inputs: [owner, recipient, amount] })
+        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
       },
       join: async (params: any) => {
-        const { input_1, input_2, fee } = params
+        const { input_1, input_2 } = params
         const _input_1 = input_1?._record ?? input_1
         const _input_2 = input_2?._record ?? input_2
-        const result = await _raw.execute.join({ inputs: [_input_1, _input_2], fee })
-        return { transactionId: result.transactionId, result: toToken(result.outputs[0] as RecordValue) }
+        const result = await _raw.execute.join({ inputs: [_input_1, _input_2] })
+        return { transactionId: result.transactionId, result: toToken(result.outputs[0] as unknown as RecordValue) }
       },
       split: async (params: any) => {
-        const { input, amount, fee } = params
+        const { input, amount } = params
         const _input = input?._record ?? input
-        const result = await _raw.execute.split({ inputs: [_input, amount], fee })
-        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as RecordValue), toToken(result.outputs[1] as RecordValue)] as const }
+        const result = await _raw.execute.split({ inputs: [_input, amount] })
+        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as unknown as RecordValue), toToken(result.outputs[1] as unknown as RecordValue)] as const }
       },
     },
     fetchAbi: _raw.fetchAbi as unknown as WrappedTokenRegistryContract['fetchAbi'],

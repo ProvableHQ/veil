@@ -131,8 +131,16 @@ function generateRecordMapper(record: RecordDef): string[] {
 
   for (const field of record.fields) {
     if (field.name === 'owner') continue
-    const cast = plaintextToCast(field.type)
-    lines.push(`    ${field.name}: record.fields.${field.name}?.value${cast} ?? ${plaintextDefault(field.type)},`)
+    // Struct-typed fields: the raw PlaintextValue is a StructValue at runtime.
+    // Cast through unknown to the generated struct interface so the return type
+    // is correct. A missing field falls back to an empty object cast the same way.
+    if (field.type.kind === 'struct') {
+      const structName = field.type.path[field.type.path.length - 1] ?? 'unknown'
+      lines.push(`    ${field.name}: record.fields.${field.name}?.value as unknown as ${structName} ?? {} as unknown as ${structName},`)
+    } else {
+      const cast = plaintextToCast(field.type)
+      lines.push(`    ${field.name}: record.fields.${field.name}?.value${cast} ?? ${plaintextDefault(field.type)},`)
+    }
   }
 
   lines.push(`    _record: record,`)
@@ -408,10 +416,13 @@ function outputMapperExpr(output: AbiFunction['outputs'][number], i: number, abi
   if (output.type.kind === 'record') {
     const recName = output.type.path[output.type.path.length - 1] ?? ''
     const isLocal = !output.type.program || output.type.program.replace(/\.aleo$/, '') === abi.program.replace(/\.aleo$/, '')
+    // Double-cast through unknown: result.outputs[i] is ParsedOutput | undefined under
+    // noUncheckedIndexedAccess. The cast to unknown then to RecordValue is intentional —
+    // the ABI guarantees this output is a record at this position.
     if (isLocal && recName) {
-      return `to${recName}(result.outputs[${i}] as RecordValue)`
+      return `to${recName}(result.outputs[${i}] as unknown as RecordValue)`
     }
-    return `result.outputs[${i}] as RecordValue`
+    return `result.outputs[${i}] as unknown as RecordValue`
   }
   if (output.type.kind === 'plaintext') {
     return `result.outputs[${i}] as unknown as ${plaintextToTsType(output.type.type)}`
@@ -465,7 +476,9 @@ function generateContractFactory(abi: ABI): string[] {
     lines.push(`  }`)
   }
 
-  // execute methods — named params, typed return + transactionId
+  // execute methods — named params, typed return + transactionId.
+  // fee is accepted for forward-compatibility but is not forwarded to core;
+  // proving config, not per-call params, is the correct place to specify fees.
   if (abi.functions.length > 0) {
     lines.push(`  execute: {`)
     for (const fn of abi.functions) {
@@ -523,9 +536,8 @@ function generateContractFactory(abi: ABI): string[] {
     for (const fn of abi.functions) {
       const names = inputNames(fn)
       const { resolveLines, resolvedNames } = resolveRecordInputs(fn)
-      const destructure = names.length > 0 ? `{ ${names.join(', ')} }` : '{}'
       lines.push(`      ${fn.name}: async (params: any) => {`)
-      lines.push(`        const ${destructure} = params`)
+      if (names.length > 0) lines.push(`        const { ${names.join(', ')} } = params`)
       for (const line of resolveLines) lines.push(line)
 
       if (fn.outputs.length === 0) {
@@ -554,11 +566,10 @@ function generateContractFactory(abi: ABI): string[] {
     for (const fn of abi.functions) {
       const names = inputNames(fn)
       const { resolveLines, resolvedNames } = resolveRecordInputs(fn)
-      const destructure = names.length > 0 ? `{ ${names.join(', ')}, fee }` : '{ fee }'
       lines.push(`      ${fn.name}: async (params: any) => {`)
-      lines.push(`        const ${destructure} = params`)
+      if (names.length > 0) lines.push(`        const { ${names.join(', ')} } = params`)
       for (const line of resolveLines) lines.push(line)
-      lines.push(`        const result = await _raw.execute.${fn.name}({ inputs: [${resolvedNames.join(', ')}], fee })`)
+      lines.push(`        const result = await _raw.execute.${fn.name}({ inputs: [${resolvedNames.join(', ')}] })`)
 
       if (fn.outputs.length === 0) {
         lines.push(`        return { transactionId: result.transactionId }`)

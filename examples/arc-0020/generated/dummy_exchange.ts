@@ -211,13 +211,13 @@ export function createDummyExchangeContract(options: {
     },
     execute: {
       transfer_from: async (params: any) => {
-        const { token_id, owner, recipient, amount, fee } = params
-        const result = await _raw.execute.transfer_from({ inputs: [token_id, owner, recipient, amount], fee })
+        const { token_id, owner, recipient, amount } = params
+        const result = await _raw.execute.transfer_from({ inputs: [token_id, owner, recipient, amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       swap: async (params: any) => {
-        const { token_in, token_out, amount_in, amount_out, fee } = params
-        const result = await _raw.execute.swap({ inputs: [token_in, token_out, amount_in, amount_out], fee })
+        const { token_in, token_out, amount_in, amount_out } = params
+        const result = await _raw.execute.swap({ inputs: [token_in, token_out, amount_in, amount_out] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
     },

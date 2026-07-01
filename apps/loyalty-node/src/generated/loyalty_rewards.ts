@@ -467,7 +467,7 @@ export function createLoyaltyRewardsContract(options: {
         const { card, reward_type, points_to_spend } = params
         const _card = card?._record ?? card
         const result = await _raw.simulate.redeem_points_for_voucher({ inputs: [_card, reward_type, points_to_spend] })
-        return [result.outputs[0] as RecordValue, toRewardVoucher(result.outputs[1] as RecordValue), result.outputs[2] as unknown as FutureValue] as const
+        return [result.outputs[0] as unknown as RecordValue, toRewardVoucher(result.outputs[1] as unknown as RecordValue), result.outputs[2] as unknown as FutureValue] as const
       },
       use_voucher: async (params: any) => {
         const { voucher } = params
@@ -479,44 +479,44 @@ export function createLoyaltyRewardsContract(options: {
         const { voucher } = params
         const _voucher = voucher?._record ?? voucher
         const result = await _raw.simulate.check_voucher({ inputs: [_voucher] })
-        return [toRewardVoucher(result.outputs[0] as RecordValue), result.outputs[1] as unknown as bigint, result.outputs[2] as unknown as bigint] as const
+        return [toRewardVoucher(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as bigint, result.outputs[2] as unknown as bigint] as const
       },
       transfer_voucher: async (params: any) => {
         const { voucher, new_owner } = params
         const _voucher = voucher?._record ?? voucher
         const result = await _raw.simulate.transfer_voucher({ inputs: [_voucher, new_owner] })
-        return [toRewardVoucher(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const
+        return [toRewardVoucher(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const
       },
     },
     execute: {
       approve_upgrade: async (params: any) => {
-        const { checksum, fee } = params
-        const result = await _raw.execute.approve_upgrade({ inputs: [checksum], fee })
+        const { checksum } = params
+        const result = await _raw.execute.approve_upgrade({ inputs: [checksum] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       redeem_points_for_voucher: async (params: any) => {
-        const { card, reward_type, points_to_spend, fee } = params
+        const { card, reward_type, points_to_spend } = params
         const _card = card?._record ?? card
-        const result = await _raw.execute.redeem_points_for_voucher({ inputs: [_card, reward_type, points_to_spend], fee })
-        return { transactionId: result.transactionId, result: [result.outputs[0] as RecordValue, toRewardVoucher(result.outputs[1] as RecordValue), result.outputs[2] as unknown as FutureValue] as const }
+        const result = await _raw.execute.redeem_points_for_voucher({ inputs: [_card, reward_type, points_to_spend] })
+        return { transactionId: result.transactionId, result: [result.outputs[0] as unknown as RecordValue, toRewardVoucher(result.outputs[1] as unknown as RecordValue), result.outputs[2] as unknown as FutureValue] as const }
       },
       use_voucher: async (params: any) => {
-        const { voucher, fee } = params
+        const { voucher } = params
         const _voucher = voucher?._record ?? voucher
-        const result = await _raw.execute.use_voucher({ inputs: [_voucher], fee })
+        const result = await _raw.execute.use_voucher({ inputs: [_voucher] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       check_voucher: async (params: any) => {
-        const { voucher, fee } = params
+        const { voucher } = params
         const _voucher = voucher?._record ?? voucher
-        const result = await _raw.execute.check_voucher({ inputs: [_voucher], fee })
-        return { transactionId: result.transactionId, result: [toRewardVoucher(result.outputs[0] as RecordValue), result.outputs[1] as unknown as bigint, result.outputs[2] as unknown as bigint] as const }
+        const result = await _raw.execute.check_voucher({ inputs: [_voucher] })
+        return { transactionId: result.transactionId, result: [toRewardVoucher(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as bigint, result.outputs[2] as unknown as bigint] as const }
       },
       transfer_voucher: async (params: any) => {
-        const { voucher, new_owner, fee } = params
+        const { voucher, new_owner } = params
         const _voucher = voucher?._record ?? voucher
-        const result = await _raw.execute.transfer_voucher({ inputs: [_voucher, new_owner], fee })
-        return { transactionId: result.transactionId, result: [toRewardVoucher(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
+        const result = await _raw.execute.transfer_voucher({ inputs: [_voucher, new_owner] })
+        return { transactionId: result.transactionId, result: [toRewardVoucher(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
       },
     },
     fetchAbi: _raw.fetchAbi as unknown as LoyaltyRewardsContract['fetchAbi'],
