@@ -164,8 +164,8 @@ export interface DummyExchangeContract {
     swap: (params: { token_in: string | InputRequest, token_out: string | InputRequest, amount_in: bigint | InputRequest, amount_out: bigint | InputRequest }) => Promise<FutureValue>
   }
   execute: {
-    transfer_from: (params: { token_id: string | InputRequest, owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    swap: (params: { token_in: string | InputRequest, token_out: string | InputRequest, amount_in: bigint | InputRequest, amount_out: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
+    transfer_from: (params: { token_id: string | InputRequest, owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    swap: (params: { token_in: string | InputRequest, token_out: string | InputRequest, amount_in: bigint | InputRequest, amount_out: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
   }
   fetchAbi: () => Promise<ABI>
 }

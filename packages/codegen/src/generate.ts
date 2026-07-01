@@ -135,7 +135,13 @@ function generateRecordMapper(record: RecordDef): string[] {
     // Cast through unknown to the generated struct interface so the return type
     // is correct. A missing field falls back to an empty object cast the same way.
     if (field.type.kind === 'struct') {
-      const structName = field.type.path[field.type.path.length - 1] ?? 'unknown'
+      const structName = field.type.path.at(-1)
+      if (!structName) {
+        throw new Error(
+          `Malformed ABI: struct field "${field.name}" in record "${name}" has an empty type path. ` +
+          `Cannot derive struct name for code generation.`
+        )
+      }
       lines.push(`    ${field.name}: record.fields.${field.name}?.value as unknown as ${structName} ?? {} as unknown as ${structName},`)
     } else {
       const cast = plaintextToCast(field.type)
@@ -291,6 +297,10 @@ function primitiveToTsType(p: Primitive): string {
 }
 
 function plaintextToCast(pt: Plaintext): string {
+  // TODO(follow-up): non-primitive record fields other than struct (i.e. `array`,
+  // `optional`) are NOT yet handled and fall through to '' (no cast). This is a
+  // known gap — ABIs containing such fields will produce non-compiling output.
+  // Implement `array` and `optional` handling before using codegen with such ABIs.
   if (pt.kind !== 'primitive') return ''
   switch (pt.primitive) {
     case 'u8':
@@ -320,6 +330,9 @@ function plaintextToCast(pt: Plaintext): string {
 }
 
 function plaintextDefault(pt: Plaintext): string {
+  // TODO(follow-up): non-primitive record fields other than struct (i.e. `array`,
+  // `optional`) fall through to "''" (empty string default). This is a known gap
+  // matching the one in `plaintextToCast` above — fix both together.
   if (pt.kind !== 'primitive') return "''"
   switch (pt.primitive) {
     case 'boolean':
@@ -477,14 +490,13 @@ function generateContractFactory(abi: ABI): string[] {
   }
 
   // execute methods — named params, typed return + transactionId.
-  // fee is accepted for forward-compatibility but is not forwarded to core;
-  // proving config, not per-call params, is the correct place to specify fees.
+  // Fee belongs in proving config, not per-call params — do not add fee here.
   if (abi.functions.length > 0) {
     lines.push(`  execute: {`)
     for (const fn of abi.functions) {
       const params = namedParamsType(fn, abi)
       const retType = executeReturnType(fn, abi)
-      lines.push(`    ${fn.name}: (params: ${params} & { fee?: bigint }) => Promise<${retType}>`)
+      lines.push(`    ${fn.name}: (params: ${params}) => Promise<${retType}>`)
     }
     lines.push(`  }`)
   }

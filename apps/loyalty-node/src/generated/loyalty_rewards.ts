@@ -405,11 +405,11 @@ export interface LoyaltyRewardsContract {
     transfer_voucher: (params: { voucher: RewardVoucher | RecordValue | string | InputRequest, new_owner: string | InputRequest }) => Promise<[RewardVoucher, FutureValue]>
   }
   execute: {
-    approve_upgrade: (params: { checksum: bigint[] | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    redeem_points_for_voucher: (params: { card: RecordValue | string | InputRequest, reward_type: bigint | InputRequest, points_to_spend: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [RecordValue, RewardVoucher, FutureValue] }>
-    use_voucher: (params: { voucher: RewardVoucher | RecordValue | string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    check_voucher: (params: { voucher: RewardVoucher | RecordValue | string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [RewardVoucher, bigint, bigint] }>
-    transfer_voucher: (params: { voucher: RewardVoucher | RecordValue | string | InputRequest, new_owner: string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [RewardVoucher, FutureValue] }>
+    approve_upgrade: (params: { checksum: bigint[] | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    redeem_points_for_voucher: (params: { card: RecordValue | string | InputRequest, reward_type: bigint | InputRequest, points_to_spend: bigint | InputRequest }) => Promise<{ transactionId: string, result: [RecordValue, RewardVoucher, FutureValue] }>
+    use_voucher: (params: { voucher: RewardVoucher | RecordValue | string | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    check_voucher: (params: { voucher: RewardVoucher | RecordValue | string | InputRequest }) => Promise<{ transactionId: string, result: [RewardVoucher, bigint, bigint] }>
+    transfer_voucher: (params: { voucher: RewardVoucher | RecordValue | string | InputRequest, new_owner: string | InputRequest }) => Promise<{ transactionId: string, result: [RewardVoucher, FutureValue] }>
   }
   fetchAbi: () => Promise<ABI>
 }

@@ -203,7 +203,6 @@ const demos: Record<string, () => Promise<void>> = {
             recipient: address,
             initial_points: 1000n,
             nonce: `${nonce}field`,
-            fee: 500_000n,
         });
         console.log(`  ${C.dim}tx:${C.reset} ${mint.transactionId}`);
         logCard(mint.result[0]);

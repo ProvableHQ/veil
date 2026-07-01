@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeAll } from 'vitest'
 import { generate } from '../src/generate.js'
 import { parseAbi, getContract, createPublicClient, custom } from '@veil/core'
 import type { ABI } from '@veil/core'
@@ -438,8 +438,8 @@ describe('generate', () => {
       expect(output).toContain('mint: (params: { recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<string>')
       // simulate methods — named params, typed return (includes FutureValue)
       expect(output).toContain('mint: (params: { recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<[Token, FutureValue]>')
-      // execute methods — named params + fee (accepted, not forwarded to core), typed return + transactionId
-      expect(output).toContain('mint: (params: { recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>')
+      // execute methods — named params, typed return + transactionId (no fee: fee belongs in proving config)
+      expect(output).toContain('mint: (params: { recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>')
     })
 
     it('generates factory returning typed interface', () => {
@@ -461,8 +461,8 @@ describe('generate', () => {
       expect(output).toContain('export interface LoyaltyTokenContract {')
       // simulate: named params, returns [LoyaltyCard, FutureValue]
       expect(output).toContain('mint_card: (params: { recipient: string | InputRequest, initial_points: bigint | InputRequest, nonce: string | InputRequest }) => Promise<[LoyaltyCard, FutureValue]>')
-      // execute: named params + fee (accepted, not forwarded to core), returns typed result
-      expect(output).toContain('mint_card: (params: { recipient: string | InputRequest, initial_points: bigint | InputRequest, nonce: string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, FutureValue] }>')
+      // execute: named params, returns typed result (no fee: fee belongs in proving config)
+      expect(output).toContain('mint_card: (params: { recipient: string | InputRequest, initial_points: bigint | InputRequest, nonce: string | InputRequest }) => Promise<{ transactionId: string, result: [LoyaltyCard, FutureValue] }>')
       // read
       expect(output).toContain('    card_exists: (params: { key: string }) => Promise<unknown>')
       expect(output).toContain('): LoyaltyTokenContract {')
@@ -661,10 +661,12 @@ describe('generate', () => {
   // ── Strict-mode typecheck ─────────────────────────────────────────────
   //
   // Verifies that generated output compiles under strict + noUncheckedIndexedAccess.
-  // Uses a minimal ABI covering the three previously broken patterns:
-  //   1. `fee` field on execute call sites (ContractExecuteParams has no `fee`)
-  //   2. `result.outputs[i]` indexed without a guard (noUncheckedIndexedAccess)
-  //   3. Nested struct fields cast as raw PlaintextValue instead of the struct type
+  // Uses a minimal ABI covering the two previously broken patterns:
+  //   1. `result.outputs[i]` indexed without a guard (noUncheckedIndexedAccess)
+  //   2. Nested struct fields cast as raw PlaintextValue instead of the struct type
+  //
+  // The original `fee` bug (passing fee to ContractExecuteParams which has no fee field)
+  // is now fixed by fully removing fee from the generated interface — no silent drop needed.
   //
   // RED evidence: before the template fix, this test produced 3+ tsc errors:
   //   - "Object literal may only specify known properties, and 'fee' does not exist"
@@ -673,14 +675,13 @@ describe('generate', () => {
   // GREEN evidence: after the fix, tsc --noEmit exits 0.
   describe('strict-mode typecheck (strict + noUncheckedIndexedAccess)', () => {
     // Extends minimalAbi with a nested struct field on the record and a record-output
-    // function, covering the three previously broken template patterns:
-    //   1. fee field on execute call sites (ContractExecuteParams has no fee)
-    //   2. result.outputs[i] under noUncheckedIndexedAccess (record output)
-    //   3. Nested struct field typed as PlaintextValue instead of the struct type
+    // function, covering the two previously broken template patterns:
+    //   1. result.outputs[i] under noUncheckedIndexedAccess (record output)
+    //   2. Nested struct field typed as PlaintextValue instead of the struct type
     const strictAbi: ABI = {
       ...minimalAbi,
       program: 'strict_test.aleo',
-      // Vault adds a nested struct field to exercise bug 3
+      // Vault adds a nested struct field to exercise bug 2
       records: [
         {
           path: ['Vault'],
@@ -706,6 +707,11 @@ describe('generate', () => {
         },
       ],
     }
+
+    // Generate once and reuse across the fast string-match tests.
+    // The tsc test has its own generate() call with coreImport set, so it stays isolated.
+    let strictOutput = ''
+    beforeAll(() => { strictOutput = generate({ abi: strictAbi }) })
 
     it('generated output compiles under strict + noUncheckedIndexedAccess', () => {
       const generated = generate({ abi: strictAbi, coreImport: '@veil/core' })
@@ -750,36 +756,25 @@ describe('generate', () => {
       }
     })
 
-    it('generated execute wrappers do not forward fee to the raw call', () => {
-      const output = generate({ abi: strictAbi })
-      // ContractExecuteParams has no fee field.
-      // fee is accepted in the public interface for forward-compatibility but must not
-      // be forwarded to _raw.execute — it is silently consumed via the proving config.
-      expect(output).not.toContain('{ inputs: [recipient, amount], fee }')
-      // The internal call must be { inputs: [...] } with no fee property.
-      expect(output).toContain('{ inputs: [recipient, amount] }')
+    it('generated execute wrappers do not include fee anywhere', () => {
+      // Fee is a proving-config concern, not a per-call param. Neither the interface
+      // nor the internal call may carry a fee field.
+      expect(strictOutput).not.toContain('fee?: bigint')
+      expect(strictOutput).not.toContain('{ inputs: [recipient, amount], fee }')
+      // The internal call must be exactly { inputs: [...] }.
+      expect(strictOutput).toContain('{ inputs: [recipient, amount] }')
     })
 
     it('generated code uses double-cast for record outputs (noUncheckedIndexedAccess)', () => {
-      const output = generate({ abi: strictAbi })
       // result.outputs[i] is ParsedOutput | undefined under noUncheckedIndexedAccess;
       // the double cast (as unknown as RecordValue) makes the call to toVault() type-safe.
-      expect(output).toContain('result.outputs[0] as unknown as RecordValue')
+      expect(strictOutput).toContain('result.outputs[0] as unknown as RecordValue')
     })
 
     it('generated record mapper uses double-cast for nested struct fields', () => {
-      const output = generate({ abi: strictAbi })
       // config is a struct field — must be cast through unknown, not left as PlaintextValue
-      expect(output).toContain('record.fields.config?.value as unknown as Config')
+      expect(strictOutput).toContain('record.fields.config?.value as unknown as Config')
     })
 
-    it('generated execute interface accepts fee for forward-compatibility but does not forward it to core', () => {
-      const output = generate({ abi: strictAbi })
-      // The interface keeps fee?: bigint so existing callers compile without breaking.
-      expect(output).toContain('& { fee?: bigint }')
-      // The internal wrapper implementation must not pass fee to _raw.execute.
-      // This is enforced by the tsc typecheck above (ContractExecuteParams has no fee).
-      expect(output).not.toContain('{ inputs: [recipient, amount], fee }')
-    })
   })
 })

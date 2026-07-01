@@ -1026,22 +1026,22 @@ export interface WrappedCreditsContract {
     split: (params: { input: Token | RecordValue | string | InputRequest, amount: bigint | InputRequest }) => Promise<[Token, Token]>
   }
   execute: {
-    deposit_credits_public_signer: (params: { amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    deposit_credits_private: (params: { input_record: RecordValue | string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [RecordValue, Token, FutureValue] }>
-    withdraw_credits_public: (params: { amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    withdraw_credits_public_signer: (params: { amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    withdraw_credits_private: (params: { input_token: Token | RecordValue | string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [RecordValue, Token, FutureValue] }>
-    transfer_public: (params: { recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    transfer_public_as_signer: (params: { recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    transfer_public_to_private: (params: { recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
-    transfer_private: (params: { input: Token | RecordValue | string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, Token] }>
-    transfer_private_to_public: (params: { input: Token | RecordValue | string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
-    approve_public: (params: { spender: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    unapprove_public: (params: { spender: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    transfer_from_public: (params: { owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    transfer_from_public_to_private: (params: { owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
-    join: (params: { input_1: Token | RecordValue | string | InputRequest, input_2: Token | RecordValue | string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: Token }>
-    split: (params: { input: Token | RecordValue | string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, Token] }>
+    deposit_credits_public_signer: (params: { amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    deposit_credits_private: (params: { input_record: RecordValue | string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: [RecordValue, Token, FutureValue] }>
+    withdraw_credits_public: (params: { amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    withdraw_credits_public_signer: (params: { amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    withdraw_credits_private: (params: { input_token: Token | RecordValue | string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: [RecordValue, Token, FutureValue] }>
+    transfer_public: (params: { recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    transfer_public_as_signer: (params: { recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    transfer_public_to_private: (params: { recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
+    transfer_private: (params: { input: Token | RecordValue | string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: [Token, Token] }>
+    transfer_private_to_public: (params: { input: Token | RecordValue | string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
+    approve_public: (params: { spender: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    unapprove_public: (params: { spender: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    transfer_from_public: (params: { owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    transfer_from_public_to_private: (params: { owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
+    join: (params: { input_1: Token | RecordValue | string | InputRequest, input_2: Token | RecordValue | string | InputRequest }) => Promise<{ transactionId: string, result: Token }>
+    split: (params: { input: Token | RecordValue | string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: [Token, Token] }>
   }
   fetchAbi: () => Promise<ABI>
 }

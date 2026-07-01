@@ -1617,26 +1617,26 @@ export interface TokenRegistryContract {
     split: (params: { token: Token | RecordValue | string | InputRequest, amount: bigint | InputRequest }) => Promise<[Token, Token]>
   }
   execute: {
-    initialize: (params: {} & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    register_token: (params: { token_id: string | InputRequest, name: bigint | InputRequest, symbol: bigint | InputRequest, decimals: bigint | InputRequest, max_supply: bigint | InputRequest, external_authorization_required: boolean | InputRequest, external_authorization_party: string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    update_token_management: (params: { token_id: string | InputRequest, admin: string | InputRequest, external_authorization_party: string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    set_role: (params: { token_id: string | InputRequest, account: string | InputRequest, role: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    remove_role: (params: { token_id: string | InputRequest, account: string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    mint_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    mint_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest, authorized_until: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
-    burn_public: (params: { token_id: string | InputRequest, owner: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    prehook_public: (params: { owner: TokenOwner | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    transfer_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    transfer_public_as_signer: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    approve_public: (params: { token_id: string | InputRequest, spender: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    unapprove_public: (params: { token_id: string | InputRequest, spender: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    transfer_public_to_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
-    transfer_pub_to_priv_as_signer: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
-    transfer_from_public_to_private: (params: { token_id: string | InputRequest, owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
-    transfer_from_public: (params: { token_id: string | InputRequest, owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    join: (params: { token_1: Token | RecordValue | string | InputRequest, token_2: Token | RecordValue | string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: Token }>
-    transfer_private: (params: { token: Token | RecordValue | string | InputRequest, to: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, Token] }>
-    split: (params: { token: Token | RecordValue | string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, Token] }>
+    initialize: (params: {}) => Promise<{ transactionId: string, result: FutureValue }>
+    register_token: (params: { token_id: string | InputRequest, name: bigint | InputRequest, symbol: bigint | InputRequest, decimals: bigint | InputRequest, max_supply: bigint | InputRequest, external_authorization_required: boolean | InputRequest, external_authorization_party: string | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    update_token_management: (params: { token_id: string | InputRequest, admin: string | InputRequest, external_authorization_party: string | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    set_role: (params: { token_id: string | InputRequest, account: string | InputRequest, role: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    remove_role: (params: { token_id: string | InputRequest, account: string | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    mint_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    mint_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest, authorized_until: bigint | InputRequest }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
+    burn_public: (params: { token_id: string | InputRequest, owner: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    prehook_public: (params: { owner: TokenOwner | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    transfer_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    transfer_public_as_signer: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    approve_public: (params: { token_id: string | InputRequest, spender: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    unapprove_public: (params: { token_id: string | InputRequest, spender: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    transfer_public_to_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
+    transfer_pub_to_priv_as_signer: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
+    transfer_from_public_to_private: (params: { token_id: string | InputRequest, owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
+    transfer_from_public: (params: { token_id: string | InputRequest, owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    join: (params: { token_1: Token | RecordValue | string | InputRequest, token_2: Token | RecordValue | string | InputRequest }) => Promise<{ transactionId: string, result: Token }>
+    transfer_private: (params: { token: Token | RecordValue | string | InputRequest, to: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: [Token, Token] }>
+    split: (params: { token: Token | RecordValue | string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: [Token, Token] }>
   }
   fetchAbi: () => Promise<ABI>
 }
