@@ -93,8 +93,8 @@ importers:
   packages/core:
     devDependencies:
       '@provablehq/aleo-types':
-        specifier: 0.3.0-alpha.4
-        version: 0.3.0-alpha.4
+        specifier: 1.0.0
+        version: 1.0.0
 
   packages/devnode:
     dependencies:
@@ -129,26 +129,26 @@ importers:
   packages/react:
     dependencies:
       '@provablehq/aleo-types':
-        specifier: 0.3.0-alpha.4
-        version: 0.3.0-alpha.4
+        specifier: 1.0.0
+        version: 1.0.0
       '@provablehq/aleo-wallet-adaptor-fox':
-        specifier: 0.3.0-alpha.3
-        version: 0.3.0-alpha.3
+        specifier: 1.0.0
+        version: 1.0.0
       '@provablehq/aleo-wallet-adaptor-leo':
-        specifier: 0.3.0-alpha.3
-        version: 0.3.0-alpha.3
+        specifier: 1.0.0
+        version: 1.0.0
       '@provablehq/aleo-wallet-adaptor-puzzle':
-        specifier: 0.3.0-alpha.3
-        version: 0.3.0-alpha.3(buffer@6.0.3)
+        specifier: 1.0.0
+        version: 1.0.0(buffer@6.0.3)
       '@provablehq/aleo-wallet-adaptor-react':
-        specifier: 0.3.0-alpha.3
-        version: 0.3.0-alpha.3(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        specifier: 1.0.0
+        version: 1.0.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@provablehq/aleo-wallet-adaptor-shield':
-        specifier: 0.3.0-alpha.3
-        version: 0.3.0-alpha.3
+        specifier: 1.0.0
+        version: 1.0.0
       '@provablehq/aleo-wallet-standard':
-        specifier: 0.3.0-alpha.3
-        version: 0.3.0-alpha.3
+        specifier: 1.0.0
+        version: 1.0.0
       '@veil/core':
         specifier: workspace:*
         version: link:../core
@@ -173,14 +173,14 @@ importers:
         version: link:../core
     devDependencies:
       '@provablehq/aleo-types':
-        specifier: 0.3.0-alpha.4
-        version: 0.3.0-alpha.4
+        specifier: 1.0.0
+        version: 1.0.0
       '@provablehq/aleo-wallet-adaptor-core':
-        specifier: 0.3.0-alpha.3
-        version: 0.3.0-alpha.3
+        specifier: 1.0.0
+        version: 1.0.0
       '@provablehq/aleo-wallet-standard':
-        specifier: 0.3.0-alpha.3
-        version: 0.3.0-alpha.3
+        specifier: 1.0.0
+        version: 1.0.0
 
 packages:
 
@@ -611,35 +611,32 @@ packages:
     resolution: {integrity: sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg==}
     engines: {node: '>= 20.19.0'}
 
-  '@provablehq/aleo-types@0.3.0-alpha.3':
-    resolution: {integrity: sha512-8oQYDfUXn7hOdF2MOXit94j+OWT/MmYq5Hjhfrqv8Ws4/XrqHmRb7mcMVwVobSC5m8qLz7ew9Rg3mvc1pMkqDQ==}
+  '@provablehq/aleo-types@1.0.0':
+    resolution: {integrity: sha512-r7yMj8q2EO74JrTXDUTcWiFP/wWJMUDBlkTuEN2dSJ3wDdrL/ys5JAMvCcAmOMYKDUIq+9NXQulQ56P+6KNIVg==}
 
-  '@provablehq/aleo-types@0.3.0-alpha.4':
-    resolution: {integrity: sha512-r03n3MZcPpJdTmtJKW8amr6bCnEqWcAshQhQ37k17CIQqjG1EIg/PL/Oj820FS6RJKTATdl/wVb8u9RTMPXMxA==}
+  '@provablehq/aleo-wallet-adaptor-core@1.0.0':
+    resolution: {integrity: sha512-gZ2eCQ31a5wN5zoUllNwyzTdfjDw9SsdxnW7Lbmwk/PxbdbRTcfsW2jctmOH/WLuovhVjpVFbFF2RjHBZWMwLw==}
 
-  '@provablehq/aleo-wallet-adaptor-core@0.3.0-alpha.3':
-    resolution: {integrity: sha512-Y29bFJyI/J8B3N04EV7T6lnbOCsaHwFsYN9wISdSzwsTQyP4++1DLiAFRLUAdBAgr73Jd/q0U302+Lxm6F7qVg==}
+  '@provablehq/aleo-wallet-adaptor-fox@1.0.0':
+    resolution: {integrity: sha512-hMJvoqBpBfo/BsdwzR6MVnBL3mA4HqF/8jHskXLaA0empu+kVBra3cmeyI9akdpZRoi5UrnlAenrkXU/z0k0NQ==}
 
-  '@provablehq/aleo-wallet-adaptor-fox@0.3.0-alpha.3':
-    resolution: {integrity: sha512-cqYFo0wyUEreO4av2Kt+z97FVvL4FqPy1LU8PP/ajsN0auC5wD+Pt0b7aNPZPWTdXoFJ5qxcL5fsiToRI7j/3Q==}
+  '@provablehq/aleo-wallet-adaptor-leo@1.0.0':
+    resolution: {integrity: sha512-g6Wm2H7+0rleEA4QqUIxADjOfAgqiXrd5eTdS9ZCH3R4hB01cJvSNHzyE6C74ZxAGfTUbX4xwQ9g4Fx63sYARQ==}
 
-  '@provablehq/aleo-wallet-adaptor-leo@0.3.0-alpha.3':
-    resolution: {integrity: sha512-L9273TKHvzSy/5mpBYRee0ztiiUujOtS70GLyNXu7n/JB7B7SmPyEpE9DUMyEExb20rM1uQsb+DjzL7z9KmYRA==}
+  '@provablehq/aleo-wallet-adaptor-puzzle@1.0.0':
+    resolution: {integrity: sha512-F9v2G2mqvC8dyhlsTjGD/edxYjn5mteEPg4Sico13rGaLd+/tlJ42wpqO/bPsCNBXoTxapccxdaf1qfrlKRNHw==}
 
-  '@provablehq/aleo-wallet-adaptor-puzzle@0.3.0-alpha.3':
-    resolution: {integrity: sha512-9kmeIWwhiivvXy8CF6qr4JbUrHiLtof4Rgzgl6r3ezvpqNVbC5iorgUrag7cIzNvzB50JBCgl/hiM33ERf6djg==}
-
-  '@provablehq/aleo-wallet-adaptor-react@0.3.0-alpha.3':
-    resolution: {integrity: sha512-o/euTbE4whbkHRTpm24LiaATsFVAqJ9+OFyqpv7RZNipR3kkgs0pAQH4ckdv4JILjd1SrapB8Dfy5Cw9D/PJSg==}
+  '@provablehq/aleo-wallet-adaptor-react@1.0.0':
+    resolution: {integrity: sha512-HaCXO0gCoxb1BvLrt1QU06lASRV3C9W/XxvZrsZxFehklUWvuUWluCpbhuzrH13hwV6r70Vn5Ab7so18rndj1g==}
     peerDependencies:
       react: ^18.0.0
       react-dom: ^18.0.0
 
-  '@provablehq/aleo-wallet-adaptor-shield@0.3.0-alpha.3':
-    resolution: {integrity: sha512-HUbaWgxO950zaiK8PZTq8KRUjFKqKHvCwj2W5uIsNFJZa/tBpmE6ObGn7Sb3Tw9Cifs5JNUKfbe3VmVbDjZj5A==}
+  '@provablehq/aleo-wallet-adaptor-shield@1.0.0':
+    resolution: {integrity: sha512-TvDfe4yKHIeMuoVyQz7KCXrgmcl2MwtA0ta/F7KbE1lMlt/YL+ZJq5dVEP+ab7RYZQ0ztt018IPtMWzPgLInBQ==}
 
-  '@provablehq/aleo-wallet-standard@0.3.0-alpha.3':
-    resolution: {integrity: sha512-sAfoU0loKa6MiC8AzQ6wm3w/NBZ5613304xaYQ59ZkMqwz8coEK7L1MlVhYdkEw7GnEhYmdB4doIAV0ZggHdNA==}
+  '@provablehq/aleo-wallet-standard@1.0.0':
+    resolution: {integrity: sha512-3QVgBd9Mq0y769VRj6a5FIzWEI5TPQ2CzwgpMurq8JwHxKLRry9Zze0XF92dWAqE6ILvvPCew3pwapC8gerYQA==}
 
   '@provablehq/sdk@0.10.3':
     resolution: {integrity: sha512-5ZsgDi7B0xXt94PoaucqWEaXA8i1nl+RLKrvuO4cJjz+3FCoXi269M9+lXxhI13kSH2lVtNCiBLpnFW9JwbueA==}
@@ -1691,33 +1688,31 @@ snapshots:
 
   '@noble/hashes@2.2.0': {}
 
-  '@provablehq/aleo-types@0.3.0-alpha.3': {}
+  '@provablehq/aleo-types@1.0.0': {}
 
-  '@provablehq/aleo-types@0.3.0-alpha.4': {}
-
-  '@provablehq/aleo-wallet-adaptor-core@0.3.0-alpha.3':
+  '@provablehq/aleo-wallet-adaptor-core@1.0.0':
     dependencies:
-      '@provablehq/aleo-types': 0.3.0-alpha.3
-      '@provablehq/aleo-wallet-standard': 0.3.0-alpha.3
+      '@provablehq/aleo-types': 1.0.0
+      '@provablehq/aleo-wallet-standard': 1.0.0
 
-  '@provablehq/aleo-wallet-adaptor-fox@0.3.0-alpha.3':
+  '@provablehq/aleo-wallet-adaptor-fox@1.0.0':
     dependencies:
-      '@provablehq/aleo-types': 0.3.0-alpha.3
-      '@provablehq/aleo-wallet-adaptor-core': 0.3.0-alpha.3
-      '@provablehq/aleo-wallet-adaptor-leo': 0.3.0-alpha.3
-      '@provablehq/aleo-wallet-standard': 0.3.0-alpha.3
+      '@provablehq/aleo-types': 1.0.0
+      '@provablehq/aleo-wallet-adaptor-core': 1.0.0
+      '@provablehq/aleo-wallet-adaptor-leo': 1.0.0
+      '@provablehq/aleo-wallet-standard': 1.0.0
 
-  '@provablehq/aleo-wallet-adaptor-leo@0.3.0-alpha.3':
+  '@provablehq/aleo-wallet-adaptor-leo@1.0.0':
     dependencies:
-      '@provablehq/aleo-types': 0.3.0-alpha.3
-      '@provablehq/aleo-wallet-adaptor-core': 0.3.0-alpha.3
-      '@provablehq/aleo-wallet-standard': 0.3.0-alpha.3
+      '@provablehq/aleo-types': 1.0.0
+      '@provablehq/aleo-wallet-adaptor-core': 1.0.0
+      '@provablehq/aleo-wallet-standard': 1.0.0
 
-  '@provablehq/aleo-wallet-adaptor-puzzle@0.3.0-alpha.3(buffer@6.0.3)':
+  '@provablehq/aleo-wallet-adaptor-puzzle@1.0.0(buffer@6.0.3)':
     dependencies:
-      '@provablehq/aleo-types': 0.3.0-alpha.3
-      '@provablehq/aleo-wallet-adaptor-core': 0.3.0-alpha.3
-      '@provablehq/aleo-wallet-standard': 0.3.0-alpha.3
+      '@provablehq/aleo-types': 1.0.0
+      '@provablehq/aleo-wallet-adaptor-core': 1.0.0
+      '@provablehq/aleo-wallet-standard': 1.0.0
       '@puzzlehq/sdk-core': 1.0.4(buffer@6.0.3)
     transitivePeerDependencies:
       - buffer
@@ -1725,23 +1720,23 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@provablehq/aleo-wallet-adaptor-react@0.3.0-alpha.3(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+  '@provablehq/aleo-wallet-adaptor-react@1.0.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@provablehq/aleo-types': 0.3.0-alpha.3
-      '@provablehq/aleo-wallet-adaptor-core': 0.3.0-alpha.3
-      '@provablehq/aleo-wallet-standard': 0.3.0-alpha.3
+      '@provablehq/aleo-types': 1.0.0
+      '@provablehq/aleo-wallet-adaptor-core': 1.0.0
+      '@provablehq/aleo-wallet-standard': 1.0.0
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
 
-  '@provablehq/aleo-wallet-adaptor-shield@0.3.0-alpha.3':
+  '@provablehq/aleo-wallet-adaptor-shield@1.0.0':
     dependencies:
-      '@provablehq/aleo-types': 0.3.0-alpha.3
-      '@provablehq/aleo-wallet-adaptor-core': 0.3.0-alpha.3
-      '@provablehq/aleo-wallet-standard': 0.3.0-alpha.3
+      '@provablehq/aleo-types': 1.0.0
+      '@provablehq/aleo-wallet-adaptor-core': 1.0.0
+      '@provablehq/aleo-wallet-standard': 1.0.0
 
-  '@provablehq/aleo-wallet-standard@0.3.0-alpha.3':
+  '@provablehq/aleo-wallet-standard@1.0.0':
     dependencies:
-      '@provablehq/aleo-types': 0.3.0-alpha.3
+      '@provablehq/aleo-types': 1.0.0
       eventemitter3: 5.0.4
 
   '@provablehq/sdk@0.10.3':

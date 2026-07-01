@@ -1,12 +1,14 @@
 import { AccountNotFoundError, ProvingNotConfiguredError, SimulateNotSupportedError } from '../../errors/errors.js'
 import type { Client } from '../../clients/createClient.js'
 import type { RawSimulateResult } from '../../types/proving.js'
+import { assertNoInputRequests } from '../../types/inputRequest.js'
+import type { TransactionInput } from '../../types/inputRequest.js'
 
 export type SimulateContractParameters = {
   program: string
   programSource?: string
   function: string
-  inputs: string[]
+  inputs: TransactionInput[]
   imports?: Record<string, string>
 }
 
@@ -36,6 +38,9 @@ export async function simulateContract(
   }
 
   if (account.type === 'local') {
+    // Simulation runs locally and resolves no wallet-side inputs.
+    assertNoInputRequests(params.inputs)
+
     if (!client.proving?.simulate) {
       throw new ProvingNotConfiguredError()
     }

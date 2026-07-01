@@ -1,5 +1,26 @@
 /**
- * Raw record data (encrypted, without plaintext)
+ * The granted, decrypted view of a record's contents.
+ *
+ * Populated by a privacy-preserving wallet with only the fields the connection's
+ * recordAccess grant permits; ungranted fields are omitted. Values are
+ * Aleo-encoded strings.
+ *
+ * @property fields Granted field key → Aleo-encoded value string. Keys may be a
+ *   record-body field name, a dotted struct path ("data.amount"), or a
+ *   `$`-prefixed metadata token ("$commitment").
+ */
+export interface RecordView {
+  fields: Record<string, string>
+}
+
+/**
+ * Raw record data (encrypted, without plaintext).
+ *
+ * @property uid Opaque per-connection handle from a privacy-preserving wallet;
+ *   pass back as a record InputRequest `uid` to spend exactly this record.
+ *   Absent from wallets that predate the privacy feature.
+ * @property recordView Granted plaintext fields when the wallet withholds full
+ *   plaintext under a recordAccess grant. Absent when no field access was granted.
  */
 export interface OwnedRecordEncrypted {
   blockHeight?: number
@@ -18,6 +39,8 @@ export interface OwnedRecordEncrypted {
   transitionId?: string
   transactionIndex?: number
   transitionIndex?: number
+  uid?: string
+  recordView?: RecordView
 }
 
 /**

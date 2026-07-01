@@ -33,6 +33,7 @@ export type {
 export type {
   OwnedRecord,
   OwnedRecordEncrypted,
+  RecordView,
   RecordStatusFilter,
   RequestRecordsParameters,
   RecordProvider,
@@ -87,6 +88,12 @@ export type {
   ParsedOutput, ParsedRecordOutput, ParsedPlaintextOutput, EncryptedRecordOutput, ParsedFutureOutput,
   InputValue, TransitionResult, ExecuteResult, SimulateResult,
 } from './types/contract.js'
+export type {
+  TransactionInput, InputRequest, RecordFilters, RecordFieldFilter,
+  AlgorithmArg, AlgorithmName, KnownAlgorithm, ArgType, ArgConstraint,
+  ConnectOptions, RecordAccessGrant, ProgramGrant, RecordGrant, FieldGrant, AlgorithmGrant,
+} from './types/inputRequest.js'
+export { KNOWN_ALGORITHMS, isInputRequest, assertNoInputRequests } from './types/inputRequest.js'
 export type {
   FunctionNames, MappingNames,
   TypedContractInstance,

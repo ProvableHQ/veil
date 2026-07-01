@@ -32,7 +32,7 @@ export function generate(options: GenerateOptions): string {
   lines.push(`// Do not edit manually.`)
   lines.push('')
   lines.push(`import { getContract } from '${coreImport}'`)
-  lines.push(`import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI } from '${coreImport}'`)
+  lines.push(`import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest } from '${coreImport}'`)
   lines.push('')
 
   // Program ID constant
@@ -152,15 +152,17 @@ function generateFunctionInputType(fn: AbiFunction, abi: ABI): string[] {
   for (const input of fn.inputs) {
     const name = input.name ?? `arg${fn.inputs.indexOf(input)}`
 
+    // Every input slot also accepts an InputRequest — a privacy-preserving
+    // wallet fulfils it (address injection, record selection, derived value).
     if (input.type.kind === 'plaintext') {
       const tsType = plaintextToTsType(input.type.type)
-      lines.push(`  ${name}: ${tsType}`)
+      lines.push(`  ${name}: ${tsType} | InputRequest`)
     } else if (input.type.kind === 'record') {
       const recName = input.type.path[input.type.path.length - 1] ?? 'RecordValue'
       const isLocal = !input.type.program || input.type.program.replace(/\.aleo$/, '') === abi.program.replace(/\.aleo$/, '')
-      lines.push(`  ${name}: ${isLocal ? recName : 'RecordValue'} | RecordValue | string`)
+      lines.push(`  ${name}: ${isLocal ? recName : 'RecordValue'} | RecordValue | string | InputRequest`)
     } else if (input.type.kind === 'dynamicRecord') {
-      lines.push(`  ${name}: RecordValue | string`)
+      lines.push(`  ${name}: RecordValue | string | InputRequest`)
     }
   }
 
@@ -352,7 +354,8 @@ function namedParamsType(fn: AbiFunction, abi: ABI): string {
     } else {
       tsType = 'RecordValue | string'
     }
-    return `${name}: ${tsType}`
+    // Also accept an InputRequest in every slot (wallet-fulfilled input).
+    return `${name}: ${tsType} | InputRequest`
   })
   return `{ ${params.join(', ')} }`
 }

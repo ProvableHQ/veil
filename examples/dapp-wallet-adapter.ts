@@ -62,12 +62,24 @@ function createMockLeoWallet(): AleoWalletAdapter {
 
     transactionStatus: vi.fn().mockResolvedValue({ status: 'accepted' }),
     decrypt: vi.fn().mockResolvedValue('{ owner: aleo1user..., amount: 1000u64 }'),
+    // A privacy-preserving wallet returns a `uid` handle and only the granted
+    // fields (`recordView`) — the record's full plaintext stays in the wallet.
     requestRecords: vi.fn().mockResolvedValue([
-      { owner: 'aleo1user...', data: { amount: '500u64' }, nonce: '123', programId: 'credits.aleo', plaintext: '' },
+      {
+        programName: 'credits.aleo',
+        recordName: 'credits',
+        spent: false,
+        uid: 'uid_abc123',
+        recordView: { fields: { microcredits: '500u64' } },
+      },
     ]),
     transitionViewKeys: vi.fn().mockResolvedValue(['tvk1abc']),
     switchNetwork: vi.fn().mockResolvedValue(undefined),
     requestTransactionHistory: vi.fn().mockResolvedValue({ transactions: [] }),
+    algorithmsSupported: vi.fn().mockResolvedValue([
+      'program-scoped-blinding-factor',
+      'program-scoped-blinded-address',
+    ]),
   }
 }
 
@@ -248,5 +260,54 @@ describe('Example dApp: Token Manager with Wallet Adapter', () => {
 
     expect(records.length).toBeGreaterThan(0)
     console.log('  Records:', records.length, 'found')
+  })
+
+  it('composes a privacy-preserving transaction with wallet-fulfilled inputs', async () => {
+    // 1. Read records. A privacy wallet returns a `uid` handle and only the
+    //    granted fields — the plaintext never reaches the dApp.
+    const records = (await walletClient.requestRecords({
+      program: 'credits.aleo',
+      statusFilter: 'unspent',
+    })) as Array<{ uid?: string; recordView?: { fields: Record<string, string> } }>
+    const rec = records[0]!
+    console.log('  Record uid:', rec.uid, 'granted fields:', rec.recordView?.fields)
+
+    // 2. Build a transfer whose inputs the WALLET fills in:
+    //    - { type: 'record', uid } pins exactly this record (plaintext stays in the wallet)
+    //    - { type: 'address' }     the wallet injects its own address; the dApp never sees it
+    //    - '100u64'                an ordinary literal input
+    const txId = await walletClient.writeContract({
+      program: 'credits.aleo',
+      function: 'transfer_private',
+      inputs: [
+        { type: 'record', program: 'credits.aleo', recordname: 'credits', uid: rec.uid! },
+        { type: 'address' },
+        '100u64',
+      ],
+    })
+    expect(txId).toBe('at1wallet_tx_abc123')
+
+    // The wallet adapter received the InputRequest objects unchanged — not stringified.
+    const opts = (leoWallet.executeTransaction as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0]
+    expect(opts.inputs[0]).toEqual({ type: 'record', program: 'credits.aleo', recordname: 'credits', uid: 'uid_abc123' })
+    expect(opts.inputs[1]).toEqual({ type: 'address' })
+    expect(opts.inputs[2]).toBe('100u64')
+
+    // Alternative: skip the read entirely and let the wallet auto-select by filters.
+    await walletClient.writeContract({
+      program: 'credits.aleo',
+      function: 'transfer_private',
+      inputs: [
+        { type: 'record', program: 'credits.aleo', recordname: 'credits', filters: { microcredits: { gte: '100u64' } } },
+        { type: 'address' },
+        '100u64',
+      ],
+    })
+
+    // Derived inputs (e.g. blinding values) are computed by the wallet from its
+    // own private state; the dApp only declares which algorithms it expects.
+    const algos = (await leoWallet.algorithmsSupported?.()) ?? []
+    expect(algos).toContain('program-scoped-blinded-address')
+    console.log('  Wallet supports derived algorithms:', algos.join(', '))
   })
 })

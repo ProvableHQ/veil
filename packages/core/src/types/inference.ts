@@ -10,6 +10,7 @@ import type { Primitive, Plaintext, RecordValue, FutureValue } from './primitive
 import type { ABI, StructDef, FunctionOutput } from './abi.js'
 import type { Program } from './program.js'
 import type { InputValue } from './contract.js'
+import type { InputRequest } from './inputRequest.js'
 
 // ── Primitive → TypeScript ───────────────────────────────────────────
 
@@ -98,9 +99,9 @@ export type ExtractMapping<A extends ABI, N extends string> =
 /** Parsed output from the proxy — either a RecordValue or the raw string */
 type ParsedOutput = RecordValue | string
 
-type SimulateParams = { inputs: InputValue[]; imports?: Record<string, string> }
-type ExecuteParams = { inputs: InputValue[]; imports?: Record<string, string> }
-type WriteParams = { inputs: InputValue[]; imports?: Record<string, string> }
+type SimulateParams = { inputs: (InputValue | InputRequest)[]; imports?: Record<string, string> }
+type ExecuteParams = { inputs: (InputValue | InputRequest)[]; imports?: Record<string, string> }
+type WriteParams = { inputs: (InputValue | InputRequest)[]; imports?: Record<string, string> }
 
 /** Check if the ABI has literal (narrowed) names or is widened to `string` */
 type IsLiteral<T extends string> = string extends T ? false : true

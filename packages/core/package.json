@@ -25,6 +25,6 @@
   },
   "files": ["dist"],
   "devDependencies": {
-    "@provablehq/aleo-types": "0.3.0-alpha.4"
+    "@provablehq/aleo-types": "1.0.0"
   }
 }

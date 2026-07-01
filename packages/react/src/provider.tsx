@@ -6,6 +6,7 @@ import { PuzzleWalletAdapter } from '@provablehq/aleo-wallet-adaptor-puzzle'
 import { FoxWalletAdapter } from '@provablehq/aleo-wallet-adaptor-fox'
 import { Network } from '@provablehq/aleo-types'
 import { WalletDecryptPermission } from '@provablehq/aleo-wallet-standard'
+import type { RecordAccessGrant, AlgorithmGrant } from '@veil/core'
 
 export interface VeilProviderProps {
   children: ReactNode
@@ -19,6 +20,12 @@ export interface VeilProviderProps {
   programs?: string[]
   /** Override the default wallet list. If omitted, all known wallets are included. */
   wallets?: ComponentProps<typeof AleoWalletProvider>['wallets']
+  /** Connect-time record/field access grant for privacy-preserving wallets. */
+  recordAccess?: RecordAccessGrant
+  /** If false, transact without the dapp ever learning the address. Defaults to true. */
+  readAddress?: boolean
+  /** Allowlist authorizing `derived` transaction inputs (e.g. blinding algorithms). */
+  algorithmsAllowed?: AlgorithmGrant[]
 }
 
 const networkMap = {
@@ -47,6 +54,9 @@ export function VeilProvider({
   decryptPermission = WalletDecryptPermission.UponRequest,
   programs,
   wallets: walletsOverride,
+  recordAccess,
+  readAddress,
+  algorithmsAllowed,
 }: VeilProviderProps) {
   const wallets = useMemo(
     () =>
@@ -66,6 +76,9 @@ export function VeilProvider({
       autoConnect={autoConnect}
       decryptPermission={decryptPermission}
       programs={programs}
+      recordAccess={recordAccess}
+      readAddress={readAddress}
+      algorithmsAllowed={algorithmsAllowed}
     >
       {children}
     </AleoWalletProvider>

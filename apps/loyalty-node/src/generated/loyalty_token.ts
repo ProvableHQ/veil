@@ -2,7 +2,7 @@
 // Do not edit manually.
 
 import { getContract } from '@veil/core'
-import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI } from '@veil/core'
+import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest } from '@veil/core'
 
 export const PROGRAM_ID = 'loyalty_token.aleo' as const
 
@@ -25,57 +25,57 @@ export function toLoyaltyCard(record: RecordValue): LoyaltyCard {
 }
 
 export type ApproveUpgradeInputs = {
-  checksum: bigint[]
+  checksum: bigint[] | InputRequest
 }
 
 export type ApproveUpgradeOutputs = FutureValue
 
 export type MintCardInputs = {
-  recipient: string
-  initial_points: bigint
-  nonce: string
+  recipient: string | InputRequest
+  initial_points: bigint | InputRequest
+  nonce: string | InputRequest
 }
 
 export type MintCardOutputs = [LoyaltyCard, FutureValue]
 
 export type AddPointsInputs = {
-  card: LoyaltyCard | RecordValue | string
-  points_earned: bigint
+  card: LoyaltyCard | RecordValue | string | InputRequest
+  points_earned: bigint | InputRequest
 }
 
 export type AddPointsOutputs = [LoyaltyCard, FutureValue]
 
 export type CheckPointsInputs = {
-  card: LoyaltyCard | RecordValue | string
+  card: LoyaltyCard | RecordValue | string | InputRequest
 }
 
 export type CheckPointsOutputs = [LoyaltyCard, bigint]
 
 export type TransferCardInputs = {
-  card: LoyaltyCard | RecordValue | string
-  new_owner: string
+  card: LoyaltyCard | RecordValue | string | InputRequest
+  new_owner: string | InputRequest
 }
 
 export type TransferCardOutputs = [LoyaltyCard, FutureValue]
 
 export type SplitCardInputs = {
-  card: LoyaltyCard | RecordValue | string
-  points_to_keep: bigint
-  nonce: string
+  card: LoyaltyCard | RecordValue | string | InputRequest
+  points_to_keep: bigint | InputRequest
+  nonce: string | InputRequest
 }
 
 export type SplitCardOutputs = [LoyaltyCard, LoyaltyCard, FutureValue]
 
 export type SplitCardV2Inputs = {
-  card: LoyaltyCard | RecordValue | string
-  points_to_keep: bigint
+  card: LoyaltyCard | RecordValue | string | InputRequest
+  points_to_keep: bigint | InputRequest
 }
 
 export type SplitCardV2Outputs = [LoyaltyCard, LoyaltyCard, FutureValue]
 
 export type SpendPointsInputs = {
-  card: LoyaltyCard | RecordValue | string
-  points_to_spend: bigint
+  card: LoyaltyCard | RecordValue | string | InputRequest
+  points_to_spend: bigint | InputRequest
 }
 
 export type SpendPointsOutputs = LoyaltyCard
@@ -578,34 +578,34 @@ export interface LoyaltyTokenContract {
     approved_upgrades: (params: { key: string }) => Promise<unknown>
   }
   write: {
-    approve_upgrade: (params: { checksum: bigint[] }) => Promise<string>
-    mint_card: (params: { recipient: string, initial_points: bigint, nonce: string }) => Promise<string>
-    add_points: (params: { card: LoyaltyCard | RecordValue | string, points_earned: bigint }) => Promise<string>
-    check_points: (params: { card: LoyaltyCard | RecordValue | string }) => Promise<string>
-    transfer_card: (params: { card: LoyaltyCard | RecordValue | string, new_owner: string }) => Promise<string>
-    split_card: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint, nonce: string }) => Promise<string>
-    split_card_v2: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint }) => Promise<string>
-    spend_points: (params: { card: LoyaltyCard | RecordValue | string, points_to_spend: bigint }) => Promise<string>
+    approve_upgrade: (params: { checksum: bigint[] | InputRequest }) => Promise<string>
+    mint_card: (params: { recipient: string | InputRequest, initial_points: bigint | InputRequest, nonce: string | InputRequest }) => Promise<string>
+    add_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_earned: bigint | InputRequest }) => Promise<string>
+    check_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest }) => Promise<string>
+    transfer_card: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, new_owner: string | InputRequest }) => Promise<string>
+    split_card: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_to_keep: bigint | InputRequest, nonce: string | InputRequest }) => Promise<string>
+    split_card_v2: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_to_keep: bigint | InputRequest }) => Promise<string>
+    spend_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_to_spend: bigint | InputRequest }) => Promise<string>
   }
   simulate: {
-    approve_upgrade: (params: { checksum: bigint[] }) => Promise<FutureValue>
-    mint_card: (params: { recipient: string, initial_points: bigint, nonce: string }) => Promise<[LoyaltyCard, FutureValue]>
-    add_points: (params: { card: LoyaltyCard | RecordValue | string, points_earned: bigint }) => Promise<[LoyaltyCard, FutureValue]>
-    check_points: (params: { card: LoyaltyCard | RecordValue | string }) => Promise<[LoyaltyCard, bigint]>
-    transfer_card: (params: { card: LoyaltyCard | RecordValue | string, new_owner: string }) => Promise<[LoyaltyCard, FutureValue]>
-    split_card: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint, nonce: string }) => Promise<[LoyaltyCard, LoyaltyCard, FutureValue]>
-    split_card_v2: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint }) => Promise<[LoyaltyCard, LoyaltyCard, FutureValue]>
-    spend_points: (params: { card: LoyaltyCard | RecordValue | string, points_to_spend: bigint }) => Promise<LoyaltyCard>
+    approve_upgrade: (params: { checksum: bigint[] | InputRequest }) => Promise<FutureValue>
+    mint_card: (params: { recipient: string | InputRequest, initial_points: bigint | InputRequest, nonce: string | InputRequest }) => Promise<[LoyaltyCard, FutureValue]>
+    add_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_earned: bigint | InputRequest }) => Promise<[LoyaltyCard, FutureValue]>
+    check_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest }) => Promise<[LoyaltyCard, bigint]>
+    transfer_card: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, new_owner: string | InputRequest }) => Promise<[LoyaltyCard, FutureValue]>
+    split_card: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_to_keep: bigint | InputRequest, nonce: string | InputRequest }) => Promise<[LoyaltyCard, LoyaltyCard, FutureValue]>
+    split_card_v2: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_to_keep: bigint | InputRequest }) => Promise<[LoyaltyCard, LoyaltyCard, FutureValue]>
+    spend_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_to_spend: bigint | InputRequest }) => Promise<LoyaltyCard>
   }
   execute: {
-    approve_upgrade: (params: { checksum: bigint[] } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    mint_card: (params: { recipient: string, initial_points: bigint, nonce: string } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, FutureValue] }>
-    add_points: (params: { card: LoyaltyCard | RecordValue | string, points_earned: bigint } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, FutureValue] }>
-    check_points: (params: { card: LoyaltyCard | RecordValue | string } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, bigint] }>
-    transfer_card: (params: { card: LoyaltyCard | RecordValue | string, new_owner: string } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, FutureValue] }>
-    split_card: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint, nonce: string } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, LoyaltyCard, FutureValue] }>
-    split_card_v2: (params: { card: LoyaltyCard | RecordValue | string, points_to_keep: bigint } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, LoyaltyCard, FutureValue] }>
-    spend_points: (params: { card: LoyaltyCard | RecordValue | string, points_to_spend: bigint } & { fee?: bigint }) => Promise<{ transactionId: string, result: LoyaltyCard }>
+    approve_upgrade: (params: { checksum: bigint[] | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
+    mint_card: (params: { recipient: string | InputRequest, initial_points: bigint | InputRequest, nonce: string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, FutureValue] }>
+    add_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_earned: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, FutureValue] }>
+    check_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, bigint] }>
+    transfer_card: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, new_owner: string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, FutureValue] }>
+    split_card: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_to_keep: bigint | InputRequest, nonce: string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, LoyaltyCard, FutureValue] }>
+    split_card_v2: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_to_keep: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [LoyaltyCard, LoyaltyCard, FutureValue] }>
+    spend_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_to_spend: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: LoyaltyCard }>
   }
   fetchAbi: () => Promise<ABI>
 }

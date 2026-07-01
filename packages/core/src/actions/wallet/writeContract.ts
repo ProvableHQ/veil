@@ -1,19 +1,27 @@
 import { AccountNotFoundError, ProvingNotConfiguredError } from '../../errors/errors.js'
 import type { Client } from '../../clients/createClient.js'
+import { assertNoInputRequests } from '../../types/inputRequest.js'
+import type { TransactionInput } from '../../types/inputRequest.js'
 
 /**
  * Parameters for `walletClient.writeContract` (alias `executeTransaction`).
  *
- * @property {string} program - Program id, e.g. `token.aleo`.
- * @property {string} function - Function/transition name to invoke.
- * @property {string[]} inputs - Function inputs as Aleo-encoded strings (e.g. `'100u64'`, `'aleo1...'`).
- * @property {boolean} [privateFee] - If true, pay the fee from a private record instead of the public credits balance. Defaults to `false`. The fee record is resolved via the wallet client's record provider; callers do not supply one.
- * @property {string[]} [imports] - Names of programs reached via dynamic dispatch that the prover or wallet can't discover statically. Static imports declared in the program's `import` block are auto-discovered.
+ * @property program Program id, e.g. `token.aleo`.
+ * @property function Function/transition name to invoke.
+ * @property inputs Function inputs: Aleo-encoded literal strings (e.g. `'100u64'`,
+ *   `'aleo1...'`), or InputRequest objects the wallet fulfils (address/record/derived).
+ *   InputRequests require a wallet (RPC) account — the local-proving path rejects them.
+ * @property privateFee Pay the fee from a private record instead of the public credits
+ *   balance. Defaults to `false`. The fee record is resolved via the wallet client's
+ *   record provider; callers do not supply one.
+ * @property imports Names of programs reached via dynamic dispatch that the prover or
+ *   wallet can't discover statically. Static imports in the program's `import` block are
+ *   auto-discovered.
  */
 export type WriteContractParameters = {
   program: string
   function: string
-  inputs: string[]
+  inputs: TransactionInput[]
   privateFee?: boolean
   imports?: string[]
 }
@@ -44,6 +52,9 @@ export async function writeContract(
   }
 
   if (account.type === 'local') {
+    // Local proving resolves no wallet-side inputs — only encoded strings.
+    assertNoInputRequests(params.inputs)
+
     const buildTransaction = client.proving?.buildTransaction
     if (!buildTransaction) {
       throw new ProvingNotConfiguredError()

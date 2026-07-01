@@ -2,24 +2,24 @@
 // Do not edit manually.
 
 import { getContract } from '@veil/core'
-import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI } from '@veil/core'
+import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest } from '@veil/core'
 
 export const PROGRAM_ID = 'dummy_exchange.aleo' as const
 
 export type TransferFromInputs = {
-  token_id: string
-  owner: string
-  recipient: string
-  amount: bigint
+  token_id: string | InputRequest
+  owner: string | InputRequest
+  recipient: string | InputRequest
+  amount: bigint | InputRequest
 }
 
 export type TransferFromOutputs = FutureValue
 
 export type SwapInputs = {
-  token_in: string
-  token_out: string
-  amount_in: bigint
-  amount_out: bigint
+  token_in: string | InputRequest
+  token_out: string | InputRequest
+  amount_in: bigint | InputRequest
+  amount_out: bigint | InputRequest
 }
 
 export type SwapOutputs = FutureValue
@@ -156,16 +156,16 @@ export interface DummyExchangeContract {
   abi: ABI
   read: Record<string, (params: { key: string }) => Promise<unknown>>
   write: {
-    transfer_from: (params: { token_id: string, owner: string, recipient: string, amount: bigint }) => Promise<string>
-    swap: (params: { token_in: string, token_out: string, amount_in: bigint, amount_out: bigint }) => Promise<string>
+    transfer_from: (params: { token_id: string | InputRequest, owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<string>
+    swap: (params: { token_in: string | InputRequest, token_out: string | InputRequest, amount_in: bigint | InputRequest, amount_out: bigint | InputRequest }) => Promise<string>
   }
   simulate: {
-    transfer_from: (params: { token_id: string, owner: string, recipient: string, amount: bigint }) => Promise<FutureValue>
-    swap: (params: { token_in: string, token_out: string, amount_in: bigint, amount_out: bigint }) => Promise<FutureValue>
+    transfer_from: (params: { token_id: string | InputRequest, owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<FutureValue>
+    swap: (params: { token_in: string | InputRequest, token_out: string | InputRequest, amount_in: bigint | InputRequest, amount_out: bigint | InputRequest }) => Promise<FutureValue>
   }
   execute: {
-    transfer_from: (params: { token_id: string, owner: string, recipient: string, amount: bigint } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    swap: (params: { token_in: string, token_out: string, amount_in: bigint, amount_out: bigint } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
+    transfer_from: (params: { token_id: string | InputRequest, owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
+    swap: (params: { token_in: string | InputRequest, token_out: string | InputRequest, amount_in: bigint | InputRequest, amount_out: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
   }
   fetchAbi: () => Promise<ABI>
 }

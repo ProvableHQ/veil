@@ -6,10 +6,12 @@ import type { TypedContractInstance } from '../types/inference.js'
 import type { RecordValue, Primitive } from '../types/primitives.js'
 import { parseProgram } from './parseProgram.js'
 import { encodeValue } from '../utils/values.js'
-import { encodeInputs, getRecordDef, parseRecordPlaintext, parseRecordPlaintextLoose, toString as serializeRecord } from '../utils/records.js'
+import { encodeInputs, getInputTypes, getRecordDef, parseRecordPlaintext, parseRecordPlaintextLoose, toString as serializeRecord } from '../utils/records.js'
 
 import type { InputValue } from '../types/contract.js'
 export type { InputValue } from '../types/contract.js'
+import { isInputRequest } from '../types/inputRequest.js'
+import type { InputRequest, TransactionInput } from '../types/inputRequest.js'
 
 /** Parsed output from the proxy — either a RecordValue (if it looks like a record) or the raw string */
 export type ParsedOutput = RecordValue | string
@@ -32,16 +34,16 @@ export type GetContractParameters = {
 
 export type ContractReadMethods = Record<string, (params: { key: string }) => Promise<unknown>>
 
-export type ContractWriteParams = { inputs: InputValue[]; imports?: Record<string, string> }
+export type ContractWriteParams = { inputs: (InputValue | InputRequest)[]; imports?: Record<string, string> }
 export type ContractWriteMethods = Record<string, (params: ContractWriteParams) => Promise<string>>
 
 export type ContractTransitionResult = { transitionId: string; program: string; function: string; outputs: ParsedOutput[] }
 
-export type ContractSimulateParams = { inputs: InputValue[]; imports?: Record<string, string> }
+export type ContractSimulateParams = { inputs: (InputValue | InputRequest)[]; imports?: Record<string, string> }
 export type ContractSimulateResult = { transitions: ContractTransitionResult[]; outputs: ParsedOutput[] }
 export type ContractSimulateMethods = Record<string, (params: ContractSimulateParams) => Promise<ContractSimulateResult>>
 
-export type ContractExecuteParams = { inputs: InputValue[]; imports?: Record<string, string> }
+export type ContractExecuteParams = { inputs: (InputValue | InputRequest)[]; imports?: Record<string, string> }
 export type ContractExecuteResult = { transactionId: string; transitions: ContractTransitionResult[]; outputs: ParsedOutput[] }
 export type ContractExecuteMethods = Record<string, (params: ContractExecuteParams) => Promise<ContractExecuteResult>>
 
@@ -111,16 +113,12 @@ export function getContract(params: GetContractParameters): ContractInstance {
     }
   }
 
-  /** Auto-encode inputs: native JS values → Aleo strings */
-  function resolveInputs(values: InputValue[], fnName: string): string[] {
-    // If we have the rich ABI, use encodeInputs with Plaintext types
-    if (resolvedAbi) {
-      return encodeInputs(values, resolvedAbi, fnName)
-    }
-
-    // Legacy Program ABI — use string type hints
+  /** Auto-encode inputs: native JS values → Aleo strings. InputRequests pass through un-encoded. */
+  function resolveInputs(values: (InputValue | InputRequest)[], fnName: string): TransactionInput[] {
     const legacyFn = (abi as Program | undefined)?.functions.find((f) => f.name === fnName)
-    return values.map((value, i) => {
+
+    // Encode a single literal value at position `i` (legacy / no-ABI path).
+    const encodeOne = (value: InputValue, i: number): string => {
       if (typeof value === 'object' && value !== null && 'owner' in value && 'fields' in value) {
         return serializeRecord(value as RecordValue)
       }
@@ -132,6 +130,22 @@ export function getContract(params: GetContractParameters): ContractInstance {
         return String(value)
       }
       return String(value)
+    }
+
+    // Fast path: no wallet-fulfilled requests — encode exactly as before.
+    if (!values.some(isInputRequest)) {
+      if (resolvedAbi) return encodeInputs(values as InputValue[], resolvedAbi, fnName)
+      return (values as InputValue[]).map(encodeOne)
+    }
+
+    // Mixed path: pass requests through untouched; encode each literal at its position.
+    const types = resolvedAbi ? getInputTypes(resolvedAbi, fnName) : undefined
+    return values.map((value, i): TransactionInput => {
+      if (isInputRequest(value)) return value
+      const literal = value as InputValue
+      const type = types?.[i]
+      if (type) return encodeInputs([literal], [type])[0]!
+      return encodeOne(literal, i)
     })
   }
 
