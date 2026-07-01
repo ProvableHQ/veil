@@ -134,6 +134,10 @@ records) are obtained via core's `requestRecords` and passed through — never h
   *private* balance derived from records — distinct from the indexer's `getBalances(user)`,
   which returns public/authorized balances for any address. Pure read of owned records; may be
   enriched with `decimals`/`symbol` via `getTokens` for display.
+  - Reads `amount`/token id from `recordPlaintext` on the SDK/local path; on the wallet path a
+    privacy wallet may return only a granted `recordView` — parse from `recordView.fields` when
+    plaintext is absent, and note the total is only as complete as the record/field grants
+    allow (an ungranted `amount` can't be summed).
   - *Open detail (resolve at impl):* which program(s) to scan for token records — the ARC-20
     token registry vs. per-token programs — depends on the token model behind shield_swap's
     `dyn record` / `token_id` fields. Confirm during Phase 3.
@@ -260,6 +264,21 @@ provides). The reference client's `extractPositionNFTFromOutputs` + manual `decr
 - the `PositionNFT` record for a given pool/position (mint returns it; increase consumes it)
 - unspent token records covering `amount_in` / `amount0_desired` / `amount1_desired`
 
+**Two account paths (post PR #68 — wallet-adapter privacy).** The `InputRequest` / `uid` /
+`RecordView` machinery is for **wallet-adapter (RPC) clients talking to a privacy-preserving
+wallet**; SDK/Leo-based **local** clients don't use it. Concretely:
+- **Local / SDK path (primary — programmatic trades, e2e, strategies):** unchanged. Records
+  carry full `OwnedRecord.recordPlaintext`; inputs are Aleo-encoded strings; local proving.
+  Local proving **rejects** `InputRequest` (`assertNoInputRequests`), which our string-encoded
+  path satisfies naturally.
+- **Wallet-adapter path:** a wallet may withhold full plaintext and return `uid` + a granted
+  `recordView` instead. Record inputs are then passed as an `InputRequest` (`{ type: 'record',
+  program, recordname, uid }`) and core/the wallet resolves them. We get this for free: action
+  record/value params accept `value | InputRequest` (codegen already widens every slot;
+  `getContract`/`writeContract` pass requests through — the non-request fast path encodes
+  exactly as before), so **no separate code path** in `@veil/dex`. Record selection by `uid`
+  and connect-time grants (`ConnectOptions.recordAccess`) are the dapp's concern, not core's.
+
 ## Tick hints (mandatory for liquidity)
 
 `mint_private` / `increase_liquidity_private` require `tick_lower_hint` / `tick_upper_hint`,
@@ -278,7 +297,7 @@ Swaps need no hints.
 |---|---|
 | Struct/record/mapping **types + decoders** (chain value → typed object) for the main DEX program(s) | **`@veil/codegen`** build step → committed `src/generated/` (follows `apps/loyalty-node` precedent). The **primary, typed source of truth**. |
 | Runtime **fallback** for programs without generated bindings (e.g. the arbitrary token programs behind `dyn record` inputs) | **`getContract`** — auto-encodes native values at runtime, but returns **no compile-time types**; used only where a generated binding doesn't exist |
-| **Input encoding** (typed params → `executeContract` `string[]`) | thin hand-written util in `@veil/dex`: primitive `to*` formatters + the single `MintPositionRequest` struct formatter + record passthrough (`OwnedRecord.recordPlaintext`). Every shield_swap entrypoint is primitives + records with exactly one struct input, so this stays small. |
+| **Input encoding** (typed params → execution) | thin hand-written util in `@veil/dex`: primitive `to*` formatters + the single `MintPositionRequest` struct formatter + record passthrough (`recordPlaintext` on the SDK path). Every shield_swap entrypoint is primitives + records with exactly one struct input, so this stays small. Params also accept `InputRequest` (wallet path) — passed through untouched to core; the non-request fast path encodes exactly as before. |
 | Record decrypt/fetch | **core** `requestRecords` + scanner |
 | Blinding derivation, `SwapHandle`, tick hints, record selection, helpers, typed action wrappers | **hand-written in `@veil/dex`**, typed against the generated bindings |
 

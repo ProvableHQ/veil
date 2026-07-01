@@ -17,6 +17,7 @@
 - **Wire types stay snake_case** to match the Provable API/`.aleo` format; SDK-facing param names may be camelCase, but anything serialized to the program is snake_case.
 - **Numeric widths:** `number` for u8/u16/u32/u64 and i32; `bigint` for u128. `string` for `field`/`address`/`scalar`/`group`.
 - **Private only (V1):** bind only `*_private` entrypoints; no public-visibility variants.
+- **Wallet vs SDK input path (post PR #68):** the SDK/local path is unchanged — `recordPlaintext` + Aleo-encoded string inputs + local proving (which **rejects** `InputRequest` via `assertNoInputRequests`). Do **not** narrow action record/value params: accept `value | InputRequest` (codegen already widens every slot; `getContract`/`writeContract` pass requests through, non-request fast path encodes as before) so a privacy-preserving wallet can fulfil record-by-`uid` / address injection with **no separate code path**. `uid`/`recordView`/grants are wallet-path concerns handled by core, not re-implemented here.
 - **Write method naming:** write methods/files/functions are the **camelCase of the transition name** — named after the transition, not re-aliased to a different concept: `swapPrivate`, `claimSwapOutputPrivate`, `createPool`, `mintPrivate`, `increaseLiquidityPrivate`. The **snake_case** form (`swap_private`, …) is only the string passed to the program (and ABI function-name assertions). Read/indexer methods keep descriptive `getX` names.
 - **Green bar:** `pnpm vitest run` from repo root passes; if any `@veil/*` public API changes, update `examples/e2e-demo.ts` and `apps/loyalty-dapp/` and keep `pnpm --filter @veil/loyalty-dapp exec tsc --noEmit` clean (CLAUDE.md).
 - **Reference revs:** contract `shield_swap_v0_0_1.aleo` @ Aleo testnet; Leo source `ProvableHQ/amm-v3`; derivation `ProvableHQ/amm-v3-tests@feat/q128` `src/client/amm-client.ts`; indexer `https://amm-api.dev.provable.com`.
@@ -340,6 +341,7 @@ describe('blinded identity (golden vectors)', () => {
 **Interfaces:**
 - Consumes: core `requestRecords(client, { program, statusFilter: 'unspent' })`; the record-plaintext parser from `records.ts`.
 - Produces: `getOwnBalances(client, { tokenIds? }): Promise<Record<string, bigint>>` — requests the account's unspent token records, parses each plaintext for `{ tokenId, amount }`, and **sums per token id** (`bigint`, u128). Optionally filters to `tokenIds`. The caller's *private* record-derived balance — distinct from `indexer.getBalances` (public/authorized).
+  - Read `amount`/token id from `recordPlaintext` (SDK path); fall back to `recordView.fields` when a privacy wallet withholds plaintext (total is bounded by what the grant exposes).
   - *Resolve at impl:* which program(s) hold token records (ARC-20 registry vs per-token) — see the spec's "Record-derived" note. Scan the registry if that's the model; otherwise accept a `programs[]`/`tokenIds[]` to scan.
 
 - [ ] **Step 1: Failing test** — mock `requestRecords` to return several unspent token records across two token ids (incl. two records of the same token); assert the result sums per token id as `bigint`, and that `tokenIds` filtering works.
