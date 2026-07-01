@@ -10,7 +10,7 @@ export interface TokenMetadata {
   token_id: string
   name: bigint
   symbol: bigint
-  decimals: bigint
+  decimals: number
   supply: bigint
   max_supply: bigint
   admin: string
@@ -27,7 +27,7 @@ export interface Balance {
   token_id: string
   account: string
   balance: bigint
-  authorized_until: bigint
+  authorized_until: number
 }
 
 export interface Token {
@@ -35,7 +35,7 @@ export interface Token {
   amount: bigint
   token_id: string
   external_authorization_required: boolean
-  authorized_until: bigint
+  authorized_until: number
   _record: RecordValue
 }
 
@@ -45,7 +45,7 @@ export function toToken(record: RecordValue): Token {
     amount: record.fields.amount?.value as bigint ?? 0n,
     token_id: record.fields.token_id?.value as string ?? '',
     external_authorization_required: record.fields.external_authorization_required?.value as boolean ?? false,
-    authorized_until: record.fields.authorized_until?.value as bigint ?? 0n,
+    authorized_until: Number((record.fields.authorized_until?.value ?? 0n) as bigint) ?? 0,
     _record: record,
   }
 }
@@ -59,7 +59,7 @@ export type RegisterTokenInputs = {
   token_id: string | InputRequest
   name: bigint | InputRequest
   symbol: bigint | InputRequest
-  decimals: bigint | InputRequest
+  decimals: number | InputRequest
   max_supply: bigint | InputRequest
   external_authorization_required: boolean | InputRequest
   external_authorization_party: string | InputRequest
@@ -78,7 +78,7 @@ export type UpdateTokenManagementOutputs = FutureValue
 export type SetRoleInputs = {
   token_id: string | InputRequest
   account: string | InputRequest
-  role: bigint | InputRequest
+  role: number | InputRequest
 }
 
 export type SetRoleOutputs = FutureValue
@@ -94,7 +94,7 @@ export type MintPublicInputs = {
   token_id: string | InputRequest
   recipient: string | InputRequest
   amount: bigint | InputRequest
-  authorized_until: bigint | InputRequest
+  authorized_until: number | InputRequest
 }
 
 export type MintPublicOutputs = FutureValue
@@ -104,7 +104,7 @@ export type MintPrivateInputs = {
   recipient: string | InputRequest
   amount: bigint | InputRequest
   external_authorization_required: boolean | InputRequest
-  authorized_until: bigint | InputRequest
+  authorized_until: number | InputRequest
 }
 
 export type MintPrivateOutputs = [Token, FutureValue]
@@ -120,7 +120,7 @@ export type BurnPublicOutputs = FutureValue
 export type PrehookPublicInputs = {
   owner: TokenOwner | InputRequest
   amount: bigint | InputRequest
-  authorized_until: bigint | InputRequest
+  authorized_until: number | InputRequest
 }
 
 export type PrehookPublicOutputs = FutureValue
@@ -229,7 +229,7 @@ export type AllowancesMappingKey = string
 export type AllowancesMappingValue = bigint
 
 export type RolesMappingKey = string
-export type RolesMappingValue = bigint
+export type RolesMappingValue = number
 
 /** The parsed ABI for token_registry.aleo. */
 export const PROGRAM_ABI: ABI = {
@@ -1574,14 +1574,14 @@ export interface TokenRegistryContract {
   }
   write: {
     initialize: (params: {}) => Promise<string>
-    register_token: (params: { token_id: string | InputRequest, name: bigint | InputRequest, symbol: bigint | InputRequest, decimals: bigint | InputRequest, max_supply: bigint | InputRequest, external_authorization_required: boolean | InputRequest, external_authorization_party: string | InputRequest }) => Promise<string>
+    register_token: (params: { token_id: string | InputRequest, name: bigint | InputRequest, symbol: bigint | InputRequest, decimals: number | InputRequest, max_supply: bigint | InputRequest, external_authorization_required: boolean | InputRequest, external_authorization_party: string | InputRequest }) => Promise<string>
     update_token_management: (params: { token_id: string | InputRequest, admin: string | InputRequest, external_authorization_party: string | InputRequest }) => Promise<string>
-    set_role: (params: { token_id: string | InputRequest, account: string | InputRequest, role: bigint | InputRequest }) => Promise<string>
+    set_role: (params: { token_id: string | InputRequest, account: string | InputRequest, role: number | InputRequest }) => Promise<string>
     remove_role: (params: { token_id: string | InputRequest, account: string | InputRequest }) => Promise<string>
-    mint_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest }) => Promise<string>
-    mint_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest, authorized_until: bigint | InputRequest }) => Promise<string>
+    mint_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, authorized_until: number | InputRequest }) => Promise<string>
+    mint_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest, authorized_until: number | InputRequest }) => Promise<string>
     burn_public: (params: { token_id: string | InputRequest, owner: string | InputRequest, amount: bigint | InputRequest }) => Promise<string>
-    prehook_public: (params: { owner: TokenOwner | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest }) => Promise<string>
+    prehook_public: (params: { owner: TokenOwner | InputRequest, amount: bigint | InputRequest, authorized_until: number | InputRequest }) => Promise<string>
     transfer_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<string>
     transfer_public_as_signer: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<string>
     approve_public: (params: { token_id: string | InputRequest, spender: string | InputRequest, amount: bigint | InputRequest }) => Promise<string>
@@ -1596,14 +1596,14 @@ export interface TokenRegistryContract {
   }
   simulate: {
     initialize: (params: {}) => Promise<FutureValue>
-    register_token: (params: { token_id: string | InputRequest, name: bigint | InputRequest, symbol: bigint | InputRequest, decimals: bigint | InputRequest, max_supply: bigint | InputRequest, external_authorization_required: boolean | InputRequest, external_authorization_party: string | InputRequest }) => Promise<FutureValue>
+    register_token: (params: { token_id: string | InputRequest, name: bigint | InputRequest, symbol: bigint | InputRequest, decimals: number | InputRequest, max_supply: bigint | InputRequest, external_authorization_required: boolean | InputRequest, external_authorization_party: string | InputRequest }) => Promise<FutureValue>
     update_token_management: (params: { token_id: string | InputRequest, admin: string | InputRequest, external_authorization_party: string | InputRequest }) => Promise<FutureValue>
-    set_role: (params: { token_id: string | InputRequest, account: string | InputRequest, role: bigint | InputRequest }) => Promise<FutureValue>
+    set_role: (params: { token_id: string | InputRequest, account: string | InputRequest, role: number | InputRequest }) => Promise<FutureValue>
     remove_role: (params: { token_id: string | InputRequest, account: string | InputRequest }) => Promise<FutureValue>
-    mint_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest }) => Promise<FutureValue>
-    mint_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest, authorized_until: bigint | InputRequest }) => Promise<[Token, FutureValue]>
+    mint_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, authorized_until: number | InputRequest }) => Promise<FutureValue>
+    mint_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest, authorized_until: number | InputRequest }) => Promise<[Token, FutureValue]>
     burn_public: (params: { token_id: string | InputRequest, owner: string | InputRequest, amount: bigint | InputRequest }) => Promise<FutureValue>
-    prehook_public: (params: { owner: TokenOwner | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest }) => Promise<FutureValue>
+    prehook_public: (params: { owner: TokenOwner | InputRequest, amount: bigint | InputRequest, authorized_until: number | InputRequest }) => Promise<FutureValue>
     transfer_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<FutureValue>
     transfer_public_as_signer: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<FutureValue>
     approve_public: (params: { token_id: string | InputRequest, spender: string | InputRequest, amount: bigint | InputRequest }) => Promise<FutureValue>
@@ -1618,14 +1618,14 @@ export interface TokenRegistryContract {
   }
   execute: {
     initialize: (params: {}) => Promise<{ transactionId: string, result: FutureValue }>
-    register_token: (params: { token_id: string | InputRequest, name: bigint | InputRequest, symbol: bigint | InputRequest, decimals: bigint | InputRequest, max_supply: bigint | InputRequest, external_authorization_required: boolean | InputRequest, external_authorization_party: string | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    register_token: (params: { token_id: string | InputRequest, name: bigint | InputRequest, symbol: bigint | InputRequest, decimals: number | InputRequest, max_supply: bigint | InputRequest, external_authorization_required: boolean | InputRequest, external_authorization_party: string | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
     update_token_management: (params: { token_id: string | InputRequest, admin: string | InputRequest, external_authorization_party: string | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
-    set_role: (params: { token_id: string | InputRequest, account: string | InputRequest, role: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    set_role: (params: { token_id: string | InputRequest, account: string | InputRequest, role: number | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
     remove_role: (params: { token_id: string | InputRequest, account: string | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
-    mint_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
-    mint_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest, authorized_until: bigint | InputRequest }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
+    mint_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, authorized_until: number | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    mint_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest, authorized_until: number | InputRequest }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
     burn_public: (params: { token_id: string | InputRequest, owner: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
-    prehook_public: (params: { owner: TokenOwner | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    prehook_public: (params: { owner: TokenOwner | InputRequest, amount: bigint | InputRequest, authorized_until: number | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
     transfer_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
     transfer_public_as_signer: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
     approve_public: (params: { token_id: string | InputRequest, spender: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>

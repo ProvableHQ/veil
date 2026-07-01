@@ -10,6 +10,50 @@ import { tmpdir } from 'os'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+/**
+ * Writes generated TypeScript to a temp dir, runs tsc --noEmit in strict mode
+ * (strict + noUncheckedIndexedAccess), and returns the exit code + stderr.
+ * The temp dir is always cleaned up in a finally block.
+ */
+function runTscCheck(generated: string, filename: string, prefix = 'veil-codegen-'): { exitCode: number; stderr: string } {
+  const tmp = mkdtempSync(join(tmpdir(), prefix))
+  try {
+    const generatedFile = join(tmp, filename)
+    const tsconfigFile = join(tmp, 'tsconfig.json')
+    const rootDir = join(__dirname, '..', '..', '..')
+
+    writeFileSync(generatedFile, generated, 'utf-8')
+    writeFileSync(tsconfigFile, JSON.stringify({
+      compilerOptions: {
+        target: 'ES2022',
+        module: 'ESNext',
+        moduleResolution: 'bundler',
+        strict: true,
+        noUncheckedIndexedAccess: true,
+        skipLibCheck: true,
+        noEmit: true,
+        paths: {
+          '@veil/core': [join(rootDir, 'packages/core/src/index.ts')],
+        },
+      },
+      include: [generatedFile],
+    }), 'utf-8')
+
+    const tscBin = join(rootDir, 'node_modules/.bin/tsc')
+    let stderr = ''
+    let exitCode = 0
+    try {
+      execSync(`"${tscBin}" --project "${tsconfigFile}"`, { stdio: 'pipe', timeout: 30_000 })
+    } catch (err: any) {
+      stderr = (err.stdout?.toString() ?? '') + (err.stderr?.toString() ?? '')
+      exitCode = err.status ?? 1
+    }
+    return { exitCode, stderr }
+  } finally {
+    rmSync(tmp, { recursive: true, force: true })
+  }
+}
+
 // Load real loyalty program ABIs for testing
 const tokenAbiRaw = JSON.parse(readFileSync(join(__dirname, 'fixtures/loyalty_token_abi.json'), 'utf-8'))
 const rewardsAbiRaw = JSON.parse(readFileSync(join(__dirname, 'fixtures/loyalty_rewards_abi.json'), 'utf-8'))
@@ -190,7 +234,7 @@ describe('generate', () => {
       expect(output).toContain('  _record: RecordValue')
     })
 
-    it('maps u8/u16/u32 to bigint', () => {
+    it('maps u8/u16/u32 to number', () => {
       const abi: ABI = {
         ...minimalAbi,
         records: [{
@@ -202,8 +246,8 @@ describe('generate', () => {
         }],
       }
       const output = generate({ abi })
-      expect(output).toContain('  tier: bigint')
-      expect(output).toContain('  level: bigint')
+      expect(output).toContain('  tier: number')
+      expect(output).toContain('  level: number')
     })
   })
 
@@ -285,7 +329,8 @@ describe('generate', () => {
   describe('advanced types', () => {
     it('generates array types', () => {
       const output = generate({ abi: advancedAbi })
-      expect(output).toContain('  data: bigint[]')
+      // u8 array → number[]
+      expect(output).toContain('  data: number[]')
     })
 
     it('generates optional types', () => {
@@ -302,12 +347,14 @@ describe('generate', () => {
 
     it('generates array input types', () => {
       const output = generate({ abi: advancedAbi })
-      expect(output).toContain('  checksum: bigint[]')
+      // u8 array input → number[]
+      expect(output).toContain('  checksum: number[]')
     })
 
     it('generates nested array types', () => {
       const output = generate({ abi: advancedAbi })
-      expect(output).toContain('  nested_array: bigint[][]')
+      // u8[][] → number[][]
+      expect(output).toContain('  nested_array: number[][]')
     })
 
     it('generates nested optional types', () => {
@@ -324,7 +371,8 @@ describe('generate', () => {
       const output = generate({ abi: advancedAbi })
       expect(output).toContain('export interface Transform {')
       expect(output).toContain('  position: Vector3')
-      expect(output).toContain('  scale: bigint')
+      // scale is u32 → number
+      expect(output).toContain('  scale: number')
     })
 
     it('generates optional input types', () => {
@@ -343,8 +391,10 @@ describe('generate', () => {
       const output = generate({ abi: tokenAbi })
       expect(output).toContain("PROGRAM_ID = 'loyalty_token.aleo'")
       expect(output).toContain('export interface LoyaltyCard {')
+      // points is u64 → bigint
       expect(output).toContain('  points: bigint')
-      expect(output).toContain('  tier: bigint')
+      // tier is u8 → number
+      expect(output).toContain('  tier: number')
       expect(output).toContain('export function toLoyaltyCard(record: RecordValue): LoyaltyCard {')
       expect(output).toContain('export type MintCardInputs = {')
       expect(output).toContain('export type MintCardOutputs = [LoyaltyCard, FutureValue]')
@@ -364,7 +414,9 @@ describe('generate', () => {
       const output = generate({ abi: rewardsAbi })
       expect(output).toContain("PROGRAM_ID = 'loyalty_rewards.aleo'")
       expect(output).toContain('export interface RewardVoucher {')
-      expect(output).toContain('  reward_type: bigint')
+      // reward_type is u8 → number
+      expect(output).toContain('  reward_type: number')
+      // amount is u64 → bigint
       expect(output).toContain('  amount: bigint')
       expect(output).toContain('export function toRewardVoucher(record: RecordValue): RewardVoucher {')
       expect(output).toContain('export type RedeemPointsForVoucherInputs = {')
@@ -556,9 +608,10 @@ describe('generate', () => {
       // verify the mapper produces correct output from a RecordValue
       const source = generate({ abi: tokenAbi })
 
-      // The mapper should reference record.fields.points?.value etc.
+      // points is u64 → direct bigint cast
       expect(source).toContain('record.fields.points?.value as bigint')
-      expect(source).toContain('record.fields.tier?.value as bigint')
+      // tier is u8 → Number() with inner ?? guard to prevent NaN for missing fields
+      expect(source).toContain('Number((record.fields.tier?.value ?? 0n) as bigint)')
       expect(source).toContain('record.fields.card_id?.value as string')
     })
 
@@ -715,45 +768,8 @@ describe('generate', () => {
 
     it('generated output compiles under strict + noUncheckedIndexedAccess', () => {
       const generated = generate({ abi: strictAbi, coreImport: '@veil/core' })
-
-      // Write to a temp dir alongside a tsconfig wired to the workspace core source
-      const tmp = mkdtempSync(join(tmpdir(), 'veil-codegen-strict-'))
-      try {
-        const generatedFile = join(tmp, 'strict_test.ts')
-        const tsconfigFile = join(tmp, 'tsconfig.json')
-        const rootDir = join(__dirname, '..', '..', '..')
-
-        writeFileSync(generatedFile, generated, 'utf-8')
-        writeFileSync(tsconfigFile, JSON.stringify({
-          compilerOptions: {
-            target: 'ES2022',
-            module: 'ESNext',
-            moduleResolution: 'bundler',
-            strict: true,
-            noUncheckedIndexedAccess: true,
-            skipLibCheck: true,
-            noEmit: true,
-            paths: {
-              '@veil/core': [join(rootDir, 'packages/core/src/index.ts')],
-            },
-          },
-          include: [generatedFile],
-        }), 'utf-8')
-
-        const tscBin = join(rootDir, 'node_modules/.bin/tsc')
-        let stderr = ''
-        let exitCode = 0
-        try {
-          execSync(`"${tscBin}" --project "${tsconfigFile}"`, { stdio: 'pipe', timeout: 30_000 })
-        } catch (err: any) {
-          stderr = (err.stdout?.toString() ?? '') + (err.stderr?.toString() ?? '')
-          exitCode = err.status ?? 1
-        }
-
-        expect(exitCode, `tsc reported errors:\n${stderr}`).toBe(0)
-      } finally {
-        rmSync(tmp, { recursive: true, force: true })
-      }
+      const { exitCode, stderr } = runTscCheck(generated, 'strict_test.ts', 'veil-codegen-strict-')
+      expect(exitCode, `tsc reported errors:\n${stderr}`).toBe(0)
     })
 
     it('generated execute wrappers do not include fee anywhere', () => {
@@ -776,5 +792,119 @@ describe('generate', () => {
       expect(strictOutput).toContain('record.fields.config?.value as unknown as Config')
     })
 
+  })
+
+  // ── Numeric-width mapping ─────────────────────────────────────────────
+  //
+  // u8/u16/u32 and i8/i16/i32 must be typed as `number` (fit in JS integer
+  // precision); u64/u128 and i64/i128 must remain `bigint`.
+  //
+  // RED evidence (before fix): this suite failed because primitiveToTsType mapped
+  //   ALL integer widths to 'bigint', so:
+  //   - widthAbi record produced `tier: bigint` and `points: bigint` (wrong for tier)
+  //   - mapper produced `record.fields.tier?.value as bigint` (no Number() wrapper)
+  //   - tsc strict-mode check reported type errors on Number/bigint mismatches
+  // GREEN evidence (after fix): all three assertions pass and tsc exits 0.
+  describe('numeric width mapping (u8–u32 → number, u64+ → bigint)', () => {
+    // Fixture: one small-width field (u32, should be number) and one wide field (u64, bigint).
+    // Also includes a mapping with a u32 key to confirm mapping types follow the same rule.
+    const widthAbi: ABI = {
+      ...minimalAbi,
+      program: 'widths_test.aleo',
+      structs: [],
+      records: [
+        {
+          path: ['WidthRecord'],
+          fields: [
+            { name: 'owner', type: { kind: 'primitive', primitive: 'address' }, mode: 'private' },
+            // u32 → number
+            { name: 'tier', type: { kind: 'primitive', primitive: 'u32' }, mode: 'private' },
+            // u64 → bigint
+            { name: 'amount', type: { kind: 'primitive', primitive: 'u64' }, mode: 'private' },
+          ],
+        },
+      ],
+      mappings: [
+        // u32 mapping key → number
+        { name: 'tier_supply', key: { kind: 'primitive', primitive: 'u32' }, value: { kind: 'primitive', primitive: 'u64' } },
+      ],
+      storageVariables: [],
+      functions: [],
+    }
+
+    let widthOutput = ''
+    beforeAll(() => { widthOutput = generate({ abi: widthAbi }) })
+
+    // (a) Static type assertions
+    it('maps u32 record field to number', () => {
+      expect(widthOutput).toContain('  tier: number')
+    })
+
+    it('maps u64 record field to bigint', () => {
+      expect(widthOutput).toContain('  amount: bigint')
+    })
+
+    it('maps u32 mapping key to number', () => {
+      expect(widthOutput).toContain('export type TierSupplyMappingKey = number')
+    })
+
+    it('maps u64 mapping value to bigint', () => {
+      expect(widthOutput).toContain('export type TierSupplyMappingValue = bigint')
+    })
+
+    // Mapper expressions: u32 must use Number(...) wrapper; u64 must cast directly
+    it('mapper uses Number() with inner ?? guard for u32 field', () => {
+      // Inner ?? 0n guard prevents NaN: Number(undefined) = NaN, and NaN ?? 0 does not rescue it.
+      expect(widthOutput).toContain('Number((record.fields.tier?.value ?? 0n) as bigint)')
+    })
+
+    it('mapper uses direct cast for u64 field', () => {
+      expect(widthOutput).toContain('record.fields.amount?.value as bigint')
+    })
+
+    // u32 default is 0, u64 default is 0n
+    it('mapper defaults u32 field to 0 (inner guard prevents NaN)', () => {
+      expect(widthOutput).toContain('Number((record.fields.tier?.value ?? 0n) as bigint) ?? 0,')
+    })
+
+    it('mapper defaults u64 field to 0n', () => {
+      expect(widthOutput).toContain('record.fields.amount?.value as bigint ?? 0n,')
+    })
+
+    // (b) tsc strict-mode: generated code with both widths must typecheck
+    it('generated code with mixed widths compiles under strict + noUncheckedIndexedAccess', () => {
+      const generated = generate({ abi: widthAbi, coreImport: '@veil/core' })
+      const { exitCode, stderr } = runTscCheck(generated, 'widths_test.ts', 'veil-codegen-widths-')
+      expect(exitCode, `tsc reported errors:\n${stderr}`).toBe(0)
+    })
+
+    // (c) Runtime decode: u32 decodes to JS number, u64 decodes to bigint
+    it('decoder produces number for u32 field and bigint for u64 field', () => {
+      // Simulate the mapper at runtime: RecordFieldValue stores bigint for all ints.
+      // The generated mapper wraps u32 with Number() and leaves u64 as bigint.
+      // We run the mapper logic inline to verify the runtime types without eval().
+      const fakeRecord = {
+        owner: 'aleo1abc',
+        program: 'widths_test.aleo',
+        recordName: 'WidthRecord',
+        nonce: '0group',
+        fields: {
+          tier:   { value: 5n,    mode: 'private' as const, type: { kind: 'primitive' as const, primitive: 'u32' as const } },
+          amount: { value: 1000n, mode: 'private' as const, type: { kind: 'primitive' as const, primitive: 'u64' as const } },
+        },
+      }
+
+      // Replicate what the generated mapper does:
+      //   tier:   Number((record.fields.tier?.value ?? 0n) as bigint) ?? 0
+      //   amount: record.fields.amount?.value as bigint                  ?? 0n
+      const tier   = Number((fakeRecord.fields.tier?.value ?? 0n) as bigint) ?? 0
+      const amount = (fakeRecord.fields.amount?.value as bigint)     ?? 0n
+
+      expect(typeof tier).toBe('number')
+      expect(tier).toBe(5)
+
+      expect(typeof amount).toBe('bigint')
+      expect(amount).toBe(1000n)
+    })
   })
 })

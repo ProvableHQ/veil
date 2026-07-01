@@ -97,7 +97,7 @@ is what's passed to the program; the camelCase name is the client method/file/fu
 
 The deployed ABI is **positional and unnamed** (`r0..rN`). A core value-add of the client is
 mapping friendly named params → typed inputs, with correct types (snake_case wire format;
-`number` for u16/u32/u64/i32, `bigint` for u128; `string` for field/address). The struct/record
+`number` for u8/u16/u32/i32, `bigint` for u64/u128; `string` for field/address). The struct/record
 *types* are codegen-generated from the ABI; primitives are encoded by a thin `to*` util, the one
 `MintPositionRequest` struct by a small formatter, and records pass through as
 `OwnedRecord.recordPlaintext` (see Generated vs hand-written).

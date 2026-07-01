@@ -144,8 +144,9 @@ function generateRecordMapper(record: RecordDef): string[] {
       }
       lines.push(`    ${field.name}: record.fields.${field.name}?.value as unknown as ${structName} ?? {} as unknown as ${structName},`)
     } else {
-      const cast = plaintextToCast(field.type)
-      lines.push(`    ${field.name}: record.fields.${field.name}?.value${cast} ?? ${plaintextDefault(field.type)},`)
+      const rawAccess = `record.fields.${field.name}?.value`
+      const expr = plaintextFieldExpr(rawAccess, field.type)
+      lines.push(`    ${field.name}: ${expr} ?? ${plaintextDefault(field.type)},`)
     }
   }
 
@@ -254,6 +255,18 @@ function storageTypeToTs(st: StorageType): string {
 
 // ── Type mapping helpers ──────────────────────────────────────────────
 
+/**
+ * Returns true for integer primitives that fit safely in a JS number (≤ 32-bit).
+ *
+ * u8/u16/u32 and i8/i16/i32 are typed as `number`; u64/u128 and i64/i128 require
+ * `bigint` to avoid precision loss. This predicate is the single source of truth
+ * for that boundary — all three type-mapping helpers delegate to it so that adding
+ * a new width requires changing only this function.
+ */
+function isSmallInt(p: Primitive): boolean {
+  return p === 'u8' || p === 'u16' || p === 'u32' || p === 'i8' || p === 'i16' || p === 'i32'
+}
+
 function plaintextToTsType(pt: Plaintext): string {
   switch (pt.kind) {
     case 'primitive':
@@ -270,6 +283,7 @@ function plaintextToTsType(pt: Plaintext): string {
 }
 
 function primitiveToTsType(p: Primitive): string {
+  if (isSmallInt(p)) return 'number'
   switch (p) {
     case 'address':
     case 'field':
@@ -280,14 +294,9 @@ function primitiveToTsType(p: Primitive): string {
       return 'string'
     case 'boolean':
       return 'boolean'
-    case 'u8':
-    case 'u16':
-    case 'u32':
+    // 64-bit and wider: must be bigint to avoid precision loss
     case 'u64':
     case 'u128':
-    case 'i8':
-    case 'i16':
-    case 'i32':
     case 'i64':
     case 'i128':
       return 'bigint'
@@ -296,49 +305,62 @@ function primitiveToTsType(p: Primitive): string {
   }
 }
 
-function plaintextToCast(pt: Plaintext): string {
+/**
+ * Builds the full typed expression for a primitive record field access.
+ *
+ * The raw value stored in RecordFieldValue is always a bigint for all integer
+ * widths (parsed by core's parseValue). For u8/u16/u32 and i8/i16/i32 fields
+ * (typed as `number`), we wrap with Number() to convert at runtime. For u64+
+ * (typed as `bigint`), we cast directly. For non-primitive types (array,
+ * optional) the raw access is returned unchanged — those fall through to the
+ * caller's existing handling.
+ *
+ * @param rawAccess - Expression yielding the raw PlaintextValue, e.g. `record.fields.x?.value`
+ */
+function plaintextFieldExpr(rawAccess: string, pt: Plaintext): string {
   // TODO(follow-up): non-primitive record fields other than struct (i.e. `array`,
-  // `optional`) are NOT yet handled and fall through to '' (no cast). This is a
-  // known gap — ABIs containing such fields will produce non-compiling output.
-  // Implement `array` and `optional` handling before using codegen with such ABIs.
-  if (pt.kind !== 'primitive') return ''
-  switch (pt.primitive) {
-    case 'u8':
-    case 'u16':
-    case 'u32':
+  // `optional`) are NOT yet handled and fall through to the raw expression.
+  // This is a known gap — ABIs containing such fields will produce non-compiling
+  // output. Implement `array` and `optional` handling before using codegen with
+  // such ABIs.
+  if (pt.kind !== 'primitive') return rawAccess
+  const p = pt.primitive
+  // Small integers stored as bigint at runtime, exposed as number in the interface.
+  // The ?? 0n guard is inside the Number() call: Number(undefined) = NaN, and
+  // NaN ?? 0 does NOT trigger (?? only catches null/undefined). Guarding before
+  // Number() ensures a missing field correctly defaults to 0.
+  if (isSmallInt(p)) return `Number((${rawAccess} ?? 0n) as bigint)`
+  switch (p) {
+    // Wide integers stay bigint end-to-end.
     case 'u64':
     case 'u128':
-    case 'i8':
-    case 'i16':
-    case 'i32':
     case 'i64':
     case 'i128':
-      return ' as bigint'
+      return `${rawAccess} as bigint`
     case 'field':
     case 'group':
     case 'scalar':
-      return ' as string'
     case 'address':
     case 'signature':
     case 'identifier':
-      return ' as string'
+      return `${rawAccess} as string`
     case 'boolean':
-      return ' as boolean'
+      return `${rawAccess} as boolean`
     default:
-      return ''
+      return rawAccess
   }
 }
 
 function plaintextDefault(pt: Plaintext): string {
-  // TODO(follow-up): non-primitive record fields other than struct (i.e. `array`,
-  // `optional`) fall through to "''" (empty string default). This is a known gap
-  // matching the one in `plaintextToCast` above — fix both together.
+  // TODO(follow-up): see plaintextFieldExpr for the known array/optional gap.
+  // Non-primitive record fields fall through to "''" (empty string default).
   if (pt.kind !== 'primitive') return "''"
+  if (isSmallInt(pt.primitive)) return '0'
   switch (pt.primitive) {
     case 'boolean':
       return 'false'
-    case 'u8': case 'u16': case 'u32': case 'u64': case 'u128':
-    case 'i8': case 'i16': case 'i32': case 'i64': case 'i128':
+    // Wide integers — bigint default
+    case 'u64': case 'u128': case 'i64': case 'i128':
       return '0n'
     case 'field': case 'group': case 'scalar':
       return "''"

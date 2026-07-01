@@ -10,7 +10,7 @@ export interface LoyaltyCard {
   owner: string
   card_id: string
   points: bigint
-  tier: bigint
+  tier: number
   _record: RecordValue
 }
 
@@ -19,13 +19,13 @@ export function toLoyaltyCard(record: RecordValue): LoyaltyCard {
     owner: record.owner,
     card_id: record.fields.card_id?.value as string ?? '',
     points: record.fields.points?.value as bigint ?? 0n,
-    tier: record.fields.tier?.value as bigint ?? 0n,
+    tier: Number((record.fields.tier?.value ?? 0n) as bigint) ?? 0,
     _record: record,
   }
 }
 
 export type ApproveUpgradeInputs = {
-  checksum: bigint[] | InputRequest
+  checksum: number[] | InputRequest
 }
 
 export type ApproveUpgradeOutputs = FutureValue
@@ -578,7 +578,7 @@ export interface LoyaltyTokenContract {
     approved_upgrades: (params: { key: string }) => Promise<unknown>
   }
   write: {
-    approve_upgrade: (params: { checksum: bigint[] | InputRequest }) => Promise<string>
+    approve_upgrade: (params: { checksum: number[] | InputRequest }) => Promise<string>
     mint_card: (params: { recipient: string | InputRequest, initial_points: bigint | InputRequest, nonce: string | InputRequest }) => Promise<string>
     add_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_earned: bigint | InputRequest }) => Promise<string>
     check_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest }) => Promise<string>
@@ -588,7 +588,7 @@ export interface LoyaltyTokenContract {
     spend_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_to_spend: bigint | InputRequest }) => Promise<string>
   }
   simulate: {
-    approve_upgrade: (params: { checksum: bigint[] | InputRequest }) => Promise<FutureValue>
+    approve_upgrade: (params: { checksum: number[] | InputRequest }) => Promise<FutureValue>
     mint_card: (params: { recipient: string | InputRequest, initial_points: bigint | InputRequest, nonce: string | InputRequest }) => Promise<[LoyaltyCard, FutureValue]>
     add_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_earned: bigint | InputRequest }) => Promise<[LoyaltyCard, FutureValue]>
     check_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest }) => Promise<[LoyaltyCard, bigint]>
@@ -598,7 +598,7 @@ export interface LoyaltyTokenContract {
     spend_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_to_spend: bigint | InputRequest }) => Promise<LoyaltyCard>
   }
   execute: {
-    approve_upgrade: (params: { checksum: bigint[] | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    approve_upgrade: (params: { checksum: number[] | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
     mint_card: (params: { recipient: string | InputRequest, initial_points: bigint | InputRequest, nonce: string | InputRequest }) => Promise<{ transactionId: string, result: [LoyaltyCard, FutureValue] }>
     add_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest, points_earned: bigint | InputRequest }) => Promise<{ transactionId: string, result: [LoyaltyCard, FutureValue] }>
     check_points: (params: { card: LoyaltyCard | RecordValue | string | InputRequest }) => Promise<{ transactionId: string, result: [LoyaltyCard, bigint] }>

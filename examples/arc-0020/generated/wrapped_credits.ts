@@ -9,7 +9,7 @@ export const PROGRAM_ID = 'wrapped_credits.aleo' as const
 export interface TokenInfo {
   name: bigint
   symbol: bigint
-  decimals: bigint
+  decimals: number
   supply: bigint
   max_supply: bigint
 }
