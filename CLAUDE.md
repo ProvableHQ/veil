@@ -9,6 +9,11 @@ Repo-wide contributor constraints live in `AGENTS.md` and apply here:
 - Do NOT add `Co-Authored-By` lines to commits
 - Do NOT add any AI attribution to commits, PRs, or code
 
+## Before committing code
+
+Before any commit that touches code (skip for docs-only commits), run `/code-review`
+and `/simplify` on the diff and address their findings, then commit.
+
 ## Keep examples and apps in sync with package APIs
 
 When you change the public API of any `@veil/*` package, also update:
