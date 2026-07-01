@@ -102,6 +102,15 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/dex:
+    dependencies:
+      '@provablehq/sdk':
+        specifier: ^0.10.3
+        version: 0.10.3
+      '@veil/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/leo: {}
 
   packages/provable:
