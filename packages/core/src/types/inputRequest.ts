@@ -14,7 +14,12 @@ export type KnownAlgorithm = (typeof KNOWN_ALGORITHMS)[number]
 /** A derivation algorithm name — a known one, or any other string the wallet supports. */
 export type AlgorithmName = KnownAlgorithm | (string & {})
 
-/** Aleo type tag for a derived-input argument value (a literal type or "string"). */
+/**
+ * Aleo type tag for a derived-input argument value — an Aleo literal type name
+ * (e.g. "address", "field", "u64") or "string". Kept as `string` rather than a
+ * closed union so Veil need not mirror the full upstream literal-type set; the
+ * wallet validates the tag.
+ */
 export type ArgType = string
 
 /**
@@ -56,6 +61,14 @@ export type RecordFilters = Record<string, RecordFieldFilter>
  *   are mutually exclusive.
  * - `derived`: the wallet runs `algorithm` over its private state and substitutes
  *   the result.
+ *
+ * @example
+ * // Spend a wallet-pinned record and let the wallet inject its own address:
+ * const inputs = [
+ *   { type: 'record', program: 'credits.aleo', recordname: 'credits', uid },
+ *   { type: 'address' },
+ *   '100u64',
+ * ]
  */
 export type InputRequest =
   | { type: 'address'; label?: string }
@@ -76,19 +89,35 @@ export type InputRequest =
 /** A transaction input: an Aleo-encoded literal string, or a wallet-fulfilled request. */
 export type TransactionInput = string | InputRequest
 
-/** A single field-access grant within a record grant. */
+/**
+ * A single field-access grant within a record grant.
+ *
+ * @property name Field key to grant: a record-body field, a dotted struct path
+ *   ("data.amount"), or a `$`-prefixed metadata token ("$commitment").
+ * @property readAccess Whether the dapp may read this field's value. Defaults to true.
+ */
 export interface FieldGrant {
   name: string
   readAccess?: boolean
 }
 
-/** Grants access to specific records (and optionally fields) of a program. */
+/**
+ * Grants access to specific records (and optionally fields) of a program.
+ *
+ * @property recordname The record type to grant access to (e.g. "credits").
+ * @property fields Field-level grants; when omitted, all fields of the record are granted.
+ */
 export interface RecordGrant {
   recordname: string
   fields?: FieldGrant[]
 }
 
-/** Grants record access scoped to one program. */
+/**
+ * Grants record access scoped to one program.
+ *
+ * @property program The program the grant applies to (e.g. "credits.aleo").
+ * @property records Per-record grants; when omitted, all records of the program are granted.
+ */
 export interface ProgramGrant {
   program: string
   records?: RecordGrant[]
@@ -139,6 +168,9 @@ export interface ConnectOptions {
  *
  * @param input A transaction input — a literal string or an InputRequest.
  * @returns True if the input is an InputRequest (address/record/derived).
+ *
+ * @example
+ * inputs.some(isInputRequest) // → true if any input needs a wallet to resolve
  */
 export function isInputRequest(input: unknown): input is InputRequest {
   if (typeof input !== 'object' || input === null) return false
@@ -154,6 +186,9 @@ export function isInputRequest(input: unknown): input is InputRequest {
  *
  * @param inputs The transaction inputs to check.
  * @throws If any input is an InputRequest — use a wallet (RPC) account instead.
+ *
+ * @example
+ * assertNoInputRequests(params.inputs) // params.inputs is now narrowed to string[]
  */
 export function assertNoInputRequests(
   inputs: TransactionInput[],

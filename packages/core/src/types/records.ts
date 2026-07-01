@@ -14,7 +14,13 @@ export interface RecordView {
 }
 
 /**
- * Raw record data (encrypted, without plaintext)
+ * Raw record data (encrypted, without plaintext).
+ *
+ * @property uid Opaque per-connection handle from a privacy-preserving wallet;
+ *   pass back as a record InputRequest `uid` to spend exactly this record.
+ *   Absent from wallets that predate the privacy feature.
+ * @property recordView Granted plaintext fields when the wallet withholds full
+ *   plaintext under a recordAccess grant. Absent when no field access was granted.
  */
 export interface OwnedRecordEncrypted {
   blockHeight?: number
@@ -33,9 +39,7 @@ export interface OwnedRecordEncrypted {
   transitionId?: string
   transactionIndex?: number
   transitionIndex?: number
-  /** Opaque per-connection handle from a privacy-preserving wallet; pass back as a record InputRequest `uid`. */
   uid?: string
-  /** Granted plaintext fields when the wallet withholds full plaintext under a recordAccess grant. */
   recordView?: RecordView
 }
 

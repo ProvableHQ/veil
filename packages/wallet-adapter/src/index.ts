@@ -35,9 +35,15 @@ export type { TransactionOptions } from '@provablehq/aleo-types'
 export type { Network, TransactionStatusResponse, TxHistoryResult } from '@veil/core'
 export type { BaseAleoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-core'
 
-// Re-export the privacy-feature types (Veil mirrors) and the upstream error
-// classes a dapp encounters under privacy grants, so consumers can import them
+// Re-export the privacy-feature types (Veil mirrors) so consumers can import them
 // from the wallet-adapter boundary alongside fromWalletAdapter.
+//
+// The upstream error classes (WalletAddressWithheldError, etc.) are deliberately
+// NOT re-exported here: @provablehq/aleo-wallet-adaptor-core is an OPTIONAL peer
+// dependency, and a value re-export would compile to a static runtime import,
+// breaking consumers who use fromWalletAdapter without installing -core. Consumers
+// that need to catch those classes import them from
+// @provablehq/aleo-wallet-adaptor-core directly.
 export type {
   TransactionInput,
   InputRequest,
@@ -47,12 +53,6 @@ export type {
   RecordAccessGrant,
   AlgorithmGrant,
 } from '@veil/core'
-export {
-  WalletAddressWithheldError,
-  WalletInputRequestInvalidError,
-  WalletInputRequestNotSupportedError,
-  WalletConnectOptionsNotSupportedError,
-} from '@provablehq/aleo-wallet-adaptor-core'
 
 // --------------------------------------------------------------------------
 // Wallet adapter interface — matches BaseAleoWalletAdapter from
