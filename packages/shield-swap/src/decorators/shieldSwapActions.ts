@@ -31,6 +31,7 @@ import {
   type GetPrivateBalancesParameters,
   type GetPrivateBalancesReturnType,
 } from '../utils/records.js'
+import { getBalances, type GetBalancesParameters, type GetBalancesReturnType } from '../utils/balances.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hints.js'
 import { ApiClient, type ApiClientOptions } from '../api/client.js'
 
@@ -60,6 +61,7 @@ export type ShieldSwapActions = {
   isTickSpacingValid: (params: { tickSpacing: number; program?: string }) => Promise<boolean>
   getFeeToTickSpacing: (params: { fee: number; program?: string }) => Promise<number | null>
   getPrivateBalances: (params: GetPrivateBalancesParameters) => Promise<GetPrivateBalancesReturnType>
+  getBalances: (params?: GetBalancesParameters) => Promise<GetBalancesReturnType>
   pickInsertHint: (params: PickInsertHintParameters) => Promise<number>
   swapPrivate: (params: SwapPrivateParameters) => Promise<SwapPrivateReturnType>
   claimSwapOutputPrivate: (params: ClaimSwapOutputPrivateParameters) => Promise<ClaimSwapOutputPrivateReturnType>
@@ -118,6 +120,7 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     isTickSpacingValid: (p) => isTickSpacingValid(client, withProgram(p)),
     getFeeToTickSpacing: (p) => getFeeToTickSpacing(client, withProgram(p)),
     getPrivateBalances: (p) => getPrivateBalances(client, p),
+    getBalances: (p) => getBalances(client, api ?? missingApi, p),
     pickInsertHint: (p) => pickInsertHint(client, withProgram(p)),
     swapPrivate: (p) => swapPrivate(client, withProgram(p)),
     claimSwapOutputPrivate: (p) => claimSwapOutputPrivate(client, p),

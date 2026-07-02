@@ -366,16 +366,25 @@ const { poolKey } = await client.createPool({
 
 ## Balances
 
-`getPrivateBalances` sums your unspent records per token, so it reflects what you
-can actually spend privately. The API's `getPublicBalances` reports public
-balances for any address:
+Three views, depending on what you want:
 
 ```ts
+// Private — summed from your unspent records (what you can spend privately).
 await client.getPrivateBalances({ programs: [token0Program, token1Program] })
 // { 'ethx_5a095e.aleo': 3000000000000000000n }
 
+// Public — the API's public/authorized balances for any address.
 await client.api.getPublicBalances({ user: address })
+
+// Combined — public + private + total per token, keyed by token id.
+await client.getBalances()
+// { '1223…045field': { symbol: 'ETHx', decimals: 18, public: 5n, private: 3n, total: 8n }, … }
 ```
+
+`getBalances` composes the other two: it pulls the token registry from the API
+(so you don't hand it a program list), reads public balances, sums your private
+records, and joins them per token. It defaults to your account's address and,
+unless you pass a `tokens` filter, returns only tokens you actually hold.
 
 ## Units and formats
 

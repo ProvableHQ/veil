@@ -83,6 +83,14 @@ export {
   type GetPrivateBalancesReturnType,
 } from './utils/records.js'
 
+// Combined public + private + total balances (composes the API and records).
+export {
+  getBalances,
+  type GetBalancesParameters,
+  type GetBalancesReturnType,
+  type BalanceEntry,
+} from './utils/balances.js'
+
 // Liquidity lifecycle: create a pool, mint a position, deepen it.
 export { createPool, type CreatePoolParameters, type CreatePoolReturnType } from './actions/liquidity/createPool.js'
 export {
