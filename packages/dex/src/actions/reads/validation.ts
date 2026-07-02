@@ -14,7 +14,7 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  *
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param params The blinded address (`aleo1…`) to check, and optionally the
- *   program to read from (defaults to the generated `PROGRAM_ID`).
+ *   program to read from (defaults to `DEFAULT_PROGRAM`).
  * @returns `true` when the address has been used, otherwise `false`.
  *
  * @example
@@ -37,7 +37,7 @@ export async function isBlindedAddressUsed(
  *
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param params The pool key (field literal with suffix), and optionally the
- *   program to read from (defaults to the generated `PROGRAM_ID`).
+ *   program to read from (defaults to `DEFAULT_PROGRAM`).
  * @returns `true` when the pool exists, otherwise `false`.
  *
  * @example

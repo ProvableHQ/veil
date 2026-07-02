@@ -81,7 +81,7 @@ export interface BlindedIdentity {
  *   {@link nextBlindedIdentity} rather than hardcoding — blinded addresses
  *   are single-use.
  * @param program Program id whose address scopes the derivation. Defaults to
- *   the generated shield_swap `PROGRAM_ID`.
+ *   `DEFAULT_PROGRAM` (the live shield_swap deployment).
  * @returns The blinding factor as a field literal (e.g. `"1234…field"`).
  * @throws When `@provablehq/sdk` is not installed (actionable message), or
  *   when the view-key scalar does not parse.
@@ -126,7 +126,7 @@ export async function deriveBlindingFactor(
  * @param signerAddress The transaction signer's address (`aleo1…`) — the
  *   program binds the blinded address to `self.signer`.
  * @param program Program id whose address scopes the derivation. Defaults to
- *   the generated shield_swap `PROGRAM_ID`.
+ *   `DEFAULT_PROGRAM` (the live shield_swap deployment).
  * @returns The blinded address as an `aleo1…` literal.
  * @throws When `@provablehq/sdk` is not installed, or when an input literal
  *   does not parse.
@@ -170,7 +170,7 @@ export async function deriveBlindedAddress(
  * @property viewKeyScalar The account view key as a scalar literal.
  * @property signer The transaction signer's address (`aleo1…`).
  * @property program Program to derive for and scan against. Defaults to the
- *   generated shield_swap `PROGRAM_ID`.
+ *   `DEFAULT_PROGRAM`.
  * @property startCounter First counter to try. Defaults to 0.
  * @property maxScan Counters to try before giving up. Defaults to 64 —
  *   generous for interactive use while still failing fast when something is

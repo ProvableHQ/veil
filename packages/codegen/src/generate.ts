@@ -10,6 +10,14 @@ export interface GenerateOptions {
   abi: ABI
   /** Import path for @veil/core types (default: '@veil/core') */
   coreImport?: string
+  /**
+   * Program id to stamp into the emitted `PROGRAM_ID` and the generated
+   * contract factory. Defaults to the ABI's own `program`. Override when the
+   * bindings' shape is taken from one deployment's ABI but they target another
+   * — e.g. when a newer program version's ABI is the only one current tooling
+   * can parse, yet the live deployment (identical shape) has a different id.
+   */
+  programId?: string
 }
 
 /**
@@ -24,7 +32,7 @@ export interface GenerateOptions {
  * - Storage variable types
  */
 export function generate(options: GenerateOptions): string {
-  const { abi, coreImport = '@veil/core' } = options
+  const { abi, coreImport = '@veil/core', programId = abi.program } = options
   const lines: string[] = []
 
   // Header
@@ -35,8 +43,8 @@ export function generate(options: GenerateOptions): string {
   lines.push(`import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '${coreImport}'`)
   lines.push('')
 
-  // Program ID constant
-  lines.push(`export const PROGRAM_ID = '${abi.program}' as const`)
+  // Program ID constant — the program these bindings target (see programId option).
+  lines.push(`export const PROGRAM_ID = '${programId}' as const`)
   lines.push('')
 
   // Decoder helper: literal types (field/group/scalar) may arrive from runtime

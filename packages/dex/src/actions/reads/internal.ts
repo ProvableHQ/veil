@@ -9,7 +9,7 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  * then the width-correct generated decoder.
  *
  * @param client A Veil client whose transport can reach an Aleo node.
- * @param program Program to read from; defaults to the generated `PROGRAM_ID`.
+ * @param program Program to read from; defaults to `DEFAULT_PROGRAM`.
  * @param mapping On-chain mapping name (e.g. `"slots"`).
  * @param key Mapping key as an Aleo literal, including its type suffix.
  * @param decode Generated struct decoder (e.g. `toSlot`).
@@ -38,7 +38,7 @@ export async function readStructMapping<T>(
  * negative answer, not an error.
  *
  * @param client A Veil client whose transport can reach an Aleo node.
- * @param program Program to read from; defaults to the generated `PROGRAM_ID`.
+ * @param program Program to read from; defaults to `DEFAULT_PROGRAM`.
  * @param mapping On-chain flag mapping name.
  * @param key Mapping key as an Aleo literal, including its type suffix.
  * @returns `true` when the key is set to true on chain, otherwise `false`.

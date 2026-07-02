@@ -8,7 +8,7 @@ import { readStructMapping } from './internal.js'
  * @property poolKey Pool key as an Aleo field literal, including the `field`
  *   suffix. Same key space as `getPool`.
  * @property program Program to read from. Defaults to the generated
- *   shield_swap `PROGRAM_ID`.
+ *   `DEFAULT_PROGRAM`.
  */
 export type GetSlotParameters = {
   poolKey: string

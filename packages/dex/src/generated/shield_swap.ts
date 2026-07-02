@@ -4,7 +4,7 @@
 import { getContract } from '@veil/core'
 import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '@veil/core'
 
-export const PROGRAM_ID = 'shield_swap_v0_0_2.aleo' as const
+export const PROGRAM_ID = 'shield_swap_v0_0_1.aleo' as const
 
 function litStr(v: PlaintextValue | undefined, suffix: string): string {
   if (typeof v === 'bigint') return `${v}${suffix}`

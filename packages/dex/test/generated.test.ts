@@ -11,10 +11,12 @@ import {
   type Position,
 } from '../src/generated/shield_swap.js'
 
-// Verify the generated PROGRAM_ID constant matches the on-chain name.
+// PROGRAM_ID is the program the bindings target, stamped by codegen from
+// veil.config.json's `programId` — the live deployment (v0_0_1), even though
+// the bindings' shape is generated from the v0_0_2 ABI.
 describe('PROGRAM_ID', () => {
-  it('equals the canonical program name', () => {
-    expect(PROGRAM_ID).toBe('shield_swap_v0_0_2.aleo')
+  it('targets the live shield_swap deployment', () => {
+    expect(PROGRAM_ID).toBe('shield_swap_v0_0_1.aleo')
   })
 })
 

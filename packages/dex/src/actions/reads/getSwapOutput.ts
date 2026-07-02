@@ -8,7 +8,7 @@ import { readStructMapping } from './internal.js'
  * @property swapId Swap id as an Aleo field literal (returned by
  *   `swap_private` as its first output), including the `field` suffix.
  * @property program Program to read from. Defaults to the generated
- *   shield_swap `PROGRAM_ID`.
+ *   `DEFAULT_PROGRAM`.
  */
 export type GetSwapOutputParameters = {
   swapId: string

@@ -14,6 +14,12 @@ import { generate } from './generate.js'
 interface ProgramConfig {
   abi: string
   out: string
+  /**
+   * Program id to stamp into the emitted PROGRAM_ID. Defaults to the ABI's own
+   * `program`. Set this when the bindings' shape comes from one deployment's
+   * ABI but they target another (identical-shape) deployment.
+   */
+  programId?: string
 }
 
 interface Config {
@@ -44,6 +50,10 @@ Config file format (veil.config.json):
     ],
     "coreImport": "@veil/core"
   }
+
+  Each program may set "programId" to stamp a PROGRAM_ID that differs from the
+  ABI's own program (for bindings shaped from one deployment but targeting
+  another).
 `)
     process.exit(0)
   }
@@ -64,7 +74,7 @@ Config file format (veil.config.json):
     for (const program of config.programs) {
       const abiPath = resolve(dirname(configPath), program.abi)
       const outPath = resolve(dirname(configPath), program.out)
-      generateOne(abiPath, outPath, resolvedCoreImport)
+      generateOne(abiPath, outPath, resolvedCoreImport, program.programId)
     }
   } else if (abiIndex !== -1 && outIndex !== -1) {
     // Single file mode
@@ -77,16 +87,16 @@ Config file format (veil.config.json):
   }
 }
 
-function generateOne(abiPath: string, outPath: string, coreImport?: string) {
+function generateOne(abiPath: string, outPath: string, coreImport?: string, programId?: string) {
   const raw = JSON.parse(readFileSync(abiPath, 'utf-8'))
   const abi = parseAbi(raw)
 
-  const source = generate({ abi, coreImport })
+  const source = generate({ abi, coreImport, programId })
 
   mkdirSync(dirname(outPath), { recursive: true })
   writeFileSync(outPath, source, 'utf-8')
 
-  console.log(`Generated ${outPath} from ${abi.program}`)
+  console.log(`Generated ${outPath} from ${abi.program}${programId ? ` (as ${programId})` : ''}`)
 }
 
 main()

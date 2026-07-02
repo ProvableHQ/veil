@@ -156,7 +156,7 @@ export interface PositionNFTInfo {
  *   mint a position first.
  *
  * @example
- * const pos = await selectPositionNFT(client, { program: PROGRAM_ID, poolKey })
+ * const pos = await selectPositionNFT(client, { program: DEFAULT_PROGRAM, poolKey })
  */
 export async function selectPositionNFT(client: Client, params: SelectPositionNFTParameters): Promise<PositionNFTInfo> {
   const records = (await requestRecords(client, {
