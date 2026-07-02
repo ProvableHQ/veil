@@ -13,7 +13,10 @@ import { SwapOutputNotFinalizedError } from '../../src/actions/swap/claimSwapOut
  *   VEIL_INTEGRATION=1
  *   VEIL_E2E_PRIVATE_KEY   funded testnet account (credits for fees)
  *   ALEO_DPS_API_KEY, ALEO_CONSUMER_ID   delegated proving credentials
- * Optional: ALEO_DPS_URL, ALEO_RSS_URL.
+ * Optional: ALEO_DPS_URL, ALEO_RSS_URL, and VEIL_DEX_PROGRAM to pick the
+ * deployment under test — defaults to shield_swap_v0_0_1.aleo (the live
+ * venue the indexer serves); set shield_swap_v0_0_2.aleo to exercise the
+ * new deployment. Both share entrypoints, struct layouts, and domains.
  */
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
 const DPS_API_KEY = process.env.ALEO_DPS_API_KEY
@@ -23,6 +26,7 @@ const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!DPS_API_K
 const NETWORK_URL = 'https://api.provable.com/v2'
 const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove/testnet'
 const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://rss.provable.com'
+const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap_v0_0_1.aleo'
 const TX_TIMEOUT = 420_000
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -39,7 +43,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     consumerId: CONSUMER_ID,
     records: scanner,
   })
-  const client = walletClient.extend(dexActions({ indexer: {} }))
+  const client = walletClient.extend(dexActions({ indexer: {}, program: DEX_PROGRAM }))
 
   // Resolved during the run and shared across steps (tests run in order).
   const state: {
@@ -68,12 +72,21 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   }, TX_TIMEOUT)
 
   it('picks a token pair and fetches wrapper program sources (dyn-dispatch imports)', async () => {
-    const tokens = await client.indexer.getTokens()
-    const withWrappers = tokens.data.filter((t) => t.wrapper_program)
-    expect(withWrappers.length).toBeGreaterThanOrEqual(2)
-    const [a, b] = withWrappers
-    state.token0 = { address: a!.address, program: a!.wrapper_program!, decimals: a!.decimals }
-    state.token1 = { address: b!.address, program: b!.wrapper_program!, decimals: b!.decimals }
+    // Prefer a pair with a live pool (v0_0_1 today) so the swap has depth;
+    // fall back to the first two wrapper tokens on a fresh deployment.
+    const pools = await client.indexer.getPools({ limit: 1 })
+    const live = pools.data[0]
+    if (live?.token0_info?.wrapper_program && live?.token1_info?.wrapper_program) {
+      state.token0 = { address: live.token0, program: live.token0_info.wrapper_program, decimals: live.token0_info.decimals }
+      state.token1 = { address: live.token1, program: live.token1_info.wrapper_program, decimals: live.token1_info.decimals }
+    } else {
+      const tokens = await client.indexer.getTokens()
+      const withWrappers = tokens.data.filter((t) => t.wrapper_program)
+      expect(withWrappers.length).toBeGreaterThanOrEqual(2)
+      const [a, b] = withWrappers
+      state.token0 = { address: a!.address, program: a!.wrapper_program!, decimals: a!.decimals }
+      state.token1 = { address: b!.address, program: b!.wrapper_program!, decimals: b!.decimals }
+    }
 
     // The prover cannot statically discover IARC20 callees — fetch sources.
     const src0 = await getProgram(walletClient, { programId: state.token0.program })
@@ -96,34 +109,50 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     }
   }, TX_TIMEOUT * 2)
 
-  it('ensures a pool exists for the pair (create, or discover a prior run’s)', async () => {
-    const fee = 100 // registered on the target program (verified reads phase)
-    try {
-      const created = await client.createPool({
-        token0ProgramId: state.token0!.address,
-        token1ProgramId: state.token1!.address,
-        fee,
-        initialTick: 0,
-      })
-      state.poolKey = created.poolKey
-    } catch {
-      // Pool already exists (finalize asserts !initialized). Recover the key
-      // from a prior create_pool call's first output.
-      const calls = (await walletClient.request({
-        method: 'getProgramCalls',
-        params: { programId: 'shield_swap_v0_0_2.aleo' },
-      })) as Array<{ function?: string; outputs?: Array<{ value?: string } | string> }>
-      for (const call of calls ?? []) {
-        if (call.function !== 'create_pool') continue
-        const first = call.outputs?.[0]
-        const value = typeof first === 'string' ? first : first?.value
-        if (value?.endsWith('field') && (await client.isPoolInitialized({ poolKey: value }))) {
-          state.poolKey = value
+  it('ensures a pool exists for the pair (indexer discovery, create, or prior run)', async () => {
+    // 1) Indexer discovery — authoritative where the indexer serves this
+    //    program (v0_0_1 today): find a live pool for the chosen pair.
+    const pools = await client.indexer.getPools({ limit: 50 })
+    for (const p of pools.data) {
+      const pair = new Set([p.token0, p.token1])
+      if (pair.has(state.token0!.address) && pair.has(state.token1!.address)) {
+        if (await client.isPoolInitialized({ poolKey: p.key })) {
+          state.poolKey = p.key
           break
         }
       }
     }
-    expect(state.poolKey, 'pool key must be resolvable (created or discovered)').toBeTruthy()
+
+    // 2) Create it (fresh deployment, e.g. v0_0_2).
+    if (!state.poolKey) {
+      const fee = 100 // registered on both deployments (verified in reads phase)
+      try {
+        const created = await client.createPool({
+          token0ProgramId: state.token0!.address,
+          token1ProgramId: state.token1!.address,
+          fee,
+          initialTick: 0,
+        })
+        state.poolKey = created.poolKey
+      } catch {
+        // 3) Pool exists but the indexer doesn't serve this program —
+        //    recover the key from a prior create_pool call's first output.
+        const calls = (await walletClient.request({
+          method: 'getProgramCalls',
+          params: { programId: DEX_PROGRAM },
+        })) as Array<{ function?: string; outputs?: Array<{ value?: string } | string> }>
+        for (const call of calls ?? []) {
+          if (call.function !== 'create_pool') continue
+          const first = call.outputs?.[0]
+          const value = typeof first === 'string' ? first : first?.value
+          if (value?.endsWith('field') && (await client.isPoolInitialized({ poolKey: value }))) {
+            state.poolKey = value
+            break
+          }
+        }
+      }
+    }
+    expect(state.poolKey, 'pool key must be resolvable (discovered or created)').toBeTruthy()
     expect(await client.isPoolInitialized({ poolKey: state.poolKey! })).toBe(true)
   }, TX_TIMEOUT)
 
