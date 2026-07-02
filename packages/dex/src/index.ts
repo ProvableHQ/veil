@@ -60,12 +60,30 @@ export {
 export {
   parseTokenRecordInfo,
   selectTokenRecord,
+  selectPositionNFT,
   getOwnBalances,
   type TokenRecordInfo,
+  type PositionNFTInfo,
   type SelectTokenRecordParameters,
+  type SelectPositionNFTParameters,
   type GetOwnBalancesParameters,
   type GetOwnBalancesReturnType,
 } from './records.js'
+
+// Liquidity lifecycle: create a pool, mint a position, deepen it.
+export { createPool, type CreatePoolParameters, type CreatePoolReturnType } from './actions/liquidity/createPool.js'
+export {
+  mintPrivate,
+  formatMintPositionRequest,
+  type MintPrivateParameters,
+  type MintPrivateReturnType,
+} from './actions/liquidity/mintPrivate.js'
+export {
+  increaseLiquidityPrivate,
+  type IncreaseLiquidityPrivateParameters,
+  type IncreaseLiquidityPrivateReturnType,
+} from './actions/liquidity/increaseLiquidityPrivate.js'
+export { pickInsertHint, type PickInsertHintParameters } from './helpers/tick-hints.js'
 
 // Swap parameter helpers: intent → contract args (pure), deadline, nonces,
 // and the contract's Q64 tick math table.

@@ -110,6 +110,89 @@ export async function selectTokenRecord(client: Client, params: SelectTokenRecor
 }
 
 /**
+ * Parameters for {@link selectPositionNFT}.
+ *
+ * @property program The shield_swap program owning the PositionNFT records.
+ * @property poolKey Pool whose position to select.
+ * @property tokenId Select one specific position by its `token_id` field
+ *   literal. Optional — without it, the first unspent position for the pool
+ *   is returned.
+ */
+export type SelectPositionNFTParameters = {
+  program: string
+  poolKey: string
+  tokenId?: string
+}
+
+/**
+ * A PositionNFT record's decoded essentials.
+ *
+ * @property tokenId The position's `token_id` field literal.
+ * @property tickLower Lower bound tick of the position's range.
+ * @property tickUpper Upper bound tick of the position's range.
+ * @property record The owning record — pass its `recordPlaintext` as
+ *   `increase_liquidity_private`'s first input.
+ */
+export interface PositionNFTInfo {
+  tokenId: string
+  tickLower: number
+  tickUpper: number
+  record: OwnedRecord
+}
+
+/**
+ * Selects an unspent PositionNFT record for a pool.
+ *
+ * Local-signer path only (wallet signers pass a `record` InputRequest).
+ * PositionNFTs live in the shield_swap program itself — one record per
+ * minted position, consumed and re-issued by every liquidity change.
+ *
+ * Hits the network (or the wallet's scanner): one `requestRecords` call.
+ *
+ * @param client A Veil wallet client with a record provider.
+ * @param params Program, pool, and optionally a specific position token id.
+ * @returns The position record with its decoded range.
+ * @throws When the account holds no unspent PositionNFT for the pool —
+ *   mint a position first.
+ *
+ * @example
+ * const pos = await selectPositionNFT(client, { program: PROGRAM_ID, poolKey })
+ */
+export async function selectPositionNFT(client: Client, params: SelectPositionNFTParameters): Promise<PositionNFTInfo> {
+  const records = (await requestRecords(client, {
+    program: params.program,
+    statusFilter: 'unspent',
+  })) as OwnedRecord[]
+
+  for (const record of records) {
+    if (!record.recordPlaintext) continue
+    let value
+    try {
+      value = parseRecordPlaintextLoose(record.recordPlaintext)
+    } catch {
+      continue
+    }
+    // PositionNFT shape: token_id/token0_id/token1_id/pool/tick_lower/tick_upper.
+    const pool = value.fields.pool?.value
+    const poolField = typeof pool === 'bigint' ? `${pool}field` : pool
+    if (poolField !== params.poolKey) continue
+    const tokenIdRaw = value.fields.token_id?.value
+    const tokenId = typeof tokenIdRaw === 'bigint' ? `${tokenIdRaw}field` : String(tokenIdRaw ?? '')
+    if (params.tokenId !== undefined && tokenId !== params.tokenId) continue
+    const tickLower = value.fields.tick_lower?.value
+    const tickUpper = value.fields.tick_upper?.value
+    if (typeof tickLower !== 'bigint' || typeof tickUpper !== 'bigint') continue
+    return { tokenId, tickLower: Number(tickLower), tickUpper: Number(tickUpper), record }
+  }
+
+  throw new Error(
+    `No unspent PositionNFT for pool ${params.poolKey} on ${params.program}` +
+      (params.tokenId ? ` with token_id ${params.tokenId}` : '') +
+      ' — mint a position first.',
+  )
+}
+
+/**
  * Parameters for {@link getOwnBalances}.
  *
  * @property programs Token programs to scan — wrapper programs and/or the
