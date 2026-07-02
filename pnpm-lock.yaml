@@ -114,6 +114,9 @@ importers:
       '@veil/codegen':
         specifier: workspace:*
         version: link:../codegen
+      '@veil/provable':
+        specifier: workspace:*
+        version: link:../provable
       openapi-typescript:
         specifier: ^7.13.0
         version: 7.13.0(typescript@5.9.3)

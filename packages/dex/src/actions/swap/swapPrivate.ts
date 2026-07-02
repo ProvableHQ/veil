@@ -44,6 +44,10 @@ import { blindingFactorIssueRequest, blindedAddressIssueRequest } from '../../wa
  *   local signer that derives by its own means). Defaults to deriving from
  *   the local account's view key, or wallet-side `derived` requests for
  *   wallet accounts.
+ * @property imports Program sources for dynamic-dispatch dependencies
+ *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
+ *   callees statically — pass the involved token programs' sources when
+ *   proving locally or via a service that requires them.
  * @property program shield_swap program override. Defaults to the generated
  *   `PROGRAM_ID`.
  */
@@ -59,6 +63,7 @@ export type SwapPrivateParameters = {
   tokenInProgram?: string
   tokenRecord?: string | InputRequest
   blindedIdentity?: { blindingFactor: string; blindedAddress: string }
+  imports?: Record<string, string>
   program?: string
 }
 
@@ -171,6 +176,7 @@ export async function swapPrivate(client: Client, params: SwapPrivateParameters)
     const result = await executeContract(client, {
       program,
       function: 'swap_private',
+      imports: params.imports,
       inputs: [recordInput, identity.blindingFactor, identity.blindedAddress, ...tail],
     })
 
@@ -208,6 +214,7 @@ export async function swapPrivate(client: Client, params: SwapPrivateParameters)
   const transactionId = await writeContract(client, {
     program,
     function: 'swap_private',
+      imports: params.imports ? Object.keys(params.imports) : undefined,
     inputs: [params.tokenRecord, ...blindingInputs, ...tail],
   })
 

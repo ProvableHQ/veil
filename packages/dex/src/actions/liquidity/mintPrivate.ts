@@ -55,6 +55,10 @@ export function formatMintPositionRequest(req: {
  *   `pickInsertHint` (best-effort — see its limitation).
  * @property tickUpperHint Explicit insert hint for the upper bound.
  * @property nonce Explicit field nonce. Defaults to crypto-random.
+ * @property imports Program sources for dynamic-dispatch dependencies
+ *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
+ *   callees statically — pass the involved token programs' sources when
+ *   proving locally or via a service that requires them.
  * @property program shield_swap program override.
  */
 export type MintPrivateParameters = {
@@ -73,6 +77,7 @@ export type MintPrivateParameters = {
   tickLowerHint?: number
   tickUpperHint?: number
   nonce?: string
+  imports?: Record<string, string>
   program?: string
 }
 
@@ -171,6 +176,7 @@ export async function mintPrivate(client: Client, params: MintPrivateParameters)
     const result = await executeContract(client, {
       program,
       function: 'mint_private',
+      imports: params.imports,
       inputs: [nonce, record0, record1, recipient, request, pool.token0, pool.token1],
     })
     const positionTokenId = result.outputs[0]
@@ -194,7 +200,8 @@ export async function mintPrivate(client: Client, params: MintPrivateParameters)
     pool.token0,
     pool.token1,
   ]
-  const transactionId = await writeContract(client, { program, function: 'mint_private', inputs })
+  const transactionId = await writeContract(client, { program, function: 'mint_private',
+      imports: params.imports ? Object.keys(params.imports) : undefined, inputs })
   return { positionTokenId: undefined, transactionId }
 }
 

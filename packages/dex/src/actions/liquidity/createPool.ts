@@ -19,6 +19,10 @@ import { MIN_TICK, MAX_TICK, getSqrtPriceAtTick } from '../../helpers/tick-math.
  * @property tickSpacing Explicit tick spacing. Defaults to the canonical
  *   spacing bound to `fee` on chain (`fee_to_tick_spacing`) — overriding is
  *   almost never right.
+ * @property imports Program sources for dynamic-dispatch dependencies
+ *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
+ *   callees statically — pass the involved token programs' sources when
+ *   proving locally or via a service that requires them.
  * @property program shield_swap program override. Defaults to the generated
  *   `PROGRAM_ID`.
  */
@@ -29,6 +33,7 @@ export type CreatePoolParameters = {
   initialTick: number
   initialSqrtPrice?: bigint
   tickSpacing?: number
+  imports?: Record<string, string>
   program?: string
 }
 
@@ -97,7 +102,8 @@ export async function createPool(client: Client, params: CreatePoolParameters): 
 
   const account = (client as { account?: { type: string } }).account
   if (account?.type === 'local') {
-    const result = await executeContract(client, { program, function: 'create_pool', inputs })
+    const result = await executeContract(client, { program, function: 'create_pool',
+      imports: params.imports, inputs })
     const poolKey = result.outputs[0]
     if (!poolKey?.endsWith('field')) {
       throw new Error(`Unexpected create_pool output shape: ${JSON.stringify(result.outputs)}`)
@@ -105,6 +111,7 @@ export async function createPool(client: Client, params: CreatePoolParameters): 
     return { poolKey, transactionId: result.transactionId }
   }
 
-  const transactionId = await writeContract(client, { program, function: 'create_pool', inputs })
+  const transactionId = await writeContract(client, { program, function: 'create_pool',
+      imports: params.imports ? Object.keys(params.imports) : undefined, inputs })
   return { poolKey: undefined, transactionId }
 }

@@ -25,11 +25,16 @@ export class SwapOutputNotFinalizedError extends Error {
  * @property handle The {@link SwapHandle} from `swapPrivate`. Local-signer
  *   handles are complete; wallet-path handles need `swapId` and
  *   `blindedAddress` resolved from the confirmed request transaction first.
+ * @property imports Program sources for dynamic-dispatch dependencies
+ *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
+ *   callees statically — pass the involved token programs' sources when
+ *   proving locally or via a service that requires them.
  * @property program shield_swap program override. Defaults to the handle's
  *   program.
  */
 export type ClaimSwapOutputPrivateParameters = {
   handle: SwapHandle
+  imports?: Record<string, string>
   program?: string
 }
 
@@ -113,6 +118,7 @@ export async function claimSwapOutputPrivate(
     const result = await executeContract(client, {
       program,
       function: 'claim_swap_output_private',
+      imports: params.imports,
       inputs: [handle.blindingFactor, handle.blindedAddress, ...tail],
     })
     return { transactionId: result.transactionId, amountOut: out.amount_out, amountRemaining: out.amount_remaining }
@@ -129,6 +135,7 @@ export async function claimSwapOutputPrivate(
     blindedAddressResolveRequest(handle.blindedAddress, program),
     ...tail,
   ]
-  const transactionId = await writeContract(client, { program, function: 'claim_swap_output_private', inputs })
+  const transactionId = await writeContract(client, { program, function: 'claim_swap_output_private',
+      imports: params.imports ? Object.keys(params.imports) : undefined, inputs })
   return { transactionId, amountOut: out.amount_out, amountRemaining: out.amount_remaining }
 }

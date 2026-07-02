@@ -26,6 +26,10 @@ import { pickInsertHint } from '../../helpers/tick-hints.js'
  * @property tickLowerHint Explicit hint override; defaults to
  *   `pickInsertHint` for the position's own bounds.
  * @property tickUpperHint Explicit hint override.
+ * @property imports Program sources for dynamic-dispatch dependencies
+ *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
+ *   callees statically — pass the involved token programs' sources when
+ *   proving locally or via a service that requires them.
  * @property program shield_swap program override.
  */
 export type IncreaseLiquidityPrivateParameters = {
@@ -42,6 +46,7 @@ export type IncreaseLiquidityPrivateParameters = {
   token1Record?: string | InputRequest
   tickLowerHint?: number
   tickUpperHint?: number
+  imports?: Record<string, string>
   program?: string
 }
 
@@ -139,6 +144,7 @@ export async function increaseLiquidityPrivate(
     const result = await executeContract(client, {
       program,
       function: 'increase_liquidity_private',
+      imports: params.imports,
       inputs: [
         positionPlaintext,
         record0,
@@ -181,7 +187,8 @@ export async function increaseLiquidityPrivate(
     `${params.tickLowerHint}i32`,
     `${params.tickUpperHint}i32`,
   ]
-  const transactionId = await writeContract(client, { program, function: 'increase_liquidity_private', inputs })
+  const transactionId = await writeContract(client, { program, function: 'increase_liquidity_private',
+      imports: params.imports ? Object.keys(params.imports) : undefined, inputs })
   return { positionTokenId: undefined, transactionId }
 }
 
