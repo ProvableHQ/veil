@@ -128,7 +128,7 @@ export type Holding = {
  * Sums holdings into a single quote-currency value.
  *
  * Pure and local. Prices come from wherever the caller trusts —
- * `poolPrice`, the indexer, an oracle.
+ * `poolPrice`, the API, an oracle.
  *
  * @param holdings The positions to sum.
  * @returns Total value in the quote currency (floating point — display
@@ -149,7 +149,7 @@ export function portfolioValue(holdings: Holding[]): number {
  * Parameters for {@link feeAprEstimate}.
  *
  * @property volume24h 24h traded volume, in quote-currency units (e.g. from
- *   the indexer's pool stats).
+ *   the API's pool stats).
  * @property feePips Pool fee in pips (u16, e.g. `3000` = 0.30%).
  * @property positionValue The position's current value in the same quote
  *   units.

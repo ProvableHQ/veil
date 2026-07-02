@@ -23,7 +23,7 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  *   token's no-dust rule (see `dustScale`).
  * @property slippageBps Slippage tolerance in basis points. Defaults to 50
  *   (0.5%).
- * @property expectedOut Quoted output amount (e.g. from the indexer's
+ * @property expectedOut Quoted output amount (e.g. from the API's
  *   `/route`). Optional — without it a spot estimate is used, which ignores
  *   price impact and fees.
  * @property sqrtPriceLimit Explicit Q64 price bound. Defaults to the
@@ -83,7 +83,7 @@ export type SwapPrivateParameters = {
  * @property blindedAddress The public single-use address the swap recorded.
  *   Present immediately on the local-signer path; on the wallet path the
  *   wallet fills the slot, so recover it post-confirmation from the
- *   transition's public inputs (or the indexer's `swap.recipient`) before
+ *   transition's public inputs (or the API's `swap.recipient`) before
  *   claiming.
  * @property tokenInId Token id (field literal) that was sold.
  * @property tokenOutId Token id (field literal) that was bought.
@@ -257,7 +257,7 @@ export async function swapPrivate(client: Client, params: SwapPrivateParameters)
 
   return {
     // swapId/blindedAddress are wallet-filled — recover them from the
-    // confirmed transaction (or the indexer) before claiming.
+    // confirmed transaction (or the API) before claiming.
     swapId: undefined,
     blindingFactor: params.blindedIdentity?.blindingFactor,
     blindedAddress: params.blindedIdentity?.blindedAddress,

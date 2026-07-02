@@ -127,7 +127,7 @@ export async function claimSwapOutputPrivate(
   if (!handle.blindedAddress) {
     throw new Error(
       'handle.blindedAddress is not set — recover it from the confirmed request transaction ' +
-        "(or the indexer's swap.recipient) so the wallet can re-derive the blinding factor.",
+        "(or the API's swap.recipient) so the wallet can re-derive the blinding factor.",
     )
   }
   const inputs: TransactionInput[] = [

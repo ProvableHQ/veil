@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { IndexerClient, IndexerError, DEFAULT_INDEXER_URL } from '../../src/indexer/client.js'
+import { ApiClient, ApiError, DEFAULT_API_URL } from '../../src/api/client.js'
 
 function fetchMock(responses: Array<{ status?: number; json: unknown }>) {
   const calls: Array<{ url: string; init: RequestInit }> = []
@@ -12,17 +12,17 @@ function fetchMock(responses: Array<{ status?: number; json: unknown }>) {
   return { impl, calls }
 }
 
-describe('IndexerClient', () => {
+describe('ApiClient', () => {
   it('builds URLs with query params and skips undefined', async () => {
     const { impl, calls } = fetchMock([{ json: { data: [], pagination: { total: 0, limit: 5, offset: 0 } } }])
-    const client = new IndexerClient({ fetch: impl })
+    const client = new ApiClient({ fetch: impl })
     await client.getPools({ limit: 5, offset: undefined })
-    expect(calls[0]!.url).toBe(`${DEFAULT_INDEXER_URL}/pools?limit=5`)
+    expect(calls[0]!.url).toBe(`${DEFAULT_API_URL}/pools?limit=5`)
   })
 
   it('serializes bigint route amounts as strings', async () => {
     const { impl, calls } = fetchMock([{ json: { data: {} } }])
-    const client = new IndexerClient({ fetch: impl })
+    const client = new ApiClient({ fetch: impl })
     await client.getRoute({ token_in: '1field', token_out: '2field', amount_in: 10n ** 18n })
     expect(calls[0]!.url).toContain('amount_in=1000000000000000000')
   })
@@ -33,7 +33,7 @@ describe('IndexerClient', () => {
       { json: { data: { token: 'jwt123' } } },
       { json: { data: { address: '1field', name: 'T', symbol: 'T', decimals: 6 } } },
     ])
-    const client = new IndexerClient({ fetch: impl })
+    const client = new ApiClient({ fetch: impl })
     const sign = vi.fn(async (m: string) => `sign1-over-${m}`)
     const token = await client.authenticate('aleo1me', sign)
 
@@ -46,16 +46,16 @@ describe('IndexerClient', () => {
   })
 
   it('auth-gated calls without a token fail fast with the remedy', async () => {
-    const client = new IndexerClient({ fetch: fetchMock([{ json: {} }]).impl })
+    const client = new ApiClient({ fetch: fetchMock([{ json: {} }]).impl })
     await expect(client.registerToken({ address: '1field', name: 'T', symbol: 'T', decimals: 6 })).rejects.toThrow(
       /requires auth — call authenticate/,
     )
   })
 
-  it('non-2xx surfaces as IndexerError with status and body', async () => {
+  it('non-2xx surfaces as ApiError with status and body', async () => {
     const { impl } = fetchMock([{ status: 404, json: { error: 'no such pool' } }])
-    const client = new IndexerClient({ fetch: impl })
-    await expect(client.getPool('9field')).rejects.toThrow(IndexerError)
+    const client = new ApiClient({ fetch: impl })
+    await expect(client.getPool('9field')).rejects.toThrow(ApiError)
     await expect(client.getPool('9field')).rejects.toThrow(/404/)
   })
 })

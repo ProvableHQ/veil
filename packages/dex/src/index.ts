@@ -2,7 +2,7 @@
 // for shield_swap. Regenerate with `pnpm generate` (ABI via `pnpm regen-abi`).
 export * from './generated/shield_swap.js'
 
-// Chain-direct reads (trust-critical: values come from the node, not an indexer).
+// Chain-direct reads (trust-critical: values come from the node, not the API).
 export { getPool, type GetPoolParameters, type GetPoolReturnType } from './actions/reads/getPool.js'
 export { getSlot, type GetSlotParameters, type GetSlotReturnType } from './actions/reads/getSlot.js'
 export {
@@ -45,14 +45,14 @@ export {
   type ClaimSwapOutputPrivateReturnType,
 } from './actions/swap/claimSwapOutputPrivate.js'
 
-// Off-chain indexer REST client (trusted convenience layer; typed from the
+// Off-chain DEX API client (trusted convenience layer; typed from the
 // service's own OpenAPI via `pnpm regen-openapi`).
 export {
-  IndexerClient,
-  IndexerError,
-  DEFAULT_INDEXER_URL,
-  type IndexerClientOptions,
-} from './indexer/client.js'
+  ApiClient,
+  ApiError,
+  DEFAULT_API_URL,
+  type ApiClientOptions,
+} from './api/client.js'
 
 // Wallet-signer InputRequest builders + the connect-time algorithm grants.
 export {
@@ -110,7 +110,7 @@ export {
   type FeeAprEstimateInput,
 } from './utils/derivations.js'
 
-// One-surface composition: chain reads flat, indexer under `.indexer`.
+// One-surface composition: chain reads flat, API under `.api`.
 export { dexActions, type DexActionsConfig, type DexActions } from './decorators/dexActions.js'
 
 // Swap parameter helpers: intent → contract args (pure), deadline, nonces,

@@ -6,7 +6,7 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  * Parameters for {@link getPool}.
  *
  * @property poolKey Pool key as an Aleo field literal, including the `field`
- *   suffix (e.g. `"4719…024field"`). Obtain keys from the indexer's `/pools`
+ *   suffix (e.g. `"4719…024field"`). Obtain keys from the API's `/pools`
  *   endpoint or compute them from a `PoolKey` struct hash.
  * @property program Program to read from. Defaults to `DEFAULT_PROGRAM`
  *   (the live shield_swap deployment). Override to read the same mapping layout from

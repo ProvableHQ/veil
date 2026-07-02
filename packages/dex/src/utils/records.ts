@@ -50,7 +50,7 @@ export function parseTokenRecordInfo(plaintext: string): { amount: bigint; token
  *
  * @property program The program holding the token records — a wrapper
  *   program (e.g. `ethx_5a095e.aleo`) or the token registry. Look it up via
- *   the indexer's token metadata (`wrapper_program`).
+ *   the API's token metadata (`wrapper_program`).
  * @property minAmount Smallest acceptable record amount (u128). The swap
  *   consumes the record whole and refunds change, so any record ≥ the trade
  *   amount works.
@@ -196,7 +196,7 @@ export async function selectPositionNFT(client: Client, params: SelectPositionNF
  * Parameters for {@link getOwnBalances}.
  *
  * @property programs Token programs to scan — wrapper programs and/or the
- *   token registry. Get them from the indexer's token list
+ *   token registry. Get them from the API's token list
  *   (`wrapper_program` per token).
  */
 export type GetOwnBalancesParameters = {
@@ -215,7 +215,7 @@ export type GetOwnBalancesReturnType = Record<string, bigint>
 /**
  * Tabulates the caller's private balances from their unspent token records.
  *
- * This is the record-derived, private counterpart to the indexer's
+ * This is the record-derived, private counterpart to the API's
  * `getBalances` (which reports public/authorized balances for any address):
  * it sums what the caller can actually spend privately, per token.
  *

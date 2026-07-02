@@ -17,7 +17,7 @@ import { MIN_SQRT_PRICE, MAX_SQRT_PRICE, Q64 } from './tick-math.js'
  *   applied to `expectedOut` (or the spot estimate) to produce
  *   `amount_out_min`.
  * @property expectedOut Expected output amount from a quote (e.g. the
- *   indexer's `/route`). Optional; without it a spot-price estimate from
+ *   the API's `/route`). Optional; without it a spot-price estimate from
  *   `slot.sqrt_price` is used, which ignores price impact and fees — fine
  *   for small trades, too loose for large ones.
  * @property sqrtPriceLimit Explicit Q64 price bound. Defaults to the

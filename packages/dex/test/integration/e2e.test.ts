@@ -16,7 +16,7 @@ import { SwapOutputNotFinalizedError } from '../../src/actions/swap/claimSwapOut
  *   ALEO_DPS_API_KEY, ALEO_CONSUMER_ID   delegated proving credentials
  * Optional: ALEO_DPS_URL, ALEO_RSS_URL, and VEIL_DEX_PROGRAM to pick the
  * deployment under test — defaults to shield_swap_v0_0_1.aleo (the live
- * venue the indexer serves); set shield_swap_v0_0_2.aleo to exercise the
+ * venue the API serves); set shield_swap_v0_0_2.aleo to exercise the
  * new deployment. Both share entrypoints, struct layouts, and domains.
  */
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
@@ -53,7 +53,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     consumerId: CONSUMER_ID,
     records: scanner,
   })
-  const client = walletClient.extend(dexActions({ indexer: {}, program: DEX_PROGRAM }))
+  const client = walletClient.extend(dexActions({ api: {}, program: DEX_PROGRAM }))
 
   // Resolved during the run and shared across steps (tests run in order).
   const state: {
@@ -65,32 +65,32 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   } = {}
 
   it('funds the account via the async airdrop when balances are empty', async () => {
-    const balances = await client.indexer.getBalances({ user: account.address })
+    const balances = await client.api.getBalances({ user: account.address })
     const empty = balances.data.length === 0 || balances.data.every((b) => BigInt(b.balance ?? 0) === 0n)
     if (empty) {
-      const started = await client.indexer.airdrop(account.address)
+      const started = await client.api.airdrop(account.address)
       expect(started.job_id).toBeTruthy()
       // Poll until the faucet's per-token transfers settle.
       for (let i = 0; i < 60; i++) {
-        const job = await client.indexer.getAirdropStatus(started.job_id)
+        const job = await client.api.getAirdropStatus(started.job_id)
         if (job.status === 'completed' || job.status === 'done') break
         await sleep(5000)
       }
     }
-    const after = await client.indexer.getBalances({ user: account.address })
+    const after = await client.api.getBalances({ user: account.address })
     expect(after.data.length).toBeGreaterThan(0)
   }, TX_TIMEOUT)
 
   it('picks a token pair and fetches wrapper program sources (dyn-dispatch imports)', async () => {
     // Prefer a pair with a live pool (v0_0_1 today) so the swap has depth;
     // fall back to the first two wrapper tokens on a fresh deployment.
-    const pools = await client.indexer.getPools({ limit: 1 })
+    const pools = await client.api.getPools({ limit: 1 })
     const live = pools.data[0]
     if (live?.token0_info?.wrapper_program && live?.token1_info?.wrapper_program) {
       state.token0 = { address: live.token0, program: live.token0_info.wrapper_program, decimals: live.token0_info.decimals }
       state.token1 = { address: live.token1, program: live.token1_info.wrapper_program, decimals: live.token1_info.decimals }
     } else {
-      const tokens = await client.indexer.getTokens()
+      const tokens = await client.api.getTokens()
       const withWrappers = tokens.data.filter((t) => t.wrapper_program)
       expect(withWrappers.length).toBeGreaterThanOrEqual(2)
       const [a, b] = withWrappers
@@ -138,10 +138,10 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     }
   }, TX_TIMEOUT * 2)
 
-  it('ensures a pool exists for the pair (indexer discovery, create, or prior run)', async () => {
-    // 1) Indexer discovery — authoritative where the indexer serves this
+  it('ensures a pool exists for the pair (API discovery, create, or prior run)', async () => {
+    // 1) API discovery — authoritative where the API serves this
     //    program (v0_0_1 today): find a live pool for the chosen pair.
-    const pools = await client.indexer.getPools({ limit: 50 })
+    const pools = await client.api.getPools({ limit: 50 })
     for (const p of pools.data) {
       const pair = new Set([p.token0, p.token1])
       if (pair.has(state.token0!.address) && pair.has(state.token1!.address)) {
@@ -164,7 +164,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
         })
         state.poolKey = created.poolKey
       } catch {
-        // 3) Pool exists but the indexer doesn't serve this program —
+        // 3) Pool exists but the API does not serve this program —
         //    recover the key from a prior create_pool call's first output.
         const calls = (await walletClient.request({
           method: 'getProgramCalls',

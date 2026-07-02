@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createClient, custom } from '@veil/core'
 import { dexActions } from '../../src/decorators/dexActions.js'
-import { IndexerClient } from '../../src/indexer/client.js'
+import { ApiClient } from '../../src/api/client.js'
 
 const POOL_PLAINTEXT =
   '{\n  token0: 11field,\n  token1: 22field,\n  fee: 3000u16,\n  enabled: true,\n  scale0: 1u128,\n  scale1: 1u128\n}'
@@ -40,15 +40,15 @@ describe('dexActions', () => {
     expect(client).toBeTruthy()
   })
 
-  it('exposes a configured indexer, adopts a preconstructed one, and fails actionably without one', () => {
-    const configured = baseClient(() => null).extend(dexActions({ indexer: { baseUrl: 'https://x.example' } }))
-    expect(configured.indexer.baseUrl).toBe('https://x.example')
+  it('exposes a configured API, adopts a preconstructed one, and fails actionably without one', () => {
+    const configured = baseClient(() => null).extend(dexActions({ api: { baseUrl: 'https://x.example' } }))
+    expect(configured.api.baseUrl).toBe('https://x.example')
 
-    const prebuilt = new IndexerClient({ baseUrl: 'https://y.example' })
-    const adopted = baseClient(() => null).extend(dexActions({ indexer: prebuilt }))
-    expect(adopted.indexer).toBe(prebuilt)
+    const prebuilt = new ApiClient({ baseUrl: 'https://y.example' })
+    const adopted = baseClient(() => null).extend(dexActions({ api: prebuilt }))
+    expect(adopted.api).toBe(prebuilt)
 
     const chainOnly = baseClient(() => null).extend(dexActions())
-    expect(() => chainOnly.indexer.getPools).toThrow(/No indexer configured/)
+    expect(() => chainOnly.api.getPools).toThrow(/No DEX API configured/)
   })
 })

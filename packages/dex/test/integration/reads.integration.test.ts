@@ -12,7 +12,7 @@ import {
 } from '../../src/actions/reads/validation.js'
 import { PROGRAM_ID } from '../../src/generated/shield_swap.js'
 
-// Real-API integration: hits the live testnet node and the live AMM indexer.
+// Real-API integration: hits the live testnet node and the live DEX API.
 // Never mocked — these tests exist to catch drift between this client and the
 // deployed contract/API. Gated so the default offline suite stays fast.
 const RUN = process.env.VEIL_INTEGRATION === '1'
@@ -21,7 +21,7 @@ const API_BASE = 'https://api.provable.com/v2'
 const NODE_URL = `${API_BASE}/testnet`
 const INDEXER_URL = 'https://amm-api.dev.provable.com'
 
-// The live indexer currently serves pools created on shield_swap_v0_0_1; the
+// The live DEX API currently serves pools created on shield_swap_v0_0_1; the
 // v0_0_2 deployment starts with empty mappings. Reads try the target program
 // first and fall back to the previous version so the decode path is always
 // exercised against real chain data. Remove the fallback once v0_0_2 has pools.
@@ -30,7 +30,7 @@ const PREVIOUS_PROGRAM = 'shield_swap_v0_0_1.aleo'
 describe.runIf(RUN)('reads against the real API', () => {
   const client = createPublicClient({ transport: http(API_BASE, { network: 'testnet' }) })
 
-  it('getPool decodes a live pool discovered via the indexer', async () => {
+  it('getPool decodes a live pool discovered via the API', async () => {
     const res = await fetch(`${INDEXER_URL}/pools?limit=1`)
     expect(res.ok).toBe(true)
     const body = (await res.json()) as { data: { key: string }[] }
@@ -63,7 +63,7 @@ describe.runIf(RUN)('reads against the real API', () => {
     expect(pool).toBeNull()
   }, 30_000)
 
-  it('getSlot decodes live trading state for an indexer-discovered pool', async () => {
+  it('getSlot decodes live trading state for an API-discovered pool', async () => {
     const res = await fetch(`${INDEXER_URL}/pools?limit=1`)
     const body = (await res.json()) as { data: { key: string }[] }
     const poolKey = body.data[0]!.key
@@ -88,14 +88,14 @@ describe.runIf(RUN)('reads against the real API', () => {
     expect(await getSwapOutput(client, { swapId: absent })).toBeNull()
   }, 30_000)
 
-  it('validation reads agree with the indexer fee-tier registry', async () => {
+  it('validation reads agree with the API fee-tier registry', async () => {
     const res = await fetch(`${INDEXER_URL}/fee-tiers`)
     expect(res.ok).toBe(true)
     const body = (await res.json()) as { data: { fee_tier: number }[] }
     expect(body.data.length).toBeGreaterThan(0)
     const fee = body.data[0]!.fee_tier
 
-    // The target deployment must register the fee the indexer advertises,
+    // The target deployment must register the fee the API advertises,
     // bind a tick spacing to it, and register that spacing.
     expect(await isFeeTierValid(client, { fee })).toBe(true)
     const spacing = await getFeeToTickSpacing(client, { fee })

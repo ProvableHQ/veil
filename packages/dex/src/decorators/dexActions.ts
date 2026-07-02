@@ -32,20 +32,20 @@ import {
   type GetOwnBalancesReturnType,
 } from '../utils/records.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hints.js'
-import { IndexerClient, type IndexerClientOptions } from '../indexer/client.js'
+import { ApiClient, type ApiClientOptions } from '../api/client.js'
 
 /**
  * Configuration for {@link dexActions}.
  *
- * @property indexer Off-chain indexer wiring: constructor options, a
- *   preconstructed `IndexerClient` (e.g. one already holding a JWT), or
- *   omitted for a chain-only client whose `.indexer` throws on first use.
+ * @property api Off-chain DEX API wiring: constructor options, a
+ *   preconstructed `ApiClient` (e.g. one already holding a JWT), or
+ *   omitted for a chain-only client whose `.api` throws on first use.
  * @property program shield_swap program id every action defaults to. Set it
  *   once to point the whole surface at another deployment; per-call
  *   `program` still overrides.
  */
 export type DexActionsConfig = {
-  indexer?: IndexerClientOptions | IndexerClient
+  api?: ApiClientOptions | ApiClient
   program?: string
 }
 
@@ -66,44 +66,44 @@ export type DexActions = {
   createPool: (params: CreatePoolParameters) => Promise<CreatePoolReturnType>
   mintPrivate: (params: MintPrivateParameters) => Promise<MintPrivateReturnType>
   increaseLiquidityPrivate: (params: IncreaseLiquidityPrivateParameters) => Promise<IncreaseLiquidityPrivateReturnType>
-  indexer: IndexerClient
+  api: ApiClient
 }
 
 /**
  * Builds the DEX decorator for `client.extend()`.
  *
  * One surface, two provenances: chain-direct reads and writes sit flat on
- * the client (consensus-backed — the money path); the off-chain indexer's
- * REST methods live under `.indexer`, so a call site always shows which
- * world a value came from. Omit `indexer` for a chain-only client.
+ * the client (consensus-backed — the money path); the off-chain DEX API's
+ * REST methods live under `.api`, so a call site always shows which world a
+ * value came from. Omit `api` for a chain-only client.
  *
- * @param config Indexer wiring and the default program.
+ * @param config DEX API wiring and the default program.
  * @returns A decorator: pass it to `client.extend(...)`.
  *
  * @example
  * const client = createWalletClient({ account, transport, proving })
- *   .extend(dexActions({ indexer: {} }))
- * const pool = await client.getPool({ poolKey })       // chain
- * const pools = await client.indexer.getPools()        // REST
+ *   .extend(dexActions({ api: {} }))
+ * const pool = await client.getPool({ poolKey })   // chain
+ * const pools = await client.api.getPools()        // REST
  */
 export function dexActions(config: DexActionsConfig = {}) {
-  const indexer =
-    config.indexer instanceof IndexerClient
-      ? config.indexer
-      : config.indexer
-        ? new IndexerClient(config.indexer)
+  const api =
+    config.api instanceof ApiClient
+      ? config.api
+      : config.api
+        ? new ApiClient(config.api)
         : undefined
 
   // Thread the client-level program default under any per-call override.
   const withProgram = <P extends { program?: string }>(p: P): P => ({ ...p, program: p.program ?? config.program })
 
   // `extend()` copies properties with Object.assign, which evaluates getters
-  // eagerly — so the "no indexer" case is a proxy that throws actionably on
+  // eagerly — so the "no api" case is a proxy that throws actionably on
   // first USE instead of a lazy getter (which would throw at extend time).
-  const missingIndexer = new Proxy({} as IndexerClient, {
+  const missingApi = new Proxy({} as ApiClient, {
     get() {
       throw new Error(
-        'No indexer configured — pass dexActions({ indexer: { baseUrl } }) or construct an IndexerClient yourself.',
+        'No DEX API configured — pass dexActions({ api: { baseUrl } }) or construct an ApiClient yourself.',
       )
     },
   })
@@ -124,6 +124,6 @@ export function dexActions(config: DexActionsConfig = {}) {
     createPool: (p) => createPool(client, withProgram(p)),
     mintPrivate: (p) => mintPrivate(client, withProgram(p)),
     increaseLiquidityPrivate: (p) => increaseLiquidityPrivate(client, withProgram(p)),
-    indexer: indexer ?? missingIndexer,
+    api: api ?? missingApi,
   })
 }
