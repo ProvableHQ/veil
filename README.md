@@ -38,7 +38,7 @@ const value = await client.readContract({
 |---------|-------------|--------|
 | `@veil/core` | Clients, transports, accounts, actions, agent tools, MCP server | In development |
 | `@veil/wallet-adapter` | Wraps `@provablehq/aleo-wallet-standard` — connects any Aleo wallet | In development |
-| `@veil/provable` | Wraps `@provablehq/sdk` — key derivation, local signing, proving | In development |
+| `@veil/provable-sdk` | Wraps `@provablehq/sdk` — key derivation, local signing, proving | In development |
 | `@veil/react` | React hooks (wagmi equivalent) | Planned |
 | `@veil/mobile` | Shield Mobile SDK helpers | Planned |
 
@@ -56,7 +56,7 @@ const value = await client.readContract({
 - `rpcAccount()` and `custom()` transport for any Aleo wallet
 - Validated with Leo, Puzzle, Fox, Shield wallets
 
-**`@veil/provable`** — wraps `@provablehq/sdk`
+**`@veil/provable-sdk`** — wraps `@provablehq/sdk`
 - `privateKeyToAccount()` with key derivation
 - Local signing and proving
 
@@ -298,7 +298,7 @@ and has been deployed: await client.getCode({ program: 'my_program.aleo' })
 │  records: config object or custom impl           │
 ├─────────────────────────────────────────────────┤
 │             Adapter Packages                     │
-│  @veil/wallet-adapter  @veil/provable  │
+│  @veil/wallet-adapter  @veil/provable-sdk  │
 ├─────────────────────────────────────────────────┤
 │          Aleo Network / Wallet Adapter           │
 └─────────────────────────────────────────────────┘
@@ -313,7 +313,7 @@ veil defines interfaces. Implementations plug in.
 - **Proving** — a client configuration (`mode: 'delegated' | 'local'`), not a standalone interface. Wallets handle proving internally; only SDK/local users configure it.
 - **Records** — config object for common cases (`{ mode: 'network', url }`) or custom implementation (`{ getRecords: ... }`) for advanced use cases.
 
-Core has zero hard dependencies. Adapter packages (`@veil/wallet-adapter`, `@veil/provable`) bridge to the ecosystem's existing SDKs.
+Core has zero hard dependencies. Adapter packages (`@veil/wallet-adapter`, `@veil/provable-sdk`) bridge to the ecosystem's existing SDKs.
 
 ### Supported backends
 
@@ -386,7 +386,7 @@ veil/
 │   │       ├── errors/      # error types (actionable messages)
 │   │       └── utils/       # address validation, credits, value parsing
 │   ├── wallet-adapter/      # @veil/wallet-adapter (wraps wallet standard)
-│   └── provable/            # @veil/provable (wraps @provablehq/sdk)
+│   └── provable/            # @veil/provable-sdk (wraps @provablehq/sdk)
 ├── skills/                  # Skill definitions for code-writing agents
 ├── docs/
 │   ├── specs/               # Design specifications

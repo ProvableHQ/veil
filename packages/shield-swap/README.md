@@ -47,7 +47,7 @@ find the private records that swaps and mints spend). Local signing also pulls
 in `@provablehq/sdk` — it derives the blinded claim identity.
 
 ```ts
-import { loadNetwork } from '@veil/provable'
+import { loadNetwork } from '@veil/provable-sdk'
 import { shieldSwapActions } from '@veil/shield-swap'
 
 const aleo = await loadNetwork('testnet')

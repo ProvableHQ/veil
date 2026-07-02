@@ -18,7 +18,7 @@
       "@veil/core/agent": ["./packages/core/src/agent/index.ts"],
       "@veil/core/mcp": ["./packages/core/src/mcp/index.ts"],
       "@veil/wallet-adapter": ["./packages/wallet-adapter/src/index.ts"],
-      "@veil/provable": ["./packages/provable/src/index.ts"],
+      "@veil/provable-sdk": ["./packages/provable-sdk/src/index.ts"],
       "@veil/leo": ["./packages/leo/src/index.ts"],
       "@veil/devnode": ["./packages/devnode/src/index.ts"],
       "@veil/shield-swap": ["./packages/shield-swap/src/index.ts"],

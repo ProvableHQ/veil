@@ -1,11 +1,11 @@
 /**
- * @veil/provable
+ * @veil/provable-sdk
  *
  * Loads `@provablehq/sdk` for a specific Aleo network and exposes the SDK's
  * functionality bound to that network's setup parameters.
  *
  * Usage:
- *   import { loadNetwork } from '@veil/provable'
+ *   import { loadNetwork } from '@veil/provable-sdk'
  *   import { http } from '@veil/core'
  *
  *   const aleo = await loadNetwork('mainnet')

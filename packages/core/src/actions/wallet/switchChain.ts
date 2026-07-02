@@ -15,7 +15,7 @@ export type SwitchChainReturnType = void
  *   updates the transport's network routing in-place. The account itself
  *   stays the same — Aleo private keys, view keys, and addresses are
  *   network-agnostic. Requires the proving config to expose `switchNetwork`
- *   (provided by `@veil/provable`).
+ *   (provided by `@veil/provable-sdk`).
  */
 export async function switchChain(
   client: Client,

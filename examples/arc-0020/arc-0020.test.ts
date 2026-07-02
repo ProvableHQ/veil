@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 
 import { createTestClient, http, type TestClient } from '@veil/core'
 import { startDevnode, type DevnodeInstance } from '@veil/devnode'
-import { createDevnodeClient } from '@veil/provable'
+import { createDevnodeClient } from '@veil/provable-sdk'
 import { createLeoClient } from '@veil/leo'
 
 import { createTokenRegistryContract } from './generated/token_registry.js'

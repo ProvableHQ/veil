@@ -16,7 +16,7 @@ import {
   isAddress,
 } from '../packages/core/src/index.js'
 import { aleoAgentTools } from '../packages/core/src/agent/index.js'
-import { loadNetwork, type AleoSdk } from '../packages/provable/src/index.js'
+import { loadNetwork, type AleoSdk } from '../packages/provable-sdk/src/index.js'
 
 const API_URL = 'https://api.provable.com/v2'
 

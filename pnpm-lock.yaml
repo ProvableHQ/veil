@@ -63,9 +63,9 @@ importers:
       '@veil/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@veil/provable':
+      '@veil/provable-sdk':
         specifier: workspace:*
-        version: link:../../packages/provable
+        version: link:../../packages/provable-sdk
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
@@ -104,7 +104,7 @@ importers:
 
   packages/leo: {}
 
-  packages/provable:
+  packages/provable-sdk:
     dependencies:
       '@noble/hashes':
         specifier: ^1.7.2
@@ -178,9 +178,9 @@ importers:
       '@veil/codegen':
         specifier: workspace:*
         version: link:../codegen
-      '@veil/provable':
+      '@veil/provable-sdk':
         specifier: workspace:*
-        version: link:../provable
+        version: link:../provable-sdk
       openapi-typescript:
         specifier: ^7.13.0
         version: 7.13.0(typescript@5.9.3)

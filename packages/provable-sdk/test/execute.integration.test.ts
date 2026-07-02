@@ -5,7 +5,7 @@
  * - A funded account (uses the SDK demo account)
  * - Network connectivity to api.provable.com
  *
- * Run with: RUN_INTEGRATION=true pnpm vitest run packages/provable/test/execute.integration.test.ts
+ * Run with: RUN_INTEGRATION=true pnpm vitest run packages/provable-sdk/test/execute.integration.test.ts
  *
  * For delegated tests, also set:
  *   ALEO_DPS_API_KEY, ALEO_CONSUMER_ID (and optionally ALEO_DPS_URL)

@@ -105,7 +105,7 @@ function setupWalletAdapterClient(): { publicClient: PublicClient; walletClient:
 // ---------------------------------------------------------------------------
 // Backend B: Local Account (Provable SDK)
 //
-// In production, you'd use @veil/provable's privateKeyToAccount()
+// In production, you'd use @veil/provable-sdk's privateKeyToAccount()
 // and createProvingConfig(). Here we simulate a local account with
 // a mock proving config.
 // ---------------------------------------------------------------------------
@@ -126,7 +126,7 @@ function setupLocalAccountClient(): { publicClient: PublicClient; walletClient: 
   }
 
   // Proving config — in production this would be createProvingConfig()
-  // from @veil/provable, using the SDK's ProgramManager
+  // from @veil/provable-sdk, using the SDK's ProgramManager
   const proving = {
     mode: 'delegated' as const,
     buildTransaction: async (opts: unknown) => ({ mockTx: true }),

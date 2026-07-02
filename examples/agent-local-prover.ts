@@ -31,7 +31,7 @@ import { aleoAgentTools, createAgentTools } from '@veil/core/agent'
 // ---------------------------------------------------------------------------
 
 // In production, this would be:
-//   import { privateKeyToAccount, createProvingConfig } from '@veil/provable'
+//   import { privateKeyToAccount, createProvingConfig } from '@veil/provable-sdk'
 //
 // The provable package wraps @provablehq/sdk and handles:
 // - Key derivation from private key

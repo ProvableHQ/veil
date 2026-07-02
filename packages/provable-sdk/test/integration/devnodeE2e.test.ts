@@ -5,7 +5,7 @@ import { join } from 'node:path'
 
 import { createLeoClient } from '@veil/leo'
 import { startDevnode, type DevnodeInstance } from '@veil/devnode'
-import { createDevnodeClient } from '@veil/provable'
+import { createDevnodeClient } from '@veil/provable-sdk'
 import { createTestClient, http } from '@veil/core'
 
 /**
@@ -17,7 +17,7 @@ import { createTestClient, http } from '@veil/core'
  * aleo-devnode on PATH and spawns a long-running devnode process.
  *
  * Run with:
- *   VEIL_DEVNODE_INTEGRATION=1 npx vitest run packages/provable/test/integration/devnodeE2e.test.ts
+ *   VEIL_DEVNODE_INTEGRATION=1 npx vitest run packages/provable-sdk/test/integration/devnodeE2e.test.ts
  */
 
 const RUN = process.env.VEIL_DEVNODE_INTEGRATION === '1'

@@ -17,7 +17,7 @@ export default defineConfig({
       '@veil/core/mcp': path.resolve(__dirname, 'packages/core/src/mcp/index.ts'),
       '@veil/core': path.resolve(__dirname, 'packages/core/src/index.ts'),
       '@veil/wallet-adapter': path.resolve(__dirname, 'packages/wallet-adapter/src/index.ts'),
-      '@veil/provable': path.resolve(__dirname, 'packages/provable/src/index.ts'),
+      '@veil/provable-sdk': path.resolve(__dirname, 'packages/provable-sdk/src/index.ts'),
       '@veil/leo': path.resolve(__dirname, 'packages/leo/src/index.ts'),
       '@veil/devnode': path.resolve(__dirname, 'packages/devnode/src/index.ts'),
     },

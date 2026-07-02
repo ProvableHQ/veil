@@ -10,7 +10,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'packages/overview',
         'packages/core',
-        'packages/provable',
+        'packages/provable-sdk',
         'packages/wallet-adapter',
         'packages/react',
         'packages/shield-swap',
