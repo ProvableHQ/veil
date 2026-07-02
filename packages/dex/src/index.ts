@@ -39,6 +39,15 @@ export {
   type ClaimSwapOutputPrivateReturnType,
 } from './actions/swap/claimSwapOutputPrivate.js'
 
+// Off-chain indexer REST client (trusted convenience layer; typed from the
+// service's own OpenAPI via `pnpm regen-openapi`).
+export {
+  IndexerClient,
+  IndexerError,
+  DEFAULT_INDEXER_URL,
+  type IndexerClientOptions,
+} from './indexer/client.js'
+
 // Wallet-signer InputRequest builders + the connect-time algorithm grants.
 export {
   SHIELD_SWAP_ALGORITHM_GRANTS,

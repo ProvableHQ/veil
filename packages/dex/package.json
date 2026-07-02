@@ -15,9 +15,12 @@
     "generate": "veil-codegen --config veil.config.json",
     "regen-abi": "./scripts/regen-abi.sh",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "regen-openapi": "./scripts/regen-openapi.sh"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "dependencies": {
     "@veil/core": "workspace:*"
   },
@@ -30,7 +33,8 @@
     }
   },
   "devDependencies": {
+    "@provablehq/sdk": "^0.11.3",
     "@veil/codegen": "workspace:*",
-    "@provablehq/sdk": "^0.11.3"
+    "openapi-typescript": "^7.13.0"
   }
 }

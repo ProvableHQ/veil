@@ -17,7 +17,7 @@
 - **Wire types stay snake_case** to match the Provable API/`.aleo` format; SDK-facing param names may be camelCase, but anything serialized to the program is snake_case.
 - **Numeric widths (codegen'd program bindings):** `number` for u8/u16/u32 (and i8/i16/i32); `bigint` for u64/u128 (and i64/i128). `string` for `field`/`address`/`scalar`/`group`. (u64 → `bigint`: mechanically-generated bindings can't assume small values — e.g. the swap nonce overflows 2^53.)
 - **Private only (V1):** bind only `*_private` entrypoints; no public-visibility variants.
-- **Wallet vs SDK input path (post PR #68):** the SDK/local path is unchanged — `recordPlaintext` + Aleo-encoded string inputs + local proving (which **rejects** `InputRequest` via `assertNoInputRequests`). Do **not** narrow action record/value params: accept `value | InputRequest` (codegen already widens every slot; `getContract`/`writeContract` pass requests through, non-request fast path encodes as before) so a privacy-preserving wallet can fulfil record-by-`uid` / address injection with **no separate code path**. `uid`/`recordView`/grants are wallet-path concerns handled by core, not re-implemented here.
+- **Exactly two signer paths, keyed by account type (post PR #68):** (1) **Wallet signers (Shield-like wallets ONLY)** — the `InputRequest` approach (what the amm-app uses) works only when a wallet sits behind the adapter to fulfil requests: actions emit `derived` requests with the issue/resolve args protocol (`mode`, `membershipProgram`, `membershipMapping: 'used_blinded_addresses'`, `targetAddress` on resolve) for the blinding slots, and `record` requests for records; the wallet fulfils from its private state and manages counters itself. (2) **Local signers — the SDK local account today, potentially a Leo-CLI-based local account client later:** no wallet exists to fulfil requests (local proving rejects `InputRequest` via `assertNoInputRequests`), so these ALWAYS pass **raw literal inputs** — a locally derived blinding factor/blinded address (Phase 2 lazy-SDK derivation for SDK accounts), scanner-selected record plaintext, and encoded values. Action params accept explicit literal overrides (`blindedIdentity?`, `tokenRecord?`) so any local signer can supply literals derived by its own means. Export `SHIELD_SWAP_ALGORITHM_GRANTS` (connect-time allowlist: swap_private pos 1,2; claim_swap_output_private pos 0,1) for wallet dapps.
 - **Write method naming:** write methods/files/functions are the **camelCase of the transition name** — named after the transition, not re-aliased to a different concept: `swapPrivate`, `claimSwapOutputPrivate`, `createPool`, `mintPrivate`, `increaseLiquidityPrivate`. The **snake_case** form (`swap_private`, …) is only the string passed to the program (and ABI function-name assertions). Read/indexer methods keep descriptive `getX` names.
 - **Green bar:** `pnpm vitest run` from repo root passes; if any `@veil/*` public API changes, update `examples/e2e-demo.ts` and `apps/loyalty-dapp/` and keep `pnpm --filter @veil/loyalty-dapp exec tsc --noEmit` clean (CLAUDE.md).
 - **Reference revs:** contract `shield_swap_v0_0_2.aleo` @ Aleo testnet; Leo source `ProvableHQ/amm-v3`; derivation `ProvableHQ/amm-v3-tests@feat/q128` `src/client/amm-client.ts`; indexer `https://amm-api.dev.provable.com`.
@@ -520,7 +520,7 @@ Each its own pure function + test (one TDD cycle + commit each), per the spec's 
 
 ---
 
-## Phase 8 — Agent + MCP surfaces
+## Phase 9 — Agent + MCP surfaces (runs AFTER the e2e — reordered per user)
 
 ### Task 8.1: Agent tool schemas
 
@@ -538,7 +538,7 @@ Each its own pure function + test (one TDD cycle + commit each), per the spec's 
 
 ---
 
-## Phase 9 — End-to-end integration test (the headline goal)
+## Phase 8 — End-to-end integration test (the headline goal; reordered BEFORE agent/MCP per user)
 
 ### Task 9.1: Full lifecycle e2e against testnet
 
