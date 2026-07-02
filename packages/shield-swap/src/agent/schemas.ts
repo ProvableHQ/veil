@@ -148,6 +148,103 @@ export const getBalancesSchema: AgentToolSchema = {
   },
 }
 
+// ---------------------------------------------------------------------------
+// Write tools (money-moving; local-signer path). Handlers auto-fetch the
+// dynamic-dispatch program sources and, on the local path, auto-select records
+// — so amounts and token programs are all the caller passes. Amounts are
+// strings (raw base units, u128).
+// ---------------------------------------------------------------------------
+
+export const createPoolSchema: AgentToolSchema = {
+  name: 'shield_swap_create_pool',
+  description:
+    'Create a pool for a token pair at a fee tier (a public transaction). Returns the pool ' +
+    'key and transaction id. The fee tier must be registered on chain (validated first).',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      token0ProgramId: { type: 'string', description: 'First token id (field literal). Order does not matter.' },
+      token1ProgramId: { type: 'string', description: 'Second token id (field literal).' },
+      fee: { type: 'number', description: 'Fee tier in pips (u16), e.g. 3000 = 0.30%.' },
+      initialTick: { type: 'number', description: 'Opening tick; sets the initial price.' },
+    },
+    required: ['token0ProgramId', 'token1ProgramId', 'fee', 'initialTick'],
+  },
+}
+
+export const swapSchema: AgentToolSchema = {
+  name: 'shield_swap_swap',
+  description:
+    'Request a private swap (phase one). Returns a swap handle to pass to shield_swap_claim ' +
+    'once the request finalizes. Pass a quoted expectedOut (from shield_swap_get_route) so ' +
+    'slippage protection is meaningful.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      poolKey: { type: 'string', description: 'Pool key field literal.' },
+      tokenInId: { type: 'string', description: 'Token id being sold (field literal); one of the pool tokens.' },
+      amountIn: { type: 'string', description: 'Amount to sell, raw base units (u128) as a string.' },
+      tokenInProgram: { type: 'string', description: "The input token's wrapper program (holds your records)." },
+      tokenOutProgram: { type: 'string', description: "The output token's wrapper program." },
+      expectedOut: { type: 'string', description: 'Quoted output (u128 string) for slippage. Optional.' },
+      slippageBps: { type: 'number', description: 'Slippage tolerance in basis points. Defaults to 50 (0.5%).' },
+    },
+    required: ['poolKey', 'tokenInId', 'amountIn', 'tokenInProgram', 'tokenOutProgram'],
+  },
+}
+
+export const claimSchema: AgentToolSchema = {
+  name: 'shield_swap_claim',
+  description:
+    'Claim a finalized private swap (phase two), collecting the output as private records. ' +
+    'Retry if it reports the output is not finalized yet.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      handle: { type: 'object', description: 'The swap handle returned by shield_swap_swap.' },
+      tokenInProgram: { type: 'string', description: "The input token's wrapper program." },
+      tokenOutProgram: { type: 'string', description: "The output token's wrapper program." },
+    },
+    required: ['handle', 'tokenInProgram', 'tokenOutProgram'],
+  },
+}
+
+export const mintSchema: AgentToolSchema = {
+  name: 'shield_swap_mint',
+  description:
+    'Mint a concentrated-liquidity position over a tick range. Ticks are rounded to the ' +
+    "pool's spacing. Returns the position token id.",
+  inputSchema: {
+    type: 'object',
+    properties: {
+      poolKey: { type: 'string', description: 'Pool key field literal.' },
+      tickLower: { type: 'number', description: 'Lower tick of the range.' },
+      tickUpper: { type: 'number', description: 'Upper tick of the range.' },
+      amount0Desired: { type: 'string', description: 'Desired token0 amount, raw base units (u128) string.' },
+      amount1Desired: { type: 'string', description: 'Desired token1 amount, raw base units (u128) string.' },
+      token0Program: { type: 'string', description: "token0's wrapper program." },
+      token1Program: { type: 'string', description: "token1's wrapper program." },
+    },
+    required: ['poolKey', 'tickLower', 'tickUpper', 'amount0Desired', 'amount1Desired', 'token0Program', 'token1Program'],
+  },
+}
+
+export const increaseLiquiditySchema: AgentToolSchema = {
+  name: 'shield_swap_increase_liquidity',
+  description: 'Add funds to your existing position in a pool (tick range unchanged).',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      poolKey: { type: 'string', description: 'Pool key field literal.' },
+      amount0Desired: { type: 'string', description: 'Additional token0 amount, raw base units (u128) string.' },
+      amount1Desired: { type: 'string', description: 'Additional token1 amount, raw base units (u128) string.' },
+      token0Program: { type: 'string', description: "token0's wrapper program." },
+      token1Program: { type: 'string', description: "token1's wrapper program." },
+    },
+    required: ['poolKey', 'amount0Desired', 'amount1Desired', 'token0Program', 'token1Program'],
+  },
+}
+
 /** Chain-direct + private-balance tools — require a client. */
 export const chainToolSchemas: AgentToolSchema[] = [
   getPoolSchema,
@@ -168,3 +265,12 @@ export const apiToolSchemas: AgentToolSchema[] = [
 
 /** Composed tools — require both a client and an ApiClient. */
 export const composedToolSchemas: AgentToolSchema[] = [getBalancesSchema]
+
+/** Money-moving write tools — require a client, and are opt-in (`includeWrites`). */
+export const writeToolSchemas: AgentToolSchema[] = [
+  createPoolSchema,
+  swapSchema,
+  claimSchema,
+  mintSchema,
+  increaseLiquiditySchema,
+]

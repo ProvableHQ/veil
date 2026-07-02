@@ -16,11 +16,18 @@ export type { AgentToolSchema, AgentTool, AgentToolHandler } from '@veil/core/ag
  *   public balances). API tools are available only when this is set.
  * @property program shield_swap program id the chain tools default to.
  *   Defaults to `DEFAULT_PROGRAM` (the live deployment).
+ * @property includeWrites Include the money-moving write tools (swap, claim,
+ *   mint, increase liquidity, create pool). Off by default — an agent gets
+ *   read-only tools unless you opt in. Requires `client`. Write tools target
+ *   the local-signer path: they auto-select records and auto-fetch the
+ *   dynamic-dispatch program sources, so the agent supplies only amounts and
+ *   token programs.
  */
 export type ShieldSwapAgentToolsConfig = {
   client?: Client
   api?: ApiClient
   program?: string
+  includeWrites?: boolean
 }
 
 /** A schema plus the handler that executes it — the internal registry entry. */

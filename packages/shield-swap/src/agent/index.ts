@@ -1,13 +1,19 @@
 import type { AgentTool, AgentToolSchema } from '@veil/core/agent'
 import type { ShieldSwapAgentToolsConfig } from './types.js'
-import { chainToolSchemas, apiToolSchemas, composedToolSchemas } from './schemas.js'
-import { createChainHandlers, createApiHandlers, createComposedHandlers } from './handlers.js'
+import { chainToolSchemas, apiToolSchemas, composedToolSchemas, writeToolSchemas } from './schemas.js'
+import {
+  createChainHandlers,
+  createApiHandlers,
+  createComposedHandlers,
+  createWriteHandlers,
+} from './handlers.js'
 
 export type { ShieldSwapAgentToolsConfig, AgentTool, AgentToolSchema, AgentToolHandler } from './types.js'
 export {
   chainToolSchemas,
   apiToolSchemas,
   composedToolSchemas,
+  writeToolSchemas,
   getPoolSchema,
   getSlotSchema,
   getSwapOutputSchema,
@@ -41,6 +47,8 @@ export function shieldSwapAgentToolSchemas(config?: ShieldSwapAgentToolsConfig):
   if (all || config.client) schemas.push(...chainToolSchemas)
   if (all || config.api) schemas.push(...apiToolSchemas)
   if (all || (config.client && config.api)) schemas.push(...composedToolSchemas)
+  // Writes are money-moving — included only when explicitly opted in.
+  if (all || (config.includeWrites && config.client)) schemas.push(...writeToolSchemas)
   return schemas
 }
 
@@ -72,5 +80,6 @@ export function createShieldSwapAgentTools(config: ShieldSwapAgentToolsConfig): 
   if (config.client) add(chainToolSchemas, createChainHandlers(config.client, config.program))
   if (config.api) add(apiToolSchemas, createApiHandlers(config.api))
   if (config.client && config.api) add(composedToolSchemas, createComposedHandlers(config.client, config.api))
+  if (config.includeWrites && config.client) add(writeToolSchemas, createWriteHandlers(config.client, config.program))
   return tools
 }

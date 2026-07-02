@@ -50,6 +50,18 @@ describe('shieldSwapAgentToolSchemas — gating', () => {
     expect(names({ client: {} as Client })).not.toContain('shield_swap_get_balances')
     expect(names({ client: {} as Client, api: {} as ApiClient })).toContain('shield_swap_get_balances')
   })
+
+  it('gates money-moving write tools behind includeWrites', () => {
+    // Off by default, even with a client.
+    expect(names({ client: {} as Client })).not.toContain('shield_swap_swap')
+    // Opt-in requires a client too.
+    expect(names({ includeWrites: true })).not.toContain('shield_swap_swap')
+    // Client + opt-in → writes appear.
+    const withWrites = names({ client: {} as Client, includeWrites: true })
+    expect(withWrites).toEqual(expect.arrayContaining(['shield_swap_swap', 'shield_swap_claim', 'shield_swap_create_pool']))
+    // No config returns everything, writes included.
+    expect(names()).toContain('shield_swap_mint')
+  })
 })
 
 describe('createShieldSwapAgentTools — wiring', () => {
