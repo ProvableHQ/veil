@@ -64,6 +64,48 @@ VEIL_INTEGRATION=1 pnpm exec vitest run packages/shield-swap/test/integration
   don't hand-edit. `PROGRAM_ID` targets the live deployment (`v0_0_1`) while the
   ABI shape currently comes from `v0_0_2`; see the README's Codegen section.
 
+## Using the agent tools
+
+This package exposes its actions as agent tools so an LLM can drive the DEX.
+Build a client, then get tools or an MCP server from it.
+
+Framework-agnostic tools (schema + handler) — feed to LangChain, the Vercel AI
+SDK, etc.:
+
+```ts
+import { shieldSwapActions } from '@veil/shield-swap'
+import { createShieldSwapAgentTools } from '@veil/shield-swap/agent'
+
+const client = walletClient.extend(shieldSwapActions({ api: {} }))
+const tools = createShieldSwapAgentTools({ client, api: client.api })
+// each: { schema: { name, description, inputSchema }, handler: (input) => Promise<result> }
+```
+
+As an MCP server (`{ tools, handleToolCall }`):
+
+```ts
+import { createShieldSwapMcpServer } from '@veil/shield-swap/mcp'
+
+const server = createShieldSwapMcpServer({ client, api: client.api })
+const pools = await server.handleToolCall('shield_swap_list_pools', { limit: 5 })
+```
+
+Rules that matter when wiring these up:
+
+- **Gating by backing.** Read tools appear when `client` is set; API tools when
+  `api` is set; `shield_swap_get_balances` needs both. `shieldSwapAgentToolSchemas()`
+  (no config) returns every schema for registration-only use.
+- **Writes are opt-in.** Money-moving tools (`swap`, `claim`, `mint`,
+  `increase_liquidity`, `create_pool`) are excluded unless you pass
+  `includeWrites: true` (and a `client`). Only enable them for an agent you
+  intend to let move funds.
+- **Params are LLM-shaped.** Amounts are strings (raw base units); the agent
+  passes token programs and amounts — handlers auto-fetch `imports` and
+  auto-select records. `shield_swap_claim` takes the handle `shield_swap_swap`
+  returned. Results are JSON-safe (bigints rendered as strings).
+- **Combine with base Aleo tools** via core's adapter:
+  `toMcpServer([...createAgentTools(cfg), ...createShieldSwapAgentTools(cfg)])`.
+
 ## Layout
 
 ```
