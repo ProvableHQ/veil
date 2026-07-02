@@ -6,10 +6,11 @@ import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 /**
  * Real-testnet pool creation. `create_pool` is a public, fee-paying
  * transaction, so this shares the e2e tier's gating (funded account + delegated
- * proving). It finds a token pair + registered fee tier with no existing pool
- * and creates one; if the pair already has pools at every fee tier tried, the
- * create still proves + broadcasts and the contract rejects the duplicate — so
- * either outcome validates the createPool path.
+ * proving). It creates the ETHx → USDCx pool — the canonical DEX pair — at the
+ * first registered fee tier that has no existing pool; if that pair already has
+ * pools at every fee tier tried, the create still proves + broadcasts and the
+ * contract rejects the duplicate — so either outcome validates the createPool
+ * path.
  *
  * Requirements (skipped when absent):
  *   VEIL_INTEGRATION=1
@@ -56,12 +57,17 @@ describe.runIf(RUN)('pool creation on testnet', () => {
     })
     client = walletClient.extend(shieldSwapActions({ api: {}, program: DEX_PROGRAM }))
 
-    // A token pair to create a pool for. Take two from the far end of the
-    // registry — less-popular tokens are likelier to have an unused fee tier.
+    // Create the ETHx → USDCx pool specifically — the canonical DEX pair.
+    // create_pool normalizes token order internally, so which is passed as
+    // token0 vs token1 does not change the resulting pool or its key.
     const tokens = (await client.api.getTokens()).data
-    expect(tokens.length).toBeGreaterThanOrEqual(2)
-    tokenA = tokens[tokens.length - 1]!.address
-    tokenB = tokens[tokens.length - 2]!.address
+    const bySymbol = (sym: string) => tokens.find((t) => t.symbol?.toUpperCase() === sym.toUpperCase())
+    const ethx = bySymbol('ETHx')
+    const usdcx = bySymbol('USDCx')
+    expect(ethx, 'ETHx must be in the token registry to create the ETHx/USDCx pool').toBeTruthy()
+    expect(usdcx, 'USDCx must be in the token registry to create the ETHx/USDCx pool').toBeTruthy()
+    tokenA = ethx!.address
+    tokenB = usdcx!.address
 
     // Which candidate fee tiers are registered on chain (create_pool requires it).
     registeredFees = []
@@ -71,7 +77,7 @@ describe.runIf(RUN)('pool creation on testnet', () => {
     expect(registeredFees.length, 'need a registered fee tier to create a pool').toBeGreaterThan(0)
   }, 90_000)
 
-  it('creates a pool at an unused fee tier (or the contract rejects a duplicate)', async () => {
+  it('creates the ETHx → USDCx pool at an unused fee tier (or the contract rejects a duplicate)', async () => {
     let created: { poolKey?: string; transactionId: string } | undefined
     let lastRevert: unknown
 
