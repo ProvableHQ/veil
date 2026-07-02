@@ -397,41 +397,40 @@ unless you pass a `tokens` filter, returns only tokens you actually hold.
 
 ## Codegen
 
-The typed layer isn't hand-written — it's generated from the contract's ABI and
-the API's OpenAPI spec, both pinned under [`codegen/`](./codegen). The package
-ships the generated output, so **using** the client needs none of this. You only
-regenerate when the upstream shapes change.
+The typed layer (contract types + decoders in `src/generated/`, and the
+`ApiClient` response types in `src/api/openapi.ts`) is generated from the
+contract's ABI and the API's OpenAPI spec, both pinned under
+[`codegen/`](./codegen). The package ships that output.
 
-What comes out of it:
+**When to use it.** Not as a consumer — installing `@veil/shield-swap` gives you
+the generated bindings already. You reach for codegen as a maintainer, when the
+upstream shapes drift out from under those bindings:
 
-- `src/generated/shield_swap.ts` — struct/record types, decoders (`toPoolState`,
-  `toSlot`, …), `PROGRAM_ID`, and the contract factory. Generated from the
-  pinned ABI (`codegen/abi/`). `getPool`/`getSlot`/etc. and `DEFAULT_PROGRAM`
-  are built on this.
-- `src/api/openapi.ts` — the `ApiClient` response types, generated from the
-  indexer's OpenAPI spec (`codegen/amm-api/`).
+- the contract is **redeployed** or gains/changes an entrypoint, struct, or mapping,
+- the DEX API adds or **renames** an endpoint or field, or
+- you want the client to **target a different deployment** than the one it ships against.
 
-When to run it:
+When none of that has happened, don't run it — the checked-in output is the
+source of truth, and regenerating against a moving testnet just produces noise.
 
-- **The contract changed** (redeploy, new entrypoint, changed struct): refetch
-  the program and regenerate.
-- **The API changed** (new/renamed endpoint or field): refetch the spec — the
-  git diff on the generated types is your drift alarm.
-- **Retarget a deployment**: point `codegen/veil.config.json` at a different
-  program's ABI (or set its `programId` to stamp a different `PROGRAM_ID` while
-  keeping the current shape) and regenerate.
-
-How (from the package root):
+**How to use it.** Run the relevant step from the package root, then review and
+commit the regenerated files — the git diff is the point, it shows exactly what
+drifted:
 
 ```sh
-pnpm regen-abi       # fetch program bytecode + ABI JSON into codegen/abi/
-pnpm generate        # ABI → src/generated/shield_swap.ts
-pnpm regen-openapi   # fetch the OpenAPI spec + regenerate src/api/openapi.ts
+pnpm regen-abi       # refetch the program bytecode + ABI JSON → codegen/abi/
+pnpm generate        # ABI → src/generated/shield_swap.ts (types, decoders, PROGRAM_ID)
+pnpm regen-openapi   # refetch the OpenAPI spec → src/api/openapi.ts
 ```
 
-Regenerating the ABI needs `leo` ≥ 4.3 (earlier versions can't parse
-`shield_swap_v0_0_1`'s `constructor` dialect). See
-[`codegen/README.md`](./codegen/README.md) for the layout details.
+Typically it's one of these, not all three: `regen-openapi` for an API change,
+`regen-abi` + `generate` for a contract change (`generate` alone is enough if
+you only edited `codegen/veil.config.json`). To retarget a deployment, point
+`veil.config.json` at another program's ABI — or set its `programId` to stamp a
+different `PROGRAM_ID` while keeping the current shape — then `generate`.
+`regen-abi` needs `leo` ≥ 4.3 (older versions can't parse `shield_swap_v0_0_1`'s
+`constructor` dialect). [`codegen/README.md`](./codegen/README.md) has the
+layout details.
 
 ## Reference
 
