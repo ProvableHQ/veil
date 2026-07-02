@@ -216,7 +216,7 @@ export type GetPrivateBalancesReturnType = Record<string, bigint>
  * Tabulates the caller's private balances from their unspent token records.
  *
  * This is the record-derived, private counterpart to the API's
- * `getBalances` (which reports public/authorized balances for any address):
+ * `getPublicBalances` (which reports public/authorized balances for any address):
  * it sums what the caller can actually spend privately, per token.
  *
  * Hits the network (or the wallet's scanner): one `requestRecords` call per

@@ -65,7 +65,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   } = {}
 
   it('funds the account via the async airdrop when balances are empty', async () => {
-    const balances = await client.api.getBalances({ user: account.address })
+    const balances = await client.api.getPublicBalances({ user: account.address })
     const empty = balances.data.length === 0 || balances.data.every((b) => BigInt(b.balance ?? 0) === 0n)
     if (empty) {
       const started = await client.api.airdrop(account.address)
@@ -77,7 +77,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
         await sleep(5000)
       }
     }
-    const after = await client.api.getBalances({ user: account.address })
+    const after = await client.api.getPublicBalances({ user: account.address })
     expect(after.data.length).toBeGreaterThan(0)
   }, TX_TIMEOUT)
 

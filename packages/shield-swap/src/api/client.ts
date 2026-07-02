@@ -198,7 +198,7 @@ export class ApiClient {
   }
 
   /** Reads a user's public/authorized balances (base units, as the API sees them). */
-  async getBalances(query: { user: string }): Promise<Schemas['BalanceListResponseDoc']> {
+  async getPublicBalances(query: { user: string }): Promise<Schemas['BalanceListResponseDoc']> {
     return this.request('GET', '/balances', { query })
   }
 

@@ -367,14 +367,14 @@ const { poolKey } = await client.createPool({
 ## Balances
 
 `getPrivateBalances` sums your unspent records per token, so it reflects what you
-can actually spend privately. The API's `getBalances` reports public
+can actually spend privately. The API's `getPublicBalances` reports public
 balances for any address:
 
 ```ts
 await client.getPrivateBalances({ programs: [token0Program, token1Program] })
 // { 'ethx_5a095e.aleo': 3000000000000000000n }
 
-await client.api.getBalances({ user: address })
+await client.api.getPublicBalances({ user: address })
 ```
 
 ## Units and formats
