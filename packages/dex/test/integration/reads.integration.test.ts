@@ -113,6 +113,20 @@ describe.runIf(RUN)('reads against the real API', () => {
     expect(await isBlindedAddressUsed(client, { address: fresh })).toBe(false)
   }, 30_000)
 
+  it('a freshly derived blinded identity is unused on chain', async () => {
+    // Devnode test account (public key) — same fixtures as the golden vectors.
+    const { nextBlindedIdentity } = await import('../../src/blinded-identity.js')
+    const id = await nextBlindedIdentity(client, {
+      viewKeyScalar: '334926304971763782347498121479281870911723639068413954564748091722770623877scalar',
+      signer: 'aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px',
+    })
+    // The scan itself asserted the address is unused; sanity-check the shape.
+    expect(id.counter).toBeGreaterThanOrEqual(0)
+    expect(id.blindingFactor.endsWith('field')).toBe(true)
+    expect(id.blindedAddress.startsWith('aleo1')).toBe(true)
+    expect(await isBlindedAddressUsed(client, { address: id.blindedAddress })).toBe(false)
+  }, 60_000)
+
   it(`target program ${PROGRAM_ID} is deployed with the expected mappings`, async () => {
     const res = await fetch(`${NODE_URL}/program/${PROGRAM_ID}/mappings`)
     expect(res.ok).toBe(true)

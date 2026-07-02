@@ -17,3 +17,19 @@ export {
   isTickSpacingValid,
   getFeeToTickSpacing,
 } from './actions/reads/validation.js'
+
+// Blinded identity (private-swap identity lifecycle). Local derivation lazily
+// loads the optional @provablehq/sdk peer; wallet accounts never need it.
+export {
+  deriveBlindingFactor,
+  deriveBlindedAddress,
+  nextBlindedIdentity,
+  type BlindedIdentity,
+  type NextBlindedIdentityParameters,
+} from './blinded-identity.js'
+export {
+  BLINDING_FACTOR_DOMAIN,
+  CLAIM_OR_SWAP_DOMAIN,
+  BLINDING_FACTOR_ALGORITHM,
+  BLINDED_ADDRESS_ALGORITHM,
+} from './constants.js'

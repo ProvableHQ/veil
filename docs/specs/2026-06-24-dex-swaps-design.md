@@ -220,6 +220,21 @@ one. The counter is auto-managed; callers never see it unless they override.
 A `BlindedIdentity` helper encapsulates derivation + counter scan, returning
 `{ counter, blindingFactor, blindedAddress }`.
 
+**Two derivation paths; the WASM SDK is an optional peer (implemented):**
+- **Wallet path (dapps — default):** the dapp cannot derive at all (it never holds the view
+  key). `swapPrivate` fills the two slots with `derived` InputRequests naming core's
+  wallet-standard algorithms `program-scoped-blinding-factor` / `program-scoped-blinded-address`;
+  the wallet derives from its own private state. Zero SDK, zero WASM in the dapp bundle.
+- **Local path (bots/agents/e2e):** `@provablehq/sdk` is an **optional peerDependency** of
+  `@veil/dex`, lazily `import()`ed inside the derivation functions — importing the package never
+  loads WASM; the first derivation call does, and a missing peer throws an actionable install
+  message. Local-account users already carry the SDK for local proving, so the peer costs them
+  nothing extra.
+- Golden vectors pin the derivation against an independent transcription of the reference
+  client; the on-chain `verify_blinded_address` assert (e2e) is the final authority. wasm-bindgen
+  values are consumed by use — every Field/Group is constructed per call (the reference's
+  `.clone()` is load-bearing).
+
 ## Two-phase swap & the SwapHandle
 
 A swap is **request → (chain computes output) → claim**, not atomic:
