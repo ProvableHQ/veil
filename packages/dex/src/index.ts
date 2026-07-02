@@ -51,6 +51,7 @@ export {
 // Wallet-signer InputRequest builders + the connect-time algorithm grants.
 export {
   SHIELD_SWAP_ALGORITHM_GRANTS,
+  shieldSwapAlgorithmGrants,
   BLINDING_MEMBERSHIP_MAPPING,
   blindingFactorIssueRequest,
   blindedAddressIssueRequest,
@@ -58,6 +59,9 @@ export {
   blindedAddressResolveRequest,
 } from './wallet-requests.js'
 export {
+  SHIELD_SWAP_V0_0_1,
+  SHIELD_SWAP_V0_0_2,
+  DEFAULT_PROGRAM,
   BLINDING_FACTOR_DOMAIN,
   CLAIM_OR_SWAP_DOMAIN,
   BLINDING_FACTOR_ALGORITHM,

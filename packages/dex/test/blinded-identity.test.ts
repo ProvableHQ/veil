@@ -5,6 +5,11 @@ import {
   deriveBlindedAddress,
   nextBlindedIdentity,
 } from '../src/blinded-identity.js'
+import { SHIELD_SWAP_V0_0_2 } from '../src/constants.js'
+
+// Vectors were generated for the v0_0_2 program scope — pin it explicitly
+// (the library default now targets the live v0_0_1 deployment). The e2e
+// validates the default-program derivation against the chain itself.
 
 // Golden vectors generated from an independent verbatim transcription of the
 // Provable reference client (amm-v3-tests @feat/q128 amm-client.ts), using the
@@ -34,18 +39,18 @@ const VECTORS = [
 describe('blinded identity derivation (golden vectors)', () => {
   for (const v of VECTORS) {
     it(`counter ${v.counter} reproduces the reference derivation`, async () => {
-      const bf = await deriveBlindingFactor(VIEW_KEY_SCALAR, v.counter)
+      const bf = await deriveBlindingFactor(VIEW_KEY_SCALAR, v.counter, SHIELD_SWAP_V0_0_2)
       expect(bf).toBe(v.blindingFactor)
-      const addr = await deriveBlindedAddress(bf, SIGNER)
+      const addr = await deriveBlindedAddress(bf, SIGNER, SHIELD_SWAP_V0_0_2)
       expect(addr).toBe(v.blindedAddress)
     })
   }
 
   it('is deterministic across calls (no wasm object reuse bugs)', async () => {
-    const a = await deriveBlindingFactor(VIEW_KEY_SCALAR, 0)
-    const b = await deriveBlindingFactor(VIEW_KEY_SCALAR, 0)
+    const a = await deriveBlindingFactor(VIEW_KEY_SCALAR, 0, SHIELD_SWAP_V0_0_2)
+    const b = await deriveBlindingFactor(VIEW_KEY_SCALAR, 0, SHIELD_SWAP_V0_0_2)
     expect(a).toBe(b)
-    expect(await deriveBlindedAddress(a, SIGNER)).toBe(await deriveBlindedAddress(b, SIGNER))
+    expect(await deriveBlindedAddress(a, SIGNER, SHIELD_SWAP_V0_0_2)).toBe(await deriveBlindedAddress(b, SIGNER, SHIELD_SWAP_V0_0_2))
   })
 })
 
@@ -61,6 +66,7 @@ describe('nextBlindedIdentity (counter scan)', () => {
     const id = await nextBlindedIdentity(scanClient(new Set()), {
       viewKeyScalar: VIEW_KEY_SCALAR,
       signer: SIGNER,
+      program: SHIELD_SWAP_V0_0_2,
     })
     expect(id.counter).toBe(0)
     expect(id.blindingFactor).toBe(VECTORS[0]!.blindingFactor)
@@ -72,6 +78,7 @@ describe('nextBlindedIdentity (counter scan)', () => {
     const id = await nextBlindedIdentity(scanClient(used), {
       viewKeyScalar: VIEW_KEY_SCALAR,
       signer: SIGNER,
+      program: SHIELD_SWAP_V0_0_2,
     })
     expect(id.counter).toBe(2)
     expect(id.blindedAddress).not.toBe(VECTORS[0]!.blindedAddress)
@@ -82,6 +89,7 @@ describe('nextBlindedIdentity (counter scan)', () => {
     const id = await nextBlindedIdentity(scanClient(new Set()), {
       viewKeyScalar: VIEW_KEY_SCALAR,
       signer: SIGNER,
+      program: SHIELD_SWAP_V0_0_2,
       startCounter: 7,
     })
     expect(id.counter).toBe(7)
@@ -90,7 +98,7 @@ describe('nextBlindedIdentity (counter scan)', () => {
     // Every address reads as used → the window exhausts.
     const allUsed = { request: async () => 'true' } as unknown as Client
     await expect(
-      nextBlindedIdentity(allUsed, { viewKeyScalar: VIEW_KEY_SCALAR, signer: SIGNER, maxScan: 3 }),
+      nextBlindedIdentity(allUsed, { viewKeyScalar: VIEW_KEY_SCALAR, signer: SIGNER, program: SHIELD_SWAP_V0_0_2, maxScan: 3 }),
     ).rejects.toThrow(/No unused blinded address/)
   })
 })

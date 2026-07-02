@@ -1,6 +1,6 @@
 import { readMapping, type Client } from '@veil/core'
-import { PROGRAM_ID } from '../../generated/shield_swap.js'
 import { readBoolMapping } from './internal.js'
+import { DEFAULT_PROGRAM } from '../../constants.js'
 
 /**
  * Checks whether a blinded address has already been consumed by a private
@@ -117,7 +117,7 @@ export async function getFeeToTickSpacing(
   params: { fee: number; program?: string },
 ): Promise<number | null> {
   const raw = await readMapping(client, {
-    programId: params.program ?? PROGRAM_ID,
+    programId: params.program ?? DEFAULT_PROGRAM,
     mapping: 'fee_to_tick_spacing',
     key: `${params.fee}u16`,
   })

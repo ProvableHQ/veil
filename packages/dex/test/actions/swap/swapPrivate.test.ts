@@ -74,7 +74,7 @@ describe('swapPrivate — local signer', () => {
 
     expect(executeMock).toHaveBeenCalledOnce()
     const call = executeMock.mock.calls[0]![1]
-    expect(call.program).toBe('shield_swap_v0_0_2.aleo')
+    expect(call.program).toBe('shield_swap_v0_0_1.aleo')
     expect(call.function).toBe('swap_private')
     // Exact positional order per the deployed ABI.
     expect(call.inputs).toEqual([
@@ -96,7 +96,7 @@ describe('swapPrivate — local signer', () => {
     expect(handle.blindingFactor).toBe(IDENTITY.blindingFactor)
     expect(handle.tokenOutId).toBe('15594200448253854747971580789field')
     expect(handle.transactionId).toBe('at1tx')
-    expect(handle.program).toBe('shield_swap_v0_0_2.aleo')
+    expect(handle.program).toBe('shield_swap_v0_0_1.aleo')
   })
 
   it('rejects InputRequests on the local path', async () => {
@@ -139,7 +139,7 @@ describe('swapPrivate — wallet signer', () => {
       algorithm: 'program-scoped-blinding-factor',
       args: {
         mode: { type: 'string', value: 'issue' },
-        membershipProgram: { type: 'string', value: 'shield_swap_v0_0_2.aleo' },
+        membershipProgram: { type: 'string', value: 'shield_swap_v0_0_1.aleo' },
         membershipMapping: { type: 'string', value: 'used_blinded_addresses' },
       },
     })

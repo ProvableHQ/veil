@@ -1,6 +1,5 @@
 import type { AlgorithmGrant, InputRequest } from '@veil/core'
-import { PROGRAM_ID } from './generated/shield_swap.js'
-import { BLINDING_FACTOR_ALGORITHM, BLINDED_ADDRESS_ALGORITHM } from './constants.js'
+import { BLINDING_FACTOR_ALGORITHM, BLINDED_ADDRESS_ALGORITHM, DEFAULT_PROGRAM } from './constants.js'
 
 // Wallet-signer path only: these build the `derived` InputRequests a
 // Shield-like wallet fulfils from its own view key. Local signers cannot use
@@ -20,12 +19,17 @@ export const BLINDING_MEMBERSHIP_MAPPING = 'used_blinded_addresses'
  * blinding_factor@1, blinded_address@2, …)`,
  * `claim_swap_output_private(blinding_factor@0, blinded_address@1, …)`.
  */
-export const SHIELD_SWAP_ALGORITHM_GRANTS: AlgorithmGrant[] = [
-  { algorithm: BLINDING_FACTOR_ALGORITHM, program: PROGRAM_ID, function: 'swap_private', inputPosition: 1 },
-  { algorithm: BLINDED_ADDRESS_ALGORITHM, program: PROGRAM_ID, function: 'swap_private', inputPosition: 2 },
-  { algorithm: BLINDING_FACTOR_ALGORITHM, program: PROGRAM_ID, function: 'claim_swap_output_private', inputPosition: 0 },
-  { algorithm: BLINDED_ADDRESS_ALGORITHM, program: PROGRAM_ID, function: 'claim_swap_output_private', inputPosition: 1 },
-]
+export function shieldSwapAlgorithmGrants(program: string = DEFAULT_PROGRAM): AlgorithmGrant[] {
+  return [
+    { algorithm: BLINDING_FACTOR_ALGORITHM, program, function: 'swap_private', inputPosition: 1 },
+    { algorithm: BLINDED_ADDRESS_ALGORITHM, program, function: 'swap_private', inputPosition: 2 },
+    { algorithm: BLINDING_FACTOR_ALGORITHM, program, function: 'claim_swap_output_private', inputPosition: 0 },
+    { algorithm: BLINDED_ADDRESS_ALGORITHM, program, function: 'claim_swap_output_private', inputPosition: 1 },
+  ]
+}
+
+/** The grants for {@link DEFAULT_PROGRAM} — pass `shieldSwapAlgorithmGrants(program)` when overriding. */
+export const SHIELD_SWAP_ALGORITHM_GRANTS: AlgorithmGrant[] = shieldSwapAlgorithmGrants()
 
 /** Shared args for the issue-mode derived requests (fresh counter slot). */
 function issueArgs(program: string) {
@@ -52,14 +56,14 @@ function resolveArgs(program: string, targetBlindedAddress: string) {
  * The wallet burns a new counter slot scoped to (program, mapping) and
  * substitutes the derived factor — the dapp never sees it. Pure and local.
  *
- * @param program Program the derivation is scoped to. Defaults to the
- *   generated shield_swap `PROGRAM_ID`.
+ * @param program Program the derivation is scoped to. Defaults to
+ *   `DEFAULT_PROGRAM` (the live deployment).
  * @returns The InputRequest for `swap_private`'s blinding-factor slot.
  *
  * @example
  * inputs[1] = blindingFactorIssueRequest()
  */
-export function blindingFactorIssueRequest(program: string = PROGRAM_ID): InputRequest {
+export function blindingFactorIssueRequest(program: string = DEFAULT_PROGRAM): InputRequest {
   return { type: 'derived', algorithm: BLINDING_FACTOR_ALGORITHM, args: issueArgs(program) }
 }
 
@@ -70,11 +74,11 @@ export function blindingFactorIssueRequest(program: string = PROGRAM_ID): InputR
  * transaction — the wallet fulfils both from the same counter slot. Pure and
  * local.
  *
- * @param program Program the derivation is scoped to. Defaults to the
- *   generated shield_swap `PROGRAM_ID`.
+ * @param program Program the derivation is scoped to. Defaults to
+ *   `DEFAULT_PROGRAM` (the live deployment).
  * @returns The InputRequest for `swap_private`'s blinded-address slot.
  */
-export function blindedAddressIssueRequest(program: string = PROGRAM_ID): InputRequest {
+export function blindedAddressIssueRequest(program: string = DEFAULT_PROGRAM): InputRequest {
   return { type: 'derived', algorithm: BLINDED_ADDRESS_ALGORITHM, args: issueArgs(program) }
 }
 
@@ -88,13 +92,13 @@ export function blindedAddressIssueRequest(program: string = PROGRAM_ID): InputR
  *
  * @param targetBlindedAddress The public blinded address from the swap
  *   (`SwapHandle.blindedAddress`).
- * @param program Program the derivation is scoped to. Defaults to the
- *   generated shield_swap `PROGRAM_ID`.
+ * @param program Program the derivation is scoped to. Defaults to
+ *   `DEFAULT_PROGRAM` (the live deployment).
  * @returns The InputRequest for `claim_swap_output_private`'s blinding-factor slot.
  */
 export function blindingFactorResolveRequest(
   targetBlindedAddress: string,
-  program: string = PROGRAM_ID,
+  program: string = DEFAULT_PROGRAM,
 ): InputRequest {
   return { type: 'derived', algorithm: BLINDING_FACTOR_ALGORITHM, args: resolveArgs(program, targetBlindedAddress) }
 }
@@ -107,13 +111,13 @@ export function blindingFactorResolveRequest(
  * wallet-fulfilled. Pure and local.
  *
  * @param targetBlindedAddress The public blinded address from the swap.
- * @param program Program the derivation is scoped to. Defaults to the
- *   generated shield_swap `PROGRAM_ID`.
+ * @param program Program the derivation is scoped to. Defaults to
+ *   `DEFAULT_PROGRAM` (the live deployment).
  * @returns The InputRequest for `claim_swap_output_private`'s blinded-address slot.
  */
 export function blindedAddressResolveRequest(
   targetBlindedAddress: string,
-  program: string = PROGRAM_ID,
+  program: string = DEFAULT_PROGRAM,
 ): InputRequest {
   return { type: 'derived', algorithm: BLINDED_ADDRESS_ALGORITHM, args: resolveArgs(program, targetBlindedAddress) }
 }

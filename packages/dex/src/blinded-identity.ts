@@ -1,6 +1,5 @@
 import type { Client } from '@veil/core'
-import { PROGRAM_ID } from './generated/shield_swap.js'
-import { BLINDING_FACTOR_DOMAIN, CLAIM_OR_SWAP_DOMAIN } from './constants.js'
+import { BLINDING_FACTOR_DOMAIN, CLAIM_OR_SWAP_DOMAIN, DEFAULT_PROGRAM } from './constants.js'
 import { isBlindedAddressUsed } from './actions/reads/validation.js'
 
 // The SDK (WASM) is an optional peer: dapps talking to a privacy-preserving
@@ -93,7 +92,7 @@ export interface BlindedIdentity {
 export async function deriveBlindingFactor(
   viewKeyScalar: string,
   counter: number,
-  program: string = PROGRAM_ID,
+  program: string = DEFAULT_PROGRAM,
 ): Promise<string> {
   const { Address, Field, Scalar, U32, Poseidon8 } = await loadSdk()
 
@@ -138,7 +137,7 @@ export async function deriveBlindingFactor(
 export async function deriveBlindedAddress(
   blindingFactor: string,
   signerAddress: string,
-  program: string = PROGRAM_ID,
+  program: string = DEFAULT_PROGRAM,
 ): Promise<string> {
   const { Address, Field, Poseidon8 } = await loadSdk()
   const SIZE_IN_DATA_BITS = 252

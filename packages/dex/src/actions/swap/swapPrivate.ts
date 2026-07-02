@@ -5,7 +5,6 @@ import {
   type InputRequest,
   type TransactionInput,
 } from '@veil/core'
-import { PROGRAM_ID } from '../../generated/shield_swap.js'
 import type { SwapHandle } from '../../types.js'
 import { getPool } from '../reads/getPool.js'
 import { getSlot } from '../reads/getSlot.js'
@@ -13,6 +12,7 @@ import { nextBlindedIdentity, viewKeyToScalar } from '../../blinded-identity.js'
 import { selectTokenRecord } from '../../records.js'
 import { resolveSwapParams, getDeadline, generateSwapNonce } from '../../helpers/params.js'
 import { blindingFactorIssueRequest, blindedAddressIssueRequest } from '../../wallet-requests.js'
+import { DEFAULT_PROGRAM } from '../../constants.js'
 
 /**
  * Parameters for {@link swapPrivate}.
@@ -48,8 +48,8 @@ import { blindingFactorIssueRequest, blindedAddressIssueRequest } from '../../wa
  *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
  *   callees statically — pass the involved token programs' sources when
  *   proving locally or via a service that requires them.
- * @property program shield_swap program override. Defaults to the generated
- *   `PROGRAM_ID`.
+ * @property program shield_swap program override. Defaults to `DEFAULT_PROGRAM`
+ *   (the live shield_swap deployment).
  */
 export type SwapPrivateParameters = {
   poolKey: string
@@ -107,7 +107,7 @@ export type SwapPrivateReturnType = SwapHandle
  * // const out = await getSwapOutput(client, { swapId: handle.swapId! })
  */
 export async function swapPrivate(client: Client, params: SwapPrivateParameters): Promise<SwapPrivateReturnType> {
-  const program = params.program ?? PROGRAM_ID
+  const program = params.program ?? DEFAULT_PROGRAM
 
   // Live pool state drives direction, dust validation, and the price bound.
   const pool = await getPool(client, { poolKey: params.poolKey, program })

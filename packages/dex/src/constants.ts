@@ -1,3 +1,22 @@
+/** The original shield_swap deployment — the live venue (pools, liquidity, indexer). */
+export const SHIELD_SWAP_V0_0_1 = 'shield_swap_v0_0_1.aleo'
+
+/** The newer shield_swap deployment — config-seeded, awaiting pools/indexer migration. */
+export const SHIELD_SWAP_V0_0_2 = 'shield_swap_v0_0_2.aleo'
+
+/**
+ * The program every DEX action targets unless overridden.
+ *
+ * Set to the deployment where real pools, liquidity, and the indexer live
+ * TODAY, so defaults work out of the box. The generated bindings are built
+ * from the v0_0_2 ABI (the only one current `leo abi` parses); both
+ * deployments share entrypoints, struct layouts, and blinding domains, and
+ * the decoders are exercised against live v0_0_1 data in integration tests.
+ * Override per client (`dexActions({ program })`) or per call (`program`).
+ * Flip this constant when the ecosystem migrates.
+ */
+export const DEFAULT_PROGRAM = SHIELD_SWAP_V0_0_1
+
 /**
  * Domain separator for deriving a blinding factor from a view key and counter.
  *

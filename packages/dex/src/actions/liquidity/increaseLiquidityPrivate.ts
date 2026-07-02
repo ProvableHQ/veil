@@ -1,8 +1,8 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@veil/core'
-import { PROGRAM_ID } from '../../generated/shield_swap.js'
 import { getPool } from '../reads/getPool.js'
 import { selectTokenRecord, selectPositionNFT } from '../../records.js'
 import { pickInsertHint } from '../../helpers/tick-hints.js'
+import { DEFAULT_PROGRAM } from '../../constants.js'
 
 /**
  * Parameters for {@link increaseLiquidityPrivate}.
@@ -93,7 +93,7 @@ export async function increaseLiquidityPrivate(
   client: Client,
   params: IncreaseLiquidityPrivateParameters,
 ): Promise<IncreaseLiquidityPrivateReturnType> {
-  const program = params.program ?? PROGRAM_ID
+  const program = params.program ?? DEFAULT_PROGRAM
 
   const pool = await getPool(client, { poolKey: params.poolKey, program })
   if (!pool) throw new Error(`Pool ${params.poolKey} does not exist on ${program}`)

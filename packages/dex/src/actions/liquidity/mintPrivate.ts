@@ -1,11 +1,11 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@veil/core'
-import { PROGRAM_ID } from '../../generated/shield_swap.js'
 import { getPool } from '../reads/getPool.js'
 import { selectTokenRecord } from '../../records.js'
 import { generateFieldNonce } from '../../helpers/params.js'
 import { roundTickToSpacing } from '../../helpers/tick-math.js'
 import { pickInsertHint } from '../../helpers/tick-hints.js'
 import { getSlot } from '../reads/getSlot.js'
+import { DEFAULT_PROGRAM } from '../../constants.js'
 
 /**
  * Formats a MintPositionRequest struct literal in the contract's exact
@@ -125,7 +125,7 @@ export type MintPrivateReturnType = {
  * })
  */
 export async function mintPrivate(client: Client, params: MintPrivateParameters): Promise<MintPrivateReturnType> {
-  const program = params.program ?? PROGRAM_ID
+  const program = params.program ?? DEFAULT_PROGRAM
 
   const pool = await getPool(client, { poolKey: params.poolKey, program })
   if (!pool) throw new Error(`Pool ${params.poolKey} does not exist on ${program}`)

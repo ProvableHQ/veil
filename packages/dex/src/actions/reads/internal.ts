@@ -1,5 +1,5 @@
 import { readMapping, parseRecordPlaintextLoose, type Client, type RecordValue } from '@veil/core'
-import { PROGRAM_ID } from '../../generated/shield_swap.js'
+import { DEFAULT_PROGRAM } from '../../constants.js'
 
 /**
  * Reads a struct-valued mapping entry and decodes it with a generated decoder.
@@ -22,7 +22,7 @@ export async function readStructMapping<T>(
   key: string,
   decode: (value: RecordValue) => T,
 ): Promise<T | null> {
-  const programId = program ?? PROGRAM_ID
+  const programId = program ?? DEFAULT_PROGRAM
   const raw = await readMapping(client, { programId, mapping, key })
   // The node returns JSON null for a key that is not in the mapping.
   if (raw == null || raw === 'null') return null
@@ -49,6 +49,6 @@ export async function readBoolMapping(
   mapping: string,
   key: string,
 ): Promise<boolean> {
-  const raw = await readMapping(client, { programId: program ?? PROGRAM_ID, mapping, key })
+  const raw = await readMapping(client, { programId: program ?? DEFAULT_PROGRAM, mapping, key })
   return raw === 'true'
 }

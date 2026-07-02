@@ -1,7 +1,7 @@
 import { executeContract, writeContract, type Client } from '@veil/core'
-import { PROGRAM_ID } from '../../generated/shield_swap.js'
 import { isFeeTierValid, getFeeToTickSpacing } from '../reads/validation.js'
 import { MIN_TICK, MAX_TICK, getSqrtPriceAtTick } from '../../helpers/tick-math.js'
+import { DEFAULT_PROGRAM } from '../../constants.js'
 
 /**
  * Parameters for {@link createPool}.
@@ -23,8 +23,8 @@ import { MIN_TICK, MAX_TICK, getSqrtPriceAtTick } from '../../helpers/tick-math.
  *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
  *   callees statically — pass the involved token programs' sources when
  *   proving locally or via a service that requires them.
- * @property program shield_swap program override. Defaults to the generated
- *   `PROGRAM_ID`.
+ * @property program shield_swap program override. Defaults to `DEFAULT_PROGRAM`
+ *   (the live shield_swap deployment).
  */
 export type CreatePoolParameters = {
   token0ProgramId: string
@@ -74,7 +74,7 @@ export type CreatePoolReturnType = {
  * })
  */
 export async function createPool(client: Client, params: CreatePoolParameters): Promise<CreatePoolReturnType> {
-  const program = params.program ?? PROGRAM_ID
+  const program = params.program ?? DEFAULT_PROGRAM
 
   if (params.initialTick < MIN_TICK || params.initialTick >= MAX_TICK) {
     throw new Error(`initialTick ${params.initialTick} outside [${MIN_TICK}, ${MAX_TICK})`)
