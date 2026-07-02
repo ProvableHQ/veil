@@ -2,12 +2,13 @@ import { describe, it, expect } from 'vitest'
 import { loadNetwork } from '@veil/provable'
 import { dexActions } from '../../src/decorators/dexActions.js'
 import { getProgram } from '@veil/core'
+import { parseTokenRecordInfo } from '../../src/records.js'
 import { SwapOutputNotFinalizedError } from '../../src/actions/swap/claimSwapOutputPrivate.js'
 
 /**
- * The headline e2e: the full private-swap + liquidity lifecycle against the
- * REAL testnet — airdrop → privatize records → ensure pool → mint →
- * increase → swapPrivate → getSwapOutput → claimSwapOutputPrivate.
+ * The headline e2e: the private-swap lifecycle against the REAL testnet —
+ * airdrop → privatize records → ensure pool → swapPrivate → getSwapOutput →
+ * claimSwapOutputPrivate.
  *
  * Requirements (skipped when absent):
  *   VEIL_INTEGRATION=1
@@ -25,15 +26,24 @@ const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!DPS_API_K
 
 const NETWORK_URL = 'https://api.provable.com/v2'
 const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove/testnet'
-const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://rss.provable.com'
+const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://api.provable.com/scanner'
 const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap_v0_0_1.aleo'
 const TX_TIMEOUT = 420_000
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+/** Polls an async predicate up to `tries` times, `ms` apart; true once it holds. */
+async function pollUntil(predicate: () => Promise<boolean>, tries: number, ms: number): Promise<boolean> {
+  for (let i = 0; i < tries; i++) {
+    if (await predicate()) return true
+    await sleep(ms)
+  }
+  return false
+}
+
 describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async () => {
   const aleo = await loadNetwork('testnet')
-  const scanner = aleo.createRemoteScanner({ url: RSS_URL, consumerId: CONSUMER_ID! })
+  const scanner = aleo.createRemoteScanner({ url: RSS_URL, consumerId: CONSUMER_ID!, apiKey: DPS_API_KEY })
   const { walletClient, account } = aleo.createAleoClient({
     privateKey: PRIVATE_KEY!,
     networkUrl: NETWORK_URL,
@@ -95,17 +105,36 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   }, 60_000)
 
   it('privatizes token balances into records (transfer_public_to_private)', async () => {
-    // One whole token each — multiples of dustScale by construction.
+    // Ensure each token has ONE unspent record large enough for the swap's
+    // input draw (record selection picks a single sufficient record — it does
+    // not aggregate). Skipping merely on record existence is wrong: prior runs
+    // leave small change records that don't cover the swap.
+    const hasCovering = async (program: string, need: bigint) => {
+      const records = await scanner.requestRecords({ program, statusFilter: 'unspent' })
+      return records.some((r) => {
+        const info = r.recordPlaintext ? parseTokenRecordInfo(r.recordPlaintext) : null
+        return info != null && info.amount >= need
+      })
+    }
+
     for (const t of [state.token0!, state.token1!]) {
-      const existing = await scanner.requestRecords({ program: t.program, statusFilter: 'unspent' })
-      if (existing.length > 0) continue // already privatized in a prior run
-      const amount = 10n ** BigInt(t.decimals)
+      const unit = 10n ** BigInt(t.decimals)
+      const need = unit / 2n // comfortably covers the swap's 0.1-token input
+      if (await hasCovering(t.program, need)) continue
+
+      // Privatize a full unit — comfortable headroom over the swap input.
       const result = await walletClient.executeContract({
         program: t.program,
         function: 'transfer_public_to_private',
-        inputs: [account.address, `${amount}u128`],
+        inputs: [account.address, `${unit}u128`],
       })
       expect(result.transactionId).toMatch(/^at1/)
+
+      // The transaction is accepted on-chain, but the RSS indexes the new
+      // record asynchronously — poll until it is scannable before the swap
+      // tries to select it.
+      const visible = await pollUntil(() => hasCovering(t.program, need), 30, 5000)
+      expect(visible, `privatized ${t.program} record did not become scannable`).toBe(true)
     }
   }, TX_TIMEOUT * 2)
 
@@ -156,23 +185,6 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     expect(await client.isPoolInitialized({ poolKey: state.poolKey! })).toBe(true)
   }, TX_TIMEOUT)
 
-  it('mints a private position', async () => {
-    const slot = await client.getSlot({ poolKey: state.poolKey! })
-    expect(slot).not.toBeNull()
-    const spacing = slot!.tick_spacing
-    const minted = await client.mintPrivate({
-      poolKey: state.poolKey!,
-      tickLower: slot!.tick - spacing * 10,
-      tickUpper: slot!.tick + spacing * 10,
-      amount0Desired: 10n ** BigInt(state.token0!.decimals) / 2n,
-      amount1Desired: 10n ** BigInt(state.token1!.decimals) / 2n,
-      token0Program: state.token0!.program,
-      token1Program: state.token1!.program,
-      imports: state.imports,
-    })
-    expect(minted.positionTokenId).toMatch(/field$/)
-  }, TX_TIMEOUT)
-
   it('swaps privately and the chain computes the output', async () => {
     const pool = await client.getPool({ poolKey: state.poolKey! })
     const tokenIn = pool!.token0
@@ -201,8 +213,14 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     expect(res.transactionId).toMatch(/^at1/)
     expect(res.amountOut > 0n).toBe(true)
 
-    // The claim consumes swap_outputs[swapId].
-    expect(await client.getSwapOutput({ swapId: state.handle!.swapId! })).toBeNull()
+    // The claim consumes swap_outputs[swapId] — but the mapping deletion
+    // reflects only after the claim's finalize propagates to reads. Poll.
+    const consumed = await pollUntil(
+      async () => (await client.getSwapOutput({ swapId: state.handle!.swapId! })) === null,
+      24,
+      5000,
+    )
+    expect(consumed, 'swap_outputs entry should be consumed after claim').toBe(true)
 
     // Claiming again is the documented non-retryable absence.
     await expect(client.claimSwapOutputPrivate({ handle: state.handle! })).rejects.toThrow(

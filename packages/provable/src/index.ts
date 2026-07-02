@@ -123,14 +123,48 @@ export interface AleoSdk {
     confirmationTimeout?: number
   }): ProvingConfig
 
-  /** Creates a record scanner backed by Provable's Record Scanner Service. */
-  createRemoteScanner(options: { url: string; consumerId: string }): RecordProvider
+  /**
+   * Creates a record scanner backed by Provable's Record Scanner Service.
+   *
+   * The first `requestRecords` call registers the account's view key with the
+   * service (a network round-trip) to obtain the UUID scanning requires;
+   * subsequent calls reuse it. `setAccount` resets the registration.
+   *
+   * @param options.url Base URL of the service (the SDK appends the network
+   *   segment — do not include it).
+   * @param options.consumerId Consumer id used for JWT refresh.
+   * @param options.apiKey Optional API key for the authenticated service
+   *   (e.g. the hosted Provable RSS). Omit for an open/unauthenticated service.
+   * @param options.startBlock Optional block height to begin scanning from at
+   *   registration. Defaults to 0 (full history).
+   */
+  createRemoteScanner(options: {
+    url: string
+    consumerId: string
+    apiKey?: string
+    startBlock?: number
+  }): RecordProvider
 
-  /** Creates a standalone record scanner with an explicit view key. */
+  /**
+   * Creates a standalone record scanner with an explicit view key.
+   *
+   * Like {@link createRemoteScanner}, the first `requestRecords` registers the
+   * view key with the service (a network round-trip) to obtain the scanning UUID.
+   *
+   * @param options.url Base URL of the service (the SDK appends the network segment).
+   * @param options.consumerId Consumer id used for JWT refresh.
+   * @param options.viewKey The view key (`AViewKey1…`) to scan and decrypt with.
+   * @param options.apiKey Optional API key for the authenticated service. Omit
+   *   for an open/unauthenticated service.
+   * @param options.startBlock Optional block height to begin scanning from at
+   *   registration. Defaults to 0 (full history).
+   */
   createStandaloneScanner(options: {
     url: string
     consumerId: string
     viewKey: string
+    apiKey?: string
+    startBlock?: number
   }): StandaloneRecordScanner
 
   /** Creates a fully-wired Aleo client from a private key and network URL. */
@@ -463,15 +497,127 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     }
   }
 
-  function createRemoteScanner(options: { url: string; consumerId: string }): RecordProvider {
+  // The RSS returns record fields in snake_case (record_plaintext,
+  // program_name, …); the veil OwnedRecord contract is camelCase. Map them —
+  // a bare cast silently leaves recordPlaintext undefined, which reads as an
+  // unspendable wallet. Fields whose two casings coincide are read directly;
+  // the rest accept either case so a future camelCase SDK build keeps working.
+  // `uid` and `recordView` are privacy-wallet-adapter concepts the RSS does
+  // not supply, so they are intentionally omitted.
+  function toOwnedRecord(raw: Record<string, unknown>): OwnedRecord {
+    const pick = (snake: string, camel: string): unknown => raw[snake] ?? raw[camel]
+    return {
+      blockHeight: pick('block_height', 'blockHeight') as number | undefined,
+      blockTimestamp: pick('block_timestamp', 'blockTimestamp') as number | undefined,
+      commitment: raw.commitment as string | undefined,
+      functionName: pick('function_name', 'functionName') as string | undefined,
+      outputIndex: pick('output_index', 'outputIndex') as number | undefined,
+      owner: raw.owner as string | undefined,
+      programName: pick('program_name', 'programName') as string,
+      recordCiphertext: pick('record_ciphertext', 'recordCiphertext') as string | undefined,
+      recordName: pick('record_name', 'recordName') as string | undefined,
+      sender: raw.sender as string | undefined,
+      spent: raw.spent as boolean | undefined,
+      tag: raw.tag as string,
+      transactionId: pick('transaction_id', 'transactionId') as string | undefined,
+      transitionId: pick('transition_id', 'transitionId') as string | undefined,
+      transactionIndex: pick('transaction_index', 'transactionIndex') as number | undefined,
+      transitionIndex: pick('transition_index', 'transitionIndex') as number | undefined,
+      recordPlaintext: (pick('record_plaintext', 'recordPlaintext') as string | undefined) ?? '',
+    }
+  }
+
+  // A scanner's UUID is issued at registration; owned() rejects locally
+  // without one. Register once, lazily, and memoize the in-flight promise so
+  // concurrent scans share a single round-trip. Returns an `ensure()` to await
+  // before scanning and a `reset()` for when the account changes.
+  function makeRegisterOnce(startBlock: number) {
+    let registration: Promise<void> | undefined
+    return {
+      reset() {
+        registration = undefined
+      },
+      ensure(
+        scanner: InstanceType<SdkModule['RecordScanner']>,
+        viewKey: ReturnType<SdkModule['ViewKey']['from_string']>,
+      ): Promise<void> {
+        if (!registration) {
+          registration = (async () => {
+            const result = await scanner.registerEncrypted(viewKey, startBlock)
+            if (!result.ok) {
+              registration = undefined // allow a later retry after a transient failure
+              throw new Error(
+                `Record scanner registration failed (HTTP ${result.status}): ${result.error?.message ?? 'unknown error'}`,
+              )
+            }
+          })()
+        }
+        return registration
+      },
+    }
+  }
+
+  // Scans owned records with bounded retry. owned() returns a discriminated
+  // result on HTTP error but *throws* on a network failure or an invalidated
+  // UUID — both paths are retried here. A freshly-minted JWT can momentarily
+  // hit an RSS backend that has not yet synced the credential (HTTP 401), and
+  // the SDK caches that JWT for the scanner's lifetime — so between attempts we
+  // drop it (setJwtData(undefined) forces a re-mint), back off, and retry,
+  // giving the backend time to catch up. A non-transient status surfaces at once.
+  //
+  // 429/5xx are always transient; a 401/403 is only worth retrying when a JWT
+  // can actually be re-minted (apiKey configured) — on an unauthenticated
+  // scanner those are permanent, so retrying just burns backoff.
+  async function scanOwned(
+    scanner: InstanceType<SdkModule['RecordScanner']>,
+    program: string,
+    statusFilter: string | undefined,
+    canReMint: boolean,
+  ): Promise<OwnedRecord[]> {
+    const ALWAYS_RETRY = new Set([429, 500, 502, 503, 504])
+    const AUTH_RETRY = new Set([401, 403])
+    const retryable = (status: number) => ALWAYS_RETRY.has(status) || (canReMint && AUTH_RETRY.has(status))
+    const MAX_ATTEMPTS = 4
+    let last = ''
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      try {
+        const result = await scanner.owned({
+          unspent: statusFilter !== 'spent',
+          filter: { programs: [program] },
+        })
+        if (result.ok) return (result.data ?? []).map((r) => toOwnedRecord(r as Record<string, unknown>))
+        last = `HTTP ${result.status}: ${result.error?.message ?? 'unknown error'}`
+        if (!retryable(result.status)) break
+      } catch (err) {
+        // owned() throws (rather than returning a result) on a network failure
+        // or an invalidated UUID — treat as transient and retry.
+        last = err instanceof Error ? err.message : String(err)
+      }
+      if (attempt === MAX_ATTEMPTS - 1) break
+      scanner.setJwtData(undefined) // drop the cached (rejected) JWT so the next call re-mints
+      await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt))
+    }
+    throw new Error(`Record scan failed (${last})`)
+  }
+
+  function createRemoteScanner(options: {
+    url: string
+    consumerId: string
+    apiKey?: string
+    startBlock?: number
+  }): RecordProvider {
     let scanner: InstanceType<SdkModule['RecordScanner']> | undefined
+    let viewKey: ReturnType<SdkModule['ViewKey']['from_string']> | undefined
+    const registration = makeRegisterOnce(options.startBlock ?? 0)
 
     return {
       setAccount: (account: { viewKey: string }) => {
-        const viewKey = ViewKey.from_string(account.viewKey)
+        viewKey = ViewKey.from_string(account.viewKey)
+        registration.reset() // a new account needs its own registration
         scanner = new RecordScanner({
           url: options.url,
           consumerId: options.consumerId,
+          ...(options.apiKey ? { apiKey: options.apiKey } : {}),
           viewKeys: [viewKey],
           decryptEnabled: true,
           autoReRegister: true,
@@ -483,14 +629,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           throw new Error('No active account set on record scanner. Call setAccount() first.')
         }
 
-        const records = await scanner.owned({
-          unspent: params.statusFilter !== 'spent',
-          filter: {
-            programs: [params.program],
-          },
-        })
-
-        return (records ?? []) as unknown as OwnedRecord[]
+        await registration.ensure(scanner, viewKey!)
+        return scanOwned(scanner, params.program, params.statusFilter, !!options.apiKey)
       },
     }
   }
@@ -499,26 +639,24 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     url: string
     consumerId: string
     viewKey: string
+    apiKey?: string
+    startBlock?: number
   }): StandaloneRecordScanner {
     const viewKey = ViewKey.from_string(options.viewKey)
     const scanner = new RecordScanner({
       url: options.url,
       consumerId: options.consumerId,
+      ...(options.apiKey ? { apiKey: options.apiKey } : {}),
       viewKeys: [viewKey],
       decryptEnabled: true,
       autoReRegister: true,
     })
+    const registration = makeRegisterOnce(options.startBlock ?? 0)
 
     return {
       requestRecords: async (params: RequestRecordsParameters): Promise<OwnedRecord[]> => {
-        const records = await scanner.owned({
-          unspent: params.statusFilter !== 'spent',
-          filter: {
-            programs: [params.program],
-          },
-        })
-
-        return (records ?? []) as unknown as OwnedRecord[]
+        await registration.ensure(scanner, viewKey)
+        return scanOwned(scanner, params.program, params.statusFilter, !!options.apiKey)
       },
     }
   }
