@@ -94,6 +94,21 @@ export {
 } from './actions/liquidity/increaseLiquidityPrivate.js'
 export { pickInsertHint, type PickInsertHintParameters } from './helpers/tick-hints.js'
 
+// Pure strategy primitives (no I/O): prices, impact, valuation, fee APR.
+export {
+  poolPrice,
+  priceImpact,
+  portfolioValue,
+  feeAprEstimate,
+  type PoolPriceInput,
+  type PriceImpactInput,
+  type Holding,
+  type FeeAprEstimateInput,
+} from './helpers/derivations.js'
+
+// One-surface composition: chain reads flat, indexer under `.indexer`.
+export { dexActions, type DexActionsConfig, type DexActions } from './decorators/dexActions.js'
+
 // Swap parameter helpers: intent → contract args (pure), deadline, nonces,
 // and the contract's Q64 tick math table.
 export {
