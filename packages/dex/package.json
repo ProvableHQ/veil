@@ -12,11 +12,11 @@
   },
   "scripts": {
     "build": "tsup",
-    "generate": "veil-codegen --config veil.config.json",
-    "regen-abi": "./scripts/regen-abi.sh",
+    "generate": "veil-codegen --config codegen/veil.config.json",
+    "regen-abi": "./codegen/regen-abi.sh",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "regen-openapi": "./scripts/regen-openapi.sh"
+    "regen-openapi": "./codegen/regen-openapi.sh"
   },
   "files": [
     "dist"
