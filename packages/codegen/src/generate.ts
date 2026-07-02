@@ -43,6 +43,8 @@ export function generate(options: GenerateOptions): string {
   for (const struct of abi.structs) {
     lines.push(...generateStructInterface(struct))
     lines.push('')
+    lines.push(...generateStructMapper(struct))
+    lines.push('')
   }
 
   // Records
@@ -120,16 +122,16 @@ function generateRecordInterface(record: RecordDef): string[] {
   return lines
 }
 
-function generateRecordMapper(record: RecordDef): string[] {
-  const name = recordName(record)
-  const fnName = `to${name}`
+// Emit the `field: <converted value>` lines shared by record and struct mappers.
+// `varName` is the mapper's parameter name (the value being decoded); `container`
+// names the enclosing type for error messages.
+function mapperFieldLines(
+  fields: readonly { name: string; type: Plaintext }[],
+  container: string,
+  varName: string,
+): string[] {
   const lines: string[] = []
-
-  lines.push(`export function ${fnName}(record: RecordValue): ${name} {`)
-  lines.push(`  return {`)
-  lines.push(`    owner: record.owner,`)
-
-  for (const field of record.fields) {
+  for (const field of fields) {
     if (field.name === 'owner') continue
     // Struct-typed fields: the raw PlaintextValue is a StructValue at runtime.
     // Cast through unknown to the generated struct interface so the return type
@@ -138,19 +140,43 @@ function generateRecordMapper(record: RecordDef): string[] {
       const structName = field.type.path.at(-1)
       if (!structName) {
         throw new Error(
-          `Malformed ABI: struct field "${field.name}" in record "${name}" has an empty type path. ` +
+          `Malformed ABI: struct field "${field.name}" in "${container}" has an empty type path. ` +
           `Cannot derive struct name for code generation.`
         )
       }
-      lines.push(`    ${field.name}: record.fields.${field.name}?.value as unknown as ${structName} ?? {} as unknown as ${structName},`)
+      lines.push(`    ${field.name}: ${varName}.fields.${field.name}?.value as unknown as ${structName} ?? {} as unknown as ${structName},`)
     } else {
-      const rawAccess = `record.fields.${field.name}?.value`
+      const rawAccess = `${varName}.fields.${field.name}?.value`
       const expr = plaintextFieldExpr(rawAccess, field.type)
       lines.push(`    ${field.name}: ${expr} ?? ${plaintextDefault(field.type)},`)
     }
   }
+  return lines
+}
 
+function generateRecordMapper(record: RecordDef): string[] {
+  const name = recordName(record)
+  const lines: string[] = []
+
+  lines.push(`export function to${name}(record: RecordValue): ${name} {`)
+  lines.push(`  return {`)
+  lines.push(`    owner: record.owner,`)
+  lines.push(...mapperFieldLines(record.fields, name, 'record'))
   lines.push(`    _record: record,`)
+  lines.push(`  }`)
+  lines.push(`}`)
+  return lines
+}
+
+// Decoder for a struct (e.g. a mapping value like PoolState/Slot). Same per-field
+// width conversions as records, without the record-only `owner`/`_record` fields.
+function generateStructMapper(struct: StructDef): string[] {
+  const name = struct.path[struct.path.length - 1] ?? 'UnknownStruct'
+  const lines: string[] = []
+
+  lines.push(`export function to${name}(value: RecordValue): ${name} {`)
+  lines.push(`  return {`)
+  lines.push(...mapperFieldLines(struct.fields, name, 'value'))
   lines.push(`  }`)
   lines.push(`}`)
   return lines

@@ -117,7 +117,7 @@ async function redeemForVoucher(card: LoyaltyCard, rewardType: RewardType, point
     // Cross-program call: pass _record for foreign record input, returns [RecordValue, RewardVoucher]
     const [updatedCardRecord, voucher] = await rewardsContract.simulate.redeem_points_for_voucher({
         card: card._record,
-        reward_type: BigInt(rewardType),
+        reward_type: Number(rewardType),
         points_to_spend: BigInt(pointsCost),
     });
     return { card: toLoyaltyCard(updatedCardRecord), voucher };

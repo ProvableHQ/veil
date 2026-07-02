@@ -17,10 +17,31 @@ export interface SwapRequest {
   deadline: number
 }
 
+export function toSwapRequest(value: RecordValue): SwapRequest {
+  return {
+    pool: value.fields.pool?.value as string ?? '',
+    zero_for_one: value.fields.zero_for_one?.value as boolean ?? false,
+    amount_in: value.fields.amount_in?.value as bigint ?? 0n,
+    amount_out_min: value.fields.amount_out_min?.value as bigint ?? 0n,
+    sqrt_price_limit: value.fields.sqrt_price_limit?.value as bigint ?? 0n,
+    recipient: value.fields.recipient?.value as string ?? '',
+    nonce: value.fields.nonce?.value as bigint ?? 0n,
+    deadline: Number((value.fields.deadline?.value ?? 0n) as bigint) ?? 0,
+  }
+}
+
 export interface SwapHop {
   pool: string
   zero_for_one: boolean
   sqrt_price_limit: bigint
+}
+
+export function toSwapHop(value: RecordValue): SwapHop {
+  return {
+    pool: value.fields.pool?.value as string ?? '',
+    zero_for_one: value.fields.zero_for_one?.value as boolean ?? false,
+    sqrt_price_limit: value.fields.sqrt_price_limit?.value as bigint ?? 0n,
+  }
 }
 
 export interface SwapMultiHopRequest {
@@ -38,6 +59,23 @@ export interface SwapMultiHopRequest {
   caller: string
 }
 
+export function toSwapMultiHopRequest(value: RecordValue): SwapMultiHopRequest {
+  return {
+    token_in: value.fields.token_in?.value as string ?? '',
+    token_out: value.fields.token_out?.value as string ?? '',
+    amount_in: value.fields.amount_in?.value as bigint ?? 0n,
+    amount_out_min: value.fields.amount_out_min?.value as bigint ?? 0n,
+    recipient: value.fields.recipient?.value as string ?? '',
+    hop0: value.fields.hop0?.value as unknown as SwapHop ?? {} as unknown as SwapHop,
+    hop1: value.fields.hop1?.value as unknown as SwapHop ?? {} as unknown as SwapHop,
+    hop2: value.fields.hop2?.value as unknown as SwapHop ?? {} as unknown as SwapHop,
+    hop_count: Number((value.fields.hop_count?.value ?? 0n) as bigint) ?? 0,
+    nonce: value.fields.nonce?.value as bigint ?? 0n,
+    deadline: Number((value.fields.deadline?.value ?? 0n) as bigint) ?? 0,
+    caller: value.fields.caller?.value as string ?? '',
+  }
+}
+
 export interface PoolState {
   token0: string
   token1: string
@@ -45,6 +83,17 @@ export interface PoolState {
   enabled: boolean
   scale0: bigint
   scale1: bigint
+}
+
+export function toPoolState(value: RecordValue): PoolState {
+  return {
+    token0: value.fields.token0?.value as string ?? '',
+    token1: value.fields.token1?.value as string ?? '',
+    fee: Number((value.fields.fee?.value ?? 0n) as bigint) ?? 0,
+    enabled: value.fields.enabled?.value as boolean ?? false,
+    scale0: value.fields.scale0?.value as bigint ?? 0n,
+    scale1: value.fields.scale1?.value as bigint ?? 0n,
+  }
 }
 
 export interface Slot {
@@ -64,6 +113,25 @@ export interface Slot {
   next_init_above: number
 }
 
+export function toSlot(value: RecordValue): Slot {
+  return {
+    tick: Number((value.fields.tick?.value ?? 0n) as bigint) ?? 0,
+    tick_spacing: Number((value.fields.tick_spacing?.value ?? 0n) as bigint) ?? 0,
+    sqrt_price: value.fields.sqrt_price?.value as bigint ?? 0n,
+    fee_protocol: Number((value.fields.fee_protocol?.value ?? 0n) as bigint) ?? 0,
+    liquidity: value.fields.liquidity?.value as bigint ?? 0n,
+    fee_growth_global0_x_64: value.fields.fee_growth_global0_x_64?.value as bigint ?? 0n,
+    fee_growth_global1_x_64: value.fields.fee_growth_global1_x_64?.value as bigint ?? 0n,
+    fee_residual0_x_64: value.fields.fee_residual0_x_64?.value as bigint ?? 0n,
+    fee_residual1_x_64: value.fields.fee_residual1_x_64?.value as bigint ?? 0n,
+    max_liquidity_per_tick: value.fields.max_liquidity_per_tick?.value as bigint ?? 0n,
+    protocol_fees0: value.fields.protocol_fees0?.value as bigint ?? 0n,
+    protocol_fees1: value.fields.protocol_fees1?.value as bigint ?? 0n,
+    next_init_below: Number((value.fields.next_init_below?.value ?? 0n) as bigint) ?? 0,
+    next_init_above: Number((value.fields.next_init_above?.value ?? 0n) as bigint) ?? 0,
+  }
+}
+
 export interface Tick {
   pool: string
   liquidity_net: bigint
@@ -73,6 +141,19 @@ export interface Tick {
   fee_growth_outside1_64: bigint
   prev: number
   next: number
+}
+
+export function toTick(value: RecordValue): Tick {
+  return {
+    pool: value.fields.pool?.value as string ?? '',
+    liquidity_net: value.fields.liquidity_net?.value as bigint ?? 0n,
+    liquidity_gross: value.fields.liquidity_gross?.value as bigint ?? 0n,
+    tick: Number((value.fields.tick?.value ?? 0n) as bigint) ?? 0,
+    fee_growth_outside0_64: value.fields.fee_growth_outside0_64?.value as bigint ?? 0n,
+    fee_growth_outside1_64: value.fields.fee_growth_outside1_64?.value as bigint ?? 0n,
+    prev: Number((value.fields.prev?.value ?? 0n) as bigint) ?? 0,
+    next: Number((value.fields.next?.value ?? 0n) as bigint) ?? 0,
+  }
 }
 
 export interface Position {
@@ -87,6 +168,20 @@ export interface Position {
   tokens_owed1: bigint
 }
 
+export function toPosition(value: RecordValue): Position {
+  return {
+    token_id: value.fields.token_id?.value as string ?? '',
+    pool: value.fields.pool?.value as string ?? '',
+    tick_lower: Number((value.fields.tick_lower?.value ?? 0n) as bigint) ?? 0,
+    tick_upper: Number((value.fields.tick_upper?.value ?? 0n) as bigint) ?? 0,
+    liquidity: value.fields.liquidity?.value as bigint ?? 0n,
+    fee_growth_inside0_last_64: value.fields.fee_growth_inside0_last_64?.value as bigint ?? 0n,
+    fee_growth_inside1_last_64: value.fields.fee_growth_inside1_last_64?.value as bigint ?? 0n,
+    tokens_owed0: value.fields.tokens_owed0?.value as bigint ?? 0n,
+    tokens_owed1: value.fields.tokens_owed1?.value as bigint ?? 0n,
+  }
+}
+
 export interface MintPositionRequest {
   pool: string
   tick_lower: number
@@ -97,6 +192,20 @@ export interface MintPositionRequest {
   amount1_min: bigint
   tick_lower_hint: number
   tick_upper_hint: number
+}
+
+export function toMintPositionRequest(value: RecordValue): MintPositionRequest {
+  return {
+    pool: value.fields.pool?.value as string ?? '',
+    tick_lower: Number((value.fields.tick_lower?.value ?? 0n) as bigint) ?? 0,
+    tick_upper: Number((value.fields.tick_upper?.value ?? 0n) as bigint) ?? 0,
+    amount0_desired: value.fields.amount0_desired?.value as bigint ?? 0n,
+    amount1_desired: value.fields.amount1_desired?.value as bigint ?? 0n,
+    amount0_min: value.fields.amount0_min?.value as bigint ?? 0n,
+    amount1_min: value.fields.amount1_min?.value as bigint ?? 0n,
+    tick_lower_hint: Number((value.fields.tick_lower_hint?.value ?? 0n) as bigint) ?? 0,
+    tick_upper_hint: Number((value.fields.tick_upper_hint?.value ?? 0n) as bigint) ?? 0,
+  }
 }
 
 export interface SwapOutput {
@@ -110,6 +219,21 @@ export interface SwapOutput {
   amount_remaining_1: bigint
   token_in_2: string
   amount_remaining_2: bigint
+}
+
+export function toSwapOutput(value: RecordValue): SwapOutput {
+  return {
+    recipient: value.fields.recipient?.value as string ?? '',
+    caller: value.fields.caller?.value as string ?? '',
+    token_in: value.fields.token_in?.value as string ?? '',
+    token_out: value.fields.token_out?.value as string ?? '',
+    amount_out: value.fields.amount_out?.value as bigint ?? 0n,
+    amount_remaining: value.fields.amount_remaining?.value as bigint ?? 0n,
+    token_in_1: value.fields.token_in_1?.value as string ?? '',
+    amount_remaining_1: value.fields.amount_remaining_1?.value as bigint ?? 0n,
+    token_in_2: value.fields.token_in_2?.value as string ?? '',
+    amount_remaining_2: value.fields.amount_remaining_2?.value as bigint ?? 0n,
+  }
 }
 
 export interface PositionNFT {

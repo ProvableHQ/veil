@@ -4,6 +4,8 @@ import {
   PROGRAM_ID,
   toPositionNFT,
   toSwapComplianceRecord,
+  toSlot,
+  toPoolState,
   type Slot,
   type PoolState,
   type Position,
@@ -13,6 +15,64 @@ import {
 describe('PROGRAM_ID', () => {
   it('equals the canonical program name', () => {
     expect(PROGRAM_ID).toBe('shield_swap_v0_0_2.aleo')
+  })
+})
+
+// Struct decoders (mapping values). toSlot exercises mixed widths: i32/u32 → number,
+// u128 → bigint. Omitted fields fall back to their zero defaults.
+describe('toSlot', () => {
+  const value: RecordValue = {
+    owner: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
+    program: 'shield_swap_v0_0_2.aleo',
+    recordName: 'Slot',
+    nonce: '0group',
+    fields: {
+      tick: { value: -60n, mode: 'public', type: { kind: 'primitive', primitive: 'i32' } },
+      tick_spacing: { value: 60n, mode: 'public', type: { kind: 'primitive', primitive: 'u32' } },
+      sqrt_price: { value: 79228162514264337593543950336n, mode: 'public', type: { kind: 'primitive', primitive: 'u128' } },
+      liquidity: { value: 1000000n, mode: 'public', type: { kind: 'primitive', primitive: 'u128' } },
+    },
+  }
+
+  it('decodes i32/u32 as number and u128 as bigint', () => {
+    const slot: Slot = toSlot(value)
+    expect(slot.tick).toBe(-60)
+    expect(typeof slot.tick).toBe('number')
+    expect(slot.tick_spacing).toBe(60)
+    expect(typeof slot.tick_spacing).toBe('number')
+    expect(slot.sqrt_price).toBe(79228162514264337593543950336n)
+    expect(typeof slot.sqrt_price).toBe('bigint')
+    expect(slot.liquidity).toBe(1000000n)
+    expect(typeof slot.liquidity).toBe('bigint')
+  })
+})
+
+describe('toPoolState', () => {
+  const value: RecordValue = {
+    owner: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
+    program: 'shield_swap_v0_0_2.aleo',
+    recordName: 'PoolState',
+    nonce: '0group',
+    fields: {
+      token0: { value: '11field', mode: 'public', type: { kind: 'primitive', primitive: 'field' } },
+      token1: { value: '22field', mode: 'public', type: { kind: 'primitive', primitive: 'field' } },
+      fee: { value: 3000n, mode: 'public', type: { kind: 'primitive', primitive: 'u16' } },
+      enabled: { value: true, mode: 'public', type: { kind: 'primitive', primitive: 'boolean' } },
+      scale0: { value: 1000000n, mode: 'public', type: { kind: 'primitive', primitive: 'u128' } },
+      scale1: { value: 1000000n, mode: 'public', type: { kind: 'primitive', primitive: 'u128' } },
+    },
+  }
+
+  it('decodes field→string, u16→number, bool→boolean, u128→bigint', () => {
+    const pool: PoolState = toPoolState(value)
+    expect(pool.token0).toBe('11field')
+    expect(typeof pool.token0).toBe('string')
+    expect(pool.fee).toBe(3000)
+    expect(typeof pool.fee).toBe('number')
+    expect(pool.enabled).toBe(true)
+    expect(typeof pool.enabled).toBe('boolean')
+    expect(pool.scale0).toBe(1000000n)
+    expect(typeof pool.scale0).toBe('bigint')
   })
 })
 

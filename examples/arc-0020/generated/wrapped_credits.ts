@@ -14,9 +14,26 @@ export interface TokenInfo {
   max_supply: bigint
 }
 
+export function toTokenInfo(value: RecordValue): TokenInfo {
+  return {
+    name: value.fields.name?.value as bigint ?? 0n,
+    symbol: value.fields.symbol?.value as bigint ?? 0n,
+    decimals: Number((value.fields.decimals?.value ?? 0n) as bigint) ?? 0,
+    supply: value.fields.supply?.value as bigint ?? 0n,
+    max_supply: value.fields.max_supply?.value as bigint ?? 0n,
+  }
+}
+
 export interface TokenAllowance {
   account: string
   spender: string
+}
+
+export function toTokenAllowance(value: RecordValue): TokenAllowance {
+  return {
+    account: value.fields.account?.value as string ?? '',
+    spender: value.fields.spender?.value as string ?? '',
+  }
 }
 
 export interface Token {

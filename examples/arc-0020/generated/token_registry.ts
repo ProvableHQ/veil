@@ -18,9 +18,30 @@ export interface TokenMetadata {
   external_authorization_party: string
 }
 
+export function toTokenMetadata(value: RecordValue): TokenMetadata {
+  return {
+    token_id: value.fields.token_id?.value as string ?? '',
+    name: value.fields.name?.value as bigint ?? 0n,
+    symbol: value.fields.symbol?.value as bigint ?? 0n,
+    decimals: Number((value.fields.decimals?.value ?? 0n) as bigint) ?? 0,
+    supply: value.fields.supply?.value as bigint ?? 0n,
+    max_supply: value.fields.max_supply?.value as bigint ?? 0n,
+    admin: value.fields.admin?.value as string ?? '',
+    external_authorization_required: value.fields.external_authorization_required?.value as boolean ?? false,
+    external_authorization_party: value.fields.external_authorization_party?.value as string ?? '',
+  }
+}
+
 export interface TokenOwner {
   account: string
   token_id: string
+}
+
+export function toTokenOwner(value: RecordValue): TokenOwner {
+  return {
+    account: value.fields.account?.value as string ?? '',
+    token_id: value.fields.token_id?.value as string ?? '',
+  }
 }
 
 export interface Balance {
@@ -28,6 +49,15 @@ export interface Balance {
   account: string
   balance: bigint
   authorized_until: number
+}
+
+export function toBalance(value: RecordValue): Balance {
+  return {
+    token_id: value.fields.token_id?.value as string ?? '',
+    account: value.fields.account?.value as string ?? '',
+    balance: value.fields.balance?.value as bigint ?? 0n,
+    authorized_until: Number((value.fields.authorized_until?.value ?? 0n) as bigint) ?? 0,
+  }
 }
 
 export interface Token {

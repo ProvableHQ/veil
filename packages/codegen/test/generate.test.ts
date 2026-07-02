@@ -465,7 +465,9 @@ describe('generate', () => {
     it('has no records (AMM uses dynamic records only)', () => {
       expect(ammAbi.records).toHaveLength(0)
       const output = generate({ abi: ammAbi })
-      expect(output).not.toContain('export function to') // no record mappers
+      // No record mappers (records emit `owner: record.owner`); struct mappers
+      // (`to<Struct>`) are still generated for the AMM's structs and are expected.
+      expect(output).not.toContain('owner: record.owner')
     })
 
     it('generated code contains no unknown types', () => {
