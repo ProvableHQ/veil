@@ -1,0 +1,6 @@
+{
+  "programs": [
+    { "abi": "./abi/shield_swap_v0_0_2.json", "out": "./src/generated/shield_swap.ts" }
+  ],
+  "coreImport": "@veil/core"
+}

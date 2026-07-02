@@ -110,6 +110,10 @@ importers:
       '@veil/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      '@veil/codegen':
+        specifier: workspace:*
+        version: link:../codegen
 
   packages/leo: {}
 

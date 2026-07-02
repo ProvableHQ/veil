@@ -4,7 +4,8 @@ import { parseAbi } from '@veil/core'
 
 describe('pinned shield_swap ABI', () => {
   it('parses and contains the V1 entrypoints', () => {
-    const raw = JSON.parse(readFileSync('packages/dex/abi/shield_swap_v0_0_1.json', 'utf-8'))
+    const abiPath = new URL('../abi/shield_swap_v0_0_2.json', import.meta.url)
+    const raw = JSON.parse(readFileSync(abiPath, 'utf-8'))
     const abi = parseAbi(raw)
     const fns = new Set(abi.functions.map((f) => f.name))
     for (const f of ['swap_private', 'claim_swap_output_private', 'create_pool', 'mint_private', 'increase_liquidity_private']) {
