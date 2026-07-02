@@ -24,9 +24,30 @@ export {
   deriveBlindingFactor,
   deriveBlindedAddress,
   nextBlindedIdentity,
+  viewKeyToScalar,
   type BlindedIdentity,
   type NextBlindedIdentityParameters,
 } from './blinded-identity.js'
+
+// The two-phase private swap: request → (chain computes) → claim.
+export type { SwapHandle } from './types.js'
+export { swapPrivate, type SwapPrivateParameters, type SwapPrivateReturnType } from './actions/swap/swapPrivate.js'
+export {
+  claimSwapOutputPrivate,
+  SwapOutputNotFinalizedError,
+  type ClaimSwapOutputPrivateParameters,
+  type ClaimSwapOutputPrivateReturnType,
+} from './actions/swap/claimSwapOutputPrivate.js'
+
+// Wallet-signer InputRequest builders + the connect-time algorithm grants.
+export {
+  SHIELD_SWAP_ALGORITHM_GRANTS,
+  BLINDING_MEMBERSHIP_MAPPING,
+  blindingFactorIssueRequest,
+  blindedAddressIssueRequest,
+  blindingFactorResolveRequest,
+  blindedAddressResolveRequest,
+} from './wallet-requests.js'
 export {
   BLINDING_FACTOR_DOMAIN,
   CLAIM_OR_SWAP_DOMAIN,

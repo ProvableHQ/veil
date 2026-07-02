@@ -29,6 +29,25 @@ async function loadSdk(): Promise<AleoSdk> {
 }
 
 /**
+ * Converts a view key literal to the scalar form the derivation consumes.
+ *
+ * Local accounts carry `viewKey` as an `AViewKey1…` literal; the blinding
+ * derivation hashes the key's scalar. Loads the WASM SDK on first call; pure
+ * and local otherwise — the view key never leaves the process.
+ *
+ * @param viewKey The account view key (`AViewKey1…`).
+ * @returns The view key scalar literal (`…scalar`).
+ * @throws When `@provablehq/sdk` is not installed, or the view key does not parse.
+ *
+ * @example
+ * const scalar = await viewKeyToScalar(account.viewKey)
+ */
+export async function viewKeyToScalar(viewKey: string): Promise<string> {
+  const { ViewKey } = await loadSdk()
+  return ViewKey.from_string(viewKey).to_scalar().toString()
+}
+
+/**
  * A single-use blinded identity for one private swap or claim.
  *
  * @property counter The derivation counter that produced this identity.
