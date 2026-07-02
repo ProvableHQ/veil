@@ -2,9 +2,18 @@
 // Do not edit manually.
 
 import { getContract } from '@veil/core'
-import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest } from '@veil/core'
+import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '@veil/core'
 
 export const PROGRAM_ID = 'wrapped_token_registry.aleo' as const
+
+function litStr(v: PlaintextValue | undefined, suffix: string): string {
+  if (typeof v === 'bigint') return `${v}${suffix}`
+  if (typeof v === 'string') return v
+  if (v == null) return ''
+  // Fail fast: a struct/array/boolean value in a literal slot means the ABI
+  // or an upstream parser is wrong — never coerce it into corrupt data.
+  throw new Error(`Expected ${suffix} literal, got ${typeof v}`)
+}
 
 export interface TokenInfo {
   name: bigint

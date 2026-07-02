@@ -2,9 +2,18 @@
 // Do not edit manually.
 
 import { getContract } from '@veil/core'
-import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest } from '@veil/core'
+import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '@veil/core'
 
 export const PROGRAM_ID = 'shield_swap_v0_0_2.aleo' as const
+
+function litStr(v: PlaintextValue | undefined, suffix: string): string {
+  if (typeof v === 'bigint') return `${v}${suffix}`
+  if (typeof v === 'string') return v
+  if (v == null) return ''
+  // Fail fast: a struct/array/boolean value in a literal slot means the ABI
+  // or an upstream parser is wrong — never coerce it into corrupt data.
+  throw new Error(`Expected ${suffix} literal, got ${typeof v}`)
+}
 
 export interface SwapRequest {
   pool: string
@@ -19,7 +28,7 @@ export interface SwapRequest {
 
 export function toSwapRequest(value: RecordValue): SwapRequest {
   return {
-    pool: value.fields.pool?.value as string ?? '',
+    pool: litStr(value.fields.pool?.value, 'field') ?? '',
     zero_for_one: value.fields.zero_for_one?.value as boolean ?? false,
     amount_in: value.fields.amount_in?.value as bigint ?? 0n,
     amount_out_min: value.fields.amount_out_min?.value as bigint ?? 0n,
@@ -38,7 +47,7 @@ export interface SwapHop {
 
 export function toSwapHop(value: RecordValue): SwapHop {
   return {
-    pool: value.fields.pool?.value as string ?? '',
+    pool: litStr(value.fields.pool?.value, 'field') ?? '',
     zero_for_one: value.fields.zero_for_one?.value as boolean ?? false,
     sqrt_price_limit: value.fields.sqrt_price_limit?.value as bigint ?? 0n,
   }
@@ -61,8 +70,8 @@ export interface SwapMultiHopRequest {
 
 export function toSwapMultiHopRequest(value: RecordValue): SwapMultiHopRequest {
   return {
-    token_in: value.fields.token_in?.value as string ?? '',
-    token_out: value.fields.token_out?.value as string ?? '',
+    token_in: litStr(value.fields.token_in?.value, 'field') ?? '',
+    token_out: litStr(value.fields.token_out?.value, 'field') ?? '',
     amount_in: value.fields.amount_in?.value as bigint ?? 0n,
     amount_out_min: value.fields.amount_out_min?.value as bigint ?? 0n,
     recipient: value.fields.recipient?.value as string ?? '',
@@ -87,8 +96,8 @@ export interface PoolState {
 
 export function toPoolState(value: RecordValue): PoolState {
   return {
-    token0: value.fields.token0?.value as string ?? '',
-    token1: value.fields.token1?.value as string ?? '',
+    token0: litStr(value.fields.token0?.value, 'field') ?? '',
+    token1: litStr(value.fields.token1?.value, 'field') ?? '',
     fee: Number((value.fields.fee?.value ?? 0n) as bigint) ?? 0,
     enabled: value.fields.enabled?.value as boolean ?? false,
     scale0: value.fields.scale0?.value as bigint ?? 0n,
@@ -145,7 +154,7 @@ export interface Tick {
 
 export function toTick(value: RecordValue): Tick {
   return {
-    pool: value.fields.pool?.value as string ?? '',
+    pool: litStr(value.fields.pool?.value, 'field') ?? '',
     liquidity_net: value.fields.liquidity_net?.value as bigint ?? 0n,
     liquidity_gross: value.fields.liquidity_gross?.value as bigint ?? 0n,
     tick: Number((value.fields.tick?.value ?? 0n) as bigint) ?? 0,
@@ -170,8 +179,8 @@ export interface Position {
 
 export function toPosition(value: RecordValue): Position {
   return {
-    token_id: value.fields.token_id?.value as string ?? '',
-    pool: value.fields.pool?.value as string ?? '',
+    token_id: litStr(value.fields.token_id?.value, 'field') ?? '',
+    pool: litStr(value.fields.pool?.value, 'field') ?? '',
     tick_lower: Number((value.fields.tick_lower?.value ?? 0n) as bigint) ?? 0,
     tick_upper: Number((value.fields.tick_upper?.value ?? 0n) as bigint) ?? 0,
     liquidity: value.fields.liquidity?.value as bigint ?? 0n,
@@ -196,7 +205,7 @@ export interface MintPositionRequest {
 
 export function toMintPositionRequest(value: RecordValue): MintPositionRequest {
   return {
-    pool: value.fields.pool?.value as string ?? '',
+    pool: litStr(value.fields.pool?.value, 'field') ?? '',
     tick_lower: Number((value.fields.tick_lower?.value ?? 0n) as bigint) ?? 0,
     tick_upper: Number((value.fields.tick_upper?.value ?? 0n) as bigint) ?? 0,
     amount0_desired: value.fields.amount0_desired?.value as bigint ?? 0n,
@@ -225,13 +234,13 @@ export function toSwapOutput(value: RecordValue): SwapOutput {
   return {
     recipient: value.fields.recipient?.value as string ?? '',
     caller: value.fields.caller?.value as string ?? '',
-    token_in: value.fields.token_in?.value as string ?? '',
-    token_out: value.fields.token_out?.value as string ?? '',
+    token_in: litStr(value.fields.token_in?.value, 'field') ?? '',
+    token_out: litStr(value.fields.token_out?.value, 'field') ?? '',
     amount_out: value.fields.amount_out?.value as bigint ?? 0n,
     amount_remaining: value.fields.amount_remaining?.value as bigint ?? 0n,
-    token_in_1: value.fields.token_in_1?.value as string ?? '',
+    token_in_1: litStr(value.fields.token_in_1?.value, 'field') ?? '',
     amount_remaining_1: value.fields.amount_remaining_1?.value as bigint ?? 0n,
-    token_in_2: value.fields.token_in_2?.value as string ?? '',
+    token_in_2: litStr(value.fields.token_in_2?.value, 'field') ?? '',
     amount_remaining_2: value.fields.amount_remaining_2?.value as bigint ?? 0n,
   }
 }
@@ -250,10 +259,10 @@ export interface PositionNFT {
 export function toPositionNFT(record: RecordValue): PositionNFT {
   return {
     owner: record.owner,
-    token_id: record.fields.token_id?.value as string ?? '',
-    token0_id: record.fields.token0_id?.value as string ?? '',
-    token1_id: record.fields.token1_id?.value as string ?? '',
-    pool: record.fields.pool?.value as string ?? '',
+    token_id: litStr(record.fields.token_id?.value, 'field') ?? '',
+    token0_id: litStr(record.fields.token0_id?.value, 'field') ?? '',
+    token1_id: litStr(record.fields.token1_id?.value, 'field') ?? '',
+    pool: litStr(record.fields.pool?.value, 'field') ?? '',
     tick_lower: Number((record.fields.tick_lower?.value ?? 0n) as bigint) ?? 0,
     tick_upper: Number((record.fields.tick_upper?.value ?? 0n) as bigint) ?? 0,
     _record: record,
@@ -274,9 +283,9 @@ export interface SwapComplianceRecord {
 export function toSwapComplianceRecord(record: RecordValue): SwapComplianceRecord {
   return {
     owner: record.owner,
-    swap_id: record.fields.swap_id?.value as string ?? '',
-    token_in: record.fields.token_in?.value as string ?? '',
-    token_out: record.fields.token_out?.value as string ?? '',
+    swap_id: litStr(record.fields.swap_id?.value, 'field') ?? '',
+    token_in: litStr(record.fields.token_in?.value, 'field') ?? '',
+    token_out: litStr(record.fields.token_out?.value, 'field') ?? '',
     request: record.fields.request?.value as unknown as SwapRequest ?? {} as unknown as SwapRequest,
     caller: record.fields.caller?.value as string ?? '',
     blinded_address: record.fields.blinded_address?.value as string ?? '',
@@ -296,7 +305,7 @@ export interface MultiHopSwapComplianceRecord {
 export function toMultiHopSwapComplianceRecord(record: RecordValue): MultiHopSwapComplianceRecord {
   return {
     owner: record.owner,
-    swap_id: record.fields.swap_id?.value as string ?? '',
+    swap_id: litStr(record.fields.swap_id?.value, 'field') ?? '',
     request: record.fields.request?.value as unknown as SwapMultiHopRequest ?? {} as unknown as SwapMultiHopRequest,
     caller: record.fields.caller?.value as string ?? '',
     blinded_address: record.fields.blinded_address?.value as string ?? '',

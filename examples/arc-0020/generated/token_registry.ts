@@ -2,9 +2,18 @@
 // Do not edit manually.
 
 import { getContract } from '@veil/core'
-import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest } from '@veil/core'
+import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '@veil/core'
 
 export const PROGRAM_ID = 'token_registry.aleo' as const
+
+function litStr(v: PlaintextValue | undefined, suffix: string): string {
+  if (typeof v === 'bigint') return `${v}${suffix}`
+  if (typeof v === 'string') return v
+  if (v == null) return ''
+  // Fail fast: a struct/array/boolean value in a literal slot means the ABI
+  // or an upstream parser is wrong — never coerce it into corrupt data.
+  throw new Error(`Expected ${suffix} literal, got ${typeof v}`)
+}
 
 export interface TokenMetadata {
   token_id: string
@@ -20,7 +29,7 @@ export interface TokenMetadata {
 
 export function toTokenMetadata(value: RecordValue): TokenMetadata {
   return {
-    token_id: value.fields.token_id?.value as string ?? '',
+    token_id: litStr(value.fields.token_id?.value, 'field') ?? '',
     name: value.fields.name?.value as bigint ?? 0n,
     symbol: value.fields.symbol?.value as bigint ?? 0n,
     decimals: Number((value.fields.decimals?.value ?? 0n) as bigint) ?? 0,
@@ -40,7 +49,7 @@ export interface TokenOwner {
 export function toTokenOwner(value: RecordValue): TokenOwner {
   return {
     account: value.fields.account?.value as string ?? '',
-    token_id: value.fields.token_id?.value as string ?? '',
+    token_id: litStr(value.fields.token_id?.value, 'field') ?? '',
   }
 }
 
@@ -53,7 +62,7 @@ export interface Balance {
 
 export function toBalance(value: RecordValue): Balance {
   return {
-    token_id: value.fields.token_id?.value as string ?? '',
+    token_id: litStr(value.fields.token_id?.value, 'field') ?? '',
     account: value.fields.account?.value as string ?? '',
     balance: value.fields.balance?.value as bigint ?? 0n,
     authorized_until: Number((value.fields.authorized_until?.value ?? 0n) as bigint) ?? 0,
@@ -73,7 +82,7 @@ export function toToken(record: RecordValue): Token {
   return {
     owner: record.owner,
     amount: record.fields.amount?.value as bigint ?? 0n,
-    token_id: record.fields.token_id?.value as string ?? '',
+    token_id: litStr(record.fields.token_id?.value, 'field') ?? '',
     external_authorization_required: record.fields.external_authorization_required?.value as boolean ?? false,
     authorized_until: Number((record.fields.authorized_until?.value ?? 0n) as bigint) ?? 0,
     _record: record,

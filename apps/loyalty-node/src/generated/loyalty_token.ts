@@ -2,9 +2,18 @@
 // Do not edit manually.
 
 import { getContract } from '@veil/core'
-import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest } from '@veil/core'
+import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '@veil/core'
 
 export const PROGRAM_ID = 'loyalty_token.aleo' as const
+
+function litStr(v: PlaintextValue | undefined, suffix: string): string {
+  if (typeof v === 'bigint') return `${v}${suffix}`
+  if (typeof v === 'string') return v
+  if (v == null) return ''
+  // Fail fast: a struct/array/boolean value in a literal slot means the ABI
+  // or an upstream parser is wrong — never coerce it into corrupt data.
+  throw new Error(`Expected ${suffix} literal, got ${typeof v}`)
+}
 
 export interface LoyaltyCard {
   owner: string
@@ -17,7 +26,7 @@ export interface LoyaltyCard {
 export function toLoyaltyCard(record: RecordValue): LoyaltyCard {
   return {
     owner: record.owner,
-    card_id: record.fields.card_id?.value as string ?? '',
+    card_id: litStr(record.fields.card_id?.value, 'field') ?? '',
     points: record.fields.points?.value as bigint ?? 0n,
     tier: Number((record.fields.tier?.value ?? 0n) as bigint) ?? 0,
     _record: record,

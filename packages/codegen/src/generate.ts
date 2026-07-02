@@ -32,11 +32,25 @@ export function generate(options: GenerateOptions): string {
   lines.push(`// Do not edit manually.`)
   lines.push('')
   lines.push(`import { getContract } from '${coreImport}'`)
-  lines.push(`import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest } from '${coreImport}'`)
+  lines.push(`import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '${coreImport}'`)
   lines.push('')
 
   // Program ID constant
   lines.push(`export const PROGRAM_ID = '${abi.program}' as const`)
+  lines.push('')
+
+  // Decoder helper: literal types (field/group/scalar) may arrive from runtime
+  // parsers as bigint (suffix stripped) or as the canonical suffixed string.
+  // Normalize to the canonical string form so decoded objects match the
+  // generated interfaces at runtime.
+  lines.push(`function litStr(v: PlaintextValue | undefined, suffix: string): string {`)
+  lines.push(`  if (typeof v === 'bigint') return \`\${v}\${suffix}\``)
+  lines.push(`  if (typeof v === 'string') return v`)
+  lines.push(`  if (v == null) return ''`)
+  lines.push(`  // Fail fast: a struct/array/boolean value in a literal slot means the ABI`)
+  lines.push(`  // or an upstream parser is wrong — never coerce it into corrupt data.`)
+  lines.push(`  throw new Error(\`Expected \${suffix} literal, got \${typeof v}\`)`)
+  lines.push(`}`)
   lines.push('')
 
   // Structs
@@ -363,9 +377,13 @@ function plaintextFieldExpr(rawAccess: string, pt: Plaintext): string {
     case 'i64':
     case 'i128':
       return `${rawAccess} as bigint`
+    // Literal types with a suffix: runtime parsers may deliver these as bigint
+    // (suffix stripped) or as the canonical suffixed string — normalize to the
+    // canonical string form (e.g. 123n → "123field").
     case 'field':
     case 'group':
     case 'scalar':
+      return `litStr(${rawAccess}, '${p}')`
     case 'address':
     case 'signature':
     case 'identifier':
