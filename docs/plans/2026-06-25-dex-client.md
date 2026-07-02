@@ -342,21 +342,21 @@ describe('blinded identity (golden vectors)', () => {
 - [ ] **Step 2:** Run → FAIL. **Step 3:** Implement (parse amount/pool from `recordPlaintext`; reuse a small struct-field reader). **Step 4:** Run → PASS.
 - [ ] **Step 5: Commit** `feat(dex): record selection`.
 
-### Task 3.2b: `getOwnBalances` — tabulate balances from records
+### Task 3.2b: `getPrivateBalances` — tabulate balances from records
 
-**Files:** Create `packages/shield-swap/src/actions/reads/getOwnBalances.ts`, `test/actions/reads/getOwnBalances.test.ts`. May add a shared `recordAmount(plaintext) → { tokenId, amount }` parser to `records.ts` (Task 3.2).
+**Files:** Create `packages/shield-swap/src/actions/reads/getPrivateBalances.ts`, `test/actions/reads/getPrivateBalances.test.ts`. May add a shared `recordAmount(plaintext) → { tokenId, amount }` parser to `records.ts` (Task 3.2).
 
 **Interfaces:**
 - Consumes: core `requestRecords(client, { program, statusFilter: 'unspent' })`; the record-plaintext parser from `records.ts`.
-- Produces: `getOwnBalances(client, { tokenIds? }): Promise<Record<string, bigint>>` — requests the account's unspent token records, parses each plaintext for `{ tokenId, amount }`, and **sums per token id** (`bigint`, u128). Optionally filters to `tokenIds`. The caller's *private* record-derived balance — distinct from `indexer.getBalances` (public/authorized).
+- Produces: `getPrivateBalances(client, { tokenIds? }): Promise<Record<string, bigint>>` — requests the account's unspent token records, parses each plaintext for `{ tokenId, amount }`, and **sums per token id** (`bigint`, u128). Optionally filters to `tokenIds`. The caller's *private* record-derived balance — distinct from `indexer.getBalances` (public/authorized).
   - Read `amount`/token id from `recordPlaintext` (SDK path); fall back to `recordView.fields` when a privacy wallet withholds plaintext (total is bounded by what the grant exposes).
   - *Resolve at impl:* which program(s) hold token records (ARC-20 registry vs per-token) — see the spec's "Record-derived" note. Scan the registry if that's the model; otherwise accept a `programs[]`/`tokenIds[]` to scan.
 
 - [ ] **Step 1: Failing test** — mock `requestRecords` to return several unspent token records across two token ids (incl. two records of the same token); assert the result sums per token id as `bigint`, and that `tokenIds` filtering works.
 - [ ] **Step 2:** Run → FAIL.
 - [ ] **Step 3: Implement** — request unspent records, parse `{ tokenId, amount }`, reduce into a `Record<string, bigint>`.
-- [ ] **Step 4:** Run → PASS. Run: `pnpm vitest run packages/shield-swap/test/actions/reads/getOwnBalances.test.ts`
-- [ ] **Step 5: Commit** `feat(dex): getOwnBalances (record-derived)`.
+- [ ] **Step 4:** Run → PASS. Run: `pnpm vitest run packages/shield-swap/test/actions/reads/getPrivateBalances.test.ts`
+- [ ] **Step 5: Commit** `feat(dex): getPrivateBalances (record-derived)`.
 
 ### Task 3.3: `swapPrivate` → `SwapHandle`
 
@@ -513,7 +513,7 @@ Each its own pure function + test (one TDD cycle + commit each), per the spec's 
 
 **Interfaces:**
 - Consumes: every action from Phases 1–6, the `IndexerClient`.
-- Produces: `shieldSwapActions(client) => { getPool, getSlot, getSwapOutput, getOwnBalances, …, swapPrivate, claimSwapOutputPrivate, createPool, mintPrivate, increaseLiquidityPrivate, indexer, poolPrice, … }`, attachable via `client.extend(shieldSwapActions)`. Mirror `packages/core/src/clients/decorators/*` (each entry `name: (params) => action(client, params)`).
+- Produces: `shieldSwapActions(client) => { getPool, getSlot, getSwapOutput, getPrivateBalances, …, swapPrivate, claimSwapOutputPrivate, createPool, mintPrivate, increaseLiquidityPrivate, indexer, poolPrice, … }`, attachable via `client.extend(shieldSwapActions)`. Mirror `packages/core/src/clients/decorators/*` (each entry `name: (params) => action(client, params)`).
 
 - [ ] **Step 1: Failing test** — `createWalletClient(...).extend(shieldSwapActions)` exposes the actions and a call routes to the underlying function (mock one).
 - [ ] **Step 2:** FAIL. **Step 3:** Implement + export from `index.ts`. **Step 4:** PASS. **Step 5: Commit** `feat(dex): shieldSwapActions decorator`.

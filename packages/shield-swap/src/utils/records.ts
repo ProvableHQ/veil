@@ -193,13 +193,13 @@ export async function selectPositionNFT(client: Client, params: SelectPositionNF
 }
 
 /**
- * Parameters for {@link getOwnBalances}.
+ * Parameters for {@link getPrivateBalances}.
  *
  * @property programs Token programs to scan — wrapper programs and/or the
  *   token registry. Get them from the API's token list
  *   (`wrapper_program` per token).
  */
-export type GetOwnBalancesParameters = {
+export type GetPrivateBalancesParameters = {
   programs: string[]
 }
 
@@ -210,7 +210,7 @@ export type GetOwnBalancesParameters = {
  * registry records (one registry program holds many tokens). Values are raw
  * atomic sums (u128).
  */
-export type GetOwnBalancesReturnType = Record<string, bigint>
+export type GetPrivateBalancesReturnType = Record<string, bigint>
 
 /**
  * Tabulates the caller's private balances from their unspent token records.
@@ -230,10 +230,10 @@ export type GetOwnBalancesReturnType = Record<string, bigint>
  *   `program/token_id` (registry).
  *
  * @example
- * const balances = await getOwnBalances(client, { programs: ['ethx_5a095e.aleo'] })
+ * const balances = await getPrivateBalances(client, { programs: ['ethx_5a095e.aleo'] })
  * // → { 'ethx_5a095e.aleo': 3000000000000000000n }
  */
-export async function getOwnBalances(client: Client, params: GetOwnBalancesParameters): Promise<GetOwnBalancesReturnType> {
+export async function getPrivateBalances(client: Client, params: GetPrivateBalancesParameters): Promise<GetPrivateBalancesReturnType> {
   const sums: Record<string, bigint> = {}
   for (const program of params.programs) {
     const records = (await requestRecords(client, { program, statusFilter: 'unspent' })) as OwnedRecord[]

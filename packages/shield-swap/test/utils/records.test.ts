@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Client } from '@veil/core'
-import { parseTokenRecordInfo, selectTokenRecord, getOwnBalances } from '../../src/utils/records.js'
+import { parseTokenRecordInfo, selectTokenRecord, getPrivateBalances } from '../../src/utils/records.js'
 
 // Wrapper-program record shape (owner/amount/_nonce) — as produced by e.g.
 // ethx_5a095e.aleo transfer_public_to_private. Mirrors the amm-app parser.
@@ -70,13 +70,13 @@ describe('selectTokenRecord', () => {
   })
 })
 
-describe('getOwnBalances', () => {
+describe('getPrivateBalances', () => {
   it('sums per wrapper program and per registry token id', async () => {
     const client = recordsClient({
       'ethx.aleo': [wrapperRecord('100u128'), wrapperRecord('250u128')],
       'registry.aleo': [registryRecord('10u128', '11field'), registryRecord('5u128', '11field'), registryRecord('7u128', '22field')],
     })
-    const balances = await getOwnBalances(client, { programs: ['ethx.aleo', 'registry.aleo'] })
+    const balances = await getPrivateBalances(client, { programs: ['ethx.aleo', 'registry.aleo'] })
     expect(balances).toEqual({
       'ethx.aleo': 350n,
       'registry.aleo/11field': 15n,
@@ -92,7 +92,7 @@ describe('getOwnBalances', () => {
         { programName: 'ethx.aleo', tag: 't1', uid: 'opaque', spent: false }, // withheld plaintext
       ],
     } as unknown as Client
-    const balances = await getOwnBalances(client, { programs: ['ethx.aleo'] })
+    const balances = await getPrivateBalances(client, { programs: ['ethx.aleo'] })
     expect(balances).toEqual({ 'ethx.aleo': 100n })
   })
 })

@@ -74,13 +74,13 @@ export {
   parseTokenRecordInfo,
   selectTokenRecord,
   selectPositionNFT,
-  getOwnBalances,
+  getPrivateBalances,
   type TokenRecordInfo,
   type PositionNFTInfo,
   type SelectTokenRecordParameters,
   type SelectPositionNFTParameters,
-  type GetOwnBalancesParameters,
-  type GetOwnBalancesReturnType,
+  type GetPrivateBalancesParameters,
+  type GetPrivateBalancesReturnType,
 } from './utils/records.js'
 
 // Liquidity lifecycle: create a pool, mint a position, deepen it.

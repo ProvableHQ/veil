@@ -128,7 +128,7 @@ records) are obtained via core's `requestRecords` and passed through — never h
 
 **Record-derived (the caller's own holdings)** — via core's `requestRecords` + scanner
 (account-type branched), not a mapping read:
-- `getOwnBalances({ tokenIds? }): Promise<Record<tokenId, bigint>>` — requests the account's
+- `getPrivateBalances({ tokenIds? }): Promise<Record<tokenId, bigint>>` — requests the account's
   **unspent** token records, parses each plaintext for its token id + `amount`, and **sums per
   token**. Optionally filtered to `tokenIds` (e.g. a pool's two tokens). This is the user's
   *private* balance derived from records — distinct from the indexer's `getBalances(user)`,
