@@ -6,6 +6,22 @@ const sidebars: SidebarsConfig = {
     'getting-started',
     {
       type: 'category',
+      label: 'Packages',
+      items: [
+        'packages/overview',
+        'packages/core',
+        'packages/provable',
+        'packages/wallet-adapter',
+        'packages/react',
+        'packages/shield-swap',
+        'packages/codegen',
+        'packages/devnode',
+        'packages/leo',
+        'packages/bridge',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Clients',
       items: [
         'clients/public-client',
