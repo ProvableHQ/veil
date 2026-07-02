@@ -436,9 +436,48 @@ The default `regen-abi` (v0_0_2) works on a standard `leo`; regenerating the
 `shield_swap_v0_0_1` reference needs `leo` ≥ 4.3 for its `constructor` dialect. [`codegen/README.md`](./codegen/README.md) has the
 layout details.
 
-## Reference
+## Integration tests
 
-The integration test at
-[`test/integration/e2e.test.ts`](./test/integration/e2e.test.ts) runs the full
-lifecycle against the real testnet (airdrop, privatize records, create pool,
-mint, swap, claim) and is the most complete usage example in the repo.
+The tests under [`test/integration/`](./test/integration) run against the **real**
+testnet node and DEX API — never mocked — so they catch upstream drift as well as
+regressions. They're gated behind environment variables so the default
+`pnpm vitest run` stays fast and offline; the integration files skip unless you
+opt in. They double as the most complete usage examples in the repo.
+
+There are two tiers of gating. The read-only tier needs only `VEIL_INTEGRATION=1`.
+The write tier additionally needs a funded testnet account and delegated-proving
+credentials, because it broadcasts real transactions and pays fees:
+
+```sh
+VEIL_INTEGRATION=1          # enables every integration test
+VEIL_E2E_PRIVATE_KEY=...    # funded testnet account — write tier only (pays fees)
+ALEO_DPS_API_KEY=...        # delegated proving — write tier only
+ALEO_CONSUMER_ID=...        # delegated proving + record scanning — write tier only
+```
+
+| File | Tier | What it exercises |
+| --- | --- | --- |
+| [`traders.integration.test.ts`](./test/integration/traders.integration.test.ts) | read-only | The analyses a trader runs before trading — spot price, price impact and output size from live liquidity, route quoting with slippage sizing, in-range LP position selection, and fee-APR from OHLCV volume. Asserts math invariants, not exact live figures. |
+| [`reads.integration.test.ts`](./test/integration/reads.integration.test.ts) | read-only | Chain-direct reads (pools, slots, fee tiers, validation) against live state. |
+| [`api.integration.test.ts`](./test/integration/api.integration.test.ts) | read-only | The off-chain `ApiClient` — pools, tokens, routes, balances, OHLCV. |
+| [`balances.integration.test.ts`](./test/integration/balances.integration.test.ts) | write | The composed balance view — public balances from the API joined with private balances decoded from the account's records. Needs the account because private balances live in its records. |
+| [`poolCreation.integration.test.ts`](./test/integration/poolCreation.integration.test.ts) | write | Creates a pool on testnet: finds a token pair and a registered fee tier, calls `createPool`, then polls `isPoolInitialized` until the finalize propagates. If the pair already has a pool at every tier tried, it confirms the contract rejects the duplicate instead. |
+| [`e2e.test.ts`](./test/integration/e2e.test.ts) | write | The full private-swap lifecycle — airdrop, privatize records, ensure a pool, `swapPrivate`, read the output, `claimSwapOutputPrivate`. |
+
+Run one file, or a set:
+
+```sh
+# Read-only tier — no account needed
+VEIL_INTEGRATION=1 pnpm exec vitest run packages/shield-swap/test/integration/traders.integration.test.ts
+
+# Write tier — needs the funded account + proving credentials above
+VEIL_INTEGRATION=1 pnpm exec vitest run packages/shield-swap/test/integration/poolCreation.integration.test.ts
+
+# The whole integration suite
+VEIL_INTEGRATION=1 pnpm exec vitest run packages/shield-swap/test/integration
+```
+
+A test that reports as skipped is missing a required variable for its tier. The
+write tier spends real testnet funds on each run. Optional overrides:
+`VEIL_DEX_PROGRAM` (defaults to `shield_swap_v0_0_2.aleo`), `ALEO_DPS_URL`, and
+`ALEO_RSS_URL`.
