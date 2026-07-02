@@ -82,13 +82,38 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   }, TX_TIMEOUT)
 
   it('picks a token pair and fetches wrapper program sources (dyn-dispatch imports)', async () => {
-    // Prefer a pair with a live pool (v0_0_2 today) so the swap has depth;
-    // fall back to the first two wrapper tokens on a fresh deployment.
-    const pools = await client.api.getPools({ limit: 1 })
-    const live = pools.data[0]
+    // Pick a live pool (v0_0_2) that satisfies BOTH swap preconditions:
+    //   1. the account can fund both tokens — the swap privatizes public balance
+    //      into records, so a token the account holds zero of would revert
+    //      transfer_public_to_private; and
+    //   2. the pool has non-zero liquidity — create_pool does not seed
+    //      liquidity, so an empty pool has nothing to swap against and the swap
+    //      finalize reverts.
+    // Fall back to the first two wrapper tokens on a fresh deployment.
+    const pools = await client.api.getPools({ limit: 50 })
+    const balances = await client.api.getPublicBalances({ user: account.address })
+    const funded = new Set(balances.data.filter((b) => BigInt(b.balance ?? 0) > 0n).map((b) => b.token_id))
+    const candidates = pools.data.filter(
+      (p) =>
+        p.token0_info?.wrapper_program &&
+        p.token1_info?.wrapper_program &&
+        funded.has(p.token0) &&
+        funded.has(p.token1),
+    )
+    let live: (typeof candidates)[number] | undefined
+    for (const p of candidates) {
+      const slot = await client.getSlot({ poolKey: p.key })
+      if (slot && slot.liquidity > 0n) {
+        live = p
+        break
+      }
+    }
     if (live?.token0_info?.wrapper_program && live?.token1_info?.wrapper_program) {
       state.token0 = { address: live.token0, program: live.token0_info.wrapper_program, decimals: live.token0_info.decimals }
       state.token1 = { address: live.token1, program: live.token1_info.wrapper_program, decimals: live.token1_info.decimals }
+      // Lock in THIS pool — the pair can have several pools across fee tiers and
+      // most have zero liquidity; only this one was verified to have depth.
+      state.poolKey = live.key
     } else {
       const tokens = await client.api.getTokens()
       const withWrappers = tokens.data.filter((t) => t.wrapper_program)
@@ -139,15 +164,20 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   }, TX_TIMEOUT * 2)
 
   it('ensures a pool exists for the pair (API discovery, create, or prior run)', async () => {
-    // 1) API discovery — authoritative where the API serves this
-    //    program (v0_0_2 today): find a live pool for the chosen pair.
-    const pools = await client.api.getPools({ limit: 50 })
-    for (const p of pools.data) {
-      const pair = new Set([p.token0, p.token1])
-      if (pair.has(state.token0!.address) && pair.has(state.token1!.address)) {
-        if (await client.isPoolInitialized({ poolKey: p.key })) {
-          state.poolKey = p.key
-          break
+    // 1) API discovery — authoritative where the API serves this program
+    //    (v0_0_2 today): find a live pool for the chosen pair. Skip when the
+    //    token-pick step already locked in a specific pool with liquidity —
+    //    re-discovering would grab the pair's first initialized pool, which is
+    //    often an empty one at a different fee tier.
+    if (!state.poolKey) {
+      const pools = await client.api.getPools({ limit: 50 })
+      for (const p of pools.data) {
+        const pair = new Set([p.token0, p.token1])
+        if (pair.has(state.token0!.address) && pair.has(state.token1!.address)) {
+          if (await client.isPoolInitialized({ poolKey: p.key })) {
+            state.poolKey = p.key
+            break
+          }
         }
       }
     }
@@ -202,9 +232,14 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     expect(state.handle.swapId).toMatch(/field$/)
     expect(state.handle.blindedAddress).toMatch(/^aleo1/)
 
-    // The request finalized (executeContract waits) — the output must be readable.
-    const out = await client.getSwapOutput({ swapId: state.handle.swapId! })
-    expect(out).not.toBeNull()
+    // The request finalized (executeContract waits), but the swap_outputs
+    // mapping write propagates to reads asynchronously — poll until it appears.
+    let out: Awaited<ReturnType<typeof client.getSwapOutput>> = null
+    const ready = await pollUntil(async () => {
+      out = await client.getSwapOutput({ swapId: state.handle!.swapId! })
+      return out !== null
+    }, 24, 5000)
+    expect(ready, 'swap output should be readable after the request finalizes').toBe(true)
     expect(out!.amount_out > 0n).toBe(true)
   }, TX_TIMEOUT)
 
