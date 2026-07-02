@@ -34,6 +34,18 @@ export {
   BLINDED_ADDRESS_ALGORITHM,
 } from './constants.js'
 
+// Record selection + record-derived balances (local-signer path; wallet
+// signers select records wallet-side via record InputRequests).
+export {
+  parseTokenRecordInfo,
+  selectTokenRecord,
+  getOwnBalances,
+  type TokenRecordInfo,
+  type SelectTokenRecordParameters,
+  type GetOwnBalancesParameters,
+  type GetOwnBalancesReturnType,
+} from './records.js'
+
 // Swap parameter helpers: intent → contract args (pure), deadline, nonces,
 // and the contract's Q64 tick math table.
 export {
