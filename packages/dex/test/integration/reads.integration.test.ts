@@ -1,6 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { createPublicClient, http } from '@veil/core'
 import { getPool } from '../../src/actions/reads/getPool.js'
+import { getSlot } from '../../src/actions/reads/getSlot.js'
+import { getSwapOutput } from '../../src/actions/reads/getSwapOutput.js'
+import {
+  isBlindedAddressUsed,
+  isPoolInitialized,
+  isFeeTierValid,
+  isTickSpacingValid,
+  getFeeToTickSpacing,
+} from '../../src/actions/reads/validation.js'
 import { PROGRAM_ID } from '../../src/generated/shield_swap.js'
 
 // Real-API integration: hits the live testnet node and the live AMM indexer.
@@ -52,6 +61,56 @@ describe.runIf(RUN)('reads against the real API', () => {
     const absentKey = '111111111111111111111111111111111111111111111111111111111111111111111111111field'
     const pool = await getPool(client, { poolKey: absentKey })
     expect(pool).toBeNull()
+  }, 30_000)
+
+  it('getSlot decodes live trading state for an indexer-discovered pool', async () => {
+    const res = await fetch(`${INDEXER_URL}/pools?limit=1`)
+    const body = (await res.json()) as { data: { key: string }[] }
+    const poolKey = body.data[0]!.key
+
+    let slot = await getSlot(client, { poolKey })
+    if (slot === null) {
+      slot = await getSlot(client, { poolKey, program: PREVIOUS_PROGRAM })
+    }
+
+    expect(slot).not.toBeNull()
+    expect(typeof slot!.tick).toBe('number')
+    expect(typeof slot!.tick_spacing).toBe('number')
+    expect(typeof slot!.sqrt_price).toBe('bigint')
+    expect(slot!.sqrt_price > 0n).toBe(true)
+    expect(typeof slot!.liquidity).toBe('bigint')
+    expect(typeof slot!.next_init_below).toBe('number')
+    expect(typeof slot!.next_init_above).toBe('number')
+  }, 30_000)
+
+  it('getSwapOutput returns null for an unknown swap id', async () => {
+    const absent = '222222222222222222222222222222222222222222222222222222222222222222222222222field'
+    expect(await getSwapOutput(client, { swapId: absent })).toBeNull()
+  }, 30_000)
+
+  it('validation reads agree with the indexer fee-tier registry', async () => {
+    const res = await fetch(`${INDEXER_URL}/fee-tiers`)
+    expect(res.ok).toBe(true)
+    const body = (await res.json()) as { data: { fee_tier: number }[] }
+    expect(body.data.length).toBeGreaterThan(0)
+    const fee = body.data[0]!.fee_tier
+
+    // The target deployment must register the fee the indexer advertises,
+    // bind a tick spacing to it, and register that spacing.
+    expect(await isFeeTierValid(client, { fee })).toBe(true)
+    const spacing = await getFeeToTickSpacing(client, { fee })
+    expect(spacing).not.toBeNull()
+    expect(await isTickSpacingValid(client, { tickSpacing: spacing! })).toBe(true)
+    // An unregistered fee reads false, not an error.
+    expect(await isFeeTierValid(client, { fee: 65535 })).toBe(false)
+  }, 30_000)
+
+  it('isPoolInitialized and isBlindedAddressUsed treat absence as false', async () => {
+    const absentKey = '333333333333333333333333333333333333333333333333333333333333333333333333333field'
+    expect(await isPoolInitialized(client, { poolKey: absentKey })).toBe(false)
+    // A fresh, never-used address (the zero-value address literal).
+    const fresh = 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc'
+    expect(await isBlindedAddressUsed(client, { address: fresh })).toBe(false)
   }, 30_000)
 
   it(`target program ${PROGRAM_ID} is deployed with the expected mappings`, async () => {
