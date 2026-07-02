@@ -27,7 +27,7 @@ export const CLAIM_OR_SWAP_DOMAIN =
 // The SDK (WASM) is an optional peer: dapps talking to a privacy-preserving
 // wallet never need it — the wallet derives with its own view key via
 // `derived` InputRequests. Only local-account callers (bots, agents, e2e)
-// derive here, so the import is lazy: loading @veil/dex never touches WASM;
+// derive here, so the import is lazy: loading @veil/shield-swap never touches WASM;
 // the first derivation call does.
 type AleoSdk = typeof import('@provablehq/sdk')
 

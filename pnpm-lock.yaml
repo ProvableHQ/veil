@@ -102,25 +102,6 @@ importers:
         specifier: workspace:*
         version: link:../core
 
-  packages/dex:
-    dependencies:
-      '@veil/core':
-        specifier: workspace:*
-        version: link:../core
-    devDependencies:
-      '@provablehq/sdk':
-        specifier: ^0.11.3
-        version: 0.11.3
-      '@veil/codegen':
-        specifier: workspace:*
-        version: link:../codegen
-      '@veil/provable':
-        specifier: workspace:*
-        version: link:../provable
-      openapi-typescript:
-        specifier: ^7.13.0
-        version: 7.13.0(typescript@5.9.3)
-
   packages/leo: {}
 
   packages/provable:
@@ -184,6 +165,25 @@ importers:
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
+
+  packages/shield-swap:
+    dependencies:
+      '@veil/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@provablehq/sdk':
+        specifier: ^0.11.3
+        version: 0.11.3
+      '@veil/codegen':
+        specifier: workspace:*
+        version: link:../codegen
+      '@veil/provable':
+        specifier: workspace:*
+        version: link:../provable
+      openapi-typescript:
+        specifier: ^7.13.0
+        version: 7.13.0(typescript@5.9.3)
 
   packages/wallet-adapter:
     dependencies:

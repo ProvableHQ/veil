@@ -43,8 +43,8 @@ indexer API, usable directly as a regular TS API and exposed agent-first as MCP 
 ┌──────────────────────────────────────────────────────────────┐
 │  Application / Agent / Strategy (future)                       │
 ├──────────────────────────────────────────────────────────────┤
-│  @veil/dex                                                     │
-│    dexActions decorator  →  attach via client.extend()         │
+│  @veil/shield-swap                                                     │
+│    shieldSwapActions decorator  →  attach via client.extend()         │
 │                                                                │
 │    Reads (layered)                Writes (private)             │
 │    ── chain-direct ──             swapPrivate  → swap_private    │
@@ -74,7 +74,7 @@ indexer API, usable directly as a regular TS API and exposed agent-first as MCP 
 └──────────────────────────────────────────────────────────────┘
 ```
 
-`@veil/dex` is a new sibling package to `@veil/bridge`. It depends on `@veil/core` and
+`@veil/shield-swap` is a new sibling package to `@veil/bridge`. It depends on `@veil/core` and
 adds no surface to core. Package layout mirrors core: `actions/`, `clients/decorators/`,
 `agent/`, `mcp/`, `types/`.
 
@@ -226,7 +226,7 @@ A `BlindedIdentity` helper encapsulates derivation + counter scan, returning
   wallet-standard algorithms `program-scoped-blinding-factor` / `program-scoped-blinded-address`;
   the wallet derives from its own private state. Zero SDK, zero WASM in the dapp bundle.
 - **Local path (bots/agents/e2e):** `@provablehq/sdk` is an **optional peerDependency** of
-  `@veil/dex`, lazily `import()`ed inside the derivation functions — importing the package never
+  `@veil/shield-swap`, lazily `import()`ed inside the derivation functions — importing the package never
   loads WASM; the first derivation call does, and a missing peer throws an actionable install
   message. Local-account users already carry the SDK for local proving, so the peer costs them
   nothing extra.
@@ -275,7 +275,7 @@ Every `dynamic.record` input is obtained through core's `requestRecords` + plugg
 provides). The reference client's `extractPositionNFTFromOutputs` + manual `decryptFn` are
 **out of scope** — we do not re-roll decrypt/extract.
 
-`@veil/dex` adds only **record selection** on top of `requestRecords({ program, unspent })`:
+`@veil/shield-swap` adds only **record selection** on top of `requestRecords({ program, unspent })`:
 - the `PositionNFT` record for a given pool/position (mint returns it; increase consumes it)
 - unspent token records covering `amount_in` / `amount0_desired` / `amount1_desired`
 
@@ -291,7 +291,7 @@ wallet**; SDK/Leo-based **local** clients don't use it. Concretely:
   program, recordname, uid }`) and core/the wallet resolves them. We get this for free: action
   record/value params accept `value | InputRequest` (codegen already widens every slot;
   `getContract`/`writeContract` pass requests through — the non-request fast path encodes
-  exactly as before), so **no separate code path** in `@veil/dex`. Record selection by `uid`
+  exactly as before), so **no separate code path** in `@veil/shield-swap`. Record selection by `uid`
   and connect-time grants (`ConnectOptions.recordAccess`) are the dapp's concern, not core's.
 
 ## Tick hints (mandatory for liquidity)
@@ -312,9 +312,9 @@ Swaps need no hints.
 |---|---|
 | Struct/record/mapping **types + decoders** (chain value → typed object) for the main DEX program(s) | **`@veil/codegen`** build step → committed `src/generated/` (follows `apps/loyalty-node` precedent). The **primary, typed source of truth**. |
 | Runtime **fallback** for programs without generated bindings (e.g. the arbitrary token programs behind `dyn record` inputs) | **`getContract`** — auto-encodes native values at runtime, but returns **no compile-time types**; used only where a generated binding doesn't exist |
-| **Input encoding** (typed params → execution) | thin hand-written util in `@veil/dex`: primitive `to*` formatters + the single `MintPositionRequest` struct formatter + record passthrough (`recordPlaintext` on the SDK path). Every shield_swap entrypoint is primitives + records with exactly one struct input, so this stays small. Params also accept `InputRequest` (wallet path) — passed through untouched to core; the non-request fast path encodes exactly as before. |
+| **Input encoding** (typed params → execution) | thin hand-written util in `@veil/shield-swap`: primitive `to*` formatters + the single `MintPositionRequest` struct formatter + record passthrough (`recordPlaintext` on the SDK path). Every shield_swap entrypoint is primitives + records with exactly one struct input, so this stays small. Params also accept `InputRequest` (wallet path) — passed through untouched to core; the non-request fast path encodes exactly as before. |
 | Record decrypt/fetch | **core** `requestRecords` + scanner |
-| Blinding derivation, `SwapHandle`, tick hints, record selection, helpers, typed action wrappers | **hand-written in `@veil/dex`**, typed against the generated bindings |
+| Blinding derivation, `SwapHandle`, tick hints, record selection, helpers, typed action wrappers | **hand-written in `@veil/shield-swap`**, typed against the generated bindings |
 
 **ABI source for the build (implemented):** shield_swap is consumed as a **deployed** program.
 The pinned ABI is generated by the **Leo CLI** — `scripts/regen-abi.sh` does `curl` the deployed
@@ -325,7 +325,7 @@ accept it. The committed ABI is the reproducible build artifact; rerun `regen-ab
 contract redeploys.
 
 **Resolved (was a spike):** codegen today emits types + decoders only. For V1 that is enough —
-`@veil/dex` types its actions against the generated struct/record types and does the small input
+`@veil/shield-swap` types its actions against the generated struct/record types and does the small input
 encoding itself. Extending codegen to emit typed per-transition encoders is a future
 enhancement, not required here.
 
@@ -359,7 +359,7 @@ Notes:
 
 Every action ships three ways from one definition:
 - the plain async TS function (regular API — imported directly by dapps/strategies)
-- an MCP tool (under `@veil/dex` `mcp/`) returning structured JSON
+- an MCP tool (under `@veil/shield-swap` `mcp/`) returning structured JSON
 - an agent tool schema (under `agent/`) for tool-calling agents
 
 Errors are structured and actionable (e.g. "blinded address exhausted", "swap output not yet

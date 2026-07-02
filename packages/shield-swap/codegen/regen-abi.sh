@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Regenerate a pinned shield_swap ABI using the Leo CLI.
 # We do NOT parse .aleo ourselves — `leo abi` produces the canonical ABI JSON.
-# Usage: packages/dex/codegen/regen-abi.sh [program]   (default: shield_swap_v0_0_1.aleo)
+# Usage: packages/shield-swap/codegen/regen-abi.sh [program]   (default: shield_swap_v0_0_1.aleo)
 set -euo pipefail
 PROGRAM="${1:-shield_swap_v0_0_1.aleo}"
 OUT="$(cd "$(dirname "$0")" && pwd)/abi/${PROGRAM%.aleo}.json"

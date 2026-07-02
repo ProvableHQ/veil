@@ -1,5 +1,5 @@
 {
-  "name": "@veil/dex",
+  "name": "@veil/shield-swap",
   "version": "0.0.0",
   "type": "module",
   "main": "dist/index.js",

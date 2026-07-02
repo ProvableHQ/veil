@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Regenerate the pinned AMM (DEX) API OpenAPI spec + generated TS types.
 # The spec is the canonical tool output (no hand-written REST types).
-# Usage: packages/dex/codegen/regen-openapi.sh
+# Usage: packages/shield-swap/codegen/regen-openapi.sh
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT

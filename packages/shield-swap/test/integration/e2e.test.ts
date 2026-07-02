@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { loadNetwork } from '@veil/provable'
-import { dexActions } from '../../src/decorators/dexActions.js'
+import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { getProgram } from '@veil/core'
 import { parseTokenRecordInfo } from '../../src/utils/records.js'
 import { SwapOutputNotFinalizedError } from '../../src/actions/swap/claimSwapOutputPrivate.js'
@@ -53,7 +53,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     consumerId: CONSUMER_ID,
     records: scanner,
   })
-  const client = walletClient.extend(dexActions({ api: {}, program: DEX_PROGRAM }))
+  const client = walletClient.extend(shieldSwapActions({ api: {}, program: DEX_PROGRAM }))
 
   // Resolved during the run and shared across steps (tests run in order).
   const state: {

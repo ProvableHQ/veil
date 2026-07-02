@@ -111,7 +111,7 @@ export {
 } from './utils/derivations.js'
 
 // One-surface composition: chain reads flat, API under `.api`.
-export { dexActions, type DexActionsConfig, type DexActions } from './decorators/dexActions.js'
+export { shieldSwapActions, type ShieldSwapActionsConfig, type ShieldSwapActions } from './decorators/shieldSwapActions.js'
 
 // Swap parameter helpers: intent → contract args (pure), deadline, nonces,
 // and the contract's Q64 tick math table.

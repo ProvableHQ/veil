@@ -1,8 +1,8 @@
-# Veil DEX Client (`@veil/dex`) Implementation Plan
+# Veil DEX Client (`@veil/shield-swap`) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship `@veil/dex` — a private-by-default, agent-first TypeScript client for the Aleo AMM `shield_swap_v0_0_2.aleo`, with composable read + write actions usable directly and as MCP/agent tools.
+**Goal:** Ship `@veil/shield-swap` — a private-by-default, agent-first TypeScript client for the Aleo AMM `shield_swap_v0_0_2.aleo`, with composable read + write actions usable directly and as MCP/agent tools.
 
 **Architecture:** A new package sibling to `@veil/bridge`, layered on `@veil/core`. Typed bindings for the main DEX program come from the `@veil/codegen` build step (committed `src/generated/`); `getContract` is the runtime fallback for programs without generated bindings (arbitrary token programs behind `dyn record` inputs). Chain-direct reads use core `getMappingValue` + generated decoders; the off-chain AMM REST API is wrapped by a typed `IndexerClient`. Records (token inputs, `PositionNFT`) come from core `requestRecords` + scanner, account-type branched. Each action is one async function exposed three ways (plain TS, MCP tool, agent schema).
 
@@ -26,22 +26,22 @@
 - **Binding contributor constraints** (`.agents/contributors.md`, always-on via `AGENTS.md`):
   - **JSDoc on every public symbol** — verb-led one-line summary; document `@param`/`@returns`/`@throws` by consequence (never restate the name or type); state defaults, units (microcredits), numeric widths, and side effects (network/sign/prove/pure); `@property` tags for object fields; a compiling `@example`. No filler, no hype adjectives, no hedging. See `.agents/voice.md`.
   - **Interface/config shape** — options objects + `extend()`, configurable defaults, no hardcoded network/RPC/wallet. `IndexerClient` base URL is configurable.
-  - **Sign-off rule (STOP):** do **not** modify `@veil/core` or `@veil/codegen` to make `@veil/dex` work, and do **not** change any shared core interface/type, without stating the change + affected dependents and getting approval first. If Phase 0 reveals codegen can't handle the deployed ABI or `dynamic.record` types, **surface it — do not patch codegen silently.**
+  - **Sign-off rule (STOP):** do **not** modify `@veil/core` or `@veil/codegen` to make `@veil/shield-swap` work, and do **not** change any shared core interface/type, without stating the change + affected dependents and getting approval first. If Phase 0 reveals codegen can't handle the deployed ABI or `dynamic.record` types, **surface it — do not patch codegen silently.**
 
 ---
 
 ## File Structure
 
 ```
-packages/dex/
-  package.json                      # @veil/dex, deps: @veil/core, @provablehq/sdk
+packages/shield-swap/
+  package.json                      # @veil/shield-swap, deps: @veil/core, @provablehq/sdk
   tsup.config.ts                    # mirror packages/bridge
   tsconfig.json
   veil.config.json                  # codegen config: shield_swap abi → src/generated
   scripts/regen-abi.sh              # curl | jq | leo abi → pinned abi.json (Leo CLI, no custom parsing)
   abi/shield_swap_v0_0_2.json       # committed pinned ABI snapshot
   src/
-    index.ts                        # public exports + dexActions
+    index.ts                        # public exports + shieldSwapActions
     constants.ts                    # program id, domains, FEE_TIERS, TICK_SPACINGS, tick sentinels
     generated/shield_swap.ts        # CODEGEN OUTPUT (committed): types + decoders
     types.ts                        # SwapHandle, intents, action param/return types
@@ -59,7 +59,7 @@ packages/dex/
     indexer/
       client.ts                     # IndexerClient (base URL, auth/JWT)
       endpoints.ts                  # typed REST methods
-    decorators/dexActions.ts        # client.extend() decorator
+    decorators/shieldSwapActions.ts        # client.extend() decorator
     agent/                          # agent tool schemas (one per action)
     mcp/                            # MCP tool registration
   test/                             # mirrors src/, plus test/integration/e2e.test.ts
@@ -69,27 +69,27 @@ packages/dex/
 
 ## Phase 0 — Package scaffold + codegen build step
 
-### Task 0.1: Scaffold the `@veil/dex` package
+### Task 0.1: Scaffold the `@veil/shield-swap` package
 
 **Files:**
-- Create: `packages/dex/package.json`, `packages/dex/tsconfig.json`, `packages/dex/tsup.config.ts`, `packages/dex/src/index.ts`
+- Create: `packages/shield-swap/package.json`, `packages/shield-swap/tsconfig.json`, `packages/shield-swap/tsup.config.ts`, `packages/shield-swap/src/index.ts`
 - Reference: `packages/bridge/package.json`, `packages/bridge/tsup.config.ts` (copy structure)
 
 **Interfaces:**
-- Produces: the `@veil/dex` workspace package with `build`/`test`/`typecheck` scripts.
+- Produces: the `@veil/shield-swap` workspace package with `build`/`test`/`typecheck` scripts.
 
-- [ ] **Step 1: Copy bridge's package skeleton**, renaming to `@veil/dex`, deps `{ "@veil/core": "workspace:*", "@provablehq/sdk": "<match core's version>" }`, and a `"generate": "tsx scripts/extract-abi.ts && veil-codegen --config veil.config.json"` script.
+- [ ] **Step 1: Copy bridge's package skeleton**, renaming to `@veil/shield-swap`, deps `{ "@veil/core": "workspace:*", "@provablehq/sdk": "<match core's version>" }`, and a `"generate": "tsx scripts/extract-abi.ts && veil-codegen --config veil.config.json"` script.
 - [ ] **Step 2: Minimal `src/index.ts`**: `export const VERSION = '0.0.0'`.
 - [ ] **Step 3: Verify it builds and is picked up by the workspace**
 
-Run: `pnpm install && pnpm --filter @veil/dex build`
+Run: `pnpm install && pnpm --filter @veil/shield-swap build`
 Expected: build succeeds, emits `dist/`.
 
 - [ ] **Step 4: Commit** (docs/scaffold — exempt from /code-review)
 
 ```bash
 git add packages/dex
-git commit -m "chore(dex): scaffold @veil/dex package"
+git commit -m "chore(dex): scaffold @veil/shield-swap package"
 ```
 
 ### Task 0.2: ABI extraction script (deployed `.aleo` → pinned `abi.json`)
@@ -102,7 +102,7 @@ git commit -m "chore(dex): scaffold @veil/dex package"
 > retained only as historical record.
 
 **Files:**
-- Create: `packages/dex/scripts/extract-abi.ts`, `packages/dex/abi/shield_swap_v0_0_2.json` (generated artifact, committed)
+- Create: `packages/shield-swap/scripts/extract-abi.ts`, `packages/shield-swap/abi/shield_swap_v0_0_2.json` (generated artifact, committed)
 - Uses: core `parseProgram` (`packages/core/src/contract/parseProgram.ts`) and `parseAbi` (`packages/core/src/utils/parseAbi.ts`) to validate shape.
 
 **Interfaces:**
@@ -112,14 +112,14 @@ git commit -m "chore(dex): scaffold @veil/dex package"
 - [ ] **Step 1: Write the failing test**
 
 ```ts
-// packages/dex/test/extract-abi.test.ts
+// packages/shield-swap/test/extract-abi.test.ts
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { parseAbi } from '@veil/core'
 
 describe('pinned shield_swap ABI', () => {
   it('parses and contains the V1 entrypoints', () => {
-    const raw = JSON.parse(readFileSync('packages/dex/abi/shield_swap_v0_0_2.json', 'utf-8'))
+    const raw = JSON.parse(readFileSync('packages/shield-swap/abi/shield_swap_v0_0_2.json', 'utf-8'))
     const abi = parseAbi(raw)
     const fns = new Set(abi.functions.map((f) => f.name))
     for (const f of ['swap_private', 'claim_swap_output_private', 'create_pool', 'mint_private', 'increase_liquidity_private']) {
@@ -135,32 +135,32 @@ describe('pinned shield_swap ABI', () => {
 
 - [ ] **Step 2: Run it — fails** (no `abi/shield_swap_v0_0_2.json` yet)
 
-Run: `pnpm vitest run packages/dex/test/extract-abi.test.ts`
+Run: `pnpm vitest run packages/shield-swap/test/extract-abi.test.ts`
 Expected: FAIL (ENOENT).
 
 - [ ] **Step 3: Write `scripts/extract-abi.ts`** — fetch the deployed program, `JSON.parse` (it's a JSON string), feed the `.aleo` source to `parseProgram`, map the resulting `Program` (`functions`/`mappings`/`closures`) into the `abi.json` shape `parseAbi` accepts (inspect `parseAbi.ts` for the exact shape), and write `abi/shield_swap_v0_0_2.json`. If the `Program`→ABI mapping proves lossy for any input/struct type, fall back to `leo build` of the fetched `amm-v3` source and copy its `build/abi.json`.
 
 - [ ] **Step 4: Generate the pinned ABI**
 
-Run: `pnpm --filter @veil/dex exec tsx scripts/extract-abi.ts`
+Run: `pnpm --filter @veil/shield-swap exec tsx scripts/extract-abi.ts`
 Expected: writes `abi/shield_swap_v0_0_2.json`.
 
 - [ ] **Step 5: Run the test — passes**
 
-Run: `pnpm vitest run packages/dex/test/extract-abi.test.ts`
+Run: `pnpm vitest run packages/shield-swap/test/extract-abi.test.ts`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/dex/scripts/extract-abi.ts packages/dex/abi packages/dex/test/extract-abi.test.ts
+git add packages/shield-swap/scripts/extract-abi.ts packages/shield-swap/abi packages/shield-swap/test/extract-abi.test.ts
 git commit -m "feat(dex): pin shield_swap ABI + extraction script"
 ```
 
 ### Task 0.3: Wire codegen → committed `src/generated/shield_swap.ts`
 
 **Files:**
-- Create: `packages/dex/veil.config.json`, `packages/dex/src/generated/shield_swap.ts` (codegen output, committed)
+- Create: `packages/shield-swap/veil.config.json`, `packages/shield-swap/src/generated/shield_swap.ts` (codegen output, committed)
 - Reference: `apps/loyalty-node/package.json` `generate` script + `apps/loyalty-node/src/generated/`
 
 **Interfaces:**
@@ -169,34 +169,34 @@ git commit -m "feat(dex): pin shield_swap ABI + extraction script"
 - [ ] **Step 1: Write `veil.config.json`**: `{ "programs": [{ "abi": "./abi/shield_swap_v0_0_2.json", "out": "./src/generated/shield_swap.ts" }], "coreImport": "@veil/core" }`.
 - [ ] **Step 2: Run codegen**
 
-Run: `pnpm --filter @veil/dex exec veil-codegen --config veil.config.json`
+Run: `pnpm --filter @veil/shield-swap exec veil-codegen --config veil.config.json`
 Expected: `Generated …/src/generated/shield_swap.ts`.
 
 - [ ] **Step 3: Write a test asserting the generated decoders work** against a sample mapping value string (copy a real `slots`/`pools` value from `getMappingValue` output, or a crafted one matching the struct):
 
 ```ts
-// packages/dex/test/generated.test.ts — assert PoolState/Slot interfaces + a decoder round-trip on a sample value
+// packages/shield-swap/test/generated.test.ts — assert PoolState/Slot interfaces + a decoder round-trip on a sample value
 ```
 
 - [ ] **Step 4: Run — passes**
 
-Run: `pnpm vitest run packages/dex/test/generated.test.ts`
+Run: `pnpm vitest run packages/shield-swap/test/generated.test.ts`
 
 - [ ] **Step 5: Typecheck**
 
-Run: `pnpm --filter @veil/dex exec tsc --noEmit`
+Run: `pnpm --filter @veil/shield-swap exec tsc --noEmit`
 Expected: clean.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/dex/veil.config.json packages/dex/src/generated packages/dex/test/generated.test.ts
+git add packages/shield-swap/veil.config.json packages/shield-swap/src/generated packages/shield-swap/test/generated.test.ts
 git commit -m "feat(dex): generate typed bindings for shield_swap"
 ```
 
 ### Task 0.4: Constants
 
-**Files:** Create `packages/dex/src/constants.ts`
+**Files:** Create `packages/shield-swap/src/constants.ts`
 
 **Interfaces:**
 - Produces: `PROGRAM_ID='shield_swap_v0_0_2.aleo'`, `BLINDING_FACTOR_DOMAIN`, `CLAIM_OR_SWAP_DOMAIN` (the exact field constants from the deployed program / reference client), `FEE_TIERS`, `TICK_SPACINGS`, `MIN_TICK_SENTINEL`, `MAX_TICK_SENTINEL`.
@@ -210,7 +210,7 @@ git commit -m "feat(dex): generate typed bindings for shield_swap"
 
 ### Task 1.1: Primitive encode util
 
-**Files:** Create `packages/dex/src/encode.ts`, `packages/dex/test/encode.test.ts`
+**Files:** Create `packages/shield-swap/src/encode.ts`, `packages/shield-swap/test/encode.test.ts`
 
 **Interfaces:**
 - Produces: `toField(s: string): string`, `toAddress(s): string`, `toU128(n: bigint): string`, `toU64/toU32/toU16/toU8(n: number): string`, `toI32(n: number): string`, `toBool(b: boolean): string`. Each appends the correct Aleo type suffix (`123u128`, `aleo1…` unchanged, `true`/`false`, `-5i32`). Port semantics from the reference's `formatting` utils.
@@ -232,12 +232,12 @@ describe('encode', () => {
 ```
 
 - [ ] **Step 2:** Run → FAIL. **Step 3:** Implement. **Step 4:** Run → PASS.
-Run: `pnpm vitest run packages/dex/test/encode.test.ts`
+Run: `pnpm vitest run packages/shield-swap/test/encode.test.ts`
 - [ ] **Step 5: Commit** `feat(dex): primitive encode util`.
 
 ### Task 1.2: `getPool` (static config read)
 
-**Files:** Create `packages/dex/src/actions/reads/getPool.ts`, `test/actions/reads/getPool.test.ts`
+**Files:** Create `packages/shield-swap/src/actions/reads/getPool.ts`, `test/actions/reads/getPool.test.ts`
 
 **Interfaces:**
 - Consumes: core `getMappingValue(client, { program, mapping, key })`; the generated `PoolState` decoder.
@@ -246,7 +246,7 @@ Run: `pnpm vitest run packages/dex/test/encode.test.ts`
 - [ ] **Step 1: Failing test** (mock `getMappingValue` to return a sample `pools` struct string; assert decoded fields).
 - [ ] **Step 2:** Run → FAIL.
 - [ ] **Step 3: Implement** — read `pools` mapping with `toField(poolKey)`, decode with the generated mapper, return `null` if absent.
-- [ ] **Step 4:** Run → PASS. Run: `pnpm vitest run packages/dex/test/actions/reads/getPool.test.ts`
+- [ ] **Step 4:** Run → PASS. Run: `pnpm vitest run packages/shield-swap/test/actions/reads/getPool.test.ts`
 - [ ] **Step 5: Commit** `feat(dex): getPool read`.
 
 ### Task 1.3: Sibling chain-direct reads (same pattern as 1.2)
@@ -271,7 +271,7 @@ Implement each as its own file + test, following Task 1.2 exactly (read mapping 
 
 ### Task 2.1: Port `deriveBlindingFactor` / `deriveBlindedAddress`
 
-**Files:** Create `packages/dex/src/blinded-identity.ts`, `test/blinded-identity.test.ts`
+**Files:** Create `packages/shield-swap/src/blinded-identity.ts`, `test/blinded-identity.test.ts`
 
 **Interfaces:**
 - Consumes: `@provablehq/sdk` (`Field`, `Scalar`, `U32`, `Address`, `Poseidon8`); `constants.ts`.
@@ -294,12 +294,12 @@ describe('blinded identity (golden vectors)', () => {
 
 - [ ] **Step 2:** Run → FAIL.
 - [ ] **Step 3: Port the two functions** verbatim from the reference (do not “improve” the bit-packing).
-- [ ] **Step 4:** Run → PASS (vectors match exactly). Run: `pnpm vitest run packages/dex/test/blinded-identity.test.ts`
+- [ ] **Step 4:** Run → PASS (vectors match exactly). Run: `pnpm vitest run packages/shield-swap/test/blinded-identity.test.ts`
 - [ ] **Step 5: Commit** `feat(dex): blinded-factor/address derivation`.
 
 ### Task 2.2: Counter scan against `used_blinded_addresses`
 
-**Files:** Modify `packages/dex/src/blinded-identity.ts`; add `test/blinded-identity.scan.test.ts`
+**Files:** Modify `packages/shield-swap/src/blinded-identity.ts`; add `test/blinded-identity.scan.test.ts`
 
 **Interfaces:**
 - Consumes: `deriveBlindingFactor`, `deriveBlindedAddress`, `isBlindedAddressUsed` (Task 1.3).
@@ -315,7 +315,7 @@ describe('blinded identity (golden vectors)', () => {
 
 ### Task 3.1: Param helpers (slippage, ordering, deadline, nonce)
 
-**Files:** Create `packages/dex/src/helpers/params.ts`, `test/helpers/params.test.ts`
+**Files:** Create `packages/shield-swap/src/helpers/params.ts`, `test/helpers/params.test.ts`
 
 **Interfaces:**
 - Consumes: `getPool` (ordering), `getSlot` (`sqrt_price`); core block-height read for deadline.
@@ -330,7 +330,7 @@ describe('blinded identity (golden vectors)', () => {
 
 ### Task 3.2: Record selection for token inputs
 
-**Files:** Create `packages/dex/src/records.ts`, `test/records.test.ts`
+**Files:** Create `packages/shield-swap/src/records.ts`, `test/records.test.ts`
 
 **Interfaces:**
 - Consumes: core `requestRecords(client, { program, statusFilter: 'unspent' })` → `OwnedRecord[]` (each has `recordName`, `recordPlaintext`).
@@ -344,7 +344,7 @@ describe('blinded identity (golden vectors)', () => {
 
 ### Task 3.2b: `getOwnBalances` — tabulate balances from records
 
-**Files:** Create `packages/dex/src/actions/reads/getOwnBalances.ts`, `test/actions/reads/getOwnBalances.test.ts`. May add a shared `recordAmount(plaintext) → { tokenId, amount }` parser to `records.ts` (Task 3.2).
+**Files:** Create `packages/shield-swap/src/actions/reads/getOwnBalances.ts`, `test/actions/reads/getOwnBalances.test.ts`. May add a shared `recordAmount(plaintext) → { tokenId, amount }` parser to `records.ts` (Task 3.2).
 
 **Interfaces:**
 - Consumes: core `requestRecords(client, { program, statusFilter: 'unspent' })`; the record-plaintext parser from `records.ts`.
@@ -355,12 +355,12 @@ describe('blinded identity (golden vectors)', () => {
 - [ ] **Step 1: Failing test** — mock `requestRecords` to return several unspent token records across two token ids (incl. two records of the same token); assert the result sums per token id as `bigint`, and that `tokenIds` filtering works.
 - [ ] **Step 2:** Run → FAIL.
 - [ ] **Step 3: Implement** — request unspent records, parse `{ tokenId, amount }`, reduce into a `Record<string, bigint>`.
-- [ ] **Step 4:** Run → PASS. Run: `pnpm vitest run packages/dex/test/actions/reads/getOwnBalances.test.ts`
+- [ ] **Step 4:** Run → PASS. Run: `pnpm vitest run packages/shield-swap/test/actions/reads/getOwnBalances.test.ts`
 - [ ] **Step 5: Commit** `feat(dex): getOwnBalances (record-derived)`.
 
 ### Task 3.3: `swapPrivate` → `SwapHandle`
 
-**Files:** Create `packages/dex/src/types.ts` (add `SwapHandle`), `packages/dex/src/actions/swap/swapPrivate.ts`, `test/actions/swap/swapPrivate.test.ts`
+**Files:** Create `packages/shield-swap/src/types.ts` (add `SwapHandle`), `packages/shield-swap/src/actions/swap/swapPrivate.ts`, `test/actions/swap/swapPrivate.test.ts`
 
 **Interfaces:**
 - Consumes: `resolveSwapParams`, `nextBlindedIdentity`, `selectTokenRecord`, `getDeadline`, `generateSwapNonce`, core wallet `executeContract`/`writeContract`, `encode.ts`.
@@ -370,12 +370,12 @@ describe('blinded identity (golden vectors)', () => {
 
 - [ ] **Step 1: Failing test** — mock the dependencies; assert the `inputs[]` array is built in exact positional order with correct encodings, and the returned `SwapHandle` carries the blinding identity + token ids.
 - [ ] **Step 2:** Run → FAIL. **Step 3:** Implement. **Step 4:** Run → PASS.
-Run: `pnpm vitest run packages/dex/test/actions/swap/swapPrivate.test.ts`
+Run: `pnpm vitest run packages/shield-swap/test/actions/swap/swapPrivate.test.ts`
 - [ ] **Step 5: Commit** `feat(dex): swapPrivate (swap_private transition)`.
 
 ### Task 3.4: `claimSwapOutputPrivate`
 
-**Files:** Create `packages/dex/src/actions/swap/claimSwapOutputPrivate.ts`, `test/actions/swap/claimSwapOutputPrivate.test.ts`
+**Files:** Create `packages/shield-swap/src/actions/swap/claimSwapOutputPrivate.ts`, `test/actions/swap/claimSwapOutputPrivate.test.ts`
 
 **Interfaces:**
 - Consumes: `SwapHandle`, `getSwapOutput`, core `waitForTransaction`/block wait, `executeContract`, `encode.ts`.
@@ -391,7 +391,7 @@ Run: `pnpm vitest run packages/dex/test/actions/swap/swapPrivate.test.ts`
 
 ### Task 4.1: Tick hints
 
-**Files:** Create `packages/dex/src/helpers/tick-hints.ts`, `test/helpers/tick-hints.test.ts`
+**Files:** Create `packages/shield-swap/src/helpers/tick-hints.ts`, `test/helpers/tick-hints.test.ts`
 
 **Interfaces:**
 - Consumes: `getSlot`.
@@ -403,7 +403,7 @@ Run: `pnpm vitest run packages/dex/test/actions/swap/swapPrivate.test.ts`
 
 ### Task 4.2: `MintPositionRequest` struct formatter
 
-**Files:** Modify `packages/dex/src/encode.ts`; add `test/encode.mint-request.test.ts`
+**Files:** Modify `packages/shield-swap/src/encode.ts`; add `test/encode.mint-request.test.ts`
 
 **Interfaces:**
 - Consumes: generated `MintPositionRequest` type, `encode.ts` primitives.
@@ -413,7 +413,7 @@ Run: `pnpm vitest run packages/dex/test/actions/swap/swapPrivate.test.ts`
 
 ### Task 4.3: `createPool`
 
-**Files:** Create `packages/dex/src/actions/liquidity/createPool.ts`, test
+**Files:** Create `packages/shield-swap/src/actions/liquidity/createPool.ts`, test
 
 **Interfaces:**
 - Consumes: `isFeeTierValid`, `getFeeToTickSpacing`, `executeContract`, `encode.ts`.
@@ -423,7 +423,7 @@ Run: `pnpm vitest run packages/dex/test/actions/swap/swapPrivate.test.ts`
 
 ### Task 4.4: `mintPrivate`
 
-**Files:** Create `packages/dex/src/actions/liquidity/mintPrivate.ts`, test
+**Files:** Create `packages/shield-swap/src/actions/liquidity/mintPrivate.ts`, test
 
 **Interfaces:**
 - Consumes: `selectTokenRecord` (×2), `pickInsertHint`, `formatMintPositionRequest`, `generateFieldNonce`, `executeContract`.
@@ -433,7 +433,7 @@ Run: `pnpm vitest run packages/dex/test/actions/swap/swapPrivate.test.ts`
 
 ### Task 4.5: `increaseLiquidityPrivate`
 
-**Files:** Create `packages/dex/src/actions/liquidity/increaseLiquidityPrivate.ts`, test
+**Files:** Create `packages/shield-swap/src/actions/liquidity/increaseLiquidityPrivate.ts`, test
 
 **Interfaces:**
 - Consumes: `selectPositionNFT`, `selectTokenRecord` (×2), `pickInsertHint`, `executeContract`.
@@ -447,7 +447,7 @@ Run: `pnpm vitest run packages/dex/test/actions/swap/swapPrivate.test.ts`
 
 ### Task 5.1: `IndexerClient` core (base URL + auth/JWT)
 
-**Files:** Create `packages/dex/src/indexer/client.ts`, `test/indexer/client.test.ts`
+**Files:** Create `packages/shield-swap/src/indexer/client.ts`, `test/indexer/client.test.ts`
 
 **Interfaces:**
 - Produces: `class IndexerClient { constructor(opts?: { baseUrl?: string }) ; auth: { challenge(address): Promise<...>; verify(address, signature): Promise<...> }; private get<T>(path, query?); private post<T>(path, body, { auth? }) }`. Stores the JWT from `verify` and attaches `Authorization: Bearer` to auth-gated calls. Default `baseUrl = 'https://amm-api.dev.provable.com'`.
@@ -457,7 +457,7 @@ Run: `pnpm vitest run packages/dex/test/actions/swap/swapPrivate.test.ts`
 
 ### Task 5.2: Indexer endpoint methods
 
-**Files:** Create `packages/dex/src/indexer/endpoints.ts`, `test/indexer/endpoints.test.ts`
+**Files:** Create `packages/shield-swap/src/indexer/endpoints.ts`, `test/indexer/endpoints.test.ts`
 
 **Interfaces:** Produces typed methods over `IndexerClient` (response types from `/openapi.json`). Each is a 1–3 line wrapper; implement all, one test file asserting URL/params for each (mock `fetch`). Group:
 
@@ -487,7 +487,7 @@ Run: `pnpm vitest run packages/dex/test/actions/swap/swapPrivate.test.ts`
 
 ### Task 6.1: `poolPrice` (golden-vector tested)
 
-**Files:** Create `packages/dex/src/helpers/derivations.ts`, `test/helpers/derivations.test.ts`
+**Files:** Create `packages/shield-swap/src/helpers/derivations.ts`, `test/helpers/derivations.test.ts`
 
 **Interfaces:**
 - Produces: `poolPrice({ sqrtPrice, scale0, scale1, decimals0, decimals1 }): { price0Per1: number; price1Per0: number }` — convert the fixed-point `sqrt_price` (Q64 now; Q128 in flight) to a human price using `scale0`/`scale1` + decimals. Match the contract's fixed-point format exactly.
@@ -507,16 +507,16 @@ Each its own pure function + test (one TDD cycle + commit each), per the spec's 
 
 ## Phase 7 — Decorator wiring
 
-### Task 7.1: `dexActions` decorator + `extend()` integration
+### Task 7.1: `shieldSwapActions` decorator + `extend()` integration
 
-**Files:** Create `packages/dex/src/decorators/dexActions.ts`; update `src/index.ts`; `test/decorators/dexActions.test.ts`
+**Files:** Create `packages/shield-swap/src/decorators/shieldSwapActions.ts`; update `src/index.ts`; `test/decorators/shieldSwapActions.test.ts`
 
 **Interfaces:**
 - Consumes: every action from Phases 1–6, the `IndexerClient`.
-- Produces: `dexActions(client) => { getPool, getSlot, getSwapOutput, getOwnBalances, …, swapPrivate, claimSwapOutputPrivate, createPool, mintPrivate, increaseLiquidityPrivate, indexer, poolPrice, … }`, attachable via `client.extend(dexActions)`. Mirror `packages/core/src/clients/decorators/*` (each entry `name: (params) => action(client, params)`).
+- Produces: `shieldSwapActions(client) => { getPool, getSlot, getSwapOutput, getOwnBalances, …, swapPrivate, claimSwapOutputPrivate, createPool, mintPrivate, increaseLiquidityPrivate, indexer, poolPrice, … }`, attachable via `client.extend(shieldSwapActions)`. Mirror `packages/core/src/clients/decorators/*` (each entry `name: (params) => action(client, params)`).
 
-- [ ] **Step 1: Failing test** — `createWalletClient(...).extend(dexActions)` exposes the actions and a call routes to the underlying function (mock one).
-- [ ] **Step 2:** FAIL. **Step 3:** Implement + export from `index.ts`. **Step 4:** PASS. **Step 5: Commit** `feat(dex): dexActions decorator`.
+- [ ] **Step 1: Failing test** — `createWalletClient(...).extend(shieldSwapActions)` exposes the actions and a call routes to the underlying function (mock one).
+- [ ] **Step 2:** FAIL. **Step 3:** Implement + export from `index.ts`. **Step 4:** PASS. **Step 5: Commit** `feat(dex): shieldSwapActions decorator`.
 
 ---
 
@@ -524,14 +524,14 @@ Each its own pure function + test (one TDD cycle + commit each), per the spec's 
 
 ### Task 8.1: Agent tool schemas
 
-**Files:** Create `packages/dex/src/agent/*.ts`, `test/agent/schemas.test.ts`
+**Files:** Create `packages/shield-swap/src/agent/*.ts`, `test/agent/schemas.test.ts`
 **Interfaces:** one agent tool schema per action (name, description, JSON-schema params, structured JSON result), generated from the action param types. Mirror `packages/core/src/agent/`.
 
 - [ ] **TDD:** test asserts each schema validates a sample params object and lists all V1 actions → implement → commit `feat(dex): agent tool schemas`.
 
 ### Task 8.2: MCP tools
 
-**Files:** Create `packages/dex/src/mcp/*.ts`, `test/mcp/server.test.ts`
+**Files:** Create `packages/shield-swap/src/mcp/*.ts`, `test/mcp/server.test.ts`
 **Interfaces:** register one MCP tool per action wrapping the same function, returning structured JSON + actionable errors (`BlindedAddressExhaustedError`, `SwapOutputNotFinalizedError`, `InsufficientRecordsError`, `TickHintUnavailableError`). Mirror `packages/core/src/mcp/`.
 
 - [ ] **TDD:** test registers the server and asserts a tool call routes through → implement → commit `feat(dex): MCP tools`.
@@ -542,14 +542,14 @@ Each its own pure function + test (one TDD cycle + commit each), per the spec's 
 
 ### Task 9.1: Full lifecycle e2e against testnet
 
-**Files:** Create `packages/dex/test/integration/e2e.test.ts` (gated behind the integration env flag)
+**Files:** Create `packages/shield-swap/test/integration/e2e.test.ts` (gated behind the integration env flag)
 
-**Interfaces:** Consumes the full client via `extend(dexActions)`.
+**Interfaces:** Consumes the full client via `extend(shieldSwapActions)`.
 
 - [ ] **Step 1: Write the gated e2e** — `indexer.airdrop(addr)` → `createPool` → `mintPrivate` → `increaseLiquidityPrivate` → `swapPrivate` → wait → `getSwapOutput` → `claimSwapOutputPrivate`, asserting end-state balances/records and that `getSwapOutput` matched the claim.
 - [ ] **Step 2: Run gated**
 
-Run: `VEIL_INTEGRATION=1 pnpm vitest run packages/dex/test/integration/e2e.test.ts`
+Run: `VEIL_INTEGRATION=1 pnpm vitest run packages/shield-swap/test/integration/e2e.test.ts`
 Expected: PASS against testnet.
 
 - [ ] **Step 3: Confirm default run stays offline**

@@ -35,7 +35,7 @@ import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hin
 import { ApiClient, type ApiClientOptions } from '../api/client.js'
 
 /**
- * Configuration for {@link dexActions}.
+ * Configuration for {@link shieldSwapActions}.
  *
  * @property api Off-chain DEX API wiring: constructor options, a
  *   preconstructed `ApiClient` (e.g. one already holding a JWT), or
@@ -44,13 +44,13 @@ import { ApiClient, type ApiClientOptions } from '../api/client.js'
  *   once to point the whole surface at another deployment; per-call
  *   `program` still overrides.
  */
-export type DexActionsConfig = {
+export type ShieldSwapActionsConfig = {
   api?: ApiClientOptions | ApiClient
   program?: string
 }
 
-/** The action surface {@link dexActions} adds to a client. */
-export type DexActions = {
+/** The action surface {@link shieldSwapActions} adds to a client. */
+export type ShieldSwapActions = {
   getPool: (params: GetPoolParameters) => Promise<GetPoolReturnType>
   getSlot: (params: GetSlotParameters) => Promise<GetSlotReturnType>
   getSwapOutput: (params: GetSwapOutputParameters) => Promise<GetSwapOutputReturnType>
@@ -82,11 +82,11 @@ export type DexActions = {
  *
  * @example
  * const client = createWalletClient({ account, transport, proving })
- *   .extend(dexActions({ api: {} }))
+ *   .extend(shieldSwapActions({ api: {} }))
  * const pool = await client.getPool({ poolKey })   // chain
  * const pools = await client.api.getPools()        // REST
  */
-export function dexActions(config: DexActionsConfig = {}) {
+export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
   const api =
     config.api instanceof ApiClient
       ? config.api
@@ -103,12 +103,12 @@ export function dexActions(config: DexActionsConfig = {}) {
   const missingApi = new Proxy({} as ApiClient, {
     get() {
       throw new Error(
-        'No DEX API configured — pass dexActions({ api: { baseUrl } }) or construct an ApiClient yourself.',
+        'No DEX API configured — pass shieldSwapActions({ api: { baseUrl } }) or construct an ApiClient yourself.',
       )
     },
   })
 
-  return (client: Client): DexActions => ({
+  return (client: Client): ShieldSwapActions => ({
     getPool: (p) => getPool(client, withProgram(p)),
     getSlot: (p) => getSlot(client, withProgram(p)),
     getSwapOutput: (p) => getSwapOutput(client, withProgram(p)),
