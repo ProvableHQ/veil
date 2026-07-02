@@ -2,9 +2,18 @@
 // Do not edit manually.
 
 import { getContract } from '@veil/core'
-import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest } from '@veil/core'
+import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '@veil/core'
 
 export const PROGRAM_ID = 'dummy_exchange.aleo' as const
+
+function litStr(v: PlaintextValue | undefined, suffix: string): string {
+  if (typeof v === 'bigint') return `${v}${suffix}`
+  if (typeof v === 'string') return v
+  if (v == null) return ''
+  // Fail fast: a struct/array/boolean value in a literal slot means the ABI
+  // or an upstream parser is wrong — never coerce it into corrupt data.
+  throw new Error(`Expected ${suffix} literal, got ${typeof v}`)
+}
 
 export type TransferFromInputs = {
   token_id: string | InputRequest
@@ -164,8 +173,8 @@ export interface DummyExchangeContract {
     swap: (params: { token_in: string | InputRequest, token_out: string | InputRequest, amount_in: bigint | InputRequest, amount_out: bigint | InputRequest }) => Promise<FutureValue>
   }
   execute: {
-    transfer_from: (params: { token_id: string | InputRequest, owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    swap: (params: { token_in: string | InputRequest, token_out: string | InputRequest, amount_in: bigint | InputRequest, amount_out: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
+    transfer_from: (params: { token_id: string | InputRequest, owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    swap: (params: { token_in: string | InputRequest, token_out: string | InputRequest, amount_in: bigint | InputRequest, amount_out: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
   }
   fetchAbi: () => Promise<ABI>
 }
@@ -211,13 +220,13 @@ export function createDummyExchangeContract(options: {
     },
     execute: {
       transfer_from: async (params: any) => {
-        const { token_id, owner, recipient, amount, fee } = params
-        const result = await _raw.execute.transfer_from({ inputs: [token_id, owner, recipient, amount], fee })
+        const { token_id, owner, recipient, amount } = params
+        const result = await _raw.execute.transfer_from({ inputs: [token_id, owner, recipient, amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       swap: async (params: any) => {
-        const { token_in, token_out, amount_in, amount_out, fee } = params
-        const result = await _raw.execute.swap({ inputs: [token_in, token_out, amount_in, amount_out], fee })
+        const { token_in, token_out, amount_in, amount_out } = params
+        const result = await _raw.execute.swap({ inputs: [token_in, token_out, amount_in, amount_out] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
     },

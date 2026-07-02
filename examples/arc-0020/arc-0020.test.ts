@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 
 import { createTestClient, http, type TestClient } from '@veil/core'
 import { startDevnode, type DevnodeInstance } from '@veil/devnode'
-import { createDevnodeClient } from '@veil/provable'
+import { createDevnodeClient } from '@veil/provable-sdk'
 import { createLeoClient } from '@veil/leo'
 
 import { createTokenRegistryContract } from './generated/token_registry.js'
@@ -178,7 +178,7 @@ if (RUN) {
       token_id: '12345field',
       name: asciiToU128('TEST'),
       symbol: asciiToU128('TST'),
-      decimals: 6n,
+      decimals: 6,
       max_supply: 1_000_000n,
       external_authorization_required: false,
       external_authorization_party: addrs[0],
@@ -186,7 +186,7 @@ if (RUN) {
     await advance()
 
     // Mint custom token to addr0 for transfer tests
-    await tr[0].write.mint_public({ token_id: '12345field', recipient: addrs[0], amount: 10_000n, authorized_until: 4294967295n })
+    await tr[0].write.mint_public({ token_id: '12345field', recipient: addrs[0], amount: 10_000n, authorized_until: 4294967295 })
     await advance()
   }, 600_000)
 
@@ -219,14 +219,14 @@ async function ensureWrappedTokenBalance(minAmount = 500n) {
         token_id: '99999field',
         name: asciiToU128('TEST'),
         symbol: asciiToU128('TST'),
-        decimals: 6n,
+        decimals: 6,
         max_supply: 10_000_000n,
         external_authorization_required: false,
         external_authorization_party: addrs[0],
       })
       await advance()
     } catch { /* already registered */ }
-    await tr[0].write.mint_public({ token_id: '99999field', recipient: addrs[0], amount: 2000n, authorized_until: 4294967295n })
+    await tr[0].write.mint_public({ token_id: '99999field', recipient: addrs[0], amount: 2000n, authorized_until: 4294967295 })
     await advance()
     await wtr[0].write.deposit_token_public_signer({ amount: 1000n })
     await advance()
@@ -451,7 +451,7 @@ describe.runIf(RUN)('ARC-0020: wrapped_credits', () => {
 
 describe.runIf(RUN)('ARC-0020: token_registry + wrapped_token_registry', () => {
   const CUSTOM_TOKEN_ID = '12345field'
-  const AUTHORIZED_UNTIL = 4294967295n
+  const AUTHORIZED_UNTIL = 4294967295
 
   // ── token_registry ────────────────────────────────────────────────────────
 
@@ -461,7 +461,7 @@ describe.runIf(RUN)('ARC-0020: token_registry + wrapped_token_registry', () => {
 
   it('register_token (negative): duplicate token_id rejects', async () => {
     await expect(tr[0].write.register_token({
-      token_id: CUSTOM_TOKEN_ID, name: 1n, symbol: 1n, decimals: 6n,
+      token_id: CUSTOM_TOKEN_ID, name: 1n, symbol: 1n, decimals: 6,
       max_supply: 1n, external_authorization_required: false, external_authorization_party: addrs[0],
     })).rejects.toThrow()
   })

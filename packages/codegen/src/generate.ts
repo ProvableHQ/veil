@@ -10,6 +10,14 @@ export interface GenerateOptions {
   abi: ABI
   /** Import path for @veil/core types (default: '@veil/core') */
   coreImport?: string
+  /**
+   * Program id to stamp into the emitted `PROGRAM_ID` and the generated
+   * contract factory. Defaults to the ABI's own `program`. Override when the
+   * bindings' shape is taken from one deployment's ABI but they target another
+   * — e.g. when a newer program version's ABI is the only one current tooling
+   * can parse, yet the live deployment (identical shape) has a different id.
+   */
+  programId?: string
 }
 
 /**
@@ -24,7 +32,7 @@ export interface GenerateOptions {
  * - Storage variable types
  */
 export function generate(options: GenerateOptions): string {
-  const { abi, coreImport = '@veil/core' } = options
+  const { abi, coreImport = '@veil/core', programId = abi.program } = options
   const lines: string[] = []
 
   // Header
@@ -32,16 +40,32 @@ export function generate(options: GenerateOptions): string {
   lines.push(`// Do not edit manually.`)
   lines.push('')
   lines.push(`import { getContract } from '${coreImport}'`)
-  lines.push(`import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest } from '${coreImport}'`)
+  lines.push(`import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '${coreImport}'`)
   lines.push('')
 
-  // Program ID constant
-  lines.push(`export const PROGRAM_ID = '${abi.program}' as const`)
+  // Program ID constant — the program these bindings target (see programId option).
+  lines.push(`export const PROGRAM_ID = '${programId}' as const`)
+  lines.push('')
+
+  // Decoder helper: literal types (field/group/scalar) may arrive from runtime
+  // parsers as bigint (suffix stripped) or as the canonical suffixed string.
+  // Normalize to the canonical string form so decoded objects match the
+  // generated interfaces at runtime.
+  lines.push(`function litStr(v: PlaintextValue | undefined, suffix: string): string {`)
+  lines.push(`  if (typeof v === 'bigint') return \`\${v}\${suffix}\``)
+  lines.push(`  if (typeof v === 'string') return v`)
+  lines.push(`  if (v == null) return ''`)
+  lines.push(`  // Fail fast: a struct/array/boolean value in a literal slot means the ABI`)
+  lines.push(`  // or an upstream parser is wrong — never coerce it into corrupt data.`)
+  lines.push(`  throw new Error(\`Expected \${suffix} literal, got \${typeof v}\`)`)
+  lines.push(`}`)
   lines.push('')
 
   // Structs
   for (const struct of abi.structs) {
     lines.push(...generateStructInterface(struct))
+    lines.push('')
+    lines.push(...generateStructMapper(struct))
     lines.push('')
   }
 
@@ -120,22 +144,61 @@ function generateRecordInterface(record: RecordDef): string[] {
   return lines
 }
 
+// Emit the `field: <converted value>` lines shared by record and struct mappers.
+// `varName` is the mapper's parameter name (the value being decoded); `container`
+// names the enclosing type for error messages.
+function mapperFieldLines(
+  fields: readonly { name: string; type: Plaintext }[],
+  container: string,
+  varName: string,
+): string[] {
+  const lines: string[] = []
+  for (const field of fields) {
+    if (field.name === 'owner') continue
+    // Struct-typed fields: the raw PlaintextValue is a StructValue at runtime.
+    // Cast through unknown to the generated struct interface so the return type
+    // is correct. A missing field falls back to an empty object cast the same way.
+    if (field.type.kind === 'struct') {
+      const structName = field.type.path.at(-1)
+      if (!structName) {
+        throw new Error(
+          `Malformed ABI: struct field "${field.name}" in "${container}" has an empty type path. ` +
+          `Cannot derive struct name for code generation.`
+        )
+      }
+      lines.push(`    ${field.name}: ${varName}.fields.${field.name}?.value as unknown as ${structName} ?? {} as unknown as ${structName},`)
+    } else {
+      const rawAccess = `${varName}.fields.${field.name}?.value`
+      const expr = plaintextFieldExpr(rawAccess, field.type)
+      lines.push(`    ${field.name}: ${expr} ?? ${plaintextDefault(field.type)},`)
+    }
+  }
+  return lines
+}
+
 function generateRecordMapper(record: RecordDef): string[] {
   const name = recordName(record)
-  const fnName = `to${name}`
   const lines: string[] = []
 
-  lines.push(`export function ${fnName}(record: RecordValue): ${name} {`)
+  lines.push(`export function to${name}(record: RecordValue): ${name} {`)
   lines.push(`  return {`)
   lines.push(`    owner: record.owner,`)
-
-  for (const field of record.fields) {
-    if (field.name === 'owner') continue
-    const cast = plaintextToCast(field.type)
-    lines.push(`    ${field.name}: record.fields.${field.name}?.value${cast} ?? ${plaintextDefault(field.type)},`)
-  }
-
+  lines.push(...mapperFieldLines(record.fields, name, 'record'))
   lines.push(`    _record: record,`)
+  lines.push(`  }`)
+  lines.push(`}`)
+  return lines
+}
+
+// Decoder for a struct (e.g. a mapping value like PoolState/Slot). Same per-field
+// width conversions as records, without the record-only `owner`/`_record` fields.
+function generateStructMapper(struct: StructDef): string[] {
+  const name = struct.path[struct.path.length - 1] ?? 'UnknownStruct'
+  const lines: string[] = []
+
+  lines.push(`export function to${name}(value: RecordValue): ${name} {`)
+  lines.push(`  return {`)
+  lines.push(...mapperFieldLines(struct.fields, name, 'value'))
   lines.push(`  }`)
   lines.push(`}`)
   return lines
@@ -240,6 +303,18 @@ function storageTypeToTs(st: StorageType): string {
 
 // ── Type mapping helpers ──────────────────────────────────────────────
 
+/**
+ * Returns true for integer primitives that fit safely in a JS number (≤ 32-bit).
+ *
+ * u8/u16/u32 and i8/i16/i32 are typed as `number`; u64/u128 and i64/i128 require
+ * `bigint` to avoid precision loss. This predicate is the single source of truth
+ * for that boundary — all three type-mapping helpers delegate to it so that adding
+ * a new width requires changing only this function.
+ */
+function isSmallInt(p: Primitive): boolean {
+  return p === 'u8' || p === 'u16' || p === 'u32' || p === 'i8' || p === 'i16' || p === 'i32'
+}
+
 function plaintextToTsType(pt: Plaintext): string {
   switch (pt.kind) {
     case 'primitive':
@@ -256,6 +331,7 @@ function plaintextToTsType(pt: Plaintext): string {
 }
 
 function primitiveToTsType(p: Primitive): string {
+  if (isSmallInt(p)) return 'number'
   switch (p) {
     case 'address':
     case 'field':
@@ -266,14 +342,9 @@ function primitiveToTsType(p: Primitive): string {
       return 'string'
     case 'boolean':
       return 'boolean'
-    case 'u8':
-    case 'u16':
-    case 'u32':
+    // 64-bit and wider: must be bigint to avoid precision loss
     case 'u64':
     case 'u128':
-    case 'i8':
-    case 'i16':
-    case 'i32':
     case 'i64':
     case 'i128':
       return 'bigint'
@@ -282,42 +353,66 @@ function primitiveToTsType(p: Primitive): string {
   }
 }
 
-function plaintextToCast(pt: Plaintext): string {
-  if (pt.kind !== 'primitive') return ''
-  switch (pt.primitive) {
-    case 'u8':
-    case 'u16':
-    case 'u32':
+/**
+ * Builds the full typed expression for a primitive record field access.
+ *
+ * The raw value stored in RecordFieldValue is always a bigint for all integer
+ * widths (parsed by core's parseValue). For u8/u16/u32 and i8/i16/i32 fields
+ * (typed as `number`), we wrap with Number() to convert at runtime. For u64+
+ * (typed as `bigint`), we cast directly. For non-primitive types (array,
+ * optional) the raw access is returned unchanged — those fall through to the
+ * caller's existing handling.
+ *
+ * @param rawAccess - Expression yielding the raw PlaintextValue, e.g. `record.fields.x?.value`
+ */
+function plaintextFieldExpr(rawAccess: string, pt: Plaintext): string {
+  // TODO(follow-up): non-primitive record fields other than struct (i.e. `array`,
+  // `optional`) are NOT yet handled and fall through to the raw expression.
+  // This is a known gap — ABIs containing such fields will produce non-compiling
+  // output. Implement `array` and `optional` handling before using codegen with
+  // such ABIs.
+  if (pt.kind !== 'primitive') return rawAccess
+  const p = pt.primitive
+  // Small integers stored as bigint at runtime, exposed as number in the interface.
+  // The ?? 0n guard is inside the Number() call: Number(undefined) = NaN, and
+  // NaN ?? 0 does NOT trigger (?? only catches null/undefined). Guarding before
+  // Number() ensures a missing field correctly defaults to 0.
+  if (isSmallInt(p)) return `Number((${rawAccess} ?? 0n) as bigint)`
+  switch (p) {
+    // Wide integers stay bigint end-to-end.
     case 'u64':
     case 'u128':
-    case 'i8':
-    case 'i16':
-    case 'i32':
     case 'i64':
     case 'i128':
-      return ' as bigint'
+      return `${rawAccess} as bigint`
+    // Literal types with a suffix: runtime parsers may deliver these as bigint
+    // (suffix stripped) or as the canonical suffixed string — normalize to the
+    // canonical string form (e.g. 123n → "123field").
     case 'field':
     case 'group':
     case 'scalar':
-      return ' as string'
+      return `litStr(${rawAccess}, '${p}')`
     case 'address':
     case 'signature':
     case 'identifier':
-      return ' as string'
+      return `${rawAccess} as string`
     case 'boolean':
-      return ' as boolean'
+      return `${rawAccess} as boolean`
     default:
-      return ''
+      return rawAccess
   }
 }
 
 function plaintextDefault(pt: Plaintext): string {
+  // TODO(follow-up): see plaintextFieldExpr for the known array/optional gap.
+  // Non-primitive record fields fall through to "''" (empty string default).
   if (pt.kind !== 'primitive') return "''"
+  if (isSmallInt(pt.primitive)) return '0'
   switch (pt.primitive) {
     case 'boolean':
       return 'false'
-    case 'u8': case 'u16': case 'u32': case 'u64': case 'u128':
-    case 'i8': case 'i16': case 'i32': case 'i64': case 'i128':
+    // Wide integers — bigint default
+    case 'u64': case 'u128': case 'i64': case 'i128':
       return '0n'
     case 'field': case 'group': case 'scalar':
       return "''"
@@ -408,10 +503,13 @@ function outputMapperExpr(output: AbiFunction['outputs'][number], i: number, abi
   if (output.type.kind === 'record') {
     const recName = output.type.path[output.type.path.length - 1] ?? ''
     const isLocal = !output.type.program || output.type.program.replace(/\.aleo$/, '') === abi.program.replace(/\.aleo$/, '')
+    // Double-cast through unknown: result.outputs[i] is ParsedOutput | undefined under
+    // noUncheckedIndexedAccess. The cast to unknown then to RecordValue is intentional —
+    // the ABI guarantees this output is a record at this position.
     if (isLocal && recName) {
-      return `to${recName}(result.outputs[${i}] as RecordValue)`
+      return `to${recName}(result.outputs[${i}] as unknown as RecordValue)`
     }
-    return `result.outputs[${i}] as RecordValue`
+    return `result.outputs[${i}] as unknown as RecordValue`
   }
   if (output.type.kind === 'plaintext') {
     return `result.outputs[${i}] as unknown as ${plaintextToTsType(output.type.type)}`
@@ -465,13 +563,14 @@ function generateContractFactory(abi: ABI): string[] {
     lines.push(`  }`)
   }
 
-  // execute methods — named params, typed return + transactionId
+  // execute methods — named params, typed return + transactionId.
+  // Fee belongs in proving config, not per-call params — do not add fee here.
   if (abi.functions.length > 0) {
     lines.push(`  execute: {`)
     for (const fn of abi.functions) {
       const params = namedParamsType(fn, abi)
       const retType = executeReturnType(fn, abi)
-      lines.push(`    ${fn.name}: (params: ${params} & { fee?: bigint }) => Promise<${retType}>`)
+      lines.push(`    ${fn.name}: (params: ${params}) => Promise<${retType}>`)
     }
     lines.push(`  }`)
   }
@@ -523,9 +622,8 @@ function generateContractFactory(abi: ABI): string[] {
     for (const fn of abi.functions) {
       const names = inputNames(fn)
       const { resolveLines, resolvedNames } = resolveRecordInputs(fn)
-      const destructure = names.length > 0 ? `{ ${names.join(', ')} }` : '{}'
       lines.push(`      ${fn.name}: async (params: any) => {`)
-      lines.push(`        const ${destructure} = params`)
+      if (names.length > 0) lines.push(`        const { ${names.join(', ')} } = params`)
       for (const line of resolveLines) lines.push(line)
 
       if (fn.outputs.length === 0) {
@@ -554,11 +652,10 @@ function generateContractFactory(abi: ABI): string[] {
     for (const fn of abi.functions) {
       const names = inputNames(fn)
       const { resolveLines, resolvedNames } = resolveRecordInputs(fn)
-      const destructure = names.length > 0 ? `{ ${names.join(', ')}, fee }` : '{ fee }'
       lines.push(`      ${fn.name}: async (params: any) => {`)
-      lines.push(`        const ${destructure} = params`)
+      if (names.length > 0) lines.push(`        const { ${names.join(', ')} } = params`)
       for (const line of resolveLines) lines.push(line)
-      lines.push(`        const result = await _raw.execute.${fn.name}({ inputs: [${resolvedNames.join(', ')}], fee })`)
+      lines.push(`        const result = await _raw.execute.${fn.name}({ inputs: [${resolvedNames.join(', ')}] })`)
 
       if (fn.outputs.length === 0) {
         lines.push(`        return { transactionId: result.transactionId }`)

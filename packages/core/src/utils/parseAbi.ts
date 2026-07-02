@@ -118,20 +118,54 @@ function parseFunctionOutput(raw: unknown): FunctionOutput {
 
 // ---- Input / Output ----
 
+// Leo 4.2.0's `leo abi` nests `mode` *inside* the type variant —
+//   { "Plaintext": { "ty": <Plaintext>, "mode": "Public" } }
+//   { "Record": { "path": [...], "program": "...", "mode": "Private" } }
+//   "DynamicRecord" | "Final" | "Future"        (bare string, no mode)
+// whereas older leo (and `leo build`) put `mode` alongside `ty`:
+//   { "ty": { "Plaintext": <Plaintext> }, "mode": "Public" }
+// Normalize the 4.2.0 shape back to `{ ty, mode }` so the variant parsers
+// (which predate 4.2.0) keep working and both formats are accepted.
+function normalizeIoEntry(raw: unknown): { ty: unknown; mode: unknown; name?: string } {
+  // Bare string variants carry no mode.
+  if (typeof raw === 'string') return { ty: raw, mode: 'None' }
+
+  const obj = raw as Record<string, unknown>
+
+  // Older shape: `ty` sits alongside `mode` (and optional `name`).
+  if ('ty' in obj) {
+    return { ty: obj.ty, mode: obj.mode ?? 'None', name: obj.name as string | undefined }
+  }
+
+  // 4.2.0 shape: the sole key is the variant, whose payload carries the mode.
+  if ('Plaintext' in obj) {
+    const p = obj.Plaintext as { ty: unknown; mode?: unknown }
+    return { ty: { Plaintext: p.ty }, mode: p.mode ?? 'None' }
+  }
+  for (const variant of ['Record', 'RecordWithDynamicId', 'ExternalRecordWithDynamicId'] as const) {
+    if (variant in obj) {
+      const { mode, ...rest } = obj[variant] as Record<string, unknown>
+      return { ty: { [variant]: rest }, mode: mode ?? 'None' }
+    }
+  }
+
+  throw new Error(`Unknown ABI input/output entry: ${JSON.stringify(raw)}`)
+}
+
 function parseInput(raw: unknown): Input {
-  const obj = raw as { name?: string; ty: unknown; mode: unknown }
+  const { ty, mode, name } = normalizeIoEntry(raw)
   return {
-    name: obj.name,
-    type: parseFunctionInput(obj.ty),
-    mode: parseMode(obj.mode),
+    name,
+    type: parseFunctionInput(ty),
+    mode: parseMode(mode),
   }
 }
 
 function parseOutput(raw: unknown): Output {
-  const obj = raw as { ty: unknown; mode: unknown }
+  const { ty, mode } = normalizeIoEntry(raw)
   return {
-    type: parseFunctionOutput(obj.ty),
-    mode: parseMode(obj.mode),
+    type: parseFunctionOutput(ty),
+    mode: parseMode(mode),
   }
 }
 
@@ -292,6 +326,13 @@ export function parseAbi(raw: unknown): ABI {
     for (const fn of r.functions as Record<string, unknown>[]) {
       if ('is_async' in fn && !('is_final' in fn)) {
         fn.is_final = fn.is_async
+      }
+      // leo 4.2.0 `leo abi` omits is_final/is_async; a finalize surfaces as a
+      // "Final" (or "Future") entry in the function's outputs.
+      if (!('is_final' in fn) && !('is_async' in fn)) {
+        fn.is_final =
+          Array.isArray(fn.outputs) &&
+          (fn.outputs as unknown[]).some((o) => o === 'Final' || o === 'Future')
       }
       if (Array.isArray(fn.outputs)) {
         for (const output of fn.outputs as Record<string, unknown>[]) {

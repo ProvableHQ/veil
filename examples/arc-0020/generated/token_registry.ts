@@ -2,15 +2,24 @@
 // Do not edit manually.
 
 import { getContract } from '@veil/core'
-import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest } from '@veil/core'
+import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '@veil/core'
 
 export const PROGRAM_ID = 'token_registry.aleo' as const
+
+function litStr(v: PlaintextValue | undefined, suffix: string): string {
+  if (typeof v === 'bigint') return `${v}${suffix}`
+  if (typeof v === 'string') return v
+  if (v == null) return ''
+  // Fail fast: a struct/array/boolean value in a literal slot means the ABI
+  // or an upstream parser is wrong — never coerce it into corrupt data.
+  throw new Error(`Expected ${suffix} literal, got ${typeof v}`)
+}
 
 export interface TokenMetadata {
   token_id: string
   name: bigint
   symbol: bigint
-  decimals: bigint
+  decimals: number
   supply: bigint
   max_supply: bigint
   admin: string
@@ -18,16 +27,46 @@ export interface TokenMetadata {
   external_authorization_party: string
 }
 
+export function toTokenMetadata(value: RecordValue): TokenMetadata {
+  return {
+    token_id: litStr(value.fields.token_id?.value, 'field') ?? '',
+    name: value.fields.name?.value as bigint ?? 0n,
+    symbol: value.fields.symbol?.value as bigint ?? 0n,
+    decimals: Number((value.fields.decimals?.value ?? 0n) as bigint) ?? 0,
+    supply: value.fields.supply?.value as bigint ?? 0n,
+    max_supply: value.fields.max_supply?.value as bigint ?? 0n,
+    admin: value.fields.admin?.value as string ?? '',
+    external_authorization_required: value.fields.external_authorization_required?.value as boolean ?? false,
+    external_authorization_party: value.fields.external_authorization_party?.value as string ?? '',
+  }
+}
+
 export interface TokenOwner {
   account: string
   token_id: string
+}
+
+export function toTokenOwner(value: RecordValue): TokenOwner {
+  return {
+    account: value.fields.account?.value as string ?? '',
+    token_id: litStr(value.fields.token_id?.value, 'field') ?? '',
+  }
 }
 
 export interface Balance {
   token_id: string
   account: string
   balance: bigint
-  authorized_until: bigint
+  authorized_until: number
+}
+
+export function toBalance(value: RecordValue): Balance {
+  return {
+    token_id: litStr(value.fields.token_id?.value, 'field') ?? '',
+    account: value.fields.account?.value as string ?? '',
+    balance: value.fields.balance?.value as bigint ?? 0n,
+    authorized_until: Number((value.fields.authorized_until?.value ?? 0n) as bigint) ?? 0,
+  }
 }
 
 export interface Token {
@@ -35,7 +74,7 @@ export interface Token {
   amount: bigint
   token_id: string
   external_authorization_required: boolean
-  authorized_until: bigint
+  authorized_until: number
   _record: RecordValue
 }
 
@@ -43,9 +82,9 @@ export function toToken(record: RecordValue): Token {
   return {
     owner: record.owner,
     amount: record.fields.amount?.value as bigint ?? 0n,
-    token_id: record.fields.token_id?.value as string ?? '',
+    token_id: litStr(record.fields.token_id?.value, 'field') ?? '',
     external_authorization_required: record.fields.external_authorization_required?.value as boolean ?? false,
-    authorized_until: record.fields.authorized_until?.value as bigint ?? 0n,
+    authorized_until: Number((record.fields.authorized_until?.value ?? 0n) as bigint) ?? 0,
     _record: record,
   }
 }
@@ -59,7 +98,7 @@ export type RegisterTokenInputs = {
   token_id: string | InputRequest
   name: bigint | InputRequest
   symbol: bigint | InputRequest
-  decimals: bigint | InputRequest
+  decimals: number | InputRequest
   max_supply: bigint | InputRequest
   external_authorization_required: boolean | InputRequest
   external_authorization_party: string | InputRequest
@@ -78,7 +117,7 @@ export type UpdateTokenManagementOutputs = FutureValue
 export type SetRoleInputs = {
   token_id: string | InputRequest
   account: string | InputRequest
-  role: bigint | InputRequest
+  role: number | InputRequest
 }
 
 export type SetRoleOutputs = FutureValue
@@ -94,7 +133,7 @@ export type MintPublicInputs = {
   token_id: string | InputRequest
   recipient: string | InputRequest
   amount: bigint | InputRequest
-  authorized_until: bigint | InputRequest
+  authorized_until: number | InputRequest
 }
 
 export type MintPublicOutputs = FutureValue
@@ -104,7 +143,7 @@ export type MintPrivateInputs = {
   recipient: string | InputRequest
   amount: bigint | InputRequest
   external_authorization_required: boolean | InputRequest
-  authorized_until: bigint | InputRequest
+  authorized_until: number | InputRequest
 }
 
 export type MintPrivateOutputs = [Token, FutureValue]
@@ -120,7 +159,7 @@ export type BurnPublicOutputs = FutureValue
 export type PrehookPublicInputs = {
   owner: TokenOwner | InputRequest
   amount: bigint | InputRequest
-  authorized_until: bigint | InputRequest
+  authorized_until: number | InputRequest
 }
 
 export type PrehookPublicOutputs = FutureValue
@@ -229,7 +268,7 @@ export type AllowancesMappingKey = string
 export type AllowancesMappingValue = bigint
 
 export type RolesMappingKey = string
-export type RolesMappingValue = bigint
+export type RolesMappingValue = number
 
 /** The parsed ABI for token_registry.aleo. */
 export const PROGRAM_ABI: ABI = {
@@ -1574,14 +1613,14 @@ export interface TokenRegistryContract {
   }
   write: {
     initialize: (params: {}) => Promise<string>
-    register_token: (params: { token_id: string | InputRequest, name: bigint | InputRequest, symbol: bigint | InputRequest, decimals: bigint | InputRequest, max_supply: bigint | InputRequest, external_authorization_required: boolean | InputRequest, external_authorization_party: string | InputRequest }) => Promise<string>
+    register_token: (params: { token_id: string | InputRequest, name: bigint | InputRequest, symbol: bigint | InputRequest, decimals: number | InputRequest, max_supply: bigint | InputRequest, external_authorization_required: boolean | InputRequest, external_authorization_party: string | InputRequest }) => Promise<string>
     update_token_management: (params: { token_id: string | InputRequest, admin: string | InputRequest, external_authorization_party: string | InputRequest }) => Promise<string>
-    set_role: (params: { token_id: string | InputRequest, account: string | InputRequest, role: bigint | InputRequest }) => Promise<string>
+    set_role: (params: { token_id: string | InputRequest, account: string | InputRequest, role: number | InputRequest }) => Promise<string>
     remove_role: (params: { token_id: string | InputRequest, account: string | InputRequest }) => Promise<string>
-    mint_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest }) => Promise<string>
-    mint_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest, authorized_until: bigint | InputRequest }) => Promise<string>
+    mint_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, authorized_until: number | InputRequest }) => Promise<string>
+    mint_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest, authorized_until: number | InputRequest }) => Promise<string>
     burn_public: (params: { token_id: string | InputRequest, owner: string | InputRequest, amount: bigint | InputRequest }) => Promise<string>
-    prehook_public: (params: { owner: TokenOwner | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest }) => Promise<string>
+    prehook_public: (params: { owner: TokenOwner | InputRequest, amount: bigint | InputRequest, authorized_until: number | InputRequest }) => Promise<string>
     transfer_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<string>
     transfer_public_as_signer: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<string>
     approve_public: (params: { token_id: string | InputRequest, spender: string | InputRequest, amount: bigint | InputRequest }) => Promise<string>
@@ -1596,14 +1635,14 @@ export interface TokenRegistryContract {
   }
   simulate: {
     initialize: (params: {}) => Promise<FutureValue>
-    register_token: (params: { token_id: string | InputRequest, name: bigint | InputRequest, symbol: bigint | InputRequest, decimals: bigint | InputRequest, max_supply: bigint | InputRequest, external_authorization_required: boolean | InputRequest, external_authorization_party: string | InputRequest }) => Promise<FutureValue>
+    register_token: (params: { token_id: string | InputRequest, name: bigint | InputRequest, symbol: bigint | InputRequest, decimals: number | InputRequest, max_supply: bigint | InputRequest, external_authorization_required: boolean | InputRequest, external_authorization_party: string | InputRequest }) => Promise<FutureValue>
     update_token_management: (params: { token_id: string | InputRequest, admin: string | InputRequest, external_authorization_party: string | InputRequest }) => Promise<FutureValue>
-    set_role: (params: { token_id: string | InputRequest, account: string | InputRequest, role: bigint | InputRequest }) => Promise<FutureValue>
+    set_role: (params: { token_id: string | InputRequest, account: string | InputRequest, role: number | InputRequest }) => Promise<FutureValue>
     remove_role: (params: { token_id: string | InputRequest, account: string | InputRequest }) => Promise<FutureValue>
-    mint_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest }) => Promise<FutureValue>
-    mint_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest, authorized_until: bigint | InputRequest }) => Promise<[Token, FutureValue]>
+    mint_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, authorized_until: number | InputRequest }) => Promise<FutureValue>
+    mint_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest, authorized_until: number | InputRequest }) => Promise<[Token, FutureValue]>
     burn_public: (params: { token_id: string | InputRequest, owner: string | InputRequest, amount: bigint | InputRequest }) => Promise<FutureValue>
-    prehook_public: (params: { owner: TokenOwner | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest }) => Promise<FutureValue>
+    prehook_public: (params: { owner: TokenOwner | InputRequest, amount: bigint | InputRequest, authorized_until: number | InputRequest }) => Promise<FutureValue>
     transfer_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<FutureValue>
     transfer_public_as_signer: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<FutureValue>
     approve_public: (params: { token_id: string | InputRequest, spender: string | InputRequest, amount: bigint | InputRequest }) => Promise<FutureValue>
@@ -1617,26 +1656,26 @@ export interface TokenRegistryContract {
     split: (params: { token: Token | RecordValue | string | InputRequest, amount: bigint | InputRequest }) => Promise<[Token, Token]>
   }
   execute: {
-    initialize: (params: {} & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    register_token: (params: { token_id: string | InputRequest, name: bigint | InputRequest, symbol: bigint | InputRequest, decimals: bigint | InputRequest, max_supply: bigint | InputRequest, external_authorization_required: boolean | InputRequest, external_authorization_party: string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    update_token_management: (params: { token_id: string | InputRequest, admin: string | InputRequest, external_authorization_party: string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    set_role: (params: { token_id: string | InputRequest, account: string | InputRequest, role: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    remove_role: (params: { token_id: string | InputRequest, account: string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    mint_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    mint_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest, authorized_until: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
-    burn_public: (params: { token_id: string | InputRequest, owner: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    prehook_public: (params: { owner: TokenOwner | InputRequest, amount: bigint | InputRequest, authorized_until: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    transfer_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    transfer_public_as_signer: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    approve_public: (params: { token_id: string | InputRequest, spender: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    unapprove_public: (params: { token_id: string | InputRequest, spender: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    transfer_public_to_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
-    transfer_pub_to_priv_as_signer: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
-    transfer_from_public_to_private: (params: { token_id: string | InputRequest, owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
-    transfer_from_public: (params: { token_id: string | InputRequest, owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: FutureValue }>
-    join: (params: { token_1: Token | RecordValue | string | InputRequest, token_2: Token | RecordValue | string | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: Token }>
-    transfer_private: (params: { token: Token | RecordValue | string | InputRequest, to: string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, Token] }>
-    split: (params: { token: Token | RecordValue | string | InputRequest, amount: bigint | InputRequest } & { fee?: bigint }) => Promise<{ transactionId: string, result: [Token, Token] }>
+    initialize: (params: {}) => Promise<{ transactionId: string, result: FutureValue }>
+    register_token: (params: { token_id: string | InputRequest, name: bigint | InputRequest, symbol: bigint | InputRequest, decimals: number | InputRequest, max_supply: bigint | InputRequest, external_authorization_required: boolean | InputRequest, external_authorization_party: string | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    update_token_management: (params: { token_id: string | InputRequest, admin: string | InputRequest, external_authorization_party: string | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    set_role: (params: { token_id: string | InputRequest, account: string | InputRequest, role: number | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    remove_role: (params: { token_id: string | InputRequest, account: string | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    mint_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, authorized_until: number | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    mint_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest, authorized_until: number | InputRequest }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
+    burn_public: (params: { token_id: string | InputRequest, owner: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    prehook_public: (params: { owner: TokenOwner | InputRequest, amount: bigint | InputRequest, authorized_until: number | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    transfer_public: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    transfer_public_as_signer: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    approve_public: (params: { token_id: string | InputRequest, spender: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    unapprove_public: (params: { token_id: string | InputRequest, spender: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    transfer_public_to_private: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
+    transfer_pub_to_priv_as_signer: (params: { token_id: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
+    transfer_from_public_to_private: (params: { token_id: string | InputRequest, owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest, external_authorization_required: boolean | InputRequest }) => Promise<{ transactionId: string, result: [Token, FutureValue] }>
+    transfer_from_public: (params: { token_id: string | InputRequest, owner: string | InputRequest, recipient: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
+    join: (params: { token_1: Token | RecordValue | string | InputRequest, token_2: Token | RecordValue | string | InputRequest }) => Promise<{ transactionId: string, result: Token }>
+    transfer_private: (params: { token: Token | RecordValue | string | InputRequest, to: string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: [Token, Token] }>
+    split: (params: { token: Token | RecordValue | string | InputRequest, amount: bigint | InputRequest }) => Promise<{ transactionId: string, result: [Token, Token] }>
   }
   fetchAbi: () => Promise<ABI>
 }
@@ -1745,7 +1784,6 @@ export function createTokenRegistryContract(options: {
     },
     simulate: {
       initialize: async (params: any) => {
-        const {} = params
         const result = await _raw.simulate.initialize({ inputs: [] })
         return result.outputs[0] as unknown as FutureValue
       },
@@ -1777,7 +1815,7 @@ export function createTokenRegistryContract(options: {
       mint_private: async (params: any) => {
         const { token_id, recipient, amount, external_authorization_required, authorized_until } = params
         const result = await _raw.simulate.mint_private({ inputs: [token_id, recipient, amount, external_authorization_required, authorized_until] })
-        return [toToken(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const
+        return [toToken(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const
       },
       burn_public: async (params: any) => {
         const { token_id, owner, amount } = params
@@ -1812,17 +1850,17 @@ export function createTokenRegistryContract(options: {
       transfer_public_to_private: async (params: any) => {
         const { token_id, recipient, amount, external_authorization_required } = params
         const result = await _raw.simulate.transfer_public_to_private({ inputs: [token_id, recipient, amount, external_authorization_required] })
-        return [toToken(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const
+        return [toToken(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const
       },
       transfer_pub_to_priv_as_signer: async (params: any) => {
         const { token_id, recipient, amount, external_authorization_required } = params
         const result = await _raw.simulate.transfer_pub_to_priv_as_signer({ inputs: [token_id, recipient, amount, external_authorization_required] })
-        return [toToken(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const
+        return [toToken(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const
       },
       transfer_from_public_to_private: async (params: any) => {
         const { token_id, owner, recipient, amount, external_authorization_required } = params
         const result = await _raw.simulate.transfer_from_public_to_private({ inputs: [token_id, owner, recipient, amount, external_authorization_required] })
-        return [toToken(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const
+        return [toToken(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const
       },
       transfer_from_public: async (params: any) => {
         const { token_id, owner, recipient, amount } = params
@@ -1834,125 +1872,124 @@ export function createTokenRegistryContract(options: {
         const _token_1 = token_1?._record ?? token_1
         const _token_2 = token_2?._record ?? token_2
         const result = await _raw.simulate.join({ inputs: [_token_1, _token_2] })
-        return toToken(result.outputs[0] as RecordValue)
+        return toToken(result.outputs[0] as unknown as RecordValue)
       },
       transfer_private: async (params: any) => {
         const { token, to, amount } = params
         const _token = token?._record ?? token
         const result = await _raw.simulate.transfer_private({ inputs: [_token, to, amount] })
-        return [toToken(result.outputs[0] as RecordValue), toToken(result.outputs[1] as RecordValue)] as const
+        return [toToken(result.outputs[0] as unknown as RecordValue), toToken(result.outputs[1] as unknown as RecordValue)] as const
       },
       split: async (params: any) => {
         const { token, amount } = params
         const _token = token?._record ?? token
         const result = await _raw.simulate.split({ inputs: [_token, amount] })
-        return [toToken(result.outputs[0] as RecordValue), toToken(result.outputs[1] as RecordValue)] as const
+        return [toToken(result.outputs[0] as unknown as RecordValue), toToken(result.outputs[1] as unknown as RecordValue)] as const
       },
     },
     execute: {
       initialize: async (params: any) => {
-        const { fee } = params
-        const result = await _raw.execute.initialize({ inputs: [], fee })
+        const result = await _raw.execute.initialize({ inputs: [] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       register_token: async (params: any) => {
-        const { token_id, name, symbol, decimals, max_supply, external_authorization_required, external_authorization_party, fee } = params
-        const result = await _raw.execute.register_token({ inputs: [token_id, name, symbol, decimals, max_supply, external_authorization_required, external_authorization_party], fee })
+        const { token_id, name, symbol, decimals, max_supply, external_authorization_required, external_authorization_party } = params
+        const result = await _raw.execute.register_token({ inputs: [token_id, name, symbol, decimals, max_supply, external_authorization_required, external_authorization_party] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       update_token_management: async (params: any) => {
-        const { token_id, admin, external_authorization_party, fee } = params
-        const result = await _raw.execute.update_token_management({ inputs: [token_id, admin, external_authorization_party], fee })
+        const { token_id, admin, external_authorization_party } = params
+        const result = await _raw.execute.update_token_management({ inputs: [token_id, admin, external_authorization_party] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       set_role: async (params: any) => {
-        const { token_id, account, role, fee } = params
-        const result = await _raw.execute.set_role({ inputs: [token_id, account, role], fee })
+        const { token_id, account, role } = params
+        const result = await _raw.execute.set_role({ inputs: [token_id, account, role] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       remove_role: async (params: any) => {
-        const { token_id, account, fee } = params
-        const result = await _raw.execute.remove_role({ inputs: [token_id, account], fee })
+        const { token_id, account } = params
+        const result = await _raw.execute.remove_role({ inputs: [token_id, account] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       mint_public: async (params: any) => {
-        const { token_id, recipient, amount, authorized_until, fee } = params
-        const result = await _raw.execute.mint_public({ inputs: [token_id, recipient, amount, authorized_until], fee })
+        const { token_id, recipient, amount, authorized_until } = params
+        const result = await _raw.execute.mint_public({ inputs: [token_id, recipient, amount, authorized_until] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       mint_private: async (params: any) => {
-        const { token_id, recipient, amount, external_authorization_required, authorized_until, fee } = params
-        const result = await _raw.execute.mint_private({ inputs: [token_id, recipient, amount, external_authorization_required, authorized_until], fee })
-        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
+        const { token_id, recipient, amount, external_authorization_required, authorized_until } = params
+        const result = await _raw.execute.mint_private({ inputs: [token_id, recipient, amount, external_authorization_required, authorized_until] })
+        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
       },
       burn_public: async (params: any) => {
-        const { token_id, owner, amount, fee } = params
-        const result = await _raw.execute.burn_public({ inputs: [token_id, owner, amount], fee })
+        const { token_id, owner, amount } = params
+        const result = await _raw.execute.burn_public({ inputs: [token_id, owner, amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       prehook_public: async (params: any) => {
-        const { owner, amount, authorized_until, fee } = params
-        const result = await _raw.execute.prehook_public({ inputs: [owner, amount, authorized_until], fee })
+        const { owner, amount, authorized_until } = params
+        const result = await _raw.execute.prehook_public({ inputs: [owner, amount, authorized_until] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       transfer_public: async (params: any) => {
-        const { token_id, recipient, amount, fee } = params
-        const result = await _raw.execute.transfer_public({ inputs: [token_id, recipient, amount], fee })
+        const { token_id, recipient, amount } = params
+        const result = await _raw.execute.transfer_public({ inputs: [token_id, recipient, amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       transfer_public_as_signer: async (params: any) => {
-        const { token_id, recipient, amount, fee } = params
-        const result = await _raw.execute.transfer_public_as_signer({ inputs: [token_id, recipient, amount], fee })
+        const { token_id, recipient, amount } = params
+        const result = await _raw.execute.transfer_public_as_signer({ inputs: [token_id, recipient, amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       approve_public: async (params: any) => {
-        const { token_id, spender, amount, fee } = params
-        const result = await _raw.execute.approve_public({ inputs: [token_id, spender, amount], fee })
+        const { token_id, spender, amount } = params
+        const result = await _raw.execute.approve_public({ inputs: [token_id, spender, amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       unapprove_public: async (params: any) => {
-        const { token_id, spender, amount, fee } = params
-        const result = await _raw.execute.unapprove_public({ inputs: [token_id, spender, amount], fee })
+        const { token_id, spender, amount } = params
+        const result = await _raw.execute.unapprove_public({ inputs: [token_id, spender, amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       transfer_public_to_private: async (params: any) => {
-        const { token_id, recipient, amount, external_authorization_required, fee } = params
-        const result = await _raw.execute.transfer_public_to_private({ inputs: [token_id, recipient, amount, external_authorization_required], fee })
-        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
+        const { token_id, recipient, amount, external_authorization_required } = params
+        const result = await _raw.execute.transfer_public_to_private({ inputs: [token_id, recipient, amount, external_authorization_required] })
+        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
       },
       transfer_pub_to_priv_as_signer: async (params: any) => {
-        const { token_id, recipient, amount, external_authorization_required, fee } = params
-        const result = await _raw.execute.transfer_pub_to_priv_as_signer({ inputs: [token_id, recipient, amount, external_authorization_required], fee })
-        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
+        const { token_id, recipient, amount, external_authorization_required } = params
+        const result = await _raw.execute.transfer_pub_to_priv_as_signer({ inputs: [token_id, recipient, amount, external_authorization_required] })
+        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
       },
       transfer_from_public_to_private: async (params: any) => {
-        const { token_id, owner, recipient, amount, external_authorization_required, fee } = params
-        const result = await _raw.execute.transfer_from_public_to_private({ inputs: [token_id, owner, recipient, amount, external_authorization_required], fee })
-        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
+        const { token_id, owner, recipient, amount, external_authorization_required } = params
+        const result = await _raw.execute.transfer_from_public_to_private({ inputs: [token_id, owner, recipient, amount, external_authorization_required] })
+        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as unknown as RecordValue), result.outputs[1] as unknown as FutureValue] as const }
       },
       transfer_from_public: async (params: any) => {
-        const { token_id, owner, recipient, amount, fee } = params
-        const result = await _raw.execute.transfer_from_public({ inputs: [token_id, owner, recipient, amount], fee })
+        const { token_id, owner, recipient, amount } = params
+        const result = await _raw.execute.transfer_from_public({ inputs: [token_id, owner, recipient, amount] })
         return { transactionId: result.transactionId, result: result.outputs[0] as unknown as FutureValue }
       },
       join: async (params: any) => {
-        const { token_1, token_2, fee } = params
+        const { token_1, token_2 } = params
         const _token_1 = token_1?._record ?? token_1
         const _token_2 = token_2?._record ?? token_2
-        const result = await _raw.execute.join({ inputs: [_token_1, _token_2], fee })
-        return { transactionId: result.transactionId, result: toToken(result.outputs[0] as RecordValue) }
+        const result = await _raw.execute.join({ inputs: [_token_1, _token_2] })
+        return { transactionId: result.transactionId, result: toToken(result.outputs[0] as unknown as RecordValue) }
       },
       transfer_private: async (params: any) => {
-        const { token, to, amount, fee } = params
+        const { token, to, amount } = params
         const _token = token?._record ?? token
-        const result = await _raw.execute.transfer_private({ inputs: [_token, to, amount], fee })
-        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as RecordValue), toToken(result.outputs[1] as RecordValue)] as const }
+        const result = await _raw.execute.transfer_private({ inputs: [_token, to, amount] })
+        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as unknown as RecordValue), toToken(result.outputs[1] as unknown as RecordValue)] as const }
       },
       split: async (params: any) => {
-        const { token, amount, fee } = params
+        const { token, amount } = params
         const _token = token?._record ?? token
-        const result = await _raw.execute.split({ inputs: [_token, amount], fee })
-        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as RecordValue), toToken(result.outputs[1] as RecordValue)] as const }
+        const result = await _raw.execute.split({ inputs: [_token, amount] })
+        return { transactionId: result.transactionId, result: [toToken(result.outputs[0] as unknown as RecordValue), toToken(result.outputs[1] as unknown as RecordValue)] as const }
       },
     },
     fetchAbi: _raw.fetchAbi as unknown as TokenRegistryContract['fetchAbi'],

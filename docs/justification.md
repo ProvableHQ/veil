@@ -240,7 +240,7 @@ Three packages ship in Q2. Core has zero hard dependencies. Adapter packages bri
 - `rpcAccount()` and `custom()` transport for any Aleo wallet
 - Required for dApp wallet connection
 
-**`@veil/provable`** — wraps `@provablehq/sdk`
+**`@veil/provable-sdk`** — wraps `@provablehq/sdk`
 - `privateKeyToAccount()` with key derivation, local signing, proving
 - Required for local account usage
 
@@ -267,6 +267,6 @@ Success in Q2 is demonstrated, not measured. Three promises, each proven with li
 
 ## The Ask
 
-Fund the development of `@veil/core`, `@veil/wallet-adapter`, and `@veil/provable` as the standard developer interface for Aleo. Position it as the recommended way to build dApps on Aleo, the foundation for AI agent tooling, and the integration target for new wallets entering the ecosystem.
+Fund the development of `@veil/core`, `@veil/wallet-adapter`, and `@veil/provable-sdk` as the standard developer interface for Aleo. Position it as the recommended way to build dApps on Aleo, the foundation for AI agent tooling, and the integration target for new wallets entering the ecosystem.
 
 The alternative is continuing to ask every developer, every agent, and every new wallet to solve the same fragmentation problems independently — a cost that grows with every participant we add to the ecosystem.

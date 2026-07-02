@@ -45,7 +45,12 @@ export function createClient(config: ClientConfig): Client {
     transport,
     uid,
     extend<extended extends Record<string, unknown>>(fn: (client: Client) => extended) {
-      return Object.assign(Object.create(client), fn(client)) as Client & extended
+      // Build on the receiver, not the captured base client, so chained
+      // extends compose: each layer's own properties (wallet actions,
+      // recordProvider, decorators) stay reachable through the prototype
+      // chain of the next. Rooting at `client` would discard everything a
+      // prior extend() added.
+      return Object.assign(Object.create(this), fn(this)) as Client & extended
     },
   }
 

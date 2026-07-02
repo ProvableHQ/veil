@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { loadNetwork } from "@veil/provable";
+import { loadNetwork } from "@veil/provable-sdk";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -117,7 +117,7 @@ async function redeemForVoucher(card: LoyaltyCard, rewardType: RewardType, point
     // Cross-program call: pass _record for foreign record input, returns [RecordValue, RewardVoucher]
     const [updatedCardRecord, voucher] = await rewardsContract.simulate.redeem_points_for_voucher({
         card: card._record,
-        reward_type: BigInt(rewardType),
+        reward_type: Number(rewardType),
         points_to_spend: BigInt(pointsCost),
     });
     return { card: toLoyaltyCard(updatedCardRecord), voucher };
@@ -203,7 +203,6 @@ const demos: Record<string, () => Promise<void>> = {
             recipient: address,
             initial_points: 1000n,
             nonce: `${nonce}field`,
-            fee: 500_000n,
         });
         console.log(`  ${C.dim}tx:${C.reset} ${mint.transactionId}`);
         logCard(mint.result[0]);

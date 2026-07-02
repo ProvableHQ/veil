@@ -17,7 +17,7 @@ npm install @veil/core @veil/react
 
 For server-side / Node.js:
 ```bash
-npm install @veil/core @veil/provable
+npm install @veil/core @veil/provable-sdk
 ```
 
 ## Quick Start — Read Chain State
@@ -81,7 +81,7 @@ function App() {
 
 ## Quick Start — Node.js / Server-Side
 
-Use `@veil/provable` for local key management without a browser wallet.
+Use `@veil/provable-sdk` for local key management without a browser wallet.
 
 ```ts
 import { createPublicClient, createWalletClient, http } from '@veil/core'
@@ -89,7 +89,7 @@ import {
   privateKeyToAccount,
   createProvingConfig,
   createLocalScanner,
-} from '@veil/provable'
+} from '@veil/provable-sdk'
 
 const transport = http('https://api.provable.com/v2', { network: 'testnet' })
 

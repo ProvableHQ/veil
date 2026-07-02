@@ -1,0 +1,49 @@
+{
+  "name": "@veil/shield-swap",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./agent": {
+      "import": "./dist/agent/index.js",
+      "types": "./dist/agent/index.d.ts"
+    },
+    "./mcp": {
+      "import": "./dist/mcp/index.js",
+      "types": "./dist/mcp/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "generate": "veil-codegen --config codegen/veil.config.json",
+    "regen-abi": "./codegen/regen-abi.sh",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "regen-openapi": "./codegen/regen-openapi.sh"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@veil/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@provablehq/sdk": "^0.11.3"
+  },
+  "peerDependenciesMeta": {
+    "@provablehq/sdk": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@provablehq/sdk": "^0.11.3",
+    "@veil/codegen": "workspace:*",
+    "@veil/provable-sdk": "workspace:*",
+    "openapi-typescript": "^7.13.0"
+  }
+}

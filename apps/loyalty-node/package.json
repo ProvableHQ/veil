@@ -14,7 +14,7 @@
   "dependencies": {
     "@veil/codegen": "workspace:*",
     "@veil/core": "workspace:*",
-    "@veil/provable": "workspace:*",
+    "@veil/provable-sdk": "workspace:*",
     "dotenv": "^16.4.5"
   },
   "devDependencies": {

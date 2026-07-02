@@ -30,7 +30,7 @@ import {
   privateKeyToAccount,
   createProvingConfig,
   createLocalScanner,
-} from '@veil/provable'
+} from '@veil/provable-sdk'
 
 const client = createWalletClient({
   account: privateKeyToAccount('APrivateKey1...'),
@@ -145,7 +145,7 @@ How `requestRecords` resolves depends on account type:
 **Local account** — You must supply a `recordProvider`. Without one, `requestRecords` throws.
 
 ```ts
-import { createLocalScanner, createRemoteScanner } from '@veil/provable'
+import { createLocalScanner, createRemoteScanner } from '@veil/provable-sdk'
 
 // Option 1: Local scanner — scans blocks + decrypts locally
 const walletClient = createWalletClient({

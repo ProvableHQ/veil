@@ -51,7 +51,7 @@ Veil:
 - Nothing removed/renamed in the symbols Veil uses. `DecryptPermission` /
   `OnChainHistory` are unchanged (not new).
 
-`@provablehq/sdk` (in `@veil/provable`) is a different package and is NOT bumped.
+`@provablehq/sdk` (in `@veil/provable-sdk`) is a different package and is NOT bumped.
 
 ## Decision: type ownership
 
