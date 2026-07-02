@@ -395,6 +395,44 @@ unless you pass a `tokens` filter, returns only tokens you actually hold.
   `'4719...field'`.
 - Fields read from chain keep their wire names (`amount_out`, `tick_spacing`).
 
+## Codegen
+
+The typed layer isn't hand-written — it's generated from the contract's ABI and
+the API's OpenAPI spec, both pinned under [`codegen/`](./codegen). The package
+ships the generated output, so **using** the client needs none of this. You only
+regenerate when the upstream shapes change.
+
+What comes out of it:
+
+- `src/generated/shield_swap.ts` — struct/record types, decoders (`toPoolState`,
+  `toSlot`, …), `PROGRAM_ID`, and the contract factory. Generated from the
+  pinned ABI (`codegen/abi/`). `getPool`/`getSlot`/etc. and `DEFAULT_PROGRAM`
+  are built on this.
+- `src/api/openapi.ts` — the `ApiClient` response types, generated from the
+  indexer's OpenAPI spec (`codegen/amm-api/`).
+
+When to run it:
+
+- **The contract changed** (redeploy, new entrypoint, changed struct): refetch
+  the program and regenerate.
+- **The API changed** (new/renamed endpoint or field): refetch the spec — the
+  git diff on the generated types is your drift alarm.
+- **Retarget a deployment**: point `codegen/veil.config.json` at a different
+  program's ABI (or set its `programId` to stamp a different `PROGRAM_ID` while
+  keeping the current shape) and regenerate.
+
+How (from the package root):
+
+```sh
+pnpm regen-abi       # fetch program bytecode + ABI JSON into codegen/abi/
+pnpm generate        # ABI → src/generated/shield_swap.ts
+pnpm regen-openapi   # fetch the OpenAPI spec + regenerate src/api/openapi.ts
+```
+
+Regenerating the ABI needs `leo` ≥ 4.3 (earlier versions can't parse
+`shield_swap_v0_0_1`'s `constructor` dialect). See
+[`codegen/README.md`](./codegen/README.md) for the layout details.
+
 ## Reference
 
 The integration test at
