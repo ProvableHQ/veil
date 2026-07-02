@@ -33,3 +33,24 @@ export {
   BLINDING_FACTOR_ALGORITHM,
   BLINDED_ADDRESS_ALGORITHM,
 } from './constants.js'
+
+// Swap parameter helpers: intent → contract args (pure), deadline, nonces,
+// and the contract's Q64 tick math table.
+export {
+  resolveSwapParams,
+  getDeadline,
+  generateSwapNonce,
+  generateFieldNonce,
+  type ResolveSwapParamsInput,
+  type ResolvedSwapParams,
+} from './helpers/params.js'
+export {
+  Q64,
+  MIN_TICK,
+  MAX_TICK,
+  MIN_SQRT_PRICE,
+  MAX_SQRT_PRICE,
+  getSqrtPriceAtTick,
+  roundTickToSpacing,
+  dustScale,
+} from './helpers/tick-math.js'

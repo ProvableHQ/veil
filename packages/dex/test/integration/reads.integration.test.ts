@@ -113,6 +113,20 @@ describe.runIf(RUN)('reads against the real API', () => {
     expect(await isBlindedAddressUsed(client, { address: fresh })).toBe(false)
   }, 30_000)
 
+  it('tick math brackets a live pool sqrt_price (table agrees with chain)', async () => {
+    const { getSqrtPriceAtTick } = await import('../../src/helpers/tick-math.js')
+    const res = await fetch(`${INDEXER_URL}/pools?limit=1`)
+    const body = (await res.json()) as { data: { key: string }[] }
+    const poolKey = body.data[0]!.key
+    let slot = await getSlot(client, { poolKey })
+    if (slot === null) slot = await getSlot(client, { poolKey, program: PREVIOUS_PROGRAM })
+    expect(slot).not.toBeNull()
+    // The live sqrt_price must sit inside its active tick's bracket — a
+    // one-off magic constant in our port would break this immediately.
+    expect(slot!.sqrt_price >= getSqrtPriceAtTick(slot!.tick)).toBe(true)
+    expect(slot!.sqrt_price < getSqrtPriceAtTick(slot!.tick + 1)).toBe(true)
+  }, 30_000)
+
   it('a freshly derived blinded identity is unused on chain', async () => {
     // Devnode test account (public key) — same fixtures as the golden vectors.
     const { nextBlindedIdentity } = await import('../../src/blinded-identity.js')
