@@ -1,5 +1,5 @@
 import { executeContract, writeContract, type Client, type TransactionInput } from '@veil/core'
-import type { SwapHandle } from '../../types.js'
+import type { SwapHandle } from './swapPrivate.js'
 import { getSwapOutput } from '../reads/getSwapOutput.js'
 import { blindingFactorResolveRequest, blindedAddressResolveRequest } from '../../wallet-requests.js'
 

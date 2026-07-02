@@ -1,10 +1,19 @@
 import type { AlgorithmGrant, InputRequest } from '@veil/core'
-import { BLINDING_FACTOR_ALGORITHM, BLINDED_ADDRESS_ALGORITHM, DEFAULT_PROGRAM } from './constants.js'
+import { DEFAULT_PROGRAM } from './constants.js'
 
 // Wallet-signer path only: these build the `derived` InputRequests a
 // Shield-like wallet fulfils from its own view key. Local signers cannot use
 // them — no wallet exists to fulfil a request — and must pass literals
 // derived via blinded-identity.ts instead.
+
+/**
+ * Wallet-standard algorithm names for wallet-side derivation (see core's
+ * `KNOWN_ALGORITHMS`). A dapp talking to a privacy-preserving wallet fills the
+ * blinding-factor / blinded-address input slots with `derived` InputRequests
+ * naming these algorithms instead of deriving locally.
+ */
+export const BLINDING_FACTOR_ALGORITHM = 'program-scoped-blinding-factor'
+export const BLINDED_ADDRESS_ALGORITHM = 'program-scoped-blinded-address'
 
 /** The mapping the wallet tracks used blinded addresses against. */
 export const BLINDING_MEMBERSHIP_MAPPING = 'used_blinded_addresses'

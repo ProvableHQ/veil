@@ -25,13 +25,19 @@ export {
   deriveBlindedAddress,
   nextBlindedIdentity,
   viewKeyToScalar,
+  BLINDING_FACTOR_DOMAIN,
+  CLAIM_OR_SWAP_DOMAIN,
   type BlindedIdentity,
   type NextBlindedIdentityParameters,
 } from './blinded-identity.js'
 
 // The two-phase private swap: request → (chain computes) → claim.
-export type { SwapHandle } from './types.js'
-export { swapPrivate, type SwapPrivateParameters, type SwapPrivateReturnType } from './actions/swap/swapPrivate.js'
+export {
+  swapPrivate,
+  type SwapHandle,
+  type SwapPrivateParameters,
+  type SwapPrivateReturnType,
+} from './actions/swap/swapPrivate.js'
 export {
   claimSwapOutputPrivate,
   SwapOutputNotFinalizedError,
@@ -53,20 +59,14 @@ export {
   SHIELD_SWAP_ALGORITHM_GRANTS,
   shieldSwapAlgorithmGrants,
   BLINDING_MEMBERSHIP_MAPPING,
+  BLINDING_FACTOR_ALGORITHM,
+  BLINDED_ADDRESS_ALGORITHM,
   blindingFactorIssueRequest,
   blindedAddressIssueRequest,
   blindingFactorResolveRequest,
   blindedAddressResolveRequest,
 } from './wallet-requests.js'
-export {
-  SHIELD_SWAP_V0_0_1,
-  SHIELD_SWAP_V0_0_2,
-  DEFAULT_PROGRAM,
-  BLINDING_FACTOR_DOMAIN,
-  CLAIM_OR_SWAP_DOMAIN,
-  BLINDING_FACTOR_ALGORITHM,
-  BLINDED_ADDRESS_ALGORITHM,
-} from './constants.js'
+export { SHIELD_SWAP_V0_0_1, SHIELD_SWAP_V0_0_2, DEFAULT_PROGRAM } from './constants.js'
 
 // Record selection + record-derived balances (local-signer path; wallet
 // signers select records wallet-side via record InputRequests).
