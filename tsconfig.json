@@ -21,7 +21,8 @@
       "@veil/provable": ["./packages/provable/src/index.ts"],
       "@veil/leo": ["./packages/leo/src/index.ts"],
       "@veil/devnode": ["./packages/devnode/src/index.ts"],
-      "@veil/shield-swap": ["./packages/shield-swap/src/index.ts"]
+      "@veil/shield-swap": ["./packages/shield-swap/src/index.ts"],
+      "@veil/shield-swap/agent": ["./packages/shield-swap/src/agent/index.ts"]
     },
     "types": ["node"]
   }
