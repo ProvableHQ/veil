@@ -49,43 +49,6 @@ and transport interfaces.
 | `@veil/leo` | Typed wrapper around the `leo` CLI (build, deploy, …). |
 | `@veil/bridge` | Cross-chain bridge client (preview). |
 
-## Roadmap
-
-### Q2 2026 — Core + Adapter Packages
-
-**`@veil/core`** — zero hard dependencies
-- Clients, transports, accounts, all public and wallet actions
-- `getContract` + `parseProgram` for typed contract instances
-- Agent tool schemas, MCP server, structured JSON output
-- 2-3 example skills and dApps
-
-**`@veil/wallet-adapter`** — wraps `@provablehq/aleo-wallet-standard`
-- `rpcAccount()` and `custom()` transport for any Aleo wallet
-- Validated with Leo, Puzzle, Fox, Shield wallets
-
-**`@veil/provable-sdk`** — wraps `@provablehq/sdk`
-- `privateKeyToAccount()` with key derivation
-- Local signing and proving
-
-**Q2 success criteria** — demonstrated, not measured:
-- A viem developer builds a working Aleo dApp without Aleo-specific docs
-- Same code works across wallets and SDKs — swap the adapter, everything else is identical
-- An agent builds a working dApp first try; MCP tools work zero config
-
-### Q3 2026 — Ecosystem Expansion
-
-- Skills and example dApps for developer onboarding
-- Agentic ecosystem integrations (Coinbase AgentKit, MPC Protocol, Near Intents)
-- 3rd-party wallet integrations
-- React hooks (`@veil/react`)
-- Mobile SDK helpers (`@veil/mobile`)
-
-**Q3 adoption metrics:**
-- npm weekly downloads and growth rate across all packages
-- Programs deployed and actively used on mainnet
-- Agent tool invocations and success rate
-- 3rd-party integrations shipped and their downstream usage
-
 ## Quick Start
 
 ### Read-only (no account needed)
