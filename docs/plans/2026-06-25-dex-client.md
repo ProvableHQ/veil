@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship `@veil/dex` — a private-by-default, agent-first TypeScript client for the Aleo AMM `shield_swap_v0_0_1.aleo`, with composable read + write actions usable directly and as MCP/agent tools.
+**Goal:** Ship `@veil/dex` — a private-by-default, agent-first TypeScript client for the Aleo AMM `shield_swap_v0_0_2.aleo`, with composable read + write actions usable directly and as MCP/agent tools.
 
 **Architecture:** A new package sibling to `@veil/bridge`, layered on `@veil/core`. Typed bindings for the main DEX program come from the `@veil/codegen` build step (committed `src/generated/`); `getContract` is the runtime fallback for programs without generated bindings (arbitrary token programs behind `dyn record` inputs). Chain-direct reads use core `getMappingValue` + generated decoders; the off-chain AMM REST API is wrapped by a typed `IndexerClient`. Records (token inputs, `PositionNFT`) come from core `requestRecords` + scanner, account-type branched. Each action is one async function exposed three ways (plain TS, MCP tool, agent schema).
 
@@ -20,7 +20,7 @@
 - **Wallet vs SDK input path (post PR #68):** the SDK/local path is unchanged — `recordPlaintext` + Aleo-encoded string inputs + local proving (which **rejects** `InputRequest` via `assertNoInputRequests`). Do **not** narrow action record/value params: accept `value | InputRequest` (codegen already widens every slot; `getContract`/`writeContract` pass requests through, non-request fast path encodes as before) so a privacy-preserving wallet can fulfil record-by-`uid` / address injection with **no separate code path**. `uid`/`recordView`/grants are wallet-path concerns handled by core, not re-implemented here.
 - **Write method naming:** write methods/files/functions are the **camelCase of the transition name** — named after the transition, not re-aliased to a different concept: `swapPrivate`, `claimSwapOutputPrivate`, `createPool`, `mintPrivate`, `increaseLiquidityPrivate`. The **snake_case** form (`swap_private`, …) is only the string passed to the program (and ABI function-name assertions). Read/indexer methods keep descriptive `getX` names.
 - **Green bar:** `pnpm vitest run` from repo root passes; if any `@veil/*` public API changes, update `examples/e2e-demo.ts` and `apps/loyalty-dapp/` and keep `pnpm --filter @veil/loyalty-dapp exec tsc --noEmit` clean (CLAUDE.md).
-- **Reference revs:** contract `shield_swap_v0_0_1.aleo` @ Aleo testnet; Leo source `ProvableHQ/amm-v3`; derivation `ProvableHQ/amm-v3-tests@feat/q128` `src/client/amm-client.ts`; indexer `https://amm-api.dev.provable.com`.
+- **Reference revs:** contract `shield_swap_v0_0_2.aleo` @ Aleo testnet; Leo source `ProvableHQ/amm-v3`; derivation `ProvableHQ/amm-v3-tests@feat/q128` `src/client/amm-client.ts`; indexer `https://amm-api.dev.provable.com`.
 - **Integration tests** that hit testnet are gated behind an env flag (follow the existing `VEIL_INTEGRATION` / `RUN_INTEGRATION` convention) so the default `pnpm vitest run` stays offline.
 - **Binding contributor constraints** (`.agents/contributors.md`, always-on via `AGENTS.md`):
   - **JSDoc on every public symbol** — verb-led one-line summary; document `@param`/`@returns`/`@throws` by consequence (never restate the name or type); state defaults, units (microcredits), numeric widths, and side effects (network/sign/prove/pure); `@property` tags for object fields; a compiling `@example`. No filler, no hype adjectives, no hedging. See `.agents/voice.md`.
@@ -37,8 +37,8 @@ packages/dex/
   tsup.config.ts                    # mirror packages/bridge
   tsconfig.json
   veil.config.json                  # codegen config: shield_swap abi → src/generated
-  scripts/extract-abi.ts            # deployed .aleo → abi.json (pinned snapshot)
-  abi/shield_swap_v0_0_1.json       # committed pinned ABI snapshot
+  scripts/regen-abi.sh              # curl | jq | leo abi → pinned abi.json (Leo CLI, no custom parsing)
+  abi/shield_swap_v0_0_2.json       # committed pinned ABI snapshot
   src/
     index.ts                        # public exports + dexActions
     constants.ts                    # program id, domains, FEE_TIERS, TICK_SPACINGS, tick sentinels
@@ -93,13 +93,20 @@ git commit -m "chore(dex): scaffold @veil/dex package"
 
 ### Task 0.2: ABI extraction script (deployed `.aleo` → pinned `abi.json`)
 
+> **REWORKED as implemented (supersedes the steps below):** per user direction we do **not**
+> parse `.aleo` ourselves. `scripts/regen-abi.sh` runs `curl | jq -r . | leo abi` to produce the
+> committed `abi/shield_swap_v0_0_2.json`. Since `leo abi` (4.2.0) emits a newer nested-mode
+> variant format, core `parseAbi` was extended (backward-compatibly, signed off) to accept it —
+> see `fix(core): parseAbi accepts leo 4.2.0 ABI format`. The `extract-abi.ts` steps below are
+> retained only as historical record.
+
 **Files:**
-- Create: `packages/dex/scripts/extract-abi.ts`, `packages/dex/abi/shield_swap_v0_0_1.json` (generated artifact, committed)
+- Create: `packages/dex/scripts/extract-abi.ts`, `packages/dex/abi/shield_swap_v0_0_2.json` (generated artifact, committed)
 - Uses: core `parseProgram` (`packages/core/src/contract/parseProgram.ts`) and `parseAbi` (`packages/core/src/utils/parseAbi.ts`) to validate shape.
 
 **Interfaces:**
-- Consumes: deployed program text from `https://api.provable.com/v2/testnet/program/shield_swap_v0_0_1.aleo` (JSON-encoded string; decode before parsing).
-- Produces: `abi/shield_swap_v0_0_1.json` in the shape `parseAbi` accepts.
+- Consumes: deployed program text from `https://api.provable.com/v2/testnet/program/shield_swap_v0_0_2.aleo` (JSON-encoded string; decode before parsing).
+- Produces: `abi/shield_swap_v0_0_2.json` in the shape `parseAbi` accepts.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -111,7 +118,7 @@ import { parseAbi } from '@veil/core'
 
 describe('pinned shield_swap ABI', () => {
   it('parses and contains the V1 entrypoints', () => {
-    const raw = JSON.parse(readFileSync('packages/dex/abi/shield_swap_v0_0_1.json', 'utf-8'))
+    const raw = JSON.parse(readFileSync('packages/dex/abi/shield_swap_v0_0_2.json', 'utf-8'))
     const abi = parseAbi(raw)
     const fns = new Set(abi.functions.map((f) => f.name))
     for (const f of ['swap_private', 'claim_swap_output_private', 'create_pool', 'mint_private', 'increase_liquidity_private']) {
@@ -125,17 +132,17 @@ describe('pinned shield_swap ABI', () => {
 })
 ```
 
-- [ ] **Step 2: Run it — fails** (no `abi/shield_swap_v0_0_1.json` yet)
+- [ ] **Step 2: Run it — fails** (no `abi/shield_swap_v0_0_2.json` yet)
 
 Run: `pnpm vitest run packages/dex/test/extract-abi.test.ts`
 Expected: FAIL (ENOENT).
 
-- [ ] **Step 3: Write `scripts/extract-abi.ts`** — fetch the deployed program, `JSON.parse` (it's a JSON string), feed the `.aleo` source to `parseProgram`, map the resulting `Program` (`functions`/`mappings`/`closures`) into the `abi.json` shape `parseAbi` accepts (inspect `parseAbi.ts` for the exact shape), and write `abi/shield_swap_v0_0_1.json`. If the `Program`→ABI mapping proves lossy for any input/struct type, fall back to `leo build` of the fetched `amm-v3` source and copy its `build/abi.json`.
+- [ ] **Step 3: Write `scripts/extract-abi.ts`** — fetch the deployed program, `JSON.parse` (it's a JSON string), feed the `.aleo` source to `parseProgram`, map the resulting `Program` (`functions`/`mappings`/`closures`) into the `abi.json` shape `parseAbi` accepts (inspect `parseAbi.ts` for the exact shape), and write `abi/shield_swap_v0_0_2.json`. If the `Program`→ABI mapping proves lossy for any input/struct type, fall back to `leo build` of the fetched `amm-v3` source and copy its `build/abi.json`.
 
 - [ ] **Step 4: Generate the pinned ABI**
 
 Run: `pnpm --filter @veil/dex exec tsx scripts/extract-abi.ts`
-Expected: writes `abi/shield_swap_v0_0_1.json`.
+Expected: writes `abi/shield_swap_v0_0_2.json`.
 
 - [ ] **Step 5: Run the test — passes**
 
@@ -158,7 +165,7 @@ git commit -m "feat(dex): pin shield_swap ABI + extraction script"
 **Interfaces:**
 - Produces: generated TS for the program — struct/record interfaces (`PoolState`, `Slot`, `Tick`, `Position`, `PositionNFT`, `MintPositionRequest`, `SwapOutput`, …) + `*FromRecord`/mapper decoders. These names are consumed by Phases 1–4.
 
-- [ ] **Step 1: Write `veil.config.json`**: `{ "programs": [{ "abi": "./abi/shield_swap_v0_0_1.json", "out": "./src/generated/shield_swap.ts" }], "coreImport": "@veil/core" }`.
+- [ ] **Step 1: Write `veil.config.json`**: `{ "programs": [{ "abi": "./abi/shield_swap_v0_0_2.json", "out": "./src/generated/shield_swap.ts" }], "coreImport": "@veil/core" }`.
 - [ ] **Step 2: Run codegen**
 
 Run: `pnpm --filter @veil/dex exec veil-codegen --config veil.config.json`
@@ -191,7 +198,7 @@ git commit -m "feat(dex): generate typed bindings for shield_swap"
 **Files:** Create `packages/dex/src/constants.ts`
 
 **Interfaces:**
-- Produces: `PROGRAM_ID='shield_swap_v0_0_1.aleo'`, `BLINDING_FACTOR_DOMAIN`, `CLAIM_OR_SWAP_DOMAIN` (the exact field constants from the deployed program / reference client), `FEE_TIERS`, `TICK_SPACINGS`, `MIN_TICK_SENTINEL`, `MAX_TICK_SENTINEL`.
+- Produces: `PROGRAM_ID='shield_swap_v0_0_2.aleo'`, `BLINDING_FACTOR_DOMAIN`, `CLAIM_OR_SWAP_DOMAIN` (the exact field constants from the deployed program / reference client), `FEE_TIERS`, `TICK_SPACINGS`, `MIN_TICK_SENTINEL`, `MAX_TICK_SENTINEL`.
 
 - [ ] **Step 1:** Copy the exact constant values from the reference client (`getAmmV3BlindingFactorDomain`, `getAmmV3ClaimOrSwapDomain`) and `constants` in the deployed `.aleo` (`CLAIM_OR_SWAP_DOMAIN = 11835072102227764468342786961086432175093421716844963782363567713633field`).
 - [ ] **Step 2: Commit** `git add … && git commit -m "feat(dex): program constants"`.
