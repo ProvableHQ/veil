@@ -4,7 +4,7 @@ import { parseAbi } from '@veil/core'
 
 describe('pinned shield_swap ABI', () => {
   it('parses and contains the V1 entrypoints', () => {
-    const abiPath = new URL('../codegen/abi/shield_swap_v0_0_1.json', import.meta.url)
+    const abiPath = new URL('../codegen/abi/shield_swap_v0_0_2.json', import.meta.url)
     const raw = JSON.parse(readFileSync(abiPath, 'utf-8'))
     const abi = parseAbi(raw)
     const fns = new Set(abi.functions.map((f) => f.name))

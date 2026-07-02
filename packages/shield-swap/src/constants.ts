@@ -10,7 +10,7 @@ export const SHIELD_SWAP_V0_0_2 = 'shield_swap_v0_0_2.aleo'
  * The program every DEX action targets unless overridden.
  *
  * Follows the generated bindings' `PROGRAM_ID` — a single source of truth
- * codegen stamps from the ABI. It points at the live deployment (v0_0_1:
+ * codegen stamps from the ABI. It points at the live deployment (v0_0_2:
  * pools, liquidity, API). Override per client (`shieldSwapActions({ program })`)
  * or per call (`program`); to move the default, regenerate from a different
  * program's ABI.

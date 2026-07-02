@@ -21,11 +21,9 @@ const API_BASE = 'https://api.provable.com/v2'
 const NODE_URL = `${API_BASE}/testnet`
 const INDEXER_URL = 'https://amm-api.dev.provable.com'
 
-// The live DEX API currently serves pools created on shield_swap_v0_0_1; the
-// v0_0_2 deployment starts with empty mappings. Reads try the target program
-// first and fall back to the previous version so the decode path is always
-// exercised against real chain data. Remove the fallback once v0_0_2 has pools.
-const PREVIOUS_PROGRAM = 'shield_swap_v0_0_1.aleo'
+// shield_swap_v0_0_2 is the live deployment the DEX API serves, and the target
+// PROGRAM_ID the reads default to — so a pool discovered via the API decodes
+// directly off chain, no fallback needed.
 
 describe.runIf(RUN)('reads against the real API', () => {
   const client = createPublicClient({ transport: http(API_BASE, { network: 'testnet' }) })
@@ -37,12 +35,7 @@ describe.runIf(RUN)('reads against the real API', () => {
     expect(body.data.length).toBeGreaterThan(0)
     const poolKey = body.data[0]!.key
 
-    let pool = await getPool(client, { poolKey })
-    if (pool === null) {
-      // v0_0_2 state not yet populated — decode the same layout from the
-      // previous deployment to keep the real-data path covered.
-      pool = await getPool(client, { poolKey, program: PREVIOUS_PROGRAM })
-    }
+    const pool = await getPool(client, { poolKey })
 
     expect(pool).not.toBeNull()
     // Live values change; assert shape and width, not exact numbers.
@@ -68,10 +61,7 @@ describe.runIf(RUN)('reads against the real API', () => {
     const body = (await res.json()) as { data: { key: string }[] }
     const poolKey = body.data[0]!.key
 
-    let slot = await getSlot(client, { poolKey })
-    if (slot === null) {
-      slot = await getSlot(client, { poolKey, program: PREVIOUS_PROGRAM })
-    }
+    const slot = await getSlot(client, { poolKey })
 
     expect(slot).not.toBeNull()
     expect(typeof slot!.tick).toBe('number')
@@ -118,8 +108,7 @@ describe.runIf(RUN)('reads against the real API', () => {
     const res = await fetch(`${INDEXER_URL}/pools?limit=1`)
     const body = (await res.json()) as { data: { key: string }[] }
     const poolKey = body.data[0]!.key
-    let slot = await getSlot(client, { poolKey })
-    if (slot === null) slot = await getSlot(client, { poolKey, program: PREVIOUS_PROGRAM })
+    const slot = await getSlot(client, { poolKey })
     expect(slot).not.toBeNull()
     // The live sqrt_price must sit inside its active tick's bracket — a
     // one-off magic constant in our port would break this immediately.

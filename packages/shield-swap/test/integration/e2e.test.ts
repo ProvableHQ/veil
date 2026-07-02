@@ -15,9 +15,9 @@ import { SwapOutputNotFinalizedError } from '../../src/actions/swap/claimSwapOut
  *   VEIL_E2E_PRIVATE_KEY   funded testnet account (credits for fees)
  *   ALEO_DPS_API_KEY, ALEO_CONSUMER_ID   delegated proving credentials
  * Optional: ALEO_DPS_URL, ALEO_RSS_URL, and VEIL_DEX_PROGRAM to pick the
- * deployment under test — defaults to shield_swap_v0_0_1.aleo (the live
- * venue the API serves); set shield_swap_v0_0_2.aleo to exercise the
- * new deployment. Both share entrypoints, struct layouts, and domains.
+ * deployment under test — defaults to shield_swap_v0_0_2.aleo (the live
+ * venue the API serves); set shield_swap_v0_0_1.aleo to run against the
+ * previous deployment. Both share entrypoints, struct layouts, and domains.
  */
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
 const DPS_API_KEY = process.env.ALEO_DPS_API_KEY
@@ -27,7 +27,7 @@ const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!DPS_API_K
 const NETWORK_URL = 'https://api.provable.com/v2'
 const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove/testnet'
 const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://api.provable.com/scanner'
-const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap_v0_0_1.aleo'
+const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap_v0_0_2.aleo'
 const TX_TIMEOUT = 420_000
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -82,7 +82,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   }, TX_TIMEOUT)
 
   it('picks a token pair and fetches wrapper program sources (dyn-dispatch imports)', async () => {
-    // Prefer a pair with a live pool (v0_0_1 today) so the swap has depth;
+    // Prefer a pair with a live pool (v0_0_2 today) so the swap has depth;
     // fall back to the first two wrapper tokens on a fresh deployment.
     const pools = await client.api.getPools({ limit: 1 })
     const live = pools.data[0]
@@ -140,7 +140,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
 
   it('ensures a pool exists for the pair (API discovery, create, or prior run)', async () => {
     // 1) API discovery — authoritative where the API serves this
-    //    program (v0_0_1 today): find a live pool for the chosen pair.
+    //    program (v0_0_2 today): find a live pool for the chosen pair.
     const pools = await client.api.getPools({ limit: 50 })
     for (const p of pools.data) {
       const pair = new Set([p.token0, p.token1])

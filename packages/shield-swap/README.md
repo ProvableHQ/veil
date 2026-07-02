@@ -4,7 +4,7 @@ A viem-shaped TS/JS client for the `shield_swap` AMM on Aleo. The client provide
 viem-style actions for the following:
 
 ### Executing DEX smart-contract functions
-Actions for executing the functions of the `shield_swap_v0_0_1.aleo` contract.
+Actions for executing the functions of the `shield_swap_v0_0_2.aleo` contract.
 - **Private swaps** — Runs the `swap_private` --> `claim_swap_output_private` flows.
 - **Liquidity** — create pools (via `create_pool`), 
 mint concentrated-liquidity positions (`mint_private`) and add to them (`increase_liquidity_private`).
@@ -107,7 +107,7 @@ reads and writes go directly on the client (`client.getPool`,
 `client.swapPrivate`), and the off-chain DEX API is namespaced under
 `client.api` — so a call site always shows whether a value came from the chain
 or the service. By default everything targets the live deployment
-(`shield_swap_v0_0_1.aleo`) and the Provable dev API; override either with
+(`shield_swap_v0_0_2.aleo`) and the Provable dev API; override either with
 `shieldSwapActions({ program, api: { baseUrl } })`.
 
 ## Pools and tokens
@@ -343,7 +343,7 @@ await client.increaseLiquidityPrivate({
   amount0Desired,
   amount1Desired,
   imports,
-  positionRecord: { type: 'record', program: 'shield_swap_v0_0_1.aleo', recordname: 'PositionNFT', filters: { pool: { eq: poolKey } } },
+  positionRecord: { type: 'record', program: 'shield_swap_v0_0_2.aleo', recordname: 'PositionNFT', filters: { pool: { eq: poolKey } } },
   token0Record: { type: 'record', program: token0Program, recordname: 'Token', filters: { amount: { gte: `${amount0Desired}u128` } } },
   token1Record: { type: 'record', program: token1Program, recordname: 'Token', filters: { amount: { gte: `${amount1Desired}u128` } } },
 })
@@ -428,8 +428,8 @@ Typically it's one of these, not all three: `regen-openapi` for an API change,
 you only edited `codegen/veil.config.json`). To retarget a deployment, point
 `veil.config.json` at another program's ABI — or set its `programId` to stamp a
 different `PROGRAM_ID` while keeping the current shape — then `generate`.
-`regen-abi` needs `leo` ≥ 4.3 (older versions can't parse `shield_swap_v0_0_1`'s
-`constructor` dialect). [`codegen/README.md`](./codegen/README.md) has the
+The default `regen-abi` (v0_0_2) works on a standard `leo`; regenerating the
+`shield_swap_v0_0_1` reference needs `leo` ≥ 4.3 for its `constructor` dialect. [`codegen/README.md`](./codegen/README.md) has the
 layout details.
 
 ## Reference

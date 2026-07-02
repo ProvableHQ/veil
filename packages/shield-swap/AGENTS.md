@@ -24,7 +24,7 @@ Codegen (only when upstream shapes change — see the README's Codegen section):
 
 ```sh
 pnpm --filter @veil/shield-swap generate       # ABI → src/generated/shield_swap.ts
-pnpm --filter @veil/shield-swap regen-abi       # refetch program bytecode + ABI (needs leo ≥ 4.3)
+pnpm --filter @veil/shield-swap regen-abi       # refetch program bytecode + ABI (defaults to v0_0_2)
 pnpm --filter @veil/shield-swap regen-openapi   # refetch OpenAPI spec → src/api/openapi.ts
 ```
 
@@ -40,7 +40,7 @@ Run them during development when touching anything they cover.
   **`ALEO_DPS_API_KEY`** + **`ALEO_CONSUMER_ID`** (delegated proving + scanner
   auth) — enables the full lifecycle (`e2e`) and the balance tests
   (private balances need the account's records).
-- Optional: `VEIL_DEX_PROGRAM` (default `shield_swap_v0_0_1.aleo`), `ALEO_DPS_URL`,
+- Optional: `VEIL_DEX_PROGRAM` (default `shield_swap_v0_0_2.aleo`), `ALEO_DPS_URL`,
   `ALEO_RSS_URL`.
 
 ```sh
@@ -61,8 +61,8 @@ VEIL_INTEGRATION=1 pnpm exec vitest run packages/shield-swap/test/integration
   reads, never the API.
 - **Bindings are generated.** `src/generated/` and `src/api/openapi.ts` are
   codegen output — edit the source (ABI / config / OpenAPI spec) and regenerate,
-  don't hand-edit. `PROGRAM_ID` targets the live deployment (`v0_0_1`) while the
-  ABI shape currently comes from `v0_0_2`; see the README's Codegen section.
+  don't hand-edit. `PROGRAM_ID` targets the live deployment (`v0_0_2`), generated from its own
+  ABI; see the README's Codegen section.
 
 ## Using the agent tools
 

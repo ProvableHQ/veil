@@ -22,7 +22,7 @@ const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!DPS_API_K
 
 const NETWORK_URL = 'https://api.provable.com/v2'
 const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://api.provable.com/scanner'
-const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap_v0_0_1.aleo'
+const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap_v0_0_2.aleo'
 
 describe.runIf(RUN)('balances against the real API + records', () => {
   let client: ReturnType<ReturnType<typeof shieldSwapActions>>

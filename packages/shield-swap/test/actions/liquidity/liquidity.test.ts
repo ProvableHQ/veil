@@ -31,7 +31,7 @@ function fakeClient(accountType: 'local' | 'rpc'): Client {
   const recordsFor = (program?: string) => {
     if (program === 'ethx.aleo') return [{ programName: program, tag: 't0', recordPlaintext: TOKEN0_RECORD, spent: false }]
     if (program === 'usdc.aleo') return [{ programName: program, tag: 't1', recordPlaintext: TOKEN1_RECORD, spent: false }]
-    if (program === 'shield_swap_v0_0_1.aleo')
+    if (program === 'shield_swap_v0_0_2.aleo')
       return [{ programName: program, tag: 't2', recordPlaintext: POSITION_RECORD, spent: false }]
     return []
   }
