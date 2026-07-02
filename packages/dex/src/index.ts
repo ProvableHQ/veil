@@ -29,7 +29,7 @@ export {
   CLAIM_OR_SWAP_DOMAIN,
   type BlindedIdentity,
   type NextBlindedIdentityParameters,
-} from './blinded-identity.js'
+} from './utils/blinding/identity.js'
 
 // The two-phase private swap: request → (chain computes) → claim.
 export {
@@ -65,7 +65,7 @@ export {
   blindedAddressIssueRequest,
   blindingFactorResolveRequest,
   blindedAddressResolveRequest,
-} from './wallet-requests.js'
+} from './utils/blinding/requests.js'
 export { SHIELD_SWAP_V0_0_1, SHIELD_SWAP_V0_0_2, DEFAULT_PROGRAM } from './constants.js'
 
 // Record selection + record-derived balances (local-signer path; wallet
@@ -81,7 +81,7 @@ export {
   type SelectPositionNFTParameters,
   type GetOwnBalancesParameters,
   type GetOwnBalancesReturnType,
-} from './records.js'
+} from './utils/records.js'
 
 // Liquidity lifecycle: create a pool, mint a position, deepen it.
 export { createPool, type CreatePoolParameters, type CreatePoolReturnType } from './actions/liquidity/createPool.js'
@@ -96,7 +96,7 @@ export {
   type IncreaseLiquidityPrivateParameters,
   type IncreaseLiquidityPrivateReturnType,
 } from './actions/liquidity/increaseLiquidityPrivate.js'
-export { pickInsertHint, type PickInsertHintParameters } from './helpers/tick-hints.js'
+export { pickInsertHint, type PickInsertHintParameters } from './utils/tick-hints.js'
 
 // Pure strategy primitives (no I/O): prices, impact, valuation, fee APR.
 export {
@@ -108,7 +108,7 @@ export {
   type PriceImpactInput,
   type Holding,
   type FeeAprEstimateInput,
-} from './helpers/derivations.js'
+} from './utils/derivations.js'
 
 // One-surface composition: chain reads flat, indexer under `.indexer`.
 export { dexActions, type DexActionsConfig, type DexActions } from './decorators/dexActions.js'
@@ -122,7 +122,7 @@ export {
   generateFieldNonce,
   type ResolveSwapParamsInput,
   type ResolvedSwapParams,
-} from './helpers/params.js'
+} from './utils/params.js'
 export {
   Q64,
   MIN_TICK,
@@ -132,4 +132,4 @@ export {
   getSqrtPriceAtTick,
   roundTickToSpacing,
   dustScale,
-} from './helpers/tick-math.js'
+} from './utils/tick-math.js'

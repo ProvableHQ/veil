@@ -114,7 +114,7 @@ describe.runIf(RUN)('reads against the real API', () => {
   }, 30_000)
 
   it('tick math brackets a live pool sqrt_price (table agrees with chain)', async () => {
-    const { getSqrtPriceAtTick } = await import('../../src/helpers/tick-math.js')
+    const { getSqrtPriceAtTick } = await import('../../src/utils/tick-math.js')
     const res = await fetch(`${INDEXER_URL}/pools?limit=1`)
     const body = (await res.json()) as { data: { key: string }[] }
     const poolKey = body.data[0]!.key
@@ -129,7 +129,7 @@ describe.runIf(RUN)('reads against the real API', () => {
 
   it('a freshly derived blinded identity is unused on chain', async () => {
     // Devnode test account (public key) — same fixtures as the golden vectors.
-    const { nextBlindedIdentity } = await import('../../src/blinded-identity.js')
+    const { nextBlindedIdentity } = await import('../../src/utils/blinding/identity.js')
     const id = await nextBlindedIdentity(client, {
       viewKeyScalar: '334926304971763782347498121479281870911723639068413954564748091722770623877scalar',
       signer: 'aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px',

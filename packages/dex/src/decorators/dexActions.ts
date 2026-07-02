@@ -30,8 +30,8 @@ import {
   getOwnBalances,
   type GetOwnBalancesParameters,
   type GetOwnBalancesReturnType,
-} from '../records.js'
-import { pickInsertHint, type PickInsertHintParameters } from '../helpers/tick-hints.js'
+} from '../utils/records.js'
+import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hints.js'
 import { IndexerClient, type IndexerClientOptions } from '../indexer/client.js'
 
 /**

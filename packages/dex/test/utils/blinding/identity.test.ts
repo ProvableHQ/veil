@@ -4,8 +4,8 @@ import {
   deriveBlindingFactor,
   deriveBlindedAddress,
   nextBlindedIdentity,
-} from '../src/blinded-identity.js'
-import { SHIELD_SWAP_V0_0_2 } from '../src/constants.js'
+} from '../../../src/utils/blinding/identity.js'
+import { SHIELD_SWAP_V0_0_2 } from '../../../src/constants.js'
 
 // Vectors were generated for the v0_0_2 program scope — pin it explicitly
 // (the library default now targets the live v0_0_1 deployment). The e2e

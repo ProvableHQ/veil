@@ -1,6 +1,6 @@
 import type { Client } from '@veil/core'
-import { DEFAULT_PROGRAM } from './constants.js'
-import { isBlindedAddressUsed } from './actions/reads/validation.js'
+import { DEFAULT_PROGRAM } from '../../constants.js'
+import { isBlindedAddressUsed } from '../../actions/reads/validation.js'
 
 /**
  * Domain separator for deriving a blinding factor from a view key and counter.

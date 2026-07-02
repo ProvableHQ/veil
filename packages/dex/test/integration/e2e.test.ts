@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { loadNetwork } from '@veil/provable'
 import { dexActions } from '../../src/decorators/dexActions.js'
 import { getProgram } from '@veil/core'
-import { parseTokenRecordInfo } from '../../src/records.js'
+import { parseTokenRecordInfo } from '../../src/utils/records.js'
 import { SwapOutputNotFinalizedError } from '../../src/actions/swap/claimSwapOutputPrivate.js'
 
 /**

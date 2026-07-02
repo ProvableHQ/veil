@@ -11,7 +11,7 @@ vi.mock('@veil/core', async (importOriginal) => {
 import { executeContract, writeContract } from '@veil/core'
 import { swapPrivate } from '../../../src/actions/swap/swapPrivate.js'
 import { claimSwapOutputPrivate, SwapOutputNotFinalizedError } from '../../../src/actions/swap/claimSwapOutputPrivate.js'
-import { MIN_SQRT_PRICE } from '../../../src/helpers/tick-math.js'
+import { MIN_SQRT_PRICE } from '../../../src/utils/tick-math.js'
 
 const executeMock = vi.mocked(executeContract)
 const writeMock = vi.mocked(writeContract)

@@ -1,7 +1,7 @@
 import { executeContract, writeContract, type Client, type TransactionInput } from '@veil/core'
 import type { SwapHandle } from './swapPrivate.js'
 import { getSwapOutput } from '../reads/getSwapOutput.js'
-import { blindingFactorResolveRequest, blindedAddressResolveRequest } from '../../wallet-requests.js'
+import { blindingFactorResolveRequest, blindedAddressResolveRequest } from '../../utils/blinding/requests.js'
 
 /**
  * The swap output is not in the mapping yet (request not finalized) —

@@ -10,7 +10,7 @@ import { executeContract, writeContract } from '@veil/core'
 import { createPool } from '../../../src/actions/liquidity/createPool.js'
 import { mintPrivate, formatMintPositionRequest } from '../../../src/actions/liquidity/mintPrivate.js'
 import { increaseLiquidityPrivate } from '../../../src/actions/liquidity/increaseLiquidityPrivate.js'
-import { getSqrtPriceAtTick } from '../../../src/helpers/tick-math.js'
+import { getSqrtPriceAtTick } from '../../../src/utils/tick-math.js'
 
 const executeMock = vi.mocked(executeContract)
 const writeMock = vi.mocked(writeContract)

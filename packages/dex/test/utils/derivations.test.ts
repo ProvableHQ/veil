@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { poolPrice, priceImpact, portfolioValue, feeAprEstimate } from '../../src/helpers/derivations.js'
-import { Q64 } from '../../src/helpers/tick-math.js'
+import { poolPrice, priceImpact, portfolioValue, feeAprEstimate } from '../../src/utils/derivations.js'
+import { Q64 } from '../../src/utils/tick-math.js'
 
 // Live ETHx(18)/USDC(6) pool fixture: sqrt_price and scales captured from testnet.
 const LIVE_SLOT = { sqrt_price: 411435173233802309n, liquidity: 94217047056n }

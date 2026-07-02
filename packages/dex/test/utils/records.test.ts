@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Client } from '@veil/core'
-import { parseTokenRecordInfo, selectTokenRecord, getOwnBalances } from '../src/records.js'
+import { parseTokenRecordInfo, selectTokenRecord, getOwnBalances } from '../../src/utils/records.js'
 
 // Wrapper-program record shape (owner/amount/_nonce) — as produced by e.g.
 // ethx_5a095e.aleo transfer_public_to_private. Mirrors the amm-app parser.

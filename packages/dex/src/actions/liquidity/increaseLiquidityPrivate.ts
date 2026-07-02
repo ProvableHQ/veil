@@ -1,7 +1,7 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@veil/core'
 import { getPool } from '../reads/getPool.js'
-import { selectTokenRecord, selectPositionNFT } from '../../records.js'
-import { pickInsertHint } from '../../helpers/tick-hints.js'
+import { selectTokenRecord, selectPositionNFT } from '../../utils/records.js'
+import { pickInsertHint } from '../../utils/tick-hints.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 
 /**

@@ -7,10 +7,10 @@ import {
 } from '@veil/core'
 import { getPool } from '../reads/getPool.js'
 import { getSlot } from '../reads/getSlot.js'
-import { nextBlindedIdentity, viewKeyToScalar } from '../../blinded-identity.js'
-import { selectTokenRecord } from '../../records.js'
-import { resolveSwapParams, getDeadline, generateSwapNonce } from '../../helpers/params.js'
-import { blindingFactorIssueRequest, blindedAddressIssueRequest } from '../../wallet-requests.js'
+import { nextBlindedIdentity, viewKeyToScalar } from '../../utils/blinding/identity.js'
+import { selectTokenRecord } from '../../utils/records.js'
+import { resolveSwapParams, getDeadline, generateSwapNonce } from '../../utils/params.js'
+import { blindingFactorIssueRequest, blindedAddressIssueRequest } from '../../utils/blinding/requests.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 
 /**

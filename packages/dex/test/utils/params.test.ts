@@ -9,13 +9,13 @@ import {
   getSqrtPriceAtTick,
   roundTickToSpacing,
   dustScale,
-} from '../../src/helpers/tick-math.js'
+} from '../../src/utils/tick-math.js'
 import {
   resolveSwapParams,
   getDeadline,
   generateSwapNonce,
   generateFieldNonce,
-} from '../../src/helpers/params.js'
+} from '../../src/utils/params.js'
 
 describe('tick math (contract table)', () => {
   it('anchors: tick 0 = Q64, extremes = the finalize bounds', () => {

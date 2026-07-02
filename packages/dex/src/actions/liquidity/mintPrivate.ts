@@ -1,9 +1,9 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@veil/core'
 import { getPool } from '../reads/getPool.js'
-import { selectTokenRecord } from '../../records.js'
-import { generateFieldNonce } from '../../helpers/params.js'
-import { roundTickToSpacing } from '../../helpers/tick-math.js'
-import { pickInsertHint } from '../../helpers/tick-hints.js'
+import { selectTokenRecord } from '../../utils/records.js'
+import { generateFieldNonce } from '../../utils/params.js'
+import { roundTickToSpacing } from '../../utils/tick-math.js'
+import { pickInsertHint } from '../../utils/tick-hints.js'
 import { getSlot } from '../reads/getSlot.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 
