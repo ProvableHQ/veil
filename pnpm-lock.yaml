@@ -104,13 +104,13 @@ importers:
 
   packages/dex:
     dependencies:
-      '@provablehq/sdk':
-        specifier: ^0.10.3
-        version: 0.10.3
       '@veil/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
+      '@provablehq/sdk':
+        specifier: ^0.11.3
+        version: 0.11.3
       '@veil/codegen':
         specifier: workspace:*
         version: link:../codegen
@@ -123,8 +123,8 @@ importers:
         specifier: ^1.7.2
         version: 1.8.0
       '@provablehq/sdk':
-        specifier: ^0.10.3
-        version: 0.10.3
+        specifier: ^0.11.3
+        version: 0.11.3
       '@scure/bip39':
         specifier: ^1.4.0
         version: 1.6.0
@@ -651,11 +651,11 @@ packages:
   '@provablehq/aleo-wallet-standard@1.0.0':
     resolution: {integrity: sha512-3QVgBd9Mq0y769VRj6a5FIzWEI5TPQ2CzwgpMurq8JwHxKLRry9Zze0XF92dWAqE6ILvvPCew3pwapC8gerYQA==}
 
-  '@provablehq/sdk@0.10.3':
-    resolution: {integrity: sha512-5ZsgDi7B0xXt94PoaucqWEaXA8i1nl+RLKrvuO4cJjz+3FCoXi269M9+lXxhI13kSH2lVtNCiBLpnFW9JwbueA==}
+  '@provablehq/sdk@0.11.3':
+    resolution: {integrity: sha512-3vxTFXqiQHm9PHlceANvrAcoS1NhyJEe/RRREgdW+6zVmMg5+i5AA2q4XzgUVDJ8Pdhu7VpdUtunKzEejQ/BcQ==}
 
-  '@provablehq/wasm@0.10.3':
-    resolution: {integrity: sha512-WlTUTqyAjXRlf8g7gi8Ht+M2nBjToBWT3Zi1JzNhV+E9OuTjZD/R1G+YuEyltWz+q+Ta8xCfr6fUbW6mK9HP5A==}
+  '@provablehq/wasm@0.11.3':
+    resolution: {integrity: sha512-/ZJZXHK7Rvsv4AsgFgqKe6/6EYvenpJ38UlxigwtAwyhNwtx5wzQMMrkJkf2+WpcCoo3VlWeLWFW3Nw1hfjrog==}
 
   '@puzzlehq/sdk-core@1.0.4':
     resolution: {integrity: sha512-tL/RzseDfSRaVLCqMg9UIbgVK0+jDEq5QgBwvvboBixEiL1qseYkEN5udX4nsJF3J5YrNm984MKQIt08JZra7A==}
@@ -1886,9 +1886,9 @@ snapshots:
       '@provablehq/aleo-types': 1.0.0
       eventemitter3: 5.0.4
 
-  '@provablehq/sdk@0.10.3':
+  '@provablehq/sdk@0.11.3':
     dependencies:
-      '@provablehq/wasm': 0.10.3
+      '@provablehq/wasm': 0.11.3
       '@scure/base': 2.0.0
       '@serenity-kit/noble-sodium': 0.2.3
       comlink: 4.4.2
@@ -1896,7 +1896,7 @@ snapshots:
       mime: 4.1.0
       xmlhttprequest-ssl: 4.0.0
 
-  '@provablehq/wasm@0.10.3': {}
+  '@provablehq/wasm@0.11.3': {}
 
   '@puzzlehq/sdk-core@1.0.4(buffer@6.0.3)':
     dependencies:
