@@ -1,5 +1,5 @@
 {
-  "program": "shield_swap_v0_0_2.aleo",
+  "program": "shield_swap_v0_0_1.aleo",
   "structs": [
     {
       "path": [
@@ -139,7 +139,7 @@
               "path": [
                 "SwapHop"
               ],
-              "program": "shield_swap_v0_0_2.aleo"
+              "program": "shield_swap_v0_0_1.aleo"
             }
           }
         },
@@ -150,7 +150,7 @@
               "path": [
                 "SwapHop"
               ],
-              "program": "shield_swap_v0_0_2.aleo"
+              "program": "shield_swap_v0_0_1.aleo"
             }
           }
         },
@@ -161,7 +161,7 @@
               "path": [
                 "SwapHop"
               ],
-              "program": "shield_swap_v0_0_2.aleo"
+              "program": "shield_swap_v0_0_1.aleo"
             }
           }
         },
@@ -763,7 +763,7 @@
               "path": [
                 "SwapRequest"
               ],
-              "program": "shield_swap_v0_0_2.aleo"
+              "program": "shield_swap_v0_0_1.aleo"
             }
           },
           "mode": "Private"
@@ -810,7 +810,7 @@
               "path": [
                 "SwapMultiHopRequest"
               ],
-              "program": "shield_swap_v0_0_2.aleo"
+              "program": "shield_swap_v0_0_1.aleo"
             }
           },
           "mode": "Private"
@@ -843,7 +843,7 @@
           "path": [
             "PoolState"
           ],
-          "program": "shield_swap_v0_0_2.aleo"
+          "program": "shield_swap_v0_0_1.aleo"
         }
       }
     },
@@ -857,7 +857,7 @@
           "path": [
             "Slot"
           ],
-          "program": "shield_swap_v0_0_2.aleo"
+          "program": "shield_swap_v0_0_1.aleo"
         }
       }
     },
@@ -871,7 +871,7 @@
           "path": [
             "Tick"
           ],
-          "program": "shield_swap_v0_0_2.aleo"
+          "program": "shield_swap_v0_0_1.aleo"
         }
       }
     },
@@ -929,7 +929,7 @@
           "path": [
             "Position"
           ],
-          "program": "shield_swap_v0_0_2.aleo"
+          "program": "shield_swap_v0_0_1.aleo"
         }
       }
     },
@@ -943,7 +943,7 @@
           "path": [
             "SwapOutput"
           ],
-          "program": "shield_swap_v0_0_2.aleo"
+          "program": "shield_swap_v0_0_1.aleo"
         }
       }
     },
@@ -972,17 +972,6 @@
       },
       "value": {
         "Primitive": "Boolean"
-      }
-    },
-    {
-      "name": "token_decimals",
-      "key": {
-        "Primitive": "Field"
-      },
-      "value": {
-        "Primitive": {
-          "UInt": "U8"
-        }
       }
     }
   ],
@@ -1065,32 +1054,6 @@
             "ty": {
               "Primitive": {
                 "UInt": "U32"
-              }
-            },
-            "mode": "Public"
-          }
-        }
-      ],
-      "outputs": [
-        "Final"
-      ]
-    },
-    {
-      "name": "set_token_decimals",
-      "inputs": [
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": "Field"
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U8"
               }
             },
             "mode": "Public"
@@ -1317,7 +1280,7 @@
                 "path": [
                   "MintPositionRequest"
                 ],
-                "program": "shield_swap_v0_0_2.aleo"
+                "program": "shield_swap_v0_0_1.aleo"
               }
             },
             "mode": "Public"
@@ -1362,7 +1325,7 @@
             "path": [
               "PositionNFT"
             ],
-            "program": "shield_swap_v0_0_2.aleo"
+            "program": "shield_swap_v0_0_1.aleo"
           }
         },
         "Final"
@@ -1396,7 +1359,7 @@
                 "path": [
                   "MintPositionRequest"
                 ],
-                "program": "shield_swap_v0_0_2.aleo"
+                "program": "shield_swap_v0_0_1.aleo"
               }
             },
             "mode": "Public"
@@ -1433,7 +1396,7 @@
             "path": [
               "PositionNFT"
             ],
-            "program": "shield_swap_v0_0_2.aleo"
+            "program": "shield_swap_v0_0_1.aleo"
           }
         },
         "DynamicRecord",
@@ -1449,7 +1412,7 @@
             "path": [
               "PositionNFT"
             ],
-            "program": "shield_swap_v0_0_2.aleo"
+            "program": "shield_swap_v0_0_1.aleo"
           }
         },
         {
@@ -1497,7 +1460,7 @@
             "path": [
               "PositionNFT"
             ],
-            "program": "shield_swap_v0_0_2.aleo"
+            "program": "shield_swap_v0_0_1.aleo"
           }
         },
         "Final"
@@ -1511,7 +1474,7 @@
             "path": [
               "PositionNFT"
             ],
-            "program": "shield_swap_v0_0_2.aleo"
+            "program": "shield_swap_v0_0_1.aleo"
           }
         },
         {
@@ -1605,7 +1568,7 @@
             "path": [
               "PositionNFT"
             ],
-            "program": "shield_swap_v0_0_2.aleo"
+            "program": "shield_swap_v0_0_1.aleo"
           }
         },
         "Final"
@@ -1619,7 +1582,7 @@
             "path": [
               "PositionNFT"
             ],
-            "program": "shield_swap_v0_0_2.aleo"
+            "program": "shield_swap_v0_0_1.aleo"
           }
         },
         "DynamicRecord",
@@ -1715,7 +1678,7 @@
             "path": [
               "PositionNFT"
             ],
-            "program": "shield_swap_v0_0_2.aleo"
+            "program": "shield_swap_v0_0_1.aleo"
           }
         },
         "DynamicRecord",
@@ -1731,7 +1694,7 @@
             "path": [
               "PositionNFT"
             ],
-            "program": "shield_swap_v0_0_2.aleo"
+            "program": "shield_swap_v0_0_1.aleo"
           }
         },
         {
@@ -1785,7 +1748,7 @@
             "path": [
               "PositionNFT"
             ],
-            "program": "shield_swap_v0_0_2.aleo"
+            "program": "shield_swap_v0_0_1.aleo"
           }
         },
         "Final"
@@ -1799,7 +1762,7 @@
             "path": [
               "PositionNFT"
             ],
-            "program": "shield_swap_v0_0_2.aleo"
+            "program": "shield_swap_v0_0_1.aleo"
           }
         },
         {
@@ -1853,7 +1816,7 @@
             "path": [
               "PositionNFT"
             ],
-            "program": "shield_swap_v0_0_2.aleo"
+            "program": "shield_swap_v0_0_1.aleo"
           }
         },
         "DynamicRecord",
@@ -1869,7 +1832,7 @@
             "path": [
               "PositionNFT"
             ],
-            "program": "shield_swap_v0_0_2.aleo"
+            "program": "shield_swap_v0_0_1.aleo"
           }
         }
       ],
@@ -1903,7 +1866,7 @@
                 "path": [
                   "SwapRequest"
                 ],
-                "program": "shield_swap_v0_0_2.aleo"
+                "program": "shield_swap_v0_0_1.aleo"
               }
             },
             "mode": "Public"
@@ -2056,7 +2019,7 @@
             "path": [
               "SwapComplianceRecord"
             ],
-            "program": "shield_swap_v0_0_2.aleo"
+            "program": "shield_swap_v0_0_1.aleo"
           }
         },
         "Final"
@@ -2202,7 +2165,7 @@
                 "path": [
                   "SwapMultiHopRequest"
                 ],
-                "program": "shield_swap_v0_0_2.aleo"
+                "program": "shield_swap_v0_0_1.aleo"
               }
             },
             "mode": "Public"
@@ -2284,7 +2247,7 @@
                 "path": [
                   "SwapHop"
                 ],
-                "program": "shield_swap_v0_0_2.aleo"
+                "program": "shield_swap_v0_0_1.aleo"
               }
             },
             "mode": "Public"
@@ -2297,7 +2260,7 @@
                 "path": [
                   "SwapHop"
                 ],
-                "program": "shield_swap_v0_0_2.aleo"
+                "program": "shield_swap_v0_0_1.aleo"
               }
             },
             "mode": "Public"
@@ -2310,7 +2273,7 @@
                 "path": [
                   "SwapHop"
                 ],
-                "program": "shield_swap_v0_0_2.aleo"
+                "program": "shield_swap_v0_0_1.aleo"
               }
             },
             "mode": "Public"
@@ -2362,7 +2325,7 @@
             "path": [
               "MultiHopSwapComplianceRecord"
             ],
-            "program": "shield_swap_v0_0_2.aleo"
+            "program": "shield_swap_v0_0_1.aleo"
           }
         },
         "Final"
@@ -2570,282 +2533,6 @@
         "DynamicRecord",
         "DynamicRecord",
         "Final"
-      ]
-    }
-  ],
-  "views": [
-    {
-      "name": "view_sqrt_price_at_tick",
-      "inputs": [
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "Int": "I32"
-              }
-            },
-            "mode": "Public"
-          }
-        }
-      ],
-      "outputs": [
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        }
-      ]
-    },
-    {
-      "name": "view_liquidity_for_amounts",
-      "inputs": [
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        }
-      ],
-      "outputs": [
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        }
-      ]
-    },
-    {
-      "name": "view_amounts_for_liquidity",
-      "inputs": [
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": "Boolean"
-            },
-            "mode": "Public"
-          }
-        }
-      ],
-      "outputs": [
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        }
-      ]
-    },
-    {
-      "name": "view_compute_swap_step",
-      "inputs": [
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U32"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": "Boolean"
-            },
-            "mode": "Public"
-          }
-        }
-      ],
-      "outputs": [
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        },
-        {
-          "Plaintext": {
-            "ty": {
-              "Primitive": {
-                "UInt": "U128"
-              }
-            },
-            "mode": "Public"
-          }
-        }
       ]
     }
   ]
