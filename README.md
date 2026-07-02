@@ -34,13 +34,20 @@ const value = await client.readContract({
 
 ## Packages
 
-| Package | Description | Status |
-|---------|-------------|--------|
-| `@veil/core` | Clients, transports, accounts, actions, agent tools, MCP server | In development |
-| `@veil/wallet-adapter` | Wraps `@provablehq/aleo-wallet-standard` — connects any Aleo wallet | In development |
-| `@veil/provable-sdk` | Wraps `@provablehq/sdk` — key derivation, local signing, proving | In development |
-| `@veil/react` | React hooks (wagmi equivalent) | Planned |
-| `@veil/mobile` | Shield Mobile SDK helpers | Planned |
+`@veil/core` is the base — every other package builds on its client, action,
+and transport interfaces.
+
+| Package | What it's for |
+|---------|---------------|
+| `@veil/core` | Clients, actions, transports, types — the base SDK. Also ships LLM agent (`/agent`) and MCP (`/mcp`) bindings. |
+| `@veil/provable-sdk` | Local accounts, signing, and proving via `@provablehq/sdk`. Build a client from a private key. |
+| `@veil/wallet-adapter` | Bridge any Provable-standard wallet (Shield, Leo, Puzzle, Fox) into a Veil client. |
+| `@veil/react` | `VeilProvider` + `useVeilWallet()` — wallet connection and clients for React apps. |
+| `@veil/shield-swap` | Client for the `shield_swap` AMM/DEX — private swaps, liquidity, and the DEX API. |
+| `@veil/codegen` | Generate typed bindings from an Aleo program ABI (library + `veil-codegen` CLI). |
+| `@veil/devnode` | Run and drive a local Aleo devnode for tests. |
+| `@veil/leo` | Typed wrapper around the `leo` CLI (build, deploy, …). |
+| `@veil/bridge` | Cross-chain bridge client (preview). |
 
 ## Roadmap
 
@@ -385,8 +392,14 @@ veil/
 │   │       ├── types/       # core type definitions
 │   │       ├── errors/      # error types (actionable messages)
 │   │       └── utils/       # address validation, credits, value parsing
+│   ├── provable-sdk/        # @veil/provable-sdk (wraps @provablehq/sdk)
 │   ├── wallet-adapter/      # @veil/wallet-adapter (wraps wallet standard)
-│   └── provable/            # @veil/provable-sdk (wraps @provablehq/sdk)
+│   ├── react/              # @veil/react (VeilProvider, useVeilWallet)
+│   ├── shield-swap/         # @veil/shield-swap (shield_swap AMM/DEX client)
+│   ├── codegen/             # @veil/codegen (ABI → typed bindings + CLI)
+│   ├── devnode/             # @veil/devnode (local Aleo devnode for tests)
+│   ├── leo/                 # @veil/leo (typed leo CLI wrapper)
+│   └── bridge/              # @veil/bridge (cross-chain bridge client, preview)
 ├── skills/                  # Skill definitions for code-writing agents
 ├── docs/
 │   ├── specs/               # Design specifications
