@@ -174,6 +174,10 @@ const route = await client.api.getRoute({
   token_out: tokenOut,
   amount_in: amountIn,
 })
+
+// estimated_amount_out is a display decimal in the output token's units.
+// expectedOut wants raw base units (u128), so scale by the token's decimals:
+const expectedOut = BigInt(Math.floor(Number(route.data.estimated_amount_out ?? 0) * 10 ** tokenOutDecimals))
 ```
 
 `swapPrivate` returns a plain serializable handle — the key to claiming your
@@ -192,7 +196,7 @@ const handle = await client.swapPrivate({
   poolKey,
   tokenInId: tokenIn,
   amountIn,                                   // raw atomic amount, bigint
-  expectedOut: BigInt(route.data.amount_out),
+  expectedOut,                                // scaled to base units above
   slippageBps: 50,                            // 0.5%
   tokenInProgram,                             // the token's wrapper program
   imports,
@@ -212,7 +216,7 @@ const handle = await client.swapPrivate({
   poolKey,
   tokenInId: tokenIn,
   amountIn,
-  expectedOut: BigInt(route.data.amount_out),
+  expectedOut,                                // scaled to base units above
   slippageBps: 50,
   imports,
   tokenRecord: {
