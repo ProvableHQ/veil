@@ -82,3 +82,13 @@ positional parameter where a viem-style config object belongs?
 - When you change a `core` type, update every package that depends on that type.
 - Avoid breaking backwards compatibility unless necessary. When it is necessary,
   declare the intent and the migration as part of the sign-off above.
+
+## Commits
+
+- Prefix every commit subject with a bracketed, capitalized type: `[Fix]`,
+  `[Feat]`, `[Chore]`, `[Docs]`, `[Refactor]`, `[Test]`. Do NOT use the
+  `fix:` / `feat:` / `chore:` colon style.
+- Follow the prefix with a concise, imperative summary
+  (`[Feat] Add delegated proving to the wallet client`).
+- Do not add `Co-Authored-By` lines or any AI attribution to commits, PRs, or
+  code.
