@@ -253,7 +253,7 @@ export type DevnodeClientActions = {
  *   .extend(devnodeActions)
  *
  * const devnode = await client.startDevnode()
- * await client.advanceBlock({ count: 1 })
+ * await client.advanceDevnode({ numBlocks: 1 })
  * await devnode.stop()
  * ```
  */

@@ -1,12 +1,14 @@
 {
   "name": "veil",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "build": "pnpm -r build",
     "test": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.0",
     "@types/node": "^25.5.0",
     "tsup": "^8.0.0",
     "tsx": "^4.21.0",
