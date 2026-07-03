@@ -1,7 +1,22 @@
 {
   "name": "@veil/bridge",
-  "version": "0.1.0",
+  "version": "0.4.0",
+  "description": "Veil client for Provable's cross-chain bridge — swaps between Aleo and other chains.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ProvableHQ/veil.git",
+    "directory": "packages/bridge"
+  },
+  "homepage": "https://github.com/ProvableHQ/veil#readme",
   "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
