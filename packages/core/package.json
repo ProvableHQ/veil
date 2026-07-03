@@ -1,6 +1,14 @@
 {
   "name": "@veil/core",
-  "version": "0.1.0",
+  "version": "0.4.0",
+  "description": "Core Veil SDK for Aleo — viem-shaped actions, clients, and transports.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ProvableHQ/veil.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/ProvableHQ/veil#readme",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,12 +26,21 @@
       "types": "./dist/mcp/index.d.ts"
     }
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@provablehq/aleo-types": "1.0.0"
   }

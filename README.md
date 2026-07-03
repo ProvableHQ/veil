@@ -4,50 +4,94 @@ A TypeScript interface for Aleo, inspired by [viem](https://github.com/wevm/viem
 
 ## Why
 
-Aleo's developer ecosystem is fragmented across multiple SDKs and wallets, each with its own API. If you've built on Ethereum with viem, you already know how to use veil — same patterns, same method names, applied to Aleo.
+### Private Apps and Assets Using EVM-Style semantics
+Aleo allows users privacy in their assets and data and allows developers to build privacy into their Dapps. 
+
+Veil provides semantics familiar to what EVM developers and agents expect. If you've built on Ethereum with `viem`, you already know how to use `veil` — same patterns, same method names, applied to Aleo.
 
 ```ts
-import { createPublicClient, http } from '@veil/core'
+import { createPublicClient, createWalletClient, custom, http, rpcAccount } from '@veil/core'
 
+// A read-only client — point a transport at an Aleo node (viem's createPublicClient).
 const client = createPublicClient({
   transport: http('https://api.provable.com/v2'),
 })
 
-const height = await client.getBlockNumber()
-const balance = await client.getBalance({ address: 'aleo1...' })
+// Similar method names as in viem, now reading Aleo state.
+const height = await client.getBlockNumber()          // current chain height
+const balance = await client.getBalance({ address: 'aleo1...' })  // public credits
+
+// readContract reads a program mapping: mapping[key] in `credits.aleo`.
 const value = await client.readContract({
   program: 'credits.aleo',
   mapping: 'account',
   key: 'aleo1...',
 })
+
+// For writes, a wallet client pairs a transport with an account — same as viem.
+const wallet = createWalletClient({
+  account: rpcAccount(walletAdapter),  // or privateKeyToAccount(...) for a local key
+  transport: custom(walletAdapter),
+})
+
+// writeContract mirrors viem: name the program + function, pass typed inputs.
+const txId = await wallet.writeContract({
+  program: 'my_program.aleo',
+  function: 'transfer',
+  inputs: ['aleo1...', '100u64'],
+})
 ```
+
+## What you can build
+
+👛 **Wallet-connected dApps** — browser apps where a user's wallet (Shield, Leo, Puzzle, Fox) holds the keys and proves. (`@veil/react`)
+
+🔭 **Explorers, dashboards, and indexers** — read blocks, transactions, mappings, staking, and network metrics with no keys and no proving. (`@veil/core`)
+
+💸 **Payments and token flows** — public or private credit transfers and ARC-0020 tokens, including confidential transfers.
+
+📈 **Shield Swap trading** — private swaps, liquidity, and pool/price reads, from a frontend, a programmatic bot, or an agent. (`@veil/shield-swap`)
+
+🤖 **AI agents that use Aleo** — expose Aleo as MCP tools or drop tool schemas into any agent framework; agents can also write viem-style code directly. (`@veil/core/agent`, `@veil/core/mcp`)
+
+🖥️ **Servers, CLIs, and custodial services** — hold a private key and sign and prove locally, unattended. (`@veil/provable-sdk`)
+
+📜 **Typed clients for your own contracts** — generate bindings from a program ABI and call it with typed reads and writes. (`@veil/codegen`, `getContract`)
+
+🦁 **Leo program pipelines** — build, deploy, and test programs against a local node, including in CI. (`@veil/leo`, `@veil/devnode`)
 
 ## Features
 
-- **Viem-compatible API** — `getBalance`, `readContract`, `writeContract`, `deployContract`, `sendTransaction`, `signMessage`, and more
-- **Interface-first** — core has zero hard dependencies on any SDK. Wallets and SDKs plug in via adapter packages.
-- **Multiple account types** — RPC accounts (wallet adapters), local accounts (private key, mnemonic), view-only accounts
-- **Pluggable transports** — `http()` for Aleo REST API, `custom()` for wallet adapters, `fallback()` for chaining
-- **Contract instances** — `getContract()` parses Aleo program source and provides typed `read`/`write` methods
-- **Proving as configuration** — proving strategy is a client config concern (`delegated` or `local`), not a separate abstraction
-- **Agent-first** — every action ships with an MCP tool, agent tool schema, and structured JSON output. AI agents can call Aleo directly via tool use or write code against the library using viem patterns they already know.
+⚡ **Viem-compatible API** — `getBalance`, `readContract`, `writeContract`, `deployContract`, `sendTransaction`, `signMessage`, and more
+
+🧩 **Interface-first** — core has zero hard dependencies on any SDK. Wallets and SDKs plug in via adapter packages.
+
+🔑 **Multiple account types** — RPC accounts (wallet adapters), local accounts (private key, mnemonic), view-only accounts
+
+🔌 **Pluggable transports** — `http()` for Aleo REST API, `custom()` for wallet adapters, `fallback()` for chaining
+
+📜 **Contract instances** — `getContract()` parses Aleo program source and provides typed `read`/`write` methods
+
+🔏 **Proving as configuration** — proving strategy is a client config concern (`delegated` or `local`), not a separate abstraction
+
+🤖 **Agent-first** — every action ships with an MCP tool, agent tool schema, and structured JSON output. AI agents can call Aleo directly via tool use or write code against the library using viem patterns they already know.
 
 ## Packages
 
 `@veil/core` is the base — every other package builds on its client, action,
 and transport interfaces.
 
-| Package | What it's for |
-|---------|---------------|
-| `@veil/core` | Clients, actions, transports, types — the base SDK. Also ships LLM agent (`/agent`) and MCP (`/mcp`) bindings. |
-| `@veil/provable-sdk` | Local accounts, signing, and proving via `@provablehq/sdk`. Build a client from a private key. |
-| `@veil/wallet-adapter` | Bridge any Provable-standard wallet (Shield, Leo, Puzzle, Fox) into a Veil client. |
-| `@veil/react` | `VeilProvider` + `useVeilWallet()` — wallet connection and clients for React apps. |
-| `@veil/shield-swap` | Client for the `shield_swap` AMM/DEX — private swaps, liquidity, and the DEX API. |
-| `@veil/codegen` | Generate typed bindings from an Aleo program ABI (library + `veil-codegen` CLI). |
-| `@veil/devnode` | Run and drive a local Aleo devnode for tests. |
-| `@veil/leo` | Typed wrapper around the `leo` CLI (build, deploy, …). |
-| `@veil/bridge` | Cross-chain bridge client (preview). |
+| Package | What it's for | When to reach for it |
+|---------|---------------|----------------------|
+| `@veil/core` | Clients, actions, transports, types — the base SDK. Also ships LLM agent (`/agent`) and MCP (`/mcp`) bindings. | Every Veil project — reading or writing Aleo, or as the base you extend. |
+| `@veil/provable-sdk` | Local accounts, signing, and proving via `@provablehq/sdk`. Build a client from a private key. | Your code holds a private key and must sign and prove itself — bots, servers, CLIs, tests. |
+| `@veil/wallet-adapter` | Bridge any Provable-standard wallet (Shield, Leo, Puzzle, Fox) into a Veil client. | You need wallet signing outside React, or a custom (non-React) wallet integration. |
+| `@veil/react` | `VeilProvider` + `useVeilWallet()` — wallet connection and clients for React apps. | You're building a React dApp with wallet connection. |
+| `@veil/shield-swap` | Client for the `shield_swap` AMM/DEX — private swaps, liquidity, and the DEX API. | You're integrating the Shield Swap DEX — swaps, liquidity, or pool/price data. |
+| `@veil/codegen` | Generate typed bindings from an Aleo program ABI (library + `veil-codegen` CLI). | You want typed reads and writes for a specific program's ABI. |
+| `@veil/devnode` | Run and drive a local Aleo devnode for tests. | You need a local Aleo node in tests or local development. |
+| `@veil/leo` | Typed wrapper around the `leo` CLI (build, deploy, …). | You compile or deploy Leo programs — including during testing, where it pairs with `@veil/devnode`. |
+| `@veil/bridge` | Cross-chain bridge client (preview). | Not yet — in preview, not published. |
 
 ## Quick Start
 
@@ -105,25 +149,16 @@ await client.transfer({
 ### Local account (signing with private key)
 
 ```ts
-import {
-  createWalletClient,
-  http,
-  privateKeyToAccount,
-} from '@veil/core'
+import { loadNetwork } from '@veil/provable-sdk'
 
-const client = createWalletClient({
-  account: privateKeyToAccount({
-    privateKey: 'APrivateKey1...',
-    address: 'aleo1...',
-    viewKey: 'AViewKey1...',
-  }),
-  transport: http('https://api.provable.com/v2'),
-  proving: {
-    mode: 'delegated',
-    url: '...',
-    apiKey: '...',
-  },
-  records: { mode: 'network', url: '...' },
+// loadNetwork builds the account, proving, and clients from a private key.
+const aleo = await loadNetwork('testnet')
+
+const { publicClient, walletClient } = aleo.createAleoClient({
+  privateKey: 'APrivateKey1...',
+  networkUrl: 'https://api.provable.com/v2',
+  provingMode: 'delegated', // or 'local' to prove in-process
+  proverUrl: 'https://api.provable.com/prove/testnet',
 })
 ```
 
@@ -291,7 +326,6 @@ veil wraps these existing tools through its adapter packages:
 
 - **[Aleo Wallet Adapter](https://github.com/ProvableHQ/aleo-dev-toolkit/tree/master/packages/aleo-wallet-adaptor)** — Leo Wallet, Puzzle Wallet, Fox Wallet, Shield Mobile Wallet
 - **[@provablehq/sdk](https://www.npmjs.com/package/@provablehq/sdk)** — WASM-based SDK for browser/node
-- **[Shield Mobile SDK](https://github.com/ProvableHQ/shield-mobile-sdk)** — Native SDK for React Native
 
 ## Actions Reference
 
@@ -364,9 +398,7 @@ veil/
 │   ├── leo/                 # @veil/leo (typed leo CLI wrapper)
 │   └── bridge/              # @veil/bridge (cross-chain bridge client, preview)
 ├── skills/                  # Skill definitions for code-writing agents
-├── docs/
-│   ├── specs/               # Design specifications
-│   └── plans/               # Implementation plans
+├── site/                    # Docusaurus documentation site
 └── package.json
 ```
 

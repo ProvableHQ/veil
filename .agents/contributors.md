@@ -5,7 +5,7 @@ changing the SDK, not using it. They bind on every contribution, human or agent.
 They are rules, not suggestions.
 
 If you only want to *use* Veil in your own project, you do not need this file —
-see the README and `docs/`.
+see the README and the documentation site under `site/`.
 
 ## Documentation
 

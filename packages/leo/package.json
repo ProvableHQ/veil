@@ -1,6 +1,14 @@
 {
   "name": "@veil/leo",
-  "version": "0.0.1",
+  "version": "0.4.0",
+  "description": "Leo language utilities for the Veil Aleo SDK.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ProvableHQ/veil.git",
+    "directory": "packages/leo"
+  },
+  "homepage": "https://github.com/ProvableHQ/veil#readme",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -10,10 +18,19 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
-  "files": ["dist"]
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }
