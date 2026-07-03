@@ -53,6 +53,8 @@ function buildRequest(
   params?: Record<string, unknown>,
 ): BuiltRequest {
   switch (method) {
+    case 'getBridgeFlags':
+      return { url: `${baseUrl}/bridge/flags`, httpMethod: 'GET' }
     case 'getBridgeQuotes': {
       const q = new URLSearchParams()
       const p = params ?? {}

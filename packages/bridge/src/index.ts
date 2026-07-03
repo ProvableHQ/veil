@@ -11,6 +11,10 @@ export { httpBridge } from './transports/httpBridge.js'
 
 // Actions (standalone forms)
 export {
+  getFlags,
+  type GetFlagsReturnType,
+} from './actions/getFlags.js'
+export {
   getQuotes,
   type GetQuotesParameters,
   type GetQuotesReturnType,
@@ -46,6 +50,7 @@ export type {
   ApiEnvelope,
 } from './types/envelope.js'
 export type {
+  BridgeFlagsDto,
   BridgeIntegrationType,
   BridgeOrderAuditDto,
   BridgeOrderFinalStatus,

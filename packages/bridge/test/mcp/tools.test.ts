@@ -4,6 +4,7 @@ import type { BridgeClient } from '../../src/clients/createBridgeClient.js'
 
 function fakeClient() {
   return {
+    getFlags: vi.fn().mockResolvedValue({ near_supports_pub_priv_swaps: true }),
     getQuotes: vi.fn().mockResolvedValue({ quotes: [], meta: { count: 0, quoteRequestId: 'r' } }),
     createOrder: vi.fn().mockResolvedValue({
       orderId: 'o1',
@@ -51,6 +52,7 @@ describe('buildBridgeMcpTools', () => {
     const tools = buildBridgeMcpTools(fakeClient())
     const names = tools.map((t) => t.name)
     expect(names).toEqual([
+      'bridge_get_flags',
       'bridge_get_quotes',
       'bridge_create_order',
       'bridge_get_order',

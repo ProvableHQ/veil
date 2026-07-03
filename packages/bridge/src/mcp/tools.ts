@@ -16,6 +16,16 @@ export type McpTool = {
 export function buildBridgeMcpTools(client: BridgeClient): McpTool[] {
   return [
     {
+      name: 'bridge_get_flags',
+      description:
+        'Fetch the bridge\'s server-side feature flags (e.g. near_supports_pub_priv_swaps). Check these before proposing routes gated by provider capabilities.',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+      handler: () => client.getFlags(),
+    },
+    {
       name: 'bridge_get_quotes',
       description:
         'Fetch cross-chain swap quotes where Aleo is one side of the pair. Returns one quote per enabled provider plus a meta block with quoteRequestId for support and any provider warnings/errors.',

@@ -1,4 +1,5 @@
 import type { Client } from '@veil/core'
+import { getFlags, type GetFlagsReturnType } from '../../actions/getFlags.js'
 import { getQuotes, type GetQuotesParameters, type GetQuotesReturnType } from '../../actions/getQuotes.js'
 import { createOrder, type CreateOrderParameters, type CreateOrderReturnType } from '../../actions/createOrder.js'
 import { getOrder, type GetOrderParameters, type GetOrderReturnType } from '../../actions/getOrder.js'
@@ -7,6 +8,7 @@ import { waitForOrder, type WaitForOrderParameters, type WaitForOrderReturnType 
 import { swap, type SwapParameters, type SwapReturnType } from '../../actions/swap.js'
 
 export type BridgeActions = {
+  getFlags: () => Promise<GetFlagsReturnType>
   getQuotes: (params: GetQuotesParameters) => Promise<GetQuotesReturnType>
   createOrder: (params: CreateOrderParameters) => Promise<CreateOrderReturnType>
   getOrder: (params: GetOrderParameters) => Promise<GetOrderReturnType>
@@ -17,6 +19,7 @@ export type BridgeActions = {
 
 export function bridgeActions(client: Client): BridgeActions {
   return {
+    getFlags: () => getFlags(client),
     getQuotes: (params) => getQuotes(client, params),
     createOrder: (params) => createOrder(client, params),
     getOrder: (params) => getOrder(client, params),

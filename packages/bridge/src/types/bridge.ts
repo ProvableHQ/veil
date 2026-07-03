@@ -53,6 +53,8 @@ export type ProviderSummary = {
   logoUrl?: string
   logoUrlPng?: string
   supportedRegions?: string[]
+  supportedCountries?: string[]
+  supportedPaymentMethods?: string[]
 }
 
 export type ProviderStatusSnapshot = {
@@ -225,6 +227,21 @@ export type BridgeOrderProviderEventDto = {
 export type BridgeOrderAuditDto = BridgeOrderStatusDto & {
   steps: BridgeOrderStepStatusDto[]
   providerEvents: BridgeOrderProviderEventDto[]
+}
+
+// ---------- Feature flags ----------
+
+/**
+ * Server-side feature flags for the bridge, from `GET /bridge/flags`.
+ *
+ * Field names are snake_case to match the wire format.
+ *
+ * @property near_supports_pub_priv_swaps Whether the NEAR provider currently
+ *   supports public → private swaps. When false, a UI should not offer a
+ *   private Aleo destination on NEAR-routed pairs.
+ */
+export type BridgeFlagsDto = {
+  near_supports_pub_priv_swaps: boolean
 }
 
 // ---------- Terminal stage helper ----------

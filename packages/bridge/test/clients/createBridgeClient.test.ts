@@ -49,11 +49,12 @@ describe('createBridgeClient', () => {
 })
 
 describe('createBridgeClient bound actions', () => {
-  it('exposes getQuotes, createOrder, getOrder, getOrderAudit, waitForOrder', () => {
+  it('exposes getFlags, getQuotes, createOrder, getOrder, getOrderAudit, waitForOrder', () => {
     const fetchFn = vi.fn()
     const client = createBridgeClient({
       transport: httpBridge('https://wsa.example/api', { fetchFn: fetchFn as unknown as typeof fetch }),
     })
+    expect(typeof client.getFlags).toBe('function')
     expect(typeof client.getQuotes).toBe('function')
     expect(typeof client.createOrder).toBe('function')
     expect(typeof client.getOrder).toBe('function')
