@@ -80,6 +80,12 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  packages/bridge:
+    dependencies:
+      '@veil/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/codegen:
     dependencies:
       '@veil/core':
