@@ -8,8 +8,12 @@ import { parseDecimalAmount } from '../utils/units.js'
 import type { BridgeOrderStage, BridgeOrderStatusDto, BridgeQuote } from '../types/bridge.js'
 
 export type SwapParameters = {
-  /** @veil/core WalletClient used to sign the Aleo unshield deposit. */
-  wallet: WalletClient
+  /**
+   * @veil/core WalletClient used to sign the Aleo unshield deposit. Optional
+   * when the bridge client was built with `createBridgeClient({ wallet })` —
+   * a value here overrides the client's wallet for this call.
+   */
+  wallet?: WalletClient | undefined
   /**
    * Source side of the swap (Aleo is hardcoded as srcChain). `asset` is the
    * API's chain-qualified code (`ALEO_MAINNET`, `USDC_ALEO`), `amount` a
@@ -71,10 +75,13 @@ export async function swap(
   client: Client,
   params: SwapParameters,
 ): Promise<SwapReturnType> {
-  if (!params.wallet.account) {
-    throw new BridgeError('swap requires a wallet client with an account')
+  const wallet = params.wallet
+  if (!wallet?.account) {
+    throw new BridgeError(
+      'swap requires a wallet with an account — set it at createBridgeClient({ wallet }) or pass SwapParameters.wallet',
+    )
   }
-  const walletAddress = params.wallet.account.address
+  const walletAddress = wallet.account.address
 
   // refundAddress is the signer's own Aleo address — some providers (NEAR
   // Intents) skip quoting entirely when it is absent.
@@ -124,7 +131,7 @@ export async function swap(
 
   // depositAmount comes back in display decimals ("0.5"); the program
   // transfer takes atomic units, scaled by the asset's decimals.
-  const depositTxId = await transfer(params.wallet, {
+  const depositTxId = await transfer(wallet, {
     asset: assetConfig.program,
     to: instructions.depositAddress,
     amount: parseDecimalAmount(instructions.depositAmount, assetConfig.decimals),

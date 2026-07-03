@@ -107,17 +107,19 @@ the request with a 400:
 
 For Aleo-source swaps, `swap` runs the whole flow: quote, pick one, create the
 order, sign and broadcast the Aleo unshield deposit through the source asset's
-program, and optionally poll the order to completion.
+program, and optionally poll the order to completion. The signing wallet is
+client configuration, viem-style — set it once at construction and every
+`bridge.swap()` uses it (a per-call `wallet` overrides it).
 
 ```ts
-import { createBridgeClient, httpBridge, swap } from '@veil/bridge'
+import { createBridgeClient, httpBridge } from '@veil/bridge'
 
 const bridge = createBridgeClient({
   transport: httpBridge('https://wallet.api.provable.com'),
+  wallet: walletClient,                 // @veil/core WalletClient — signs deposits
 })
 
-const result = await swap(bridge, {
-  wallet: walletClient,                 // @veil/core WalletClient — signs the deposit
+const result = await bridge.swap({
   from: { asset: 'ALEO_MAINNET', amount: '100' },
   to: { chain: 'SOLANA', asset: 'SOL_SOLANA', address: solAddress },
   selectQuote: 'best',                  // or 'fastest', or a callback
@@ -129,6 +131,10 @@ result.depositTxId   // at1... — the Aleo deposit transition
 result.orderId       // track or audit later
 result.finalStatus   // present because poll was truthy
 ```
+
+Every action also exists in viem's standalone, tree-shakable form
+(`import { swap } from '@veil/bridge'` then `swap(client, params)`) for
+bundle-sensitive consumers; the client form above is the primary API.
 
 Compliance-bearing source assets (`USDCX_ALEO`, `USAD_ALEO`) require a
 `merkleProof` input for their unshield transition — pass it via
