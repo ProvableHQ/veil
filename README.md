@@ -23,7 +23,7 @@ const balance = await client.getBalance({ address: 'aleo1...' })  // public cred
 
 // readContract reads a program mapping: mapping[key] in `credits.aleo`.
 const value = await client.readContract({
-  program: 'credits.aleo',
+  programId: 'credits.aleo',
   mapping: 'account',
   key: 'aleo1...',
 })
@@ -109,9 +109,9 @@ const height = await client.getBlockNumber()
 const block = await client.getBlock({ height: 1000 })
 const tx = await client.getTransaction({ id: 'at1...' })
 const balance = await client.getBalance({ address: 'aleo1...' })
-const source = await client.getCode({ program: 'credits.aleo' })
+const source = await client.getCode({ programId: 'credits.aleo' })
 const value = await client.readContract({
-  program: 'credits.aleo',
+  programId: 'credits.aleo',
   mapping: 'account',
   key: 'aleo1...',
 })
@@ -260,7 +260,7 @@ Every error message is an instruction an agent can act on:
 
 ```
 Program "my_program.aleo" not found. Verify the program ID is correct
-and has been deployed: await client.getCode({ program: 'my_program.aleo' })
+and has been deployed: await client.getCode({ programId: 'my_program.aleo' })
 ```
 
 ## Architecture
@@ -337,8 +337,8 @@ veil wraps these existing tools through its adapter packages:
 | `getBlock({ height?, hash? })` | Fetch block by height or hash | `aleo_get_block` |
 | `getTransaction({ id })` | Fetch transaction by ID | `aleo_get_transaction` |
 | `getBalance({ address })` | Public credits balance | `aleo_get_balance` |
-| `readContract({ program, mapping, key })` | Read a program mapping value | `aleo_read_mapping` |
-| `getCode({ program })` | Fetch program source code | `aleo_get_program_source` |
+| `readContract({ programId, mapping, key })` | Read a program mapping value | `aleo_read_mapping` |
+| `getCode({ programId })` | Fetch program source code | `aleo_get_program_source` |
 | `describeProgram({ program })` | Introspect program functions and mappings | `aleo_describe_program` |
 | `getRecords({ program })` | Fetch records (Aleo-native) | `aleo_get_records` |
 | `getTransitionViewKeys({ transactionId })` | Get transition view keys (Aleo-native) | `aleo_get_transition_view_keys` |

@@ -14,16 +14,16 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./agent": {
-      "import": "./dist/agent/index.js",
-      "types": "./dist/agent/index.d.ts"
+      "types": "./dist/agent/index.d.ts",
+      "import": "./dist/agent/index.js"
     },
     "./mcp": {
-      "import": "./dist/mcp/index.js",
-      "types": "./dist/mcp/index.d.ts"
+      "types": "./dist/mcp/index.d.ts",
+      "import": "./dist/mcp/index.js"
     }
   },
   "sideEffects": false,
