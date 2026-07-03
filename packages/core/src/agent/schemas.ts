@@ -4,6 +4,12 @@ import type { AgentToolSchema } from './types.js'
 // Public (read-only) tool schemas
 // ---------------------------------------------------------------------------
 
+/**
+ * Describes the `aleo_get_block_number` tool: reads the latest Aleo block height.
+ *
+ * The paired handler calls `getBlockNumber` on the public client and returns
+ * `{ height }` with the height as a decimal string.
+ */
 export const getBlockNumberSchema: AgentToolSchema = {
   name: 'aleo_get_block_number',
   description:
@@ -12,6 +18,13 @@ export const getBlockNumberSchema: AgentToolSchema = {
   inputSchema: { type: 'object', properties: {}, required: [] },
 }
 
+/**
+ * Describes the `aleo_get_balance` tool: reads an address's public credits balance.
+ *
+ * The paired handler calls `getBalance` on the public client and returns
+ * `{ balance, unit, address }` with the balance in microcredits as a decimal
+ * string. Private record balances are not included.
+ */
 export const getBalanceSchema: AgentToolSchema = {
   name: 'aleo_get_balance',
   description:
@@ -27,6 +40,12 @@ export const getBalanceSchema: AgentToolSchema = {
   },
 }
 
+/**
+ * Describes the `aleo_read_mapping` tool: reads one key from a program's public mapping.
+ *
+ * The paired handler calls `readContract` on the public client and returns
+ * `{ value, program, mapping, key }`, echoing the lookup alongside the value.
+ */
 export const readMappingSchema: AgentToolSchema = {
   name: 'aleo_read_mapping',
   description:
@@ -43,6 +62,13 @@ export const readMappingSchema: AgentToolSchema = {
   },
 }
 
+/**
+ * Describes the `aleo_get_program` tool: fetches a deployed program's source.
+ *
+ * The paired handler calls `getCode` on the public client and returns
+ * `{ source, program }` with the raw Aleo instructions text. For a parsed
+ * view of functions and mappings, prefer {@link describeProgramSchema}'s tool.
+ */
 export const getProgramSchema: AgentToolSchema = {
   name: 'aleo_get_program',
   description:
@@ -57,6 +83,12 @@ export const getProgramSchema: AgentToolSchema = {
   },
 }
 
+/**
+ * Describes the `aleo_get_block` tool: fetches a block by height or hash.
+ *
+ * The paired handler calls `getBlock` on the public client and returns
+ * `{ block }` with the full block object.
+ */
 export const getBlockSchema: AgentToolSchema = {
   name: 'aleo_get_block',
   description:
@@ -71,6 +103,12 @@ export const getBlockSchema: AgentToolSchema = {
   },
 }
 
+/**
+ * Describes the `aleo_get_transaction` tool: fetches a transaction by its `at1...` ID.
+ *
+ * The paired handler calls `getTransaction` on the public client and returns
+ * `{ transaction }` with transitions, fee, and status.
+ */
 export const getTransactionSchema: AgentToolSchema = {
   name: 'aleo_get_transaction',
   description:
@@ -85,6 +123,14 @@ export const getTransactionSchema: AgentToolSchema = {
   },
 }
 
+/**
+ * Describes the `aleo_describe_program` tool: fetches and parses a program's interface.
+ *
+ * The paired handler fetches the source via the public client, parses it
+ * locally, and returns `{ program, functions, mappings, closures }` — each
+ * function with its input/output types, each mapping with its key/value types.
+ * The tool for an agent to call before executing an unfamiliar program.
+ */
 export const describeProgramSchema: AgentToolSchema = {
   name: 'aleo_describe_program',
   description:
@@ -104,6 +150,13 @@ export const describeProgramSchema: AgentToolSchema = {
 // Wallet (write) tool schemas
 // ---------------------------------------------------------------------------
 
+/**
+ * Describes the `aleo_execute` tool: executes a transition on an Aleo program.
+ *
+ * The paired handler calls `writeContract` on the wallet client — which signs,
+ * proves, and submits to the network — and returns `{ transactionId }` with
+ * the `at1...` ID. Requires a wallet client with a signing account.
+ */
 export const executeSchema: AgentToolSchema = {
   name: 'aleo_execute',
   description:
@@ -138,6 +191,13 @@ export const executeSchema: AgentToolSchema = {
   },
 }
 
+/**
+ * Describes the `aleo_transfer` tool: sends public credits to another address.
+ *
+ * The paired handler calls `transfer` on the wallet client (a wrapper around
+ * `credits.aleo/transfer_public`) — which signs, proves, and submits to the
+ * network — and returns `{ transactionId }`. Amount is in microcredits (u64).
+ */
 export const transferSchema: AgentToolSchema = {
   name: 'aleo_transfer',
   description:
@@ -153,6 +213,13 @@ export const transferSchema: AgentToolSchema = {
   },
 }
 
+/**
+ * Describes the `aleo_deploy` tool: deploys a program to the network.
+ *
+ * The paired handler calls `deployContract` on the wallet client with the full
+ * program source — which signs, proves, and submits to the network — and
+ * returns `{ transactionId }`. Requires a wallet client with a signing account.
+ */
 export const deploySchema: AgentToolSchema = {
   name: 'aleo_deploy',
   description:
@@ -178,6 +245,11 @@ export const deploySchema: AgentToolSchema = {
 // Grouped exports
 // ---------------------------------------------------------------------------
 
+/**
+ * Lists the schemas for the read-only tools, which need only a `PublicClient`.
+ *
+ * Use this set when the agent should query the chain but never sign or spend.
+ */
 export const publicToolSchemas: AgentToolSchema[] = [
   getBlockNumberSchema,
   getBalanceSchema,
@@ -188,12 +260,25 @@ export const publicToolSchemas: AgentToolSchema[] = [
   describeProgramSchema,
 ]
 
+/**
+ * Lists the schemas for the write tools, which need a `WalletClient` with a
+ * signing account.
+ *
+ * Every tool in this set produces a fee-paying transaction when invoked.
+ */
 export const walletToolSchemas: AgentToolSchema[] = [
   executeSchema,
   transferSchema,
   deploySchema,
 ]
 
+/**
+ * Lists every built-in tool schema — {@link publicToolSchemas} followed by
+ * {@link walletToolSchemas}.
+ *
+ * Use this when registering the full Aleo tool set with an LLM up front;
+ * `aleoAgentToolSchemas` filters the same set by the clients you actually have.
+ */
 export const allToolSchemas: AgentToolSchema[] = [
   ...publicToolSchemas,
   ...walletToolSchemas,

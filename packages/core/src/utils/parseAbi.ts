@@ -309,6 +309,24 @@ function reconstructStorageVariables(mappings: Mapping[]): {
 
 // ---- Program (full ABI) ----
 
+/**
+ * Parses Leo ABI JSON into Veil's `ABI` type.
+ *
+ * Accepts output from both `leo build` and `leo abi`, normalizing their
+ * differences — `transitions` vs `functions`, `is_async` vs `is_final`,
+ * mode placement — and reconstructing storage variables from their lowered
+ * `__`-suffixed mappings when the ABI comes from disassembled bytecode.
+ * Local, no network; mutates `raw` in place during normalization.
+ *
+ * @param raw Parsed JSON of the ABI file.
+ * @returns The normalized ABI with functions, structs, records, mappings,
+ *   and storage variables.
+ * @throws If the JSON is not an object or contains unknown Leo variants.
+ *
+ * @example
+ * const abi = parseAbi(JSON.parse(abiJson))
+ * abi.functions.map((f) => f.name)
+ */
 export function parseAbi(raw: unknown): ABI {
   if (typeof raw !== 'object' || raw === null) {
     throw new Error('Invalid ABI: expected an object')

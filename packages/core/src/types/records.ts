@@ -50,8 +50,10 @@ export interface OwnedRecord extends OwnedRecordEncrypted {
   recordPlaintext: string
 }
 
+/** Spent-status filter for a record request. */
 export type RecordStatusFilter = 'all' | 'spent' | 'unspent'
 
+/** Parameters for requestRecords — scopes the scan to one program's records. */
 export type RequestRecordsParameters = {
   program: string
   /** Whether to include plaintext on each record. Defaults to true. */
@@ -64,6 +66,7 @@ export type RequestRecordsParameters = {
 // RSS (Record Scanning Service) types
 // ---------------------------------------------------------------------------
 
+/** Field-selection mask for RSS responses — set a field true to include it on each returned record. */
 export type ResponseFilter = {
   blockHeight?: boolean
   checksum?: boolean
@@ -81,6 +84,16 @@ export type ResponseFilter = {
   transitionIndex?: boolean
 }
 
+/**
+ * Narrows an RSS scan by commitments, block range, programs, record types,
+ * or functions, with pagination.
+ *
+ * @property start Lower bound of the block-height range to scan.
+ * @property end Upper bound of the block-height range to scan.
+ * @property records Record type names to include.
+ * @property functions Names of the functions that produced the records.
+ * @property response Field-selection mask applied to each returned record.
+ */
 export type RecordFilter = {
   commitments?: string[]
   start?: number
@@ -93,6 +106,12 @@ export type RecordFilter = {
   response?: ResponseFilter
 }
 
+/**
+ * Request body for an RSS owned-records query.
+ *
+ * @property uuid Scan session identifier issued by the service.
+ * @property unspent When true, return only unspent records.
+ */
 export type OwnedRecordsRequest = {
   uuid: string
   unspent?: boolean

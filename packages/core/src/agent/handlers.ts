@@ -7,6 +7,23 @@ import { parseProgram } from '../contract/parseProgram.js'
 // Public (read-only) handlers
 // ---------------------------------------------------------------------------
 
+/**
+ * Builds the handlers for the read-only tools, keyed by tool name.
+ *
+ * Construction is pure and local; each handler hits the network through
+ * `client` when invoked and resolves to structured JSON matching its schema
+ * in `publicToolSchemas`. Most callers get these pre-wired via
+ * `aleoAgentTools` or `createAgentTools`; reach for this directly only when
+ * pairing handlers with schemas yourself.
+ *
+ * @param client Public client whose transport serves every read.
+ * @returns One handler per tool in `publicToolSchemas`, keyed by tool name
+ *   (`aleo_get_balance`, `aleo_read_mapping`, ...).
+ *
+ * @example
+ * const handlers = createPublicHandlers(client)
+ * const result = await handlers.aleo_get_balance!({ address: 'aleo1...' })
+ */
 export function createPublicHandlers(client: PublicClient): Record<string, AgentToolHandler> {
   return {
     aleo_get_block_number: async () => {
@@ -77,6 +94,22 @@ export function createPublicHandlers(client: PublicClient): Record<string, Agent
 // Wallet (write) handlers
 // ---------------------------------------------------------------------------
 
+/**
+ * Builds the handlers for the write tools, keyed by tool name.
+ *
+ * Construction is pure and local; each handler signs, proves, and submits a
+ * fee-paying transaction through `walletClient` when invoked, resolving to
+ * `{ transactionId }` with the `at1...` ID. Most callers get these pre-wired
+ * via `aleoAgentTools` or `createAgentTools`.
+ *
+ * @param walletClient Wallet client whose account signs and pays for every call.
+ * @returns One handler per tool in `walletToolSchemas`, keyed by tool name
+ *   (`aleo_execute`, `aleo_transfer`, `aleo_deploy`).
+ *
+ * @example
+ * const handlers = createWalletHandlers(walletClient)
+ * const result = await handlers.aleo_transfer!({ to: 'aleo1...', amount: 1_000_000 })
+ */
 export function createWalletHandlers(walletClient: WalletClient): Record<string, AgentToolHandler> {
   return {
     aleo_execute: async (input) => {

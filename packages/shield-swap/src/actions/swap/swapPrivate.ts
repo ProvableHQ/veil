@@ -104,6 +104,7 @@ export interface SwapHandle {
   program: string
 }
 
+/** The {@link SwapHandle} a swap request resolves to — persist it; the claim consumes it. */
 export type SwapPrivateReturnType = SwapHandle
 
 /**

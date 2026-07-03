@@ -21,6 +21,13 @@ import { createWalletHandlers } from './handlers.js'
  * Returns just the tool schemas (no handlers).
  * Useful for consumers that only need the definitions — e.g. to register
  * tool names/descriptions with an LLM without wiring up execution.
+ *
+ * Pure and local — no client is required and nothing is called.
+ *
+ * @param config Optional filter: with `client` set the read-only schemas are
+ *   included, with `walletClient` set the write schemas are included. When
+ *   omitted entirely, all schemas are returned.
+ * @returns The schemas for the selected tool sets, read-only first.
  */
 export function aleoAgentToolSchemas(config?: AgentToolsConfig): AgentToolSchema[] {
   const schemas: AgentToolSchema[] = []
@@ -34,6 +41,27 @@ export function aleoAgentToolSchemas(config?: AgentToolsConfig): AgentToolSchema
  * Framework-agnostic — can be consumed by LangChain, Vercel AI SDK, etc.
  *
  * Exposed via subpath export: import { aleoAgentTools } from '@veil/core/agent'
+ *
+ * Construction is pure and local; each tool's handler reaches the network
+ * through the configured client when the agent invokes it, and wallet-backed
+ * tools sign and pay fees.
+ *
+ * @param config Clients that select the tool set: `client` enables the
+ *   read-only tools, `walletClient` enables the write tools. Omitting one
+ *   omits its tools.
+ * @returns One flat definition per enabled tool, ready to register with an
+ *   agent framework.
+ *
+ * @example
+ * import { createPublicClient, http } from '@veil/core'
+ * import { aleoAgentTools } from '@veil/core/agent'
+ *
+ * const client = createPublicClient({
+ *   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+ * })
+ * const tools = aleoAgentTools({ client })
+ * // Register each tool's name/description/inputSchema with your framework
+ * // and route calls to tool.handler(input).
  */
 export function aleoAgentTools(config: AgentToolsConfig): AgentToolDefinition[] {
   const tools: AgentToolDefinition[] = []

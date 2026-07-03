@@ -9,6 +9,7 @@ const poolKeyProp = {
   poolKey: { type: 'string', description: 'Pool key field literal, e.g. "4719…024field".' },
 }
 
+/** Declares the `shield_swap_get_pool` tool — a chain-direct read of a pool's static configuration (backed by `getPool`). */
 export const getPoolSchema: AgentToolSchema = {
   name: 'shield_swap_get_pool',
   description:
@@ -17,6 +18,7 @@ export const getPoolSchema: AgentToolSchema = {
   inputSchema: { type: 'object', properties: poolKeyProp, required: ['poolKey'] },
 }
 
+/** Declares the `shield_swap_get_slot` tool — a chain-direct read of a pool's live trading state (backed by `getSlot`). */
 export const getSlotSchema: AgentToolSchema = {
   name: 'shield_swap_get_slot',
   description:
@@ -25,6 +27,7 @@ export const getSlotSchema: AgentToolSchema = {
   inputSchema: { type: 'object', properties: poolKeyProp, required: ['poolKey'] },
 }
 
+/** Declares the `shield_swap_get_swap_output` tool — a chain-direct read of a finalized swap's output (backed by `getSwapOutput`). */
 export const getSwapOutputSchema: AgentToolSchema = {
   name: 'shield_swap_get_swap_output',
   description:
@@ -37,12 +40,14 @@ export const getSwapOutputSchema: AgentToolSchema = {
   },
 }
 
+/** Declares the `shield_swap_is_pool_initialized` tool — a chain-direct pool-existence check (backed by `isPoolInitialized`). */
 export const isPoolInitializedSchema: AgentToolSchema = {
   name: 'shield_swap_is_pool_initialized',
   description: 'Check whether a pool exists (is initialized) for a pool key. Returns a boolean.',
   inputSchema: { type: 'object', properties: poolKeyProp, required: ['poolKey'] },
 }
 
+/** Declares the `shield_swap_get_fee_tick_spacing` tool — a chain-direct fee-tier to tick-spacing lookup (backed by `getFeeToTickSpacing`). */
 export const getFeeToTickSpacingSchema: AgentToolSchema = {
   name: 'shield_swap_get_fee_tick_spacing',
   description:
@@ -55,6 +60,7 @@ export const getFeeToTickSpacingSchema: AgentToolSchema = {
   },
 }
 
+/** Declares the `shield_swap_get_private_balances` tool — sums the caller's unspent token records per program (backed by `getPrivateBalances`). */
 export const getPrivateBalancesSchema: AgentToolSchema = {
   name: 'shield_swap_get_private_balances',
   description:
@@ -77,6 +83,7 @@ export const getPrivateBalancesSchema: AgentToolSchema = {
 // Off-chain DEX API read tools (backed by the ApiClient).
 // ---------------------------------------------------------------------------
 
+/** Declares the `shield_swap_list_pools` tool — a paginated pool listing from the DEX API (backed by `ApiClient.getPools`). */
 export const listPoolsSchema: AgentToolSchema = {
   name: 'shield_swap_list_pools',
   description: 'List pools from the DEX API with token metadata (paginated).',
@@ -90,6 +97,7 @@ export const listPoolsSchema: AgentToolSchema = {
   },
 }
 
+/** Declares the `shield_swap_get_route` tool — a best-route quote from the DEX API (backed by `ApiClient.getRoute`); its output feeds the swap tool's `expectedOut`. */
 export const getRouteSchema: AgentToolSchema = {
   name: 'shield_swap_get_route',
   description:
@@ -106,12 +114,14 @@ export const getRouteSchema: AgentToolSchema = {
   },
 }
 
+/** Declares the `shield_swap_list_tokens` tool — the DEX API's token registry (backed by `ApiClient.getTokens`). */
 export const listTokensSchema: AgentToolSchema = {
   name: 'shield_swap_list_tokens',
   description: 'List all tokens the DEX API knows, with symbol, decimals, and wrapper program.',
   inputSchema: { type: 'object', properties: {}, required: [] },
 }
 
+/** Declares the `shield_swap_get_public_balances` tool — an address's public/authorized balances from the DEX API (backed by `ApiClient.getPublicBalances`). */
 export const getPublicBalancesSchema: AgentToolSchema = {
   name: 'shield_swap_get_public_balances',
   description:
@@ -128,6 +138,7 @@ export const getPublicBalancesSchema: AgentToolSchema = {
 // Composed (needs both client and API).
 // ---------------------------------------------------------------------------
 
+/** Declares the `shield_swap_get_balances` tool — public + private + total balances per token, joining the DEX API with the caller's records (backed by `getBalances`). */
 export const getBalancesSchema: AgentToolSchema = {
   name: 'shield_swap_get_balances',
   description:
@@ -155,6 +166,7 @@ export const getBalancesSchema: AgentToolSchema = {
 // strings (raw base units, u128).
 // ---------------------------------------------------------------------------
 
+/** Declares the `shield_swap_create_pool` write tool — creates a pool for a token pair (a public, fee-costing transaction; backed by `createPool`). */
 export const createPoolSchema: AgentToolSchema = {
   name: 'shield_swap_create_pool',
   description:
@@ -172,6 +184,7 @@ export const createPoolSchema: AgentToolSchema = {
   },
 }
 
+/** Declares the `shield_swap_swap` write tool — phase one of a private swap; returns the handle `shield_swap_claim` consumes (backed by `swapPrivate`). */
 export const swapSchema: AgentToolSchema = {
   name: 'shield_swap_swap',
   description:
@@ -193,6 +206,7 @@ export const swapSchema: AgentToolSchema = {
   },
 }
 
+/** Declares the `shield_swap_claim` write tool — phase two of a private swap; collects the finalized output as private records (backed by `claimSwapOutputPrivate`). */
 export const claimSchema: AgentToolSchema = {
   name: 'shield_swap_claim',
   description:
@@ -209,6 +223,7 @@ export const claimSchema: AgentToolSchema = {
   },
 }
 
+/** Declares the `shield_swap_mint` write tool — mints a concentrated-liquidity position over a tick range (backed by `mintPrivate`). */
 export const mintSchema: AgentToolSchema = {
   name: 'shield_swap_mint',
   description:
@@ -229,6 +244,7 @@ export const mintSchema: AgentToolSchema = {
   },
 }
 
+/** Declares the `shield_swap_increase_liquidity` write tool — deepens the caller's existing position without changing its tick range (backed by `increaseLiquidityPrivate`). */
 export const increaseLiquiditySchema: AgentToolSchema = {
   name: 'shield_swap_increase_liquidity',
   description: 'Add funds to your existing position in a pool (tick range unchanged).',

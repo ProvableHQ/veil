@@ -14,31 +14,51 @@ import { fromWalletAdapter, type AleoWalletAdapter } from '@veil/wallet-adapter'
 
 const DEFAULT_API_URL = 'https://api.provable.com/v2'
 
+/**
+ * Options for {@link useVeilWallet}.
+ *
+ * @property rpcUrl Node endpoint both clients read through (and the wallet
+ *   client falls back to). Defaults to the Provable API,
+ *   `https://api.provable.com/v2`.
+ * @property network Network for the HTTP transport. Defaults to the connected
+ *   wallet's network, or `'mainnet'` before a wallet connects. Set it to pin
+ *   the transport to one network regardless of the wallet.
+ */
 export interface UseVeilWalletConfig {
-  /** RPC endpoint URL. Defaults to Provable mainnet API. */
   rpcUrl?: string
-  /** Network for the HTTP transport. Defaults to 'mainnet'. */
   network?: 'mainnet' | 'testnet'
 }
 
+/**
+ * Clients, connection state, and connection controls from {@link useVeilWallet}.
+ *
+ * @property publicClient Read-only client for chain queries. Usable with or
+ *   without a connected wallet.
+ * @property walletClient Write client that signs and submits through the
+ *   connected wallet. `undefined` until a wallet connects — gate writes on it.
+ * @property address The connected account's address, or `null` when disconnected.
+ * @property connected True once a wallet session is established and
+ *   `walletClient` is available.
+ * @property connecting True while a connect is in flight — use it to disable
+ *   the connect button.
+ * @property connect Opens the wallet's approval flow on its current network.
+ *   Pass a wallet name to select and connect in one step; otherwise the wallet
+ *   chosen via `selectWallet` is connected.
+ * @property disconnect Ends the wallet session; `walletClient` becomes
+ *   `undefined` and `address` becomes `null`.
+ * @property wallets Detected wallets with their install status, for building a
+ *   wallet picker.
+ * @property selectWallet Chooses which wallet a later `connect()` opens, by name.
+ */
 export interface UseVeilWalletReturn {
-  /** Read-only client for chain queries. Always available. */
   publicClient: PublicClient
-  /** Write client for transactions. Available when a wallet is connected. */
   walletClient: WalletClient | undefined
-  /** Connected wallet address, or null. */
   address: string | null
-  /** Whether a wallet is connected. */
   connected: boolean
-  /** Whether a wallet is currently connecting. */
   connecting: boolean
-  /** Connect a wallet. Pass a wallet name to select and connect in one step. */
   connect: (walletName?: string) => Promise<void>
-  /** Disconnect the current wallet. */
   disconnect: () => Promise<void>
-  /** Available wallets with their install status. */
   wallets: ReturnType<typeof useWallet>['wallets']
-  /** Select a wallet by name before connecting. */
   selectWallet: (name: string) => void
 }
 

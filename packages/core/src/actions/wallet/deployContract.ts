@@ -15,8 +15,31 @@ export type DeployContractParameters = {
   privateFee?: boolean
 }
 
+/** Transaction id (`at1...`) of the broadcast deployment. */
 export type DeployContractReturnType = string
 
+/**
+ * Deploys an Aleo program to the network.
+ *
+ * Reach for this to publish new program source; once the deployment is
+ * accepted, the program is callable via `writeContract`. For RPC accounts the
+ * wallet builds, proves, and broadcasts the deployment, prompting the user.
+ * For local accounts the proving config builds and proves it, then the
+ * transport broadcasts. Deployment fees scale with program size and come out
+ * of the account. Returns as soon as the transaction is submitted; it does
+ * not wait for acceptance. Poll `transactionStatus` for the outcome.
+ *
+ * @param client Wallet client with an account attached.
+ * @param params Program source and fee-privacy option.
+ * @returns The transaction id to poll with `transactionStatus`.
+ * @throws AccountNotFoundError if the client has no signing account.
+ * @throws ProvingNotConfiguredError if the account is local and the client has no proving config.
+ *
+ * @example
+ * const txId = await walletClient.deployContract({
+ *   program: 'program hello.aleo; function main: ...',
+ * })
+ */
 export async function deployContract(
   client: Client,
   params: DeployContractParameters,

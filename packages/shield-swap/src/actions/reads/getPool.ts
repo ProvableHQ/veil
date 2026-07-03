@@ -17,6 +17,7 @@ export type GetPoolParameters = {
   program?: string
 }
 
+/** The decoded pool, or `null` when no pool exists under the key. */
 export type GetPoolReturnType = PoolState | null
 
 /**

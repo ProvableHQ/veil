@@ -1,5 +1,11 @@
 import type { Client } from '../../clients/createClient.js'
 
+/**
+ * Parameters for {@link getStatePath}.
+ *
+ * @property commitment Record commitment (a `field` literal) whose inclusion
+ *   path to fetch.
+ */
 export type GetStatePathParameters = { commitment: string }
 
 /**
@@ -12,6 +18,21 @@ export type GetStatePathParameters = { commitment: string }
  */
 export type GetStatePathReturnType = string
 
+/**
+ * Fetches the Merkle state path proving a record commitment's inclusion in the ledger.
+ *
+ * Spending a record requires its state path, so reach for this when building
+ * execution proofs outside a node. The path verifies against the global state
+ * root (see `getStateRoot`). Queries the connected node, so it hits the
+ * network. Use `getStatePaths` to fetch several paths in one round trip.
+ *
+ * @param client Client whose transport serves the query.
+ * @param params Commitment to prove.
+ * @returns The serialized state path for the commitment.
+ *
+ * @example
+ * const path = await client.getStatePath({ commitment: '5031743…field' })
+ */
 export async function getStatePath(
   client: Client,
   params: GetStatePathParameters,
