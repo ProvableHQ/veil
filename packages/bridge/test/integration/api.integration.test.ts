@@ -20,11 +20,11 @@ import { TransportError } from '@veil/core'
 const RUN = process.env.VEIL_INTEGRATION === '1'
 const API_URL = process.env.VEIL_BRIDGE_API_URL ?? 'https://wallet.api.provable.com'
 
-// Syntactically valid addresses for quoting (no funds move on a quote).
+// The e2e test wallets, used for quoting (no funds move on a quote).
 // Providers skip quoting without recipient/refund addresses.
 const ALEO_ADDR = 'aleo1uusf3j8kz9mkwtj00v4zv8tnqdkfzjjh3nkaz98vjj7zpn44wg9qz3xjum'
-const SOL_ADDR = '11111111111111111111111111111111'
-const ETH_ADDR = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'
+const SOL_ADDR = '9TtLbwEUUQ677hQ6RdnCCkt1MbBaMjG4Ht4isx56nNnt'
+const ETH_ADDR = '0x734C0a5AB55885974cEDb9D6ff71d8E8448c7375'
 
 describe.runIf(RUN)('bridge client against the live wallet-services API', () => {
   const client = createBridgeClient({ transport: httpBridge(API_URL) })
