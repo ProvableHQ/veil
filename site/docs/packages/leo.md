@@ -19,7 +19,7 @@ Requires the `leo` binary on your `PATH`.
 
 - **`createLeoClient(config?)`** → a `LeoClient` with `.build()`, `.deploy()`, `.synthesize()`, `.abi()`.
 - **`leoActions(config?)`** — an `extend()` decorator attaching `.leo` to a client.
-- **Standalone** — `build`, `buildBatch`, `start` (runs `leo run`), `clean`.
+- **Standalone** — `build`, `buildBatch`, `abi` (returns the ABI JSON of a compiled `.aleo` file), `run` (runs `leo run`), `clean`.
 
 ## Usage
 

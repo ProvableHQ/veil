@@ -69,8 +69,9 @@ await leo.build()
   keys for the named program.
 
 Standalone functions cover the rest of the toolchain without a client:
-`build`, `buildBatch` (compile several project directories in sequence), `start`
-(`leo run` a function with inputs), and `clean` (`leo clean`).
+`build`, `buildBatch` (compile several project directories in sequence), `abi`
+(`leo abi` a compiled `.aleo` file, returning the ABI JSON), `run` (`leo run`
+a function with inputs), and `clean` (`leo clean`).
 
 ## Errors
 
