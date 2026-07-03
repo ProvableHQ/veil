@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { buildBridgeMcpTools } from '../../src/mcp/tools.js'
+import { createBridgeAgentTools } from '../../src/agent/tools.js'
 import type { BridgeClient } from '../../src/clients/createBridgeClient.js'
 
 function fakeClient() {
@@ -47,10 +47,10 @@ function fakeClient() {
   } as unknown as BridgeClient
 }
 
-describe('buildBridgeMcpTools', () => {
-  it('returns one tool per action with a non-empty description and an object input schema', () => {
-    const tools = buildBridgeMcpTools(fakeClient())
-    const names = tools.map((t) => t.name)
+describe('createBridgeAgentTools', () => {
+  it('returns one core-shaped AgentTool per action with non-empty descriptions', () => {
+    const tools = createBridgeAgentTools(fakeClient())
+    const names = tools.map((t) => t.schema.name)
     expect(names).toEqual([
       'bridge_get_flags',
       'bridge_get_quotes',
@@ -61,21 +61,22 @@ describe('buildBridgeMcpTools', () => {
       'bridge_swap',
     ])
     for (const tool of tools) {
-      expect(tool.description.length).toBeGreaterThan(0)
-      expect(tool.inputSchema.type).toBe('object')
+      expect(tool.schema.description.length).toBeGreaterThan(0)
+      expect(tool.schema.inputSchema.type).toBe('object')
+      expect(typeof tool.handler).toBe('function')
     }
   })
 
   it('bridge_get_quotes schema requires the OpenAPI required fields', () => {
-    const tools = buildBridgeMcpTools(fakeClient())
-    const tool = tools.find((t) => t.name === 'bridge_get_quotes')!
-    expect(tool.inputSchema.required).toEqual(['srcChain', 'srcAsset', 'destChain', 'destAsset', 'amountIn'])
+    const tools = createBridgeAgentTools(fakeClient())
+    const tool = tools.find((t) => t.schema.name === 'bridge_get_quotes')!
+    expect(tool.schema.inputSchema.required).toEqual(['srcChain', 'srcAsset', 'destChain', 'destAsset', 'amountIn'])
   })
 
   it('bridge_create_order schema requires the OpenAPI CreateBridgeOrderRequest required fields', () => {
-    const tools = buildBridgeMcpTools(fakeClient())
-    const tool = tools.find((t) => t.name === 'bridge_create_order')!
-    expect(tool.inputSchema.required).toEqual([
+    const tools = createBridgeAgentTools(fakeClient())
+    const tool = tools.find((t) => t.schema.name === 'bridge_create_order')!
+    expect(tool.schema.inputSchema.required).toEqual([
       'providerId',
       'srcChain',
       'srcAsset',
@@ -87,30 +88,39 @@ describe('buildBridgeMcpTools', () => {
     ])
   })
 
+  it('bridge_get_flags handler proxies to client.getFlags', async () => {
+    const client = fakeClient()
+    const tools = createBridgeAgentTools(client)
+    const tool = tools.find((t) => t.schema.name === 'bridge_get_flags')!
+    const result = await tool.handler({})
+    expect(client.getFlags as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalled()
+    expect((result as { near_supports_pub_priv_swaps: boolean }).near_supports_pub_priv_swaps).toBe(true)
+  })
+
   it('bridge_get_quotes handler proxies to client.getQuotes', async () => {
     const client = fakeClient()
-    const tools = buildBridgeMcpTools(client)
-    const tool = tools.find((t) => t.name === 'bridge_get_quotes')!
+    const tools = createBridgeAgentTools(client)
+    const tool = tools.find((t) => t.schema.name === 'bridge_get_quotes')!
     const result = await tool.handler({
-      srcChain: 'aleo',
-      srcAsset: 'ALEO',
-      destChain: 'solana',
-      destAsset: 'SOL',
+      srcChain: 'ALEO',
+      srcAsset: 'ALEO_MAINNET',
+      destChain: 'SOLANA',
+      destAsset: 'SOL_SOLANA',
       amountIn: '1',
     })
-    expect((client.getQuotes as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+    expect(client.getQuotes as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalled()
     expect((result as { meta: { quoteRequestId: string } }).meta.quoteRequestId).toBe('r')
   })
 
   it('bridge_swap handler proxies to client.swap', async () => {
     const client = fakeClient()
-    const tools = buildBridgeMcpTools(client)
-    const tool = tools.find((t) => t.name === 'bridge_swap')!
+    const tools = createBridgeAgentTools(client)
+    const tool = tools.find((t) => t.schema.name === 'bridge_swap')!
     const result = await tool.handler({
       from: { asset: 'ALEO', amount: '1' },
       to: { chain: 'solana', asset: 'SOL', address: '8xJ...' },
     })
-    expect((client.swap as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+    expect(client.swap as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalled()
     expect((result as { orderId: string }).orderId).toBe('o1')
   })
 })
