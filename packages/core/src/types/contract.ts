@@ -48,6 +48,7 @@ export type InputValue = bigint | number | boolean | string | RecordValue
 
 // ── Execute / simulate result types ───────────────────────────────────
 
+/** Parsed outputs of one transition within an execution. */
 export type TransitionResult = {
   transitionId: string
   program: string
@@ -55,6 +56,7 @@ export type TransitionResult = {
   outputs: ParsedOutput[]
 }
 
+/** Result of executeContract: the confirmed transaction id plus parsed outputs. */
 export type ExecuteResult = {
   transactionId: string
   transitions: TransitionResult[]
@@ -62,6 +64,7 @@ export type ExecuteResult = {
   outputs: ParsedOutput[]
 }
 
+/** Result of simulateContract: parsed outputs only — nothing is proven or broadcast. */
 export type SimulateResult = {
   outputs: ParsedOutput[]
 }

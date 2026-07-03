@@ -29,6 +29,14 @@ export type BuildTransactionOptions = {
   imports?: string[] | undefined
 }
 
+/**
+ * Options for a local simulation — runs the function without proving or
+ * broadcasting, so it is free and leaves no on-chain trace.
+ *
+ * @property inputs Function inputs as Aleo-encoded strings (e.g. '100u64').
+ * @property programSource Program source, when the caller already has it; fetched otherwise.
+ * @property programImports Import program name → source, for imports the simulator cannot fetch.
+ */
 export type SimulateOptions = {
   programName: string
   functionName: string
@@ -37,6 +45,16 @@ export type SimulateOptions = {
   programImports?: Record<string, string> | undefined
 }
 
+/**
+ * Options for an execute call — proves, broadcasts, and waits for
+ * confirmation, so it hits the network and costs a fee.
+ *
+ * @property inputs Function inputs as Aleo-encoded strings (e.g. '100u64').
+ * @property privateFee If true, pay the fee from a private record instead of
+ *   the public credits balance. Defaults to false.
+ * @property programSource Program source, when the caller already has it; fetched otherwise.
+ * @property programImports Import program name → source, for imports the prover cannot fetch.
+ */
 export type ExecuteOptions = {
   programName: string
   functionName: string
@@ -48,6 +66,7 @@ export type ExecuteOptions = {
   programImports?: Record<string, string> | undefined
 }
 
+/** Result of a local simulation, before ABI parsing — outputs are raw Aleo-encoded strings. */
 export type RawSimulateResult = {
   /** Per-transition results with program/function metadata */
   transitions: RawTransitionResult[]
@@ -63,6 +82,7 @@ export type RawTransitionResult = {
   outputs: string[]
 }
 
+/** Result of an execute call, before ABI parsing — the confirmed transaction id plus raw Aleo-encoded output strings. */
 export type RawExecuteResult = {
   transactionId: string
   /** Per-transition results with program/function metadata */

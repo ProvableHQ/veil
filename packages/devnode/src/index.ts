@@ -17,6 +17,11 @@ const HEALTH_CHECK_REQUEST_TIMEOUT_MS = 1_000
 // Types
 // =============================================================================
 
+/**
+ * Options for {@link startDevnode}.
+ *
+ * Most fields map to flags of the `aleo-devnode start` subcommand.
+ */
 export type DevnodeStartOptions = {
   /** Private key for block creation. Defaults to `DEVNODE_PRIVATE_KEY`. */
   privateKey?: string
@@ -45,6 +50,11 @@ export type DevnodeStartOptions = {
   verbose?: boolean
 }
 
+/**
+ * Options for {@link advanceDevnode}.
+ *
+ * Fields map to the `aleo-devnode advance` subcommand.
+ */
 export type DevnodeAdvanceOptions = {
   /** Number of blocks to advance. Defaults to 1. */
   numBlocks?: number
@@ -54,6 +64,13 @@ export type DevnodeAdvanceOptions = {
   devnodePath?: string
 }
 
+/**
+ * Options for {@link restoreDevnode}.
+ *
+ * Fields map to flags of the `aleo-devnode restore` subcommand. Restoring
+ * requires persistent storage, so the snapshot must have been taken from a
+ * devnode started with `storagePath`.
+ */
 export type DevnodeRestoreOptions = {
   /** `--snapshot`. Name of the snapshot to restore. Required. */
   snapshot: string
@@ -73,6 +90,12 @@ export type DevnodeRestoreOptions = {
   devnodePath?: string
 }
 
+/**
+ * Handle to a running devnode process returned by {@link startDevnode}.
+ *
+ * Hold on to it for the lifetime of the node and call `stop()` when done —
+ * the child process is not stopped automatically when the parent exits.
+ */
 export type DevnodeInstance = {
   /** Socket address the devnode is listening on. */
   socketAddr: string
@@ -84,6 +107,33 @@ export type DevnodeInstance = {
 // Public API
 // =============================================================================
 
+/**
+ * Starts a local Aleo devnode and waits until its REST API answers.
+ *
+ * Spawns the `aleo-devnode` binary as a child process, so it MUST be
+ * installed and on PATH (or located via `devnodePath`). If a devnode is
+ * already listening on the target socket, it is asked to shut down first so
+ * the new instance can bind. Resolves once the node serves block height, or
+ * rejects after `readyTimeout`.
+ *
+ * By default the node binds `127.0.0.1:3030`, keeps its ledger in memory
+ * (lost on stop), creates blocks automatically, and produces blocks with the
+ * well-known seeded key {@link DEVNODE_PRIVATE_KEY}.
+ *
+ * @param options Overrides for the defaults above; omit for an ephemeral
+ *   node on port 3030.
+ * @returns A {@link DevnodeInstance} — keep it and call `stop()` to terminate
+ *   the process.
+ * @throws If the binary is missing, the process exits during startup, or the
+ *   REST API is not ready within `readyTimeout` (default 30000 ms).
+ *
+ * @example
+ * import { startDevnode } from '@veil/devnode'
+ *
+ * const devnode = await startDevnode()
+ * // ...run tests against http://127.0.0.1:3030...
+ * await devnode.stop()
+ */
 export async function startDevnode(options?: DevnodeStartOptions): Promise<DevnodeInstance> {
   const privateKey = options?.privateKey ?? DEVNODE_PRIVATE_KEY
   const socketAddr = options?.socketAddr ?? DEVNODE_ADDR
@@ -111,6 +161,17 @@ export async function startDevnode(options?: DevnodeStartOptions): Promise<Devno
   return spawnDevnode(devnodePath, args, socketAddr, readyTimeout, verbose)
 }
 
+/**
+ * Advances a running devnode by one or more empty blocks.
+ *
+ * Spawns `aleo-devnode advance` as a child process (requires the binary on
+ * PATH) and resolves when it exits. Use it to move the chain forward when the
+ * node runs with `manualBlockCreation`, or when a test needs height to pass.
+ *
+ * @param options.numBlocks Blocks to produce. Defaults to 1.
+ * @param options.socketAddr Devnode to target. Defaults to `127.0.0.1:3030`.
+ * @throws If the binary is missing or no devnode answers on the socket.
+ */
 export async function advanceDevnode(options?: DevnodeAdvanceOptions): Promise<void> {
   const devnodePath = options?.devnodePath ?? 'aleo-devnode'
   const args = ['advance']
@@ -119,6 +180,19 @@ export async function advanceDevnode(options?: DevnodeAdvanceOptions): Promise<v
   await runDevnode(devnodePath, args)
 }
 
+/**
+ * Restores a devnode ledger from a named snapshot.
+ *
+ * Spawns `aleo-devnode restore` as a child process (requires the binary on
+ * PATH). With `restart: true` the devnode is relaunched on the restored
+ * ledger; otherwise only the storage directory is rewritten and the caller
+ * starts the node separately.
+ *
+ * @param options Snapshot name, target storage directory, and optional
+ *   restart parameters.
+ * @throws If the binary is missing, the snapshot does not exist, or the
+ *   command exits non-zero.
+ */
 export async function restoreDevnode(options: DevnodeRestoreOptions): Promise<void> {
   const devnodePath = options.devnodePath ?? 'aleo-devnode'
   const args = ['restore', '--snapshot', options.snapshot]
@@ -235,6 +309,16 @@ async function spawnDevnode(
 // Test client decorator
 // =============================================================================
 
+/**
+ * Devnode management actions added to a test client by {@link devnodeActions}.
+ *
+ * Each action delegates to the standalone function of the same name and
+ * spawns the `aleo-devnode` binary.
+ *
+ * @property startDevnode Starts a devnode; see {@link startDevnode}.
+ * @property advanceDevnode Produces blocks on a running devnode; see {@link advanceDevnode}.
+ * @property restoreDevnode Restores a ledger snapshot; see {@link restoreDevnode}.
+ */
 export type DevnodeClientActions = {
   startDevnode: (options?: DevnodeStartOptions) => Promise<DevnodeInstance>
   advanceDevnode: (options?: DevnodeAdvanceOptions) => Promise<void>

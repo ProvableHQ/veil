@@ -1,3 +1,9 @@
+/**
+ * Base class for every error Veil throws.
+ *
+ * Catch it to distinguish Veil errors from unexpected runtime failures:
+ * `error instanceof BaseError` is true for all errors in this module.
+ */
 export class BaseError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options)
@@ -5,6 +11,11 @@ export class BaseError extends Error {
   }
 }
 
+/**
+ * Thrown when a transport request fails — the node returned an error
+ * response or could not be reached. Check the endpoint URL and network
+ * reachability, then retry.
+ */
 export class TransportError extends BaseError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options)
@@ -12,6 +23,11 @@ export class TransportError extends BaseError {
   }
 }
 
+/**
+ * Thrown when an action that signs is called on a client with no account.
+ * Create the client with `createWalletClient({ account, ... })`, or use
+ * `createPublicClient` if only reads are needed.
+ */
 export class AccountNotFoundError extends BaseError {
   constructor() {
     super(
@@ -23,6 +39,11 @@ export class AccountNotFoundError extends BaseError {
   }
 }
 
+/**
+ * Thrown when a local account attempts a write action without a proving
+ * configuration. Pass `proving` to `createWalletClient`, or switch to an
+ * RPC account (wallet adapter), which proves internally.
+ */
 export class ProvingNotConfiguredError extends BaseError {
   constructor() {
     super(
@@ -34,6 +55,11 @@ export class ProvingNotConfiguredError extends BaseError {
   }
 }
 
+/**
+ * Thrown when a string fails Aleo address validation. Valid addresses are
+ * "aleo1" followed by 58 lowercase alphanumeric characters — check for
+ * truncation or a copy-paste error.
+ */
 export class InvalidAddressError extends BaseError {
   constructor(address: string) {
     super(
@@ -44,6 +70,11 @@ export class InvalidAddressError extends BaseError {
   }
 }
 
+/**
+ * Thrown when a program ID does not resolve to a deployed program on the
+ * connected network. Verify the ID and the target network — a program
+ * deployed to testnet is not visible from mainnet.
+ */
 export class ProgramNotFoundError extends BaseError {
   constructor(program: string) {
     super(
@@ -56,6 +87,14 @@ export class ProgramNotFoundError extends BaseError {
 }
 
 
+/**
+ * Thrown when a function argument does not match the type the program's
+ * ABI expects. Encode arguments with `encodeValue()` before calling.
+ *
+ * @param functionName Transition whose argument failed validation.
+ * @param expected Type the ABI requires, echoed in the message.
+ * @param received The offending value as the caller passed it.
+ */
 export class InvalidInputError extends BaseError {
   constructor(functionName: string, expected: string, received: string) {
     super(
@@ -66,6 +105,12 @@ export class InvalidInputError extends BaseError {
   }
 }
 
+/**
+ * Thrown when `requestTransactionHistory` is called with a local account.
+ * The Aleo REST API keeps no per-program history, so only RPC accounts
+ * (connected wallet adapters) can serve this call — switch account type or
+ * track transaction IDs in the application.
+ */
 export class TransactionHistoryNotSupportedError extends BaseError {
   constructor() {
     super(
@@ -80,6 +125,11 @@ export class TransactionHistoryNotSupportedError extends BaseError {
 
 // ── Transaction lifecycle errors ─────────────────────────────────────
 
+/**
+ * Thrown when the network rejects a transaction as malformed before it
+ * enters the mempool. Retrying unchanged will fail again — fix the
+ * transaction's inputs or structure first.
+ */
 export class InvalidTransactionError extends BaseError {
   constructor(message: string, options?: ErrorOptions) {
     super(
@@ -91,6 +141,13 @@ export class InvalidTransactionError extends BaseError {
   }
 }
 
+/**
+ * Thrown when a transaction with the same ID already exists in the ledger.
+ * The earlier submission likely succeeded — check its status with
+ * `getTransaction()` instead of resubmitting.
+ *
+ * @property transactionId On-chain transaction ID (`at1...`) when known.
+ */
 export class DuplicateTransactionError extends BaseError {
   readonly transactionId?: string
 
@@ -132,6 +189,14 @@ export class OutputIdCollisionError extends BaseError {
   }
 }
 
+/**
+ * Thrown when submitting a transaction to the network fails for a reason
+ * other than a malformed transaction or a duplicate — typically congestion
+ * or a node-side failure. Safe to retry after a short delay.
+ *
+ * @property statusCode HTTP status of the failed broadcast, when the
+ *   transport preserved one.
+ */
 export class BroadcastError extends BaseError {
   readonly statusCode?: number
 
@@ -146,6 +211,14 @@ export class BroadcastError extends BaseError {
   }
 }
 
+/**
+ * Thrown when a submitted transaction is not confirmed within the polling
+ * window. The transaction may still land — check `getTransaction()` before
+ * resubmitting, or the retry raises a `DuplicateTransactionError`.
+ *
+ * @property transactionId ID of the transaction that was being awaited.
+ * @property timeoutMs How long confirmation was polled, in milliseconds.
+ */
 export class TransactionTimeoutError extends BaseError {
   readonly transactionId: string
   readonly timeoutMs: number
@@ -163,6 +236,14 @@ export class TransactionTimeoutError extends BaseError {
   }
 }
 
+/**
+ * Thrown when a transaction reaches the chain but its finalize block
+ * reverts, leaving it rejected with the base fee consumed. On-chain state
+ * (mappings, balances) changed since the inputs were built — re-read state
+ * and retry with fresh inputs.
+ *
+ * @property transactionId ID of the rejected transaction.
+ */
 export class FinalizeRevertError extends BaseError {
   readonly transactionId: string
 
@@ -178,6 +259,14 @@ export class FinalizeRevertError extends BaseError {
   }
 }
 
+/**
+ * Thrown when proof generation fails, locally or at a delegated proving
+ * service. For delegated proving, check the prover URL and service status;
+ * for local proving, check available memory and input validity.
+ *
+ * @property statusCode HTTP status from the proving service, when the
+ *   failure was a service response rather than a local fault.
+ */
 export class ProvingError extends BaseError {
   readonly statusCode?: number
 
@@ -201,6 +290,11 @@ export class ConfigurationError extends BaseError {
   }
 }
 
+/**
+ * Thrown when `simulateContract` is called with an RPC (wallet) account.
+ * Wallets expose no dry-run interface — use a local account to simulate,
+ * or call `executeContract` directly.
+ */
 export class SimulateNotSupportedError extends BaseError {
   constructor() {
     super(

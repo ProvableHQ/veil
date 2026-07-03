@@ -36,7 +36,7 @@ const networkMap = {
 /**
  * Batteries-included provider for veil + Aleo wallets.
  *
- * Wraps your app with wallet connection support. All known Aleo wallets
+ * Wraps the app with wallet connection support. All known Aleo wallets
  * (Shield, Leo, Puzzle, Fox) are auto-configured.
  *
  * ```tsx

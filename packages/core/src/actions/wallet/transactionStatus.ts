@@ -2,10 +2,16 @@ import type { Client } from '../../clients/createClient.js'
 import type { ConfirmedTransaction } from '../../types/block.js'
 import type { TransactionStatusResponse } from '../../types/wallet.js'
 
+/**
+ * Parameters for `walletClient.transactionStatus`.
+ *
+ * @property transactionId On-chain transaction id (`at1...`) to look up.
+ */
 export type TransactionStatusParameters = {
   transactionId: string
 }
 
+/** The transaction's current status and id. */
 export type TransactionStatusReturnType = TransactionStatusResponse
 
 /**
@@ -21,6 +27,16 @@ export type TransactionStatusReturnType = TransactionStatusResponse
  * - `'rejected'`  — present in `/transaction/confirmed/{id}` with `status: 'rejected'`
  * - `'pending'`   — present in `/transaction/unconfirmed/{id}`
  * - `'not_found'` — present in neither pool (never submitted, dropped, or expired)
+ *
+ * Read-only; hits the wallet indexer or the network REST API, never signs.
+ *
+ * @param client Client whose transport reaches a wallet adapter or an Aleo node.
+ * @param params The transaction id to look up.
+ * @returns The current status; `'not_found'` rather than a throw when the id is unknown.
+ *
+ * @example
+ * const { status } = await walletClient.transactionStatus({ transactionId: 'at1...' })
+ * // status: 'accepted' | 'rejected' | 'pending' | 'not_found'
  */
 export async function transactionStatus(
   client: Client,
@@ -36,7 +52,7 @@ export async function transactionStatus(
   // Derive status from the chain. Confirmed transactions live at
   // `/transaction/confirmed/{id}`, unconfirmed at `/transaction/unconfirmed/{id}`.
   // A "confirmed" transaction can still be rejected — the envelope carries
-  // its own `status: 'accepted' | 'rejected'`, which we surface verbatim.
+  // its own `status: 'accepted' | 'rejected'`, surfaced verbatim.
   try {
     const confirmed = await client.request({
       method: 'getConfirmedTransaction',

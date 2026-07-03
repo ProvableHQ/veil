@@ -2,17 +2,46 @@ import type { PublicClient } from '../clients/createPublicClient.js'
 import type { WalletClient } from '../clients/createWalletClient.js'
 import { createAgentTools, type AgentTool } from '../agent/index.js'
 
+/**
+ * Selects which tool sets `createMcpServer` exposes.
+ *
+ * Pass only `client` for a read-only server; add `walletClient` to expose the
+ * write tools as well.
+ *
+ * @property client Backs the read-only tools; when absent they are omitted.
+ * @property walletClient Backs the write tools (execute, transfer, deploy);
+ *   when absent they are omitted.
+ */
 export type McpServerConfig = {
   client?: PublicClient
   walletClient?: WalletClient
 }
 
+/**
+ * Declares one tool in MCP's wire shape, ready to return from a `tools/list`
+ * response.
+ *
+ * @property name Tool identifier the client calls, e.g. `aleo_get_balance`.
+ * @property description What the model reads to decide when to call the tool.
+ * @property inputSchema JSON Schema for the tool's arguments.
+ */
 export type McpToolDefinition = {
   name: string
   description: string
   inputSchema: Record<string, unknown>
 }
 
+/**
+ * Transport-agnostic MCP server surface: the tool list plus a dispatcher.
+ *
+ * This is not a running process — the caller wires it into an MCP SDK server:
+ * serve `tools` from `tools/list` and route `tools/call` to `handleToolCall`
+ * over any transport (stdio, HTTP).
+ *
+ * @property tools Tool declarations to return from `tools/list`.
+ * @property handleToolCall Dispatches a call by tool name and resolves to the
+ *   tool's structured JSON result; rejects on an unknown name.
+ */
 export type McpServer = {
   tools: McpToolDefinition[]
   handleToolCall: (name: string, input: Record<string, unknown>) => Promise<unknown>
@@ -59,6 +88,26 @@ export function toMcpServer(tools: AgentTool[]): McpServer {
  * different or combined tool set (e.g. DEX tools), call `toMcpServer` directly.
  *
  * Exposed via subpath export: import { createMcpServer } from '@veil/core/mcp'
+ *
+ * Construction is pure and local; the handlers reach the network through the
+ * configured clients only when a tool is invoked, and wallet-backed tools
+ * sign and pay fees. This returns the tool list and dispatcher — binding a
+ * transport (stdio, HTTP) is the caller's job.
+ *
+ * @param config Clients that select the tool set: `client` enables the
+ *   read-only tools, `walletClient` enables the write tools.
+ * @returns An {@link McpServer} serving the enabled tools.
+ *
+ * @example
+ * import { createPublicClient, http } from '@veil/core'
+ * import { createMcpServer } from '@veil/core/mcp'
+ *
+ * const client = createPublicClient({
+ *   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+ * })
+ * const server = createMcpServer({ client })
+ * // Wire into an MCP transport: list server.tools, route calls to
+ * // server.handleToolCall(name, input).
  */
 export function createMcpServer(config: McpServerConfig): McpServer {
   return toMcpServer(createAgentTools(config))

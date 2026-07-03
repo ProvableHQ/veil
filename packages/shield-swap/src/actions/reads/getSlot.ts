@@ -15,6 +15,7 @@ export type GetSlotParameters = {
   program?: string
 }
 
+/** The decoded live slot, or `null` when no pool exists under the key. */
 export type GetSlotReturnType = Slot | null
 
 /**

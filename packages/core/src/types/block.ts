@@ -7,6 +7,7 @@
  * noted on the u128 fields below.
  */
 
+/** Block header metadata: network id, consensus round, height, puzzle targets, and timestamps. */
 export type Metadata = {
   /** u16 — network id */
   network: number
@@ -35,6 +36,7 @@ export type Metadata = {
   cumulative_proof_target: string
 }
 
+/** Block header: the Merkle roots committing to the block's state, plus metadata. */
 export type Header = {
   previous_state_root: string
   transactions_root: string
@@ -45,11 +47,19 @@ export type Header = {
   metadata: Metadata
 }
 
+/**
+ * A ratification entry in a block — a protocol-level credit movement such as
+ * a block or puzzle reward.
+ *
+ * @property type Ratification kind (e.g. "block_reward", "puzzle_reward").
+ * @property amount u64 — microcredits.
+ */
 export type Ratification = {
   type: string
   amount: number
 }
 
+/** The prover-supplied part of a puzzle solution, before its target is computed. */
 export type PartialSolution = {
   solution_id: string
   epoch_hash: string
@@ -58,18 +68,26 @@ export type PartialSolution = {
   counter: number
 }
 
+/** A puzzle solution included in a block. */
 export type Solution = {
   partial_solution: PartialSolution
   /** u64 — solution target */
   target: number
 }
 
+/** The solutions section of a block; `solutions` is absent when the block has none. */
 export type Solutions = {
   /** u16 — solutions format version */
   version: number
   solutions?: Solution[]
 }
 
+/**
+ * One finalize operation recorded for a confirmed transaction — a mapping
+ * change identified by its mapping, key, and value ids.
+ *
+ * @property type Operation kind (e.g. "update_key_value", "insert_key_value").
+ */
 export type Finalize = {
   type: string
   mapping_id: string
@@ -77,6 +95,10 @@ export type Finalize = {
   value_id: string
 }
 
+/**
+ * A transaction as confirmed in a block: the raw transaction wrapped with its
+ * status, position, and the finalize operations it caused.
+ */
 export type ConfirmedTransaction = {
   /** e.g. "accepted" | "rejected" */
   status: string
@@ -91,6 +113,7 @@ export type ConfirmedTransaction = {
   finalize: Finalize[]
 }
 
+/** A block as returned by the node's `GET /{network}/block/{heightOrHash}` endpoint. */
 export type Block = {
   block_hash: string
   previous_hash: string

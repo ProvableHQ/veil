@@ -7,12 +7,19 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
 // derived via blinded-identity.ts instead.
 
 /**
- * Wallet-standard algorithm names for wallet-side derivation (see core's
- * `KNOWN_ALGORITHMS`). A dapp talking to a privacy-preserving wallet fills the
- * blinding-factor / blinded-address input slots with `derived` InputRequests
- * naming these algorithms instead of deriving locally.
+ * Wallet-standard algorithm name for wallet-side blinding-factor derivation
+ * (see core's `KNOWN_ALGORITHMS`). A dapp talking to a privacy-preserving
+ * wallet fills the blinding-factor input slot with a `derived` InputRequest
+ * naming this algorithm instead of deriving the factor locally.
  */
 export const BLINDING_FACTOR_ALGORITHM = 'program-scoped-blinding-factor'
+
+/**
+ * Wallet-standard algorithm name for the matching blinded-address derivation.
+ * Companion to {@link BLINDING_FACTOR_ALGORITHM} — the wallet fulfils both
+ * slots from the same counter, so requests naming the two algorithms MUST
+ * travel in the same transaction.
+ */
 export const BLINDED_ADDRESS_ALGORITHM = 'program-scoped-blinded-address'
 
 /** The mapping the wallet tracks used blinded addresses against. */

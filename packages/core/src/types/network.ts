@@ -9,6 +9,7 @@
 
 // ---------- Summaries ----------
 
+/** Condensed block row as returned by the explorer API's block-summary endpoint. */
 export type BlockSummary = {
   block_height: number
   block_hash: string
@@ -22,6 +23,11 @@ export type BlockSummary = {
   proof_target: number
 }
 
+/**
+ * Condensed transaction row from the explorer API's transaction-summary
+ * endpoint. Status and type strings are capitalized here ("Accepted",
+ * "Execute"), unlike the node's lowercase forms.
+ */
 export type TransactionSummary = {
   /** at1... transaction id */
   id: string
@@ -39,6 +45,10 @@ export type TransactionSummary = {
   function_id: string
 }
 
+/**
+ * Condensed transition row from the explorer API, including the amount and
+ * counterparties for credits.aleo transfers.
+ */
 export type TransitionSummary = {
   /** au1... transition id */
   id: string
@@ -69,6 +79,7 @@ export type TransitionSummary = {
  */
 export type CommitteeMember = [number, boolean, number]
 
+/** The current validator committee, with members keyed by validator address. */
 export type Committee = {
   /** Committee id (field element). */
   id: string
@@ -76,6 +87,7 @@ export type Committee = {
   members: Record<string, CommitteeMember>
 }
 
+/** Cumulative staking rewards earned by an address, as of a given block. */
 export type StakingEarnings = {
   /** microcredits, cumulative */
   total_rewards: number
@@ -85,17 +97,20 @@ export type StakingEarnings = {
 
 // ---------- Metrics ----------
 
+/** One day's transaction count in the transaction-metrics series. */
 export type TransactionMetricPoint = {
   /** ISO-8601 day bucket, e.g. "2026-04-20T00:00:00.000Z" */
   day: string
   count: number
 }
 
+/** Call count for one program in the program-metrics ranking. */
 export type ProgramMetricPoint = {
   program_id: string
   calls: number
 }
 
+/** Estimated staking APY for one validator. */
 export type ValidatorApy = {
   validator: string
   /** Decimal APY (e.g. 10.89 for ~10.89%). */
@@ -104,6 +119,7 @@ export type ValidatorApy = {
 
 // ---------- DeFi / supply ----------
 
+/** Total value locked in one DeFi protocol. */
 export type TvlEntry = {
   protocol_name: string
   /** Total value locked, in credits (not microcredits). */
@@ -112,6 +128,7 @@ export type TvlEntry = {
 
 // ---------- Tokens ----------
 
+/** Pagination envelope on the explorer API's list endpoints. */
 export type Pagination = {
   limit: number
   offset: number
@@ -120,6 +137,11 @@ export type Pagination = {
   has_previous: boolean
 }
 
+/**
+ * Token metadata and market data from the tokens endpoint. Supply and
+ * monetary figures arrive as decimal strings because they can exceed the
+ * safe integer range.
+ */
 export type TokenInfo = {
   token_id: string
   token_id_datatype: string
@@ -140,6 +162,7 @@ export type TokenInfo = {
   volume_24h: string | null
 }
 
+/** One page of tokens with its pagination envelope. */
 export type TokenPage = {
   pagination: Pagination
   data: TokenInfo[]

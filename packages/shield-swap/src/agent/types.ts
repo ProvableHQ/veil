@@ -18,7 +18,7 @@ export type { AgentToolSchema, AgentTool, AgentToolHandler } from '@veil/core/ag
  *   Defaults to `DEFAULT_PROGRAM` (the live deployment).
  * @property includeWrites Include the money-moving write tools (swap, claim,
  *   mint, increase liquidity, create pool). Off by default — an agent gets
- *   read-only tools unless you opt in. Requires `client`. Write tools target
+ *   read-only tools unless the caller opts in. Requires `client`. Write tools target
  *   the local-signer path: they auto-select records and auto-fetch the
  *   dynamic-dispatch program sources, so the agent supplies only amounts and
  *   token programs.

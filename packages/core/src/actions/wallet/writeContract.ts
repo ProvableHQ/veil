@@ -26,8 +26,40 @@ export type WriteContractParameters = {
   imports?: string[]
 }
 
+/** Transaction id (`at1...`) of the broadcast execution. */
 export type WriteContractReturnType = string
 
+/**
+ * Executes a program function on-chain and returns the transaction id.
+ *
+ * The workhorse write action — use it whenever the transaction id is
+ * enough and the function's outputs are not needed (use `executeContract` for
+ * outputs, `simulateContract` for a dry run). For RPC accounts the wallet
+ * proves, signs, and broadcasts in one adapter call, prompting the user. For
+ * local accounts the proving config builds and proves the transaction —
+ * in-process or via a delegated prover, per `proving.mode` — and the transport
+ * broadcasts it. Either way the fee comes out of the account (unless a
+ * delegated prover with `useFeeMaster` covers it). Returns as soon as the
+ * transaction is submitted; it does not wait for acceptance. Poll
+ * `transactionStatus` for the outcome.
+ *
+ * Exported as `executeTransaction` as well — the wallet-adapter name for the
+ * same action.
+ *
+ * @param client Wallet client with an account attached.
+ * @param params Program, function, inputs, and fee/import options.
+ * @returns The transaction id to poll with `transactionStatus`.
+ * @throws AccountNotFoundError if the client has no signing account.
+ * @throws ProvingNotConfiguredError if the account is local and the client has no proving config.
+ * @throws If `inputs` contains InputRequest objects on the local-proving path.
+ *
+ * @example
+ * const txId = await walletClient.writeContract({
+ *   program: 'token.aleo',
+ *   function: 'transfer_public',
+ *   inputs: ['aleo1...', '100u64'],
+ * })
+ */
 export async function writeContract(
   client: Client,
   params: WriteContractParameters,

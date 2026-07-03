@@ -9,8 +9,8 @@ import { getPrivateBalances } from './records.js'
  *   own account address.
  * @property tokens Token ids (field literals) to restrict to. Defaults to
  *   every token the API lists. When given, entries are returned for exactly
- *   these tokens (including zero balances); when omitted, only tokens you hold
- *   (non-zero total) are returned.
+ *   these tokens (including zero balances); when omitted, only tokens the user
+ *   holds (non-zero total) are returned.
  */
 export type GetBalancesParameters = {
   user?: string
@@ -23,7 +23,7 @@ export type GetBalancesParameters = {
  * @property symbol Token symbol from the registry (e.g. `ETHx`).
  * @property decimals Token decimals — apply them to render a human amount.
  * @property public Public/authorized balance (raw base units) from the API.
- * @property private Private balance (raw base units) summed from your records.
+ * @property private Private balance (raw base units) summed from the user's records.
  * @property total `public + private`.
  */
 export type BalanceEntry = {
@@ -41,11 +41,11 @@ export type GetBalancesReturnType = Record<string, BalanceEntry>
  * Tabulates public, private, and total balances per token.
  *
  * Composes the two balance views into one: the API's public/authorized
- * balances ({@link ApiClient.getPublicBalances}) and your record-derived
+ * balances ({@link ApiClient.getPublicBalances}) and the record-derived
  * private balances ({@link getPrivateBalances}). The API's token registry
  * bridges them — public balances key by token id, private records key by
- * wrapper program — and supplies the token set to scan, so you don't hand it a
- * program list. Both sides are raw base units in each token's own decimals, so
+ * wrapper program — and supplies the token set to scan, so no program list
+ * needs to be passed. Both sides are raw base units in each token's own decimals, so
  * `total = public + private` is meaningful per token.
  *
  * Hits the network: the token list, the public-balance read, and one record
@@ -88,7 +88,7 @@ export async function getBalances(
     const pub = publicByToken.get(t.address) ?? 0n
     const prv = t.wrapper_program ? (priv[t.wrapper_program] ?? 0n) : 0n
     // With an explicit token filter, report every requested token; otherwise
-    // skip tokens you don't hold at all.
+    // skip tokens the user does not hold at all.
     if (!params.tokens && pub === 0n && prv === 0n) continue
     out[t.address] = { symbol: t.symbol, decimals: t.decimals, public: pub, private: prv, total: pub + prv }
   }

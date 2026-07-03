@@ -15,6 +15,10 @@ export type GetSwapOutputParameters = {
   program?: string
 }
 
+/**
+ * The decoded swap output, or `null` when the swap id is not in the mapping —
+ * either not yet finalized or already claimed.
+ */
 export type GetSwapOutputReturnType = SwapOutput | null
 
 /**

@@ -13,7 +13,11 @@ see the README and the documentation site under `site/`.
 - The first line is a one-sentence summary led by a present-tense verb ("Builds a
   deployment transaction"). Tooling shows the first paragraph, so do not bury the
   summary, and do not open with "This function is designed to…".
-- Give one or two sentences of context: what it does and when to reach for it.
+- Give one or two sentences of context: what it does and when it applies.
+- Write comments in the third person or the imperative — never "you", "we", or
+  "I". Name the actor ("the caller", "a developer", "the wallet") or drop it.
+  Do not write "reach for"; say when the symbol applies ("Applies when…",
+  "Use for…", "Suited to…") or state the discriminating fact.
 - Document every `@param`, `@returns`, and `@throws` by its consequence, not by
   restating its name. `options — The options for the transaction` is a failure.
 - Do not repeat TypeScript types in tags. The signature already carries them;

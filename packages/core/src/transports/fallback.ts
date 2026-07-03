@@ -2,6 +2,28 @@ import { TransportError } from '../errors/errors.js'
 import type { Transport } from '../types/transport.js'
 import { createTransport } from './createTransport.js'
 
+/**
+ * Combines transports into one that tries each in order until a request succeeds.
+ *
+ * Use for pairing a primary transport with backups — the typical case is
+ * `[walletAdapter, http(url, { network })]`, where the wallet handles writes and
+ * HTTP serves reads. On a call it invokes each transport in turn and returns the
+ * first success; the returned transport is pure until called. Network is
+ * inherited from the first supplied transport that declares one.
+ *
+ * @param transports Transports to try in order, most preferred first.
+ * @returns A transport of type `'fallback'` that fails over across `transports`.
+ * @throws {TransportError} If every transport throws; the error message carries
+ *   the first transport's error, which is set as its `cause`.
+ *
+ * @example
+ * import { fallback, http, custom } from '@veil/core'
+ *
+ * const transport = fallback([
+ *   custom({ request: (args) => wallet.request(args) }),
+ *   http('https://api.provable.com/v2', { network: 'mainnet' }),
+ * ])
+ */
 export function fallback(transports: Transport[]): Transport<'fallback'> {
   // Inherit network from the first transport that declares one — typical
   // pairing is [walletAdapter, http(url, { network })] where the wallet

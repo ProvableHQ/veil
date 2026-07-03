@@ -66,7 +66,7 @@ export type SupportedNetwork = 'mainnet' | 'testnet'
 
 // `loadSdk('testnet')` and `loadSdk('mainnet')` return modules whose runtime
 // classes have the same shape. The narrowed-to-testnet type is used as the
-// canonical handle so we don't pass through TS's union-of-modules confusion.
+// canonical handle to avoid TS's union-of-modules confusion.
 type SdkModule = Awaited<ReturnType<typeof loadSdk<'testnet'>>>
 
 /**
@@ -285,7 +285,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         // imports (declared in the `import` block) and the user's dynamic ones.
         // Auto-discover static imports first, then add the user-provided
         // dynamic ones on top. The SDK's ProgramImports values can be string
-        // or Program; we mirror its return type instead of reconstructing it.
+        // or Program; its return type is mirrored instead of reconstructed.
         type SdkProgramImports = Awaited<
           ReturnType<InstanceType<SdkModule['AleoNetworkClient']>['getProgramImports']>
         >
@@ -561,8 +561,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
   // result on HTTP error but *throws* on a network failure or an invalidated
   // UUID — both paths are retried here. A freshly-minted JWT can momentarily
   // hit an RSS backend that has not yet synced the credential (HTTP 401), and
-  // the SDK caches that JWT for the scanner's lifetime — so between attempts we
-  // drop it (setJwtData(undefined) forces a re-mint), back off, and retry,
+  // the SDK caches that JWT for the scanner's lifetime — so between attempts it
+  // is dropped (setJwtData(undefined) forces a re-mint), backed off, and retried,
   // giving the backend time to catch up. A non-transient status surfaces at once.
   //
   // 429/5xx are always transient; a 401/403 is only worth retrying when a JWT

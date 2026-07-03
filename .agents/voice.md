@@ -113,6 +113,39 @@ export type transfer_public_params = {
 };
 ```
 
+### Third person, imperative — never "you", "we", or "I"
+
+Comments and JSDoc are written in the third person or the imperative mood.
+Pronouns referring to the reader or author are banned: no "you", "your", "we",
+"our", "I". Name the actor instead — "the caller", "a developer", "the wallet",
+"the client" — or drop the actor entirely with an imperative.
+
+```ts
+// Good — imperative, no pronoun.
+/** Use `getBlocks` for complete block contents. */
+// Good — third person, the actor is named.
+/** The caller supplies the proving configuration. */
+// Bad — second person.
+/** Use this when you need complete block contents. */
+/** You supply the proving configuration. */
+```
+
+### Do not write "reach for"
+
+"Reach for this when…" is a tic; it flags machine-written text. Say when the
+symbol applies, or state the discriminating fact and let it choose:
+
+```ts
+// Good — states when it applies.
+/** Applies when only the header is needed; `getBlock` returns full contents. */
+// Good — imperative alternative.
+/** Use for header-only queries; `getBlock` returns full contents. */
+// Good — the contrast itself does the work.
+/** Fetches the block header. `getBlock` fetches the full block. */
+// Bad.
+/** Reach for this when you need only the header. */
+```
+
 ### `@deprecated` carries a migration path
 
 ```ts
@@ -158,3 +191,5 @@ record actually is.
 | D. Hedging / obvious | "It's important to note that…" | (state the fact directly) |
 | Types in tags | `@param {string} to …` | `@param to …` (TS carries the type) |
 | Bare optional | `@param fee Optional fee.` | `@param fee Optional fee in microcredits. Defaults to 0.` |
+| First/second person | "you", "your", "we", "our", "I" | "the caller", "a developer", or imperative mood |
+| "Reach for" | "Reach for this when…" | "Applies when…", "Use for…", "Suited to…", or state the discriminating fact |

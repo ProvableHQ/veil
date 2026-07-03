@@ -4,6 +4,13 @@ import { spawn } from 'node:child_process'
 // Client-level config (defaults shared across every command)
 // =============================================================================
 
+/**
+ * Defaults applied to every command a {@link LeoClient} runs.
+ *
+ * Each field maps to a global `leo` CLI flag and is forwarded on every
+ * invocation. Any command can override a field per-call by passing the same
+ * key in its options.
+ */
 export type LeoClientConfig = {
   /**
    * Default project root (equivalent to `--path`). Commands can still override
@@ -40,7 +47,22 @@ export type LeoClientConfig = {
 // Shared option mixins
 // =============================================================================
 
-/** Compiler-phase options shared by build/deploy/synthesize. */
+/**
+ * Compiler-phase options shared by build/deploy/synthesize.
+ *
+ * Each field maps to the `leo` CLI flag of the same (kebab-case) name.
+ *
+ * @property enableAstSpans `--enable-ast-spans`. Include source spans in AST snapshots.
+ * @property enableDce `--enable-dce`. Enable dead-code elimination.
+ * @property conditionalBlockMaxDepth `--conditional-block-max-depth`. Maximum nesting depth the compiler type-checks in conditional blocks.
+ * @property disableConditionalBranchTypeChecking `--disable-conditional-branch-type-checking`.
+ * @property enableInitialAstSnapshot `--enable-initial-ast-snapshot`. Write the pre-pass AST snapshot.
+ * @property enableAllAstSnapshots `--enable-all-ast-snapshots`. Write a snapshot after every compiler pass.
+ * @property astSnapshots `--ast-snapshots`. Names of individual compiler passes to snapshot.
+ * @property buildTests `--build-tests`. Also compile the package's tests.
+ * @property noCache `--no-cache`. Recompile instead of reusing cached build artifacts.
+ * @property noLocal `--no-local`. Resolve dependencies from the network instead of local paths.
+ */
 export type LeoCompilerOptions = {
   enableAstSpans?: boolean
   enableDce?: boolean
@@ -80,8 +102,20 @@ export type LeoTransactionOptions = {
 // Per-command option types
 // =============================================================================
 
+/**
+ * Options for {@link LeoClient.build} (`leo build`).
+ *
+ * Combines the compiler flags with per-call overrides of any
+ * {@link LeoClientConfig} default.
+ */
 export type LeoBuildOptions = LeoCompilerOptions & Partial<LeoClientConfig>
 
+/**
+ * Options for {@link LeoClient.abi} (`leo abi`).
+ *
+ * Also accepts per-call overrides of any {@link LeoClientConfig} default
+ * except `network`, which is redefined here for the parsing context.
+ */
 export type LeoAbiOptions = {
   /** Path to the `.aleo` bytecode file (required positional). */
   file: string
@@ -91,6 +125,12 @@ export type LeoAbiOptions = {
   output?: string
 } & Partial<Omit<LeoClientConfig, 'network'>>
 
+/**
+ * Options for {@link LeoClient.deploy} (`leo deploy`).
+ *
+ * Combines compiler flags, transaction-shape flags, and per-call overrides of
+ * any {@link LeoClientConfig} default.
+ */
 export type LeoDeployOptions = {
   /** `--skip` deployment of any program whose name contains these substrings. */
   skip?: string[]
@@ -98,6 +138,12 @@ export type LeoDeployOptions = {
   LeoTransactionOptions &
   Partial<LeoClientConfig>
 
+/**
+ * Options for {@link LeoClient.synthesize} (`leo synthesize`).
+ *
+ * Combines compiler flags, transaction-shape flags, and per-call overrides of
+ * any {@link LeoClientConfig} default.
+ */
 export type LeoSynthesizeOptions = {
   /** Program name (required positional), e.g. `'helloworld.aleo'`. */
   name: string
@@ -113,6 +159,14 @@ export type LeoSynthesizeOptions = {
 // Client
 // =============================================================================
 
+/**
+ * Programmatic wrapper around the `leo` CLI.
+ *
+ * Every method spawns the `leo` binary as a child process, so the Leo CLI
+ * MUST be installed and on PATH (or located via `leoPath`). Create one with
+ * {@link createLeoClient}, or attach one to an existing veil client with
+ * {@link leoActions}.
+ */
 export type LeoClient = {
   /** Config the client was constructed with. */
   readonly config: LeoClientConfig
@@ -138,6 +192,9 @@ export type LeoClient = {
  *
  * The extension ignores the host client — leo operations don't need a transport —
  * so this works equally well on publicClient, walletClient, or testClient.
+ *
+ * @param config Defaults forwarded to every `leo` invocation. Defaults to `{}`.
+ * @returns An extension object exposing the client at `.leo`.
  */
 export function leoActions(config: LeoClientConfig = {}) {
   return (_client: unknown): { leo: LeoClient } => ({
@@ -145,6 +202,27 @@ export function leoActions(config: LeoClientConfig = {}) {
   })
 }
 
+/**
+ * Creates a {@link LeoClient} whose commands shell out to the `leo` CLI.
+ *
+ * Construction is cheap and does nothing on its own; each method call spawns
+ * a `leo` child process, so the Leo CLI MUST be installed
+ * (https://developer.aleo.org/leo/installation). Applies when a script
+ * or test needs to compile, deploy, or synthesize keys for a Leo project;
+ * prefer {@link leoActions} when a veil client is already in hand.
+ *
+ * @param config Defaults forwarded to every command. Defaults to `{}` — the
+ *   `leo` binary is resolved on PATH and runs in the current working directory.
+ * @returns A client whose methods reject if the binary is missing or a
+ *   command exits non-zero.
+ *
+ * @example
+ * import { createLeoClient } from '@veil/leo'
+ *
+ * const leo = createLeoClient({ cwd: './programs/token', network: 'testnet' })
+ * await leo.build()
+ * const abi = await leo.abi({ file: './build/main.aleo' })
+ */
 export function createLeoClient(config: LeoClientConfig = {}): LeoClient {
   const merge = <T extends Partial<LeoClientConfig>>(opts: T): T & LeoClientConfig => ({
     ...config,
@@ -310,10 +388,40 @@ function runLeoCapture(args: string[], cwd?: string, leoPath = 'leo'): Promise<s
 // Standalone API
 // =============================================================================
 
+/**
+ * Compiles a Leo project by spawning `leo build` as a child process.
+ *
+ * Requires the Leo CLI on PATH. This is the zero-config path for scripts;
+ * use {@link createLeoClient} when compiler flags or shared defaults are needed.
+ *
+ * @param options.cwd Project directory to build. Defaults to the current
+ *   working directory.
+ * @throws If the `leo` binary is missing or the build exits non-zero.
+ *
+ * @example
+ * import { build } from '@veil/leo'
+ * await build({ cwd: './programs/token' })
+ */
 export async function build(options?: { cwd?: string }): Promise<void> {
   await runLeo(['build'], options?.cwd)
 }
 
+/**
+ * Compiles several Leo projects sequentially by spawning `leo build` once per
+ * project.
+ *
+ * Requires the Leo CLI on PATH. Builds run in order, so list dependencies
+ * before the projects that import them.
+ *
+ * @param projects Project directories, each given as a path string or a
+ *   `{ cwd }` object.
+ * @throws On the first project whose build exits non-zero; later projects are
+ *   not built.
+ *
+ * @example
+ * import { buildBatch } from '@veil/leo'
+ * await buildBatch(['./programs/token', './programs/market'])
+ */
 export async function buildBatch(projects: Array<string | { cwd?: string }>): Promise<void> {
   for (const project of projects) {
     const cwd = typeof project === 'string' ? project : project.cwd
@@ -321,10 +429,28 @@ export async function buildBatch(projects: Array<string | { cwd?: string }>): Pr
   }
 }
 
+/**
+ * Spawns `leo build` for the project, which emits the ABI alongside the other
+ * build artifacts.
+ *
+ * Requires the Leo CLI on PATH. To generate an ABI from an existing `.aleo`
+ * bytecode file and capture it as a string, use {@link LeoClient.abi} instead.
+ *
+ * @param options.cwd Project directory. Defaults to the current working
+ *   directory.
+ * @throws If the `leo` binary is missing or the build exits non-zero.
+ */
 export async function abi(options?: { cwd?: string }): Promise<void> {
   await runLeo(['build'], options?.cwd)
 }
 
+/**
+ * Options for {@link start}.
+ *
+ * `program` is carried for context only — `leo run` resolves the program from
+ * the project at `cwd`, so the function executed is `function` within that
+ * project.
+ */
 export type LeoStartOptions = {
   /** Leo program name/path to run. */
   program: string
@@ -336,16 +462,42 @@ export type LeoStartOptions = {
   cwd?: string
 }
 
+/**
+ * Executes a function of the local Leo project by spawning
+ * `leo run <function> [inputs...]`.
+ *
+ * Requires the Leo CLI on PATH. Runs the transition locally against the
+ * project at `cwd` — nothing is broadcast to a network.
+ *
+ * @param options Function name, its inputs, and the project directory.
+ * @throws If the `leo` binary is missing or the run exits non-zero (for
+ *   example on a type error or failing assertion).
+ *
+ * @example
+ * import { start } from '@veil/leo'
+ * await start({ program: 'token.aleo', function: 'mint', inputs: ['1000u64'], cwd: './programs/token' })
+ */
 export async function start(options: LeoStartOptions): Promise<void> {
   const args = ['run', options.function, ...(options.inputs ?? [])]
   await runLeo(args, options.cwd)
 }
 
+/** Options for {@link clean}. */
 export type LeoCleanOptions = {
   /** Path to the Leo project directory. Defaults to the current working directory. */
   cwd?: string
 }
 
+/**
+ * Deletes a Leo project's build artifacts by spawning `leo clean`.
+ *
+ * Requires the Leo CLI on PATH. Use before a build when cached artifacts are
+ * suspect.
+ *
+ * @param options.cwd Project directory to clean. Defaults to the current
+ *   working directory.
+ * @throws If the `leo` binary is missing or the command exits non-zero.
+ */
 export async function clean(options?: LeoCleanOptions): Promise<void> {
   await runLeo(['clean'], options?.cwd)
 }

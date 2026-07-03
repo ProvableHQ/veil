@@ -1,10 +1,16 @@
 import type { Client } from '../../clients/createClient.js'
 import type { Network } from '../../types/wallet.js'
 
+/**
+ * Parameters for `walletClient.switchChain`.
+ *
+ * @property network Network to switch to, e.g. `'mainnet'` or `'testnet'`.
+ */
 export type SwitchChainParameters = {
   network: Network
 }
 
+/** Resolves with no value once the client targets the new network. */
 export type SwitchChainReturnType = void
 
 /**
@@ -16,6 +22,12 @@ export type SwitchChainReturnType = void
  *   stays the same — Aleo private keys, view keys, and addresses are
  *   network-agnostic. Requires the proving config to expose `switchNetwork`
  *   (provided by `@veil/provable-sdk`).
+ *
+ * @param client Wallet client to re-target.
+ * @param params The network to switch to.
+ *
+ * @example
+ * await walletClient.switchChain({ network: 'mainnet' })
  */
 export async function switchChain(
   client: Client,

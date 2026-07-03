@@ -60,6 +60,14 @@ import { getTokenDetails, type GetTokenDetailsParameters, type GetTokenDetailsRe
 import { getProgramMetricsByRange, type GetProgramMetricsByRangeParameters, type GetProgramMetricsByRangeReturnType } from '../../actions/public/getProgramMetricsByRange.js'
 import type { Client } from '../createClient.js'
 
+/**
+ * Read-only actions attached to a {@link PublicClient}.
+ *
+ * Each method binds the client to the correspondingly named action and hits the
+ * network to query chain state — blocks, transactions, balances, program
+ * mappings, and network metrics. See each action's own documentation for its
+ * parameters, return value, and behavior.
+ */
 export type PublicActions = {
   getBlockNumber: () => Promise<GetBlockNumberReturnType>
   getBlock: (params: GetBlockParameters) => Promise<GetBlockReturnType>
@@ -117,6 +125,22 @@ export type PublicActions = {
   getProgramMetricsByRange: (params: GetProgramMetricsByRangeParameters) => Promise<GetProgramMetricsByRangeReturnType>
 }
 
+/**
+ * Binds the read-only actions to a client for use with `extend`.
+ *
+ * {@link createPublicClient} applies this; call it directly only when composing a
+ * custom client. Each returned method forwards to its action with `client` bound.
+ *
+ * @param client The client the actions run against.
+ * @returns The public actions bound to `client`.
+ *
+ * @example
+ * import { createClient, http } from '@veil/core'
+ *
+ * const client = createClient({
+ *   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+ * }).extend(publicActions)
+ */
 export function publicActions(client: Client): PublicActions {
   return {
     getBlockNumber: () => getBlockNumber(client),

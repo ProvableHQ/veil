@@ -35,6 +35,21 @@ function parseInt_(raw: string): Primitive {
   return result
 }
 
+/**
+ * Parses a Leo ABI JSON primitive descriptor into Veil's lowercase
+ * `Primitive` name.
+ *
+ * Reached through `parseAbi`; call it directly only when handling raw Leo
+ * ABI fragments by hand. Pure and local.
+ *
+ * @param raw Leo JSON primitive: a capitalized string variant such as
+ *   `"Address"`, or a `{ UInt }` / `{ Int }` object variant.
+ * @returns The primitive name, e.g. `'u8'` or `'address'`.
+ * @throws If the variant is not a known Leo primitive.
+ *
+ * @example
+ * parsePrimitive({ UInt: 'U64' }) // 'u64'
+ */
 export function parsePrimitive(raw: unknown): Primitive {
   // Simple string variants: "Address", "Boolean", "Field", etc.
   if (typeof raw === 'string') {
@@ -69,6 +84,20 @@ export function parsePrimitive(raw: unknown): Primitive {
 //   { "Array": { "element": { "Primitive": "Boolean" }, "length": 4 } }
 //   { "Optional": { "Primitive": "Boolean" } }
 
+/**
+ * Parses a Leo ABI JSON plaintext type descriptor into Veil's `Plaintext`
+ * discriminated union. Handles primitives, structs, arrays, and optionals,
+ * recursing into nested element types. Pure and local.
+ *
+ * @param raw Leo JSON plaintext, e.g. `{ Primitive: { UInt: 'U8' } }` or
+ *   `{ Array: { element: ..., length: 4 } }`.
+ * @returns The type as a `{ kind: ... }` union member.
+ * @throws If the variant is not a known Leo plaintext shape.
+ *
+ * @example
+ * parsePlaintext({ Primitive: 'Boolean' })
+ * // { kind: 'primitive', primitive: 'boolean' }
+ */
 export function parsePlaintext(raw: unknown): Plaintext {
   if (typeof raw !== 'object' || raw === null) {
     throw new Error(`Invalid Plaintext: ${JSON.stringify(raw)}`)

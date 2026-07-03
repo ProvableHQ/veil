@@ -6,46 +6,58 @@
 import type { Plaintext } from './primitives.js'
 
 // ---- Mode ----
-// Visibility of a function input, output, or record field.
 
+/** Visibility of a function input, output, or record field. */
 export type Mode = 'none' | 'constant' | 'private' | 'public'
 
 // ---- Struct and Record definitions ----
 // Full definitions including fields, not just references by name.
 
+/** One named field of a struct definition. */
 export type StructField = {
   name: string
   type: Plaintext
 }
 
+/** One named field of a record definition, with its on-chain visibility. */
 export type RecordField = {
   name: string
   type: Plaintext
   mode: Mode
 }
 
-// A struct definition. path is single-element for top-level structs,
-// multi-element for module structs e.g. ['utils', 'Vector3'].
+/**
+ * A struct definition with its full field list.
+ *
+ * @property path Struct name path — single-element for top-level structs,
+ *   multi-element for module structs (e.g. `['utils', 'Vector3']`).
+ */
 export type StructDef = {
   path: string[]
   fields: StructField[]
 }
 
-// A record definition. Records always have an implicit `owner: address` field.
+/**
+ * A record definition with its full field list. Records always have an
+ * implicit `owner: address` field in addition to the fields listed here.
+ */
 export type RecordDef = {
   path: string[]
   fields: RecordField[]
 }
 
 // ---- Function input/output types ----
-// Functions can accept plaintext, record, or dynamic record inputs.
-// Outputs can be plaintext, record, dynamic record, or a finalize handle.
 
+/** Type descriptor for a function input: plaintext, a named record, or a dynamic record. */
 export type FunctionInput =
   | { kind: 'plaintext'; type: Plaintext }
   | { kind: 'record'; path: string[]; program?: string; dynamicId?: string }
   | { kind: 'dynamicRecord' }
 
+/**
+ * Type descriptor for a function output: plaintext, a record, a dynamic
+ * record, or a future handle for an on-chain finalize block.
+ */
 export type FunctionOutput =
   | { kind: 'plaintext'; type: Plaintext }
   | { kind: 'record'; path: string[]; program?: string; dynamicId?: string }
@@ -55,27 +67,39 @@ export type FunctionOutput =
 
 // ---- Function ----
 
+/**
+ * A function input as declared in the ABI.
+ *
+ * @property name Parameter name. Present in Leo ABI JSON; "arg1", "arg2" when
+ *   produced by the disassembler; undefined if unknown.
+ */
 export type Input = {
-  name?: string  // present from Leo ABI JSON; "arg1", "arg2" from disassembler; undefined if unknown
+  name?: string
   type: FunctionInput
   mode: Mode
 }
 
+/** A function output as declared in the ABI. */
 export type Output = {
   type: FunctionOutput
   mode: Mode
 }
 
+/**
+ * A function entry in a program's ABI.
+ *
+ * @property isFinal True if the function has an on-chain finalize block.
+ */
 export type AbiFunction = {
   name: string
-  isFinal: boolean              // true if the function has a finalize block
+  isFinal: boolean
   inputs: Input[]
   outputs: Output[]
 }
 
 // ---- Mapping ----
-// On-chain key-value storage.
 
+/** An on-chain key-value mapping declared by the program. */
 export type Mapping = {
   name: string
   key: Plaintext
@@ -83,24 +107,32 @@ export type Mapping = {
 }
 
 // ---- Storage variables ----
-// Leo-level storage (not native to Aleo bytecode — lowered to mappings with
-// a `__` suffix convention during compilation).
 
+/** Type descriptor for a Leo storage variable: plaintext or a vector of storage types. */
 export type StorageType =
   | { kind: 'plaintext'; type: Plaintext }
   | { kind: 'vector'; element: StorageType }
 
+/**
+ * A Leo-level storage variable. Not native to Aleo bytecode — lowered to
+ * mappings with a `__` suffix convention during compilation.
+ */
 export type StorageVariable = {
   name: string
   type: StorageType
 }
 
 // ---- Program ----
-// The full ABI for a deployed program. This is what gets stored in Provapipe
-// and served by the API.
 
+/**
+ * The full ABI of a deployed program: its structs, records, mappings, storage
+ * variables, and functions. This is what gets stored in Provapipe and served
+ * by the API.
+ *
+ * @property program Program id (e.g. "tictactoe.aleo").
+ */
 export type ABI = {
-  program: string               // e.g. "tictactoe.aleo"
+  program: string
   structs: StructDef[]
   records: RecordDef[]
   mappings: Mapping[]

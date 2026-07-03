@@ -5,18 +5,24 @@ import type { Plaintext, Primitive } from '@veil/core'
 
 // ── Public API ────────────────────────────────────────────────────────
 
+/**
+ * Options for {@link generate}.
+ *
+ * @property abi Parsed ABI the bindings are generated from — it supplies the
+ *   structs, records, functions, mappings, and storage variables to emit.
+ * @property coreImport Import path emitted for `@veil/core` types. Defaults to
+ *   `'@veil/core'`. Override when the generated file resolves core through an
+ *   alias or a relative path (e.g. inside the monorepo).
+ * @property programId Program id to stamp into the emitted `PROGRAM_ID` and
+ *   the generated contract factory. Defaults to the ABI's own `program`.
+ *   Override when the bindings' shape is taken from one deployment's ABI but
+ *   they target another — e.g. when a newer program version's ABI is the only
+ *   one current tooling can parse, yet the live deployment (identical shape)
+ *   has a different id.
+ */
 export interface GenerateOptions {
-  /** The parsed ABI to generate from */
   abi: ABI
-  /** Import path for @veil/core types (default: '@veil/core') */
   coreImport?: string
-  /**
-   * Program id to stamp into the emitted `PROGRAM_ID` and the generated
-   * contract factory. Defaults to the ABI's own `program`. Override when the
-   * bindings' shape is taken from one deployment's ABI but they target another
-   * — e.g. when a newer program version's ABI is the only one current tooling
-   * can parse, yet the live deployment (identical shape) has a different id.
-   */
   programId?: string
 }
 
@@ -358,8 +364,8 @@ function primitiveToTsType(p: Primitive): string {
  *
  * The raw value stored in RecordFieldValue is always a bigint for all integer
  * widths (parsed by core's parseValue). For u8/u16/u32 and i8/i16/i32 fields
- * (typed as `number`), we wrap with Number() to convert at runtime. For u64+
- * (typed as `bigint`), we cast directly. For non-primitive types (array,
+ * (typed as `number`), the access is wrapped with Number() to convert at
+ * runtime. For u64+ (typed as `bigint`), it is cast directly. For non-primitive types (array,
  * optional) the raw access is returned unchanged — those fall through to the
  * caller's existing handling.
  *
