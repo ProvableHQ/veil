@@ -200,6 +200,74 @@ throw `BridgeError` subclasses: `BridgeEnvelopeError` (malformed response
 envelope), `BridgeOrderFailedError` (terminal order failure — carries the
 order status), `BridgeTimeoutError` (polling deadline hit).
 
+## Swapping bridged assets on Shield Swap
+
+Bridged-in value lands as an Aleo asset (USDC on Ethereum arrives as
+`USDC_ALEO`, ETH as `ETH_ALEO`), and from there it is ordinary Aleo money —
+including tradeable on the Shield Swap DEX via `@veil/shield-swap`. Both
+packages hang off the same `@veil/core` wallet client, so one signer runs the
+whole chain: bridge in, trade privately, bridge back out.
+
+```ts
+import { createBridgeClient, httpBridge } from '@veil/bridge'
+import { shieldSwapActions } from '@veil/shield-swap'
+import { createWalletClient, custom, erc20Abi, parseUnits } from 'viem'
+import { mainnet } from 'viem/chains'
+
+// One Aleo wallet client, two Veil surfaces.
+const bridge = createBridgeClient({
+  transport: httpBridge('https://wallet.api.provable.com'),
+  wallet: walletClient,
+})
+const dex = walletClient.extend(shieldSwapActions({ api: {} }))
+
+// 1. Bridge in: quote the route and create the order.
+const { quotes } = await bridge.getQuotes({
+  srcChain: 'EVM:1', srcAsset: 'USDC_ETH',
+  destChain: 'ALEO', destAsset: 'USDC_ALEO',
+  amountIn: '250',
+  recipientAddress: aleoAddress, refundAddress: ethAddress,
+})
+const q = quotes[0]
+const order = await bridge.createOrder({
+  providerId: q.provider.id,
+  srcChain: q.srcChain, destChain: q.destChain,
+  srcAsset: q.srcAsset, destAsset: q.destAsset,
+  amountIn: q.amountIn,
+  walletAddress: aleoAddress,           // where the bridged USDC lands
+  quoteId: (q.quoteId ?? q.quoteOptionId)!,
+})
+
+// 2. Pay the deposit from the user's EVM wallet — this side is plain viem.
+const evm = createWalletClient({ chain: mainnet, transport: custom(window.ethereum) })
+const [ethAccount] = await evm.getAddresses()
+await evm.writeContract({
+  account: ethAccount,
+  address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC on Ethereum
+  abi: erc20Abi,
+  functionName: 'transfer',
+  args: [order.depositAddress as `0x${string}`, parseUnits(order.depositAmount!, 6)],
+})
+await bridge.waitForOrder({ id: order.orderId }) // USDC_ALEO arrives
+
+// 3. Trade on the DEX: privatize, swap, claim.
+const handle = await dex.swapPrivate({ poolKey, tokenInId, amountIn, slippageBps: 50, tokenInProgram, imports })
+await dex.claimSwapOutputPrivate({ handle, imports })
+
+// 4. Bridge back out — one call, deposit signed by the same Aleo wallet.
+await bridge.swap({
+  from: { asset: 'ALEO_MAINNET', amount: '100' },
+  to: { chain: 'SOLANA', asset: 'SOL_SOLANA', address: solAddress },
+  poll: true,
+})
+```
+
+The whole chain is exercised by
+[`packages/shield-swap/test/integration/bridgeRoundTrip.e2e.test.ts`](../shield-swap/test/integration/bridgeRoundTrip.e2e.test.ts),
+which also documents the two seams to know about: the inbound deposit needs a
+source-chain signer, and the DEX currently runs on testnet while the bridge is
+mainnet.
+
 ## Agent and MCP tools
 
 Every action ships as an agent tool. `createBridgeAgentTools(client)` (from

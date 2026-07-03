@@ -184,6 +184,9 @@ importers:
       '@provablehq/sdk':
         specifier: ^0.11.3
         version: 0.11.3
+      '@veil/bridge':
+        specifier: workspace:*
+        version: link:../bridge
       '@veil/codegen':
         specifier: workspace:*
         version: link:../codegen

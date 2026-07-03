@@ -197,6 +197,71 @@ const account = viewOnlyAccount({
 // Use the view key to decrypt records without signing authority
 ```
 
+## Bridging in and out
+
+`@veil/bridge` moves value between Aleo and other chains (Solana, Ethereum and
+other EVM networks, Bitcoin, Tron) through third-party swap providers. Aleo is
+always one side of the pair. Amounts are decimal strings in display units, and
+assets use the API's chain-qualified codes (`ALEO_MAINNET`, `USDC_ETH`) —
+never bare symbols.
+
+Bridging **out** is one call. The client carries the signing wallet, and
+`swap` runs the whole chain: quote the route, create the order, sign and
+broadcast the Aleo deposit, and (with `poll`) wait until the funds arrive:
+
+```ts
+import { createBridgeClient, httpBridge } from '@veil/bridge'
+
+const bridge = createBridgeClient({
+  transport: httpBridge('https://wallet.api.provable.com'),
+  wallet: walletClient, // @veil/core WalletClient — signs the Aleo deposit
+})
+
+const result = await bridge.swap({
+  from: { asset: 'ALEO_MAINNET', amount: '100' },
+  to: { chain: 'SOLANA', asset: 'SOL_SOLANA', address: solAddress },
+  poll: true, // wait for COMPLETED
+})
+result.depositTxId // at1... — the Aleo deposit
+```
+
+Bridging **in** starts on the other chain, so the deposit is signed there —
+from this SDK you quote the route and create the order, then pay the returned
+deposit instructions from the source-chain wallet:
+
+```ts
+const { quotes } = await bridge.getQuotes({
+  srcChain: 'EVM:1', srcAsset: 'USDC_ETH',
+  destChain: 'ALEO', destAsset: 'USDC_ALEO',
+  amountIn: '250',
+  recipientAddress: aleoAddress, // where the USDC lands on Aleo
+  refundAddress: ethAddress,
+})
+const q = quotes[0]
+const order = await bridge.createOrder({
+  providerId: q.provider.id,
+  srcChain: q.srcChain, destChain: q.destChain,
+  srcAsset: q.srcAsset, destAsset: q.destAsset,
+  amountIn: q.amountIn,
+  walletAddress: aleoAddress,
+  quoteId: (q.quoteId ?? q.quoteOptionId)!,
+})
+// → pay order.depositAmount to order.depositAddress from the user's EVM
+//   wallet — that side is plain viem (an erc20 transfer via writeContract;
+//   see packages/bridge/README.md for the full snippet) — then
+await bridge.waitForOrder({ id: order.orderId })
+```
+
+Bridged-in assets are ordinary Aleo tokens — tradeable on the Shield Swap DEX
+via `@veil/shield-swap` with the same wallet client. The live examples are the
+e2e tests:
+[`packages/bridge/test/integration/e2e.test.ts`](./packages/bridge/test/integration/e2e.test.ts)
+runs the full outbound swap chain, and
+[`packages/shield-swap/test/integration/bridgeRoundTrip.e2e.test.ts`](./packages/shield-swap/test/integration/bridgeRoundTrip.e2e.test.ts)
+chains bridge in → DEX swap → bridge out. See
+[`packages/bridge/README.md`](./packages/bridge/README.md) for providers,
+routes, and route discovery.
+
 ## Agent Usage
 
 veil is designed for two audiences equally: human developers who write code against the TypeScript library, and AI agents that either write code using viem patterns or call tools directly.

@@ -463,6 +463,7 @@ ALEO_CONSUMER_ID=...        # delegated proving + record scanning — write tier
 | [`balances.integration.test.ts`](./test/integration/balances.integration.test.ts) | write | The composed balance view — public balances from the API joined with private balances decoded from the account's records. Needs the account because private balances live in its records. |
 | [`poolCreation.integration.test.ts`](./test/integration/poolCreation.integration.test.ts) | write | Creates a pool on testnet: finds a token pair and a registered fee tier, calls `createPool`, then polls `isPoolInitialized` until the finalize propagates. If the pair already has a pool at every tier tried, it confirms the contract rejects the duplicate instead. |
 | [`e2e.test.ts`](./test/integration/e2e.test.ts) | write | The full private-swap lifecycle — airdrop, privatize records, ensure a pool, `swapPrivate`, read the output, `claimSwapOutputPrivate`. |
+| [`bridgeRoundTrip.e2e.test.ts`](./test/integration/bridgeRoundTrip.e2e.test.ts) | write | The cross-product chain with `@veil/bridge`: verify the inbound bridge route, swap on the DEX, bridge the proceeds out. Additionally gated by `VEIL_BRIDGE_E2E=1` — the bridge leg spends mainnet ALEO. |
 
 Run one file, or a set:
 
