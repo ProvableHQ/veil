@@ -227,15 +227,35 @@ client — expose it only to agents you intend to let move funds. The rest
 ## Integration tests
 
 `test/integration/` runs against the **live** API and its real providers —
-never mocked — gated behind `VEIL_INTEGRATION=1` so the default suite stays
-offline. The tests are read-only (quotes and error paths; no orders, no
-funds), but every quote request does fan out to real provider systems.
-`VEIL_BRIDGE_API_URL` overrides the target deployment.
+never mocked — in two tiers, gated so the default suite stays offline.
+`VEIL_BRIDGE_API_URL` overrides the target deployment for both.
+
+**Read-only tier** (`api.integration.test.ts`) needs only
+`VEIL_INTEGRATION=1`. Quotes and error paths; no orders, no funds — though
+every quote request does fan out to real provider systems.
 
 ```sh
-VEIL_INTEGRATION=1 pnpm exec vitest run packages/bridge/test/integration
+VEIL_INTEGRATION=1 pnpm exec vitest run packages/bridge/test/integration/api.integration.test.ts
 ```
 
 Route assertions are deliberately loose — only the flagship ALEO → SOL route
 is required to quote, everything else asserts invariants of whatever comes
 back — because route availability is a moving target.
+
+**Swap e2e tier** (`e2e.test.ts`) runs the whole chain on **mainnet**: quote,
+create the order, sign and broadcast the Aleo unshield deposit, poll the
+order to `COMPLETED`, and audit it. This spends real ALEO and delivers real
+SOL, so it takes an explicit second gate on top of the integration flag plus
+a mainnet-funded account and proving credentials:
+
+```sh
+VEIL_INTEGRATION=1 VEIL_BRIDGE_E2E=1 \
+  pnpm exec vitest run packages/bridge/test/integration/e2e.test.ts
+```
+
+Requires `VEIL_E2E_PRIVATE_KEY` (funded on mainnet), `ALEO_DPS_API_KEY`, and
+`ALEO_CONSUMER_ID`. `VEIL_BRIDGE_SWAP_AMOUNT` sets the decimal ALEO to swap
+(default `5` — providers reject amounts below their minimums) and
+`VEIL_BRIDGE_DEST_ADDRESS` the Solana recipient. The test shields a private
+record first when none covers the deposit, and fails before moving funds if
+no provider quotes the route.
