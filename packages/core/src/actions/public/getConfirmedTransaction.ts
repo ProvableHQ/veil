@@ -17,8 +17,8 @@ export type GetConfirmedTransactionReturnType = ConfirmedTransaction
  *
  * Queries the connected Aleo node, so it hits the network. Unlike
  * `getTransaction`, which returns the bare transaction, this wraps it with
- * whether it was accepted or rejected and its index in the block — reach for
- * it when the outcome matters, e.g. to confirm a transfer landed.
+ * whether it was accepted or rejected and its index in the block — use it
+ * when the outcome matters, e.g. to confirm a transfer landed.
  *
  * @param client Client whose transport serves the query.
  * @param params Transaction to fetch.

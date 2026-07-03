@@ -111,7 +111,7 @@ export type GetTokenDetailsReturnType = {
 /**
  * Fetches a token's registry entry and price history.
  *
- * Reach for this for one token's metadata and market data; use `getTokens` to
+ * Covers one token's metadata and market data; use `getTokens` to
  * list registered tokens. Queries the connected node, so it hits the network.
  *
  * @param client Client whose transport serves the query.

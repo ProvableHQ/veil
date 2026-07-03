@@ -7,7 +7,7 @@ export type GetValidatorApyReturnType = ValidatorApy[]
 /**
  * Fetches the estimated staking APY for each validator.
  *
- * Reach for this when choosing a validator to bond to; use `getApy` for the
+ * Applies when choosing a validator to bond to; use `getApy` for the
  * network-wide rate. APY values are decimal percentages (10.9 means 10.9%).
  * Queries the connected node, so it hits the network.
  *

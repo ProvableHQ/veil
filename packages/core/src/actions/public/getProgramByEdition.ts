@@ -15,8 +15,8 @@ export type GetProgramByEditionReturnType = string
 /**
  * Fetches a program's source at a specific edition.
  *
- * Aleo programs are upgradeable; each upgrade deploys a new edition. Reach for
- * this to inspect a historical version — use `getCode` for the current source
+ * Aleo programs are upgradeable; each upgrade deploys a new edition. Use it
+ * to inspect a historical version — use `getCode` for the current source
  * and `getLatestEdition` to find the newest edition number. Queries the
  * connected node, so it hits the network.
  *

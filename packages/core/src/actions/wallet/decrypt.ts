@@ -28,7 +28,7 @@ export type DecryptReturnType = string
 /**
  * Decrypts a ciphertext the account's view key can open.
  *
- * Reach for this to read a record returned by an execution, or a private
+ * Use it to read a record returned by an execution, or a private
  * transition output. For local accounts the view key is held locally, so
  * decryption runs in-process via the proving config and never touches the
  * network. For RPC accounts the request goes to the wallet adapter, which
@@ -53,7 +53,7 @@ export async function decrypt(
   }
 
   // Local accounts — use the SDK-backed decrypt on the proving config.
-  // The wallet adapter transport doesn't apply; we have the view key locally.
+  // The wallet adapter transport doesn't apply; the view key is held locally.
   if (account.type === 'local' && client.proving?.decrypt) {
     return client.proving.decrypt(
       params.cipherText,

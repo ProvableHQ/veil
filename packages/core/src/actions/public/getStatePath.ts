@@ -21,7 +21,7 @@ export type GetStatePathReturnType = string
 /**
  * Fetches the Merkle state path proving a record commitment's inclusion in the ledger.
  *
- * Spending a record requires its state path, so reach for this when building
+ * Spending a record requires its state path, so call this when building
  * execution proofs outside a node. The path verifies against the global state
  * root (see `getStateRoot`). Queries the connected node, so it hits the
  * network. Use `getStatePaths` to fetch several paths in one round trip.

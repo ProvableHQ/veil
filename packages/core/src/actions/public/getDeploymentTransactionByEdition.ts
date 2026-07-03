@@ -15,7 +15,7 @@ export type GetDeploymentTransactionByEditionReturnType = string
  * Retrieves the id of the transaction that deployed a specific edition of a
  * program.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it when
+ * Queries the connected Aleo node, so it hits the network. Use it when
  * tracing a program's upgrade history edition by edition;
  * `getDeploymentTransaction` covers the common case without an edition
  * number.

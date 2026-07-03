@@ -13,8 +13,8 @@ import { parseProgram } from '../contract/parseProgram.js'
  * Construction is pure and local; each handler hits the network through
  * `client` when invoked and resolves to structured JSON matching its schema
  * in `publicToolSchemas`. Most callers get these pre-wired via
- * `aleoAgentTools` or `createAgentTools`; reach for this directly only when
- * pairing handlers with schemas yourself.
+ * `aleoAgentTools` or `createAgentTools`; call this directly only to pair
+ * handlers with schemas by hand.
  *
  * @param client Public client whose transport serves every read.
  * @returns One handler per tool in `publicToolSchemas`, keyed by tool name

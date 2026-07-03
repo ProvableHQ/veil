@@ -10,7 +10,7 @@ type CustomTransportConfig = {
 /**
  * Creates a transport backed by a caller-supplied request function.
  *
- * Reach for this to route requests through an existing provider — an injected
+ * Use for routing requests through an existing provider — an injected
  * wallet, a proxy, or a test double — instead of Veil's built-in HTTP path.
  * Building the transport is pure; the supplied `request` function is what
  * performs I/O when the transport is called.

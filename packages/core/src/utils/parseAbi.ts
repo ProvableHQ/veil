@@ -264,7 +264,7 @@ function reconstructStorageVariables(mappings: Mapping[]): {
   const regularMappings: Mapping[] = []
 
   // Candidates: mappings ending with __ and a u32 key that might be vectors.
-  // We collect them separately and resolve after the main pass once we know
+  // Collected separately and resolved after the main pass, once it is known
   // which ones have a corresponding __len__ mapping.
   const vectorCandidates = new Map<string, Mapping>() // name__ → mapping
   const lenMappingNames = new Set<string>()            // name__ of confirmed vectors
@@ -283,7 +283,7 @@ function reconstructStorageVariables(mappings: Mapping[]): {
     }
 
     if (m.name.endsWith('__') && m.key.kind === 'primitive' && m.key.primitive === 'u32') {
-      // Possible vector — defer until we've seen all mappings
+      // Possible vector — defer until all mappings have been seen
       vectorCandidates.set(m.name, m)
       continue
     }

@@ -14,9 +14,9 @@ export type GetBlockTransactionsReturnType = ConfirmedTransaction[]
 /**
  * Retrieves the confirmed transactions in a block at a given height.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it when
- * you only need a block's transactions; `getBlock` returns them along with
- * the header. If you hold a block hash instead of a height, use
+ * Queries the connected Aleo node, so it hits the network. Applies when only
+ * a block's transactions are needed; `getBlock` returns them along with
+ * the header. Given a block hash instead of a height, use
  * `getBlockTransactionsByHash`.
  *
  * @param client Client whose transport serves the query.

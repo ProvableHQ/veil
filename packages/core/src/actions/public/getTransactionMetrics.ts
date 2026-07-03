@@ -8,7 +8,7 @@ export type GetTransactionMetricsReturnType = TransactionMetricPoint[]
  * Fetches daily transaction counts for the network.
  *
  * Each point pairs a day bucket with the number of transactions that day.
- * Reach for this to chart network activity over time. Queries the connected
+ * Use it to chart network activity over time. Queries the connected
  * node, so it hits the network.
  *
  * @param client Client whose transport serves the query.

@@ -14,9 +14,9 @@ export type GetOriginalDeploymentTransactionReturnType = string | null
  * Retrieves the id of the transaction that originally deployed a program
  * edition, before any amendments.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it when
- * an edition has been amended and you need the deployment as it was first
- * published; `getAmendmentDeploymentTransaction` resolves the individual
+ * Queries the connected Aleo node, so it hits the network. Use it to see an
+ * amended edition's deployment as it was first published;
+ * `getAmendmentDeploymentTransaction` resolves the individual
  * amendments that followed.
  *
  * @param client Client whose transport serves the query.

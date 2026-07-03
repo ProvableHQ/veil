@@ -21,7 +21,7 @@ export type ToAccountSource = {
 /**
  * Constructs a typed account from a source object, branching on its `type`.
  *
- * Reach for this to build an account without going through a specific
+ * Use for building an account without going through a specific
  * constructor: pass `type: 'rpc'` for wallet-delegated signing, or
  * `type: 'local'` with key material for local signing. Pure and local; it
  * shapes the input into an account and touches neither the network nor a key.

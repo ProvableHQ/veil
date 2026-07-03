@@ -19,7 +19,7 @@ export type LocalWalletClientConfig = {
   account: LocalAccount
   transport: Transport
   proving: ProvingConfig
-  /** Record provider for fetching records. Required if you need requestRecords with a local account. */
+  /** Record provider for fetching records. Required for requestRecords with a local account. */
   recordProvider?: RecordProvider
   key?: string | undefined
   name?: string | undefined
@@ -30,8 +30,8 @@ export type LocalWalletClientConfig = {
  *
  * Use {@link RpcWalletClientConfig} with an RPC account, where the connected
  * wallet handles proving and records; use {@link LocalWalletClientConfig} with a
- * local account, where you supply the proving configuration and, optionally, a
- * record provider.
+ * local account, where the caller supplies the proving configuration and,
+ * optionally, a record provider.
  */
 export type WalletClientConfig = RpcWalletClientConfig | LocalWalletClientConfig
 
@@ -49,8 +49,8 @@ export type WalletClient = Client & WalletActions & {
 /**
  * Creates a client that signs and submits transactions.
  *
- * Reach for this to write to the chain — call programs, transfer credits, deploy,
- * and sign messages. Pass an RPC account to delegate proving and records to a
+ * Use for writes to the chain — calling programs, transferring credits, deploying,
+ * and signing messages. Pass an RPC account to delegate proving and records to a
  * connected wallet, or a local account with a proving configuration to prove in
  * process. The returned client's write methods sign and hit the network.
  *

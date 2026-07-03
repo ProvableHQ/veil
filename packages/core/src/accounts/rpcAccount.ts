@@ -9,7 +9,7 @@ type RpcAccountSource = {
 /**
  * Wraps an external signer as an RPC account for use with a wallet client.
  *
- * Reach for this when signing is delegated to a wallet or other provider that
+ * Applies when signing is delegated to a wallet or other provider that
  * holds the private key: the returned account carries the address and forwards
  * signing to the supplied callbacks. Building the account is pure; the `sign`
  * and `signMessage` callbacks are what hit the wallet.

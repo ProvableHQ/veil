@@ -13,7 +13,7 @@ export type RequestRecordsReturnType = OwnedRecord[] | OwnedRecordEncrypted[]
 /**
  * Fetches the account's records for a program.
  *
- * Reach for this to find spendable records — private balances, program-issued
+ * Use it to find spendable records — private balances, program-issued
  * assets — before passing one as a function input. Hits the network: RPC
  * accounts delegate to the wallet adapter (which may prompt the user), local
  * accounts scan via the client's configured `recordProvider` (e.g.

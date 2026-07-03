@@ -13,8 +13,8 @@ export type FindBlockHeightByStateRootReturnType = number
 /**
  * Finds the height of the block that produced a state root.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it when
- * verifying a state path or proof anchored to a state root and you need the
+ * Queries the connected Aleo node, so it hits the network. Use it while
+ * verifying a state path or proof anchored to a state root, to locate the
  * block it came from.
  *
  * @param client Client whose transport serves the query.

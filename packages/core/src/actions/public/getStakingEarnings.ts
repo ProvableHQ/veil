@@ -15,8 +15,8 @@ export type GetStakingEarningsReturnType = StakingEarnings
  * Fetches the cumulative staking rewards earned by an address.
  *
  * Rewards are reported in microcredits (u64), together with the block height
- * the total was computed at. Reach for this to show a staker's lifetime
- * earnings; use `getApy` or `getValidatorApy` for forward-looking yield.
+ * the total was computed at. Use it to show a staker's lifetime earnings;
+ * use `getApy` or `getValidatorApy` for forward-looking yield.
  * Queries the connected node, so it hits the network.
  *
  * @param client Client whose transport serves the query.

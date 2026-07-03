@@ -15,7 +15,7 @@ export type GetStateRootReturnType = string
  * Fetches the ledger's global state root, at a given height or the latest block.
  *
  * The state root commits to the entire ledger; the state paths returned by
- * `getStatePath` verify against it. Reach for this when checking inclusion
+ * `getStatePath` verify against it. Applies when checking inclusion
  * proofs or anchoring off-chain data to a ledger state. Queries the connected
  * node, so it hits the network.
  *

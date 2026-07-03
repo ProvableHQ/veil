@@ -207,9 +207,9 @@ export function leoActions(config: LeoClientConfig = {}) {
  *
  * Construction is cheap and does nothing on its own; each method call spawns
  * a `leo` child process, so the Leo CLI MUST be installed
- * (https://developer.aleo.org/leo/installation). Reach for this when a script
+ * (https://developer.aleo.org/leo/installation). Applies when a script
  * or test needs to compile, deploy, or synthesize keys for a Leo project;
- * prefer {@link leoActions} when you already hold a veil client.
+ * prefer {@link leoActions} when a veil client is already in hand.
  *
  * @param config Defaults forwarded to every command. Defaults to `{}` — the
  *   `leo` binary is resolved on PATH and runs in the current working directory.
@@ -392,7 +392,7 @@ function runLeoCapture(args: string[], cwd?: string, leoPath = 'leo'): Promise<s
  * Compiles a Leo project by spawning `leo build` as a child process.
  *
  * Requires the Leo CLI on PATH. This is the zero-config path for scripts;
- * use {@link createLeoClient} when you need compiler flags or shared defaults.
+ * use {@link createLeoClient} when compiler flags or shared defaults are needed.
  *
  * @param options.cwd Project directory to build. Defaults to the current
  *   working directory.

@@ -25,7 +25,7 @@ export type GetAmendmentCountByEditionReturnType = {
  * Retrieves the number of amendments applied to a specific edition of a
  * program.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it when
+ * Queries the connected Aleo node, so it hits the network. Applies when
  * auditing an older edition; `getAmendmentCount` covers the latest edition
  * without needing an edition number.
  *

@@ -40,7 +40,7 @@ function parseInt_(raw: string): Primitive {
  * `Primitive` name.
  *
  * Reached through `parseAbi`; call it directly only when handling raw Leo
- * ABI fragments yourself. Pure and local.
+ * ABI fragments by hand. Pure and local.
  *
  * @param raw Leo JSON primitive: a capitalized string variant such as
  *   `"Address"`, or a `{ UInt }` / `{ Int }` object variant.

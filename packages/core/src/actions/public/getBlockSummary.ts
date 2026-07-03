@@ -7,9 +7,9 @@ export type GetBlockSummaryReturnType = BlockSummary[]
 /**
  * Retrieves summaries of the most recent blocks.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it to
+ * Queries the connected Aleo node, so it hits the network. Use it to
  * populate an explorer-style recent-blocks view without downloading full
- * blocks; use `getBlocks` when you need complete block contents.
+ * blocks; `getBlocks` returns complete block contents.
  *
  * @param client Client whose transport serves the query.
  * @returns Summaries of the latest blocks, newest first.

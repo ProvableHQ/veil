@@ -13,7 +13,7 @@ export type GetMappingNamesReturnType = string[]
 /**
  * Retrieves the names of the on-chain mappings a program declares.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it to
+ * Queries the connected Aleo node, so it hits the network. Use it to
  * discover what public state a program exposes before reading values with
  * `readContract`.
  *

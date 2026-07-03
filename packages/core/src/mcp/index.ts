@@ -34,9 +34,9 @@ export type McpToolDefinition = {
 /**
  * Transport-agnostic MCP server surface: the tool list plus a dispatcher.
  *
- * This is not a running process — wire it into an MCP SDK server yourself:
+ * This is not a running process — the caller wires it into an MCP SDK server:
  * serve `tools` from `tools/list` and route `tools/call` to `handleToolCall`
- * over whatever transport you choose (stdio, HTTP).
+ * over any transport (stdio, HTTP).
  *
  * @property tools Tool declarations to return from `tools/list`.
  * @property handleToolCall Dispatches a call by tool name and resolves to the

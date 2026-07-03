@@ -13,8 +13,8 @@ export type GetProgramCallsReturnType = unknown[]
 /**
  * Fetches the latest calls made into a program.
  *
- * Returns the node's most-recent-calls feed as untyped elements. Reach for
- * `getProgramCallsPaginated` instead when you need typed results or to page
+ * Returns the node's most-recent-calls feed as untyped elements. Use
+ * `getProgramCallsPaginated` instead for typed results or to page
  * through the full call history. Queries the connected node, so it hits the
  * network.
  *

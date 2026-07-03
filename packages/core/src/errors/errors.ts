@@ -109,7 +109,7 @@ export class InvalidInputError extends BaseError {
  * Thrown when `requestTransactionHistory` is called with a local account.
  * The Aleo REST API keeps no per-program history, so only RPC accounts
  * (connected wallet adapters) can serve this call — switch account type or
- * track transaction IDs yourself.
+ * track transaction IDs in the application.
  */
 export class TransactionHistoryNotSupportedError extends BaseError {
   constructor() {

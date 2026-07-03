@@ -13,8 +13,8 @@ export type FindBlockHashReturnType = string
 /**
  * Finds the hash of the block that contains a transaction.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it when
- * you hold a transaction id and need its block; follow up with
+ * Queries the connected Aleo node, so it hits the network. Use it to resolve
+ * a transaction id to its block; follow up with
  * `getBlock({ hash })` for the full block.
  *
  * @param client Client whose transport serves the query.

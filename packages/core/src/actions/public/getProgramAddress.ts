@@ -13,8 +13,8 @@ export type GetProgramAddressReturnType = string
 /**
  * Resolves a program ID to its on-chain address.
  *
- * Every deployed program owns an `aleo1…` address derived from its ID. Reach for
- * this when a program appears as a party to a transfer, or to check a program's
+ * Every deployed program owns an `aleo1…` address derived from its ID. Use it
+ * when a program appears as a party to a transfer, or to check a program's
  * public credits balance. Queries the connected node, so it hits the network.
  * Use `getProgramIdByAddress` for the reverse lookup.
  *

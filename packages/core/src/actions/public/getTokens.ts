@@ -8,7 +8,7 @@ export type GetTokensReturnType = TokenPage
  * Fetches the tokens registered on the network.
  *
  * Returns registry entries with market data where available, plus pagination
- * metadata. Reach for this to list tokens; use `getTokenDetails` for one
+ * metadata. Use it to list tokens; use `getTokenDetails` for one
  * token's entry and price history. Queries the connected node, so it hits the
  * network.
  *

@@ -21,7 +21,7 @@ const INTEGER_REGEX = /^(-?\d+)(u8|u16|u32|u64|u128|i8|i16|i32|i64|i128|field|sc
  * Use it to decode plaintext values returned by the network — mapping
  * reads, transition outputs — into JavaScript values. Pure and local; the
  * inverse of `encodeValue`. All numeric types decode to `bigint` regardless
- * of width; convert to `number` yourself for u64 and smaller if needed.
+ * of width; the caller converts to `number` for u64 and smaller if needed.
  *
  * @param raw Leo literal: a suffixed integer (`'5u8'`, `'-3i64'`,
  *   `'7field'`), `'true'`/`'false'`, or an `aleo1...` address.

@@ -15,7 +15,7 @@ export type GetCodeReturnType = string
  *
  * Queries the connected Aleo node, so it hits the network. The result is the
  * program's Aleo instructions text — Veil's analogue of viem's `getCode`,
- * which returns bytecode. Reach for it to inspect a program's functions,
+ * which returns bytecode. Use it to inspect a program's functions,
  * mappings, and record types before calling it.
  *
  * @param client Client whose transport serves the query.

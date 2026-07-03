@@ -5,7 +5,7 @@ import { createTransport } from './createTransport.js'
 /**
  * Combines transports into one that tries each in order until a request succeeds.
  *
- * Reach for this to pair a primary transport with backups — the typical case is
+ * Use for pairing a primary transport with backups — the typical case is
  * `[walletAdapter, http(url, { network })]`, where the wallet handles writes and
  * HTTP serves reads. On a call it invokes each transport in turn and returns the
  * first success; the returned transport is pure until called. Network is

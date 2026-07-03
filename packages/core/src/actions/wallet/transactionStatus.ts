@@ -52,7 +52,7 @@ export async function transactionStatus(
   // Derive status from the chain. Confirmed transactions live at
   // `/transaction/confirmed/{id}`, unconfirmed at `/transaction/unconfirmed/{id}`.
   // A "confirmed" transaction can still be rejected — the envelope carries
-  // its own `status: 'accepted' | 'rejected'`, which we surface verbatim.
+  // its own `status: 'accepted' | 'rejected'`, surfaced verbatim.
   try {
     const confirmed = await client.request({
       method: 'getConfirmedTransaction',

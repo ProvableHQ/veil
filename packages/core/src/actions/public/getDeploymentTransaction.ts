@@ -14,8 +14,8 @@ export type GetDeploymentTransactionReturnType = Transaction
 /**
  * Retrieves the transaction that deployed a program.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it to
- * find who deployed a program and when; for a specific edition's deployment
+ * Queries the connected Aleo node, so it hits the network. Use it to find
+ * who deployed a program and when; for a specific edition's deployment
  * use `getDeploymentTransactionByEdition`.
  *
  * @param client Client whose transport serves the query.

@@ -21,7 +21,7 @@ export type DeployContractReturnType = string
 /**
  * Deploys an Aleo program to the network.
  *
- * Reach for this to publish new program source; once the deployment is
+ * Use it to publish new program source; once the deployment is
  * accepted, the program is callable via `writeContract`. For RPC accounts the
  * wallet builds, proves, and broadcasts the deployment, prompting the user.
  * For local accounts the proving config builds and proves it, then the

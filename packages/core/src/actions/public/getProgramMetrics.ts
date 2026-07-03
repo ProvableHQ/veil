@@ -7,7 +7,7 @@ export type GetProgramMetricsReturnType = ProgramMetricPoint[]
 /**
  * Fetches call counts for every program on the network.
  *
- * Reach for this to rank programs by activity or gauge a program's usage
+ * Use it to rank programs by activity or gauge a program's usage
  * against the rest of the network; use `getProgramMetricsByRange` for one
  * program's daily history. Queries the connected node, so it hits the network.
  *

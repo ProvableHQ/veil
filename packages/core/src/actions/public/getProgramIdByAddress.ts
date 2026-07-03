@@ -13,9 +13,9 @@ export type GetProgramIdByAddressReturnType = string
 /**
  * Resolves a program's on-chain address to its program ID.
  *
- * Inverse of `getProgramAddress`. Reach for this when an `aleo1…` address in a
- * transfer or transition turns out to belong to a program and you need to know
- * which one. Queries the connected node, so it hits the network.
+ * Inverse of `getProgramAddress`. Use it to identify which program owns an
+ * `aleo1…` address seen in a transfer or transition. Queries the connected
+ * node, so it hits the network.
  *
  * @param client Client whose transport serves the query.
  * @param params Address to look up.

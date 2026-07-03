@@ -15,8 +15,8 @@ export type GetUnconfirmedTransactionReturnType = Transaction
  * Fetches a transaction in its original, as-submitted form.
  *
  * What lands on chain can differ from what was broadcast: a rejected
- * execution is stored with its transitions replaced by the fee. Reach for
- * this to inspect the original payload of a rejected transaction; use
+ * execution is stored with its transitions replaced by the fee. Use it to
+ * inspect the original payload of a rejected transaction; use
  * `getTransaction` for the on-chain form and `getConfirmedTransaction` for the
  * confirmed wrapper. Queries the connected node, so it hits the network.
  *

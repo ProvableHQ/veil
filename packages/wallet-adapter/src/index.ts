@@ -147,7 +147,7 @@ export interface AleoWalletAdapter {
 }
 
 /**
- * Union of our minimal interface and the real BaseAleoWalletAdapter.
+ * Union of Veil's minimal interface and the real BaseAleoWalletAdapter.
  * All public functions accept either shape — duck-typing handles
  * the differences since both expose the same method signatures.
  */
@@ -228,7 +228,7 @@ export function transportFromAdapter(adapter: AnyWalletAdapter): Transport<'cust
 
         case 'deployProgram': {
           // The wallet-standard `AleoDeployment` shape requires `priorityFee`,
-          // but our user-facing API treats fees as auto-estimated; pass 0 so
+          // but Veil's user-facing API treats fees as auto-estimated; pass 0 so
           // the wallet uses its own default.
           const deployment: AleoDeployment = {
             program: p?.program as string,

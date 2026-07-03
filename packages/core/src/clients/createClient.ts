@@ -59,7 +59,7 @@ export type Client = {
 /**
  * Creates a base client from a transport and optional account.
  *
- * Reach for this when building a custom client shape; the common cases have
+ * Applies when building a custom client shape; the common cases have
  * dedicated factories ({@link createPublicClient}, `createWalletClient`,
  * `createTestClient`) that call this and attach their actions. Pure and local —
  * it wires up configuration and does not touch the network.

@@ -155,7 +155,7 @@ function isABI(abi: ABI | Program): abi is ABI {
 /**
  * Binds an Aleo program to a client, exposing its mappings and functions as callable methods.
  *
- * Reach for this to interact with a program by name instead of assembling raw
+ * Use for interacting with a program by name instead of assembling raw
  * `readContract`/`writeContract` calls: `contract.read.<mapping>` fetches mapping
  * values, `contract.write.<function>` broadcasts a transaction, `contract.simulate`
  * proves locally, and `contract.execute` broadcasts and waits. When a rich ABI is
@@ -263,7 +263,7 @@ export function getContract(params: GetContractParameters): ContractInstance {
 
   /** Parse raw output strings — detect records and parse them */
   function parseOutputs(rawOutputs: string[], fnName: string): ParsedOutput[] {
-    // If we have the rich ABI, try to find RecordDefs for typed parsing
+    // With a rich ABI, look up RecordDefs for typed parsing
     if (resolvedAbi) {
       const fn = resolvedAbi.functions.find((f) => f.name === fnName)
       return rawOutputs.map((raw, i) => {

@@ -14,7 +14,7 @@ export type GetTransitionViewKeysReturnType = string[]
  * Requests the transition view keys for a transaction's transitions.
  *
  * A transition view key lets its holder decrypt that transition's encrypted
- * inputs and outputs, so reach for this to reveal a private transaction to an
+ * inputs and outputs, so use this to reveal a private transaction to an
  * auditor or indexer without sharing the account's view key. Served by
  * wallet-backed transports such as `transportFromAdapter` — the plain `http`
  * node transport rejects this method — and the wallet may prompt the user.

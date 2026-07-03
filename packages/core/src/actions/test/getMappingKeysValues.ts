@@ -17,7 +17,7 @@ export type GetMappingKeysValuesReturnType = [string, string][]
 /**
  * Reads every key/value pair in a program mapping from a local devnode.
  *
- * Reach for this to assert on a program's full public state after a test run —
+ * Use it to assert on a program's full public state after a test run —
  * real network REST APIs only serve one mapping value per request, so
  * enumerating a whole mapping is a devnode-only operation. Read-only; hits
  * the devnode over the transport.

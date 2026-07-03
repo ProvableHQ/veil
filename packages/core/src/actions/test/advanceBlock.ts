@@ -15,7 +15,7 @@ export type AdvanceBlockReturnType = void
 /**
  * Mines blocks on a local devnode to move the chain forward.
  *
- * Reach for this in tests that need a pending transaction confirmed or a
+ * Use in tests that need a pending transaction confirmed or a
  * height-gated condition met without waiting for real block production. Hits
  * the devnode over the transport; the devnode MUST be running with
  * `--manual-block-creation`. Real networks do not expose this.

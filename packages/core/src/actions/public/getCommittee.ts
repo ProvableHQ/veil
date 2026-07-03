@@ -16,8 +16,8 @@ export type GetCommitteeReturnType = Committee
 /**
  * Retrieves the validator committee, either current or at a past height.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it to
- * see which validators are producing blocks and their bonded stake; use
+ * Queries the connected Aleo node, so it hits the network. Use it to see
+ * which validators are producing blocks and their bonded stake; use
  * `getDelegators` to see who is bonded to a specific validator.
  *
  * @param client Client whose transport serves the query.

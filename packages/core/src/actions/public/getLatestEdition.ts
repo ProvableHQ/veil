@@ -13,8 +13,8 @@ export type GetLatestEditionReturnType = number
 /**
  * Fetches the newest edition number of a program.
  *
- * Aleo programs are upgradeable; each upgrade increments the edition. Reach for
- * this to find the current edition before fetching a historical version with
+ * Aleo programs are upgradeable; each upgrade increments the edition. Use it
+ * to find the current edition before fetching a historical version with
  * `getProgramByEdition`. Queries the connected node, so it hits the network.
  *
  * @param client Client whose transport serves the query.

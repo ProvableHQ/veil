@@ -15,7 +15,7 @@ export type SendTransactionReturnType = string
 /**
  * Broadcasts an already-built transaction to the network.
  *
- * Reach for this when the transaction was proved elsewhere — a delegated
+ * Applies when the transaction was proved elsewhere — a delegated
  * prover, an offline build — and only needs submitting. Does not sign or
  * prove; higher-level actions (`writeContract`, `deployContract`) build the
  * transaction and call this internally. Hits the network and returns as soon

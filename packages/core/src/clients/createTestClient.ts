@@ -24,7 +24,7 @@ export type TestClient = Client & TestActions
 /**
  * Creates a client for controlling a local devnode in tests.
  *
- * Reach for this against a devnode when a test needs to advance blocks, read raw
+ * Applies when a test against a devnode needs to advance blocks, read raw
  * mapping key/value pairs, or shut the node down — operations a real network does
  * not expose. Its methods hit the local node through the transport.
  *

@@ -19,9 +19,9 @@ export type GetAmendmentDeploymentTransactionReturnType = string | null
  * Retrieves the id of the transaction that applied a specific amendment to a
  * program edition.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it when
- * tracing how a program changed: `getAmendmentCountByEdition` tells you how
- * many amendments exist, and this resolves each one to its transaction.
+ * Queries the connected Aleo node, so it hits the network. Use it when
+ * tracing how a program changed: `getAmendmentCountByEdition` gives the
+ * number of amendments, and this resolves each one to its transaction.
  *
  * @param client Client whose transport serves the query.
  * @param params Program, edition, and amendment index to resolve.

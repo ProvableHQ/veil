@@ -14,7 +14,7 @@ export type GetStatePathsReturnType = string[]
 /**
  * Batch state-path lookup for multiple commitments in one call.
  *
- * Reach for this over repeated `getStatePath` calls when proving several
+ * Use this over repeated `getStatePath` calls when proving several
  * records — one round trip instead of one per commitment. Queries the
  * connected node, so it hits the network.
  *

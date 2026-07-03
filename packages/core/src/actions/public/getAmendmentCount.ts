@@ -24,8 +24,8 @@ export type GetAmendmentCountReturnType = {
  * Retrieves the number of amendments applied to the latest edition of a
  * program.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it to
- * check whether a deployed program has been amended since its edition was
+ * Queries the connected Aleo node, so it hits the network. Use it to check
+ * whether a deployed program has been amended since its edition was
  * published; use `getAmendmentCountByEdition` to inspect a specific edition.
  *
  * @param client Client whose transport serves the query.

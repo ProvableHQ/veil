@@ -15,8 +15,8 @@ export type GetTransitionsReturnType = TransitionSummary[]
  * Fetches transition summaries involving an address.
  *
  * Each summary carries the program and function called, the amount for
- * credits transfers, the containing transaction, and its status. Reach for
- * this to build an address's activity history. Queries the connected node, so
+ * credits transfers, the containing transaction, and its status. Use it to
+ * build an address's activity history. Queries the connected node, so
  * it hits the network.
  *
  * @param client Client whose transport serves the query.

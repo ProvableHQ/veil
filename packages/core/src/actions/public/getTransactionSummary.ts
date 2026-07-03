@@ -8,8 +8,8 @@ export type GetTransactionSummaryReturnType = TransactionSummary[]
  * Fetches summaries of the most recent transactions network-wide.
  *
  * Each summary carries the transaction id, fee in microcredits, status, block
- * placement, and the program and function called. Reach for this for an
- * explorer-style latest-transactions feed; use `getTransaction` for a full
+ * placement, and the program and function called. Use for an explorer-style
+ * latest-transactions feed; `getTransaction` returns a full
  * body. Queries the connected node, so it hits the network.
  *
  * @param client Client whose transport serves the query.

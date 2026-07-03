@@ -13,9 +13,9 @@ export type FindTransactionIdReturnType = string
 /**
  * Finds the id of the transaction that contains a transition.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it when
- * an event or record points at a transition and you need the enclosing
- * transaction; follow up with `getTransaction({ id })` for its contents.
+ * Queries the connected Aleo node, so it hits the network. Applies when an
+ * event or record points at a transition and the enclosing transaction is
+ * needed; follow up with `getTransaction({ id })` for its contents.
  *
  * @param client Client whose transport serves the query.
  * @param params Transition to locate.

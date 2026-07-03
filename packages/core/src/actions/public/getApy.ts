@@ -6,8 +6,8 @@ export type GetApyReturnType = number
 /**
  * Retrieves the current network-wide staking APY.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it to
- * show an estimated staking yield; use `getValidatorApy` for per-validator
+ * Queries the connected Aleo node, so it hits the network. Use it to show
+ * an estimated staking yield; use `getValidatorApy` for per-validator
  * rates.
  *
  * @param client Client whose transport serves the query.

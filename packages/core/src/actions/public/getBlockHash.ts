@@ -6,8 +6,8 @@ export type GetBlockHashReturnType = string
 /**
  * Retrieves the hash of the latest block.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it when
- * you need a chain-tip identifier; `getBlockNumber` gives the tip as a height
+ * Queries the connected Aleo node, so it hits the network. Use it for a
+ * chain-tip identifier; `getBlockNumber` gives the tip as a height
  * instead.
  *
  * @param client Client whose transport serves the query.

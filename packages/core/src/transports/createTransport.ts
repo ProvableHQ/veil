@@ -4,7 +4,7 @@ import type { Transport, TransportConfig } from '../types/transport.js'
  * Wraps a transport config into a {@link Transport} instance.
  *
  * The low-level building block the concrete transports ({@link http},
- * {@link custom}, {@link fallback}) are built on; reach for it directly only
+ * {@link custom}, {@link fallback}) are built on; call it directly only
  * when defining a custom transport shape. Pure and local — it lifts `config`
  * and exposes `config.request` as the transport's `request`.
  *

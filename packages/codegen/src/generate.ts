@@ -364,8 +364,8 @@ function primitiveToTsType(p: Primitive): string {
  *
  * The raw value stored in RecordFieldValue is always a bigint for all integer
  * widths (parsed by core's parseValue). For u8/u16/u32 and i8/i16/i32 fields
- * (typed as `number`), we wrap with Number() to convert at runtime. For u64+
- * (typed as `bigint`), we cast directly. For non-primitive types (array,
+ * (typed as `number`), the access is wrapped with Number() to convert at
+ * runtime. For u64+ (typed as `bigint`), it is cast directly. For non-primitive types (array,
  * optional) the raw access is returned unchanged — those fall through to the
  * caller's existing handling.
  *

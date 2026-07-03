@@ -276,8 +276,8 @@ export const walletToolSchemas: AgentToolSchema[] = [
  * Lists every built-in tool schema — {@link publicToolSchemas} followed by
  * {@link walletToolSchemas}.
  *
- * Use this when registering the full Aleo tool set with an LLM up front;
- * `aleoAgentToolSchemas` filters the same set by the clients you actually have.
+ * Use when registering the full Aleo tool set with an LLM up front;
+ * `aleoAgentToolSchemas` filters the same set by the clients on hand.
  */
 export const allToolSchemas: AgentToolSchema[] = [
   ...publicToolSchemas,

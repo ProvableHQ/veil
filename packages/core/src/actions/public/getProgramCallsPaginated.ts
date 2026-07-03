@@ -71,8 +71,8 @@ export type GetProgramCallsPaginatedReturnType = {
 /**
  * Fetches one page of a program's call history with cursor pagination.
  *
- * Reach for this over `getProgramCalls` when you need typed results or more
- * than the latest feed. To fetch the following page, pass the returned
+ * Use this over `getProgramCalls` for typed results or more than the latest
+ * feed. To fetch the following page, pass the returned
  * `next_cursor` fields back as `cursorBlockNumber` and `cursorTransitionId`.
  * Queries the connected node, so it hits the network.
  *

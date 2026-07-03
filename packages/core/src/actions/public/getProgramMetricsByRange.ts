@@ -28,7 +28,7 @@ export type GetProgramMetricsByRangeReturnType = ProgramMetricsDayPoint[]
 /**
  * Fetches a program's daily call counts over a trailing window.
  *
- * Reach for this to chart one program's activity over time; use
+ * Use it to chart one program's activity over time; use
  * `getProgramMetrics` for a network-wide snapshot. Queries the connected node,
  * so it hits the network.
  *

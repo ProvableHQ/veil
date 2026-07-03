@@ -25,8 +25,8 @@ export type PublicClient = Client & PublicActions
 /**
  * Creates a read-only client for querying Aleo chain state.
  *
- * Reach for this to read blocks, transactions, balances, program mappings, and
- * network metrics — anything that does not sign or submit a transaction. The
+ * Use for blocks, transactions, balances, program mappings, and network
+ * metrics — anything that does not sign or submit a transaction. The
  * returned client's methods each hit the network through the transport.
  *
  * @param config Transport and optional naming.

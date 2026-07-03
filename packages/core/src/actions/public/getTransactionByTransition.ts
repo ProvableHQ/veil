@@ -18,8 +18,8 @@ export type GetTransactionByTransitionReturnType = Transaction
  * `/find/transactionID/{transitionId}` to resolve the transaction id, then
  * `/transaction/{id}` to fetch the transaction body.
  *
- * Reach for this when an event or record only gives you a transition id
- * (`au1…`) and you need the transaction it belongs to. Hits the network twice.
+ * Applies when an event or record only carries a transition id (`au1…`) and
+ * the enclosing transaction is needed. Hits the network twice.
  *
  * @param client Client whose transport serves both queries.
  * @param params Transition to resolve.

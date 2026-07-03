@@ -13,8 +13,8 @@ export type GetTransactionsByAddressReturnType = unknown[]
 /**
  * Fetches the transactions associated with an address.
  *
- * Returns the endpoint's wire shape untyped. Reach for `getTransitions` when
- * you want typed per-transition summaries for an address instead. Queries the
+ * Returns the endpoint's wire shape untyped. Use `getTransitions` instead
+ * for typed per-transition summaries of an address. Queries the
  * connected node, so it hits the network.
  *
  * @param client Client whose transport serves the query.

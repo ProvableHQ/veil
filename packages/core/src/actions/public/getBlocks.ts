@@ -16,7 +16,7 @@ export type GetBlocksReturnType = Block[]
 /**
  * Retrieves a range of blocks by height.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it when
+ * Queries the connected Aleo node, so it hits the network. Applies when
  * scanning a window of chain history; for a single block use `getBlock`. The
  * node serves at most 50 blocks per request, so page larger ranges.
  *

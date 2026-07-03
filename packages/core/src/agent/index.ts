@@ -60,7 +60,7 @@ export function aleoAgentToolSchemas(config?: AgentToolsConfig): AgentToolSchema
  *   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
  * })
  * const tools = aleoAgentTools({ client })
- * // Register each tool's name/description/inputSchema with your framework
+ * // Register each tool's name/description/inputSchema with the agent framework
  * // and route calls to tool.handler(input).
  */
 export function aleoAgentTools(config: AgentToolsConfig): AgentToolDefinition[] {

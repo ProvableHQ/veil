@@ -13,8 +13,8 @@ export type GetBlockHeightByHashReturnType = number
 /**
  * Resolves a block hash to its height.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it when
- * an API gave you a block hash but you need the height, e.g. to page through
+ * Queries the connected Aleo node, so it hits the network. Applies when an
+ * API returned a block hash but the height is needed, e.g. to page through
  * neighbouring blocks with `getBlocks`.
  *
  * @param client Client whose transport serves the query.

@@ -185,8 +185,8 @@ export async function advanceDevnode(options?: DevnodeAdvanceOptions): Promise<v
  *
  * Spawns `aleo-devnode restore` as a child process (requires the binary on
  * PATH). With `restart: true` the devnode is relaunched on the restored
- * ledger; otherwise only the storage directory is rewritten and you start
- * the node yourself.
+ * ledger; otherwise only the storage directory is rewritten and the caller
+ * starts the node separately.
  *
  * @param options Snapshot name, target storage directory, and optional
  *   restart parameters.

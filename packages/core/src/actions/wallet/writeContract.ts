@@ -32,7 +32,7 @@ export type WriteContractReturnType = string
 /**
  * Executes a program function on-chain and returns the transaction id.
  *
- * The workhorse write action — reach for it whenever the transaction id is
+ * The workhorse write action — use it whenever the transaction id is
  * enough and the function's outputs are not needed (use `executeContract` for
  * outputs, `simulateContract` for a dry run). For RPC accounts the wallet
  * proves, signs, and broadcasts in one adapter call, prompting the user. For

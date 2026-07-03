@@ -17,7 +17,7 @@ export type SignMessageReturnType = Uint8Array
 /**
  * Signs an arbitrary message with the client's account.
  *
- * Reach for this for off-chain proof of address ownership — login challenges,
+ * Use for off-chain proof of address ownership — login challenges,
  * attestations. Creates no transaction and costs no fee. Local accounts sign
  * in-process with the private key and never touch the network; RPC accounts
  * delegate to the wallet, which prompts the user.

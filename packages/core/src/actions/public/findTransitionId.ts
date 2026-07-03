@@ -15,9 +15,10 @@ export type FindTransitionIdReturnType = string
  * Finds the id of the transition that consumed or produced a given input or
  * output id.
  *
- * Queries the connected Aleo node, so it hits the network. Reach for it when
- * you hold a record serial number or commitment and need the transition that
- * spent or created it; chain into `findTransactionId` for the transaction.
+ * Queries the connected Aleo node, so it hits the network. Applies when the
+ * caller holds a record serial number or commitment and needs the transition
+ * that spent or created it; chain into `findTransactionId` for the
+ * transaction.
  *
  * @param client Client whose transport serves the query.
  * @param params Input or output id to locate.

@@ -226,7 +226,7 @@ export type NextBlindedIdentityParameters = {
  * @param params View-key scalar, signer, and optional scan bounds.
  * @returns The first unused identity, with the counter that produced it.
  * @throws When every counter in the scan window is already used — persist
- *   your last-used counter (or raise `startCounter`) to skip the scan; also
+ *   the last-used counter (or raise `startCounter`) to skip the scan; also
  *   propagates SDK-missing and transport errors. A duplicate-identity
  *   rejection on-chain means concurrent calls raced — serialize them.
  *
