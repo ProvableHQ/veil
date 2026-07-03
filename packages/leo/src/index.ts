@@ -430,31 +430,33 @@ export async function buildBatch(projects: Array<string | { cwd?: string }>): Pr
 }
 
 /**
- * Spawns `leo build` for the project, which emits the ABI alongside the other
- * build artifacts.
+ * Generates the ABI of a compiled `.aleo` file by spawning `leo abi <file>`
+ * and capturing its output.
  *
- * Requires the Leo CLI on PATH. To generate an ABI from an existing `.aleo`
- * bytecode file and capture it as a string, use {@link LeoClient.abi} instead.
+ * Requires the Leo CLI on PATH. This is the zero-config path for scripts;
+ * use {@link createLeoClient} when network or output flags and shared
+ * defaults are needed. The file MUST already exist — call {@link build}
+ * first when generating from source.
  *
+ * @param options.file Path to the compiled `.aleo` bytecode file, relative
+ *   to `cwd`.
  * @param options.cwd Project directory. Defaults to the current working
  *   directory.
- * @throws If the `leo` binary is missing or the build exits non-zero.
+ * @returns The ABI JSON captured from stdout, raw — a trailing newline may be
+ *   present. `JSON.parse` tolerates it.
+ * @throws If the `leo` binary is missing or the command exits non-zero.
+ *
+ * @example
+ * import { abi } from '@veil/leo'
+ * const json = await abi({ file: 'build/main.aleo', cwd: './programs/token' })
  */
-export async function abi(options?: { cwd?: string }): Promise<void> {
-  await runLeo(['build'], options?.cwd)
+export async function abi(options: { file: string; cwd?: string }): Promise<string> {
+  return runLeoCapture(['abi', options.file], options.cwd)
 }
 
-/**
- * Options for {@link start}.
- *
- * `program` is carried for context only — `leo run` resolves the program from
- * the project at `cwd`, so the function executed is `function` within that
- * project.
- */
-export type LeoStartOptions = {
-  /** Leo program name/path to run. */
-  program: string
-  /** Function name to call. */
+/** Options for {@link run}. */
+export type LeoRunOptions = {
+  /** Function name to call. `leo run` resolves the program from the project at `cwd`. */
   function: string
   /** Inputs to pass to the function. */
   inputs?: string[]
@@ -474,10 +476,10 @@ export type LeoStartOptions = {
  *   example on a type error or failing assertion).
  *
  * @example
- * import { start } from '@veil/leo'
- * await start({ program: 'token.aleo', function: 'mint', inputs: ['1000u64'], cwd: './programs/token' })
+ * import { run } from '@veil/leo'
+ * await run({ function: 'mint', inputs: ['1000u64'], cwd: './programs/token' })
  */
-export async function start(options: LeoStartOptions): Promise<void> {
+export async function run(options: LeoRunOptions): Promise<void> {
   const args = ['run', options.function, ...(options.inputs ?? [])]
   await runLeo(args, options.cwd)
 }
