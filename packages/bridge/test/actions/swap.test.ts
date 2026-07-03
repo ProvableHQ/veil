@@ -113,7 +113,9 @@ describe('swap (ALEO source)', () => {
       params: expect.objectContaining({
         quoteId: 'b',
         providerId: 'p1',
-        walletAddress: 'aleo1sender',
+        // payout recipient = destination address; the signer is the refund address
+        walletAddress: '8xJ...',
+        refundAddress: 'aleo1sender',
       }),
     }))
 
@@ -272,5 +274,64 @@ describe('swap (compliance source — USDCX)', () => {
       to: { chain: 'EVM:1', asset: 'USDC_ETH', address: '0xdest' },
       wallet,
     })).rejects.toThrow(/merkleProof/)
+  })
+})
+
+describe('swap (deposit instruction guards)', () => {
+  it('throws without depositing when the order carries a deposit memo', async () => {
+    const bridge = makeBridgeClient({
+      quotes: [makeQuote()],
+      order: {
+        orderId: 'o1',
+        depositAddress: 'aleo1deposit',
+        depositAmount: '1.5',
+        depositMemo: 'tag-123',
+        depositChain: 'ALEO',
+      },
+    })
+    const wallet = makeWallet()
+
+    await expect(swap(bridge, { ...baseParams, wallet, poll: false })).rejects.toThrow(/memo/)
+    // The Aleo deposit must NOT have been signed.
+    const walletRequest = (wallet as unknown as { request: ReturnType<typeof vi.fn> }).request
+    expect(walletRequest).not.toHaveBeenCalled()
+  })
+
+  it('prefers the decimals the order instructions declare over the asset map', async () => {
+    const bridge = makeBridgeClient({
+      quotes: [makeQuote()],
+      order: {
+        orderId: 'o1',
+        depositAddress: 'aleo1deposit',
+        depositAmount: '1.5',
+        depositChain: 'ALEO',
+        // The API is authoritative: 3 decimals here, though the map says 6.
+        instructions: { type: 'ONCHAIN_DEPOSIT', address: 'aleo1deposit', amount: '1.5', chain: 'ALEO', assetDecimals: 3 },
+      },
+    })
+    const wallet = makeWallet()
+
+    await swap(bridge, { ...baseParams, wallet, poll: false })
+
+    const walletRequest = (wallet as unknown as { request: ReturnType<typeof vi.fn> }).request
+    expect(walletRequest).toHaveBeenCalledWith({
+      method: 'executeTransaction',
+      params: expect.objectContaining({
+        inputs: ['aleo1deposit', '1500u64'],
+      }),
+    })
+  })
+
+  it('validates the asset map and merkle requirement before any network call', async () => {
+    const bridge = makeBridgeClient({ quotes: [makeQuote()] })
+    const wallet = makeWallet()
+
+    await expect(swap(bridge, {
+      from: { asset: 'NOT_AN_ASSET', amount: '1' },
+      to: { chain: 'SOLANA', asset: 'SOL_SOLANA', address: '8xJ...' },
+      wallet,
+    })).rejects.toThrow(/unknown aleo asset/i)
+    // Failed on local validation — no quote request was issued.
+    expect(bridge.request).not.toHaveBeenCalled()
   })
 })

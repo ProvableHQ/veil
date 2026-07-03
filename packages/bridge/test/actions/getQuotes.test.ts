@@ -76,17 +76,20 @@ describe('getQuotes', () => {
     expect(result.meta.providerErrors).toEqual({ stale: { message: 'down' } })
   })
 
-  it('defaults to empty meta when missing', async () => {
+  it('throws BridgeEnvelopeError when meta lacks quoteRequestId', async () => {
+    // Every quote response carries a quoteRequestId; downstream code (swap's
+    // return value, support flows) relies on it — a silent {} would surface
+    // later as an undefined field the types promise is a string.
     const client = makeClient({ data: [] })
-    const result = await getQuotes(client, {
-      srcChain: 'aleo',
-      destChain: 'solana',
-      srcAsset: 'ALEO',
-      destAsset: 'SOL',
-      amountIn: '1',
-    })
-    expect(result.quotes).toEqual([])
-    expect(result.meta).toEqual({})
+    await expect(
+      getQuotes(client, {
+        srcChain: 'aleo',
+        destChain: 'solana',
+        srcAsset: 'ALEO',
+        destAsset: 'SOL',
+        amountIn: '1',
+      }),
+    ).rejects.toThrow(BridgeEnvelopeError)
   })
 
   it('throws BridgeEnvelopeError if data is missing', async () => {

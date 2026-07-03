@@ -43,6 +43,8 @@ export function bridgeActions(client: Client, config: BridgeActionsConfig = {}):
     getOrder: (params) => getOrder(client, params),
     getOrderAudit: (params) => getOrderAudit(client, params),
     waitForOrder: (params) => waitForOrder(client, params),
-    swap: (params) => swap(client, { wallet: config.wallet, ...params }),
+    // ?? (not spread order) so an explicitly-undefined params.wallet cannot
+    // clobber the client's configured wallet.
+    swap: (params) => swap(client, { ...params, wallet: params.wallet ?? config.wallet }),
   }
 }

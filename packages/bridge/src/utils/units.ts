@@ -18,6 +18,29 @@ import { BridgeError } from '../errors/bridgeErrors.js'
  * parseDecimalAmount('0.5', 6)   // 500000n
  * parseDecimalAmount('100', 6)   // 100000000n
  */
+/**
+ * Compares two non-negative decimal amount strings exactly.
+ *
+ * `Number()` comparison loses precision past ~15 significant digits — enough
+ * to mis-rank quotes on 18-decimal assets. This compares digit strings
+ * directly, so it is exact at any precision. Pure and local; returns 0 for
+ * malformed inputs rather than throwing (callers rank, they don't validate).
+ *
+ * @param a First decimal string (e.g. `"1.000000000000000002"`).
+ * @param b Second decimal string.
+ * @returns Negative when a < b, positive when a > b, 0 when equal.
+ */
+export function compareDecimal(a: string, b: string): number {
+  const parse = (s: string) => /^(\d+)(?:\.(\d*))?$/.exec(s.trim())
+  const ma = parse(a)
+  const mb = parse(b)
+  if (!ma || !mb) return 0
+  const fracLen = Math.max(ma[2]?.length ?? 0, mb[2]?.length ?? 0)
+  const ia = BigInt(ma[1]! + (ma[2] ?? '').padEnd(fracLen, '0'))
+  const ib = BigInt(mb[1]! + (mb[2] ?? '').padEnd(fracLen, '0'))
+  return ia < ib ? -1 : ia > ib ? 1 : 0
+}
+
 export function parseDecimalAmount(amount: string, decimals: number): bigint {
   const match = /^(\d+)(?:\.(\d+))?$/.exec(amount.trim())
   if (!match) {

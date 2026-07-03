@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseDecimalAmount } from '../../src/utils/units.js'
+import { compareDecimal, parseDecimalAmount } from '../../src/utils/units.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 
 describe('parseDecimalAmount', () => {
@@ -28,5 +28,23 @@ describe('parseDecimalAmount', () => {
     expect(() => parseDecimalAmount('-1', 6)).toThrow(BridgeError)
     expect(() => parseDecimalAmount('1.', 6)).toThrow(BridgeError)
     expect(() => parseDecimalAmount('', 6)).toThrow(BridgeError)
+  })
+})
+
+describe('compareDecimal', () => {
+  it('orders plain decimals', () => {
+    expect(compareDecimal('1.5', '2')).toBeLessThan(0)
+    expect(compareDecimal('2', '1.5')).toBeGreaterThan(0)
+    expect(compareDecimal('2.0', '2')).toBe(0)
+  })
+
+  it('is exact where Number() is not (18 decimals)', () => {
+    expect(compareDecimal('1.000000000000000002', '1.000000000000000001')).toBeGreaterThan(0)
+    expect(compareDecimal('1.000000000000000001', '1.000000000000000002')).toBeLessThan(0)
+  })
+
+  it('treats malformed input as equal rather than throwing', () => {
+    expect(compareDecimal('abc', '1')).toBe(0)
+    expect(compareDecimal('1', '')).toBe(0)
   })
 })

@@ -21,8 +21,5 @@ export type GetFlagsReturnType = BridgeFlagsDto
  */
 export async function getFlags(client: Client): Promise<GetFlagsReturnType> {
   const response = await client.request({ method: 'getBridgeFlags' })
-  return unwrapEnvelope<BridgeFlagsDto>(
-    response as { data: BridgeFlagsDto; meta?: Record<string, unknown> },
-    { keepMeta: false },
-  )
+  return unwrapEnvelope<BridgeFlagsDto>(response)
 }

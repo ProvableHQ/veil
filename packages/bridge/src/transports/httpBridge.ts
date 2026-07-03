@@ -2,6 +2,14 @@ import { TransportError } from '@veil/core'
 import type { Transport, TransportConfig } from '@veil/core'
 import { createTransport } from '@veil/core'
 
+/**
+ * Configuration for {@link httpBridge}.
+ *
+ * @property fetchFn Fetch implementation to use. Defaults to the global `fetch`.
+ * @property headers Extra headers sent with every request (e.g. auth).
+ * @property key Transport key. Defaults to `'httpBridge'`.
+ * @property name Transport name. Defaults to `'HTTP Bridge Transport'`.
+ */
 type HttpBridgeConfig = {
   fetchFn?: typeof fetch | undefined
   headers?: Record<string, string> | undefined
@@ -21,32 +29,12 @@ type BuiltRequest = {
   headers?: Record<string, string>
 }
 
-const QUOTE_QUERY_KEYS = [
-  'srcChain',
-  'destChain',
-  'srcAsset',
-  'destAsset',
-  'amountIn',
-  'slippageBps',
-  'fromAddress',
-  'recipientAddress',
-  'refundAddress',
-] as const
-
-const ORDER_BODY_KEYS = [
-  'providerId',
-  'integrationType',
-  'srcChain',
-  'destChain',
-  'srcAsset',
-  'destAsset',
-  'amountIn',
-  'slippageBps',
-  'walletAddress',
-  'quoteId',
-  'refundAddress',
-] as const
-
+/**
+ * Builds each bridge method's HTTP request. The typed action parameters own
+ * the wire contract — params are forwarded wholesale (minus transport-level
+ * fields like `timezone`), so adding a field to an action's parameter type is
+ * enough for it to reach the API.
+ */
 function buildRequest(
   baseUrl: string,
   method: string,
@@ -57,21 +45,19 @@ function buildRequest(
       return { url: `${baseUrl}/bridge/flags`, httpMethod: 'GET' }
     case 'getBridgeQuotes': {
       const q = new URLSearchParams()
-      const p = params ?? {}
-      for (const key of QUOTE_QUERY_KEYS) {
-        const value = p[key]
+      for (const [key, value] of Object.entries(params ?? {})) {
         if (value != null) q.set(key, String(value))
       }
       return { url: `${baseUrl}/bridge/quotes?${q.toString()}`, httpMethod: 'GET' }
     }
     case 'createBridgeOrder': {
-      const p = (params ?? {}) as Record<string, unknown>
+      // timezone travels as the x-timezone header, not in the body.
+      const { timezone, ...rest } = params ?? {}
       const headers: Record<string, string> = {}
-      const timezone = p['timezone']
       if (typeof timezone === 'string' && timezone) headers['x-timezone'] = timezone
       const body: Record<string, unknown> = {}
-      for (const key of ORDER_BODY_KEYS) {
-        if (p[key] != null) body[key] = p[key]
+      for (const [key, value] of Object.entries(rest)) {
+        if (value != null) body[key] = value
       }
       return {
         url: `${baseUrl}/bridge/orders`,
@@ -95,6 +81,26 @@ function buildRequest(
   }
 }
 
+/**
+ * Creates a transport speaking the bridge REST API (`/bridge/*` on the
+ * wallet-services API).
+ *
+ * Maps the bridge client's request methods (`getBridgeQuotes`,
+ * `createBridgeOrder`, …) onto their HTTP routes. Every request hits the
+ * network; non-2xx responses throw `TransportError` with the response body in
+ * the message.
+ *
+ * @param baseUrl The API origin, without a trailing path — e.g.
+ *   `https://wallet.api.provable.com`.
+ * @param config Optional fetch/header/identity overrides — see the config type.
+ * @returns A transport to pass to `createBridgeClient`.
+ * @throws TransportError From requests: unknown method, or a non-2xx response.
+ *
+ * @example
+ * const bridge = createBridgeClient({
+ *   transport: httpBridge('https://wallet.api.provable.com'),
+ * })
+ */
 export function httpBridge(
   baseUrl: string,
   config: HttpBridgeConfig = {},
