@@ -4,17 +4,26 @@ import { createOrder } from './createOrder.js'
 import { waitForOrder } from './waitForOrder.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import { aleoAssetProgram, type AleoAssetConfig } from '../lib/aleo-asset.js'
+import { parseDecimalAmount } from '../utils/units.js'
 import type { BridgeOrderStage, BridgeOrderStatusDto, BridgeQuote } from '../types/bridge.js'
 
 export type SwapParameters = {
   /** @veil/core WalletClient used to sign the Aleo unshield deposit. */
   wallet: WalletClient
-  /** Source side of the swap (Aleo is hardcoded as srcChain). */
+  /**
+   * Source side of the swap (Aleo is hardcoded as srcChain). `asset` is the
+   * API's chain-qualified code (`ALEO_MAINNET`, `USDC_ALEO`), `amount` a
+   * decimal string in display units.
+   */
   from: { asset: string; amount: string }
-  /** Destination side. */
+  /**
+   * Destination side. `chain` and `asset` use the API's identifiers
+   * (`SOLANA`/`SOL_SOLANA`, `EVM:1`/`ETH_MAINNET`); `address` is the
+   * destination-chain recipient.
+   */
   to: { chain: string; asset: string; address: string }
   /** Required only when the source asset's Aleo program requires a merkle proof
-   *  (e.g. USDCX, USAD). Pre-formatted as a single Aleo input string matching
+   *  (e.g. USDCX_ALEO, USAD_ALEO). Pre-formatted as a single Aleo input string matching
    *  the program's `[MerkleProof; 2u32].private` shape. */
   merkleProof?: string | undefined
   /** Override the default asset → Aleo program map. */
@@ -39,7 +48,8 @@ export type SwapReturnType = {
   finalStatus?: BridgeOrderStatusDto
 }
 
-const SRC_CHAIN = 'aleo' as const
+// The API's chain identifiers are case-sensitive ('ALEO', 'SOLANA', 'EVM:1').
+const SRC_CHAIN = 'ALEO' as const
 
 async function pickQuote(
   strategy: SwapParameters['selectQuote'],
@@ -66,6 +76,8 @@ export async function swap(
   }
   const walletAddress = params.wallet.account.address
 
+  // refundAddress is the signer's own Aleo address — some providers (NEAR
+  // Intents) skip quoting entirely when it is absent.
   const { quotes, meta } = await getQuotes(client, {
     srcChain: SRC_CHAIN,
     srcAsset: params.from.asset,
@@ -73,6 +85,7 @@ export async function swap(
     destAsset: params.to.asset,
     amountIn: params.from.amount,
     recipientAddress: params.to.address,
+    refundAddress: walletAddress,
   })
 
   if (quotes.length === 0) {
@@ -109,10 +122,12 @@ export async function swap(
     )
   }
 
+  // depositAmount comes back in display decimals ("0.5"); the program
+  // transfer takes atomic units, scaled by the asset's decimals.
   const depositTxId = await transfer(params.wallet, {
     asset: assetConfig.program,
     to: instructions.depositAddress,
-    amount: BigInt(instructions.depositAmount),
+    amount: parseDecimalAmount(instructions.depositAmount, assetConfig.decimals),
     visibility: 'unshield',
     merkleProof: params.merkleProof,
   })

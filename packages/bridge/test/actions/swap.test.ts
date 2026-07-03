@@ -7,10 +7,10 @@ function makeQuote(over: Partial<Record<string, unknown>> = {}) {
   return {
     provider: { id: 'p1', code: 'demo', displayName: 'Demo', capabilities: [] },
     quoteId: 'q1',
-    srcChain: 'aleo',
-    destChain: 'solana',
-    srcAsset: 'ALEO',
-    destAsset: 'SOL',
+    srcChain: 'ALEO',
+    destChain: 'SOLANA',
+    srcAsset: 'ALEO_MAINNET',
+    destAsset: 'SOL_SOLANA',
     amountIn: '1.5',
     amountOut: '0.05',
     estimatedTimeSeconds: 120,
@@ -49,9 +49,9 @@ function makeBridgeClient(opts: {
           data: opts.order ?? {
             orderId: 'o1',
             depositAddress: 'aleo1deposit',
-            depositAmount: '1500000',
-            depositChain: 'aleo',
-            instructions: { type: 'ONCHAIN_DEPOSIT', address: 'aleo1deposit', amount: '1500000', chain: 'aleo' },
+            depositAmount: '1.5',
+            depositChain: 'ALEO',
+            instructions: { type: 'ONCHAIN_DEPOSIT', address: 'aleo1deposit', amount: '1.5', chain: 'ALEO' },
           },
         }
       }
@@ -73,8 +73,8 @@ function makeWallet(over: Partial<{ address: string; transactionId: string }> = 
 }
 
 const baseParams = {
-  from: { asset: 'ALEO', amount: '1.5' },
-  to: { chain: 'solana', asset: 'SOL', address: '8xJ...' },
+  from: { asset: 'ALEO_MAINNET', amount: '1.5' },
+  to: { chain: 'SOLANA', asset: 'SOL_SOLANA', address: '8xJ...' },
 }
 
 describe('swap (ALEO source)', () => {
@@ -95,6 +95,17 @@ describe('swap (ALEO source)', () => {
     expect(result.orderId).toBe('o1')
     expect(result.depositTxId).toBe('at1deadbeef')
     expect(result.finalStatus?.status).toBe('COMPLETED')
+
+    // Quote request used the API's chain identifier and included the signer's
+    // refund address (providers skip quoting without it).
+    expect(bridge.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'getBridgeQuotes',
+      params: expect.objectContaining({
+        srcChain: 'ALEO',
+        refundAddress: 'aleo1sender',
+        recipientAddress: '8xJ...',
+      }),
+    }))
 
     // Picked the higher-amountOut quote
     expect(bridge.request).toHaveBeenCalledWith(expect.objectContaining({
@@ -187,13 +198,19 @@ describe('swap (ALEO source)', () => {
 describe('swap (token_registry source — WBTC)', () => {
   it('routes deposit through token_registry.aleo with u128 amount', async () => {
     const bridge = makeBridgeClient({
-      quotes: [makeQuote({ srcAsset: 'WBTC' })],
+      quotes: [makeQuote({ srcAsset: 'WBTC_ALEO' })],
+      order: {
+        orderId: 'o1',
+        depositAddress: 'aleo1deposit',
+        depositAmount: '0.01',
+        depositChain: 'ALEO',
+      },
     })
     const wallet = makeWallet()
 
     await swap(bridge, {
-      from: { asset: 'WBTC', amount: '0.01' },
-      to: { chain: 'ethereum', asset: 'WBTC', address: '0xdest' },
+      from: { asset: 'WBTC_ALEO', amount: '0.01' },
+      to: { chain: 'EVM:1', asset: 'WBTC_ETH', address: '0xdest' },
       wallet,
       poll: false,
     })
@@ -204,7 +221,7 @@ describe('swap (token_registry source — WBTC)', () => {
       params: expect.objectContaining({
         programName: 'token_registry.aleo',
         functionName: 'transfer_private_to_public',
-        inputs: ['aleo1deposit', '1500000u128'],
+        inputs: ['aleo1deposit', '1000000u128'],
         privateFee: true,
       }),
     })
@@ -214,13 +231,19 @@ describe('swap (token_registry source — WBTC)', () => {
 describe('swap (compliance source — USDCX)', () => {
   it('routes deposit through usdcx_stablecoin.aleo and appends merkleProof', async () => {
     const bridge = makeBridgeClient({
-      quotes: [makeQuote({ srcAsset: 'USDCX' })],
+      quotes: [makeQuote({ srcAsset: 'USDCX_ALEO' })],
+      order: {
+        orderId: 'o1',
+        depositAddress: 'aleo1deposit',
+        depositAmount: '100',
+        depositChain: 'ALEO',
+      },
     })
     const wallet = makeWallet()
 
     await swap(bridge, {
-      from: { asset: 'USDCX', amount: '100' },
-      to: { chain: 'ethereum', asset: 'USDC', address: '0xdest' },
+      from: { asset: 'USDCX_ALEO', amount: '100' },
+      to: { chain: 'EVM:1', asset: 'USDC_ETH', address: '0xdest' },
       wallet,
       merkleProof: 'mp-input',
       poll: false,
@@ -232,7 +255,7 @@ describe('swap (compliance source — USDCX)', () => {
       params: expect.objectContaining({
         programName: 'usdcx_stablecoin.aleo',
         functionName: 'transfer_private_to_public',
-        inputs: ['aleo1deposit', '1500000u128', 'mp-input'],
+        inputs: ['aleo1deposit', '100000000u128', 'mp-input'],
         privateFee: true,
       }),
     })
@@ -240,13 +263,13 @@ describe('swap (compliance source — USDCX)', () => {
 
   it('throws BridgeError when merkleProof is missing for USDCX', async () => {
     const bridge = makeBridgeClient({
-      quotes: [makeQuote({ srcAsset: 'USDCX' })],
+      quotes: [makeQuote({ srcAsset: 'USDCX_ALEO' })],
     })
     const wallet = makeWallet()
 
     await expect(swap(bridge, {
-      from: { asset: 'USDCX', amount: '100' },
-      to: { chain: 'ethereum', asset: 'USDC', address: '0xdest' },
+      from: { asset: 'USDCX_ALEO', amount: '100' },
+      to: { chain: 'EVM:1', asset: 'USDC_ETH', address: '0xdest' },
       wallet,
     })).rejects.toThrow(/merkleProof/)
   })

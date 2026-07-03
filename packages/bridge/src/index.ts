@@ -87,6 +87,7 @@ export {
 
 // Utilities
 export { unwrapEnvelope } from './utils/unwrapEnvelope.js'
+export { parseDecimalAmount } from './utils/units.js'
 
 // Asset routing
 export {
