@@ -18,13 +18,24 @@ export type ParsedOutput = RecordValue | string
 
 // ── Parameter types ───────────────────────────────────────────────────
 
+/**
+ * Configuration passed to {@link getContract} to bind a program to a client.
+ *
+ * @property program On-chain program ID the instance targets, such as `"credits.aleo"`.
+ * @property abi Parsed ABI or legacy Program used to validate method names and
+ *   type inputs and outputs. When omitted, method names are not validated and
+ *   values pass through the dynamic proxies unencoded. Defaults to undefined.
+ * @property programSource Program source code, required for local proving and
+ *   simulation because snarkVM needs the source. Defaults to undefined.
+ * @property imports Map of imported program ID to its source code, needed when a
+ *   called function depends on other programs during proving. Defaults to undefined.
+ * @property client Client backing reads and writes: a `PublicClient` for reads
+ *   only, a `WalletClient` for writes only, or `{ public, wallet }` for both.
+ */
 export type GetContractParameters = {
   program: string
-  /** Parsed ABI or legacy Program — if not provided, dynamic proxies are used */
   abi?: ABI | Program | undefined
-  /** Program source code — needed for proving/simulation (snarkvm requires source) */
   programSource?: string | undefined
-  /** Import program sources — map of program ID to source code */
   imports?: Record<string, string> | undefined
   client:
     | PublicClient
@@ -32,31 +43,103 @@ export type GetContractParameters = {
     | { public: PublicClient; wallet: WalletClient }
 }
 
+/** Mapping-name-keyed read methods that fetch an on-chain mapping value by key. */
 export type ContractReadMethods = Record<string, (params: { key: string }) => Promise<unknown>>
 
+/**
+ * Arguments to a contract write method.
+ *
+ * @property inputs Ordered function inputs. Native JS values are auto-encoded to
+ *   Aleo strings against the ABI; `InputRequest`s are passed through for the
+ *   wallet to fulfill.
+ * @property imports Optional per-call imported program sources, merged over the
+ *   instance-level imports. Defaults to undefined.
+ */
 export type ContractWriteParams = { inputs: (InputValue | InputRequest)[]; imports?: Record<string, string> }
+
+/** Function-name-keyed write methods that build, sign, and broadcast a transaction, resolving to its transaction id. */
 export type ContractWriteMethods = Record<string, (params: ContractWriteParams) => Promise<string>>
 
+/**
+ * Parsed outputs of a single transition within a simulated or executed transaction.
+ *
+ * @property transitionId On-chain transition id.
+ * @property program Program ID the transition ran against.
+ * @property function Function name the transition invoked.
+ * @property outputs Transition outputs, parsed to `RecordValue` where an output
+ *   looks like a record and left as the raw string otherwise.
+ */
 export type ContractTransitionResult = { transitionId: string; program: string; function: string; outputs: ParsedOutput[] }
 
+/**
+ * Arguments to a contract simulate method.
+ *
+ * @property inputs Ordered function inputs, encoded as for {@link ContractWriteParams}.
+ * @property imports Optional per-call imported program sources, merged over the
+ *   instance-level imports. Defaults to undefined.
+ */
 export type ContractSimulateParams = { inputs: (InputValue | InputRequest)[]; imports?: Record<string, string> }
+
+/**
+ * Result of a local simulation.
+ *
+ * @property transitions Parsed results for every transition the call produced,
+ *   including nested foreign-program transitions.
+ * @property outputs Parsed outputs of the called function's own transition.
+ */
 export type ContractSimulateResult = { transitions: ContractTransitionResult[]; outputs: ParsedOutput[] }
+
+/** Function-name-keyed simulate methods that prove locally and return parsed outputs without broadcasting. */
 export type ContractSimulateMethods = Record<string, (params: ContractSimulateParams) => Promise<ContractSimulateResult>>
 
+/**
+ * Arguments to a contract execute method.
+ *
+ * @property inputs Ordered function inputs, encoded as for {@link ContractWriteParams}.
+ * @property imports Optional per-call imported program sources, merged over the
+ *   instance-level imports. Defaults to undefined.
+ */
 export type ContractExecuteParams = { inputs: (InputValue | InputRequest)[]; imports?: Record<string, string> }
+
+/**
+ * Result of an on-chain execution.
+ *
+ * @property transactionId Id of the broadcast, confirmed transaction.
+ * @property transitions Parsed results for every transition the call produced,
+ *   including nested foreign-program transitions.
+ * @property outputs Parsed outputs of the called function's own transition.
+ */
 export type ContractExecuteResult = { transactionId: string; transitions: ContractTransitionResult[]; outputs: ParsedOutput[] }
+
+/** Function-name-keyed execute methods that build, broadcast, wait for confirmation, and return parsed outputs. */
 export type ContractExecuteMethods = Record<string, (params: ContractExecuteParams) => Promise<ContractExecuteResult>>
 
+/**
+ * A program bound to a client, exposing its mappings and functions as callable methods.
+ *
+ * Returned by {@link getContract} when no rich ABI is supplied; a typed instance
+ * is returned instead when the ABI is known at compile time.
+ *
+ * @property program On-chain program ID the instance targets.
+ * @property abi ABI or legacy Program backing method-name validation, or
+ *   undefined when none was supplied. Updated in place by `fetchAbi`.
+ * @property read Mapping reads keyed by mapping name. Requires a public client.
+ * @property write Function calls keyed by function name that broadcast a
+ *   transaction. Requires a wallet client.
+ * @property simulate Local proving keyed by function name that returns parsed
+ *   outputs without broadcasting (local accounts only). Requires a wallet client.
+ * @property execute Function calls keyed by function name that broadcast, wait
+ *   for confirmation, and return parsed outputs. Requires a wallet client.
+ * @property fetchAbi Fetches the on-chain program source, parses it, and caches
+ *   the result as `abi`. Hits the network and requires a public client.
+ */
 export type ContractInstance = {
   program: string
   abi: ABI | Program | undefined
   read: ContractReadMethods
   write: ContractWriteMethods
-  /** Execute locally and return parsed outputs without broadcasting (local accounts only) */
   simulate: ContractSimulateMethods
-  /** Build, broadcast, wait for confirmation, and return parsed outputs */
   execute: ContractExecuteMethods
-  /** Fetch and parse the on-chain program source, populating the abi */
   fetchAbi: () => Promise<Program>
 }
 
@@ -69,6 +152,35 @@ function isABI(abi: ABI | Program): abi is ABI {
 
 // ── Implementation ────────────────────────────────────────────────────
 
+/**
+ * Binds an Aleo program to a client, exposing its mappings and functions as callable methods.
+ *
+ * Reach for this to interact with a program by name instead of assembling raw
+ * `readContract`/`writeContract` calls: `contract.read.<mapping>` fetches mapping
+ * values, `contract.write.<function>` broadcasts a transaction, `contract.simulate`
+ * proves locally, and `contract.execute` broadcasts and waits. When a rich ABI is
+ * passed as a `const`, the returned instance is statically typed to the program's
+ * mappings and functions; otherwise the methods are dynamic proxies.
+ *
+ * Construction is pure and local — the network is only touched when a method is
+ * called. Read methods need a public client, write/simulate/execute need a wallet
+ * client, and simulation/proving additionally needs `programSource`.
+ *
+ * @param params Program ID, optional ABI and sources, and the backing client.
+ * @returns A contract instance whose `read`/`write`/`simulate`/`execute` methods
+ *   are keyed by mapping and function name, typed to the ABI when one is supplied.
+ * @throws When a method is invoked whose name is absent from the supplied ABI, or
+ *   when the required client (public for reads, wallet for writes) was not provided.
+ *
+ * @example
+ * import { createPublicClient, http, parseProgram, getContract } from '@veil/core'
+ *
+ * const client = createPublicClient({ transport: http('https://api.provable.com/v2', { network: 'mainnet' }) })
+ * const source = await client.getCode({ programId: 'credits.aleo' })
+ * const credits = getContract({ program: 'credits.aleo', abi: parseProgram(source), client })
+ *
+ * const balance = await credits.read.account({ key: 'aleo1…' })
+ */
 export function getContract<const A extends ABI | Program | undefined = undefined>(
   params: GetContractParameters & { abi?: A },
 ): A extends ABI ? TypedContractInstance<A & ABI> : ContractInstance

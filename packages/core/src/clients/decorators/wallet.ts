@@ -13,6 +13,14 @@ import { requestTransactionHistory, type RequestTransactionHistoryParameters, ty
 import { getChainId, type GetChainIdReturnType } from '../../actions/wallet/getChainId.js'
 import type { Client } from '../createClient.js'
 
+/**
+ * Signing and submitting actions attached to a {@link WalletClient}.
+ *
+ * Each method binds the client to the correspondingly named action to call
+ * programs, transfer credits, deploy, sign messages, and query wallet state.
+ * Several names are aliases that match Aleo wallet adapter terminology. See each
+ * action's own documentation for parameters, return value, and behavior.
+ */
 export type WalletActions = {
   sendTransaction: (params: SendTransactionParameters) => Promise<SendTransactionReturnType>
   writeContract: (params: WriteContractParameters) => Promise<WriteContractReturnType>
@@ -37,6 +45,27 @@ export type WalletActions = {
   getNetwork: () => Promise<GetChainIdReturnType>
 }
 
+/**
+ * Binds the wallet actions to a client for use with `extend`.
+ *
+ * {@link createWalletClient} applies this; call it directly only when composing a
+ * custom client. Each returned method forwards to its action with `client` bound.
+ *
+ * @param client The client the actions run against; must carry an account to sign.
+ * @returns The wallet actions bound to `client`.
+ *
+ * @example
+ * import { createClient, http, rpcAccount } from '@veil/core'
+ *
+ * const client = createClient({
+ *   account: rpcAccount({
+ *     address: 'aleo1...',
+ *     sign: async (bytes) => bytes,
+ *     signMessage: async (bytes) => bytes,
+ *   }),
+ *   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+ * }).extend(walletActions)
+ */
 export function walletActions(client: Client): WalletActions {
   return {
     sendTransaction: (params) => sendTransaction(client, params),

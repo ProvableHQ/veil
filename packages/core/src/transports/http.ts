@@ -212,6 +212,33 @@ function buildUrl(
   }
 }
 
+/**
+ * Creates an HTTP transport that talks to an Aleo REST node.
+ *
+ * The default transport for reading the chain and broadcasting transactions:
+ * it maps each veil method to a REST path under `{url}/{network}` and issues
+ * the request. Building the transport is pure; each call performs a network
+ * request and throws on a non-2xx response.
+ *
+ * @param url Base URL of the Aleo node, without a trailing network segment
+ *   (e.g. `https://api.provable.com/v2`).
+ * @param config Optional transport settings.
+ * @param config.fetchFn Optional `fetch` implementation to use for requests.
+ *   Defaults to the global `fetch`; supply one for non-browser runtimes or tests.
+ * @param config.headers Optional headers merged into every request. Defaults to
+ *   none; use it for auth tokens or custom routing.
+ * @param config.key Optional transport key. Defaults to `'http'`.
+ * @param config.name Optional human-readable name. Defaults to `'HTTP Transport'`.
+ * @param config.network Optional network whose segment is used in request paths.
+ *   Defaults to `'mainnet'`. For local accounts, `switchChain` mutates this to
+ *   re-route reads.
+ * @returns A transport of type `'http'` bound to `url` and the chosen network.
+ *
+ * @example
+ * import { http } from '@veil/core'
+ *
+ * const transport = http('https://api.provable.com/v2', { network: 'testnet' })
+ */
 export function http(
   url: string,
   config: HttpTransportConfig = {},
