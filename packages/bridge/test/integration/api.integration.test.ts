@@ -29,6 +29,26 @@ const ETH_ADDR = '0x734C0a5AB55885974cEDb9D6ff71d8E8448c7375'
 describe.runIf(RUN)('bridge client against the live wallet-services API', () => {
   const client = createBridgeClient({ transport: httpBridge(API_URL) })
 
+  it('serves the asset catalog with the identifiers other calls need', async () => {
+    const assets = await client.getAssets()
+
+    expect(assets.length).toBeGreaterThan(0)
+    // Every entry carries a chain-qualified code, its chain, and decimals —
+    // this is where srcAsset/srcChain values come from.
+    for (const a of assets) {
+      expect(a.code).toBeTruthy()
+      expect(a.chain).toBeTruthy()
+      expect(typeof a.decimals).toBe('number')
+    }
+    // The Aleo side always exists (Aleo is one side of every route).
+    expect(assets.some((a) => a.chain === 'ALEO' && a.native)).toBe(true)
+  }, 30_000)
+
+  it('serves the provider registry with at least one bridge provider', async () => {
+    const providers = await client.getProviders()
+    expect(providers.some((p) => p.capabilities.includes('BRIDGE'))).toBe(true)
+  }, 30_000)
+
   it('quotes the flagship ALEO → SOL route from real providers', async () => {
     const { quotes, meta } = await client.getQuotes({
       srcChain: 'ALEO',

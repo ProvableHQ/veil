@@ -4,6 +4,12 @@ import type { BridgeClient } from '../../src/clients/createBridgeClient.js'
 
 function fakeClient() {
   return {
+    getAssets: vi.fn().mockResolvedValue([
+      { id: 'a1', code: 'ALEO_MAINNET', chain: 'ALEO', symbol: 'ALEO', decimals: 6, native: true },
+    ]),
+    getProviders: vi.fn().mockResolvedValue([
+      { id: 'p1', code: 'demo', displayName: 'Demo', capabilities: ['BRIDGE'] },
+    ]),
     getFlags: vi.fn().mockResolvedValue({ near_supports_pub_priv_swaps: true }),
     getQuotes: vi.fn().mockResolvedValue({ quotes: [], meta: { count: 0, quoteRequestId: 'r' } }),
     createOrder: vi.fn().mockResolvedValue({
@@ -52,6 +58,8 @@ describe('createBridgeAgentTools', () => {
     const tools = createBridgeAgentTools(fakeClient())
     const names = tools.map((t) => t.schema.name)
     expect(names).toEqual([
+      'bridge_list_assets',
+      'bridge_list_providers',
       'bridge_get_flags',
       'bridge_get_quotes',
       'bridge_create_order',
@@ -122,5 +130,25 @@ describe('createBridgeAgentTools', () => {
     })
     expect(client.swap as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalled()
     expect((result as { orderId: string }).orderId).toBe('o1')
+  })
+})
+
+describe('discovery tools', () => {
+  it('bridge_list_assets handler proxies to client.getAssets', async () => {
+    const client = fakeClient()
+    const tools = createBridgeAgentTools(client)
+    const tool = tools.find((t) => t.schema.name === 'bridge_list_assets')!
+    const result = (await tool.handler({})) as Array<{ code: string; chain: string }>
+    expect(client.getAssets as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalled()
+    expect(result[0]!.code).toBe('ALEO_MAINNET')
+    expect(result[0]!.chain).toBe('ALEO')
+  })
+
+  it('bridge_list_providers handler proxies to client.getProviders', async () => {
+    const client = fakeClient()
+    const tools = createBridgeAgentTools(client)
+    const tool = tools.find((t) => t.schema.name === 'bridge_list_providers')!
+    const result = (await tool.handler({})) as Array<{ capabilities: string[] }>
+    expect(result[0]!.capabilities).toContain('BRIDGE')
   })
 })

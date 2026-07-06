@@ -72,34 +72,52 @@ production:
 Aleo's wrapped assets (`ETH_ALEO`, `USDC_ALEO`, …) had no outbound routes at
 that snapshot: value comes in as wrapped assets but leaves as native ALEO.
 
-**Getting the current pairs.** There is no routes endpoint; `getQuotes` IS the
-discovery mechanism. To learn what is live right now:
+**Getting the current pairs.** There is no routes endpoint; discovery is two
+calls on the client:
 
-1. `GET /common/assets` on the API lists the asset universe — every
-   chain-qualified code the bridge knows (29 at the snapshot).
-2. Call `getQuotes` for the pair you care about, with `recipientAddress` and
-   `refundAddress` set. Quotes back means the route is live; an empty array
-   means no enabled provider will take it right now.
+1. `getAssets()` returns the asset catalog — every asset with its
+   chain-qualified `code`, its `chain`, `decimals`, a wallet-address
+   validation regex, and `supportedProviders` naming who can route it. An
+   asset with no supported providers has no current routes.
+2. `getQuotes` for the pair you care about, with `recipientAddress` and
+   `refundAddress` set, is the liveness check: quotes back means the route is
+   live right now; an empty array means no enabled provider will take it.
+
+```ts
+const assets = await bridge.getAssets()
+const fromAleo = assets.filter((a) => a.chain === 'ALEO')
+const dest = assets.find((a) => a.symbol === 'SOL' && a.chain === 'SOLANA')!
+// dest.code → 'SOL_SOLANA'; dest.decimals, dest.walletValidationRegex, dest.supportedProviders
+```
 
 A quote request is cheap and moves no funds, so probing a pair before showing
-it to a user is the intended pattern.
+it to a user is the intended pattern. `getProviders()` lists the registry
+(filter `capabilities` for `'BRIDGE'`), but per-asset `supportedProviders`
+and a live quote are the authoritative signals — registry presence does not
+mean a provider is currently enabled.
 
 ## Identifiers and units
 
 Three conventions run through every call. Get these wrong and the API rejects
-the request with a 400:
+the request with a 400. Do not hardcode or guess the values — they all come
+from `getAssets()`:
 
 - **Chains** are the API's identifiers, case-sensitive: `ALEO`, `SOLANA`,
   `BITCOIN`, `TRON`, and `EVM:<chainId>` for EVM networks (`EVM:1` mainnet,
-  `EVM:8453` Base, `EVM:42161` Arbitrum).
-- **Assets** are chain-qualified codes from `/common/assets`, never bare
-  symbols: `ALEO_MAINNET`, `USDC_ALEO`, `ETH_BASE`. `ALEO` alone is rejected.
+  `EVM:8453` Base, `EVM:42161` Arbitrum). Read them from the catalog's
+  `chain` field.
+- **Assets** are chain-qualified codes, never bare symbols: `ALEO_MAINNET`,
+  `USDC_ALEO`, `ETH_BASE`. `ALEO` alone is rejected. Read them from the
+  catalog's `code` field.
 - **Amounts** are decimal strings in display units (`"1.5"` ALEO, not
-  microcredits), with at most the asset's decimals of precision. Quotes and
+  microcredits), with at most the asset's `decimals` of precision. Quotes and
   deposit instructions come back the same way. The `swap` action converts to
   atomic units internally when it builds the Aleo transfer; if you build a
   deposit yourself, `parseDecimalAmount(amount, decimals)` does the exact
   string-based conversion.
+
+The literal codes in this README's examples are real, but they are snapshots —
+resolve them at runtime the way the example above does.
 
 ## Usage
 
@@ -289,8 +307,12 @@ const server = toMcpServer([
 
 `bridge_swap` signs and broadcasts with the wallet the host wired into the
 client — expose it only to agents you intend to let move funds. The rest
-(flags, quotes, order tracking) are read-only against the API, though
-`bridge_create_order` does create a real order server-side.
+(discovery, flags, quotes, order tracking) are read-only against the API,
+though `bridge_create_order` does create a real order server-side. The
+discovery tools matter for agents especially: `bridge_list_assets` and
+`bridge_list_providers` give the model the chain ids, asset codes, decimals,
+and provider support it must not guess — the `bridge_list_assets` description
+tells it to call that first.
 
 ## Integration tests
 

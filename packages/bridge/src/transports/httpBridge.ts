@@ -41,6 +41,10 @@ function buildRequest(
   params?: Record<string, unknown>,
 ): BuiltRequest {
   switch (method) {
+    case 'getBridgeAssets':
+      return { url: `${baseUrl}/common/assets`, httpMethod: 'GET' }
+    case 'getBridgeProviders':
+      return { url: `${baseUrl}/common/providers`, httpMethod: 'GET' }
     case 'getBridgeFlags':
       return { url: `${baseUrl}/bridge/flags`, httpMethod: 'GET' }
     case 'getBridgeQuotes': {

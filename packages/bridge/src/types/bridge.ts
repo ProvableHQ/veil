@@ -229,6 +229,59 @@ export type BridgeOrderAuditDto = BridgeOrderStatusDto & {
   providerEvents: BridgeOrderProviderEventDto[]
 }
 
+// ---------- Asset catalog ----------
+
+/**
+ * A provider's support entry on an asset, from `GET /common/assets`.
+ *
+ * @property providerId Provider id, usable as `createOrder`'s `providerId`.
+ * @property providerCode Provider code (`NEAR_INTENTS`, `HALLIDAY`, `HOUDINI`).
+ * @property integrationType How the provider routes this asset.
+ */
+export type AssetProviderSupport = {
+  providerId: string
+  providerCode: string
+  integrationType?: BridgeIntegrationType
+}
+
+/**
+ * One entry of the bridge's asset catalog (`GET /common/assets`) — the
+ * source of truth for the identifiers every other call takes.
+ *
+ * @property code Chain-qualified asset code (`ALEO_MAINNET`, `USDC_ETH`) —
+ *   what `srcAsset`/`destAsset` expect. Never a bare symbol.
+ * @property chain Chain identifier (`ALEO`, `SOLANA`, `EVM:1`, `BITCOIN`) —
+ *   what `srcChain`/`destChain` expect. Case-sensitive.
+ * @property symbol Display symbol (`ALEO`, `USDC`).
+ * @property decimals Display decimals; amounts are decimal strings with at
+ *   most this precision.
+ * @property native Whether the asset is the chain's native token.
+ * @property walletValidationRegex Regex a recipient address on this asset's
+ *   chain must match, when the API defines one.
+ * @property supportedProviders Which providers can route this asset — an
+ *   empty/absent list means no current routes touch it.
+ * @property displayName Human-readable name, when set.
+ * @property description Longer description, when set.
+ * @property coingeckoId CoinGecko id for price lookups.
+ * @property assetIconUrl Asset icon.
+ * @property chainIconUrl Chain badge icon; null for native assets.
+ */
+export type BridgeAssetSummary = {
+  id: string
+  code: string
+  chain: string
+  symbol: string
+  decimals: number
+  native: boolean
+  walletValidationRegex?: string | null
+  supportedProviders?: AssetProviderSupport[]
+  displayName?: string
+  description?: string
+  coingeckoId?: string
+  assetIconUrl?: string
+  chainIconUrl?: string | null
+}
+
 // ---------- Feature flags ----------
 
 /**

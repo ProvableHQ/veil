@@ -11,6 +11,17 @@ function makeFetchMock(response: { ok: boolean; status?: number; body: unknown }
 }
 
 describe('httpBridge transport', () => {
+  it('GETs /common/assets and /common/providers', async () => {
+    const fetchFn = makeFetchMock({ ok: true, body: { data: [] } })
+    const transport = httpBridge('https://wsa.example/api', { fetchFn: fetchFn as unknown as typeof fetch })
+
+    await transport.request({ method: 'getBridgeAssets' })
+    await transport.request({ method: 'getBridgeProviders' })
+
+    expect(fetchFn.mock.calls[0][0]).toBe('https://wsa.example/api/common/assets')
+    expect(fetchFn.mock.calls[1][0]).toBe('https://wsa.example/api/common/providers')
+  })
+
   it('GETs /bridge/flags with no params', async () => {
     const fetchFn = makeFetchMock({ ok: true, body: { data: { near_supports_pub_priv_swaps: true } } })
     const transport = httpBridge('https://wsa.example/api', { fetchFn: fetchFn as unknown as typeof fetch })

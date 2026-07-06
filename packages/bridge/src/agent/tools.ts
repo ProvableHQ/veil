@@ -27,6 +27,30 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
   return [
     {
       schema: {
+        name: 'bridge_list_assets',
+        description:
+          'List the bridge\'s asset catalog — the source of truth for identifiers. Each entry has the chain-qualified code (ALEO_MAINNET, USDC_ETH) used as srcAsset/destAsset, the case-sensitive chain id (ALEO, SOLANA, EVM:1) used as srcChain/destChain, decimals bounding amount precision, a wallet-address validation regex, and which providers can route it. Call this FIRST — do not guess asset codes or chain ids.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      handler: () => client.getAssets(),
+    },
+    {
+      schema: {
+        name: 'bridge_list_providers',
+        description:
+          'List the registered providers. Entries with BRIDGE in capabilities are swap providers; BUY/SELL are fiat ramps. Registry presence does not guarantee a provider currently quotes — per-asset supportedProviders (bridge_list_assets) and a live bridge_get_quotes are authoritative.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      handler: () => client.getProviders(),
+    },
+    {
+      schema: {
         name: 'bridge_get_flags',
         description:
           'Fetch the bridge\'s server-side feature flags (e.g. near_supports_pub_priv_swaps). Check these before proposing routes gated by provider capabilities.',

@@ -11,6 +11,14 @@ export { httpBridge } from './transports/httpBridge.js'
 
 // Actions (standalone forms)
 export {
+  getAssets,
+  type GetAssetsReturnType,
+} from './actions/getAssets.js'
+export {
+  getProviders,
+  type GetProvidersReturnType,
+} from './actions/getProviders.js'
+export {
   getFlags,
   type GetFlagsReturnType,
 } from './actions/getFlags.js'
@@ -50,6 +58,8 @@ export type {
   ApiEnvelope,
 } from './types/envelope.js'
 export type {
+  AssetProviderSupport,
+  BridgeAssetSummary,
   BridgeFlagsDto,
   BridgeIntegrationType,
   BridgeOrderAuditDto,
