@@ -195,12 +195,13 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
             to: {
               type: 'object',
               properties: {
-                chain: { type: 'string' },
-                asset: { type: 'string' },
-                address: { type: 'string' },
+                chain: { type: 'string', description: 'Destination chain — id (SOLANA, EVM:1) or display name (Solana, Ethereum).' },
+                asset: { type: 'string', description: 'Chain-qualified destination asset code (e.g. SOL_SOLANA).' },
+                address: { type: 'string', description: 'Destination-chain recipient the provider pays out to.' },
               },
               required: ['chain', 'asset', 'address'],
             },
+            refundAddress: { type: 'string', description: 'Aleo address a failed swap refunds to. Defaults to the signing wallet\'s address.' },
             merkleProof: { type: 'string', description: 'Pre-formatted [MerkleProof; 2u32] input string. Required only for compliance-bearing source assets (e.g. USDCX_ALEO, USAD_ALEO).' },
             selectQuote: {
               description: 'best (highest amountOut), fastest (lowest estimatedTimeSeconds), or a callback (callbacks are only available to in-process callers, not to JSON agents).',

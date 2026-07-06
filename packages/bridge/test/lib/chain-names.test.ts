@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { chainDisplayName, KNOWN_CHAIN_NAMES } from '../../src/lib/chain-names.js'
+import { chainDisplayName, KNOWN_CHAIN_NAMES, resolveChainId } from '../../src/lib/chain-names.js'
 
 describe('chainDisplayName', () => {
   it('names the chains the bridge serves', () => {
@@ -21,5 +21,19 @@ describe('chainDisplayName', () => {
 
   it('exposes the map for UIs that render pickers', () => {
     expect(Object.keys(KNOWN_CHAIN_NAMES).length).toBeGreaterThanOrEqual(10)
+  })
+})
+
+describe('resolveChainId', () => {
+  it('resolves display names to identifiers, case-insensitively', () => {
+    expect(resolveChainId('Solana')).toBe('SOLANA')
+    expect(resolveChainId('ethereum')).toBe('EVM:1')
+    expect(resolveChainId('Base')).toBe('EVM:8453')
+  })
+
+  it('normalizes identifier casing and passes unknowns through', () => {
+    expect(resolveChainId('evm:42161')).toBe('EVM:42161')
+    expect(resolveChainId('SOLANA')).toBe('SOLANA')
+    expect(resolveChainId('NEWCHAIN')).toBe('NEWCHAIN')
   })
 })

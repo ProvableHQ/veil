@@ -43,3 +43,30 @@ export const KNOWN_CHAIN_NAMES: Readonly<Record<string, string>> = Object.freeze
 export function chainDisplayName(chain: string): string {
   return KNOWN_CHAIN_NAMES[chain] ?? chain
 }
+
+/**
+ * Resolves a chain reference — identifier or display name — to the API's
+ * identifier.
+ *
+ * The inverse of {@link chainDisplayName}: `'Solana'` → `'SOLANA'`, `'Base'`
+ * → `'EVM:8453'`. Matching is case-insensitive on both forms; anything
+ * unrecognized passes through verbatim (the API is the final validator, and
+ * a chain this SDK does not know may still be valid there). Pure and local.
+ *
+ * @param chainOrName A chain identifier (`'EVM:1'`) or display name
+ *   (`'Ethereum'`), any casing.
+ * @returns The API's case-sensitive chain identifier, or the input verbatim
+ *   when unrecognized.
+ *
+ * @example
+ * resolveChainId('Solana')   // 'SOLANA'
+ * resolveChainId('evm:8453') // 'EVM:8453'
+ * resolveChainId('NEWCHAIN') // 'NEWCHAIN' (unknown → pass through)
+ */
+export function resolveChainId(chainOrName: string): string {
+  const wanted = chainOrName.toLowerCase()
+  for (const [id, name] of Object.entries(KNOWN_CHAIN_NAMES)) {
+    if (id.toLowerCase() === wanted || name.toLowerCase() === wanted) return id
+  }
+  return chainOrName
+}

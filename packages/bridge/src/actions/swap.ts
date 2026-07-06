@@ -5,6 +5,7 @@ import { waitForOrder } from './waitForOrder.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import { aleoAssetProgram, type AleoAssetConfig } from '../lib/aleo-asset.js'
 import { compareDecimal, parseDecimalAmount } from '../utils/units.js'
+import { resolveChainId } from '../lib/chain-names.js'
 import type { BridgeOrderStage, BridgeOrderStatusDto, BridgeQuote } from '../types/bridge.js'
 
 /**
@@ -17,9 +18,14 @@ import type { BridgeOrderStage, BridgeOrderStatusDto, BridgeQuote } from '../typ
  * @property from Source side of the swap (Aleo is always the source chain).
  *   `asset` is the API's chain-qualified code (`ALEO_MAINNET`, `USDC_ALEO`);
  *   `amount` a decimal string in display units.
- * @property to Destination side. `chain` and `asset` use the API's
- *   identifiers (`SOLANA`/`SOL_SOLANA`, `EVM:1`/`ETH_MAINNET`); `address` is
- *   the destination-chain recipient the provider pays out to.
+ * @property to Destination side. `chain` accepts the API's identifier
+ *   (`SOLANA`, `EVM:1`) or the display name (`'Solana'`, `'Ethereum'`),
+ *   case-insensitively; `asset` is the chain-qualified code
+ *   (`SOL_SOLANA`, `ETH_MAINNET`); `address` is the destination-chain
+ *   recipient the provider pays out to.
+ * @property refundAddress Aleo address a failed swap refunds to. Defaults
+ *   to the signing wallet's address — override when refunds should land in a
+ *   different account than the one paying the deposit.
  * @property merkleProof Compliance proof, required only when the source
  *   asset's Aleo program takes one (e.g. USDCX_ALEO, USAD_ALEO).
  *   Pre-formatted as a single Aleo input string matching the program's
@@ -40,6 +46,7 @@ export type SwapParameters = {
   wallet?: WalletClient | undefined
   from: { asset: string; amount: string }
   to: { chain: string; asset: string; address: string }
+  refundAddress?: string | undefined
   merkleProof?: string | undefined
   aleoAssetMap?: Readonly<Record<string, AleoAssetConfig>> | undefined
   selectQuote?:
@@ -135,6 +142,10 @@ export async function swap(
     )
   }
   const walletAddress = wallet.account.address
+  // Accept the destination chain by identifier or display name; the API
+  // matches identifiers strictly.
+  const destChain = resolveChainId(params.to.chain)
+  const refundAddress = params.refundAddress ?? walletAddress
 
   // Fail on local knowledge before any network round-trip: an unknown asset
   // or missing proof discovered after createOrder leaves an abandoned order.
@@ -145,16 +156,16 @@ export async function swap(
     )
   }
 
-  // refundAddress is the signer's own Aleo address — some providers (NEAR
+  // A refund address is required in practice — some providers (NEAR
   // Intents) skip quoting entirely when it is absent.
   const { quotes, meta } = await getQuotes(client, {
     srcChain: SRC_CHAIN,
     srcAsset: params.from.asset,
-    destChain: params.to.chain,
+    destChain,
     destAsset: params.to.asset,
     amountIn: params.from.amount,
     recipientAddress: params.to.address,
-    refundAddress: walletAddress,
+    refundAddress,
   })
 
   if (quotes.length === 0) {
@@ -173,13 +184,13 @@ export async function swap(
   const instructions = await createOrder(client, {
     providerId: chosen.provider.id,
     srcChain: SRC_CHAIN,
-    destChain: params.to.chain,
+    destChain,
     srcAsset: params.from.asset,
     destAsset: params.to.asset,
     amountIn: params.from.amount,
     walletAddress: params.to.address,
     quoteId: chosen.quoteId,
-    refundAddress: walletAddress,
+    refundAddress,
     timezone: params.timezone,
   })
 

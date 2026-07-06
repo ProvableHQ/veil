@@ -335,3 +335,47 @@ describe('swap (deposit instruction guards)', () => {
     expect(bridge.request).not.toHaveBeenCalled()
   })
 })
+
+describe('swap (destination chain and refund address)', () => {
+  it('accepts the destination chain by display name and sends the identifier', async () => {
+    const bridge = makeBridgeClient({ quotes: [makeQuote()] })
+    const wallet = makeWallet()
+
+    await swap(bridge, {
+      from: { asset: 'ALEO_MAINNET', amount: '1.5' },
+      to: { chain: 'Solana', asset: 'SOL_SOLANA', address: '8xJ...' },
+      wallet,
+      poll: false,
+    })
+
+    expect(bridge.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'getBridgeQuotes',
+      params: expect.objectContaining({ destChain: 'SOLANA' }),
+    }))
+    expect(bridge.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'createBridgeOrder',
+      params: expect.objectContaining({ destChain: 'SOLANA' }),
+    }))
+  })
+
+  it('refundAddress overrides the signer default on quote and order', async () => {
+    const bridge = makeBridgeClient({ quotes: [makeQuote()] })
+    const wallet = makeWallet()
+
+    await swap(bridge, {
+      ...baseParams,
+      wallet,
+      refundAddress: 'aleo1refund',
+      poll: false,
+    })
+
+    expect(bridge.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'getBridgeQuotes',
+      params: expect.objectContaining({ refundAddress: 'aleo1refund' }),
+    }))
+    expect(bridge.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'createBridgeOrder',
+      params: expect.objectContaining({ refundAddress: 'aleo1refund' }),
+    }))
+  })
+})
