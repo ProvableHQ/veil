@@ -117,21 +117,16 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
 
     // Select both legs' routes from the derived route graph, by symbol and
     // chain name — the discovery path a consumer should use.
-    const usdcRoutes = await bridge.getRoutes({ symbol: 'USDC' })
+    const usdcRoutes = await bridge.getRoutes({ symbol: 'USDC', externalChain: 'Ethereum' })
     const inbound = usdcRoutes.find(
-      (r) =>
-        r.externalAsset.symbol === 'USDC' &&
-        r.externalAsset.chainName === 'Ethereum' &&
-        r.aleoAsset.symbol === 'USDC',
+      (r) => r.externalAsset.symbol === 'USDC' && r.aleoAsset.symbol === 'USDC',
     )
     if (!inbound) throw new Error('no candidate route USDC on Ethereum <-> USDC on Aleo')
     usdcEth = inbound.externalAsset
     usdcAleo = inbound.aleoAsset
 
-    const solRoutes = await bridge.getRoutes({ symbol: 'SOL' })
-    const outbound = solRoutes.find(
-      (r) => r.aleoAsset.native && r.externalAsset.native && r.externalAsset.chainName === 'Solana',
-    )
+    const solRoutes = await bridge.getRoutes({ symbol: 'SOL', externalChain: 'Solana' })
+    const outbound = solRoutes.find((r) => r.aleoAsset.native && r.externalAsset.native)
     if (!outbound) throw new Error('no candidate route native ALEO <-> native SOL')
     nativeAleo = outbound.aleoAsset
     nativeSol = outbound.externalAsset

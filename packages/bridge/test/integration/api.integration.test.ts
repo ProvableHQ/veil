@@ -47,21 +47,16 @@ describe.runIf(RUN)('bridge client against the live wallet-services API', () => 
     assets = await client.getAssets()
 
     // Flagship route: native ALEO <-> native SOL on Solana.
-    const solRoutes = await client.getRoutes({ symbol: 'SOL' })
-    const flagship = solRoutes.find(
-      (r) => r.aleoAsset.native && r.externalAsset.native && r.externalAsset.chainName === 'Solana',
-    )
+    const solRoutes = await client.getRoutes({ symbol: 'SOL', externalChain: 'Solana' })
+    const flagship = solRoutes.find((r) => r.aleoAsset.native && r.externalAsset.native)
     expect(flagship, 'route graph no longer offers native ALEO <-> native SOL').toBeTruthy()
     aleo = flagship!.aleoAsset
     sol = flagship!.externalAsset
 
     // Inbound route: USDC on Ethereum <-> USDC on Aleo.
-    const usdcRoutes = await client.getRoutes({ symbol: 'USDC' })
+    const usdcRoutes = await client.getRoutes({ symbol: 'USDC', externalChain: 'Ethereum' })
     const inbound = usdcRoutes.find(
-      (r) =>
-        r.externalAsset.symbol === 'USDC' &&
-        r.externalAsset.chainName === 'Ethereum' &&
-        r.aleoAsset.symbol === 'USDC',
+      (r) => r.externalAsset.symbol === 'USDC' && r.aleoAsset.symbol === 'USDC',
     )
     expect(inbound, 'route graph no longer offers USDC on Ethereum <-> USDC on Aleo').toBeTruthy()
     usdcEth = inbound!.externalAsset

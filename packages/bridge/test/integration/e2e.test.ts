@@ -103,10 +103,8 @@ describe.runIf(RUN)('e2e: full bridge swap chain (ALEO → SOL) on mainnet', () 
 
     // Select the route from the derived route graph, by symbol and chain
     // name — the discovery path a consumer should use.
-    const routes = await bridge.getRoutes({ symbol: 'SOL' })
-    const route = routes.find(
-      (r) => r.aleoAsset.native && r.externalAsset.native && r.externalAsset.chainName === 'Solana',
-    )
+    const routes = await bridge.getRoutes({ symbol: 'SOL', externalChain: 'Solana' })
+    const route = routes.find((r) => r.aleoAsset.native && r.externalAsset.native)
     if (!route) throw new Error('no candidate route native ALEO <-> native SOL on Solana')
     aleoAsset = route.aleoAsset
     solAsset = route.externalAsset
