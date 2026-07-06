@@ -15,8 +15,12 @@ import type { BridgeOrderStage, BridgeOrderStatusDto, BridgeQuote } from '../typ
  *   deposit. Optional when the bridge client was built with
  *   `createBridgeClient({ wallet })` — a value here overrides the client's
  *   wallet for this call.
- * @property from Source side of the swap (Aleo is always the source chain).
- *   `asset` is the API's chain-qualified code (`ALEO_MAINNET`, `USDC_ALEO`);
+ * @property from Source side of the swap. `chain` is optional and defaults
+ *   to `'ALEO'` — it MUST resolve to Aleo (identifier or the name `'Aleo'`),
+ *   because this action signs the deposit with an Aleo wallet; a non-Aleo
+ *   source throws with guidance (inbound swaps quote and order through the
+ *   individual actions, with the deposit paid on the source chain). `asset`
+ *   is the API's chain-qualified code (`ALEO_MAINNET`, `USDC_ALEO`);
  *   `amount` a decimal string in display units.
  * @property to Destination side. `chain` accepts the API's identifier
  *   (`SOLANA`, `EVM:1`) or the display name (`'Solana'`, `'Ethereum'`),
@@ -49,7 +53,7 @@ import type { BridgeOrderStage, BridgeOrderStatusDto, BridgeQuote } from '../typ
  */
 export type SwapParameters = {
   wallet?: WalletClient | undefined
-  from: { asset: string; amount: string }
+  from: { chain?: string | undefined; asset: string; amount: string }
   to: { chain: string; asset: string; address: string }
   provider?: string | undefined
   refundAddress?: string | undefined
@@ -148,8 +152,16 @@ export async function swap(
     )
   }
   const walletAddress = wallet.account.address
-  // Accept the destination chain by identifier or display name; the API
-  // matches identifiers strictly.
+  // Accept chains by identifier or display name; the API matches identifiers
+  // strictly. The source must be Aleo — this action signs the deposit with an
+  // Aleo wallet — but the slot exists so the constraint is a validated value,
+  // not a hole in the parameter shape.
+  const srcChain = resolveChainId(params.from.chain ?? SRC_CHAIN)
+  if (srcChain !== SRC_CHAIN) {
+    throw new BridgeError(
+      `swap can only source from Aleo (got from.chain "${params.from.chain}"): the deposit is signed by the Aleo wallet. For an inbound swap, use getQuotes + createOrder and pay the deposit instructions from the source chain's wallet.`,
+    )
+  }
   const destChain = resolveChainId(params.to.chain)
   const refundAddress = params.refundAddress ?? walletAddress
 
@@ -165,7 +177,7 @@ export async function swap(
   // A refund address is required in practice — some providers (NEAR
   // Intents) skip quoting entirely when it is absent.
   const { quotes, meta } = await getQuotes(client, {
-    srcChain: SRC_CHAIN,
+    srcChain,
     srcAsset: params.from.asset,
     destChain,
     destAsset: params.to.asset,
@@ -203,7 +215,7 @@ export async function swap(
   // quote's recipient for it).
   const instructions = await createOrder(client, {
     providerId: chosen.provider.id,
-    srcChain: SRC_CHAIN,
+    srcChain,
     destChain,
     srcAsset: params.from.asset,
     destAsset: params.to.asset,

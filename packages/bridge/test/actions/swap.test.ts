@@ -414,3 +414,34 @@ describe('swap (provider pinning)', () => {
     expect(walletRequest).not.toHaveBeenCalled()
   })
 })
+
+describe('swap (source chain slot)', () => {
+  it("accepts from.chain as 'ALEO' or the display name 'Aleo'", async () => {
+    for (const chain of ['ALEO', 'Aleo', 'aleo']) {
+      const bridge = makeBridgeClient({ quotes: [makeQuote()] })
+      const wallet = makeWallet()
+      await swap(bridge, {
+        from: { chain, asset: 'ALEO_MAINNET', amount: '1.5' },
+        to: { chain: 'SOLANA', asset: 'SOL_SOLANA', address: '8xJ...' },
+        wallet,
+        poll: false,
+      })
+      expect(bridge.request).toHaveBeenCalledWith(expect.objectContaining({
+        method: 'getBridgeQuotes',
+        params: expect.objectContaining({ srcChain: 'ALEO' }),
+      }))
+    }
+  })
+
+  it('rejects a non-Aleo source chain before any network call', async () => {
+    const bridge = makeBridgeClient({ quotes: [makeQuote()] })
+    const wallet = makeWallet()
+
+    await expect(swap(bridge, {
+      from: { chain: 'Solana', asset: 'SOL_SOLANA', amount: '1' },
+      to: { chain: 'ALEO', asset: 'ALEO_MAINNET', address: 'aleo1dest' },
+      wallet,
+    })).rejects.toThrow(/only source from Aleo.*getQuotes/s)
+    expect(bridge.request).not.toHaveBeenCalled()
+  })
+})

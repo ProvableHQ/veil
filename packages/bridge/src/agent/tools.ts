@@ -187,8 +187,9 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
             from: {
               type: 'object',
               properties: {
-                asset: { type: 'string' },
-                amount: { type: 'string' },
+                chain: { type: 'string', description: 'Source chain; optional, defaults to ALEO and MUST be Aleo — this tool signs the deposit with the Aleo wallet. Inbound swaps use bridge_get_quotes + bridge_create_order instead.' },
+                asset: { type: 'string', description: 'Chain-qualified source asset code (e.g. ALEO_MAINNET).' },
+                amount: { type: 'string', description: 'Decimal source amount in display units.' },
               },
               required: ['asset', 'amount'],
             },
