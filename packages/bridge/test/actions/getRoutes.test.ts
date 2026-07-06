@@ -49,10 +49,23 @@ describe('getRoutes', () => {
     expect(r.externalAsset.chainName).toBe('Ethereum')
   })
 
-  it('filters by external chain', async () => {
+  it('filters by external chain identifier', async () => {
     const routes = await getRoutes(makeClient(), { externalChain: 'SOLANA' })
     expect(routes).toHaveLength(1)
     expect(routes[0]!.externalAsset.code).toBe('SOL_SOLANA')
+  })
+
+  it('accepts the chain display name (case-insensitively) as the chain filter', async () => {
+    // Results carry chainName, so callers naturally filter by it too.
+    const byName = await getRoutes(makeClient(), { externalChain: 'Solana' })
+    expect(byName).toHaveLength(1)
+    expect(byName[0]!.externalAsset.code).toBe('SOL_SOLANA')
+
+    const byNameForEvm = await getRoutes(makeClient(), { externalChain: 'ethereum' })
+    expect(byNameForEvm.map((r) => r.externalAsset.code)).toEqual(['USDC_ETH', 'USDC_ETH'])
+
+    const byLowerId = await getRoutes(makeClient(), { externalChain: 'evm:1' })
+    expect(byLowerId).toHaveLength(2)
   })
 
   it('filters by symbol on either side', async () => {

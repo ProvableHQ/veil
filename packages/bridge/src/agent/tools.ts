@@ -57,7 +57,7 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
         inputSchema: {
           type: 'object',
           properties: {
-            externalChain: { type: 'string', description: 'Only routes whose external side is on this chain id (e.g. SOLANA, EVM:1).' },
+            externalChain: { type: 'string', description: 'Only routes whose external side is on this chain — by id (SOLANA, EVM:1) or display name (Solana, Ethereum), case-insensitive.' },
             symbol: { type: 'string', description: 'Only routes where either side has exactly this symbol (e.g. USDC).' },
             provider: { type: 'string', description: 'Only routes this provider supports (e.g. NEAR_INTENTS).' },
           },

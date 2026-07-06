@@ -42,8 +42,9 @@ export type BridgeRouteCandidate = {
  * Optional filters for `getRoutes`. All narrow the candidate set; omit
  * everything for the full graph.
  *
- * @property externalChain Only pairs whose external side is on this chain,
- *   by identifier (e.g. `'SOLANA'`, `'EVM:1'`).
+ * @property externalChain Only pairs whose external side is on this chain —
+ *   by identifier (`'SOLANA'`, `'EVM:1'`) or display name (`'Solana'`,
+ *   `'Ethereum'`), case-insensitively.
  * @property symbol Only pairs where either side's symbol matches, exactly
  *   (e.g. `'USDC'` — every place USDC can move relative to Aleo).
  * @property provider Only pairs this provider supports (e.g. `'NEAR_INTENTS'`).
@@ -90,13 +91,20 @@ export async function getRoutes(
 ): Promise<GetRoutesReturnType> {
   const assets = await getAssets(client)
 
+  // The chain filter accepts the identifier ('SOLANA', 'EVM:8453') or the
+  // display name ('Solana', 'Base'), case-insensitively — results carry
+  // chainName, so callers naturally reach for it.
+  const wantedChain = params.externalChain?.toLowerCase()
+  const chainMatches = (chain: string) =>
+    wantedChain == null ||
+    chain.toLowerCase() === wantedChain ||
+    chainDisplayName(chain).toLowerCase() === wantedChain
+
   // Split the catalog: Aleo is always one side of a pair. Assets with no
   // provider support cannot be on any route.
   const supported = assets.filter((a) => (a.supportedProviders ?? []).length > 0)
   const aleoSide = supported.filter((a) => a.chain === 'ALEO')
-  const externalSide = supported.filter(
-    (a) => a.chain !== 'ALEO' && (params.externalChain == null || a.chain === params.externalChain),
-  )
+  const externalSide = supported.filter((a) => a.chain !== 'ALEO' && chainMatches(a.chain))
 
   const routes: BridgeRouteCandidate[] = []
   for (const aleoAsset of aleoSide) {
