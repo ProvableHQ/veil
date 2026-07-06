@@ -408,8 +408,10 @@ const bridge = createBridgeClient({
 const dex = walletClient.extend(shieldSwapActions({ api: {} }))
 
 // Discover a bridge route by symbol and chain name, then bridge out in one
-// call — the deposit is signed by the same wallet that traded.
-const [route] = await bridge.getRoutes({ symbol: 'SOL', externalChain: 'Solana' })
+// call — the deposit is signed by the same wallet that traded. Pin both
+// sides to the native assets: outbound routes exist only for native ALEO.
+const routes = await bridge.getRoutes({ symbol: 'SOL', externalChain: 'Solana' })
+const route = routes.find((r) => r.aleoAsset.native && r.externalAsset.native)!
 await bridge.swap({
   from: { asset: route.aleoAsset.code, amount: '100' },
   to: { chain: route.externalAsset.chainName, asset: route.externalAsset.code, address: solAddress },

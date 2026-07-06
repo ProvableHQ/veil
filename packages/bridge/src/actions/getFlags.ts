@@ -2,6 +2,7 @@ import type { Client } from '@veil/core'
 import { unwrapEnvelope } from '../utils/unwrapEnvelope.js'
 import type { BridgeFlagsDto } from '../types/bridge.js'
 
+/** What `getFlags` resolves with: the current server-side flag values. */
 export type GetFlagsReturnType = BridgeFlagsDto
 
 /**

@@ -1,5 +1,4 @@
 import { transfer, type Client, type WalletClient } from '@veil/core'
-import { getAssets } from './getAssets.js'
 import { getQuotes } from './getQuotes.js'
 import { createOrder } from './createOrder.js'
 import { waitForOrder } from './waitForOrder.js'
@@ -7,7 +6,7 @@ import { BridgeError } from '../errors/bridgeErrors.js'
 import { aleoAssetProgram, type AleoAssetConfig } from '../lib/aleo-asset.js'
 import { compareDecimal, parseDecimalAmount } from '../utils/units.js'
 import { resolveChainId } from '../lib/chain-names.js'
-import { isAssetCode, resolveAssetCode } from '../lib/asset-resolve.js'
+import { resolveRouteRefs } from '../lib/asset-resolve.js'
 import type { BridgeOrderStage, BridgeOrderStatusDto, BridgeQuote } from '../types/bridge.js'
 
 /**
@@ -165,18 +164,16 @@ export async function swap(
       `swap can only source from Aleo (got from.chain "${params.from.chain}"): the deposit is signed by the Aleo wallet. For an inbound swap, use getQuotes + createOrder and pay the deposit instructions from the source chain's wallet.`,
     )
   }
-  const destChain = resolveChainId(params.to.chain)
   const refundAddress = params.refundAddress ?? walletAddress
 
-  // Assets accept symbols; resolving costs one catalog fetch, and only when
-  // a symbol is actually passed — exact codes skip it.
-  let srcAsset = params.from.asset
-  let destAsset = params.to.asset
-  if (!isAssetCode(srcAsset) || !isAssetCode(destAsset)) {
-    const assets = await getAssets(client)
-    srcAsset = resolveAssetCode(assets, srcAsset, SRC_CHAIN)
-    destAsset = resolveAssetCode(assets, destAsset, destChain)
-  }
+  // The shared resolver: chains from ids or names, assets from codes or
+  // symbols (one catalog fetch, only when a symbol is passed).
+  const { destChain, srcAsset, destAsset } = await resolveRouteRefs(client, {
+    srcChain: SRC_CHAIN,
+    srcAsset: params.from.asset,
+    destChain: params.to.chain,
+    destAsset: params.to.asset,
+  })
 
   // Fail on local knowledge before any further round-trip: an unknown asset
   // or missing proof discovered after createOrder leaves an abandoned order.

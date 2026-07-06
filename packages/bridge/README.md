@@ -60,14 +60,18 @@ before offering routes the flag gates.
 
 A route is a (source asset, destination asset) pair some provider will quote.
 Routes appear and disappear — with provider enablement, liquidity, and flags —
-so treat any static description as a snapshot. The following patterns currently
-exist within the Aleo bridge.
+so treat any static description as a snapshot. The following patterns exist
+within the Aleo bridge as of July 2026.
 
 | Pattern                              | Example pairs | Quoted by |
 |--------------------------------------|---|---|
 | Native ALEO → External Pairs         | `ALEO_MAINNET` → `SOL_SOLANA`, `ETH_MAINNET`, `USDT_TRON`, `USDC_SOLANA`, … | NEAR Intents |
 | External Pairs → Native ALEO         | `SOL_SOLANA` → `ALEO_MAINNET`, `ETH_MAINNET` → `ALEO_MAINNET`, … | NEAR Intents, Halliday |
 | External Pairs → Aleo Wrapped Assets | `ETH_MAINNET` → `ETH_ALEO`, `USDC_ETH` → `USDC_ALEO`, `BTC_MAINNET` → `WBTC_ALEO` | Halliday |
+
+Note the asymmetry: value can enter Aleo as wrapped assets or native ALEO,
+but leaves only as native ALEO — the wrapped assets have no outbound routes
+at this snapshot.
 
 ### Getting the supported pairs
 
@@ -89,9 +93,10 @@ provider and provide the metadata needed to get quotes.
 
 The routes returned by `getRoutes()` are candidate routes. 
 
-Callers must call get `getQuotes()` to ensure a particular `pair` and `direction` `(Aleo -> External, External -> Aleo)`,
-is available to bridge (Note the `recipientAddress` and a `refundAddress` must be set). Receiving an empty array 
-means no enabled provider supports the route at the time of the quote.
+Call `getQuotes()` to confirm that a particular pair and direction
+(Aleo → External or External → Aleo) is available to bridge, with
+`recipientAddress` and `refundAddress` set. An empty array means no enabled
+provider supports the route at the time of the quote.
 
 ```ts
 // Everywhere USDC can move relative to Aleo:
@@ -102,7 +107,7 @@ r.externalAsset.chainName  // 'Ethereum' (human-readable; chain id is 'EVM:1')
 r.providers                // ['HALLIDAY']
 
 // Get a quote to see if the route exists.
-const { quotes, meta } = await client.getQuotes({
+const { quotes, meta } = await bridge.getQuotes({
   srcChain: 'Ethereum',
   srcAsset: 'USDC',
   destChain: 'Aleo',
@@ -114,7 +119,7 @@ const { quotes, meta } = await client.getQuotes({
 ```
 
 `getQuotes` returns one entry per provider willing to take the route, plus a
-`meta` block.
+`meta` block. A live capture from the ALEO → SOL route, trimmed:
 
 ```typescript
 // Data returned from getQuotes().
@@ -132,8 +137,8 @@ const { quotes, meta } = await client.getQuotes({
       estimatedTimeSeconds: 900,
       quoteId: '1089843a-…',           // → createOrder's quoteId (some routes use quoteOptionId)
       integrationType: 'CEX',
-      feeEstimate: { provider: { feeUsd: '0.020501', … },
-      ...
+      feeEstimate: { provider: { feeUsd: '0.020501', … }, appFeeBps: 5, … },
+      …
     },
   ],
   meta: {
@@ -186,8 +191,9 @@ resolve them at runtime the way the example above does.
 For swaps FROM Aleo, `swap` runs the following flow
 1. Gets quotes from the providers
 2. Picks a quote
-3. Makes an Aleo unshield deposit through the source asset's address.
-4. Optionally polls the order to completion. 
+3. Creates the bridge order (a real server-side order — unfunded orders expire)
+4. Makes an Aleo unshield deposit through the source asset's Aleo program
+5. Optionally polls the order to completion. 
 
 The signing wallet for the swap is set during the bridge client's creation. 
 This can be optionally overridden by providing another wallet to the swap action's
@@ -279,9 +285,9 @@ order.depositMemo      // include when present — omitting it strands funds
 order.expiration       // deposit before this
 
 // 4. Track it.
-const done = await client.waitForOrder({ id: order.orderId })  // → COMPLETED or throws
-const status = await client.getOrder({ id: order.orderId })     // one snapshot
-const audit = await client.getOrderAudit({ id: order.orderId }) // + step/provider event log
+const done = await bridge.waitForOrder({ id: order.orderId })  // → COMPLETED or throws
+const status = await bridge.getOrder({ id: order.orderId })     // one snapshot
+const audit = await bridge.getOrderAudit({ id: order.orderId }) // + step/provider event log
 ```
 
 An order moves through stages (`NEW`, `WAITING`, `CONFIRMING`, `EXCHANGING`,
@@ -321,7 +327,10 @@ const bridge = createBridgeClient({
 const dex = walletClient.extend(shieldSwapActions({ api: {} }))
 
 // 1. Bridge in: pick the route from the graph, quote it, create the order.
-const [route] = await bridge.getRoutes({ symbol: 'USDC', externalChain: 'Ethereum' })
+// The symbol filter matches either side, so pin BOTH sides to USDC — routes[0]
+// could otherwise be a native-ALEO pair.
+const routes = await bridge.getRoutes({ symbol: 'USDC', externalChain: 'Ethereum' })
+const route = routes.find((r) => r.aleoAsset.symbol === 'USDC' && r.externalAsset.symbol === 'USDC')!
 const { quotes } = await bridge.getQuotes({
   srcChain: route.externalAsset.chain, srcAsset: route.externalAsset.code,
   destChain: route.aleoAsset.chain, destAsset: route.aleoAsset.code,

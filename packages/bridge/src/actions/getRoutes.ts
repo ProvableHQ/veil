@@ -1,6 +1,6 @@
 import type { Client } from '@veil/core'
 import { getAssets } from './getAssets.js'
-import { chainDisplayName } from '../lib/chain-names.js'
+import { chainDisplayName, resolveChainId } from '../lib/chain-names.js'
 import type { BridgeAssetSummary } from '../types/bridge.js'
 
 /**
@@ -44,10 +44,12 @@ export type BridgeRouteCandidate = {
  *
  * @property externalChain Only pairs whose external side is on this chain —
  *   by identifier (`'SOLANA'`, `'EVM:1'`) or display name (`'Solana'`,
- *   `'Ethereum'`), case-insensitively.
- * @property symbol Only pairs where either side's symbol matches, exactly
- *   (e.g. `'USDC'` — every place USDC can move relative to Aleo).
- * @property provider Only pairs this provider supports (e.g. `'NEAR_INTENTS'`).
+ *   `'Ethereum'`), case-insensitively. An empty string means no filter.
+ * @property symbol Only pairs where either side's symbol matches,
+ *   case-insensitively (e.g. `'USDC'` — every place USDC can move relative
+ *   to Aleo).
+ * @property provider Only pairs this provider supports, by code,
+ *   case-insensitively (e.g. `'NEAR_INTENTS'`).
  */
 export type GetRoutesParameters = {
   externalChain?: string | undefined
@@ -55,6 +57,7 @@ export type GetRoutesParameters = {
   provider?: string | undefined
 }
 
+/** What `getRoutes` resolves with: one candidate per supportable pair. */
 export type GetRoutesReturnType = BridgeRouteCandidate[]
 
 /**
@@ -91,40 +94,37 @@ export async function getRoutes(
 ): Promise<GetRoutesReturnType> {
   const assets = await getAssets(client)
 
-  // The chain filter accepts the identifier ('SOLANA', 'EVM:8453') or the
-  // display name ('Solana', 'Base'), case-insensitively — results carry
-  // chainName, so callers naturally reach for it.
-  const wantedChain = params.externalChain?.toLowerCase()
-  const chainMatches = (chain: string) =>
-    wantedChain == null ||
-    chain.toLowerCase() === wantedChain ||
-    chainDisplayName(chain).toLowerCase() === wantedChain
+  // Every filter matches case-insensitively — swap and resolveAssetCode do,
+  // and a silent [] from a casing mismatch is a false negative with no error
+  // to correct it. Empty strings mean no filter (a UI's blank picker).
+  // The chain filter goes through resolveChainId so id-or-name acceptance
+  // stays in one place.
+  const wantedChain = params.externalChain ? resolveChainId(params.externalChain).toLowerCase() : undefined
+  const wantedSymbol = params.symbol ? params.symbol.toLowerCase() : undefined
+  const wantedProvider = params.provider ? params.provider.toLowerCase() : undefined
 
   // Split the catalog: Aleo is always one side of a pair. Assets with no
-  // provider support cannot be on any route.
-  const supported = assets.filter((a) => (a.supportedProviders ?? []).length > 0)
-  const aleoSide = supported.filter((a) => a.chain === 'ALEO')
-  const externalSide = supported.filter((a) => a.chain !== 'ALEO' && chainMatches(a.chain))
+  // provider support cannot be on any route. Provider sets are computed once
+  // per asset — dedup (the catalog can list one provider twice with
+  // different integration types) happens here for free.
+  const supported = assets
+    .filter((a) => (a.supportedProviders ?? []).length > 0)
+    .map((a) => ({ asset: a, providers: new Set((a.supportedProviders ?? []).map((s) => s.providerCode)) }))
+  const aleoSide = supported.filter(({ asset }) => asset.chain === 'ALEO')
+  const externalSide = supported.filter(
+    ({ asset }) => asset.chain !== 'ALEO' && (wantedChain == null || asset.chain.toLowerCase() === wantedChain),
+  )
 
   const routes: BridgeRouteCandidate[] = []
-  for (const aleoAsset of aleoSide) {
-    const aleoProviders = new Set((aleoAsset.supportedProviders ?? []).map((s) => s.providerCode))
-    for (const externalAsset of externalSide) {
-      // Dedup provider codes: the catalog can list one provider twice with
-      // different integration types.
-      const shared = [
-        ...new Set(
-          (externalAsset.supportedProviders ?? [])
-            .map((s) => s.providerCode)
-            .filter((code) => aleoProviders.has(code)),
-        ),
-      ]
+  for (const { asset: aleoAsset, providers: aleoProviders } of aleoSide) {
+    for (const { asset: externalAsset, providers: externalProviders } of externalSide) {
+      const shared = [...externalProviders].filter((code) => aleoProviders.has(code))
       if (shared.length === 0) continue
-      if (params.provider != null && !shared.includes(params.provider)) continue
+      if (wantedProvider != null && !shared.some((code) => code.toLowerCase() === wantedProvider)) continue
       if (
-        params.symbol != null &&
-        aleoAsset.symbol !== params.symbol &&
-        externalAsset.symbol !== params.symbol
+        wantedSymbol != null &&
+        aleoAsset.symbol.toLowerCase() !== wantedSymbol &&
+        externalAsset.symbol.toLowerCase() !== wantedSymbol
       ) {
         continue
       }

@@ -2,6 +2,7 @@ import type { Client } from '@veil/core'
 import { unwrapEnvelope } from '../utils/unwrapEnvelope.js'
 import type { BridgeAssetSummary } from '../types/bridge.js'
 
+/** What `getAssets` resolves with: every asset the bridge knows. */
 export type GetAssetsReturnType = BridgeAssetSummary[]
 
 /**

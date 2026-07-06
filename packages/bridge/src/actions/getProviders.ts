@@ -2,6 +2,7 @@ import type { Client } from '@veil/core'
 import { unwrapEnvelope } from '../utils/unwrapEnvelope.js'
 import type { ProviderSummary } from '../types/bridge.js'
 
+/** What `getProviders` resolves with: every registered provider. */
 export type GetProvidersReturnType = ProviderSummary[]
 
 /**

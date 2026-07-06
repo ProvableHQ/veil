@@ -202,8 +202,10 @@ const account = viewOnlyAccount({
 `@veil/bridge` moves value between Aleo and other chains (Solana, Ethereum and
 other EVM networks, Bitcoin, Tron) through third-party swap providers. Aleo is
 always one side of the pair. Amounts are decimal strings in display units, and
-assets use the API's chain-qualified codes (`ALEO_MAINNET`, `USDC_ETH`) —
-never bare symbols. Don't hardcode those identifiers: `bridge.getRoutes()`
+assets use the API's chain-qualified codes (`ALEO_MAINNET`, `USDC_ETH`),
+though `getQuotes` and `swap` also accept plain symbols (`'USDC'`) and chain
+display names (`'Ethereum'`) and resolve them for you. Don't hardcode
+identifiers: `bridge.getRoutes()`
 derives the candidate pairs ("what can move where"), filterable by symbol or
 chain name, each side carrying its code, chain, human-readable `chainName`,
 decimals, and address-validation regex; `bridge.getAssets()` is the raw

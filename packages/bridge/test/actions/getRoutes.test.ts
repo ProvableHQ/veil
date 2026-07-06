@@ -68,17 +68,27 @@ describe('getRoutes', () => {
     expect(byLowerId).toHaveLength(2)
   })
 
-  it('filters by symbol on either side', async () => {
-    const routes = await getRoutes(makeClient(), { symbol: 'USDC' })
-    const keys = routes.map((r) => `${r.aleoAsset.code}<->${r.externalAsset.code}`)
-    // Matches USDC on the Aleo side AND on the external side.
-    expect(keys).toEqual(['ALEO_MAINNET<->USDC_ETH', 'USDC_ALEO<->USDC_ETH'])
+  it('filters by symbol on either side, case-insensitively', async () => {
+    for (const symbol of ['USDC', 'usdc', 'Usdc']) {
+      const routes = await getRoutes(makeClient(), { symbol })
+      const keys = routes.map((r) => `${r.aleoAsset.code}<->${r.externalAsset.code}`)
+      // Matches USDC on the Aleo side AND on the external side.
+      expect(keys).toEqual(['ALEO_MAINNET<->USDC_ETH', 'USDC_ALEO<->USDC_ETH'])
+    }
   })
 
-  it('filters by provider', async () => {
-    const routes = await getRoutes(makeClient(), { provider: 'HALLIDAY' })
-    const keys = routes.map((r) => `${r.aleoAsset.code}<->${r.externalAsset.code}`)
-    expect(keys).toEqual(['ALEO_MAINNET<->USDC_ETH', 'USDC_ALEO<->USDC_ETH'])
+  it('filters by provider, case-insensitively', async () => {
+    for (const provider of ['HALLIDAY', 'halliday']) {
+      const routes = await getRoutes(makeClient(), { provider })
+      const keys = routes.map((r) => `${r.aleoAsset.code}<->${r.externalAsset.code}`)
+      expect(keys).toEqual(['ALEO_MAINNET<->USDC_ETH', 'USDC_ALEO<->USDC_ETH'])
+    }
+  })
+
+  it('treats empty-string filters as no filter (a blank UI picker)', async () => {
+    const all = await getRoutes(makeClient())
+    const blank = await getRoutes(makeClient(), { externalChain: '', symbol: '', provider: '' })
+    expect(blank).toEqual(all)
   })
 
   it('dedups a provider listed twice with different integration types', async () => {

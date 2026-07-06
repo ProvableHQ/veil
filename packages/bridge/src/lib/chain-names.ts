@@ -9,8 +9,8 @@
  */
 
 /**
- * Human-readable names for the chain identifiers the bridge used at the time
- * of writing. Keys are the API's case-sensitive chain ids.
+ * Maps the API's case-sensitive chain identifiers to human-readable names,
+ * as of the time of writing.
  */
 export const KNOWN_CHAIN_NAMES: Readonly<Record<string, string>> = Object.freeze({
   ALEO: 'Aleo',

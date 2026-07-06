@@ -248,6 +248,7 @@ export type AssetProviderSupport = {
  * One entry of the bridge's asset catalog (`GET /common/assets`) — the
  * source of truth for the identifiers every other call takes.
  *
+ * @property id The asset's registry id.
  * @property code Chain-qualified asset code (`ALEO_MAINNET`, `USDC_ETH`) —
  *   what `srcAsset`/`destAsset` expect. Never a bare symbol.
  * @property chain Chain identifier (`ALEO`, `SOLANA`, `EVM:1`, `BITCOIN`) —

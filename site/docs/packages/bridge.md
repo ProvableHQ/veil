@@ -46,6 +46,7 @@ import { createBridgeClient, httpBridge } from '@veil/bridge'
 
 const bridge = createBridgeClient({
   transport: httpBridge('https://wallet.api.provable.com'),
+  wallet: walletClient, // a @veil/core WalletClient — required for swap below
 })
 
 // What can move where, relative to Aleo? Filter by symbol and chain name.

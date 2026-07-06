@@ -73,6 +73,10 @@ describe.runIf(RUN)('bridge client against the live wallet-services API', () => 
       expect(a.code).toBeTruthy()
       expect(a.chain).toBeTruthy()
       expect(typeof a.decimals).toBe('number')
+      // Symbol resolution discriminates codes from symbols by underscore;
+      // this guards the invariant against catalog drift.
+      expect(a.code, 'asset codes must contain an underscore').toContain('_')
+      expect(a.symbol, 'asset symbols must not contain underscores').not.toContain('_')
     }
     // The catalog's validation regexes accept the test wallets — the same
     // check a UI would run before quoting.
@@ -164,20 +168,39 @@ describe.runIf(RUN)('bridge client against the live wallet-services API', () => 
     expect(meta.quoteRequestId).toBeTruthy()
   }, 90_000)
 
-  it('rejects a bare symbol as an asset code', async () => {
-    // Deliberately NOT from the catalog: the bare symbol is the mistake the
-    // API must reject (the catalog's code for this asset is chain-qualified).
+  it('the API itself rejects a bare symbol as an asset code', async () => {
+    // getQuotes would resolve the symbol client-side, so go through the raw
+    // transport to verify the API-level invariant the resolution exists for.
     expect(aleo.symbol).not.toBe(aleo.code)
     await expect(
-      client.getQuotes({
-        srcChain: aleo.chain,
-        srcAsset: aleo.symbol, // e.g. 'ALEO' — must be aleo.code
-        destChain: sol.chain,
-        destAsset: sol.code,
-        amountIn: '1',
+      client.request({
+        method: 'getBridgeQuotes',
+        params: {
+          srcChain: aleo.chain,
+          srcAsset: aleo.symbol, // e.g. 'ALEO' — the API wants aleo.code
+          destChain: sol.chain,
+          destAsset: sol.code,
+          amountIn: '1',
+        },
       }),
     ).rejects.toThrow(TransportError)
   }, 30_000)
+
+  it('getQuotes resolves the same bare symbol instead of failing', async () => {
+    // The SDK-level counterpart: the symbol that 400s at the API succeeds
+    // through getQuotes because resolution turns it into the code.
+    const { quotes, meta } = await client.getQuotes({
+      srcChain: aleo.chainName, // display name
+      srcAsset: aleo.symbol, // symbol
+      destChain: sol.chain,
+      destAsset: sol.code,
+      amountIn: '100',
+      recipientAddress: SOL_ADDR,
+      refundAddress: ALEO_ADDR,
+    })
+    expect(meta.quoteRequestId).toBeTruthy()
+    for (const q of quotes) expect(q.srcAsset).toBe(aleo.code)
+  }, 90_000)
 
   it('throws for an unknown order id', async () => {
     await expect(client.getOrder({ id: '00000000-0000-0000-0000-000000000000' })).rejects.toThrow(

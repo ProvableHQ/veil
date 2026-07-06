@@ -1,9 +1,7 @@
 import type { Client } from '@veil/core'
-import { getAssets } from './getAssets.js'
 import { unwrapEnvelope } from '../utils/unwrapEnvelope.js'
 import { BridgeEnvelopeError } from '../errors/bridgeErrors.js'
-import { resolveChainId } from '../lib/chain-names.js'
-import { isAssetCode, resolveAssetCode } from '../lib/asset-resolve.js'
+import { resolveRouteRefs } from '../lib/asset-resolve.js'
 import type { BridgeQuote, GetQuotesMeta } from '../types/bridge.js'
 
 /**
@@ -89,17 +87,7 @@ export async function getQuotes(
   client: Client,
   params: GetQuotesParameters,
 ): Promise<GetQuotesReturnType> {
-  // Chains normalize locally; symbols need the catalog — fetched once, only
-  // when a symbol is actually passed, so exact-code calls stay one request.
-  const srcChain = resolveChainId(params.srcChain)
-  const destChain = resolveChainId(params.destChain)
-  let { srcAsset, destAsset } = params
-  if (!isAssetCode(srcAsset) || !isAssetCode(destAsset)) {
-    const assets = await getAssets(client)
-    srcAsset = resolveAssetCode(assets, srcAsset, srcChain)
-    destAsset = resolveAssetCode(assets, destAsset, destChain)
-  }
-  const resolved = { ...params, srcChain, destChain, srcAsset, destAsset }
+  const resolved = { ...params, ...(await resolveRouteRefs(client, params)) }
 
   const response = await client.request({ method: 'getBridgeQuotes', params: resolved })
   const { data, meta } = unwrapEnvelope<BridgeQuote[]>(response, { keepMeta: true })

@@ -1,4 +1,7 @@
+import type { Client } from '@veil/core'
 import { BridgeError } from '../errors/bridgeErrors.js'
+import { getAssets } from '../actions/getAssets.js'
+import { resolveChainId } from './chain-names.js'
 import type { BridgeAssetSummary } from '../types/bridge.js'
 
 /**
@@ -54,4 +57,39 @@ export function resolveAssetCode(
   throw new BridgeError(
     `Symbol "${assetRef}" is ambiguous on chain ${chain}: ${matches.map((a) => a.code).join(', ')}. Pass the chain-qualified code.`,
   )
+}
+
+/**
+ * Resolves a route's four references to the API's exact identifiers.
+ *
+ * Chains normalize locally from ids or display names; asset symbols resolve
+ * against the catalog within their (resolved) chain. The catalog is fetched
+ * once, and only when a symbol is actually passed — exact codes keep callers
+ * at zero extra requests. `getQuotes` and `swap` both resolve through here,
+ * so the same input can never resolve differently between them.
+ *
+ * @param client A client whose transport is `httpBridge` (used only when a
+ *   symbol needs the catalog).
+ * @param refs The route as the caller expressed it — ids/names, codes/symbols.
+ * @returns The route in the API's identifiers.
+ * @throws BridgeError When a symbol matches nothing (or several things) on
+ *   its chain.
+ *
+ * @example
+ * await resolveRouteRefs(client, { srcChain: 'Aleo', srcAsset: 'ALEO', destChain: 'Solana', destAsset: 'SOL' })
+ * // → { srcChain: 'ALEO', srcAsset: 'ALEO_MAINNET', destChain: 'SOLANA', destAsset: 'SOL_SOLANA' }
+ */
+export async function resolveRouteRefs(
+  client: Client,
+  refs: { srcChain: string; srcAsset: string; destChain: string; destAsset: string },
+): Promise<{ srcChain: string; srcAsset: string; destChain: string; destAsset: string }> {
+  const srcChain = resolveChainId(refs.srcChain)
+  const destChain = resolveChainId(refs.destChain)
+  let { srcAsset, destAsset } = refs
+  if (!isAssetCode(srcAsset) || !isAssetCode(destAsset)) {
+    const assets = await getAssets(client)
+    srcAsset = resolveAssetCode(assets, srcAsset, srcChain)
+    destAsset = resolveAssetCode(assets, destAsset, destChain)
+  }
+  return { srcChain, srcAsset, destChain, destAsset }
 }
