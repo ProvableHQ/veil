@@ -1,6 +1,7 @@
 import type { Client, WalletClient } from '@veil/core'
 import { getAssets, type GetAssetsReturnType } from '../../actions/getAssets.js'
 import { getProviders, type GetProvidersReturnType } from '../../actions/getProviders.js'
+import { getRoutes, type GetRoutesParameters, type GetRoutesReturnType } from '../../actions/getRoutes.js'
 import { getFlags, type GetFlagsReturnType } from '../../actions/getFlags.js'
 import { getQuotes, type GetQuotesParameters, type GetQuotesReturnType } from '../../actions/getQuotes.js'
 import { createOrder, type CreateOrderParameters, type CreateOrderReturnType } from '../../actions/createOrder.js'
@@ -22,6 +23,7 @@ export type BridgeActionsConfig = {
 export type BridgeActions = {
   getAssets: () => Promise<GetAssetsReturnType>
   getProviders: () => Promise<GetProvidersReturnType>
+  getRoutes: (params?: GetRoutesParameters) => Promise<GetRoutesReturnType>
   getFlags: () => Promise<GetFlagsReturnType>
   getQuotes: (params: GetQuotesParameters) => Promise<GetQuotesReturnType>
   createOrder: (params: CreateOrderParameters) => Promise<CreateOrderReturnType>
@@ -43,6 +45,7 @@ export function bridgeActions(client: Client, config: BridgeActionsConfig = {}):
   return {
     getAssets: () => getAssets(client),
     getProviders: () => getProviders(client),
+    getRoutes: (params) => getRoutes(client, params),
     getFlags: () => getFlags(client),
     getQuotes: (params) => getQuotes(client, params),
     createOrder: (params) => createOrder(client, params),

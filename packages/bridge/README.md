@@ -72,23 +72,26 @@ production:
 Aleo's wrapped assets (`ETH_ALEO`, `USDC_ALEO`, …) had no outbound routes at
 that snapshot: value comes in as wrapped assets but leaves as native ALEO.
 
-**Getting the current pairs.** There is no routes endpoint; discovery is two
-calls on the client:
-
-1. `getAssets()` returns the asset catalog — every asset with its
-   chain-qualified `code`, its `chain`, `decimals`, a wallet-address
-   validation regex, and `supportedProviders` naming who can route it. An
-   asset with no supported providers has no current routes.
-2. `getQuotes` for the pair you care about, with `recipientAddress` and
-   `refundAddress` set, is the liveness check: quotes back means the route is
-   live right now; an empty array means no enabled provider will take it.
+**Getting the current pairs.** There is no routes endpoint on the API;
+`getRoutes()` derives the candidate graph from the asset catalog — pairs of
+assets (Aleo always one side) that share a supporting provider — so you can
+enumerate what can move where without knowing any code in advance:
 
 ```ts
-const assets = await bridge.getAssets()
-const fromAleo = assets.filter((a) => a.chain === 'ALEO')
-const dest = assets.find((a) => a.symbol === 'SOL' && a.chain === 'SOLANA')!
-// dest.code → 'SOL_SOLANA'; dest.decimals, dest.walletValidationRegex, dest.supportedProviders
+// Everywhere USDC can move relative to Aleo:
+const routes = await bridge.getRoutes({ symbol: 'USDC' })
+const r = routes[0]
+r.externalAsset.code       // 'USDC_ETH'
+r.externalAsset.chainName  // 'Ethereum' (human-readable; chain id is 'EVM:1')
+r.providers                // ['HALLIDAY']
 ```
+
+Candidates mean supportability, not liveness or direction (wrapped Aleo
+assets are often inbound-only). `getQuotes` for the pair and direction you
+care about, with `recipientAddress` and `refundAddress` set, is the liveness
+check: quotes back means live; an empty array means no enabled provider will
+take it right now. `getAssets()` remains the underlying catalog when you want
+the raw universe rather than the pair graph.
 
 A quote request is cheap and moves no funds, so probing a pair before showing
 it to a user is the intended pattern. `getProviders()` lists the registry

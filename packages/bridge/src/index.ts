@@ -19,6 +19,13 @@ export {
   type GetProvidersReturnType,
 } from './actions/getProviders.js'
 export {
+  getRoutes,
+  type BridgeRouteCandidate,
+  type GetRoutesParameters,
+  type GetRoutesReturnType,
+  type RouteAsset,
+} from './actions/getRoutes.js'
+export {
   getFlags,
   type GetFlagsReturnType,
 } from './actions/getFlags.js'

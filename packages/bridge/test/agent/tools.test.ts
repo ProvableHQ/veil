@@ -10,6 +10,7 @@ function fakeClient() {
     getProviders: vi.fn().mockResolvedValue([
       { id: 'p1', code: 'demo', displayName: 'Demo', capabilities: ['BRIDGE'] },
     ]),
+    getRoutes: vi.fn().mockResolvedValue([]),
     getFlags: vi.fn().mockResolvedValue({ near_supports_pub_priv_swaps: true }),
     getQuotes: vi.fn().mockResolvedValue({ quotes: [], meta: { count: 0, quoteRequestId: 'r' } }),
     createOrder: vi.fn().mockResolvedValue({
@@ -60,6 +61,7 @@ describe('createBridgeAgentTools', () => {
     expect(names).toEqual([
       'bridge_list_assets',
       'bridge_list_providers',
+      'bridge_list_routes',
       'bridge_get_flags',
       'bridge_get_quotes',
       'bridge_create_order',

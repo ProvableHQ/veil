@@ -7,7 +7,7 @@ import type { SwapReturnType } from '../../src/actions/swap.js'
 
 /**
  * The full bridge swap chain against MAINNET and the live providers,
- * with the route's identifiers discovered from getAssets() at runtime:
+ * with the route selected from getRoutes() by symbol + chain name at runtime:
  * quote → order → sign + broadcast the Aleo unshield deposit → poll the
  * order to COMPLETED → audit it. This SPENDS REAL ALEO and delivers real
  * SOL to the destination wallet — it is gated separately from the read-only
@@ -67,8 +67,9 @@ function recordMicrocredits(plaintext: string): bigint {
 
 describe.runIf(RUN)('e2e: full bridge swap chain (ALEO → SOL) on mainnet', () => {
   let bridge: BridgeClient
-  // Resolved from the live catalog in beforeAll — never hardcoded.
-  let aleoAsset: { code: string; chain: string; decimals: number }
+  // The route under test, selected from getRoutes() by symbol + chain name
+  // in beforeAll — never hardcoded.
+  let aleoAsset: { code: string; chain: string }
   let solAsset: { code: string; chain: string }
   let scanner: Awaited<ReturnType<Awaited<ReturnType<typeof loadNetwork>>['createRemoteScanner']>>
   let walletClient: ReturnType<Awaited<ReturnType<typeof loadNetwork>>['createAleoClient']>['walletClient']
@@ -100,14 +101,15 @@ describe.runIf(RUN)('e2e: full bridge swap chain (ALEO → SOL) on mainnet', () 
       wallet: walletClient,
     })
 
-    // Discover the route's identifiers from the catalog, the way a consumer
-    // should — native ALEO out, native SOL in.
-    const assets = await bridge.getAssets()
-    const nativeAleo = assets.find((a) => a.chain === 'ALEO' && a.native)
-    const nativeSol = assets.find((a) => a.chain === 'SOLANA' && a.native)
-    if (!nativeAleo || !nativeSol) throw new Error('asset catalog no longer lists native ALEO/SOL')
-    aleoAsset = nativeAleo
-    solAsset = nativeSol
+    // Select the route from the derived route graph, by symbol and chain
+    // name — the discovery path a consumer should use.
+    const routes = await bridge.getRoutes({ symbol: 'SOL' })
+    const route = routes.find(
+      (r) => r.aleoAsset.native && r.externalAsset.native && r.externalAsset.chainName === 'Solana',
+    )
+    if (!route) throw new Error('no candidate route native ALEO <-> native SOL on Solana')
+    aleoAsset = route.aleoAsset
+    solAsset = route.externalAsset
   }, 120_000)
 
   it('quotes the route with a live provider before committing funds', async () => {

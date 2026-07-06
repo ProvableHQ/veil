@@ -51,6 +51,22 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
     },
     {
       schema: {
+        name: 'bridge_list_routes',
+        description:
+          'List candidate bridge routes derived from the asset catalog: pairs of assets (one always on Aleo) that share a supporting provider. Each side carries its code, chain id, human-readable chainName, decimals, and address regex — everything a follow-up quote needs. Candidates mean supportability, not liveness or direction; confirm with bridge_get_quotes. Use this to answer "what can move where" instead of guessing pairs.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            externalChain: { type: 'string', description: 'Only routes whose external side is on this chain id (e.g. SOLANA, EVM:1).' },
+            symbol: { type: 'string', description: 'Only routes where either side has exactly this symbol (e.g. USDC).' },
+            provider: { type: 'string', description: 'Only routes this provider supports (e.g. NEAR_INTENTS).' },
+          },
+        },
+      },
+      handler: (params) => client.getRoutes(params as Parameters<BridgeClient['getRoutes']>[0]),
+    },
+    {
+      schema: {
         name: 'bridge_get_flags',
         description:
           'Fetch the bridge\'s server-side feature flags (e.g. near_supports_pub_priv_swaps). Check these before proposing routes gated by provider capabilities.',

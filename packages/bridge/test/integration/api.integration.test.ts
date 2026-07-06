@@ -69,6 +69,21 @@ describe.runIf(RUN)('bridge client against the live wallet-services API', () => 
     if (usdcEth.walletValidationRegex) expect(ETH_ADDR).toMatch(new RegExp(usdcEth.walletValidationRegex))
   })
 
+  it('derives a route graph with the flagship pair, selectable by symbol and chain name', async () => {
+    const routes = await client.getRoutes({ symbol: 'SOL' })
+
+    // The flagship native-ALEO <-> native-SOL pair is findable without
+    // knowing any asset code — by symbol and human-readable chain name.
+    const flagship = routes.find(
+      (r) => r.aleoAsset.native && r.externalAsset.native && r.externalAsset.chainName === 'Solana',
+    )
+    expect(flagship, 'flagship ALEO<->SOL route missing from the derived graph').toBeTruthy()
+    expect(flagship!.aleoAsset.code).toBe(aleo.code)
+    expect(flagship!.externalAsset.code).toBe(sol.code)
+    expect(flagship!.providers.length).toBeGreaterThan(0)
+    expect(flagship!.aleoAsset.chainName).toBe('Aleo')
+  }, 30_000)
+
   it('serves the provider registry with at least one bridge provider', async () => {
     const providers = await client.getProviders()
     expect(providers.some((p) => p.capabilities.includes('BRIDGE'))).toBe(true)

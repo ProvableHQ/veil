@@ -115,17 +115,26 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
     })
     bridge = createBridgeClient({ transport: httpBridge(BRIDGE_URL), wallet: bridgeWallet })
 
-    // Discover every identifier the bridge legs use from the asset catalog.
-    const assets = await bridge.getAssets()
-    const pick = (what: string, pred: (a: (typeof assets)[number]) => boolean) => {
-      const found = assets.find(pred)
-      if (!found) throw new Error(`asset catalog no longer lists ${what}`)
-      return found
-    }
-    usdcEth = pick('USDC on EVM:1', (a) => a.symbol === 'USDC' && a.chain === 'EVM:1')
-    usdcAleo = pick('USDC on ALEO', (a) => a.symbol === 'USDC' && a.chain === 'ALEO')
-    nativeAleo = pick('native ALEO', (a) => a.chain === 'ALEO' && a.native)
-    nativeSol = pick('native SOL', (a) => a.chain === 'SOLANA' && a.native)
+    // Select both legs' routes from the derived route graph, by symbol and
+    // chain name — the discovery path a consumer should use.
+    const usdcRoutes = await bridge.getRoutes({ symbol: 'USDC' })
+    const inbound = usdcRoutes.find(
+      (r) =>
+        r.externalAsset.symbol === 'USDC' &&
+        r.externalAsset.chainName === 'Ethereum' &&
+        r.aleoAsset.symbol === 'USDC',
+    )
+    if (!inbound) throw new Error('no candidate route USDC on Ethereum <-> USDC on Aleo')
+    usdcEth = inbound.externalAsset
+    usdcAleo = inbound.aleoAsset
+
+    const solRoutes = await bridge.getRoutes({ symbol: 'SOL' })
+    const outbound = solRoutes.find(
+      (r) => r.aleoAsset.native && r.externalAsset.native && r.externalAsset.chainName === 'Solana',
+    )
+    if (!outbound) throw new Error('no candidate route native ALEO <-> native SOL')
+    nativeAleo = outbound.aleoAsset
+    nativeSol = outbound.externalAsset
   }, 180_000)
 
   it('bridge in: the inbound route quotes end-to-end up to the deposit', async () => {
