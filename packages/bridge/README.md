@@ -60,24 +60,38 @@ before offering routes the flag gates.
 
 A route is a (source asset, destination asset) pair some provider will quote.
 Routes appear and disappear — with provider enablement, liquidity, and flags —
-so treat any static description as a snapshot. As of July 2026, production
-quotes follow three patterns (verified by live probes, not exhaustively
-enumerated — probe your pair):
+so treat any static description as a snapshot. The following patterns currently
+exist within the Aleo bridge.
 
-| Pattern | Example pairs | Quoted by |
-|---|---|---|
-| Native ALEO → majors | `ALEO_MAINNET` → `SOL_SOLANA`, `ETH_MAINNET`, `USDT_TRON`, `USDC_SOLANA`, … | NEAR Intents |
-| Majors → native ALEO | `SOL_SOLANA` → `ALEO_MAINNET`, `ETH_MAINNET` → `ALEO_MAINNET`, … | NEAR Intents, Halliday |
-| Majors → wrapped-on-Aleo | `ETH_MAINNET` → `ETH_ALEO`, `USDC_ETH` → `USDC_ALEO`, `BTC_MAINNET` → `WBTC_ALEO` | Halliday |
+| Pattern                              | Example pairs | Quoted by |
+|--------------------------------------|---|---|
+| Native ALEO → External Pairs         | `ALEO_MAINNET` → `SOL_SOLANA`, `ETH_MAINNET`, `USDT_TRON`, `USDC_SOLANA`, … | NEAR Intents |
+| External Pairs → Native ALEO         | `SOL_SOLANA` → `ALEO_MAINNET`, `ETH_MAINNET` → `ALEO_MAINNET`, … | NEAR Intents, Halliday |
+| External Pairs → Aleo Wrapped Assets | `ETH_MAINNET` → `ETH_ALEO`, `USDC_ETH` → `USDC_ALEO`, `BTC_MAINNET` → `WBTC_ALEO` | Halliday |
 
-Aleo's wrapped assets (`ETH_ALEO`, `USDC_ALEO`, …) had no outbound routes at
-that snapshot: value can enter as wrapped assets or native ALEO, but leaves
-only as native ALEO.
+### Getting the supported pairs
 
-**Getting the current pairs.** There is no routes endpoint on the API;
-`getRoutes()` derives the candidate graph from the asset catalog — pairs of
-assets (Aleo always one side) that share a supporting provider — so you can
-enumerate what can move where without knowing any code in advance:
+#### Step 1: Discovering Possible Routes
+`getRoutes()` finds the routes from the asset catalog. This function returns 
+an array of asset pairs (src asset, destination asset) that share a supporting 
+provider and provide the metadata needed to get quotes.
+
+```typescript
+// Data returned from getRoutes().
+{
+  aleoAsset:  { code: 'ALEO_MAINNET', chain: 'ALEO', chainName: 'Aleo', symbol: 'ALEO', … },
+  externalAsset: { code: 'USDC_BASE', chain: 'EVM:8453', chainName: 'Base', symbol: 'USDC', … },
+  providers: ['NEAR_INTENTS', 'HALLIDAY'],
+}
+```
+
+#### Step 2: Determining if a Quote Exists
+
+The routes returned by `getRoutes()` are candidate routes. 
+
+Callers must call get `getQuotes()` to ensure a particular `pair` and `direction` `(Aleo -> External, External -> Aleo)`,
+is available to bridge (Note the `recipientAddress` and a `refundAddress` must be set). Receiving an empty array 
+means no enabled provider supports the route at the time of the quote.
 
 ```ts
 // Everywhere USDC can move relative to Aleo:
@@ -86,20 +100,55 @@ const r = routes[0]
 r.externalAsset.code       // 'USDC_ETH'
 r.externalAsset.chainName  // 'Ethereum' (human-readable; chain id is 'EVM:1')
 r.providers                // ['HALLIDAY']
+
+// Get a quote to see if the route exists.
+const { quotes, meta } = await client.getQuotes({
+  srcChain: 'Ethereum',
+  srcAsset: 'USDC',
+  destChain: 'Aleo',
+  destAsset: 'USDC',
+  amountIn: '250',
+  recipientAddress: aleoAddress,
+  refundAddress: ethAddress,
+})
 ```
 
-Candidates mean supportability, not liveness or direction (wrapped Aleo
-assets are often inbound-only). `getQuotes` for the pair and direction you
-care about, with `recipientAddress` and `refundAddress` set, is the liveness
-check: quotes back means live; an empty array means no enabled provider will
-take it right now. `getAssets()` remains the underlying catalog when you want
-the raw universe rather than the pair graph.
+`getQuotes` returns one entry per provider willing to take the route, plus a
+`meta` block. A live capture (ALEO → SOL, trimmed):
 
-A quote request is cheap and moves no funds, so probing a pair before showing
-it to a user is the intended pattern. `getProviders()` lists the registry
-(filter `capabilities` for `'BRIDGE'`), but per-asset `supportedProviders`
-and a live quote are the authoritative signals — registry presence does not
-mean a provider is currently enabled.
+```typescript
+// Data returned from getQuotes().
+{
+  quotes: [
+    {
+      provider: { id: 'ab26…', code: 'NEAR_INTENTS', displayName: 'NEAR Intents', … },
+      srcChain: 'ALEO',                // resolved identifiers echoed back,
+      destChain: 'SOLANA',             // even when you passed names/symbols
+      srcAsset: 'ALEO_MAINNET',
+      destAsset: 'SOL_SOLANA',
+      amountIn: '100',                 // decimal display units throughout
+      amountOut: '0.023951296',        // estimated receive amount
+      minAmountOut: '0.023711783',     // slippage floor
+      estimatedTimeSeconds: 900,
+      quoteId: '1089843a-…',           // → createOrder's quoteId (some routes use quoteOptionId)
+      integrationType: 'CEX',
+      feeEstimate: { provider: { feeUsd: '0.020501', … }, appFeeBps: 5, appFeeAmountIn: '0.05' },
+      metadata: { amountInAtomic: '100000000', amountOutAtomic: '23951296', … },
+      destChainWalletValidationRegex: '^[1-9A-HJ-NP-Za-km-z]{32,44}$',
+    },
+  ],
+  meta: {
+    count: 1,
+    quoteRequestId: '98b21e5f-…',      // support handle — log it
+    // warnings / providerErrors appear here when providers skip or fail
+  },
+}
+```
+
+The fields that matter downstream: `quoteId` (or `quoteOptionId`) and
+`provider.id` are what `createOrder` takes; the echoed `srcAsset`/`destAsset`
+are the resolved codes; and `destChainWalletValidationRegex` validates the
+recipient before committing.
 
 ## Identifiers and units
 
