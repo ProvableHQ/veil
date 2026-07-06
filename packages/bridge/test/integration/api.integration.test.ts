@@ -3,6 +3,7 @@ import { createBridgeClient } from '../../src/clients/createBridgeClient.js'
 import { httpBridge } from '../../src/transports/httpBridge.js'
 import { TransportError } from '@veil/core'
 import type { BridgeAssetSummary } from '../../src/types/bridge.js'
+import type { RouteAsset } from '../../src/actions/getRoutes.js'
 
 /**
  * Real-API integration for the bridge client: every test hits the LIVE
@@ -11,8 +12,8 @@ import type { BridgeAssetSummary } from '../../src/types/bridge.js'
  * catch provider drift as well as API drift. Read-only: quotes and error
  * paths only; no orders are created and no funds move.
  *
- * Identifiers are DISCOVERED, not hardcoded: beforeAll resolves the assets
- * under test from getAssets() by symbol + chain semantics, the same way a
+ * Identifiers are DISCOVERED, not hardcoded: beforeAll selects the routes
+ * under test from getRoutes() by symbol + chain name, the same way a
  * consumer should. Route availability shifts with provider enablement and
  * liquidity — tests assert invariants of whatever comes back, and only the
  * flagship native-ALEO → native-SOL route is required to actually quote.
@@ -32,26 +33,40 @@ const ETH_ADDR = '0x734C0a5AB55885974cEDb9D6ff71d8E8448c7375'
 describe.runIf(RUN)('bridge client against the live wallet-services API', () => {
   const client = createBridgeClient({ transport: httpBridge(API_URL) })
 
-  // Resolved from the live catalog — the discovery path consumers should use.
+  // The routes under test, selected from the derived route graph by symbol
+  // and chain name — the discovery path consumers should use. The individual
+  // asset references below are the routes' own enriched entries.
   let assets: BridgeAssetSummary[]
-  let aleo: BridgeAssetSummary // native ALEO
-  let sol: BridgeAssetSummary // native SOL on Solana
-  let usdcEth: BridgeAssetSummary // USDC on Ethereum mainnet
-  let usdcAleo: BridgeAssetSummary // USDC bridged onto Aleo
-
-  function resolve(what: string, pred: (a: BridgeAssetSummary) => boolean): BridgeAssetSummary {
-    const found = assets.find(pred)
-    expect(found, `asset catalog no longer lists ${what}`).toBeTruthy()
-    return found!
-  }
+  let aleo: RouteAsset // native ALEO — flagship route's Aleo side
+  let sol: RouteAsset // native SOL — flagship route's external side
+  let usdcEth: RouteAsset // inbound route's external side
+  let usdcAleo: RouteAsset // inbound route's Aleo side
 
   beforeAll(async () => {
+    // Raw catalog, for the coherence assertions below.
     assets = await client.getAssets()
-    aleo = resolve('native ALEO', (a) => a.chain === 'ALEO' && a.native)
-    sol = resolve('native SOL on SOLANA', (a) => a.chain === 'SOLANA' && a.native)
-    usdcEth = resolve('USDC on EVM:1', (a) => a.symbol === 'USDC' && a.chain === 'EVM:1')
-    usdcAleo = resolve('USDC on ALEO', (a) => a.symbol === 'USDC' && a.chain === 'ALEO')
-  }, 30_000)
+
+    // Flagship route: native ALEO <-> native SOL on Solana.
+    const solRoutes = await client.getRoutes({ symbol: 'SOL' })
+    const flagship = solRoutes.find(
+      (r) => r.aleoAsset.native && r.externalAsset.native && r.externalAsset.chainName === 'Solana',
+    )
+    expect(flagship, 'route graph no longer offers native ALEO <-> native SOL').toBeTruthy()
+    aleo = flagship!.aleoAsset
+    sol = flagship!.externalAsset
+
+    // Inbound route: USDC on Ethereum <-> USDC on Aleo.
+    const usdcRoutes = await client.getRoutes({ symbol: 'USDC' })
+    const inbound = usdcRoutes.find(
+      (r) =>
+        r.externalAsset.symbol === 'USDC' &&
+        r.externalAsset.chainName === 'Ethereum' &&
+        r.aleoAsset.symbol === 'USDC',
+    )
+    expect(inbound, 'route graph no longer offers USDC on Ethereum <-> USDC on Aleo').toBeTruthy()
+    usdcEth = inbound!.externalAsset
+    usdcAleo = inbound!.aleoAsset
+  }, 60_000)
 
   it('serves a coherent asset catalog: codes, chains, decimals, address regexes', () => {
     expect(assets.length).toBeGreaterThan(0)
@@ -69,20 +84,20 @@ describe.runIf(RUN)('bridge client against the live wallet-services API', () => 
     if (usdcEth.walletValidationRegex) expect(ETH_ADDR).toMatch(new RegExp(usdcEth.walletValidationRegex))
   })
 
-  it('derives a route graph with the flagship pair, selectable by symbol and chain name', async () => {
-    const routes = await client.getRoutes({ symbol: 'SOL' })
-
-    // The flagship native-ALEO <-> native-SOL pair is findable without
-    // knowing any asset code — by symbol and human-readable chain name.
-    const flagship = routes.find(
-      (r) => r.aleoAsset.native && r.externalAsset.native && r.externalAsset.chainName === 'Solana',
-    )
-    expect(flagship, 'flagship ALEO<->SOL route missing from the derived graph').toBeTruthy()
-    expect(flagship!.aleoAsset.code).toBe(aleo.code)
-    expect(flagship!.externalAsset.code).toBe(sol.code)
-    expect(flagship!.providers.length).toBeGreaterThan(0)
-    expect(flagship!.aleoAsset.chainName).toBe('Aleo')
-  }, 30_000)
+  it('route-graph entries mirror the raw catalog and carry chain names', () => {
+    // beforeAll selected aleo/sol/usdcEth/usdcAleo FROM getRoutes; each must
+    // be a real catalog entry (same code, chain, decimals), enriched with the
+    // display name.
+    for (const picked of [aleo, sol, usdcEth, usdcAleo]) {
+      const raw = assets.find((a) => a.code === picked.code)
+      expect(raw, `route asset ${picked.code} missing from the raw catalog`).toBeTruthy()
+      expect(picked.chain).toBe(raw!.chain)
+      expect(picked.decimals).toBe(raw!.decimals)
+    }
+    expect(aleo.chainName).toBe('Aleo')
+    expect(sol.chainName).toBe('Solana')
+    expect(usdcEth.chainName).toBe('Ethereum')
+  })
 
   it('serves the provider registry with at least one bridge provider', async () => {
     const providers = await client.getProviders()
