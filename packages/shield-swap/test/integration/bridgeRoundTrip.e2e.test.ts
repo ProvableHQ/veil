@@ -75,10 +75,10 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
   let bridge: BridgeClient
   let address: string
   // Route identifiers resolved from the live catalog in beforeAll — never hardcoded.
-  let usdcEth: { code: string; chain: string }
-  let usdcAleo: { code: string; chain: string }
-  let nativeAleo: { code: string; chain: string }
-  let nativeSol: { code: string; chain: string }
+  let usdcEth: { code: string; chain: string; chainName: string }
+  let usdcAleo: { code: string; chain: string; chainName: string }
+  let nativeAleo: { code: string; chain: string; chainName: string }
+  let nativeSol: { code: string; chain: string; chainName: string }
 
   async function buildDexClient() {
     const aleo = await loadNetwork(DEX_NETWORK)
@@ -231,9 +231,11 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
     // (Native ALEO rather than the DEX output: outbound routes currently
     // exist only for ALEO_MAINNET, and the bridge leg runs on mainnet.)
     const stages: string[] = []
+    // Chains by display name straight off the route; provider unpinned so
+    // the strategy picks whichever provider quotes.
     const result = await bridge.swap({
-      from: { asset: nativeAleo.code, amount: BRIDGE_OUT_AMOUNT },
-      to: { chain: nativeSol.chain, asset: nativeSol.code, address: SOL_ADDR },
+      from: { chain: nativeAleo.chainName, asset: nativeAleo.code, amount: BRIDGE_OUT_AMOUNT },
+      to: { chain: nativeSol.chainName, asset: nativeSol.code, address: SOL_ADDR },
       selectQuote: 'best',
       poll: true,
       onStage: (s) => {

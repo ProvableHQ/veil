@@ -69,8 +69,8 @@ describe.runIf(RUN)('e2e: full bridge swap chain (ALEO → SOL) on mainnet', () 
   let bridge: BridgeClient
   // The route under test, selected from getRoutes() by symbol + chain name
   // in beforeAll — never hardcoded.
-  let aleoAsset: { code: string; chain: string }
-  let solAsset: { code: string; chain: string }
+  let aleoAsset: { code: string; chain: string; chainName: string }
+  let solAsset: { code: string; chain: string; chainName: string }
   let scanner: Awaited<ReturnType<Awaited<ReturnType<typeof loadNetwork>>['createRemoteScanner']>>
   let walletClient: ReturnType<Awaited<ReturnType<typeof loadNetwork>>['createAleoClient']>['walletClient']
   let account: ReturnType<Awaited<ReturnType<typeof loadNetwork>>['createAleoClient']>['account']
@@ -158,9 +158,13 @@ describe.runIf(RUN)('e2e: full bridge swap chain (ALEO → SOL) on mainnet', () 
 
   it('runs the whole swap chain: quote → order → deposit → COMPLETED', async () => {
     const stages: string[] = []
+    // Chains by display name straight off the route (swap resolves them to
+    // identifiers). Provider deliberately unpinned: the strategy picks
+    // whichever provider quotes, so the test does not couple to one
+    // provider's uptime.
     result = await bridge.swap({
-      from: { asset: aleoAsset.code, amount: SWAP_AMOUNT },
-      to: { chain: solAsset.chain, asset: solAsset.code, address: SOL_ADDR },
+      from: { chain: aleoAsset.chainName, asset: aleoAsset.code, amount: SWAP_AMOUNT },
+      to: { chain: solAsset.chainName, asset: solAsset.code, address: SOL_ADDR },
       selectQuote: 'best',
       poll: true,
       onStage: (s) => {
