@@ -105,3 +105,6 @@ export {
   DEFAULT_ALEO_ASSET_MAP,
   type AleoAssetConfig,
 } from './lib/aleo-asset.js'
+
+// Chain display names (stopgap until the API exposes its chain registry)
+export { chainDisplayName, KNOWN_CHAIN_NAMES } from './lib/chain-names.js'

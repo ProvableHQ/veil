@@ -105,7 +105,8 @@ from `getAssets()`:
 - **Chains** are the API's identifiers, case-sensitive: `ALEO`, `SOLANA`,
   `BITCOIN`, `TRON`, and `EVM:<chainId>` for EVM networks (`EVM:1` mainnet,
   `EVM:8453` Base, `EVM:42161` Arbitrum). Read them from the catalog's
-  `chain` field.
+  `chain` field. For display, `chainDisplayName('EVM:8453')` → `'Base'` — a
+  client-side map for now, until the API exposes its chain registry.
 - **Assets** are chain-qualified codes, never bare symbols: `ALEO_MAINNET`,
   `USDC_ALEO`, `ETH_BASE`. `ALEO` alone is rejected. Read them from the
   catalog's `code` field.
