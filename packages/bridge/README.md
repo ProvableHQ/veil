@@ -60,17 +60,19 @@ before offering routes the flag gates.
 
 A route is a (source asset, destination asset) pair some provider will quote.
 Routes appear and disappear — with provider enablement, liquidity, and flags —
-so treat any static list as a snapshot. This one is from July 2026,
-production:
+so treat any static description as a snapshot. As of July 2026, production
+quotes follow three patterns (verified by live probes, not exhaustively
+enumerated — probe your pair):
 
-| Direction | Route | Quoted by |
+| Pattern | Example pairs | Quoted by |
 |---|---|---|
-| Aleo → out | `ALEO_MAINNET` → `SOL_SOLANA`, `ETH_MAINNET`, `USDT_TRON`, `USDC_SOLANA` | NEAR Intents |
-| In → Aleo | `SOL_SOLANA` → `ALEO_MAINNET` | NEAR Intents, Halliday |
-| In → Aleo | `ETH_MAINNET` → `ETH_ALEO`, `USDC_ETH` → `USDC_ALEO`, `BTC_MAINNET` → `WBTC_ALEO` | Halliday |
+| Native ALEO → majors | `ALEO_MAINNET` → `SOL_SOLANA`, `ETH_MAINNET`, `USDT_TRON`, `USDC_SOLANA`, … | NEAR Intents |
+| Majors → native ALEO | `SOL_SOLANA` → `ALEO_MAINNET`, `ETH_MAINNET` → `ALEO_MAINNET`, … | NEAR Intents, Halliday |
+| Majors → wrapped-on-Aleo | `ETH_MAINNET` → `ETH_ALEO`, `USDC_ETH` → `USDC_ALEO`, `BTC_MAINNET` → `WBTC_ALEO` | Halliday |
 
 Aleo's wrapped assets (`ETH_ALEO`, `USDC_ALEO`, …) had no outbound routes at
-that snapshot: value comes in as wrapped assets but leaves as native ALEO.
+that snapshot: value can enter as wrapped assets or native ALEO, but leaves
+only as native ALEO.
 
 **Getting the current pairs.** There is no routes endpoint on the API;
 `getRoutes()` derives the candidate graph from the asset catalog — pairs of
