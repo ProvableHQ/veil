@@ -38,6 +38,14 @@ function makeBridgeClient(opts: {
   let i = 0
   return {
     request: vi.fn().mockImplementation(async ({ method }: { method: string }) => {
+      if (method === 'getBridgeAssets') {
+        return {
+          data: [
+            { id: 'a1', code: 'ALEO_MAINNET', chain: 'ALEO', symbol: 'ALEO', decimals: 6, native: true },
+            { id: 'a2', code: 'SOL_SOLANA', chain: 'SOLANA', symbol: 'SOL', decimals: 9, native: true },
+          ],
+        }
+      }
       if (method === 'getBridgeQuotes') {
         return {
           data: opts.quotes,
@@ -443,5 +451,30 @@ describe('swap (source chain slot)', () => {
       wallet,
     })).rejects.toThrow(/only source from Aleo.*getQuotes/s)
     expect(bridge.request).not.toHaveBeenCalled()
+  })
+})
+
+describe('swap (symbol resolution)', () => {
+  it('accepts symbols for both assets and sends resolved codes', async () => {
+    const bridge = makeBridgeClient({ quotes: [makeQuote()] })
+    const wallet = makeWallet()
+
+    await swap(bridge, {
+      from: { asset: 'ALEO', amount: '1.5' },          // symbol
+      to: { chain: 'Solana', asset: 'SOL', address: '8xJ...' }, // name + symbol
+      wallet,
+      poll: false,
+    })
+
+    expect(bridge.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'getBridgeQuotes',
+      params: expect.objectContaining({ srcAsset: 'ALEO_MAINNET', destAsset: 'SOL_SOLANA' }),
+    }))
+    // The resolved code drives the deposit program too (credits.aleo, u64).
+    const walletRequest = (wallet as unknown as { request: ReturnType<typeof vi.fn> }).request
+    expect(walletRequest).toHaveBeenCalledWith({
+      method: 'executeTransaction',
+      params: expect.objectContaining({ programName: 'credits.aleo' }),
+    })
   })
 })

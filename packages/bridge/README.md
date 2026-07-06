@@ -120,6 +120,12 @@ from `getAssets()`:
   deposit yourself, `parseDecimalAmount(amount, decimals)` does the exact
   string-based conversion.
 
+`getQuotes` and `swap` soften both rules for you: chains resolve from display
+names locally, and asset symbols resolve against the catalog within their
+chain (one extra `getAssets` fetch, only when a symbol is passed — exact
+codes keep the single request). `createOrder` stays strict: echo the chosen
+quote, which carries the resolved codes.
+
 The literal codes in this README's examples are real, but they are snapshots —
 resolve them at runtime the way the example above does.
 
@@ -181,12 +187,13 @@ browser flow where the user's wallet signs), when the source is not Aleo, or
 when you want control between steps.
 
 ```ts
-// 1. Quote. One entry per provider willing to take the route.
+// 1. Quote. One entry per provider willing to take the route. Chains accept
+// ids or display names, assets accept codes or symbols (resolved per chain).
 const { quotes, meta } = await client.getQuotes({
-  srcChain: 'EVM:1',
-  srcAsset: 'USDC_ETH',
-  destChain: 'ALEO',
-  destAsset: 'USDC_ALEO',
+  srcChain: 'Ethereum',
+  srcAsset: 'USDC',
+  destChain: 'Aleo',
+  destAsset: 'USDC',
   amountIn: '250',
   recipientAddress: aleoAddress,
   refundAddress: ethAddress,

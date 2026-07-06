@@ -81,14 +81,14 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
       schema: {
         name: 'bridge_get_quotes',
         description:
-          'Fetch cross-chain swap quotes where Aleo is one side of the pair. Returns one quote per enabled provider plus a meta block with quoteRequestId for support and any provider warnings/errors. Pass recipientAddress and refundAddress (or fromAddress) — some providers (NEAR Intents) skip quoting without them. Asset codes are chain-qualified (ALEO_MAINNET, USDC_ALEO, ETH_BASE), not bare symbols.',
+          'Fetch cross-chain swap quotes where Aleo is one side of the pair. Returns one quote per enabled provider plus a meta block with quoteRequestId for support and any provider warnings/errors. Pass recipientAddress and refundAddress (or fromAddress) — some providers (NEAR Intents) skip quoting without them. Chains accept ids (EVM:1) or names (Ethereum); assets accept chain-qualified codes (USDC_ETH) or symbols (USDC), resolved within the chain.',
         inputSchema: {
           type: 'object',
           properties: {
-            srcChain: { type: 'string', description: 'Source chain identifier (e.g. ALEO, SOLANA, EVM:1, BITCOIN).' },
-            srcAsset: { type: 'string', description: 'Chain-qualified source asset code (e.g. ALEO_MAINNET).' },
-            destChain: { type: 'string', description: 'Destination chain identifier.' },
-            destAsset: { type: 'string', description: 'Chain-qualified destination asset code (e.g. SOL_SOLANA).' },
+            srcChain: { type: 'string', description: 'Source chain — id (ALEO, EVM:1) or display name (Ethereum).' },
+            srcAsset: { type: 'string', description: 'Source asset — chain-qualified code (ALEO_MAINNET) or symbol (ALEO) resolved on srcChain.' },
+            destChain: { type: 'string', description: 'Destination chain — id or display name.' },
+            destAsset: { type: 'string', description: 'Destination asset — code (SOL_SOLANA) or symbol (SOL) resolved on destChain.' },
             amountIn: { type: 'string', description: 'Decimal source amount as a string, at most the asset\'s decimals.' },
             slippageBps: { type: 'string', description: 'Optional slippage tolerance in basis points (decimal string).' },
             fromAddress: { type: 'string', description: 'Optional source-chain wallet address; doubles as the default recipient/refund address.' },
@@ -188,7 +188,7 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
               type: 'object',
               properties: {
                 chain: { type: 'string', description: 'Source chain; optional, defaults to ALEO and MUST be Aleo — this tool signs the deposit with the Aleo wallet. Inbound swaps use bridge_get_quotes + bridge_create_order instead.' },
-                asset: { type: 'string', description: 'Chain-qualified source asset code (e.g. ALEO_MAINNET).' },
+                asset: { type: 'string', description: 'Source asset — chain-qualified code (ALEO_MAINNET) or symbol (ALEO).' },
                 amount: { type: 'string', description: 'Decimal source amount in display units.' },
               },
               required: ['asset', 'amount'],
@@ -197,7 +197,7 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
               type: 'object',
               properties: {
                 chain: { type: 'string', description: 'Destination chain — id (SOLANA, EVM:1) or display name (Solana, Ethereum).' },
-                asset: { type: 'string', description: 'Chain-qualified destination asset code (e.g. SOL_SOLANA).' },
+                asset: { type: 'string', description: 'Destination asset — chain-qualified code (SOL_SOLANA) or symbol (SOL) resolved on the destination chain.' },
                 address: { type: 'string', description: 'Destination-chain recipient the provider pays out to.' },
               },
               required: ['chain', 'asset', 'address'],

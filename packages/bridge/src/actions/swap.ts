@@ -1,4 +1,5 @@
 import { transfer, type Client, type WalletClient } from '@veil/core'
+import { getAssets } from './getAssets.js'
 import { getQuotes } from './getQuotes.js'
 import { createOrder } from './createOrder.js'
 import { waitForOrder } from './waitForOrder.js'
@@ -6,6 +7,7 @@ import { BridgeError } from '../errors/bridgeErrors.js'
 import { aleoAssetProgram, type AleoAssetConfig } from '../lib/aleo-asset.js'
 import { compareDecimal, parseDecimalAmount } from '../utils/units.js'
 import { resolveChainId } from '../lib/chain-names.js'
+import { isAssetCode, resolveAssetCode } from '../lib/asset-resolve.js'
 import type { BridgeOrderStage, BridgeOrderStatusDto, BridgeQuote } from '../types/bridge.js'
 
 /**
@@ -20,13 +22,14 @@ import type { BridgeOrderStage, BridgeOrderStatusDto, BridgeQuote } from '../typ
  *   because this action signs the deposit with an Aleo wallet; a non-Aleo
  *   source throws with guidance (inbound swaps quote and order through the
  *   individual actions, with the deposit paid on the source chain). `asset`
- *   is the API's chain-qualified code (`ALEO_MAINNET`, `USDC_ALEO`);
- *   `amount` a decimal string in display units.
+ *   is the chain-qualified code (`ALEO_MAINNET`) or the symbol (`'ALEO'`),
+ *   resolved on the Aleo chain; `amount` a decimal string in display units.
  * @property to Destination side. `chain` accepts the API's identifier
  *   (`SOLANA`, `EVM:1`) or the display name (`'Solana'`, `'Ethereum'`),
  *   case-insensitively; `asset` is the chain-qualified code
  *   (`SOL_SOLANA`, `ETH_MAINNET`); `address` is the destination-chain
- *   recipient the provider pays out to.
+ *   recipient the provider pays out to. `asset` also accepts the symbol
+ *   (`'SOL'`), resolved on the destination chain.
  * @property provider Only accept quotes from this provider, by code
  *   (`'NEAR_INTENTS'`, `'HALLIDAY'`), case-insensitively. Default: any
  *   provider; the selectQuote strategy picks among all quotes. Use it to
@@ -165,12 +168,22 @@ export async function swap(
   const destChain = resolveChainId(params.to.chain)
   const refundAddress = params.refundAddress ?? walletAddress
 
-  // Fail on local knowledge before any network round-trip: an unknown asset
+  // Assets accept symbols; resolving costs one catalog fetch, and only when
+  // a symbol is actually passed — exact codes skip it.
+  let srcAsset = params.from.asset
+  let destAsset = params.to.asset
+  if (!isAssetCode(srcAsset) || !isAssetCode(destAsset)) {
+    const assets = await getAssets(client)
+    srcAsset = resolveAssetCode(assets, srcAsset, SRC_CHAIN)
+    destAsset = resolveAssetCode(assets, destAsset, destChain)
+  }
+
+  // Fail on local knowledge before any further round-trip: an unknown asset
   // or missing proof discovered after createOrder leaves an abandoned order.
-  const assetConfig = aleoAssetProgram(params.from.asset, params.aleoAssetMap)
+  const assetConfig = aleoAssetProgram(srcAsset, params.aleoAssetMap)
   if (assetConfig.requiresMerkleProof && !params.merkleProof) {
     throw new BridgeError(
-      `swap source asset ${params.from.asset} requires merkleProof; pass via SwapParameters.merkleProof`,
+      `swap source asset ${srcAsset} requires merkleProof; pass via SwapParameters.merkleProof`,
     )
   }
 
@@ -178,9 +191,9 @@ export async function swap(
   // Intents) skip quoting entirely when it is absent.
   const { quotes, meta } = await getQuotes(client, {
     srcChain,
-    srcAsset: params.from.asset,
+    srcAsset,
     destChain,
-    destAsset: params.to.asset,
+    destAsset,
     amountIn: params.from.amount,
     recipientAddress: params.to.address,
     refundAddress,
@@ -217,8 +230,8 @@ export async function swap(
     providerId: chosen.provider.id,
     srcChain,
     destChain,
-    srcAsset: params.from.asset,
-    destAsset: params.to.asset,
+    srcAsset,
+    destAsset,
     amountIn: params.from.amount,
     walletAddress: params.to.address,
     quoteId: chosen.quoteId,
