@@ -332,9 +332,11 @@ every quote request does fan out to real provider systems.
 VEIL_INTEGRATION=1 pnpm exec vitest run packages/bridge/test/integration/api.integration.test.ts
 ```
 
-Route assertions are deliberately loose — only the flagship ALEO → SOL route
-is required to quote, everything else asserts invariants of whatever comes
-back — because route availability is a moving target.
+Route assertions are deliberately loose — everything asserts invariants of
+whatever comes back, because route availability is a moving target. One
+reference route (native ALEO → native SOL) is required to quote: it is the
+pair that consistently quotes in production today, so its silence signals a
+regression rather than shifting liquidity.
 
 **Swap e2e tier** (`e2e.test.ts`) runs the whole chain on **mainnet**: quote,
 create the order, sign and broadcast the Aleo unshield deposit, poll the

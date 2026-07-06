@@ -36,8 +36,8 @@ describe('getRoutes', () => {
 
   it('reports the shared providers per pair', async () => {
     const routes = await getRoutes(makeClient())
-    const flagship = routes.find((r) => r.externalAsset.code === 'SOL_SOLANA')!
-    expect(flagship.providers).toEqual(['NEAR_INTENTS'])
+    const solRoute = routes.find((r) => r.externalAsset.code === 'SOL_SOLANA')!
+    expect(solRoute.providers).toEqual(['NEAR_INTENTS'])
     const usdc = routes.find((r) => r.aleoAsset.code === 'USDC_ALEO')!
     expect(usdc.providers).toEqual(['HALLIDAY'])
   })

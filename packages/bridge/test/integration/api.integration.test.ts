@@ -15,8 +15,10 @@ import type { RouteAsset } from '../../src/actions/getRoutes.js'
  * Identifiers are DISCOVERED, not hardcoded: beforeAll selects the routes
  * under test from getRoutes() by symbol + chain name, the same way a
  * consumer should. Route availability shifts with provider enablement and
- * liquidity — tests assert invariants of whatever comes back, and only the
- * flagship native-ALEO → native-SOL route is required to actually quote.
+ * liquidity — tests assert invariants of whatever comes back. One reference
+ * route (native ALEO → native SOL) is required to actually quote: it is the
+ * pair that consistently quotes in production today (NEAR Intents), so its
+ * silence signals a real regression rather than shifting liquidity.
  *
  * Requirements: VEIL_INTEGRATION=1. Optional: VEIL_BRIDGE_API_URL to point
  * at a non-production deployment.
@@ -37,8 +39,8 @@ describe.runIf(RUN)('bridge client against the live wallet-services API', () => 
   // and chain name — the discovery path consumers should use. The individual
   // asset references below are the routes' own enriched entries.
   let assets: BridgeAssetSummary[]
-  let aleo: RouteAsset // native ALEO — flagship route's Aleo side
-  let sol: RouteAsset // native SOL — flagship route's external side
+  let aleo: RouteAsset // native ALEO — reference route's Aleo side
+  let sol: RouteAsset // native SOL — reference route's external side
   let usdcEth: RouteAsset // inbound route's external side
   let usdcAleo: RouteAsset // inbound route's Aleo side
 
@@ -46,12 +48,12 @@ describe.runIf(RUN)('bridge client against the live wallet-services API', () => 
     // Raw catalog, for the coherence assertions below.
     assets = await client.getAssets()
 
-    // Flagship route: native ALEO <-> native SOL on Solana.
+    // Reference route: native ALEO <-> native SOL on Solana.
     const solRoutes = await client.getRoutes({ symbol: 'SOL', externalChain: 'Solana' })
-    const flagship = solRoutes.find((r) => r.aleoAsset.native && r.externalAsset.native)
-    expect(flagship, 'route graph no longer offers native ALEO <-> native SOL').toBeTruthy()
-    aleo = flagship!.aleoAsset
-    sol = flagship!.externalAsset
+    const reference = solRoutes.find((r) => r.aleoAsset.native && r.externalAsset.native)
+    expect(reference, 'route graph no longer offers native ALEO <-> native SOL').toBeTruthy()
+    aleo = reference!.aleoAsset
+    sol = reference!.externalAsset
 
     // Inbound route: USDC on Ethereum <-> USDC on Aleo.
     const usdcRoutes = await client.getRoutes({ symbol: 'USDC', externalChain: 'Ethereum' })
@@ -97,12 +99,12 @@ describe.runIf(RUN)('bridge client against the live wallet-services API', () => 
   it('serves the provider registry with at least one bridge provider', async () => {
     const providers = await client.getProviders()
     expect(providers.some((p) => p.capabilities.includes('BRIDGE'))).toBe(true)
-    // The flagship source asset names at least one of those providers as
+    // The reference route's source asset names at least one of those providers as
     // supporting it — the per-asset half of discovery.
     expect((aleo.supportedProviders ?? []).length).toBeGreaterThan(0)
   }, 30_000)
 
-  it('quotes the flagship native-ALEO → native-SOL route from real providers', async () => {
+  it('quotes the reference route (native ALEO → native SOL) from real providers', async () => {
     const { quotes, meta } = await client.getQuotes({
       srcChain: aleo.chain,
       srcAsset: aleo.code,
