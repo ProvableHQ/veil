@@ -114,7 +114,7 @@ const { quotes, meta } = await client.getQuotes({
 ```
 
 `getQuotes` returns one entry per provider willing to take the route, plus a
-`meta` block. A live capture (ALEO → SOL, trimmed):
+`meta` block.
 
 ```typescript
 // Data returned from getQuotes().
@@ -132,9 +132,8 @@ const { quotes, meta } = await client.getQuotes({
       estimatedTimeSeconds: 900,
       quoteId: '1089843a-…',           // → createOrder's quoteId (some routes use quoteOptionId)
       integrationType: 'CEX',
-      feeEstimate: { provider: { feeUsd: '0.020501', … }, appFeeBps: 5, appFeeAmountIn: '0.05' },
-      metadata: { amountInAtomic: '100000000', amountOutAtomic: '23951296', … },
-      destChainWalletValidationRegex: '^[1-9A-HJ-NP-Za-km-z]{32,44}$',
+      feeEstimate: { provider: { feeUsd: '0.020501', … },
+      ...
     },
   ],
   meta: {
@@ -182,13 +181,17 @@ resolve them at runtime the way the example above does.
 
 ## Usage
 
-### The one-call path: `swap`
+### Swapping FROM Aleo in one-call using `swap`
 
-For Aleo-source swaps, `swap` runs the whole flow: quote, pick one, create the
-order, sign and broadcast the Aleo unshield deposit through the source asset's
-program, and optionally poll the order to completion. The signing wallet is
-client configuration, viem-style — set it once at construction and every
-`bridge.swap()` uses it (a per-call `wallet` overrides it).
+For swaps FROM Aleo, `swap` runs the following flow
+1. Gets quotes from the providers
+2. Picks a quote
+3. Makes an Aleo unshield deposit through the source asset's address.
+4. Optionally polls the order to completion. 
+
+The signing wallet for the swap is set during the bridge client's creation. 
+This can be optionally overridden by providing another wallet to the swap action's
+`wallet` parameter.
 
 ```ts
 import { createBridgeClient, httpBridge } from '@veil/bridge'
@@ -212,12 +215,12 @@ result.finalStatus   // present because poll was truthy
 ```
 
 Chain slots accept the API identifier or the display name (`'Solana'`,
-`'Ethereum'`), case-insensitively. Three more optional knobs: `provider`
-pins quote selection to one provider by code (`'NEAR_INTENTS'`) and throws
-before any funds move if it did not quote — the natural follow-through when
-the user picked from a `getRoutes` candidate's `providers`; `refundAddress`
-redirects refunds away from the default (the signing wallet's address); and
-`from.chain` exists for shape-stability — it defaults to `'ALEO'` and must
+`'Ethereum'`), case-insensitively. 
+
+Three more optional parameters include: 
+- `provider` pins quote selection to one provider by code (`'NEAR_INTENTS'`). 
+- `refundAddress` redirects refunds away from the default (the signing wallet's address).
+- `from.chain` exists for shape-stability — it defaults to `'ALEO'` and must
 resolve to Aleo, since this action signs the deposit with the Aleo wallet.
 
 Every action also exists in viem's standalone, tree-shakable form
@@ -238,6 +241,13 @@ browser flow where the user's wallet signs), when the source is not Aleo, or
 when you want control between steps.
 
 ```ts
+import { createBridgeClient, httpBridge } from '@veil/bridge'
+
+const bridge = createBridgeClient({
+  transport: httpBridge('https://wallet.api.provable.com'),
+  wallet: walletClient,                 // @veil/core WalletClient — signs deposits
+})
+
 // 1. Quote. One entry per provider willing to take the route. Chains accept
 // ids or display names, assets accept codes or symbols (resolved per chain).
 const { quotes, meta } = await client.getQuotes({
