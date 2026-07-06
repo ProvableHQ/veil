@@ -6,7 +6,8 @@ import { getOrderAudit } from '../../src/actions/getOrderAudit.js'
 import type { SwapReturnType } from '../../src/actions/swap.js'
 
 /**
- * The full bridge swap chain against MAINNET and the live providers:
+ * The full bridge swap chain against MAINNET and the live providers,
+ * with the route's identifiers discovered from getAssets() at runtime:
  * quote → order → sign + broadcast the Aleo unshield deposit → poll the
  * order to COMPLETED → audit it. This SPENDS REAL ALEO and delivers real
  * SOL to the destination wallet — it is gated separately from the read-only
@@ -66,6 +67,9 @@ function recordMicrocredits(plaintext: string): bigint {
 
 describe.runIf(RUN)('e2e: full bridge swap chain (ALEO → SOL) on mainnet', () => {
   let bridge: BridgeClient
+  // Resolved from the live catalog in beforeAll — never hardcoded.
+  let aleoAsset: { code: string; chain: string; decimals: number }
+  let solAsset: { code: string; chain: string }
   let scanner: Awaited<ReturnType<Awaited<ReturnType<typeof loadNetwork>>['createRemoteScanner']>>
   let walletClient: ReturnType<Awaited<ReturnType<typeof loadNetwork>>['createAleoClient']>['walletClient']
   let account: ReturnType<Awaited<ReturnType<typeof loadNetwork>>['createAleoClient']>['account']
@@ -95,14 +99,23 @@ describe.runIf(RUN)('e2e: full bridge swap chain (ALEO → SOL) on mainnet', () 
       transport: httpBridge(BRIDGE_URL),
       wallet: walletClient,
     })
+
+    // Discover the route's identifiers from the catalog, the way a consumer
+    // should — native ALEO out, native SOL in.
+    const assets = await bridge.getAssets()
+    const nativeAleo = assets.find((a) => a.chain === 'ALEO' && a.native)
+    const nativeSol = assets.find((a) => a.chain === 'SOLANA' && a.native)
+    if (!nativeAleo || !nativeSol) throw new Error('asset catalog no longer lists native ALEO/SOL')
+    aleoAsset = nativeAleo
+    solAsset = nativeSol
   }, 120_000)
 
   it('quotes the route with a live provider before committing funds', async () => {
     const { quotes, meta } = await bridge.getQuotes({
-      srcChain: 'ALEO',
-      srcAsset: 'ALEO_MAINNET',
-      destChain: 'SOLANA',
-      destAsset: 'SOL_SOLANA',
+      srcChain: aleoAsset.chain,
+      srcAsset: aleoAsset.code,
+      destChain: solAsset.chain,
+      destAsset: solAsset.code,
       amountIn: SWAP_AMOUNT,
       recipientAddress: SOL_ADDR,
       refundAddress: account.address,
@@ -146,8 +159,8 @@ describe.runIf(RUN)('e2e: full bridge swap chain (ALEO → SOL) on mainnet', () 
   it('runs the whole swap chain: quote → order → deposit → COMPLETED', async () => {
     const stages: string[] = []
     result = await bridge.swap({
-      from: { asset: 'ALEO_MAINNET', amount: SWAP_AMOUNT },
-      to: { chain: 'SOLANA', asset: 'SOL_SOLANA', address: SOL_ADDR },
+      from: { asset: aleoAsset.code, amount: SWAP_AMOUNT },
+      to: { chain: solAsset.chain, asset: solAsset.code, address: SOL_ADDR },
       selectQuote: 'best',
       poll: true,
       onStage: (s) => {

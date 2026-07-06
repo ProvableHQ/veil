@@ -74,6 +74,11 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
   // Bridge-side client (mainnet), carrying its own wallet for the deposit leg.
   let bridge: BridgeClient
   let address: string
+  // Route identifiers resolved from the live catalog in beforeAll — never hardcoded.
+  let usdcEth: { code: string; chain: string }
+  let usdcAleo: { code: string; chain: string }
+  let nativeAleo: { code: string; chain: string }
+  let nativeSol: { code: string; chain: string }
 
   async function buildDexClient() {
     const aleo = await loadNetwork(DEX_NETWORK)
@@ -109,6 +114,18 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
       records: bridgeScanner,
     })
     bridge = createBridgeClient({ transport: httpBridge(BRIDGE_URL), wallet: bridgeWallet })
+
+    // Discover every identifier the bridge legs use from the asset catalog.
+    const assets = await bridge.getAssets()
+    const pick = (what: string, pred: (a: (typeof assets)[number]) => boolean) => {
+      const found = assets.find(pred)
+      if (!found) throw new Error(`asset catalog no longer lists ${what}`)
+      return found
+    }
+    usdcEth = pick('USDC on EVM:1', (a) => a.symbol === 'USDC' && a.chain === 'EVM:1')
+    usdcAleo = pick('USDC on ALEO', (a) => a.symbol === 'USDC' && a.chain === 'ALEO')
+    nativeAleo = pick('native ALEO', (a) => a.chain === 'ALEO' && a.native)
+    nativeSol = pick('native SOL', (a) => a.chain === 'SOLANA' && a.native)
   }, 180_000)
 
   it('bridge in: the inbound route quotes end-to-end up to the deposit', async () => {
@@ -117,10 +134,10 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
     // on the source chain (a real inbound run would createOrder from this
     // quote and pay order.depositAddress from the Ethereum wallet).
     const { quotes, meta } = await bridge.getQuotes({
-      srcChain: 'EVM:1',
-      srcAsset: 'USDC_ETH',
-      destChain: 'ALEO',
-      destAsset: 'USDC_ALEO',
+      srcChain: usdcEth.chain,
+      srcAsset: usdcEth.code,
+      destChain: usdcAleo.chain,
+      destAsset: usdcAleo.code,
       amountIn: '100',
       recipientAddress: address,
       refundAddress: ETH_ADDR,
@@ -132,7 +149,7 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
       `no provider quoted the inbound USDC route (providerErrors ${JSON.stringify(meta.providerErrors ?? null)})`,
     ).toBeGreaterThan(0)
     for (const q of quotes) {
-      expect(q.destAsset).toBe('USDC_ALEO')
+      expect(q.destAsset).toBe(usdcAleo.code)
       expect(Number(q.amountOut)).toBeGreaterThan(0)
       expect(q.quoteId ?? q.quoteOptionId).toBeTruthy()
     }
@@ -211,8 +228,8 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
     // exist only for ALEO_MAINNET, and the bridge leg runs on mainnet.)
     const stages: string[] = []
     const result = await bridge.swap({
-      from: { asset: 'ALEO_MAINNET', amount: BRIDGE_OUT_AMOUNT },
-      to: { chain: 'SOLANA', asset: 'SOL_SOLANA', address: SOL_ADDR },
+      from: { asset: nativeAleo.code, amount: BRIDGE_OUT_AMOUNT },
+      to: { chain: nativeSol.chain, asset: nativeSol.code, address: SOL_ADDR },
       selectQuote: 'best',
       poll: true,
       onStage: (s) => {

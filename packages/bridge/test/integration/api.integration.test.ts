@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import { createBridgeClient } from '../../src/clients/createBridgeClient.js'
 import { httpBridge } from '../../src/transports/httpBridge.js'
 import { TransportError } from '@veil/core'
+import type { BridgeAssetSummary } from '../../src/types/bridge.js'
 
 /**
  * Real-API integration for the bridge client: every test hits the LIVE
@@ -10,9 +11,11 @@ import { TransportError } from '@veil/core'
  * catch provider drift as well as API drift. Read-only: quotes and error
  * paths only; no orders are created and no funds move.
  *
- * Route availability shifts with provider enablement and liquidity — tests
- * assert invariants of whatever comes back, and only the flagship
- * ALEO → SOL route is required to actually quote.
+ * Identifiers are DISCOVERED, not hardcoded: beforeAll resolves the assets
+ * under test from getAssets() by symbol + chain semantics, the same way a
+ * consumer should. Route availability shifts with provider enablement and
+ * liquidity — tests assert invariants of whatever comes back, and only the
+ * flagship native-ALEO → native-SOL route is required to actually quote.
  *
  * Requirements: VEIL_INTEGRATION=1. Optional: VEIL_BRIDGE_API_URL to point
  * at a non-production deployment.
@@ -29,9 +32,28 @@ const ETH_ADDR = '0x734C0a5AB55885974cEDb9D6ff71d8E8448c7375'
 describe.runIf(RUN)('bridge client against the live wallet-services API', () => {
   const client = createBridgeClient({ transport: httpBridge(API_URL) })
 
-  it('serves the asset catalog with the identifiers other calls need', async () => {
-    const assets = await client.getAssets()
+  // Resolved from the live catalog — the discovery path consumers should use.
+  let assets: BridgeAssetSummary[]
+  let aleo: BridgeAssetSummary // native ALEO
+  let sol: BridgeAssetSummary // native SOL on Solana
+  let usdcEth: BridgeAssetSummary // USDC on Ethereum mainnet
+  let usdcAleo: BridgeAssetSummary // USDC bridged onto Aleo
 
+  function resolve(what: string, pred: (a: BridgeAssetSummary) => boolean): BridgeAssetSummary {
+    const found = assets.find(pred)
+    expect(found, `asset catalog no longer lists ${what}`).toBeTruthy()
+    return found!
+  }
+
+  beforeAll(async () => {
+    assets = await client.getAssets()
+    aleo = resolve('native ALEO', (a) => a.chain === 'ALEO' && a.native)
+    sol = resolve('native SOL on SOLANA', (a) => a.chain === 'SOLANA' && a.native)
+    usdcEth = resolve('USDC on EVM:1', (a) => a.symbol === 'USDC' && a.chain === 'EVM:1')
+    usdcAleo = resolve('USDC on ALEO', (a) => a.symbol === 'USDC' && a.chain === 'ALEO')
+  }, 30_000)
+
+  it('serves a coherent asset catalog: codes, chains, decimals, address regexes', () => {
     expect(assets.length).toBeGreaterThan(0)
     // Every entry carries a chain-qualified code, its chain, and decimals —
     // this is where srcAsset/srcChain values come from.
@@ -40,21 +62,27 @@ describe.runIf(RUN)('bridge client against the live wallet-services API', () => 
       expect(a.chain).toBeTruthy()
       expect(typeof a.decimals).toBe('number')
     }
-    // The Aleo side always exists (Aleo is one side of every route).
-    expect(assets.some((a) => a.chain === 'ALEO' && a.native)).toBe(true)
-  }, 30_000)
+    // The catalog's validation regexes accept the test wallets — the same
+    // check a UI would run before quoting.
+    if (aleo.walletValidationRegex) expect(ALEO_ADDR).toMatch(new RegExp(aleo.walletValidationRegex))
+    if (sol.walletValidationRegex) expect(SOL_ADDR).toMatch(new RegExp(sol.walletValidationRegex))
+    if (usdcEth.walletValidationRegex) expect(ETH_ADDR).toMatch(new RegExp(usdcEth.walletValidationRegex))
+  })
 
   it('serves the provider registry with at least one bridge provider', async () => {
     const providers = await client.getProviders()
     expect(providers.some((p) => p.capabilities.includes('BRIDGE'))).toBe(true)
+    // The flagship source asset names at least one of those providers as
+    // supporting it — the per-asset half of discovery.
+    expect((aleo.supportedProviders ?? []).length).toBeGreaterThan(0)
   }, 30_000)
 
-  it('quotes the flagship ALEO → SOL route from real providers', async () => {
+  it('quotes the flagship native-ALEO → native-SOL route from real providers', async () => {
     const { quotes, meta } = await client.getQuotes({
-      srcChain: 'ALEO',
-      srcAsset: 'ALEO_MAINNET',
-      destChain: 'SOLANA',
-      destAsset: 'SOL_SOLANA',
+      srcChain: aleo.chain,
+      srcAsset: aleo.code,
+      destChain: sol.chain,
+      destAsset: sol.code,
       amountIn: '100',
       recipientAddress: SOL_ADDR,
       refundAddress: ALEO_ADDR,
@@ -64,8 +92,8 @@ describe.runIf(RUN)('bridge client against the live wallet-services API', () => 
     expect(meta.quoteRequestId).toBeTruthy()
     for (const q of quotes) {
       expect(q.provider.code).toBeTruthy()
-      expect(q.srcAsset).toBe('ALEO_MAINNET')
-      expect(q.destAsset).toBe('SOL_SOLANA')
+      expect(q.srcAsset).toBe(aleo.code)
+      expect(q.destAsset).toBe(sol.code)
       expect(Number(q.amountOut)).toBeGreaterThan(0)
       // A quote must be actionable: it needs the id createOrder requires.
       expect(q.quoteId ?? q.quoteOptionId).toBeTruthy()
@@ -77,10 +105,10 @@ describe.runIf(RUN)('bridge client against the live wallet-services API', () => 
 
   it('quotes an inbound route (USDC on Ethereum → USDC on Aleo)', async () => {
     const { quotes, meta } = await client.getQuotes({
-      srcChain: 'EVM:1',
-      srcAsset: 'USDC_ETH',
-      destChain: 'ALEO',
-      destAsset: 'USDC_ALEO',
+      srcChain: usdcEth.chain,
+      srcAsset: usdcEth.code,
+      destChain: usdcAleo.chain,
+      destAsset: usdcAleo.code,
       amountIn: '100',
       recipientAddress: ALEO_ADDR,
       refundAddress: ETH_ADDR,
@@ -90,16 +118,16 @@ describe.runIf(RUN)('bridge client against the live wallet-services API', () => 
     expect(meta.quoteRequestId).toBeTruthy()
     for (const q of quotes) {
       expect(Number(q.amountOut)).toBeGreaterThan(0)
-      expect(q.destAsset).toBe('USDC_ALEO')
+      expect(q.destAsset).toBe(usdcAleo.code)
     }
   }, 90_000)
 
   it('omitting recipient/refund addresses narrows the provider fan-out but still succeeds', async () => {
     const { quotes, meta } = await client.getQuotes({
-      srcChain: 'ALEO',
-      srcAsset: 'ALEO_MAINNET',
-      destChain: 'SOLANA',
-      destAsset: 'SOL_SOLANA',
+      srcChain: aleo.chain,
+      srcAsset: aleo.code,
+      destChain: sol.chain,
+      destAsset: sol.code,
       amountIn: '100',
     })
 
@@ -110,12 +138,15 @@ describe.runIf(RUN)('bridge client against the live wallet-services API', () => 
   }, 90_000)
 
   it('rejects a bare symbol as an asset code', async () => {
+    // Deliberately NOT from the catalog: the bare symbol is the mistake the
+    // API must reject (the catalog's code for this asset is chain-qualified).
+    expect(aleo.symbol).not.toBe(aleo.code)
     await expect(
       client.getQuotes({
-        srcChain: 'ALEO',
-        srcAsset: 'ALEO', // must be chain-qualified: ALEO_MAINNET
-        destChain: 'SOLANA',
-        destAsset: 'SOL_SOLANA',
+        srcChain: aleo.chain,
+        srcAsset: aleo.symbol, // e.g. 'ALEO' — must be aleo.code
+        destChain: sol.chain,
+        destAsset: sol.code,
         amountIn: '1',
       }),
     ).rejects.toThrow(TransportError)
