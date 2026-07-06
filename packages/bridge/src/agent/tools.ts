@@ -201,6 +201,7 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
               },
               required: ['chain', 'asset', 'address'],
             },
+            provider: { type: 'string', description: 'Only accept quotes from this provider code (e.g. NEAR_INTENTS); throws before funds move if it did not quote. Default: any provider.' },
             refundAddress: { type: 'string', description: 'Aleo address a failed swap refunds to. Defaults to the signing wallet\'s address.' },
             merkleProof: { type: 'string', description: 'Pre-formatted [MerkleProof; 2u32] input string. Required only for compliance-bearing source assets (e.g. USDCX_ALEO, USAD_ALEO).' },
             selectQuote: {

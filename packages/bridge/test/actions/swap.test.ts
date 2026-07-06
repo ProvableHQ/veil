@@ -379,3 +379,38 @@ describe('swap (destination chain and refund address)', () => {
     }))
   })
 })
+
+describe('swap (provider pinning)', () => {
+  it('restricts the pick to the requested provider even when another quotes better', async () => {
+    const bridge = makeBridgeClient({
+      quotes: [
+        makeQuote({ quoteId: 'best-other', amountOut: '0.09', provider: { id: 'p1', code: 'NEAR_INTENTS', displayName: 'NEAR', capabilities: [] } }),
+        makeQuote({ quoteId: 'pinned', amountOut: '0.05', provider: { id: 'p2', code: 'HALLIDAY', displayName: 'Halliday', capabilities: [] } }),
+      ],
+    })
+    const wallet = makeWallet()
+
+    await swap(bridge, { ...baseParams, wallet, provider: 'halliday', poll: false })
+
+    expect(bridge.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'createBridgeOrder',
+      params: expect.objectContaining({ quoteId: 'pinned', providerId: 'p2' }),
+    }))
+  })
+
+  it('throws before any funds move when the pinned provider did not quote', async () => {
+    const bridge = makeBridgeClient({
+      quotes: [makeQuote({ provider: { id: 'p1', code: 'NEAR_INTENTS', displayName: 'NEAR', capabilities: [] } })],
+    })
+    const wallet = makeWallet()
+
+    await expect(
+      swap(bridge, { ...baseParams, wallet, provider: 'HOUDINI' }),
+    ).rejects.toThrow(/HOUDINI.*no quote.*NEAR_INTENTS/s)
+    // No order was created and no deposit signed.
+    const methods = (bridge.request as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0].method)
+    expect(methods).not.toContain('createBridgeOrder')
+    const walletRequest = (wallet as unknown as { request: ReturnType<typeof vi.fn> }).request
+    expect(walletRequest).not.toHaveBeenCalled()
+  })
+})

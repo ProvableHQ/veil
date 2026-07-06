@@ -23,6 +23,11 @@ import type { BridgeOrderStage, BridgeOrderStatusDto, BridgeQuote } from '../typ
  *   case-insensitively; `asset` is the chain-qualified code
  *   (`SOL_SOLANA`, `ETH_MAINNET`); `address` is the destination-chain
  *   recipient the provider pays out to.
+ * @property provider Only accept quotes from this provider, by code
+ *   (`'NEAR_INTENTS'`, `'HALLIDAY'`), case-insensitively. Default: any
+ *   provider; the selectQuote strategy picks among all quotes. Use it to
+ *   honor a user's provider choice from a getRoutes candidate — throws
+ *   (before any funds move) when that provider returned no quote.
  * @property refundAddress Aleo address a failed swap refunds to. Defaults
  *   to the signing wallet's address — override when refunds should land in a
  *   different account than the one paying the deposit.
@@ -46,6 +51,7 @@ export type SwapParameters = {
   wallet?: WalletClient | undefined
   from: { asset: string; amount: string }
   to: { chain: string; asset: string; address: string }
+  provider?: string | undefined
   refundAddress?: string | undefined
   merkleProof?: string | undefined
   aleoAssetMap?: Readonly<Record<string, AleoAssetConfig>> | undefined
@@ -172,7 +178,21 @@ export async function swap(
     throw new BridgeError('Bridge returned no quotes for the requested route')
   }
 
-  const chosen = await pickQuote(params.selectQuote ?? 'best', quotes)
+  // Provider pinning: restrict the pick to the requested provider's quotes,
+  // failing loudly (before any funds move) when it did not quote.
+  let candidates = quotes
+  if (params.provider != null) {
+    const wanted = params.provider.toLowerCase()
+    candidates = quotes.filter((q) => q.provider.code.toLowerCase() === wanted)
+    if (candidates.length === 0) {
+      const quoted = [...new Set(quotes.map((q) => q.provider.code))].join(', ')
+      throw new BridgeError(
+        `Provider ${params.provider} returned no quote for this route (quoted: ${quoted})`,
+      )
+    }
+  }
+
+  const chosen = await pickQuote(params.selectQuote ?? 'best', candidates)
 
   if (!chosen.quoteId) {
     throw new BridgeError('Selected bridge quote is missing quoteId')
