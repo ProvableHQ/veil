@@ -390,6 +390,45 @@ await client.getBalances()
 records, and joins them per token. It defaults to your account's address and,
 unless you pass a `tokens` filter, returns only tokens you actually hold.
 
+## Bridging in and out
+
+Value can enter and leave Aleo around a DEX position via `@veil/bridge` —
+both packages hang off the same `@veil/core` wallet client, so one signer
+covers the whole chain: bridge assets in, trade them privately here, bridge
+the proceeds out.
+
+```ts
+import { createBridgeClient, httpBridge } from '@veil/bridge'
+import { shieldSwapActions } from '@veil/shield-swap'
+
+const bridge = createBridgeClient({
+  transport: httpBridge('https://wallet.api.provable.com'),
+  wallet: walletClient,
+})
+const dex = walletClient.extend(shieldSwapActions({ api: {} }))
+
+// Discover a bridge route by symbol and chain name, then bridge out in one
+// call — the deposit is signed by the same wallet that traded.
+const [route] = await bridge.getRoutes({ symbol: 'SOL', externalChain: 'Solana' })
+await bridge.swap({
+  from: { asset: route.aleoAsset.code, amount: '100' },
+  to: { chain: route.externalAsset.chainName, asset: route.externalAsset.code, address: solAddress },
+  poll: true,
+})
+```
+
+Bridging in starts on the source chain (its wallet signs the deposit), so
+from this SDK you quote and create the order, then pay the instructions from
+that chain's wallet. The full walkthrough — including the EVM deposit via
+viem — lives in the
+[`@veil/bridge` README](../bridge/README.md#swapping-bridged-assets-on-shield-swap),
+and the whole chain is exercised by
+[`bridgeRoundTrip.e2e.test.ts`](./test/integration/bridgeRoundTrip.e2e.test.ts).
+
+One seam to know: the bridge operates on mainnet while `shield_swap` is on
+testnet today, so the two legs run on different networks until the DEX lands
+on mainnet.
+
 ## Units and formats
 
 - Token amounts are raw atomic units, typed `bigint`. Ticks and fees fit in

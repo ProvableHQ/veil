@@ -252,10 +252,11 @@ const bridge = createBridgeClient({
 })
 const dex = walletClient.extend(shieldSwapActions({ api: {} }))
 
-// 1. Bridge in: quote the route and create the order.
+// 1. Bridge in: pick the route from the graph, quote it, create the order.
+const [route] = await bridge.getRoutes({ symbol: 'USDC', externalChain: 'Ethereum' })
 const { quotes } = await bridge.getQuotes({
-  srcChain: 'EVM:1', srcAsset: 'USDC_ETH',
-  destChain: 'ALEO', destAsset: 'USDC_ALEO',
+  srcChain: route.externalAsset.chain, srcAsset: route.externalAsset.code,
+  destChain: route.aleoAsset.chain, destAsset: route.aleoAsset.code,
   amountIn: '250',
   recipientAddress: aleoAddress, refundAddress: ethAddress,
 })
@@ -288,7 +289,7 @@ await dex.claimSwapOutputPrivate({ handle, imports })
 // 4. Bridge back out — one call, deposit signed by the same Aleo wallet.
 await bridge.swap({
   from: { asset: 'ALEO_MAINNET', amount: '100' },
-  to: { chain: 'SOLANA', asset: 'SOL_SOLANA', address: solAddress },
+  to: { chain: 'Solana', asset: 'SOL_SOLANA', address: solAddress },
   poll: true,
 })
 ```
