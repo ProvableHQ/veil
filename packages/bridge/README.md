@@ -240,6 +240,74 @@ missing. If the API lists an Aleo asset this SDK does not know yet, extend the
 program map: pass `aleoAssetMap: { ...DEFAULT_ALEO_ASSET_MAP, NEW_CODE:
 { program: '...', decimals: n } }`.
 
+### Swapping INTO Aleo
+
+An inbound swap starts on the other chain, so its deposit is signed there —
+Veil's Aleo keys handle everything except that one transfer. For an EVM
+source the deposit is plain viem, which means the whole flow stays in
+territory an EVM developer already knows:
+
+```ts
+import { createBridgeClient, httpBridge } from '@veil/bridge'
+import { createWalletClient, http, erc20Abi, parseUnits } from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
+import { mainnet } from 'viem/chains'
+
+const bridge = createBridgeClient({ transport: httpBridge('https://wallet.api.provable.com') })
+const evm = createWalletClient({
+  account: privateKeyToAccount(ethPrivateKey),
+  chain: mainnet,
+  transport: http(),
+})
+
+// 1. Route + quote. Refunds happen on the source chain, so refundAddress is
+// the Ethereum account; recipientAddress is where the ALEO lands.
+const routes = await bridge.getRoutes({ symbol: 'USDC', externalChain: 'Ethereum' })
+const route = routes.find((r) => r.aleoAsset.native && r.externalAsset.symbol === 'USDC')!
+const { quotes } = await bridge.getQuotes({
+  srcChain: route.externalAsset.chain, srcAsset: route.externalAsset.code,
+  destChain: route.aleoAsset.chain, destAsset: route.aleoAsset.code,
+  amountIn: '25',
+  recipientAddress: aleoAddress,
+  refundAddress: evm.account.address,
+})
+const quote = quotes[0]
+
+// 2. Create the order — walletAddress is the payout recipient on Aleo.
+const order = await bridge.createOrder({
+  providerId: quote.provider.id,
+  srcChain: quote.srcChain, destChain: quote.destChain,
+  srcAsset: quote.srcAsset, destAsset: quote.destAsset,
+  amountIn: quote.amountIn,
+  walletAddress: aleoAddress,
+  quoteId: (quote.quoteId ?? quote.quoteOptionId)!,
+  refundAddress: evm.account.address,
+})
+
+// 3. Pay the deposit from the Ethereum wallet — the one non-Veil step.
+// Check order.depositMemo is empty first (an ERC-20 transfer can't carry
+// one) and order.expiration hasn't passed.
+await evm.writeContract({
+  address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC on Ethereum
+  abi: erc20Abi,
+  functionName: 'transfer',
+  args: [order.depositAddress as `0x${string}`, parseUnits(order.depositAmount!, 6)],
+})
+
+// 4. Track to completion — the ALEO arrives as public balance, ready to
+// shield (transfer with visibility: 'shield') for private use.
+await bridge.waitForOrder({ id: order.orderId })
+```
+
+One irreversibility note: once the ERC-20 transfer is sent, funds are
+committed to the provider flow — recovery is the provider's refund to your
+Ethereum address, not a revert. The runnable version of this flow, gated
+like the fund-moving tier, lives at
+[`examples/bridge-into-aleo.ts`](../../examples/bridge-into-aleo.ts), and
+[`test/integration/inbound.e2e.test.ts`](./test/integration/inbound.e2e.test.ts)
+runs it with assertions (including the on-chain balance-delta check — the
+reason the example targets native ALEO: arrival is one `getBalance` read).
+
 ### Step by step
 
 Use the individual actions when the wallet is not in the same process (a
@@ -443,3 +511,12 @@ Requires `VEIL_E2E_PRIVATE_KEY` (funded on mainnet), `ALEO_DPS_API_KEY`, and
 `VEIL_BRIDGE_DEST_ADDRESS` the Solana recipient. The test shields a private
 record first when none covers the deposit, and fails before moving funds if
 no provider quotes the route.
+
+**Inbound e2e** (`inbound.e2e.test.ts`) runs the other direction — USDC on
+Ethereum → native ALEO — with viem signing the Ethereum deposit. Same gates,
+plus `ETH_PRIVATE_KEY` (an Ethereum account holding USDC and gas);
+`VEIL_BRIDGE_INBOUND_AMOUNT` sets the USDC amount (default `25`), and
+`ETH_RPC_URL`/`ETH_USDC_CONTRACT` override the Ethereum endpoint and token
+contract. It spends real USDC and gas — and once the deposit is sent, funds
+are committed to the provider flow (recovery is the refund path). The
+narrative version is [`examples/bridge-into-aleo.ts`](../../examples/bridge-into-aleo.ts).

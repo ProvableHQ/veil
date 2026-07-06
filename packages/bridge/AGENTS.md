@@ -37,6 +37,10 @@ Integration tests hit the **real** wallet-services API and its providers
   e2e (`e2e.test.ts`). It SPENDS REAL ALEO and delivers real SOL; run it
   deliberately. Knobs: `VEIL_BRIDGE_SWAP_AMOUNT`, `VEIL_BRIDGE_DEST_ADDRESS`,
   `VEIL_BRIDGE_API_URL`.
+- The inbound e2e (`inbound.e2e.test.ts`) additionally needs
+  **`ETH_PRIVATE_KEY`** (an Ethereum account with USDC + gas) — viem signs
+  the source-chain deposit. It spends real USDC; once the deposit is sent,
+  recovery is the provider's refund path, not a revert.
 - The cross-product round trip (bridge in → DEX swap → bridge out) lives in
   `packages/shield-swap/test/integration/bridgeRoundTrip.e2e.test.ts`.
 

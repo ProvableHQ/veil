@@ -1,7 +1,7 @@
 {
   "name": "@veil/bridge",
   "version": "0.4.0",
-  "description": "Veil client for Provable's cross-chain bridge — swaps between Aleo and other chains.",
+  "description": "Veil client for Provable's cross-chain bridge \u2014 swaps between Aleo and other chains.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -38,8 +38,13 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "dependencies": {
     "@veil/core": "workspace:*"
+  },
+  "devDependencies": {
+    "viem": "^2.21.0"
   }
 }
