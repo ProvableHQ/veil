@@ -203,10 +203,13 @@ const account = viewOnlyAccount({
 other EVM networks, Bitcoin, Tron) through third-party swap providers. Aleo is
 always one side of the pair. Amounts are decimal strings in display units, and
 assets use the API's chain-qualified codes (`ALEO_MAINNET`, `USDC_ETH`) —
-never bare symbols. Don't hardcode those identifiers: `bridge.getAssets()`
-returns the catalog they come from (code, chain, decimals, address-validation
-regex, and which providers route each asset), and `bridge.getProviders()`
-lists the providers.
+never bare symbols. Don't hardcode those identifiers: `bridge.getRoutes()`
+derives the candidate pairs ("what can move where"), filterable by symbol or
+chain name, each side carrying its code, chain, human-readable `chainName`,
+decimals, and address-validation regex; `bridge.getAssets()` is the raw
+catalog underneath and `bridge.getProviders()` lists the providers. Chain
+slots on `swap` accept ids or display names (`'Solana'`), and a `provider`
+option pins the quote to one provider.
 
 Bridging **out** is one call. The client carries the signing wallet, and
 `swap` runs the whole chain: quote the route, create the order, sign and

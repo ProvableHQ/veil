@@ -142,8 +142,8 @@ const bridge = createBridgeClient({
 })
 
 const result = await bridge.swap({
-  from: { asset: 'ALEO_MAINNET', amount: '100' },
-  to: { chain: 'SOLANA', asset: 'SOL_SOLANA', address: solAddress },
+  from: { asset: 'ALEO_MAINNET', amount: '100' },   // from.chain optional; must be Aleo
+  to: { chain: 'Solana', asset: 'SOL_SOLANA', address: solAddress }, // chain by id or name
   selectQuote: 'best',                  // or 'fastest', or a callback
   poll: true,                           // wait for COMPLETED
   onStage: (s) => console.log(s.status),
@@ -153,6 +153,15 @@ result.depositTxId   // at1... — the Aleo deposit transition
 result.orderId       // track or audit later
 result.finalStatus   // present because poll was truthy
 ```
+
+Chain slots accept the API identifier or the display name (`'Solana'`,
+`'Ethereum'`), case-insensitively. Three more optional knobs: `provider`
+pins quote selection to one provider by code (`'NEAR_INTENTS'`) and throws
+before any funds move if it did not quote — the natural follow-through when
+the user picked from a `getRoutes` candidate's `providers`; `refundAddress`
+redirects refunds away from the default (the signing wallet's address); and
+`from.chain` exists for shape-stability — it defaults to `'ALEO'` and must
+resolve to Aleo, since this action signs the deposit with the Aleo wallet.
 
 Every action also exists in viem's standalone, tree-shakable form
 (`import { swap } from '@veil/bridge'` then `swap(client, params)`) for
@@ -313,10 +322,11 @@ const server = toMcpServer([
 client — expose it only to agents you intend to let move funds. The rest
 (discovery, flags, quotes, order tracking) are read-only against the API,
 though `bridge_create_order` does create a real order server-side. The
-discovery tools matter for agents especially: `bridge_list_assets` and
-`bridge_list_providers` give the model the chain ids, asset codes, decimals,
-and provider support it must not guess — the `bridge_list_assets` description
-tells it to call that first.
+discovery tools matter for agents especially: `bridge_list_assets`,
+`bridge_list_routes`, and `bridge_list_providers` give the model the chain
+ids, asset codes, chain names, decimals, and provider support it must not
+guess — the descriptions steer it to discover before quoting, and
+`bridge_list_routes` answers "what can move where" directly.
 
 ## Integration tests
 
