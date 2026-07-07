@@ -6,7 +6,7 @@ import { readStructMapping } from './internal.js'
  * Parameters for {@link getSwapOutput}.
  *
  * @property swapId Swap id as an Aleo field literal (returned by
- *   `swap_private` as its first output), including the `field` suffix.
+ *   `swap` as its first output), including the `field` suffix.
  * @property program Program to read from. Defaults to the generated
  *   `DEFAULT_PROGRAM`.
  */
@@ -26,7 +26,7 @@ export type GetSwapOutputReturnType = SwapOutput | null
  *
  * Between the two phases of a private swap the chain computes the outcome and
  * stores it here: `amount_out` and `amount_remaining` (both u128 `bigint`) are
- * the values `claim_swap_output_private` MUST be called with. Read them from
+ * the values `claim_swap_output` MUST be called with. Read them from
  * chain — never from an off-chain service — because they gate money movement.
  *
  * `null` has two meanings the caller must distinguish by context: the request
@@ -44,7 +44,7 @@ export type GetSwapOutputReturnType = SwapOutput | null
  *
  * @example
  * const out = await getSwapOutput(client, { swapId })
- * if (out) await claimSwapOutputPrivate(client, { handle, amountOut: out.amount_out })
+ * if (out) await claimSwapOutput(client, { handle, amountOut: out.amount_out })
  */
 export async function getSwapOutput(client: Client, params: GetSwapOutputParameters): Promise<GetSwapOutputReturnType> {
   return readStructMapping(client, params.program, 'swap_outputs', params.swapId, toSwapOutput)

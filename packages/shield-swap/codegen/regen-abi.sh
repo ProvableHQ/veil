@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Regenerate a pinned shield_swap ABI using the Leo CLI.
 # We do NOT parse .aleo ourselves — `leo abi` produces the canonical ABI JSON.
-# Usage: packages/shield-swap/codegen/regen-abi.sh [program]   (default: shield_swap_v0_0_2.aleo)
+# Usage: packages/shield-swap/codegen/regen-abi.sh [program]   (default: shield_swap_v3.aleo)
 set -euo pipefail
-PROGRAM="${1:-shield_swap_v0_0_2.aleo}"
+PROGRAM="${1:-shield_swap_v3.aleo}"
 OUT="$(cd "$(dirname "$0")" && pwd)/abi/${PROGRAM%.aleo}.json"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 # -f: fail on HTTP 4xx/5xx (a 404 error body is valid JSON and would otherwise

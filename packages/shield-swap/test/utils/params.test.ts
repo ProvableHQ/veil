@@ -29,7 +29,7 @@ describe('tick math (contract table)', () => {
 
   it('low-bits entries are the dedicated precise constants (verified in deployed bytecode)', () => {
     // MAGIC[3] is NOT (MAGIC[1]×MAGIC[2])>>63 — it is a precise precomputed
-    // sqrt(1.0001^-3), and the deployed v0_0_2 bytecode carries this exact
+    // sqrt(1.0001^-3), and the deployed bytecode carries this exact
     // literal. tick=-3 returns it directly; tick=+3 is its Q64² inverse.
     expect(getSqrtPriceAtTick(-3)).toBe(9221988703967300608n)
     expect(getSqrtPriceAtTick(3)).toBe((Q64 * Q64) / 9221988703967300608n)

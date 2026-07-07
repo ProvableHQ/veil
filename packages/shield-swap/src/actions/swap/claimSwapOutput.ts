@@ -1,6 +1,7 @@
 import { executeContract, writeContract, type Client, type TransactionInput } from '@veil/core'
-import type { SwapHandle } from './swapPrivate.js'
+import type { SwapHandle } from './swap.js'
 import { getSwapOutput } from '../reads/getSwapOutput.js'
+import { requireAccount } from '../../utils/guards.js'
 import { blindingFactorResolveRequest, blindedAddressResolveRequest } from '../../utils/blinding/requests.js'
 
 /**
@@ -20,9 +21,9 @@ export class SwapOutputNotFinalizedError extends Error {
 }
 
 /**
- * Parameters for {@link claimSwapOutputPrivate}.
+ * Parameters for {@link claimSwapOutput}.
  *
- * @property handle The {@link SwapHandle} from `swapPrivate`. Local-signer
+ * @property handle The {@link SwapHandle} from `swap`. Local-signer
  *   handles are complete; wallet-path handles need `swapId` and
  *   `blindedAddress` resolved from the confirmed request transaction first.
  * @property imports Program sources for dynamic-dispatch dependencies
@@ -32,7 +33,7 @@ export class SwapOutputNotFinalizedError extends Error {
  * @property program shield_swap program override. Defaults to the handle's
  *   program.
  */
-export type ClaimSwapOutputPrivateParameters = {
+export type ClaimSwapOutputParameters = {
   handle: SwapHandle
   imports?: Record<string, string>
   program?: string
@@ -47,7 +48,7 @@ export type ClaimSwapOutputPrivateParameters = {
  * @property amountRemaining Raw atomic input refund (u128) — non-zero when
  *   the swap partially filled at the price limit.
  */
-export type ClaimSwapOutputPrivateReturnType = {
+export type ClaimSwapOutputReturnType = {
   transactionId: string
   amountOut: bigint
   amountRemaining: bigint
@@ -58,11 +59,11 @@ export type ClaimSwapOutputPrivateReturnType = {
  *
  * Reads the chain-computed result from `swap_outputs` (never an off-chain
  * service — these amounts gate money movement), proves ownership of the
- * blinded identity, and submits `claim_swap_output_private`. The output and
+ * blinded identity, and submits `claim_swap_output`. The output and
  * any refund arrive as private records owned by the signer; the mapping
  * entry is consumed.
  *
- * Signer paths mirror `swapPrivate`: a local account passes the handle's
+ * Signer paths mirror `swap`: a local account passes the handle's
  * literal `blindingFactor`; a wallet account gets resolve-mode derived
  * requests targeting the handle's `blindedAddress` and re-derives the factor
  * itself.
@@ -78,19 +79,19 @@ export type ClaimSwapOutputPrivateReturnType = {
  *   the fields its signer path needs, and on transport/proving errors.
  *
  * @example
- * const { amountOut } = await claimSwapOutputPrivate(client, { handle })
+ * const { amountOut } = await claimSwapOutput(client, { handle })
  */
-export async function claimSwapOutputPrivate(
+export async function claimSwapOutput(
   client: Client,
-  params: ClaimSwapOutputPrivateParameters,
-): Promise<ClaimSwapOutputPrivateReturnType> {
+  params: ClaimSwapOutputParameters,
+): Promise<ClaimSwapOutputReturnType> {
   const { handle } = params
   const program = params.program ?? handle.program
 
   if (!handle.swapId) {
     throw new Error(
       'handle.swapId is not set — on the wallet path, resolve it from the confirmed ' +
-        'request transaction (first public output of the swap_private transition) before claiming.',
+        'request transaction (first public output of the swap transition) before claiming.',
     )
   }
 
@@ -98,9 +99,7 @@ export async function claimSwapOutputPrivate(
   const out = await getSwapOutput(client, { swapId: handle.swapId, program })
   if (!out) throw new SwapOutputNotFinalizedError(handle.swapId)
 
-  const account = (client as { account?: { type: string } }).account
-  if (!account) throw new Error('claimSwapOutputPrivate requires a wallet client with an account')
-  const isLocal = account.type === 'local'
+  const isLocal = requireAccount(client, 'claimSwapOutput').type === 'local'
 
   // Everything after the two blinding slots, verbatim from chain state.
   const tail: string[] = [
@@ -113,11 +112,11 @@ export async function claimSwapOutputPrivate(
 
   if (isLocal) {
     if (!handle.blindingFactor || !handle.blindedAddress) {
-      throw new Error('Local claims need handle.blindingFactor and handle.blindedAddress (set by swapPrivate on the local path)')
+      throw new Error('Local claims need handle.blindingFactor and handle.blindedAddress (set by swap on the local path)')
     }
     const result = await executeContract(client, {
       program,
-      function: 'claim_swap_output_private',
+      function: 'claim_swap_output',
       imports: params.imports,
       inputs: [handle.blindingFactor, handle.blindedAddress, ...tail],
     })
@@ -135,7 +134,7 @@ export async function claimSwapOutputPrivate(
     blindedAddressResolveRequest(handle.blindedAddress, program),
     ...tail,
   ]
-  const transactionId = await writeContract(client, { program, function: 'claim_swap_output_private',
+  const transactionId = await writeContract(client, { program, function: 'claim_swap_output',
       imports: params.imports ? Object.keys(params.imports) : undefined, inputs })
   return { transactionId, amountOut: out.amount_out, amountRemaining: out.amount_remaining }
 }

@@ -9,8 +9,8 @@ vi.mock('@veil/core', async (importOriginal) => {
 })
 
 import { executeContract, writeContract } from '@veil/core'
-import { swapPrivate } from '../../../src/actions/swap/swapPrivate.js'
-import { claimSwapOutputPrivate, SwapOutputNotFinalizedError } from '../../../src/actions/swap/claimSwapOutputPrivate.js'
+import { swap } from '../../../src/actions/swap/swap.js'
+import { claimSwapOutput, SwapOutputNotFinalizedError } from '../../../src/actions/swap/claimSwapOutput.js'
 import { MIN_SQRT_PRICE } from '../../../src/utils/tick-math.js'
 
 const executeMock = vi.mocked(executeContract)
@@ -57,11 +57,11 @@ beforeEach(() => {
   writeMock.mockReset()
 })
 
-describe('swapPrivate — local signer', () => {
+describe('swap — local signer', () => {
   it('builds the exact positional literal inputs and returns a complete handle', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1tx', transitions: [], outputs: ['777field', 'record1...', 'record1...'] })
 
-    const handle = await swapPrivate(fakeClient('local'), {
+    const handle = await swap(fakeClient('local'), {
       poolKey: POOL_KEY,
       tokenInId: TOKEN0,
       amountIn: 10n ** 18n,
@@ -74,8 +74,8 @@ describe('swapPrivate — local signer', () => {
 
     expect(executeMock).toHaveBeenCalledOnce()
     const call = executeMock.mock.calls[0]![1]
-    expect(call.program).toBe('shield_swap_v0_0_2.aleo')
-    expect(call.function).toBe('swap_private')
+    expect(call.program).toBe('shield_swap_v3.aleo')
+    expect(call.function).toBe('swap')
     // Exact positional order per the deployed ABI.
     expect(call.inputs).toEqual([
       RECORD,
@@ -96,12 +96,12 @@ describe('swapPrivate — local signer', () => {
     expect(handle.blindingFactor).toBe(IDENTITY.blindingFactor)
     expect(handle.tokenOutId).toBe('15594200448253854747971580789field')
     expect(handle.transactionId).toBe('at1tx')
-    expect(handle.program).toBe('shield_swap_v0_0_2.aleo')
+    expect(handle.program).toBe('shield_swap_v3.aleo')
   })
 
   it('rejects InputRequests on the local path', async () => {
     await expect(
-      swapPrivate(fakeClient('local'), {
+      swap(fakeClient('local'), {
         poolKey: POOL_KEY,
         tokenInId: TOKEN0,
         amountIn: 10n ** 18n,
@@ -114,19 +114,19 @@ describe('swapPrivate — local signer', () => {
 
   it('throws when the pool does not exist', async () => {
     await expect(
-      swapPrivate(fakeClient('local', { pools: null }), {
+      swap(fakeClient('local', { pools: null }), {
         poolKey: POOL_KEY, tokenInId: TOKEN0, amountIn: 1n, blindedIdentity: IDENTITY, tokenRecord: RECORD,
       }),
     ).rejects.toThrow(/does not exist/)
   })
 })
 
-describe('swapPrivate — wallet signer', () => {
+describe('swap — wallet signer', () => {
   it('fills blinding slots with issue-mode derived requests and requires tokenRecord', async () => {
     writeMock.mockResolvedValue('at1walletTx')
     const recordRequest = { type: 'record' as const, program: 'ethx.aleo', recordname: 'Token', filters: { amount: { gte: '1000000000000000000u128' } } }
 
-    const handle = await swapPrivate(fakeClient('rpc'), {
+    const handle = await swap(fakeClient('rpc'), {
       poolKey: POOL_KEY, tokenInId: TOKEN0, amountIn: 10n ** 18n, expectedOut: 2_000_000n, nonce: 42n,
       tokenRecord: recordRequest,
     })
@@ -139,7 +139,7 @@ describe('swapPrivate — wallet signer', () => {
       algorithm: 'program-scoped-blinding-factor',
       args: {
         mode: { type: 'string', value: 'issue' },
-        membershipProgram: { type: 'string', value: 'shield_swap_v0_0_2.aleo' },
+        membershipProgram: { type: 'string', value: 'shield_swap_v3.aleo' },
         membershipMapping: { type: 'string', value: 'used_blinded_addresses' },
       },
     })
@@ -152,12 +152,12 @@ describe('swapPrivate — wallet signer', () => {
 
   it('demands tokenRecord with an actionable message', async () => {
     await expect(
-      swapPrivate(fakeClient('rpc'), { poolKey: POOL_KEY, tokenInId: TOKEN0, amountIn: 10n ** 18n }),
+      swap(fakeClient('rpc'), { poolKey: POOL_KEY, tokenInId: TOKEN0, amountIn: 10n ** 18n }),
     ).rejects.toThrow(/must provide tokenRecord/)
   })
 })
 
-describe('claimSwapOutputPrivate', () => {
+describe('claimSwapOutput', () => {
   const handle = {
     swapId: '777field',
     ...IDENTITY,
@@ -166,15 +166,15 @@ describe('claimSwapOutputPrivate', () => {
     poolKey: POOL_KEY,
     amountIn: 10n ** 18n,
     transactionId: 'at1tx',
-    program: 'shield_swap_v0_0_2.aleo',
+    program: 'shield_swap_v3.aleo',
   }
 
   it('local: reads chain amounts and submits literal inputs', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1claim', transitions: [], outputs: [] })
-    const res = await claimSwapOutputPrivate(fakeClient('local'), { handle })
+    const res = await claimSwapOutput(fakeClient('local'), { handle })
 
     const call = executeMock.mock.calls[0]![1]
-    expect(call.function).toBe('claim_swap_output_private')
+    expect(call.function).toBe('claim_swap_output')
     expect(call.inputs).toEqual([
       IDENTITY.blindingFactor,
       IDENTITY.blindedAddress,
@@ -190,7 +190,7 @@ describe('claimSwapOutputPrivate', () => {
 
   it('wallet: resolve-mode derived requests target the handle blindedAddress', async () => {
     writeMock.mockResolvedValue('at1walletClaim')
-    await claimSwapOutputPrivate(fakeClient('rpc'), { handle })
+    await claimSwapOutput(fakeClient('rpc'), { handle })
 
     const inputs = writeMock.mock.calls[0]![1].inputs
     expect(inputs[0]).toMatchObject({
@@ -206,13 +206,13 @@ describe('claimSwapOutputPrivate', () => {
 
   it('throws SwapOutputNotFinalizedError when the output is absent', async () => {
     await expect(
-      claimSwapOutputPrivate(fakeClient('local', { swap_outputs: null }), { handle }),
+      claimSwapOutput(fakeClient('local', { swap_outputs: null }), { handle }),
     ).rejects.toThrow(SwapOutputNotFinalizedError)
   })
 
   it('demands swapId (wallet-path resolution) before claiming', async () => {
     await expect(
-      claimSwapOutputPrivate(fakeClient('local'), { handle: { ...handle, swapId: undefined } }),
+      claimSwapOutput(fakeClient('local'), { handle: { ...handle, swapId: undefined } }),
     ).rejects.toThrow(/resolve it from the confirmed/)
   })
 })

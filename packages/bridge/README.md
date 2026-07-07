@@ -428,8 +428,8 @@ await evm.writeContract({
 await bridge.waitForOrder({ id: order.orderId }) // USDC_ALEO arrives
 
 // 3. Trade on the DEX: privatize, swap, claim.
-const handle = await dex.swapPrivate({ poolKey, tokenInId, amountIn, slippageBps: 50, tokenInProgram, imports })
-await dex.claimSwapOutputPrivate({ handle, imports })
+const handle = await dex.swap({ poolKey, tokenInId, amountIn, slippageBps: 50, tokenInProgram, imports })
+await dex.claimSwapOutput({ handle, imports })
 
 // 4. Bridge back out — one call, deposit signed by the same Aleo wallet.
 await bridge.swap({

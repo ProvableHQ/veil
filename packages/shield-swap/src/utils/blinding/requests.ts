@@ -31,16 +31,16 @@ export const BLINDING_MEMBERSHIP_MAPPING = 'used_blinded_addresses'
  * A wallet refuses any `derived` request whose (algorithm, program, function,
  * inputPosition) tuple was not granted at connect time — pass this array in
  * `ConnectOptions.algorithmsAllowed` so private swaps and claims work.
- * Positions follow the transition declarations: `swap_private(record,
+ * Positions follow the transition declarations: `swap(record,
  * blinding_factor@1, blinded_address@2, …)`,
- * `claim_swap_output_private(blinding_factor@0, blinded_address@1, …)`.
+ * `claim_swap_output(blinding_factor@0, blinded_address@1, …)`.
  */
 export function shieldSwapAlgorithmGrants(program: string = DEFAULT_PROGRAM): AlgorithmGrant[] {
   return [
-    { algorithm: BLINDING_FACTOR_ALGORITHM, program, function: 'swap_private', inputPosition: 1 },
-    { algorithm: BLINDED_ADDRESS_ALGORITHM, program, function: 'swap_private', inputPosition: 2 },
-    { algorithm: BLINDING_FACTOR_ALGORITHM, program, function: 'claim_swap_output_private', inputPosition: 0 },
-    { algorithm: BLINDED_ADDRESS_ALGORITHM, program, function: 'claim_swap_output_private', inputPosition: 1 },
+    { algorithm: BLINDING_FACTOR_ALGORITHM, program, function: 'swap', inputPosition: 1 },
+    { algorithm: BLINDED_ADDRESS_ALGORITHM, program, function: 'swap', inputPosition: 2 },
+    { algorithm: BLINDING_FACTOR_ALGORITHM, program, function: 'claim_swap_output', inputPosition: 0 },
+    { algorithm: BLINDED_ADDRESS_ALGORITHM, program, function: 'claim_swap_output', inputPosition: 1 },
   ]
 }
 
@@ -73,8 +73,8 @@ function resolveArgs(program: string, targetBlindedAddress: string) {
  * substitutes the derived factor — the dapp never sees it. Pure and local.
  *
  * @param program Program the derivation is scoped to. Defaults to
- *   `DEFAULT_PROGRAM` (the live deployment).
- * @returns The InputRequest for `swap_private`'s blinding-factor slot.
+ *   `DEFAULT_PROGRAM`.
+ * @returns The InputRequest for `swap`'s blinding-factor slot.
  *
  * @example
  * inputs[1] = blindingFactorIssueRequest()
@@ -91,8 +91,8 @@ export function blindingFactorIssueRequest(program: string = DEFAULT_PROGRAM): I
  * local.
  *
  * @param program Program the derivation is scoped to. Defaults to
- *   `DEFAULT_PROGRAM` (the live deployment).
- * @returns The InputRequest for `swap_private`'s blinded-address slot.
+ *   `DEFAULT_PROGRAM`.
+ * @returns The InputRequest for `swap`'s blinded-address slot.
  */
 export function blindedAddressIssueRequest(program: string = DEFAULT_PROGRAM): InputRequest {
   return { type: 'derived', algorithm: BLINDED_ADDRESS_ALGORITHM, args: issueArgs(program) }
@@ -109,8 +109,8 @@ export function blindedAddressIssueRequest(program: string = DEFAULT_PROGRAM): I
  * @param targetBlindedAddress The public blinded address from the swap
  *   (`SwapHandle.blindedAddress`).
  * @param program Program the derivation is scoped to. Defaults to
- *   `DEFAULT_PROGRAM` (the live deployment).
- * @returns The InputRequest for `claim_swap_output_private`'s blinding-factor slot.
+ *   `DEFAULT_PROGRAM`.
+ * @returns The InputRequest for `claim_swap_output`'s blinding-factor slot.
  */
 export function blindingFactorResolveRequest(
   targetBlindedAddress: string,
@@ -128,8 +128,8 @@ export function blindingFactorResolveRequest(
  *
  * @param targetBlindedAddress The public blinded address from the swap.
  * @param program Program the derivation is scoped to. Defaults to
- *   `DEFAULT_PROGRAM` (the live deployment).
- * @returns The InputRequest for `claim_swap_output_private`'s blinded-address slot.
+ *   `DEFAULT_PROGRAM`.
+ * @returns The InputRequest for `claim_swap_output`'s blinded-address slot.
  */
 export function blindedAddressResolveRequest(
   targetBlindedAddress: string,

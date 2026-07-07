@@ -1,11 +1,11 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@veil/core'
-import { getPool } from '../reads/getPool.js'
-import { selectTokenRecord, selectPositionNFT } from '../../utils/records.js'
+import { selectTokenRecord, resolvePositionRecord } from '../../utils/records.js'
+import { requireAccount, requirePool } from '../../utils/guards.js'
 import { pickInsertHint } from '../../utils/tick-hints.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 
 /**
- * Parameters for {@link increaseLiquidityPrivate}.
+ * Parameters for {@link increaseLiquidity}.
  *
  * @property poolKey Pool the position belongs to.
  * @property amount0Desired Raw atomic token0 to add (u128).
@@ -32,7 +32,7 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  *   proving locally or via a service that requires them.
  * @property program shield_swap program override.
  */
-export type IncreaseLiquidityPrivateParameters = {
+export type IncreaseLiquidityParameters = {
   poolKey: string
   amount0Desired: bigint
   amount1Desired: bigint
@@ -58,7 +58,7 @@ export type IncreaseLiquidityPrivateParameters = {
  *   confirmation).
  * @property transactionId The transaction's id.
  */
-export type IncreaseLiquidityPrivateReturnType = {
+export type IncreaseLiquidityReturnType = {
   positionTokenId?: string
   transactionId: string
 }
@@ -70,7 +70,7 @@ export type IncreaseLiquidityPrivateReturnType = {
  * (updated NFT, change records). The position's tick range is fixed at mint
  * — this only deepens it.
  *
- * Signer paths mirror `mintPrivate`: local accounts auto-select the
+ * Signer paths mirror `mint`: local accounts auto-select the
  * position and token records; wallet accounts must supply all three record
  * inputs explicitly.
  *
@@ -84,45 +84,39 @@ export type IncreaseLiquidityPrivateReturnType = {
  *   (local) or not provided (wallet); and on transport/proving errors.
  *
  * @example
- * await increaseLiquidityPrivate(client, {
+ * await increaseLiquidity(client, {
  *   poolKey, amount0Desired: 10n ** 17n, amount1Desired: 200_000n,
  *   token0Program: 'ethx_5a095e.aleo', token1Program: 'usdc_5a095e.aleo',
  * })
  */
-export async function increaseLiquidityPrivate(
+export async function increaseLiquidity(
   client: Client,
-  params: IncreaseLiquidityPrivateParameters,
-): Promise<IncreaseLiquidityPrivateReturnType> {
+  params: IncreaseLiquidityParameters,
+): Promise<IncreaseLiquidityReturnType> {
   const program = params.program ?? DEFAULT_PROGRAM
 
-  const pool = await getPool(client, { poolKey: params.poolKey, program })
-  if (!pool) throw new Error(`Pool ${params.poolKey} does not exist on ${program}`)
+  const pool = await requirePool(client, params.poolKey, program)
 
-  const account = (client as { account?: { type: string } }).account
-  if (!account) throw new Error('increaseLiquidityPrivate requires a wallet client with an account')
-  const isLocal = account.type === 'local'
+  const isLocal = requireAccount(client, 'increaseLiquidity').type === 'local'
 
   if (isLocal) {
-    if (
-      typeof params.positionRecord === 'object' ||
-      typeof params.token0Record === 'object' ||
-      typeof params.token1Record === 'object'
-    ) {
+    // Token records must be literals on the local path; resolvePositionRecord
+    // applies the same rule to the position record below.
+    if (typeof params.token0Record === 'object' || typeof params.token1Record === 'object') {
       throw new Error('Local accounts cannot use InputRequests — pass record plaintext literals instead')
     }
 
-    // Select the position (for its record AND its tick bounds → hints).
-    let positionPlaintext: string
-    let tickLower: number | undefined
-    let tickUpper: number | undefined
-    if (typeof params.positionRecord === 'string') {
-      positionPlaintext = params.positionRecord
-    } else {
-      const pos = await selectPositionNFT(client, { program, poolKey: params.poolKey, tokenId: params.positionTokenId })
-      positionPlaintext = pos.record.recordPlaintext
-      tickLower = pos.tickLower
-      tickUpper = pos.tickUpper
-    }
+    // Resolve the position for its record AND its tick bounds (→ hints).
+    const {
+      plaintext: positionPlaintext,
+      tickLower,
+      tickUpper,
+    } = await resolvePositionRecord(client, {
+      positionRecord: params.positionRecord,
+      program,
+      poolKey: params.poolKey,
+      tokenId: params.positionTokenId,
+    })
 
     const tickLowerHint =
       params.tickLowerHint ??
@@ -143,7 +137,7 @@ export async function increaseLiquidityPrivate(
 
     const result = await executeContract(client, {
       program,
-      function: 'increase_liquidity_private',
+      function: 'increase_liquidity',
       imports: params.imports,
       inputs: [
         positionPlaintext,
@@ -161,7 +155,7 @@ export async function increaseLiquidityPrivate(
     })
     const positionTokenId = result.outputs[0]
     if (!positionTokenId?.endsWith('field')) {
-      throw new Error(`Unexpected increase_liquidity_private output shape: ${JSON.stringify(result.outputs)}`)
+      throw new Error(`Unexpected increase_liquidity output shape: ${JSON.stringify(result.outputs)}`)
     }
     return { positionTokenId, transactionId: result.transactionId }
   }
@@ -187,7 +181,7 @@ export async function increaseLiquidityPrivate(
     `${params.tickLowerHint}i32`,
     `${params.tickUpperHint}i32`,
   ]
-  const transactionId = await writeContract(client, { program, function: 'increase_liquidity_private',
+  const transactionId = await writeContract(client, { program, function: 'increase_liquidity',
       imports: params.imports ? Object.keys(params.imports) : undefined, inputs })
   return { positionTokenId: undefined, transactionId }
 }

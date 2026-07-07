@@ -33,17 +33,17 @@ export {
 
 // The two-phase private swap: request → (chain computes) → claim.
 export {
-  swapPrivate,
+  swap,
   type SwapHandle,
-  type SwapPrivateParameters,
-  type SwapPrivateReturnType,
-} from './actions/swap/swapPrivate.js'
+  type SwapParameters,
+  type SwapReturnType,
+} from './actions/swap/swap.js'
 export {
-  claimSwapOutputPrivate,
+  claimSwapOutput,
   SwapOutputNotFinalizedError,
-  type ClaimSwapOutputPrivateParameters,
-  type ClaimSwapOutputPrivateReturnType,
-} from './actions/swap/claimSwapOutputPrivate.js'
+  type ClaimSwapOutputParameters,
+  type ClaimSwapOutputReturnType,
+} from './actions/swap/claimSwapOutput.js'
 
 // Off-chain DEX API client (trusted convenience layer; typed from the
 // service's own OpenAPI via `pnpm regen-openapi`).
@@ -66,7 +66,7 @@ export {
   blindingFactorResolveRequest,
   blindedAddressResolveRequest,
 } from './utils/blinding/requests.js'
-export { SHIELD_SWAP_V0_0_1, SHIELD_SWAP_V0_0_2, DEFAULT_PROGRAM } from './constants.js'
+export { SHIELD_SWAP_V3, DEFAULT_PROGRAM } from './constants.js'
 
 // Record selection + record-derived balances (local-signer path; wallet
 // signers select records wallet-side via record InputRequests).
@@ -91,19 +91,27 @@ export {
   type BalanceEntry,
 } from './utils/balances.js'
 
-// Liquidity lifecycle: create a pool, mint a position, deepen it.
+// Liquidity lifecycle: create a pool, mint a position, deepen it, shrink it,
+// collect owed tokens, and burn the drained position.
 export { createPool, type CreatePoolParameters, type CreatePoolReturnType } from './actions/liquidity/createPool.js'
 export {
-  mintPrivate,
+  mint,
   formatMintPositionRequest,
-  type MintPrivateParameters,
-  type MintPrivateReturnType,
-} from './actions/liquidity/mintPrivate.js'
+  type MintParameters,
+  type MintReturnType,
+} from './actions/liquidity/mint.js'
 export {
-  increaseLiquidityPrivate,
-  type IncreaseLiquidityPrivateParameters,
-  type IncreaseLiquidityPrivateReturnType,
-} from './actions/liquidity/increaseLiquidityPrivate.js'
+  increaseLiquidity,
+  type IncreaseLiquidityParameters,
+  type IncreaseLiquidityReturnType,
+} from './actions/liquidity/increaseLiquidity.js'
+export {
+  decreaseLiquidity,
+  type DecreaseLiquidityParameters,
+  type DecreaseLiquidityReturnType,
+} from './actions/liquidity/decreaseLiquidity.js'
+export { collect, type CollectParameters, type CollectReturnType } from './actions/liquidity/collect.js'
+export { burn, type BurnParameters, type BurnReturnType } from './actions/liquidity/burn.js'
 export { pickInsertHint, type PickInsertHintParameters } from './utils/tick-hints.js'
 
 // Pure strategy primitives (no I/O): prices, impact, valuation, fee APR.

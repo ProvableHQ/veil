@@ -17,9 +17,8 @@ export const BLINDING_FACTOR_DOMAIN =
  * Domain separator for deriving a blinded address from a blinding factor.
  *
  * MUST match the constant the program hashes in `verify_blinded_address` —
- * verified against the deployed shield_swap_v0_0_2.aleo bytecode (the literal
- * appears in its Poseidon8 preimage cast). Documented in the reference client
- * as `Identifier("amm_v3_private_claim_or_swap")`.
+ * the literal appears in its Poseidon8 preimage cast. Documented in the
+ * reference client as `Identifier("amm_v3_private_claim_or_swap")`.
  */
 export const CLAIM_OR_SWAP_DOMAIN =
   '11835072102227764468342786961086432175093421716844963782363567713633field'
@@ -73,7 +72,7 @@ export async function viewKeyToScalar(viewKey: string): Promise<string> {
  *
  * @property counter The derivation counter that produced this identity.
  * @property blindingFactor Secret field literal passed privately to
- *   `swap_private` / `claim_swap_output_private`. Treat like a key: whoever
+ *   `swap` / `claim_swap_output`. Treat like a key: whoever
  *   holds it can claim the swap's output.
  * @property blindedAddress Public address literal the program records in
  *   `used_blinded_addresses`; safe to reveal.
@@ -103,7 +102,7 @@ export interface BlindedIdentity {
  *   {@link nextBlindedIdentity} rather than hardcoding — blinded addresses
  *   are single-use.
  * @param program Program id whose address scopes the derivation. Defaults to
- *   `DEFAULT_PROGRAM` (the live shield_swap deployment).
+ *   `DEFAULT_PROGRAM`.
  * @returns The blinding factor as a field literal (e.g. `"1234…field"`).
  * @throws When `@provablehq/sdk` is not installed (actionable message), or
  *   when the view-key scalar does not parse.
@@ -148,7 +147,7 @@ export async function deriveBlindingFactor(
  * @param signerAddress The transaction signer's address (`aleo1…`) — the
  *   program binds the blinded address to `self.signer`.
  * @param program Program id whose address scopes the derivation. Defaults to
- *   `DEFAULT_PROGRAM` (the live shield_swap deployment).
+ *   `DEFAULT_PROGRAM`.
  * @returns The blinded address as an `aleo1…` literal.
  * @throws When `@provablehq/sdk` is not installed, or when an input literal
  *   does not parse.
@@ -232,7 +231,7 @@ export type NextBlindedIdentityParameters = {
  *
  * @example
  * const id = await nextBlindedIdentity(client, { viewKeyScalar, signer })
- * // id.blindingFactor → swap_private input; id.blindedAddress → public slot
+ * // id.blindingFactor → swap input; id.blindedAddress → public slot
  */
 export async function nextBlindedIdentity(
   client: Client,

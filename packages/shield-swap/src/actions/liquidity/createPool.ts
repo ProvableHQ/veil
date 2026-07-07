@@ -23,8 +23,7 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
  *   callees statically — pass the involved token programs' sources when
  *   proving locally or via a service that requires them.
- * @property program shield_swap program override. Defaults to `DEFAULT_PROGRAM`
- *   (the live shield_swap deployment).
+ * @property program shield_swap program override. Defaults to `DEFAULT_PROGRAM`.
  */
 export type CreatePoolParameters = {
   token0ProgramId: string

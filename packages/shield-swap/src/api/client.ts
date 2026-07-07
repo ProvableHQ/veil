@@ -161,7 +161,7 @@ export class ApiClient {
   /**
    * Finds the best route between two tokens (BFS, ≤ 3 hops).
    *
-   * Use the quoted output as `expectedOut` for `swapPrivate`'s slippage
+   * Use the quoted output as `expectedOut` for `swap`'s slippage
    * math — a wrong quote only widens protection, never moves funds.
    */
   async getRoute(query: { token_in: string; token_out: string; amount_in?: bigint }): Promise<Schemas['RouteResponseDoc']> {

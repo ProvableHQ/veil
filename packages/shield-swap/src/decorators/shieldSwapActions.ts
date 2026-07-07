@@ -13,19 +13,26 @@ import {
   isTickSpacingValid,
   getFeeToTickSpacing,
 } from '../actions/reads/validation.js'
-import { swapPrivate, type SwapPrivateParameters, type SwapPrivateReturnType } from '../actions/swap/swapPrivate.js'
+import { swap, type SwapParameters, type SwapReturnType } from '../actions/swap/swap.js'
 import {
-  claimSwapOutputPrivate,
-  type ClaimSwapOutputPrivateParameters,
-  type ClaimSwapOutputPrivateReturnType,
-} from '../actions/swap/claimSwapOutputPrivate.js'
+  claimSwapOutput,
+  type ClaimSwapOutputParameters,
+  type ClaimSwapOutputReturnType,
+} from '../actions/swap/claimSwapOutput.js'
 import { createPool, type CreatePoolParameters, type CreatePoolReturnType } from '../actions/liquidity/createPool.js'
-import { mintPrivate, type MintPrivateParameters, type MintPrivateReturnType } from '../actions/liquidity/mintPrivate.js'
+import { mint, type MintParameters, type MintReturnType } from '../actions/liquidity/mint.js'
 import {
-  increaseLiquidityPrivate,
-  type IncreaseLiquidityPrivateParameters,
-  type IncreaseLiquidityPrivateReturnType,
-} from '../actions/liquidity/increaseLiquidityPrivate.js'
+  increaseLiquidity,
+  type IncreaseLiquidityParameters,
+  type IncreaseLiquidityReturnType,
+} from '../actions/liquidity/increaseLiquidity.js'
+import {
+  decreaseLiquidity,
+  type DecreaseLiquidityParameters,
+  type DecreaseLiquidityReturnType,
+} from '../actions/liquidity/decreaseLiquidity.js'
+import { collect, type CollectParameters, type CollectReturnType } from '../actions/liquidity/collect.js'
+import { burn, type BurnParameters, type BurnReturnType } from '../actions/liquidity/burn.js'
 import {
   getPrivateBalances,
   type GetPrivateBalancesParameters,
@@ -63,11 +70,14 @@ export type ShieldSwapActions = {
   getPrivateBalances: (params: GetPrivateBalancesParameters) => Promise<GetPrivateBalancesReturnType>
   getBalances: (params?: GetBalancesParameters) => Promise<GetBalancesReturnType>
   pickInsertHint: (params: PickInsertHintParameters) => Promise<number>
-  swapPrivate: (params: SwapPrivateParameters) => Promise<SwapPrivateReturnType>
-  claimSwapOutputPrivate: (params: ClaimSwapOutputPrivateParameters) => Promise<ClaimSwapOutputPrivateReturnType>
+  swap: (params: SwapParameters) => Promise<SwapReturnType>
+  claimSwapOutput: (params: ClaimSwapOutputParameters) => Promise<ClaimSwapOutputReturnType>
   createPool: (params: CreatePoolParameters) => Promise<CreatePoolReturnType>
-  mintPrivate: (params: MintPrivateParameters) => Promise<MintPrivateReturnType>
-  increaseLiquidityPrivate: (params: IncreaseLiquidityPrivateParameters) => Promise<IncreaseLiquidityPrivateReturnType>
+  mint: (params: MintParameters) => Promise<MintReturnType>
+  increaseLiquidity: (params: IncreaseLiquidityParameters) => Promise<IncreaseLiquidityReturnType>
+  decreaseLiquidity: (params: DecreaseLiquidityParameters) => Promise<DecreaseLiquidityReturnType>
+  collect: (params: CollectParameters) => Promise<CollectReturnType>
+  burn: (params: BurnParameters) => Promise<BurnReturnType>
   api: ApiClient
 }
 
@@ -122,11 +132,14 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     getPrivateBalances: (p) => getPrivateBalances(client, p),
     getBalances: (p) => getBalances(client, api ?? missingApi, p),
     pickInsertHint: (p) => pickInsertHint(client, withProgram(p)),
-    swapPrivate: (p) => swapPrivate(client, withProgram(p)),
-    claimSwapOutputPrivate: (p) => claimSwapOutputPrivate(client, p),
+    swap: (p) => swap(client, withProgram(p)),
+    claimSwapOutput: (p) => claimSwapOutput(client, p),
     createPool: (p) => createPool(client, withProgram(p)),
-    mintPrivate: (p) => mintPrivate(client, withProgram(p)),
-    increaseLiquidityPrivate: (p) => increaseLiquidityPrivate(client, withProgram(p)),
+    mint: (p) => mint(client, withProgram(p)),
+    increaseLiquidity: (p) => increaseLiquidity(client, withProgram(p)),
+    decreaseLiquidity: (p) => decreaseLiquidity(client, withProgram(p)),
+    collect: (p) => collect(client, withProgram(p)),
+    burn: (p) => burn(client, withProgram(p)),
     api: api ?? missingApi,
   })
 }

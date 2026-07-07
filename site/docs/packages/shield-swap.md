@@ -16,8 +16,8 @@ npm install @veil/core @veil/shield-swap
 ## Key exports
 
 - **`shieldSwapActions(config)`** — the decorator; chain reads/writes sit flat on the client, the DEX API under `.api`.
-- **Swaps** — `swapPrivate` → `claimSwapOutputPrivate` (+ `SwapHandle`).
-- **Liquidity** — `createPool`, `mintPrivate`, `increaseLiquidityPrivate`.
+- **Swaps** — `swap` → `claimSwapOutput` (+ `SwapHandle`).
+- **Liquidity** — `createPool`, `mint`, `increaseLiquidity`, `decreaseLiquidity`, `collect`, `burn`.
 - **Reads** — `getPool`, `getSlot`, `getSwapOutput`; balances `getBalances`, `getPrivateBalances`.
 - **Wallet grants** — `SHIELD_SWAP_ALGORITHM_GRANTS`, `shieldSwapAlgorithmGrants`.
 

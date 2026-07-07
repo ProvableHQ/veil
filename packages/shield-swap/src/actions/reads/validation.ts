@@ -6,7 +6,7 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  * Checks whether a blinded address has already been consumed by a private
  * swap or claim.
  *
- * Blinded addresses are single-use: `swap_private` records each one in the
+ * Blinded addresses are single-use: `swap` records each one in the
  * `used_blinded_addresses` mapping. The blinded-identity counter scan calls
  * this to find the first unused counter. Absence means unused.
  *

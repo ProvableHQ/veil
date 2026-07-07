@@ -8,8 +8,8 @@ vi.mock('@veil/core', async (importOriginal) => {
 
 import { executeContract, writeContract } from '@veil/core'
 import { createPool } from '../../../src/actions/liquidity/createPool.js'
-import { mintPrivate, formatMintPositionRequest } from '../../../src/actions/liquidity/mintPrivate.js'
-import { increaseLiquidityPrivate } from '../../../src/actions/liquidity/increaseLiquidityPrivate.js'
+import { mint, formatMintPositionRequest } from '../../../src/actions/liquidity/mint.js'
+import { increaseLiquidity } from '../../../src/actions/liquidity/increaseLiquidity.js'
 import { getSqrtPriceAtTick } from '../../../src/utils/tick-math.js'
 
 const executeMock = vi.mocked(executeContract)
@@ -31,7 +31,7 @@ function fakeClient(accountType: 'local' | 'rpc'): Client {
   const recordsFor = (program?: string) => {
     if (program === 'ethx.aleo') return [{ programName: program, tag: 't0', recordPlaintext: TOKEN0_RECORD, spent: false }]
     if (program === 'usdc.aleo') return [{ programName: program, tag: 't1', recordPlaintext: TOKEN1_RECORD, spent: false }]
-    if (program === 'shield_swap_v0_0_2.aleo')
+    if (program === 'shield_swap_v3.aleo')
       return [{ programName: program, tag: 't2', recordPlaintext: POSITION_RECORD, spent: false }]
     return []
   }
@@ -103,10 +103,10 @@ describe('createPool', () => {
   })
 })
 
-describe('mintPrivate — local', () => {
+describe('mint — local', () => {
   it('rounds ticks, derives hints from slot neighbors, auto-selects records, exact inputs', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1mint', transitions: [], outputs: ['555field'] })
-    const res = await mintPrivate(fakeClient('local'), {
+    const res = await mint(fakeClient('local'), {
       poolKey: POOL_KEY,
       tickLower: -64350,      // → rounded to -64400
       tickUpper: -60050,      // → rounded to -60200
@@ -118,7 +118,7 @@ describe('mintPrivate — local', () => {
       recipient: 'aleo1recipient',
     })
     const call = executeMock.mock.calls[0]![1]
-    expect(call.function).toBe('mint_private')
+    expect(call.function).toBe('mint')
     expect(call.inputs[0]).toBe('7field')
     expect(call.inputs[1]).toBe(TOKEN0_RECORD)
     expect(call.inputs[2]).toBe(TOKEN1_RECORD)
@@ -134,7 +134,7 @@ describe('mintPrivate — local', () => {
 
   it('wallet path requires both records', async () => {
     await expect(
-      mintPrivate(fakeClient('rpc'), {
+      mint(fakeClient('rpc'), {
         poolKey: POOL_KEY, tickLower: -64400, tickUpper: -60000,
         amount0Desired: 1n, amount1Desired: 1n,
       }),
@@ -142,10 +142,10 @@ describe('mintPrivate — local', () => {
   })
 })
 
-describe('increaseLiquidityPrivate — local', () => {
+describe('increaseLiquidity — local', () => {
   it('selects the position by pool, uses its bounds for hints, exact input order', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1inc', transitions: [], outputs: ['555field'] })
-    const res = await increaseLiquidityPrivate(fakeClient('local'), {
+    const res = await increaseLiquidity(fakeClient('local'), {
       poolKey: POOL_KEY,
       amount0Desired: 10n ** 17n,
       amount1Desired: 200_000n,
@@ -153,7 +153,7 @@ describe('increaseLiquidityPrivate — local', () => {
       token1Program: 'usdc.aleo',
     })
     const call = executeMock.mock.calls[0]![1]
-    expect(call.function).toBe('increase_liquidity_private')
+    expect(call.function).toBe('increase_liquidity')
     expect(call.inputs[0]).toBe(POSITION_RECORD)
     expect(call.inputs[1]).toBe(TOKEN0_RECORD)
     expect(call.inputs[2]).toBe(TOKEN1_RECORD)
@@ -168,7 +168,7 @@ describe('increaseLiquidityPrivate — local', () => {
 
   it('wallet path requires all records + hints', async () => {
     await expect(
-      increaseLiquidityPrivate(fakeClient('rpc'), {
+      increaseLiquidity(fakeClient('rpc'), {
         poolKey: POOL_KEY, amount0Desired: 1n, amount1Desired: 1n,
       }),
     ).rejects.toThrow(/must provide positionRecord/)

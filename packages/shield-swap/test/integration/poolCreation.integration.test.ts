@@ -24,7 +24,7 @@ const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!DPS_API_K
 
 const NETWORK_URL = 'https://api.provable.com/v2'
 const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove/testnet'
-const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap_v0_0_2.aleo'
+const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap_v3.aleo'
 const CANDIDATE_FEES = [100, 500, 3000, 10000] // common Uniswap-style tiers
 const TX_TIMEOUT = 420_000
 

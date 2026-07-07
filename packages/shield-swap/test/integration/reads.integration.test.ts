@@ -21,9 +21,8 @@ const API_BASE = 'https://api.provable.com/v2'
 const NODE_URL = `${API_BASE}/testnet`
 const INDEXER_URL = 'https://amm-api.dev.provable.com'
 
-// shield_swap_v0_0_2 is the live deployment the DEX API serves, and the target
-// PROGRAM_ID the reads default to — so a pool discovered via the API decodes
-// directly off chain, no fallback needed.
+// Reads default to PROGRAM_ID (shield_swap_v3), so a pool discovered via the
+// API decodes directly off chain, no fallback needed.
 
 describe.runIf(RUN)('reads against the real API', () => {
   const client = createPublicClient({ transport: http(API_BASE, { network: 'testnet' }) })

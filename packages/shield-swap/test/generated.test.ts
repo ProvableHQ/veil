@@ -11,12 +11,11 @@ import {
   type Position,
 } from '../src/generated/shield_swap.js'
 
-// PROGRAM_ID is the program the bindings target, stamped by codegen from
-// veil.config.json's `programId` — the live deployment (v0_0_2), even though
-// the bindings' shape is generated from the v0_0_2 ABI.
+// PROGRAM_ID is the program the bindings target, stamped by codegen from the
+// ABI named in veil.config.json — currently shield_swap_v3.
 describe('PROGRAM_ID', () => {
-  it('targets the live shield_swap deployment', () => {
-    expect(PROGRAM_ID).toBe('shield_swap_v0_0_2.aleo')
+  it('targets the shield_swap v3 deployment', () => {
+    expect(PROGRAM_ID).toBe('shield_swap_v3.aleo')
   })
 })
 
@@ -25,7 +24,7 @@ describe('PROGRAM_ID', () => {
 describe('toSlot', () => {
   const value: RecordValue = {
     owner: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
-    program: 'shield_swap_v0_0_2.aleo',
+    program: 'shield_swap_v3.aleo',
     recordName: 'Slot',
     nonce: '0group',
     fields: {
@@ -52,7 +51,7 @@ describe('toSlot', () => {
 describe('toPoolState', () => {
   const value: RecordValue = {
     owner: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
-    program: 'shield_swap_v0_0_2.aleo',
+    program: 'shield_swap_v3.aleo',
     recordName: 'PoolState',
     nonce: '0group',
     fields: {
@@ -83,7 +82,7 @@ describe('toPoolState', () => {
 describe('toPositionNFT', () => {
   const record: RecordValue = {
     owner: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
-    program: 'shield_swap_v0_0_2.aleo',
+    program: 'shield_swap_v3.aleo',
     recordName: 'PositionNFT',
     nonce: '0group',
     fields: {
@@ -243,7 +242,7 @@ describe('toSwapComplianceRecord', () => {
     const owner = 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc'
     const record: RecordValue = {
       owner,
-      program: 'shield_swap_v0_0_2.aleo',
+      program: 'shield_swap_v3.aleo',
       recordName: 'SwapComplianceRecord',
       nonce: '0group',
       fields: {
@@ -266,7 +265,7 @@ describe('toSwapComplianceRecord', () => {
           // Nested struct — the mapper casts via `as unknown as SwapRequest`.
           value: {},
           mode: 'private',
-          type: { kind: 'struct', path: ['SwapRequest'], program: 'shield_swap_v0_0_2.aleo' },
+          type: { kind: 'struct', path: ['SwapRequest'], program: 'shield_swap_v3.aleo' },
         },
         caller: {
           value: owner,
