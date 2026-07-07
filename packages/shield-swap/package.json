@@ -59,6 +59,7 @@
     "@provablehq/sdk": "^0.11.3",
     "@veil/codegen": "workspace:*",
     "@veil/provable-sdk": "workspace:*",
-    "openapi-typescript": "^7.13.0"
+    "openapi-typescript": "^7.13.0",
+    "@veil/bridge": "workspace:*"
   }
 }
