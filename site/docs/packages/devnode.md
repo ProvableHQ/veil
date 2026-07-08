@@ -14,9 +14,13 @@ npm install -D @veil/core @veil/devnode
 
 ## Key exports
 
-- **`devnodeActions`** — an `extend()` decorator adding `startDevnode`, `advanceBlock`, and snapshot controls to a client.
+- **`devnodeActions`** — an `extend()` decorator adding `startDevnode`, `advanceDevnode`, and `restoreDevnode` to a client.
 - **Standalone** — `startDevnode`, `advanceDevnode`, `restoreDevnode`.
 - **Constants** — `DEVNODE_PRIVATE_KEY`, `DEVNODE_ADDR` (`127.0.0.1:3030`).
+
+Taking a snapshot is a live REST call, so it lives on the `@veil/core` test
+client as `client.snapshot(...)` / `client.listSnapshots()` rather than in this
+package; reload one here with `restoreDevnode`.
 
 ## Usage
 

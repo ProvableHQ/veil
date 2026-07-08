@@ -50,4 +50,51 @@ describe('http transport', () => {
     const transport = http('https://api.provable.com/v2', { fetchFn: mockFetch })
     await expect(transport.request({ method: 'getLatestHeight' })).rejects.toThrow()
   })
+
+  it('maps snapshot to POST /snapshot carrying the name', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ name: 'before-deploy', height: 42 }),
+    })
+
+    const transport = http('http://127.0.0.1:3030', { fetchFn: mockFetch, network: 'testnet' })
+    const result = await transport.request({ method: 'snapshot', params: { name: 'before-deploy' } })
+
+    expect(result).toEqual({ name: 'before-deploy', height: 42 })
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:3030/testnet/snapshot',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'before-deploy' }) }),
+    )
+  })
+
+  it('maps snapshot without a name to an empty JSON body', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ name: 'snapshot-42', height: 42 }),
+    })
+
+    const transport = http('http://127.0.0.1:3030', { fetchFn: mockFetch, network: 'testnet' })
+    await transport.request({ method: 'snapshot' })
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:3030/testnet/snapshot',
+      expect.objectContaining({ method: 'POST', body: '{}' }),
+    )
+  })
+
+  it('maps listSnapshots to GET /snapshots', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(['snapshot-42', 'before-deploy']),
+    })
+
+    const transport = http('http://127.0.0.1:3030', { fetchFn: mockFetch, network: 'testnet' })
+    const result = await transport.request({ method: 'listSnapshots' })
+
+    expect(result).toEqual(['snapshot-42', 'before-deploy'])
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:3030/testnet/snapshots',
+      expect.objectContaining({ method: 'GET' }),
+    )
+  })
 })
