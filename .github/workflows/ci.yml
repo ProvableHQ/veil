@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  LEO_RELEASE: leo-lang-v4.3.2
+  DEVNODE_RELEASE: v0.2.0
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Unit and example tests
+        run: pnpm vitest run
+      - name: Typecheck reference dApp
+        run: pnpm --filter @veil/loyalty-dapp exec tsc --noEmit
+
+  live-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VEIL_INTEGRATION: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Read-only tests against live public endpoints — no keys, no secrets.
+      # --retry=2 retries each failing test individually so one flaky endpoint
+      # does not rerun the suite. Keyed write tests are never collected.
+      - name: Read-only integration tests against live endpoints
+        run: >
+          pnpm vitest run --retry=2
+          packages/core/test/integration/realApi.test.ts
+          packages/shield-swap/test/integration/reads.integration.test.ts
+          packages/shield-swap/test/integration/api.integration.test.ts
+          packages/shield-swap/test/integration/traders.integration.test.ts
+          packages/bridge/test/integration/api.integration.test.ts
+
+  devnode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VEIL_DEVNODE_INTEGRATION: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Cache Aleo toolchain
+        id: toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.aleo-tools
+          key: aleo-tools-${{ env.LEO_RELEASE }}-${{ env.DEVNODE_RELEASE }}
+      - name: Install leo and aleo-devnode
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.aleo-tools
+          curl -fsSL -o /tmp/leo.zip \
+            "https://github.com/ProvableHQ/leo/releases/download/${LEO_RELEASE}/${LEO_RELEASE}-x86_64-unknown-linux-gnu.zip"
+          unzip -o /tmp/leo.zip -d ~/.aleo-tools
+          curl -fsSL -o /tmp/devnode.zip \
+            "https://github.com/ProvableHQ/aleo-devnode/releases/download/${DEVNODE_RELEASE}/aleo-devnode-${DEVNODE_RELEASE}-x86_64-unknown-linux-gnu.zip"
+          unzip -o /tmp/devnode.zip -d ~/.aleo-tools
+          chmod +x ~/.aleo-tools/leo ~/.aleo-tools/aleo-devnode
+      - name: Add toolchain to PATH
+        run: echo "$HOME/.aleo-tools" >> "$GITHUB_PATH"
+      - name: Toolchain versions
+        run: |
+          leo --version
+          aleo-devnode --version
+      # Every devnode suite binds 127.0.0.1:3030 — run the files strictly
+      # sequentially so two devnodes never race for the port.
+      - name: Devnode e2e tests
+        run: >
+          pnpm vitest run --no-file-parallelism
+          packages/devnode/test/devnodeActions.integration.test.ts
+          packages/provable-sdk/test/integration/devnodeE2e.test.ts
+          packages/provable-sdk/test/integration/devnodeWrite.e2e.test.ts
