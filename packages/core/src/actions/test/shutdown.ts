@@ -16,5 +16,13 @@ export type ShutdownReturnType = void
  * await testClient.shutdown()
  */
 export async function shutdown(client: Client): Promise<ShutdownReturnType> {
-  await client.request({ method: 'shutdown' })
+  try {
+    await client.request({ method: 'shutdown' })
+  } catch (err) {
+    // The devnode acknowledges shutdown with an empty 2xx body, which the JSON
+    // transport cannot parse and surfaces as a SyntaxError. That is success for
+    // this action, so swallow it. A real failure (non-2xx, unreachable node)
+    // arrives as a different error class and still propagates.
+    if (!(err instanceof SyntaxError)) throw err
+  }
 }
