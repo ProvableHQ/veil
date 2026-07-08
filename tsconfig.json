@@ -29,5 +29,6 @@
       "@veil/bridge/mcp": ["./packages/bridge/src/mcp/index.ts"]
     },
     "types": ["node"]
-  }
+  },
+  "exclude": ["node_modules", "site", "apps"]
 }
