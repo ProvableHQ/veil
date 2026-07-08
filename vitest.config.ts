@@ -7,8 +7,9 @@ export default defineConfig({
     include: ['packages/*/test/**/*.test.ts', 'examples/*.ts', 'examples/**/*.test.ts'],
     onConsoleLog(log) {
       // Suppress SDK deployment noise: program-existence checks hit /latest_edition
-      // which returns 500 on the devnode, causing retries and status spam.
-      if (/does not exist on the network|Creating deployment|Checking program|Importing program|Adding \S+ to the process|Error - \d+ .* retrying in|No network specified|No endpoint specified|Authorizing \S+\/fee_public|Loading the SnarkVM process|Check program imports|parsing inputs/.test(log)) return false
+      // and /amendment_count which return 500 on the devnode, causing retries and
+      // status spam.
+      if (/does not exist on the network|Creating deployment|Checking program|Importing program|Adding \S+ to the process|Error - \d+ .* retrying in|No network specified|No endpoint specified|Authorizing \S+\/fee_public|Loading the SnarkVM process|Check program imports|parsing inputs|Error finding edition\/amendment/.test(log)) return false
     },
   },
   resolve: {

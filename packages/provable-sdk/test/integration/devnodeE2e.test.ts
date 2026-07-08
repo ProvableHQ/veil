@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { rmSync } from 'node:fs'
 
-import { createLeoClient } from '@veil/leo'
 import { startDevnode, type DevnodeInstance } from '@veil/devnode'
 import { createDevnodeClient } from '@veil/provable-sdk'
 import { createTestClient, http } from '@veil/core'
+
+import { buildLeoProgram } from './leoProject.js'
 
 /**
  * End-to-end devnode flow: build a Leo program, spin up a devnode, deploy,
@@ -26,50 +25,31 @@ const RUN = process.env.VEIL_DEVNODE_INTEGRATION === '1'
 const PROGRAM_NAME = `veil_test_${Math.floor(Date.now() / 1000)}.aleo`
 const PROGRAM_ID_NO_EXT = PROGRAM_NAME.replace(/\.aleo$/, '')
 
+// Leo 4.3 syntax: `fn` + `final` blocks, and an explicit constructor.
 const LEO_SOURCE = `program ${PROGRAM_NAME} {
+    @noupgrade
+    constructor() {}
+
     mapping values: address => u64;
 
-    async transition set_value(public v: u64) -> Future {
-        return finalize_set_value(self.caller, v);
-    }
-
-    async function finalize_set_value(caller: address, v: u64) {
-        Mapping::set(values, caller, v);
+    fn set_value(public v: u64) -> Final {
+        let caller = self.caller;
+        return final {
+            Mapping::set(values, caller, v);
+        };
     }
 }
 `
-
-const PROGRAM_JSON = JSON.stringify(
-  {
-    program: PROGRAM_NAME,
-    version: '0.0.0',
-    description: 'veil e2e devnode test',
-    license: 'MIT',
-  },
-  null,
-  2,
-)
 
 describe.runIf(RUN)('e2e: devnode deploy + execute + read + shutdown', () => {
   it(
     'scaffolds a Leo project, builds it, runs the full devnode flow',
     async () => {
-      // --- 1. Scaffold a Leo project in a tmpdir ---
-      const projectDir = mkdtempSync(join(tmpdir(), 'veil-e2e-'))
+      // --- 1 + 2. Scaffold and build the Leo program ---
+      const { dir: projectDir, compiled: compiledAleo } = await buildLeoProgram(PROGRAM_NAME, LEO_SOURCE)
       let devnode: DevnodeInstance | null = null
 
       try {
-        mkdirSync(join(projectDir, 'src'), { recursive: true })
-        writeFileSync(join(projectDir, 'src', 'main.leo'), LEO_SOURCE)
-        writeFileSync(join(projectDir, 'program.json'), PROGRAM_JSON)
-
-        // --- 2. Build the Leo program → produces build/main.aleo ---
-        const leoClient = createLeoClient({ cwd: projectDir })
-        await leoClient.build()
-        const compiledAleo = readFileSync(
-          join(projectDir, 'build', 'main.aleo'),
-          'utf-8',
-        )
         expect(compiledAleo).toMatch(new RegExp(`^program\\s+${PROGRAM_ID_NO_EXT}\\.aleo;`))
 
         // --- 3. Start a devnode (in-memory, fresh) ---
