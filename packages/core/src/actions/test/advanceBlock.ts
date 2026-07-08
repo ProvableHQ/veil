@@ -31,5 +31,11 @@ export async function advanceBlock(
   client: Client,
   params: AdvanceBlockParameters = {},
 ): Promise<AdvanceBlockReturnType> {
-  await client.request({ method: 'advanceBlock', params: { count: params.count ?? 1 } })
+  const count = params.count ?? 1
+  // The devnode's block-creation endpoint mines exactly one block per request
+  // and ignores any count in the body, so issue one request per block. Blocks
+  // build on one another, so the requests must run sequentially.
+  for (let i = 0; i < count; i++) {
+    await client.request({ method: 'advanceBlock' })
+  }
 }

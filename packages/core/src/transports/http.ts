@@ -206,6 +206,14 @@ function buildUrl(
       return { url: `${base}/shutdown`, httpMethod: 'POST' }
     case 'getMappingKeysValues':
       return { url: `${base}/program/${params?.programId}/mapping/${params?.mapping}?all=true`, httpMethod: 'GET' }
+    case 'snapshot':
+      return {
+        url: `${base}/snapshot`,
+        httpMethod: 'POST',
+        body: JSON.stringify(params?.name != null ? { name: params.name } : {}),
+      }
+    case 'listSnapshots':
+      return { url: `${base}/snapshots`, httpMethod: 'GET' }
 
     default:
       throw new TransportError(`Unknown method: ${method}`)

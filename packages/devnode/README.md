@@ -46,10 +46,18 @@ await devnode.stop()
 timing instead of automatic creation. `restoreDevnode` reloads ledger state
 from a named snapshot, optionally restarting the node afterward.
 
+Taking a snapshot is a live REST call against the running node, not a binary
+subcommand, so it lives on the `@veil/core` test client as `snapshot` (with
+`listSnapshots` to enumerate them) rather than in this package. Capture state
+with `client.snapshot(...)` and reload it here with `restoreDevnode` — the node
+must have been started with `storagePath`, since an in-memory node has nothing
+to snapshot.
+
 ### As test-client actions
 
-`devnodeActions` folds the same functions onto a `@veil/core` client via
-`.extend`, so a single client both drives the node and talks to it.
+`devnodeActions` folds the process-lifecycle functions onto a `@veil/core` test
+client via `.extend`, so a single client drives the node (start/advance/restore)
+and, through the core test actions, snapshots it.
 
 ```ts
 import { createTestClient, http } from '@veil/core'
@@ -59,8 +67,11 @@ const client = createTestClient({
   transport: http('http://127.0.0.1:3030', { network: 'testnet' }),
 }).extend(devnodeActions)
 
-const devnode = await client.startDevnode()
+const devnode = await client.startDevnode({ storagePath: '' })
 await client.advanceDevnode({ numBlocks: 1 })
+const { name } = await client.snapshot({ name: 'before-deploy' }) // core test action
+// ...run something you may want to undo...
+await client.restoreDevnode({ snapshot: name, restart: true })
 await devnode.stop()
 ```
 

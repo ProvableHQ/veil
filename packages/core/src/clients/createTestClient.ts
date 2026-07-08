@@ -17,7 +17,8 @@ export type TestClientConfig = {
 
 /**
  * A base {@link Client} extended with the test actions (`advanceBlock`,
- * `shutdown`, `getMappingKeysValues`) for driving a local devnode.
+ * `shutdown`, `getMappingKeysValues`, `snapshot`, `listSnapshots`) for driving a
+ * local devnode.
  */
 export type TestClient = Client & TestActions
 
@@ -25,8 +26,9 @@ export type TestClient = Client & TestActions
  * Creates a client for controlling a local devnode in tests.
  *
  * Applies when a test against a devnode needs to advance blocks, read raw
- * mapping key/value pairs, or shut the node down — operations a real network does
- * not expose. Its methods hit the local node through the transport.
+ * mapping key/value pairs, snapshot or list ledger state, or shut the node
+ * down — operations a real network does not expose. Its methods hit the local
+ * node through the transport.
  *
  * @param config Transport for the devnode and optional naming.
  * @returns A client carrying every test action.

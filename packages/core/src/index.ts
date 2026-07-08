@@ -158,6 +158,8 @@ export type { TestActions } from './clients/decorators/test.js'
 export { advanceBlock } from './actions/test/advanceBlock.js'
 export { shutdown } from './actions/test/shutdown.js'
 export { getMappingKeysValues } from './actions/test/getMappingKeysValues.js'
+export { snapshot } from './actions/test/snapshot.js'
+export { listSnapshots } from './actions/test/listSnapshots.js'
 
 // Accounts
 export { rpcAccount } from './accounts/rpcAccount.js'
