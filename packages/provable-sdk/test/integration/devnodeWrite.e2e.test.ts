@@ -76,6 +76,34 @@ describe.runIf(RUN)('e2e: devnode write path (deploy, write, execute, reject)', 
   let programA: BuiltLeoProgram | undefined
   let programB: BuiltLeoProgram | undefined
 
+  /**
+   * Advances devnode blocks until `promise` settles or `timeoutMs` elapses.
+   * The devnode auto-produces a block after each broadcast, so confirmation
+   * normally lands without help — advancing while pending keeps the tests
+   * correct if the suite ever switches to manualBlockCreation. The deadline
+   * stops the loop from outliving a failed test and hitting a devnode that
+   * afterAll already shut down.
+   */
+  async function advanceWhilePending<T>(promise: Promise<T>, timeoutMs = 60_000): Promise<T> {
+    let settled = false
+    // Both arms flip the flag; the rejection arm also marks the rejection
+    // handled so the caller observes it via the returned promise.
+    promise.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      },
+    )
+    const deadline = Date.now() + timeoutMs
+    while (!settled && Date.now() < deadline) {
+      await testClient.advanceBlock({ count: 1 })
+      await new Promise((resolve) => setTimeout(resolve, 1_000))
+    }
+    return promise
+  }
+
   beforeAll(async () => {
     // Compile both programs before spending time on the devnode boot.
     programA = await buildLeoProgram(PROGRAM_A, SOURCE_A)
@@ -160,6 +188,47 @@ describe.runIf(RUN)('e2e: devnode write path (deploy, write, execute, reject)', 
 
     const value = await contract.read.values!({ key: account.address })
     expect(value).toBe('7u64')
+  }, 120_000)
+
+  it('executeContract returns the transition outputs directly', async () => {
+    // executeContract waits for on-chain confirmation; advance concurrently
+    // so the test also holds under manual block creation.
+    const result = await advanceWhilePending(
+      walletClient.executeContract({
+        program: PROGRAM_A,
+        function: 'add_one',
+        inputs: ['99u64'],
+      }),
+    )
+
+    // Public output of a pure transition — plaintext, assertable verbatim.
+    expect(result.transactionId).toMatch(/^at1/)
+    expect(result.outputs).toEqual(['100u64'])
+    expect(result.transitions).toHaveLength(1)
+    expect(result.transitions[0]).toMatchObject({
+      program: PROGRAM_A,
+      function: 'add_one',
+      outputs: ['100u64'],
+    })
+  }, 120_000)
+
+  it('executeContract confirms a finalizing transition and the mapping write lands', async () => {
+    const result = await advanceWhilePending(
+      walletClient.executeContract({
+        program: PROGRAM_A,
+        function: 'set_value',
+        inputs: ['99u64'],
+      }),
+    )
+    expect(result.transactionId).toMatch(/^at1/)
+    expect(result.transitions.length).toBeGreaterThan(0)
+
+    const value = await publicClient.readContract({
+      programId: PROGRAM_A,
+      mapping: 'values',
+      key: account.address,
+    })
+    expect(value).toBe('99u64')
   }, 120_000)
 
   it('a finalize assert failure surfaces as rejected transaction status', async () => {

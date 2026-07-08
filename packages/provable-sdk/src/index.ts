@@ -761,6 +761,12 @@ export function generateAccount(): LocalAccount<'privateKey'> {
  * bypasses consensus and skips ZK proof generation, enabling rapid program iteration.
  * The seeded account is pre-funded; both key and socket address can be overridden.
  *
+ * The returned wallet client supports `executeContract`. Its confirmation wait
+ * resolves once the devnode includes the transaction in a block — automatic
+ * after broadcast by default; under `manualBlockCreation` the caller must
+ * advance blocks (e.g. a test client's `advanceBlock`) while the call is
+ * pending.
+ *
  * @example
  * ```ts
  * // Zero-config — uses seeded key and localhost:3030
@@ -786,10 +792,42 @@ export function createDevnodeClient(options?: {
   const keyProvider = new AleoKeyProvider()
   keyProvider.useCache(true)
 
+  // Initialize the wasm consensus heights before any wasm build or parse call
+  // this client makes. Idempotent get-or-init: safe to call per client.
+  getOrInitConsensusVersionTestHeights(DEVNODE_CONSENSUS_HEIGHTS)
+
+  // Created before the proving config so `execute` can broadcast and poll
+  // through the same transport-backed client the caller receives.
+  const publicClient = createPublicClient({ transport })
+
+  /**
+   * Builds an unproven devnode execution transaction. `imports` must already
+   * map program id → source; resolution of dynamic-dispatch import names
+   * happens in `buildTransaction`, not here. Priority fees are always 0 on
+   * the devnode path — a caller-supplied fee is ignored.
+   */
+  const buildExecutionTx = async (opts: {
+    programName: string
+    functionName: string
+    inputs: string[]
+    privateFee?: boolean | undefined
+    imports?: Record<string, string> | undefined
+  }) => {
+    const programManager = new ProgramManager(url, keyProvider, undefined)
+    programManager.setAccount(sdkAccount)
+    return programManager.buildDevnodeExecutionTransaction({
+      programName: opts.programName,
+      functionName: opts.functionName,
+      priorityFee: 0,
+      privateFee: opts.privateFee ?? false,
+      inputs: opts.inputs,
+      ...(opts.imports ? { imports: opts.imports } : {}),
+    })
+  }
+
   const proving: ProvingConfig = {
     mode: 'devnode',
     buildDeployment: async (deployOptions: BuildDeploymentOptions) => {
-      getOrInitConsensusVersionTestHeights(DEVNODE_CONSENSUS_HEIGHTS)
       const programManager = new ProgramManager(url, keyProvider, undefined)
       programManager.setAccount(sdkAccount)
       const tx = await programManager.buildDevnodeDeploymentTransaction({
@@ -800,16 +838,13 @@ export function createDevnodeClient(options?: {
       return JSON.parse(tx.toString())
     },
     buildTransaction: async (txOptions: BuildTransactionOptions) => {
-      getOrInitConsensusVersionTestHeights(DEVNODE_CONSENSUS_HEIGHTS)
-      const programManager = new ProgramManager(url, keyProvider, undefined)
-      programManager.setAccount(sdkAccount)
-
       // Fetch program sources for any call.dynamic targets the caller declared,
       // and recursively include their static imports as well.
       // Use direct REST calls instead of the SDK network client to avoid the
       // /latest_edition endpoint which returns 500 on the devnode.
       let imports: Record<string, string> | undefined
       if (txOptions.imports && txOptions.imports.length > 0) {
+        const networkClient = new ProgramManager(url, keyProvider, undefined).networkClient
         imports = {}
         const queue = [...txOptions.imports]
         const seen = new Set<string>()
@@ -817,7 +852,7 @@ export function createDevnodeClient(options?: {
           const name = queue.shift()!
           if (seen.has(name)) continue
           seen.add(name)
-          const source = await programManager.networkClient.getProgram(name); // automatically throws.
+          const source = await networkClient.getProgram(name); // automatically throws.
           imports[name] = source;
           const importNames = Program.fromString(source).getImports(); // Invoke `wasm` to avoid regex.
           for (const dep of importNames) {
@@ -826,19 +861,41 @@ export function createDevnodeClient(options?: {
         }
       }
 
-      const tx = await programManager.buildDevnodeExecutionTransaction({
+      const tx = await buildExecutionTx({
         programName: txOptions.programName,
         functionName: txOptions.functionName,
-        priorityFee: 0,
-        privateFee: txOptions.privateFee ?? false,
         inputs: txOptions.inputs,
-        ...(imports ? { imports } : {}),
+        privateFee: txOptions.privateFee,
+        imports,
       })
       return JSON.parse(tx.toString())
     },
+    execute: async (execOptions: ExecuteOptions): Promise<RawExecuteResult> => {
+      const tx = await buildExecutionTx({
+        programName: execOptions.programName,
+        functionName: execOptions.functionName,
+        inputs: execOptions.inputs,
+        privateFee: execOptions.privateFee,
+        imports: execOptions.programImports,
+      })
+
+      // Broadcast through the same transport-backed request writeContract uses.
+      const txId = (await publicClient.request({
+        method: 'sendTransaction',
+        params: { transaction: tx.toString() },
+      })) as string
+
+      // The devnode auto-produces a block after broadcast by default; under
+      // manualBlockCreation the caller must advance blocks for this to resolve.
+      const confirmedTx = await waitForConfirmation(publicClient, txId)
+
+      // No decryptor: the devnode account's record outputs stay as ciphertexts,
+      // matching the RPC-account path in executeContract.
+      const { transitions, outputs } = extractTransitions(confirmedTx)
+      return { transactionId: txId, transitions, outputs }
+    },
   }
 
-  const publicClient = createPublicClient({ transport })
   const walletClient = createWalletClient({ account, transport, proving })
 
   return { publicClient, walletClient, account }
