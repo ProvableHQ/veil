@@ -1,7 +1,7 @@
 {
   "name": "@provablehq/shield-swap-sdk",
   "version": "0.4.0",
-  "description": "Typescript SDK for the Shield Swap AMM DEX on Aleo.",
+  "description": "TypeScript SDK for the Shield Swap AMM DEX on Aleo.",
   "license": "MIT",
   "repository": {
     "type": "git",
