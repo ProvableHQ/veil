@@ -138,8 +138,13 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
 
   const tickLowerHint =
     params.tickLowerHint ?? (await pickInsertHint(client, { poolKey: params.poolKey, targetTick: tickLower, program }))
-  const tickUpperHint =
+  const upperPredecessor =
     params.tickUpperHint ?? (await pickInsertHint(client, { poolKey: params.poolKey, targetTick: tickUpper, program }))
+  // The finalize inserts tick_lower before validating the upper hint, so when
+  // no initialized tick sits between the bounds, the upper tick's predecessor
+  // is the just-inserted lower tick — not the predecessor visible on chain.
+  const tickUpperHint =
+    params.tickUpperHint === undefined && tickLower > upperPredecessor ? tickLower : upperPredecessor
 
   const request = formatMintPositionRequest({
     pool: params.poolKey,
