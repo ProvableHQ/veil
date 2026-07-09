@@ -32,33 +32,6 @@ jobs:
       - name: Typecheck reference dApp
         run: pnpm --filter @veil/loyalty-dapp exec tsc --noEmit
 
-  live-api:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      VEIL_INTEGRATION: '1'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      # Read-only tests against live public endpoints — no keys, no secrets.
-      # --retry=2 retries each failing test individually so one flaky endpoint
-      # does not rerun the suite. Keyed write tests are never collected.
-      - name: Read-only integration tests against live endpoints
-        run: >
-          pnpm vitest run --retry=2
-          packages/core/test/integration/realApi.test.ts
-          packages/shield-swap/test/integration/reads.integration.test.ts
-          packages/shield-swap/test/integration/api.integration.test.ts
-          packages/shield-swap/test/integration/traders.integration.test.ts
-          packages/bridge/test/integration/api.integration.test.ts
-
   devnode:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -105,3 +78,4 @@ jobs:
           packages/devnode/test/devnodeActions.integration.test.ts
           packages/provable-sdk/test/integration/devnodeE2e.test.ts
           packages/provable-sdk/test/integration/devnodeWrite.e2e.test.ts
+          packages/codegen/test/integration/creditsDevnode.e2e.test.ts

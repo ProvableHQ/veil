@@ -1,3 +1,5 @@
+import type { Network } from './wallet.js'
+
 /**
  * The granted, decrypted view of a record's contents.
  *
@@ -135,6 +137,19 @@ export type RecordProvider = {
   requestRecords: (params: RequestRecordsParameters) => Promise<OwnedRecord[]>
   /** Update the active account for record scanning */
   setAccount: (account: { viewKey: string }) => void
+  /**
+   * Re-targets record scanning to another network. Optional — the
+   * `switchChain` action calls it when present, so a provider that
+   * implements it keeps `requestRecords` consistent with the client's
+   * network after a chain switch; a provider without it keeps scanning
+   * the network it was created for. May hit the network (re-registration
+   * on the new chain happens lazily on the next scan).
+   *
+   * @param network Network to scan from then on, e.g. `'mainnet'`.
+   * @throws If the provider cannot serve the requested network; the
+   *   `switchChain` action then restores the client's previous network.
+   */
+  switchNetwork?: (network: Network) => void | Promise<void>
 }
 
 /**

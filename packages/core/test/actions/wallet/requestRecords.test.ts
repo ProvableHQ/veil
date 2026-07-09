@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { requestRecords } from '../../../src/actions/wallet/requestRecords.js'
+import { createWalletClient } from '../../../src/clients/createWalletClient.js'
 import { AccountNotFoundError } from '../../../src/errors/errors.js'
 
 describe('requestRecords', () => {
@@ -67,5 +68,33 @@ describe('requestRecords', () => {
   it('throws without account', async () => {
     const client = { account: undefined, request: vi.fn() } as any
     await expect(requestRecords(client, { program: 'token.aleo' })).rejects.toThrow(AccountNotFoundError)
+  })
+
+  it('a provider passed to createWalletClient reaches walletClient.requestRecords', async () => {
+    // Regression: the wallet actions close over the pre-extension base
+    // client, so the provider must be attached before extend() — a
+    // post-extension property is invisible to the action's lookup.
+    const mockRecords = [{ programName: 'token.aleo', tag: '789', spent: false, recordPlaintext: '{}' }]
+    const recordProvider = {
+      setAccount: vi.fn(),
+      requestRecords: vi.fn().mockResolvedValue(mockRecords),
+    }
+    const walletClient = createWalletClient({
+      account: {
+        type: 'local',
+        source: 'privateKey',
+        address: 'aleo1abc',
+        privateKey: 'APrivateKey1abc',
+        viewKey: 'AViewKey1abc',
+        sign: async (bytes: Uint8Array) => bytes,
+        signMessage: async (bytes: Uint8Array) => bytes,
+      } as any,
+      transport: { config: { key: 't', name: 't', type: 'mock', request: vi.fn() }, request: vi.fn() } as any,
+      recordProvider,
+    })
+
+    const result = await walletClient.requestRecords({ program: 'token.aleo' })
+    expect(result).toEqual(mockRecords)
+    expect(recordProvider.requestRecords).toHaveBeenCalledWith({ program: 'token.aleo' })
   })
 })

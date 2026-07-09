@@ -78,9 +78,12 @@ export function createWalletClient(config: WalletClientConfig): WalletClient {
     name,
   })
 
-  const recordProvider = 'recordProvider' in rest ? rest.recordProvider : undefined
+  // Attach the provider to the base client BEFORE extending: the wallet
+  // actions close over this object, so a property set on the extended client
+  // afterwards would be invisible to requestRecords' lookup (prototype chains
+  // point derived → base, not the reverse).
+  ;(client as { recordProvider?: RecordProvider }).recordProvider =
+    'recordProvider' in rest ? rest.recordProvider : undefined
 
-  const walletClient = client.extend(walletActions) as WalletClient
-  ;(walletClient as any).recordProvider = recordProvider
-  return walletClient
+  return client.extend(walletActions) as WalletClient
 }

@@ -1,0 +1,55 @@
+name: Upstream version check
+
+on:
+  schedule:
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The script exits 1 when any stream is stale; capture rather than fail
+      # so the report and the follow-up steps still run.
+      - name: Check upstream versions
+        id: check
+        run: |
+          set +e -o pipefail
+          ./scripts/check-upstream-versions.sh | tee report.txt
+          echo "stale=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: File or update the staleness issue
+        if: steps.check.outputs.stale == '1'
+        run: |
+          gh label create upstream-stale --description "Upstream Aleo dependency has a newer version" --color D93F0B 2>/dev/null || true
+          {
+            echo '`scripts/check-upstream-versions.sh` found newer upstream versions:'
+            echo
+            echo '```'
+            cat report.txt
+            echo '```'
+            echo
+            echo 'An automated update PR has been triggered (`claude-update-deps.yml`).'
+            echo 'To run it by hand instead: `/update-dependencies` in Claude Code.'
+          } > body.md
+          existing=$(gh issue list --label upstream-stale --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file body.md
+          else
+            gh issue create --title "Upstream Aleo dependencies are stale" --body-file body.md --label upstream-stale
+          fi
+      - name: Trigger the Claude update workflow
+        if: steps.check.outputs.stale == '1'
+        run: gh workflow run claude-update-deps.yml --ref "${{ github.ref_name }}"

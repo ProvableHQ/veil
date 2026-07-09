@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { rmSync } from 'node:fs'
 
 import { startDevnode, type DevnodeInstance } from '@veil/devnode'
-import { createDevnodeClient } from '@veil/provable-sdk'
+import { createDevnodeClient, generateAccount } from '@veil/provable-sdk'
 import { createTestClient, getContract, http, parseProgram } from '@veil/core'
 import type { PublicClient, WalletClient, TestClient, LocalAccount } from '@veil/core'
 
@@ -29,11 +29,35 @@ const PROGRAM_A = `veil_wtest_${SUFFIX}.aleo`
 const PROGRAM_B = `veil_dtest_${SUFFIX}.aleo`
 
 // Program A: happy-path mapping write, a pure function with a public output
-// (so executeContract's returned outputs are assertable plaintext), and an
-// on-chain assert that rejects on zero. Leo 4.3 syntax: `fn` + `final` blocks.
-const SOURCE_A = `program ${PROGRAM_A} {
+// (so executeContract's returned outputs are assertable plaintext), an
+// on-chain assert that rejects on zero, and a function returning a record
+// with a nested struct plus a public struct (complex output decoding).
+// Leo 4.3 syntax: `fn` + `final` blocks; structs live outside the program block.
+const SOURCE_A = `struct Point {
+    x: u64,
+    y: u64,
+}
+
+struct Shape {
+    origin: Point,
+    scale: u64,
+}
+
+program ${PROGRAM_A} {
     @noupgrade
     constructor() {}
+
+    record Artifact {
+        owner: address,
+        shape: Shape,
+        tag: field,
+    }
+
+    fn make_artifact(public sx: u64, public sy: u64, public scale: u64) -> (Artifact, public Shape) {
+        let shape: Shape = Shape { origin: Point { x: sx, y: sy }, scale: scale };
+        let art: Artifact = Artifact { owner: self.caller, shape: shape, tag: 7field };
+        return (art, shape);
+    }
 
     mapping values: address => u64;
 
@@ -229,6 +253,69 @@ describe.runIf(RUN)('e2e: devnode write path (deploy, write, execute, reject)', 
       key: account.address,
     })
     expect(value).toBe('99u64')
+  }, 120_000)
+
+  it('executeContract decodes a record with a nested struct and a public struct output', async () => {
+    const result = await advanceWhilePending(
+      walletClient.executeContract({
+        program: PROGRAM_A,
+        function: 'make_artifact',
+        inputs: ['3u64', '4u64', '5u64'],
+      }),
+    )
+    expect(result.transactionId).toMatch(/^at1/)
+    expect(result.outputs).toHaveLength(2)
+
+    // Output 0: the Artifact record, decrypted — owner plus the nested
+    // struct's leaf values surface in the plaintext.
+    const artifact = result.outputs[0]!
+    expect(artifact).toContain(`owner: ${account.address}`)
+    expect(artifact).toContain('x: 3u64')
+    expect(artifact).toContain('y: 4u64')
+    expect(artifact).toContain('scale: 5u64')
+    expect(artifact).toContain('tag: 7field')
+
+    // Output 1: the public Shape struct, plaintext with both nesting levels.
+    const shape = result.outputs[1]!
+    expect(shape).toContain('x: 3u64')
+    expect(shape).toContain('y: 4u64')
+    expect(shape).toContain('scale: 5u64')
+    expect(shape).not.toContain('owner:')
+  }, 120_000)
+
+  it('executeContract spends a private record: transfer_public_to_private then transfer_private', async () => {
+    // Mint a private record to self via the pre-deployed credits.aleo — the
+    // record-creation path that needs no pre-existing records and no scanner
+    // (requestRecords does not work against a devnode).
+    const mint = await advanceWhilePending(
+      walletClient.executeContract({
+        program: 'credits.aleo',
+        function: 'transfer_public_to_private',
+        inputs: [account.address, '1000000u64'],
+      }),
+    )
+    expect(mint.transactionId).toMatch(/^at1/)
+    // The record output is owned by the executing account, so the devnode
+    // client decrypts it to plaintext in the returned outputs.
+    const minted = mint.outputs.find((o) => o.includes('microcredits'))
+    expect(minted, 'expected a decrypted record among the outputs').toBeDefined()
+    expect(minted).toContain('1000000u64')
+
+    // Spend the record privately to a fresh account.
+    const recipient = generateAccount()
+    const spend = await advanceWhilePending(
+      walletClient.executeContract({
+        program: 'credits.aleo',
+        function: 'transfer_private',
+        inputs: [minted!, recipient.address, '400000u64'],
+      }),
+    )
+    expect(spend.transactionId).toMatch(/^at1/)
+    // The sender-owned change record decrypts; the recipient's record is not
+    // decryptable with this view key and is dropped from outputs.
+    const change = spend.outputs.find((o) => o.includes('microcredits'))
+    expect(change, 'expected the decrypted change record among the outputs').toBeDefined()
+    expect(change).toContain('600000u64')
   }, 120_000)
 
   it('a finalize assert failure surfaces as rejected transaction status', async () => {

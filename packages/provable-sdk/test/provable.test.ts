@@ -127,6 +127,23 @@ describe('@veil/provable-sdk', () => {
       expect(account.signMessage).toBeTypeOf('function')
     })
 
+    it('generateMnemonicAccount returns a fresh mnemonic and its derived account', () => {
+      const { mnemonic, account } = aleo.generateMnemonicAccount()
+      expect(mnemonic.split(' ')).toHaveLength(12)
+      expect(account.source).toBe('mnemonic')
+      expect(account.address).toMatch(/^aleo1/)
+      // Re-deriving from the returned mnemonic yields the same account.
+      expect(aleo.mnemonicToAccount(mnemonic).address).toBe(account.address)
+    })
+
+    it('generateMnemonicAccount honors strength and derivation options', () => {
+      const { mnemonic, account } = aleo.generateMnemonicAccount({ strength: 256, index: 1 })
+      expect(mnemonic.split(' ')).toHaveLength(24)
+      expect(aleo.mnemonicToAccount(mnemonic, { index: 1 }).address).toBe(account.address)
+      // A different index derives a different account from the same mnemonic.
+      expect(aleo.mnemonicToAccount(mnemonic, { index: 0 }).address).not.toBe(account.address)
+    })
+
     it('default options match { index: 0, derivation: "standard" }', () => {
       const a = aleo.mnemonicToAccount(SHIELD_VECTORS[0].mnemonic)
       const b = aleo.mnemonicToAccount(SHIELD_VECTORS[0].mnemonic, {
@@ -465,6 +482,21 @@ describe('@veil/provable-sdk', () => {
       await expect(
         walletClient.requestRecords({ program: 'token.aleo' }),
       ).rejects.toThrow(/recordProvider/)
+    })
+
+    it('createRemoteScanner supports network switching', async () => {
+      const scanner = aleo.createRemoteScanner({
+        url: 'https://api.provable.com/scanner',
+        consumerId: 'test-consumer',
+      })
+      expect(scanner.switchNetwork).toBeTypeOf('function')
+
+      // Rejects unsupported networks; accepts a supported one offline (the
+      // rebuild happens locally, registration is deferred to the next scan).
+      await expect(scanner.switchNetwork!('bogusnet')).rejects.toThrow(/mainnet|testnet/)
+      const account = aleo.generateAccount()
+      scanner.setAccount({ viewKey: account.viewKey })
+      await expect(scanner.switchNetwork!('mainnet')).resolves.toBeUndefined()
     })
   })
 })
