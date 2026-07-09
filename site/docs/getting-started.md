@@ -6,23 +6,33 @@ sidebar_position: 2
 
 ## Installation
 
+Every setup starts with the base package.
+
 ```bash
 npm install @provablehq/veil-core
 ```
 
-For React apps:
+A browser dApp adds the React hooks package, which pulls in the wallet
+adapter bridge:
+
 ```bash
 npm install @provablehq/veil-core @provablehq/veil-aleo-react-hooks
 ```
 
-For server-side / Node.js:
+A Node process holding its own private key adds the local-signing package
+instead, which pulls in `@provablehq/sdk`:
+
 ```bash
 npm install @provablehq/veil-core @provablehq/veil-aleo-sdk
 ```
 
-## Quick Start — Read Chain State
+A read-only integration — an explorer, an indexer, a price feed — needs
+only `@provablehq/veil-core`; no account or signing package is required.
 
-No wallet needed. Create a public client and start reading.
+## Read-only client
+
+Create a public client and start reading. No account, wallet, or private
+key is involved anywhere in this path.
 
 ```ts
 import { createPublicClient, http } from '@provablehq/veil-core'
@@ -31,100 +41,121 @@ const client = createPublicClient({
   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
 })
 
-// Get the latest block height
+// Current chain height
 const height = await client.getBlockNumber()
 
-// Read a mapping value
-const totalCards = await client.readMapping({
-  program: 'loyalty_token.aleo',
-  mapping: 'total_cards',
-  key: '0field',
+// Public credits balance
+const balance = await client.getBalance({
+  address: 'aleo1q6qstg8q8shwqf5m6q5fcenuwsdqsvp4hhsgfnx5chzjm3secyzqt9mxm8',
 })
 
-// Get an account balance (credits)
-const balance = await client.getBalance({
-  address: 'aleo1...',
+// A program mapping value — Aleo's public key/value storage
+const raw = await client.readContract({
+  programId: 'credits.aleo',
+  mapping: 'account',
+  key: 'aleo1q6qstg8q8shwqf5m6q5fcenuwsdqsvp4hhsgfnx5chzjm3secyzqt9mxm8',
 })
 ```
 
-## Quick Start — React dApp
+## Browser dApp with a connected wallet
 
-Wrap your app in `VeilProvider`, then use the `useVeilWallet` hook anywhere.
+`VeilProvider` auto-configures every known Aleo wallet adapter (Shield, Leo,
+Puzzle, Fox) and `useVeilWallet` returns a public client that works
+immediately and a wallet client that becomes available once the user
+connects.
 
 ```tsx
 import { VeilProvider, useVeilWallet } from '@provablehq/veil-aleo-react-hooks'
 
-// Root — that's the entire setup
 function Root() {
   return (
-    <VeilProvider network="mainnet">
+    <VeilProvider network="testnet" programs={['my_program.aleo']}>
       <App />
     </VeilProvider>
   )
 }
 
-// Any component
 function App() {
   const { publicClient, walletClient, address, connect } = useVeilWallet()
 
-  // Read — always works
-  const balance = await publicClient.getBalance({ address: 'aleo1...' })
+  async function checkBalance() {
+    // Reads work before a wallet connects.
+    return publicClient.getBalance({ address: 'aleo1...' })
+  }
 
-  // Write — after wallet connects
-  const txId = await walletClient.writeContract({
-    program: 'my_program.aleo',
-    function: 'my_function',
-    inputs: ['arg1', 'arg2'],
-  })
+  async function sendTransfer() {
+    // Writes require a connected wallet — walletClient is undefined until then.
+    if (!walletClient) return
+    return walletClient.writeContract({
+      program: 'my_program.aleo',
+      function: 'transfer',
+      inputs: ['aleo1...', '100u64'],
+    })
+  }
+
+  return (
+    <div>
+      {address ? address : <button onClick={() => connect('Shield Wallet')}>Connect</button>}
+    </div>
+  )
 }
 ```
 
-## Quick Start — Node.js / Server-Side
+`programs` declares which programs the dApp calls; wallets like Shield
+require it at connection time and reject calls to programs not listed there.
 
-Use `@provablehq/veil-aleo-sdk` for local key management without a browser wallet.
+## Node process with a local private key
+
+`loadNetwork` loads the Aleo WASM binaries for one network and returns a
+handle carrying account derivation and proving configuration bound to it.
+The handle's `privateKeyToAccount` and `createProvingConfig` build the
+pieces a wallet client needs to sign, prove, and broadcast without a
+browser wallet in the loop.
 
 ```ts
 import { createPublicClient, createWalletClient, http } from '@provablehq/veil-core'
-import {
-  privateKeyToAccount,
-  createProvingConfig,
-  createLocalScanner,
-} from '@provablehq/veil-aleo-sdk'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 
 const transport = http('https://api.provable.com/v2', { network: 'testnet' })
 
-// Public client for reads
+// Public client for reads — same interface as the read-only path above.
 const publicClient = createPublicClient({ transport })
 
-// Local account from private key
-const account = privateKeyToAccount('APrivateKey1...')
+const aleo = await loadNetwork('testnet')
+const account = aleo.privateKeyToAccount('APrivateKey1...')
 
-// Wallet client with local proving + record scanning
 const walletClient = createWalletClient({
   account,
   transport,
-  proving: createProvingConfig({ mode: 'delegated' }),
-  recordProvider: createLocalScanner({
-    url: 'https://api.provable.com/v2',
+  proving: aleo.createProvingConfig({
+    mode: 'delegated',
+    networkUrl: 'https://api.provable.com/v2',
+    proverUrl: 'https://api.provable.com',
+    consumerId: '<consumer-id>',
+    apiKey: '<api-key>',
+    account,
   }),
 })
 
-// Same interface as the React version
 const txId = await walletClient.writeContract({
   program: 'my_program.aleo',
   function: 'my_function',
-  inputs: ['arg1', 'arg2'],
-})
-
-// Fetch records (uses the configured recordProvider)
-const records = await walletClient.requestRecords({
-  program: 'my_program.aleo',
+  inputs: ['aleo1...', '100u64'],
 })
 ```
 
-## Next Steps
+`mode: 'delegated'` sends the proving work to a remote prover at
+`proverUrl` instead of proving in-process; pass `mode: 'local'` to prove
+with the handle's own WASM binaries instead, dropping `proverUrl`,
+`consumerId`, and `apiKey`. `consumerId` and `apiKey` authenticate against
+the delegated prover and come from registering with the Provable API — see
+the "Registering with the Provable API" section of the repository's
+`AGENTS.md` for the one-time registration call.
 
-- [Public Client](/clients/public-client) — All read actions
-- [Wallet Client](/clients/wallet-client) — Writing to the chain
-- [React Integration](/react/overview) — VeilProvider and hooks
-- [Working with Records](/guides/working-with-records) — Private state on Aleo
+## Next steps
+
+- [`getBalance`](/api/public/getBalance) and the rest of the [Public Client](/clients/public-client) — every read action.
+- [`writeContract`](/api/wallet/writeContract) and the [Wallet Client](/clients/wallet-client) — signing, deploying, and transferring.
+- [React Integration](/react/overview) — `VeilProvider` and `useVeilWallet` in full.
+- [Working with records](/guides/working-with-records) — Aleo's private state model and how it flows into program inputs.
+- [Test Client](/clients/test-client) and [Local devnode](/guides/devnode) — running against a local Aleo node instead of the public API.
