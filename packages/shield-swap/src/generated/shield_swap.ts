@@ -268,16 +268,17 @@ export interface PositionNFT {
   _record: RecordValue
 }
 
-export function toPositionNFT(record: RecordValue): PositionNFT {
+export function toPositionNFT(record: RecordValue | string): PositionNFT {
+  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
   return {
-    owner: record.owner,
-    token_id: litStr(record.fields.token_id?.value, 'field') ?? '',
-    token0_id: litStr(record.fields.token0_id?.value, 'field') ?? '',
-    token1_id: litStr(record.fields.token1_id?.value, 'field') ?? '',
-    pool: litStr(record.fields.pool?.value, 'field') ?? '',
-    tick_lower: Number((record.fields.tick_lower?.value ?? 0n) as bigint) ?? 0,
-    tick_upper: Number((record.fields.tick_upper?.value ?? 0n) as bigint) ?? 0,
-    _record: record,
+    owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
+    token_id: litStr(fields.token_id?.value, 'field') ?? '',
+    token0_id: litStr(fields.token0_id?.value, 'field') ?? '',
+    token1_id: litStr(fields.token1_id?.value, 'field') ?? '',
+    pool: litStr(fields.pool?.value, 'field') ?? '',
+    tick_lower: Number((fields.tick_lower?.value ?? 0n) as bigint) ?? 0,
+    tick_upper: Number((fields.tick_upper?.value ?? 0n) as bigint) ?? 0,
+    _record: record as unknown as RecordValue,
   }
 }
 
@@ -292,16 +293,17 @@ export interface SwapComplianceRecord {
   _record: RecordValue
 }
 
-export function toSwapComplianceRecord(record: RecordValue): SwapComplianceRecord {
+export function toSwapComplianceRecord(record: RecordValue | string): SwapComplianceRecord {
+  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
   return {
-    owner: record.owner,
-    swap_id: litStr(record.fields.swap_id?.value, 'field') ?? '',
-    token_in: litStr(record.fields.token_in?.value, 'field') ?? '',
-    token_out: litStr(record.fields.token_out?.value, 'field') ?? '',
-    request: record.fields.request?.value as unknown as SwapRequest ?? {} as unknown as SwapRequest,
-    caller: record.fields.caller?.value as string ?? '',
-    blinded_address: record.fields.blinded_address?.value as string ?? '',
-    _record: record,
+    owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
+    swap_id: litStr(fields.swap_id?.value, 'field') ?? '',
+    token_in: litStr(fields.token_in?.value, 'field') ?? '',
+    token_out: litStr(fields.token_out?.value, 'field') ?? '',
+    request: fields.request?.value as unknown as SwapRequest ?? {} as unknown as SwapRequest,
+    caller: fields.caller?.value as string ?? '',
+    blinded_address: fields.blinded_address?.value as string ?? '',
+    _record: record as unknown as RecordValue,
   }
 }
 
@@ -314,14 +316,15 @@ export interface MultiHopSwapComplianceRecord {
   _record: RecordValue
 }
 
-export function toMultiHopSwapComplianceRecord(record: RecordValue): MultiHopSwapComplianceRecord {
+export function toMultiHopSwapComplianceRecord(record: RecordValue | string): MultiHopSwapComplianceRecord {
+  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
   return {
-    owner: record.owner,
-    swap_id: litStr(record.fields.swap_id?.value, 'field') ?? '',
-    request: record.fields.request?.value as unknown as SwapMultiHopRequest ?? {} as unknown as SwapMultiHopRequest,
-    caller: record.fields.caller?.value as string ?? '',
-    blinded_address: record.fields.blinded_address?.value as string ?? '',
-    _record: record,
+    owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
+    swap_id: litStr(fields.swap_id?.value, 'field') ?? '',
+    request: fields.request?.value as unknown as SwapMultiHopRequest ?? {} as unknown as SwapMultiHopRequest,
+    caller: fields.caller?.value as string ?? '',
+    blinded_address: fields.blinded_address?.value as string ?? '',
+    _record: record as unknown as RecordValue,
   }
 }
 
@@ -336,16 +339,17 @@ export interface MintComplianceRecord {
   _record: RecordValue
 }
 
-export function toMintComplianceRecord(record: RecordValue): MintComplianceRecord {
+export function toMintComplianceRecord(record: RecordValue | string): MintComplianceRecord {
+  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
   return {
-    owner: record.owner,
-    token_id: litStr(record.fields.token_id?.value, 'field') ?? '',
-    token0_id: litStr(record.fields.token0_id?.value, 'field') ?? '',
-    token1_id: litStr(record.fields.token1_id?.value, 'field') ?? '',
-    request: record.fields.request?.value as unknown as MintPositionRequest ?? {} as unknown as MintPositionRequest,
-    caller: record.fields.caller?.value as string ?? '',
-    recipient: record.fields.recipient?.value as string ?? '',
-    _record: record,
+    owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
+    token_id: litStr(fields.token_id?.value, 'field') ?? '',
+    token0_id: litStr(fields.token0_id?.value, 'field') ?? '',
+    token1_id: litStr(fields.token1_id?.value, 'field') ?? '',
+    request: fields.request?.value as unknown as MintPositionRequest ?? {} as unknown as MintPositionRequest,
+    caller: fields.caller?.value as string ?? '',
+    recipient: fields.recipient?.value as string ?? '',
+    _record: record as unknown as RecordValue,
   }
 }
 

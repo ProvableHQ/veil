@@ -156,7 +156,7 @@ function generateRecordInterface(record: RecordDef): string[] {
 function mapperFieldLines(
   fields: readonly { name: string; type: Plaintext }[],
   container: string,
-  varName: string,
+  fieldsVar: string,
 ): string[] {
   const lines: string[] = []
   for (const field of fields) {
@@ -172,9 +172,9 @@ function mapperFieldLines(
           `Cannot derive struct name for code generation.`
         )
       }
-      lines.push(`    ${field.name}: ${varName}.fields.${field.name}?.value as unknown as ${structName} ?? {} as unknown as ${structName},`)
+      lines.push(`    ${field.name}: ${fieldsVar}.${field.name}?.value as unknown as ${structName} ?? {} as unknown as ${structName},`)
     } else {
-      const rawAccess = `${varName}.fields.${field.name}?.value`
+      const rawAccess = `${fieldsVar}.${field.name}?.value`
       const expr = plaintextFieldExpr(rawAccess, field.type)
       lines.push(`    ${field.name}: ${expr} ?? ${plaintextDefault(field.type)},`)
     }
@@ -182,15 +182,29 @@ function mapperFieldLines(
   return lines
 }
 
+/**
+ * Emits a `const fields = …` guard so a mapper tolerates an undecryptable
+ * output. Record outputs owned by another party (e.g. a compliance record
+ * minted to an authority) arrive as ciphertext strings, and every record
+ * output arrives as ciphertext on the wallet path — the mapper then returns
+ * defaulted fields with the raw ciphertext preserved on `_record`, rather
+ * than dereferencing `.fields` on a string and throwing.
+ */
+function fieldsGuardLine(varName: string): string {
+  return `  const fields = (typeof ${varName} === 'object' && ${varName} !== null ? ${varName}.fields : undefined) ?? {}`
+}
+
 function generateRecordMapper(record: RecordDef): string[] {
   const name = recordName(record)
   const lines: string[] = []
 
-  lines.push(`export function to${name}(record: RecordValue): ${name} {`)
+  // Accepts a ciphertext string for records the caller cannot decrypt.
+  lines.push(`export function to${name}(record: RecordValue | string): ${name} {`)
+  lines.push(fieldsGuardLine('record'))
   lines.push(`  return {`)
-  lines.push(`    owner: record.owner,`)
-  lines.push(...mapperFieldLines(record.fields, name, 'record'))
-  lines.push(`    _record: record,`)
+  lines.push(`    owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,`)
+  lines.push(...mapperFieldLines(record.fields, name, 'fields'))
+  lines.push(`    _record: record as unknown as RecordValue,`)
   lines.push(`  }`)
   lines.push(`}`)
   return lines
@@ -202,9 +216,12 @@ function generateStructMapper(struct: StructDef): string[] {
   const name = struct.path[struct.path.length - 1] ?? 'UnknownStruct'
   const lines: string[] = []
 
+  // Struct values (mapping reads, nested struct fields) are always readable
+  // plaintext — never ciphertext — so no tolerance guard: a shape mismatch
+  // should still fail loudly rather than return a silently-zeroed struct.
   lines.push(`export function to${name}(value: RecordValue): ${name} {`)
   lines.push(`  return {`)
-  lines.push(...mapperFieldLines(struct.fields, name, 'value'))
+  lines.push(...mapperFieldLines(struct.fields, name, 'value.fields'))
   lines.push(`  }`)
   lines.push(`}`)
   return lines

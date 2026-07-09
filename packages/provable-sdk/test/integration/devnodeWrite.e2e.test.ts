@@ -311,11 +311,17 @@ describe.runIf(RUN)('e2e: devnode write path (deploy, write, execute, reject)', 
       }),
     )
     expect(spend.transactionId).toMatch(/^at1/)
-    // The sender-owned change record decrypts; the recipient's record is not
-    // decryptable with this view key and is dropped from outputs.
+    // The sender-owned change record decrypts to plaintext; the recipient's
+    // record cannot be decrypted with this view key and passes through as a
+    // `record1…` ciphertext, keeping its output position rather than being
+    // dropped.
     const change = spend.outputs.find((o) => o.includes('microcredits'))
     expect(change, 'expected the decrypted change record among the outputs').toBeDefined()
     expect(change).toContain('600000u64')
+    expect(
+      spend.outputs.some((o) => o.startsWith('record1')),
+      'expected the undecryptable recipient record to pass through as ciphertext',
+    ).toBe(true)
   }, 120_000)
 
   it('a finalize assert failure surfaces as rejected transaction status', async () => {
