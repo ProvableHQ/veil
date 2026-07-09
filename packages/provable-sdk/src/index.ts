@@ -47,7 +47,7 @@ import {
   extractTransitions,
 } from '@veil/core'
 import type { Decryptor } from '@veil/core'
-import { mnemonicToHDKey, type AleoDerivationId } from './mnemonic.js'
+import { generateMnemonic, mnemonicToHDKey, type AleoDerivationId } from './mnemonic.js'
 
 export {
   BLS12377HDKey,
@@ -99,6 +99,27 @@ export interface AleoSdk {
     mnemonic: string,
     options?: { index?: number; derivation?: AleoDerivationId },
   ): LocalAccount<'mnemonic'>
+
+  /**
+   * Generates a fresh BIP39 mnemonic and derives its Aleo account in one call.
+   * Pure and local — no network access. The caller MUST persist the returned
+   * mnemonic; it is the only way to re-derive the account.
+   *
+   * @param options.strength Entropy bits: 128 (12 words, default) or 256 (24 words).
+   * @param options.index Account index on the derivation path. Defaults to 0.
+   * @param options.derivation Derivation path id. Defaults to `'standard'`
+   *   (`m/44'/683'`); pass `'legacy'` for pre-registration `m/44'/0'` wallets.
+   * @returns The generated mnemonic and the account derived from it.
+   *
+   * @example
+   * const { mnemonic, account } = aleo.generateMnemonicAccount()
+   * // store `mnemonic` safely; `account.address` is ready to use
+   */
+  generateMnemonicAccount(options?: {
+    strength?: 128 | 256
+    index?: number
+    derivation?: AleoDerivationId
+  }): { mnemonic: string; account: LocalAccount<'mnemonic'> }
 
   /** Creates a new random Aleo account. */
   generateAccount(): LocalAccount<'privateKey'>
@@ -223,6 +244,16 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       from_seed_unchecked: (seed: Uint8Array) => InstanceType<SdkModule['PrivateKey']>
     }).from_seed_unchecked(hd.key).to_string()
     return { ...privateKeyToAccount(privateKey), source: 'mnemonic' }
+  }
+
+  function generateMnemonicAccount(options?: {
+    strength?: 128 | 256
+    index?: number
+    derivation?: AleoDerivationId
+  }): { mnemonic: string; account: LocalAccount<'mnemonic'> } {
+    const mnemonic = generateMnemonic(options?.strength ?? 128)
+    const { strength: _strength, ...derivationOptions } = options ?? {}
+    return { mnemonic, account: mnemonicToAccount(mnemonic, derivationOptions) }
   }
 
   function generateAccount(): LocalAccount<'privateKey'> {
@@ -702,6 +733,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     network,
     privateKeyToAccount,
     mnemonicToAccount,
+    generateMnemonicAccount,
     generateAccount,
     decryptRecord,
     verifySignature,
