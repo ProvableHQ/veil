@@ -1,6 +1,6 @@
 {
   "name": "@provablehq/veil-aleo-bridges",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Veil client for swaps between Aleo and other chains (SOL, ETH, BTC, etc.).",
   "license": "MIT",
