@@ -114,6 +114,15 @@ export { collect, type CollectParameters, type CollectReturnType } from './actio
 export { burn, type BurnParameters, type BurnReturnType } from './actions/liquidity/burn.js'
 export { pickInsertHint, type PickInsertHintParameters } from './utils/tick-hints.js'
 
+// Local pool/tick key derivation (BHP256 struct hash via the optional
+// @provablehq/sdk peer) — address a pool or tick without a network round trip.
+export {
+  derivePoolKey,
+  deriveTickKey,
+  type DerivePoolKeyParameters,
+  type DeriveTickKeyParameters,
+} from './utils/keys.js'
+
 // Pure strategy primitives (no I/O): prices, impact, valuation, fee APR.
 export {
   poolPrice,

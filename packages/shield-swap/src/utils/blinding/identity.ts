@@ -1,6 +1,7 @@
 import type { Client } from '@provablehq/veil-core'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 import { isBlindedAddressUsed } from '../../actions/reads/validation.js'
+import { loadSdk } from '../sdk.js'
 
 /**
  * Domain separator for deriving a blinding factor from a view key and counter.
@@ -22,31 +23,6 @@ export const BLINDING_FACTOR_DOMAIN =
  */
 export const CLAIM_OR_SWAP_DOMAIN =
   '11835072102227764468342786961086432175093421716844963782363567713633field'
-
-// The SDK (WASM) is an optional peer: dapps talking to a privacy-preserving
-// wallet never need it — the wallet derives with its own view key via
-// `derived` InputRequests. Only local-account callers (bots, agents, e2e)
-// derive here, so the import is lazy: loading @provablehq/shield-swap-sdk never touches WASM;
-// the first derivation call does.
-type AleoSdk = typeof import('@provablehq/sdk')
-
-let sdkPromise: Promise<AleoSdk> | undefined
-
-async function loadSdk(): Promise<AleoSdk> {
-  if (!sdkPromise) {
-    sdkPromise = import('@provablehq/sdk').catch((cause) => {
-      // Reset so a later call retries after the user installs the package.
-      sdkPromise = undefined
-      throw new Error(
-        'Local blinded-address derivation requires @provablehq/sdk. ' +
-          'Run `pnpm add @provablehq/sdk`, or use a wallet account — ' +
-          'a privacy-preserving wallet derives wallet-side without it.',
-        { cause },
-      )
-    })
-  }
-  return sdkPromise
-}
 
 /**
  * Converts a view key literal to the scalar form the derivation consumes.
