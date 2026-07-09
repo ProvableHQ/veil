@@ -26,17 +26,17 @@ describe('shieldSwapActions', () => {
 
   it('threads the client-level program default; per-call still overrides', async () => {
     const programs: string[] = []
-    const client = baseClient(() => null).extend(shieldSwapActions({ program: 'shield_swap_v0_0_1.aleo' }))
+    const client = baseClient(() => null).extend(shieldSwapActions({ program: 'shield_swap_alt.aleo' }))
     // Intercept via a second extension to observe the underlying request:
     // simpler — spy through the transport by re-extending with a probe.
     const probe = baseClient((method, params) => {
       programs.push((params as { programId?: string })?.programId ?? '')
       return null
-    }).extend(shieldSwapActions({ program: 'shield_swap_v0_0_1.aleo' }))
+    }).extend(shieldSwapActions({ program: 'shield_swap_alt.aleo' }))
 
     await probe.getPool({ poolKey: '1field' })
     await probe.getPool({ poolKey: '1field', program: 'shield_swap_v9.aleo' })
-    expect(programs).toEqual(['shield_swap_v0_0_1.aleo', 'shield_swap_v9.aleo'])
+    expect(programs).toEqual(['shield_swap_alt.aleo', 'shield_swap_v9.aleo'])
     expect(client).toBeTruthy()
   })
 

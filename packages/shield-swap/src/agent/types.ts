@@ -15,9 +15,10 @@ export type { AgentToolSchema, AgentTool, AgentToolHandler } from '@veil/core/ag
  * @property api The DEX API client for off-chain reads (pools, routes, tokens,
  *   public balances). API tools are available only when this is set.
  * @property program shield_swap program id the chain tools default to.
- *   Defaults to `DEFAULT_PROGRAM` (the live deployment).
- * @property includeWrites Include the money-moving write tools (swap, claim,
- *   mint, increase liquidity, create pool). Off by default — an agent gets
+ *   Defaults to `DEFAULT_PROGRAM`.
+ * @property includeWrites Include the money-moving write tools (create pool,
+ *   swap, claim, mint, increase/decrease liquidity, collect, burn). Off by
+ *   default — an agent gets
  *   read-only tools unless the caller opts in. Requires `client`. Write tools target
  *   the local-signer path: they auto-select records and auto-fetch the
  *   dynamic-dispatch program sources, so the agent supplies only amounts and

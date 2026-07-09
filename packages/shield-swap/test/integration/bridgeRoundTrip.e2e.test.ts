@@ -45,7 +45,7 @@ const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://api.provable.com/scanner'
 
 // The DEX leg's network and deployment (testnet today).
 const DEX_NETWORK = (process.env.VEIL_DEX_NETWORK ?? 'testnet') as 'mainnet' | 'testnet'
-const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap_v0_0_2.aleo'
+const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap_v3.aleo'
 
 // The bridge legs' route endpoints — the e2e wallets.
 const ETH_ADDR = '0x734C0a5AB55885974cEDb9D6ff71d8E8448c7375'
@@ -159,7 +159,7 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
     }
   }, 90_000)
 
-  it('swaps on Shield Swap: pick a live pool, privatize, swapPrivate, claim', async () => {
+  it('swaps on Shield Swap: pick a live pool, privatize, swap, claim', async () => {
     // Discover a pool the account can trade: wrappers on both tokens,
     // non-zero public balance for the input, and live liquidity.
     const pools = await dex.api.getPools({ limit: 50 })
@@ -211,7 +211,7 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
     }
 
     // The encapsulated private swap: request, chain computes, claim.
-    const handle = await dex.swapPrivate({
+    const handle = await dex.swap({
       poolKey: pool!.key,
       tokenInId: tokenIn,
       amountIn,
@@ -221,7 +221,7 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
     })
     expect(handle.swapId).toMatch(/field$/)
 
-    const claim = await dex.claimSwapOutputPrivate({ handle, imports })
+    const claim = await dex.claimSwapOutput({ handle, imports })
     expect(claim.transactionId).toMatch(/^at1/)
     expect(claim.amountOut > 0n).toBe(true)
   }, TX_TIMEOUT * 3)

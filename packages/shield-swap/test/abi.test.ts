@@ -3,12 +3,12 @@ import { readFileSync } from 'node:fs'
 import { parseAbi } from '@veil/core'
 
 describe('pinned shield_swap ABI', () => {
-  it('parses and contains the V1 entrypoints', () => {
-    const abiPath = new URL('../codegen/abi/shield_swap_v0_0_2.json', import.meta.url)
+  it('parses and contains the v3 entrypoints', () => {
+    const abiPath = new URL('../codegen/abi/shield_swap_v3.json', import.meta.url)
     const raw = JSON.parse(readFileSync(abiPath, 'utf-8'))
     const abi = parseAbi(raw)
     const fns = new Set(abi.functions.map((f) => f.name))
-    for (const f of ['swap_private', 'claim_swap_output_private', 'create_pool', 'mint_private', 'increase_liquidity_private']) {
+    for (const f of ['swap', 'claim_swap_output', 'create_pool', 'mint', 'increase_liquidity', 'decrease_liquidity', 'collect', 'burn']) {
       expect(fns.has(f)).toBe(true)
     }
     const maps = new Set(abi.mappings.map((m) => m.name))

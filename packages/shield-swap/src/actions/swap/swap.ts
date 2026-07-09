@@ -5,16 +5,15 @@ import {
   type InputRequest,
   type TransactionInput,
 } from '@veil/core'
-import { getPool } from '../reads/getPool.js'
-import { getSlot } from '../reads/getSlot.js'
 import { nextBlindedIdentity, viewKeyToScalar } from '../../utils/blinding/identity.js'
 import { selectTokenRecord } from '../../utils/records.js'
+import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
 import { resolveSwapParams, getDeadline, generateSwapNonce } from '../../utils/params.js'
 import { blindingFactorIssueRequest, blindedAddressIssueRequest } from '../../utils/blinding/requests.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 
 /**
- * Parameters for {@link swapPrivate}.
+ * Parameters for {@link swap}.
  *
  * @property poolKey Pool key field literal to trade against.
  * @property tokenInId Token id (field literal) being sold. Must be one of
@@ -47,10 +46,9 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
  *   callees statically — pass the involved token programs' sources when
  *   proving locally or via a service that requires them.
- * @property program shield_swap program override. Defaults to `DEFAULT_PROGRAM`
- *   (the live shield_swap deployment).
+ * @property program shield_swap program override. Defaults to `DEFAULT_PROGRAM`.
  */
-export type SwapPrivateParameters = {
+export type SwapParameters = {
   poolKey: string
   tokenInId: string
   amountIn: bigint
@@ -69,7 +67,7 @@ export type SwapPrivateParameters = {
 /**
  * The serializable thread between a private swap's two transactions.
  *
- * `swapPrivate` returns it; `claimSwapOutputPrivate` consumes it. Plain JSON
+ * `swap` returns it; `claimSwapOutput` consumes it. Plain JSON
  * on purpose — persist it (disk, DB) so a claim can happen after a crash or
  * from another process.
  *
@@ -105,16 +103,16 @@ export interface SwapHandle {
 }
 
 /** The {@link SwapHandle} a swap request resolves to — persist it; the claim consumes it. */
-export type SwapPrivateReturnType = SwapHandle
+export type SwapReturnType = SwapHandle
 
 /**
  * Requests a private swap — phase one of the two-transaction lifecycle.
  *
  * Resolves the intent against live pool state, obtains a single-use blinded
  * identity and a token record (see the two signer paths below), submits the
- * `swap_private` transition, and returns a serializable {@link SwapHandle}.
+ * `swap` transition, and returns a serializable {@link SwapHandle}.
  * The chain computes the outcome at finalize; read it with `getSwapOutput`
- * and collect it with `claimSwapOutputPrivate`.
+ * and collect it with `claimSwapOutput`.
  *
  * Signer paths:
  * - **Local account** — derives the blinding identity from the account's view
@@ -138,20 +136,18 @@ export type SwapPrivateReturnType = SwapHandle
  *   account is used without `tokenRecord`; and on transport/proving errors.
  *
  * @example
- * const handle = await swapPrivate(client, {
+ * const handle = await swap(client, {
  *   poolKey, tokenInId, amountIn: 10n ** 18n, tokenInProgram: 'ethx_5a095e.aleo',
  * })
  * // …await finalize, then:
  * // const out = await getSwapOutput(client, { swapId: handle.swapId! })
  */
-export async function swapPrivate(client: Client, params: SwapPrivateParameters): Promise<SwapPrivateReturnType> {
+export async function swap(client: Client, params: SwapParameters): Promise<SwapReturnType> {
   const program = params.program ?? DEFAULT_PROGRAM
 
   // Live pool state drives direction, dust validation, and the price bound.
-  const pool = await getPool(client, { poolKey: params.poolKey, program })
-  if (!pool) throw new Error(`Pool ${params.poolKey} does not exist on ${program}`)
-  const slot = await getSlot(client, { poolKey: params.poolKey, program })
-  if (!slot) throw new Error(`Pool ${params.poolKey} has no slot state on ${program}`)
+  const pool = await requirePool(client, params.poolKey, program)
+  const slot = await requireSlot(client, params.poolKey, program)
 
   const resolved = resolveSwapParams({
     pool,
@@ -166,8 +162,7 @@ export async function swapPrivate(client: Client, params: SwapPrivateParameters)
   const deadline = await getDeadline(client, { offsetBlocks: params.deadlineOffsetBlocks })
   const nonce = params.nonce ?? generateSwapNonce()
 
-  const account = (client as { account?: { type: string; address: string; viewKey?: string } }).account
-  if (!account) throw new Error('swapPrivate requires a wallet client with an account')
+  const account = requireAccount(client, 'swap')
   const isLocal = account.type === 'local'
 
   // Shared tail of the positional input list (everything after the three
@@ -213,7 +208,7 @@ export async function swapPrivate(client: Client, params: SwapPrivateParameters)
 
     const result = await executeContract(client, {
       program,
-      function: 'swap_private',
+      function: 'swap',
       imports: params.imports,
       inputs: [recordInput, identity.blindingFactor, identity.blindedAddress, ...tail],
     })
@@ -221,7 +216,7 @@ export async function swapPrivate(client: Client, params: SwapPrivateParameters)
     // The transition's first output is the public swap id.
     const swapId = result.outputs[0]
     if (!swapId?.endsWith('field')) {
-      throw new Error(`Unexpected swap_private output shape: ${JSON.stringify(result.outputs)}`)
+      throw new Error(`Unexpected swap output shape: ${JSON.stringify(result.outputs)}`)
     }
 
     return {
@@ -251,7 +246,7 @@ export async function swapPrivate(client: Client, params: SwapPrivateParameters)
 
   const transactionId = await writeContract(client, {
     program,
-    function: 'swap_private',
+    function: 'swap',
       imports: params.imports ? Object.keys(params.imports) : undefined,
     inputs: [params.tokenRecord, ...blindingInputs, ...tail],
   })

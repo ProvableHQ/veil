@@ -32,6 +32,7 @@ jobs:
       - name: Typecheck reference dApp
         run: pnpm --filter @veil/loyalty-dapp exec tsc --noEmit
 
+  # Core devnode plumbing (deploy / execute / records / snapshots / codegen).
   devnode:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -39,37 +40,10 @@ jobs:
       VEIL_DEVNODE_INTEGRATION: '1'
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: ./.github/actions/setup-devnode
         with:
-          version: 10
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Cache Aleo toolchain
-        id: toolchain
-        uses: actions/cache@v4
-        with:
-          path: ~/.aleo-tools
-          key: aleo-tools-${{ env.LEO_RELEASE }}-${{ env.DEVNODE_RELEASE }}
-      - name: Install leo and aleo-devnode
-        if: steps.toolchain.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ~/.aleo-tools
-          curl -fsSL -o /tmp/leo.zip \
-            "https://github.com/ProvableHQ/leo/releases/download/${LEO_RELEASE}/${LEO_RELEASE}-x86_64-unknown-linux-gnu.zip"
-          unzip -o /tmp/leo.zip -d ~/.aleo-tools
-          curl -fsSL -o /tmp/devnode.zip \
-            "https://github.com/ProvableHQ/aleo-devnode/releases/download/${DEVNODE_RELEASE}/aleo-devnode-${DEVNODE_RELEASE}-x86_64-unknown-linux-gnu.zip"
-          unzip -o /tmp/devnode.zip -d ~/.aleo-tools
-          chmod +x ~/.aleo-tools/leo ~/.aleo-tools/aleo-devnode
-      - name: Add toolchain to PATH
-        run: echo "$HOME/.aleo-tools" >> "$GITHUB_PATH"
-      - name: Toolchain versions
-        run: |
-          leo --version
-          aleo-devnode --version
+          leo-release: ${{ env.LEO_RELEASE }}
+          devnode-release: ${{ env.DEVNODE_RELEASE }}
       # Every devnode suite binds 127.0.0.1:3030 — run the files strictly
       # sequentially so two devnodes never race for the port.
       - name: Devnode e2e tests
@@ -79,3 +53,22 @@ jobs:
           packages/provable-sdk/test/integration/devnodeE2e.test.ts
           packages/provable-sdk/test/integration/devnodeWrite.e2e.test.ts
           packages/codegen/test/integration/creditsDevnode.e2e.test.ts
+
+  # Shield Swap AMM v3 lifecycle — heavier (deploys the ~240KB AMM), so it runs
+  # as its own job, in parallel with the core devnode job on a separate runner.
+  devnode-shield-swap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VEIL_DEVNODE_INTEGRATION: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-devnode
+        with:
+          leo-release: ${{ env.LEO_RELEASE }}
+          devnode-release: ${{ env.DEVNODE_RELEASE }}
+      - name: Shield Swap AMM lifecycle e2e
+        run: >
+          pnpm vitest run --no-file-parallelism
+          packages/shield-swap/test/integration/devnodeLifecycle.actions.e2e.test.ts
+          packages/shield-swap/test/integration/devnodeLifecycle.generated.e2e.test.ts

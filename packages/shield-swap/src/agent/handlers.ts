@@ -8,12 +8,15 @@ import { getSwapOutput } from '../actions/reads/getSwapOutput.js'
 import { isPoolInitialized, getFeeToTickSpacing } from '../actions/reads/validation.js'
 import { getPrivateBalances } from '../utils/records.js'
 import { getBalances } from '../utils/balances.js'
-import { swapPrivate } from '../actions/swap/swapPrivate.js'
-import { claimSwapOutputPrivate } from '../actions/swap/claimSwapOutputPrivate.js'
-import type { SwapHandle } from '../actions/swap/swapPrivate.js'
+import { swap } from '../actions/swap/swap.js'
+import { claimSwapOutput } from '../actions/swap/claimSwapOutput.js'
+import type { SwapHandle } from '../actions/swap/swap.js'
 import { createPool } from '../actions/liquidity/createPool.js'
-import { mintPrivate } from '../actions/liquidity/mintPrivate.js'
-import { increaseLiquidityPrivate } from '../actions/liquidity/increaseLiquidityPrivate.js'
+import { mint } from '../actions/liquidity/mint.js'
+import { increaseLiquidity } from '../actions/liquidity/increaseLiquidity.js'
+import { decreaseLiquidity } from '../actions/liquidity/decreaseLiquidity.js'
+import { collect } from '../actions/liquidity/collect.js'
+import { burn } from '../actions/liquidity/burn.js'
 
 /**
  * Recursively converts `bigint` values to strings so a tool result is safe to
@@ -109,7 +112,7 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
     shield_swap_swap: async (i) => {
       const imports = await fetchImports(client, [i.tokenInProgram as string, i.tokenOutProgram as string])
       return jsonSafe(
-        await swapPrivate(client, {
+        await swap(client, {
           poolKey: i.poolKey as string,
           tokenInId: i.tokenInId as string,
           amountIn: BigInt(i.amountIn as string),
@@ -125,13 +128,13 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
     shield_swap_claim: async (i) => {
       const imports = await fetchImports(client, [i.tokenInProgram as string, i.tokenOutProgram as string])
       // The handle keeps its own program; do not override it with the config default.
-      return jsonSafe(await claimSwapOutputPrivate(client, { handle: i.handle as unknown as SwapHandle, imports }))
+      return jsonSafe(await claimSwapOutput(client, { handle: i.handle as unknown as SwapHandle, imports }))
     },
 
     shield_swap_mint: async (i) => {
       const imports = await fetchImports(client, [i.token0Program as string, i.token1Program as string])
       return jsonSafe(
-        await mintPrivate(client, {
+        await mint(client, {
           poolKey: i.poolKey as string,
           tickLower: i.tickLower as number,
           tickUpper: i.tickUpper as number,
@@ -148,7 +151,7 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
     shield_swap_increase_liquidity: async (i) => {
       const imports = await fetchImports(client, [i.token0Program as string, i.token1Program as string])
       return jsonSafe(
-        await increaseLiquidityPrivate(client, {
+        await increaseLiquidity(client, {
           poolKey: i.poolKey as string,
           amount0Desired: BigInt(i.amount0Desired as string),
           amount1Desired: BigInt(i.amount1Desired as string),
@@ -159,5 +162,38 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
         }),
       )
     },
+
+    shield_swap_decrease_liquidity: async (i) =>
+      jsonSafe(
+        await decreaseLiquidity(client, {
+          poolKey: i.poolKey as string,
+          liquidityToRemove: BigInt(i.liquidityToRemove as string),
+          amount0Min: i.amount0Min !== undefined ? BigInt(i.amount0Min as string) : undefined,
+          amount1Min: i.amount1Min !== undefined ? BigInt(i.amount1Min as string) : undefined,
+          program,
+        }),
+      ),
+
+    shield_swap_collect: async (i) => {
+      const imports = await fetchImports(client, [i.token0Program as string, i.token1Program as string])
+      return jsonSafe(
+        await collect(client, {
+          poolKey: i.poolKey as string,
+          amount0Requested: BigInt(i.amount0Requested as string),
+          amount1Requested: BigInt(i.amount1Requested as string),
+          imports,
+          program,
+        }),
+      )
+    },
+
+    shield_swap_burn: async (i) =>
+      jsonSafe(
+        await burn(client, {
+          poolKey: i.poolKey as string,
+          positionTokenId: i.positionTokenId as string | undefined,
+          program,
+        }),
+      ),
   }
 }

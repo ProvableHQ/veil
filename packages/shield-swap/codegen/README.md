@@ -19,6 +19,4 @@ pnpm regen-abi      # refetch program bytecode + ABI into abi/
 pnpm regen-openapi  # refetch the OpenAPI spec + regenerate src/api/openapi.ts
 ```
 
-Bindings are generated from `shield_swap_v0_0_2.aleo` (the live deployment).
-`shield_swap_v0_0_1.aleo` is pinned for reference (the previous version;
-regenerating its ABI needs `leo` ≥ 4.3 for its `constructor` dialect).
+Bindings are generated from `shield_swap_v3.aleo`.

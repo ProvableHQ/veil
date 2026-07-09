@@ -41,4 +41,5 @@ jobs:
           packages/shield-swap/test/integration/api.integration.test.ts
           packages/shield-swap/test/integration/traders.integration.test.ts
           packages/shield-swap/test/integration/balances.integration.test.ts
+          packages/shield-swap/test/integration/swapExistingPools.e2e.test.ts
           packages/bridge/test/integration/api.integration.test.ts

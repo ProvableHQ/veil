@@ -90,7 +90,7 @@ export function getSqrtPriceAtTick(tick: number): bigint {
 /**
  * Rounds a tick down to the nearest multiple of the pool's tick spacing.
  *
- * Pure and local. Position bounds passed to `mint_private` MUST be
+ * Pure and local. Position bounds passed to `mint` MUST be
  * spacing-aligned or the contract rejects them.
  *
  * @param tick Tick index to align.

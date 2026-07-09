@@ -4,10 +4,10 @@ A viem-shaped TS/JS client for the `shield_swap` AMM on Aleo. The client provide
 viem-style actions for the following:
 
 ### Executing DEX smart-contract functions
-Actions for executing the functions of the `shield_swap_v0_0_2.aleo` contract.
-- **Private swaps** — Runs the `swap_private` --> `claim_swap_output_private` flows.
+Actions for executing the functions of the `shield_swap_v3.aleo` contract.
+- **Private swaps** — Runs the `swap` --> `claim_swap_output` flows.
 - **Liquidity** — create pools (via `create_pool`), 
-mint concentrated-liquidity positions (`mint_private`) and add to them (`increase_liquidity_private`).
+mint concentrated-liquidity positions (`mint`) and add to them (`increase_liquidity`).
 
 ### Reading the DEX contract + DEX API
 Actions for:
@@ -104,10 +104,10 @@ per-action "local vs wallet" notes under [Swapping](#swapping) and
 
 Either way, `shieldSwapActions` adds the DEX methods to the client. On-chain
 reads and writes go directly on the client (`client.getPool`,
-`client.swapPrivate`), and the off-chain DEX API is namespaced under
+`client.swap`), and the off-chain DEX API is namespaced under
 `client.api` — so a call site always shows whether a value came from the chain
-or the service. By default everything targets the live deployment
-(`shield_swap_v0_0_2.aleo`) and the Provable dev API; override either with
+or the service. By default everything targets `shield_swap_v3.aleo` and the
+Provable dev API; override either with
 `shieldSwapActions({ program, api: { baseUrl } })`.
 
 ## Pools and tokens
@@ -180,7 +180,7 @@ const route = await client.api.getRoute({
 const expectedOut = BigInt(Math.floor(Number(route.data.estimated_amount_out ?? 0) * 10 ** tokenOutDecimals))
 ```
 
-`swapPrivate` returns a plain serializable handle — the key to claiming your
+`swap` returns a plain serializable handle — the key to claiming your
 output. Persist it if there's any chance your process dies before the claim.
 How you supply the input record differs by signer.
 
@@ -192,7 +192,7 @@ claim identity from your view key. The returned handle is complete — it alread
 carries `swapId` and `blindedAddress`.
 
 ```ts
-const handle = await client.swapPrivate({
+const handle = await client.swap({
   poolKey,
   tokenInId: tokenIn,
   amountIn,                                   // raw atomic amount, bigint
@@ -212,7 +212,7 @@ slots itself. The returned handle therefore comes back **without** `swapId` or
 `blindedAddress`; see the wallet claim case below for recovering them.
 
 ```ts
-const handle = await client.swapPrivate({
+const handle = await client.swap({
   poolKey,
   tokenInId: tokenIn,
   amountIn,
@@ -241,7 +241,7 @@ The handle already carries `swapId` and `blindedAddress`, so the claim just
 works:
 
 ```ts
-const { amountOut, amountRemaining } = await client.claimSwapOutputPrivate({
+const { amountOut, amountRemaining } = await client.claimSwapOutput({
   handle,
   imports,
 })
@@ -260,7 +260,7 @@ blinded address itself, so you never hold it.
 handle.swapId = swapIdFromConfirmedTx
 handle.blindedAddress = blindedAddressFromConfirmedTx
 
-const { amountOut, amountRemaining } = await client.claimSwapOutputPrivate({
+const { amountOut, amountRemaining } = await client.claimSwapOutput({
   handle,
   imports,
 })
@@ -285,7 +285,7 @@ Auto-selects the two token records from `token0Program`/`token1Program`.
 ```ts
 const slot = await client.getSlot({ poolKey })
 
-const { positionTokenId } = await client.mintPrivate({
+const { positionTokenId } = await client.mint({
   poolKey,
   tickLower: slot.tick - slot.tick_spacing * 10,
   tickUpper: slot.tick + slot.tick_spacing * 10,
@@ -304,7 +304,7 @@ Drop the two `*Program` fields and pass `token0Record`/`token1Record` as
 resolves each against its own records.
 
 ```ts
-const { positionTokenId } = await client.mintPrivate({
+const { positionTokenId } = await client.mint({
   poolKey,
   tickLower: slot.tick - slot.tick_spacing * 10,
   tickUpper: slot.tick + slot.tick_spacing * 10,
@@ -318,7 +318,7 @@ const { positionTokenId } = await client.mintPrivate({
 
 ### Add to a position
 
-The tick range is fixed at mint; `increaseLiquidityPrivate` adds funds to an
+The tick range is fixed at mint; `increaseLiquidity` adds funds to an
 existing position without changing it.
 
 #### Local key
@@ -326,7 +326,7 @@ existing position without changing it.
 Auto-selects the position NFT (by `poolKey`) and the two token records.
 
 ```ts
-await client.increaseLiquidityPrivate({
+await client.increaseLiquidity({
   poolKey,
   amount0Desired,
   amount1Desired,
@@ -342,12 +342,12 @@ Supply the position and both token records as `record` InputRequests. The
 position NFT is a record of the shield_swap program itself:
 
 ```ts
-await client.increaseLiquidityPrivate({
+await client.increaseLiquidity({
   poolKey,
   amount0Desired,
   amount1Desired,
   imports,
-  positionRecord: { type: 'record', program: 'shield_swap_v0_0_2.aleo', recordname: 'PositionNFT', filters: { pool: { eq: poolKey } } },
+  positionRecord: { type: 'record', program: 'shield_swap_v3.aleo', recordname: 'PositionNFT', filters: { pool: { eq: poolKey } } },
   token0Record: { type: 'record', program: token0Program, recordname: 'Token', filters: { amount: { gte: `${amount0Desired}u128` } } },
   token1Record: { type: 'record', program: token1Program, recordname: 'Token', filters: { amount: { gte: `${amount1Desired}u128` } } },
 })
@@ -473,9 +473,7 @@ Typically it's one of these, not all three: `regen-openapi` for an API change,
 you only edited `codegen/veil.config.json`). To retarget a deployment, point
 `veil.config.json` at another program's ABI — or set its `programId` to stamp a
 different `PROGRAM_ID` while keeping the current shape — then `generate`.
-The default `regen-abi` (v0_0_2) works on a standard `leo`; regenerating the
-`shield_swap_v0_0_1` reference needs `leo` ≥ 4.3 for its `constructor` dialect. [`codegen/README.md`](./codegen/README.md) has the
-layout details.
+[`codegen/README.md`](./codegen/README.md) has the layout details.
 
 ## Integration tests
 
@@ -503,7 +501,7 @@ ALEO_CONSUMER_ID=...        # delegated proving + record scanning — write tier
 | [`api.integration.test.ts`](./test/integration/api.integration.test.ts) | read-only | The off-chain `ApiClient` — pools, tokens, routes, balances, OHLCV. |
 | [`balances.integration.test.ts`](./test/integration/balances.integration.test.ts) | write | The composed balance view — public balances from the API joined with private balances decoded from the account's records. Needs the account because private balances live in its records. |
 | [`poolCreation.integration.test.ts`](./test/integration/poolCreation.integration.test.ts) | write | Creates a pool on testnet: finds a token pair and a registered fee tier, calls `createPool`, then polls `isPoolInitialized` until the finalize propagates. If the pair already has a pool at every tier tried, it confirms the contract rejects the duplicate instead. |
-| [`e2e.test.ts`](./test/integration/e2e.test.ts) | write | The full private-swap lifecycle — airdrop, privatize records, ensure a pool, `swapPrivate`, read the output, `claimSwapOutputPrivate`. |
+| [`e2e.test.ts`](./test/integration/e2e.test.ts) | write | The full private-swap lifecycle — airdrop, privatize records, ensure a pool, `swap`, read the output, `claimSwapOutput`. |
 | [`bridgeRoundTrip.e2e.test.ts`](./test/integration/bridgeRoundTrip.e2e.test.ts) | write | The cross-product chain with `@veil/bridge`: verify the inbound bridge route, swap on the DEX, bridge the proceeds out. Additionally gated by `VEIL_BRIDGE_E2E=1` — the bridge leg spends mainnet ALEO. |
 
 Run one file, or a set:
@@ -521,5 +519,5 @@ VEIL_INTEGRATION=1 pnpm exec vitest run packages/shield-swap/test/integration
 
 A test that reports as skipped is missing a required variable for its tier. The
 write tier spends real testnet funds on each run. Optional overrides:
-`VEIL_DEX_PROGRAM` (defaults to `shield_swap_v0_0_2.aleo`), `ALEO_DPS_URL`, and
+`VEIL_DEX_PROGRAM` (defaults to `shield_swap_v3.aleo`), `ALEO_DPS_URL`, and
 `ALEO_RSS_URL`.

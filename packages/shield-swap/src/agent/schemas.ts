@@ -184,7 +184,7 @@ export const createPoolSchema: AgentToolSchema = {
   },
 }
 
-/** Declares the `shield_swap_swap` write tool — phase one of a private swap; returns the handle `shield_swap_claim` consumes (backed by `swapPrivate`). */
+/** Declares the `shield_swap_swap` write tool — phase one of a private swap; returns the handle `shield_swap_claim` consumes (backed by `swap`). */
 export const swapSchema: AgentToolSchema = {
   name: 'shield_swap_swap',
   description:
@@ -206,7 +206,7 @@ export const swapSchema: AgentToolSchema = {
   },
 }
 
-/** Declares the `shield_swap_claim` write tool — phase two of a private swap; collects the finalized output as private records (backed by `claimSwapOutputPrivate`). */
+/** Declares the `shield_swap_claim` write tool — phase two of a private swap; collects the finalized output as private records (backed by `claimSwapOutput`). */
 export const claimSchema: AgentToolSchema = {
   name: 'shield_swap_claim',
   description:
@@ -223,7 +223,7 @@ export const claimSchema: AgentToolSchema = {
   },
 }
 
-/** Declares the `shield_swap_mint` write tool — mints a concentrated-liquidity position over a tick range (backed by `mintPrivate`). */
+/** Declares the `shield_swap_mint` write tool — mints a concentrated-liquidity position over a tick range (backed by `mint`). */
 export const mintSchema: AgentToolSchema = {
   name: 'shield_swap_mint',
   description:
@@ -244,7 +244,7 @@ export const mintSchema: AgentToolSchema = {
   },
 }
 
-/** Declares the `shield_swap_increase_liquidity` write tool — deepens the caller's existing position without changing its tick range (backed by `increaseLiquidityPrivate`). */
+/** Declares the `shield_swap_increase_liquidity` write tool — deepens the caller's existing position without changing its tick range (backed by `increaseLiquidity`). */
 export const increaseLiquiditySchema: AgentToolSchema = {
   name: 'shield_swap_increase_liquidity',
   description: 'Add funds to your existing position in a pool (tick range unchanged).',
@@ -258,6 +258,59 @@ export const increaseLiquiditySchema: AgentToolSchema = {
       token1Program: { type: 'string', description: "token1's wrapper program." },
     },
     required: ['poolKey', 'amount0Desired', 'amount1Desired', 'token0Program', 'token1Program'],
+  },
+}
+
+/** Declares the `shield_swap_decrease_liquidity` write tool — removes liquidity from the caller's position into `tokens_owed` without moving tokens (backed by `decreaseLiquidity`). */
+export const decreaseLiquiditySchema: AgentToolSchema = {
+  name: 'shield_swap_decrease_liquidity',
+  description:
+    'Remove liquidity from your existing position. No tokens move — the withdrawn principal and ' +
+    'accrued fees settle into the position, collectable with shield_swap_collect.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      poolKey: { type: 'string', description: 'Pool key field literal.' },
+      liquidityToRemove: { type: 'string', description: 'Liquidity units to remove, raw (u128) string.' },
+      amount0Min: { type: 'string', description: 'Minimum token0 credited (slippage guard, u128 string). Optional.' },
+      amount1Min: { type: 'string', description: 'Minimum token1 credited (u128 string). Optional.' },
+    },
+    required: ['poolKey', 'liquidityToRemove'],
+  },
+}
+
+/** Declares the `shield_swap_collect` write tool — withdraws a position's owed tokens as private records (backed by `collect`). */
+export const collectSchema: AgentToolSchema = {
+  name: 'shield_swap_collect',
+  description:
+    "Withdraw a position's owed tokens as private records to your address. Amounts are capped " +
+    'on chain at the owed balance.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      poolKey: { type: 'string', description: 'Pool key field literal.' },
+      amount0Requested: { type: 'string', description: 'token0 to withdraw, raw base units (u128) string.' },
+      amount1Requested: { type: 'string', description: 'token1 to withdraw, raw base units (u128) string.' },
+      token0Program: { type: 'string', description: "token0's wrapper program." },
+      token1Program: { type: 'string', description: "token1's wrapper program." },
+    },
+    required: ['poolKey', 'amount0Requested', 'amount1Requested', 'token0Program', 'token1Program'],
+  },
+}
+
+/** Declares the `shield_swap_burn` write tool — closes a fully-drained position by consuming its PositionNFT (backed by `burn`). */
+export const burnSchema: AgentToolSchema = {
+  name: 'shield_swap_burn',
+  description:
+    'Close a position by burning its NFT. The position must first be drained to zero liquidity ' +
+    '(shield_swap_decrease_liquidity) and zero owed tokens (shield_swap_collect).',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      poolKey: { type: 'string', description: 'Pool key field literal.' },
+      positionTokenId: { type: 'string', description: 'The position token id to burn. Optional on the local path.' },
+    },
+    required: ['poolKey'],
   },
 }
 
@@ -289,4 +342,7 @@ export const writeToolSchemas: AgentToolSchema[] = [
   claimSchema,
   mintSchema,
   increaseLiquiditySchema,
+  decreaseLiquiditySchema,
+  collectSchema,
+  burnSchema,
 ]

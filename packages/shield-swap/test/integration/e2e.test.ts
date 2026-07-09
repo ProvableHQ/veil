@@ -3,21 +3,19 @@ import { loadNetwork } from '@veil/provable-sdk'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { getProgram } from '@veil/core'
 import { parseTokenRecordInfo } from '../../src/utils/records.js'
-import { SwapOutputNotFinalizedError } from '../../src/actions/swap/claimSwapOutputPrivate.js'
+import { SwapOutputNotFinalizedError } from '../../src/actions/swap/claimSwapOutput.js'
 
 /**
  * The headline e2e: the private-swap lifecycle against the REAL testnet —
- * airdrop → privatize records → ensure pool → swapPrivate → getSwapOutput →
- * claimSwapOutputPrivate.
+ * airdrop → privatize records → ensure pool → swap → getSwapOutput →
+ * claimSwapOutput.
  *
  * Requirements (skipped when absent):
  *   VEIL_INTEGRATION=1
  *   VEIL_E2E_PRIVATE_KEY   funded testnet account (credits for fees)
  *   ALEO_DPS_API_KEY, ALEO_CONSUMER_ID   delegated proving credentials
  * Optional: ALEO_DPS_URL, ALEO_RSS_URL, and VEIL_DEX_PROGRAM to pick the
- * deployment under test — defaults to shield_swap_v0_0_2.aleo (the live
- * venue the API serves); set shield_swap_v0_0_1.aleo to run against the
- * previous deployment. Both share entrypoints, struct layouts, and domains.
+ * program under test — defaults to shield_swap_v3.aleo.
  */
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
 const DPS_API_KEY = process.env.ALEO_DPS_API_KEY
@@ -27,7 +25,7 @@ const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!DPS_API_K
 const NETWORK_URL = 'https://api.provable.com/v2'
 const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove/testnet'
 const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://api.provable.com/scanner'
-const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap_v0_0_2.aleo'
+const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap_v3.aleo'
 const TX_TIMEOUT = 420_000
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -61,7 +59,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     token1?: { address: string; program: string; decimals: number }
     imports?: Record<string, string>
     poolKey?: string
-    handle?: Awaited<ReturnType<typeof client.swapPrivate>>
+    handle?: Awaited<ReturnType<typeof client.swap>>
   } = {}
 
   it('funds the account via the async airdrop when balances are empty', async () => {
@@ -82,7 +80,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   }, TX_TIMEOUT)
 
   it('picks a token pair and fetches wrapper program sources (dyn-dispatch imports)', async () => {
-    // Pick a live pool (v0_0_2) that satisfies BOTH swap preconditions:
+    // Pick a live pool that satisfies BOTH swap preconditions:
     //   1. the account can fund both tokens — the swap privatizes public balance
     //      into records, so a token the account holds zero of would revert
     //      transfer_public_to_private; and
@@ -165,7 +163,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
 
   it('ensures a pool exists for the pair (API discovery, create, or prior run)', async () => {
     // 1) API discovery — authoritative where the API serves this program
-    //    (v0_0_2 today): find a live pool for the chosen pair. Skip when the
+    //    find a live pool for the chosen pair. Skip when the
     //    token-pick step already locked in a specific pool with liquidity —
     //    re-discovering would grab the pair's first initialized pool, which is
     //    often an empty one at a different fee tier.
@@ -182,9 +180,9 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
       }
     }
 
-    // 2) Create it (fresh deployment, e.g. v0_0_2).
+    // 2) Create it.
     if (!state.poolKey) {
-      const fee = 100 // registered on both deployments (verified in reads phase)
+      const fee = 100 // registered on chain (verified in reads phase)
       try {
         const created = await client.createPool({
           token0ProgramId: state.token0!.address,
@@ -221,7 +219,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     const inMeta = tokenIn === state.token0!.address ? state.token0! : state.token1!
     const amountIn = 10n ** BigInt(inMeta.decimals) / 10n // 0.1 token
 
-    state.handle = await client.swapPrivate({
+    state.handle = await client.swap({
       poolKey: state.poolKey!,
       tokenInId: tokenIn,
       amountIn,
@@ -244,7 +242,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   }, TX_TIMEOUT)
 
   it('claims the output as private records and the entry is consumed', async () => {
-    const res = await client.claimSwapOutputPrivate({ handle: state.handle!, imports: state.imports })
+    const res = await client.claimSwapOutput({ handle: state.handle!, imports: state.imports })
     expect(res.transactionId).toMatch(/^at1/)
     expect(res.amountOut > 0n).toBe(true)
 
@@ -258,7 +256,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     expect(consumed, 'swap_outputs entry should be consumed after claim').toBe(true)
 
     // Claiming again is the documented non-retryable absence.
-    await expect(client.claimSwapOutputPrivate({ handle: state.handle! })).rejects.toThrow(
+    await expect(client.claimSwapOutput({ handle: state.handle! })).rejects.toThrow(
       SwapOutputNotFinalizedError,
     )
   }, TX_TIMEOUT)

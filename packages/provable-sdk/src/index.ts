@@ -956,11 +956,14 @@ export function createDevnodeClient(options?: {
       const confirmedTx = await waitForConfirmation(publicClient, txId)
 
       // Self-custody decryptor: records owned by the devnode account surface
-      // as plaintext; foreign records are dropped, matching the local path.
+      // as plaintext; records owned by someone else (e.g. a compliance record
+      // minted to an authority) pass through as ciphertext rather than being
+      // dropped, so the outputs keep their transition positions — positional
+      // consumers like the generated contract bindings depend on that.
       const accountViewKey = StaticViewKey.from_string(account.viewKey)
       const decryptor: Decryptor = (ciphertext: string) => {
         const ct = StaticRecordCiphertext.fromString(ciphertext)
-        return ct.isOwner(accountViewKey) ? ct.decrypt(accountViewKey).toString() : null
+        return ct.isOwner(accountViewKey) ? ct.decrypt(accountViewKey).toString() : ciphertext
       }
       const { transitions, outputs } = extractTransitions(confirmedTx, decryptor)
       return { transactionId: txId, transitions, outputs }

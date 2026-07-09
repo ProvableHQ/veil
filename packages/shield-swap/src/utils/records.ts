@@ -1,4 +1,4 @@
-import { requestRecords, parseRecordPlaintextLoose, type Client, type OwnedRecord } from '@veil/core'
+import { requestRecords, parseRecordPlaintextLoose, type Client, type InputRequest, type OwnedRecord } from '@veil/core'
 
 /**
  * A token record's decoded essentials, alongside the record it came from.
@@ -131,7 +131,7 @@ export type SelectPositionNFTParameters = {
  * @property tickLower Lower bound tick of the position's range.
  * @property tickUpper Upper bound tick of the position's range.
  * @property record The owning record — pass its `recordPlaintext` as
- *   `increase_liquidity_private`'s first input.
+ *   `increase_liquidity`'s first input.
  */
 export interface PositionNFTInfo {
   tokenId: string
@@ -190,6 +190,59 @@ export async function selectPositionNFT(client: Client, params: SelectPositionNF
       (params.tokenId ? ` with token_id ${params.tokenId}` : '') +
       ' — mint a position first.',
   )
+}
+
+/**
+ * A PositionNFT resolved to the record plaintext a local-signer call passes.
+ *
+ * @property plaintext The PositionNFT record plaintext literal.
+ * @property tickLower The position's lower tick, present only when the record
+ *   was auto-selected (a caller-supplied literal carries no decoded bounds).
+ * @property tickUpper The position's upper tick, present only when
+ *   auto-selected.
+ */
+export type ResolvedPosition = {
+  plaintext: string
+  tickLower?: number
+  tickUpper?: number
+}
+
+/**
+ * Resolves a PositionNFT to its record plaintext for a local-signer call.
+ *
+ * Rejects `InputRequest`s (the local path passes literals, never wallet
+ * requests), then returns the caller's plaintext as-is or auto-selects the
+ * pool's first unspent position. Auto-selection also yields the position's tick
+ * bounds; a caller-supplied literal does not, since it is not decoded here.
+ *
+ * Hits the network only when auto-selecting (a record scan).
+ *
+ * @param client A Veil wallet client (local account).
+ * @param params The optional record, and the program/pool/token id used to
+ *   auto-select when no record is given.
+ * @returns The record plaintext, plus tick bounds when auto-selected.
+ * @throws When `positionRecord` is an `InputRequest`; and, when auto-selecting,
+ *   when no matching unspent position exists.
+ *
+ * @example
+ * const { plaintext } = await resolvePositionRecord(client, { program, poolKey })
+ */
+export async function resolvePositionRecord(
+  client: Client,
+  params: { positionRecord?: string | InputRequest; program: string; poolKey: string; tokenId?: string },
+): Promise<ResolvedPosition> {
+  if (typeof params.positionRecord === 'object') {
+    throw new Error('Local accounts cannot use InputRequests — pass a record plaintext literal instead')
+  }
+  if (typeof params.positionRecord === 'string') {
+    return { plaintext: params.positionRecord }
+  }
+  const pos = await selectPositionNFT(client, {
+    program: params.program,
+    poolKey: params.poolKey,
+    tokenId: params.tokenId,
+  })
+  return { plaintext: pos.record.recordPlaintext, tickLower: pos.tickLower, tickUpper: pos.tickUpper }
 }
 
 /**

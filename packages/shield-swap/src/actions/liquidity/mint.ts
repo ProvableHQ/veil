@@ -1,10 +1,9 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@veil/core'
-import { getPool } from '../reads/getPool.js'
 import { selectTokenRecord } from '../../utils/records.js'
+import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
 import { generateFieldNonce } from '../../utils/params.js'
 import { roundTickToSpacing } from '../../utils/tick-math.js'
 import { pickInsertHint } from '../../utils/tick-hints.js'
-import { getSlot } from '../reads/getSlot.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 
 /**
@@ -32,7 +31,7 @@ export function formatMintPositionRequest(req: {
 }
 
 /**
- * Parameters for {@link mintPrivate}.
+ * Parameters for {@link mint}.
  *
  * @property poolKey Pool to provide liquidity to.
  * @property tickLower Lower bound of the range. Rounded down to the pool's
@@ -61,7 +60,7 @@ export function formatMintPositionRequest(req: {
  *   proving locally or via a service that requires them.
  * @property program shield_swap program override.
  */
-export type MintPrivateParameters = {
+export type MintParameters = {
   poolKey: string
   tickLower: number
   tickUpper: number
@@ -90,7 +89,7 @@ export type MintPrivateParameters = {
  *   confirmation.
  * @property transactionId The mint transaction's id.
  */
-export type MintPrivateReturnType = {
+export type MintReturnType = {
   positionTokenId?: string
   transactionId: string
 }
@@ -100,10 +99,10 @@ export type MintPrivateReturnType = {
  *
  * Deposits both tokens privately (records in, change back), aligns the tick
  * range to the pool's spacing, computes insert hints, and submits
- * `mint_private`. The PositionNFT record the transition returns is the key
+ * `mint`. The PositionNFT record the transition returns is the key
  * to all later liquidity operations — the scanner will pick it up.
  *
- * Signer paths mirror `swapPrivate`: local accounts auto-select records and
+ * Signer paths mirror `swap`: local accounts auto-select records and
  * pass literals; wallet accounts must supply both `tokenNRecord` inputs and
  * get the recipient defaulted to their address.
  *
@@ -118,19 +117,17 @@ export type MintPrivateReturnType = {
  *   (wallet); and on transport/proving errors.
  *
  * @example
- * const { positionTokenId } = await mintPrivate(client, {
+ * const { positionTokenId } = await mint(client, {
  *   poolKey, tickLower: -62400, tickUpper: -60000,
  *   amount0Desired: 10n ** 18n, amount1Desired: 2_000_000n,
  *   token0Program: 'ethx_5a095e.aleo', token1Program: 'usdc_5a095e.aleo',
  * })
  */
-export async function mintPrivate(client: Client, params: MintPrivateParameters): Promise<MintPrivateReturnType> {
+export async function mint(client: Client, params: MintParameters): Promise<MintReturnType> {
   const program = params.program ?? DEFAULT_PROGRAM
 
-  const pool = await getPool(client, { poolKey: params.poolKey, program })
-  if (!pool) throw new Error(`Pool ${params.poolKey} does not exist on ${program}`)
-  const slot = await getSlot(client, { poolKey: params.poolKey, program })
-  if (!slot) throw new Error(`Pool ${params.poolKey} has no slot state on ${program}`)
+  const pool = await requirePool(client, params.poolKey, program)
+  const slot = await requireSlot(client, params.poolKey, program)
 
   // Align the range to the pool's spacing; an empty range would revert.
   const tickLower = roundTickToSpacing(params.tickLower, slot.tick_spacing)
@@ -141,8 +138,13 @@ export async function mintPrivate(client: Client, params: MintPrivateParameters)
 
   const tickLowerHint =
     params.tickLowerHint ?? (await pickInsertHint(client, { poolKey: params.poolKey, targetTick: tickLower, program }))
-  const tickUpperHint =
+  const upperPredecessor =
     params.tickUpperHint ?? (await pickInsertHint(client, { poolKey: params.poolKey, targetTick: tickUpper, program }))
+  // The finalize inserts tick_lower before validating the upper hint, so when
+  // no initialized tick sits between the bounds, the upper tick's predecessor
+  // is the just-inserted lower tick — not the predecessor visible on chain.
+  const tickUpperHint =
+    params.tickUpperHint === undefined && tickLower > upperPredecessor ? tickLower : upperPredecessor
 
   const request = formatMintPositionRequest({
     pool: params.poolKey,
@@ -156,8 +158,7 @@ export async function mintPrivate(client: Client, params: MintPrivateParameters)
     tickUpperHint,
   })
 
-  const account = (client as { account?: { type: string; address: string } }).account
-  if (!account) throw new Error('mintPrivate requires a wallet client with an account')
+  const account = requireAccount(client, 'mint')
   const isLocal = account.type === 'local'
   const nonce = params.nonce ?? generateFieldNonce()
   const recipient = params.recipient ?? account.address
@@ -175,13 +176,13 @@ export async function mintPrivate(client: Client, params: MintPrivateParameters)
 
     const result = await executeContract(client, {
       program,
-      function: 'mint_private',
+      function: 'mint',
       imports: params.imports,
       inputs: [nonce, record0, record1, recipient, request, pool.token0, pool.token1],
     })
     const positionTokenId = result.outputs[0]
     if (!positionTokenId?.endsWith('field')) {
-      throw new Error(`Unexpected mint_private output shape: ${JSON.stringify(result.outputs)}`)
+      throw new Error(`Unexpected mint output shape: ${JSON.stringify(result.outputs)}`)
     }
     return { positionTokenId, transactionId: result.transactionId }
   }
@@ -200,7 +201,7 @@ export async function mintPrivate(client: Client, params: MintPrivateParameters)
     pool.token0,
     pool.token1,
   ]
-  const transactionId = await writeContract(client, { program, function: 'mint_private',
+  const transactionId = await writeContract(client, { program, function: 'mint',
       imports: params.imports ? Object.keys(params.imports) : undefined, inputs })
   return { positionTokenId: undefined, transactionId }
 }

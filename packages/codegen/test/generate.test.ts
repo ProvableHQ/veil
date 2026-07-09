@@ -262,11 +262,13 @@ describe('generate', () => {
   describe('record mappers', () => {
     it('generates toX mapper function with _record', () => {
       const output = generate({ abi: minimalAbi })
-      expect(output).toContain('export function toToken(record: RecordValue): Token {')
-      expect(output).toContain('owner: record.owner')
-      expect(output).toContain('record.fields.amount?.value as bigint')
-      expect(output).toContain('record.fields.active?.value as boolean')
-      expect(output).toContain('_record: record,')
+      expect(output).toContain('export function toToken(record: RecordValue | string): Token {')
+      // owner is read through the type guard so a ciphertext string is tolerated.
+      expect(output).toContain("owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,")
+      expect(output).toContain('const fields = (')
+      expect(output).toContain('fields.amount?.value as bigint')
+      expect(output).toContain('fields.active?.value as boolean')
+      expect(output).toContain('_record: record as unknown as RecordValue,')
     })
   })
 
@@ -403,7 +405,7 @@ describe('generate', () => {
       expect(output).toContain('  points: bigint')
       // tier is u8 → number
       expect(output).toContain('  tier: number')
-      expect(output).toContain('export function toLoyaltyCard(record: RecordValue): LoyaltyCard {')
+      expect(output).toContain('export function toLoyaltyCard(record: RecordValue | string): LoyaltyCard {')
       expect(output).toContain('export type MintCardInputs = {')
       expect(output).toContain('export type MintCardOutputs = [LoyaltyCard, FutureValue]')
       expect(output).toContain('export type CardExistsMappingKey = string')
@@ -426,7 +428,7 @@ describe('generate', () => {
       expect(output).toContain('  reward_type: number')
       // amount is u64 → bigint
       expect(output).toContain('  amount: bigint')
-      expect(output).toContain('export function toRewardVoucher(record: RecordValue): RewardVoucher {')
+      expect(output).toContain('export function toRewardVoucher(record: RecordValue | string): RewardVoucher {')
       expect(output).toContain('export type RedeemPointsForVoucherInputs = {')
     })
 
@@ -619,12 +621,12 @@ describe('generate', () => {
       const source = generate({ abi: tokenAbi })
 
       // points is u64 → direct bigint cast
-      expect(source).toContain('record.fields.points?.value as bigint')
+      expect(source).toContain('fields.points?.value as bigint')
       // tier is u8 → Number() with inner ?? guard to prevent NaN for missing fields
-      expect(source).toContain('Number((record.fields.tier?.value ?? 0n) as bigint)')
+      expect(source).toContain('Number((fields.tier?.value ?? 0n) as bigint)')
       // field literals go through litStr so bigint runtime values are
       // canonicalized to the suffixed string form
-      expect(source).toContain("litStr(record.fields.card_id?.value, 'field')")
+      expect(source).toContain("litStr(fields.card_id?.value, 'field')")
     })
 
     it('generated typed interface uses named params and typed returns (not raw arrays)', () => {
@@ -665,7 +667,7 @@ describe('generate', () => {
 
     it('generated mapper includes _record for round-trip', () => {
       const source = generate({ abi: tokenAbi })
-      expect(source).toContain('_record: record,')
+      expect(source).toContain('_record: record as unknown as RecordValue,')
     })
 
     it('generated wrappers resolve record inputs via _record', () => {
@@ -801,7 +803,7 @@ describe('generate', () => {
 
     it('generated record mapper uses double-cast for nested struct fields', () => {
       // config is a struct field — must be cast through unknown, not left as PlaintextValue
-      expect(strictOutput).toContain('record.fields.config?.value as unknown as Config')
+      expect(strictOutput).toContain('fields.config?.value as unknown as Config')
     })
 
   })
@@ -867,20 +869,20 @@ describe('generate', () => {
     // Mapper expressions: u32 must use Number(...) wrapper; u64 must cast directly
     it('mapper uses Number() with inner ?? guard for u32 field', () => {
       // Inner ?? 0n guard prevents NaN: Number(undefined) = NaN, and NaN ?? 0 does not rescue it.
-      expect(widthOutput).toContain('Number((record.fields.tier?.value ?? 0n) as bigint)')
+      expect(widthOutput).toContain('Number((fields.tier?.value ?? 0n) as bigint)')
     })
 
     it('mapper uses direct cast for u64 field', () => {
-      expect(widthOutput).toContain('record.fields.amount?.value as bigint')
+      expect(widthOutput).toContain('fields.amount?.value as bigint')
     })
 
     // u32 default is 0, u64 default is 0n
     it('mapper defaults u32 field to 0 (inner guard prevents NaN)', () => {
-      expect(widthOutput).toContain('Number((record.fields.tier?.value ?? 0n) as bigint) ?? 0,')
+      expect(widthOutput).toContain('Number((fields.tier?.value ?? 0n) as bigint) ?? 0,')
     })
 
     it('mapper defaults u64 field to 0n', () => {
-      expect(widthOutput).toContain('record.fields.amount?.value as bigint ?? 0n,')
+      expect(widthOutput).toContain('fields.amount?.value as bigint ?? 0n,')
     })
 
     // (b) tsc strict-mode: generated code with both widths must typecheck

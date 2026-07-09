@@ -65,7 +65,7 @@ export type ResolvedSwapParams = {
  *
  * @example
  * const p = resolveSwapParams({ pool, slot, tokenInId, amountIn: 1_000_000_000n, slippageBps: 50 })
- * // p.zeroForOne, p.amountOutMin, p.sqrtPriceLimit → swap_private args
+ * // p.zeroForOne, p.amountOutMin, p.sqrtPriceLimit → swap args
  */
 export function resolveSwapParams(params: ResolveSwapParamsInput): ResolvedSwapParams {
   const { pool, slot, tokenInId, amountIn, slippageBps } = params
@@ -142,7 +142,7 @@ export async function getDeadline(client: Client, params?: { offsetBlocks?: numb
 }
 
 /**
- * Generates a random u64 nonce for `swap_private`.
+ * Generates a random u64 nonce for `swap`.
  *
  * The nonce uniquifies the swap id so identical back-to-back swaps do not
  * collide in `swap_outputs`. Pure and local (crypto-random). Requires a
@@ -160,7 +160,7 @@ export function generateSwapNonce(): bigint {
 }
 
 /**
- * Generates a random field literal for `mint_private`'s nonce input.
+ * Generates a random field literal for `mint`'s nonce input.
  *
  * The mint nonce is hashed into the position's `token_id`, so a fresh value
  * per call lets one (recipient, request) pair mint multiple positions
@@ -171,7 +171,7 @@ export function generateSwapNonce(): bigint {
  * @returns A random field literal (e.g. `"1234…field"`).
  *
  * @example
- * const nonce = generateFieldNonce() // mint_private input 0
+ * const nonce = generateFieldNonce() // mint input 0
  */
 export function generateFieldNonce(): string {
   const bytes = new Uint8Array(31)
