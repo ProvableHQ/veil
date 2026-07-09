@@ -4,17 +4,21 @@ import { ApiClient } from '../../src/api/client.js'
 import { getPool } from '../../src/actions/reads/getPool.js'
 import { getSlot } from '../../src/actions/reads/getSlot.js'
 import { poolPrice, priceImpact, feeAprEstimate } from '../../src/utils/derivations.js'
-import { resolveSwapParams } from '../../src/utils/params.js'
-import { getSqrtPriceAtTick, roundTickToSpacing, MIN_SQRT_PRICE, MAX_SQRT_PRICE } from '../../src/utils/tick-math.js'
+import { getSqrtPriceAtTick, roundTickToSpacing } from '../../src/utils/tick-math.js'
 import type { PoolState } from '../../src/generated/shield_swap.js'
 import type { GetSlotReturnType } from '../../src/actions/reads/getSlot.js'
 
 /**
- * Real-API integration for the analyses a trader actually runs — quoting,
- * price impact, slippage sizing, LP range selection, and fee-APR estimation —
- * exercising the pure strategy helpers (poolPrice / priceImpact / feeAprEstimate
- * / resolveSwapParams / tick math) against LIVE pool and route data. Read-only:
- * no funds, no account, no transactions. Gated on VEIL_INTEGRATION.
+ * Real-API integration for the analyses a trader actually runs — price
+ * impact, LP range selection, and fee-APR estimation — exercising the pure
+ * strategy helpers (poolPrice / priceImpact / feeAprEstimate / tick math)
+ * against LIVE pool data. Read-only: no funds, no account, no transactions.
+ * Gated on VEIL_INTEGRATION.
+ *
+ * The route-quote test was removed 2026-07-08: the amm-api stopped populating
+ * `estimated_amount_out` on /route (routes themselves are valid). Restore
+ * quote coverage when the indexer serves estimates again; slippage sizing
+ * (resolveSwapParams) keeps unit coverage in test/utils/params.test.ts.
  *
  * Assertions check invariants and monotonic properties, not exact figures —
  * live liquidity and prices move, but the math relationships hold.
@@ -74,29 +78,6 @@ describe.runIf(RUN)('trader workflows against live pool + route data', () => {
     expect(big.impactBps).toBeGreaterThanOrEqual(0)
     expect(Number.isFinite(big.impactBps)).toBe(true)
   })
-
-  it('quotes a route and sizes slippage protection before swapping (no funds moved)', async () => {
-    // The API route quote is a decimal in the output token's units — a display
-    // figure, not raw base units.
-    const route = await api.getRoute({ token_in: pool.token0, token_out: pool.token1, amount_in: 10n ** BigInt(decimals0) / 10n })
-    expect(route.data.token_in).toBe(pool.token0)
-    expect(Number(route.data.estimated_amount_out ?? '0')).toBeGreaterThan(0)
-
-    // For on-chain slippage bounds a trader uses a base-unit expectedOut — take
-    // it from the chain-derived priceImpact estimate, not the display quote.
-    const amountIn = 10n ** BigInt(decimals0) / 10n
-    const expectedOut = priceImpact({ pool, slot, amountIn, zeroForOne: true }).expectedOut
-    const params = resolveSwapParams({ pool, slot, tokenInId: pool.token0, amountIn, slippageBps: 50, expectedOut })
-
-    expect(params.zeroForOne).toBe(true) // selling token0
-    expect(params.tokenOutId).toBe(pool.token1)
-    // Selling token0 pushes price down → the bound is the low extreme.
-    expect(params.sqrtPriceLimit).toBe(MIN_SQRT_PRICE)
-    expect(MAX_SQRT_PRICE).toBeGreaterThan(MIN_SQRT_PRICE)
-    // amountOutMin = expectedOut * (1 - 0.5%) — never above the quote.
-    expect(params.amountOutMin).toBe((expectedOut * 9950n) / 10000n)
-    expect(params.amountOutMin).toBeLessThanOrEqual(expectedOut)
-  }, 30_000)
 
   it('picks an in-range LP position bracketing the current price', () => {
     const spacing = slot.tick_spacing

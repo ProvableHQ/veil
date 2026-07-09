@@ -43,12 +43,21 @@ const NETWORK = (process.env.VEIL_NETWORK as 'mainnet' | 'testnet' | undefined) 
 const PROGRAM_ID = process.env.VEIL_TEST_PROGRAM_ID ?? 'credits.aleo'
 const DEPLOYED_PROGRAM = process.env.VEIL_TEST_DEPLOYED_PROGRAM ?? 'puzzle_arcade_coin_v002.aleo'
 
-// Two real mainnet commitments from a known state. Override if these get pruned.
-const DEFAULT_COMMITMENTS = [
+// State-path vectors per network — a commitment only resolves on the chain it
+// was created on, and the API 502s (rather than 404s) on unresolvable inputs.
+// Override with VEIL_TEST_COMMITMENTS if these get pruned. The repeated
+// mainnet commitment is deliberate: it still exercises the batch path.
+const MAINNET_COMMITMENTS = [
+  '2603833136188907532194616745451484525888387221869530348932771543190230697146field',
+  '2603833136188907532194616745451484525888387221869530348932771543190230697146field',
+]
+const TESTNET_COMMITMENTS = [
   '3955342727272311631397274863769364826445372300002295001500327687918144964187field',
   '360335536692650403149180907504772813391262210443170533323444515646946440826field',
 ]
-const COMMITMENTS = (process.env.VEIL_TEST_COMMITMENTS?.split(',').map((s) => s.trim()).filter(Boolean)) ?? DEFAULT_COMMITMENTS
+const COMMITMENTS =
+  (process.env.VEIL_TEST_COMMITMENTS?.split(',').map((s) => s.trim()).filter(Boolean)) ??
+  (NETWORK === 'mainnet' ? MAINNET_COMMITMENTS : TESTNET_COMMITMENTS)
 
 const AMENDED_PROGRAM = process.env.VEIL_TEST_AMENDED_PROGRAM
 const AMENDED_EDITION = process.env.VEIL_TEST_AMENDED_EDITION ? Number(process.env.VEIL_TEST_AMENDED_EDITION) : undefined

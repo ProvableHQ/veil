@@ -221,7 +221,7 @@ export function leoActions(config: LeoClientConfig = {}) {
  *
  * const leo = createLeoClient({ cwd: './programs/token', network: 'testnet' })
  * await leo.build()
- * const abi = await leo.abi({ file: './build/main.aleo' })
+ * const abi = await leo.abi({ file: './build/token/token.aleo' })
  */
 export function createLeoClient(config: LeoClientConfig = {}): LeoClient {
   const merge = <T extends Partial<LeoClientConfig>>(opts: T): T & LeoClientConfig => ({
@@ -448,7 +448,7 @@ export async function buildBatch(projects: Array<string | { cwd?: string }>): Pr
  *
  * @example
  * import { abi } from '@veil/leo'
- * const json = await abi({ file: 'build/main.aleo', cwd: './programs/token' })
+ * const json = await abi({ file: 'build/token/token.aleo', cwd: './programs/token' })
  */
 export async function abi(options: { file: string; cwd?: string }): Promise<string> {
   return runLeoCapture(['abi', options.file], options.cwd)

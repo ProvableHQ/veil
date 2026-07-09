@@ -6,8 +6,12 @@
     "types": ["vite/client"],
     "paths": {
       "@veil/core": ["../../packages/core/src/index.ts"],
+      "@veil/react": ["../../packages/react/src/index.ts"],
       "@veil/wallet-adapter": ["../../packages/wallet-adapter/src/index.ts"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Override the inherited root exclude: its "apps" entry resolves to the repo's
+  // apps/ dir and would drop this app's own src from the compilation.
+  "exclude": ["node_modules"]
 }
