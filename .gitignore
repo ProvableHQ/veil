@@ -5,3 +5,6 @@ dist
 .DS_Store
 scratch.txt
 devnode*.log
+
+# Generated bindings written by integration tests
+packages/codegen/test/integration/generated/
