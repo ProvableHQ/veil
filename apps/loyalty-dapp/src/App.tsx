@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useVeilWallet } from '@provablehq/veil-react'
+import { useVeilWallet } from '@provablehq/veil-aleo-react-hooks'
 import { useLoyalty } from './hooks/useLoyalty'
 import { WalletButton } from './components/WalletButton'
 import { LoyaltyCard } from './components/LoyaltyCard'
@@ -144,7 +144,7 @@ async function getMapping(program: string, mapping: string, key: string) {
 
 expose({ execute, getMapping });`,
             after: `// veil — two lines in your React app
-import { VeilProvider, useVeilWallet } from '@provablehq/veil-react';
+import { VeilProvider, useVeilWallet } from '@provablehq/veil-aleo-react-hooks';
 
 // Root
 <VeilProvider network="testnet">

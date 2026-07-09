@@ -1,11 +1,11 @@
 /**
- * @provablehq/veil-sdk
+ * @provablehq/veil-aleo-sdk
  *
  * Loads `@provablehq/sdk` for a specific Aleo network and exposes the SDK's
  * functionality bound to that network's setup parameters.
  *
  * Usage:
- *   import { loadNetwork } from '@provablehq/veil-sdk'
+ *   import { loadNetwork } from '@provablehq/veil-aleo-sdk'
  *   import { http } from '@provablehq/veil-core'
  *
  *   const aleo = await loadNetwork('mainnet')
@@ -30,7 +30,7 @@ import {
   ViewKey as StaticViewKey,
   getOrInitConsensusVersionTestHeights,
 } from '@provablehq/sdk'
-import { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR } from '@provablehq/veil-devnode'
+import { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR } from '@provablehq/veil-aleo-devnode'
 export { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR }
 import type { LocalAccount } from '@provablehq/veil-core'
 import type { ProvingConfig, BuildTransactionOptions, BuildDeploymentOptions, SimulateOptions, ExecuteOptions, RawSimulateResult, RawExecuteResult } from '@provablehq/veil-core'
@@ -786,7 +786,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 
 // Consensus version activation heights the WASM layer assumes when building
 // devnode transactions. MUST mirror the CONSENSUS_VERSION_HEIGHTS default that
-// @provablehq/veil-devnode passes to the aleo-devnode process, so the transaction builder
+// @provablehq/veil-aleo-devnode passes to the aleo-devnode process, so the transaction builder
 // and the node agree on which consensus version is active at each height. The
 // entry count must also equal the WASM SDK's consensus-version count exactly —
 // a shorter list panics with an opaque `unreachable` inside the WASM.

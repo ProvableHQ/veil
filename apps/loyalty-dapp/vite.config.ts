@@ -7,7 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@provablehq/veil-core': path.resolve(__dirname, '../../packages/core/src/index.ts'),
-      '@provablehq/veil-wallet-adapter': path.resolve(__dirname, '../../packages/wallet-adapter/src/index.ts'),
+      '@provablehq/veil-aleo-wallet-adapter': path.resolve(__dirname, '../../packages/wallet-adapter/src/index.ts'),
     },
   },
 })

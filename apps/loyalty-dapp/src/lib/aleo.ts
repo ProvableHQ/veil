@@ -13,7 +13,7 @@ import {
   getContract,
   parseProgram,
 } from '@provablehq/veil-core'
-import { fromWalletAdapter, type AleoWalletAdapter } from '@provablehq/veil-wallet-adapter'
+import { fromWalletAdapter, type AleoWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 
 const API_URL = 'https://api.provable.com/v2'
 

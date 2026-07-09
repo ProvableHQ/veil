@@ -1,5 +1,5 @@
 {
-  "name": "@provablehq/veil-wallet-adapter",
+  "name": "@provablehq/veil-aleo-wallet-adapter",
   "version": "0.4.0",
   "description": "Wallet adapter bindings for the Veil Aleo SDK.",
   "license": "MIT",

@@ -38,7 +38,7 @@ Try multiple transports in order. First success wins.
 
 ```ts
 import { fallback, http } from '@provablehq/veil-core'
-import { transportFromAdapter } from '@provablehq/veil-wallet-adapter'
+import { transportFromAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 
 const transport = fallback([
   transportFromAdapter(walletAdapter), // Try wallet first

@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { startDevnode, type DevnodeInstance } from '@provablehq/veil-devnode'
-import { createDevnodeClient, loadNetwork, generateAccount, type AleoSdk } from '@provablehq/veil-sdk'
+import { startDevnode, type DevnodeInstance } from '@provablehq/veil-aleo-devnode'
+import { createDevnodeClient, loadNetwork, generateAccount, type AleoSdk } from '@provablehq/veil-aleo-sdk'
 import { createTestClient, http } from '@provablehq/veil-core'
 import type { PublicClient, WalletClient, TestClient, LocalAccount, ConfirmedTransaction } from '@provablehq/veil-core'
 

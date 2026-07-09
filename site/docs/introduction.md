@@ -27,14 +27,14 @@ const txId = await walletClient.writeContract({
 | Package | Description |
 |---|---|
 | [`@provablehq/veil-core`](./packages/core) | Clients, actions, transports, types — plus `/agent` + `/mcp` bindings |
-| [`@provablehq/veil-sdk`](./packages/provable-sdk) | Local accounts, signing, and proving via `@provablehq/sdk` |
-| [`@provablehq/veil-wallet-adapter`](./packages/wallet-adapter) | Bridges any Aleo wallet adapter into veil |
-| [`@provablehq/veil-react`](./packages/react) | `VeilProvider` + `useVeilWallet()` for React apps |
+| [`@provablehq/veil-aleo-sdk`](./packages/provable-sdk) | Local accounts, signing, and proving via `@provablehq/sdk` |
+| [`@provablehq/veil-aleo-wallet-adapter`](./packages/wallet-adapter) | Bridges any Aleo wallet adapter into veil |
+| [`@provablehq/veil-aleo-react-hooks`](./packages/react) | `VeilProvider` + `useVeilWallet()` for React apps |
 | [`@provablehq/shield-swap-sdk`](./packages/shield-swap) | Client for the `shield_swap` AMM/DEX |
 | [`@provablehq/veil-codegen`](./packages/codegen) | Typed bindings from an Aleo program ABI |
-| [`@provablehq/veil-devnode`](./packages/devnode) | Run and drive a local Aleo devnode |
+| [`@provablehq/veil-aleo-devnode`](./packages/devnode) | Run and drive a local Aleo devnode |
 | [`@provablehq/veil-leo`](./packages/leo) | Typed wrapper around the `leo` CLI |
-| [`@provablehq/veil-bridge`](./packages/bridge) | Cross-chain bridge client (preview) |
+| [`@provablehq/veil-aleo-bridges`](./packages/bridge) | Cross-chain bridge client (preview) |
 
 See [Packages](./packages/overview) for the full breakdown.
 

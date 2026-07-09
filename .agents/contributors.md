@@ -56,7 +56,7 @@ platform into core action logic.
   Leo-wallet specifics into core.
 - **Runtime.** Core stays node/browser/React Native agnostic. No `window`, `fs`,
   or environment-specific globals in core.
-- **Framework.** React and any UI framework stay in `@provablehq/veil-react`. Core never
+- **Framework.** React and any UI framework stay in `@provablehq/veil-aleo-react-hooks`. Core never
   imports or assumes a framework.
 - **Configuration shape.** When platform-agnosticism needs extra parameters or
   objects, express them as viem-shaped configuration — options objects, client,

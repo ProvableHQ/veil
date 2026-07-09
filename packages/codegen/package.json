@@ -39,9 +39,9 @@
     "@provablehq/veil-core": "workspace:*"
   },
   "devDependencies": {
-    "@provablehq/veil-devnode": "workspace:*",
+    "@provablehq/veil-aleo-devnode": "workspace:*",
     "@provablehq/veil-leo": "workspace:*",
-    "@provablehq/veil-sdk": "workspace:*",
+    "@provablehq/veil-aleo-sdk": "workspace:*",
     "tsup": "^8.0.0",
     "typescript": "^5.7.0"
   }

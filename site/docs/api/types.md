@@ -44,7 +44,7 @@ import type {
   AleoWalletAdapter,    // minimal interface for custom adapters
   AnyWalletAdapter,     // union of AleoWalletAdapter | BaseAleoWalletAdapter
   BaseAleoWalletAdapter, // from @provablehq/aleo-wallet-adaptor-core
-} from '@provablehq/veil-wallet-adapter'
+} from '@provablehq/veil-aleo-wallet-adapter'
 ```
 
 `AnyWalletAdapter` is the type accepted by `fromWalletAdapter()`. Pass any official wallet adapter (Shield, Leo, Puzzle, Fox) directly, or implement `AleoWalletAdapter` for custom adapters.

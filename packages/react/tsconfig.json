@@ -12,7 +12,7 @@
     "rootDir": "..",
     "paths": {
       "@provablehq/veil-core": ["../core/src"],
-      "@provablehq/veil-wallet-adapter": ["../wallet-adapter/src"]
+      "@provablehq/veil-aleo-wallet-adapter": ["../wallet-adapter/src"]
     }
   },
   "include": ["src"]

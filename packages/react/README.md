@@ -1,4 +1,4 @@
-# @provablehq/veil-react
+# @provablehq/veil-aleo-react-hooks
 
 React bindings for the Veil Aleo SDK.
 
@@ -12,7 +12,7 @@ a peer dependency.
 ## Installation
 
 ```sh
-pnpm add @provablehq/veil-react @provablehq/veil-core react
+pnpm add @provablehq/veil-aleo-react-hooks @provablehq/veil-core react
 ```
 
 `react` is a peer dependency — the caller supplies it.
@@ -24,7 +24,7 @@ it. The provider configures all known Aleo wallets; the hook derives its network
 from the provider unless the caller overrides it.
 
 ```tsx
-import { VeilProvider, useVeilWallet } from '@provablehq/veil-react'
+import { VeilProvider, useVeilWallet } from '@provablehq/veil-aleo-react-hooks'
 
 function Root() {
   return (

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import { loadNetwork } from '@provablehq/veil-sdk'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { FinalizeRevertError } from '@provablehq/veil-core'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 

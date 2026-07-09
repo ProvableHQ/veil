@@ -10,7 +10,7 @@ import {
   type TxHistoryResult,
   type WalletClient,
 } from '@provablehq/veil-core'
-import { fromWalletAdapter, type AleoWalletAdapter } from '@provablehq/veil-wallet-adapter'
+import { fromWalletAdapter, type AleoWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 
 const DEFAULT_API_URL = 'https://api.provable.com/v2'
 
@@ -69,7 +69,7 @@ export interface UseVeilWalletReturn {
  * (available after wallet connection). No manual adapter bridging needed.
  *
  * ```tsx
- * import { useVeilWallet } from '@provablehq/veil-react'
+ * import { useVeilWallet } from '@provablehq/veil-aleo-react-hooks'
  *
  * function App() {
  *   const { publicClient, walletClient, address, connect } = useVeilWallet()

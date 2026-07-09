@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import { loadNetwork } from '@provablehq/veil-sdk'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { createBridgeClient, type BridgeClient } from '../../src/clients/createBridgeClient.js'
 import { httpBridge } from '../../src/transports/httpBridge.js'
 import { getOrderAudit } from '../../src/actions/getOrderAudit.js'

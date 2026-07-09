@@ -128,7 +128,7 @@ export type DevnodeInstance = {
  *   REST API is not ready within `readyTimeout` (default 30000 ms).
  *
  * @example
- * import { startDevnode } from '@provablehq/veil-devnode'
+ * import { startDevnode } from '@provablehq/veil-aleo-devnode'
  *
  * const devnode = await startDevnode()
  * // ...run tests against http://127.0.0.1:3030...
@@ -260,7 +260,7 @@ async function spawnDevnode(
 ): Promise<DevnodeInstance> {
   const proc = spawn(devnodePath, args, {
     stdio: 'pipe',
-    // MUST mirror DEVNODE_CONSENSUS_HEIGHTS in @provablehq/veil-sdk so the
+    // MUST mirror DEVNODE_CONSENSUS_HEIGHTS in @provablehq/veil-aleo-sdk so the
     // transaction builder and the node agree on active consensus versions.
     env: { ...process.env, CONSENSUS_VERSION_HEIGHTS: process.env.CONSENSUS_VERSION_HEIGHTS || '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16' },
   })
@@ -333,7 +333,7 @@ export type DevnodeClientActions = {
  * @example
  * ```ts
  * import { createTestClient, http } from '@provablehq/veil-core'
- * import { devnodeActions } from '@provablehq/veil-devnode'
+ * import { devnodeActions } from '@provablehq/veil-aleo-devnode'
  *
  * const client = createTestClient({ transport: http('http://127.0.0.1:3030', { network: 'testnet' }) })
  *   .extend(devnodeActions)

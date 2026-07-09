@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { rmSync } from 'node:fs'
 
-import { startDevnode, type DevnodeInstance } from '@provablehq/veil-devnode'
-import { createDevnodeClient, generateAccount } from '@provablehq/veil-sdk'
+import { startDevnode, type DevnodeInstance } from '@provablehq/veil-aleo-devnode'
+import { createDevnodeClient, generateAccount } from '@provablehq/veil-aleo-sdk'
 import { createTestClient, getContract, http, parseProgram } from '@provablehq/veil-core'
 import type { PublicClient, WalletClient, TestClient, LocalAccount } from '@provablehq/veil-core'
 

@@ -47,7 +47,7 @@ find the private records that swaps and mints spend). Local signing also pulls
 in `@provablehq/sdk` — it derives the blinded claim identity.
 
 ```ts
-import { loadNetwork } from '@provablehq/veil-sdk'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 
 const aleo = await loadNetwork('testnet')
@@ -82,7 +82,7 @@ blinded identity for private swaps and claims on your behalf.
 
 ```ts
 import { createWalletClient } from '@provablehq/veil-core'
-import { fromWalletAdapter } from '@provablehq/veil-wallet-adapter'
+import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 import { shieldSwapActions, SHIELD_SWAP_ALGORITHM_GRANTS } from '@provablehq/shield-swap-sdk'
 
 // e.g. a connected Leo/Shield adapter — pass the grants in its connect options:
@@ -392,13 +392,13 @@ unless you pass a `tokens` filter, returns only tokens you actually hold.
 
 ## Bridging in and out
 
-Value can enter and leave Aleo around a DEX position via `@provablehq/veil-bridge` —
+Value can enter and leave Aleo around a DEX position via `@provablehq/veil-aleo-bridges` —
 both packages hang off the same `@provablehq/veil-core` wallet client, so one signer
 covers the whole chain: bridge assets in, trade them privately here, bridge
 the proceeds out.
 
 ```ts
-import { createBridgeClient, httpBridge } from '@provablehq/veil-bridge'
+import { createBridgeClient, httpBridge } from '@provablehq/veil-aleo-bridges'
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 
 const bridge = createBridgeClient({
@@ -423,7 +423,7 @@ Bridging in starts on the source chain (its wallet signs the deposit), so
 from this SDK you quote and create the order, then pay the instructions from
 that chain's wallet. The full walkthrough — including the EVM deposit via
 viem — lives in the
-[`@provablehq/veil-bridge` README](../bridge/README.md#swapping-bridged-assets-on-shield-swap),
+[`@provablehq/veil-aleo-bridges` README](../bridge/README.md#swapping-bridged-assets-on-shield-swap),
 and the whole chain is exercised by
 [`bridgeRoundTrip.e2e.test.ts`](./test/integration/bridgeRoundTrip.e2e.test.ts).
 
@@ -502,7 +502,7 @@ ALEO_CONSUMER_ID=...        # delegated proving + record scanning — write tier
 | [`balances.integration.test.ts`](./test/integration/balances.integration.test.ts) | write | The composed balance view — public balances from the API joined with private balances decoded from the account's records. Needs the account because private balances live in its records. |
 | [`poolCreation.integration.test.ts`](./test/integration/poolCreation.integration.test.ts) | write | Creates a pool on testnet: finds a token pair and a registered fee tier, calls `createPool`, then polls `isPoolInitialized` until the finalize propagates. If the pair already has a pool at every tier tried, it confirms the contract rejects the duplicate instead. |
 | [`e2e.test.ts`](./test/integration/e2e.test.ts) | write | The full private-swap lifecycle — airdrop, privatize records, ensure a pool, `swap`, read the output, `claimSwapOutput`. |
-| [`bridgeRoundTrip.e2e.test.ts`](./test/integration/bridgeRoundTrip.e2e.test.ts) | write | The cross-product chain with `@provablehq/veil-bridge`: verify the inbound bridge route, swap on the DEX, bridge the proceeds out. Additionally gated by `VEIL_BRIDGE_E2E=1` — the bridge leg spends mainnet ALEO. |
+| [`bridgeRoundTrip.e2e.test.ts`](./test/integration/bridgeRoundTrip.e2e.test.ts) | write | The cross-product chain with `@provablehq/veil-aleo-bridges`: verify the inbound bridge route, swap on the DEX, bridge the proceeds out. Additionally gated by `VEIL_BRIDGE_E2E=1` — the bridge leg spends mainnet ALEO. |
 
 Run one file, or a set:
 

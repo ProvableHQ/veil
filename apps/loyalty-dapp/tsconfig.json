@@ -6,8 +6,8 @@
     "types": ["vite/client"],
     "paths": {
       "@provablehq/veil-core": ["../../packages/core/src/index.ts"],
-      "@provablehq/veil-react": ["../../packages/react/src/index.ts"],
-      "@provablehq/veil-wallet-adapter": ["../../packages/wallet-adapter/src/index.ts"]
+      "@provablehq/veil-aleo-react-hooks": ["../../packages/react/src/index.ts"],
+      "@provablehq/veil-aleo-wallet-adapter": ["../../packages/wallet-adapter/src/index.ts"]
     }
   },
   "include": ["src"],

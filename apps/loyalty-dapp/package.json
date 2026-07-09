@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@provablehq/veil-core": "workspace:*",
-    "@provablehq/veil-react": "workspace:*",
+    "@provablehq/veil-aleo-react-hooks": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

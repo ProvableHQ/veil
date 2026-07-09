@@ -9,7 +9,7 @@ The primary hook for interacting with Aleo from React components. Returns a publ
 ## Usage
 
 ```tsx
-import { useVeilWallet } from '@provablehq/veil-react'
+import { useVeilWallet } from '@provablehq/veil-aleo-react-hooks'
 
 function App() {
   const { publicClient, walletClient, address, connect, disconnect } = useVeilWallet()

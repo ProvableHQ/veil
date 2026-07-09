@@ -40,7 +40,7 @@ const networkMap = {
  * (Shield, Leo, Puzzle, Fox) are auto-configured.
  *
  * ```tsx
- * import { VeilProvider } from '@provablehq/veil-react'
+ * import { VeilProvider } from '@provablehq/veil-aleo-react-hooks'
  *
  * <VeilProvider network="mainnet">
  *   <App />

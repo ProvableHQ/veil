@@ -2,10 +2,10 @@
 sidebar_position: 10
 ---
 
-# @provablehq/veil-bridge
+# @provablehq/veil-aleo-bridges
 
 :::caution Preview
-`@provablehq/veil-bridge` is early and not yet published. The API below is subject to
+`@provablehq/veil-aleo-bridges` is early and not yet published. The API below is subject to
 change — treat this page as a preview.
 :::
 
@@ -30,8 +30,8 @@ of the pair.
   `DEFAULT_ALEO_ASSET_MAP`.
 - **Errors** — `BridgeError`, `BridgeEnvelopeError`, `BridgeOrderFailedError`,
   `BridgeTimeoutError`.
-- **Agent surfaces** — `createBridgeAgentTools` (`@provablehq/veil-bridge/agent`),
-  `createBridgeMcpServer` (`@provablehq/veil-bridge/mcp`) — composable with other
+- **Agent surfaces** — `createBridgeAgentTools` (`@provablehq/veil-aleo-bridges/agent`),
+  `createBridgeMcpServer` (`@provablehq/veil-aleo-bridges/mcp`) — composable with other
   packages' tools via core's `toMcpServer`.
 
 ## Identifiers
@@ -42,7 +42,7 @@ The API is strict about identifiers: chains are case-sensitive ids (`ALEO`,
 units. Don't hardcode any of them — discover:
 
 ```ts
-import { createBridgeClient, httpBridge } from '@provablehq/veil-bridge'
+import { createBridgeClient, httpBridge } from '@provablehq/veil-aleo-bridges'
 
 const bridge = createBridgeClient({
   transport: httpBridge('https://wallet.api.provable.com'),

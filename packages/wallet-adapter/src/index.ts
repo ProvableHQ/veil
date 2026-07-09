@@ -1,5 +1,5 @@
 /**
- * @provablehq/veil-wallet-adapter
+ * @provablehq/veil-aleo-wallet-adapter
  *
  * Wraps @provablehq/aleo-wallet-adaptor-core into veil's
  * Account and Transport interfaces.
@@ -7,7 +7,7 @@
  * Usage with any wallet adapter (Leo, Puzzle, Fox, Shield):
  *
  *   import { LeoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-leo'
- *   import { fromWalletAdapter } from '@provablehq/veil-wallet-adapter'
+ *   import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
  *   import { createWalletClient, http, fallback } from '@provablehq/veil-core'
  *
  *   const leoWallet = new LeoWalletAdapter()

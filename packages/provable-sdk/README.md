@@ -1,4 +1,4 @@
-# @provablehq/veil-sdk
+# @provablehq/veil-aleo-sdk
 
 Local signing and proving for the Veil Aleo SDK, backed by the Provable WASM SDK
 (`@provablehq/sdk`).
@@ -14,7 +14,7 @@ proves for you — generally does not need this package at all.
 ## Installation
 
 ```sh
-pnpm add @provablehq/veil-sdk @provablehq/veil-core
+pnpm add @provablehq/veil-aleo-sdk @provablehq/veil-core
 ```
 
 ## Usage
@@ -24,7 +24,7 @@ the returned handle. `loadNetwork` is async because it fetches the network's WAS
 binaries; the handle it returns is synchronous from there on.
 
 ```ts
-import { loadNetwork } from '@provablehq/veil-sdk'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 
 const aleo = await loadNetwork('testnet')
 
@@ -85,5 +85,5 @@ account.
 `@provablehq/sdk` ships the Aleo cryptography as WebAssembly, and this package
 loads it. That is the cost of holding keys and proving locally. An app that
 connects a wallet — Shield, Leo — should build its client from the wallet adapter
-instead (see `@provablehq/veil-wallet-adapter`) and skip `@provablehq/veil-sdk`, keeping the
+instead (see `@provablehq/veil-aleo-wallet-adapter`) and skip `@provablehq/veil-aleo-sdk`, keeping the
 WASM out of the bundle.

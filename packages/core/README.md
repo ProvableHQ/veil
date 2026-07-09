@@ -20,8 +20,8 @@ pnpm add @provablehq/veil-core
 `@provablehq/veil-core` alone does not sign or prove. Concrete signing and proving come
 from a companion package:
 
-- **`@provablehq/veil-sdk`** — local private keys for bots, scripts, and tests.
-- **`@provablehq/veil-wallet-adapter`** — a connected wallet (Shield, Leo) that holds the
+- **`@provablehq/veil-aleo-sdk`** — local private keys for bots, scripts, and tests.
+- **`@provablehq/veil-aleo-wallet-adapter`** — a connected wallet (Shield, Leo) that holds the
   keys and proves on the user's behalf.
 
 ## Initialization
@@ -31,10 +31,10 @@ Core gives you a read-only `PublicClient` (a transport is all it needs) and a
 depending on where the keys live.
 
 ### Local Key for Programmatic Usage (Using veil as an Aleo SDK)
-Your code holds a private key (bots, scripts, servers, tests). For this path, `@provablehq/veil-sdk` is used to manage accounts, perform proving and signing, and record management.
+Your code holds a private key (bots, scripts, servers, tests). For this path, `@provablehq/veil-aleo-sdk` is used to manage accounts, perform proving and signing, and record management.
 
 ```ts
-import { loadNetwork } from '@provablehq/veil-sdk'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 
 const aleo = await loadNetwork('testnet')
 
@@ -48,14 +48,14 @@ const { publicClient, walletClient } = aleo.createAleoClient({
 
 ### Wallets with Wallet-Custodied Keys (Web or Mobile Dapps)
 A connected web or mobile wallet (Shield, Leo, Puzzle, Fox) holds a user's keys and 
-performs signing, proving and record management. `@provablehq/veil-wallet-adapter` adapts it into an account, 
+performs signing, proving and record management. `@provablehq/veil-aleo-wallet-adapter` adapts it into an account, 
 so the app carries no key or proving config:
 
 ```ts
 import { createWalletClient, custom, rpcAccount } from '@provablehq/veil-core'
 
 const walletClient = createWalletClient({
-  account: rpcAccount(walletAdapter), // walletAdapter from @provablehq/veil-wallet-adapter
+  account: rpcAccount(walletAdapter), // walletAdapter from @provablehq/veil-aleo-wallet-adapter
   transport: custom(walletAdapter),
 })
 ```
@@ -98,7 +98,7 @@ const supply = await client.readContract({
 
 A wallet client pairs a transport with an `account` that signs and proves. Core
 defines the account interface; the account instance comes from
-`@provablehq/veil-sdk` or `@provablehq/veil-wallet-adapter`.
+`@provablehq/veil-aleo-sdk` or `@provablehq/veil-aleo-wallet-adapter`.
 
 ```ts
 import { createWalletClient, http } from '@provablehq/veil-core'

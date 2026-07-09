@@ -35,5 +35,5 @@ await client.leo.build()
 await client.leo.deploy()
 ```
 
-Commonly paired with [`@provablehq/veil-devnode`](./devnode) for a full local
+Commonly paired with [`@provablehq/veil-aleo-devnode`](./devnode) for a full local
 compile → deploy → test loop.

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import { loadNetwork } from '@provablehq/veil-sdk'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { getProgram } from '@provablehq/veil-core'
-import { createBridgeClient, httpBridge, type BridgeClient } from '@provablehq/veil-bridge'
+import { createBridgeClient, httpBridge, type BridgeClient } from '@provablehq/veil-aleo-bridges'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { parseTokenRecordInfo } from '../../src/utils/records.js'
 

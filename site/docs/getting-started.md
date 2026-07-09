@@ -12,12 +12,12 @@ npm install @provablehq/veil-core
 
 For React apps:
 ```bash
-npm install @provablehq/veil-core @provablehq/veil-react
+npm install @provablehq/veil-core @provablehq/veil-aleo-react-hooks
 ```
 
 For server-side / Node.js:
 ```bash
-npm install @provablehq/veil-core @provablehq/veil-sdk
+npm install @provablehq/veil-core @provablehq/veil-aleo-sdk
 ```
 
 ## Quick Start — Read Chain State
@@ -52,7 +52,7 @@ const balance = await client.getBalance({
 Wrap your app in `VeilProvider`, then use the `useVeilWallet` hook anywhere.
 
 ```tsx
-import { VeilProvider, useVeilWallet } from '@provablehq/veil-react'
+import { VeilProvider, useVeilWallet } from '@provablehq/veil-aleo-react-hooks'
 
 // Root — that's the entire setup
 function Root() {
@@ -81,7 +81,7 @@ function App() {
 
 ## Quick Start — Node.js / Server-Side
 
-Use `@provablehq/veil-sdk` for local key management without a browser wallet.
+Use `@provablehq/veil-aleo-sdk` for local key management without a browser wallet.
 
 ```ts
 import { createPublicClient, createWalletClient, http } from '@provablehq/veil-core'
@@ -89,7 +89,7 @@ import {
   privateKeyToAccount,
   createProvingConfig,
   createLocalScanner,
-} from '@provablehq/veil-sdk'
+} from '@provablehq/veil-aleo-sdk'
 
 const transport = http('https://api.provable.com/v2', { network: 'testnet' })
 

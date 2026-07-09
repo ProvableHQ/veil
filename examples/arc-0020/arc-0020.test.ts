@@ -15,8 +15,8 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { createTestClient, http, type TestClient } from '@provablehq/veil-core'
-import { startDevnode, type DevnodeInstance } from '@provablehq/veil-devnode'
-import { createDevnodeClient } from '@provablehq/veil-sdk'
+import { startDevnode, type DevnodeInstance } from '@provablehq/veil-aleo-devnode'
+import { createDevnodeClient } from '@provablehq/veil-aleo-sdk'
 import { createLeoClient } from '@provablehq/veil-leo'
 
 import { createTokenRegistryContract } from './generated/token_registry.js'

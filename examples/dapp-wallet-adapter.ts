@@ -22,7 +22,7 @@ import {
 import {
   fromWalletAdapter,
   type AleoWalletAdapter,
-} from '@provablehq/veil-wallet-adapter'
+} from '@provablehq/veil-aleo-wallet-adapter'
 
 // ---------------------------------------------------------------------------
 // Mock wallet adapter — simulates a real browser wallet like Leo Wallet

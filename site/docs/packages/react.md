@@ -2,14 +2,14 @@
 sidebar_position: 5
 ---
 
-# @provablehq/veil-react
+# @provablehq/veil-aleo-react-hooks
 
 React bindings for Veil. A batteries-included provider auto-configures the known
 Aleo adapters (Shield, Leo, Puzzle, Fox), and a hook returns ready-to-use
 clients — add wallet connection and chain access without wiring adapters by hand.
 
 ```bash
-npm install @provablehq/veil-core @provablehq/veil-react
+npm install @provablehq/veil-core @provablehq/veil-aleo-react-hooks
 ```
 
 ## Key exports
@@ -20,7 +20,7 @@ npm install @provablehq/veil-core @provablehq/veil-react
 ## Usage
 
 ```tsx
-import { VeilProvider, useVeilWallet } from '@provablehq/veil-react'
+import { VeilProvider, useVeilWallet } from '@provablehq/veil-aleo-react-hooks'
 
 function Root() {
   return (

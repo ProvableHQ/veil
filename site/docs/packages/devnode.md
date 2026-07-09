@@ -2,14 +2,14 @@
 sidebar_position: 8
 ---
 
-# @provablehq/veil-devnode
+# @provablehq/veil-aleo-devnode
 
 Manages a local Aleo devnode process from Node — start it, advance blocks,
 restore snapshots — typically wired into a test client via `extend()` for
 integration tests against a local devnet.
 
 ```bash
-npm install -D @provablehq/veil-core @provablehq/veil-devnode
+npm install -D @provablehq/veil-core @provablehq/veil-aleo-devnode
 ```
 
 ## Key exports
@@ -26,7 +26,7 @@ package; reload one here with `restoreDevnode`.
 
 ```ts
 import { createTestClient, http } from '@provablehq/veil-core'
-import { devnodeActions } from '@provablehq/veil-devnode'
+import { devnodeActions } from '@provablehq/veil-aleo-devnode'
 
 const client = createTestClient({
   transport: http('http://127.0.0.1:3030', { network: 'testnet' }),

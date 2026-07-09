@@ -1,5 +1,5 @@
 /**
- * Base class for every error `@provablehq/veil-bridge` throws itself.
+ * Base class for every error `@provablehq/veil-aleo-bridges` throws itself.
  *
  * Transport-level failures (4xx/5xx responses) surface as `TransportError`
  * from `@provablehq/veil-core` instead; catch both when wrapping bridge calls.

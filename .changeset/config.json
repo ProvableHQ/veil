@@ -5,11 +5,11 @@
   "fixed": [
     [
       "@provablehq/veil-core",
-      "@provablehq/veil-react",
-      "@provablehq/veil-wallet-adapter",
-      "@provablehq/veil-sdk",
+      "@provablehq/veil-aleo-react-hooks",
+      "@provablehq/veil-aleo-wallet-adapter",
+      "@provablehq/veil-aleo-sdk",
       "@provablehq/veil-leo",
-      "@provablehq/veil-devnode",
+      "@provablehq/veil-aleo-devnode",
       "@provablehq/shield-swap-sdk",
       "@provablehq/veil-codegen"
     ]

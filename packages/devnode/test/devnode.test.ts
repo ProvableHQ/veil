@@ -7,7 +7,7 @@ import {
   restoreDevnode,
 } from '../src/index.js'
 
-describe('@provablehq/veil-devnode', () => {
+describe('@provablehq/veil-aleo-devnode', () => {
   describe('constants', () => {
     it('DEVNODE_PRIVATE_KEY has correct format', () => {
       expect(DEVNODE_PRIVATE_KEY).toMatch(/^APrivateKey1/)

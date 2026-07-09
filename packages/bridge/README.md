@@ -1,4 +1,4 @@
-# @provablehq/veil-bridge
+# @provablehq/veil-aleo-bridges
 
 A viem-shaped client for Provable's cross-chain bridge service. The bridge
 moves value between Aleo and other chains through third-party swap providers;
@@ -8,7 +8,7 @@ the Aleo deposit. Aleo is always one side of the pair — the service does not
 route, say, Ethereum to Solana.
 
 ```ts
-import { createBridgeClient, httpBridge } from '@provablehq/veil-bridge'
+import { createBridgeClient, httpBridge } from '@provablehq/veil-aleo-bridges'
 
 const client = createBridgeClient({
   transport: httpBridge('https://wallet.api.provable.com'),
@@ -28,12 +28,12 @@ const { quotes } = await client.getQuotes({
 ## Installation
 
 ```sh
-pnpm add @provablehq/veil-bridge @provablehq/veil-core
+pnpm add @provablehq/veil-aleo-bridges @provablehq/veil-core
 ```
 
 The read/track actions need only the bridge client. The `swap` action
 additionally takes a `@provablehq/veil-core` `WalletClient` (any signer path — local key
-via `@provablehq/veil-sdk`, or a wallet adapter) to sign the Aleo deposit.
+via `@provablehq/veil-aleo-sdk`, or a wallet adapter) to sign the Aleo deposit.
 
 ## Providers
 
@@ -200,7 +200,7 @@ This can be optionally overridden by providing another wallet to the swap action
 `wallet` parameter.
 
 ```ts
-import { createBridgeClient, httpBridge } from '@provablehq/veil-bridge'
+import { createBridgeClient, httpBridge } from '@provablehq/veil-aleo-bridges'
 
 const bridge = createBridgeClient({
   transport: httpBridge('https://wallet.api.provable.com'),
@@ -230,7 +230,7 @@ Three more optional parameters include:
 resolve to Aleo, since this action signs the deposit with the Aleo wallet.
 
 Every action also exists in viem's standalone, tree-shakable form
-(`import { swap } from '@provablehq/veil-bridge'` then `swap(client, params)`) for
+(`import { swap } from '@provablehq/veil-aleo-bridges'` then `swap(client, params)`) for
 bundle-sensitive consumers; the client form above is the primary API.
 
 Compliance-bearing source assets (`USDCX_ALEO`, `USAD_ALEO`) require a
@@ -248,7 +248,7 @@ source the deposit is plain viem, which means the whole flow stays in
 territory an EVM developer already knows:
 
 ```ts
-import { createBridgeClient, httpBridge } from '@provablehq/veil-bridge'
+import { createBridgeClient, httpBridge } from '@provablehq/veil-aleo-bridges'
 import { createWalletClient, http, erc20Abi, parseUnits } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { mainnet } from 'viem/chains'
@@ -315,7 +315,7 @@ browser flow where the user's wallet signs), when the source is not Aleo, or
 when you want control between steps.
 
 ```ts
-import { createBridgeClient, httpBridge } from '@provablehq/veil-bridge'
+import { createBridgeClient, httpBridge } from '@provablehq/veil-aleo-bridges'
 
 const bridge = createBridgeClient({
   transport: httpBridge('https://wallet.api.provable.com'),
@@ -382,7 +382,7 @@ packages hang off the same `@provablehq/veil-core` wallet client, so one signer 
 whole chain: bridge in, trade privately, bridge back out.
 
 ```ts
-import { createBridgeClient, httpBridge } from '@provablehq/veil-bridge'
+import { createBridgeClient, httpBridge } from '@provablehq/veil-aleo-bridges'
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 import { createWalletClient, custom, erc20Abi, parseUnits } from 'viem'
 import { mainnet } from 'viem/chains'
@@ -448,15 +448,15 @@ mainnet.
 ## Agent and MCP tools
 
 Every action ships as an agent tool. `createBridgeAgentTools(client)` (from
-`@provablehq/veil-bridge/agent`) returns core-shaped `AgentTool`s for any agent
-framework; `createBridgeMcpServer(client)` (from `@provablehq/veil-bridge/mcp`) serves
+`@provablehq/veil-aleo-bridges/agent`) returns core-shaped `AgentTool`s for any agent
+framework; `createBridgeMcpServer(client)` (from `@provablehq/veil-aleo-bridges/mcp`) serves
 them over MCP. The tools compose with other Veil packages' tools through
 core's `toMcpServer`:
 
 ```ts
 import { createAgentTools } from '@provablehq/veil-core/agent'
 import { toMcpServer } from '@provablehq/veil-core/mcp'
-import { createBridgeAgentTools } from '@provablehq/veil-bridge/agent'
+import { createBridgeAgentTools } from '@provablehq/veil-aleo-bridges/agent'
 
 const server = toMcpServer([
   ...createAgentTools({ client: publicClient }),

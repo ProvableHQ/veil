@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { loadNetwork } from '@provablehq/veil-sdk'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { getProgram } from '@provablehq/veil-core'
 import { parseTokenRecordInfo } from '../../src/utils/records.js'

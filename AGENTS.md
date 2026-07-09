@@ -16,42 +16,42 @@ signing keys live and what you are integrating.
 | Package | Reach for it when | Docs |
 | --- | --- | --- |
 | `@provablehq/veil-core` | You want a typed, viem-style client to read Aleo state or write to contracts. The foundation every other package extends. Ships agent tool schemas (`@provablehq/veil-core/agent`) and MCP tools (`@provablehq/veil-core/mcp`). | [README](./packages/core/README.md) |
-| `@provablehq/veil-react` | You are building a browser dApp and want React context + hooks (`VeilProvider`, `useVeilWallet`) over a connected wallet. | [README](./packages/react/README.md) |
-| `@provablehq/veil-wallet-adapter` | You need the framework-agnostic layer that turns a Provable/Aleo wallet adapter (Shield, Leo, Puzzle, Fox) into a Veil account. `@provablehq/veil-react` wraps this; reach for it directly outside React. | [README](./packages/wallet-adapter/README.md) |
-| `@provablehq/veil-sdk` | Your code holds a private key directly (bots, scripts, servers, CI) and must sign and prove locally. Pulls in the Provable WASM SDK. | [README](./packages/provable-sdk/README.md) |
+| `@provablehq/veil-aleo-react-hooks` | You are building a browser dApp and want React context + hooks (`VeilProvider`, `useVeilWallet`) over a connected wallet. | [README](./packages/react/README.md) |
+| `@provablehq/veil-aleo-wallet-adapter` | You need the framework-agnostic layer that turns a Provable/Aleo wallet adapter (Shield, Leo, Puzzle, Fox) into a Veil account. `@provablehq/veil-aleo-react-hooks` wraps this; reach for it directly outside React. | [README](./packages/wallet-adapter/README.md) |
+| `@provablehq/veil-aleo-sdk` | Your code holds a private key directly (bots, scripts, servers, CI) and must sign and prove locally. Pulls in the Provable WASM SDK. | [README](./packages/provable-sdk/README.md) |
 | `@provablehq/shield-swap-sdk` | You are integrating the Shield Swap AMM/DEX — swaps, liquidity, pool reads. Ships agent tool schemas (`@provablehq/shield-swap-sdk/agent`) and MCP tools (`@provablehq/shield-swap-sdk/mcp`). | [README](./packages/shield-swap/README.md) |
-| `@provablehq/veil-leo` | You build, compile, or deploy Leo programs from TypeScript — including compiling programs during testing, where it pairs with `@provablehq/veil-devnode` to build and deploy against a local node. Requires the `leo` binary on `PATH`. | [README](./packages/leo/README.md) |
+| `@provablehq/veil-leo` | You build, compile, or deploy Leo programs from TypeScript — including compiling programs during testing, where it pairs with `@provablehq/veil-aleo-devnode` to build and deploy against a local node. Requires the `leo` binary on `PATH`. | [README](./packages/leo/README.md) |
 | `@provablehq/veil-codegen` | You want typed TypeScript bindings generated from a program ABI. Ships the `veil-codegen` CLI; use it as a build-time dev dependency. | [README](./packages/codegen/README.md) |
-| `@provablehq/veil-devnode` | You run a local Aleo node in tests or local development. Requires the `aleo-devnode` binary on `PATH`. | [README](./packages/devnode/README.md) |
+| `@provablehq/veil-aleo-devnode` | You run a local Aleo node in tests or local development. Requires the `aleo-devnode` binary on `PATH`. | [README](./packages/devnode/README.md) |
 
-`@provablehq/veil-bridge` (cross-chain bridge client) is in preview and not yet published.
+`@provablehq/veil-aleo-bridges` (cross-chain bridge client) is in preview and not yet published.
 
 ### Common setups
 
-- **Building a frontend dApp.** Install `@provablehq/veil-react` and the wallet adapters
+- **Building a frontend dApp.** Install `@provablehq/veil-aleo-react-hooks` and the wallet adapters
   you support. The user's wallet holds the keys and proves, so your app carries
-  no private key or proving config. `@provablehq/veil-react` pulls in `@provablehq/veil-core` and
-  `@provablehq/veil-wallet-adapter` for you.
+  no private key or proving config. `@provablehq/veil-aleo-react-hooks` pulls in `@provablehq/veil-core` and
+  `@provablehq/veil-aleo-wallet-adapter` for you.
 
 - **Giving an agent the ability to use Aleo.** Start from `@provablehq/veil-core` plus its
   `@provablehq/veil-core/agent` (tool schemas) and `@provablehq/veil-core/mcp` (MCP tools) entry
   points. If the agent holds its own key and signs unattended, add
-  `@provablehq/veil-sdk`. For DEX actions, add `@provablehq/shield-swap-sdk` and its
+  `@provablehq/veil-aleo-sdk`. For DEX actions, add `@provablehq/shield-swap-sdk` and its
   `/agent` and `/mcp` entry points.
 
 - **Integrating Aleo into a CLI, server, or custodial service.** Use
-  `@provablehq/veil-core` with `@provablehq/veil-sdk` — you hold the private key and sign and
+  `@provablehq/veil-core` with `@provablehq/veil-aleo-sdk` — you hold the private key and sign and
   prove locally (delegated proving or fully local). Add `@provablehq/veil-leo` to build or
   deploy programs, and `@provablehq/veil-codegen` to generate typed bindings for the
   contracts you call.
 
 - **Integrating Shield Swap.** Always start with `@provablehq/shield-swap-sdk` on top of a
   client, then pick the client by where the keys live:
-  - *In a frontend* — pair it with `@provablehq/veil-react`; the connected wallet signs and
+  - *In a frontend* — pair it with `@provablehq/veil-aleo-react-hooks`; the connected wallet signs and
     proves.
-  - *In an agent trader* — pair it with `@provablehq/veil-sdk` and the
+  - *In an agent trader* — pair it with `@provablehq/veil-aleo-sdk` and the
     `@provablehq/shield-swap-sdk/agent` and `/mcp` tooling.
-  - *In a programmatic trader or bot* — pair it with `@provablehq/veil-sdk`
+  - *In a programmatic trader or bot* — pair it with `@provablehq/veil-aleo-sdk`
     (local key, delegated or local proving). Read-only pool and price queries
     need only a transport — no key, proving, or scanner.
 

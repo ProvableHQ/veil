@@ -1,4 +1,4 @@
-# @provablehq/veil-devnode
+# @provablehq/veil-aleo-devnode
 
 Runs and drives a local Aleo development node from TypeScript. Reach for it in
 tests, CI, and local development when you need a real node to broadcast against
@@ -11,10 +11,10 @@ boots.
 ## Installation
 
 ```sh
-pnpm add @provablehq/veil-devnode @provablehq/veil-core
+pnpm add @provablehq/veil-aleo-devnode @provablehq/veil-core
 ```
 
-`@provablehq/veil-devnode` drives the `aleo-devnode` binary as a subprocess — it does not
+`@provablehq/veil-aleo-devnode` drives the `aleo-devnode` binary as a subprocess — it does not
 bundle a node. The binary MUST be installed and resolvable on `PATH` (override
 its location per call with `devnodePath`). Every function throws with an
 install-and-PATH hint if it cannot find or run the binary.
@@ -27,7 +27,7 @@ returned instance is ready to receive transactions. Call `stop` to terminate it
 first.
 
 ```ts
-import { startDevnode, advanceDevnode, DEVNODE_ADDR } from '@provablehq/veil-devnode'
+import { startDevnode, advanceDevnode, DEVNODE_ADDR } from '@provablehq/veil-aleo-devnode'
 
 const devnode = await startDevnode({
   socketAddr: DEVNODE_ADDR, // '127.0.0.1:3030'
@@ -61,7 +61,7 @@ and, through the core test actions, snapshots it.
 
 ```ts
 import { createTestClient, http } from '@provablehq/veil-core'
-import { devnodeActions } from '@provablehq/veil-devnode'
+import { devnodeActions } from '@provablehq/veil-aleo-devnode'
 
 const client = createTestClient({
   transport: http('http://127.0.0.1:3030', { network: 'testnet' }),
