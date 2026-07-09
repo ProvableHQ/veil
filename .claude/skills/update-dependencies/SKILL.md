@@ -11,6 +11,16 @@ commit each stream separately (`[Chore] Bump <thing> to <version>` plus any
 `[Fix]` commits the bump forces). Devnode-gated tests require `leo` and
 `aleo-devnode` on PATH.
 
+Start with the detection script — it prints current-vs-latest for every stream
+(including the CI workflow pins) and exits 1 when anything is stale:
+
+```sh
+./scripts/check-upstream-versions.sh
+```
+
+When it exits 0, every stream is current — report that and stop. Otherwise
+work only the streams it flagged, using the sections below.
+
 Full devnode verification command used throughout (append newer devnode test
 files if the CI workflow lists more):
 
