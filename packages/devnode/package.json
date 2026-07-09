@@ -1,7 +1,7 @@
 {
   "name": "@provablehq/veil-aleo-devnode",
   "version": "0.4.0",
-  "description": "Local Aleo development node helpers for the Veil SDK.",
+  "description": "TypeScript interface for orchestrating local Aleo test networks for testing & developing Aleo programs.",
   "license": "MIT",
   "repository": {
     "type": "git",

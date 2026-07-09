@@ -1,7 +1,7 @@
 {
   "name": "@provablehq/veil-leo",
   "version": "0.4.0",
-  "description": "Leo language utilities for the Veil Aleo SDK.",
+  "description": "TypeScript interface for using the Leo CLI from TS/JS.",
   "license": "MIT",
   "repository": {
     "type": "git",
