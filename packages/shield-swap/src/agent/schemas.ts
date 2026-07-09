@@ -1,4 +1,4 @@
-import type { AgentToolSchema } from '@veil/core/agent'
+import type { AgentToolSchema } from '@provablehq/veil-core/agent'
 
 // ---------------------------------------------------------------------------
 // Chain-direct read tools (backed by a Veil client). Trust-critical values —

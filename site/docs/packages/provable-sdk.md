@@ -2,15 +2,15 @@
 sidebar_position: 3
 ---
 
-# @veil/provable-sdk
+# @provablehq/veil-sdk
 
 Wraps the `@provablehq/sdk` (WASM) and binds it to a named network. Reach for it
 to build a fully-wired client from a private key, derive accounts from keys or
 BIP39 mnemonics, run local or delegated proving, and scan records — the
-headless / server-side counterpart to `@veil/wallet-adapter`.
+headless / server-side counterpart to `@provablehq/veil-wallet-adapter`.
 
 ```bash
-npm install @veil/core @veil/provable-sdk
+npm install @provablehq/veil-core @provablehq/veil-sdk
 ```
 
 ## Key exports
@@ -22,7 +22,7 @@ npm install @veil/core @veil/provable-sdk
 ## Usage
 
 ```ts
-import { loadNetwork } from '@veil/provable-sdk'
+import { loadNetwork } from '@provablehq/veil-sdk'
 
 const aleo = await loadNetwork('mainnet')
 

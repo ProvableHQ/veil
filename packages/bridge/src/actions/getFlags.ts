@@ -1,4 +1,4 @@
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 import { unwrapEnvelope } from '../utils/unwrapEnvelope.js'
 import type { BridgeFlagsDto } from '../types/bridge.js'
 

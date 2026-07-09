@@ -6,7 +6,7 @@ import { PuzzleWalletAdapter } from '@provablehq/aleo-wallet-adaptor-puzzle'
 import { FoxWalletAdapter } from '@provablehq/aleo-wallet-adaptor-fox'
 import { Network } from '@provablehq/aleo-types'
 import { WalletDecryptPermission } from '@provablehq/aleo-wallet-standard'
-import type { RecordAccessGrant, AlgorithmGrant } from '@veil/core'
+import type { RecordAccessGrant, AlgorithmGrant } from '@provablehq/veil-core'
 
 export interface VeilProviderProps {
   children: ReactNode
@@ -40,7 +40,7 @@ const networkMap = {
  * (Shield, Leo, Puzzle, Fox) are auto-configured.
  *
  * ```tsx
- * import { VeilProvider } from '@veil/react'
+ * import { VeilProvider } from '@provablehq/veil-react'
  *
  * <VeilProvider network="mainnet">
  *   <App />

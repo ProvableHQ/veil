@@ -1,4 +1,4 @@
-import { executeContract, writeContract, type Client } from '@veil/core'
+import { executeContract, writeContract, type Client } from '@provablehq/veil-core'
 import { isFeeTierValid, getFeeToTickSpacing } from '../reads/validation.js'
 import { MIN_TICK, MAX_TICK, getSqrtPriceAtTick } from '../../utils/tick-math.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'

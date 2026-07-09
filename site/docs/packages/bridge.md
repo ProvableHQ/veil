@@ -2,23 +2,23 @@
 sidebar_position: 10
 ---
 
-# @veil/bridge
+# @provablehq/veil-bridge
 
 :::caution Preview
-`@veil/bridge` is early and not yet published. The API below is subject to
+`@provablehq/veil-bridge` is early and not yet published. The API below is subject to
 change — treat this page as a preview.
 :::
 
 A viem-shaped client for Provable's cross-chain bridge: discover routes,
 fetch quotes, create and track orders, and perform an Aleo-originated swap in
-one call (an unshield deposit signed by a `@veil/core` wallet client, then
+one call (an unshield deposit signed by a `@provablehq/veil-core` wallet client, then
 bridged to a destination chain, asset, and address). Aleo is always one side
 of the pair.
 
 ## Key exports
 
 - **`createBridgeClient(config)`** → a `BridgeClient`; pass `wallet` (a
-  `@veil/core` WalletClient) to enable `swap`.
+  `@provablehq/veil-core` WalletClient) to enable `swap`.
 - **`httpBridge(baseUrl, config?)`** — the bridge transport.
 - **Discovery** — `getAssets` (the identifier catalog), `getProviders`,
   `getRoutes` (derived candidate pairs, filterable by symbol / chain /
@@ -30,8 +30,8 @@ of the pair.
   `DEFAULT_ALEO_ASSET_MAP`.
 - **Errors** — `BridgeError`, `BridgeEnvelopeError`, `BridgeOrderFailedError`,
   `BridgeTimeoutError`.
-- **Agent surfaces** — `createBridgeAgentTools` (`@veil/bridge/agent`),
-  `createBridgeMcpServer` (`@veil/bridge/mcp`) — composable with other
+- **Agent surfaces** — `createBridgeAgentTools` (`@provablehq/veil-bridge/agent`),
+  `createBridgeMcpServer` (`@provablehq/veil-bridge/mcp`) — composable with other
   packages' tools via core's `toMcpServer`.
 
 ## Identifiers
@@ -42,11 +42,11 @@ The API is strict about identifiers: chains are case-sensitive ids (`ALEO`,
 units. Don't hardcode any of them — discover:
 
 ```ts
-import { createBridgeClient, httpBridge } from '@veil/bridge'
+import { createBridgeClient, httpBridge } from '@provablehq/veil-bridge'
 
 const bridge = createBridgeClient({
   transport: httpBridge('https://wallet.api.provable.com'),
-  wallet: walletClient, // a @veil/core WalletClient — required for swap below
+  wallet: walletClient, // a @provablehq/veil-core WalletClient — required for swap below
 })
 
 // What can move where, relative to Aleo? Filter by symbol and chain name.

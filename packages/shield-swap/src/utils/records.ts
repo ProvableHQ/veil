@@ -1,4 +1,4 @@
-import { requestRecords, parseRecordPlaintextLoose, type Client, type InputRequest, type OwnedRecord } from '@veil/core'
+import { requestRecords, parseRecordPlaintextLoose, type Client, type InputRequest, type OwnedRecord } from '@provablehq/veil-core'
 
 /**
  * A token record's decoded essentials, alongside the record it came from.

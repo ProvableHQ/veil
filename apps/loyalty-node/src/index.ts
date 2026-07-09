@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { loadNetwork } from "@veil/provable-sdk";
+import { loadNetwork } from "@provablehq/veil-sdk";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";

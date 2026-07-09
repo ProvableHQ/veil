@@ -1,4 +1,4 @@
-import type { AgentTool, AgentToolSchema } from '@veil/core/agent'
+import type { AgentTool, AgentToolSchema } from '@provablehq/veil-core/agent'
 import type { ShieldSwapAgentToolsConfig } from './types.js'
 import { chainToolSchemas, apiToolSchemas, composedToolSchemas, writeToolSchemas } from './schemas.js'
 import {
@@ -55,7 +55,7 @@ export function shieldSwapAgentToolSchemas(config?: ShieldSwapAgentToolsConfig):
 /**
  * Builds executable shield_swap agent tools (schema + handler).
  *
- * Framework-agnostic {@link AgentTool}s — the same shape as `@veil/core`'s
+ * Framework-agnostic {@link AgentTool}s — the same shape as `@provablehq/veil-core`'s
  * `createAgentTools`, so DEX and base-Aleo tools register together (LangChain,
  * Vercel AI SDK, the MCP server). Only tool groups whose backing is present
  * are included: chain + private-balance tools need `client`, API tools need

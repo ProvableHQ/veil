@@ -12,8 +12,8 @@ import {
   fallback,
   getContract,
   parseProgram,
-} from '@veil/core'
-import { fromWalletAdapter, type AleoWalletAdapter } from '@veil/wallet-adapter'
+} from '@provablehq/veil-core'
+import { fromWalletAdapter, type AleoWalletAdapter } from '@provablehq/veil-wallet-adapter'
 
 const API_URL = 'https://api.provable.com/v2'
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 import { getBalances } from '../../src/utils/balances.js'
 import type { ApiClient } from '../../src/api/client.js'
 

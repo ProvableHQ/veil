@@ -1,4 +1,4 @@
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 import { getAssets } from './getAssets.js'
 import { chainDisplayName, resolveChainId } from '../lib/chain-names.js'
 import type { BridgeAssetSummary } from '../types/bridge.js'

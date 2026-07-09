@@ -1,7 +1,7 @@
-# @veil/wallet-adapter
+# @provablehq/veil-wallet-adapter
 
 Adapts a Provable/Aleo wallet-standard adapter (Shield, Leo, Puzzle, Fox, …) into
-the abstract `@veil/core` account and transport interfaces.
+the abstract `@provablehq/veil-core` account and transport interfaces.
 
 Reach for this when a connected wallet — not the app — should hold the keys and
 records and prove transactions. The adapter keeps signing, decryption, record
@@ -12,7 +12,7 @@ client is built from.
 ## Installation
 
 ```sh
-pnpm add @veil/wallet-adapter @veil/core
+pnpm add @provablehq/veil-wallet-adapter @provablehq/veil-core
 ```
 
 The concrete wallet adapter packages are optional peers — install only the ones
@@ -36,8 +36,8 @@ through `fallback()` so read methods (`getBlock`, `getBalance`) still resolve.
 
 ```ts
 import { LeoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-leo'
-import { fromWalletAdapter } from '@veil/wallet-adapter'
-import { createWalletClient, http, fallback } from '@veil/core'
+import { fromWalletAdapter } from '@provablehq/veil-wallet-adapter'
+import { createWalletClient, http, fallback } from '@provablehq/veil-core'
 
 const wallet = new LeoWalletAdapter()
 await wallet.connect(network, decryptPermission)
@@ -63,7 +63,7 @@ upstream `BaseAleoWalletAdapter`), and the privacy-feature types
 
 ## Where this fits
 
-Most React apps use `@veil/react` and its `VeilProvider`, which wraps this
-package and manages connection state for the caller. `@veil/wallet-adapter` is
+Most React apps use `@provablehq/veil-react` and its `VeilProvider`, which wraps this
+package and manages connection state for the caller. `@provablehq/veil-wallet-adapter` is
 the framework-agnostic layer underneath — reach for it directly in scripts,
 non-React apps, or when building a custom provider.

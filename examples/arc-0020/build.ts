@@ -1,4 +1,4 @@
-import { createLeoClient } from '@veil/leo'
+import { createLeoClient } from '@provablehq/veil-leo'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 

@@ -17,7 +17,7 @@ import { createTransport } from './createTransport.js'
  *   the first transport's error, which is set as its `cause`.
  *
  * @example
- * import { fallback, http, custom } from '@veil/core'
+ * import { fallback, http, custom } from '@provablehq/veil-core'
  *
  * const transport = fallback([
  *   custom({ request: (args) => wallet.request(args) }),

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { getOrder } from '../../src/actions/getOrder.js'
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 
 function makeClient(response: unknown): Client {
   return { request: vi.fn().mockResolvedValue(response) } as unknown as Client

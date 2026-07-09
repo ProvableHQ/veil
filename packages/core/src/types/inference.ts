@@ -2,7 +2,7 @@
 //
 // These conditional types enable getContract to narrow function/mapping names
 // and infer output types when the ABI is passed as a literal type.
-// Complements @veil/codegen — codegen provides richer DX (named params, typed
+// Complements @provablehq/veil-codegen — codegen provides richer DX (named params, typed
 // record interfaces), while these types provide autocomplete and basic type
 // safety without a build step.
 

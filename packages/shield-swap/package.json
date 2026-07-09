@@ -1,5 +1,5 @@
 {
-  "name": "@veil/shield-swap",
+  "name": "@provablehq/veil-shield-swap",
   "version": "0.4.0",
   "description": "Veil client for the Shield Swap AMM DEX on Aleo.",
   "license": "MIT",
@@ -53,13 +53,13 @@
     }
   },
   "dependencies": {
-    "@veil/core": "workspace:*"
+    "@provablehq/veil-core": "workspace:*"
   },
   "devDependencies": {
     "@provablehq/sdk": "^0.11.3",
-    "@veil/codegen": "workspace:*",
-    "@veil/provable-sdk": "workspace:*",
+    "@provablehq/veil-codegen": "workspace:*",
+    "@provablehq/veil-sdk": "workspace:*",
     "openapi-typescript": "^7.13.0",
-    "@veil/bridge": "workspace:*"
+    "@provablehq/veil-bridge": "workspace:*"
   }
 }

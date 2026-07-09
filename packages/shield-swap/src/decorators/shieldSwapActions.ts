@@ -1,4 +1,4 @@
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 import { getPool, type GetPoolParameters, type GetPoolReturnType } from '../actions/reads/getPool.js'
 import { getSlot, type GetSlotParameters, type GetSlotReturnType } from '../actions/reads/getSlot.js'
 import {

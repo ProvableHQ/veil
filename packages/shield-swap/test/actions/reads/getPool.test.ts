@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 import { getPool } from '../../../src/actions/reads/getPool.js'
 
 // Real `pools` mapping value captured from testnet (shield_swap, pool

@@ -7,17 +7,17 @@ sidebar_position: 2
 ## Installation
 
 ```bash
-npm install @veil/core
+npm install @provablehq/veil-core
 ```
 
 For React apps:
 ```bash
-npm install @veil/core @veil/react
+npm install @provablehq/veil-core @provablehq/veil-react
 ```
 
 For server-side / Node.js:
 ```bash
-npm install @veil/core @veil/provable-sdk
+npm install @provablehq/veil-core @provablehq/veil-sdk
 ```
 
 ## Quick Start — Read Chain State
@@ -25,7 +25,7 @@ npm install @veil/core @veil/provable-sdk
 No wallet needed. Create a public client and start reading.
 
 ```ts
-import { createPublicClient, http } from '@veil/core'
+import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
@@ -52,7 +52,7 @@ const balance = await client.getBalance({
 Wrap your app in `VeilProvider`, then use the `useVeilWallet` hook anywhere.
 
 ```tsx
-import { VeilProvider, useVeilWallet } from '@veil/react'
+import { VeilProvider, useVeilWallet } from '@provablehq/veil-react'
 
 // Root — that's the entire setup
 function Root() {
@@ -81,15 +81,15 @@ function App() {
 
 ## Quick Start — Node.js / Server-Side
 
-Use `@veil/provable-sdk` for local key management without a browser wallet.
+Use `@provablehq/veil-sdk` for local key management without a browser wallet.
 
 ```ts
-import { createPublicClient, createWalletClient, http } from '@veil/core'
+import { createPublicClient, createWalletClient, http } from '@provablehq/veil-core'
 import {
   privateKeyToAccount,
   createProvingConfig,
   createLocalScanner,
-} from '@veil/provable-sdk'
+} from '@provablehq/veil-sdk'
 
 const transport = http('https://api.provable.com/v2', { network: 'testnet' })
 

@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { rmSync } from 'node:fs'
 
-import { startDevnode, type DevnodeInstance } from '@veil/devnode'
-import { createDevnodeClient, generateAccount } from '@veil/provable-sdk'
-import { createTestClient, getContract, http, parseProgram } from '@veil/core'
-import type { PublicClient, WalletClient, TestClient, LocalAccount } from '@veil/core'
+import { startDevnode, type DevnodeInstance } from '@provablehq/veil-devnode'
+import { createDevnodeClient, generateAccount } from '@provablehq/veil-sdk'
+import { createTestClient, getContract, http, parseProgram } from '@provablehq/veil-core'
+import type { PublicClient, WalletClient, TestClient, LocalAccount } from '@provablehq/veil-core'
 
 import { buildLeoProgram, type BuiltLeoProgram } from './leoProject.js'
 

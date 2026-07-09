@@ -243,7 +243,7 @@ function buildUrl(
  * @returns A transport of type `'http'` bound to `url` and the chosen network.
  *
  * @example
- * import { http } from '@veil/core'
+ * import { http } from '@provablehq/veil-core'
  *
  * const transport = http('https://api.provable.com/v2', { network: 'testnet' })
  */

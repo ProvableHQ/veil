@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import type { WalletClient, PublicClient } from '@veil/react'
+import type { WalletClient, PublicClient } from '@provablehq/veil-react'
 
 const TOKEN_PROGRAM = 'loyalty_token.aleo'
 const REWARDS_PROGRAM = 'loyalty_rewards.aleo'

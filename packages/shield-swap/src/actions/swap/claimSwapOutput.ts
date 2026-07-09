@@ -1,4 +1,4 @@
-import { executeContract, writeContract, type Client, type TransactionInput } from '@veil/core'
+import { executeContract, writeContract, type Client, type TransactionInput } from '@provablehq/veil-core'
 import type { SwapHandle } from './swap.js'
 import { getSwapOutput } from '../reads/getSwapOutput.js'
 import { requireAccount } from '../../utils/guards.js'

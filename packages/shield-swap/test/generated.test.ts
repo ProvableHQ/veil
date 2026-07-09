@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { RecordValue } from '@veil/core'
+import type { RecordValue } from '@provablehq/veil-core'
 import {
   PROGRAM_ID,
   toPositionNFT,

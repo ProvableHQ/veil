@@ -4,12 +4,12 @@ sidebar_position: 1
 
 # React Integration
 
-`@veil/react` provides batteries-included React support. All Aleo wallets are auto-configured — no manual adapter setup needed.
+`@provablehq/veil-react` provides batteries-included React support. All Aleo wallets are auto-configured — no manual adapter setup needed.
 
 ## Installation
 
 ```bash
-npm install @veil/core @veil/react
+npm install @provablehq/veil-core @provablehq/veil-react
 ```
 
 ## Setup
@@ -17,7 +17,7 @@ npm install @veil/core @veil/react
 Wrap your app with `VeilProvider`:
 
 ```tsx
-import { VeilProvider } from '@veil/react'
+import { VeilProvider } from '@provablehq/veil-react'
 
 function Root() {
   return (
@@ -33,7 +33,7 @@ That's it. Shield, Leo, Puzzle, and Fox wallets are auto-configured.
 ## Use in Components
 
 ```tsx
-import { useVeilWallet } from '@veil/react'
+import { useVeilWallet } from '@provablehq/veil-react'
 
 function MyComponent() {
   const {
@@ -64,7 +64,7 @@ function MyComponent() {
 
 ## What's Included
 
-`@veil/react` handles:
+`@provablehq/veil-react` handles:
 - Wallet discovery (which wallets are installed)
 - Wallet selection and connection
 - Network configuration

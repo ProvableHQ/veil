@@ -1,6 +1,6 @@
-import { TransportError } from '@veil/core'
-import type { Transport, TransportConfig } from '@veil/core'
-import { createTransport } from '@veil/core'
+import { TransportError } from '@provablehq/veil-core'
+import type { Transport, TransportConfig } from '@provablehq/veil-core'
+import { createTransport } from '@provablehq/veil-core'
 
 /**
  * Configuration for {@link httpBridge}.

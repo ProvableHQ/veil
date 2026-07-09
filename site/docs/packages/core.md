@@ -2,7 +2,7 @@
 sidebar_position: 2
 ---
 
-# @veil/core
+# @provablehq/veil-core
 
 The base of the SDK: a viem-shaped client library for Aleo. Read chain state
 and write transactions through transports, public/wallet/test clients, and
@@ -10,7 +10,7 @@ standalone actions — plus agent- and MCP-facing bindings that expose those
 actions to LLMs.
 
 ```bash
-npm install @veil/core
+npm install @provablehq/veil-core
 ```
 
 ## Key exports
@@ -26,11 +26,11 @@ and [API](../api/public-actions) sections for the full surface.
 
 ## Subpaths
 
-- **`@veil/core/agent`** — framework-agnostic LLM tool bindings: `createAgentTools`, `aleoAgentToolSchemas`, and the `AgentTool` / `AgentToolSchema` types.
-- **`@veil/core/mcp`** — adapt agent tools into an MCP server: `toMcpServer(tools)` (package-agnostic) and `createMcpServer(config)` for the base Aleo tools.
+- **`@provablehq/veil-core/agent`** — framework-agnostic LLM tool bindings: `createAgentTools`, `aleoAgentToolSchemas`, and the `AgentTool` / `AgentToolSchema` types.
+- **`@provablehq/veil-core/mcp`** — adapt agent tools into an MCP server: `toMcpServer(tools)` (package-agnostic) and `createMcpServer(config)` for the base Aleo tools.
 
 ```ts
-import { createMcpServer } from '@veil/core/mcp'
+import { createMcpServer } from '@provablehq/veil-core/mcp'
 
 const server = createMcpServer({ client, walletClient })
 const tools = server.tools

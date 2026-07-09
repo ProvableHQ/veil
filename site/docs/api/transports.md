@@ -9,7 +9,7 @@ sidebar_position: 3
 Creates an HTTP transport for connecting to an Aleo RPC endpoint.
 
 ```ts
-import { http } from '@veil/core'
+import { http } from '@provablehq/veil-core'
 
 const transport = http(url, config?)
 ```
@@ -26,7 +26,7 @@ const transport = http(url, config?)
 Wraps a custom request function as a transport.
 
 ```ts
-import { custom } from '@veil/core'
+import { custom } from '@provablehq/veil-core'
 
 const transport = custom({
   key: 'myTransport',
@@ -40,7 +40,7 @@ const transport = custom({
 Tries multiple transports in order. Returns the first successful response.
 
 ```ts
-import { fallback } from '@veil/core'
+import { fallback } from '@provablehq/veil-core'
 
 const transport = fallback([transport1, transport2])
 ```

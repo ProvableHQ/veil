@@ -40,7 +40,7 @@ import {
   privateKeyToAccount,
   createProvingConfig,
   createLocalScanner,
-} from '@veil/provable-sdk'
+} from '@provablehq/veil-sdk'
 
 const walletClient = createWalletClient({
   account: privateKeyToAccount('APrivateKey1...'),
@@ -61,7 +61,7 @@ const records = await walletClient.requestRecords({
 Delegates scanning to a Record Scanning Service. Faster than local scanning for large block ranges.
 
 ```ts
-import { createRemoteScanner } from '@veil/provable-sdk'
+import { createRemoteScanner } from '@provablehq/veil-sdk'
 
 const walletClient = createWalletClient({
   account: privateKeyToAccount('APrivateKey1...'),
@@ -79,8 +79,8 @@ const walletClient = createWalletClient({
 For view-only use cases where you need records but don't need to sign transactions. Uses the `withRecords` extension on a public client.
 
 ```ts
-import { createPublicClient, http } from '@veil/core'
-import { createStandaloneScanner, withRecords } from '@veil/provable-sdk'
+import { createPublicClient, http } from '@provablehq/veil-core'
+import { createStandaloneScanner, withRecords } from '@provablehq/veil-sdk'
 
 const scanner = createStandaloneScanner({
   url: 'https://api.provable.com/v2',

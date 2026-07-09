@@ -37,7 +37,7 @@ export type TestActions = {
  * @returns The test actions bound to `client`.
  *
  * @example
- * import { createClient, http } from '@veil/core'
+ * import { createClient, http } from '@provablehq/veil-core'
  *
  * const client = createClient({
  *   transport: http('http://127.0.0.1:3030'),

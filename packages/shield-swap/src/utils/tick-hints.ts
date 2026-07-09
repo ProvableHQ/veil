@@ -1,4 +1,4 @@
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 import { getSlot } from '../actions/reads/getSlot.js'
 import { MIN_TICK } from './tick-math.js'
 

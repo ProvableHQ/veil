@@ -21,8 +21,8 @@ import {
   rpcAccount,
   getContract,
   parseProgram,
-} from '@veil/core'
-import type { Program } from '@veil/core'
+} from '@provablehq/veil-core'
+import type { Program } from '@provablehq/veil-core'
 
 // ---------------------------------------------------------------------------
 // Mock program source — a realistic subset of credits.aleo

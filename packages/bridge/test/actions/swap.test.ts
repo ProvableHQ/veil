@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { swap } from '../../src/actions/swap.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
-import type { Client, WalletClient } from '@veil/core'
+import type { Client, WalletClient } from '@provablehq/veil-core'
 
 function makeQuote(over: Partial<Record<string, unknown>> = {}) {
   return {

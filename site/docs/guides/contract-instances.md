@@ -13,7 +13,7 @@ The contract abstraction layer is under active development. The API may change.
 ## Create a Contract Instance
 
 ```ts
-import { getContract, parseProgram } from '@veil/core'
+import { getContract, parseProgram } from '@provablehq/veil-core'
 
 // Fetch and parse the program source
 const source = await publicClient.getCode({ program: 'credits.aleo' })
@@ -46,7 +46,7 @@ const txId = await credits.write.transfer_public({
 When you have the Leo compiler's ABI output, use `parseAbi` for more accurate types:
 
 ```ts
-import { parseAbi, getContract } from '@veil/core'
+import { parseAbi, getContract } from '@provablehq/veil-core'
 import abi from './my_program/build/abi.json'
 
 const program = parseAbi(abi)

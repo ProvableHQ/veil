@@ -33,7 +33,7 @@ export type PublicClient = Client & PublicActions
  * @returns A client carrying every public action.
  *
  * @example
- * import { createPublicClient, http } from '@veil/core'
+ * import { createPublicClient, http } from '@provablehq/veil-core'
  *
  * const client = createPublicClient({
  *   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),

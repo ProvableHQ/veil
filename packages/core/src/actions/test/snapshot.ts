@@ -27,7 +27,7 @@ export type SnapshotReturnType = {
  * Captures the current ledger state of a local devnode as a named snapshot.
  *
  * Use in tests to save a point to return to later, then reload it with the
- * `@veil/devnode` `restoreDevnode` action. Hits the devnode over the transport;
+ * `@provablehq/veil-devnode` `restoreDevnode` action. Hits the devnode over the transport;
  * the node MUST be running with persistent storage (`storagePath`) — an
  * in-memory node has nothing to snapshot. Real networks do not expose this.
  *

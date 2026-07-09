@@ -23,15 +23,15 @@ import {
   custom,
   getContract,
   parseProgram,
-} from '@veil/core'
-import { aleoAgentTools, createAgentTools } from '@veil/core/agent'
+} from '@provablehq/veil-core'
+import { aleoAgentTools, createAgentTools } from '@provablehq/veil-core/agent'
 
 // ---------------------------------------------------------------------------
 // Mock proving infrastructure
 // ---------------------------------------------------------------------------
 
 // In production, this would be:
-//   import { privateKeyToAccount, createProvingConfig } from '@veil/provable-sdk'
+//   import { privateKeyToAccount, createProvingConfig } from '@provablehq/veil-sdk'
 //
 // The provable package wraps @provablehq/sdk and handles:
 // - Key derivation from private key
@@ -312,7 +312,7 @@ describe('Example: AgentKit-style Tool Integration', () => {
     // This is how you'd wire veil into Coinbase AgentKit:
     //
     //   import { CdpAgentkit } from '@coinbase/cdp-agentkit-core'
-    //   import { aleoAgentTools } from '@veil/core/agent'
+    //   import { aleoAgentTools } from '@provablehq/veil-core/agent'
     //
     //   const aleoTools = aleoAgentTools({ client: publicClient, walletClient })
     //

@@ -1,2 +1,2 @@
 export { createBridgeAgentTools } from './tools.js'
-export type { AgentTool, AgentToolSchema, AgentToolHandler } from '@veil/core/agent'
+export type { AgentTool, AgentToolSchema, AgentToolHandler } from '@provablehq/veil-core/agent'

@@ -1,4 +1,4 @@
-import type { Client, WalletClient } from '@veil/core'
+import type { Client, WalletClient } from '@provablehq/veil-core'
 import { getAssets, type GetAssetsReturnType } from '../../actions/getAssets.js'
 import { getProviders, type GetProvidersReturnType } from '../../actions/getProviders.js'
 import { getRoutes, type GetRoutesParameters, type GetRoutesReturnType } from '../../actions/getRoutes.js'

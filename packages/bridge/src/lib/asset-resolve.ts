@@ -1,4 +1,4 @@
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import { getAssets } from '../actions/getAssets.js'
 import { resolveChainId } from './chain-names.js'

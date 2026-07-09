@@ -18,7 +18,7 @@ type RpcAccountSource = {
  * @returns An account tagged `type: 'rpc'` that delegates signing to `source`.
  *
  * @example
- * import { rpcAccount } from '@veil/core'
+ * import { rpcAccount } from '@provablehq/veil-core'
  *
  * const account = rpcAccount({
  *   address: 'aleo1...',

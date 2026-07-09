@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createClient, custom } from '@veil/core'
+import { createClient, custom } from '@provablehq/veil-core'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { ApiClient } from '../../src/api/client.js'
 

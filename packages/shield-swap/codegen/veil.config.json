@@ -5,5 +5,5 @@
       "out": "../src/generated/shield_swap.ts"
     }
   ],
-  "coreImport": "@veil/core"
+  "coreImport": "@provablehq/veil-core"
 }

@@ -23,7 +23,7 @@ async function main() {
 
     const raw = JSON.parse(readFileSync(abiPath, 'utf-8'))
     const abi = parseAbi(raw)
-    const source = generate({ abi, coreImport: '@veil/core' })
+    const source = generate({ abi, coreImport: '@provablehq/veil-core' })
 
     writeFileSync(outPath, source, 'utf-8')
     console.log(`Generated ${outPath}`)

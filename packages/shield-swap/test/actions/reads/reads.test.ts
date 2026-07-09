@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 import { getSlot } from '../../../src/actions/reads/getSlot.js'
 import { getSwapOutput } from '../../../src/actions/reads/getSwapOutput.js'
 import {

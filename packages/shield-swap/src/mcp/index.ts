@@ -1,8 +1,8 @@
-import { toMcpServer, type McpServer } from '@veil/core/mcp'
+import { toMcpServer, type McpServer } from '@provablehq/veil-core/mcp'
 import { createShieldSwapAgentTools } from '../agent/index.js'
 import type { ShieldSwapAgentToolsConfig } from '../agent/types.js'
 
-export type { McpServer, McpToolDefinition } from '@veil/core/mcp'
+export type { McpServer, McpToolDefinition } from '@provablehq/veil-core/mcp'
 
 /**
  * Creates an MCP server exposing the shield_swap tools.
@@ -13,7 +13,7 @@ export type { McpServer, McpToolDefinition } from '@veil/core/mcp'
  * tools alongside the base Aleo tools, call core's `toMcpServer` with both
  * arrays concatenated.
  *
- * Exposed via subpath export: `import { createShieldSwapMcpServer } from '@veil/shield-swap/mcp'`.
+ * Exposed via subpath export: `import { createShieldSwapMcpServer } from '@provablehq/veil-shield-swap/mcp'`.
  *
  * @param config The client and/or API client to bind, and the default program.
  * @returns An {@link McpServer} whose `handleToolCall` dispatches by tool name.

@@ -4,19 +4,19 @@
   "commit": false,
   "fixed": [
     [
-      "@veil/core",
-      "@veil/react",
-      "@veil/wallet-adapter",
-      "@veil/provable-sdk",
-      "@veil/leo",
-      "@veil/devnode",
-      "@veil/shield-swap",
-      "@veil/codegen"
+      "@provablehq/veil-core",
+      "@provablehq/veil-react",
+      "@provablehq/veil-wallet-adapter",
+      "@provablehq/veil-sdk",
+      "@provablehq/veil-leo",
+      "@provablehq/veil-devnode",
+      "@provablehq/veil-shield-swap",
+      "@provablehq/veil-codegen"
     ]
   ],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["@veil/loyalty-dapp", "@veil/loyalty-node"]
+  "ignore": ["@provablehq/veil-loyalty-dapp", "@provablehq/veil-loyalty-node"]
 }

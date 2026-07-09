@@ -1,10 +1,10 @@
-import type { Client } from '@veil/core'
-import type { AgentToolSchema, AgentTool, AgentToolHandler } from '@veil/core/agent'
+import type { Client } from '@provablehq/veil-core'
+import type { AgentToolSchema, AgentTool, AgentToolHandler } from '@provablehq/veil-core/agent'
 import type { ApiClient } from '../api/client.js'
 
 // Reuse core's agent-tool contract so shield_swap tools compose into the same
 // registries (LangChain, Vercel AI SDK, the MCP server) as the base Aleo tools.
-export type { AgentToolSchema, AgentTool, AgentToolHandler } from '@veil/core/agent'
+export type { AgentToolSchema, AgentTool, AgentToolHandler } from '@provablehq/veil-core/agent'
 
 /**
  * Wiring for the shield_swap agent tools.

@@ -1,4 +1,4 @@
-import { transfer, type Client, type WalletClient } from '@veil/core'
+import { transfer, type Client, type WalletClient } from '@provablehq/veil-core'
 import { getQuotes } from './getQuotes.js'
 import { createOrder } from './createOrder.js'
 import { waitForOrder } from './waitForOrder.js'
@@ -12,7 +12,7 @@ import type { BridgeOrderStage, BridgeOrderStatusDto, BridgeQuote } from '../typ
 /**
  * Parameters for the end-to-end Aleo-source `swap`.
  *
- * @property wallet `@veil/core` WalletClient used to sign the Aleo unshield
+ * @property wallet `@provablehq/veil-core` WalletClient used to sign the Aleo unshield
  *   deposit. Optional when the bridge client was built with
  *   `createBridgeClient({ wallet })` — a value here overrides the client's
  *   wallet for this call.

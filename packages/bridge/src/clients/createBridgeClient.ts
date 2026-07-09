@@ -1,11 +1,11 @@
-import { createClient, type ClientConfig, type Client, type WalletClient } from '@veil/core'
+import { createClient, type ClientConfig, type Client, type WalletClient } from '@provablehq/veil-core'
 import { bridgeActions, type BridgeActions } from './decorators/bridge.js'
 
 /**
  * Configuration for {@link createBridgeClient}.
  *
  * @property transport The bridge transport, from `httpBridge(baseUrl)`.
- * @property wallet Optional `@veil/core` WalletClient used by the `swap`
+ * @property wallet Optional `@provablehq/veil-core` WalletClient used by the `swap`
  *   action to sign the Aleo deposit. Set it here (viem-style account
  *   configuration) so `bridge.swap()` needs only the route; omit it for a
  *   quote/track-only client, or when supplying `wallet` per swap call.
@@ -27,7 +27,7 @@ export type BridgeClient = Client & BridgeActions
  *
  * @param config Transport (required), optional signing wallet for `swap`,
  *   and client identity overrides.
- * @returns A {@link BridgeClient} — a `@veil/core` client extended with
+ * @returns A {@link BridgeClient} — a `@provablehq/veil-core` client extended with
  *   {@link BridgeActions}.
  *
  * @example

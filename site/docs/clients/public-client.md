@@ -9,7 +9,7 @@ The public client provides read-only access to the Aleo network. No wallet or ac
 ## Create a Public Client
 
 ```ts
-import { createPublicClient, http } from '@veil/core'
+import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),

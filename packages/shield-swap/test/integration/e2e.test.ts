@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { loadNetwork } from '@veil/provable-sdk'
+import { loadNetwork } from '@provablehq/veil-sdk'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
-import { getProgram } from '@veil/core'
+import { getProgram } from '@provablehq/veil-core'
 import { parseTokenRecordInfo } from '../../src/utils/records.js'
 import { SwapOutputNotFinalizedError } from '../../src/actions/swap/claimSwapOutput.js'
 

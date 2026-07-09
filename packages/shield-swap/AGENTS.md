@@ -1,4 +1,4 @@
-# @veil/shield-swap — agent guide
+# @provablehq/veil-shield-swap — agent guide
 
 Working notes for coding agents editing this package. The repo-wide contributor
 constraints in the root `AGENTS.md` / `.agents/contributors.md` still bind here
@@ -10,22 +10,22 @@ interface, no AI attribution in commits). This file adds package-specific how-to
 A viem-shaped client for the `shield_swap` AMM on Aleo: chain-direct reads +
 writes as tree-shakable actions, a typed off-chain API client under `.api`, and
 composition via `shieldSwapActions()` + viem's `extend()`. Agent/MCP tool
-surfaces ship under the `@veil/shield-swap/agent` and `/mcp` subpaths.
+surfaces ship under the `@provablehq/veil-shield-swap/agent` and `/mcp` subpaths.
 
 ## Commands (run from the repo root)
 
 ```sh
-pnpm --filter @veil/shield-swap exec tsc --noEmit   # typecheck
+pnpm --filter @provablehq/veil-shield-swap exec tsc --noEmit   # typecheck
 pnpm vitest run                                      # offline suite (integration auto-skips)
-pnpm --filter @veil/shield-swap build                # tsup → dist (also emits dist/agent, dist/mcp)
+pnpm --filter @provablehq/veil-shield-swap build                # tsup → dist (also emits dist/agent, dist/mcp)
 ```
 
 Codegen (only when upstream shapes change — see the README's Codegen section):
 
 ```sh
-pnpm --filter @veil/shield-swap generate       # ABI → src/generated/shield_swap.ts
-pnpm --filter @veil/shield-swap regen-abi       # refetch program bytecode + ABI (defaults to v0_0_2)
-pnpm --filter @veil/shield-swap regen-openapi   # refetch OpenAPI spec → src/api/openapi.ts
+pnpm --filter @provablehq/veil-shield-swap generate       # ABI → src/generated/shield_swap.ts
+pnpm --filter @provablehq/veil-shield-swap regen-abi       # refetch program bytecode + ABI (defaults to v0_0_2)
+pnpm --filter @provablehq/veil-shield-swap regen-openapi   # refetch OpenAPI spec → src/api/openapi.ts
 ```
 
 ## Tests
@@ -73,8 +73,8 @@ Framework-agnostic tools (schema + handler) — feed to LangChain, the Vercel AI
 SDK, etc.:
 
 ```ts
-import { shieldSwapActions } from '@veil/shield-swap'
-import { createShieldSwapAgentTools } from '@veil/shield-swap/agent'
+import { shieldSwapActions } from '@provablehq/veil-shield-swap'
+import { createShieldSwapAgentTools } from '@provablehq/veil-shield-swap/agent'
 
 const client = walletClient.extend(shieldSwapActions({ api: {} }))
 const tools = createShieldSwapAgentTools({ client, api: client.api })
@@ -84,7 +84,7 @@ const tools = createShieldSwapAgentTools({ client, api: client.api })
 As an MCP server (`{ tools, handleToolCall }`):
 
 ```ts
-import { createShieldSwapMcpServer } from '@veil/shield-swap/mcp'
+import { createShieldSwapMcpServer } from '@provablehq/veil-shield-swap/mcp'
 
 const server = createShieldSwapMcpServer({ client, api: client.api })
 const pools = await server.handleToolCall('shield_swap_list_pools', { limit: 5 })
@@ -112,8 +112,8 @@ Rules that matter when wiring these up:
 src/actions/   reads/ swap/ liquidity/ — the (client, params) actions
 src/utils/     pure helpers (tick math, params, derivations) + records/balances + blinding/
 src/api/       ApiClient + generated openapi types
-src/agent/     agent tool schemas + handlers (@veil/shield-swap/agent)
-src/mcp/       MCP server wrapper (@veil/shield-swap/mcp)
+src/agent/     agent tool schemas + handlers (@provablehq/veil-shield-swap/agent)
+src/mcp/       MCP server wrapper (@provablehq/veil-shield-swap/mcp)
 src/generated/ codegen output
 codegen/       pinned ABI + OpenAPI inputs, config, regen scripts
 ```

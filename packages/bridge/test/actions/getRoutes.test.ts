@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { getRoutes } from '../../src/actions/getRoutes.js'
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 
 const sp = (...codes: string[]) => codes.map((c) => ({ providerId: `id-${c}`, providerCode: c }))
 

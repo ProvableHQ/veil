@@ -68,7 +68,7 @@ export type Client = {
  * @returns A client exposing `request`, its configuration, and `extend`.
  *
  * @example
- * import { createClient, http } from '@veil/core'
+ * import { createClient, http } from '@provablehq/veil-core'
  *
  * const client = createClient({
  *   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),

@@ -11,7 +11,7 @@ Transports define how veil communicates with the Aleo network. Every client requ
 Connects to an Aleo RPC endpoint via REST.
 
 ```ts
-import { http } from '@veil/core'
+import { http } from '@provablehq/veil-core'
 
 const transport = http('https://api.provable.com/v2', {
   network: 'mainnet', // or 'testnet'
@@ -23,7 +23,7 @@ const transport = http('https://api.provable.com/v2', {
 Wrap any request function as a transport.
 
 ```ts
-import { custom } from '@veil/core'
+import { custom } from '@provablehq/veil-core'
 
 const transport = custom({
   request: async ({ method, params }) => {
@@ -37,8 +37,8 @@ const transport = custom({
 Try multiple transports in order. First success wins.
 
 ```ts
-import { fallback, http } from '@veil/core'
-import { transportFromAdapter } from '@veil/wallet-adapter'
+import { fallback, http } from '@provablehq/veil-core'
+import { transportFromAdapter } from '@provablehq/veil-wallet-adapter'
 
 const transport = fallback([
   transportFromAdapter(walletAdapter), // Try wallet first

@@ -40,7 +40,7 @@ export function aleoAgentToolSchemas(config?: AgentToolsConfig): AgentToolSchema
  * Returns AgentTool[] with both schema and handler for all available actions.
  * Framework-agnostic — can be consumed by LangChain, Vercel AI SDK, etc.
  *
- * Exposed via subpath export: import { aleoAgentTools } from '@veil/core/agent'
+ * Exposed via subpath export: import { aleoAgentTools } from '@provablehq/veil-core/agent'
  *
  * Construction is pure and local; each tool's handler reaches the network
  * through the configured client when the agent invokes it, and wallet-backed
@@ -53,8 +53,8 @@ export function aleoAgentToolSchemas(config?: AgentToolsConfig): AgentToolSchema
  *   agent framework.
  *
  * @example
- * import { createPublicClient, http } from '@veil/core'
- * import { aleoAgentTools } from '@veil/core/agent'
+ * import { createPublicClient, http } from '@provablehq/veil-core'
+ * import { aleoAgentTools } from '@provablehq/veil-core/agent'
  *
  * const client = createPublicClient({
  *   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),

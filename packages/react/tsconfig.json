@@ -11,8 +11,8 @@
     "outDir": "dist",
     "rootDir": "..",
     "paths": {
-      "@veil/core": ["../core/src"],
-      "@veil/wallet-adapter": ["../wallet-adapter/src"]
+      "@provablehq/veil-core": ["../core/src"],
+      "@provablehq/veil-wallet-adapter": ["../wallet-adapter/src"]
     }
   },
   "include": ["src"]

@@ -1,4 +1,4 @@
-# @veil/bridge — agent guide
+# @provablehq/veil-bridge — agent guide
 
 Working notes for coding agents editing this package. The repo-wide
 contributor constraints in the root `AGENTS.md` / `.agents/contributors.md`
@@ -11,16 +11,16 @@ adds package-specific how-to.
 A viem-shaped client for Provable's cross-chain bridge (the `/bridge/*` and
 `/common/*` endpoints of the wallet-services API): discovery (assets,
 providers, derived routes), quotes, orders and tracking, and an end-to-end
-Aleo-source `swap` that signs the unshield deposit with a `@veil/core`
-WalletClient. Agent/MCP tool surfaces ship under `@veil/bridge/agent` and
+Aleo-source `swap` that signs the unshield deposit with a `@provablehq/veil-core`
+WalletClient. Agent/MCP tool surfaces ship under `@provablehq/veil-bridge/agent` and
 `/mcp`, in core's composable `AgentTool` shape.
 
 ## Commands (run from the repo root)
 
 ```sh
-pnpm --filter @veil/bridge exec tsc --noEmit   # typecheck
+pnpm --filter @provablehq/veil-bridge exec tsc --noEmit   # typecheck
 pnpm vitest run packages/bridge                # offline suite (integration auto-skips)
-pnpm --filter @veil/bridge build               # tsup → dist (+ dist/agent, dist/mcp; build @veil/core first in a fresh checkout)
+pnpm --filter @provablehq/veil-bridge build               # tsup → dist (+ dist/agent, dist/mcp; build @provablehq/veil-core first in a fresh checkout)
 ```
 
 ## Tests
@@ -85,9 +85,9 @@ Tools are core-shaped `AgentTool`s ({ schema, handler }) and compose with
 other packages via core's `toMcpServer`:
 
 ```ts
-import { createBridgeAgentTools } from '@veil/bridge/agent'
-import { createBridgeMcpServer } from '@veil/bridge/mcp'
-import { toMcpServer } from '@veil/core/mcp'
+import { createBridgeAgentTools } from '@provablehq/veil-bridge/agent'
+import { createBridgeMcpServer } from '@provablehq/veil-bridge/mcp'
+import { toMcpServer } from '@provablehq/veil-core/mcp'
 
 const tools = createBridgeAgentTools(bridgeClient)
 const server = createBridgeMcpServer(bridgeClient) // or toMcpServer([...tools, ...others])
@@ -112,7 +112,7 @@ src/clients/     createBridgeClient + the bridgeActions decorator
 src/transports/  httpBridge (method → HTTP route mapping)
 src/lib/         aleo-asset map, chain-names stopgap
 src/utils/       envelope unwrap, exact decimal units
-src/agent/       core-shaped agent tools (@veil/bridge/agent)
-src/mcp/         MCP server binding (@veil/bridge/mcp)
+src/agent/       core-shaped agent tools (@provablehq/veil-bridge/agent)
+src/mcp/         MCP server binding (@provablehq/veil-bridge/mcp)
 src/types/       wire types (API mirrors) + envelope
 ```

@@ -1,8 +1,8 @@
 /**
- * Base class for every error `@veil/bridge` throws itself.
+ * Base class for every error `@provablehq/veil-bridge` throws itself.
  *
  * Transport-level failures (4xx/5xx responses) surface as `TransportError`
- * from `@veil/core` instead; catch both when wrapping bridge calls.
+ * from `@provablehq/veil-core` instead; catch both when wrapping bridge calls.
  */
 export class BridgeError extends Error {
   constructor(message: string, options?: ErrorOptions) {

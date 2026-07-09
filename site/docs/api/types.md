@@ -4,12 +4,12 @@ sidebar_position: 4
 
 # Types
 
-Core type definitions exported from `@veil/core`.
+Core type definitions exported from `@provablehq/veil-core`.
 
 ## Clients
 
 ```ts
-import type { Client, PublicClient, WalletClient } from '@veil/core'
+import type { Client, PublicClient, WalletClient } from '@provablehq/veil-core'
 ```
 
 - **`Client`** — Base client with `account`, `transport`, `request`, `extend`
@@ -24,7 +24,7 @@ import type {
   LocalAccount,
   RpcAccount,
   ViewOnlyAccount,
-} from '@veil/core'
+} from '@provablehq/veil-core'
 ```
 
 - **`RpcAccount`** — `type: 'rpc'`. Signing delegated to wallet. Created by `fromWalletAdapter()`.
@@ -34,7 +34,7 @@ import type {
 ## Transport
 
 ```ts
-import type { Transport } from '@veil/core'
+import type { Transport } from '@provablehq/veil-core'
 ```
 
 ## Wallet Adapter
@@ -44,7 +44,7 @@ import type {
   AleoWalletAdapter,    // minimal interface for custom adapters
   AnyWalletAdapter,     // union of AleoWalletAdapter | BaseAleoWalletAdapter
   BaseAleoWalletAdapter, // from @provablehq/aleo-wallet-adaptor-core
-} from '@veil/wallet-adapter'
+} from '@provablehq/veil-wallet-adapter'
 ```
 
 `AnyWalletAdapter` is the type accepted by `fromWalletAdapter()`. Pass any official wallet adapter (Shield, Leo, Puzzle, Fox) directly, or implement `AleoWalletAdapter` for custom adapters.
@@ -57,7 +57,7 @@ import type {
   StandaloneRecordScanner,
   OwnedRecord,
   OwnedRecordEncrypted,
-} from '@veil/core'
+} from '@provablehq/veil-core'
 ```
 
 - **`RecordProvider`** — Interface for record scanning. Plugs into `recordProvider` on `LocalWalletClientConfig`. Implemented by `createLocalScanner()` and `createRemoteScanner()`.
@@ -72,7 +72,7 @@ import type {
   RecordFilter,
   ResponseFilter,
   OwnedRecordsRequest,
-} from '@veil/core'
+} from '@provablehq/veil-core'
 ```
 
 - **`RecordFilter`** — Filter criteria for record scanning (program, record name).

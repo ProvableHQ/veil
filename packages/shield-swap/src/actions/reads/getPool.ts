@@ -1,4 +1,4 @@
-import { readMapping, parseRecordPlaintextLoose, type Client } from '@veil/core'
+import { readMapping, parseRecordPlaintextLoose, type Client } from '@provablehq/veil-core'
 import { toPoolState, type PoolState } from '../../generated/shield_swap.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 

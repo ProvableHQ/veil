@@ -11,8 +11,8 @@ The wallet client provides write access to the Aleo network through a connected 
 ### From a wallet adapter (browser)
 
 ```ts
-import { createWalletClient, http, fallback } from '@veil/core'
-import { fromWalletAdapter } from '@veil/wallet-adapter'
+import { createWalletClient, http, fallback } from '@provablehq/veil-core'
+import { fromWalletAdapter } from '@provablehq/veil-wallet-adapter'
 
 const { account, transport } = fromWalletAdapter(connectedAdapter)
 
@@ -25,12 +25,12 @@ const client = createWalletClient({
 ### From a private key (Node.js)
 
 ```ts
-import { createWalletClient, http } from '@veil/core'
+import { createWalletClient, http } from '@provablehq/veil-core'
 import {
   privateKeyToAccount,
   createProvingConfig,
   createLocalScanner,
-} from '@veil/provable-sdk'
+} from '@provablehq/veil-sdk'
 
 const client = createWalletClient({
   account: privateKeyToAccount('APrivateKey1...'),
@@ -45,7 +45,7 @@ const client = createWalletClient({
 ### From React (recommended)
 
 ```tsx
-import { useVeilWallet } from '@veil/react'
+import { useVeilWallet } from '@provablehq/veil-react'
 
 const { walletClient } = useVeilWallet()
 ```
@@ -145,7 +145,7 @@ How `requestRecords` resolves depends on account type:
 **Local account** — You must supply a `recordProvider`. Without one, `requestRecords` throws.
 
 ```ts
-import { createLocalScanner, createRemoteScanner } from '@veil/provable-sdk'
+import { createLocalScanner, createRemoteScanner } from '@provablehq/veil-sdk'
 
 // Option 1: Local scanner — scans blocks + decrypts locally
 const walletClient = createWalletClient({
