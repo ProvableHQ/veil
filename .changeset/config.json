@@ -10,7 +10,7 @@
       "@provablehq/veil-sdk",
       "@provablehq/veil-leo",
       "@provablehq/veil-devnode",
-      "@provablehq/veil-shield-swap",
+      "@provablehq/shield-swap-sdk",
       "@provablehq/veil-codegen"
     ]
   ],

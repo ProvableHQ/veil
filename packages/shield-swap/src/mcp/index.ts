@@ -13,7 +13,7 @@ export type { McpServer, McpToolDefinition } from '@provablehq/veil-core/mcp'
  * tools alongside the base Aleo tools, call core's `toMcpServer` with both
  * arrays concatenated.
  *
- * Exposed via subpath export: `import { createShieldSwapMcpServer } from '@provablehq/veil-shield-swap/mcp'`.
+ * Exposed via subpath export: `import { createShieldSwapMcpServer } from '@provablehq/shield-swap-sdk/mcp'`.
  *
  * @param config The client and/or API client to bind, and the default program.
  * @returns An {@link McpServer} whose `handleToolCall` dispatches by tool name.

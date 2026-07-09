@@ -57,7 +57,7 @@ service (drop `proverUrl`/`apiKey`/`consumerId`). The `walletClient` composes wi
 action packages the same way a wallet-backed client does:
 
 ```ts
-import { shieldSwapActions } from '@provablehq/veil-shield-swap'
+import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 
 const client = walletClient.extend(
   shieldSwapActions({ api: { baseUrl: 'https://amm-api.dev.provable.com' } }),

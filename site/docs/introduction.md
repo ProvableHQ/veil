@@ -30,7 +30,7 @@ const txId = await walletClient.writeContract({
 | [`@provablehq/veil-sdk`](./packages/provable-sdk) | Local accounts, signing, and proving via `@provablehq/sdk` |
 | [`@provablehq/veil-wallet-adapter`](./packages/wallet-adapter) | Bridges any Aleo wallet adapter into veil |
 | [`@provablehq/veil-react`](./packages/react) | `VeilProvider` + `useVeilWallet()` for React apps |
-| [`@provablehq/veil-shield-swap`](./packages/shield-swap) | Client for the `shield_swap` AMM/DEX |
+| [`@provablehq/shield-swap-sdk`](./packages/shield-swap) | Client for the `shield_swap` AMM/DEX |
 | [`@provablehq/veil-codegen`](./packages/codegen) | Typed bindings from an Aleo program ABI |
 | [`@provablehq/veil-devnode`](./packages/devnode) | Run and drive a local Aleo devnode |
 | [`@provablehq/veil-leo`](./packages/leo) | Typed wrapper around the `leo` CLI |

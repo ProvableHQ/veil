@@ -21,9 +21,9 @@
       "@provablehq/veil-sdk": ["./packages/provable-sdk/src/index.ts"],
       "@provablehq/veil-leo": ["./packages/leo/src/index.ts"],
       "@provablehq/veil-devnode": ["./packages/devnode/src/index.ts"],
-      "@provablehq/veil-shield-swap": ["./packages/shield-swap/src/index.ts"],
-      "@provablehq/veil-shield-swap/agent": ["./packages/shield-swap/src/agent/index.ts"],
-      "@provablehq/veil-shield-swap/mcp": ["./packages/shield-swap/src/mcp/index.ts"],
+      "@provablehq/shield-swap-sdk": ["./packages/shield-swap/src/index.ts"],
+      "@provablehq/shield-swap-sdk/agent": ["./packages/shield-swap/src/agent/index.ts"],
+      "@provablehq/shield-swap-sdk/mcp": ["./packages/shield-swap/src/mcp/index.ts"],
       "@provablehq/veil-bridge": ["./packages/bridge/src/index.ts"],
       "@provablehq/veil-bridge/agent": ["./packages/bridge/src/agent/index.ts"],
       "@provablehq/veil-bridge/mcp": ["./packages/bridge/src/mcp/index.ts"]

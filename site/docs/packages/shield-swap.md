@@ -2,7 +2,7 @@
 sidebar_position: 6
 ---
 
-# @provablehq/veil-shield-swap
+# @provablehq/shield-swap-sdk
 
 A viem-shaped client for the `shield_swap` concentrated-liquidity AMM on Aleo:
 private swaps, liquidity management, direct on-chain reads, and a typed off-chain
@@ -10,7 +10,7 @@ DEX API — all composed onto one client via `extend()`. Works with either signe
 path: a local private key (bots, scripts) or a connected wallet (Shield, Leo).
 
 ```bash
-npm install @provablehq/veil-core @provablehq/veil-shield-swap
+npm install @provablehq/veil-core @provablehq/shield-swap-sdk
 ```
 
 ## Key exports
@@ -24,7 +24,7 @@ npm install @provablehq/veil-core @provablehq/veil-shield-swap
 ## Usage
 
 ```ts
-import { shieldSwapActions } from '@provablehq/veil-shield-swap'
+import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 
 const client = walletClient.extend(
   shieldSwapActions({ api: { baseUrl: 'https://amm-api.dev.provable.com' } }),
@@ -36,8 +36,8 @@ const pool = await client.getPool({ poolKey: pools.data[0].key }) // chain read
 
 ## Subpaths
 
-- **`@provablehq/veil-shield-swap/agent`** — `createShieldSwapAgentTools({ client, api, includeWrites? })` and `shieldSwapAgentToolSchemas()`. Read tools by default; money-moving write tools are opt-in via `includeWrites`.
-- **`@provablehq/veil-shield-swap/mcp`** — `createShieldSwapMcpServer({ client, api })`.
+- **`@provablehq/shield-swap-sdk/agent`** — `createShieldSwapAgentTools({ client, api, includeWrites? })` and `shieldSwapAgentToolSchemas()`. Read tools by default; money-moving write tools are opt-in via `includeWrites`.
+- **`@provablehq/shield-swap-sdk/mcp`** — `createShieldSwapMcpServer({ client, api })`.
 
 The package ships a thorough
 [README](https://github.com/ProvableHQ/veil/blob/main/packages/shield-swap/README.md)

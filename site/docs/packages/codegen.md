@@ -45,5 +45,5 @@ veil-codegen --config veil.config.json
 }
 ```
 
-`@provablehq/veil-shield-swap` uses this to generate its `shield_swap` bindings — see its
+`@provablehq/shield-swap-sdk` uses this to generate its `shield_swap` bindings — see its
 package README for a full setup, including the `programId` override.

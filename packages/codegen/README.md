@@ -8,7 +8,7 @@ Reach for it as a package maintainer, not a consumer: point it at a program's
 and struct decoders (`RecordValue` → typed interface), per-function input and
 output types, mapping and storage types, the parsed `PROGRAM_ABI` constant, and
 a typed contract factory (`read`/`write`/`simulate`/`execute`). A package like
-`@provablehq/veil-shield-swap` commits that output and ships it — a consumer installing the
+`@provablehq/shield-swap-sdk` commits that output and ships it — a consumer installing the
 package gets the bindings already. You run codegen when the upstream contract
 drifts (redeploy, a new or renamed entrypoint, struct, or mapping) and the
 checked-in bindings need to catch up.
@@ -32,7 +32,7 @@ veil-codegen --abi ./abi/loyalty_token.json --out ./src/generated/loyalty_token.
 ```
 
 Or drive one or more programs from a config file with `--config` (this is how
-`@provablehq/veil-shield-swap` wires it — a `generate` script runs
+`@provablehq/shield-swap-sdk` wires it — a `generate` script runs
 `veil-codegen --config codegen/veil.config.json`):
 
 ```sh

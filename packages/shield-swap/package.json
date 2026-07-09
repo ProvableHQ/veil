@@ -1,5 +1,5 @@
 {
-  "name": "@provablehq/veil-shield-swap",
+  "name": "@provablehq/shield-swap-sdk",
   "version": "0.4.0",
   "description": "Veil client for the Shield Swap AMM DEX on Aleo.",
   "license": "MIT",

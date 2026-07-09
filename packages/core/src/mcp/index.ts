@@ -50,7 +50,7 @@ export type McpServer = {
 /**
  * Adapts any {@link AgentTool}s into an MCP server (tool list + dispatcher).
  *
- * Package-agnostic — feed it `createAgentTools` output, `@provablehq/veil-shield-swap`'s
+ * Package-agnostic — feed it `createAgentTools` output, `@provablehq/shield-swap-sdk`'s
  * `createShieldSwapAgentTools`, or any mix, to expose them over MCP. Pure and
  * local; the handlers hit the network only when a tool is invoked.
  *

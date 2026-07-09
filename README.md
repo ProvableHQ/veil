@@ -50,7 +50,7 @@ const txId = await wallet.writeContract({
 
 💸 **Payments and token flows** — public or private credit transfers and ARC-0020 tokens, including confidential transfers.
 
-📈 **Shield Swap trading** — private swaps, liquidity, and pool/price reads, from a frontend, a programmatic bot, or an agent. (`@provablehq/veil-shield-swap`)
+📈 **Shield Swap trading** — private swaps, liquidity, and pool/price reads, from a frontend, a programmatic bot, or an agent. (`@provablehq/shield-swap-sdk`)
 
 🤖 **AI agents that use Aleo** — expose Aleo as MCP tools or drop tool schemas into any agent framework; agents can also write viem-style code directly. (`@provablehq/veil-core/agent`, `@provablehq/veil-core/mcp`)
 
@@ -87,7 +87,7 @@ and transport interfaces.
 | `@provablehq/veil-sdk` | Local accounts, signing, and proving via `@provablehq/sdk`. Build a client from a private key. | Your code holds a private key and must sign and prove itself — bots, servers, CLIs, tests. |
 | `@provablehq/veil-wallet-adapter` | Bridge any Provable-standard wallet (Shield, Leo, Puzzle, Fox) into a Veil client. | You need wallet signing outside React, or a custom (non-React) wallet integration. |
 | `@provablehq/veil-react` | `VeilProvider` + `useVeilWallet()` — wallet connection and clients for React apps. | You're building a React dApp with wallet connection. |
-| `@provablehq/veil-shield-swap` | Client for the `shield_swap` AMM/DEX — private swaps, liquidity, and the DEX API. | You're integrating the Shield Swap DEX — swaps, liquidity, or pool/price data. |
+| `@provablehq/shield-swap-sdk` | Client for the `shield_swap` AMM/DEX — private swaps, liquidity, and the DEX API. | You're integrating the Shield Swap DEX — swaps, liquidity, or pool/price data. |
 | `@provablehq/veil-codegen` | Generate typed bindings from an Aleo program ABI (library + `veil-codegen` CLI). | You want typed reads and writes for a specific program's ABI. |
 | `@provablehq/veil-devnode` | Run and drive a local Aleo devnode for tests. | You need a local Aleo node in tests or local development. |
 | `@provablehq/veil-leo` | Typed wrapper around the `leo` CLI (build, deploy, …). | You compile or deploy Leo programs — including during testing, where it pairs with `@provablehq/veil-devnode`. |
@@ -261,7 +261,7 @@ await bridge.waitForOrder({ id: order.orderId })
 ```
 
 Bridged-in assets are ordinary Aleo tokens — tradeable on the Shield Swap DEX
-via `@provablehq/veil-shield-swap` with the same wallet client. The live examples are the
+via `@provablehq/shield-swap-sdk` with the same wallet client. The live examples are the
 e2e tests:
 [`packages/bridge/test/integration/e2e.test.ts`](./packages/bridge/test/integration/e2e.test.ts)
 runs the full outbound swap chain, and
@@ -465,7 +465,7 @@ veil/
 │   ├── provable-sdk/        # @provablehq/veil-sdk (wraps @provablehq/sdk)
 │   ├── wallet-adapter/      # @provablehq/veil-wallet-adapter (wraps wallet standard)
 │   ├── react/              # @provablehq/veil-react (VeilProvider, useVeilWallet)
-│   ├── shield-swap/         # @provablehq/veil-shield-swap (shield_swap AMM/DEX client)
+│   ├── shield-swap/         # @provablehq/shield-swap-sdk (shield_swap AMM/DEX client)
 │   ├── codegen/             # @provablehq/veil-codegen (ABI → typed bindings + CLI)
 │   ├── devnode/             # @provablehq/veil-devnode (local Aleo devnode for tests)
 │   ├── leo/                 # @provablehq/veil-leo (typed leo CLI wrapper)

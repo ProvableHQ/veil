@@ -377,13 +377,13 @@ order status), `BridgeTimeoutError` (polling deadline hit).
 
 Bridged-in value lands as an Aleo asset (USDC on Ethereum arrives as
 `USDC_ALEO`, ETH as `ETH_ALEO`), and from there it is ordinary Aleo money —
-including tradeable on the Shield Swap DEX via `@provablehq/veil-shield-swap`. Both
+including tradeable on the Shield Swap DEX via `@provablehq/shield-swap-sdk`. Both
 packages hang off the same `@provablehq/veil-core` wallet client, so one signer runs the
 whole chain: bridge in, trade privately, bridge back out.
 
 ```ts
 import { createBridgeClient, httpBridge } from '@provablehq/veil-bridge'
-import { shieldSwapActions } from '@provablehq/veil-shield-swap'
+import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 import { createWalletClient, custom, erc20Abi, parseUnits } from 'viem'
 import { mainnet } from 'viem/chains'
 

@@ -1,4 +1,4 @@
-# @provablehq/veil-shield-swap
+# @provablehq/shield-swap-sdk
 
 A viem-shaped TS/JS client for the `shield_swap` AMM on Aleo. The client provides 
 viem-style actions for the following:
@@ -20,7 +20,7 @@ Actions that help traders do common things like check thier private token positi
 ## Installation
 
 ```sh
-pnpm add @provablehq/veil-shield-swap @provablehq/veil-core
+pnpm add @provablehq/shield-swap-sdk @provablehq/veil-core
 ```
 
 If you sign with a local private key (bots, scripts, tests) you also need
@@ -48,7 +48,7 @@ in `@provablehq/sdk` — it derives the blinded claim identity.
 
 ```ts
 import { loadNetwork } from '@provablehq/veil-sdk'
-import { shieldSwapActions } from '@provablehq/veil-shield-swap'
+import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 
 const aleo = await loadNetwork('testnet')
 
@@ -83,7 +83,7 @@ blinded identity for private swaps and claims on your behalf.
 ```ts
 import { createWalletClient } from '@provablehq/veil-core'
 import { fromWalletAdapter } from '@provablehq/veil-wallet-adapter'
-import { shieldSwapActions, SHIELD_SWAP_ALGORITHM_GRANTS } from '@provablehq/veil-shield-swap'
+import { shieldSwapActions, SHIELD_SWAP_ALGORITHM_GRANTS } from '@provablehq/shield-swap-sdk'
 
 // e.g. a connected Leo/Shield adapter — pass the grants in its connect options:
 await adapter.connect(network, decryptPermission, {
@@ -399,7 +399,7 @@ the proceeds out.
 
 ```ts
 import { createBridgeClient, httpBridge } from '@provablehq/veil-bridge'
-import { shieldSwapActions } from '@provablehq/veil-shield-swap'
+import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 
 const bridge = createBridgeClient({
   transport: httpBridge('https://wallet.api.provable.com'),
@@ -447,7 +447,7 @@ The typed layer (contract types + decoders in `src/generated/`, and the
 contract's ABI and the API's OpenAPI spec, both pinned under
 [`codegen/`](./codegen). The package ships that output.
 
-**When to use it.** Not as a consumer — installing `@provablehq/veil-shield-swap` gives you
+**When to use it.** Not as a consumer — installing `@provablehq/shield-swap-sdk` gives you
 the generated bindings already. You reach for codegen as a maintainer, when the
 upstream shapes drift out from under those bindings:
 
