@@ -26,6 +26,8 @@ import {
   AleoKeyProvider,
   Program,
   ProgramManager,
+  RecordCiphertext as StaticRecordCiphertext,
+  ViewKey as StaticViewKey,
   getOrInitConsensusVersionTestHeights,
 } from '@provablehq/sdk'
 import { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR } from '@veil/devnode'
@@ -797,7 +799,8 @@ export function generateAccount(): LocalAccount<'privateKey'> {
  * resolves once the devnode includes the transaction in a block — automatic
  * after broadcast by default; under `manualBlockCreation` the caller must
  * advance blocks (e.g. a test client's `advanceBlock`) while the call is
- * pending.
+ * pending. Record outputs owned by the client's account are decrypted to
+ * plaintext in the result; foreign records are dropped.
  *
  * @example
  * ```ts
@@ -921,9 +924,14 @@ export function createDevnodeClient(options?: {
       // manualBlockCreation the caller must advance blocks for this to resolve.
       const confirmedTx = await waitForConfirmation(publicClient, txId)
 
-      // No decryptor: the devnode account's record outputs stay as ciphertexts,
-      // matching the RPC-account path in executeContract.
-      const { transitions, outputs } = extractTransitions(confirmedTx)
+      // Self-custody decryptor: records owned by the devnode account surface
+      // as plaintext; foreign records are dropped, matching the local path.
+      const accountViewKey = StaticViewKey.from_string(account.viewKey)
+      const decryptor: Decryptor = (ciphertext: string) => {
+        const ct = StaticRecordCiphertext.fromString(ciphertext)
+        return ct.isOwner(accountViewKey) ? ct.decrypt(accountViewKey).toString() : null
+      }
+      const { transitions, outputs } = extractTransitions(confirmedTx, decryptor)
       return { transactionId: txId, transitions, outputs }
     },
   }

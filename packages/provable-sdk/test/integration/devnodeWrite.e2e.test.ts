@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { rmSync } from 'node:fs'
 
 import { startDevnode, type DevnodeInstance } from '@veil/devnode'
-import { createDevnodeClient } from '@veil/provable-sdk'
+import { createDevnodeClient, generateAccount } from '@veil/provable-sdk'
 import { createTestClient, getContract, http, parseProgram } from '@veil/core'
 import type { PublicClient, WalletClient, TestClient, LocalAccount } from '@veil/core'
 
@@ -229,6 +229,41 @@ describe.runIf(RUN)('e2e: devnode write path (deploy, write, execute, reject)', 
       key: account.address,
     })
     expect(value).toBe('99u64')
+  }, 120_000)
+
+  it('executeContract spends a private record: transfer_public_to_private then transfer_private', async () => {
+    // Mint a private record to self via the pre-deployed credits.aleo — the
+    // record-creation path that needs no pre-existing records and no scanner
+    // (requestRecords does not work against a devnode).
+    const mint = await advanceWhilePending(
+      walletClient.executeContract({
+        program: 'credits.aleo',
+        function: 'transfer_public_to_private',
+        inputs: [account.address, '1000000u64'],
+      }),
+    )
+    expect(mint.transactionId).toMatch(/^at1/)
+    // The record output is owned by the executing account, so the devnode
+    // client decrypts it to plaintext in the returned outputs.
+    const minted = mint.outputs.find((o) => o.includes('microcredits'))
+    expect(minted, 'expected a decrypted record among the outputs').toBeDefined()
+    expect(minted).toContain('1000000u64')
+
+    // Spend the record privately to a fresh account.
+    const recipient = generateAccount()
+    const spend = await advanceWhilePending(
+      walletClient.executeContract({
+        program: 'credits.aleo',
+        function: 'transfer_private',
+        inputs: [minted!, recipient.address, '400000u64'],
+      }),
+    )
+    expect(spend.transactionId).toMatch(/^at1/)
+    // The sender-owned change record decrypts; the recipient's record is not
+    // decryptable with this view key and is dropped from outputs.
+    const change = spend.outputs.find((o) => o.includes('microcredits'))
+    expect(change, 'expected the decrypted change record among the outputs').toBeDefined()
+    expect(change).toContain('600000u64')
   }, 120_000)
 
   it('a finalize assert failure surfaces as rejected transaction status', async () => {
