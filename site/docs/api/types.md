@@ -28,13 +28,13 @@ The rule across `@provablehq/veil-core`: `number` represents a u64 or
 smaller on-chain integer, `bigint` represents a u128 or larger one. Two
 kinds of exception exist:
 
-- **Widened for parity with viem.** `getBalance` and `getBlockNumber` return
-  `bigint` even though the underlying values are a u64 and a u32
-  respectively, matching viem's `getBalance`/`getBlockNumber` return types.
-  Convert with `Number()` before passing a block height into an action that
-  takes one (`Number(await client.getBlockNumber())`).
-- **Delivered as a string on the wire.** `Metadata.cumulative_weight` and
-  `Metadata.cumulative_proof_target` are u128 values, but JSON numbers
+- Some return types are widened for parity with viem: `getBalance` and
+  `getBlockNumber` return `bigint` even though the underlying values are a
+  u64 and a u32 respectively, matching viem's `getBalance`/`getBlockNumber`
+  return types. Convert with `Number()` before passing a block height into
+  an action that takes one (`Number(await client.getBlockNumber())`).
+- Some u128 fields arrive as strings on the wire: `Metadata.cumulative_weight`
+  and `Metadata.cumulative_proof_target` are u128 values, but JSON numbers
   cannot losslessly represent a u128, so the node sends them as decimal
   strings. Wrap with `BigInt(...)` to use them as numbers.
 
@@ -50,10 +50,10 @@ field both report a transaction's state as one of four strings:
 | `'pending'` | Present in the mempool, not yet confirmed. |
 | `'not_found'` | Absent from both the confirmed and unconfirmed pools — never submitted, dropped, or expired. |
 
-Veil never uses `'finalized'` for this state; Aleo's finalize step is a
-distinct concept (the on-chain execution of a transaction's mapping writes)
-from confirmation, and the status strings above are the complete set a
-caller needs to branch on. See
+Veil never borrows the EVM finality vocabulary for this state; on Aleo,
+"finalize" names a distinct concept (the on-chain execution of a
+transaction's mapping writes), not confirmation, and the status strings
+above are the complete set a caller needs to branch on. See
 [Transaction Lifecycle](/guides/transaction-lifecycle) for polling a
 transaction through these states.
 
@@ -196,10 +196,12 @@ matching `type`.
 | `Input` | `id` | `string` | Input id. |
 | `Input` | `tag` | `string` (optional) | Record tag; present on record inputs. |
 | `Input` | `value` | `string` (optional) | Plaintext or ciphertext, depending on visibility; absent on record inputs. |
+| `Input` | `dynamic_id` | `string` (optional) | Dynamic id; present when the input's record type is resolved via dynamic dispatch. |
 | `Output` | `type` | `string` | Visibility kind: `'public'`, `'private'`, `'record'`, or `'future'`. |
 | `Output` | `id` | `string` | Output id. |
 | `Output` | `checksum` | `string` (optional) | Output checksum. |
 | `Output` | `value` | `string` (optional) | Plaintext or ciphertext value, depending on visibility. |
+| `Output` | `dynamic_id` | `string` (optional) | Dynamic id; present when the output's record type is resolved via dynamic dispatch. |
 
 **`Deployment`** / **`VerifyingKey`** / **`Owner`**
 
@@ -284,6 +286,8 @@ These shape requests to a hosted [Record Scanning Service](/guides/working-with-
 | `RecordFilter` | `programs` | `string[]` (optional) | Restrict the scan to these programs. |
 | `RecordFilter` | `records` | `string[]` (optional) | Restrict the scan to these record type names. |
 | `RecordFilter` | `functions` | `string[]` (optional) | Restrict the scan to records produced by these functions. |
+| `RecordFilter` | `resultsPerPage` | `number` (optional) | Number of records per page of results. |
+| `RecordFilter` | `page` | `number` (optional) | Page of results to return. |
 | `RecordFilter` | `response` | `ResponseFilter` (optional) | Field-selection mask applied to each returned record. |
 | `ResponseFilter` | *(any field)* | `boolean` (optional) | Set a field true to include it on each returned record, e.g. `commitment`, `owner`, `blockHeight`. |
 | `OwnedRecordsRequest` | `uuid` | `string` | Scan session identifier issued by the service. |

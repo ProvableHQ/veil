@@ -101,7 +101,7 @@ const transport = http('https://api.provable.com/v2', { network: 'testnet' })
 
 ### Base URL resolution
 
-Every request resolves against `{url}/{network}`, so `http('https://api.provable.com/v2', { network: 'testnet' })` issues requests under `https://api.provable.com/v2/testnet`. Each method maps to one REST path under that base — for example `getLatestHeight` reads `GET {base}/block/height/latest`, `getBalance` reads `GET {base}/program/credits.aleo/mapping/account/{address}`, and `sendTransaction` posts to `POST {base}/transaction/broadcast`. An unrecognized method throws `TransportError` before any request is issued; a non-2xx response throws `TransportError` with the response body as its message.
+Every request resolves against `{url}/{network}`, so `http('https://api.provable.com/v2', { network: 'testnet' })` issues requests under `https://api.provable.com/v2/testnet`. Each method maps to one REST path under that base — for example `getLatestHeight` reads `GET {base}/block/height/latest`, `getBalance` reads `GET {base}/program/credits.aleo/mapping/account/{address}`, and `sendTransaction` posts to `POST {base}/transaction/broadcast`. An unrecognized method throws `TransportError` before any request is issued; a non-2xx response throws `TransportError` with a message of the form `HTTP {status}: {response body}`.
 
 ## `custom`
 
