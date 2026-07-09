@@ -12,6 +12,7 @@ Verifies a signature against a message and an address. Pure and local.
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 
 const aleo = await loadNetwork('testnet')
+const account = aleo.generateAccount()
 
 const message = new TextEncoder().encode('Hello from veil!')
 const signature = await account.sign(message)

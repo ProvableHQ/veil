@@ -14,7 +14,8 @@ Each action delegates to the standalone function of the same name —
 extension ignores the host client entirely, since devnode process management
 needs no transport; it composes with the client's built-in test actions
 (`snapshot`, `listSnapshots`) so one client both drives the process and
-captures ledger state.
+captures ledger state. `devnodeActions` itself takes no options — every
+option lives on the individual action calls.
 
 ## Usage
 
@@ -39,11 +40,6 @@ await devnode.stop()
 An object with `startDevnode`, `advanceDevnode`, and `restoreDevnode`
 properties, each matching the parameters and return type of its standalone
 function.
-
-## Parameters
-
-None. `devnodeActions` takes the client from `.extend` and needs no options of
-its own; every option lives on the individual action calls.
 
 ## Constants
 

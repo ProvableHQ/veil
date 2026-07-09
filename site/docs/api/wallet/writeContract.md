@@ -26,6 +26,7 @@ const client = createWalletClient({
   proving: aleo.createProvingConfig({
     mode: 'delegated',
     networkUrl: 'https://api.provable.com/v2',
+    proverUrl: 'https://api.provable.com/prove/testnet',
     account,
   }),
 })
@@ -44,8 +45,10 @@ A wallet-adapter (RPC) account hands the call to the connected wallet, which
 proves, signs, and broadcasts in one step and prompts the user. A local SDK
 account builds and proves the transaction through the client's `proving`
 config — in process for `mode: 'local'`, via a delegated prover for
-`mode: 'delegated'` — then broadcasts it through the transport. Either way the
-fee comes out of the account, unless a delegated prover with `useFeeMaster`
+`mode: 'delegated'` — then broadcasts it through the transport. Delegated mode
+requires `proverUrl` on the proving config (plus `apiKey` and `consumerId` for
+the hosted Provable prover); local mode needs neither. Either way the fee
+comes out of the account, unless a delegated prover with `useFeeMaster`
 covers it.
 
 `inputs` may contain `record` and `address` InputRequests only on the

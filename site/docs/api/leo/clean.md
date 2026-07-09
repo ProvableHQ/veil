@@ -26,7 +26,12 @@ Resolves once `leo clean` exits with status 0.
 
 ## Parameters
 
-### options.cwd
+### options
+
+- **Type:** `LeoCleanOptions`
+- **Default:** `undefined` — cleans the current working directory.
+
+#### options.cwd
 
 - **Type:** `string`
 - **Default:** current working directory

@@ -35,6 +35,8 @@ Resolves once `leo synthesize` exits with status 0.
 
 ## Parameters
 
+### options
+
 - **Type:** `LeoSynthesizeOptions`
 
 Combines the fields below with the compiler flags documented on
@@ -43,20 +45,20 @@ documented on [`deploy`](/api/leo/deploy) (`LeoTransactionOptions`), and a
 per-call override of any [`LeoClientConfig`](/api/leo/createLeoClient)
 default.
 
-### options.name
+#### options.name
 
 - **Type:** `string`
 
 Program name, e.g. `'helloworld.aleo'`. Required.
 
-### options.local
+#### options.local
 
 - **Type:** `boolean`
 - **Default:** `false`
 
 `-l, --local`. Uses the local Leo project instead of a published one.
 
-### options.skip
+#### options.skip
 
 - **Type:** `string[]`
 

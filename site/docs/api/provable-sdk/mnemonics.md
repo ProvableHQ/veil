@@ -79,6 +79,8 @@ still produces a seed, only for the wrong accounts.
 ```ts
 import { mnemonicToSeed } from '@provablehq/veil-aleo-sdk'
 
+const mnemonic =
+  'absurd letter switch already canoe piano wage sock unique all blade coyote'
 const seed = mnemonicToSeed(mnemonic) // 64 bytes
 ```
 
@@ -99,6 +101,8 @@ of this.
 ```ts
 import { mnemonicToHDKey } from '@provablehq/veil-aleo-sdk'
 
+const mnemonic =
+  'absurd letter switch already canoe piano wage sock unique all blade coyote'
 const hdKey = mnemonicToHDKey(mnemonic, { index: 1 })
 ```
 
@@ -119,13 +123,15 @@ Aleo private key. Throws if the index is out of range.
 Hierarchical-deterministic key node for the BLS12-377 curve Aleo uses.
 Follows the SLIP-0010 construction (HMAC-SHA512 chains, hardened-only
 derivation) with an Aleo-specific master key tag. All operations are pure and
-local. Most callers reach it only through `mnemonicToHDKey`; the static
+local. Most callers use it only through `mnemonicToHDKey`; the static
 factory and `derive`/`deriveChild` methods below apply when building custom
 derivation paths.
 
 ```ts
 import { BLS12377HDKey, mnemonicToSeed } from '@provablehq/veil-aleo-sdk'
 
+const mnemonic =
+  'absurd letter switch already canoe piano wage sock unique all blade coyote'
 const seed = mnemonicToSeed(mnemonic)
 const root = BLS12377HDKey.fromMasterSeed(seed)
 const account0 = root.derivePath("m/44'/683'").deriveChild(0)

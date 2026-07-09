@@ -25,21 +25,25 @@ Resolves once `leo run` exits with status 0.
 
 ## Parameters
 
-### options.function
+### options
+
+- **Type:** `LeoRunOptions`
+
+#### options.function
 
 - **Type:** `string`
 
 Function name to call. `leo run` resolves the program from the project at
 `cwd`.
 
-### options.inputs
+#### options.inputs
 
 - **Type:** `string[]`
 - **Default:** `[]`
 
 Inputs to pass to the function, as Leo literals (e.g. `'1000u64'`).
 
-### options.cwd
+#### options.cwd
 
 - **Type:** `string`
 - **Default:** current working directory

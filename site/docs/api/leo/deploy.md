@@ -42,6 +42,8 @@ transaction locally otherwise.
 
 ## Parameters
 
+### options
+
 - **Type:** `LeoDeployOptions`
 - **Default:** `undefined`
 
@@ -49,34 +51,34 @@ Combines the fields below with the compiler flags documented on
 [`build`](/api/leo/build) (`LeoCompilerOptions`) and a per-call override of
 any [`LeoClientConfig`](/api/leo/createLeoClient) default.
 
-### options.skip
+#### options.skip
 
 - **Type:** `string[]`
 
 `--skip`. Skips deployment of any program whose name contains one of these
 substrings.
 
-### options.priorityFees
+#### options.priorityFees
 
 - **Type:** `string`
 
 `--priority-fees`. Microcredit amounts delimited by `|`, one per program
 being deployed.
 
-### options.feeRecords
+#### options.feeRecords
 
 - **Type:** `string`
 
 `-f, --fee-records`. Private records to spend for the deployment fee.
 
-### options.print
+#### options.print
 
 - **Type:** `boolean`
 - **Default:** `false`
 
 `--print`. Prints the built transaction.
 
-### options.broadcast
+#### options.broadcast
 
 - **Type:** `boolean`
 - **Default:** `false`
@@ -85,33 +87,33 @@ being deployed.
 costs a fee and changes on-chain state — omit it to build the transaction
 without sending it.
 
-### options.save
+#### options.save
 
 - **Type:** `string`
 
 `--save`. Saves the built transaction to the given directory.
 
-### options.yes
+#### options.yes
 
 - **Type:** `boolean`
 - **Default:** `false`
 
 `-y, --yes`. Skips confirmation prompts.
 
-### options.consensusVersion
+#### options.consensusVersion
 
 - **Type:** `string`
 
 `--consensus-version`.
 
-### options.maxWait
+#### options.maxWait
 
 - **Type:** `number`
 
 `--max-wait`. Seconds to search for the broadcast transaction before giving
 up.
 
-### options.blocksToCheck
+#### options.blocksToCheck
 
 - **Type:** `number`
 

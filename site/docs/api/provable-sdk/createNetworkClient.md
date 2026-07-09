@@ -6,10 +6,11 @@ sidebar_position: 8
 
 Creates an `AleoNetworkClient` instance from `@provablehq/sdk` for direct
 access to the underlying SDK's network client. Applies when a call needs an
-SDK method Veil does not wrap; bypasses the retry, fallback, and
-error-classification behavior [`createPublicClient`](/clients/public-client)
-and [`createWalletClient`](/clients/wallet-client) add on top, so most reads
-and writes go through those instead.
+SDK method Veil does not wrap. It forgoes the typed action surface
+(`getBalance`, `writeContract`, and the rest) that
+[`createPublicClient`](/clients/public-client) and
+[`createWalletClient`](/clients/wallet-client) provide, so most reads and
+writes go through those instead.
 
 ## Usage
 

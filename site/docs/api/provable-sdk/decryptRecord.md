@@ -13,6 +13,7 @@ never leaves the caller and no network round trip is made.
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 
 const aleo = await loadNetwork('testnet')
+const account = aleo.privateKeyToAccount('APrivateKey1...')
 
 const plaintext = aleo.decryptRecord(
   account.viewKey,

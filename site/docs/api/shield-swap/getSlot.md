@@ -47,7 +47,9 @@ The decoded live slot, or `null` when no pool exists under the key.
   creation.
 - **sqrt_price** — `bigint`. Current price as a Q64 fixed-point sqrt price
   (u128).
-- **fee_protocol** — `number`. Protocol fee share, in pips.
+- **fee_protocol** — `number`. Protocol fee share as a fraction of 16 (u8):
+  `0` (disabled) or `4`–`10`, i.e. 4/16 to 10/16 of the swap fee routed to
+  the protocol.
 - **liquidity** — `bigint`. In-range liquidity currently active (u128).
 - **fee_growth_global0_x_64** — `bigint`. Cumulative token0 fee growth (Q64,
   u128).

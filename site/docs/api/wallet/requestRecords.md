@@ -22,6 +22,7 @@ const client = createWalletClient({
   proving: aleo.createProvingConfig({
     mode: 'delegated',
     networkUrl: 'https://api.provable.com/v2',
+    proverUrl: 'https://api.provable.com/prove/testnet',
     account,
   }),
   recordProvider: aleo.createRemoteScanner({

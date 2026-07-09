@@ -40,8 +40,9 @@ The decoded pool, or `null` when no pool exists under the key.
 - **token1** — `string`. Token id (field literal) of the pair's second
   token.
 - **fee** — `number`. Fee tier in pips (u16, e.g. `3000` = 0.30%).
-- **enabled** — `boolean`. Whether the pool currently accepts swaps and
-  liquidity operations.
+- **enabled** — `boolean`. Whether the pool accepts swaps and new or added
+  liquidity (`swap`, `mint`, `increase_liquidity`). Exit paths —
+  `decrease_liquidity`, `collect`, `burn` — remain open on a disabled pool.
 - **scale0** — `bigint`. Decimal scale for token0 (u128), used to convert
   between raw atomic units and display units.
 - **scale1** — `bigint`. Decimal scale for token1 (u128).

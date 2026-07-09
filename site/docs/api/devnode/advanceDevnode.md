@@ -20,7 +20,7 @@ const devnode = await startDevnode({ manualBlockCreation: true })
 
 // ...broadcast a transaction...
 
-await advanceDevnode({ numBlocks: 1 }) // mine a block so the broadcast can finalize
+await advanceDevnode({ numBlocks: 1 }) // mine a block so the broadcast can be accepted
 
 await devnode.stop()
 ```

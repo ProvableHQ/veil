@@ -22,6 +22,7 @@ re-registers lazily on the next scan.
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 
 const aleo = await loadNetwork('testnet')
+const account = aleo.privateKeyToAccount('APrivateKey1...')
 
 const records = aleo.createRemoteScanner({
   url: 'https://api.provable.com/v2',

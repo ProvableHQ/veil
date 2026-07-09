@@ -16,12 +16,12 @@ installed and on `PATH` (or located via `leoPath`).
 ## Usage
 
 ```ts
-import { createTestClient } from '@provablehq/veil-core'
+import { createTestClient, http } from '@provablehq/veil-core'
 import { leoActions } from '@provablehq/veil-leo'
 
-const testClient = createTestClient({ transport }).extend(
-  leoActions({ cwd: './my-program' }),
-)
+const testClient = createTestClient({
+  transport: http('http://127.0.0.1:3030', { network: 'testnet' }),
+}).extend(leoActions({ cwd: './my-program' }))
 
 await testClient.leo.build()
 await testClient.advanceBlock()
