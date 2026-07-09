@@ -5,41 +5,40 @@ sidebar_position: 10
 # @provablehq/veil-aleo-bridges
 
 :::caution Preview
-`@provablehq/veil-aleo-bridges` is early and not yet published. The API below is subject to
-change — treat this page as a preview.
+`@provablehq/veil-aleo-bridges` is early and not yet published to npm (`private: true`
+in its `package.json`). The API below is subject to change — treat this page
+as a preview.
 :::
 
 A viem-shaped client for Provable's cross-chain bridge: discover routes,
 fetch quotes, create and track orders, and perform an Aleo-originated swap in
-one call (an unshield deposit signed by a `@provablehq/veil-core` wallet client, then
-bridged to a destination chain, asset, and address). Aleo is always one side
-of the pair.
+one call — an unshield deposit signed by a `@provablehq/veil-core` wallet
+client, then bridged to a destination chain, asset, and address. Aleo is
+always one side of the pair; the bridge moves value between Aleo and any
+other supported chain, in either direction.
+
+## Installation
+
+Not yet published — the package builds only from the `veil` monorepo as a
+workspace dependency until it leaves preview.
 
 ## Key exports
 
-- **`createBridgeClient(config)`** → a `BridgeClient`; pass `wallet` (a
-  `@provablehq/veil-core` WalletClient) to enable `swap`.
+- **`createBridgeClient(config)`** — returns a `BridgeClient`; pass `wallet` (a `@provablehq/veil-core` WalletClient) to enable `swap`.
+- **`bridgeActions(config?)`** — the `extend()`-style alternative: binds the same actions onto an existing client instead of constructing a standalone one.
 - **`httpBridge(baseUrl, config?)`** — the bridge transport.
-- **Discovery** — `getAssets` (the identifier catalog), `getProviders`,
-  `getRoutes` (derived candidate pairs, filterable by symbol / chain /
-  provider), `getFlags`.
-- **Actions** — `getQuotes`, `createOrder`, `getOrder`, `getOrderAudit`,
-  `waitForOrder`, `swap`.
-- **Helpers** — `chainDisplayName`, `resolveChainId`, `parseDecimalAmount`,
-  `isTerminalStage`, `TERMINAL_STAGES`, `aleoAssetProgram`,
-  `DEFAULT_ALEO_ASSET_MAP`.
-- **Errors** — `BridgeError`, `BridgeEnvelopeError`, `BridgeOrderFailedError`,
-  `BridgeTimeoutError`.
-- **Agent surfaces** — `createBridgeAgentTools` (`@provablehq/veil-aleo-bridges/agent`),
-  `createBridgeMcpServer` (`@provablehq/veil-aleo-bridges/mcp`) — composable with other
-  packages' tools via core's `toMcpServer`.
+- **Discovery** — `getAssets` (the identifier catalog), `getProviders`, `getRoutes` (derived candidate pairs, filterable by symbol / chain / provider), `getFlags`.
+- **Actions** — `getQuotes`, `createOrder`, `getOrder`, `getOrderAudit`, `waitForOrder`, `swap`.
+- **Helpers** — `chainDisplayName`, `resolveChainId`, `parseDecimalAmount`, `isTerminalStage`, `TERMINAL_STAGES`, `aleoAssetProgram`, `DEFAULT_ALEO_ASSET_MAP`.
+- **Errors** — `BridgeError`, `BridgeEnvelopeError`, `BridgeOrderFailedError`, `BridgeTimeoutError`.
+- **Agent surfaces** — `createBridgeAgentTools` (`@provablehq/veil-aleo-bridges/agent`), `createBridgeMcpServer` (`@provablehq/veil-aleo-bridges/mcp`) — composable with other packages' tools via core's `toMcpServer`.
 
 ## Identifiers
 
 The API is strict about identifiers: chains are case-sensitive ids (`ALEO`,
 `SOLANA`, `EVM:1`), assets are chain-qualified codes (`ALEO_MAINNET`,
 `USDC_ETH` — never bare symbols), and amounts are decimal strings in display
-units. Don't hardcode any of them — discover:
+units. None of them should be hardcoded — discover them instead:
 
 ```ts
 import { createBridgeClient, httpBridge } from '@provablehq/veil-aleo-bridges'
@@ -57,8 +56,8 @@ route.externalAsset.chainName  // 'Solana'
 route.providers                // e.g. ['NEAR_INTENTS', 'HALLIDAY']
 ```
 
-Candidates mean supportability; a live `getQuotes` for your direction and
-amount is the confirmation.
+A route candidate means supportability; a live `getQuotes` call for the
+intended direction and amount is the confirmation.
 
 ## Swapping out of Aleo
 

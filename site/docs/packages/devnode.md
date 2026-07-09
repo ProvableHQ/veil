@@ -4,9 +4,13 @@ sidebar_position: 8
 
 # @provablehq/veil-aleo-devnode
 
-Manages a local Aleo devnode process from Node — start it, advance blocks,
-restore snapshots — typically wired into a test client via `extend()` for
-integration tests against a local devnet.
+Manages a local Aleo devnode process from Node — starts it, advances blocks,
+restores snapshots — typically wired into a `TestClient` via `extend()` for
+integration tests against a local devnet. Every method spawns the
+`aleo-devnode` binary as a child process, so it MUST be installed and on
+`PATH` (or located via a `devnodePath` option).
+
+## Installation
 
 ```bash
 npm install -D @provablehq/veil-core @provablehq/veil-aleo-devnode
@@ -16,13 +20,14 @@ npm install -D @provablehq/veil-core @provablehq/veil-aleo-devnode
 
 - **`devnodeActions`** — an `extend()` decorator adding `startDevnode`, `advanceDevnode`, and `restoreDevnode` to a client.
 - **Standalone** — `startDevnode`, `advanceDevnode`, `restoreDevnode`.
-- **Constants** — `DEVNODE_PRIVATE_KEY`, `DEVNODE_ADDR` (`127.0.0.1:3030`).
+- **Constants** — `DEVNODE_PRIVATE_KEY` (the well-known seeded key), `DEVNODE_ADDR` (`'127.0.0.1:3030'`).
 
-Taking a snapshot is a live REST call, so it lives on the `@provablehq/veil-core` test
-client as `client.snapshot(...)` / `client.listSnapshots()` rather than in this
-package; reload one here with `restoreDevnode`.
+Taking a snapshot is a live REST call against a running node, so it lives on
+the `@provablehq/veil-core` test client itself — `client.snapshot(...)` and
+`client.listSnapshots()` — rather than in this package. `restoreDevnode` here
+reloads one from disk.
 
-## Usage
+## Example
 
 ```ts
 import { createTestClient, http } from '@provablehq/veil-core'
@@ -33,8 +38,14 @@ const client = createTestClient({
 }).extend(devnodeActions)
 
 const devnode = await client.startDevnode()
-await client.advanceBlock({ count: 1 })
+await client.advanceDevnode({ numBlocks: 1 })
 await devnode.stop()
 ```
 
-Pair with [`@provablehq/veil-leo`](./leo) to compile and deploy programs onto the devnode.
+By default the devnode binds `127.0.0.1:3030`, keeps its ledger in memory, and
+produces blocks automatically after each broadcast. Pass `manualBlockCreation:
+true` to `startDevnode` to gate confirmation on an explicit `advanceDevnode`
+call instead. Pair with [`@provablehq/veil-leo`](./leo) to compile and deploy
+programs onto the devnode, and see
+[Testing against a devnode](/guides/devnode) and the
+[`/api/devnode`](/api/devnode/startDevnode) pages for the full option surface.

@@ -4,24 +4,26 @@ sidebar_position: 9
 
 # @provablehq/veil-leo
 
-A thin typed wrapper around the `leo` CLI binary, exposing Leo commands (build,
-deploy, run, synthesize, clean) as Node async functions with typed options that
-map to CLI flags. Use it to drive Leo compilation and deployment
-programmatically — standalone or wired into a test client via `extend()`.
+A thin typed wrapper around the `leo` CLI binary, exposing Leo commands
+(build, deploy, run, synthesize, clean) as Node async functions with typed
+options that map to CLI flags. Applies to driving Leo compilation and
+deployment programmatically, standalone or wired into a `TestClient` via
+`extend()`. Every method spawns the `leo` binary as a child process, so the
+Leo CLI MUST be installed and on `PATH` (or located via a `leoPath` option).
+
+## Installation
 
 ```bash
 npm install -D @provablehq/veil-leo
 ```
 
-Requires the `leo` binary on your `PATH`.
-
 ## Key exports
 
-- **`createLeoClient(config?)`** → a `LeoClient` with `.build()`, `.deploy()`, `.synthesize()`, `.abi()`.
-- **`leoActions(config?)`** — an `extend()` decorator attaching `.leo` to a client.
-- **Standalone** — `build`, `buildBatch`, `abi` (returns the ABI JSON of a compiled `.aleo` file), `run` (runs `leo run`), `clean`.
+- **`createLeoClient(config?)`** — returns a `LeoClient` with `.build()`, `.deploy()`, `.synthesize()`, `.abi()`. `config` sets defaults (`cwd`, `network`, `privateKey`, …) forwarded to every command; any can be overridden per call.
+- **`leoActions(config?)`** — an `extend()` decorator attaching `.leo` to any Veil client (public, wallet, or test — leo operations don't need the host client's transport).
+- **Standalone** — `build`, `buildBatch` (sequential, for multiple projects), `abi` (returns the ABI JSON of a compiled `.aleo` file), `run` (runs `leo run` locally, nothing broadcast), `clean`.
 
-## Usage
+## Example
 
 ```ts
 import { createTestClient, http } from '@provablehq/veil-core'
@@ -35,5 +37,6 @@ await client.leo.build()
 await client.leo.deploy()
 ```
 
-Commonly paired with [`@provablehq/veil-aleo-devnode`](./devnode) for a full local
-compile → deploy → test loop.
+Commonly paired with [`@provablehq/veil-aleo-devnode`](./devnode) for a full
+local compile-deploy-test loop. See the [`/api/leo`](/api/leo/createLeoClient)
+pages for every command's option surface.
