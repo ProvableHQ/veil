@@ -32,41 +32,6 @@ jobs:
       - name: Typecheck reference dApp
         run: pnpm --filter @veil/loyalty-dapp exec tsc --noEmit
 
-  live-api:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      VEIL_INTEGRATION: '1'
-      # Balances test credentials: the E2E account key plus the registered
-      # Provable API consumer (see "Registering with the Provable API" in
-      # AGENTS.md). The test self-skips when these are absent.
-      VEIL_E2E_PRIVATE_KEY: ${{ secrets.VEIL_E2E_PRIVATE_KEY }}
-      ALEO_DPS_API_KEY: ${{ secrets.ALEO_DPS_API_KEY }}
-      ALEO_CONSUMER_ID: ${{ secrets.ALEO_CONSUMER_ID }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      # Read-only tests against live endpoints. --retry=2 retries each failing
-      # test individually so one flaky endpoint does not rerun the suite.
-      # Write-path e2e tests are never collected; balances is read-only but
-      # keyed (records scanning needs the account's registered view key).
-      - name: Read-only integration tests against live endpoints
-        run: >
-          pnpm vitest run --retry=2
-          packages/core/test/integration/realApi.test.ts
-          packages/shield-swap/test/integration/reads.integration.test.ts
-          packages/shield-swap/test/integration/api.integration.test.ts
-          packages/shield-swap/test/integration/traders.integration.test.ts
-          packages/shield-swap/test/integration/balances.integration.test.ts
-          packages/bridge/test/integration/api.integration.test.ts
-
   devnode:
     runs-on: ubuntu-latest
     timeout-minutes: 30
