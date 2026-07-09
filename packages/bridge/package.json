@@ -2,7 +2,7 @@
   "name": "@provablehq/veil-aleo-bridges",
   "version": "0.4.0",
   "private": true,
-  "description": "Veil client for Provable's cross-chain bridge \u2014 swaps between Aleo and other chains.",
+  "description": "Veil client for swaps between Aleo and other chains (SOL, ETH, BTC, etc.).",
   "license": "MIT",
   "repository": {
     "type": "git",
