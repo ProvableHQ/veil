@@ -11,16 +11,17 @@ import { buildLeoProgram } from '../../../provable-sdk/test/integration/leoProje
 import { createShieldSwapV3Contract } from '../../src/generated/shield_swap.js'
 
 /**
- * Shared devnode fixture for the AMM lifecycle e2e suites: fetches the
- * deployed shield_swap_v3.aleo (and its multisig import) from the live
- * testnet API, patches the baked admin address to the devnode account,
- * deploys everything alongside two locally-built ARC-20 test tokens,
- * runs the admin configuration through the generated contract, and funds
- * a non-admin user for the lifecycle calls.
+ * Shared devnode fixture for the AMM lifecycle e2e suites: deploys the
+ * vendored shield_swap_v3.aleo (and its multisig import) with the baked admin
+ * patched to the devnode account, alongside two locally-built ARC-20 test
+ * tokens, runs the admin configuration through the generated contract, and
+ * funds a non-admin user for the lifecycle calls. Fully hermetic — no live
+ * network. Refresh the vendored AMM sources with
+ * codegen/refresh-devnode-fixtures.sh when the deployed contract changes.
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const TESTNET_API = process.env.VEIL_API_URL ?? 'https://api.provable.com/v2'
+const FIXTURES = join(HERE, '../fixtures/programs')
 
 export const AMM_PROGRAM = 'shield_swap_v3.aleo'
 export const MULTISIG_PROGRAM = 'test_shield_swap_multisig_core.aleo'
@@ -50,7 +51,6 @@ export type AmmDevnode = {
   /** Program id of the token whose field id sorts lower/higher. */
   token0Program: string
   token1Program: string
-  readMapping: (mapping: string, key: string) => Promise<unknown>
   /** Decrypts the caller-owned records of a confirmed transaction. */
   recordsOf: (viewKey: string, txId: string) => Promise<string[]>
   stop: () => Promise<void>
@@ -66,11 +66,9 @@ export function identifierToField(identifier: string): string {
   return `${value}field`
 }
 
-/** Fetches a deployed program's source from the testnet API. */
-async function fetchTestnetProgram(programId: string): Promise<string> {
-  const res = await fetch(`${TESTNET_API}/testnet/program/${programId}`)
-  if (!res.ok) throw new Error(`Fetching ${programId} from testnet failed: HTTP ${res.status}`)
-  return (await res.json()) as string
+/** Reads a vendored program fixture. */
+function readFixture(fileName: string): string {
+  return readFileSync(join(FIXTURES, fileName), 'utf-8')
 }
 
 /**
@@ -120,12 +118,10 @@ export async function setupAmmDevnode(): Promise<AmmDevnode> {
     await buildLeoProgram(TOKEN_B, tokenBSource),
   ]
 
-  // Fetch the deployed AMM and its import from the live testnet API.
-  const [multisigSource, ammSourceRaw, creditsSource] = await Promise.all([
-    fetchTestnetProgram(MULTISIG_PROGRAM),
-    fetchTestnetProgram(AMM_PROGRAM),
-    fetchTestnetProgram('credits.aleo'),
-  ])
+  // The AMM and its multisig import are vendored; the ARC-20 tokens compile
+  // from vendored Leo sources above.
+  const multisigSource = readFixture(MULTISIG_PROGRAM)
+  const ammSourceRaw = readFixture(AMM_PROGRAM)
 
   const devnode = await startDevnode({ readyTimeout: 45_000, verbose: process.env.VEIL_DEVNODE_VERBOSE === '1' })
   const testClient = createTestClient({
@@ -134,6 +130,10 @@ export async function setupAmmDevnode(): Promise<AmmDevnode> {
   const aleo = await loadNetwork('testnet')
   const adminPair = createDevnodeClient()
   const admin: DevnodeActor = { publicClient: adminPair.publicClient, walletClient: adminPair.walletClient, account: adminPair.account }
+
+  // credits.aleo ships with every node — read it from the devnode rather than
+  // vendoring it (the AMM dynamically dispatches into it).
+  const creditsSource = await admin.publicClient.getCode({ programId: 'credits.aleo' })
 
   const ammSource = patchAdminAddress(ammSourceRaw, admin.account.address)
 
@@ -213,9 +213,6 @@ export async function setupAmmDevnode(): Promise<AmmDevnode> {
     await waitAccepted(admin, testClient, mintTx, `mint ${token}`)
   }
 
-  const readMapping = (mapping: string, key: string) =>
-    admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping, key })
-
   // Decrypts the records of a confirmed transaction that the given view key
   // owns — how the suites recover PositionNFTs and token change records the
   // write actions do not return.
@@ -254,7 +251,6 @@ export async function setupAmmDevnode(): Promise<AmmDevnode> {
     token1Field: aFirst ? bField : aField,
     token0Program: aFirst ? TOKEN_A : TOKEN_B,
     token1Program: aFirst ? TOKEN_B : TOKEN_A,
-    readMapping,
     recordsOf,
     stop: async () => {
       try {

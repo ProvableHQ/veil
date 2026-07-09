@@ -34,7 +34,7 @@ jobs:
 
   devnode:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       VEIL_DEVNODE_INTEGRATION: '1'
     steps:
@@ -79,3 +79,5 @@ jobs:
           packages/provable-sdk/test/integration/devnodeE2e.test.ts
           packages/provable-sdk/test/integration/devnodeWrite.e2e.test.ts
           packages/codegen/test/integration/creditsDevnode.e2e.test.ts
+          packages/shield-swap/test/integration/devnodeLifecycle.actions.e2e.test.ts
+          packages/shield-swap/test/integration/devnodeLifecycle.generated.e2e.test.ts

@@ -19,7 +19,7 @@ import {
  * generated contract bindings.
  *
  * Gated behind VEIL_DEVNODE_INTEGRATION=1: requires leo and aleo-devnode on
- * PATH, and fetches the deployed AMM source from the live testnet API.
+ * PATH; the AMM sources are vendored fixtures (no live network).
  *
  * Run with:
  *   VEIL_DEVNODE_INTEGRATION=1 npx vitest run packages/shield-swap/test/integration/devnodeLifecycle.actions.e2e.test.ts
@@ -62,7 +62,7 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (SDK write actions)', () =
   }
 
   async function position(pool: PoolCase) {
-    const raw = await ctx.readMapping('positions', pool.positionTokenId!)
+    const raw = await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'positions', key: pool.positionTokenId! })
     expect(raw, `positions[${pool.positionTokenId}]`).toBeTruthy()
     return positionNumbers(String(raw))
   }
@@ -77,14 +77,14 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (SDK write actions)', () =
   }, 60_000)
 
   it('admin setup landed: fee tiers, spacings, tokens, open pool creation', async () => {
-    expect(await ctx.readMapping('fee_tiers', '3000u16')).toBe('true')
-    expect(await ctx.readMapping('fee_tiers', '500u16')).toBe('true')
-    expect(await ctx.readMapping('tick_spacings', '60u32')).toBe('true')
-    expect(await ctx.readMapping('fee_to_tick_spacing', '500u16')).toBe('10u32')
-    expect(await ctx.readMapping('token_allowed', ctx.token0Field)).toBe('true')
-    expect(await ctx.readMapping('token_decimals', ctx.token1Field)).toBe('6u8')
-    expect(await ctx.readMapping('pool_creation_is_open', 'true')).toBe('true')
-    expect(String(await ctx.readMapping('admin', 'true'))).toBe(ctx.admin.account.address)
+    expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'fee_tiers', key: '3000u16' })).toBe('true')
+    expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'fee_tiers', key: '500u16' })).toBe('true')
+    expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'tick_spacings', key: '60u32' })).toBe('true')
+    expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'fee_to_tick_spacing', key: '500u16' })).toBe('10u32')
+    expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'token_allowed', key: ctx.token0Field })).toBe('true')
+    expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'token_decimals', key: ctx.token1Field })).toBe('6u8')
+    expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'pool_creation_is_open', key: 'true' })).toBe('true')
+    expect(String(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'admin', key: 'true' }))).toBe(ctx.admin.account.address)
   })
 
   it('a non-admin creates two pools over the same pair at distinct fee tiers', async () => {
@@ -102,8 +102,8 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (SDK write actions)', () =
       pool.poolKey = poolKey
 
       // Mapping state: pool registered, slot at the initial tick, no liquidity.
-      expect(await ctx.readMapping('initialized_pools', poolKey!)).toBe('true')
-      expect(await ctx.readMapping('pools', poolKey!)).toBeTruthy()
+      expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'initialized_pools', key: poolKey! })).toBe('true')
+      expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'pools', key: poolKey! })).toBeTruthy()
       const slot = await dex.getSlot({ poolKey: poolKey! })
       expect(slot).toBeTruthy()
       expect(slot!.tick).toBe(0)
@@ -200,7 +200,7 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (SDK write actions)', () =
       expect(handle.swapId).toMatch(/field$/)
 
       // The finalize wrote the outcome into swap_outputs before the claim.
-      const output = await ctx.readMapping('swap_outputs', handle.swapId!)
+      const output = await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'swap_outputs', key: handle.swapId! })
       expect(output).toBeTruthy()
 
       const claim = await dex.claimSwapOutput({ handle, imports: ctx.imports })
@@ -269,7 +269,7 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (SDK write actions)', () =
       const result = await dex.burn({ poolKey: pool.poolKey!, positionRecord: pool.nftRecord! })
       expect(result.transactionId).toMatch(/^at1/)
       // The position mapping entry is removed by the burn finalize.
-      expect(await ctx.readMapping('positions', pool.positionTokenId!)).toBeFalsy()
+      expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'positions', key: pool.positionTokenId! })).toBeFalsy()
     }
   }, 480_000)
 
