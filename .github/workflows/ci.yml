@@ -105,3 +105,4 @@ jobs:
           packages/devnode/test/devnodeActions.integration.test.ts
           packages/provable-sdk/test/integration/devnodeE2e.test.ts
           packages/provable-sdk/test/integration/devnodeWrite.e2e.test.ts
+          packages/codegen/test/integration/creditsDevnode.e2e.test.ts
