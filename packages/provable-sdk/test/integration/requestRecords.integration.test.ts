@@ -3,9 +3,10 @@ import { loadNetwork } from '@veil/provable-sdk'
 
 /**
  * Scans the VEIL_E2E account's credits.aleo records on testnet AND mainnet
- * through the hosted Record Scanner Service, exercising switchChain between
- * the two scans. Registration with the Provable API is required — see
- * "Registering with the Provable API" in AGENTS.md.
+ * through one wallet client: switchChain re-targets the proving stack, the
+ * transport, and the attached record scanner together, so the second scan
+ * hits mainnet without rebuilding the client. Registration with the Provable
+ * API is required — see "Registering with the Provable API" in AGENTS.md.
  *
  * Credentials resolve in two steps: the pre-registered consumer from
  * ALEO_DPS_API_KEY + ALEO_CONSUMER_ID is preferred (verified with a JWT
@@ -75,7 +76,7 @@ describe.runIf(RUN)('requestRecords on testnet and mainnet with switchChain', ()
         consumerId,
         apiKey,
       })
-      const { walletClient, account } = aleoTestnet.createAleoClient({
+      const { walletClient } = aleoTestnet.createAleoClient({
         privateKey: PRIVATE_KEY!,
         networkUrl: NETWORK_URL,
         provingMode: 'local',
@@ -91,22 +92,16 @@ describe.runIf(RUN)('requestRecords on testnet and mainnet with switchChain', ()
         expect('recordPlaintext' in record && record.recordPlaintext).toContain('microcredits')
       }
 
-      // --- Switch the wallet client's proving stack to mainnet ---
+      // --- Switch the whole client to mainnet: proving stack, transport
+      // routing, and the record provider all re-target together ---
       await walletClient.switchChain({ network: 'mainnet' })
 
-      // --- Mainnet: scan the same view key through a mainnet-bound handle ---
-      const aleoMainnet = await loadNetwork('mainnet')
-      const mainnetScanner = aleoMainnet.createStandaloneScanner({
-        url: SCANNER_URL,
-        consumerId,
-        viewKey: account.viewKey,
-        apiKey,
-      })
-      const mainnetRecords = await mainnetScanner.requestRecords({ program: 'credits.aleo' })
+      // --- Mainnet: same wallet client, same view key, new chain ---
+      const mainnetRecords = await walletClient.requestRecords({ program: 'credits.aleo' })
       expect(mainnetRecords.length).toBeGreaterThan(0)
       for (const record of mainnetRecords) {
         expect(record.programName).toBe('credits.aleo')
-        expect(record.recordPlaintext).toContain('microcredits')
+        expect('recordPlaintext' in record && record.recordPlaintext).toContain('microcredits')
       }
     },
     300_000,

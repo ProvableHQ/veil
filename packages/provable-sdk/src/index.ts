@@ -153,6 +153,10 @@ export interface AleoSdk {
    * service (a network round-trip) to obtain the UUID scanning requires;
    * subsequent calls reuse it. `setAccount` resets the registration.
    *
+   * The provider implements `switchNetwork`, so a wallet client carrying it
+   * re-targets record scanning when `switchChain` runs — the scanner rebuilds
+   * against the new network and re-registers lazily on the next scan.
+   *
    * @param options.url Base URL of the service (the SDK appends the network
    *   segment — do not include it).
    * @param options.consumerId Consumer id used for JWT refresh.
@@ -562,14 +566,11 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 
   // A scanner's UUID is issued at registration; owned() rejects locally
   // without one. Register once, lazily, and memoize the in-flight promise so
-  // concurrent scans share a single round-trip. Returns an `ensure()` to await
-  // before scanning and a `reset()` for when the account changes.
+  // concurrent scans share a single round-trip. Account or network changes
+  // replace the whole object (one registration per scanner build).
   function makeRegisterOnce(startBlock: number) {
     let registration: Promise<void> | undefined
     return {
-      reset() {
-        registration = undefined
-      },
       ensure(
         scanner: InstanceType<SdkModule['RecordScanner']>,
         viewKey: ReturnType<SdkModule['ViewKey']['from_string']>,
@@ -639,22 +640,36 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     apiKey?: string
     startBlock?: number
   }): RecordProvider {
+    // The RecordScanner class is network-bound: a scanner built from a given
+    // SDK module scans that module's network. Network switching rebuilds the
+    // scanner (and the wasm view key) from the target network's module.
+    let scannerSdk: Pick<SdkModule, 'RecordScanner' | 'ViewKey'> = { RecordScanner, ViewKey }
     let scanner: InstanceType<SdkModule['RecordScanner']> | undefined
     let viewKey: ReturnType<SdkModule['ViewKey']['from_string']> | undefined
-    const registration = makeRegisterOnce(options.startBlock ?? 0)
+    let viewKeyString: string | undefined
+    let registration = makeRegisterOnce(options.startBlock ?? 0)
+
+    function buildScanner() {
+      if (!viewKeyString) return // no active account yet — nothing to rebuild
+      viewKey = scannerSdk.ViewKey.from_string(viewKeyString)
+      scanner = new scannerSdk.RecordScanner({
+        url: options.url,
+        consumerId: options.consumerId,
+        ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+        viewKeys: [viewKey],
+        decryptEnabled: true,
+        autoReRegister: true,
+      })
+      // Each build gets its own registration: view keys register per account
+      // AND per network, and the old promise stays bound to the scanner a
+      // concurrent scan may still hold.
+      registration = makeRegisterOnce(options.startBlock ?? 0)
+    }
 
     return {
       setAccount: (account: { viewKey: string }) => {
-        viewKey = ViewKey.from_string(account.viewKey)
-        registration.reset() // a new account needs its own registration
-        scanner = new RecordScanner({
-          url: options.url,
-          consumerId: options.consumerId,
-          ...(options.apiKey ? { apiKey: options.apiKey } : {}),
-          viewKeys: [viewKey],
-          decryptEnabled: true,
-          autoReRegister: true,
-        })
+        viewKeyString = account.viewKey
+        buildScanner()
       },
 
       requestRecords: async (params: RequestRecordsParameters): Promise<OwnedRecord[]> => {
@@ -662,8 +677,24 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           throw new Error('No active account set on record scanner. Call setAccount() first.')
         }
 
-        await registration.ensure(scanner, viewKey!)
-        return scanOwned(scanner, params.program, params.statusFilter, !!options.apiKey)
+        // Pin this scan to the current build: a concurrent setAccount or
+        // switchNetwork swaps the closures, and mixing builds mid-scan would
+        // register one scanner and scan another.
+        const activeScanner = scanner
+        const activeViewKey = viewKey!
+        const activeRegistration = registration
+        await activeRegistration.ensure(activeScanner, activeViewKey)
+        return scanOwned(activeScanner, params.program, params.statusFilter, !!options.apiKey)
+      },
+
+      switchNetwork: async (newNetwork: string) => {
+        if (newNetwork !== 'mainnet' && newNetwork !== 'testnet') {
+          throw new Error(
+            `Record scanning supports 'mainnet' or 'testnet' (received '${newNetwork}').`,
+          )
+        }
+        scannerSdk = (await loadSdk(newNetwork as SupportedNetwork)) as SdkModule
+        buildScanner()
       },
     }
   }

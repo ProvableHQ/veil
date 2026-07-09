@@ -483,5 +483,20 @@ describe('@veil/provable-sdk', () => {
         walletClient.requestRecords({ program: 'token.aleo' }),
       ).rejects.toThrow(/recordProvider/)
     })
+
+    it('createRemoteScanner supports network switching', async () => {
+      const scanner = aleo.createRemoteScanner({
+        url: 'https://api.provable.com/scanner',
+        consumerId: 'test-consumer',
+      })
+      expect(scanner.switchNetwork).toBeTypeOf('function')
+
+      // Rejects unsupported networks; accepts a supported one offline (the
+      // rebuild happens locally, registration is deferred to the next scan).
+      await expect(scanner.switchNetwork!('bogusnet')).rejects.toThrow(/mainnet|testnet/)
+      const account = aleo.generateAccount()
+      scanner.setAccount({ viewKey: account.viewKey })
+      await expect(scanner.switchNetwork!('mainnet')).resolves.toBeUndefined()
+    })
   })
 })
