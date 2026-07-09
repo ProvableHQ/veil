@@ -21,8 +21,9 @@ npm install @provablehq/veil-core
 - **Actions** — `getBlockNumber`, `getBlock`, `getTransaction`, `getBalance`, `transfer`, `requestRecords`, `readMapping`, `waitForConfirmation`
 - **Accounts / types** — `rpcAccount`, `toAccount`; `PublicClient`, `WalletClient`, `Account`, `Transport`, `ABI`, `ProvingConfig`
 
-See the [Clients](../clients/public-client), [Guides](../guides/reading-chain-state),
-and [API](../api/public-actions) sections for the full surface.
+See the [Clients](../clients/public-client) pages for the full action
+surface, [Guides](../guides/reading-chain-state) for common flows, and
+[API](../api/types) for the type and transport reference.
 
 ## Subpaths
 

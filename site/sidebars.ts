@@ -51,34 +51,8 @@ const sidebars: SidebarsConfig = {
     },
   ],
   api: [
-    {
-      type: 'category',
-      label: 'Public Actions',
-      items: [
-        'api/public-actions',
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Wallet Actions',
-      items: [
-        'api/wallet-actions',
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Transports',
-      items: [
-        'api/transports',
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Types',
-      items: [
-        'api/types',
-      ],
-    },
+    'api/transports',
+    'api/types',
   ],
 };
 
