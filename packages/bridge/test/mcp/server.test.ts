@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createBridgeMcpServer } from '../../src/mcp/index.js'
 import { createBridgeAgentTools } from '../../src/agent/tools.js'
-import { toMcpServer } from '@veil/core/mcp'
+import { toMcpServer } from '@provablehq/veil-core/mcp'
 import type { BridgeClient } from '../../src/clients/createBridgeClient.js'
 
 function fakeClient() {

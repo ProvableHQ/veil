@@ -1,5 +1,5 @@
 {
-  "name": "@veil/loyalty-node",
+  "name": "@provablehq/veil-loyalty-node",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,9 +12,9 @@
     "start:redeem": "tsx src/index.ts redeem_for_voucher"
   },
   "dependencies": {
-    "@veil/codegen": "workspace:*",
-    "@veil/core": "workspace:*",
-    "@veil/provable-sdk": "workspace:*",
+    "@provablehq/veil-codegen": "workspace:*",
+    "@provablehq/veil-core": "workspace:*",
+    "@provablehq/veil-aleo-sdk": "workspace:*",
     "dotenv": "^16.4.5"
   },
   "devDependencies": {

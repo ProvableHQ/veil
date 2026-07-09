@@ -15,13 +15,13 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   createPublicClient,
   custom,
-} from '@veil/core'
+} from '@provablehq/veil-core'
 import {
   aleoAgentTools,
   aleoAgentToolSchemas,
   createAgentTools,
   publicToolSchemas,
-} from '@veil/core/agent'
+} from '@provablehq/veil-core/agent'
 
 // ---------------------------------------------------------------------------
 // Mock transport — simulates Aleo network responses

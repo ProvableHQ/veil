@@ -1,4 +1,4 @@
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 import type { ApiClient } from '../api/client.js'
 import { getPrivateBalances } from './records.js'
 

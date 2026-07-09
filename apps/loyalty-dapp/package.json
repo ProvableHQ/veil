@@ -1,15 +1,15 @@
 {
-  "name": "@veil/loyalty-dapp",
+  "name": "@provablehq/veil-loyalty-dapp",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "pnpm --filter \"@veil/loyalty-dapp^...\" --workspace-concurrency=1 build && vite build",
+    "build": "pnpm --filter \"@provablehq/veil-loyalty-dapp^...\" --workspace-concurrency=1 build && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@veil/core": "workspace:*",
-    "@veil/react": "workspace:*",
+    "@provablehq/veil-core": "workspace:*",
+    "@provablehq/veil-aleo-react-hooks": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

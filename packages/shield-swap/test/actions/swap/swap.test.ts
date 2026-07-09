@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 
 // Mock ONLY the transaction-submission boundary; reads (getPool/getSlot/
 // deadline) run their real implementations against the scripted client.
-vi.mock('@veil/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@veil/core')>()
+vi.mock('@provablehq/veil-core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@provablehq/veil-core')>()
   return { ...actual, executeContract: vi.fn(), writeContract: vi.fn() }
 })
 
-import { executeContract, writeContract } from '@veil/core'
+import { executeContract, writeContract } from '@provablehq/veil-core'
 import { swap } from '../../../src/actions/swap/swap.js'
 import { claimSwapOutput, SwapOutputNotFinalizedError } from '../../../src/actions/swap/claimSwapOutput.js'
 import { MIN_SQRT_PRICE } from '../../../src/utils/tick-math.js'

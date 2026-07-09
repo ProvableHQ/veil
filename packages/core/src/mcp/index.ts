@@ -50,7 +50,7 @@ export type McpServer = {
 /**
  * Adapts any {@link AgentTool}s into an MCP server (tool list + dispatcher).
  *
- * Package-agnostic — feed it `createAgentTools` output, `@veil/shield-swap`'s
+ * Package-agnostic — feed it `createAgentTools` output, `@provablehq/shield-swap-sdk`'s
  * `createShieldSwapAgentTools`, or any mix, to expose them over MCP. Pure and
  * local; the handlers hit the network only when a tool is invoked.
  *
@@ -87,7 +87,7 @@ export function toMcpServer(tools: AgentTool[]): McpServer {
  * A thin binding of {@link toMcpServer} to the built-in Aleo tool set. For a
  * different or combined tool set (e.g. DEX tools), call `toMcpServer` directly.
  *
- * Exposed via subpath export: import { createMcpServer } from '@veil/core/mcp'
+ * Exposed via subpath export: import { createMcpServer } from '@provablehq/veil-core/mcp'
  *
  * Construction is pure and local; the handlers reach the network through the
  * configured clients only when a tool is invoked, and wallet-backed tools
@@ -99,8 +99,8 @@ export function toMcpServer(tools: AgentTool[]): McpServer {
  * @returns An {@link McpServer} serving the enabled tools.
  *
  * @example
- * import { createPublicClient, http } from '@veil/core'
- * import { createMcpServer } from '@veil/core/mcp'
+ * import { createPublicClient, http } from '@provablehq/veil-core'
+ * import { createMcpServer } from '@provablehq/veil-core/mcp'
  *
  * const client = createPublicClient({
  *   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),

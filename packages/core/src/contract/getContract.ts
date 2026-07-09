@@ -173,7 +173,7 @@ function isABI(abi: ABI | Program): abi is ABI {
  *   when the required client (public for reads, wallet for writes) was not provided.
  *
  * @example
- * import { createPublicClient, http, parseProgram, getContract } from '@veil/core'
+ * import { createPublicClient, http, parseProgram, getContract } from '@provablehq/veil-core'
  *
  * const client = createPublicClient({ transport: http('https://api.provable.com/v2', { network: 'mainnet' }) })
  * const source = await client.getCode({ programId: 'credits.aleo' })

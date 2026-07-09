@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createBridgeClient } from '../../src/clients/createBridgeClient.js'
 import { httpBridge } from '../../src/transports/httpBridge.js'
-import type { WalletClient } from '@veil/core'
+import type { WalletClient } from '@provablehq/veil-core'
 
 describe('createBridgeClient', () => {
   it('exposes a request function from the transport', () => {

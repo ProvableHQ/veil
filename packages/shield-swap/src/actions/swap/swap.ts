@@ -4,7 +4,7 @@ import {
   type Client,
   type InputRequest,
   type TransactionInput,
-} from '@veil/core'
+} from '@provablehq/veil-core'
 import { nextBlindedIdentity, viewKeyToScalar } from '../../utils/blinding/identity.js'
 import { selectTokenRecord } from '../../utils/records.js'
 import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'

@@ -1,4 +1,4 @@
-import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@veil/core'
+import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@provablehq/veil-core'
 import { selectTokenRecord } from '../../utils/records.js'
 import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
 import { generateFieldNonce } from '../../utils/params.js'

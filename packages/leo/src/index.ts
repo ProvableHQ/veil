@@ -217,7 +217,7 @@ export function leoActions(config: LeoClientConfig = {}) {
  *   command exits non-zero.
  *
  * @example
- * import { createLeoClient } from '@veil/leo'
+ * import { createLeoClient } from '@provablehq/veil-leo'
  *
  * const leo = createLeoClient({ cwd: './programs/token', network: 'testnet' })
  * await leo.build()
@@ -399,7 +399,7 @@ function runLeoCapture(args: string[], cwd?: string, leoPath = 'leo'): Promise<s
  * @throws If the `leo` binary is missing or the build exits non-zero.
  *
  * @example
- * import { build } from '@veil/leo'
+ * import { build } from '@provablehq/veil-leo'
  * await build({ cwd: './programs/token' })
  */
 export async function build(options?: { cwd?: string }): Promise<void> {
@@ -419,7 +419,7 @@ export async function build(options?: { cwd?: string }): Promise<void> {
  *   not built.
  *
  * @example
- * import { buildBatch } from '@veil/leo'
+ * import { buildBatch } from '@provablehq/veil-leo'
  * await buildBatch(['./programs/token', './programs/market'])
  */
 export async function buildBatch(projects: Array<string | { cwd?: string }>): Promise<void> {
@@ -447,7 +447,7 @@ export async function buildBatch(projects: Array<string | { cwd?: string }>): Pr
  * @throws If the `leo` binary is missing or the command exits non-zero.
  *
  * @example
- * import { abi } from '@veil/leo'
+ * import { abi } from '@provablehq/veil-leo'
  * const json = await abi({ file: 'build/token/token.aleo', cwd: './programs/token' })
  */
 export async function abi(options: { file: string; cwd?: string }): Promise<string> {
@@ -476,7 +476,7 @@ export type LeoRunOptions = {
  *   example on a type error or failing assertion).
  *
  * @example
- * import { run } from '@veil/leo'
+ * import { run } from '@provablehq/veil-leo'
  * await run({ function: 'mint', inputs: ['1000u64'], cwd: './programs/token' })
  */
 export async function run(options: LeoRunOptions): Promise<void> {

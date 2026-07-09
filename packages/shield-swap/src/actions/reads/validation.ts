@@ -1,4 +1,4 @@
-import { readMapping, type Client } from '@veil/core'
+import { readMapping, type Client } from '@provablehq/veil-core'
 import { readBoolMapping } from './internal.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 

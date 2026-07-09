@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// CLI entry point for @veil/codegen.
+// CLI entry point for @provablehq/veil-codegen.
 //
 // Usage:
 //   veil-codegen --abi loyalty_token/build/abi.json --out src/generated/loyalty_token.ts
@@ -8,7 +8,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { dirname, resolve } from 'path'
-import { parseAbi } from '@veil/core'
+import { parseAbi } from '@provablehq/veil-core'
 import { generate } from './generate.js'
 
 interface ProgramConfig {
@@ -40,7 +40,7 @@ Options:
   --abi <path>       Path to abi.json file
   --out <path>       Output .ts file path
   --config <path>    Path to config JSON (default: veil.config.json)
-  --core-import      Import path for @veil/core (default: '@veil/core')
+  --core-import      Import path for @provablehq/veil-core (default: '@provablehq/veil-core')
   --help, -h         Show this help
 
 Config file format (veil.config.json):
@@ -48,7 +48,7 @@ Config file format (veil.config.json):
     "programs": [
       { "abi": "./loyalty_token/build/abi.json", "out": "./src/generated/loyalty_token.ts" }
     ],
-    "coreImport": "@veil/core"
+    "coreImport": "@provablehq/veil-core"
   }
 
   Each program may set "programId" to stamp a PROGRAM_ID that differs from the

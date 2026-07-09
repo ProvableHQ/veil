@@ -1,4 +1,4 @@
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 import { getOrder } from './getOrder.js'
 import { BridgeOrderFailedError, BridgeTimeoutError } from '../errors/bridgeErrors.js'
 import {

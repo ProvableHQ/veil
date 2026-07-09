@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { createTestClient, http } from '@veil/core'
+import { createTestClient, http } from '@provablehq/veil-core'
 import {
   startDevnode,
   advanceDevnode,

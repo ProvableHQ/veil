@@ -30,7 +30,7 @@ jobs:
       - name: Unit and example tests
         run: pnpm vitest run
       - name: Typecheck reference dApp
-        run: pnpm --filter @veil/loyalty-dapp exec tsc --noEmit
+        run: pnpm --filter @provablehq/veil-loyalty-dapp exec tsc --noEmit
 
   # Core devnode plumbing (deploy / execute / records / snapshots / codegen).
   devnode:

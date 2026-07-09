@@ -23,8 +23,8 @@ import {
   rpcAccount,
   getContract,
   parseProgram,
-} from '@veil/core'
-import type { PublicClient, WalletClient, Transport } from '@veil/core'
+} from '@provablehq/veil-core'
+import type { PublicClient, WalletClient, Transport } from '@provablehq/veil-core'
 
 // ---------------------------------------------------------------------------
 // Shared mock data — all backends return the same responses
@@ -80,7 +80,7 @@ function createMockRequest() {
 // ---------------------------------------------------------------------------
 // Backend A: Wallet Adapter
 //
-// In production, you'd use @veil/wallet-adapter's fromWalletAdapter()
+// In production, you'd use @provablehq/veil-aleo-wallet-adapter's fromWalletAdapter()
 // with a real browser wallet (Leo, Puzzle, Fox, etc). Here we simulate the
 // same shape: an RPC account where the wallet handles signing/proving.
 // ---------------------------------------------------------------------------
@@ -105,7 +105,7 @@ function setupWalletAdapterClient(): { publicClient: PublicClient; walletClient:
 // ---------------------------------------------------------------------------
 // Backend B: Local Account (Provable SDK)
 //
-// In production, you'd use @veil/provable-sdk's privateKeyToAccount()
+// In production, you'd use @provablehq/veil-aleo-sdk's privateKeyToAccount()
 // and createProvingConfig(). Here we simulate a local account with
 // a mock proving config.
 // ---------------------------------------------------------------------------
@@ -126,7 +126,7 @@ function setupLocalAccountClient(): { publicClient: PublicClient; walletClient: 
   }
 
   // Proving config — in production this would be createProvingConfig()
-  // from @veil/provable-sdk, using the SDK's ProgramManager
+  // from @provablehq/veil-aleo-sdk, using the SDK's ProgramManager
   const proving = {
     mode: 'delegated' as const,
     buildTransaction: async (opts: unknown) => ({ mockTx: true }),

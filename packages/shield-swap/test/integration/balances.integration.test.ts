@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import { loadNetwork } from '@veil/provable-sdk'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { getPrivateBalances } from '../../src/utils/records.js'
 import { getBalances } from '../../src/utils/balances.js'

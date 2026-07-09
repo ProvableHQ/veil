@@ -58,7 +58,7 @@ export type WalletClient = Client & WalletActions & {
  * @returns A client carrying every wallet action.
  *
  * @example
- * import { createWalletClient, http, rpcAccount } from '@veil/core'
+ * import { createWalletClient, http, rpcAccount } from '@provablehq/veil-core'
  *
  * const client = createWalletClient({
  *   account: rpcAccount({

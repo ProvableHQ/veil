@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { parseAbi } from '@veil/core'
+import { parseAbi } from '@provablehq/veil-core'
 
 describe('pinned shield_swap ABI', () => {
   it('parses and contains the v3 entrypoints', () => {

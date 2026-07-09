@@ -1,4 +1,4 @@
-# @veil/devnode
+# @provablehq/veil-aleo-devnode
 
 Runs and drives a local Aleo development node from TypeScript. Reach for it in
 tests, CI, and local development when you need a real node to broadcast against
@@ -11,10 +11,10 @@ boots.
 ## Installation
 
 ```sh
-pnpm add @veil/devnode @veil/core
+pnpm add @provablehq/veil-aleo-devnode @provablehq/veil-core
 ```
 
-`@veil/devnode` drives the `aleo-devnode` binary as a subprocess — it does not
+`@provablehq/veil-aleo-devnode` drives the `aleo-devnode` binary as a subprocess — it does not
 bundle a node. The binary MUST be installed and resolvable on `PATH` (override
 its location per call with `devnodePath`). Every function throws with an
 install-and-PATH hint if it cannot find or run the binary.
@@ -27,7 +27,7 @@ returned instance is ready to receive transactions. Call `stop` to terminate it
 first.
 
 ```ts
-import { startDevnode, advanceDevnode, DEVNODE_ADDR } from '@veil/devnode'
+import { startDevnode, advanceDevnode, DEVNODE_ADDR } from '@provablehq/veil-aleo-devnode'
 
 const devnode = await startDevnode({
   socketAddr: DEVNODE_ADDR, // '127.0.0.1:3030'
@@ -47,7 +47,7 @@ timing instead of automatic creation. `restoreDevnode` reloads ledger state
 from a named snapshot, optionally restarting the node afterward.
 
 Taking a snapshot is a live REST call against the running node, not a binary
-subcommand, so it lives on the `@veil/core` test client as `snapshot` (with
+subcommand, so it lives on the `@provablehq/veil-core` test client as `snapshot` (with
 `listSnapshots` to enumerate them) rather than in this package. Capture state
 with `client.snapshot(...)` and reload it here with `restoreDevnode` — the node
 must have been started with `storagePath`, since an in-memory node has nothing
@@ -55,13 +55,13 @@ to snapshot.
 
 ### As test-client actions
 
-`devnodeActions` folds the process-lifecycle functions onto a `@veil/core` test
+`devnodeActions` folds the process-lifecycle functions onto a `@provablehq/veil-core` test
 client via `.extend`, so a single client drives the node (start/advance/restore)
 and, through the core test actions, snapshots it.
 
 ```ts
-import { createTestClient, http } from '@veil/core'
-import { devnodeActions } from '@veil/devnode'
+import { createTestClient, http } from '@provablehq/veil-core'
+import { devnodeActions } from '@provablehq/veil-aleo-devnode'
 
 const client = createTestClient({
   transport: http('http://127.0.0.1:3030', { network: 'testnet' }),

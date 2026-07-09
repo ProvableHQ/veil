@@ -22,7 +22,7 @@ type CustomTransportConfig = {
  *   `config.request`.
  *
  * @example
- * import { custom } from '@veil/core'
+ * import { custom } from '@provablehq/veil-core'
  *
  * const transport = custom({
  *   request: async ({ method, params }) => window.aleo.request({ method, params }),

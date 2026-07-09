@@ -1,4 +1,4 @@
-import { readMapping, parseRecordPlaintextLoose, type Client, type RecordValue } from '@veil/core'
+import { readMapping, parseRecordPlaintextLoose, type Client, type RecordValue } from '@provablehq/veil-core'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 
 /**

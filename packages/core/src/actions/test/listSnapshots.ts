@@ -6,7 +6,7 @@ export type ListSnapshotsReturnType = string[]
 /**
  * Lists the snapshots available on a local devnode.
  *
- * Use in tests to discover a snapshot name to pass to the `@veil/devnode`
+ * Use in tests to discover a snapshot name to pass to the `@provablehq/veil-aleo-devnode`
  * `restoreDevnode` action. Hits the devnode over the transport. Real networks
  * do not expose this.
  *

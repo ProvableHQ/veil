@@ -1,4 +1,4 @@
-import type { AlgorithmGrant, InputRequest } from '@veil/core'
+import type { AlgorithmGrant, InputRequest } from '@provablehq/veil-core'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 
 // Wallet-signer path only: these build the `derived` InputRequests a

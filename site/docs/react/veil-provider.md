@@ -9,7 +9,7 @@ Wraps your app with wallet connection support and auto-configures all known Aleo
 ## Usage
 
 ```tsx
-import { VeilProvider } from '@veil/react'
+import { VeilProvider } from '@provablehq/veil-aleo-react-hooks'
 
 <VeilProvider
   network="mainnet"

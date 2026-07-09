@@ -1,5 +1,5 @@
 {
-  "name": "@veil/leo",
+  "name": "@provablehq/veil-leo",
   "version": "0.4.0",
   "description": "Leo language utilities for the Veil Aleo SDK.",
   "license": "MIT",

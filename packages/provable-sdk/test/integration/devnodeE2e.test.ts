@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { rmSync } from 'node:fs'
 
-import { startDevnode, type DevnodeInstance } from '@veil/devnode'
-import { createDevnodeClient } from '@veil/provable-sdk'
-import { createTestClient, http } from '@veil/core'
+import { startDevnode, type DevnodeInstance } from '@provablehq/veil-aleo-devnode'
+import { createDevnodeClient } from '@provablehq/veil-aleo-sdk'
+import { createTestClient, http } from '@provablehq/veil-core'
 
 import { buildLeoProgram } from './leoProject.js'
 

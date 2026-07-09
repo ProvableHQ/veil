@@ -1,4 +1,4 @@
-# @veil/leo
+# @provablehq/veil-leo
 
 Wraps the Leo CLI in a typed TS/JS client. The client shells out to the `leo`
 binary and exposes its `build`, `abi`, `deploy`, and `synthesize` commands as
@@ -13,7 +13,7 @@ and mine a block from one call site.
 ## Installation
 
 ```sh
-pnpm add @veil/leo
+pnpm add @provablehq/veil-leo
 ```
 
 This package spawns the `leo` binary — it does not vendor the Leo toolchain. The
@@ -27,8 +27,8 @@ The extension ignores the host client — Leo operations run locally and need no
 transport — so it works on a public, wallet, or test client alike.
 
 ```ts
-import { createTestClient } from '@veil/core'
-import { leoActions } from '@veil/leo'
+import { createTestClient } from '@provablehq/veil-core'
+import { leoActions } from '@provablehq/veil-leo'
 
 const client = createTestClient({ transport }).extend(
   leoActions({ cwd: './my-program', network: 'testnet' }),
@@ -52,7 +52,7 @@ call.
 For a standalone client with no host to extend, call `createLeoClient` directly:
 
 ```ts
-import { createLeoClient } from '@veil/leo'
+import { createLeoClient } from '@provablehq/veil-leo'
 
 const leo = createLeoClient({ cwd: './my-program' })
 await leo.build()

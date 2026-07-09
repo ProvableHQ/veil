@@ -131,7 +131,7 @@ describe.runIf(RUN)('example: bridge USDC on Ethereum into Aleo', () => {
 
     // ---- 6. The privacy-native coda (optional): shield the arrival into a
     // private record. From here it can fund private DEX swaps
-    // (@veil/shield-swap) or a private outbound bridge deposit.
+    // (@provablehq/shield-swap-sdk) or a private outbound bridge deposit.
     //
     //   const { walletClient } = aleo.createAleoClient({ ...same config, records: scanner })
     //   await walletClient.transfer({

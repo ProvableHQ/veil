@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 
-vi.mock('@veil/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@veil/core')>()
+vi.mock('@provablehq/veil-core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@provablehq/veil-core')>()
   return { ...actual, executeContract: vi.fn(), writeContract: vi.fn() }
 })
 
-import { executeContract, writeContract } from '@veil/core'
+import { executeContract, writeContract } from '@provablehq/veil-core'
 import { decreaseLiquidity } from '../../../src/actions/liquidity/decreaseLiquidity.js'
 import { collect } from '../../../src/actions/liquidity/collect.js'
 import { burn } from '../../../src/actions/liquidity/burn.js'

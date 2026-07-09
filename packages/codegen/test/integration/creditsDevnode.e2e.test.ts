@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { startDevnode, type DevnodeInstance } from '@veil/devnode'
-import { createDevnodeClient } from '@veil/provable-sdk'
-import { abi } from '@veil/leo'
-import { createTestClient, http, parseAbi } from '@veil/core'
-import type { PublicClient, WalletClient, TestClient, LocalAccount } from '@veil/core'
+import { startDevnode, type DevnodeInstance } from '@provablehq/veil-aleo-devnode'
+import { createDevnodeClient } from '@provablehq/veil-aleo-sdk'
+import { abi } from '@provablehq/veil-leo'
+import { createTestClient, http, parseAbi } from '@provablehq/veil-core'
+import type { PublicClient, WalletClient, TestClient, LocalAccount } from '@provablehq/veil-core'
 
 import { generate } from '../../src/generate.js'
 

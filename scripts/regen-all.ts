@@ -36,7 +36,7 @@ async function main() {
   for (const { abi: abiPath, out: outPath } of targets) {
     const raw = JSON.parse(readFileSync(join(root, abiPath), 'utf-8'))
     const abi = parseAbi(raw)
-    const source = generate({ abi, coreImport: '@veil/core' })
+    const source = generate({ abi, coreImport: '@provablehq/veil-core' })
     writeFileSync(join(root, outPath), source, 'utf-8')
     console.log(`Generated ${outPath}`)
   }

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { waitForOrder } from '../../src/actions/waitForOrder.js'
 import { BridgeTimeoutError, BridgeOrderFailedError } from '../../src/errors/bridgeErrors.js'
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 
 function makeStatus(statusValue: string, over: Partial<Record<string, unknown>> = {}) {
   return {

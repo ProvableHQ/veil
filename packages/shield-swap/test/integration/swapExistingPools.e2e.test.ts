@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import { loadNetwork } from '@veil/provable-sdk'
-import { getProgram } from '@veil/core'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+import { getProgram } from '@provablehq/veil-core'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { parseTokenRecordInfo } from '../../src/utils/records.js'
 

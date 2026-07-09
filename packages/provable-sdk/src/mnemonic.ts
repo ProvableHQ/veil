@@ -184,7 +184,7 @@ export class BLS12377HDKey {
  * @returns A space-separated mnemonic phrase.
  *
  * @example
- * import { generateMnemonic, mnemonicToHDKey } from '@veil/provable-sdk'
+ * import { generateMnemonic, mnemonicToHDKey } from '@provablehq/veil-aleo-sdk'
  *
  * const mnemonic = generateMnemonic()
  * const account0 = mnemonicToHDKey(mnemonic)
@@ -246,7 +246,7 @@ export function mnemonicToSeed(mnemonic: string): Uint8Array {
  * @throws If the index is out of range.
  *
  * @example
- * import { mnemonicToHDKey } from '@veil/provable-sdk'
+ * import { mnemonicToHDKey } from '@provablehq/veil-aleo-sdk'
  *
  * const hdKey = mnemonicToHDKey(mnemonic, { index: 1 })
  */

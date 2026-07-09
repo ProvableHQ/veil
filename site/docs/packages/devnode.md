@@ -2,14 +2,14 @@
 sidebar_position: 8
 ---
 
-# @veil/devnode
+# @provablehq/veil-aleo-devnode
 
 Manages a local Aleo devnode process from Node — start it, advance blocks,
 restore snapshots — typically wired into a test client via `extend()` for
 integration tests against a local devnet.
 
 ```bash
-npm install -D @veil/core @veil/devnode
+npm install -D @provablehq/veil-core @provablehq/veil-aleo-devnode
 ```
 
 ## Key exports
@@ -18,15 +18,15 @@ npm install -D @veil/core @veil/devnode
 - **Standalone** — `startDevnode`, `advanceDevnode`, `restoreDevnode`.
 - **Constants** — `DEVNODE_PRIVATE_KEY`, `DEVNODE_ADDR` (`127.0.0.1:3030`).
 
-Taking a snapshot is a live REST call, so it lives on the `@veil/core` test
+Taking a snapshot is a live REST call, so it lives on the `@provablehq/veil-core` test
 client as `client.snapshot(...)` / `client.listSnapshots()` rather than in this
 package; reload one here with `restoreDevnode`.
 
 ## Usage
 
 ```ts
-import { createTestClient, http } from '@veil/core'
-import { devnodeActions } from '@veil/devnode'
+import { createTestClient, http } from '@provablehq/veil-core'
+import { devnodeActions } from '@provablehq/veil-aleo-devnode'
 
 const client = createTestClient({
   transport: http('http://127.0.0.1:3030', { network: 'testnet' }),
@@ -37,4 +37,4 @@ await client.advanceBlock({ count: 1 })
 await devnode.stop()
 ```
 
-Pair with [`@veil/leo`](./leo) to compile and deploy programs onto the devnode.
+Pair with [`@provablehq/veil-leo`](./leo) to compile and deploy programs onto the devnode.

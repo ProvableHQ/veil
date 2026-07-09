@@ -1,4 +1,4 @@
-import type { AgentTool } from '@veil/core/agent'
+import type { AgentTool } from '@provablehq/veil-core/agent'
 import type { BridgeClient } from '../clients/createBridgeClient.js'
 
 /**
@@ -12,14 +12,14 @@ import type { BridgeClient } from '../clients/createBridgeClient.js'
  * wallet-services API.
  *
  * The `bridge_swap` tool additionally requires the client to have been built
- * with a `@veil/core` WalletClient (it signs and broadcasts the Aleo deposit);
+ * with a `@provablehq/veil-core` WalletClient (it signs and broadcasts the Aleo deposit);
  * only expose it to agents you intend to let move funds.
  *
  * @param client A bridge client from `createBridgeClient`.
  * @returns One tool per bridge action, `bridge_`-prefixed.
  *
  * @example
- * import { toMcpServer } from '@veil/core/mcp'
+ * import { toMcpServer } from '@provablehq/veil-core/mcp'
  * const server = toMcpServer(createBridgeAgentTools(client))
  * const flags = await server.handleToolCall('bridge_get_flags', {})
  */
@@ -180,7 +180,7 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
       schema: {
         name: 'bridge_swap',
         description:
-          'End-to-end Aleo-source bridge swap: quote → select → order → Aleo unshield deposit (routed through the asset\'s Aleo program) → optional poll to completion. Requires a @veil/core WalletClient (passed in by the SDK host, not the agent).',
+          'End-to-end Aleo-source bridge swap: quote → select → order → Aleo unshield deposit (routed through the asset\'s Aleo program) → optional poll to completion. Requires a @provablehq/veil-core WalletClient (passed in by the SDK host, not the agent).',
         inputSchema: {
           type: 'object',
           properties: {

@@ -1,7 +1,7 @@
 {
-  "name": "@veil/react",
+  "name": "@provablehq/veil-aleo-react-hooks",
   "version": "0.4.0",
-  "description": "React hooks and providers for the Veil Aleo SDK.",
+  "description": "React hooks and providers for the building web apps.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -36,8 +36,8 @@
     "react": ">=18"
   },
   "dependencies": {
-    "@veil/core": "workspace:*",
-    "@veil/wallet-adapter": "workspace:*",
+    "@provablehq/veil-core": "workspace:*",
+    "@provablehq/veil-aleo-wallet-adapter": "workspace:*",
     "@provablehq/aleo-wallet-adaptor-react": "1.0.0",
     "@provablehq/aleo-wallet-adaptor-shield": "1.0.0",
     "@provablehq/aleo-wallet-adaptor-leo": "1.0.0",

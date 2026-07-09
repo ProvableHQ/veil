@@ -18,7 +18,7 @@ export default function Home() {
           </Link>
         </div>
         <pre style={{ marginTop: '3rem', padding: '1.5rem 2rem', borderRadius: 8, fontSize: '0.9rem', maxWidth: 500, width: '100%' }}>
-{`import { createPublicClient, http } from '@veil/core'
+{`import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
   transport: http('https://api.provable.com/v2'),

@@ -6,5 +6,15 @@ dist
 scratch.txt
 devnode*.log
 
+# Local agent tooling and worktrees — never committed, except the tracked
+# .claude/skills/ project assets.
+.claude/*
+!.claude/skills/
+.superpowers/
+
+# Local brainstorming plans and working notes — kept out of git by convention
+docs/superpowers/
+notes/
+
 # Generated bindings written by integration tests
 packages/codegen/test/integration/generated/

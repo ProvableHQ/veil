@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { createLeoClient } from '@veil/leo'
+import { createLeoClient } from '@provablehq/veil-leo'
 
 /** A scaffolded and compiled Leo program: the project dir and the compiled Aleo instructions. */
 export type BuiltLeoProgram = { dir: string; compiled: string }

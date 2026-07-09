@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import { loadNetwork } from '@veil/provable-sdk'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import {
   createWalletClient as createEvmWalletClient,
   http as evmHttp,

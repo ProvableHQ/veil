@@ -13,7 +13,7 @@ import type { Transport, TransportConfig } from '../types/transport.js'
  * @returns A transport pairing the config with its request function.
  *
  * @example
- * import { createTransport } from '@veil/core'
+ * import { createTransport } from '@provablehq/veil-core'
  *
  * const transport = createTransport({
  *   key: 'custom',

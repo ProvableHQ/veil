@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createPublicClient, http } from '@veil/core'
+import { createPublicClient, http } from '@provablehq/veil-core'
 import { getPool } from '../../src/actions/reads/getPool.js'
 import { getSlot } from '../../src/actions/reads/getSlot.js'
 import { getSwapOutput } from '../../src/actions/reads/getSwapOutput.js'

@@ -1,4 +1,4 @@
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 import { toSlot, type Slot } from '../../generated/shield_swap.js'
 import { readStructMapping } from './internal.js'
 

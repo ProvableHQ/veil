@@ -1,5 +1,5 @@
 {
-  "name": "@veil/provable-sdk",
+  "name": "@provablehq/veil-aleo-sdk",
   "version": "0.4.0",
   "description": "Local signing and proving for the Veil Aleo SDK, backed by the Provable SDK.",
   "license": "MIT",
@@ -33,8 +33,8 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@veil/core": "workspace:*",
-    "@veil/devnode": "workspace:*"
+    "@provablehq/veil-core": "workspace:*",
+    "@provablehq/veil-aleo-devnode": "workspace:*"
   },
   "dependencies": {
     "@noble/hashes": "^1.7.2",
@@ -42,6 +42,6 @@
     "@scure/bip39": "^1.4.0"
   },
   "devDependencies": {
-    "@veil/leo": "workspace:*"
+    "@provablehq/veil-leo": "workspace:*"
   }
 }

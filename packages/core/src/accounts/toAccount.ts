@@ -32,7 +32,7 @@ export type ToAccountSource = {
  *   for `type: 'local'`.
  *
  * @example
- * import { toAccount } from '@veil/core'
+ * import { toAccount } from '@provablehq/veil-core'
  *
  * const account = toAccount({
  *   type: 'rpc',

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { createBridgeClient } from '../../src/clients/createBridgeClient.js'
 import { httpBridge } from '../../src/transports/httpBridge.js'
-import { TransportError } from '@veil/core'
+import { TransportError } from '@provablehq/veil-core'
 import type { BridgeAssetSummary } from '../../src/types/bridge.js'
 import type { RouteAsset } from '../../src/actions/getRoutes.js'
 

@@ -1,4 +1,4 @@
-import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@veil/core'
+import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@provablehq/veil-core'
 import { resolvePositionRecord } from '../../utils/records.js'
 import { requireAccount } from '../../utils/guards.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'

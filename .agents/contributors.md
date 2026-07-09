@@ -1,6 +1,6 @@
 # Veil Contributor Constraints
 
-Constraints for **contributing to** the Veil monorepo (`@veil/*` packages) —
+Constraints for **contributing to** the Veil monorepo (`@provablehq/veil-*` packages) —
 changing the SDK, not using it. They bind on every contribution, human or agent.
 They are rules, not suggestions.
 
@@ -46,7 +46,7 @@ See `.agents/voice.md` for verbatim good and bad examples.
 
 ## Veil is an interface
 
-`@veil/core` defines capabilities as interfaces. Concrete platform bindings stay
+`@provablehq/veil-core` defines capabilities as interfaces. Concrete platform bindings stay
 behind those interfaces and stay optional and configurable. Do not hardcode one
 platform into core action logic.
 
@@ -56,7 +56,7 @@ platform into core action logic.
   Leo-wallet specifics into core.
 - **Runtime.** Core stays node/browser/React Native agnostic. No `window`, `fs`,
   or environment-specific globals in core.
-- **Framework.** React and any UI framework stay in `@veil/react`. Core never
+- **Framework.** React and any UI framework stay in `@provablehq/veil-aleo-react-hooks`. Core never
   imports or assumes a framework.
 - **Configuration shape.** When platform-agnosticism needs extra parameters or
   objects, express them as viem-shaped configuration — options objects, client,
@@ -76,7 +76,7 @@ positional parameter where a viem-style config object belongs?
   dependent packages and examples are affected, why it is necessary, and why
   there is no backward-compatible alternative. Then wait for approval. Do not
   proceed silently.
-- Do not modify `@veil/core` or another package you depend on just to make your
+- Do not modify `@provablehq/veil-core` or another package you depend on just to make your
   own package work. Surface it and justify it first.
 - When you change a feature an example depends on, update the example in the same
   change. (`examples/e2e-demo.ts` and `apps/loyalty-dapp/` are required to stay

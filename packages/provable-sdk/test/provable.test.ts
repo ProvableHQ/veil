@@ -8,7 +8,7 @@ import {
   DEVNODE_ADDR,
 } from '../src/index.js'
 
-describe('@veil/provable-sdk', () => {
+describe('@provablehq/veil-aleo-sdk', () => {
   let aleo: AleoSdk
 
   beforeAll(async () => {

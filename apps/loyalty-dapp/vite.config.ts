@@ -6,8 +6,8 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@veil/core': path.resolve(__dirname, '../../packages/core/src/index.ts'),
-      '@veil/wallet-adapter': path.resolve(__dirname, '../../packages/wallet-adapter/src/index.ts'),
+      '@provablehq/veil-core': path.resolve(__dirname, '../../packages/core/src/index.ts'),
+      '@provablehq/veil-aleo-wallet-adapter': path.resolve(__dirname, '../../packages/wallet-adapter/src/index.ts'),
     },
   },
 })

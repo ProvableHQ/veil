@@ -1,4 +1,4 @@
-# @veil/codegen
+# @provablehq/veil-codegen
 
 Generates TypeScript bindings from an Aleo program's ABI, and ships the
 `veil-codegen` CLI that drives it.
@@ -8,7 +8,7 @@ Reach for it as a package maintainer, not a consumer: point it at a program's
 and struct decoders (`RecordValue` → typed interface), per-function input and
 output types, mapping and storage types, the parsed `PROGRAM_ABI` constant, and
 a typed contract factory (`read`/`write`/`simulate`/`execute`). A package like
-`@veil/shield-swap` commits that output and ships it — a consumer installing the
+`@provablehq/shield-swap-sdk` commits that output and ships it — a consumer installing the
 package gets the bindings already. You run codegen when the upstream contract
 drifts (redeploy, a new or renamed entrypoint, struct, or mapping) and the
 checked-in bindings need to catch up.
@@ -18,7 +18,7 @@ checked-in bindings need to catch up.
 It is a build-time tool, so install it as a dev dependency:
 
 ```sh
-pnpm add -D @veil/codegen
+pnpm add -D @provablehq/veil-codegen
 ```
 
 ## Usage
@@ -32,7 +32,7 @@ veil-codegen --abi ./abi/loyalty_token.json --out ./src/generated/loyalty_token.
 ```
 
 Or drive one or more programs from a config file with `--config` (this is how
-`@veil/shield-swap` wires it — a `generate` script runs
+`@provablehq/shield-swap-sdk` wires it — a `generate` script runs
 `veil-codegen --config codegen/veil.config.json`):
 
 ```sh
@@ -44,8 +44,8 @@ Flags:
 - `--abi <path>` — path to the program's `abi.json`. Pair with `--out`.
 - `--out <path>` — output `.ts` file. Parent directories are created if missing.
 - `--config <path>` — path to a config JSON. Defaults to `veil.config.json`.
-- `--core-import <path>` — import specifier for `@veil/core` in the emitted
-  file. Defaults to `@veil/core`; on the CLI it overrides the config's
+- `--core-import <path>` — import specifier for `@provablehq/veil-core` in the emitted
+  file. Defaults to `@provablehq/veil-core`; on the CLI it overrides the config's
   `coreImport`.
 - `--help`, `-h` — print usage.
 
@@ -62,7 +62,7 @@ not the working directory.
       "out": "../src/generated/shield_swap.ts"
     }
   ],
-  "coreImport": "@veil/core"
+  "coreImport": "@provablehq/veil-core"
 }
 ```
 
@@ -72,32 +72,32 @@ not the working directory.
   that differs from the ABI's own `program`. Set it when the bindings take their
   shape from one deployment's ABI but must target another, identical-shape
   deployment. Defaults to the ABI's `program`.
-- `coreImport` — optional. Import specifier for `@veil/core` in every emitted
-  file. Defaults to `@veil/core`.
+- `coreImport` — optional. Import specifier for `@provablehq/veil-core` in every emitted
+  file. Defaults to `@provablehq/veil-core`.
 
 ### Programmatic API
 
 `generate` takes an already-parsed ABI and returns the TypeScript source as a
 string; it writes nothing and touches no network. Parse the ABI with
-`parseAbi` from `@veil/core` first, then write the result yourself. This is the
+`parseAbi` from `@provablehq/veil-core` first, then write the result yourself. This is the
 path to take when you generate as part of a larger build step rather than from
 the CLI.
 
 ```ts
 import { readFileSync, writeFileSync } from 'node:fs'
-import { parseAbi } from '@veil/core'
-import { generate } from '@veil/codegen'
+import { parseAbi } from '@provablehq/veil-core'
+import { generate } from '@provablehq/veil-codegen'
 
 const abi = parseAbi(JSON.parse(readFileSync('./abi/loyalty_token.json', 'utf-8')))
-const source = generate({ abi, coreImport: '@veil/core' })
+const source = generate({ abi, coreImport: '@provablehq/veil-core' })
 writeFileSync('./src/generated/loyalty_token.ts', source)
 ```
 
 `generate(options)` accepts `GenerateOptions`:
 
 - `abi` — the parsed `ABI` to generate from.
-- `coreImport` — optional import specifier for `@veil/core`. Defaults to
-  `@veil/core`.
+- `coreImport` — optional import specifier for `@provablehq/veil-core`. Defaults to
+  `@provablehq/veil-core`.
 - `programId` — optional override for the emitted `PROGRAM_ID`, same meaning as
   the config field above. Defaults to the ABI's `program`.
 </content>

@@ -18,11 +18,11 @@ import {
   fallback,
   getContract,
   parseProgram,
-} from '@veil/core'
+} from '@provablehq/veil-core'
 import {
   fromWalletAdapter,
   type AleoWalletAdapter,
-} from '@veil/wallet-adapter'
+} from '@provablehq/veil-aleo-wallet-adapter'
 
 // ---------------------------------------------------------------------------
 // Mock wallet adapter — simulates a real browser wallet like Leo Wallet

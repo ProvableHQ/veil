@@ -32,12 +32,12 @@ importers:
 
   apps/loyalty-dapp:
     dependencies:
-      '@veil/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@veil/react':
+      '@provablehq/veil-aleo-react-hooks':
         specifier: workspace:*
         version: link:../../packages/react
+      '@provablehq/veil-core':
+        specifier: workspace:*
+        version: link:../../packages/core
       react:
         specifier: ^19.0.0
         version: 19.2.5
@@ -63,15 +63,15 @@ importers:
 
   apps/loyalty-node:
     dependencies:
-      '@veil/codegen':
-        specifier: workspace:*
-        version: link:../../packages/codegen
-      '@veil/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@veil/provable-sdk':
+      '@provablehq/veil-aleo-sdk':
         specifier: workspace:*
         version: link:../../packages/provable-sdk
+      '@provablehq/veil-codegen':
+        specifier: workspace:*
+        version: link:../../packages/codegen
+      '@provablehq/veil-core':
+        specifier: workspace:*
+        version: link:../../packages/core
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
@@ -85,7 +85,7 @@ importers:
 
   packages/bridge:
     dependencies:
-      '@veil/core':
+      '@provablehq/veil-core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -95,19 +95,19 @@ importers:
 
   packages/codegen:
     dependencies:
-      '@veil/core':
+      '@provablehq/veil-core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
-      '@veil/devnode':
+      '@provablehq/veil-aleo-devnode':
         specifier: workspace:*
         version: link:../devnode
-      '@veil/leo':
-        specifier: workspace:*
-        version: link:../leo
-      '@veil/provable-sdk':
+      '@provablehq/veil-aleo-sdk':
         specifier: workspace:*
         version: link:../provable-sdk
+      '@provablehq/veil-leo':
+        specifier: workspace:*
+        version: link:../leo
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(postcss@8.5.16)(tsx@4.21.0)(typescript@5.9.3)
@@ -123,7 +123,7 @@ importers:
 
   packages/devnode:
     dependencies:
-      '@veil/core':
+      '@provablehq/veil-core':
         specifier: workspace:*
         version: link:../core
 
@@ -137,17 +137,17 @@ importers:
       '@provablehq/sdk':
         specifier: ^0.11.3
         version: 0.11.3
+      '@provablehq/veil-aleo-devnode':
+        specifier: workspace:*
+        version: link:../devnode
+      '@provablehq/veil-core':
+        specifier: workspace:*
+        version: link:../core
       '@scure/bip39':
         specifier: ^1.4.0
         version: 1.6.0
-      '@veil/core':
-        specifier: workspace:*
-        version: link:../core
-      '@veil/devnode':
-        specifier: workspace:*
-        version: link:../devnode
     devDependencies:
-      '@veil/leo':
+      '@provablehq/veil-leo':
         specifier: workspace:*
         version: link:../leo
 
@@ -174,12 +174,12 @@ importers:
       '@provablehq/aleo-wallet-standard':
         specifier: 1.0.0
         version: 1.0.0
-      '@veil/core':
-        specifier: workspace:*
-        version: link:../core
-      '@veil/wallet-adapter':
+      '@provablehq/veil-aleo-wallet-adapter':
         specifier: workspace:*
         version: link:../wallet-adapter
+      '@provablehq/veil-core':
+        specifier: workspace:*
+        version: link:../core
       react:
         specifier: '>=18'
         version: 19.2.5
@@ -193,29 +193,29 @@ importers:
 
   packages/shield-swap:
     dependencies:
-      '@veil/core':
+      '@provablehq/veil-core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
       '@provablehq/sdk':
         specifier: ^0.11.3
         version: 0.11.3
-      '@veil/bridge':
+      '@provablehq/veil-aleo-bridges':
         specifier: workspace:*
         version: link:../bridge
-      '@veil/codegen':
-        specifier: workspace:*
-        version: link:../codegen
-      '@veil/provable-sdk':
+      '@provablehq/veil-aleo-sdk':
         specifier: workspace:*
         version: link:../provable-sdk
+      '@provablehq/veil-codegen':
+        specifier: workspace:*
+        version: link:../codegen
       openapi-typescript:
         specifier: ^7.13.0
         version: 7.13.0(typescript@5.9.3)
 
   packages/wallet-adapter:
     dependencies:
-      '@veil/core':
+      '@provablehq/veil-core':
         specifier: workspace:*
         version: link:../core
     devDependencies:

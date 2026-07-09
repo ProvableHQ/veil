@@ -1,6 +1,6 @@
 // Wallet-fulfilled transaction inputs and connect-time privacy grants.
 // Local mirrors of the Provable wallet-standard shapes (field-for-field), so
-// @provablehq/* stays out of @veil/core's public surface.
+// @provablehq/* stays out of @provablehq/veil-core's public surface.
 
 /** Wallet-side derivation algorithms known to Veil; any string is also accepted. */
 export const KNOWN_ALGORITHMS = [

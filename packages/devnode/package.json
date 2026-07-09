@@ -1,5 +1,5 @@
 {
-  "name": "@veil/devnode",
+  "name": "@provablehq/veil-aleo-devnode",
   "version": "0.4.0",
   "description": "Local Aleo development node helpers for the Veil SDK.",
   "license": "MIT",
@@ -34,6 +34,6 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@veil/core": "workspace:*"
+    "@provablehq/veil-core": "workspace:*"
   }
 }

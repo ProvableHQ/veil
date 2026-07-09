@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createLeoClient } from '../src/index.js'
 
-describe('@veil/leo', () => {
+describe('@provablehq/veil-leo', () => {
   describe('createLeoClient', () => {
     it('returns a client with the expected surface', () => {
       const client = createLeoClient()

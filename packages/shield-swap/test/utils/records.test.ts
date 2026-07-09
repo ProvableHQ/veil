@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { Client } from '@veil/core'
+import type { Client } from '@provablehq/veil-core'
 import { parseTokenRecordInfo, selectTokenRecord, getPrivateBalances } from '../../src/utils/records.js'
 
 // Wrapper-program record shape (owner/amount/_nonce) — as produced by e.g.

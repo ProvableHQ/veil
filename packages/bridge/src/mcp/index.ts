@@ -1,8 +1,8 @@
-import { toMcpServer, type McpServer } from '@veil/core/mcp'
+import { toMcpServer, type McpServer } from '@provablehq/veil-core/mcp'
 import { createBridgeAgentTools } from '../agent/tools.js'
 import type { BridgeClient } from '../clients/createBridgeClient.js'
 
-export type { McpServer, McpToolDefinition } from '@veil/core/mcp'
+export type { McpServer, McpToolDefinition } from '@provablehq/veil-core/mcp'
 
 /**
  * Creates an MCP server exposing the bridge tools.
@@ -12,7 +12,7 @@ export type { McpServer, McpToolDefinition } from '@veil/core/mcp'
  * MCP. To serve bridge tools alongside the base Aleo tools (or the DEX tools),
  * call core's `toMcpServer` with the arrays concatenated.
  *
- * Exposed via subpath export: `import { createBridgeMcpServer } from '@veil/bridge/mcp'`.
+ * Exposed via subpath export: `import { createBridgeMcpServer } from '@provablehq/veil-aleo-bridges/mcp'`.
  *
  * @param client A bridge client from `createBridgeClient`.
  * @returns An {@link McpServer} whose `handleToolCall` dispatches by tool name.

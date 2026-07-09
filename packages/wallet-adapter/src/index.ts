@@ -1,5 +1,5 @@
 /**
- * @veil/wallet-adapter
+ * @provablehq/veil-aleo-wallet-adapter
  *
  * Wraps @provablehq/aleo-wallet-adaptor-core into veil's
  * Account and Transport interfaces.
@@ -7,8 +7,8 @@
  * Usage with any wallet adapter (Leo, Puzzle, Fox, Shield):
  *
  *   import { LeoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-leo'
- *   import { fromWalletAdapter } from '@veil/wallet-adapter'
- *   import { createWalletClient, http, fallback } from '@veil/core'
+ *   import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
+ *   import { createWalletClient, http, fallback } from '@provablehq/veil-core'
  *
  *   const leoWallet = new LeoWalletAdapter()
  *   await leoWallet.connect(Network.MAINNET, DecryptPermission.UponRequest)
@@ -21,18 +21,18 @@
  *   })
  */
 
-import { custom } from '@veil/core'
-import type { Network, RpcAccount, Transport, TransactionStatusResponse, TxHistoryResult } from '@veil/core'
+import { custom } from '@provablehq/veil-core'
+import type { Network, RpcAccount, Transport, TransactionStatusResponse, TxHistoryResult } from '@provablehq/veil-core'
 
 // Import the real types from the Provable ecosystem
 import type { TransactionOptions, TransactionInput } from '@provablehq/aleo-types'
 import type { AleoDeployment } from '@provablehq/aleo-wallet-standard'
-import type { RecordStatusFilter } from '@veil/core'
+import type { RecordStatusFilter } from '@provablehq/veil-core'
 import type { BaseAleoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-core'
 
 // Re-export useful types so consumers don't need extra imports
 export type { TransactionOptions } from '@provablehq/aleo-types'
-export type { Network, TransactionStatusResponse, TxHistoryResult } from '@veil/core'
+export type { Network, TransactionStatusResponse, TxHistoryResult } from '@provablehq/veil-core'
 export type { BaseAleoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-core'
 
 // Re-export the privacy-feature types (Veil mirrors) so consumers can import them
@@ -52,7 +52,7 @@ export type {
   ConnectOptions,
   RecordAccessGrant,
   AlgorithmGrant,
-} from '@veil/core'
+} from '@provablehq/veil-core'
 
 // --------------------------------------------------------------------------
 // Wallet adapter interface — matches BaseAleoWalletAdapter from
@@ -274,7 +274,7 @@ export function transportFromAdapter(adapter: AnyWalletAdapter): Transport<'cust
 
         case 'switchNetwork': {
           // Cast: BaseAleoWalletAdapter expects @provablehq/aleo-types' Network
-          // enum, AleoWalletAdapter expects @veil/core's string-union Network.
+          // enum, AleoWalletAdapter expects @provablehq/veil-core's string-union Network.
           // Runtime values are identical strings.
           return (adapter.switchNetwork as (n: unknown) => Promise<void>)(p?.network)
         }
