@@ -11,8 +11,10 @@ const config: Config = {
     v4: true,
   },
 
-  url: 'https://veil.provable.com',
-  baseUrl: '/',
+  // GitHub Pages project hosting; override for a custom domain:
+  // DOCS_URL=https://veil.provable.com DOCS_BASE_URL=/
+  url: process.env.DOCS_URL ?? 'https://provablehq.github.io',
+  baseUrl: process.env.DOCS_BASE_URL ?? '/veil/',
 
   organizationName: 'ProvableHQ',
   projectName: 'veil',
@@ -83,9 +85,8 @@ const config: Config = {
         {
           title: 'API Reference',
           items: [
-            { label: 'Public Actions', to: '/api/public-actions' },
-            { label: 'Wallet Actions', to: '/api/wallet-actions' },
             { label: 'Transports', to: '/api/transports' },
+            { label: 'Types', to: '/api/types' },
           ],
         },
         {
