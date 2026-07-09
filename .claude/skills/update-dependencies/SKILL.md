@@ -82,7 +82,7 @@ VEIL_INTEGRATION=1 pnpm vitest run --retry=2 \
      required; structs moved outside the `program { }` block).
    - Build artifact layout changes break
      `packages/provable-sdk/test/integration/leoProject.ts` (4.3 moved
-     `build/main.aleo` → `build/<name>/<name>.aleo`) and the `@veil/leo`
+     `build/main.aleo` → `build/<name>/<name>.aleo`) and the `@provablehq/veil-leo`
      JSDoc examples.
    - `leo abi` output shape changes break `parseAbi` in
      `packages/core/src/utils/parseAbi.ts` and the codegen round-trip test.
@@ -124,7 +124,7 @@ The ProvableHQ/aleo-dev-toolkit monorepo publishes the
    pnpm vitest run packages/wallet-adapter packages/react
    ```
 
-   and the dApp typecheck (`pnpm --filter @veil/loyalty-dapp exec tsc --noEmit`).
+   and the dApp typecheck (`pnpm --filter @provablehq/veil-loyalty-dapp exec tsc --noEmit`).
 3. Adapter interface changes ripple into `packages/wallet-adapter/src/index.ts`
    and `packages/react/src/provider.tsx` — fix, re-run, and keep
    `apps/loyalty-dapp/` compiling (it is a release blocker per CLAUDE.md).
