@@ -1,0 +1,84 @@
+name: Claude dependency update
+
+# Dispatched by upstream-check.yml when a stream is stale; run manually with
+# `gh workflow run claude-update-deps.yml` anytime.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: claude-update-deps
+  cancel-in-progress: false
+
+env:
+  LEO_RELEASE: leo-lang-v4.3.2
+  DEVNODE_RELEASE: v0.2.0
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      # Integration suites the update skill re-runs. Same secrets as the CI
+      # live-api job; the keyed tests self-skip if these are ever removed.
+      VEIL_E2E_PRIVATE_KEY: ${{ secrets.VEIL_E2E_PRIVATE_KEY }}
+      ALEO_DPS_API_KEY: ${{ secrets.ALEO_DPS_API_KEY }}
+      ALEO_CONSUMER_ID: ${{ secrets.ALEO_CONSUMER_ID }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The current toolchain, so the skill can run the devnode suites before
+      # and after any bump. When the skill bumps a binary, it installs the new
+      # release itself and updates the pins in ci.yml.
+      - name: Cache Aleo toolchain
+        id: toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.aleo-tools
+          key: aleo-tools-${{ env.LEO_RELEASE }}-${{ env.DEVNODE_RELEASE }}
+      - name: Install leo and aleo-devnode
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.aleo-tools
+          curl -fsSL -o /tmp/leo.zip \
+            "https://github.com/ProvableHQ/leo/releases/download/${LEO_RELEASE}/${LEO_RELEASE}-x86_64-unknown-linux-gnu.zip"
+          unzip -o /tmp/leo.zip -d ~/.aleo-tools
+          curl -fsSL -o /tmp/devnode.zip \
+            "https://github.com/ProvableHQ/aleo-devnode/releases/download/${DEVNODE_RELEASE}/aleo-devnode-${DEVNODE_RELEASE}-x86_64-unknown-linux-gnu.zip"
+          unzip -o /tmp/devnode.zip -d ~/.aleo-tools
+          chmod +x ~/.aleo-tools/leo ~/.aleo-tools/aleo-devnode
+      - name: Add toolchain to PATH
+        run: echo "$HOME/.aleo-tools" >> "$GITHUB_PATH"
+      - name: Run the update-dependencies skill
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Run the /update-dependencies skill end to end.
+
+            Ground rules for this automated run:
+            - Work on a new branch named chore/update-deps-<utc-date>, never on
+              main. Create it from the current checkout before any edit.
+            - Follow the repo's commit conventions ([Chore]/[Fix] prefixes, one
+              commit per dependency stream, no AI attribution).
+            - If the detection script reports every stream current, stop and
+              exit without creating a branch or PR.
+            - After the skill completes with green tests, push the branch and
+              open a PR against main with `gh pr create`, summarizing which
+              streams moved, what broke, and how it was fixed. Reference the
+              open "Upstream Aleo dependencies are stale" issue if one exists.
+            - If a bump cannot be made green, do not open a PR with failing
+              tests: push the branch, open a draft PR instead, and describe the
+              blocker in its body.
+          claude_args: --allowedTools "Bash,Edit,Write,Read,Glob,Grep" --permission-mode acceptEdits

@@ -21,6 +21,12 @@ Start with the detection script — it prints current-vs-latest for every stream
 When it exits 0, every stream is current — report that and stop. Otherwise
 work only the streams it flagged, using the sections below.
 
+Automation around this skill: `.github/workflows/upstream-check.yml` runs the
+detection script daily, files an `upstream-stale` issue when something moved,
+and dispatches `.github/workflows/claude-update-deps.yml` — a Claude Code run
+of this skill that opens the update PR. A manual run of this skill supersedes
+both; close the issue when the update lands.
+
 Full devnode verification command used throughout (append newer devnode test
 files if the CI workflow lists more):
 
