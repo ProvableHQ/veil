@@ -17,7 +17,7 @@ actions over it.
 ```ts
 import { createPublicClient, http } from '@provablehq/veil-core'
 
-const client = createPublicClient({
+const publicClient = createPublicClient({
   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
 })
 ```
@@ -34,7 +34,7 @@ alias, [`readMapping`](/api/public/readMapping)):
 ```ts
 import { parseValue } from '@provablehq/veil-core'
 
-const raw = await client.readContract({
+const raw = await publicClient.readContract({
   programId: 'credits.aleo',
   mapping: 'account',
   key: 'aleo1q6qstg8q8shwqf5m6q5fcenuwsdqsvp4hhsgfnx5chzjm3secyzqt9mxm8',
@@ -46,10 +46,17 @@ const balance = parseValue(raw)
 
 The value comes back as the raw Aleo literal the node stores — a number,
 boolean, or struct literal with its type suffix still attached (`u64`, in the
-example above). `parseValue` decodes it into a structured value; skip it when
-the raw string is all that is needed. A key that has never been written
-returns a 404 rather than a value — a mapping only holds entries that a
-transaction has actually inserted.
+example above). `parseValue` decodes suffixed integers of every width
+(including `field`, `scalar`, and `group`), booleans, and `aleo1...`
+addresses, and throws on anything else — a struct literal needs manual
+parsing, or ABI-based decoding through a
+[contract instance](/guides/contract-instances). Skip `parseValue` when the
+raw string is all that is needed.
+
+A key that has never been written does not resolve to an empty value: the
+node answers 404 and the call rejects with a transport error
+(`HTTP 404: ...`). Wrap the read in try/catch when the key may not exist — a
+mapping only holds entries a transaction has actually inserted.
 
 For a typed read bound to a program's ABI instead of a raw mapping name and
 key, see [Contract instances](/guides/contract-instances).
@@ -60,7 +67,7 @@ Before reading a mapping, [`getMappingNames`](/api/public/getMappingNames)
 lists what a program exposes:
 
 ```ts
-const mappings = await client.getMappingNames({ programId: 'credits.aleo' })
+const mappings = await publicClient.getMappingNames({ programId: 'credits.aleo' })
 // ['account', 'committee', 'bonded', 'unbonding', ...]
 ```
 
@@ -72,8 +79,8 @@ underlying value is a u32 on chain. Convert it with `Number()` before passing
 a height into an action such as [`getBlock`](/api/public/getBlock):
 
 ```ts
-const height = await client.getBlockNumber()
-const block = await client.getBlock({ height: Number(height) })
+const height = await publicClient.getBlockNumber()
+const block = await publicClient.getBlock({ height: Number(height) })
 ```
 
 `getBlock` returns the full block — header, ratifications, solutions, and
@@ -81,7 +88,7 @@ confirmed transactions. Look up a specific transaction by its `at1...` id with
 [`getTransaction`](/api/public/getTransaction):
 
 ```ts
-const tx = await client.getTransaction({ id: 'at1...' })
+const tx = await publicClient.getTransaction({ id: 'at1...' })
 ```
 
 See [Types](/api/types) for the full `Block` and `Transaction` field
@@ -96,7 +103,7 @@ bytecode. Inspect the source to see a program's functions, mappings, and
 record types before calling it:
 
 ```ts
-const source = await client.getCode({ programId: 'credits.aleo' })
+const source = await publicClient.getCode({ programId: 'credits.aleo' })
 ```
 
 [`getDeploymentTransaction`](/api/public/getDeploymentTransaction) finds the
@@ -104,7 +111,7 @@ transaction that deployed a program, including the deployer's address and
 signature:
 
 ```ts
-const deployTx = await client.getDeploymentTransaction({
+const deployTx = await publicClient.getDeploymentTransaction({
   programId: 'credits.aleo',
 })
 ```

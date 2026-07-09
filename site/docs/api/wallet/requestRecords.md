@@ -16,6 +16,12 @@ import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 const aleo = await loadNetwork('testnet')
 const account = aleo.privateKeyToAccount('APrivateKey1...')
 
+const recordProvider = aleo.createRemoteScanner({
+  url: 'https://rss.provable.com',
+  consumerId: '<consumer-id>',
+})
+recordProvider.setAccount({ viewKey: account.viewKey })
+
 const client = createWalletClient({
   account,
   transport: http('https://api.provable.com/v2', { network: 'testnet' }),
@@ -25,10 +31,7 @@ const client = createWalletClient({
     proverUrl: 'https://api.provable.com/prove/testnet',
     account,
   }),
-  recordProvider: aleo.createRemoteScanner({
-    url: 'https://rss.provable.com',
-    consumerId: '<consumer-id>',
-  }),
+  recordProvider,
 })
 
 const records = await client.requestRecords({

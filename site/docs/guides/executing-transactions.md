@@ -30,7 +30,7 @@ import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 const aleo = await loadNetwork('testnet')
 const account = aleo.privateKeyToAccount('APrivateKey1...')
 
-const client = createWalletClient({
+const walletClient = createWalletClient({
   account,
   transport: http('https://api.provable.com/v2', { network: 'testnet' }),
   proving: aleo.createProvingConfig({
@@ -56,7 +56,7 @@ returns the transaction id as soon as it is broadcast — it does not wait for
 the transaction to be accepted:
 
 ```ts
-const txId = await client.writeContract({
+const txId = await walletClient.writeContract({
   program: 'token.aleo',
   function: 'transfer_public',
   inputs: ['aleo1...', '100u64'],
@@ -100,7 +100,7 @@ By default the fee is paid from the account's public credits balance. Set
 record provider resolves which record to spend:
 
 ```ts
-const txId = await client.writeContract({
+const txId = await walletClient.writeContract({
   program: 'token.aleo',
   function: 'transfer_public',
   inputs: ['aleo1...', '100u64'],
@@ -115,7 +115,7 @@ Once the deployment is accepted, the program is callable through
 `writeContract` like any other:
 
 ```ts
-const txId = await client.deployContract({
+const txId = await walletClient.deployContract({
   program: programSource,
 })
 ```
@@ -130,7 +130,7 @@ program source automatically.
 `credits.aleo` transfer function:
 
 ```ts
-const txId = await client.transfer({
+const txId = await walletClient.transfer({
   to: 'aleo1recipient...',
   amount: 1_000_000n, // 1 credit = 1,000,000 microcredits
   visibility: 'private',

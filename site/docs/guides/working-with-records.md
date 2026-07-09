@@ -28,9 +28,9 @@ import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 import { createWalletClient } from '@provablehq/veil-core'
 
 const { account, transport } = fromWalletAdapter(connectedAdapter)
-const client = createWalletClient({ account, transport })
+const walletClient = createWalletClient({ account, transport })
 
-const records = await client.requestRecords({
+const records = await walletClient.requestRecords({
   program: 'loyalty_token.aleo',
   statusFilter: 'unspent',
 })
@@ -49,7 +49,7 @@ import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 const aleo = await loadNetwork('testnet')
 const account = aleo.privateKeyToAccount('APrivateKey1...')
 
-const client = createWalletClient({
+const walletClient = createWalletClient({
   account,
   transport: http('https://api.provable.com/v2', { network: 'testnet' }),
   proving: aleo.createProvingConfig({
@@ -63,7 +63,7 @@ const client = createWalletClient({
   }),
 })
 
-const records = await client.requestRecords({
+const records = await walletClient.requestRecords({
   program: 'loyalty_token.aleo',
   statusFilter: 'unspent',
 })
@@ -146,7 +146,7 @@ literal input is passed:
 ```ts
 const card = unspentCards[0]
 
-const txId = await client.writeContract({
+const txId = await walletClient.writeContract({
   program: 'loyalty_token.aleo',
   function: 'add_points',
   inputs: [card.recordPlaintext, '100u64'],
@@ -173,7 +173,7 @@ last scan. Refresh immediately before spending rather than trusting a
 previously fetched list:
 
 ```ts
-const fresh = await client.requestRecords({
+const fresh = await walletClient.requestRecords({
   program: 'loyalty_token.aleo',
   statusFilter: 'unspent',
 })
@@ -183,7 +183,7 @@ if (!card) {
   throw new Error('No unspent card available')
 }
 
-await client.writeContract({
+await walletClient.writeContract({
   program: 'loyalty_token.aleo',
   function: 'add_points',
   inputs: [card.recordPlaintext, '100u64'],
@@ -218,6 +218,8 @@ inputs: [
 `filters` narrows the wallet's automatic selection by record field; `uid` —
 the opaque handle a prior `requestRecords` call attached to a record — pins
 the request to that exact record instead. The two are mutually exclusive.
+Wallets that predate the privacy feature do not attach a `uid` to their
+records, so check for its presence before relying on it.
 Local accounts do not support `InputRequest` inputs; `writeContract` and
 `executeContract` throw if one is passed on that path, since there is no
 wallet to resolve it against.

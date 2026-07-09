@@ -102,8 +102,10 @@ reads and private-balance lookups, an `api` client enables the off-chain DEX
 API reads (pool listing, routing, token registry), and both together enable
 the tools that combine them. Money-moving writes — swap, mint, add or remove
 liquidity — are opt-in via `includeWrites`, since a model calling them can
-move funds. `walletClient` below is the same [wallet client](/clients/wallet-client)
-used throughout the rest of the docs:
+move funds. The write tools target the local-signer path: they auto-select
+records and auto-fetch the dynamic-dispatch program sources, so the agent
+supplies only amounts and token programs. `walletClient` below is the same
+[wallet client](/clients/wallet-client) used throughout the rest of the docs:
 
 ```ts
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'

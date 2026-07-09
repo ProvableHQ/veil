@@ -65,27 +65,32 @@ import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 const aleo = await loadNetwork('testnet')
 const account = aleo.privateKeyToAccount('APrivateKey1...')
 
+const recordProvider = aleo.createRemoteScanner({
+  url: 'https://api.provable.com/v2',
+  consumerId: '<consumer-id>',
+  apiKey: '<api-key>',
+})
+recordProvider.setAccount({ viewKey: account.viewKey })
+
 const client = createWalletClient({
   account,
   transport: http('https://api.provable.com/v2', { network: 'testnet' }),
   proving: aleo.createProvingConfig({
     mode: 'delegated',
     networkUrl: 'https://api.provable.com/v2',
+    proverUrl: 'https://api.provable.com/prove/testnet',
     account,
   }),
-  recordProvider: aleo.createRemoteScanner({
-    url: 'https://api.provable.com/v2',
-    consumerId: '<consumer-id>',
-    apiKey: '<api-key>',
-  }),
+  recordProvider,
 })
 ```
 
-`mode: 'delegated'` submits proving to a remote prover service; `mode:
-'local'` builds proofs in-process from the handle's WASM binaries instead.
-See [`createProvingConfig`](/api/provable-sdk/createProvingConfig) for the
-full option set, including the `useFeeMaster` billing arrangement for
-delegated proving.
+`mode: 'delegated'` submits proving to the remote prover service at
+`proverUrl`; `mode: 'local'` builds proofs in-process from the handle's WASM
+binaries instead, dropping `proverUrl`. See
+[`createProvingConfig`](/api/provable-sdk/createProvingConfig) for the full
+option set. The scanner's `setAccount` call points record scanning at the
+account's view key — without it, `requestRecords` throws.
 
 ### From React
 
@@ -232,22 +237,25 @@ given.
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 
 const aleo = await loadNetwork('testnet')
+const account = aleo.privateKeyToAccount('APrivateKey1...')
 
-// Local scanner: registers a view key with the hosted Record Scanning
-// Service and reuses the registration across calls.
+// Remote scanner: registers a view key with the hosted Record Scanning
+// Service on the first scan and reuses the registration across calls.
 const recordProvider = aleo.createRemoteScanner({
   url: 'https://api.provable.com/v2',
   consumerId: '<consumer-id>',
   apiKey: '<api-key>',
 })
+recordProvider.setAccount({ viewKey: account.viewKey })
 
 const walletClient = createWalletClient({
-  account: aleo.privateKeyToAccount('APrivateKey1...'),
+  account,
   transport: http('https://api.provable.com/v2', { network: 'testnet' }),
   proving: aleo.createProvingConfig({
     mode: 'delegated',
     networkUrl: 'https://api.provable.com/v2',
-    account: aleo.privateKeyToAccount('APrivateKey1...'),
+    proverUrl: 'https://api.provable.com/prove/testnet',
+    account,
   }),
   recordProvider,
 })

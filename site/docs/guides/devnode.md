@@ -91,8 +91,9 @@ const devnode = await client.startDevnode({ storagePath: '' })
 await client.advanceDevnode({ numBlocks: 1 })
 ```
 
-`advanceBlock` is the core test action of the same shape, for a client that
-already has a devnode running and only needs to move the chain forward:
+[`advanceBlock`](/api/test/advanceBlock) is the core test action of the same
+shape, for a client that already has a devnode running and only needs to move
+the chain forward. The devnode MUST be running with `manualBlockCreation`:
 
 ```ts
 await client.advanceBlock({ count: 5 }) // mines 5 blocks, one request per block
