@@ -138,6 +138,24 @@ const config = await client.getPool({ poolKey: pool.key })
 const slot = await client.getSlot({ poolKey: pool.key })
 ```
 
+The pool key can also be derived locally from the token pair and fee tier,
+without a `getPools` round trip. `derivePoolKey` computes the same
+`BHP256::hash_to_field(PoolKey { token0, token1, fee })` the contract does
+(sorting the pair ascending), and `deriveTickKey` does the same for an
+individual tick — useful for reading the `ticks` mapping directly, e.g. to
+walk `prev`/`next` for an authoritative insertion hint.
+
+```ts
+import { derivePoolKey, deriveTickKey } from '@provablehq/shield-swap-sdk'
+
+const poolKey = await derivePoolKey({ token0, token1, fee: 3000 })
+const tickKey = await deriveTickKey({ pool: poolKey, tick: -600 })
+```
+
+Both load the optional `@provablehq/sdk` peer on first call to hash locally
+(same lazy, wallet-free path as the blinded-identity derivation); they are
+pure and hit no network otherwise.
+
 ## Program imports
 
 `shield_swap` calls token programs through a dynamic dispatch interface, so

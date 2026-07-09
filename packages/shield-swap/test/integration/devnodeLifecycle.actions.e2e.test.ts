@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { parseTokenRecordInfo } from '../../src/utils/records.js'
+import { derivePoolKey, deriveTickKey } from '../../src/utils/keys.js'
 import {
   setupAmmDevnode,
   privatizeToken,
@@ -110,6 +111,10 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (SDK write actions)', () =
       expect(poolKey).toMatch(/field$/)
       pool.poolKey = poolKey
 
+      // Authoritative parity: the locally derived key must equal the one the
+      // chain computed for these tokens + fee (BHP256 struct-hash parity).
+      expect(await derivePoolKey({ token0: ctx.token0Field, token1: ctx.token1Field, fee: pool.fee })).toBe(poolKey)
+
       // Mapping state: pool registered with the requested fee/tokens, slot at
       // the initial tick, no liquidity.
       expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'initialized_pools', key: poolKey! })).toBe('true')
@@ -142,6 +147,12 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (SDK write actions)', () =
       expect(result.positionTokenId).toMatch(/field$/)
       pool.positionTokenId = result.positionTokenId
       await refreshNft(pool, result.transactionId)
+
+      // Authoritative tick-key parity: the mint initialized tick_lower, so its
+      // locally derived key must locate a real tick (i32 struct-hash parity).
+      const tickLowerKey = await deriveTickKey({ pool: pool.poolKey!, tick: -10 * pool.tickSpacing })
+      const tickEntry = await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'ticks', key: tickLowerKey })
+      expect(tickEntry, `tick ${-10 * pool.tickSpacing} present via derived key`).toBeTruthy()
 
       const pos = await position(pool)
       expect(pos.liquidity).toBeGreaterThan(0n)

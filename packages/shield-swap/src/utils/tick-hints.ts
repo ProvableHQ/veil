@@ -27,10 +27,12 @@ export type PickInsertHintParameters = {
  *
  * Known limitation (inherited from the Provable reference client): when
  * multiple initialized ticks lie between the slot's neighbors and the
- * target, the true predecessor cannot be found without hashing tick keys
- * (BHP256 struct parity the SDK does not provide). The hint returned is
- * best-effort; a wrong hint makes the transaction revert on the contract's
- * assert — pick bounds closer to the active range or pass explicit hints.
+ * target, this helper does not walk the list to the true predecessor, so the
+ * hint returned is best-effort; a wrong hint makes the transaction revert on
+ * the contract's assert — pick bounds closer to the active range or pass
+ * explicit hints. An exact walk is now possible with {@link deriveTickKey}
+ * (read each tick's `prev`/`next` by its derived key); wiring it in here is a
+ * follow-up.
  *
  * Hits the network: one slot read.
  *
