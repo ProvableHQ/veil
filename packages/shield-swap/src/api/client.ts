@@ -233,12 +233,21 @@ export class ApiClient {
    * {@link getAirdropStatus}. Used by the e2e to fund fresh accounts.
    */
   async airdrop(address: string): Promise<Schemas['AirdropStartResult']> {
-    return this.request('POST', '/airdrop', { body: { address } })
+    const res = await this.request<{ data: Schemas['AirdropStartResult'] }>('POST', '/airdrop', {
+      body: { address },
+      auth: true,
+    })
+    return res.data
   }
 
   /** Polls a faucet job until its per-token transfers complete. */
   async getAirdropStatus(jobId: string): Promise<Schemas['AirdropJob']> {
-    return this.request('GET', `/airdrop/${encodeURIComponent(jobId)}`)
+    const res = await this.request<{ data: Schemas['AirdropJob'] }>(
+      'GET',
+      `/airdrop/${encodeURIComponent(jobId)}`,
+      { auth: true },
+    )
+    return res.data
   }
 
   /** Raw on-chain pool introspection (slot + tick statuses) via the API. */
