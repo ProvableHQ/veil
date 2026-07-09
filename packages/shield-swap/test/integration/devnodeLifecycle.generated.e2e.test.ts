@@ -5,6 +5,7 @@ import { formatMintPositionRequest } from '../../src/actions/liquidity/mint.js'
 import { nextBlindedIdentity, viewKeyToScalar } from '../../src/utils/blinding/identity.js'
 import { getSqrtPriceAtTick, MIN_SQRT_PRICE, MAX_SQRT_PRICE } from '../../src/utils/tick-math.js'
 import { generateFieldNonce } from '../../src/utils/params.js'
+import { parseTokenRecordInfo } from '../../src/utils/records.js'
 import {
   setupAmmDevnode,
   privatizeToken,
@@ -105,6 +106,7 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (generated contract)', () 
     expect(structValue(pool, 'fee')).toBe(FEE)
     const slot = String(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'slots', key: poolKey }))
     expect(structValue(slot, 'tick')).toBe('0i32')
+    expect(structValue(slot, 'tick_spacing')).toBe(`${TICK_SPACING}u32`)
     expect(structValue(slot, 'liquidity')).toBe('0u128')
   }, 240_000)
 
@@ -214,7 +216,8 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (generated contract)', () 
       // it back verbatim with the same blinded pair.
       const output = String(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'swap_outputs', key: swapId }))
       const amountOut = structValue(output, 'amount_out')
-      expect(BigInt(amountOut.replace('u128', ''))).toBeGreaterThan(0n)
+      const chainAmountOut = BigInt(amountOut.replace('u128', ''))
+      expect(chainAmountOut).toBeGreaterThan(0n)
 
       const claim = await contract.execute.claim_swap_output({
         arg0: identity.blindingFactor,
@@ -226,8 +229,10 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (generated contract)', () 
         arg6: structValue(output, 'amount_remaining'),
       })
       expect(claim.transactionId).toMatch(/^at1/)
+      // The claimed Token record's decoded amount is exactly the swap output.
       const records = await ctx.recordsOf(ctx.user.account.viewKey, claim.transactionId)
-      expect(records.some((r) => r.includes('amount'))).toBe(true)
+      const paid = records.map((r) => parseTokenRecordInfo(r)).find((i) => i?.amount === chainAmountOut)
+      expect(paid, `a claimed Token record of ${chainAmountOut}`).toBeDefined()
 
       // Price moved in the direction of the swap.
       const slotAfter = String(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'slots', key: poolKey }))
@@ -238,12 +243,16 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (generated contract)', () 
     }
   }, 480_000)
 
-  it('collect drains the owed amounts', async () => {
+  it('collect drains the owed amounts and pays them out', async () => {
     // Two passes: the first collect folds accrued swap fees into owed while
     // paying the requested amounts; the second drains the folded remainder.
+    let paidOut = 0n
     for (let pass = 0; pass < 2; pass++) {
       const owed = await positionNumbers()
-      if (owed.owed0 + owed.owed1 === 0n && pass > 0) break
+      if (owed.owed0 + owed.owed1 === 0n) {
+        if (pass === 0) throw new Error('collect precondition: position owes nothing')
+        break
+      }
       const { transactionId } = await contract.execute.collect({
         arg0: nftRecord,
         arg1: `${owed.owed0}u128`,
@@ -252,11 +261,18 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (generated contract)', () 
         arg4: ctx.token1Field,
         arg5: ctx.user.account.address,
       })
+      // The owed tokens are paid out as Token records — total what moved.
+      const records = await ctx.recordsOf(ctx.user.account.viewKey, transactionId)
+      for (const r of records) {
+        const info = parseTokenRecordInfo(r)
+        if (info) paidOut += info.amount
+      }
       await refreshNft(transactionId)
     }
     const after = await positionNumbers()
     expect(after.owed0).toBe(0n)
     expect(after.owed1).toBe(0n)
+    expect(paidOut).toBeGreaterThan(0n)
   }, 240_000)
 
   it('burn removes the emptied position', async () => {

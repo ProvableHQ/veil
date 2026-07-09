@@ -134,6 +134,10 @@ describe.runIf(RUN)('e2e: codegen credits.aleo round trip on a devnode', () => {
     const sent = spend.result.find((r: { microcredits: bigint }) => r.microcredits === 300_000n)!
     const back = await contract.execute.transfer_private_to_public({ arg0: sent, arg1: addr, arg2: '300000u64' })
     expect(back.transactionId).toMatch(/^at1/)
+    // The 300k input is fully consumed, so the returned change record is empty.
+    const change = back.result[0] as { owner: string; microcredits: bigint }
+    expect(change.owner).toBe(addr)
+    expect(change.microcredits).toBe(0n)
     const afterBack = await balance()
     expect(afterBack - afterMint).toBeGreaterThan(300_000n - FEE_TOLERANCE)
     expect(afterBack - afterMint).toBeLessThanOrEqual(300_000n)

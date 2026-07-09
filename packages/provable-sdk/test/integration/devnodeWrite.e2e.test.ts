@@ -300,6 +300,8 @@ describe.runIf(RUN)('e2e: devnode write path (deploy, write, execute, reject)', 
     const minted = mint.outputs.find((o) => o.includes('microcredits'))
     expect(minted, 'expected a decrypted record among the outputs').toBeDefined()
     expect(minted).toContain('1000000u64')
+    // The decrypted record is genuinely owned by (and minted to) the account.
+    expect(minted).toContain(`owner: ${account.address}`)
 
     // Spend the record privately to a fresh account.
     const recipient = generateAccount()

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
+import { parseTokenRecordInfo } from '../../src/utils/records.js'
 import {
   setupAmmDevnode,
   privatizeToken,
@@ -53,11 +54,19 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (SDK write actions)', () =
     { fee: 500, tickSpacing: 10 },
   ]
 
-  /** Re-reads the user's PositionNFT from a transaction and stores it on the pool case. */
+  /**
+   * Re-reads the user's PositionNFT from a transaction and stores it. On the
+   * first mint it also checks the NFT carries the requested tick range, so a
+   * malformed or wrong-ticks NFT is caught rather than passed through.
+   */
   async function refreshNft(pool: PoolCase, txId: string) {
     const records = await ctx.recordsOf(ctx.user.account.viewKey, txId)
     const nft = records.find((r) => r.includes('tick_lower'))
     expect(nft, `PositionNFT record in ${txId}`).toBeDefined()
+    if (pool.nftRecord === undefined) {
+      expect(nft).toMatch(new RegExp(`tick_lower:\\s*${-10 * pool.tickSpacing}i32`))
+      expect(nft).toMatch(new RegExp(`tick_upper:\\s*${10 * pool.tickSpacing}i32`))
+    }
     pool.nftRecord = nft
   }
 
@@ -101,9 +110,12 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (SDK write actions)', () =
       expect(poolKey).toMatch(/field$/)
       pool.poolKey = poolKey
 
-      // Mapping state: pool registered, slot at the initial tick, no liquidity.
+      // Mapping state: pool registered with the requested fee/tokens, slot at
+      // the initial tick, no liquidity.
       expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'initialized_pools', key: poolKey! })).toBe('true')
-      expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'pools', key: poolKey! })).toBeTruthy()
+      const poolStruct = String(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'pools', key: poolKey! }))
+      expect(poolStruct).toMatch(/enabled:\s*true/)
+      expect(poolStruct).toMatch(new RegExp(`fee:\\s*${pool.fee}u16`))
       const slot = await dex.getSlot({ poolKey: poolKey! })
       expect(slot).toBeTruthy()
       expect(slot!.tick).toBe(0)
@@ -199,17 +211,24 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (SDK write actions)', () =
       })
       expect(handle.swapId).toMatch(/field$/)
 
-      // The finalize wrote the outcome into swap_outputs before the claim.
-      const output = await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'swap_outputs', key: handle.swapId! })
-      expect(output).toBeTruthy()
+      // The finalize computed the outcome into swap_outputs — read it fresh
+      // from chain and parse the actual amount_out the contract produced.
+      const output = String(
+        await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'swap_outputs', key: handle.swapId! }),
+      )
+      const chainAmountOut = BigInt(output.match(/amount_out:\s*(\d+)u128/)![1]!)
+      expect(chainAmountOut).toBeGreaterThan(0n)
 
       const claim = await dex.claimSwapOutput({ handle, imports: ctx.imports })
       expect(claim.transactionId).toMatch(/^at1/)
-      expect(claim.amountOut).toBeGreaterThan(0n)
+      // The SDK-reported amount must match the chain's own computation.
+      expect(claim.amountOut).toBe(chainAmountOut)
 
-      // The private output landed as Token records for the signer.
+      // The private output landed as a Token record whose decoded amount is
+      // exactly the swap's output.
       const records = await ctx.recordsOf(ctx.user.account.viewKey, claim.transactionId)
-      expect(records.some((r) => r.includes('amount'))).toBe(true)
+      const paid = records.map((r) => parseTokenRecordInfo(r)).find((i) => i?.amount === chainAmountOut)
+      expect(paid, `a claimed Token record of ${chainAmountOut}`).toBeDefined()
 
       // Price moved in the direction of the swap.
       const slotAfter = await dex.getSlot({ poolKey: pool.poolKey! })
@@ -223,9 +242,15 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (SDK write actions)', () =
       // tokens_owed updates lazily: the collect finalize first folds accrued
       // swap fees into owed, then pays the requested amounts — so one pass
       // leaves the freshly-folded fees behind. Two passes drain fully.
+      let paidOut = 0n
       for (let pass = 0; pass < 2; pass++) {
         const owed = await position(pool)
-        if (owed.owed0 + owed.owed1 === 0n && pass > 0) break
+        if (owed.owed0 + owed.owed1 === 0n) {
+          // The position must actually owe something on the first pass —
+          // otherwise a no-op collect would pass vacuously.
+          if (pass === 0) throw new Error('collect precondition: position owes nothing')
+          break
+        }
         const result = await dex.collect({
           poolKey: pool.poolKey!,
           amount0Requested: owed.owed0,
@@ -233,11 +258,20 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (SDK write actions)', () =
           positionRecord: pool.nftRecord!,
           imports: ctx.imports,
         })
+        // The owed tokens are paid out as Token records to the recipient —
+        // decode them and total the amounts actually moved.
+        const records = await ctx.recordsOf(ctx.user.account.viewKey, result.transactionId)
+        for (const r of records) {
+          const info = parseTokenRecordInfo(r)
+          if (info) paidOut += info.amount
+        }
         await refreshNft(pool, result.transactionId)
       }
       const after = await position(pool)
       expect(after.owed0).toBe(0n)
       expect(after.owed1).toBe(0n)
+      // Owed didn't just get zeroed — tokens were actually paid out.
+      expect(paidOut).toBeGreaterThan(0n)
     }
   }, 240_000)
 
@@ -273,9 +307,11 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (SDK write actions)', () =
     }
   }, 480_000)
 
-  it('token field ids derive from program identifiers', () => {
-    // Sanity on the key encoding the suite relies on for mapping reads.
-    expect(ctx.token0Field).toMatch(/field$/)
-    expect(identifierToField('test_token_a')).not.toBe(identifierToField('test_token_b'))
+  it('identifierToField matches the contract token-id encoding (golden)', () => {
+    // Golden values: the little-endian byte encoding the AMM keys tokens by.
+    // The lifecycle above already relies on these (pool creation, token_allowed
+    // reads) — this pins the exact encoding so a regression is caught directly.
+    expect(identifierToField('test_token_a')).toBe('30135415236709662781336675700field')
+    expect(identifierToField('test_token_b')).toBe('30444900246531007850061456756field')
   })
 })
