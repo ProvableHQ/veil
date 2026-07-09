@@ -61,6 +61,12 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (generated contract)', () 
     const records = await ctx.recordsOf(ctx.user.account.viewKey, txId)
     const nft = records.find((r) => r.includes('tick_lower'))
     expect(nft, `PositionNFT record in ${txId}`).toBeDefined()
+    // On the first mint, confirm the NFT carries the requested tick range so a
+    // malformed or wrong-ticks NFT is caught rather than passed through.
+    if (nftRecord === undefined) {
+      expect(nft).toMatch(new RegExp(`tick_lower:\\s*${-10 * TICK_SPACING}i32`))
+      expect(nft).toMatch(new RegExp(`tick_upper:\\s*${10 * TICK_SPACING}i32`))
+    }
     nftRecord = nft!
   }
 
