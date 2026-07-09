@@ -26,6 +26,8 @@ import {
   AleoKeyProvider,
   Program,
   ProgramManager,
+  RecordCiphertext as StaticRecordCiphertext,
+  ViewKey as StaticViewKey,
   getOrInitConsensusVersionTestHeights,
 } from '@provablehq/sdk'
 import { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR } from '@veil/devnode'
@@ -47,7 +49,7 @@ import {
   extractTransitions,
 } from '@veil/core'
 import type { Decryptor } from '@veil/core'
-import { mnemonicToHDKey, type AleoDerivationId } from './mnemonic.js'
+import { generateMnemonic, mnemonicToHDKey, type AleoDerivationId } from './mnemonic.js'
 
 export {
   BLS12377HDKey,
@@ -100,6 +102,27 @@ export interface AleoSdk {
     options?: { index?: number; derivation?: AleoDerivationId },
   ): LocalAccount<'mnemonic'>
 
+  /**
+   * Generates a fresh BIP39 mnemonic and derives its Aleo account in one call.
+   * Pure and local — no network access. The caller MUST persist the returned
+   * mnemonic; it is the only way to re-derive the account.
+   *
+   * @param options.strength Entropy bits: 128 (12 words, default) or 256 (24 words).
+   * @param options.index Account index on the derivation path. Defaults to 0.
+   * @param options.derivation Derivation path id. Defaults to `'standard'`
+   *   (`m/44'/683'`); pass `'legacy'` for pre-registration `m/44'/0'` wallets.
+   * @returns The generated mnemonic and the account derived from it.
+   *
+   * @example
+   * const { mnemonic, account } = aleo.generateMnemonicAccount()
+   * // store `mnemonic` safely; `account.address` is ready to use
+   */
+  generateMnemonicAccount(options?: {
+    strength?: 128 | 256
+    index?: number
+    derivation?: AleoDerivationId
+  }): { mnemonic: string; account: LocalAccount<'mnemonic'> }
+
   /** Creates a new random Aleo account. */
   generateAccount(): LocalAccount<'privateKey'>
 
@@ -129,6 +152,10 @@ export interface AleoSdk {
    * The first `requestRecords` call registers the account's view key with the
    * service (a network round-trip) to obtain the UUID scanning requires;
    * subsequent calls reuse it. `setAccount` resets the registration.
+   *
+   * The provider implements `switchNetwork`, so a wallet client carrying it
+   * re-targets record scanning when `switchChain` runs — the scanner rebuilds
+   * against the new network and re-registers lazily on the next scan.
    *
    * @param options.url Base URL of the service (the SDK appends the network
    *   segment — do not include it).
@@ -223,6 +250,16 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       from_seed_unchecked: (seed: Uint8Array) => InstanceType<SdkModule['PrivateKey']>
     }).from_seed_unchecked(hd.key).to_string()
     return { ...privateKeyToAccount(privateKey), source: 'mnemonic' }
+  }
+
+  function generateMnemonicAccount(options?: {
+    strength?: 128 | 256
+    index?: number
+    derivation?: AleoDerivationId
+  }): { mnemonic: string; account: LocalAccount<'mnemonic'> } {
+    const mnemonic = generateMnemonic(options?.strength ?? 128)
+    const { strength: _strength, ...derivationOptions } = options ?? {}
+    return { mnemonic, account: mnemonicToAccount(mnemonic, derivationOptions) }
   }
 
   function generateAccount(): LocalAccount<'privateKey'> {
@@ -529,14 +566,11 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 
   // A scanner's UUID is issued at registration; owned() rejects locally
   // without one. Register once, lazily, and memoize the in-flight promise so
-  // concurrent scans share a single round-trip. Returns an `ensure()` to await
-  // before scanning and a `reset()` for when the account changes.
+  // concurrent scans share a single round-trip. Account or network changes
+  // replace the whole object (one registration per scanner build).
   function makeRegisterOnce(startBlock: number) {
     let registration: Promise<void> | undefined
     return {
-      reset() {
-        registration = undefined
-      },
       ensure(
         scanner: InstanceType<SdkModule['RecordScanner']>,
         viewKey: ReturnType<SdkModule['ViewKey']['from_string']>,
@@ -606,22 +640,36 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     apiKey?: string
     startBlock?: number
   }): RecordProvider {
+    // The RecordScanner class is network-bound: a scanner built from a given
+    // SDK module scans that module's network. Network switching rebuilds the
+    // scanner (and the wasm view key) from the target network's module.
+    let scannerSdk: Pick<SdkModule, 'RecordScanner' | 'ViewKey'> = { RecordScanner, ViewKey }
     let scanner: InstanceType<SdkModule['RecordScanner']> | undefined
     let viewKey: ReturnType<SdkModule['ViewKey']['from_string']> | undefined
-    const registration = makeRegisterOnce(options.startBlock ?? 0)
+    let viewKeyString: string | undefined
+    let registration = makeRegisterOnce(options.startBlock ?? 0)
+
+    function buildScanner() {
+      if (!viewKeyString) return // no active account yet — nothing to rebuild
+      viewKey = scannerSdk.ViewKey.from_string(viewKeyString)
+      scanner = new scannerSdk.RecordScanner({
+        url: options.url,
+        consumerId: options.consumerId,
+        ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+        viewKeys: [viewKey],
+        decryptEnabled: true,
+        autoReRegister: true,
+      })
+      // Each build gets its own registration: view keys register per account
+      // AND per network, and the old promise stays bound to the scanner a
+      // concurrent scan may still hold.
+      registration = makeRegisterOnce(options.startBlock ?? 0)
+    }
 
     return {
       setAccount: (account: { viewKey: string }) => {
-        viewKey = ViewKey.from_string(account.viewKey)
-        registration.reset() // a new account needs its own registration
-        scanner = new RecordScanner({
-          url: options.url,
-          consumerId: options.consumerId,
-          ...(options.apiKey ? { apiKey: options.apiKey } : {}),
-          viewKeys: [viewKey],
-          decryptEnabled: true,
-          autoReRegister: true,
-        })
+        viewKeyString = account.viewKey
+        buildScanner()
       },
 
       requestRecords: async (params: RequestRecordsParameters): Promise<OwnedRecord[]> => {
@@ -629,8 +677,24 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           throw new Error('No active account set on record scanner. Call setAccount() first.')
         }
 
-        await registration.ensure(scanner, viewKey!)
-        return scanOwned(scanner, params.program, params.statusFilter, !!options.apiKey)
+        // Pin this scan to the current build: a concurrent setAccount or
+        // switchNetwork swaps the closures, and mixing builds mid-scan would
+        // register one scanner and scan another.
+        const activeScanner = scanner
+        const activeViewKey = viewKey!
+        const activeRegistration = registration
+        await activeRegistration.ensure(activeScanner, activeViewKey)
+        return scanOwned(activeScanner, params.program, params.statusFilter, !!options.apiKey)
+      },
+
+      switchNetwork: async (newNetwork: string) => {
+        if (newNetwork !== 'mainnet' && newNetwork !== 'testnet') {
+          throw new Error(
+            `Record scanning supports 'mainnet' or 'testnet' (received '${newNetwork}').`,
+          )
+        }
+        scannerSdk = (await loadSdk(newNetwork as SupportedNetwork)) as SdkModule
+        buildScanner()
       },
     }
   }
@@ -702,6 +766,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     network,
     privateKeyToAccount,
     mnemonicToAccount,
+    generateMnemonicAccount,
     generateAccount,
     decryptRecord,
     verifySignature,
@@ -765,7 +830,8 @@ export function generateAccount(): LocalAccount<'privateKey'> {
  * resolves once the devnode includes the transaction in a block — automatic
  * after broadcast by default; under `manualBlockCreation` the caller must
  * advance blocks (e.g. a test client's `advanceBlock`) while the call is
- * pending.
+ * pending. Record outputs owned by the client's account are decrypted to
+ * plaintext in the result; foreign records are dropped.
  *
  * @example
  * ```ts
@@ -889,9 +955,14 @@ export function createDevnodeClient(options?: {
       // manualBlockCreation the caller must advance blocks for this to resolve.
       const confirmedTx = await waitForConfirmation(publicClient, txId)
 
-      // No decryptor: the devnode account's record outputs stay as ciphertexts,
-      // matching the RPC-account path in executeContract.
-      const { transitions, outputs } = extractTransitions(confirmedTx)
+      // Self-custody decryptor: records owned by the devnode account surface
+      // as plaintext; foreign records are dropped, matching the local path.
+      const accountViewKey = StaticViewKey.from_string(account.viewKey)
+      const decryptor: Decryptor = (ciphertext: string) => {
+        const ct = StaticRecordCiphertext.fromString(ciphertext)
+        return ct.isOwner(accountViewKey) ? ct.decrypt(accountViewKey).toString() : null
+      }
+      const { transitions, outputs } = extractTransitions(confirmedTx, decryptor)
       return { transactionId: txId, transitions, outputs }
     },
   }
