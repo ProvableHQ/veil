@@ -10,7 +10,8 @@ Aleo allows users privacy in their assets and data and allows developers to buil
 Veil provides semantics familiar to what EVM developers and agents expect. If you've built on Ethereum with `viem`, you already know how to use `veil` — same patterns, same method names, applied to Aleo.
 
 ```ts
-import { createPublicClient, createWalletClient, custom, http, rpcAccount } from '@provablehq/veil-core'
+import { createPublicClient, createWalletClient, http } from '@provablehq/veil-core'
+import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 
 // A read-only client — point a transport at an Aleo node (viem's createPublicClient).
 const client = createPublicClient({
@@ -29,10 +30,9 @@ const value = await client.readContract({
 })
 
 // For writes, a wallet client pairs a transport with an account — same as viem.
-const wallet = createWalletClient({
-  account: rpcAccount(walletAdapter),  // or privateKeyToAccount(...) for a local key
-  transport: custom(walletAdapter),
-})
+// A connected wallet supplies both; a local key path uses @provablehq/veil-aleo-sdk.
+const { account, transport } = fromWalletAdapter(walletAdapter)
+const wallet = createWalletClient({ account, transport })
 
 // writeContract mirrors viem: name the program + function, pass typed inputs.
 const txId = await wallet.writeContract({
@@ -68,7 +68,7 @@ const txId = await wallet.writeContract({
 
 🔑 **Multiple account types** — RPC accounts (wallet adapters), local accounts (private key, mnemonic), view-only accounts
 
-🔌 **Pluggable transports** — `http()` for Aleo REST API, `custom()` for wallet adapters, `fallback()` for chaining
+🔌 **Pluggable transports** — `http()` for Aleo REST API, `custom()` for injected providers, `fallback()` for chaining
 
 📜 **Contract instances** — `getContract()` parses Aleo program source and provides typed `read`/`write` methods
 
@@ -120,12 +120,11 @@ const value = await client.readContract({
 ### Wallet (signing delegated to wallet adapter)
 
 ```ts
-import { createWalletClient, custom, rpcAccount } from '@provablehq/veil-core'
+import { createWalletClient } from '@provablehq/veil-core'
+import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 
-const client = createWalletClient({
-  account: rpcAccount(walletAdapter),
-  transport: custom(walletAdapter),
-})
+const { account, transport } = fromWalletAdapter(walletAdapter)
+const client = createWalletClient({ account, transport })
 
 // writeContract or its alias executeTransaction
 await client.writeContract({
