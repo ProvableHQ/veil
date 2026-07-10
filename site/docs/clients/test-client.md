@@ -147,9 +147,9 @@ import { devnodeActions, DEVNODE_PRIVATE_KEY, type DevnodeInstance } from '@prov
 import { leoActions } from '@provablehq/veil-leo'
 import { createDevnodeClient } from '@provablehq/veil-aleo-sdk'
 
-const PROGRAM_ID = 'loyalty_token.aleo'
+const PROGRAM_ID = 'points_demo.aleo'
 
-describe('loyalty_token.aleo', () => {
+describe('points_demo.aleo', () => {
   let devnode: DevnodeInstance
   let testClient: TestClient
   let publicClient: PublicClient
@@ -166,7 +166,7 @@ describe('loyalty_token.aleo', () => {
     })
       .extend(devnodeActions)
       .extend(leoActions({
-        cwd: './programs/loyalty_token',
+        cwd: './programs/points_demo',
         network: 'testnet',
         endpoint: 'http://127.0.0.1:3030',
         privateKey: DEVNODE_PRIVATE_KEY,
@@ -256,7 +256,7 @@ const client = createTestClient({
 })
   .extend(devnodeActions)
   .extend(leoActions({
-    cwd: './programs/loyalty_token',
+    cwd: './programs/points_demo',
     network: 'testnet',
     endpoint: 'http://127.0.0.1:3030',
     privateKey: DEVNODE_PRIVATE_KEY,
