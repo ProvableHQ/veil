@@ -85,6 +85,8 @@ const config: Config = {
         {
           title: 'API Reference',
           items: [
+            { label: 'Public Actions', to: '/api/public/getBlock' },
+            { label: 'Wallet Actions', to: '/api/wallet/writeContract' },
             { label: 'Transports', to: '/api/transports' },
             { label: 'Types', to: '/api/types' },
           ],
