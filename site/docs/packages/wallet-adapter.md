@@ -4,9 +4,13 @@ sidebar_position: 4
 
 # @provablehq/veil-aleo-wallet-adapter
 
-Adapts any Provable-standard Aleo wallet (Shield, Leo, Puzzle, Fox) into Veil's
-`Account` and `Transport`, so you can build a `@provablehq/veil-core` wallet client from an
-already-connected adapter — the app never holds a private key.
+Adapts any Provable-standard Aleo wallet (Shield, Leo, Puzzle, Fox) into
+Veil's `Account` and `Transport` interfaces, so a `@provablehq/veil-core`
+wallet client can be built from an already-connected adapter — the app never
+holds a private key. Applies to framework-agnostic code; React apps use
+`@provablehq/veil-aleo-react-hooks`, which wraps this package.
+
+## Installation
 
 ```bash
 npm install @provablehq/veil-core @provablehq/veil-aleo-wallet-adapter
@@ -14,11 +18,11 @@ npm install @provablehq/veil-core @provablehq/veil-aleo-wallet-adapter
 
 ## Key exports
 
-- **`fromWalletAdapter(adapter)`** — the entry point; returns `{ account, transport }`.
-- `rpcAccountFromAdapter`, `transportFromAdapter` — the individual pieces.
-- Re-exported types: `ConnectOptions`, `InputRequest`, `RecordFilters`, `AlgorithmGrant`, `Network`, …
+- **`fromWalletAdapter(adapter)`** — the primary entry point; returns `{ account, transport }`.
+- `rpcAccountFromAdapter`, `transportFromAdapter` — the individual pieces `fromWalletAdapter` composes.
+- Re-exported types: `ConnectOptions`, `InputRequest`, `RecordFilters`, `RecordView`, `AlgorithmGrant`, `RecordAccessGrant`, `Network`, `TransactionStatusResponse`, `TxHistoryResult`.
 
-## Usage
+## Example
 
 ```ts
 import { LeoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-leo'
@@ -31,9 +35,12 @@ await wallet.connect(Network.MAINNET, DecryptPermission.UponRequest)
 const { account, transport } = fromWalletAdapter(wallet)
 const walletClient = createWalletClient({
   account,
-  // The adapter transport routes wallet ops; pair it with http() for reads.
-  transport: fallback([transport, http('https://api.provable.com/v2')]),
+  // The adapter transport routes wallet operations (sign, execute, decrypt, …);
+  // pair it with http() so reads (getBlock, getBalance, …) still resolve.
+  transport: fallback([transport, http('https://api.provable.com/v2', { network: 'mainnet' })]),
 })
 ```
 
-For React apps, `@provablehq/veil-aleo-react-hooks` wires this up automatically.
+The adapter transport only handles wallet-specific methods — read methods
+fall through to the `http()` transport in the `fallback` chain. See
+[Wallet client](/clients/wallet-client) for the full client surface.

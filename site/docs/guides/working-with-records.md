@@ -4,127 +4,144 @@ sidebar_position: 3
 
 # Working with Records
 
-Records are Aleo's private state. Unlike mappings (public), records are encrypted and owned by a specific address. Many program functions require records as inputs.
+Records are Aleo's private state, and they are analogous to UTXOs in
+Bitcoin. A record is created as the output of a program function; once
+another function consumes it as an input, it is spent and can never be used
+again. A private balance — a `credits.aleo` holding, a token, a
+program-issued asset — is the sum of every unspent record a program has ever
+produced for that owner. Finding that balance, or finding a specific record
+to spend, means scanning the chain for records the caller owns and checking
+which of them are still unspent.
 
-## Three Paths to Records
+Veil hides that scan behind [`requestRecords`](/api/wallet/requestRecords).
+Which mechanism actually performs the scan depends on where the account's
+signing key lives.
 
-| Path | Scanner | Use case |
-|---|---|---|
-| **Wallet** | Built into wallet adapter | Browser dApps via `walletClient.requestRecords()` |
-| **SDK** | `createLocalScanner` or `createRemoteScanner` | Server-side via `walletClient.requestRecords()` |
-| **Standalone** | `createStandaloneScanner` + `withRecords` | View-only / no wallet client needed |
+## Records from a connected wallet
 
-## Path 1: Wallet (RPC Account)
-
-No config needed. The wallet handles scanning internally.
+An RPC account — one built with `fromWalletAdapter` or `useVeilWallet` —
+delegates the scan to the connected wallet, which maintains its own record
+index. No scanner configuration is needed on the client:
 
 ```ts
+import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
+import { createWalletClient } from '@provablehq/veil-core'
+
 const { account, transport } = fromWalletAdapter(connectedAdapter)
 const walletClient = createWalletClient({ account, transport })
 
 const records = await walletClient.requestRecords({
   program: 'loyalty_token.aleo',
+  statusFilter: 'unspent',
 })
 ```
 
-## Path 2: SDK (Local Account)
+## Records from a local account
 
-Requires a `recordProvider` in the wallet client config. Two scanner factories are available:
-
-### Local scanner
-
-Scans blocks and decrypts records locally. No key material in config — the wallet client derives keys from the account.
+A local account has no wallet to ask, so the wallet client needs its own
+`recordProvider`. `loadNetwork`'s handle exposes two scanner factories, both
+backed by Provable's Record Scanning Service (RSS):
 
 ```ts
-import {
-  privateKeyToAccount,
-  createProvingConfig,
-  createLocalScanner,
-} from '@provablehq/veil-aleo-sdk'
+import { createWalletClient, http } from '@provablehq/veil-core'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+
+const aleo = await loadNetwork('testnet')
+const account = aleo.privateKeyToAccount('APrivateKey1...')
 
 const walletClient = createWalletClient({
-  account: privateKeyToAccount('APrivateKey1...'),
+  account,
   transport: http('https://api.provable.com/v2', { network: 'testnet' }),
-  proving: createProvingConfig({ mode: 'delegated' }),
-  recordProvider: createLocalScanner({
+  proving: aleo.createProvingConfig({
+    mode: 'delegated',
+    networkUrl: 'https://api.provable.com/v2',
+    account,
+  }),
+  recordProvider: aleo.createRemoteScanner({
     url: 'https://api.provable.com/v2',
+    consumerId: '<consumer-id>',
   }),
 })
 
 const records = await walletClient.requestRecords({
   program: 'loyalty_token.aleo',
+  statusFilter: 'unspent',
 })
 ```
 
-### Remote scanner (RSS)
+`createRemoteScanner`'s first call registers the account's view key with the
+service to obtain a scanning session; subsequent calls reuse it. A wallet
+client built without a `recordProvider` throws as soon as a local account
+calls `requestRecords`.
 
-Delegates scanning to a Record Scanning Service. Faster than local scanning for large block ranges.
+## Records without a wallet client
 
-```ts
-import { createRemoteScanner } from '@provablehq/veil-aleo-sdk'
-
-const walletClient = createWalletClient({
-  account: privateKeyToAccount('APrivateKey1...'),
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
-  proving: createProvingConfig({ mode: 'delegated' }),
-  recordProvider: createRemoteScanner({
-    url: 'https://rss.provable.com',
-    consumerId: 'my-app',
-  }),
-})
-```
-
-## Path 3: Standalone (No Wallet Client)
-
-For view-only use cases where you need records but don't need to sign transactions. Uses the `withRecords` extension on a public client.
+A read-only integration — a dashboard, an audit tool — that needs records
+but never signs a transaction has no reason to build a wallet client at all.
+`createStandaloneScanner` takes an explicit view key and extends a public
+client with `withRecords`:
 
 ```ts
-import { createPublicClient, http } from '@provablehq/veil-core'
-import { createStandaloneScanner, withRecords } from '@provablehq/veil-aleo-sdk'
+import { createPublicClient, http, withRecords } from '@provablehq/veil-core'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 
-const scanner = createStandaloneScanner({
+const aleo = await loadNetwork('mainnet')
+
+const scanner = aleo.createStandaloneScanner({
   url: 'https://api.provable.com/v2',
-  consumerId: 'my-app',
+  consumerId: '<consumer-id>',
   viewKey: 'AViewKey1...',
 })
 
-const client = createPublicClient({
+const viewClient = createPublicClient({
   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
 }).extend(withRecords({ scanner }))
 
-const records = await client.requestRecords({
-  program: 'loyalty_token.aleo',
-})
+const records = await viewClient.requestRecords({ program: 'loyalty_token.aleo' })
 ```
 
-The standalone scanner requires an explicit `viewKey` and is **not** pluggable into wallet client config.
+This scanner is not pluggable into a wallet client's `recordProvider` — use
+`createRemoteScanner` there instead. `createStandaloneScanner` exists
+specifically for the no-signer case, and the resulting client can only
+scan — it has no `writeContract` to spend what it finds. The rest of this
+guide assumes a wallet client from one of the first two paths, since
+spending a record requires signing.
 
-## Record Shape
+## The record shape
 
-Each record returned looks like:
+Every entry `requestRecords` returns carries `programName`, `recordName`,
+`owner`, `spent`, and the transaction and transition coordinates that
+produced it. With the default `includePlaintext: true`, each entry also
+carries `recordPlaintext` — the decrypted record body:
 
-```ts
+```
 {
+  programName: 'loyalty_token.aleo',
   recordName: 'LoyaltyCard',
   spent: false,
-  programName: 'loyalty_token.aleo',
-  recordPlaintext: '{\n  owner: aleo1....private,\n  card_id: 123field.private,\n  points: 500u64.private,\n  tier: 1u8.private,\n  _nonce: ...group.public\n}',
+  recordPlaintext: '{\n  owner: aleo1....private,\n  card_id: 123field.private,\n  points: 500u64.private,\n  _nonce: ...group.public\n}',
+  ...
 }
 ```
 
-## Filtering for Usable Records
+Set `includePlaintext: false` to get ciphertext-only entries instead — useful
+when the caller only needs to know which records exist, not their contents.
+`statusFilter` narrows the scan to `'unspent'`, `'spent'`, or `'all'`
+(the default).
 
-**Always check `spent: false`** before using a record as input. A spent record will cause the transaction to fail.
+## Filtering for spendable records
+
+A record can only be spent once. Filter for `spent: false` before using one
+as a function input — passing a spent record fails the transaction:
 
 ```ts
 const unspentCards = records.filter(
-  r => r.recordName === 'LoyaltyCard' && !r.spent
+  (r) => r.recordName === 'LoyaltyCard' && !r.spent,
 )
 ```
 
-## Using Records as Inputs
-
-Pass the `recordPlaintext` string as the input:
+Pass the `recordPlaintext` string as the input, the same way any other
+literal input is passed:
 
 ```ts
 const card = unspentCards[0]
@@ -136,22 +153,31 @@ const txId = await walletClient.writeContract({
 })
 ```
 
-## Record Lifecycle
+## Decrypting a record directly
 
-When a transaction consumes a record, that record becomes **spent** and a new record is created with the updated state. After a transaction confirms:
-
-1. The input record is now spent (`spent: true`)
-2. A new record exists with the updated values
-3. Call `requestRecords` again to get the fresh record
-
-**Important:** Always refresh records before using them. If a previous transaction is still pending, the record may already be spent but your local state doesn't know yet.
+A record ciphertext received outside `requestRecords` — from a program
+output, or fetched from a transaction — decrypts with
+[`decryptRecord`](/api/provable-sdk/decryptRecord), given the owner's view
+key. This is pure and local; no network round trip is made and the view key
+never leaves the caller:
 
 ```ts
-// Refresh before each transaction
-const freshRecords = await walletClient.requestRecords({
+const plaintext = aleo.decryptRecord(account.viewKey, 'record1qyqsq...')
+```
+
+## Refreshing before spending
+
+A record fetched some time ago may already be spent by the time it is used
+— by a transaction still pending elsewhere, or one that landed since the
+last scan. Refresh immediately before spending rather than trusting a
+previously fetched list:
+
+```ts
+const fresh = await walletClient.requestRecords({
   program: 'loyalty_token.aleo',
+  statusFilter: 'unspent',
 })
-const card = freshRecords.find(r => r.recordName === 'LoyaltyCard' && !r.spent)
+const card = fresh.find((r) => r.recordName === 'LoyaltyCard')
 
 if (!card) {
   throw new Error('No unspent card available')
@@ -164,10 +190,36 @@ await walletClient.writeContract({
 })
 ```
 
-## Detecting New Records
+After a transaction that consumes or creates records is accepted, allow a
+moment for the scanner to catch up to that block before expecting
+`requestRecords` to reflect the change — see
+[Transaction Lifecycle](/guides/transaction-lifecycle) for the acceptance
+and propagation timing in full.
 
-Records are identified by their nonce. After a transaction confirms, poll `requestRecords` until you see a record with a new nonce — that's your updated state.
+## Records as wallet-fulfilled inputs
+
+The examples above pass a record's plaintext directly as a literal input,
+which works for both account types. An RPC account has a second option: an
+`InputRequest` object that asks the connected wallet to select and supply the
+record itself, so the plaintext never has to pass through the caller at all.
 
 ```ts
-const nonce = plaintext.match(/_nonce:\s*(\d+)group/)?.[1]
+inputs: [
+  {
+    type: 'record',
+    program: 'loyalty_token.aleo',
+    recordname: 'LoyaltyCard',
+    filters: { points: { gte: '100u64' } },
+  },
+  '100u64',
+]
 ```
+
+`filters` narrows the wallet's automatic selection by record field; `uid` —
+the opaque handle a prior `requestRecords` call attached to a record — pins
+the request to that exact record instead. The two are mutually exclusive.
+Wallets that predate the privacy feature do not attach a `uid` to their
+records, so check for its presence before relying on it.
+Local accounts do not support `InputRequest` inputs; `writeContract` and
+`executeContract` throw if one is passed on that path, since there is no
+wallet to resolve it against.
