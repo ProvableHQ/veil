@@ -58,8 +58,7 @@ const config: Config = {
           label: 'Docs',
         },
         {
-          type: 'docSidebar',
-          sidebarId: 'api',
+          to: '/api/transports',
           position: 'left',
           label: 'API Reference',
         },
