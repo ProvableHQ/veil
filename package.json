@@ -7,7 +7,7 @@
     "test": "vitest",
     "typecheck": "tsc --noEmit",
     "changeset": "changeset",
-    "version-packages": "changeset version",
+    "version-packages": "changeset version && node scripts/sync-versions.mjs",
     "release": "pnpm build && changeset publish"
   },
   "devDependencies": {

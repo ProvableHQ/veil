@@ -138,6 +138,7 @@ export { createTransport } from './transports/createTransport.js'
 export { http } from './transports/http.js'
 export { custom } from './transports/custom.js'
 export { fallback } from './transports/fallback.js'
+export { version } from './version.js'
 
 // Clients
 export { createClient, type Client, type ClientConfig } from './clients/createClient.js'
