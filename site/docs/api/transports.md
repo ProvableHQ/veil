@@ -89,7 +89,7 @@ throws on a non-2xx response.
 | `url` | `string` | Base URL of the Aleo node, without a trailing network segment (e.g. `https://api.provable.com/v2`). |
 | `config.network` | `Network` | Optional. Network segment used in request paths. Defaults to `'mainnet'`. For local accounts, `switchChain` mutates this field to re-route reads at the new network's path segment. |
 | `config.fetchFn` | `typeof fetch` | Optional. `fetch` implementation used for requests. Defaults to the global `fetch`; supply one for non-browser runtimes or tests. |
-| `config.clientHeader` | `string \| false` | Optional. Value of the `X-Veil-Client` header identifying the SDK, sent to Provable-operated hosts only. Defaults to `veil-core/<version>`; pass a non-empty string to replace the value or `false` to never send the header. See [the client header](/clients/transports#the-client-header). |
+| `config.clientHeader` | `string \| false` | Optional. Value of the `X-Veil-Client` header identifying the SDK. Defaults to `veil-core/<version>`; pass a non-empty string to replace the value or `false` to never send the header. See [the client header](/clients/transports#the-client-header). |
 | `config.headers` | `Record<string, string>` | Optional. Headers merged into every request. Defaults to none; use for auth tokens or custom routing. An `X-Veil-Client` entry (any casing) replaces the default client header. |
 | `config.key` | `string` | Optional. Transport key. Defaults to `'http'`. |
 | `config.name` | `string` | Optional. Human-readable transport name. Defaults to `'HTTP Transport'`. |
