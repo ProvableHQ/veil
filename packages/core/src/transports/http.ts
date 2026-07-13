@@ -1,14 +1,32 @@
 import { TransportError } from '../errors/errors.js'
 import type { Transport, TransportConfig } from '../types/transport.js'
 import type { Network } from '../types/wallet.js'
+import { version } from '../version.js'
 import { createTransport } from './createTransport.js'
 
 type HttpTransportConfig = {
+  clientHeader?: string | false | undefined
   fetchFn?: typeof fetch | undefined
   headers?: Record<string, string> | undefined
   key?: string | undefined
   name?: string | undefined
   network?: Network | undefined
+}
+
+/**
+ * Reports whether a node URL points at a Provable-operated host.
+ *
+ * Gates the default client header: Provable hosts are known to allow
+ * `X-Veil-Client` in their CORS config, so sending it there can never fail a
+ * browser preflight. Unparseable URLs report `false`.
+ */
+function isProvableHost(url: string): boolean {
+  try {
+    const host = new URL(url).hostname
+    return host === 'provable.com' || host.endsWith('.provable.com')
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -231,6 +249,15 @@ function buildUrl(
  * @param url Base URL of the Aleo node, without a trailing network segment
  *   (e.g. `https://api.provable.com/v2`).
  * @param config Optional transport settings.
+ * @param config.clientHeader Optional value for the `X-Veil-Client` header
+ *   identifying the SDK to the node. Defaults to `veil-core/<version>`. The
+ *   header is only ever sent to Provable-operated hosts, whose CORS config
+ *   allows it — browser requests to any other node carry no header, so they
+ *   cannot fail CORS preflight over it. Pass a non-empty string to replace
+ *   the value (an empty string is treated as unset), or `false` to never
+ *   send the header. An `X-Veil-Client` entry in `headers` (any casing)
+ *   replaces the default. To identify the client to a non-Provable node
+ *   whose CORS config allows it, set `headers` instead.
  * @param config.fetchFn Optional `fetch` implementation to use for requests.
  *   Defaults to the global `fetch`; supply one for non-browser runtimes or tests.
  * @param config.headers Optional headers merged into every request. Defaults to
@@ -252,12 +279,26 @@ export function http(
   config: HttpTransportConfig = {},
 ): Transport<'http'> {
   const {
+    clientHeader,
     fetchFn = fetch,
     headers = {},
     key = 'http',
     name = 'HTTP Transport',
     network = 'mainnet',
   } = config
+
+  // Resolve the identifying header once at construction; the JSDoc on
+  // `clientHeader` carries the policy. HTTP header names are case-insensitive
+  // and fetch's Headers combines case-variant duplicate keys into one wire
+  // value, so a user-supplied header suppresses the default under any casing
+  // rather than by exact key.
+  const userSetsClientHeader = Object.keys(headers).some(
+    (k) => k.toLowerCase() === 'x-veil-client',
+  )
+  const resolvedClientHeader =
+    clientHeader !== false && !userSetsClientHeader && isProvableHost(url)
+      ? clientHeader || `veil-core/${version}`
+      : undefined
 
   // Build the config object first so the request closure can read
   // `transportConfig.network` on every call. `switchChain` for local accounts
@@ -280,6 +321,7 @@ export function http(
         method: httpMethod,
         headers: {
           'Content-Type': 'application/json',
+          ...(resolvedClientHeader ? { 'X-Veil-Client': resolvedClientHeader } : {}),
           ...headers,
         },
         ...(body ? { body } : {}),

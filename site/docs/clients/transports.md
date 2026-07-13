@@ -42,7 +42,43 @@ import { http } from '@provablehq/veil-core'
 const transport = http('http://127.0.0.1:3030', { network: 'testnet' })
 ```
 
+## The client header
+
+When the `http` transport points at a Provable-operated endpoint, it sends
+an `X-Veil-Client: veil-core/<version>` header identifying the SDK. The
+header goes to `provable.com` hosts only, without exception: those
+endpoints allow it in their CORS configuration, while a self-hosted or
+third-party node might not, and a browser request carrying a header the
+server's `Access-Control-Allow-Headers` does not list fails outright.
+Pointing the transport anywhere else sends no header at all.
+
+Pass `clientHeader` to replace the value or turn the header off:
+
+```ts
+// Identify the app instead of the SDK.
+const transport = http('https://api.provable.com/v2', {
+  clientHeader: 'my-dapp/1.2',
+})
+
+// Never send the header.
+const anonymous = http('https://api.provable.com/v2', { clientHeader: false })
+```
+
+An `X-Veil-Client` value set through `headers` (any casing) always wins over
+the default.
+
+To identify the client to a node Provable does not operate, set the header
+explicitly through `headers` — it applies to any host, and the node's CORS
+config MUST allow `X-Veil-Client` for browser requests to succeed:
+
+```ts
+const custom = http('https://my-node.example.com/v2', {
+  headers: { 'X-Veil-Client': 'my-dapp/1.2' },
+})
+```
+
 For the full option set on each transport (`http`'s `network`, `fetchFn`,
-and `headers`; `custom`'s `request`; `fallback`'s multi-transport error
-behavior) and the underlying `Transport`/`TransportConfig` shape, see the
+`headers`, and `clientHeader`; `custom`'s `request`; `fallback`'s
+multi-transport error behavior) and the underlying
+`Transport`/`TransportConfig` shape, see the
 [Transports reference](/api/transports).
