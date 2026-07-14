@@ -26,6 +26,25 @@ function fieldLiteral(literal: string): string {
 }
 
 /**
+ * Sorts a token pair ascending by numeric value, accepting bare or suffixed
+ * field literals — the canonical ordering the contract applies before
+ * building its `PoolKey` and `PairKey` structs. Pure and local.
+ *
+ * @param token0 One token id as a `field` literal (the suffix is optional).
+ * @param token1 The other token id.
+ * @returns The pair as bigints, ascending.
+ * @throws When a literal does not parse as an integer.
+ *
+ * @example
+ * const [t0, t1] = sortTokenPair(tokenA, tokenB)
+ */
+export function sortTokenPair(token0: string, token1: string): [bigint, bigint] {
+  const a = BigInt(stripSuffix(token0, 'field'))
+  const b = BigInt(stripSuffix(token1, 'field'))
+  return a <= b ? [a, b] : [b, a]
+}
+
+/**
  * Hashes an Aleo struct literal to a field with BHP256, matching the contract's
  * `hash.bhp256 <struct> into field`. Loads the optional `@provablehq/sdk` peer
  * on first call; single-sources the correctness-critical hash step both key
@@ -76,10 +95,7 @@ export interface DerivePoolKeyParameters {
 export async function derivePoolKey(params: DerivePoolKeyParameters): Promise<string> {
   // Sort the pair ascending, matching the program's sorted_token0/1 before it
   // hashes — the key is order-independent in the token arguments.
-  const a = BigInt(stripSuffix(params.token0, 'field'))
-  const b = BigInt(stripSuffix(params.token1, 'field'))
-  const [token0, token1] = a <= b ? [a, b] : [b, a]
-
+  const [token0, token1] = sortTokenPair(params.token0, params.token1)
   return hashStruct(`{ token0: ${token0}field, token1: ${token1}field, fee: ${params.fee}u16 }`)
 }
 

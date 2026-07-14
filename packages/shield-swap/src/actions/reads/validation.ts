@@ -1,5 +1,5 @@
-import { readMapping, type Client } from '@provablehq/veil-core'
-import { readBoolMapping } from './internal.js'
+import { type Client } from '@provablehq/veil-core'
+import { readBoolMapping, readUintMapping } from './internal.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 
 /**
@@ -116,17 +116,7 @@ export async function getFeeToTickSpacing(
   client: Client,
   params: { fee: number; program?: string },
 ): Promise<number | null> {
-  const raw = await readMapping(client, {
-    programId: params.program ?? DEFAULT_PROGRAM,
-    mapping: 'fee_to_tick_spacing',
-    key: `${params.fee}u16`,
-  })
-  if (raw == null || raw === 'null') return null
-  const spacing = Number(raw.replace(/u32$/, ''))
-  // Fail fast on an unexpected literal shape — a NaN tick spacing passed
-  // downstream would silently corrupt key encoding and pool creation.
-  if (Number.isNaN(spacing)) {
-    throw new Error(`fee_to_tick_spacing returned an unexpected value: ${raw}`)
-  }
-  return spacing
+  // Strict decode — a NaN tick spacing passed downstream would silently
+  // corrupt key encoding and pool creation.
+  return readUintMapping(client, params.program, 'fee_to_tick_spacing', `${params.fee}u16`)
 }

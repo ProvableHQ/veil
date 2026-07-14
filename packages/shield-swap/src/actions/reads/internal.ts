@@ -52,3 +52,32 @@ export async function readBoolMapping(
   const raw = await readMapping(client, { programId: program ?? DEFAULT_PROGRAM, mapping, key })
   return raw === 'true'
 }
+
+/**
+ * Reads an unsigned-integer-valued mapping entry, decoding the suffixed
+ * literal strictly.
+ *
+ * Shared by the numeric config reads (`getFeeToTickSpacing`,
+ * `getFrozenPosition`, `getTokenDecimals`): one node request, JSON-null
+ * guard, then a strict `<digits>u8|u16|u32` parse — a malformed response
+ * fails loudly instead of yielding a silent zero.
+ *
+ * @param client A Veil client whose transport can reach an Aleo node.
+ * @param program Program to read from; defaults to `DEFAULT_PROGRAM`.
+ * @param mapping On-chain mapping name.
+ * @param key Mapping key as an Aleo literal, including its type suffix.
+ * @returns The decoded value, or `null` when the key is not in the mapping.
+ * @throws When the mapping value is not a suffixed unsigned literal.
+ */
+export async function readUintMapping(
+  client: Client,
+  program: string | undefined,
+  mapping: string,
+  key: string,
+): Promise<number | null> {
+  const raw = await readMapping(client, { programId: program ?? DEFAULT_PROGRAM, mapping, key })
+  if (raw == null || raw === 'null') return null
+  const match = /^(\d+)u(?:8|16|32)$/.exec(String(raw))
+  if (!match) throw new Error(`${mapping} returned an unexpected value: ${raw}`)
+  return Number(match[1])
+}
