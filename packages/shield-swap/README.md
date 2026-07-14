@@ -5,17 +5,22 @@ viem-style actions for the following:
 
 ### Executing DEX smart-contract functions
 Actions for executing the functions of the `shield_swap_v3.aleo` contract.
-- **Private swaps** — Runs the `swap` --> `claim_swap_output` flows.
+- **Private swaps** — Runs the `swap` --> `claim_swap_output` flows, and the
+multi-hop variants (`swap_multi_hop` --> `claim_multi_hop_output`) for 2–3
+pool routes.
 - **Liquidity** — create pools (via `create_pool`), 
 mint concentrated-liquidity positions (`mint`) and add to them (`increase_liquidity`).
 
 ### Reading the DEX contract + DEX API
 Actions for:
-- Reading Shield Swap smart-contract mappings directly 
+- Reading Shield Swap smart-contract mappings directly — pools, slots,
+positions, ticks, swap outputs, and the pause/freeze control gates.
 - Reading Shield Swap api endpoints via typed client REST API service namespaced under `client.api`.
 
 ### Helpers for Traders
-Actions that help traders do common things like check thier private token position balances.
+Actions that help traders do common things like check thier private token position balances,
+derive pool/tick keys and swap/position ids locally, and pre-flight a pool's
+control gates before paying for a transaction.
 
 ## Installation
 
@@ -274,15 +279,65 @@ blinded address is also readable from `api.getSwap(...).recipient` — set them 
 the handle, then claim. The wallet re-derives the blinding factor from the
 blinded address itself, so you never hold it.
 
+The handle carries the full swap-id preimage (`zeroForOne`, `sqrtPriceLimit`,
+`nonce`), so once you have the blinded address you can also compute the id
+locally instead of digging it out of the transaction:
+
 ```ts
-handle.swapId = swapIdFromConfirmedTx
 handle.blindedAddress = blindedAddressFromConfirmedTx
+handle.swapId = await deriveSwapId({
+  poolKey: handle.poolKey,
+  zeroForOne: handle.zeroForOne!,
+  amountIn: handle.amountIn,
+  sqrtPriceLimit: handle.sqrtPriceLimit!,
+  blindedAddress: handle.blindedAddress,
+  nonce: handle.nonce!,
+})
 
 const { amountOut, amountRemaining } = await client.claimSwapOutput({
   handle,
   imports,
 })
 ```
+
+### Multi-hop routes
+
+When the best route crosses more than one pool, `swapMultiHop` submits the
+whole 2–3 hop route as one atomic transaction — the intermediate tokens never
+touch your account. Pass the pool keys in route order (the API's `/route`
+returns them); the client walks your input token through each pool's pair to
+fix the hop directions and the final output token, and rejects a route that
+does not connect. A single-hop trade stays on `swap` — the contract requires
+at least two hops here.
+
+```ts
+const handle = await client.swapMultiHop({
+  poolKeys: [ethUsdcPool, usdcAleoPool],   // ETH → USDC → ALEO
+  tokenInId: ethTokenId,
+  amountIn,
+  expectedOut,                             // quote for the FINAL output token
+  slippageBps: 50,                         // applied once, end to end
+  tokenInProgram,                          // local key; wallets pass tokenRecord
+  imports,
+})
+```
+
+The handle is the same idea as the single-hop one — serializable, carries the
+whole id preimage, consumed by the claim. Partial fills on later hops refund
+the intermediate token; the claim reports those as `hopRefunds` alongside the
+main output and input refund:
+
+```ts
+const { amountOut, amountRemaining, hopRefunds } = await client.claimMultiHopOutput({
+  handle,
+  imports,   // include every token program the route touches
+})
+```
+
+Signer paths, `SwapOutputNotFinalizedError`, and the wallet-path recovery
+story all match the single-hop flow (the local helper there is
+`deriveMultiHopSwapId`, and unlike the single-hop preimage it includes the
+deadline).
 
 ## Liquidity
 
@@ -319,7 +374,11 @@ const { positionTokenId } = await client.mint({
 
 Drop the two `*Program` fields and pass `token0Record`/`token1Record` as
 `record` InputRequests (same shape as the swap's `tokenRecord`); the wallet
-resolves each against its own records.
+resolves each against its own records. `positionTokenId` still comes back
+filled when `@provablehq/sdk` is installed — every field of the id's
+preimage is client-known, so the client hashes it locally instead of waiting
+for confirmation. Without the peer it is `undefined`; compute it later with
+`derivePositionTokenId`.
 
 ```ts
 const { positionTokenId } = await client.mint({
@@ -385,6 +444,50 @@ const { poolKey } = await client.createPool({
   initialTick: 0,  // sets the opening price
 })
 ```
+
+## Pre-flight controls and position reads
+
+The contract gates every trade behind a set of admin controls — a global
+pause, per-token pauses, per-pair pauses, and each pool's `enabled` flag —
+and asserts them at finalize, where a violation costs you a proved, fee-paid
+revert. `getTradeControls` reads every gate for a pool in one call and
+reports the same conjunction the finalize checks:
+
+```ts
+const controls = await client.getTradeControls({ poolKey })
+if (!controls.tradeable) {
+  console.log('blocked:', controls)   // which gate, exactly
+}
+```
+
+The individual readers are there too when you need one gate —
+`isGlobalPaused`, `isTokenPaused`, `isPairPaused`, `isTokenAllowed` (gates
+pool creation, not trading), `isPoolCreationOpen`, and `getFrozenPosition`
+(a frozen position blocks liquidity operations until unfrozen).
+`getTokenDecimals` reads a token's registered decimal count, which pairs
+with `dustScale` to validate raw amounts. Control state can change before
+your transaction finalizes, so treat a green read as advisory.
+
+Two more chain reads round out reconciliation after liquidity operations:
+`getPosition` returns a position's public state by its token id (liquidity,
+range, and the `tokens_owed` balances that `decreaseLiquidity` and fee
+accrual settle into), and `getTick` returns an initialized tick — pass
+`{ poolKey, tick }` to derive the key locally, or a pre-derived `tickKey`
+to stay off the WASM peer.
+
+## Deriving keys and ids locally
+
+Every id the contract computes by hashing a struct is computable client-side,
+without the network: `derivePoolKey` and `deriveTickKey` for mapping keys,
+`deriveSwapId`, `deriveMultiHopSwapId`, and `derivePositionTokenId` for the
+ids that swaps and mints produce. The actions already fill these into their
+returns wherever the preimage is known (see the swap and mint sections), so
+reach for the helpers directly when reconstructing an id after the fact —
+say, a wallet-path swap persisted before confirmation — or when addressing
+state you have not touched yet.
+
+All of them load the optional `@provablehq/sdk` peer for the BHP256 hash on
+first use; pool and price reads never need it.
 
 ## Balances
 

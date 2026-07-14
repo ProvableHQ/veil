@@ -10,6 +10,18 @@ import {
   isTickSpacingValid,
   getFeeToTickSpacing,
 } from '../../src/actions/reads/validation.js'
+import { getPosition } from '../../src/actions/reads/getPosition.js'
+import { getTick } from '../../src/actions/reads/getTick.js'
+import {
+  isGlobalPaused,
+  isPoolCreationOpen,
+  isTokenAllowed,
+  isTokenPaused,
+  isPairPaused,
+  getFrozenPosition,
+  getTokenDecimals,
+  getTradeControls,
+} from '../../src/actions/reads/controls.js'
 import { PROGRAM_ID } from '../../src/generated/shield_swap.js'
 
 // Real-API integration: hits the live testnet node and the live DEX API.
@@ -133,8 +145,76 @@ describe.runIf(RUN)('reads against the real API', () => {
     const res = await fetch(`${NODE_URL}/program/${PROGRAM_ID}/mappings`)
     expect(res.ok).toBe(true)
     const mappings = (await res.json()) as string[]
-    for (const m of ['pools', 'slots', 'swap_outputs', 'used_blinded_addresses']) {
+    for (const m of [
+      'pools', 'slots', 'swap_outputs', 'used_blinded_addresses',
+      'positions', 'ticks', 'global_paused', 'token_allowed', 'token_paused',
+      'pair_paused', 'frozen_position', 'token_decimals', 'pool_creation_is_open',
+    ]) {
       expect(mappings).toContain(m)
     }
+  }, 30_000)
+
+  it('getTradeControls agrees with the individual control reads on a live pool', async () => {
+    const res = await fetch(`${INDEXER_URL}/pools?limit=1`)
+    const body = (await res.json()) as { data: { key: string }[] }
+    const poolKey = body.data[0]!.key
+
+    const controls = await getTradeControls(client, { poolKey })
+    const pool = await getPool(client, { poolKey })
+
+    expect(controls.poolEnabled).toBe(pool!.enabled)
+    expect(controls.globalPaused).toBe(await isGlobalPaused(client))
+    expect(controls.token0.allowed).toBe(await isTokenAllowed(client, { tokenId: pool!.token0 }))
+    expect(controls.token0.paused).toBe(await isTokenPaused(client, { tokenId: pool!.token0 }))
+    expect(controls.pairPaused).toBe(
+      await isPairPaused(client, { token0: pool!.token0, token1: pool!.token1 }),
+    )
+    // The verdict is exactly the swap-finalize conjunction.
+    expect(controls.tradeable).toBe(
+      !controls.globalPaused &&
+        controls.poolEnabled &&
+        !controls.token0.paused &&
+        !controls.token1.paused &&
+        !controls.pairPaused,
+    )
+  }, 60_000)
+
+  it('token decimals are registered for a live pool pair', async () => {
+    const res = await fetch(`${INDEXER_URL}/pools?limit=1`)
+    const body = (await res.json()) as { data: { key: string }[] }
+    const pool = await getPool(client, { poolKey: body.data[0]!.key })
+
+    // create_pool hard-requires registration, so a live pool's tokens read back.
+    const decimals0 = await getTokenDecimals(client, { tokenId: pool!.token0 })
+    expect(decimals0).not.toBeNull()
+    expect(decimals0!).toBeGreaterThanOrEqual(0)
+    // Absent controls read their get_or_use defaults, not errors.
+    expect(typeof (await isPoolCreationOpen(client))).toBe('boolean')
+    expect(await getFrozenPosition(client, { positionTokenId: '444444444444444444field' })).toBeNull()
+  }, 60_000)
+
+  it('getTick reads an initialized tick via the slot neighbors', async () => {
+    const res = await fetch(`${INDEXER_URL}/pools?limit=1`)
+    const body = (await res.json()) as { data: { key: string }[] }
+    const poolKey = body.data[0]!.key
+    const slot = await getSlot(client, { poolKey })
+
+    // next_init_above/below point at initialized ticks (or the extremes);
+    // probe one that is a real entry when in range.
+    const target = slot!.next_init_above
+    const tick = await getTick(client, { poolKey, tick: target })
+    if (tick !== null) {
+      expect(tick.tick).toBe(target)
+      expect(typeof tick.liquidity_gross).toBe('bigint')
+      expect(typeof tick.prev).toBe('number')
+      expect(typeof tick.next).toBe('number')
+    }
+    // An out-of-domain tick is never initialized.
+    expect(await getTick(client, { poolKey, tick: 399999 })).toBeNull()
+  }, 60_000)
+
+  it('getPosition returns null for an unknown position id', async () => {
+    const absent = '555555555555555555555555555555555555555555555555555555555555555555555555555field'
+    expect(await getPosition(client, { positionTokenId: absent })).toBeNull()
   }, 30_000)
 })

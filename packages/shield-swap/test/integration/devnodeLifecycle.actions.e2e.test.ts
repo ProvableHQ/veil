@@ -2,7 +2,13 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { parseTokenRecordInfo } from '../../src/utils/records.js'
-import { derivePoolKey, deriveTickKey } from '../../src/utils/keys.js'
+import {
+  derivePoolKey,
+  deriveTickKey,
+  deriveSwapId,
+  derivePositionTokenId,
+  deriveMultiHopSwapId,
+} from '../../src/utils/keys.js'
 import {
   setupAmmDevnode,
   privatizeToken,
@@ -222,6 +228,19 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (SDK write actions)', () =
       })
       expect(handle.swapId).toMatch(/field$/)
 
+      // Authoritative id parity: the transition's first output equals the
+      // local BHP256 SwapKey hash over the handle's own preimage fields.
+      expect(
+        await deriveSwapId({
+          poolKey: pool.poolKey!,
+          zeroForOne: handle.zeroForOne!,
+          amountIn: handle.amountIn,
+          sqrtPriceLimit: handle.sqrtPriceLimit!,
+          blindedAddress: handle.blindedAddress!,
+          nonce: handle.nonce!,
+        }),
+      ).toBe(handle.swapId)
+
       // The finalize computed the outcome into swap_outputs — read it fresh
       // from chain and parse the actual amount_out the contract produced.
       const output = String(
@@ -246,6 +265,90 @@ describe.runIf(RUN)('e2e: AMM v3 lifecycle on devnode (SDK write actions)', () =
       if (zeroForOne) expect(slotAfter!.sqrt_price).toBeLessThan(slotBefore!.sqrt_price)
       else expect(slotAfter!.sqrt_price).toBeGreaterThan(slotBefore!.sqrt_price)
     }
+  }, 480_000)
+
+  it('a repeat mint proves position token id parity (TokenIDPreimage hash)', async () => {
+    const pool = pools[0]!
+    const record0 = await privatizeToken(ctx.user, ctx.token0Program, 50_000_000n)
+    const record1 = await privatizeToken(ctx.user, ctx.token1Program, 50_000_000n)
+    const nonce = '424242field'
+    // Same range as the first mint: the ticks are already initialized, so the
+    // contract skips hint validation and the whole preimage is known here.
+    const result = await dex.mint({
+      poolKey: pool.poolKey!,
+      tickLower: -10 * pool.tickSpacing,
+      tickUpper: 10 * pool.tickSpacing,
+      amount0Desired: 10_000_000n,
+      amount1Desired: 10_000_000n,
+      token0Record: record0,
+      token1Record: record1,
+      tickLowerHint: -400001,
+      tickUpperHint: -400001,
+      nonce,
+      imports: ctx.imports,
+    })
+    expect(result.positionTokenId).toMatch(/field$/)
+
+    // Authoritative id parity: transition output vs local TokenIDPreimage hash.
+    expect(
+      await derivePositionTokenId({
+        request: {
+          pool: pool.poolKey!,
+          tickLower: -10 * pool.tickSpacing,
+          tickUpper: 10 * pool.tickSpacing,
+          amount0Desired: 10_000_000n,
+          amount1Desired: 10_000_000n,
+          amount0Min: 0n,
+          amount1Min: 0n,
+          tickLowerHint: -400001,
+          tickUpperHint: -400001,
+        },
+        recipient: ctx.user.account.address,
+        nonce,
+      }),
+    ).toBe(result.positionTokenId)
+  }, 240_000)
+
+  it('swap_multi_hop routes across both pools and claims the output', async () => {
+    // The two pools share the token pair, so A →(pool0) B →(pool1) A is a
+    // valid two-hop route — the round trip exercises direction resolution
+    // in both orientations.
+    const tokenRecord = await privatizeToken(ctx.user, ctx.token0Program, 20_000_000n)
+    const handle = await dex.swapMultiHop({
+      poolKeys: [pools[0]!.poolKey!, pools[1]!.poolKey!],
+      tokenInId: ctx.token0Field,
+      amountIn: 5_000_000n,
+      expectedOut: 0n,
+      tokenRecord,
+      imports: ctx.imports,
+    })
+    expect(handle.swapId).toMatch(/field$/)
+    expect(handle.tokenOutId).toBe(ctx.token0Field)
+    expect(handle.hops.map((h) => h.zeroForOne)).toEqual([true, false])
+
+    // Authoritative id parity: transition output vs local SwapMultiHopRequest
+    // hash over the handle's own preimage fields (deadline included).
+    expect(
+      await deriveMultiHopSwapId({
+        tokenInId: handle.tokenInId,
+        tokenOutId: handle.tokenOutId,
+        amountIn: handle.amountIn,
+        amountOutMin: handle.amountOutMin,
+        blindedAddress: handle.blindedAddress!,
+        hops: handle.hops,
+        nonce: handle.nonce,
+        deadline: handle.deadline,
+      }),
+    ).toBe(handle.swapId)
+
+    // The finalize computed the route outcome — claim it and check the
+    // chain-computed amounts came back as records.
+    const claim = await dex.claimMultiHopOutput({ handle, imports: ctx.imports })
+    expect(claim.transactionId).toMatch(/^at1/)
+    expect(claim.amountOut).toBeGreaterThan(0n)
+    const records = await ctx.recordsOf(ctx.user.account.viewKey, claim.transactionId)
+    const paid = records.map((r) => parseTokenRecordInfo(r)).find((i) => i?.amount === claim.amountOut)
+    expect(paid, `a claimed Token record of ${claim.amountOut}`).toBeDefined()
   }, 480_000)
 
   it('collect pays out the owed tokens and clears them from the position', async () => {
