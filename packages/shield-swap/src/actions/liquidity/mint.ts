@@ -1,34 +1,11 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@provablehq/veil-core'
 import { selectTokenRecord } from '../../utils/records.js'
 import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
-import { generateFieldNonce } from '../../utils/params.js'
+import { generateFieldNonce, formatMintPositionRequest } from '../../utils/params.js'
 import { roundTickToSpacing } from '../../utils/tick-math.js'
 import { pickInsertHint } from '../../utils/tick-hints.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 
-/**
- * Formats a MintPositionRequest struct literal in the contract's exact
- * field order — pool, ticks, desired/min amounts, hints. Order is
- * load-bearing: struct hashing and the transition input both depend on it.
- */
-export function formatMintPositionRequest(req: {
-  pool: string
-  tickLower: number
-  tickUpper: number
-  amount0Desired: bigint
-  amount1Desired: bigint
-  amount0Min: bigint
-  amount1Min: bigint
-  tickLowerHint: number
-  tickUpperHint: number
-}): string {
-  return (
-    `{ pool: ${req.pool}, tick_lower: ${req.tickLower}i32, tick_upper: ${req.tickUpper}i32, ` +
-    `amount0_desired: ${req.amount0Desired}u128, amount1_desired: ${req.amount1Desired}u128, ` +
-    `amount0_min: ${req.amount0Min}u128, amount1_min: ${req.amount1Min}u128, ` +
-    `tick_lower_hint: ${req.tickLowerHint}i32, tick_upper_hint: ${req.tickUpperHint}i32 }`
-  )
-}
 
 /**
  * Parameters for {@link mint}.

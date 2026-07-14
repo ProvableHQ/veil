@@ -8,7 +8,8 @@ vi.mock('@provablehq/veil-core', async (importOriginal) => {
 
 import { executeContract, writeContract } from '@provablehq/veil-core'
 import { createPool } from '../../../src/actions/liquidity/createPool.js'
-import { mint, formatMintPositionRequest } from '../../../src/actions/liquidity/mint.js'
+import { mint } from '../../../src/actions/liquidity/mint.js'
+import { formatMintPositionRequest } from '../../../src/utils/params.js'
 import { increaseLiquidity } from '../../../src/actions/liquidity/increaseLiquidity.js'
 import { getSqrtPriceAtTick } from '../../../src/utils/tick-math.js'
 

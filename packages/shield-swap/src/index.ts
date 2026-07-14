@@ -94,12 +94,8 @@ export {
 // Liquidity lifecycle: create a pool, mint a position, deepen it, shrink it,
 // collect owed tokens, and burn the drained position.
 export { createPool, type CreatePoolParameters, type CreatePoolReturnType } from './actions/liquidity/createPool.js'
-export {
-  mint,
-  formatMintPositionRequest,
-  type MintParameters,
-  type MintReturnType,
-} from './actions/liquidity/mint.js'
+export { mint, type MintParameters, type MintReturnType } from './actions/liquidity/mint.js'
+export { formatMintPositionRequest, type MintPositionRequestInput } from './utils/params.js'
 export {
   increaseLiquidity,
   type IncreaseLiquidityParameters,

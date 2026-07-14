@@ -142,6 +142,91 @@ export async function getDeadline(client: Client, params?: { offsetBlocks?: numb
 }
 
 /**
+ * The `MintPositionRequest` fields in TypeScript form.
+ *
+ * @property pool Pool key field literal.
+ * @property tickLower Lower bound of the range (i32, already spacing-aligned).
+ * @property tickUpper Upper bound of the range (i32).
+ * @property amount0Desired Raw atomic token0 deposit (u128).
+ * @property amount1Desired Raw atomic token1 deposit (u128).
+ * @property amount0Min Minimum token0 actually taken (u128 slippage guard).
+ * @property amount1Min Minimum token1 actually taken (u128).
+ * @property tickLowerHint Insert hint for the lower tick (i32).
+ * @property tickUpperHint Insert hint for the upper tick (i32).
+ */
+export type MintPositionRequestInput = {
+  pool: string
+  tickLower: number
+  tickUpper: number
+  amount0Desired: bigint
+  amount1Desired: bigint
+  amount0Min: bigint
+  amount1Min: bigint
+  tickLowerHint: number
+  tickUpperHint: number
+}
+
+/**
+ * Formats a MintPositionRequest struct literal in the contract's exact
+ * field order — pool, ticks, desired/min amounts, hints. Order is
+ * load-bearing: struct hashing and the transition input both depend on it.
+ * Pure and local.
+ *
+ * @param req The request fields, already resolved (spacing-aligned ticks,
+ *   computed hints).
+ * @returns The struct literal the `mint` transition and the token-id hash
+ *   consume.
+ *
+ * @example
+ * const request = formatMintPositionRequest({ pool, tickLower, tickUpper,
+ *   amount0Desired, amount1Desired, amount0Min: 0n, amount1Min: 0n,
+ *   tickLowerHint, tickUpperHint })
+ */
+export function formatMintPositionRequest(req: MintPositionRequestInput): string {
+  return (
+    `{ pool: ${req.pool}, tick_lower: ${req.tickLower}i32, tick_upper: ${req.tickUpper}i32, ` +
+    `amount0_desired: ${req.amount0Desired}u128, amount1_desired: ${req.amount1Desired}u128, ` +
+    `amount0_min: ${req.amount0Min}u128, amount1_min: ${req.amount1Min}u128, ` +
+    `tick_lower_hint: ${req.tickLowerHint}i32, tick_upper_hint: ${req.tickUpperHint}i32 }`
+  )
+}
+
+/**
+ * One hop of a multi-hop swap in TypeScript form.
+ *
+ * @property poolKey Pool key field literal the hop trades against.
+ * @property zeroForOne True when the hop sells the pool's token0 for token1.
+ * @property sqrtPriceLimit Q64 price bound for the hop (u128).
+ */
+export type SwapHopInput = { poolKey: string; zeroForOne: boolean; sqrtPriceLimit: bigint }
+
+/**
+ * Formats a SwapHop struct literal in the contract's exact field order.
+ * Order is load-bearing: the multi-hop request hash and the transition
+ * inputs both depend on it. Pure and local.
+ *
+ * @param hop The resolved hop; the pool key MUST carry its `field` suffix.
+ * @returns The struct literal the `swap_multi_hop` transition and the
+ *   multi-hop request hash consume.
+ *
+ * @example
+ * const hop0 = formatSwapHop({ poolKey, zeroForOne: true, sqrtPriceLimit: MIN_SQRT_PRICE })
+ */
+export function formatSwapHop(hop: SwapHopInput): string {
+  return `{ pool: ${hop.poolKey}, zero_for_one: ${hop.zeroForOne}, sqrt_price_limit: ${hop.sqrtPriceLimit}u128 }`
+}
+
+/**
+ * The padding literal for an unused hop slot. The contract guards every
+ * hop2 assertion behind `hop_count == 3`, so a zeroed hop is inert.
+ */
+export const EMPTY_SWAP_HOP_LITERAL = formatSwapHop({
+  poolKey: '0field',
+  zeroForOne: false,
+  sqrtPriceLimit: 0n,
+})
+
+/**
  * Generates a random u64 nonce for `swap`.
  *
  * The nonce uniquifies the swap id so identical back-to-back swaps do not
