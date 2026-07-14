@@ -1,11 +1,18 @@
 import type { AgentTool, AgentToolSchema } from '@provablehq/veil-core/agent'
 import type { ShieldSwapAgentToolsConfig } from './types.js'
-import { chainToolSchemas, apiToolSchemas, composedToolSchemas, writeToolSchemas } from './schemas.js'
+import {
+  chainToolSchemas,
+  apiToolSchemas,
+  composedToolSchemas,
+  writeToolSchemas,
+  pureToolSchemas,
+} from './schemas.js'
 import {
   createChainHandlers,
   createApiHandlers,
   createComposedHandlers,
   createWriteHandlers,
+  createPureHandlers,
 } from './handlers.js'
 
 export type { ShieldSwapAgentToolsConfig, AgentTool, AgentToolSchema, AgentToolHandler } from './types.js'
@@ -14,12 +21,24 @@ export {
   apiToolSchemas,
   composedToolSchemas,
   writeToolSchemas,
+  pureToolSchemas,
   getPoolSchema,
   getSlotSchema,
   getSwapOutputSchema,
+  getPositionSchema,
+  getTickSchema,
+  getTradeControlsSchema,
+  getFrozenPositionSchema,
+  getTokenDecimalsSchema,
+  isPoolCreationOpenSchema,
   isPoolInitializedSchema,
   getFeeToTickSpacingSchema,
   getPrivateBalancesSchema,
+  derivePoolKeySchema,
+  deriveTickKeySchema,
+  deriveSwapIdSchema,
+  derivePositionTokenIdSchema,
+  deriveMultiHopSwapIdSchema,
   listPoolsSchema,
   getRouteSchema,
   listTokensSchema,
@@ -31,9 +50,11 @@ export {
  * Returns the shield_swap agent-tool schemas (definitions only, no handlers).
  *
  * For registering tool names/descriptions with an LLM without wiring
- * execution. The set reflects what the config could back: chain tools when a
- * `client` is given, API tools when an `api` is given, composed tools when
- * both are. With no config, returns every schema.
+ * execution. The pure derivation tools (pool/tick keys, swap and position
+ * ids) are always included — they need no backing. The rest reflects what
+ * the config could back: chain tools when a `client` is given, API tools
+ * when an `api` is given, composed tools when both are. With no config,
+ * returns every schema.
  *
  * @param config Optional wiring; gates which tool groups are included.
  * @returns The matching {@link AgentToolSchema}s. Pure and local.
@@ -43,7 +64,8 @@ export {
  */
 export function shieldSwapAgentToolSchemas(config?: ShieldSwapAgentToolsConfig): AgentToolSchema[] {
   const all = !config
-  const schemas: AgentToolSchema[] = []
+  // Pure derivations need no backing — always available.
+  const schemas: AgentToolSchema[] = [...pureToolSchemas]
   if (all || config.client) schemas.push(...chainToolSchemas)
   if (all || config.api) schemas.push(...apiToolSchemas)
   if (all || (config.client && config.api)) schemas.push(...composedToolSchemas)
@@ -57,9 +79,10 @@ export function shieldSwapAgentToolSchemas(config?: ShieldSwapAgentToolsConfig):
  *
  * Framework-agnostic {@link AgentTool}s — the same shape as `@provablehq/veil-core`'s
  * `createAgentTools`, so DEX and base-Aleo tools register together (LangChain,
- * Vercel AI SDK, the MCP server). Only tool groups whose backing is present
- * are included: chain + private-balance tools need `client`, API tools need
- * `api`, and `shield_swap_get_balances` needs both.
+ * Vercel AI SDK, the MCP server). The pure derivation tools are always
+ * included; the other groups appear only when their backing is present:
+ * chain + private-balance tools need `client`, API tools need `api`, and
+ * `shield_swap_get_balances` needs both.
  *
  * Handlers hit the network when invoked; results are JSON-safe (bigints
  * rendered as strings).
@@ -77,6 +100,8 @@ export function createShieldSwapAgentTools(config: ShieldSwapAgentToolsConfig): 
     for (const schema of schemas) tools.push({ schema, handler: handlers[schema.name]! })
   }
 
+  // Pure derivations need no backing — always available.
+  add(pureToolSchemas, createPureHandlers())
   if (config.client) add(chainToolSchemas, createChainHandlers(config.client, config.program))
   if (config.api) add(apiToolSchemas, createApiHandlers(config.api))
   if (config.client && config.api) add(composedToolSchemas, createComposedHandlers(config.client, config.api))

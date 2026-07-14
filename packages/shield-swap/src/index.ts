@@ -17,6 +17,26 @@ export {
   isTickSpacingValid,
   getFeeToTickSpacing,
 } from './actions/reads/validation.js'
+export {
+  getPosition,
+  type GetPositionParameters,
+  type GetPositionReturnType,
+} from './actions/reads/getPosition.js'
+export { getTick, type GetTickParameters, type GetTickReturnType } from './actions/reads/getTick.js'
+
+// Control-state reads: the pause/allowlist/freeze gates the finalize asserts,
+// as cheap pre-flight checks, plus the batched getTradeControls verdict.
+export {
+  isGlobalPaused,
+  isPoolCreationOpen,
+  isTokenAllowed,
+  isTokenPaused,
+  isPairPaused,
+  getFrozenPosition,
+  getTokenDecimals,
+  getTradeControls,
+  type GetTradeControlsReturnType,
+} from './actions/reads/controls.js'
 
 // Blinded identity (private-swap identity lifecycle). Local derivation lazily
 // loads the optional @provablehq/sdk peer; wallet accounts never need it.
@@ -44,6 +64,19 @@ export {
   type ClaimSwapOutputParameters,
   type ClaimSwapOutputReturnType,
 } from './actions/swap/claimSwapOutput.js'
+
+// The multi-hop variant: 2–3 pools in one atomic route, same two-phase shape.
+export {
+  swapMultiHop,
+  type MultiHopSwapHandle,
+  type SwapMultiHopParameters,
+  type SwapMultiHopReturnType,
+} from './actions/swap/swapMultiHop.js'
+export {
+  claimMultiHopOutput,
+  type ClaimMultiHopOutputParameters,
+  type ClaimMultiHopOutputReturnType,
+} from './actions/swap/claimMultiHopOutput.js'
 
 // Off-chain DEX API client (trusted convenience layer; typed from the
 // service's own OpenAPI via `pnpm regen-openapi`).
@@ -74,6 +107,8 @@ export {
   parseTokenRecordInfo,
   selectTokenRecord,
   selectPositionNFT,
+  resolveTokenRecord,
+  positionTokenIdFromPlaintext,
   getPrivateBalances,
   type TokenRecordInfo,
   type PositionNFTInfo,
@@ -110,13 +145,22 @@ export { collect, type CollectParameters, type CollectReturnType } from './actio
 export { burn, type BurnParameters, type BurnReturnType } from './actions/liquidity/burn.js'
 export { pickInsertHint, type PickInsertHintParameters } from './utils/tick-hints.js'
 
-// Local pool/tick key derivation (BHP256 struct hash via the optional
-// @provablehq/sdk peer) — address a pool or tick without a network round trip.
+// Local key/id derivation (BHP256 struct hash via the optional
+// @provablehq/sdk peer) — address pools, ticks, swaps, and positions without
+// a network round trip. Actions fill the ids best-effort; these helpers
+// compute them explicitly.
 export {
   derivePoolKey,
   deriveTickKey,
+  deriveSwapId,
+  derivePositionTokenId,
+  deriveMultiHopSwapId,
+  sortTokenPair,
   type DerivePoolKeyParameters,
   type DeriveTickKeyParameters,
+  type DeriveSwapIdParameters,
+  type DerivePositionTokenIdParameters,
+  type DeriveMultiHopSwapIdParameters,
 } from './utils/keys.js'
 
 // Pure strategy primitives (no I/O): prices, impact, valuation, fee APR.
@@ -138,11 +182,18 @@ export { shieldSwapActions, type ShieldSwapActionsConfig, type ShieldSwapActions
 // and the contract's Q64 tick math table.
 export {
   resolveSwapParams,
+  resolveMultiHopParams,
   getDeadline,
   generateSwapNonce,
   generateFieldNonce,
+  formatSwapHop,
+  formatSwapHopSlots,
+  EMPTY_SWAP_HOP_LITERAL,
   type ResolveSwapParamsInput,
   type ResolvedSwapParams,
+  type ResolveMultiHopParamsInput,
+  type ResolvedMultiHopParams,
+  type SwapHopInput,
 } from './utils/params.js'
 export {
   Q64,

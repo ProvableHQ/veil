@@ -13,12 +13,39 @@ import {
   isTickSpacingValid,
   getFeeToTickSpacing,
 } from '../actions/reads/validation.js'
+import {
+  getPosition,
+  type GetPositionParameters,
+  type GetPositionReturnType,
+} from '../actions/reads/getPosition.js'
+import { getTick, type GetTickParameters, type GetTickReturnType } from '../actions/reads/getTick.js'
+import {
+  isGlobalPaused,
+  isPoolCreationOpen,
+  isTokenAllowed,
+  isTokenPaused,
+  isPairPaused,
+  getFrozenPosition,
+  getTokenDecimals,
+  getTradeControls,
+  type GetTradeControlsReturnType,
+} from '../actions/reads/controls.js'
 import { swap, type SwapParameters, type SwapReturnType } from '../actions/swap/swap.js'
 import {
   claimSwapOutput,
   type ClaimSwapOutputParameters,
   type ClaimSwapOutputReturnType,
 } from '../actions/swap/claimSwapOutput.js'
+import {
+  swapMultiHop,
+  type SwapMultiHopParameters,
+  type SwapMultiHopReturnType,
+} from '../actions/swap/swapMultiHop.js'
+import {
+  claimMultiHopOutput,
+  type ClaimMultiHopOutputParameters,
+  type ClaimMultiHopOutputReturnType,
+} from '../actions/swap/claimMultiHopOutput.js'
 import { createPool, type CreatePoolParameters, type CreatePoolReturnType } from '../actions/liquidity/createPool.js'
 import { mint, type MintParameters, type MintReturnType } from '../actions/liquidity/mint.js'
 import {
@@ -62,16 +89,28 @@ export type ShieldSwapActions = {
   getPool: (params: GetPoolParameters) => Promise<GetPoolReturnType>
   getSlot: (params: GetSlotParameters) => Promise<GetSlotReturnType>
   getSwapOutput: (params: GetSwapOutputParameters) => Promise<GetSwapOutputReturnType>
+  getPosition: (params: GetPositionParameters) => Promise<GetPositionReturnType>
+  getTick: (params: GetTickParameters) => Promise<GetTickReturnType>
   isBlindedAddressUsed: (params: { address: string; program?: string }) => Promise<boolean>
   isPoolInitialized: (params: { poolKey: string; program?: string }) => Promise<boolean>
   isFeeTierValid: (params: { fee: number; program?: string }) => Promise<boolean>
   isTickSpacingValid: (params: { tickSpacing: number; program?: string }) => Promise<boolean>
   getFeeToTickSpacing: (params: { fee: number; program?: string }) => Promise<number | null>
+  isGlobalPaused: (params?: { program?: string }) => Promise<boolean>
+  isPoolCreationOpen: (params?: { program?: string }) => Promise<boolean>
+  isTokenAllowed: (params: { tokenId: string; program?: string }) => Promise<boolean>
+  isTokenPaused: (params: { tokenId: string; program?: string }) => Promise<boolean>
+  isPairPaused: (params: { token0: string; token1: string; program?: string }) => Promise<boolean>
+  getFrozenPosition: (params: { positionTokenId: string; program?: string }) => Promise<number | null>
+  getTokenDecimals: (params: { tokenId: string; program?: string }) => Promise<number | null>
+  getTradeControls: (params: { poolKey: string; program?: string }) => Promise<GetTradeControlsReturnType>
   getPrivateBalances: (params: GetPrivateBalancesParameters) => Promise<GetPrivateBalancesReturnType>
   getBalances: (params?: GetBalancesParameters) => Promise<GetBalancesReturnType>
   pickInsertHint: (params: PickInsertHintParameters) => Promise<number>
   swap: (params: SwapParameters) => Promise<SwapReturnType>
   claimSwapOutput: (params: ClaimSwapOutputParameters) => Promise<ClaimSwapOutputReturnType>
+  swapMultiHop: (params: SwapMultiHopParameters) => Promise<SwapMultiHopReturnType>
+  claimMultiHopOutput: (params: ClaimMultiHopOutputParameters) => Promise<ClaimMultiHopOutputReturnType>
   createPool: (params: CreatePoolParameters) => Promise<CreatePoolReturnType>
   mint: (params: MintParameters) => Promise<MintReturnType>
   increaseLiquidity: (params: IncreaseLiquidityParameters) => Promise<IncreaseLiquidityReturnType>
@@ -124,16 +163,28 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     getPool: (p) => getPool(client, withProgram(p)),
     getSlot: (p) => getSlot(client, withProgram(p)),
     getSwapOutput: (p) => getSwapOutput(client, withProgram(p)),
+    getPosition: (p) => getPosition(client, withProgram(p)),
+    getTick: (p) => getTick(client, withProgram(p) as GetTickParameters),
     isBlindedAddressUsed: (p) => isBlindedAddressUsed(client, withProgram(p)),
     isPoolInitialized: (p) => isPoolInitialized(client, withProgram(p)),
     isFeeTierValid: (p) => isFeeTierValid(client, withProgram(p)),
     isTickSpacingValid: (p) => isTickSpacingValid(client, withProgram(p)),
     getFeeToTickSpacing: (p) => getFeeToTickSpacing(client, withProgram(p)),
+    isGlobalPaused: (p) => isGlobalPaused(client, withProgram(p ?? {})),
+    isPoolCreationOpen: (p) => isPoolCreationOpen(client, withProgram(p ?? {})),
+    isTokenAllowed: (p) => isTokenAllowed(client, withProgram(p)),
+    isTokenPaused: (p) => isTokenPaused(client, withProgram(p)),
+    isPairPaused: (p) => isPairPaused(client, withProgram(p)),
+    getFrozenPosition: (p) => getFrozenPosition(client, withProgram(p)),
+    getTokenDecimals: (p) => getTokenDecimals(client, withProgram(p)),
+    getTradeControls: (p) => getTradeControls(client, withProgram(p)),
     getPrivateBalances: (p) => getPrivateBalances(client, p),
     getBalances: (p) => getBalances(client, api ?? missingApi, p),
     pickInsertHint: (p) => pickInsertHint(client, withProgram(p)),
     swap: (p) => swap(client, withProgram(p)),
     claimSwapOutput: (p) => claimSwapOutput(client, p),
+    swapMultiHop: (p) => swapMultiHop(client, withProgram(p)),
+    claimMultiHopOutput: (p) => claimMultiHopOutput(client, p),
     createPool: (p) => createPool(client, withProgram(p)),
     mint: (p) => mint(client, withProgram(p)),
     increaseLiquidity: (p) => increaseLiquidity(client, withProgram(p)),
