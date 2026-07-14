@@ -6,7 +6,7 @@ import {
   type TransactionInput,
 } from '@provablehq/veil-core'
 import { nextBlindedIdentity, viewKeyToScalar } from '../../utils/blinding/identity.js'
-import { selectTokenRecord } from '../../utils/records.js'
+import { resolveTokenRecord } from '../../utils/records.js'
 import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
 import { resolveSwapParams, getDeadline, generateSwapNonce } from '../../utils/params.js'
 import { blindingFactorIssueRequest, blindedAddressIssueRequest } from '../../utils/blinding/requests.js'
@@ -207,22 +207,12 @@ export async function swap(client: Client, params: SwapParameters): Promise<Swap
         program,
       }))
 
-    let recordInput: string
-    if (typeof params.tokenRecord === 'string') {
-      recordInput = params.tokenRecord
-    } else if (params.tokenRecord) {
-      throw new Error('Local accounts cannot use InputRequests — pass a record plaintext literal instead')
-    } else {
-      if (!params.tokenInProgram) {
-        throw new Error('tokenInProgram is required to auto-select a record (or pass tokenRecord explicitly)')
-      }
-      const picked = await selectTokenRecord(client, {
-        program: params.tokenInProgram,
-        minAmount: params.amountIn,
-        tokenId: params.tokenInId,
-      })
-      recordInput = picked.record.recordPlaintext
-    }
+    const recordInput = await resolveTokenRecord(client, {
+      tokenRecord: params.tokenRecord,
+      tokenInProgram: params.tokenInProgram,
+      tokenId: params.tokenInId,
+      minAmount: params.amountIn,
+    })
 
     const result = await executeContract(client, {
       program,

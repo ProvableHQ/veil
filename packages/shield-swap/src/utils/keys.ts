@@ -1,8 +1,7 @@
 import { loadSdk } from './sdk.js'
 import {
   formatMintPositionRequest,
-  formatSwapHop,
-  EMPTY_SWAP_HOP_LITERAL,
+  formatSwapHopSlots,
   type MintPositionRequestInput,
   type SwapHopInput,
 } from './params.js'
@@ -269,17 +268,11 @@ export interface DeriveMultiHopSwapIdParameters {
  * })
  */
 export async function deriveMultiHopSwapId(params: DeriveMultiHopSwapIdParameters): Promise<string> {
-  if (params.hops.length < 2 || params.hops.length > 3) {
-    throw new Error(`swap_multi_hop takes 2 or 3 hops, got ${params.hops.length} — use swap for a single hop`)
-  }
-  // A hole would silently hash the zero padding under hop_count 3 — an id
-  // that can never match any on-chain submission. Fail loudly instead.
-  if (params.hops.some((h) => !h)) {
-    throw new Error('hops must not contain empty slots')
-  }
-  // Normalize pool literals so bare and suffixed keys hash identically.
-  const hop = (h: SwapHopInput) => formatSwapHop({ ...h, poolKey: fieldLiteral(h.poolKey) })
-  const [hop0, hop1, hop2 = EMPTY_SWAP_HOP_LITERAL] = params.hops.map(hop)
+  // Normalize pool literals so bare and suffixed keys hash identically;
+  // formatSwapHopSlots enforces the 2–3 count and zero-pads the third slot.
+  const [hop0, hop1, hop2] = formatSwapHopSlots(
+    params.hops.map((h) => (h ? { ...h, poolKey: fieldLiteral(h.poolKey) } : h)),
+  )
   const tokenIn = fieldLiteral(params.tokenInId)
   const tokenOut = fieldLiteral(params.tokenOutId)
   return hashStruct(
