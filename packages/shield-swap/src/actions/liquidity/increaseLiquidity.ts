@@ -1,5 +1,5 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@provablehq/veil-core'
-import { selectTokenRecord, resolvePositionRecord } from '../../utils/records.js'
+import { selectTokenRecord, resolvePositionRecord, positionTokenIdFromPlaintext } from '../../utils/records.js'
 import { requireAccount, requirePool } from '../../utils/guards.js'
 import { pickInsertHint } from '../../utils/tick-hints.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
@@ -54,8 +54,9 @@ export type IncreaseLiquidityParameters = {
  * The increase's essentials.
  *
  * @property positionTokenId The grown position's `token_id` (first public
- *   output on the local path; `undefined` on the wallet path until
- *   confirmation).
+ *   output on the local path; on the wallet path, echoes the
+ *   caller-supplied `positionTokenId` — the id is stable across position
+ *   operations — and is `undefined` when only `positionRecord` was given).
  * @property transactionId The transaction's id.
  */
 export type IncreaseLiquidityReturnType = {
@@ -79,7 +80,8 @@ export type IncreaseLiquidityReturnType = {
  *
  * @param client A Veil wallet client (local or wallet account).
  * @param params The amounts and optional overrides.
- * @returns The position token id (local path) and transaction id.
+ * @returns The position token id (echoed from the caller on the wallet
+ *   path) and transaction id.
  * @throws When the pool or position is missing; when records are missing
  *   (local) or not provided (wallet); and on transport/proving errors.
  *
@@ -183,7 +185,14 @@ export async function increaseLiquidity(
   ]
   const transactionId = await writeContract(client, { program, function: 'increase_liquidity',
       imports: params.imports ? Object.keys(params.imports) : undefined, inputs })
-  return { positionTokenId: undefined, transactionId }
+  // The id is stable across position operations. Prefer the id inside a
+  // granted plaintext (the position actually spent); fall back to the
+  // caller-supplied id for opaque record requests.
+  const positionTokenId =
+    (typeof params.positionRecord === 'string'
+      ? positionTokenIdFromPlaintext(params.positionRecord)
+      : undefined) ?? params.positionTokenId
+  return { positionTokenId, transactionId }
 }
 
 /** Auto-select a token record on the local path, with an actionable error. */

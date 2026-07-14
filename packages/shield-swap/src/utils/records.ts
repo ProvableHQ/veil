@@ -246,6 +246,29 @@ export async function resolvePositionRecord(
 }
 
 /**
+ * Extracts a PositionNFT's `token_id` from a record plaintext literal.
+ *
+ * Applies when a caller-supplied granted plaintext names the position being
+ * spent — the id inside the record is authoritative over any id the caller
+ * passed alongside it. Pure and local.
+ *
+ * @param plaintext The PositionNFT record plaintext.
+ * @returns The `token_id` field literal, or `undefined` when the plaintext
+ *   does not parse or carries no `token_id`.
+ *
+ * @example
+ * const tokenId = positionTokenIdFromPlaintext(grantedRecord)
+ */
+export function positionTokenIdFromPlaintext(plaintext: string): string | undefined {
+  try {
+    const raw = parseRecordPlaintextLoose(plaintext).fields.token_id?.value
+    return typeof raw === 'bigint' ? `${raw}field` : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * Parameters for {@link getPrivateBalances}.
  *
  * @property programs Token programs to scan — wrapper programs and/or the

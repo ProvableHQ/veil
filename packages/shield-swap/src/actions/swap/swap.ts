@@ -10,6 +10,8 @@ import { selectTokenRecord } from '../../utils/records.js'
 import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
 import { resolveSwapParams, getDeadline, generateSwapNonce } from '../../utils/params.js'
 import { blindingFactorIssueRequest, blindedAddressIssueRequest } from '../../utils/blinding/requests.js'
+import { tryLoadSdk } from '../../utils/sdk.js'
+import { deriveSwapId } from '../../utils/keys.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 
 /**
@@ -73,8 +75,10 @@ export type SwapParameters = {
  *
  * @property swapId Swap id field literal (the request transition's first
  *   output). Present immediately on the local-signer path; on the wallet
- *   path it becomes known once the wallet's transaction confirms — resolve
- *   it from the transaction before claiming.
+ *   path it is derived locally when the caller supplied `blindedIdentity`
+ *   and `@provablehq/sdk` is installed, and `undefined` otherwise — resolve
+ *   it from the confirmed transaction, or compute it with `deriveSwapId`
+ *   once the blinded address is known.
  * @property blindingFactor Secret field literal proving ownership at claim
  *   time. Present only on the local-signer path — a wallet keeps it private
  *   and re-derives it from `blindedAddress` at claim time. Treat like a key.
@@ -87,6 +91,15 @@ export type SwapParameters = {
  * @property tokenOutId Token id (field literal) that was bought.
  * @property poolKey Pool the swap executed against.
  * @property amountIn Raw atomic amount sold (u128).
+ * @property zeroForOne True when the swap sold the pool's token0 for token1.
+ *   Filled by every new swap; optional so handles persisted before this
+ *   field existed still parse.
+ * @property sqrtPriceLimit The submitted Q64 price bound (u128). Optional
+ *   for the same persistence-compatibility reason.
+ * @property nonce The submitted u64 nonce. With `zeroForOne`,
+ *   `sqrtPriceLimit`, and the blinded address, it completes the `deriveSwapId`
+ *   preimage — a wallet-path id is computable from the handle alone once the
+ *   blinded address is known.
  * @property transactionId The request transaction's id.
  * @property program The shield_swap program the swap targets.
  */
@@ -98,6 +111,9 @@ export interface SwapHandle {
   tokenOutId: string
   poolKey: string
   amountIn: bigint
+  zeroForOne?: boolean
+  sqrtPriceLimit?: bigint
+  nonce?: bigint
   transactionId: string
   program: string
 }
@@ -121,7 +137,9 @@ export type SwapReturnType = SwapHandle
  *   returns a handle with `swapId`/`blindedAddress` already filled.
  * - **Wallet account** — emits wallet-derived requests for the blinding
  *   slots (`tokenRecord` must be provided); the wallet proves and returns a
- *   transaction id. `swapId` and `blindedAddress` become recoverable from
+ *   transaction id. `swapId` fills immediately when the caller supplied
+ *   `blindedIdentity` and `@provablehq/sdk` is installed; otherwise it and
+ *   `blindedAddress` become recoverable from
  *   the confirmed transaction.
  *
  * Hits the network: pool reads, deadline read, record scan, and the
@@ -227,6 +245,9 @@ export async function swap(client: Client, params: SwapParameters): Promise<Swap
       tokenOutId: resolved.tokenOutId,
       poolKey: params.poolKey,
       amountIn: params.amountIn,
+      zeroForOne: resolved.zeroForOne,
+      sqrtPriceLimit: resolved.sqrtPriceLimit,
+      nonce,
       transactionId: result.transactionId,
       program,
     }
@@ -244,6 +265,23 @@ export async function swap(client: Client, params: SwapParameters): Promise<Swap
     ? [params.blindedIdentity.blindingFactor, params.blindedIdentity.blindedAddress]
     : [blindingFactorIssueRequest(program), blindedAddressIssueRequest(program)]
 
+  // Best-effort id: derivable only when the caller supplied the blinded
+  // identity (the wallet otherwise fills those slots) and the WASM peer is
+  // present. A derivation fault (broken WASM asset, CSP, version skew)
+  // degrades to undefined rather than blocking a submittable transaction;
+  // the id then comes from the confirmed transaction, as without the peer.
+  let swapId: string | undefined
+  if (params.blindedIdentity && (await tryLoadSdk())) {
+    swapId = await deriveSwapId({
+      poolKey: params.poolKey,
+      zeroForOne: resolved.zeroForOne,
+      amountIn: params.amountIn,
+      sqrtPriceLimit: resolved.sqrtPriceLimit,
+      blindedAddress: params.blindedIdentity.blindedAddress,
+      nonce,
+    }).catch(() => undefined)
+  }
+
   const transactionId = await writeContract(client, {
     program,
     function: 'swap',
@@ -252,15 +290,16 @@ export async function swap(client: Client, params: SwapParameters): Promise<Swap
   })
 
   return {
-    // swapId/blindedAddress are wallet-filled — recover them from the
-    // confirmed transaction (or the API) before claiming.
-    swapId: undefined,
+    swapId,
     blindingFactor: params.blindedIdentity?.blindingFactor,
     blindedAddress: params.blindedIdentity?.blindedAddress,
     tokenInId: params.tokenInId,
     tokenOutId: resolved.tokenOutId,
     poolKey: params.poolKey,
     amountIn: params.amountIn,
+    zeroForOne: resolved.zeroForOne,
+    sqrtPriceLimit: resolved.sqrtPriceLimit,
+    nonce,
     transactionId,
     program,
   }

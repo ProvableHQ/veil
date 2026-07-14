@@ -2,6 +2,8 @@ import { executeContract, writeContract, type Client, type InputRequest, type Tr
 import { selectTokenRecord } from '../../utils/records.js'
 import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
 import { generateFieldNonce, formatMintPositionRequest } from '../../utils/params.js'
+import { tryLoadSdk } from '../../utils/sdk.js'
+import { derivePositionTokenId } from '../../utils/keys.js'
 import { roundTickToSpacing } from '../../utils/tick-math.js'
 import { pickInsertHint } from '../../utils/tick-hints.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
@@ -62,8 +64,10 @@ export type MintParameters = {
  *
  * @property positionTokenId The position's `token_id` (first public
  *   output) — the key for `getPosition` and later liquidity changes. Known
- *   immediately on the local path; `undefined` on the wallet path until
- *   confirmation.
+ *   immediately on the local path; on the wallet path it is derived locally
+ *   when `@provablehq/sdk` is installed, and `undefined` otherwise — recover
+ *   it from the confirmed transaction or compute it with
+ *   `derivePositionTokenId`.
  * @property transactionId The mint transaction's id.
  */
 export type MintReturnType = {
@@ -88,7 +92,8 @@ export type MintReturnType = {
  *
  * @param client A Veil wallet client (local or wallet account).
  * @param params The range, amounts, and optional overrides.
- * @returns The position token id (local path) and transaction id.
+ * @returns The position token id (derived locally on the wallet path when
+ *   the WASM peer is present) and transaction id.
  * @throws When the pool does not exist; when the range is empty after
  *   spacing alignment; when records are missing (local) or not provided
  *   (wallet); and on transport/proving errors.
@@ -123,7 +128,7 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
   const tickUpperHint =
     params.tickUpperHint === undefined && tickLower > upperPredecessor ? tickLower : upperPredecessor
 
-  const request = formatMintPositionRequest({
+  const requestInput = {
     pool: params.poolKey,
     tickLower,
     tickUpper,
@@ -133,7 +138,8 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
     amount1Min: params.amount1Min ?? 0n,
     tickLowerHint,
     tickUpperHint,
-  })
+  }
+  const request = formatMintPositionRequest(requestInput)
 
   const account = requireAccount(client, 'mint')
   const isLocal = account.type === 'local'
@@ -178,9 +184,16 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
     pool.token0,
     pool.token1,
   ]
+  // Best-effort id: every preimage field is client-known, so when the
+  // optional WASM peer is present the id is computable ahead of submission.
+  // A derivation fault (broken WASM asset, CSP, version skew) degrades to
+  // undefined rather than blocking a submittable transaction.
+  const positionTokenId = (await tryLoadSdk())
+    ? await derivePositionTokenId({ request: requestInput, recipient, nonce }).catch(() => undefined)
+    : undefined
   const transactionId = await writeContract(client, { program, function: 'mint',
       imports: params.imports ? Object.keys(params.imports) : undefined, inputs })
-  return { positionTokenId: undefined, transactionId }
+  return { positionTokenId, transactionId }
 }
 
 /** Auto-select a token record on the local path, with an actionable error. */

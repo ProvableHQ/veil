@@ -11,6 +11,7 @@ import { createPool } from '../../../src/actions/liquidity/createPool.js'
 import { mint } from '../../../src/actions/liquidity/mint.js'
 import { formatMintPositionRequest } from '../../../src/utils/params.js'
 import { increaseLiquidity } from '../../../src/actions/liquidity/increaseLiquidity.js'
+import { derivePositionTokenId } from '../../../src/utils/keys.js'
 import { getSqrtPriceAtTick } from '../../../src/utils/tick-math.js'
 
 const executeMock = vi.mocked(executeContract)
@@ -140,6 +141,42 @@ describe('mint — local', () => {
         amount0Desired: 1n, amount1Desired: 1n,
       }),
     ).rejects.toThrow(/must provide token0Record and token1Record/)
+  })
+
+  it('wallet path fills positionTokenId from the client-known preimage', async () => {
+    writeMock.mockResolvedValue('at1walletmint')
+    const recipient = 'aleo1t08epjqqv8h7jpuy2m2cxm80zy2pcy5c4f3m82hnac4sjmdrjyysvx3s2h'
+    const res = await mint(fakeClient('rpc'), {
+      poolKey: POOL_KEY,
+      tickLower: -64400,
+      tickUpper: -60200,
+      amount0Desired: 10n ** 18n,
+      amount1Desired: 2_000_000n,
+      token0Record: '{ granted0 }',
+      token1Record: '{ granted1 }',
+      tickLowerHint: -64400,
+      tickUpperHint: -64400,
+      nonce: '7field',
+      recipient,
+    })
+    expect(res.transactionId).toBe('at1walletmint')
+    expect(res.positionTokenId).toBe(
+      await derivePositionTokenId({
+        request: {
+          pool: POOL_KEY,
+          tickLower: -64400,
+          tickUpper: -60200,
+          amount0Desired: 10n ** 18n,
+          amount1Desired: 2_000_000n,
+          amount0Min: 0n,
+          amount1Min: 0n,
+          tickLowerHint: -64400,
+          tickUpperHint: -64400,
+        },
+        recipient,
+        nonce: '7field',
+      }),
+    )
   })
 })
 
