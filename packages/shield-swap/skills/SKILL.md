@@ -64,16 +64,32 @@ helpers from `$SKILLS/scripts/session.js`, and run them with `npx tsx`.
 ## After startup: ask what's next
 
 When setup exits 0 (it prints `ASK_NEXT_ACTION`), STOP and ask the user
-what they want to do — never launch into a journey unprompted. Offer three
-paths:
+what they want to do — never launch into a journey unprompted. Present the
+options WITH their context so the user understands what each one means,
+not just its name:
 
-1. **Their own playbook.** Ask whether they have a markdown file, notes, or
-   a memory store (an Obsidian vault, a strategy doc, instructions from a
-   previous session) they want followed. If so, read it and treat it as the
-   plan — the runbooks below are the how, their document is the what.
-2. **A suggested journey.** Offer the table below verbatim-ish: swap
-   against live pools; make several private swaps at once; open a
-   liquidity position; add/remove liquidity; collect winnings.
+1. **Their own playbook.** Ask whether they have instructions of their own
+   — a markdown strategy file, notes, or a memory store (an Obsidian
+   vault, output from a previous session). If so, read it and treat it as
+   the plan: their document decides what to do, the runbooks below
+   describe how each step works.
+2. **A suggested journey.** Frame the setting first — Shield Swap is a
+   private AMM on Aleo testnet; the account trades with private token
+   records, so amounts and the trader's identity stay shielded on-chain —
+   then offer:
+   - *Swap against live pools* — a private swap is two transactions
+     (request, then a claim that withdraws the output once it finalizes);
+     the natural first trade.
+   - *Several private swaps at once* — fan swaps out in parallel across
+     different tokens, each with its own reserved blinded identity; the
+     stress-test move.
+   - *Open a liquidity position* — deposit both tokens of a pool into a
+     chosen price range; it earns trading fees while price stays in range.
+   - *Add or remove liquidity* — grow a position, or shrink it (withdrawn
+     amounts settle as owed balances to collect).
+   - *Collect winnings* — claim finished swap outputs and withdraw owed LP
+     earnings into private records; the state file remembers everything
+     still claimable, even across crashes.
 3. **A free-form prompt.** Whatever they describe, map it onto the
    runbooks before improvising against the SDK.
 

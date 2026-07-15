@@ -224,18 +224,33 @@ async function main() {
     }
   }
   console.log(
-    '\nASK_NEXT_ACTION: setup is complete — ask the user what they want to do ' +
-      'before touching the DEX (do not pick for them):\n' +
-      '  1. Their own playbook — do they have a markdown file, notes, or memory\n' +
-      '     (an Obsidian vault, a strategy doc, prior instructions) to point at?\n' +
-      '     Read it and follow it.\n' +
-      '  2. A suggested journey:\n' +
-      '     - swap against live pools           → swapping.md\n' +
-      '     - several private swaps at once     → swapping.md (concurrency recipe)\n' +
-      '     - open a liquidity position (mint)  → liquidity.md\n' +
-      '     - add/remove liquidity              → liquidity.md\n' +
-      '     - collect swap outputs + LP fees    → collecting.md\n' +
-      '  3. A free-form prompt — whatever they describe, mapped onto the runbooks.\n',
+    '\nASK_NEXT_ACTION: setup is complete — present the user with what is possible ' +
+      'and ask what they want to do (do not pick for them). Relay the context behind ' +
+      'each option, not just its name:\n\n' +
+      '1. Follow their own playbook.\n' +
+      '   Ask whether they have instructions of their own — a markdown strategy\n' +
+      '   file, notes, or a memory store such as an Obsidian vault. Their document\n' +
+      '   decides WHAT to do; the runbooks here describe HOW each step works.\n\n' +
+      '2. A suggested journey. Shield Swap is a private AMM on Aleo testnet: the\n' +
+      '   account trades with private token records, so amounts and the trader\'s\n' +
+      '   identity stay shielded on-chain.\n' +
+      '   - Swap against live pools (swapping.md). A private swap is two\n' +
+      '     transactions: the swap request, then a claim that withdraws the output\n' +
+      '     to a private record once the swap finalizes. The natural first trade.\n' +
+      '   - Several private swaps at once (swapping.md, concurrency recipe). Fan\n' +
+      '     swaps out in parallel across different tokens; each needs its own\n' +
+      '     reserved blinded identity and input record. The stress-test move.\n' +
+      '   - Open a liquidity position (liquidity.md). Deposit both tokens of a\n' +
+      '     pool into a chosen price range — a concentrated-liquidity position\n' +
+      '     that earns trading fees while the price stays inside the range.\n' +
+      '   - Add or remove liquidity (liquidity.md). Grow an existing position, or\n' +
+      '     shrink it — withdrawn amounts settle as owed balances to collect.\n' +
+      '   - Collect winnings (collecting.md). Claim finished swap outputs and\n' +
+      '     withdraw owed LP fees/principal into private records. Worth running\n' +
+      '     after any trading session (or a crash) — the state file remembers\n' +
+      '     everything still claimable.\n\n' +
+      '3. Take a free-form prompt. Whatever the user describes, map it onto the\n' +
+      '   runbooks above before improvising against the SDK.\n',
   )
 }
 
