@@ -40,15 +40,12 @@ valid but earns nothing until price enters it.
 ## Mint the position
 
 ```ts
-import { getProgram } from '@provablehq/veil-core'
-import { appendPosition, floorToDust } from '$SKILLS/scripts/session.js'
+import { appendPosition, buildDexImports, floorToDust } from '$SKILLS/scripts/session.js'
 
 const p0 = pool.token0_info!.wrapper_program!
 const p1 = pool.token1_info!.wrapper_program!
-const imports = {
-  [p0]: await getProgram(client, { programId: p0 }),
-  [p1]: await getProgram(client, { programId: p1 }),
-}
+// Token programs + the DEX program's own declared imports.
+const imports = await buildDexImports(client, [p0, p1])
 
 // Deposit a small slice of each holding; the contract balances the two
 // against the range and refunds the excess side as change. Deposits obey

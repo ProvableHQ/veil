@@ -15,10 +15,15 @@ claimable once the swap transaction finalizes; claiming before that throws
 `SwapOutputNotFinalizedError` — expected, retry with backoff.
 
 ```ts
-import { getProgram } from '@provablehq/veil-core'
 import { SwapOutputNotFinalizedError } from '@provablehq/shield-swap-sdk'
 import type { SwapHandle, MultiHopSwapHandle } from '@provablehq/shield-swap-sdk'
-import { loadSession, deserializeHandle, isMultiHopHandle, removeSwapHandle } from '$SKILLS/scripts/session.js'
+import {
+  loadSession,
+  deserializeHandle,
+  isMultiHopHandle,
+  removeSwapHandle,
+  buildDexImports,
+} from '$SKILLS/scripts/session.js'
 
 const { client, account, state } = await loadSession()
 const tokens = (await client.api.getTokens()).data
@@ -33,10 +38,7 @@ for (const stored of [...state.swapHandles]) {
     console.error(`no wrapper program for swap ${handle.transactionId} tokens — keeping the handle`)
     continue
   }
-  const imports = {
-    [pIn]: await getProgram(client, { programId: pIn }),
-    [pOut]: await getProgram(client, { programId: pOut }),
-  }
+  const imports = await buildDexImports(client, [pIn, pOut])
 
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
@@ -83,10 +85,7 @@ for (const tracked of state.positions) {
   const position = await client.getPosition({ positionTokenId: tracked.positionTokenId })
   if (!position || (position.tokens_owed0 === 0n && position.tokens_owed1 === 0n)) continue
 
-  const imports = {
-    [tracked.token0Program]: await getProgram(client, { programId: tracked.token0Program }),
-    [tracked.token1Program]: await getProgram(client, { programId: tracked.token1Program }),
-  }
+  const imports = await buildDexImports(client, [tracked.token0Program, tracked.token1Program])
   const { transactionId } = await client.collect({
     poolKey: tracked.poolKey,
     positionTokenId: tracked.positionTokenId, // REQUIRED with several positions in one pool

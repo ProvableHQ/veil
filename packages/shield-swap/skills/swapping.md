@@ -47,9 +47,8 @@ rules on `amountIn`:
 ## One private swap
 
 ```ts
-import { getProgram } from '@provablehq/veil-core'
 import { ApiError } from '@provablehq/shield-swap-sdk'
-import { appendSwapHandle, floorToDust } from '$SKILLS/scripts/session.js'
+import { appendSwapHandle, buildDexImports, floorToDust } from '$SKILLS/scripts/session.js'
 
 const { pool, holdIn } = candidates[0]
 const tokenInId = holdIn.tokenId
@@ -74,14 +73,13 @@ try {
   if (!(err instanceof ApiError && err.status === 404)) throw err
 }
 
-// The prover cannot discover token-program callees statically — pass both
-// pool tokens' program sources as imports on every write.
-const p0 = pool.token0_info!.wrapper_program!
-const p1 = pool.token1_info!.wrapper_program!
-const imports = {
-  [p0]: await getProgram(client, { programId: p0 }),
-  [p1]: await getProgram(client, { programId: p1 }),
-}
+// Every write needs an imports map: both pool tokens' program sources PLUS
+// the DEX program's own declared imports (the prover does not resolve
+// those). buildDexImports assembles all of it.
+const imports = await buildDexImports(client, [
+  pool.token0_info!.wrapper_program!,
+  pool.token1_info!.wrapper_program!,
+])
 
 const handle = await client.swap({
   poolKey: pool.key,

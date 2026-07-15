@@ -172,6 +172,10 @@ export async function loadSession() {
     proverUrl: PROVER_URL,
     apiKey: state.provableApi.apiKey,
     consumerId: state.provableApi.consumerId,
+    // Faucet-funded accounts hold no public credits; the delegated prover
+    // pays fees from its FeeMaster account. Opt out with
+    // SHIELD_SWAP_FEE_MASTER=0 when the account funds its own fees.
+    useFeeMaster: process.env.SHIELD_SWAP_FEE_MASTER !== '0',
     records: scanner,
   })
   const client = walletClient.extend(shieldSwapActions({ api: {} }))
@@ -214,6 +218,31 @@ export async function getHoldings(
     publicAmount: pub.get(t.address) ?? 0n,
     privateAmount: t.wrapper_program ? (priv[t.wrapper_program] ?? 0n) : 0n,
   }))
+}
+
+/**
+ * Builds the imports map a DEX write needs: the given token programs PLUS
+ * the DEX program's own declared imports. The prover resolves the closure
+ * of supplied sources but not the main program's static imports (e.g.
+ * `test_shield_swap_multisig_core.aleo`), so a write submitted with only
+ * the token programs fails with "its import … must be added first".
+ */
+export async function buildDexImports(
+  client: Awaited<ReturnType<typeof loadSession>>['client'],
+  tokenPrograms: string[],
+  program = 'shield_swap_v3.aleo',
+): Promise<Record<string, string>> {
+  const { getProgram } = await import('@provablehq/veil-core')
+  const imports: Record<string, string> = {}
+  for (const p of new Set(tokenPrograms)) {
+    imports[p] = await getProgram(client, { programId: p })
+  }
+  const dexSource = await getProgram(client, { programId: program })
+  for (const m of dexSource.matchAll(/^import ([\w.]+);/gm)) {
+    const dep = m[1]!
+    if (!imports[dep]) imports[dep] = await getProgram(client, { programId: dep })
+  }
+  return imports
 }
 
 /** Polls a predicate until it returns true or attempts run out. */

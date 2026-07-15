@@ -143,6 +143,7 @@ export {
 export { collect, type CollectParameters, type CollectReturnType } from './actions/liquidity/collect.js'
 export { burn, type BurnParameters, type BurnReturnType } from './actions/liquidity/burn.js'
 export { pickInsertHint, type PickInsertHintParameters } from './utils/tick-hints.js'
+export { resolveDexImports, type ResolveDexImportsParameters } from './utils/imports.js'
 
 // Local key/id derivation (BHP256 struct hash via the optional
 // @provablehq/sdk peer) — address pools, ticks, swaps, and positions without

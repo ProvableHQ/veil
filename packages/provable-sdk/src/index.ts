@@ -144,6 +144,7 @@ export interface AleoSdk {
     consumerId?: string
     account?: LocalAccount<'privateKey'>
     confirmationTimeout?: number
+    useFeeMaster?: boolean
   }): ProvingConfig
 
   /**
@@ -202,6 +203,7 @@ export interface AleoSdk {
     proverUrl?: string
     apiKey?: string
     consumerId?: string
+    useFeeMaster?: boolean
     /**
      * Record provider for `requestRecords`. Not wired by default — pass
      * `aleo.createRemoteScanner(...)` or any
@@ -294,6 +296,14 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     account?: LocalAccount<'privateKey'>
     /** Timeout in ms for waiting for transaction confirmation (default: 300_000 = 5 min) */
     confirmationTimeout?: number
+    /**
+     * The delegated prover pays the transaction fee from its FeeMaster
+     * account instead of the caller's public credits. Only meaningful with
+     * `mode: 'delegated'`; requires the prover service to allow it for the
+     * consumer. Defaults to false. Suited to accounts holding no credits
+     * (e.g. faucet-funded testnet accounts).
+     */
+    useFeeMaster?: boolean
   }): ProvingConfig {
     // Each call reads from currentSdk so switchNetwork can swap the binary set
     // without rebuilding the wallet client.
@@ -458,6 +468,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               priorityFee,
               privateFee: execOptions.privateFee ?? false,
               broadcast: true,
+              useFeeMaster: options.useFeeMaster ?? false,
             })
 
             const dpsClient = new AleoNetworkClient(options.proverUrl)
@@ -732,6 +743,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     proverUrl?: string
     apiKey?: string
     consumerId?: string
+    /** Forwarded to `createProvingConfig` — the delegated prover pays fees. Defaults to false. */
+    useFeeMaster?: boolean
     records?: RecordProvider
   }): { publicClient: PublicClient; walletClient: WalletClient; account: LocalAccount<'privateKey'> } {
     const account = privateKeyToAccount(options.privateKey)
@@ -744,6 +757,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       apiKey: options.apiKey,
       consumerId: options.consumerId,
       account,
+      ...(options.useFeeMaster !== undefined ? { useFeeMaster: options.useFeeMaster } : {}),
     })
 
     const publicClient = createPublicClient({ transport })
