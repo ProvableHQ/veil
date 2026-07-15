@@ -201,6 +201,25 @@ describe('createShieldSwapAgentTools — wiring', () => {
     expect(result).toEqual({ code: 'INVITE1', status: 'redeemed' })
   })
 
+  it('redeem tool falls back to the referral endpoint when the access endpoint rejects', async () => {
+    const { ApiError } = await import('../../src/api/client.js')
+    const calls: Record<string, unknown> = {}
+    const api = {
+      ...fakeApi(calls),
+      redeemAccessCode: async () => {
+        throw new ApiError(400, '/access/redeem', 'invalid access code')
+      },
+      redeemReferralCode: async (code: unknown) => (
+        (calls.redeemReferralCode = code), { code, status: 'redeemed', token: 'jwt-with-access' }
+      ),
+    } as unknown as ApiClient
+    const tools = createShieldSwapAgentTools({ client: fakeClient(), api })
+    const redeem = tools.find((t) => t.schema.name === 'shield_swap_redeem_access_code')!
+    const result = (await redeem.handler({ code: 'REF1' })) as Record<string, unknown>
+    expect(calls.redeemReferralCode).toBe('REF1')
+    expect(result).toEqual({ code: 'REF1', status: 'redeemed' })
+  })
+
   it('derive_position_token_id handler round-trips against derivePositionTokenId', async () => {
     const { derivePositionTokenId } = await import('../../src/utils/keys.js')
     const tools = createShieldSwapAgentTools({})

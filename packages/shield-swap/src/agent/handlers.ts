@@ -128,10 +128,18 @@ export function createAuthHandlers(client: Client, api: ApiClient): Record<strin
     },
     shield_swap_get_access_status: async () => api.getAccessStatus(),
     shield_swap_redeem_access_code: async (i) => {
-      // The upgraded session token stays inside the ApiClient — the agent
+      // Distributed codes come as access codes or referral codes; both
+      // unlock the account, so try both endpoints before failing. The
+      // upgraded session token stays inside the ApiClient — the agent
       // needs the outcome, not the credential.
-      const { code, status } = await api.redeemAccessCode(i.code as string)
-      return { code, status }
+      try {
+        const { code, status } = await api.redeemAccessCode(i.code as string)
+        return { code, status }
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.status !== 400) throw err
+        const { code, status } = await api.redeemReferralCode(i.code as string)
+        return { code, status }
+      }
     },
     shield_swap_create_api_token: async (i) =>
       api.createApiToken({
