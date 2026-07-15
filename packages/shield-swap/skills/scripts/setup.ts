@@ -231,24 +231,25 @@ async function main() {
       '   Ask whether they have instructions of their own — a markdown strategy\n' +
       '   file, notes, or a memory store such as an Obsidian vault. Their document\n' +
       '   decides WHAT to do; the runbooks here describe HOW each step works.\n\n' +
-      '2. A suggested journey. Shield Swap is a private AMM on Aleo testnet: the\n' +
-      '   account trades with private token records, so amounts and the trader\'s\n' +
-      '   identity stay shielded on-chain.\n' +
-      '   - Swap against live pools (swapping.md). A private swap is two\n' +
-      '     transactions: the swap request, then a claim that withdraws the output\n' +
-      '     to a private record once the swap finalizes. The natural first trade.\n' +
-      '   - Several private swaps at once (swapping.md, concurrency recipe). Fan\n' +
-      '     swaps out in parallel across different tokens; each needs its own\n' +
-      '     reserved blinded identity and input record. The stress-test move.\n' +
-      '   - Open a liquidity position (liquidity.md). Deposit both tokens of a\n' +
-      '     pool into a chosen price range — a concentrated-liquidity position\n' +
-      '     that earns trading fees while the price stays inside the range.\n' +
-      '   - Add or remove liquidity (liquidity.md). Grow an existing position, or\n' +
-      '     shrink it — withdrawn amounts settle as owed balances to collect.\n' +
-      '   - Collect winnings (collecting.md). Claim finished swap outputs and\n' +
-      '     withdraw owed LP fees/principal into private records. Worth running\n' +
-      '     after any trading session (or a crash) — the state file remembers\n' +
-      '     everything still claimable.\n\n' +
+      '2. A suggested journey. Shield Swap is a private exchange on Aleo\'s test\n' +
+      '   network: trading uses test tokens, and what is traded — and by whom —\n' +
+      '   stays hidden on the public chain.\n' +
+      '   - Swap tokens (swapping.md). Trade one token for another. It settles in\n' +
+      '     two steps: place the trade, then pick up what was bought a minute or\n' +
+      '     two later. The natural first move.\n' +
+      '   - Several swaps at once (swapping.md, concurrency recipe). Place a\n' +
+      '     handful of trades in parallel and watch them all land — the busiest\n' +
+      '     way to exercise the exchange.\n' +
+      '   - Open a liquidity position (liquidity.md). Instead of trading, become\n' +
+      '     the market: deposit a pair of tokens so other people can trade against\n' +
+      '     them. The user picks the price range their deposit works in, and while\n' +
+      '     the market price sits inside that range they earn a small cut of every\n' +
+      '     trade that passes through.\n' +
+      '   - Add or remove liquidity (liquidity.md). Top up a position, or take\n' +
+      '     some of it back out — whatever comes out becomes earnings to collect.\n' +
+      '   - Collect earnings (collecting.md). Sweep up everything the account is\n' +
+      '     owed — tokens bought in earlier swaps and the fees its liquidity\n' +
+      '     earned — into the wallet. Good to run after any trading session.\n\n' +
       '3. Take a free-form prompt. Whatever the user describes, map it onto the\n' +
       '   runbooks above before improvising against the SDK.\n',
   )

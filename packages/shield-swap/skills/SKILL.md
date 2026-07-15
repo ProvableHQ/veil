@@ -6,7 +6,7 @@ description: >
   several at once), provide and withdraw liquidity, and collect swap
   outputs and LP earnings. Use when the user asks to set up a shield-swap
   account, get an airdrop, swap tokens, mint/add/remove liquidity
-  positions, or collect winnings.
+  positions, or collect earnings.
 ---
 
 # Trading on Shield Swap
@@ -73,23 +73,27 @@ not just its name:
    vault, output from a previous session). If so, read it and treat it as
    the plan: their document decides what to do, the runbooks below
    describe how each step works.
-2. **A suggested journey.** Frame the setting first — Shield Swap is a
-   private AMM on Aleo testnet; the account trades with private token
-   records, so amounts and the trader's identity stay shielded on-chain —
-   then offer:
-   - *Swap against live pools* — a private swap is two transactions
-     (request, then a claim that withdraws the output once it finalizes);
-     the natural first trade.
-   - *Several private swaps at once* — fan swaps out in parallel across
-     different tokens, each with its own reserved blinded identity; the
-     stress-test move.
-   - *Open a liquidity position* — deposit both tokens of a pool into a
-     chosen price range; it earns trading fees while price stays in range.
-   - *Add or remove liquidity* — grow a position, or shrink it (withdrawn
-     amounts settle as owed balances to collect).
-   - *Collect winnings* — claim finished swap outputs and withdraw owed LP
-     earnings into private records; the state file remembers everything
-     still claimable, even across crashes.
+2. **A suggested journey.** Keep the descriptions introductory — plain
+   language, no implementation detail (identities, records, state files
+   are the agent's business, not the user's). Frame the setting first —
+   Shield Swap is a private exchange on Aleo's test network: trading uses
+   test tokens, and what is traded, and by whom, stays hidden on the
+   public chain — then offer:
+   - *Swap tokens* — trade one token for another. It settles in two steps:
+     place the trade, then pick up what was bought a minute or two later.
+     The natural first move.
+   - *Several swaps at once* — place a handful of trades in parallel and
+     watch them all land; the busiest way to exercise the exchange.
+   - *Open a liquidity position* — instead of trading, become the market:
+     deposit a pair of tokens so other people can trade against them. The
+     user picks the price range their deposit works in, and while the
+     market price sits inside that range they earn a small cut of every
+     trade that passes through.
+   - *Add or remove liquidity* — top up a position, or take some of it
+     back out; whatever comes out becomes earnings to collect.
+   - *Collect earnings* — sweep up everything the account is owed (tokens
+     bought in earlier swaps, fees its liquidity earned) into the wallet;
+     good to run after any trading session.
 3. **A free-form prompt.** Whatever they describe, map it onto the
    runbooks before improvising against the SDK.
 
@@ -100,7 +104,7 @@ not just its name:
 | Account setup, registration, airdrop | [startup.md](./startup.md) | "set up a shield-swap account and get tokens" |
 | Discover pools and swap privately (incl. several at once) | [swapping.md](./swapping.md) | "find pools and start swapping" |
 | Mint positions, add/remove liquidity | [liquidity.md](./liquidity.md) | "create a position", "add/remove liquidity" |
-| Claim swap outputs, collect LP earnings | [collecting.md](./collecting.md) | "collect my winnings" |
+| Claim swap outputs, collect LP earnings | [collecting.md](./collecting.md) | "collect my earnings" |
 
 Always run startup first — every other runbook assumes its gates have
 passed (key material, API registration, DEX session, invite redemption,

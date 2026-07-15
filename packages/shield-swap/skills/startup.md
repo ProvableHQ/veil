@@ -94,7 +94,7 @@ what they want to do next. Three paths, in this order:
    memory store (Obsidian vault, strategy doc, prior session output) to
    point at? Read it and follow it.
 2. Offer the journeys: swapping (single or several at once), opening a
-   position, adding/removing liquidity, collecting winnings — each mapped
+   position, adding/removing liquidity, collecting earnings — each mapped
    to its runbook in [SKILL.md](./SKILL.md).
 3. Take a free-form prompt and map it onto the runbooks.
 

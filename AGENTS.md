@@ -5,7 +5,7 @@ Veil is the Aleo SDK (`@provablehq/veil-*` packages).
 ## Trading on Shield Swap (start here for the DEX)
 
 To USE Shield Swap — set up an account, get a testnet airdrop, discover
-pools, make private swaps, provide liquidity, collect winnings — start from
+pools, make private swaps, provide liquidity, collect earnings — start from
 the single entrypoint
 [`packages/shield-swap/skills/SKILL.md`](./packages/shield-swap/skills/SKILL.md)
 and follow its runbooks. It covers account bootstrap (including invite-code
