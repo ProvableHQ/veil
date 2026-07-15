@@ -26,9 +26,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { getProgram } from '../packages/core/src/index.js'
 import { loadNetwork } from '../packages/provable-sdk/src/index.js'
-import { shieldSwapActions, derivePoolKey, DEFAULT_PROGRAM } from '../packages/shield-swap/src/index.js'
+import { shieldSwapActions, derivePoolKey, resolveDexImports, DEFAULT_PROGRAM } from '../packages/shield-swap/src/index.js'
 
 const RUN =
   process.env.VEIL_INTEGRATION === '1' &&
@@ -77,11 +76,9 @@ describe.runIf(RUN)('example: provide liquidity on Shield Swap', () => {
     const balances = await client.getPrivateBalances({ programs: [token0Program, token1Program] })
     if (!balances[token0Program] || !balances[token1Program]) return ctx.skip()
 
-    // Token program sources for every write that dispatches into them.
-    const imports = {
-      [token0Program]: await getProgram(walletClient, { programId: token0Program }),
-      [token1Program]: await getProgram(walletClient, { programId: token1Program }),
-    }
+    // Program sources for every write: the token programs it dispatches
+    // into, plus the DEX program's own declared imports.
+    const imports = await resolveDexImports(walletClient, { tokenPrograms: [token0Program, token1Program] })
 
     // ---- Create the pool only if it does not exist yet. derivePoolKey computes
     // the key locally (BHP256 struct hash, pair sorted like the contract), so

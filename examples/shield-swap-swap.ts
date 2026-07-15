@@ -26,9 +26,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { getProgram } from '../packages/core/src/index.js'
 import { loadNetwork } from '../packages/provable-sdk/src/index.js'
-import { shieldSwapActions, SwapOutputNotFinalizedError } from '../packages/shield-swap/src/index.js'
+import { shieldSwapActions, resolveDexImports, SwapOutputNotFinalizedError } from '../packages/shield-swap/src/index.js'
 
 const RUN =
   process.env.VEIL_INTEGRATION === '1' &&
@@ -83,12 +82,11 @@ describe.runIf(RUN)('example: swap on Shield Swap', () => {
     const tokenInProgram = t0.wrapper_program
     const amountIn = 1_000_000n
 
-    // ---- Preload the token program sources the swap dispatches into. Fetched
-    // once with getProgram; the SDK resolves the rest of the import closure.
-    const imports = {
-      [t0.wrapper_program]: await getProgram(walletClient, { programId: t0.wrapper_program }),
-      [t1.wrapper_program]: await getProgram(walletClient, { programId: t1.wrapper_program }),
-    }
+    // ---- Preload the program sources every write needs: the token programs
+    // the swap dispatches into, plus the DEX program's own declared imports.
+    const imports = await resolveDexImports(walletClient, {
+      tokenPrograms: [t0.wrapper_program, t1.wrapper_program],
+    })
 
     // ---- Quote (informational). client.api.getRoute finds a path and, given
     // amount_in, an estimated output — good for routing and UX. For a slippage

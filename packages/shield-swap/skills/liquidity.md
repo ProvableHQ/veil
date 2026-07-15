@@ -26,11 +26,15 @@ const pool = pools.find((p) => held(p.token0) && held(p.token1) && p.token0_info
 if (!pool) throw new Error('no pool where the account holds both tokens — swap into the missing side first')
 
 // Live state → a range straddling the current tick earns fees now.
-// (API fields arrive as strings; the chain reads take numbers.)
+// UNITS TRAP: the API's `pool.fee` is in basis points ("5"), but the chain
+// registers fee tiers in pips (500). Read the fee from the on-chain pool
+// state — chain values for chain calls, no unit guessing.
 const slot = await client.getSlot({ poolKey: pool.key })
-const spacing = await client.getFeeToTickSpacing({ fee: Number(pool.fee) })
-const tickLower = roundTickToSpacing(slot!.tick - 10 * spacing!, spacing!)
-const tickUpper = roundTickToSpacing(slot!.tick + 10 * spacing!, spacing!)
+const poolState = await client.getPool({ poolKey: pool.key })
+const spacing = await client.getFeeToTickSpacing({ fee: poolState!.fee })
+if (!slot || !spacing) throw new Error('pool has no live slot or an unregistered fee tier')
+const tickLower = roundTickToSpacing(slot.tick - 10 * spacing, spacing)
+const tickUpper = roundTickToSpacing(slot.tick + 10 * spacing, spacing)
 ```
 
 The range MUST align to the pool's tick spacing (`roundTickToSpacing`) and
