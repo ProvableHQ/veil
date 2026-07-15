@@ -40,6 +40,35 @@ describe('shieldSwapActions', () => {
     expect(client).toBeTruthy()
   })
 
+  it('authenticateApi signs the DEX API challenge with the client account', async () => {
+    const requests: Array<{ url: string; body: unknown }> = []
+    const fetchImpl = (async (url: URL | string, init?: RequestInit) => {
+      requests.push({ url: String(url), body: init?.body ? JSON.parse(String(init.body)) : undefined })
+      const path = new URL(String(url)).pathname
+      if (path === '/auth/challenge') return new Response(JSON.stringify({ data: { message: 'msg', nonce: 'n' } }))
+      return new Response(JSON.stringify({ data: { token: 'jwt123' } }))
+    }) as unknown as typeof fetch
+
+    const account = {
+      type: 'local',
+      address: 'aleo1me',
+      signMessage: async (m: Uint8Array) => new TextEncoder().encode(`signed:${new TextDecoder().decode(m)}`),
+    }
+    const client = createClient({
+      transport: custom({ request: async () => null }),
+      account: account as never,
+    }).extend(shieldSwapActions({ api: { baseUrl: 'https://x.example', fetch: fetchImpl } }))
+
+    const jwt = await client.authenticateApi()
+    expect(jwt).toBe('jwt123')
+    expect(requests[1]!.body).toEqual({ address: 'aleo1me', signature: 'signed:msg' })
+  })
+
+  it('authenticateApi fails actionably without an account', async () => {
+    const client = baseClient(() => null).extend(shieldSwapActions({ api: { baseUrl: 'https://x.example' } }))
+    await expect(client.authenticateApi()).rejects.toThrow(/account/)
+  })
+
   it('exposes a configured API, adopts a preconstructed one, and fails actionably without one', () => {
     const configured = baseClient(() => null).extend(shieldSwapActions({ api: { baseUrl: 'https://x.example' } }))
     expect(configured.api.baseUrl).toBe('https://x.example')

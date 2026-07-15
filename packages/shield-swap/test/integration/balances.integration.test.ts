@@ -41,6 +41,8 @@ describe.runIf(RUN)('balances against the real API + records', () => {
     })
     address = account.address
     client = walletClient.extend(shieldSwapActions({ api: {}, program: DEX_PROGRAM }))
+    // The public-balance read is bearer-gated.
+    await client.authenticateApi()
   }, 60_000)
 
   it('getPublicBalances returns parseable base-unit balances', async () => {

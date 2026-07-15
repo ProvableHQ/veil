@@ -125,6 +125,21 @@ const tools = createShieldSwapAgentTools({
 `createShieldSwapMcpServer({ client, api })` from `@provablehq/shield-swap-sdk/mcp`
 is the equivalent MCP binding, serving only the `shield_swap_*` tool set.
 
+Most DEX API endpoints are bearer-gated. When both `client` and `api` are
+configured, the tool set includes the auth flow: `shield_swap_authenticate`
+signs the API's challenge with the client account and unlocks the gated API
+tools for the session, and `shield_swap_create_api_token` /
+`shield_swap_list_api_tokens` / `shield_swap_revoke_api_token` manage
+long-lived `ss_…` tokens an agent can persist and pass back as
+`api: { apiToken }` on later runs. An agent that hits an auth error on an API
+tool calls `shield_swap_authenticate` and retries.
+
+Access is the second gate: a first-time account also needs an invite code, or
+gated endpoints return 403 `redeem an invite code to unlock access`.
+`shield_swap_get_access_status` reports the gate and
+`shield_swap_redeem_access_code` redeems a code the operator supplies —
+one-time per account, unlocked immediately.
+
 ## Combining tool sets
 
 Because `createAgentTools` and `createShieldSwapAgentTools` both return

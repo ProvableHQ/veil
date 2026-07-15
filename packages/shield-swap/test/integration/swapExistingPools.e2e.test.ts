@@ -69,12 +69,13 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
     dex = walletClient.extend(shieldSwapActions({ api: {}, program: DEX_PROGRAM }))
 
     // No pools to swap against → skip funding entirely so the no-pool case
-    // resolves in seconds rather than waiting out the faucet poll.
+    // resolves in seconds rather than waiting out the faucet poll. Pool
+    // listing is public; everything after it is bearer-gated.
     if ((await dex.api.getPools({ limit: 1 })).data.length === 0) return
+    await dex.authenticateApi()
 
     // Airdrop once if the account holds nothing — the swap privatizes public
-    // balance, so it needs a funded token. The faucet is auth-gated, so run
-    // the DEX API challenge/verify handshake first (signs with the account).
+    // balance, so it needs a funded token.
     // Best-effort: poll the account's balance rather than the ephemeral faucet
     // job, and don't abort the suite if the faucet misbehaves — the discovery
     // step reports an unfunded account with a clear message.
@@ -84,10 +85,6 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
     }
     if (!(await funded())) {
       try {
-        await dex.api.authenticate(account.address, async (message) => {
-          const sig = await account.sign(new TextEncoder().encode(message))
-          return new TextDecoder().decode(sig)
-        })
         await dex.api.airdrop(account.address)
       } catch (err) {
         console.warn('airdrop request failed (continuing to poll balances):', (err as Error).message)

@@ -102,6 +102,13 @@ discovery, quoting, the `imports` map — and the wallet-signer variants.
   [`getSlot`](/api/shield-swap/getSlot),
   [`getSwapOutput`](/api/shield-swap/getSwapOutput); combined balances via
   `getBalances` and `getPrivateBalances`.
+- **DEX API auth** — `client.authenticateApi()` (session handshake signed by
+  the account, auto-renewing), `ApiClient.getAccessStatus` /
+  `redeemAccessCode` for the one-time invite-code gate, and
+  `ApiClient.createApiToken` / `listApiTokens` / `revokeApiToken` for
+  long-lived `ss_…` keys passed as `api: { apiToken }`. Most API endpoints
+  beyond discovery are bearer-gated —
+  see the [guide](/guides/shield-swap#authenticating-with-the-dex-api).
 - **Wallet grants** — `SHIELD_SWAP_ALGORITHM_GRANTS`,
   `shieldSwapAlgorithmGrants` — the connect-time algorithm allowlist a
   wallet-signer setup passes so the wallet may derive blinded identities.

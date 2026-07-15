@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { createPublicClient, http, type PublicClient } from '@provablehq/veil-core'
-import { ApiClient } from '../../src/api/client.js'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+import { ApiClient, authenticateWithAccount } from '../../src/api/client.js'
 import { getPool } from '../../src/actions/reads/getPool.js'
 import { getSlot } from '../../src/actions/reads/getSlot.js'
 import { poolPrice, priceImpact, feeAprEstimate } from '../../src/utils/derivations.js'
@@ -12,8 +13,9 @@ import type { GetSlotReturnType } from '../../src/actions/reads/getSlot.js'
  * Real-API integration for the analyses a trader actually runs — price
  * impact, LP range selection, and fee-APR estimation — exercising the pure
  * strategy helpers (poolPrice / priceImpact / feeAprEstimate / tick math)
- * against LIVE pool data. Read-only: no funds, no account, no transactions.
- * Gated on VEIL_INTEGRATION.
+ * against LIVE pool data. Read-only: no funds, no transactions.
+ * Gated on VEIL_INTEGRATION; the OHLCV-backed APR estimate additionally
+ * needs VEIL_E2E_PRIVATE_KEY because the candles endpoint is bearer-gated.
  *
  * The route-quote test was removed 2026-07-08: the amm-api stopped populating
  * `estimated_amount_out` on /route (routes themselves are valid). Restore
@@ -24,6 +26,7 @@ import type { GetSlotReturnType } from '../../src/actions/reads/getSlot.js'
  * live liquidity and prices move, but the math relationships hold.
  */
 const RUN = process.env.VEIL_INTEGRATION === '1'
+const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
 const NODE = 'https://api.provable.com/v2'
 
 describe.runIf(RUN)('trader workflows against live pool + route data', () => {
@@ -39,6 +42,12 @@ describe.runIf(RUN)('trader workflows against live pool + route data', () => {
   beforeAll(async () => {
     client = createPublicClient({ transport: http(NODE, { network: 'testnet' }) })
     api = new ApiClient()
+    // OHLCV is bearer-gated; authenticate when a key is on hand (the
+    // key-less run skips the candle-backed test below).
+    if (PRIVATE_KEY) {
+      const aleo = await loadNetwork('testnet')
+      await authenticateWithAccount(api, aleo.privateKeyToAccount(PRIVATE_KEY))
+    }
 
     // Discover a pool that actually has liquidity to analyze.
     const pools = (await api.getPools({ limit: 25 })).data
@@ -93,7 +102,7 @@ describe.runIf(RUN)('trader workflows against live pool + route data', () => {
     expect(getSqrtPriceAtTick(upper)).toBeGreaterThan(slot.sqrt_price)
   })
 
-  it('estimates LP fee APR from live 24h volume (OHLCV)', async () => {
+  it.runIf(!!PRIVATE_KEY)('estimates LP fee APR from live 24h volume (OHLCV)', async () => {
     const to = Math.floor(Date.now() / 1000)
     const candles = (await api.getPoolOhlcv(poolKey, { granularity: '1h', from: to - 86_400, to })).data
     const volume24h = candles.reduce((sum, c) => sum + (Number(c.volume) || 0), 0)

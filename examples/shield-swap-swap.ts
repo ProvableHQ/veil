@@ -60,6 +60,14 @@ describe.runIf(RUN)('example: swap on Shield Swap', () => {
     })
     const client = walletClient.extend(shieldSwapActions({ api: { baseUrl: AMM_API_URL } }))
 
+    // ---- Authenticate with the DEX API. Most endpoints (routes, balances,
+    // fee tiers) are bearer-gated; the account signs a challenge once and the
+    // session renews itself on expiry. A long-lived key works too:
+    // shieldSwapActions({ api: { apiToken: process.env.SHIELD_SWAP_API_TOKEN } }).
+    // First-time accounts also need a one-time invite code:
+    // await client.api.redeemAccessCode(code) when getAccessStatus() is false.
+    await client.authenticateApi()
+
     // ---- Pick a pool. Discovery goes through the off-chain API, namespaced
     // under `client.api` so a call site shows chain vs service at a glance.
     const { data: pools } = await client.api.getPools()

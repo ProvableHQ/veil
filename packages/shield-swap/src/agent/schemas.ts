@@ -239,6 +239,86 @@ export const getBalancesSchema: AgentToolSchema = {
 }
 
 // ---------------------------------------------------------------------------
+// Auth tools (need both client and API — the client's account signs the
+// challenge; the API holds the resulting session). Most DEX API endpoints are
+// bearer-gated, so an agent that starts credential-less authenticates once
+// per session, or mints a long-lived API token to reuse across sessions.
+// ---------------------------------------------------------------------------
+
+/** Declares the `shield_swap_authenticate` tool — the challenge/verify handshake with the client's account (backed by `ApiClient.authenticate`); unlocks the gated DEX API tools for ~24h. */
+export const authenticateSchema: AgentToolSchema = {
+  name: 'shield_swap_authenticate',
+  description:
+    'Authenticate with the DEX API by signing its challenge with the client account. Stores a ' +
+    '~24h session credential internally and unlocks the gated API tools (routes, swaps, ' +
+    'positions, balances, fee tiers). Call this once if API tools fail with an auth error.',
+  inputSchema: { type: 'object', properties: {}, required: [] },
+}
+
+/** Declares the `shield_swap_get_access_status` tool — whether the account has redeemed an invite code (backed by `ApiClient.getAccessStatus`). */
+export const getAccessStatusSchema: AgentToolSchema = {
+  name: 'shield_swap_get_access_status',
+  description:
+    'Check whether the authenticated account has redeemed an invite code. Gated DEX API ' +
+    'endpoints return 403 until it has — when has_access is false, redeem a code with ' +
+    'shield_swap_redeem_access_code. Requires shield_swap_authenticate first.',
+  inputSchema: { type: 'object', properties: {}, required: [] },
+}
+
+/** Declares the `shield_swap_redeem_access_code` tool — redeems an invite code, unlocking the gated DEX API endpoints (backed by `ApiClient.redeemAccessCode`). */
+export const redeemAccessCodeSchema: AgentToolSchema = {
+  name: 'shield_swap_redeem_access_code',
+  description:
+    'Redeem an invite code to unlock the gated DEX API endpoints for the account. One-time: ' +
+    'an already-used code is rejected. The upgraded session applies immediately. Requires ' +
+    'shield_swap_authenticate first.',
+  inputSchema: {
+    type: 'object',
+    properties: { code: { type: 'string', description: 'The invite code to redeem.' } },
+    required: ['code'],
+  },
+}
+
+/** Declares the `shield_swap_create_api_token` tool — mints a long-lived DEX API token (backed by `ApiClient.createApiToken`); the returned secret is shown only once. */
+export const createApiTokenSchema: AgentToolSchema = {
+  name: 'shield_swap_create_api_token',
+  description:
+    'Mint a long-lived DEX API token (ss_…) for reuse across sessions without re-signing. ' +
+    'Requires shield_swap_authenticate first. The returned token is the full secret and is ' +
+    'shown only once — store it; pass it as apiToken when constructing the API client later.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', description: 'Label for the token shown in listings (e.g. "trading-bot").' },
+      expiresInDays: { type: 'number', description: 'Optional lifetime in days. Omitted means no expiry.' },
+    },
+    required: ['name'],
+  },
+}
+
+/** Declares the `shield_swap_list_api_tokens` tool — the account's API tokens, prefixes only (backed by `ApiClient.listApiTokens`). */
+export const listApiTokensSchema: AgentToolSchema = {
+  name: 'shield_swap_list_api_tokens',
+  description:
+    "List the account's DEX API tokens (id, name, prefix, timestamps — never full secrets). " +
+    'Requires shield_swap_authenticate first.',
+  inputSchema: { type: 'object', properties: {}, required: [] },
+}
+
+/** Declares the `shield_swap_revoke_api_token` tool — revokes an API token by id (backed by `ApiClient.revokeApiToken`). */
+export const revokeApiTokenSchema: AgentToolSchema = {
+  name: 'shield_swap_revoke_api_token',
+  description:
+    'Revoke a DEX API token by its id; it stops authenticating immediately. Requires ' +
+    'shield_swap_authenticate first.',
+  inputSchema: {
+    type: 'object',
+    properties: { id: { type: 'string', description: 'Token id (uuid) from create or list.' } },
+    required: ['id'],
+  },
+}
+
+// ---------------------------------------------------------------------------
 // Write tools (money-moving; local-signer path). Handlers auto-fetch the
 // dynamic-dispatch program sources and, on the local path, auto-select records
 // — so amounts and token programs are all the caller passes. Amounts are
@@ -598,6 +678,16 @@ export const apiToolSchemas: AgentToolSchema[] = [
 
 /** Composed tools — require both a client and an ApiClient. */
 export const composedToolSchemas: AgentToolSchema[] = [getBalancesSchema]
+
+/** Auth-flow tools — require a client (the signing account) and the API. */
+export const authToolSchemas: AgentToolSchema[] = [
+  authenticateSchema,
+  getAccessStatusSchema,
+  redeemAccessCodeSchema,
+  createApiTokenSchema,
+  listApiTokensSchema,
+  revokeApiTokenSchema,
+]
 
 /** Money-moving write tools — require a client, and are opt-in (`includeWrites`). */
 export const writeToolSchemas: AgentToolSchema[] = [

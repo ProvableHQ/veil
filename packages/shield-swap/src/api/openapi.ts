@@ -4,6 +4,70 @@
  */
 
 export interface paths {
+    "/access/codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["access_list_codes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/access/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["access_generate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/access/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["access_redeem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/access/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["access_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/airdrop": {
         parameters: {
             query?: never;
@@ -15,19 +79,19 @@ export interface paths {
         put?: never;
         /**
          * POST /airdrop
-         * @description Mints 1000 (×10^decimals) of every token registered in the DB to the given
-         *     address by calling `<wrapper_program>::mint_public` on each. Because each
-         *     token's admin is the treasury/deployer key, this never requires the treasury
-         *     to hold a balance — it mints fresh supply.
+         * @description Delivers ~$10 worth each of wALEO, wUSDCx, and wETH to the given address as
+         *     private records via `transfer_public_to_private`, spent from the
+         *     treasury's wrapped public balance in each program. One claim per
+         *     recipient address per 15 minutes (429 after that).
          *
-         *     Proving each token takes ~15-30s and the list can be long, so this returns
-         *     immediately with `status: "running"` + a `job_id`. The mints run in a
-         *     detached worker (capped concurrency, per-token timeout); poll
-         *     `GET /airdrop/{job_id}` until `status == "complete"` to read per-token
-         *     results.
+         *     Proving each token takes ~15-30s, so this returns immediately with
+         *     `status: "running"` + a `job_id`. The transfers run in a detached worker
+         *     (capped concurrency, per-token timeout); poll `GET /airdrop/{job_id}` until
+         *     `status == "complete"` to read per-token results.
          *
-         *     Required env: `DEPLOYER_PRIVATE_KEY` (the treasury/admin of every token;
-         *     `AIRDROP_PRIVATE_KEY` honored as a fallback), `RPC_URLS` (first entry used).
+         *     Required env: `DEPLOYER_PRIVATE_KEY` (the treasury key whose public wrapped
+         *     balance funds every airdrop; `AIRDROP_PRIVATE_KEY` honored as a fallback),
+         *     `RPC_URLS` (first entry used).
          */
         post: operations["airdrop"];
         delete?: never;
@@ -53,6 +117,38 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_tokens_list"];
+        put?: never;
+        post: operations["api_tokens_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api-tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["api_tokens_revoke"];
         options?: never;
         head?: never;
         patch?: never;
@@ -98,6 +194,54 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_balances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/compliance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_config"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/compliance/pairs/{token0}/{token1}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_pair_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/compliance/tokens/{token_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_token_status"];
         put?: never;
         post?: never;
         delete?: never;
@@ -154,6 +298,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pools/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * `GET /pools/stats?keys=key1,key2,…`
+         * @description Batched rolling-24h stats for many pools in one request. Used by the
+         *     pools-table page to populate per-row volume / fees / APR without doing
+         *     `N + 1` round-trips. Missing keys are silently dropped from the response
+         *     (they just won't appear in the returned map); the caller treats absence
+         *     as "no stats yet" rather than an error.
+         *
+         *     Cap: hard limit of 100 keys per request to avoid run-away DB load.
+         */
+        get: operations["get_pool_24h_stats_batch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pools/{key}": {
         parameters: {
             query?: never;
@@ -162,6 +332,44 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get_pool"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pools/{key}/initialized-ticks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Returns the full sorted list of *initialized* ticks for the given pool — every
+         *     `tick_lower` and `tick_upper` across all non-burned positions, deduplicated.
+         * @description Used by the frontend mint flow to compute the correct
+         *     `tick_lower_hint` / `tick_upper_hint` for the AMM's hint-walk asserts.
+         */
+        get: operations["get_pool_initialized_ticks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pools/{key}/liquidity-distribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_pool_liquidity_distribution"];
         put?: never;
         post?: never;
         delete?: never;
@@ -250,6 +458,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/referral/admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["admin_check"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/referral/codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["referral_list_codes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/referral/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["referral_generate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/referral/my-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["my_codes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/referral/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["referral_redeem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/referral/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_settings"];
+        put: operations["update_settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/referral/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["referral_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/route": {
         parameters: {
             query?: never;
@@ -297,7 +617,7 @@ export interface paths {
         };
         /**
          * GET /schema/trading/{id}
-         * @description Returns the input schema for a single operation (e.g. `swap`, `mint`, `swap_private`).
+         * @description Returns the input schema for a single operation (e.g. `swap`, `mint`, `collect`).
          */
         get: operations["get_trading_schema"];
         put?: never;
@@ -372,6 +692,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tokens/deploy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /tokens/deploy
+         * @description Deploys a fresh self-contained ARC-20 token (the treasury/deployer key is its
+         *     baked-in admin) and mints the initial supply to the creator (`recipient`),
+         *     then registers it (with `wrapper_program`) so it is swap- and airdrop-ready.
+         *
+         *     Deploy + mint are two on-chain txs that take minutes, so this returns
+         *     immediately with `status: "deploying"` and finishes in the background. Poll
+         *     `GET /tokens` for a row whose `wrapper_program` equals the returned
+         *     `program_id` to know it completed.
+         *
+         *     Required env: `DEPLOYER_PRIVATE_KEY` (treasury/admin; `AIRDROP_PRIVATE_KEY`
+         *     honored as fallback), `RPC_URLS`. `leo` must be on the server PATH.
+         */
+        post: operations["deploy_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tokens/mint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /tokens/mint
+         * @description Admin-mints `amount` (base units) of an existing wrapper to `recipient`,
+         *     signed by the treasury/deployer key (the token's admin). Synchronous — a
+         *     single mint tx. Reuses scripts/airdrop-helper.mjs (which calls mint_public).
+         */
+        post: operations["mint_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tokens/{address}": {
         parameters: {
             query?: never;
@@ -388,33 +760,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/unclaimed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /unclaimed
+         * @description Returns everything the user can still claim:
+         *       - Swaps with `claimed_at IS NULL` (user can drive `claim_swap_output`).
+         *       - Positions with `tokens_owed0 > 0` or `tokens_owed1 > 0`
+         *         (post-`decrease_liquidity` accumulations; user calls `collect`).
+         *
+         *     The indexer is the source of truth: it stamps `claimed_at` for every claim
+         *     variant, and the `swaps` row already carries every field the claim tx needs.
+         *     So we do zero on-chain mapping reads here — that earlier per-swap RPC loop
+         *     was both slow (N sequential reads) and wrong (reads went through a balancer
+         *     hitting nodes at different heights, so freshly-claimed swaps flapped back).
+         */
+        get: operations["get_unclaimed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AccessCodeRow: {
+            code: string;
+            created_at: string;
+            redeemed_at?: string | null;
+            redeemed_by?: string | null;
+        };
+        AccessGenerateRequest: {
+            /** Format: int32 */
+            count: number;
+        };
+        AccessGenerateResponse: {
+            codes: string[];
+        };
+        AccessGenerateResponseDoc: {
+            data: components["schemas"]["AccessGenerateResponse"];
+        };
+        AccessListResponse: {
+            /** Format: int64 */
+            available: number;
+            codes: components["schemas"]["AccessCodeRow"][];
+            /** Format: int64 */
+            redeemed: number;
+            /** Format: int64 */
+            total: number;
+        };
+        AccessListResponseDoc: {
+            data: components["schemas"]["AccessListResponse"];
+        };
+        AccessRedeemRequest: {
+            code: string;
+        };
+        AccessRedeemResponse: {
+            code: string;
+            status: string;
+            token: string;
+        };
+        AccessRedeemResponseDoc: {
+            data: components["schemas"]["AccessRedeemResponse"];
+        };
+        AccessStatusResponse: {
+            has_access: boolean;
+        };
+        AccessStatusResponseDoc: {
+            data: components["schemas"]["AccessStatusResponse"];
+        };
         /**
          * @description Status of a background airdrop job. `status` is `"running"` until every token
-         *     has resolved, then `"complete"`. `results` grows as each per-token mint lands,
-         *     so a poller sees live progress (`results.len()` of `total`).
+         *     has resolved, then `"complete"`. `results` grows as each per-token transfer
+         *     lands, so a poller sees live progress (`results.len()` of `total`).
          */
         AirdropJob: {
             results: components["schemas"]["AirdropResult"][];
             status: string;
             total: number;
         };
+        AirdropJobResponseDoc: {
+            data: components["schemas"]["AirdropJob"];
+        };
         AirdropRequest: {
-            /** @description Aleo address (`aleo1...`) to receive 1000 of each registered token. */
+            /** @description Aleo address (`aleo1...`) to receive the airdrop. */
             address: string;
         };
         AirdropResult: {
-            /** @description Base-unit amount (`1000 * 10^decimals`). */
+            /** @description Base-unit amount delivered. */
             amount: string;
             error?: string | null;
+            /**
+             * @description `"accepted"` | `"rejected"` (broadcast but aborted at finalize, e.g.
+             *     insufficient treasury balance) | `"pending"` (broadcast, not yet
+             *     confirmed) | `"failed"` (never broadcast — see `error`).
+             */
             status: string;
             symbol: string;
-            token_address: string;
             tx_id?: string | null;
             wrapper_program: string;
+        };
+        AirdropStartResponseDoc: {
+            data: components["schemas"]["AirdropStartResult"];
         };
         /**
          * @description Returned by `POST /airdrop` — the airdrop now runs in the background, so the
@@ -423,6 +879,48 @@ export interface components {
         AirdropStartResult: {
             job_id: string;
             status: string;
+        };
+        ApiTokenCreateRequest: {
+            /** Format: int64 */
+            expires_in_days?: number | null;
+            name: string;
+        };
+        ApiTokenCreatedResponse: {
+            created_at: string;
+            expires_at?: string | null;
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description Full secret, returned only once at creation. */
+            token: string;
+            token_prefix: string;
+        };
+        ApiTokenCreatedResponseDoc: {
+            data: components["schemas"]["ApiTokenCreatedResponse"];
+        };
+        ApiTokenListResponse: {
+            tokens: components["schemas"]["ApiTokenRow"][];
+        };
+        ApiTokenListResponseDoc: {
+            data: components["schemas"]["ApiTokenListResponse"];
+        };
+        ApiTokenRevokeResponse: {
+            /** Format: uuid */
+            id: string;
+            revoked: boolean;
+        };
+        ApiTokenRevokeResponseDoc: {
+            data: components["schemas"]["ApiTokenRevokeResponse"];
+        };
+        ApiTokenRow: {
+            created_at: string;
+            expires_at?: string | null;
+            /** Format: uuid */
+            id: string;
+            last_used_at?: string | null;
+            name: string;
+            revoked_at?: string | null;
+            token_prefix: string;
         };
         AuthTokenPayload: {
             token: string;
@@ -453,13 +951,43 @@ export interface components {
             /** @description Deployed ARC-20 wrapper program ID (e.g. `mtk_a1b2c3.aleo`). Optional. */
             wrapper_program?: string | null;
         };
+        DeployTokenRequest: {
+            /** Format: int32 */
+            decimals: number;
+            name: string;
+            /** @description Aleo address (`aleo1...`) of the creator — receives the initial supply. */
+            recipient: string;
+            /** @description Initial supply in whole units (default 1_000_000), minted to `recipient`. */
+            supply?: string | null;
+            symbol: string;
+        };
+        DeployTokenResponseDoc: {
+            data: components["schemas"]["DeployTokenResult"];
+        };
+        DeployTokenResult: {
+            /** @description `<symbol>_<rand>.aleo` — the deployed wrapper program id. */
+            program_id: string;
+            recipient: string;
+            /**
+             * @description Always `"deploying"`. Deploy + initial mint run in the background
+             *     (minutes); poll `GET /tokens` until a token with this `wrapper_program`
+             *     appears to know it finished and was registered.
+             */
+            status: string;
+        };
         ErrorResponseDoc: {
             error: string;
+            ref?: string | null;
         };
         FeeTierDoc: {
-            fee: string;
-            /** Format: int32 */
-            tick_spacing: number;
+            created_at: string;
+            /**
+             * Format: int32
+             * @description Raw hundredths of a basis point; the fee fraction is this value divided by 1,000,000.
+             */
+            fee_tier: number;
+            id: string;
+            transaction: string;
         };
         FeeTierListResponseDoc: {
             data: components["schemas"]["FeeTierDoc"][];
@@ -476,18 +1004,56 @@ export interface components {
             id: string;
             /** @description Ordered list of inputs — index in this array == positional argument index. */
             inputs: components["schemas"]["SchemaField"][];
-            /** @description Aleo program ID the function lives on (e.g. `leo_amm.aleo`, `token_registry.aleo`). */
+            /** @description Aleo program ID the function lives on (e.g. `shield_swap_v0_0_1.aleo`, `token_registry.aleo`). */
             program: string;
             /** @description `public` (clear inputs) or `private` (hidden inputs using records). */
             visibility: string;
         };
+        GlobalConfigResponseDoc: {
+            data: components["schemas"]["GlobalConfigStatus"];
+        };
+        GlobalConfigStatus: {
+            global_paused: boolean;
+            pool_creation_is_open: boolean;
+        };
+        /** @enum {string} */
+        GranularityDoc: "1m" | "5m" | "15m" | "30m" | "1h" | "6h" | "12h" | "1d";
+        InitializedTicksResponseDoc: {
+            data: number[];
+        };
+        LiquidityDistributionResponseDoc: {
+            data: components["schemas"]["TickLiquidityDoc"][];
+        };
+        MintTokenRequest: {
+            /** @description Amount in BASE units (already scaled by 10^decimals), as a string. */
+            amount: string;
+            /** @description Recipient Aleo address (`aleo1...`). */
+            recipient: string;
+            /** @description The token's wrapper program id (e.g. `mtk_a1b2c3.aleo`). */
+            wrapper_program: string;
+        };
+        MintTokenResponseDoc: {
+            data: components["schemas"]["MintTokenResult"];
+        };
+        MintTokenResult: {
+            status: string;
+            tx_id?: string | null;
+        };
         OhlcvDoc: {
-            bucket: string;
-            close: string;
-            high: string;
-            low: string;
-            open: string;
-            volume: string;
+            /** @description Last normalized token1-per-token0 price; execution price after migration 0028, preserved legacy baseline before it. */
+            c: string;
+            granularity: components["schemas"]["GranularityDoc"];
+            /** @description Highest normalized token1-per-token0 price; execution price after migration 0028, preserved legacy baseline before it. */
+            h: string;
+            /** @description Lowest normalized token1-per-token0 price; execution price after migration 0028, preserved legacy baseline before it. */
+            l: string;
+            /** @description First normalized token1-per-token0 price; execution price after migration 0028, preserved legacy baseline before it. */
+            o: string;
+            pool: string;
+            /** Format: int64 */
+            timestamp: number;
+            /** @description Raw token0 volume; exact consumed units after migration 0028, preserved legacy baseline before it. */
+            v: string;
         };
         OhlcvResponseDoc: {
             data: components["schemas"]["OhlcvDoc"][];
@@ -499,6 +1065,34 @@ export interface components {
             offset: number;
             /** Format: int64 */
             total: number;
+        };
+        PairComplianceResponseDoc: {
+            data: components["schemas"]["PairComplianceStatus"];
+        };
+        PairComplianceStatus: {
+            paused: boolean;
+            token0: string;
+            token1: string;
+        };
+        PendingSwapDoc: {
+            is_multi_hop: boolean;
+            is_private: boolean;
+            output: components["schemas"]["PendingSwapOutputDoc"];
+            swap_id: string;
+            swap_tx_hash: string;
+            token_in_info?: null | components["schemas"]["TokenDoc"];
+            token_out_info?: null | components["schemas"]["TokenDoc"];
+        };
+        PendingSwapOutputDoc: {
+            amount_out: string;
+            amount_remaining: string;
+            amount_remaining_1?: string | null;
+            amount_remaining_2?: string | null;
+            recipient: string;
+            token_in: string;
+            token_in_1?: string | null;
+            token_in_2?: string | null;
+            token_out: string;
         };
         PoolDebugInfoDoc: {
             /** Format: int32 */
@@ -529,32 +1123,68 @@ export interface components {
             id: string;
             init_tx: string;
             key: string;
+            scale0: string;
+            scale1: string;
             token0: string;
             token1: string;
+        };
+        PoolStats24hBatchResponseDoc: {
+            data: {
+                [key: string]: components["schemas"]["PoolStats24hDoc"];
+            };
+        };
+        PoolStats24hDoc: {
+            change_24h_pct?: string | null;
+            /** @description Highest normalized price; execution price after migration 0028, preserved legacy baseline before it. */
+            high_24h: string;
+            liquidity: string;
+            /** @description Lowest normalized price; execution price after migration 0028, preserved legacy baseline before it. */
+            low_24h: string;
+            /** @description Earliest normalized price; execution price after migration 0028, preserved legacy baseline before it. */
+            open_24h: string;
+            price: string;
+            price_reversed: string;
+            /** @description Raw token0 volume; exact consumed units after migration 0028, preserved legacy baseline before it. */
+            volume_24h: string;
+        };
+        PoolStats24hResponseDoc: {
+            data: components["schemas"]["PoolStats24hDoc"];
         };
         PoolStatsDoc: {
             /** Format: int32 */
             active_tick: number;
+            fee_growth_global0_x_64: string;
+            fee_growth_global1_x_64: string;
+            /** Format: int32 */
+            fee_protocol: number;
             id: string;
             liquidity: string;
+            max_liquidity_per_tick: string;
+            /** Format: int32 */
+            next_init_above: number;
+            /** Format: int32 */
+            next_init_below: number;
             pool: string;
             price: string;
             price_reversed: string;
+            protocol_fees0: string;
+            protocol_fees1: string;
             /** Format: int32 */
             tick_spacing: number;
         };
         PoolTradeDoc: {
             amount0: string;
             amount1: string;
-            executed_at: string;
+            executedAt: string;
             id: string;
-            is_private: boolean;
             pool: string;
-            trade_type: string;
-            transaction: string;
-            transaction_hash?: string | null;
-            user: string;
+            tradeType: components["schemas"]["PoolTradeTypeDoc"];
+            transactionHash: string;
         };
+        /** @enum {string} */
+        PoolTradeFilterDoc: "mint" | "add_liquidity" | "remove_liquidity" | "burn" | "collect" | "swap";
+        /** @enum {string} */
+        PoolTradeTypeDoc: "mint" | "add_liquidity" | "remove_liquidity" | "burn" | "collect" | "swap" | "swap_multi_hop";
         PoolTradesResponseDoc: {
             data: components["schemas"]["PoolTradeDoc"][];
             pagination: components["schemas"]["PaginationMeta"];
@@ -571,8 +1201,13 @@ export interface components {
             amount0: string;
             amount1: string;
             created_at: string;
+            fee_growth_inside0_last_64: string;
+            fee_growth_inside1_last_64: string;
+            frozen_at?: string | null;
             id: string;
             is_burned: boolean;
+            is_frozen: boolean;
+            is_private: boolean;
             liquidity: string;
             pool: string;
             /** Format: int32 */
@@ -580,6 +1215,8 @@ export interface components {
             /** Format: int32 */
             tick_upper: number;
             token_id: string;
+            tokens_owed0: string;
+            tokens_owed1: string;
             transaction: string;
             transaction_hash?: string | null;
             user: string;
@@ -590,6 +1227,105 @@ export interface components {
         };
         PositionResponseDoc: {
             data: components["schemas"]["PositionDoc"];
+        };
+        PositionWithOwedDoc: {
+            is_private: boolean;
+            pool: string;
+            scale0: string;
+            scale1: string;
+            /** Format: int32 */
+            tick_lower: number;
+            /** Format: int32 */
+            tick_upper: number;
+            token0_info?: null | components["schemas"]["TokenDoc"];
+            token1_info?: null | components["schemas"]["TokenDoc"];
+            token_id: string;
+            tokens_owed0: string;
+            tokens_owed1: string;
+            transaction_hash?: string | null;
+        };
+        ReferralAdminCheckResponse: {
+            is_admin: boolean;
+        };
+        ReferralAdminResponseDoc: {
+            data: components["schemas"]["ReferralAdminCheckResponse"];
+        };
+        ReferralCodeRow: {
+            code: string;
+            created_at: string;
+            issued_to?: string | null;
+            redeemed_at?: string | null;
+            redeemed_by?: string | null;
+        };
+        ReferralGenerateRequest: {
+            /** Format: int32 */
+            count: number;
+        };
+        ReferralGenerateResponse: {
+            codes: string[];
+        };
+        ReferralGenerateResponseDoc: {
+            data: components["schemas"]["ReferralGenerateResponse"];
+        };
+        ReferralListResponse: {
+            /** Format: int64 */
+            available: number;
+            codes: components["schemas"]["ReferralCodeRow"][];
+            /** Format: int64 */
+            redeemed: number;
+            /** Format: int64 */
+            total: number;
+        };
+        ReferralListResponseDoc: {
+            data: components["schemas"]["ReferralListResponse"];
+        };
+        ReferralMyCodeRow: {
+            code: string;
+            redeemed_at?: string | null;
+            redeemed_by?: string | null;
+        };
+        ReferralMyCodesResponse: {
+            codes: components["schemas"]["ReferralMyCodeRow"][];
+            /** Format: int32 */
+            quota: number;
+        };
+        ReferralMyCodesResponseDoc: {
+            data: components["schemas"]["ReferralMyCodesResponse"];
+        };
+        ReferralRedeemRequest: {
+            code: string;
+        };
+        ReferralRedeemResponse: {
+            code: string;
+            status: string;
+            token: string;
+        };
+        ReferralRedeemResponseDoc: {
+            data: components["schemas"]["ReferralRedeemResponse"];
+        };
+        ReferralSettingsResponse: {
+            /** Format: int32 */
+            codes_per_user: number;
+            /** Format: int32 */
+            codes_per_user_limit: number;
+            /** Format: int32 */
+            max_users?: number | null;
+        };
+        ReferralSettingsResponseDoc: {
+            data: components["schemas"]["ReferralSettingsResponse"];
+        };
+        ReferralStatusResponse: {
+            code?: string | null;
+            has_access: boolean;
+        };
+        ReferralStatusResponseDoc: {
+            data: components["schemas"]["ReferralStatusResponse"];
+        };
+        ReferralUpdateSettingsRequest: {
+            /** Format: int32 */
+            codes_per_user: number;
+            /** Format: int32 */
+            max_users?: number | null;
         };
         RouteHopDoc: {
             /** Format: int32 */
@@ -633,21 +1369,30 @@ export interface components {
         };
         SwapDoc: {
             amount_remaining: string;
+            amount_remaining_1: string;
+            amount_remaining_2: string;
+            claim_tx?: string | null;
+            claimed_at?: string | null;
             executed_at: string;
+            /** @description Full ordered route for single-hop and multi-hop swaps. */
             hops: components["schemas"]["SwapHopDoc"][];
             id: string;
             input_amount: string;
             input_token: string;
             input_token_info?: null | components["schemas"]["TokenDoc"];
-            /** Format: int64 */
-            nonce: number;
+            is_private: boolean;
+            nonce: string;
             output_amount: string;
             output_token: string;
             output_token_info?: null | components["schemas"]["TokenDoc"];
+            /** @description First-hop pool retained for compatibility; use `hops` for the full route. */
             pool: string;
             recipient: string;
             swap_id: string;
-            trade: string;
+            token_in_1?: string | null;
+            token_in_2?: string | null;
+            /** @description Pool analytics trade; absent when a route lacks authoritative per-hop amounts. */
+            trade?: string | null;
             transaction: string;
             user: string;
         };
@@ -662,7 +1407,13 @@ export interface components {
         SwapResponseDoc: {
             data: components["schemas"]["SwapDoc"];
         };
+        TickLiquidityDoc: {
+            liquidity_net: string;
+            /** Format: int32 */
+            tick: number;
+        };
         TickSpacingDoc: {
+            id: string;
             /** Format: int32 */
             tick_spacing: number;
         };
@@ -684,6 +1435,14 @@ export interface components {
             name: string;
             symbol: string;
             token_address: string;
+            token_id: string;
+        };
+        TokenComplianceResponseDoc: {
+            data: components["schemas"]["TokenComplianceStatus"];
+        };
+        TokenComplianceStatus: {
+            allowed: boolean;
+            paused: boolean;
             token_id: string;
         };
         TokenDoc: {
@@ -708,6 +1467,13 @@ export interface components {
         TradingSchemaResponse: {
             data: components["schemas"]["FunctionSchema"];
         };
+        UnclaimedPayloadDoc: {
+            pending_swaps: components["schemas"]["PendingSwapDoc"][];
+            positions_with_owed: components["schemas"]["PositionWithOwedDoc"][];
+        };
+        UnclaimedResponseDoc: {
+            data: components["schemas"]["UnclaimedPayloadDoc"];
+        };
         VerifyRequestDoc: {
             address: string;
             signature: string;
@@ -721,6 +1487,270 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    access_list_codes: {
+        parameters: {
+            query?: {
+                /** @description Page size (1-2000) */
+                limit?: number;
+                /** @description Page offset */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Access-code inventory */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessListResponseDoc"];
+                };
+            };
+            /** @description Invalid query parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Administrator authorization required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    access_generate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Generated access codes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessGenerateResponseDoc"];
+                };
+            };
+            /** @description Malformed JSON request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Administrator authorization required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Content-Type must be application/json */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body does not match schema */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    access_redeem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessRedeemRequest"];
+            };
+        };
+        responses: {
+            /** @description Access code redeemed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRedeemResponseDoc"];
+                };
+            };
+            /** @description Invalid or already-used code */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Content-Type must be application/json */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body does not match schema */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    access_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Wallet access status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessStatusResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
     airdrop: {
         parameters: {
             query?: never;
@@ -740,11 +1770,56 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AirdropStartResult"];
+                    "application/json": components["schemas"]["AirdropStartResponseDoc"];
                 };
             };
             /** @description Bad request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Content-Type must be application/json */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body does not match schema */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Airdrop already claimed for this address in the last 15 minutes */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -781,11 +1856,240 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AirdropJob"];
+                    "application/json": components["schemas"]["AirdropJobResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
             /** @description Unknown job id */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal job-store error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    api_tokens_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description API tokens for the authenticated wallet (no secrets) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiTokenListResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Invite access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    api_tokens_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiTokenCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description API token created; the token value is shown only once */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiTokenCreatedResponseDoc"];
+                };
+            };
+            /** @description Invalid name, expiry, or active-token limit reached */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Invite access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Content-Type must be application/json */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body does not match schema */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Too many attempts */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    api_tokens_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Token id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description API token revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiTokenRevokeResponseDoc"];
+                };
+            };
+            /** @description Malformed token id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Invite access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Token not found or already revoked */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -815,6 +2119,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChallengeResponseDoc"];
+                };
+            };
+            /** @description Malformed JSON or invalid address */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description JSON content type required */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body schema mismatch */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
             /** @description Internal error */
@@ -850,8 +2199,53 @@ export interface operations {
                     "application/json": components["schemas"]["AuthTokenResponseDoc"];
                 };
             };
+            /** @description Malformed JSON */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
             /** @description Invalid / expired signature */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description JSON content type required */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body schema mismatch */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Rate limit exceeded */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -872,10 +2266,7 @@ export interface operations {
     };
     list_balances: {
         parameters: {
-            query: {
-                /** @description Aleo address to fetch balances for */
-                user: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -889,6 +2280,119 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BalanceListResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal database or RPC error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    get_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Global pause / pool-creation gating state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlobalConfigResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    get_pair_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description First token id (Aleo field) */
+                token0: string;
+                /** @description Second token id (Aleo field) */
+                token1: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pause state for a token pair (order-independent) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairComplianceResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    get_token_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description On-chain token id (Aleo field) */
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Allowlist / pause state for a single token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenComplianceResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
         };
@@ -916,6 +2420,24 @@ export interface operations {
                     "application/json": components["schemas"]["PoolDebugResponseDoc"];
                 };
             };
+            /** @description Invalid query parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal RPC error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
         };
     };
     list_fee_tiers: {
@@ -934,6 +2456,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeeTierListResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
         };
@@ -959,6 +2490,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PoolListResponseDoc"];
+                };
+            };
+            /** @description Invalid query parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    get_pool_24h_stats_batch: {
+        parameters: {
+            query: {
+                /** @description Comma-separated pool keys (max 100) */
+                keys: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Map of pool key → 24h stats; failed or unknown keys may be omitted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PoolStats24hBatchResponseDoc"];
+                };
+            };
+            /** @description Empty / too-large keys list */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
         };
@@ -993,13 +2574,104 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    get_pool_initialized_ticks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Pool key */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sorted initialized ticks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InitializedTicksResponseDoc"];
+                };
+            };
+            /** @description Pool not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    get_pool_liquidity_distribution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Pool key */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Initialized tick liquidity deltas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiquidityDistributionResponseDoc"];
+                };
+            };
+            /** @description Pool not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
         };
     };
     get_pool_ohlcv: {
         parameters: {
             query: {
-                /** @description Candle bucket: 1m | 5m | 15m | 1h | 4h | 1d */
-                granularity: string;
+                /** @description Candle bucket */
+                granularity: components["schemas"]["GranularityDoc"];
                 /** @description Inclusive unix-second start */
                 from: number;
                 /** @description Exclusive unix-second end */
@@ -1032,6 +2704,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
         };
     };
     get_pool_24h_stats: {
@@ -1051,10 +2732,21 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PoolStats24hResponseDoc"];
+                };
             };
             /** @description Pool not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1071,8 +2763,8 @@ export interface operations {
                 limit?: number;
                 /** @description Page offset */
                 offset?: number;
-                /** @description Filter: swap | mint | burn | collect */
-                trade_type?: string;
+                /** @description Indexed pool trade type filter */
+                trade_type?: components["schemas"]["PoolTradeFilterDoc"];
             };
             header?: never;
             path: {
@@ -1092,8 +2784,26 @@ export interface operations {
                     "application/json": components["schemas"]["PoolTradesResponseDoc"];
                 };
             };
+            /** @description Invalid query parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
             /** @description Pool not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1105,9 +2815,7 @@ export interface operations {
     };
     list_positions: {
         parameters: {
-            query: {
-                /** @description Aleo address whose positions to fetch */
-                user: string;
+            query?: {
                 /** @description Page size (1-100) */
                 limit?: number;
                 /** @description Page offset */
@@ -1126,6 +2834,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PositionListResponseDoc"];
+                };
+            };
+            /** @description Invalid query parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
         };
@@ -1151,8 +2886,518 @@ export interface operations {
                     "application/json": components["schemas"]["PositionResponseDoc"];
                 };
             };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
             /** @description Position not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    admin_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Wallet administrator status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralAdminResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Invite access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    referral_list_codes: {
+        parameters: {
+            query?: {
+                /** @description Page size (1-2000) */
+                limit?: number;
+                /** @description Page offset */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Referral-code inventory */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralListResponseDoc"];
+                };
+            };
+            /** @description Invalid query parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Administrator authorization required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    referral_generate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Generated referral codes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralGenerateResponseDoc"];
+                };
+            };
+            /** @description Malformed JSON request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Administrator authorization required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Content-Type must be application/json */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body does not match schema */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    my_codes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Codes issued to the wallet */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralMyCodesResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Invite access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    referral_redeem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralRedeemRequest"];
+            };
+        };
+        responses: {
+            /** @description Referral code redeemed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralRedeemResponseDoc"];
+                };
+            };
+            /** @description Invalid, used, or capacity-limited code */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Content-Type must be application/json */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body does not match schema */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    get_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Referral settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralSettingsResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Administrator authorization required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    update_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralUpdateSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated referral settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralSettingsResponseDoc"];
+                };
+            };
+            /** @description Malformed JSON request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Administrator authorization required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Content-Type must be application/json */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body does not match schema */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    referral_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Wallet referral status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralStatusResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1169,7 +3414,7 @@ export interface operations {
                 token_in: string;
                 /** @description Output token ID */
                 token_out: string;
-                /** @description Optional input amount for output estimation */
+                /** @description Optional positive canonical decimal amount for output estimation */
                 amount_in?: string;
             };
             header?: never;
@@ -1178,7 +3423,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Best swap route (BFS, max 3 hops) */
+            /** @description Best swap route (max 3 hops) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1187,8 +3432,26 @@ export interface operations {
                     "application/json": components["schemas"]["RouteResponseDoc"];
                 };
             };
-            /** @description No route between the given tokens */
+            /** @description Invalid amount_in */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description No route or executable quote for the given tokens */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Routing dependencies are temporarily unavailable or the quote candidate set exceeds the safe limit */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1223,7 +3486,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Operation ID (swap, swap_private, mint, create_pool, burn, collect, decrease_liquidity, swap_multi_hop, swap_multi_hop_private, claim_swap_output, claim_swap_output_private, register_token, mint_public, mint_private, transfer_public_to_private, add_fee_tier, add_tick_spacing, set_pool_enabled) */
+                /** @description Operation ID (swap, mint, create_pool, burn, collect, decrease_liquidity, swap_multi_hop, claim_swap_output, claim_multi_hop_output, register_token, mint_public, mint_private, transfer_public_to_private, add_fee_tier, add_tick_spacing, set_pool_enabled) */
                 id: string;
             };
             cookie?: never;
@@ -1244,20 +3507,20 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
             };
         };
     };
     list_swaps: {
         parameters: {
-            query: {
-                /** @description Aleo address whose swaps to fetch */
-                user: string;
+            query?: {
                 /** @description Page size (1-100) */
                 limit?: number;
                 /** @description Page offset */
                 offset?: number;
-                /** @description Filter by on-chain pool key */
+                /** @description Filter by any pool in the route */
                 pool?: string;
             };
             header?: never;
@@ -1273,6 +3536,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SwapListResponseDoc"];
+                };
+            };
+            /** @description Invalid query parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Pool filter not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
         };
@@ -1298,8 +3597,26 @@ export interface operations {
                     "application/json": components["schemas"]["SwapResponseDoc"];
                 };
             };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
             /** @description Swap not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1327,6 +3644,15 @@ export interface operations {
                     "application/json": components["schemas"]["TickSpacingListResponseDoc"];
                 };
             };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
         };
     };
     list_tokens: {
@@ -1345,6 +3671,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TokenListResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
         };
@@ -1369,6 +3704,243 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TokenResponseDoc"];
+                };
+            };
+            /** @description Invalid token decimals or request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Administrator authorization required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Administrator authorization required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Content-Type must be application/json */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body does not match schema */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    deploy_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeployTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Deploy started */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeployTokenResponseDoc"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Administrator authorization required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Content-Type must be application/json */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body does not match schema */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Misconfigured server */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    mint_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MintTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Mint broadcast */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MintTokenResponseDoc"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Administrator authorization required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Content-Type must be application/json */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body does not match schema */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Misconfigured server */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
         };
@@ -1396,6 +3968,53 @@ export interface operations {
             };
             /** @description Token not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    get_unclaimed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending swap and liquidity claims */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnclaimedResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

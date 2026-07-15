@@ -82,6 +82,7 @@ export {
   ApiClient,
   ApiError,
   DEFAULT_API_URL,
+  authenticateWithAccount,
   type ApiClientOptions,
 } from './api/client.js'
 

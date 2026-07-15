@@ -1,7 +1,7 @@
 import type { Client } from '@provablehq/veil-core'
 import { getProgram } from '@provablehq/veil-core'
 import type { AgentToolHandler } from '@provablehq/veil-core/agent'
-import type { ApiClient } from '../api/client.js'
+import { authenticateWithAccount, type ApiClient } from '../api/client.js'
 import { getPool } from '../actions/reads/getPool.js'
 import { getSlot } from '../actions/reads/getSlot.js'
 import { getSwapOutput } from '../actions/reads/getSwapOutput.js'
@@ -110,6 +110,36 @@ export function createComposedHandlers(client: Client, api: ApiClient): Record<s
           tokens: i.tokens as string[] | undefined,
         }),
       ),
+  }
+}
+
+/**
+ * Auth-flow handlers, keyed by tool name. The client's account signs the
+ * DEX API challenge; the resulting session credential stays inside the
+ * `ApiClient` and is never surfaced to the agent. The one exception is
+ * `shield_swap_create_api_token`, whose result carries the minted secret —
+ * the server shows it exactly once and the agent is the party storing it.
+ */
+export function createAuthHandlers(client: Client, api: ApiClient): Record<string, AgentToolHandler> {
+  return {
+    shield_swap_authenticate: async () => {
+      await authenticateWithAccount(api, client.account)
+      return { authenticated: true, address: client.account!.address }
+    },
+    shield_swap_get_access_status: async () => api.getAccessStatus(),
+    shield_swap_redeem_access_code: async (i) => {
+      // The upgraded session token stays inside the ApiClient — the agent
+      // needs the outcome, not the credential.
+      const { code, status } = await api.redeemAccessCode(i.code as string)
+      return { code, status }
+    },
+    shield_swap_create_api_token: async (i) =>
+      api.createApiToken({
+        name: i.name as string,
+        expires_in_days: i.expiresInDays as number | undefined,
+      }),
+    shield_swap_list_api_tokens: async () => ({ tokens: await api.listApiTokens() }),
+    shield_swap_revoke_api_token: async (i) => api.revokeApiToken(i.id as string),
   }
 }
 

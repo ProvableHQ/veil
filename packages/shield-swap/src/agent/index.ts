@@ -4,6 +4,7 @@ import {
   chainToolSchemas,
   apiToolSchemas,
   composedToolSchemas,
+  authToolSchemas,
   writeToolSchemas,
   pureToolSchemas,
 } from './schemas.js'
@@ -11,6 +12,7 @@ import {
   createChainHandlers,
   createApiHandlers,
   createComposedHandlers,
+  createAuthHandlers,
   createWriteHandlers,
   createPureHandlers,
 } from './handlers.js'
@@ -20,6 +22,7 @@ export {
   chainToolSchemas,
   apiToolSchemas,
   composedToolSchemas,
+  authToolSchemas,
   writeToolSchemas,
   pureToolSchemas,
   getPoolSchema,
@@ -44,6 +47,12 @@ export {
   listTokensSchema,
   getPublicBalancesSchema,
   getBalancesSchema,
+  authenticateSchema,
+  getAccessStatusSchema,
+  redeemAccessCodeSchema,
+  createApiTokenSchema,
+  listApiTokensSchema,
+  revokeApiTokenSchema,
 } from './schemas.js'
 
 /**
@@ -68,7 +77,7 @@ export function shieldSwapAgentToolSchemas(config?: ShieldSwapAgentToolsConfig):
   const schemas: AgentToolSchema[] = [...pureToolSchemas]
   if (all || config.client) schemas.push(...chainToolSchemas)
   if (all || config.api) schemas.push(...apiToolSchemas)
-  if (all || (config.client && config.api)) schemas.push(...composedToolSchemas)
+  if (all || (config.client && config.api)) schemas.push(...composedToolSchemas, ...authToolSchemas)
   // Writes are money-moving — included only when explicitly opted in.
   if (all || (config.includeWrites && config.client)) schemas.push(...writeToolSchemas)
   return schemas
@@ -104,7 +113,10 @@ export function createShieldSwapAgentTools(config: ShieldSwapAgentToolsConfig): 
   add(pureToolSchemas, createPureHandlers())
   if (config.client) add(chainToolSchemas, createChainHandlers(config.client, config.program))
   if (config.api) add(apiToolSchemas, createApiHandlers(config.api))
-  if (config.client && config.api) add(composedToolSchemas, createComposedHandlers(config.client, config.api))
+  if (config.client && config.api) {
+    add(composedToolSchemas, createComposedHandlers(config.client, config.api))
+    add(authToolSchemas, createAuthHandlers(config.client, config.api))
+  }
   if (config.includeWrites && config.client) add(writeToolSchemas, createWriteHandlers(config.client, config.program))
   return tools
 }
