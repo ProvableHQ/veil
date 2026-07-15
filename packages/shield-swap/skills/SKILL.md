@@ -94,3 +94,8 @@ funded account).
   account MUST partition blinded-identity counters and use disjoint input
   records — the exact recipe is in [swapping.md](./swapping.md). When in
   doubt, run swaps sequentially.
+- **One runbook script at a time.** The state file has no lock. Persist
+  through the session helpers (`appendSwapHandle`, `removeSwapHandle`,
+  `appendPosition` — each re-reads before writing) and do not run two
+  runbook scripts concurrently; concurrency belongs INSIDE one script, per
+  the swapping recipe.

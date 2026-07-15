@@ -16,7 +16,7 @@ Everything a swap needs comes from three reads:
 ```ts
 import { loadSession, getHoldings } from '$SKILLS/scripts/session.js'
 
-const { client, account, state } = await loadSession()
+const { client, account } = await loadSession()
 
 // What the account can sell (private side funds swaps).
 const holdings = await getHoldings(client, account.address)
@@ -34,22 +34,27 @@ for (const pool of pools) {
 ```
 
 Sizing: sell a small fraction of the holding (1–10%) so repeated swaps
-don't drain a record, and stay well under the pool's liquidity. Record
-selection picks ONE private record big enough for `amountIn` — after many
-swaps the change fragments, so if a swap reports no covering record, lower
-`amountIn`.
+don't drain a record, and stay well under the pool's liquidity. Two hard
+rules on `amountIn`:
+
+- **No-dust rule.** The contract rejects amounts whose low `decimals - 9`
+  digits are non-zero (tokens with more than 9 decimals). ALWAYS floor
+  through the session helper: `floorToDust(amount, token.decimals)`.
+- **One covering record.** Record selection picks ONE private record big
+  enough for `amountIn`; it does not aggregate. After many swaps the change
+  fragments — if a swap reports no covering record, lower `amountIn`.
 
 ## One private swap
 
 ```ts
 import { getProgram } from '@provablehq/veil-core'
-import { serializeHandle, saveState } from '$SKILLS/scripts/session.js'
+import { appendSwapHandle, floorToDust } from '$SKILLS/scripts/session.js'
 
 const { pool, holdIn } = candidates[0]
 const tokenInId = holdIn.tokenId
 const tokenOutInfo = tokenInId === pool.token0 ? pool.token1_info : pool.token0_info
 const tokenInProgram = holdIn.wrapperProgram!
-const amountIn = holdIn.privateAmount / 100n // 1% of the holding
+const amountIn = floorToDust(holdIn.privateAmount / 100n, holdIn.decimals) // 1%, dust-safe
 
 // Quote → slippage floor. A missing estimate is fine (spot floor applies).
 const route = await client.api.getRoute({
@@ -80,8 +85,9 @@ const handle = await client.swap({
 })
 
 // PERSIST THE HANDLE IMMEDIATELY — it is the only key to the output.
-state.swapHandles.push(serializeHandle(handle))
-saveState(state)
+// appendSwapHandle re-reads the state file, so it never clobbers handles
+// another script saved meanwhile.
+appendSwapHandle(handle)
 console.log('swap submitted:', handle.transactionId, 'swapId:', handle.swapId)
 ```
 
@@ -106,21 +112,23 @@ partitioned explicitly:
    prefer different tokens or sequential submission instead.)
 
 ```ts
-import {
-  viewKeyToScalar,
-  nextBlindedIdentity,
-  deriveBlindingFactor,
-  deriveBlindedAddress,
-} from '@provablehq/shield-swap-sdk'
+import { viewKeyToScalar, nextBlindedIdentity } from '@provablehq/shield-swap-sdk'
+import { appendSwapHandle } from '$SKILLS/scripts/session.js'
 
-// Reserve K consecutive counters starting at the first unused one.
+// Reserve K distinct UNUSED identities. Scan forward for each one — used
+// counters are not always contiguous (failed swaps leave gaps), so
+// `first.counter + i` is NOT safe.
 const vk = await viewKeyToScalar(account.viewKey)
-const first = await nextBlindedIdentity(client, { viewKeyScalar: vk, signer: account.address })
 const identities = []
+let startCounter = 0
 for (let i = 0; i < swaps.length; i++) {
-  const blindingFactor = await deriveBlindingFactor(vk, first.counter + i)
-  const blindedAddress = await deriveBlindedAddress(blindingFactor, account.address)
-  identities.push({ blindingFactor, blindedAddress })
+  const id = await nextBlindedIdentity(client, {
+    viewKeyScalar: vk,
+    signer: account.address,
+    startCounter,
+  })
+  identities.push({ blindingFactor: id.blindingFactor, blindedAddress: id.blindedAddress })
+  startCounter = id.counter + 1 // next scan starts past this reservation
 }
 
 // swaps[] entries MUST each sell a different token (disjoint records).
@@ -129,8 +137,7 @@ const handles = await Promise.all(
     client.swap({ ...s, blindedIdentity: identities[i] }).then((h) => {
       // Persist as each one lands, not after the batch — a crash mid-batch
       // must not orphan the finished swaps.
-      state.swapHandles.push(serializeHandle(h))
-      saveState(state)
+      appendSwapHandle(h)
       return h
     }),
   ),
@@ -147,7 +154,10 @@ When no direct pool connects two tokens, `client.api.getRoute` returns a
 multi-hop path (≤ 3 hops) and `client.swapMultiHop` executes it — same
 handle-and-claim discipline, with `poolKeys` (plural) and every hop token's
 program source in `imports`. The same record and identity rules apply: one
-multi-hop swap consumes one input record and one blinded identity.
+multi-hop swap consumes one input record and one blinded identity. Persist
+the handle with `appendSwapHandle` like any other — the collecting sweep
+tells the two shapes apart (multi-hop handles carry `poolKeys`) and claims
+each with the right action.
 
 ## Failure modes
 
@@ -156,6 +166,7 @@ multi-hop swap consumes one input record and one blinded identity.
 | `requires auth` / 401 | Session missing or expired | `loadSession()` authenticates; it auto-renews. Re-run the script. |
 | 403 `redeem an invite code` | Access gate | Back to [startup.md](./startup.md) — redeem a code. |
 | No covering record for `amountIn` | Fragmented/small records | Lower `amountIn`, or airdrop again if truly empty. |
+| `rejects amounts with non-zero dust digits` | `amountIn` violates the no-dust rule | Floor it: `floorToDust(amount, decimals)`. |
 | Duplicate blinded address rejection | Concurrent swaps raced the counter scan | Use the explicit-identity recipe above. |
 | Double-spend rejection | Two swaps selected the same record | Different input tokens per concurrent swap. |
 | `amount_out_min` revert | Price moved past slippage | Re-quote, widen `slippageBps` modestly, retry. |

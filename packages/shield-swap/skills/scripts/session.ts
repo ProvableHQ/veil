@@ -11,11 +11,11 @@
  * version control (`.shield-swap/` belongs in .gitignore) and treat it like
  * a wallet file.
  */
-import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadNetwork, generateAccount } from '@provablehq/veil-aleo-sdk'
-import { shieldSwapActions, authenticateWithAccount, getPrivateBalances } from '@provablehq/shield-swap-sdk'
-import type { SwapHandle } from '@provablehq/shield-swap-sdk'
+import { shieldSwapActions, authenticateWithAccount, getPrivateBalances, dustScale } from '@provablehq/shield-swap-sdk'
+import type { SwapHandle, MultiHopSwapHandle } from '@provablehq/shield-swap-sdk'
 
 export const NETWORK = 'testnet' as const
 export const NETWORK_URL = 'https://api.provable.com/v2'
@@ -40,6 +40,8 @@ export type ShieldSwapState = {
   provableApi?: { consumerId: string; apiKey: string }
   dexApiToken?: string
   accessRedeemed?: boolean
+  /** Faucet job already requested for this account — prevents double-drawing on re-runs. */
+  airdropJobId?: string
   /** Open swap handles, JSON-safe (bigints as strings). The only path to unclaimed funds. */
   swapHandles: Record<string, unknown>[]
   positions: TrackedPosition[]
@@ -59,29 +61,88 @@ export function loadState(): ShieldSwapState {
   return parsed
 }
 
-/** Writes the state file (0600 — it holds the private key). */
+/**
+ * Writes the state file atomically (temp file + rename, 0600 — it holds the
+ * private key). A crash mid-write can never truncate the only copy of the
+ * key and the open swap handles.
+ */
 export function saveState(state: ShieldSwapState): void {
   mkdirSync(STATE_DIR, { recursive: true })
-  writeFileSync(STATE_PATH, JSON.stringify(state, jsonSafe, 2))
-  chmodSync(STATE_PATH, 0o600)
+  const tmp = `${STATE_PATH}.tmp`
+  writeFileSync(tmp, JSON.stringify(state, jsonSafe, 2))
+  chmodSync(tmp, 0o600)
+  renameSync(tmp, STATE_PATH)
+}
+
+/**
+ * Appends a swap handle with a fresh read-modify-write, so a long-running
+ * script holding a stale state snapshot cannot clobber handles another
+ * script persisted meanwhile. Returns the reloaded state.
+ */
+export function appendSwapHandle(handle: SwapHandle | MultiHopSwapHandle): ShieldSwapState {
+  const state = loadState()
+  state.swapHandles.push(serializeHandle(handle))
+  saveState(state)
+  return state
+}
+
+/** Removes a claimed handle by its transaction id, with a fresh read-modify-write. */
+export function removeSwapHandle(transactionId: string): ShieldSwapState {
+  const state = loadState()
+  state.swapHandles = state.swapHandles.filter((h) => h.transactionId !== transactionId)
+  saveState(state)
+  return state
+}
+
+/** Appends a tracked position with a fresh read-modify-write. */
+export function appendPosition(position: TrackedPosition): ShieldSwapState {
+  const state = loadState()
+  state.positions.push(position)
+  saveState(state)
+  return state
 }
 
 function jsonSafe(_key: string, value: unknown): unknown {
   return typeof value === 'bigint' ? value.toString() : value
 }
 
-/** Serializes a SwapHandle for the state file (bigints become strings). */
-export function serializeHandle(handle: SwapHandle): Record<string, unknown> {
+/** Serializes a swap handle (single- or multi-hop) for the state file (bigints become strings). */
+export function serializeHandle(handle: SwapHandle | MultiHopSwapHandle): Record<string, unknown> {
   return JSON.parse(JSON.stringify(handle, jsonSafe)) as Record<string, unknown>
 }
 
-/** Revives a stored handle's bigint fields so claim actions accept it. */
-export function deserializeHandle(stored: Record<string, unknown>): SwapHandle {
+/** True when a stored handle came from `swapMultiHop` — claim it with `claimMultiHopOutput`. */
+export function isMultiHopHandle(stored: Record<string, unknown>): boolean {
+  return Array.isArray(stored.poolKeys)
+}
+
+/**
+ * Revives a stored handle's bigint fields so the claim actions accept it.
+ * Handles both shapes: single-hop (`SwapHandle`) and multi-hop
+ * (`MultiHopSwapHandle`, including each hop's `sqrtPriceLimit`).
+ */
+export function deserializeHandle(stored: Record<string, unknown>): SwapHandle | MultiHopSwapHandle {
   const h = { ...stored } as Record<string, unknown>
-  for (const key of ['amountIn', 'sqrtPriceLimit', 'nonce']) {
+  for (const key of ['amountIn', 'sqrtPriceLimit', 'nonce', 'amountOutMin']) {
     if (typeof h[key] === 'string') h[key] = BigInt(h[key] as string)
   }
-  return h as unknown as SwapHandle
+  if (Array.isArray(h.hops)) {
+    h.hops = (h.hops as Array<Record<string, unknown>>).map((hop) => ({
+      ...hop,
+      sqrtPriceLimit: typeof hop.sqrtPriceLimit === 'string' ? BigInt(hop.sqrtPriceLimit) : hop.sqrtPriceLimit,
+    }))
+  }
+  return h as unknown as SwapHandle | MultiHopSwapHandle
+}
+
+/**
+ * Floors an amount to the token's no-dust rule. The contract rejects
+ * amounts whose low `decimals - 9` digits are non-zero (tokens with more
+ * than 9 decimals) — every swap or deposit amount MUST pass through this.
+ */
+export function floorToDust(amount: bigint, decimals: number): bigint {
+  const scale = dustScale(decimals)
+  return amount - (amount % scale)
 }
 
 /**
@@ -129,7 +190,16 @@ export async function loadSession() {
 export async function getHoldings(
   client: Awaited<ReturnType<typeof loadSession>>['client'],
   address: string,
-): Promise<Array<{ tokenId: string; symbol: string; wrapperProgram?: string; publicAmount: bigint; privateAmount: bigint }>> {
+): Promise<
+  Array<{
+    tokenId: string
+    symbol: string
+    decimals: number
+    wrapperProgram?: string
+    publicAmount: bigint
+    privateAmount: bigint
+  }>
+> {
   const tokens = (await client.api.getTokens()).data
   const pub = new Map(
     (await client.api.getPublicBalances({ user: address })).data.map((b) => [b.token_id, BigInt(b.balance ?? 0)]),
@@ -139,6 +209,7 @@ export async function getHoldings(
   return tokens.map((t) => ({
     tokenId: t.address,
     symbol: t.symbol,
+    decimals: t.decimals,
     wrapperProgram: t.wrapper_program ?? undefined,
     publicAmount: pub.get(t.address) ?? 0n,
     privateAmount: t.wrapper_program ? (priv[t.wrapper_program] ?? 0n) : 0n,
@@ -165,6 +236,13 @@ export async function ensureKeyMaterial(
   options: { importKey?: string; allowGenerate?: boolean } = {},
 ): Promise<ShieldSwapState> {
   await loadNetwork(NETWORK) // initializes the WASM the account helpers use
+  if (state.privateKey && options.importKey && options.importKey !== state.privateKey) {
+    throw new Error(
+      `a DIFFERENT account is already configured here (${state.address ?? 'address unknown'}). ` +
+        'Refusing to switch silently — its funds and access live on that key. To use the imported ' +
+        `key instead, move or delete the state directory first, then re-run with --private-key.`,
+    )
+  }
   if (!state.privateKey) {
     if (options.importKey) {
       state.privateKey = options.importKey

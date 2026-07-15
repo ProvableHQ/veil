@@ -26,8 +26,9 @@ const pool = pools.find((p) => held(p.token0) && held(p.token1) && p.token0_info
 if (!pool) throw new Error('no pool where the account holds both tokens — swap into the missing side first')
 
 // Live state → a range straddling the current tick earns fees now.
+// (API fields arrive as strings; the chain reads take numbers.)
 const slot = await client.getSlot({ poolKey: pool.key })
-const spacing = await client.getFeeToTickSpacing({ fee: pool.fee })
+const spacing = await client.getFeeToTickSpacing({ fee: Number(pool.fee) })
 const tickLower = roundTickToSpacing(slot!.tick - 10 * spacing!, spacing!)
 const tickUpper = roundTickToSpacing(slot!.tick + 10 * spacing!, spacing!)
 ```
@@ -40,6 +41,7 @@ valid but earns nothing until price enters it.
 
 ```ts
 import { getProgram } from '@provablehq/veil-core'
+import { appendPosition, floorToDust } from '$SKILLS/scripts/session.js'
 
 const p0 = pool.token0_info!.wrapper_program!
 const p1 = pool.token1_info!.wrapper_program!
@@ -49,27 +51,29 @@ const imports = {
 }
 
 // Deposit a small slice of each holding; the contract balances the two
-// against the range and refunds the excess side as change.
+// against the range and refunds the excess side as change. Deposits obey
+// the same no-dust rule as swaps — always floor.
+const h0 = held(pool.token0)!
+const h1 = held(pool.token1)!
 const { positionTokenId, transactionId } = await client.mint({
   poolKey: pool.key,
   tickLower,
   tickUpper,
-  amount0Desired: held(pool.token0)!.privateAmount / 20n, // 5%
-  amount1Desired: held(pool.token1)!.privateAmount / 20n,
+  amount0Desired: floorToDust(h0.privateAmount / 20n, h0.decimals), // 5%, dust-safe
+  amount1Desired: floorToDust(h1.privateAmount / 20n, h1.decimals),
   token0Program: p0,
   token1Program: p1,
   imports,
 })
 
 // PERSIST IMMEDIATELY — the id is the key to the position.
-state.positions.push({
+appendPosition({
   positionTokenId: positionTokenId!,
   poolKey: pool.key,
   token0Program: p0,
   token1Program: p1,
   openedAt: new Date().toISOString(),
 })
-saveState(state)
 console.log('minted position', positionTokenId, 'tx', transactionId)
 ```
 
@@ -84,12 +88,16 @@ const position = await client.getPosition({ positionTokenId })
 ## Add liquidity to an existing position
 
 `increaseLiquidity` deposits more of both tokens into the position's
-existing range (the PositionNFT record is auto-selected):
+existing range. The PositionNFT record is auto-selected **by pool** — the
+action has no `positionTokenId` parameter, so with more than one position
+in the same pool its target is ambiguous. Keep ONE position per pool when
+using it; otherwise treat the second position as its own mint/decrease
+lifecycle.
 
 ```ts
 await client.increaseLiquidity({
   poolKey: pool.key,
-  amount0Desired: extra0, // raw base units, bigint
+  amount0Desired: extra0, // raw base units, bigint, dust-floored
   amount1Desired: extra1,
   token0Program: p0,
   token1Program: p1,
@@ -107,6 +115,7 @@ Collect them afterwards ([collecting.md](./collecting.md)).
 const position = await client.getPosition({ positionTokenId })
 await client.decreaseLiquidity({
   poolKey: pool.key,
+  positionTokenId, // pin the position — pool-only selection is ambiguous
   liquidityToRemove: position!.liquidity / 2n, // remove half
   // amount0Min/amount1Min optional — slippage floors for the withdrawal
 })
@@ -115,12 +124,15 @@ await client.decreaseLiquidity({
 Full exit = decrease everything, collect everything, then `burn`:
 
 ```ts
-await client.decreaseLiquidity({ poolKey: pool.key, liquidityToRemove: position!.liquidity })
+import { loadState, saveState } from '$SKILLS/scripts/session.js'
+
+await client.decreaseLiquidity({ poolKey: pool.key, positionTokenId, liquidityToRemove: position!.liquidity })
 // … collect per collecting.md until tokens_owed0/1 are zero …
 await client.burn({ poolKey: pool.key, positionTokenId })
-// then drop it from state.positions
-state.positions = state.positions.filter((p) => p.positionTokenId !== positionTokenId)
-saveState(state)
+// then drop it from the tracked positions (fresh read-modify-write)
+const latest = loadState()
+latest.positions = latest.positions.filter((p) => p.positionTokenId !== positionTokenId)
+saveState(latest)
 ```
 
 `burn` requires an empty position — zero liquidity AND zero owed.

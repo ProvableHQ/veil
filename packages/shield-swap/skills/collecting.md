@@ -17,45 +17,60 @@ claimable once the swap transaction finalizes; claiming before that throws
 ```ts
 import { getProgram } from '@provablehq/veil-core'
 import { SwapOutputNotFinalizedError } from '@provablehq/shield-swap-sdk'
-import { loadSession, deserializeHandle, saveState } from '$SKILLS/scripts/session.js'
+import type { SwapHandle, MultiHopSwapHandle } from '@provablehq/shield-swap-sdk'
+import { loadSession, deserializeHandle, isMultiHopHandle, removeSwapHandle } from '$SKILLS/scripts/session.js'
 
 const { client, account, state } = await loadSession()
 const tokens = (await client.api.getTokens()).data
 const programOf = (tokenId: string) => tokens.find((t) => t.address === tokenId)?.wrapper_program
 
-const remaining: typeof state.swapHandles = []
-for (const stored of state.swapHandles) {
+for (const stored of [...state.swapHandles]) {
   const handle = deserializeHandle(stored)
-  const pIn = programOf(handle.tokenInId)!
-  const pOut = programOf(handle.tokenOutId)!
+  const multiHop = isMultiHopHandle(stored) // multi-hop handles carry poolKeys
+  const pIn = programOf(handle.tokenInId)
+  const pOut = programOf(handle.tokenOutId)
+  if (!pIn || !pOut) {
+    console.error(`no wrapper program for swap ${handle.transactionId} tokens — keeping the handle`)
+    continue
+  }
   const imports = {
     [pIn]: await getProgram(client, { programId: pIn }),
     [pOut]: await getProgram(client, { programId: pOut }),
   }
 
-  let claimed = false
-  for (let attempt = 0; attempt < 10 && !claimed; attempt++) {
+  for (let attempt = 0; attempt < 10; attempt++) {
     try {
-      const { amountOut, transactionId } = await client.claimSwapOutput({ handle, imports })
-      console.log(`claimed ${amountOut} of ${handle.tokenOutId} (tx ${transactionId})`)
-      claimed = true
+      const result = multiHop
+        ? await client.claimMultiHopOutput({ handle: handle as MultiHopSwapHandle, imports })
+        : await client.claimSwapOutput({ handle: handle as SwapHandle, imports })
+      console.log(`claimed ${result.amountOut} of ${handle.tokenOutId} (tx ${result.transactionId})`)
+      // Drop the handle the moment its claim confirms — never later, so a
+      // crash between claims cannot resurrect an already-claimed handle.
+      removeSwapHandle(handle.transactionId)
+      break
     } catch (err) {
       if (err instanceof SwapOutputNotFinalizedError) {
         await new Promise((r) => setTimeout(r, 15_000)) // finalize lag — wait and retry
       } else {
         console.error(`claim failed for swap ${handle.swapId ?? handle.transactionId}:`, err)
-        break
+        break // keep the handle — money in flight
       }
     }
   }
-  if (!claimed) remaining.push(stored) // keep unclaimed handles — money in flight
 }
-state.swapHandles = remaining
-saveState(state)
 ```
 
-A handle leaves the state file ONLY after its claim confirms. Never delete
-an unclaimed handle: without it the output is unrecoverable.
+A handle leaves the state file ONLY at the moment its claim confirms
+(`removeSwapHandle` right after success — not in a batch at the end). Never
+delete an unclaimed handle: without it the output is unrecoverable.
+
+One ambiguity to know about: `getSwapOutput` reads `null` both before the
+swap finalizes AND after a successful claim consumed the output. If a sweep
+keeps hitting `SwapOutputNotFinalizedError` on an old handle for more than
+~5 minutes, check `handle.transactionId` on chain — a swap that was itself
+rejected has nothing to claim, and a handle whose claim already confirmed
+in a crashed run can be dropped once the claimed record shows up in
+holdings.
 
 ## Collect liquidity earnings
 
@@ -74,6 +89,7 @@ for (const tracked of state.positions) {
   }
   const { transactionId } = await client.collect({
     poolKey: tracked.poolKey,
+    positionTokenId: tracked.positionTokenId, // REQUIRED with several positions in one pool
     amount0Requested: position.tokens_owed0, // everything owed
     amount1Requested: position.tokens_owed1,
     imports,

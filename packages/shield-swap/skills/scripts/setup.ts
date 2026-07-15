@@ -130,15 +130,45 @@ async function main() {
   if (await funded()) {
     console.log('✓ account already funded')
   } else {
-    const job = await client.api.airdrop(account.address)
-    console.log(`… airdrop started (job ${job.job_id})`)
+    // Request the faucet at most once per account: the job id persists in
+    // the state file, so a re-run resumes polling instead of double-drawing.
+    if (!state.airdropJobId) {
+      const job = await client.api.airdrop(account.address)
+      state.airdropJobId = job.job_id
+      saveState(state)
+      console.log(`… airdrop started (job ${job.job_id})`)
+    } else {
+      console.log(`… resuming airdrop job ${state.airdropJobId}`)
+    }
 
     // Two phases: the faucet job finishing (fast), then the record service
     // indexing the new private records (slower, asynchronous).
-    await pollUntil(async () => {
-      const s = await client.api.getAirdropStatus(job.job_id).catch(() => null)
-      return s?.status === 'complete'
+    let job: Awaited<ReturnType<typeof client.api.getAirdropStatus>> | null = null
+    const jobDone = await pollUntil(async () => {
+      job = await client.api.getAirdropStatus(state.airdropJobId!).catch(() => null)
+      return job?.status === 'complete'
     }, 24, 5_000)
+    if (!jobDone) {
+      console.error(
+        `\nAIRDROP_PENDING: faucet job ${state.airdropJobId} has not completed yet ` +
+          `(last status: ${job ? (job as { status?: string }).status : 'unknown'}). ` +
+          'Re-run setup.ts in a few minutes — it resumes this job, it does not double-request.\n',
+      )
+      process.exit(3)
+    }
+    const rejected = (job!.results ?? []).filter((r: { status?: string }) => r.status !== 'accepted')
+    if (rejected.length > 0) {
+      // The job finished but some transfers failed — surface it and allow a
+      // fresh request next run instead of resuming a dead job forever.
+      state.airdropJobId = undefined
+      saveState(state)
+      console.error(
+        `\nAIRDROP_FAILED: faucet job finished with rejected transfers: ` +
+          `${rejected.map((r: { symbol?: string; status?: string }) => `${r.symbol}:${r.status}`).join(', ')}. ` +
+          'Re-run setup.ts to request a fresh airdrop.\n',
+      )
+      process.exit(3)
+    }
     console.log('… faucet job complete — waiting for the records to become scannable')
 
     const landed = await pollUntil(funded, 36, 10_000)
@@ -146,7 +176,7 @@ async function main() {
       console.error(
         '\nAIRDROP_PENDING: the faucet finished but the records are not scannable ' +
           'yet (the record service indexes asynchronously). Re-run setup.ts in a ' +
-          'few minutes — it will not double-request.\n',
+          'few minutes — it resumes this job, it does not double-request.\n',
       )
       process.exit(3)
     }
