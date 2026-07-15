@@ -92,3 +92,9 @@ programs — swaps and liquidity operations need them.
 - The invite code is one-time; after redemption it has no further value.
 - The `ss_…` API token covers data/trading endpoints for this account —
   treat it like a password.
+- One state file per account. Registering a fresh Provable API consumer
+  for the same account (e.g. importing the key on a second machine)
+  re-binds the record scanner to the new consumer, and sessions still
+  using the old credentials start failing with
+  `No credentials found for given 'iss'` — re-run setup where that
+  happens, or carry the state file over instead of re-importing the key.
