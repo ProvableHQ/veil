@@ -59,7 +59,10 @@ const amountIn = floorToDust(holdIn.privateAmount / 100n, holdIn.decimals) // 1%
 // Quote → slippage floor. The quote is informational: a missing estimate
 // or a 404 ("no executable route … for the requested amount") is fine —
 // without expectedOut the swap falls back to a spot-price floor derived
-// from slippageBps.
+// from slippageBps. UNITS TRAP: the API sometimes formats the estimate as
+// a decimal string ("0.5097…") instead of raw base units; only an
+// integral string is safe to use as expectedOut — anything else would set
+// a wildly wrong slippage floor.
 let expectedOut: bigint | undefined
 try {
   const route = await client.api.getRoute({
@@ -68,7 +71,7 @@ try {
     amount_in: amountIn,
   })
   const est = route.data.estimated_amount_out
-  expectedOut = est ? BigInt(est) : undefined
+  expectedOut = est && /^\d+$/.test(est) ? BigInt(est) : undefined
 } catch (err) {
   if (!(err instanceof ApiError && err.status === 404)) throw err
 }
