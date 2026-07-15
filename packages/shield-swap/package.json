@@ -36,7 +36,8 @@
     "regen-openapi": "./codegen/regen-openapi.sh"
   },
   "files": [
-    "dist"
+    "dist",
+    "skills"
   ],
   "engines": {
     "node": ">=18"
