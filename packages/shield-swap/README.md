@@ -153,6 +153,21 @@ balances, fee tiers, candles — are bearer-gated. Two credentials work:
   (`createApiToken`, `listApiTokens`, `revokeApiToken`) always requires a
   session JWT. Revoking a token stops it authenticating immediately.
 
+Authentication alone is not enough: the account must also have redeemed an
+**invite code**, or the gated endpoints return 403
+`redeem an invite code to unlock access`. Check and redeem once per account:
+
+```ts
+await client.authenticateApi()
+if (!(await client.api.getAccessStatus()).has_access) {
+  await client.api.redeemAccessCode(inviteCode) // one-time; unlocks immediately
+}
+```
+
+Redemption upgrades the session in place — the client adopts the returned
+token, so no second handshake is needed. `listAccessCodes` and
+`generateAccessCodes` manage the invite inventory (administrators only).
+
 Calling a gated method with no credential fails fast client-side with the
 remedy in the message, rather than surfacing a bare 401.
 

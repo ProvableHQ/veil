@@ -113,6 +113,20 @@ Managing tokens (`createApiToken`, `listApiTokens`, `revokeApiToken`) always
 requires a fresh session JWT; the tokens themselves cover data and trading
 endpoints only.
 
+Authentication is the first of two gates. The account must also have
+redeemed an invite code, or gated endpoints return 403
+`redeem an invite code to unlock access`:
+
+```ts
+await client.authenticateApi()
+if (!(await client.api.getAccessStatus()).has_access) {
+  await client.api.redeemAccessCode(inviteCode) // one-time per account
+}
+```
+
+Redemption unlocks the session immediately — the client adopts the upgraded
+token the server returns, no second handshake needed.
+
 ## Pools and tokens
 
 Pool discovery goes through the DEX API. Each entry carries the pool key —

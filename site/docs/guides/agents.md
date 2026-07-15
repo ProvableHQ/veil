@@ -134,6 +134,12 @@ long-lived `ss_…` tokens an agent can persist and pass back as
 `api: { apiToken }` on later runs. An agent that hits an auth error on an API
 tool calls `shield_swap_authenticate` and retries.
 
+Access is the second gate: a first-time account also needs an invite code, or
+gated endpoints return 403 `redeem an invite code to unlock access`.
+`shield_swap_get_access_status` reports the gate and
+`shield_swap_redeem_access_code` redeems a code the operator supplies —
+one-time per account, unlocked immediately.
+
 ## Combining tool sets
 
 Because `createAgentTools` and `createShieldSwapAgentTools` both return

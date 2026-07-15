@@ -48,6 +48,8 @@ export {
   getPublicBalancesSchema,
   getBalancesSchema,
   authenticateSchema,
+  getAccessStatusSchema,
+  redeemAccessCodeSchema,
   createApiTokenSchema,
   listApiTokensSchema,
   revokeApiTokenSchema,

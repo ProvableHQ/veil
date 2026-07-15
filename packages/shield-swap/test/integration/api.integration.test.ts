@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+import { loadNetwork, generateAccount } from '@provablehq/veil-aleo-sdk'
 import type { AnyAccount, Client } from '@provablehq/veil-core'
 import { ApiClient, ApiError, authenticateWithAccount } from '../../src/api/client.js'
 
@@ -177,6 +177,35 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     const err = await revokedClient.getFeeTiers().catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ApiError)
     expect((err as ApiError).status).toBe(401)
+  }, 60_000)
+
+  it('access status: the e2e account has redeemed an invite code', async () => {
+    // The gated reads above only pass because this account holds access —
+    // assert the status endpoint agrees.
+    const status = await api.getAccessStatus()
+    expect(status.has_access).toBe(true)
+  }, 30_000)
+
+  it('invite gate: a fresh account authenticates but stays locked until it redeems', async () => {
+    // Authentication and access are separate layers: a brand-new account
+    // completes the handshake, yet gated endpoints 403 until an invite code
+    // is redeemed.
+    const fresh = generateAccount()
+    const freshApi = new ApiClient()
+    await authenticateWithAccount(freshApi, fresh)
+
+    const status = await freshApi.getAccessStatus()
+    expect(status.has_access).toBe(false)
+
+    const gated = await freshApi.getFeeTiers().catch((e: unknown) => e)
+    expect(gated).toBeInstanceOf(ApiError)
+    expect((gated as ApiError).status).toBe(403)
+    expect((gated as ApiError).message).toMatch(/invite code/i)
+
+    // A bogus code is rejected as invalid (400) — not as unauthenticated.
+    const redeem = await freshApi.redeemAccessCode('not-a-real-invite-code').catch((e: unknown) => e)
+    expect(redeem).toBeInstanceOf(ApiError)
+    expect((redeem as ApiError).status).toBe(400)
   }, 60_000)
 
   it('auto re-auth: a poisoned session heals on the next gated call', async () => {

@@ -37,6 +37,10 @@ function fakeApi(calls: Record<string, unknown>): ApiClient {
     ),
     listApiTokens: async () => [{ id: 'u1', name: 'bot', token_prefix: 'ss_live_n', created_at: 'now' }],
     revokeApiToken: async (id: unknown) => ((calls.revokeApiToken = id), { id, revoked: true }),
+    getAccessStatus: async () => ({ has_access: false }),
+    redeemAccessCode: async (code: unknown) => (
+      (calls.redeemAccessCode = code), { code, status: 'redeemed', token: 'jwt-with-access' }
+    ),
   } as unknown as ApiClient
 }
 
@@ -93,6 +97,8 @@ describe('shieldSwapAgentToolSchemas — gating', () => {
   it('gates the auth tools on both client (signer) and api', () => {
     const authNames = [
       'shield_swap_authenticate',
+      'shield_swap_get_access_status',
+      'shield_swap_redeem_access_code',
       'shield_swap_create_api_token',
       'shield_swap_list_api_tokens',
       'shield_swap_revoke_api_token',
@@ -178,6 +184,21 @@ describe('createShieldSwapAgentTools — wiring', () => {
     const revoke = tools.find((t) => t.schema.name === 'shield_swap_revoke_api_token')!
     await revoke.handler({ id: 'u1' })
     expect(calls.revokeApiToken).toBe('u1')
+  })
+
+  it('access handlers report the invite gate and redeem without leaking the upgraded token', async () => {
+    const calls: Record<string, unknown> = {}
+    const tools = createShieldSwapAgentTools({ client: fakeClient(), api: fakeApi(calls) })
+
+    const status = tools.find((t) => t.schema.name === 'shield_swap_get_access_status')!
+    expect(await status.handler({})).toEqual({ has_access: false })
+
+    const redeem = tools.find((t) => t.schema.name === 'shield_swap_redeem_access_code')!
+    const result = (await redeem.handler({ code: 'INVITE1' })) as Record<string, unknown>
+    expect(calls.redeemAccessCode).toBe('INVITE1')
+    // The upgraded session token stays inside the ApiClient; the agent only
+    // needs the outcome.
+    expect(result).toEqual({ code: 'INVITE1', status: 'redeemed' })
   })
 
   it('derive_position_token_id handler round-trips against derivePositionTokenId', async () => {

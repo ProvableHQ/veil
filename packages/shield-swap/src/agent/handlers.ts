@@ -126,6 +126,13 @@ export function createAuthHandlers(client: Client, api: ApiClient): Record<strin
       await authenticateWithAccount(api, client.account)
       return { authenticated: true, address: client.account!.address }
     },
+    shield_swap_get_access_status: async () => api.getAccessStatus(),
+    shield_swap_redeem_access_code: async (i) => {
+      // The upgraded session token stays inside the ApiClient — the agent
+      // needs the outcome, not the credential.
+      const { code, status } = await api.redeemAccessCode(i.code as string)
+      return { code, status }
+    },
     shield_swap_create_api_token: async (i) =>
       api.createApiToken({
         name: i.name as string,

@@ -255,6 +255,30 @@ export const authenticateSchema: AgentToolSchema = {
   inputSchema: { type: 'object', properties: {}, required: [] },
 }
 
+/** Declares the `shield_swap_get_access_status` tool — whether the account has redeemed an invite code (backed by `ApiClient.getAccessStatus`). */
+export const getAccessStatusSchema: AgentToolSchema = {
+  name: 'shield_swap_get_access_status',
+  description:
+    'Check whether the authenticated account has redeemed an invite code. Gated DEX API ' +
+    'endpoints return 403 until it has — when has_access is false, redeem a code with ' +
+    'shield_swap_redeem_access_code. Requires shield_swap_authenticate first.',
+  inputSchema: { type: 'object', properties: {}, required: [] },
+}
+
+/** Declares the `shield_swap_redeem_access_code` tool — redeems an invite code, unlocking the gated DEX API endpoints (backed by `ApiClient.redeemAccessCode`). */
+export const redeemAccessCodeSchema: AgentToolSchema = {
+  name: 'shield_swap_redeem_access_code',
+  description:
+    'Redeem an invite code to unlock the gated DEX API endpoints for the account. One-time: ' +
+    'an already-used code is rejected. The upgraded session applies immediately. Requires ' +
+    'shield_swap_authenticate first.',
+  inputSchema: {
+    type: 'object',
+    properties: { code: { type: 'string', description: 'The invite code to redeem.' } },
+    required: ['code'],
+  },
+}
+
 /** Declares the `shield_swap_create_api_token` tool — mints a long-lived DEX API token (backed by `ApiClient.createApiToken`); the returned secret is shown only once. */
 export const createApiTokenSchema: AgentToolSchema = {
   name: 'shield_swap_create_api_token',
@@ -658,6 +682,8 @@ export const composedToolSchemas: AgentToolSchema[] = [getBalancesSchema]
 /** Auth-flow tools — require a client (the signing account) and the API. */
 export const authToolSchemas: AgentToolSchema[] = [
   authenticateSchema,
+  getAccessStatusSchema,
+  redeemAccessCodeSchema,
   createApiTokenSchema,
   listApiTokensSchema,
   revokeApiTokenSchema,

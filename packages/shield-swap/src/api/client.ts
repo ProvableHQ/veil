@@ -59,7 +59,10 @@ export class ApiError extends Error {
  * signature handshake), or a long-lived API token (`ss_…`) passed as
  * `apiToken` at construction and minted once via `createApiToken()`. Gated
  * calls attach whichever is available (session JWT first); API-token
- * management accepts session JWTs only. Every method hits the network.
+ * management accepts session JWTs only. Access is a second gate on top of
+ * auth: an account that has not redeemed an invite code gets 403 from the
+ * gated endpoints — see `getAccessStatus()` and `redeemAccessCode()`. Every
+ * method hits the network.
  *
  * @example
  * const api = new ApiClient()
@@ -248,6 +251,75 @@ export class ApiClient {
       `/api-tokens/${encodeURIComponent(id)}`,
       { auth: 'session' },
     )
+    return res.data
+  }
+
+  // ── invite-code access ───────────────────────────────────────────────
+  // Authentication alone does not unlock the gated endpoints: an account
+  // must also have redeemed an invite code, or they return
+  // 403 "redeem an invite code to unlock access".
+
+  /**
+   * Reads whether the authenticated account has redeemed an invite code.
+   *
+   * Gated data and trading endpoints return 403 until access is granted —
+   * check this after {@link authenticate} and prompt for a code when
+   * `has_access` is false. Requires a session JWT.
+   */
+  async getAccessStatus(): Promise<Schemas['AccessStatusResponse']> {
+    const res = await this.request<Schemas['AccessStatusResponseDoc']>('GET', '/access/status', { auth: 'session' })
+    return res.data
+  }
+
+  /**
+   * Redeems an invite code, unlocking the gated endpoints for the account.
+   *
+   * The response carries an upgraded session token with the access grant;
+   * it replaces the session JWT held on this instance, so subsequent calls
+   * are unlocked without a new handshake. One-time: the server rejects an
+   * already-used code with a 400. Requires a session JWT.
+   *
+   * @param code The invite code to redeem.
+   * @returns The redemption result (code, status, and the upgraded token).
+   * @throws When no session JWT is held, or the code is invalid or already
+   *   used (400).
+   *
+   * @example
+   * await authenticateWithAccount(api, account)
+   * if (!(await api.getAccessStatus()).has_access) {
+   *   await api.redeemAccessCode(process.env.SHIELD_SWAP_INVITE_CODE!)
+   * }
+   */
+  async redeemAccessCode(code: string): Promise<Schemas['AccessRedeemResponse']> {
+    const res = await this.request<Schemas['AccessRedeemResponseDoc']>('POST', '/access/redeem', {
+      body: { code },
+      auth: 'session',
+    })
+    if (res.data.token) this.token = res.data.token
+    return res.data
+  }
+
+  /**
+   * Lists the invite-code inventory with redemption state (administrators
+   * only — other accounts receive a 403). Requires a session JWT.
+   */
+  async listAccessCodes(): Promise<Schemas['AccessListResponse']> {
+    const res = await this.request<Schemas['AccessListResponseDoc']>('GET', '/access/codes', { auth: 'session' })
+    return res.data
+  }
+
+  /**
+   * Generates new invite codes (administrators only — other accounts
+   * receive a 403). Requires a session JWT.
+   *
+   * @param body.count Number of codes to mint.
+   * @returns The newly minted codes.
+   */
+  async generateAccessCodes(body: Schemas['AccessGenerateRequest']): Promise<Schemas['AccessGenerateResponse']> {
+    const res = await this.request<Schemas['AccessGenerateResponseDoc']>('POST', '/access/generate', {
+      body,
+      auth: 'session',
+    })
     return res.data
   }
 

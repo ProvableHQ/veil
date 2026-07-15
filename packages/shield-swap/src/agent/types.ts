@@ -16,7 +16,8 @@ export type { AgentToolSchema, AgentTool, AgentToolHandler } from '@provablehq/v
  *   public balances). API tools are available only when this is set. Most API
  *   endpoints are bearer-gated: construct the client with an `apiToken`, or
  *   set `client` too so the auth tools (`shield_swap_authenticate`,
- *   API-token mint/list/revoke) let the agent establish its own session.
+ *   invite-code status/redeem, API-token mint/list/revoke) let the agent
+ *   establish its own session and unlock first-time access.
  * @property program shield_swap program id the chain tools default to.
  *   Defaults to `DEFAULT_PROGRAM`.
  * @property includeWrites Include the money-moving write tools (create pool,
