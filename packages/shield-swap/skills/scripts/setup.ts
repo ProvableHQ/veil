@@ -255,7 +255,11 @@ async function main() {
       '   - Collect earnings (collecting.md). Sweep up everything the account is\n' +
       '     owed — tokens bought in earlier swaps and the fees its liquidity\n' +
       '     earned — into the wallet. Good to run after any trading session.\n\n' +
-      '3. Take a free-form prompt. Whatever the user describes, map it onto the\n' +
+      '3. Developing an app? If the user is building on Shield Swap — a dApp, a\n' +
+      '   trading bot, a server or agent integration — offer development guidance:\n' +
+      '   developing.md picks the right packages by where their keys live and maps\n' +
+      '   to the docs, examples, and integration caveats.\n\n' +
+      '4. Take a free-form prompt. Whatever the user describes, map it onto the\n' +
       '   runbooks above before improvising against the SDK.\n',
   )
 }
