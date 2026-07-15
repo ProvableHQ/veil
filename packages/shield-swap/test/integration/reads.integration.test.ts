@@ -3,25 +3,21 @@ import { createPublicClient, http } from '@provablehq/veil-core'
 import { getPool } from '../../src/actions/reads/getPool.js'
 import { getSlot } from '../../src/actions/reads/getSlot.js'
 import { getSwapOutput } from '../../src/actions/reads/getSwapOutput.js'
-import {
-  isBlindedAddressUsed,
-  isPoolInitialized,
-  isFeeTierValid,
-  isTickSpacingValid,
-  getFeeToTickSpacing,
-} from '../../src/actions/reads/validation.js'
+import { isBlindedAddressUsed } from '../../src/actions/reads/isBlindedAddressUsed.js'
+import { isPoolInitialized } from '../../src/actions/reads/isPoolInitialized.js'
+import { isFeeTierValid } from '../../src/actions/reads/isFeeTierValid.js'
+import { isTickSpacingValid } from '../../src/actions/reads/isTickSpacingValid.js'
+import { getFeeToTickSpacing } from '../../src/actions/reads/getFeeToTickSpacing.js'
 import { getPosition } from '../../src/actions/reads/getPosition.js'
 import { getTick } from '../../src/actions/reads/getTick.js'
-import {
-  isGlobalPaused,
-  isPoolCreationOpen,
-  isTokenAllowed,
-  isTokenPaused,
-  isPairPaused,
-  getFrozenPosition,
-  getTokenDecimals,
-  getTradeControls,
-} from '../../src/actions/reads/controls.js'
+import { isGlobalPaused } from '../../src/actions/reads/isGlobalPaused.js'
+import { isPoolCreationOpen } from '../../src/actions/reads/isPoolCreationOpen.js'
+import { isTokenAllowed } from '../../src/actions/reads/isTokenAllowed.js'
+import { isTokenPaused } from '../../src/actions/reads/isTokenPaused.js'
+import { isPairPaused } from '../../src/actions/reads/isPairPaused.js'
+import { getFrozenPosition } from '../../src/actions/reads/getFrozenPosition.js'
+import { getTokenDecimals } from '../../src/actions/reads/getTokenDecimals.js'
+import { getTradeControls } from '../../src/actions/reads/getTradeControls.js'
 import { PROGRAM_ID } from '../../src/generated/shield_swap.js'
 
 // Real-API integration: hits the live testnet node and the live DEX API.

@@ -7,13 +7,12 @@ import { getSlot } from '../actions/reads/getSlot.js'
 import { getSwapOutput } from '../actions/reads/getSwapOutput.js'
 import { getPosition } from '../actions/reads/getPosition.js'
 import { getTick } from '../actions/reads/getTick.js'
-import {
-  getTradeControls,
-  getFrozenPosition,
-  getTokenDecimals,
-  isPoolCreationOpen,
-} from '../actions/reads/controls.js'
-import { isPoolInitialized, getFeeToTickSpacing } from '../actions/reads/validation.js'
+import { getTradeControls } from '../actions/reads/getTradeControls.js'
+import { getFrozenPosition } from '../actions/reads/getFrozenPosition.js'
+import { getTokenDecimals } from '../actions/reads/getTokenDecimals.js'
+import { isPoolCreationOpen } from '../actions/reads/isPoolCreationOpen.js'
+import { isPoolInitialized } from '../actions/reads/isPoolInitialized.js'
+import { getFeeToTickSpacing } from '../actions/reads/getFeeToTickSpacing.js'
 import { getPrivateBalances } from '../utils/records.js'
 import { getBalances } from '../utils/balances.js'
 import {

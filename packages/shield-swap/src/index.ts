@@ -10,13 +10,11 @@ export {
   type GetSwapOutputParameters,
   type GetSwapOutputReturnType,
 } from './actions/reads/getSwapOutput.js'
-export {
-  isBlindedAddressUsed,
-  isPoolInitialized,
-  isFeeTierValid,
-  isTickSpacingValid,
-  getFeeToTickSpacing,
-} from './actions/reads/validation.js'
+export { isBlindedAddressUsed } from './actions/reads/isBlindedAddressUsed.js'
+export { isPoolInitialized } from './actions/reads/isPoolInitialized.js'
+export { isFeeTierValid } from './actions/reads/isFeeTierValid.js'
+export { isTickSpacingValid } from './actions/reads/isTickSpacingValid.js'
+export { getFeeToTickSpacing } from './actions/reads/getFeeToTickSpacing.js'
 export {
   getPosition,
   type GetPositionParameters,
@@ -26,17 +24,17 @@ export { getTick, type GetTickParameters, type GetTickReturnType } from './actio
 
 // Control-state reads: the pause/allowlist/freeze gates the finalize asserts,
 // as cheap pre-flight checks, plus the batched getTradeControls verdict.
+export { isGlobalPaused } from './actions/reads/isGlobalPaused.js'
+export { isPoolCreationOpen } from './actions/reads/isPoolCreationOpen.js'
+export { isTokenAllowed } from './actions/reads/isTokenAllowed.js'
+export { isTokenPaused } from './actions/reads/isTokenPaused.js'
+export { isPairPaused } from './actions/reads/isPairPaused.js'
+export { getFrozenPosition } from './actions/reads/getFrozenPosition.js'
+export { getTokenDecimals } from './actions/reads/getTokenDecimals.js'
 export {
-  isGlobalPaused,
-  isPoolCreationOpen,
-  isTokenAllowed,
-  isTokenPaused,
-  isPairPaused,
-  getFrozenPosition,
-  getTokenDecimals,
   getTradeControls,
   type GetTradeControlsReturnType,
-} from './actions/reads/controls.js'
+} from './actions/reads/getTradeControls.js'
 
 // Blinded identity (private-swap identity lifecycle). Local derivation lazily
 // loads the optional @provablehq/sdk peer; wallet accounts never need it.

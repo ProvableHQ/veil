@@ -1,15 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
-import {
-  isGlobalPaused,
-  isPoolCreationOpen,
-  isTokenAllowed,
-  isTokenPaused,
-  isPairPaused,
-  getFrozenPosition,
-  getTokenDecimals,
-  getTradeControls,
-} from '../../../src/actions/reads/controls.js'
+import { isGlobalPaused } from '../../../src/actions/reads/isGlobalPaused.js'
+import { isPoolCreationOpen } from '../../../src/actions/reads/isPoolCreationOpen.js'
+import { isTokenAllowed } from '../../../src/actions/reads/isTokenAllowed.js'
+import { isTokenPaused } from '../../../src/actions/reads/isTokenPaused.js'
+import { isPairPaused } from '../../../src/actions/reads/isPairPaused.js'
+import { getFrozenPosition } from '../../../src/actions/reads/getFrozenPosition.js'
+import { getTokenDecimals } from '../../../src/actions/reads/getTokenDecimals.js'
+import { getTradeControls } from '../../../src/actions/reads/getTradeControls.js'
 
 const TOKEN0 = '122352848155208110005843045field'
 const TOKEN1 = '15594200448253854747971580789field'

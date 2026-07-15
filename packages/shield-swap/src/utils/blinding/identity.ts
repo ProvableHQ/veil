@@ -1,6 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
 import { DEFAULT_PROGRAM } from '../../constants.js'
-import { isBlindedAddressUsed } from '../../actions/reads/validation.js'
+import { isBlindedAddressUsed } from '../../actions/reads/isBlindedAddressUsed.js'
 import { loadSdk } from '../sdk.js'
 
 /**
