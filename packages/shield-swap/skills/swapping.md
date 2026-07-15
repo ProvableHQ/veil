@@ -48,6 +48,7 @@ rules on `amountIn`:
 
 ```ts
 import { getProgram } from '@provablehq/veil-core'
+import { ApiError } from '@provablehq/shield-swap-sdk'
 import { appendSwapHandle, floorToDust } from '$SKILLS/scripts/session.js'
 
 const { pool, holdIn } = candidates[0]
@@ -56,14 +57,22 @@ const tokenOutInfo = tokenInId === pool.token0 ? pool.token1_info : pool.token0_
 const tokenInProgram = holdIn.wrapperProgram!
 const amountIn = floorToDust(holdIn.privateAmount / 100n, holdIn.decimals) // 1%, dust-safe
 
-// Quote → slippage floor. A missing estimate is fine (spot floor applies).
-const route = await client.api.getRoute({
-  token_in: tokenInId,
-  token_out: tokenOutInfo!.address,
-  amount_in: amountIn,
-})
-const est = route.data.estimated_amount_out
-const expectedOut = est ? BigInt(est) : undefined
+// Quote → slippage floor. The quote is informational: a missing estimate
+// or a 404 ("no executable route … for the requested amount") is fine —
+// without expectedOut the swap falls back to a spot-price floor derived
+// from slippageBps.
+let expectedOut: bigint | undefined
+try {
+  const route = await client.api.getRoute({
+    token_in: tokenInId,
+    token_out: tokenOutInfo!.address,
+    amount_in: amountIn,
+  })
+  const est = route.data.estimated_amount_out
+  expectedOut = est ? BigInt(est) : undefined
+} catch (err) {
+  if (!(err instanceof ApiError && err.status === 404)) throw err
+}
 
 // The prover cannot discover token-program callees statically — pass both
 // pool tokens' program sources as imports on every write.
@@ -169,5 +178,6 @@ each with the right action.
 | `rejects amounts with non-zero dust digits` | `amountIn` violates the no-dust rule | Floor it: `floorToDust(amount, decimals)`. |
 | Duplicate blinded address rejection | Concurrent swaps raced the counter scan | Use the explicit-identity recipe above. |
 | Double-spend rejection | Two swaps selected the same record | Different input tokens per concurrent swap. |
+| `/route` 404 `no executable route … for the requested amount` | Quote unavailable at that size | Proceed without `expectedOut` (spot floor applies), or resize the trade. |
 | `amount_out_min` revert | Price moved past slippage | Re-quote, widen `slippageBps` modestly, retry. |
 | Swap confirmed but output missing | Not finalized yet | Normal — claim with the retry loop in [collecting.md](./collecting.md). |

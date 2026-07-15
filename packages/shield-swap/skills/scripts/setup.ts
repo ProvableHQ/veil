@@ -89,21 +89,33 @@ async function main() {
       )
       process.exit(2)
     }
-    try {
-      await client.api.redeemAccessCode(inviteCode)
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 400) {
-        console.error(
-          `\nINVALID_INVITE_CODE: the server rejected "${inviteCode}" (${err.message}). ` +
-            'Ask the user for a valid, unused code and re-run.\n',
-        )
-        process.exit(2)
+    // Distributed codes come in two kinds with one purpose: access codes
+    // (/access/redeem) and referral codes (/referral/redeem) both unlock
+    // the account. Try both before rejecting the code.
+    let redeemed = false
+    for (const attempt of [
+      () => client.api.redeemAccessCode(inviteCode),
+      () => client.api.redeemReferralCode(inviteCode),
+    ]) {
+      try {
+        await attempt()
+        redeemed = true
+        break
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 400) continue
+        throw err
       }
-      throw err
+    }
+    if (!redeemed) {
+      console.error(
+        `\nINVALID_INVITE_CODE: the server rejected "${inviteCode}" as both an access ` +
+          'code and a referral code. Ask the user for a valid, unused code and re-run.\n',
+      )
+      process.exit(2)
     }
     state.accessRedeemed = true
     saveState(state)
-    console.log('✓ invite code redeemed — access unlocked')
+    console.log('✓ code redeemed — access unlocked')
   } else {
     state.accessRedeemed = true
     saveState(state)
