@@ -1,6 +1,6 @@
 {
   "name": "@provablehq/veil-aleo-devnode",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "TypeScript interface for orchestrating local Aleo test networks for testing & developing Aleo programs.",
   "license": "MIT",
   "repository": {
@@ -34,6 +34,6 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@provablehq/veil-core": "workspace:*"
+    "@provablehq/veil-core": "workspace:^"
   }
 }

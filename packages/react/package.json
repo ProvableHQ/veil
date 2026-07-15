@@ -1,6 +1,6 @@
 {
   "name": "@provablehq/veil-aleo-react-hooks",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "React hooks and providers for the building web apps.",
   "license": "MIT",
   "repository": {
