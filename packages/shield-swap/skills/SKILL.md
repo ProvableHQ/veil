@@ -79,11 +79,15 @@ not just its name:
    Shield Swap is a private exchange on Aleo's test network: trading uses
    test tokens, and what is traded, and by whom, stays hidden on the
    public chain — then offer:
-   - *Swap tokens* — trade one token for another. It settles in two steps:
-     place the trade, then pick up what was bought a minute or two later.
-     The natural first move.
+   - *Swap tokens* — trade one token for another. It settles in two steps
+     — placing the trade, then collecting what was bought — and the agent
+     does both, so the proceeds arrive without a separate trip. The
+     natural first move.
    - *Several swaps at once* — place a handful of trades in parallel and
-     watch them all land; the busiest way to exercise the exchange.
+     watch them all land; the busiest way to exercise the exchange. Before
+     running it, show the user which trades are possible right now (one
+     per token they hold that has a live pool) and ask how many — and
+     which — they want; collect each one as it lands.
    - *Open a liquidity position* — instead of trading, become the market:
      deposit a pair of tokens so other people can trade against them. The
      user picks the price range their deposit works in, and while the

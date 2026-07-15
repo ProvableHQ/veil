@@ -234,12 +234,14 @@ async function main() {
       '2. A suggested journey. Shield Swap is a private exchange on Aleo\'s test\n' +
       '   network: trading uses test tokens, and what is traded — and by whom —\n' +
       '   stays hidden on the public chain.\n' +
-      '   - Swap tokens (swapping.md). Trade one token for another. It settles in\n' +
-      '     two steps: place the trade, then pick up what was bought a minute or\n' +
-      '     two later. The natural first move.\n' +
+      '   - Swap tokens (swapping.md). Trade one token for another. It settles\n' +
+      '     in two steps — placing the trade, then collecting what was bought —\n' +
+      '     and both happen in one go. The natural first move.\n' +
       '   - Several swaps at once (swapping.md, concurrency recipe). Place a\n' +
       '     handful of trades in parallel and watch them all land — the busiest\n' +
-      '     way to exercise the exchange.\n' +
+      '     way to exercise the exchange. First show the user which trades are\n' +
+      '     possible right now and ask how many (and which) they want; collect\n' +
+      '     each one as it lands.\n' +
       '   - Open a liquidity position (liquidity.md). Instead of trading, become\n' +
       '     the market: deposit a pair of tokens so other people can trade against\n' +
       '     them. The user picks the price range their deposit works in, and while\n' +

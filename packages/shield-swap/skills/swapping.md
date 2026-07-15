@@ -101,11 +101,50 @@ appendSwapHandle(handle)
 console.log('swap submitted:', handle.transactionId, 'swapId:', handle.swapId)
 ```
 
-Expect a minute or two: remote proving plus on-chain confirmation. Then
-claim per [collecting.md](./collecting.md) (the output is claimable only
-after the swap finalizes — the claim runbook handles the retry).
+Expect a minute or two: remote proving plus on-chain confirmation.
+
+**Claim immediately.** As soon as the swap transaction lands, collect the
+output in the same session — do not leave it for a later sweep. The output
+becomes claimable once the swap finalizes (a few blocks after
+confirmation), so the first attempts may throw
+`SwapOutputNotFinalizedError`; that is normal, retry:
+
+```ts
+import { SwapOutputNotFinalizedError } from '@provablehq/shield-swap-sdk'
+import { removeSwapHandle } from '$SKILLS/scripts/session.js'
+
+// Same imports map as the swap.
+for (let attempt = 0; attempt < 10; attempt++) {
+  try {
+    const { amountOut, transactionId } = await client.claimSwapOutput({ handle, imports })
+    console.log(`claimed ${amountOut} of ${handle.tokenOutId} (tx ${transactionId})`)
+    removeSwapHandle(handle.transactionId)
+    break
+  } catch (err) {
+    if (!(err instanceof SwapOutputNotFinalizedError)) throw err
+    await new Promise((r) => setTimeout(r, 15_000)) // finalize lag — wait and retry
+  }
+}
+```
+
+[collecting.md](./collecting.md) remains the recovery path: anything left
+in the state file (a crash between swap and claim, a claim that gave up)
+gets swept there.
 
 ## Several swaps at once
+
+**Ask before executing.** Concurrency is bounded by what the account
+holds: each concurrent swap needs a DIFFERENT input token (one covering
+record per token — see below), so the possible concurrent swaps are one
+per distinct held token that has a live pool. Before running anything:
+
+1. Discover the candidates — for each token the account holds privately,
+   find a pool with liquidity it can trade into (the discovery loop above,
+   keeping one entry per input token).
+2. Present them to the user in plain language ("you can place up to N
+   trades at once: ETH → wUSDCx, wALEO → ETH, …").
+3. Ask how many — and which — swaps they want, up to that maximum. Only
+   then execute.
 
 Two per-account resources collide under concurrency; both must be
 partitioned explicitly:
@@ -142,7 +181,7 @@ for (let i = 0; i < swaps.length; i++) {
 }
 
 // swaps[] entries MUST each sell a different token (disjoint records).
-const handles = await Promise.all(
+const results = await Promise.allSettled(
   swaps.map((s, i) =>
     client.swap({ ...s, blindedIdentity: identities[i] }).then((h) => {
       // Persist as each one lands, not after the batch — a crash mid-batch
@@ -156,7 +195,31 @@ const handles = await Promise.all(
 
 `Promise.all` rejects on the first failure but the other swaps keep
 running server-side — always sweep `state.swapHandles` afterwards and claim
-everything that confirmed, regardless of batch errors.
+everything that confirmed, regardless of batch errors. Use
+`Promise.allSettled` to keep the batch alive past one rejection.
+
+**Claim immediately after the batch.** As each swap confirms, its output
+is claimable a few blocks later — claim all of them right away (the same
+retry loop as the single-swap recipe, one handle at a time, reusing each
+swap's own imports map) instead of deferring to a later session:
+
+```ts
+for (const [i, result] of results.entries()) {
+  if (result.status !== 'fulfilled') continue
+  const handle = result.value
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      const { amountOut } = await client.claimSwapOutput({ handle, imports: swaps[i]!.imports })
+      console.log(`claimed ${amountOut} of ${handle.tokenOutId}`)
+      removeSwapHandle(handle.transactionId)
+      break
+    } catch (err) {
+      if (!(err instanceof SwapOutputNotFinalizedError)) throw err
+      await new Promise((r) => setTimeout(r, 15_000))
+    }
+  }
+}
+```
 
 ## Multi-hop
 
