@@ -300,8 +300,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
      * The delegated prover pays the transaction fee from its FeeMaster
      * account instead of the caller's public credits. Only meaningful with
      * `mode: 'delegated'`; requires the prover service to allow it for the
-     * consumer. Defaults to false. Suited to accounts holding no credits
-     * (e.g. faucet-funded testnet accounts).
+     * consumer. Defaults to true — accounts need no public credits to
+     * transact. Set false when the account funds its own fees.
      */
     useFeeMaster?: boolean
   }): ProvingConfig {
@@ -468,7 +468,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               priorityFee,
               privateFee: execOptions.privateFee ?? false,
               broadcast: true,
-              useFeeMaster: options.useFeeMaster ?? false,
+              useFeeMaster: options.useFeeMaster ?? true,
             })
 
             const dpsClient = new AleoNetworkClient(options.proverUrl)
@@ -743,7 +743,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     proverUrl?: string
     apiKey?: string
     consumerId?: string
-    /** Forwarded to `createProvingConfig` — the delegated prover pays fees. Defaults to false. */
+    /** Forwarded to `createProvingConfig` — the delegated prover pays fees. Defaults to true. */
     useFeeMaster?: boolean
     records?: RecordProvider
   }): { publicClient: PublicClient; walletClient: WalletClient; account: LocalAccount<'privateKey'> } {
