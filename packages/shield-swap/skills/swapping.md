@@ -48,7 +48,7 @@ rules on `amountIn`:
 
 ```ts
 import { ApiError } from '@provablehq/shield-swap-sdk'
-import { appendSwapHandle, buildDexImports, floorToDust } from '$SKILLS/scripts/session.js'
+import { appendSwapHandle, buildDexImports, floorToDust, formatAmount } from '$SKILLS/scripts/session.js'
 
 const { pool, holdIn } = candidates[0]
 const tokenInId = holdIn.tokenId
@@ -117,7 +117,7 @@ import { removeSwapHandle } from '$SKILLS/scripts/session.js'
 for (let attempt = 0; attempt < 10; attempt++) {
   try {
     const { amountOut, transactionId } = await client.claimSwapOutput({ handle, imports })
-    console.log(`claimed ${amountOut} of ${handle.tokenOutId} (tx ${transactionId})`)
+    console.log(`claimed ${formatAmount(amountOut, tokenOutInfo!.decimals, tokenOutInfo!.symbol)} (tx ${transactionId})`)
     removeSwapHandle(handle.transactionId)
     break
   } catch (err) {
@@ -210,7 +210,8 @@ for (const [i, result] of results.entries()) {
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
       const { amountOut } = await client.claimSwapOutput({ handle, imports: swaps[i]!.imports })
-      console.log(`claimed ${amountOut} of ${handle.tokenOutId}`)
+      // Display in human units (swaps[i] should carry the out token's decimals/symbol).
+      console.log(`claimed ${formatAmount(amountOut, swaps[i]!.outDecimals, swaps[i]!.outSymbol)}`)
       removeSwapHandle(handle.transactionId)
       break
     } catch (err) {

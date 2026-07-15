@@ -23,11 +23,13 @@ import {
   isMultiHopHandle,
   removeSwapHandle,
   buildDexImports,
+  formatAmount,
 } from '$SKILLS/scripts/session.js'
 
 const { client, account, state } = await loadSession()
 const tokens = (await client.api.getTokens()).data
 const programOf = (tokenId: string) => tokens.find((t) => t.address === tokenId)?.wrapper_program
+const infoOf = (tokenId: string) => tokens.find((t) => t.address === tokenId)
 
 for (const stored of [...state.swapHandles]) {
   const handle = deserializeHandle(stored)
@@ -45,7 +47,8 @@ for (const stored of [...state.swapHandles]) {
       const result = multiHop
         ? await client.claimMultiHopOutput({ handle: handle as MultiHopSwapHandle, imports })
         : await client.claimSwapOutput({ handle: handle as SwapHandle, imports })
-      console.log(`claimed ${result.amountOut} of ${handle.tokenOutId} (tx ${result.transactionId})`)
+      const out = infoOf(handle.tokenOutId)
+      console.log(`claimed ${formatAmount(result.amountOut, out?.decimals ?? 0, out?.symbol)} (tx ${result.transactionId})`)
       // Drop the handle the moment its claim confirms — never later, so a
       // crash between claims cannot resurrect an already-claimed handle.
       removeSwapHandle(handle.transactionId)
@@ -81,10 +84,11 @@ settles withdrawn principal into the same place. `collect` withdraws owed
 balances to private records.
 
 ```ts
-import { floorToDust } from '$SKILLS/scripts/session.js'
+import { floorToDust, formatAmount } from '$SKILLS/scripts/session.js'
 
 const tokens = (await client.api.getTokens()).data
-const decimalsOf = (wrapperProgram: string) => tokens.find((t) => t.wrapper_program === wrapperProgram)?.decimals ?? 0
+const tokenOf = (wrapperProgram: string) => tokens.find((t) => t.wrapper_program === wrapperProgram)
+const decimalsOf = (wrapperProgram: string) => tokenOf(wrapperProgram)?.decimals ?? 0
 
 for (const tracked of state.positions) {
   const position = await client.getPosition({ positionTokenId: tracked.positionTokenId })
@@ -106,7 +110,12 @@ for (const tracked of state.positions) {
     amount1Requested: amount1,
     imports,
   })
-  console.log(`collected ${amount0}/${amount1} from ${tracked.positionTokenId} (tx ${transactionId})`)
+  const t0 = tokenOf(tracked.token0Program)
+  const t1 = tokenOf(tracked.token1Program)
+  console.log(
+    `collected ${formatAmount(amount0, t0?.decimals ?? 0, t0?.symbol)} + ` +
+      `${formatAmount(amount1, t1?.decimals ?? 0, t1?.symbol)} (tx ${transactionId})`,
+  )
 }
 ```
 
@@ -120,9 +129,9 @@ accrues on top of them.
 After a sweep, the claimed and collected amounts appear as private records:
 
 ```ts
-import { getHoldings } from '$SKILLS/scripts/session.js'
+import { getHoldings, formatAmount } from '$SKILLS/scripts/session.js'
 const holdings = await getHoldings(client, account.address)
-for (const h of holdings) console.log(h.symbol, 'private', h.privateAmount)
+for (const h of holdings) console.log(formatAmount(h.privateAmount, h.decimals, h.symbol), 'private')
 ```
 
 The record scanner indexes new records asynchronously — allow a few

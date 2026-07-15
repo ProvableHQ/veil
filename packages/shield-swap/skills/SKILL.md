@@ -121,8 +121,15 @@ funded account).
   `getTokens()`; quotes come from `client.api.getRoute()`; live pool state
   comes from `client.getSlot()`. Field literals (`…field`) and addresses
   are opaque — copy them exactly.
-- **Amounts are raw base units** (`bigint`, u128). Convert with the token's
-  `decimals` from the API: 1 token = `10n ** BigInt(decimals)` units.
+- **Amounts are raw base units** (`bigint`, u128) on the SDK side. Convert
+  with the token's `decimals` from the API: 1 token = `10n ** BigInt(decimals)`
+  units.
+- **Never show raw units to the user.** Anything user-facing — balances,
+  trade sizes, claimed outputs, tables, summaries — MUST be rendered in
+  human units with the token symbol via the session helper
+  `formatAmount(amount, decimals, symbol)` ("0.0534 ETH", never
+  "53,369,000,000,000 raw"). Raw integers misstate holdings by orders of
+  magnitude to a human reader.
 - **Tokens arrive and move privately.** The faucet airdrops private
   records, so public balances read zero on a funded account — check
   holdings with the session helper `getHoldings()` (it reads both sides).

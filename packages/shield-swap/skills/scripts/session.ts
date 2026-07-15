@@ -146,6 +146,26 @@ export function floorToDust(amount: bigint, decimals: number): bigint {
 }
 
 /**
+ * Renders a raw base-unit amount in human units ("0.0534 ETH"), the ONLY
+ * format that should ever reach the user. Raw units (wei-style integers)
+ * are SDK-facing; showing them to a person misstates their balances by
+ * orders of magnitude.
+ */
+export function formatAmount(amount: bigint, decimals: number, symbol?: string): string {
+  const scale = 10n ** BigInt(decimals)
+  const whole = amount / scale
+  const frac = amount % scale
+  let s = whole.toLocaleString('en-US')
+  if (frac > 0n) {
+    // Full precision minus trailing zeros — tiny testnet amounts live many
+    // places below the decimal point and must not round away to nothing.
+    const fracStr = frac.toString().padStart(decimals, '0').replace(/0+$/, '')
+    if (fracStr) s += `.${fracStr}`
+  }
+  return symbol ? `${s} ${symbol}` : s
+}
+
+/**
  * Builds the fully wired, authenticated session from the state file.
  *
  * Requires setup.ts to have run (key material + Provable API credentials in

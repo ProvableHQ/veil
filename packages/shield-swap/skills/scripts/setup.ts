@@ -41,6 +41,7 @@ import {
   NeedsConfigDecisionError,
   loadSession,
   getHoldings,
+  formatAmount,
   pollUntil,
 } from './session.js'
 
@@ -220,7 +221,9 @@ async function main() {
   console.log(`\nAccount ${account.address} is ready:`)
   for (const h of holdings) {
     if (h.publicAmount > 0n || h.privateAmount > 0n) {
-      console.log(`  ${h.symbol}: public ${h.publicAmount}, private ${h.privateAmount} (${h.wrapperProgram ?? 'no wrapper'})`)
+      const priv = formatAmount(h.privateAmount, h.decimals, h.symbol)
+      const pub = formatAmount(h.publicAmount, h.decimals, h.symbol)
+      console.log(`  ${h.symbol}: ${priv} private, ${pub} public (${h.wrapperProgram ?? 'no wrapper'})`)
     }
   }
   console.log(
