@@ -19,20 +19,32 @@ import { loadSession, getHoldings, saveState } from '$SKILLS/scripts/session.js'
 const { client, account, state } = await loadSession()
 const holdings = await getHoldings(client, account.address)
 
-// A pool whose BOTH tokens the account holds privately.
+// A pool whose BOTH tokens the account holds privately, on a fee tier the
+// CURRENT deployment registers. Two traps here:
+//  - UNITS: the API's `pool.fee` is in basis points ("5"), the chain
+//    registers tiers in pips (500) — read the fee from the on-chain pool
+//    state, never convert the API's number.
+//  - STALE TIERS: pools created before a redeployment can carry a fee the
+//    current registry no longer lists; reading tick spacing for such a fee
+//    can hang the node endpoint. ALWAYS gate on isFeeTierValid first.
 const pools = (await client.api.getPools({ limit: 50 })).data
 const held = (id: string) => holdings.find((h) => h.tokenId === id && h.privateAmount > 0n)
-const pool = pools.find((p) => held(p.token0) && held(p.token1) && p.token0_info?.wrapper_program && p.token1_info?.wrapper_program)
-if (!pool) throw new Error('no pool where the account holds both tokens — swap into the missing side first')
 
-// Live state → a range straddling the current tick earns fees now.
-// UNITS TRAP: the API's `pool.fee` is in basis points ("5"), but the chain
-// registers fee tiers in pips (500). Read the fee from the on-chain pool
-// state — chain values for chain calls, no unit guessing.
-const slot = await client.getSlot({ poolKey: pool.key })
-const poolState = await client.getPool({ poolKey: pool.key })
-const spacing = await client.getFeeToTickSpacing({ fee: poolState!.fee })
-if (!slot || !spacing) throw new Error('pool has no live slot or an unregistered fee tier')
+let pool, slot: Awaited<ReturnType<typeof client.getSlot>>, spacing: number | null = null
+for (const p of pools) {
+  if (!held(p.token0) || !held(p.token1) || !p.token0_info?.wrapper_program || !p.token1_info?.wrapper_program) continue
+  const poolState = await client.getPool({ poolKey: p.key })
+  if (!poolState || !(await client.isFeeTierValid({ fee: poolState.fee }))) continue
+  const s = await client.getSlot({ poolKey: p.key })
+  if (!s || s.liquidity === 0n) continue
+  spacing = await client.getFeeToTickSpacing({ fee: poolState.fee })
+  if (!spacing) continue
+  pool = p
+  slot = s
+  break
+}
+if (!pool || !slot || !spacing) throw new Error('no mintable pool: need both tokens held and a registered fee tier')
+
 const tickLower = roundTickToSpacing(slot.tick - 10 * spacing, spacing)
 const tickUpper = roundTickToSpacing(slot.tick + 10 * spacing, spacing)
 ```
@@ -143,6 +155,7 @@ saveState(latest)
 | Symptom | Cause | Remedy |
 | --- | --- | --- |
 | No covering record for a deposit | The account holds too little of one token privately | Swap into the missing side first, or shrink the desired amounts. |
+| Tick-spacing read hangs/times out | Pool's fee tier predates the current deployment (unregistered) | Gate pool selection on `isFeeTierValid` — never read spacing for an unvalidated fee. |
 | Empty range after alignment | `tickLower === tickUpper` post-rounding | Widen the range to at least one spacing. |
 | Mint reverts on amounts | Desired amounts far out of ratio for the range | Let the smaller side lead: size both from quotes around `slot.tick`. |
 | `burn` rejected | Liquidity or owed balances remain | Decrease to zero and collect everything first. |
