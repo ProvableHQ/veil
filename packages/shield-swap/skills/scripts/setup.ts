@@ -227,41 +227,41 @@ async function main() {
     }
   }
   console.log(
-    '\nASK_NEXT_ACTION: setup is complete — present the user with what is possible ' +
-      'and ask what they want to do (do not pick for them). Relay the context behind ' +
-      'each option, not just its name:\n\n' +
-      '1. Follow their own playbook.\n' +
-      '   Ask whether they have instructions of their own — a markdown strategy\n' +
-      '   file, notes, or a memory store such as an Obsidian vault. Their document\n' +
-      '   decides WHAT to do; the runbooks here describe HOW each step works.\n\n' +
-      '2. A suggested journey. Shield Swap is a private exchange on Aleo\'s test\n' +
-      '   network: trading uses test tokens, and what is traded — and by whom —\n' +
-      '   stays hidden on the public chain.\n' +
-      '   - Swap tokens (swapping.md). Trade one token for another. It settles\n' +
-      '     in two steps — placing the trade, then collecting what was bought —\n' +
-      '     and both happen in one go. The natural first move.\n' +
-      '   - Several swaps at once (swapping.md, concurrency recipe). Place a\n' +
-      '     handful of trades in parallel and watch them all land — the busiest\n' +
-      '     way to exercise the exchange. First show the user which trades are\n' +
-      '     possible right now and ask how many (and which) they want; collect\n' +
-      '     each one as it lands.\n' +
-      '   - Open a liquidity position (liquidity.md). Instead of trading, become\n' +
-      '     the market: deposit a pair of tokens so other people can trade against\n' +
-      '     them. The user picks the price range their deposit works in, and while\n' +
-      '     the market price sits inside that range they earn a small cut of every\n' +
-      '     trade that passes through.\n' +
-      '   - Add or remove liquidity (liquidity.md). Top up a position, or take\n' +
-      '     some of it back out — whatever comes out becomes earnings to collect.\n' +
-      '   - Collect earnings (collecting.md). Sweep up everything the account is\n' +
-      '     owed — tokens bought in earlier swaps and the fees its liquidity\n' +
-      '     earned — into the wallet. Good to run after any trading session.\n\n' +
-      '3. Developing a trading application or agent? If the user is building on\n' +
-      '   Shield Swap — a dApp, a trading bot, a server or agent integration —\n' +
-      '   offer development guidance:\n' +
-      '   developing.md picks the right packages by where their keys live and maps\n' +
-      '   to the docs, examples, and integration caveats.\n\n' +
-      '4. Take a free-form prompt. Whatever the user describes, map it onto the\n' +
-      '   runbooks above before improvising against the SDK.\n',
+    '\nASK_NEXT_ACTION: setup is complete — ask the user what to do next with ONE ' +
+      'user-selectable prompt (the harness\'s selection UI if it has one, a numbered ' +
+      'list otherwise) offering ALL SEVEN options below, in this order. Free-form ' +
+      'input stays available as the escape hatch ("Other"); map whatever the user ' +
+      'types onto the runbooks before improvising against the SDK. Do not pick for ' +
+      'them. Frame the setting first: Shield Swap is a private exchange on Aleo\'s ' +
+      'test network — trading uses test tokens, and what is traded, and by whom, ' +
+      'stays hidden on the public chain.\n\n' +
+      '1. Develop on Shield Swap (developing.md). For a user building their own\n' +
+      '   dApp, trading bot, or server/agent integration rather than trading\n' +
+      '   here. If chosen, FIRST ask what they are building, then follow\n' +
+      '   developing.md — it picks the packages by where their keys live and\n' +
+      '   maps to the docs, examples, and integration caveats.\n' +
+      '2. Follow their own playbook. Ask whether they have instructions of\n' +
+      '   their own — a markdown strategy file, notes, or a memory store such\n' +
+      '   as an Obsidian vault. Their document decides WHAT to do; the runbooks\n' +
+      '   here describe HOW each step works.\n' +
+      '3. Swap tokens (swapping.md). Trade one token for another. It settles\n' +
+      '   in two steps — placing the trade, then collecting what was bought —\n' +
+      '   and both happen in one go. The natural first move for a trader.\n' +
+      '4. Several swaps at once (swapping.md, concurrency recipe). Place a\n' +
+      '   handful of trades in parallel and watch them all land — the busiest\n' +
+      '   way to exercise the exchange. First show the user which trades are\n' +
+      '   possible right now and ask how many (and which) they want; collect\n' +
+      '   each one as it lands.\n' +
+      '5. Open a liquidity position (liquidity.md). Instead of trading, become\n' +
+      '   the market: deposit a pair of tokens so other people can trade against\n' +
+      '   them. The user picks the price range their deposit works in, and while\n' +
+      '   the market price sits inside that range they earn a small cut of every\n' +
+      '   trade that passes through.\n' +
+      '6. Add or remove liquidity (liquidity.md). Top up a position, or take\n' +
+      '   some of it back out — whatever comes out becomes earnings to collect.\n' +
+      '7. Collect earnings (collecting.md). Sweep up everything the account is\n' +
+      '   owed — tokens bought in earlier swaps and the fees its liquidity\n' +
+      '   earned — into the wallet. Good to run after any trading session.\n',
   )
 }
 
