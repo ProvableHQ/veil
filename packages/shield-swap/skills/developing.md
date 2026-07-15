@@ -1,8 +1,8 @@
-# Developing: build an app on Shield Swap
+# Developing: build a trading application or agent on Shield Swap
 
-Goal: guide a developer who is building something on Shield Swap — a
-frontend dApp, a trading bot, a server integration, or an agent — rather
-than trading interactively. The trading runbooks double as living
+Goal: guide a developer who is building a trading application or agent on
+Shield Swap — a frontend dApp, a trading bot, a server integration, or an
+agent — rather than trading interactively. The trading runbooks double as living
 integration references; this runbook maps what they want to build onto the
 SDK and points at the deep documentation.
 

@@ -6,8 +6,8 @@ description: >
   several at once), provide and withdraw liquidity, and collect swap
   outputs and LP earnings. Use when the user asks to set up a shield-swap
   account, get an airdrop, swap tokens, mint/add/remove liquidity
-  positions, collect earnings, or build an app/bot/integration on Shield
-  Swap.
+  positions, collect earnings, or develop a trading application or agent
+  on Shield Swap.
 ---
 
 # Trading on Shield Swap
@@ -99,8 +99,9 @@ not just its name:
    - *Collect earnings* — sweep up everything the account is owed (tokens
      bought in earlier swaps, fees its liquidity earned) into the wallet;
      good to run after any trading session.
-3. **Building something?** Ask whether they are developing an app, bot,
-   or integration on Shield Swap rather than (or besides) trading here.
+3. **Developing a trading application or agent?** Ask whether they are
+   building on Shield Swap — a dApp, a trading bot, a server or agent
+   integration — rather than (or besides) trading here.
    The chat-driven journeys above are one way to use the DEX; consumers
    also build on the SDK directly — route builders to
    [developing.md](./developing.md), which picks the client by where their
@@ -116,7 +117,7 @@ not just its name:
 | Discover pools and swap privately (incl. several at once) | [swapping.md](./swapping.md) | "find pools and start swapping" |
 | Mint positions, add/remove liquidity | [liquidity.md](./liquidity.md) | "create a position", "add/remove liquidity" |
 | Claim swap outputs, collect LP earnings | [collecting.md](./collecting.md) | "collect my earnings" |
-| Build an app, bot, or integration on Shield Swap | [developing.md](./developing.md) | "I'm building a dApp / trading bot on shield swap" |
+| Develop a trading application or agent on Shield Swap | [developing.md](./developing.md) | "I'm building a dApp / trading bot / agent on shield swap" |
 
 Always run startup first — every other runbook assumes its gates have
 passed (key material, API registration, DEX session, invite redemption,
