@@ -79,7 +79,9 @@ describe('decreaseLiquidity — wallet', () => {
       positionRecord: POSITION_RECORD,
     })
     expect(writeMock.mock.calls[0]![1].inputs[0]).toBe(POSITION_RECORD)
-    expect(res.positionTokenId).toBeUndefined()
+    // The granted plaintext names the position being spent — its token_id
+    // is surfaced in the return.
+    expect(res.positionTokenId).toBe('555field')
     expect(res.transactionId).toBe('at1walletDec')
   })
 })

@@ -246,6 +246,71 @@ export async function resolvePositionRecord(
 }
 
 /**
+ * Resolves a token record to its plaintext for a local-signer call.
+ *
+ * The token-record counterpart to {@link resolvePositionRecord}: rejects
+ * `InputRequest`s (the local path passes literals, never wallet requests),
+ * returns the caller's plaintext as-is, or auto-selects an unspent record
+ * covering the amount from `tokenInProgram`.
+ *
+ * Hits the network only when auto-selecting (a record scan).
+ *
+ * @param client A Veil wallet client (local account).
+ * @param params The optional record, and the program/token id/minimum amount
+ *   used to auto-select when no record is given.
+ * @returns The record plaintext literal for the transition input.
+ * @throws When `tokenRecord` is an `InputRequest`; when neither `tokenRecord`
+ *   nor `tokenInProgram` is given; and, when auto-selecting, when no record
+ *   covers the amount.
+ *
+ * @example
+ * const record = await resolveTokenRecord(client, { tokenInProgram, tokenId, minAmount })
+ */
+export async function resolveTokenRecord(
+  client: Client,
+  params: { tokenRecord?: string | InputRequest; tokenInProgram?: string; tokenId: string; minAmount: bigint },
+): Promise<string> {
+  if (typeof params.tokenRecord === 'string') {
+    return params.tokenRecord
+  }
+  if (params.tokenRecord) {
+    throw new Error('Local accounts cannot use InputRequests — pass a record plaintext literal instead')
+  }
+  if (!params.tokenInProgram) {
+    throw new Error('tokenInProgram is required to auto-select a record (or pass tokenRecord explicitly)')
+  }
+  const picked = await selectTokenRecord(client, {
+    program: params.tokenInProgram,
+    minAmount: params.minAmount,
+    tokenId: params.tokenId,
+  })
+  return picked.record.recordPlaintext
+}
+
+/**
+ * Extracts a PositionNFT's `token_id` from a record plaintext literal.
+ *
+ * Applies when a caller-supplied granted plaintext names the position being
+ * spent — the id inside the record is authoritative over any id the caller
+ * passed alongside it. Pure and local.
+ *
+ * @param plaintext The PositionNFT record plaintext.
+ * @returns The `token_id` field literal, or `undefined` when the plaintext
+ *   does not parse or carries no `token_id`.
+ *
+ * @example
+ * const tokenId = positionTokenIdFromPlaintext(grantedRecord)
+ */
+export function positionTokenIdFromPlaintext(plaintext: string): string | undefined {
+  try {
+    const raw = parseRecordPlaintextLoose(plaintext).fields.token_id?.value
+    return typeof raw === 'bigint' ? `${raw}field` : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * Parameters for {@link getPrivateBalances}.
  *
  * @property programs Token programs to scan — wrapper programs and/or the

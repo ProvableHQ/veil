@@ -1,4 +1,10 @@
 import { loadSdk } from './sdk.js'
+import {
+  formatMintPositionRequest,
+  formatSwapHopSlots,
+  type MintPositionRequestInput,
+  type SwapHopInput,
+} from './params.js'
 
 /**
  * Removes a trailing Aleo type suffix from a literal, if present.
@@ -9,6 +15,33 @@ import { loadSdk } from './sdk.js'
 function stripSuffix(literal: string, suffix: string): string {
   const trimmed = literal.trim()
   return trimmed.endsWith(suffix) ? trimmed.slice(0, -suffix.length) : trimmed
+}
+
+/**
+ * Normalizes a field literal to its suffixed form, accepting bare input —
+ * the tolerance every derivation in this file grants uniformly.
+ */
+function fieldLiteral(literal: string): string {
+  return `${stripSuffix(literal, 'field')}field`
+}
+
+/**
+ * Sorts a token pair ascending by numeric value, accepting bare or suffixed
+ * field literals — the canonical ordering the contract applies before
+ * building its `PoolKey` and `PairKey` structs. Pure and local.
+ *
+ * @param token0 One token id as a `field` literal (the suffix is optional).
+ * @param token1 The other token id.
+ * @returns The pair as bigints, ascending.
+ * @throws When a literal does not parse as an integer.
+ *
+ * @example
+ * const [t0, t1] = sortTokenPair(tokenA, tokenB)
+ */
+export function sortTokenPair(token0: string, token1: string): [bigint, bigint] {
+  const a = BigInt(stripSuffix(token0, 'field'))
+  const b = BigInt(stripSuffix(token1, 'field'))
+  return a <= b ? [a, b] : [b, a]
 }
 
 /**
@@ -62,10 +95,7 @@ export interface DerivePoolKeyParameters {
 export async function derivePoolKey(params: DerivePoolKeyParameters): Promise<string> {
   // Sort the pair ascending, matching the program's sorted_token0/1 before it
   // hashes — the key is order-independent in the token arguments.
-  const a = BigInt(stripSuffix(params.token0, 'field'))
-  const b = BigInt(stripSuffix(params.token1, 'field'))
-  const [token0, token1] = a <= b ? [a, b] : [b, a]
-
+  const [token0, token1] = sortTokenPair(params.token0, params.token1)
   return hashStruct(`{ token0: ${token0}field, token1: ${token1}field, fee: ${params.fee}u16 }`)
 }
 
@@ -103,6 +133,168 @@ export interface DeriveTickKeyParameters {
  * const tick = await publicClient.readContract({ programId, mapping: 'ticks', key: tickKey })
  */
 export async function deriveTickKey(params: DeriveTickKeyParameters): Promise<string> {
-  const pool = stripSuffix(params.pool, 'field')
-  return hashStruct(`{ pool: ${pool}field, tick: ${params.tick}i32 }`)
+  return hashStruct(`{ pool: ${fieldLiteral(params.pool)}, tick: ${params.tick}i32 }`)
+}
+
+/**
+ * Parameters for {@link deriveSwapId}.
+ *
+ * @property poolKey Pool key field literal the swap trades against (the
+ *   `field` suffix is optional).
+ * @property zeroForOne True when selling the pool's token0 for token1.
+ * @property amountIn Raw atomic amount sold (u128), as passed to `swap`.
+ * @property sqrtPriceLimit Q64 price bound (u128), as passed to `swap`.
+ * @property blindedAddress The swap's single-use blinded address — the
+ *   contract records it as both `recipient` and `caller` in the preimage.
+ * @property nonce The swap's u64 nonce.
+ */
+export interface DeriveSwapIdParameters {
+  poolKey: string
+  zeroForOne: boolean
+  amountIn: bigint
+  sqrtPriceLimit: bigint
+  blindedAddress: string
+  nonce: bigint
+}
+
+/**
+ * Derives a single-hop swap id without the network.
+ *
+ * Computes `BHP256::hash_to_field(SwapKey)` exactly as the `swap` transition
+ * does, with the blinded address occupying both the `recipient` and `caller`
+ * slots. Applies when the id is needed before the transaction confirms —
+ * e.g. a wallet-path swap whose `blindedIdentity` the dapp supplied, or
+ * re-deriving an id from persisted swap parameters.
+ *
+ * Loads the optional `@provablehq/sdk` peer on first call (see
+ * {@link loadSdk}); pure and local otherwise — no network, no signing.
+ *
+ * @param params The swap's preimage fields, exactly as submitted.
+ * @returns The swap id as a `field` literal — the `swap_outputs` mapping key.
+ * @throws When `@provablehq/sdk` is not installed, or when a literal does
+ *   not parse as its Aleo type.
+ *
+ * @example
+ * const swapId = await deriveSwapId({
+ *   poolKey, zeroForOne: true, amountIn, sqrtPriceLimit, blindedAddress, nonce,
+ * })
+ * const out = await getSwapOutput(client, { swapId })
+ */
+export async function deriveSwapId(params: DeriveSwapIdParameters): Promise<string> {
+  const pool = fieldLiteral(params.poolKey)
+  return hashStruct(
+    `{ pool: ${pool}, zero_for_one: ${params.zeroForOne}, amount_in: ${params.amountIn}u128, ` +
+      `sqrt_price_limit: ${params.sqrtPriceLimit}u128, recipient: ${params.blindedAddress}, ` +
+      `nonce: ${params.nonce}u64, caller: ${params.blindedAddress} }`,
+  )
+}
+
+/**
+ * Parameters for {@link derivePositionTokenId}.
+ *
+ * @property request The mint request exactly as submitted (spacing-aligned
+ *   ticks, resolved hints) — the same fields `mint` formats into its
+ *   `MintPositionRequest` input.
+ * @property recipient The position owner address, as passed to `mint`.
+ * @property nonce The mint's field-literal nonce (the `field` suffix is
+ *   optional).
+ */
+export interface DerivePositionTokenIdParameters {
+  request: MintPositionRequestInput
+  recipient: string
+  nonce: string
+}
+
+/**
+ * Derives a position's `token_id` without the network.
+ *
+ * Computes `BHP256::hash_to_field(TokenIDPreimage { request, recipient,
+ * nonce })` exactly as the `mint` transition does. Every preimage field is
+ * client-known before submission — including on the wallet path — so the id
+ * a mint will produce is computable ahead of confirmation. The id is the
+ * `positions` mapping key and the handle for later liquidity operations.
+ *
+ * Loads the optional `@provablehq/sdk` peer on first call; pure and local
+ * otherwise.
+ *
+ * @param params The mint's preimage fields, exactly as submitted.
+ * @returns The position token id as a `field` literal.
+ * @throws When `@provablehq/sdk` is not installed, or when a literal does
+ *   not parse as its Aleo type.
+ *
+ * @example
+ * const tokenId = await derivePositionTokenId({ request, recipient, nonce })
+ * const position = await getPosition(client, { positionTokenId: tokenId })
+ */
+export async function derivePositionTokenId(params: DerivePositionTokenIdParameters): Promise<string> {
+  // Grant the request's pool key the same bare-or-suffixed tolerance as the
+  // sibling derivations.
+  const request = { ...params.request, pool: fieldLiteral(params.request.pool) }
+  return hashStruct(
+    `{ request: ${formatMintPositionRequest(request)}, recipient: ${params.recipient}, ` +
+      `nonce: ${fieldLiteral(params.nonce)} }`,
+  )
+}
+
+/**
+ * Parameters for {@link deriveMultiHopSwapId}.
+ *
+ * @property tokenInId Token id (field literal) sold into the route.
+ * @property tokenOutId Token id (field literal) the route pays out.
+ * @property amountIn Raw atomic input amount (u128).
+ * @property amountOutMin Minimum acceptable final output (u128).
+ * @property blindedAddress The swap's single-use blinded address (occupies
+ *   both `recipient` and `caller` in the preimage).
+ * @property hops The 2–3 resolved hops, in route order.
+ * @property nonce The swap's u64 nonce.
+ * @property deadline Absolute block height (u32) — part of the multi-hop
+ *   preimage, unlike the single-hop `SwapKey`.
+ */
+export interface DeriveMultiHopSwapIdParameters {
+  tokenInId: string
+  tokenOutId: string
+  amountIn: bigint
+  amountOutMin: bigint
+  blindedAddress: string
+  hops: SwapHopInput[]
+  nonce: bigint
+  deadline: number
+}
+
+/**
+ * Derives a multi-hop swap id without the network.
+ *
+ * Computes `BHP256::hash_to_field(SwapMultiHopRequest)` exactly as the
+ * `swap_multi_hop` transition does: the blinded address as `recipient` and
+ * `caller`, unused hop slots zero-padded, and — unlike the single-hop id —
+ * the deadline included in the preimage.
+ *
+ * Loads the optional `@provablehq/sdk` peer on first call; pure and local
+ * otherwise.
+ *
+ * @param params The multi-hop request fields, exactly as submitted.
+ * @returns The swap id as a `field` literal — the `swap_outputs` mapping key.
+ * @throws When `hops` is not 2 or 3 entries; when `@provablehq/sdk` is not
+ *   installed; or when a literal does not parse as its Aleo type.
+ *
+ * @example
+ * const swapId = await deriveMultiHopSwapId({
+ *   tokenInId, tokenOutId, amountIn, amountOutMin: 0n,
+ *   blindedAddress, hops, nonce, deadline,
+ * })
+ */
+export async function deriveMultiHopSwapId(params: DeriveMultiHopSwapIdParameters): Promise<string> {
+  // Normalize pool literals so bare and suffixed keys hash identically;
+  // formatSwapHopSlots enforces the 2–3 count and zero-pads the third slot.
+  const [hop0, hop1, hop2] = formatSwapHopSlots(
+    params.hops.map((h) => (h ? { ...h, poolKey: fieldLiteral(h.poolKey) } : h)),
+  )
+  const tokenIn = fieldLiteral(params.tokenInId)
+  const tokenOut = fieldLiteral(params.tokenOutId)
+  return hashStruct(
+    `{ token_in: ${tokenIn}, token_out: ${tokenOut}, amount_in: ${params.amountIn}u128, ` +
+      `amount_out_min: ${params.amountOutMin}u128, recipient: ${params.blindedAddress}, ` +
+      `hop0: ${hop0}, hop1: ${hop1}, hop2: ${hop2}, hop_count: ${params.hops.length}u8, ` +
+      `nonce: ${params.nonce}u64, deadline: ${params.deadline}u32, caller: ${params.blindedAddress} }`,
+  )
 }

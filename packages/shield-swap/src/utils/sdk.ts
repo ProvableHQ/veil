@@ -42,3 +42,32 @@ export async function loadSdk(): Promise<AleoSdk> {
   }
   return sdkPromise
 }
+
+let sdkUnavailable = false
+
+/**
+ * Attempts to load the optional `@provablehq/sdk` peer, resolving `null`
+ * instead of throwing when it is not installed.
+ *
+ * Applies to best-effort enrichment — an action that can fill a derived id
+ * when the WASM SDK happens to be present, but must degrade to its SDK-free
+ * behaviour (leaving the field `undefined`) in a wallet-only bundle. A caller
+ * that requires the SDK uses {@link loadSdk} and its actionable error instead.
+ *
+ * The negative result is cached: once the import has failed, later calls
+ * return `null` without retrying ({@link loadSdk} keeps its retry behaviour
+ * for callers that install the package mid-process).
+ *
+ * @returns The loaded SDK module, or `null` when the peer cannot be imported.
+ *
+ * @example
+ * const sdk = await tryLoadSdk()
+ * const swapId = sdk ? await deriveSwapId(args) : undefined
+ */
+export async function tryLoadSdk(): Promise<AleoSdk | null> {
+  if (sdkUnavailable) return null
+  return loadSdk().catch(() => {
+    sdkUnavailable = true
+    return null
+  })
+}

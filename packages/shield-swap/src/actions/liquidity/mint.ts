@@ -1,34 +1,13 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@provablehq/veil-core'
 import { selectTokenRecord } from '../../utils/records.js'
 import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
-import { generateFieldNonce } from '../../utils/params.js'
+import { generateFieldNonce, formatMintPositionRequest } from '../../utils/params.js'
+import { tryLoadSdk } from '../../utils/sdk.js'
+import { derivePositionTokenId } from '../../utils/keys.js'
 import { roundTickToSpacing } from '../../utils/tick-math.js'
 import { pickInsertHint } from '../../utils/tick-hints.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 
-/**
- * Formats a MintPositionRequest struct literal in the contract's exact
- * field order — pool, ticks, desired/min amounts, hints. Order is
- * load-bearing: struct hashing and the transition input both depend on it.
- */
-export function formatMintPositionRequest(req: {
-  pool: string
-  tickLower: number
-  tickUpper: number
-  amount0Desired: bigint
-  amount1Desired: bigint
-  amount0Min: bigint
-  amount1Min: bigint
-  tickLowerHint: number
-  tickUpperHint: number
-}): string {
-  return (
-    `{ pool: ${req.pool}, tick_lower: ${req.tickLower}i32, tick_upper: ${req.tickUpper}i32, ` +
-    `amount0_desired: ${req.amount0Desired}u128, amount1_desired: ${req.amount1Desired}u128, ` +
-    `amount0_min: ${req.amount0Min}u128, amount1_min: ${req.amount1Min}u128, ` +
-    `tick_lower_hint: ${req.tickLowerHint}i32, tick_upper_hint: ${req.tickUpperHint}i32 }`
-  )
-}
 
 /**
  * Parameters for {@link mint}.
@@ -85,8 +64,10 @@ export type MintParameters = {
  *
  * @property positionTokenId The position's `token_id` (first public
  *   output) — the key for `getPosition` and later liquidity changes. Known
- *   immediately on the local path; `undefined` on the wallet path until
- *   confirmation.
+ *   immediately on the local path; on the wallet path it is derived locally
+ *   when `@provablehq/sdk` is installed, and `undefined` otherwise — recover
+ *   it from the confirmed transaction or compute it with
+ *   `derivePositionTokenId`.
  * @property transactionId The mint transaction's id.
  */
 export type MintReturnType = {
@@ -111,7 +92,8 @@ export type MintReturnType = {
  *
  * @param client A Veil wallet client (local or wallet account).
  * @param params The range, amounts, and optional overrides.
- * @returns The position token id (local path) and transaction id.
+ * @returns The position token id (derived locally on the wallet path when
+ *   the WASM peer is present) and transaction id.
  * @throws When the pool does not exist; when the range is empty after
  *   spacing alignment; when records are missing (local) or not provided
  *   (wallet); and on transport/proving errors.
@@ -146,7 +128,7 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
   const tickUpperHint =
     params.tickUpperHint === undefined && tickLower > upperPredecessor ? tickLower : upperPredecessor
 
-  const request = formatMintPositionRequest({
+  const requestInput = {
     pool: params.poolKey,
     tickLower,
     tickUpper,
@@ -156,7 +138,8 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
     amount1Min: params.amount1Min ?? 0n,
     tickLowerHint,
     tickUpperHint,
-  })
+  }
+  const request = formatMintPositionRequest(requestInput)
 
   const account = requireAccount(client, 'mint')
   const isLocal = account.type === 'local'
@@ -201,9 +184,16 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
     pool.token0,
     pool.token1,
   ]
+  // Best-effort id: every preimage field is client-known, so when the
+  // optional WASM peer is present the id is computable ahead of submission.
+  // A derivation fault (broken WASM asset, CSP, version skew) degrades to
+  // undefined rather than blocking a submittable transaction.
+  const positionTokenId = (await tryLoadSdk())
+    ? await derivePositionTokenId({ request: requestInput, recipient, nonce }).catch(() => undefined)
+    : undefined
   const transactionId = await writeContract(client, { program, function: 'mint',
       imports: params.imports ? Object.keys(params.imports) : undefined, inputs })
-  return { positionTokenId: undefined, transactionId }
+  return { positionTokenId, transactionId }
 }
 
 /** Auto-select a token record on the local path, with an actionable error. */

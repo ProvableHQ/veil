@@ -1,5 +1,5 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@provablehq/veil-core'
-import { resolvePositionRecord } from '../../utils/records.js'
+import { resolvePositionRecord, positionTokenIdFromPlaintext } from '../../utils/records.js'
 import { requireAccount } from '../../utils/guards.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 
@@ -27,8 +27,9 @@ export type BurnParameters = {
  * The burn's essentials.
  *
  * @property positionTokenId The burned position's `token_id` (first public
- *   output on the local path; `undefined` on the wallet path until
- *   confirmation).
+ *   output on the local path; on the wallet path, echoes the
+ *   caller-supplied `positionTokenId` — the id is stable across position
+ *   operations — and is `undefined` when only `positionRecord` was given).
  * @property transactionId The transaction's id.
  */
 export type BurnReturnType = {
@@ -52,7 +53,8 @@ export type BurnReturnType = {
  *
  * @param client A Veil wallet client (local or wallet account).
  * @param params The position to burn and optional overrides.
- * @returns The burned position's token id (local path) and transaction id.
+ * @returns The burned position's token id (echoed from the caller on the
+ *   wallet path) and transaction id.
  * @throws When no matching position is found (local); when `positionRecord` is
  *   missing (wallet); when the position is not fully drained (on chain); and on
  *   transport/proving errors.
@@ -90,5 +92,12 @@ export async function burn(client: Client, params: BurnParameters): Promise<Burn
   }
   const inputs: TransactionInput[] = [params.positionRecord]
   const transactionId = await writeContract(client, { program, function: 'burn', inputs })
-  return { positionTokenId: undefined, transactionId }
+  // The id is stable across position operations. Prefer the id inside a
+  // granted plaintext (the position actually spent); fall back to the
+  // caller-supplied id for opaque record requests.
+  const positionTokenId =
+    (typeof params.positionRecord === 'string'
+      ? positionTokenIdFromPlaintext(params.positionRecord)
+      : undefined) ?? params.positionTokenId
+  return { positionTokenId, transactionId }
 }

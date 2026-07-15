@@ -11,6 +11,7 @@ vi.mock('@provablehq/veil-core', async (importOriginal) => {
 import { executeContract, writeContract } from '@provablehq/veil-core'
 import { swap } from '../../../src/actions/swap/swap.js'
 import { claimSwapOutput, SwapOutputNotFinalizedError } from '../../../src/actions/swap/claimSwapOutput.js'
+import { deriveSwapId } from '../../../src/utils/keys.js'
 import { MIN_SQRT_PRICE } from '../../../src/utils/tick-math.js'
 
 const executeMock = vi.mocked(executeContract)
@@ -22,11 +23,11 @@ const POOL_PLAINTEXT =
 const SLOT_PLAINTEXT =
   '{\n  tick: -62200i32,\n  tick_spacing: 200u32,\n  sqrt_price: 411435173233802309u128,\n  fee_protocol: 0u8,\n  liquidity: 94217047056u128,\n  fee_growth_global0_x_64: 0u128,\n  fee_growth_global1_x_64: 0u128,\n  fee_residual0_x_64: 0u128,\n  fee_residual1_x_64: 0u128,\n  max_liquidity_per_tick: 9223372036854775808u128,\n  protocol_fees0: 0u128,\n  protocol_fees1: 0u128,\n  next_init_below: -64400i32,\n  next_init_above: -60000i32\n}'
 const SWAP_OUTPUT_PLAINTEXT =
-  '{\n  recipient: aleo1blinded000000000000000000000000000000000000000000000q3ljyzc,\n  caller: aleo1blinded000000000000000000000000000000000000000000000q3ljyzc,\n  token_in: 122352848155208110005843045field,\n  token_out: 15594200448253854747971580789field,\n  amount_out: 1980000u128,\n  amount_remaining: 0u128,\n  token_in_1: 0field,\n  amount_remaining_1: 0u128,\n  token_in_2: 0field,\n  amount_remaining_2: 0u128\n}'
+  '{\n  recipient: aleo1t08epjqqv8h7jpuy2m2cxm80zy2pcy5c4f3m82hnac4sjmdrjyysvx3s2h,\n  caller: aleo1t08epjqqv8h7jpuy2m2cxm80zy2pcy5c4f3m82hnac4sjmdrjyysvx3s2h,\n  token_in: 122352848155208110005843045field,\n  token_out: 15594200448253854747971580789field,\n  amount_out: 1980000u128,\n  amount_remaining: 0u128,\n  token_in_1: 0field,\n  amount_remaining_1: 0u128,\n  token_in_2: 0field,\n  amount_remaining_2: 0u128\n}'
 
 const POOL_KEY = '4719270064611482818245310300232007815222047549513360085395965112315873598024field'
 const TOKEN0 = '122352848155208110005843045field'
-const IDENTITY = { blindingFactor: '111field', blindedAddress: 'aleo1blinded000000000000000000000000000000000000000000000q3ljyzc' }
+const IDENTITY = { blindingFactor: '111field', blindedAddress: 'aleo1t08epjqqv8h7jpuy2m2cxm80zy2pcy5c4f3m82hnac4sjmdrjyysvx3s2h' }
 const RECORD = '{ owner: aleo1me.private, amount: 5000000000000000000u128.private, _nonce: 1group.public }'
 
 /** Scripted client: chain reads answered per mapping; height fixed at 1000. */
@@ -154,6 +155,30 @@ describe('swap — wallet signer', () => {
     await expect(
       swap(fakeClient('rpc'), { poolKey: POOL_KEY, tokenInId: TOKEN0, amountIn: 10n ** 18n }),
     ).rejects.toThrow(/must provide tokenRecord/)
+  })
+
+  it('derives swapId when the caller supplied the blinded identity', async () => {
+    writeMock.mockResolvedValue('at1walletTx')
+    const handle = await swap(fakeClient('rpc'), {
+      poolKey: POOL_KEY, tokenInId: TOKEN0, amountIn: 10n ** 18n, expectedOut: 2_000_000n, nonce: 42n,
+      blindedIdentity: IDENTITY,
+      tokenRecord: RECORD,
+    })
+    expect(handle.swapId).toBe(
+      await deriveSwapId({
+        poolKey: POOL_KEY,
+        zeroForOne: true,
+        amountIn: 10n ** 18n,
+        sqrtPriceLimit: MIN_SQRT_PRICE,
+        blindedAddress: IDENTITY.blindedAddress,
+        nonce: 42n,
+      }),
+    )
+    // The handle now carries the preimage fields, so a late derivation
+    // (once the blinded address is known) needs nothing else.
+    expect(handle.zeroForOne).toBe(true)
+    expect(handle.sqrtPriceLimit).toBe(MIN_SQRT_PRICE)
+    expect(handle.nonce).toBe(42n)
   })
 })
 

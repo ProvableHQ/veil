@@ -58,9 +58,36 @@ describe('shieldSwapAgentToolSchemas — gating', () => {
     expect(names({ includeWrites: true })).not.toContain('shield_swap_swap')
     // Client + opt-in → writes appear.
     const withWrites = names({ client: {} as Client, includeWrites: true })
-    expect(withWrites).toEqual(expect.arrayContaining(['shield_swap_swap', 'shield_swap_claim', 'shield_swap_create_pool']))
+    expect(withWrites).toEqual(
+      expect.arrayContaining([
+        'shield_swap_swap',
+        'shield_swap_claim',
+        'shield_swap_create_pool',
+        'shield_swap_swap_multi_hop',
+        'shield_swap_claim_multi_hop',
+      ]),
+    )
     // No config returns everything, writes included.
     expect(names()).toContain('shield_swap_mint')
+  })
+
+  it('includes the new chain reads with a client', () => {
+    const chain = names({ client: {} as Client })
+    expect(chain).toEqual(
+      expect.arrayContaining(['shield_swap_get_position', 'shield_swap_get_tick', 'shield_swap_get_trade_controls']),
+    )
+  })
+
+  it('always includes the pure derivation tools — no backing needed', () => {
+    for (const cfg of [undefined, { client: {} as Client }, { api: {} as ApiClient }, {}]) {
+      expect(names(cfg)).toEqual(
+        expect.arrayContaining([
+          'shield_swap_derive_swap_id',
+          'shield_swap_derive_position_token_id',
+          'shield_swap_derive_multi_hop_swap_id',
+        ]),
+      )
+    }
   })
 })
 
@@ -87,5 +114,98 @@ describe('createShieldSwapAgentTools — wiring', () => {
     const getRoute = tools.find((t) => t.schema.name === 'shield_swap_get_route')!
     await getRoute.handler({ tokenIn: 'aField', tokenOut: 'bField', amountIn: '1000000000000000000' })
     expect(calls.getRoute).toEqual({ token_in: 'aField', token_out: 'bField', amount_in: 10n ** 18n })
+  })
+
+  it('derive_position_token_id handler round-trips against derivePositionTokenId', async () => {
+    const { derivePositionTokenId } = await import('../../src/utils/keys.js')
+    const tools = createShieldSwapAgentTools({})
+    const tool = tools.find((t) => t.schema.name === 'shield_swap_derive_position_token_id')!
+    const blinded = 'aleo1t08epjqqv8h7jpuy2m2cxm80zy2pcy5c4f3m82hnac4sjmdrjyysvx3s2h'
+    const result = (await tool.handler({
+      poolKey: '1field',
+      tickLower: -600,
+      tickUpper: 600,
+      amount0Desired: '10',
+      amount1Desired: '10',
+      tickLowerHint: -600,
+      tickUpperHint: -600,
+      recipient: blinded,
+      nonce: '7field',
+    })) as { positionTokenId: string }
+    expect(result.positionTokenId).toBe(
+      await derivePositionTokenId({
+        request: {
+          pool: '1field',
+          tickLower: -600,
+          tickUpper: 600,
+          amount0Desired: 10n,
+          amount1Desired: 10n,
+          amount0Min: 0n, // schema default when omitted
+          amount1Min: 0n,
+          tickLowerHint: -600,
+          tickUpperHint: -600,
+        },
+        recipient: blinded,
+        nonce: '7field',
+      }),
+    )
+  })
+
+  it('derive_multi_hop_swap_id handler round-trips against deriveMultiHopSwapId', async () => {
+    const { deriveMultiHopSwapId } = await import('../../src/utils/keys.js')
+    const tools = createShieldSwapAgentTools({})
+    const tool = tools.find((t) => t.schema.name === 'shield_swap_derive_multi_hop_swap_id')!
+    const blinded = 'aleo1t08epjqqv8h7jpuy2m2cxm80zy2pcy5c4f3m82hnac4sjmdrjyysvx3s2h'
+    const hops = [
+      { poolKey: '10field', zeroForOne: true, sqrtPriceLimit: '19029805711' },
+      { poolKey: '20field', zeroForOne: false, sqrtPriceLimit: '4470386772317930780047134862' },
+    ]
+    const result = (await tool.handler({
+      tokenInId: '1field',
+      tokenOutId: '2field',
+      amountIn: '1000',
+      amountOutMin: '1',
+      blindedAddress: blinded,
+      hops,
+      nonce: '42',
+      deadline: 5000000,
+    })) as { swapId: string }
+    expect(result.swapId).toBe(
+      await deriveMultiHopSwapId({
+        tokenInId: '1field',
+        tokenOutId: '2field',
+        amountIn: 1000n,
+        amountOutMin: 1n,
+        blindedAddress: blinded,
+        hops: hops.map((h) => ({ ...h, sqrtPriceLimit: BigInt(h.sqrtPriceLimit) })),
+        nonce: 42n,
+        deadline: 5000000,
+      }),
+    )
+  })
+
+  it('derive_swap_id handler round-trips against deriveSwapId', async () => {
+    const { deriveSwapId } = await import('../../src/utils/keys.js')
+    const tools = createShieldSwapAgentTools({})
+    const tool = tools.find((t) => t.schema.name === 'shield_swap_derive_swap_id')!
+    const blinded = 'aleo1t08epjqqv8h7jpuy2m2cxm80zy2pcy5c4f3m82hnac4sjmdrjyysvx3s2h'
+    const result = (await tool.handler({
+      poolKey: '1field',
+      zeroForOne: true,
+      amountIn: '1000',
+      sqrtPriceLimit: '19029805711',
+      blindedAddress: blinded,
+      nonce: '42',
+    })) as { swapId: string }
+    expect(result.swapId).toBe(
+      await deriveSwapId({
+        poolKey: '1field',
+        zeroForOne: true,
+        amountIn: 1000n,
+        sqrtPriceLimit: 19029805711n,
+        blindedAddress: blinded,
+        nonce: 42n,
+      }),
+    )
   })
 })

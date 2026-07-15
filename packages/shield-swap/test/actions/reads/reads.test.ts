@@ -2,13 +2,11 @@ import { describe, it, expect } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
 import { getSlot } from '../../../src/actions/reads/getSlot.js'
 import { getSwapOutput } from '../../../src/actions/reads/getSwapOutput.js'
-import {
-  isBlindedAddressUsed,
-  isPoolInitialized,
-  isFeeTierValid,
-  isTickSpacingValid,
-  getFeeToTickSpacing,
-} from '../../../src/actions/reads/validation.js'
+import { isBlindedAddressUsed } from '../../../src/actions/reads/isBlindedAddressUsed.js'
+import { isPoolInitialized } from '../../../src/actions/reads/isPoolInitialized.js'
+import { isFeeTierValid } from '../../../src/actions/reads/isFeeTierValid.js'
+import { isTickSpacingValid } from '../../../src/actions/reads/isTickSpacingValid.js'
+import { getFeeToTickSpacing } from '../../../src/actions/reads/getFeeToTickSpacing.js'
 
 // Real `slots` mapping value captured from testnet (shield_swap, ETHx/USDC pool).
 const REAL_SLOT_PLAINTEXT =

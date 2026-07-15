@@ -1,5 +1,5 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@provablehq/veil-core'
-import { resolvePositionRecord } from '../../utils/records.js'
+import { resolvePositionRecord, positionTokenIdFromPlaintext } from '../../utils/records.js'
 import { requireAccount } from '../../utils/guards.js'
 import { DEFAULT_PROGRAM } from '../../constants.js'
 
@@ -35,8 +35,9 @@ export type DecreaseLiquidityParameters = {
  * The decrease's essentials.
  *
  * @property positionTokenId The shrunk position's `token_id` (first public
- *   output on the local path; `undefined` on the wallet path until
- *   confirmation).
+ *   output on the local path; on the wallet path, echoes the
+ *   caller-supplied `positionTokenId` — the id is stable across position
+ *   operations — and is `undefined` when only `positionRecord` was given).
  * @property transactionId The transaction's id.
  */
 export type DecreaseLiquidityReturnType = {
@@ -60,7 +61,8 @@ export type DecreaseLiquidityReturnType = {
  *
  * @param client A Veil wallet client (local or wallet account).
  * @param params The amount to remove and optional overrides.
- * @returns The position token id (local path) and transaction id.
+ * @returns The position token id (echoed from the caller on the wallet
+ *   path) and transaction id.
  * @throws When no matching position is found (local); when `positionRecord` is
  *   missing (wallet); and on transport/proving errors.
  *
@@ -107,5 +109,12 @@ export async function decreaseLiquidity(
   }
   const inputs: TransactionInput[] = [params.positionRecord, ...tail]
   const transactionId = await writeContract(client, { program, function: 'decrease_liquidity', inputs })
-  return { positionTokenId: undefined, transactionId }
+  // The id is stable across position operations. Prefer the id inside a
+  // granted plaintext (the position actually spent); fall back to the
+  // caller-supplied id for opaque record requests.
+  const positionTokenId =
+    (typeof params.positionRecord === 'string'
+      ? positionTokenIdFromPlaintext(params.positionRecord)
+      : undefined) ?? params.positionTokenId
+  return { positionTokenId, transactionId }
 }

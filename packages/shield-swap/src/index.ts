@@ -10,13 +10,31 @@ export {
   type GetSwapOutputParameters,
   type GetSwapOutputReturnType,
 } from './actions/reads/getSwapOutput.js'
+export { isBlindedAddressUsed } from './actions/reads/isBlindedAddressUsed.js'
+export { isPoolInitialized } from './actions/reads/isPoolInitialized.js'
+export { isFeeTierValid } from './actions/reads/isFeeTierValid.js'
+export { isTickSpacingValid } from './actions/reads/isTickSpacingValid.js'
+export { getFeeToTickSpacing } from './actions/reads/getFeeToTickSpacing.js'
 export {
-  isBlindedAddressUsed,
-  isPoolInitialized,
-  isFeeTierValid,
-  isTickSpacingValid,
-  getFeeToTickSpacing,
-} from './actions/reads/validation.js'
+  getPosition,
+  type GetPositionParameters,
+  type GetPositionReturnType,
+} from './actions/reads/getPosition.js'
+export { getTick, type GetTickParameters, type GetTickReturnType } from './actions/reads/getTick.js'
+
+// Control-state reads: the pause/allowlist/freeze gates the finalize asserts,
+// as cheap pre-flight checks, plus the batched getTradeControls verdict.
+export { isGlobalPaused } from './actions/reads/isGlobalPaused.js'
+export { isPoolCreationOpen } from './actions/reads/isPoolCreationOpen.js'
+export { isTokenAllowed } from './actions/reads/isTokenAllowed.js'
+export { isTokenPaused } from './actions/reads/isTokenPaused.js'
+export { isPairPaused } from './actions/reads/isPairPaused.js'
+export { getFrozenPosition } from './actions/reads/getFrozenPosition.js'
+export { getTokenDecimals } from './actions/reads/getTokenDecimals.js'
+export {
+  getTradeControls,
+  type GetTradeControlsReturnType,
+} from './actions/reads/getTradeControls.js'
 
 // Blinded identity (private-swap identity lifecycle). Local derivation lazily
 // loads the optional @provablehq/sdk peer; wallet accounts never need it.
@@ -44,6 +62,19 @@ export {
   type ClaimSwapOutputParameters,
   type ClaimSwapOutputReturnType,
 } from './actions/swap/claimSwapOutput.js'
+
+// The multi-hop variant: 2–3 pools in one atomic route, same two-phase shape.
+export {
+  swapMultiHop,
+  type MultiHopSwapHandle,
+  type SwapMultiHopParameters,
+  type SwapMultiHopReturnType,
+} from './actions/swap/swapMultiHop.js'
+export {
+  claimMultiHopOutput,
+  type ClaimMultiHopOutputParameters,
+  type ClaimMultiHopOutputReturnType,
+} from './actions/swap/claimMultiHopOutput.js'
 
 // Off-chain DEX API client (trusted convenience layer; typed from the
 // service's own OpenAPI via `pnpm regen-openapi`).
@@ -74,6 +105,8 @@ export {
   parseTokenRecordInfo,
   selectTokenRecord,
   selectPositionNFT,
+  resolveTokenRecord,
+  positionTokenIdFromPlaintext,
   getPrivateBalances,
   type TokenRecordInfo,
   type PositionNFTInfo,
@@ -94,12 +127,8 @@ export {
 // Liquidity lifecycle: create a pool, mint a position, deepen it, shrink it,
 // collect owed tokens, and burn the drained position.
 export { createPool, type CreatePoolParameters, type CreatePoolReturnType } from './actions/liquidity/createPool.js'
-export {
-  mint,
-  formatMintPositionRequest,
-  type MintParameters,
-  type MintReturnType,
-} from './actions/liquidity/mint.js'
+export { mint, type MintParameters, type MintReturnType } from './actions/liquidity/mint.js'
+export { formatMintPositionRequest, type MintPositionRequestInput } from './utils/params.js'
 export {
   increaseLiquidity,
   type IncreaseLiquidityParameters,
@@ -114,13 +143,22 @@ export { collect, type CollectParameters, type CollectReturnType } from './actio
 export { burn, type BurnParameters, type BurnReturnType } from './actions/liquidity/burn.js'
 export { pickInsertHint, type PickInsertHintParameters } from './utils/tick-hints.js'
 
-// Local pool/tick key derivation (BHP256 struct hash via the optional
-// @provablehq/sdk peer) — address a pool or tick without a network round trip.
+// Local key/id derivation (BHP256 struct hash via the optional
+// @provablehq/sdk peer) — address pools, ticks, swaps, and positions without
+// a network round trip. Actions fill the ids best-effort; these helpers
+// compute them explicitly.
 export {
   derivePoolKey,
   deriveTickKey,
+  deriveSwapId,
+  derivePositionTokenId,
+  deriveMultiHopSwapId,
+  sortTokenPair,
   type DerivePoolKeyParameters,
   type DeriveTickKeyParameters,
+  type DeriveSwapIdParameters,
+  type DerivePositionTokenIdParameters,
+  type DeriveMultiHopSwapIdParameters,
 } from './utils/keys.js'
 
 // Pure strategy primitives (no I/O): prices, impact, valuation, fee APR.
@@ -142,11 +180,18 @@ export { shieldSwapActions, type ShieldSwapActionsConfig, type ShieldSwapActions
 // and the contract's Q64 tick math table.
 export {
   resolveSwapParams,
+  resolveMultiHopParams,
   getDeadline,
   generateSwapNonce,
   generateFieldNonce,
+  formatSwapHop,
+  formatSwapHopSlots,
+  EMPTY_SWAP_HOP_LITERAL,
   type ResolveSwapParamsInput,
   type ResolvedSwapParams,
+  type ResolveMultiHopParamsInput,
+  type ResolvedMultiHopParams,
+  type SwapHopInput,
 } from './utils/params.js'
 export {
   Q64,
