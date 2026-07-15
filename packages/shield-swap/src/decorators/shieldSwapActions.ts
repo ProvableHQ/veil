@@ -65,7 +65,7 @@ import {
 } from '../utils/records.js'
 import { getBalances, type GetBalancesParameters, type GetBalancesReturnType } from '../utils/balances.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hints.js'
-import { ApiClient, type ApiClientOptions } from '../api/client.js'
+import { ApiClient, authenticateWithAccount, type ApiClientOptions } from '../api/client.js'
 
 /**
  * Configuration for {@link shieldSwapActions}.
@@ -115,6 +115,13 @@ export type ShieldSwapActions = {
   decreaseLiquidity: (params: DecreaseLiquidityParameters) => Promise<DecreaseLiquidityReturnType>
   collect: (params: CollectParameters) => Promise<CollectReturnType>
   burn: (params: BurnParameters) => Promise<BurnReturnType>
+  /**
+   * Authenticates the `.api` client by signing its challenge with the
+   * client's account. Most DEX API endpoints are bearer-gated; call this once
+   * per session (the JWT lasts ~24h and renews automatically on expiry), or
+   * skip it entirely by configuring the api with a long-lived `apiToken`.
+   */
+  authenticateApi: () => Promise<string>
   api: ApiClient
 }
 
@@ -189,6 +196,12 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     decreaseLiquidity: (p) => decreaseLiquidity(client, withProgram(p)),
     collect: (p) => collect(client, withProgram(p)),
     burn: (p) => burn(client, withProgram(p)),
+    authenticateApi: () => {
+      if (!client.account) {
+        return Promise.reject(new Error('authenticateApi requires a client with an account — the account signs the challenge.'))
+      }
+      return authenticateWithAccount(api ?? missingApi, client.account)
+    },
     api: api ?? missingApi,
   })
 }

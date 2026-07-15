@@ -115,6 +115,47 @@ or the service. By default everything targets `shield_swap_v3.aleo` and the
 Provable dev API; override either with
 `shieldSwapActions({ program, api: { baseUrl } })`.
 
+### Authenticating with the DEX API
+
+Most API endpoints beyond pool and token discovery — routes, swaps, positions,
+balances, fee tiers, candles — are bearer-gated. Two credentials work:
+
+- **A session JWT** (about 24 hours), issued by a challenge/verify handshake:
+  the API sends a nonce message, the account signs it, and the signature is
+  exchanged for the token. On a composed client this is one call:
+
+  ```ts
+  await client.authenticateApi()
+  const route = await client.api.getRoute({ token_in, token_out })
+  ```
+
+  The signer is retained, so when the session expires the next gated call
+  renews it and retries automatically (disable with
+  `api: { autoReauthenticate: false }`). Outside the decorator, use
+  `authenticateWithAccount(api, account)` or `api.authenticate(address, sign)`
+  directly — the latter is what a wallet-backed frontend wires to its own
+  signing prompt.
+
+- **A long-lived API token** (`ss_…`), minted once under a session JWT and
+  passed at construction. Suited to bots, CI, and servers that should not
+  re-sign on every boot:
+
+  ```ts
+  // One-time provisioning (keep the secret — it is shown only once):
+  await client.authenticateApi()
+  const { token } = await client.api.createApiToken({ name: 'trading-bot' })
+
+  // Every run after that:
+  const bot = walletClient.extend(shieldSwapActions({ api: { apiToken: token } }))
+  ```
+
+  API tokens cover data and trading endpoints; managing tokens themselves
+  (`createApiToken`, `listApiTokens`, `revokeApiToken`) always requires a
+  session JWT. Revoking a token stops it authenticating immediately.
+
+Calling a gated method with no credential fails fast client-side with the
+remedy in the message, rather than surfacing a bare 401.
+
 ## Pools and tokens
 
 Pool discovery goes through the API. Each pool entry has the pool key
@@ -606,20 +647,22 @@ opt in. They double as the most complete usage examples in the repo.
 
 There are two tiers of gating. The read-only tier needs only `VEIL_INTEGRATION=1`.
 The write tier additionally needs a funded testnet account and delegated-proving
-credentials, because it broadcasts real transactions and pays fees:
+credentials, because it broadcasts real transactions and pays fees. Most DEX API
+endpoints are bearer-gated, so the API-auth suites also need the account key —
+it signs the challenge, no fees involved:
 
 ```sh
 VEIL_INTEGRATION=1          # enables every integration test
-VEIL_E2E_PRIVATE_KEY=...    # funded testnet account — write tier only (pays fees)
+VEIL_E2E_PRIVATE_KEY=...    # testnet account — signs DEX API auth; write tier needs it funded (pays fees)
 ALEO_DPS_API_KEY=...        # delegated proving — write tier only
 ALEO_CONSUMER_ID=...        # delegated proving + record scanning — write tier only
 ```
 
 | File | Tier | What it exercises |
 | --- | --- | --- |
-| [`traders.integration.test.ts`](./test/integration/traders.integration.test.ts) | read-only | The analyses a trader runs before trading — spot price, price impact and output size from live liquidity, route quoting with slippage sizing, in-range LP position selection, and fee-APR from OHLCV volume. Asserts math invariants, not exact live figures. |
+| [`traders.integration.test.ts`](./test/integration/traders.integration.test.ts) | read-only | The analyses a trader runs before trading — spot price, price impact and output size from live liquidity, route quoting with slippage sizing, in-range LP position selection, and fee-APR from OHLCV volume. Asserts math invariants, not exact live figures. The OHLCV test needs `VEIL_E2E_PRIVATE_KEY` (bearer-gated endpoint). |
 | [`reads.integration.test.ts`](./test/integration/reads.integration.test.ts) | read-only | Chain-direct reads (pools, slots, fee tiers, validation) against live state. |
-| [`api.integration.test.ts`](./test/integration/api.integration.test.ts) | read-only | The off-chain `ApiClient` — pools, tokens, routes, balances, OHLCV. |
+| [`api.integration.test.ts`](./test/integration/api.integration.test.ts) | read-only | The off-chain `ApiClient` — the public surface credential-less, then with `VEIL_E2E_PRIVATE_KEY` both auth flows end-to-end: the session handshake over the gated reads (routes, balances, OHLCV, fee tiers), auto re-auth after expiry, and the API-token lifecycle (mint, use, list, revoke — self-cleaning). |
 | [`balances.integration.test.ts`](./test/integration/balances.integration.test.ts) | write | The composed balance view — public balances from the API joined with private balances decoded from the account's records. Needs the account because private balances live in its records. |
 | [`poolCreation.integration.test.ts`](./test/integration/poolCreation.integration.test.ts) | write | Creates a pool on testnet: finds a token pair and a registered fee tier, calls `createPool`, then polls `isPoolInitialized` until the finalize propagates. If the pair already has a pool at every tier tried, it confirms the contract rejects the duplicate instead. |
 | [`e2e.test.ts`](./test/integration/e2e.test.ts) | write | The full private-swap lifecycle — airdrop, privatize records, ensure a pool, `swap`, read the output, `claimSwapOutput`. |

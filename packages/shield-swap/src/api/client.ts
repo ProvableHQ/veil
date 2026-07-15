@@ -1,3 +1,4 @@
+import type { AnyAccount } from '@provablehq/veil-core'
 import type { components } from './openapi.js'
 
 type Schemas = components['schemas']
@@ -11,10 +12,24 @@ export const DEFAULT_API_URL = 'https://amm-api.dev.provable.com'
  * @property baseUrl DEX API origin. Defaults to the Provable dev API.
  * @property fetch Custom fetch implementation (tests, polyfills). Defaults
  *   to the global fetch.
+ * @property apiToken Long-lived API token (`ss_…`) minted via
+ *   {@link ApiClient.createApiToken}. Covers data and trading endpoints
+ *   without a signature handshake — suited to bots, CI, and servers holding a
+ *   provisioned key. Token management still requires a session JWT from
+ *   {@link ApiClient.authenticate}.
+ * @property autoReauthenticate Re-run the challenge/verify handshake and
+ *   retry once when a gated call fails with 401 after
+ *   {@link ApiClient.authenticate} — session JWTs expire after ~24h, so
+ *   long-running processes heal without wiring their own retry. Defaults to
+ *   true; set false to surface the 401 instead. Only applies when the client
+ *   has authenticated (it needs the signer); apiToken-only clients cannot
+ *   re-authenticate.
  */
 export type ApiClientOptions = {
   baseUrl?: string
   fetch?: typeof fetch
+  apiToken?: string
+  autoReauthenticate?: boolean
 }
 
 /** A DEX API request that came back non-2xx, with the server's error body. */
@@ -39,9 +54,12 @@ export class ApiError extends Error {
  * spec (`pnpm regen-openapi`), so drift shows up as a type change, not a
  * runtime surprise.
  *
- * Auth: `authenticate()` runs the challenge/verify handshake and stores the
- * JWT; auth-gated calls attach it automatically. Every method hits the
- * network.
+ * Auth: most endpoints beyond pool/token discovery are bearer-gated. Two
+ * credentials work: a 24h session JWT from `authenticate()` (challenge/verify
+ * signature handshake), or a long-lived API token (`ss_…`) passed as
+ * `apiToken` at construction and minted once via `createApiToken()`. Gated
+ * calls attach whichever is available (session JWT first); API-token
+ * management accepts session JWTs only. Every method hits the network.
  *
  * @example
  * const api = new ApiClient()
@@ -51,17 +69,33 @@ export class ApiError extends Error {
 export class ApiClient {
   readonly baseUrl: string
   private readonly fetchImpl: typeof fetch
+  private readonly apiToken: string | undefined
+  private readonly autoReauthenticate: boolean
   private token: string | undefined
+  // Kept from the last authenticate() call so an expired session can be
+  // renewed transparently; shared promise dedupes concurrent renewals.
+  private signer: { address: string; sign: (message: string) => Promise<string> } | undefined
+  private reauthInFlight: Promise<string> | undefined
 
   constructor(options: ApiClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? DEFAULT_API_URL).replace(/\/$/, '')
     this.fetchImpl = options.fetch ?? fetch
+    this.apiToken = options.apiToken
+    this.autoReauthenticate = options.autoReauthenticate ?? true
   }
 
   private async request<T>(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'DELETE',
     path: string,
-    opts: { query?: Record<string, string | number | undefined>; body?: unknown; auth?: boolean } = {},
+    opts: {
+      query?: Record<string, string | number | undefined>
+      body?: unknown
+      // true: any credential (session JWT preferred, then API token).
+      // 'session': session JWT only — the server rejects API tokens here.
+      auth?: boolean | 'session'
+      // Set internally on the post-re-auth retry so one 401 never loops.
+      isRetry?: boolean
+    } = {},
   ): Promise<T> {
     const url = new URL(this.baseUrl + path)
     for (const [k, v] of Object.entries(opts.query ?? {})) {
@@ -69,17 +103,41 @@ export class ApiClient {
     }
     const headers: Record<string, string> = { accept: 'application/json' }
     if (opts.body !== undefined) headers['content-type'] = 'application/json'
-    if (opts.auth) {
-      if (!this.token) throw new Error(`${path} requires auth — call authenticate() first`)
+    if (opts.auth === 'session') {
+      if (!this.token) {
+        throw new Error(`${path} requires a session JWT — call authenticate() first (API tokens are not accepted here)`)
+      }
       headers.authorization = `Bearer ${this.token}`
+    } else if (opts.auth) {
+      const bearer = this.token ?? this.apiToken
+      if (!bearer) throw new Error(`${path} requires auth — call authenticate() or pass apiToken at construction`)
+      headers.authorization = `Bearer ${bearer}`
     }
     const res = await this.fetchImpl(url, {
       method,
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     })
-    if (!res.ok) throw new ApiError(res.status, path, await res.text())
+    if (!res.ok) {
+      // An expired session JWT comes back 401; when the signer from
+      // authenticate() is on hand, renew the session once and retry.
+      if (res.status === 401 && opts.auth && !opts.isRetry && this.autoReauthenticate && this.signer) {
+        await res.text().catch(() => undefined)
+        await this.reauthenticate()
+        return this.request(method, path, { ...opts, isRetry: true })
+      }
+      throw new ApiError(res.status, path, await res.text())
+    }
     return (await res.json()) as T
+  }
+
+  /** Renews the session JWT via the stored signer, deduping concurrent renewals. */
+  private async reauthenticate(): Promise<void> {
+    const { address, sign } = this.signer!
+    this.reauthInFlight ??= this.authenticate(address, sign).finally(() => {
+      this.reauthInFlight = undefined
+    })
+    await this.reauthInFlight
   }
 
   // ── auth ─────────────────────────────────────────────────────────────
@@ -90,6 +148,8 @@ export class ApiClient {
    * The API authenticates by signature: it issues a nonce message, the
    * account signs it, and the signature is exchanged for a JWT. The token is
    * held on this instance and attached to auth-gated calls automatically.
+   * The signer is retained so an expired session renews itself on the next
+   * 401 (see `autoReauthenticate`).
    *
    * @param address The authenticating account's address.
    * @param sign Signs the challenge message and returns an Aleo signature
@@ -97,20 +157,81 @@ export class ApiClient {
    * @returns The JWT, in case the caller wants to persist it.
    */
   async authenticate(address: string, sign: (message: string) => Promise<string>): Promise<string> {
-    const challenge = await this.request<Schemas['ChallengeResponseDoc']>('POST', '/auth/challenge', {
-      body: { address },
-    })
-    const signature = await sign(challenge.data.message)
-    const verified = await this.request<Schemas['AuthTokenResponseDoc']>('POST', '/auth/verify', {
-      body: { address, signature },
-    })
-    this.token = verified.data.token
-    return this.token
+    // The server keeps one active challenge per address, so concurrent
+    // logins for the same account invalidate each other's nonce and verify
+    // 401s. A fresh handshake heals that race — retry it a bounded number
+    // of times; other failures (bad request, server error) surface at once.
+    const attempts = 3
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const challenge = await this.request<Schemas['ChallengeResponseDoc']>('POST', '/auth/challenge', {
+          body: { address },
+        })
+        const signature = await sign(challenge.data.message)
+        const verified = await this.request<Schemas['AuthTokenResponseDoc']>('POST', '/auth/verify', {
+          body: { address, signature },
+        })
+        this.signer = { address, sign }
+        this.token = verified.data.token
+        return this.token
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.status !== 401 || attempt >= attempts) throw err
+      }
+    }
   }
 
-  /** Adopts a previously issued JWT (e.g. persisted from a prior session). */
+  /** Adopts a previously issued session JWT (e.g. persisted from a prior session). */
   setToken(token: string): void {
     this.token = token
+  }
+
+  /**
+   * Mints a long-lived API token (`ss_…`) under the current session JWT.
+   *
+   * The returned `token` is the full secret and is shown only once — the
+   * caller MUST store it; later listings expose only the prefix. Pass the
+   * secret as `apiToken` when constructing an {@link ApiClient} to skip the
+   * signature handshake on subsequent sessions.
+   *
+   * @param body.name Label shown in listings (e.g. `"trading-bot"`).
+   * @param body.expires_in_days Optional lifetime in days. Omitted or null
+   *   means the token does not expire.
+   * @returns The created token row including the one-time full secret.
+   * @throws When no session JWT is held, or the server rejects the name,
+   *   expiry, or active-token limit.
+   */
+  async createApiToken(body: Schemas['ApiTokenCreateRequest']): Promise<Schemas['ApiTokenCreatedResponse']> {
+    const res = await this.request<Schemas['ApiTokenCreatedResponseDoc']>('POST', '/api-tokens', {
+      body,
+      auth: 'session',
+    })
+    return res.data
+  }
+
+  /**
+   * Lists the account's API tokens (prefixes only, never full secrets).
+   *
+   * Requires a session JWT — API tokens cannot inspect or manage tokens.
+   */
+  async listApiTokens(): Promise<Schemas['ApiTokenRow'][]> {
+    const res = await this.request<Schemas['ApiTokenListResponseDoc']>('GET', '/api-tokens', { auth: 'session' })
+    return res.data.tokens
+  }
+
+  /**
+   * Revokes an API token by its id; the token stops authenticating immediately.
+   *
+   * Requires a session JWT — API tokens cannot inspect or manage tokens.
+   *
+   * @param id The token's uuid from {@link createApiToken} or {@link listApiTokens}.
+   */
+  async revokeApiToken(id: string): Promise<Schemas['ApiTokenRevokeResponse']> {
+    const res = await this.request<Schemas['ApiTokenRevokeResponseDoc']>(
+      'DELETE',
+      `/api-tokens/${encodeURIComponent(id)}`,
+      { auth: 'session' },
+    )
+    return res.data
   }
 
   // ── pools & markets ──────────────────────────────────────────────────
@@ -127,7 +248,7 @@ export class ApiClient {
 
   /** Reads a pool's rolling 24h price/volume summary. */
   async getPoolStats(key: string): Promise<Schemas['PoolStatsDoc']> {
-    return this.request('GET', `/pools/${encodeURIComponent(key)}/stats`)
+    return this.request('GET', `/pools/${encodeURIComponent(key)}/stats`, { auth: true })
   }
 
   /** Lists a pool's trades, optionally filtered by kind (paginated). */
@@ -135,7 +256,7 @@ export class ApiClient {
     key: string,
     query?: { limit?: number; offset?: number; trade_type?: string },
   ): Promise<Schemas['PoolTradesResponseDoc']> {
-    return this.request('GET', `/pools/${encodeURIComponent(key)}/trades`, { query })
+    return this.request('GET', `/pools/${encodeURIComponent(key)}/trades`, { query, auth: true })
   }
 
   /** Reads OHLCV candles for a pool over a unix-seconds time range. */
@@ -143,19 +264,19 @@ export class ApiClient {
     key: string,
     query: { granularity: '1m' | '5m' | '15m' | '1h' | '4h' | '1d'; from: number; to: number },
   ): Promise<Schemas['OhlcvResponseDoc']> {
-    return this.request('GET', `/pools/${encodeURIComponent(key)}/ohlcv`, { query })
+    return this.request('GET', `/pools/${encodeURIComponent(key)}/ohlcv`, { query, auth: true })
   }
 
   // ── swaps & routing ──────────────────────────────────────────────────
 
   /** Lists a user's swap history (paginated; the API requires `user`). */
   async getSwaps(query: { user: string; pool?: string; limit?: number; offset?: number }): Promise<Schemas['SwapListResponseDoc']> {
-    return this.request('GET', '/swaps', { query })
+    return this.request('GET', '/swaps', { query, auth: true })
   }
 
   /** Reads one swap by id, with its hops and amounts. */
   async getSwap(swapId: string): Promise<Schemas['SwapResponseDoc']> {
-    return this.request('GET', `/swaps/${encodeURIComponent(swapId)}`)
+    return this.request('GET', `/swaps/${encodeURIComponent(swapId)}`, { auth: true })
   }
 
   /**
@@ -167,6 +288,7 @@ export class ApiClient {
   async getRoute(query: { token_in: string; token_out: string; amount_in?: bigint }): Promise<Schemas['RouteResponseDoc']> {
     return this.request('GET', '/route', {
       query: { token_in: query.token_in, token_out: query.token_out, amount_in: query.amount_in?.toString() },
+      auth: true,
     })
   }
 
@@ -174,12 +296,12 @@ export class ApiClient {
 
   /** Lists a user's liquidity positions (paginated). */
   async getPositions(query: { user: string; limit?: number; offset?: number }): Promise<Schemas['PositionListResponseDoc']> {
-    return this.request('GET', '/positions', { query })
+    return this.request('GET', '/positions', { query, auth: true })
   }
 
   /** Reads one position by its token id. */
   async getPosition(tokenId: string): Promise<Schemas['PositionResponseDoc']> {
-    return this.request('GET', `/positions/${encodeURIComponent(tokenId)}`)
+    return this.request('GET', `/positions/${encodeURIComponent(tokenId)}`, { auth: true })
   }
 
   /** Lists all registered tokens with metadata. */
@@ -199,29 +321,29 @@ export class ApiClient {
 
   /** Reads a user's public/authorized balances (base units, as the API sees them). */
   async getPublicBalances(query: { user: string }): Promise<Schemas['BalanceListResponseDoc']> {
-    return this.request('GET', '/balances', { query })
+    return this.request('GET', '/balances', { query, auth: true })
   }
 
   // ── protocol config ──────────────────────────────────────────────────
 
   /** Lists registered fee tiers with their tick spacings. */
   async getFeeTiers(): Promise<Schemas['FeeTierListResponseDoc']> {
-    return this.request('GET', '/fee-tiers')
+    return this.request('GET', '/fee-tiers', { auth: true })
   }
 
   /** Lists registered tick spacings. */
   async getTickSpacings(): Promise<Schemas['TickSpacingListResponseDoc']> {
-    return this.request('GET', '/tick-spacings')
+    return this.request('GET', '/tick-spacings', { auth: true })
   }
 
   /** Lists the on-chain operation schemas the API publishes. */
   async getTradingSchemas(): Promise<Schemas['TradingSchemaListResponse']> {
-    return this.request('GET', '/schema/trading')
+    return this.request('GET', '/schema/trading', { auth: true })
   }
 
   /** Reads one operation schema by id (e.g. `"swap"`). */
   async getTradingSchema(id: string): Promise<Schemas['TradingSchemaResponse']> {
-    return this.request('GET', `/schema/trading/${encodeURIComponent(id)}`)
+    return this.request('GET', `/schema/trading/${encodeURIComponent(id)}`, { auth: true })
   }
 
   // ── utilities ────────────────────────────────────────────────────────
@@ -252,6 +374,28 @@ export class ApiClient {
 
   /** Raw on-chain pool introspection (slot + tick statuses) via the API. */
   async debugPool(query: { pool_key: string; ticks?: string }): Promise<Schemas['PoolDebugResponseDoc']> {
-    return this.request('GET', '/debug/pool', { query })
+    return this.request('GET', '/debug/pool', { query, auth: true })
   }
+}
+
+/**
+ * Runs {@link ApiClient.authenticate} with a Veil account as the signer.
+ *
+ * Bridges the account's byte-oriented `signMessage` to the string challenge
+ * the DEX API issues. Hits the network (challenge + verify) and leaves the
+ * session JWT on the client, so subsequent gated calls authenticate — and,
+ * with `autoReauthenticate` (the default), renew — automatically.
+ *
+ * @param api The API client that receives the session.
+ * @param account The signing account, e.g. `client.account`.
+ * @returns The session JWT, in case the caller wants to persist it.
+ *
+ * @example
+ * await authenticateWithAccount(client.api, client.account!)
+ * const tiers = await client.api.getFeeTiers()
+ */
+export async function authenticateWithAccount(api: ApiClient, account: AnyAccount): Promise<string> {
+  return api.authenticate(account.address, async (message) =>
+    new TextDecoder().decode(await account.signMessage(new TextEncoder().encode(message))),
+  )
 }

@@ -83,6 +83,36 @@ examples on [`swap`](/api/shield-swap/swap) show the connect-time setup,
 including the `SHIELD_SWAP_ALGORITHM_GRANTS` the wallet needs to derive
 blinded identities.
 
+## Authenticating with the DEX API
+
+Most DEX API endpoints beyond pool and token discovery — routes, swaps,
+positions, balances, fee tiers, candles — require a bearer credential. The
+account signs a challenge once per session:
+
+```ts
+await client.authenticateApi()
+const route = await client.api.getRoute({ token_in, token_out })
+```
+
+The session lasts about 24 hours and renews itself: the signer is retained,
+so an expired session re-authenticates and retries on the next gated call.
+
+A process that should not sign on every boot — a bot, CI, a server — mints a
+long-lived API token (`ss_…`) once and passes it at construction instead:
+
+```ts
+// One-time provisioning; the secret is shown only once.
+await client.authenticateApi()
+const { token } = await client.api.createApiToken({ name: 'trading-bot' })
+
+// Every run after that — no handshake, no signer needed for API reads.
+const bot = walletClient.extend(shieldSwapActions({ api: { apiToken: token } }))
+```
+
+Managing tokens (`createApiToken`, `listApiTokens`, `revokeApiToken`) always
+requires a fresh session JWT; the tokens themselves cover data and trading
+endpoints only.
+
 ## Pools and tokens
 
 Pool discovery goes through the DEX API. Each entry carries the pool key —

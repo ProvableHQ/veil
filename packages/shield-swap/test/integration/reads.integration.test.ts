@@ -18,12 +18,16 @@ import { isPairPaused } from '../../src/actions/reads/isPairPaused.js'
 import { getFrozenPosition } from '../../src/actions/reads/getFrozenPosition.js'
 import { getTokenDecimals } from '../../src/actions/reads/getTokenDecimals.js'
 import { getTradeControls } from '../../src/actions/reads/getTradeControls.js'
+import { ApiClient, authenticateWithAccount } from '../../src/api/client.js'
 import { PROGRAM_ID } from '../../src/generated/shield_swap.js'
 
 // Real-API integration: hits the live testnet node and the live DEX API.
 // Never mocked — these tests exist to catch drift between this client and the
 // deployed contract/API. Gated so the default offline suite stays fast.
+// The fee-tier registry endpoint is bearer-gated, so that one test
+// additionally needs VEIL_E2E_PRIVATE_KEY to sign the API challenge.
 const RUN = process.env.VEIL_INTEGRATION === '1'
+const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
 
 const API_BASE = 'https://api.provable.com/v2'
 const NODE_URL = `${API_BASE}/testnet`
@@ -85,12 +89,14 @@ describe.runIf(RUN)('reads against the real API', () => {
     expect(await getSwapOutput(client, { swapId: absent })).toBeNull()
   }, 30_000)
 
-  it('validation reads agree with the API fee-tier registry', async () => {
-    const res = await fetch(`${INDEXER_URL}/fee-tiers`)
-    expect(res.ok).toBe(true)
-    const body = (await res.json()) as { data: { fee_tier: number }[] }
-    expect(body.data.length).toBeGreaterThan(0)
-    const fee = body.data[0]!.fee_tier
+  it.runIf(!!PRIVATE_KEY)('validation reads agree with the API fee-tier registry', async () => {
+    const { loadNetwork } = await import('@provablehq/veil-aleo-sdk')
+    const api = new ApiClient({ baseUrl: INDEXER_URL })
+    const aleo = await loadNetwork('testnet')
+    await authenticateWithAccount(api, aleo.privateKeyToAccount(PRIVATE_KEY!))
+    const tiers = await api.getFeeTiers()
+    expect(tiers.data.length).toBeGreaterThan(0)
+    const fee = tiers.data[0]!.fee_tier
 
     // The target deployment must register the fee the API advertises,
     // bind a tick spacing to it, and register that spacing.

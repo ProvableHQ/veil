@@ -63,6 +63,8 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   } = {}
 
   it('funds the account via the async airdrop when balances are empty', async () => {
+    // Balances, the airdrop, and most other API reads are bearer-gated.
+    await client.authenticateApi()
     const balances = await client.api.getPublicBalances({ user: account.address })
     const empty = balances.data.length === 0 || balances.data.every((b) => BigInt(b.balance ?? 0) === 0n)
     if (empty) {

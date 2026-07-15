@@ -10,7 +10,11 @@ const POOL_PLAINTEXT =
 /** Scripted client: answers the `pools` mapping read getPool performs. */
 function fakeClient(): Client {
   return {
-    account: { type: 'local', address: 'aleo1me' },
+    account: {
+      type: 'local',
+      address: 'aleo1me',
+      signMessage: async (m: Uint8Array) => new TextEncoder().encode(`signed:${new TextDecoder().decode(m)}`),
+    },
     request: async (req: { method: string; params?: { mapping?: string } }) => {
       if (req.method === 'getMappingValue') return req.params?.mapping === 'pools' ? POOL_PLAINTEXT : null
       throw new Error(`unexpected ${req.method}`)
@@ -25,6 +29,14 @@ function fakeApi(calls: Record<string, unknown>): ApiClient {
     getRoute: async (q: unknown) => ((calls.getRoute = q), { data: { amount_out: '0' } }),
     getTokens: async () => ({ data: [] }),
     getPublicBalances: async (q: unknown) => ((calls.getPublicBalances = q), { data: [] }),
+    authenticate: async (address: string, sign: (m: string) => Promise<string>) => (
+      (calls.authenticate = { address, signature: await sign('challenge-msg') }), 'jwt123'
+    ),
+    createApiToken: async (body: unknown) => (
+      (calls.createApiToken = body), { id: 'u1', name: 'bot', token: 'ss_live_new', token_prefix: 'ss_live_n', created_at: 'now' }
+    ),
+    listApiTokens: async () => [{ id: 'u1', name: 'bot', token_prefix: 'ss_live_n', created_at: 'now' }],
+    revokeApiToken: async (id: unknown) => ((calls.revokeApiToken = id), { id, revoked: true }),
   } as unknown as ApiClient
 }
 
@@ -78,6 +90,22 @@ describe('shieldSwapAgentToolSchemas — gating', () => {
     )
   })
 
+  it('gates the auth tools on both client (signer) and api', () => {
+    const authNames = [
+      'shield_swap_authenticate',
+      'shield_swap_create_api_token',
+      'shield_swap_list_api_tokens',
+      'shield_swap_revoke_api_token',
+    ]
+    // Signing needs the client's account; the flow itself needs the API.
+    for (const name of authNames) {
+      expect(names({ client: {} as Client, api: {} as ApiClient })).toContain(name)
+      expect(names({ client: {} as Client })).not.toContain(name)
+      expect(names({ api: {} as ApiClient })).not.toContain(name)
+      expect(names()).toContain(name)
+    }
+  })
+
   it('always includes the pure derivation tools — no backing needed', () => {
     for (const cfg of [undefined, { client: {} as Client }, { api: {} as ApiClient }, {}]) {
       expect(names(cfg)).toEqual(
@@ -114,6 +142,42 @@ describe('createShieldSwapAgentTools — wiring', () => {
     const getRoute = tools.find((t) => t.schema.name === 'shield_swap_get_route')!
     await getRoute.handler({ tokenIn: 'aField', tokenOut: 'bField', amountIn: '1000000000000000000' })
     expect(calls.getRoute).toEqual({ token_in: 'aField', token_out: 'bField', amount_in: 10n ** 18n })
+  })
+
+  it('authenticate handler signs the challenge with the client account, never leaks the JWT', async () => {
+    const calls: Record<string, unknown> = {}
+    const tools = createShieldSwapAgentTools({ client: fakeClient(), api: fakeApi(calls) })
+    const auth = tools.find((t) => t.schema.name === 'shield_swap_authenticate')!
+    const result = (await auth.handler({})) as Record<string, unknown>
+    expect(result).toEqual({ authenticated: true, address: 'aleo1me' })
+    const recorded = calls.authenticate as { address: string; signature: string }
+    expect(recorded.address).toBe('aleo1me')
+    expect(recorded.signature).toBe('signed:challenge-msg')
+  })
+
+  it('authenticate handler fails actionably without an account on the client', async () => {
+    const calls: Record<string, unknown> = {}
+    const tools = createShieldSwapAgentTools({ client: {} as Client, api: fakeApi(calls) })
+    const auth = tools.find((t) => t.schema.name === 'shield_swap_authenticate')!
+    await expect(auth.handler({})).rejects.toThrow(/account/)
+  })
+
+  it('api-token handlers map camelCase inputs to the wire shape', async () => {
+    const calls: Record<string, unknown> = {}
+    const tools = createShieldSwapAgentTools({ client: fakeClient(), api: fakeApi(calls) })
+
+    const create = tools.find((t) => t.schema.name === 'shield_swap_create_api_token')!
+    const created = (await create.handler({ name: 'bot', expiresInDays: 30 })) as Record<string, unknown>
+    expect(calls.createApiToken).toEqual({ name: 'bot', expires_in_days: 30 })
+    expect(created.token).toBe('ss_live_new') // the one-time secret must surface
+
+    const list = tools.find((t) => t.schema.name === 'shield_swap_list_api_tokens')!
+    const listed = (await list.handler({})) as { tokens: Array<{ id: string }> }
+    expect(listed.tokens[0]!.id).toBe('u1')
+
+    const revoke = tools.find((t) => t.schema.name === 'shield_swap_revoke_api_token')!
+    await revoke.handler({ id: 'u1' })
+    expect(calls.revokeApiToken).toBe('u1')
   })
 
   it('derive_position_token_id handler round-trips against derivePositionTokenId', async () => {
