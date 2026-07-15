@@ -119,14 +119,20 @@ export class ApiClient {
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     })
     if (!res.ok) {
+      const error = new ApiError(res.status, path, await res.text())
       // An expired session JWT comes back 401; when the signer from
-      // authenticate() is on hand, renew the session once and retry.
+      // authenticate() is on hand, renew the session once and retry. A
+      // failed renewal surfaces the original error — the caller asked for
+      // this endpoint, not for the handshake.
       if (res.status === 401 && opts.auth && !opts.isRetry && this.autoReauthenticate && this.signer) {
-        await res.text().catch(() => undefined)
-        await this.reauthenticate()
+        try {
+          await this.reauthenticate()
+        } catch {
+          throw error
+        }
         return this.request(method, path, { ...opts, isRetry: true })
       }
-      throw new ApiError(res.status, path, await res.text())
+      throw error
     }
     return (await res.json()) as T
   }
@@ -150,6 +156,12 @@ export class ApiClient {
    * held on this instance and attached to auth-gated calls automatically.
    * The signer is retained so an expired session renews itself on the next
    * 401 (see `autoReauthenticate`).
+   *
+   * The handshake retries up to three times on a 401 — the server keeps one
+   * active challenge per address, so concurrent logins race. A signer whose
+   * signature the server persistently rejects is therefore invoked up to
+   * three times before the error surfaces; an interactive wallet user may
+   * see repeated signing prompts in that (misconfigured) case.
    *
    * @param address The authenticating account's address.
    * @param sign Signs the challenge message and returns an Aleo signature
@@ -199,6 +211,11 @@ export class ApiClient {
    * @returns The created token row including the one-time full secret.
    * @throws When no session JWT is held, or the server rejects the name,
    *   expiry, or active-token limit.
+   *
+   * @example
+   * await authenticateWithAccount(api, account)
+   * const { token } = await api.createApiToken({ name: 'trading-bot' })
+   * // Store `token`; later sessions: new ApiClient({ apiToken: token })
    */
   async createApiToken(body: Schemas['ApiTokenCreateRequest']): Promise<Schemas['ApiTokenCreatedResponse']> {
     const res = await this.request<Schemas['ApiTokenCreatedResponseDoc']>('POST', '/api-tokens', {
@@ -387,14 +404,19 @@ export class ApiClient {
  * with `autoReauthenticate` (the default), renew — automatically.
  *
  * @param api The API client that receives the session.
- * @param account The signing account, e.g. `client.account`.
+ * @param account The signing account, e.g. `client.account`. Accepts
+ *   `undefined` so call sites can pass an optional `client.account` directly.
  * @returns The session JWT, in case the caller wants to persist it.
+ * @throws When `account` is undefined — the handshake needs a signer.
  *
  * @example
- * await authenticateWithAccount(client.api, client.account!)
+ * await authenticateWithAccount(client.api, client.account)
  * const tiers = await client.api.getFeeTiers()
  */
-export async function authenticateWithAccount(api: ApiClient, account: AnyAccount): Promise<string> {
+export async function authenticateWithAccount(api: ApiClient, account: AnyAccount | undefined): Promise<string> {
+  if (!account) {
+    throw new Error('DEX API authentication requires a client with an account — the account signs the challenge.')
+  }
   return api.authenticate(account.address, async (message) =>
     new TextDecoder().decode(await account.signMessage(new TextEncoder().encode(message))),
   )

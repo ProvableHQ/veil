@@ -52,8 +52,10 @@ signing keys live and what you are integrating.
   - *In an agent trader* — pair it with `@provablehq/veil-aleo-sdk` and the
     `@provablehq/shield-swap-sdk/agent` and `/mcp` tooling.
   - *In a programmatic trader or bot* — pair it with `@provablehq/veil-aleo-sdk`
-    (local key, delegated or local proving). Read-only pool and price queries
-    need only a transport — no key, proving, or scanner.
+    (local key, delegated or local proving). On-chain pool reads need only a
+    transport — no key, proving, or scanner. Most DEX API endpoints beyond
+    pool/token discovery are bearer-gated: authenticate once with the account
+    (`client.authenticateApi()`) or pass a provisioned `apiToken`.
 
 ### Registering with the Provable API
 

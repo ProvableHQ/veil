@@ -67,12 +67,12 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
       records: scanner,
     }))
     dex = walletClient.extend(shieldSwapActions({ api: {}, program: DEX_PROGRAM }))
-    // Balances, the faucet, and most other API reads are bearer-gated.
-    await dex.authenticateApi()
 
     // No pools to swap against → skip funding entirely so the no-pool case
-    // resolves in seconds rather than waiting out the faucet poll.
+    // resolves in seconds rather than waiting out the faucet poll. Pool
+    // listing is public; everything after it is bearer-gated.
     if ((await dex.api.getPools({ limit: 1 })).data.length === 0) return
+    await dex.authenticateApi()
 
     // Airdrop once if the account holds nothing — the swap privatizes public
     // balance, so it needs a funded token.

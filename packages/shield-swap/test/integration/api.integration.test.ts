@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
-import { ApiClient, ApiError } from '../../src/api/client.js'
+import type { AnyAccount, Client } from '@provablehq/veil-core'
+import { ApiClient, ApiError, authenticateWithAccount } from '../../src/api/client.js'
 
 /**
  * Real-API integration: the whole read surface plus both auth flows against
@@ -24,6 +25,13 @@ const RUN_AUTHED = RUN && !!PRIVATE_KEY
 // in beforeAll so the account never hits the server's active-token limit.
 const TEST_TOKEN_PREFIX = 'veil-itest-'
 
+/** Revokes any unexpired test tokens this suite (or a crashed run) minted. */
+async function sweepTestTokens(api: ApiClient): Promise<void> {
+  for (const row of await api.listApiTokens()) {
+    if (row.name.startsWith(TEST_TOKEN_PREFIX) && !row.revoked_at) await api.revokeApiToken(row.id)
+  }
+}
+
 describe.runIf(RUN)('ApiClient against the live DEX API (public surface)', () => {
   const api = new ApiClient()
 
@@ -46,35 +54,31 @@ describe.runIf(RUN)('ApiClient against the live DEX API (public surface)', () =>
     expect(token.data.address).toBe(tokens.data[0]!.address)
   }, 30_000)
 
-  it('gated endpoints reject without a credential (server-side 401)', async () => {
-    // Bypass the client-side fail-fast to prove the server itself gates.
-    const raw = api as unknown as {
-      request: (m: string, p: string, o?: object) => Promise<unknown>
-    }
-    await expect(raw.request('GET', '/fee-tiers')).rejects.toThrow(ApiError)
-    await expect(raw.request('GET', '/fee-tiers')).rejects.toThrow(/401/)
+  it('gated endpoints reject a bad credential (server-side 401)', async () => {
+    // An invalid token passes the client-side fail-fast, proving the server
+    // itself gates — one request, both assertions on the captured error.
+    const err = await new ApiClient({ apiToken: 'ss_invalid' }).getFeeTiers().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect((err as ApiError).status).toBe(401)
   }, 30_000)
 })
 
 describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () => {
   let api: ApiClient
+  let account: AnyAccount
   let address: string
-  let sign: (message: string) => Promise<string>
 
   beforeAll(async () => {
     const aleo = await loadNetwork('testnet')
-    const account = aleo.privateKeyToAccount(PRIVATE_KEY!)
+    account = aleo.privateKeyToAccount(PRIVATE_KEY!)
     address = account.address
-    sign = async (message) => new TextDecoder().decode(await account.sign(new TextEncoder().encode(message)))
 
     api = new ApiClient()
-    const jwt = await api.authenticate(address, sign)
+    const jwt = await authenticateWithAccount(api, account)
     expect(jwt.length).toBeGreaterThan(0)
 
     // Sweep API tokens left behind by crashed runs.
-    for (const row of await api.listApiTokens()) {
-      if (row.name.startsWith(TEST_TOKEN_PREFIX) && !row.revoked_at) await api.revokeApiToken(row.id)
-    }
+    await sweepTestTokens(api)
   }, 60_000)
 
   it('session JWT covers the gated read surface', async () => {
@@ -185,18 +189,16 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
 
   it('agent auth tools drive the full token lifecycle end-to-end', async () => {
     const { createShieldSwapAgentTools } = await import('../../src/agent/index.js')
-    const aleo = await loadNetwork('testnet')
-    const account = aleo.privateKeyToAccount(PRIVATE_KEY!)
     // The auth tools need only the signing account from the client.
     const toolApi = new ApiClient()
     const tools = createShieldSwapAgentTools({
-      client: { account } as unknown as import('@provablehq/veil-core').Client,
+      client: { account } as unknown as Client,
       api: toolApi,
     })
     const call = async (name: string, input: Record<string, unknown> = {}) =>
       tools.find((t) => t.schema.name === name)!.handler(input)
 
-    expect(await call('shield_swap_authenticate')).toEqual({ authenticated: true, address: account.address })
+    expect(await call('shield_swap_authenticate')).toEqual({ authenticated: true, address })
 
     const created = (await call('shield_swap_create_api_token', {
       name: `${TEST_TOKEN_PREFIX}agent-${Date.now()}`,
@@ -216,10 +218,6 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
   afterAll(async () => {
     // Belt and braces: leave no test tokens behind for the active-token limit.
     if (!api) return
-    for (const row of await api.listApiTokens().catch(() => [])) {
-      if (row.name.startsWith(TEST_TOKEN_PREFIX) && !row.revoked_at) {
-        await api.revokeApiToken(row.id).catch(() => {})
-      }
-    }
+    await sweepTestTokens(api).catch(() => {})
   }, 30_000)
 })

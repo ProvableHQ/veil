@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { getProgram } from '@provablehq/veil-core'
@@ -62,9 +62,13 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     handle?: Awaited<ReturnType<typeof client.swap>>
   } = {}
 
-  it('funds the account via the async airdrop when balances are empty', async () => {
-    // Balances, the airdrop, and most other API reads are bearer-gated.
+  // Balances, the airdrop, and most other API reads are bearer-gated; a
+  // beforeAll keeps later tests independent of the airdrop test running.
+  beforeAll(async () => {
     await client.authenticateApi()
+  }, 60_000)
+
+  it('funds the account via the async airdrop when balances are empty', async () => {
     const balances = await client.api.getPublicBalances({ user: account.address })
     const empty = balances.data.length === 0 || balances.data.every((b) => BigInt(b.balance ?? 0) === 0n)
     if (empty) {

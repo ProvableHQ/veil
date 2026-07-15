@@ -82,7 +82,19 @@ export type ShieldSwapActionsConfig = {
   program?: string
 }
 
-/** The action surface {@link shieldSwapActions} adds to a client. */
+/**
+ * The action surface {@link shieldSwapActions} adds to a client.
+ *
+ * @property authenticateApi Authenticates the `.api` client by signing its
+ *   challenge with the client's account. Most DEX API endpoints are
+ *   bearer-gated; call once per session — the JWT lasts ~24h and renews
+ *   automatically on expiry — or skip it by configuring the api with a
+ *   long-lived `apiToken`. Hits the network (challenge + verify) and signs.
+ *   Returns the session JWT for callers that persist it; rejects when the
+ *   client has no account.
+ * @property api The off-chain DEX API client; throws on first use when no
+ *   `api` was configured.
+ */
 export type ShieldSwapActions = {
   getPool: (params: GetPoolParameters) => Promise<GetPoolReturnType>
   getSlot: (params: GetSlotParameters) => Promise<GetSlotReturnType>
@@ -115,12 +127,6 @@ export type ShieldSwapActions = {
   decreaseLiquidity: (params: DecreaseLiquidityParameters) => Promise<DecreaseLiquidityReturnType>
   collect: (params: CollectParameters) => Promise<CollectReturnType>
   burn: (params: BurnParameters) => Promise<BurnReturnType>
-  /**
-   * Authenticates the `.api` client by signing its challenge with the
-   * client's account. Most DEX API endpoints are bearer-gated; call this once
-   * per session (the JWT lasts ~24h and renews automatically on expiry), or
-   * skip it entirely by configuring the api with a long-lived `apiToken`.
-   */
   authenticateApi: () => Promise<string>
   api: ApiClient
 }
@@ -196,12 +202,7 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     decreaseLiquidity: (p) => decreaseLiquidity(client, withProgram(p)),
     collect: (p) => collect(client, withProgram(p)),
     burn: (p) => burn(client, withProgram(p)),
-    authenticateApi: () => {
-      if (!client.account) {
-        return Promise.reject(new Error('authenticateApi requires a client with an account — the account signs the challenge.'))
-      }
-      return authenticateWithAccount(api ?? missingApi, client.account)
-    },
+    authenticateApi: () => authenticateWithAccount(api ?? missingApi, client.account),
     api: api ?? missingApi,
   })
 }

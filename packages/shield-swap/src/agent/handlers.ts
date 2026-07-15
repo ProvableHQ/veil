@@ -123,12 +123,8 @@ export function createComposedHandlers(client: Client, api: ApiClient): Record<s
 export function createAuthHandlers(client: Client, api: ApiClient): Record<string, AgentToolHandler> {
   return {
     shield_swap_authenticate: async () => {
-      const account = client.account
-      if (!account) {
-        throw new Error('shield_swap_authenticate requires a client with an account — the account signs the challenge.')
-      }
-      await authenticateWithAccount(api, account)
-      return { authenticated: true, address: account.address }
+      await authenticateWithAccount(api, client.account)
+      return { authenticated: true, address: client.account!.address }
     },
     shield_swap_create_api_token: async (i) =>
       api.createApiToken({
