@@ -61,6 +61,22 @@ helpers from `$SKILLS/scripts/session.js`, and run them with `npx tsx`.
    re-run with `--invite-code <code>`. Do not guess or reuse codes; they are
    one-time.
 
+## After startup: ask what's next
+
+When setup exits 0 (it prints `ASK_NEXT_ACTION`), STOP and ask the user
+what they want to do — never launch into a journey unprompted. Offer three
+paths:
+
+1. **Their own playbook.** Ask whether they have a markdown file, notes, or
+   a memory store (an Obsidian vault, a strategy doc, instructions from a
+   previous session) they want followed. If so, read it and treat it as the
+   plan — the runbooks below are the how, their document is the what.
+2. **A suggested journey.** Offer the table below verbatim-ish: swap
+   against live pools; make several private swaps at once; open a
+   liquidity position; add/remove liquidity; collect winnings.
+3. **A free-form prompt.** Whatever they describe, map it onto the
+   runbooks before improvising against the SDK.
+
 ## Runbooks
 
 | Task | Runbook | User says things like |

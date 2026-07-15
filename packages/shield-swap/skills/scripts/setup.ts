@@ -223,7 +223,20 @@ async function main() {
       console.log(`  ${h.symbol}: public ${h.publicAmount}, private ${h.privateAmount} (${h.wrapperProgram ?? 'no wrapper'})`)
     }
   }
-  console.log('\nNext: read swapping.md or liquidity.md to trade.')
+  console.log(
+    '\nASK_NEXT_ACTION: setup is complete — ask the user what they want to do ' +
+      'before touching the DEX (do not pick for them):\n' +
+      '  1. Their own playbook — do they have a markdown file, notes, or memory\n' +
+      '     (an Obsidian vault, a strategy doc, prior instructions) to point at?\n' +
+      '     Read it and follow it.\n' +
+      '  2. A suggested journey:\n' +
+      '     - swap against live pools           → swapping.md\n' +
+      '     - several private swaps at once     → swapping.md (concurrency recipe)\n' +
+      '     - open a liquidity position (mint)  → liquidity.md\n' +
+      '     - add/remove liquidity              → liquidity.md\n' +
+      '     - collect swap outputs + LP fees    → collecting.md\n' +
+      '  3. A free-form prompt — whatever they describe, mapped onto the runbooks.\n',
+  )
 }
 
 main().catch((err) => {

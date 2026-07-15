@@ -44,7 +44,7 @@ location overrides with `SHIELD_SWAP_STATE_DIR` (default `./.shield-swap`).
 
 | Exit | Marker in output | What to do |
 | --- | --- | --- |
-| 0 | `Account … is ready` + holdings | Proceed to swapping/liquidity. |
+| 0 | `Account … is ready` + `ASK_NEXT_ACTION` | Ask the user what's next (their own playbook file/memory, a suggested journey, or a free prompt) — see below. |
 | 2 | `NEEDS_CONFIG_DECISION` | Ask the user: existing account or new? Existing → key goes in a file (`--private-key-file <path>`) or their own env, never pasted. New → `--new`. |
 | 2 | `NEEDS_INVITE_CODE` / `INVALID_INVITE_CODE` | Ask the user for their (valid, unused) invite code; re-run with `--invite-code`. |
 | 3 | `AIRDROP_PENDING` | The faucet finished but records are still indexing. Wait a few minutes, re-run — it will not double-request. |
@@ -84,6 +84,19 @@ Account aleo1… is ready:
 
 Private balances funded + exit 0 = ready to trade. Note the wrapper
 programs — swaps and liquidity operations need them.
+
+## After setup: ask, don't assume
+
+The script's final `ASK_NEXT_ACTION` block is a contract: ask the user
+what they want to do next. Three paths, in this order:
+
+1. Do they have their own instructions — a markdown file, notes, or a
+   memory store (Obsidian vault, strategy doc, prior session output) to
+   point at? Read it and follow it.
+2. Offer the journeys: swapping (single or several at once), opening a
+   position, adding/removing liquidity, collecting winnings — each mapped
+   to its runbook in [SKILL.md](./SKILL.md).
+3. Take a free-form prompt and map it onto the runbooks.
 
 ## Security notes
 
