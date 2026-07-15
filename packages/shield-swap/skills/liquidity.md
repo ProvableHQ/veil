@@ -140,7 +140,8 @@ Full exit = decrease everything, collect everything, then `burn`:
 import { loadState, saveState } from '$SKILLS/scripts/session.js'
 
 await client.decreaseLiquidity({ poolKey: pool.key, positionTokenId, liquidityToRemove: position!.liquidity })
-// … collect per collecting.md until tokens_owed0/1 are zero …
+// … collect per collecting.md until nothing representable remains
+// (sub-scale dust can stay owed and may block the burn — see collecting.md) …
 await client.burn({ poolKey: pool.key, positionTokenId })
 // then drop it from the tracked positions (fresh read-modify-write)
 const latest = loadState()
