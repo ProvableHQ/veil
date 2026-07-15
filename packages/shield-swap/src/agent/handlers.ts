@@ -1,7 +1,7 @@
 import type { Client } from '@provablehq/veil-core'
-import { getProgram } from '@provablehq/veil-core'
 import type { AgentToolHandler } from '@provablehq/veil-core/agent'
-import { authenticateWithAccount, type ApiClient } from '../api/client.js'
+import { authenticateWithAccount, ApiError, type ApiClient } from '../api/client.js'
+import { resolveDexImports } from '../utils/imports.js'
 import { getPool } from '../actions/reads/getPool.js'
 import { getSlot } from '../actions/reads/getSlot.js'
 import { getSwapOutput } from '../actions/reads/getSwapOutput.js'
@@ -128,10 +128,18 @@ export function createAuthHandlers(client: Client, api: ApiClient): Record<strin
     },
     shield_swap_get_access_status: async () => api.getAccessStatus(),
     shield_swap_redeem_access_code: async (i) => {
-      // The upgraded session token stays inside the ApiClient — the agent
+      // Distributed codes come as access codes or referral codes; both
+      // unlock the account, so try both endpoints before failing. The
+      // upgraded session token stays inside the ApiClient — the agent
       // needs the outcome, not the credential.
-      const { code, status } = await api.redeemAccessCode(i.code as string)
-      return { code, status }
+      try {
+        const { code, status } = await api.redeemAccessCode(i.code as string)
+        return { code, status }
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.status !== 400) throw err
+        const { code, status } = await api.redeemReferralCode(i.code as string)
+        return { code, status }
+      }
     },
     shield_swap_create_api_token: async (i) =>
       api.createApiToken({
@@ -206,17 +214,14 @@ export function createPureHandlers(): Record<string, AgentToolHandler> {
 }
 
 /**
- * Fetches sources for the given token programs into an `imports` map. The
- * prover can't discover the `IARC20@(…)` dynamic-dispatch callees statically,
- * so writes need them — the agent shouldn't hand-author program sources, so
- * the handlers fetch them here.
+ * Fetches sources for the given token programs — plus the DEX program's own
+ * declared imports — into an `imports` map. The prover can't discover the
+ * `IARC20@(…)` dynamic-dispatch callees statically, and it does not resolve
+ * the main program's static imports either, so writes need both; the agent
+ * shouldn't hand-author program sources, so the handlers fetch them here.
  */
-async function fetchImports(client: Client, programs: string[]): Promise<Record<string, string>> {
-  const unique = [...new Set(programs)]
-  const entries = await Promise.all(
-    unique.map(async (programId) => [programId, await getProgram(client, { programId })] as const),
-  )
-  return Object.fromEntries(entries)
+async function fetchImports(client: Client, programs: string[], program?: string): Promise<Record<string, string>> {
+  return resolveDexImports(client, { tokenPrograms: programs, ...(program ? { program } : {}) })
 }
 
 /** Money-moving write handlers (local-signer path), keyed by tool name. */
@@ -234,7 +239,7 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
       ),
 
     shield_swap_swap: async (i) => {
-      const imports = await fetchImports(client, [i.tokenInProgram as string, i.tokenOutProgram as string])
+      const imports = await fetchImports(client, [i.tokenInProgram as string, i.tokenOutProgram as string], program)
       return jsonSafe(
         await swap(client, {
           poolKey: i.poolKey as string,
@@ -250,13 +255,13 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
     },
 
     shield_swap_claim: async (i) => {
-      const imports = await fetchImports(client, [i.tokenInProgram as string, i.tokenOutProgram as string])
+      const imports = await fetchImports(client, [i.tokenInProgram as string, i.tokenOutProgram as string], program)
       // The handle keeps its own program; do not override it with the config default.
       return jsonSafe(await claimSwapOutput(client, { handle: i.handle as unknown as SwapHandle, imports }))
     },
 
     shield_swap_swap_multi_hop: async (i) => {
-      const imports = await fetchImports(client, i.tokenPrograms as string[])
+      const imports = await fetchImports(client, i.tokenPrograms as string[], program)
       return jsonSafe(
         await swapMultiHop(client, {
           poolKeys: i.poolKeys as string[],
@@ -272,7 +277,7 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
     },
 
     shield_swap_claim_multi_hop: async (i) => {
-      const imports = await fetchImports(client, i.tokenPrograms as string[])
+      const imports = await fetchImports(client, i.tokenPrograms as string[], program)
       // The handle keeps its own program; do not override it with the config default.
       return jsonSafe(
         await claimMultiHopOutput(client, { handle: i.handle as unknown as MultiHopSwapHandle, imports }),
@@ -280,7 +285,7 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
     },
 
     shield_swap_mint: async (i) => {
-      const imports = await fetchImports(client, [i.token0Program as string, i.token1Program as string])
+      const imports = await fetchImports(client, [i.token0Program as string, i.token1Program as string], program)
       return jsonSafe(
         await mint(client, {
           poolKey: i.poolKey as string,
@@ -297,7 +302,7 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
     },
 
     shield_swap_increase_liquidity: async (i) => {
-      const imports = await fetchImports(client, [i.token0Program as string, i.token1Program as string])
+      const imports = await fetchImports(client, [i.token0Program as string, i.token1Program as string], program)
       return jsonSafe(
         await increaseLiquidity(client, {
           poolKey: i.poolKey as string,
@@ -323,7 +328,7 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
       ),
 
     shield_swap_collect: async (i) => {
-      const imports = await fetchImports(client, [i.token0Program as string, i.token1Program as string])
+      const imports = await fetchImports(client, [i.token0Program as string, i.token1Program as string], program)
       return jsonSafe(
         await collect(client, {
           poolKey: i.poolKey as string,

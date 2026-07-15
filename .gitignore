@@ -18,3 +18,6 @@ notes/
 
 # Generated bindings written by integration tests
 packages/codegen/test/integration/generated/
+
+# shield-swap agent-skill session state (private key + credentials)
+.shield-swap/

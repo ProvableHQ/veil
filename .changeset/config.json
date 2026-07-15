@@ -18,5 +18,8 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["@provablehq/veil-loyalty-dapp", "@provablehq/veil-loyalty-node"]
+  "ignore": ["@provablehq/veil-loyalty-dapp", "@provablehq/veil-loyalty-node"],
+  "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
+    "onlyUpdatePeerDependentsWhenOutOfRange": true
+  }
 }

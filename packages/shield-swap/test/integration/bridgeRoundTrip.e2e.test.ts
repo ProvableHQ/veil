@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
-import { getProgram } from '@provablehq/veil-core'
 import { createBridgeClient, httpBridge, type BridgeClient } from '@provablehq/veil-aleo-bridges'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
+import { resolveDexImports } from '../../src/utils/imports.js'
 import { parseTokenRecordInfo } from '../../src/utils/records.js'
 
 /**
@@ -187,10 +187,12 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
     const outInfo = zeroForOne ? pool!.token1_info! : pool!.token0_info!
     const amountIn = 10n ** BigInt(inInfo.decimals) / 10n // 0.1 token
 
-    // The prover cannot statically discover IARC20 callees — fetch sources.
-    const src0 = await getProgram(dexWallet, { programId: inInfo.wrapper_program! })
-    const src1 = await getProgram(dexWallet, { programId: outInfo.wrapper_program! })
-    const imports = { [inInfo.wrapper_program!]: src0, [outInfo.wrapper_program!]: src1 }
+    // The prover cannot statically discover IARC20 callees, nor the DEX
+    // program's own static imports — resolve the full map.
+    const imports = await resolveDexImports(dexWallet, {
+      tokenPrograms: [inInfo.wrapper_program!, outInfo.wrapper_program!],
+      program: DEX_PROGRAM,
+    })
 
     // Ensure ONE unspent record covers the swap input (selection picks a
     // single sufficient record — it does not aggregate).

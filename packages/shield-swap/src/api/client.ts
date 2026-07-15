@@ -300,6 +300,29 @@ export class ApiClient {
   }
 
   /**
+   * Redeems a referral code, which also unlocks the gated endpoints for the
+   * account — operationally interchangeable with {@link redeemAccessCode}
+   * for first-time access (distributed codes are commonly referral codes).
+   *
+   * The response carries an upgraded session token with the access grant;
+   * it replaces the session JWT held on this instance. One-time: the server
+   * rejects an already-used code with a 400. Requires a session JWT.
+   *
+   * @param code The referral code to redeem.
+   * @returns The redemption result (code, status, and the upgraded token).
+   * @throws When no session JWT is held, or the code is invalid or already
+   *   used (400).
+   */
+  async redeemReferralCode(code: string): Promise<Schemas['ReferralRedeemResponse']> {
+    const res = await this.request<Schemas['ReferralRedeemResponseDoc']>('POST', '/referral/redeem', {
+      body: { code },
+      auth: 'session',
+    })
+    if (res.data.token) this.token = res.data.token
+    return res.data
+  }
+
+  /**
    * Lists the invite-code inventory with redemption state (administrators
    * only — other accounts receive a 403). Requires a session JWT.
    */

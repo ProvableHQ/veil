@@ -217,6 +217,22 @@ describe('ApiClient', () => {
     await expect(client.getAccessStatus()).rejects.toThrow(/session JWT/)
   })
 
+  it('redeemReferralCode posts the code and adopts the upgraded token', async () => {
+    const { impl, calls } = fetchMock([
+      { json: { data: { code: 'REF1', status: 'redeemed', token: 'jwt-with-access' } } },
+      { json: { data: [] } },
+    ])
+    const client = new ApiClient({ fetch: impl })
+    client.setToken('jwt-no-access')
+    const redeemed = await client.redeemReferralCode('REF1')
+    expect(redeemed.status).toBe('redeemed')
+    expect(calls[0]!.url).toBe(`${DEFAULT_API_URL}/referral/redeem`)
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ code: 'REF1' })
+
+    await client.getFeeTiers()
+    expect((calls[1]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt-with-access')
+  })
+
   it('admin access-code inventory and generation round-trip under the session JWT', async () => {
     const { impl, calls } = fetchMock([
       { json: { data: { total: 1, redeemed: 0, available: 1, codes: [{ code: 'INVITE1', created_at: 'now' }] } } },

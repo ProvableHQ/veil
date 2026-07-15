@@ -1,6 +1,6 @@
 {
   "name": "@provablehq/shield-swap-sdk",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "TypeScript SDK for the Shield Swap AMM DEX on Aleo.",
   "license": "MIT",
   "repository": {
@@ -36,7 +36,8 @@
     "regen-openapi": "./codegen/regen-openapi.sh"
   },
   "files": [
-    "dist"
+    "dist",
+    "skills"
   ],
   "engines": {
     "node": ">=18"

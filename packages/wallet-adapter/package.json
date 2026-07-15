@@ -1,6 +1,6 @@
 {
   "name": "@provablehq/veil-aleo-wallet-adapter",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Aleo wallet adapter bindings for the Veil Aleo SDK.",
   "license": "MIT",
   "repository": {
@@ -33,7 +33,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@provablehq/veil-core": "workspace:*",
+    "@provablehq/veil-core": "workspace:^",
     "@provablehq/aleo-wallet-adaptor-core": "*"
   },
   "peerDependenciesMeta": {

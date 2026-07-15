@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
-import { getProgram } from '@provablehq/veil-core'
+import { resolveDexImports } from '../../src/utils/imports.js'
 import { parseTokenRecordInfo } from '../../src/utils/records.js'
 import { SwapOutputNotFinalizedError } from '../../src/actions/swap/claimSwapOutput.js'
 
@@ -127,10 +127,12 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
       state.token1 = { address: b!.address, program: b!.wrapper_program!, decimals: b!.decimals }
     }
 
-    // The prover cannot statically discover IARC20 callees — fetch sources.
-    const src0 = await getProgram(walletClient, { programId: state.token0.program })
-    const src1 = await getProgram(walletClient, { programId: state.token1.program })
-    state.imports = { [state.token0.program]: src0, [state.token1.program]: src1 }
+    // The prover cannot statically discover IARC20 callees, nor the DEX
+    // program's own static imports — resolve the full map.
+    state.imports = await resolveDexImports(walletClient, {
+      tokenPrograms: [state.token0.program, state.token1.program],
+      program: DEX_PROGRAM,
+    })
   }, 60_000)
 
   it('privatizes token balances into records (transfer_public_to_private)', async () => {

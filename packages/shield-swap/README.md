@@ -3,6 +3,12 @@
 A viem-shaped TS/JS client for the `shield_swap` AMM on Aleo. The client provides 
 viem-style actions for the following:
 
+> **Agents and new traders: start at [`skills/SKILL.md`](./skills/SKILL.md).**
+> It is the single entrypoint for using the DEX — account bootstrap
+> (registration, invite code, airdrop), pool discovery, private swaps,
+> liquidity, and collection, with runnable scripts and failure-mode tables.
+> This README documents the SDK surface itself.
+
 ### Executing DEX smart-contract functions
 Actions for executing the functions of the `shield_swap_v3.aleo` contract.
 - **Private swaps** — Runs the `swap` --> `claim_swap_output` flows, and the

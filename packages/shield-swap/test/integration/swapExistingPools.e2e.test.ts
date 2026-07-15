@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
-import { getProgram } from '@provablehq/veil-core'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
+import { resolveDexImports } from '../../src/utils/imports.js'
 import { parseTokenRecordInfo } from '../../src/utils/records.js'
 
 /**
@@ -110,8 +110,10 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
       const inAddress = inInfo === p.token0_info ? p.token0 : p.token1
       state.poolKey = p.key
       state.tokenIn = { address: inAddress, program: inInfo.wrapper_program!, decimals: inInfo.decimals }
-      const src = await getProgram(walletClient, { programId: state.tokenIn.program })
-      state.imports = { [state.tokenIn.program]: src }
+      state.imports = await resolveDexImports(walletClient, {
+        tokenPrograms: [state.tokenIn.program],
+        program: DEX_PROGRAM,
+      })
       break
     }
 
