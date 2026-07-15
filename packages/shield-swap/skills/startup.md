@@ -18,35 +18,43 @@ left off.
 # brand-new account (user confirmed they have none)
 npx tsx $SKILLS/scripts/setup.ts --new
 
-# returning user with an existing key
-npx tsx $SKILLS/scripts/setup.ts --private-key <APrivateKey1...>
+# returning user: they save their key to a file THEMSELVES, the path is
+# what travels — the key never appears in the conversation or shell history
+npx tsx $SKILLS/scripts/setup.ts --private-key-file <path>
 
 # returning user who also has Provable API credentials
-npx tsx $SKILLS/scripts/setup.ts --private-key <key> --consumer-id <id> --api-key <key>
+npx tsx $SKILLS/scripts/setup.ts --private-key-file <path> --consumer-id <id> --api-key <key>
 
 # when setup asks for an invite code
 npx tsx $SKILLS/scripts/setup.ts --invite-code <code>
 ```
 
-Environment variables work as fallbacks for every flag:
-`SHIELD_SWAP_PRIVATE_KEY`, `ALEO_CONSUMER_ID`, `ALEO_DPS_API_KEY`,
-`SHIELD_SWAP_INVITE_CODE`. State location overrides with
-`SHIELD_SWAP_STATE_DIR` (default `./.shield-swap`).
+**Private keys never transit the conversation.** When the user has an
+existing key, ask them to write it to a file (e.g. `~/.aleo-key`, any
+location they choose) and tell you the path — or to export
+`SHIELD_SWAP_PRIVATE_KEY` / `SHIELD_SWAP_PRIVATE_KEY_FILE` in their own
+shell before you re-run setup. Do not accept a pasted key, and do not echo
+one if pasted anyway.
+
+Environment variables work as fallbacks for the other flags too:
+`ALEO_CONSUMER_ID`, `ALEO_DPS_API_KEY`, `SHIELD_SWAP_INVITE_CODE`. State
+location overrides with `SHIELD_SWAP_STATE_DIR` (default `./.shield-swap`).
 
 ## Exit-code contract
 
 | Exit | Marker in output | What to do |
 | --- | --- | --- |
 | 0 | `Account … is ready` + holdings | Proceed to swapping/liquidity. |
-| 2 | `NEEDS_CONFIG_DECISION` | Ask the user: existing account or new? Re-run with `--private-key` or `--new`. |
+| 2 | `NEEDS_CONFIG_DECISION` | Ask the user: existing account or new? Existing → key goes in a file (`--private-key-file <path>`) or their own env, never pasted. New → `--new`. |
 | 2 | `NEEDS_INVITE_CODE` / `INVALID_INVITE_CODE` | Ask the user for their (valid, unused) invite code; re-run with `--invite-code`. |
 | 3 | `AIRDROP_PENDING` | The faucet finished but records are still indexing. Wait a few minutes, re-run — it will not double-request. |
 | 1 | `SETUP_FAILED: …` | Read the message; usually transient (network) — re-run once before digging. |
 
 ## What each gate does
 
-1. **Key material** — reuses the stored key, imports `--private-key`, or
-   generates one under `--new`. The address is derived and stored.
+1. **Key material** — reuses the stored key, imports one from
+   `--private-key-file` (or the user's own env), or generates one under
+   `--new`. The address is derived and stored.
 2. **Provable API consumer** — self-registers at
    `https://api.provable.com/consumers` (or adopts imported credentials).
    These credentials authenticate delegated proving and the record scanner.

@@ -269,7 +269,7 @@ export async function ensureKeyMaterial(
     throw new Error(
       `a DIFFERENT account is already configured here (${state.address ?? 'address unknown'}). ` +
         'Refusing to switch silently — its funds and access live on that key. To use the imported ' +
-        `key instead, move or delete the state directory first, then re-run with --private-key.`,
+        `key instead, move or delete the state directory first, then re-run with --private-key-file.`,
     )
   }
   if (!state.privateKey) {
@@ -312,7 +312,11 @@ export async function ensureProvableApiCredentials(
     saveState(state)
     return state
   }
-  const username = `ss-agent-${state.address!.slice(5, 17)}`
+  // Random suffix: usernames are globally unique, and a returning user who
+  // lost their state file (new machine) must be able to register a fresh
+  // consumer for the same address — the old API key is unrecoverable.
+  const suffix = Math.random().toString(36).slice(2, 8)
+  const username = `ss-agent-${state.address!.slice(5, 13)}-${suffix}`
   const res = await fetch(CONSUMERS_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

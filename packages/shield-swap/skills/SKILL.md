@@ -52,6 +52,10 @@ helpers from `$SKILLS/scripts/session.js`, and run them with `npx tsx`.
    script enforces this: with no config and no `--new` flag it exits with
    `NEEDS_CONFIG_DECISION`. Never generate a fresh key for a user who may
    already have one — their funds and access live on the old account.
+   **NEVER ask the user to paste a private key into the conversation.**
+   They supply it out-of-band: saved to a file whose path goes to
+   `--private-key-file`, or exported as `SHIELD_SWAP_PRIVATE_KEY` (or
+   `SHIELD_SWAP_PRIVATE_KEY_FILE`) in their own shell.
 2. **Invite code.** Access to the DEX API is invite-gated per account. When
    setup exits with `NEEDS_INVITE_CODE`, ask the user for their code and
    re-run with `--invite-code <code>`. Do not guess or reuse codes; they are

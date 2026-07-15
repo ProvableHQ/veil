@@ -15,12 +15,15 @@
  *                            then poll until the PRIVATE records land
  *
  * Usage:
- *   npx tsx setup.ts --new                          # brand-new account
- *   npx tsx setup.ts --private-key APrivateKey1...  # returning user
- *   npx tsx setup.ts --invite-code CODE             # when access is locked
+ *   npx tsx setup.ts --new                            # brand-new account
+ *   npx tsx setup.ts --private-key-file <path>        # returning user (key in a file)
+ *   npx tsx setup.ts --invite-code CODE               # when access is locked
  *
- * Environment fallbacks: SHIELD_SWAP_PRIVATE_KEY, ALEO_CONSUMER_ID +
- * ALEO_DPS_API_KEY, SHIELD_SWAP_INVITE_CODE.
+ * A private key is NEVER pasted into a conversation or command history: a
+ * returning user either writes it to a file and passes the path, or exports
+ * SHIELD_SWAP_PRIVATE_KEY (or SHIELD_SWAP_PRIVATE_KEY_FILE) in their own
+ * shell. Other environment fallbacks: ALEO_CONSUMER_ID + ALEO_DPS_API_KEY,
+ * SHIELD_SWAP_INVITE_CODE.
  *
  * Exit codes: 0 ready · 2 needs input from the user (message says what) ·
  * 3 airdrop still pending · 1 anything else.
@@ -28,6 +31,7 @@
  * State lands in ./.shield-swap/state.json (private key + credentials —
  * gitignore it, treat it like a wallet file).
  */
+import { readFileSync } from 'node:fs'
 import { ApiError } from '@provablehq/shield-swap-sdk'
 import {
   loadState,
@@ -46,10 +50,23 @@ function argValue(flag: string): string | undefined {
 }
 
 const inviteCode = argValue('--invite-code') ?? process.env.SHIELD_SWAP_INVITE_CODE
-const importKey = argValue('--private-key') ?? process.env.SHIELD_SWAP_PRIVATE_KEY
 const consumerId = argValue('--consumer-id') ?? process.env.ALEO_CONSUMER_ID
 const apiKey = argValue('--api-key') ?? process.env.ALEO_DPS_API_KEY
 const allowGenerate = process.argv.includes('--new')
+
+// The key itself never travels through a conversation or the command line:
+// it is read from a file the user wrote, or from an env var the user
+// exported in their own shell.
+function resolveImportKey(): string | undefined {
+  const keyFile = argValue('--private-key-file') ?? process.env.SHIELD_SWAP_PRIVATE_KEY_FILE
+  if (keyFile) {
+    const key = readFileSync(keyFile, 'utf8').trim()
+    if (!key) throw new Error(`private key file ${keyFile} is empty`)
+    return key
+  }
+  return process.env.SHIELD_SWAP_PRIVATE_KEY
+}
+const importKey = resolveImportKey()
 
 async function main() {
   // ── 1 + 2: key material and Provable API credentials ────────────────
@@ -60,9 +77,12 @@ async function main() {
     if (err instanceof NeedsConfigDecisionError) {
       console.error(
         '\nNEEDS_CONFIG_DECISION: no shield-swap account is configured here. Ask the user ' +
-          'whether they already have one before creating anything:\n' +
-          '  - existing account → re-run with --private-key <APrivateKey1...>\n' +
-          '    (add --consumer-id/--api-key if they have Provable API credentials)\n' +
+          'whether they already have one before creating anything. NEVER ask them to paste ' +
+          'a private key into the conversation:\n' +
+          '  - existing account → the user saves their key to a file themselves, then re-run\n' +
+          '    with --private-key-file <path> (or they export SHIELD_SWAP_PRIVATE_KEY in\n' +
+          '    their own shell). Add --consumer-id/--api-key if they have Provable API\n' +
+          '    credentials.\n' +
           '  - brand new       → re-run with --new\n',
       )
       process.exit(2)
