@@ -168,3 +168,48 @@ view balance_of:
     expect(program.functions).toHaveLength(1)
   })
 })
+
+describe('parseProgram — full snarkVM ValueType register surface', () => {
+  // One register per ValueType variant: constant, public, private, record,
+  // external record, future, dynamic record, dynamic future.
+  const source = `program value_types.aleo;
+
+function kitchen_sink:
+    input r0 as u8.constant;
+    input r1 as address.public;
+    input r2 as u128.private;
+    input r3 as Token.record;
+    input r4 as credits.aleo/credits.record;
+    input r5 as dynamic.record;
+    output r6 as u8.constant;
+    output r7 as Token.record;
+    output r8 as credits.aleo/credits.record;
+    output r9 as dynamic.record;
+    output r10 as value_types.aleo/kitchen_sink.future;
+    output r11 as dynamic.future;
+`
+
+  it('parses every input variant', () => {
+    const fn = parseProgram(source).functions[0]!
+    expect(fn.inputs).toEqual([
+      { name: 'r0', type: 'u8', visibility: 'constant' },
+      { name: 'r1', type: 'address', visibility: 'public' },
+      { name: 'r2', type: 'u128', visibility: 'private' },
+      { name: 'r3', type: 'Token', visibility: 'record' },
+      { name: 'r4', type: 'credits.aleo/credits', visibility: 'record' },
+      { name: 'r5', type: 'dynamic', visibility: 'record' },
+    ])
+  })
+
+  it('parses every output variant', () => {
+    const fn = parseProgram(source).functions[0]!
+    expect(fn.outputs).toEqual([
+      { type: 'u8', visibility: 'constant' },
+      { type: 'Token', visibility: 'record' },
+      { type: 'credits.aleo/credits', visibility: 'record' },
+      { type: 'dynamic', visibility: 'record' },
+      { type: 'value_types.aleo/kitchen_sink', visibility: 'future' },
+      { type: 'dynamic', visibility: 'future' },
+    ])
+  })
+})

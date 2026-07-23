@@ -1,16 +1,41 @@
 /**
+ * One register in a function or view signature, split into the base type and
+ * the visibility suffix as written in Aleo instructions. Together the two
+ * fields cover every snarkVM `ValueType` variant:
+ *
+ * - `u8.constant` / `address.public` / `u128.private` — plaintext types
+ *   (including arrays like `[field; 16u32]`) with explicit visibility.
+ * - `Token.record` — a record the program defines; `type` is the record name.
+ * - `credits.aleo/credits.record` — an external record; `type` keeps the
+ *   program-qualified locator.
+ * - `token.aleo/fn.future` — a future; `type` keeps the locator.
+ * - `dynamic.record` / `dynamic.future` — dynamic records and futures
+ *   (Leo `dyn record`); `type` is the literal `dynamic`.
+ *
+ * @property name Register name (e.g. `r0`); absent on outputs.
+ * @property type Base type with any visibility suffix removed.
+ * @property visibility The suffix: `record` and `future` registers inherit
+ *   visibility from their definition, so the suffix names the register kind
+ *   rather than a plain/private split.
+ */
+export type ProgramRegister = {
+  name?: string
+  type: string
+  visibility: 'public' | 'private' | 'constant' | 'record' | 'future'
+}
+
+/**
  * A function signature parsed from program source. Input and output types are
- * raw Aleo type strings (e.g. "u64", "[field; 16u32]", "Token" for records,
- * "token.aleo/fn" for futures) — a looser view than the structured
- * `AbiFunction`. The `record` and `future` visibilities mark record-typed and
- * future-typed registers, whose base type carries no plain/private split.
+ * raw Aleo type strings — a looser view than the structured `AbiFunction`.
+ * See {@link ProgramRegister} for how each snarkVM `ValueType` variant maps
+ * onto the `type`/`visibility` pair.
  *
  * @property hasFinalize True if the function has an on-chain finalize block.
  */
 export type ProgramFunction = {
   name: string
-  inputs: Array<{ name: string; type: string; visibility: 'public' | 'private' | 'constant' | 'record' | 'future' }>
-  outputs: Array<{ type: string; visibility: 'public' | 'private' | 'constant' | 'record' | 'future' }>
+  inputs: Array<ProgramRegister & { name: string }>
+  outputs: ProgramRegister[]
   hasFinalize: boolean
 }
 

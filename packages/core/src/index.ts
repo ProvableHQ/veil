@@ -65,7 +65,7 @@ export type {
   VerifyingKey,
   Owner,
 } from './types/transaction.js'
-export type { Program, ProgramFunction, ProgramMapping, ProgramRecord, ProgramStruct, MappingValue } from './types/program.js'
+export type { Program, ProgramFunction, ProgramRegister, ProgramMapping, ProgramRecord, ProgramStruct, MappingValue } from './types/program.js'
 export type {
   BlockSummary,
   TransactionSummary,
