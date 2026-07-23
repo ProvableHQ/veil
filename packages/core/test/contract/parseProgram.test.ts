@@ -83,3 +83,88 @@ closure helper:
     expect(program.closures).toHaveLength(0)
   })
 })
+
+describe('parseProgram — records, structs, views, register types', () => {
+  const source = `import freezelist.aleo;
+program conformance_fixture.aleo;
+
+record Token:
+    owner as address.private;
+    amount as u128.private;
+
+struct MerkleProof:
+    siblings as [field; 16u32];
+    leaf_index as u32;
+
+function transfer_private:
+    input r0 as address.private;
+    input r1 as u128.private;
+    input r2 as Token.record;
+    input r3 as [freezelist.aleo/MerkleProof; 2u32].private;
+    async transfer_private r0 r1 into r4;
+    output r5 as Token.record;
+    output r4 as conformance_fixture.aleo/transfer_private.future;
+
+view name:
+    output 'ETH' as identifier.public;
+
+view balance_of:
+    input r0 as address.public;
+    output r1 as u128.public;
+`
+
+  it('parses record declarations with field visibility', () => {
+    const program = parseProgram(source)
+    expect(program.records).toEqual([
+      {
+        name: 'Token',
+        fields: [
+          { name: 'owner', type: 'address', visibility: 'private' },
+          { name: 'amount', type: 'u128', visibility: 'private' },
+        ],
+      },
+    ])
+  })
+
+  it('parses struct declarations including array field types', () => {
+    const program = parseProgram(source)
+    expect(program.structs).toEqual([
+      {
+        name: 'MerkleProof',
+        fields: [
+          { name: 'siblings', type: '[field; 16u32]' },
+          { name: 'leaf_index', type: 'u32' },
+        ],
+      },
+    ])
+  })
+
+  it('parses record, array, and future register types in functions', () => {
+    const program = parseProgram(source)
+    const fn = program.functions.find((f) => f.name === 'transfer_private')!
+    expect(fn.inputs).toEqual([
+      { name: 'r0', type: 'address', visibility: 'private' },
+      { name: 'r1', type: 'u128', visibility: 'private' },
+      { name: 'r2', type: 'Token', visibility: 'record' },
+      { name: 'r3', type: '[freezelist.aleo/MerkleProof; 2u32]', visibility: 'private' },
+    ])
+    expect(fn.outputs).toEqual([
+      { type: 'Token', visibility: 'record' },
+      { type: 'conformance_fixture.aleo/transfer_private', visibility: 'future' },
+    ])
+  })
+
+  it('parses view blocks like functions, including literal outputs', () => {
+    const program = parseProgram(source)
+    expect(program.views.map((v) => v.name)).toEqual(['name', 'balance_of'])
+    const name = program.views.find((v) => v.name === 'name')!
+    expect(name.inputs).toEqual([])
+    expect(name.outputs).toEqual([{ type: 'identifier', visibility: 'public' }])
+  })
+
+  it('function block parsing stops at view/record/struct boundaries', () => {
+    const program = parseProgram(source)
+    // transfer_private must not swallow the view blocks that follow it
+    expect(program.functions).toHaveLength(1)
+  })
+})
