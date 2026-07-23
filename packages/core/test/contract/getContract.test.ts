@@ -25,6 +25,7 @@ describe('getContract', () => {
     const client = createPublicClient({ transport: custom({ request }) })
 
     const abi: Program = {
+      kind: 'program',
       id: 'token.aleo',
       source: '',
       mappings: [{ name: 'balances', keyType: 'address', valueType: 'u64' }],
@@ -44,6 +45,7 @@ describe('getContract', () => {
     const client = createPublicClient({ transport: custom({ request }) })
 
     const abi: Program = {
+      kind: 'program',
       id: 'token.aleo',
       source: '',
       mappings: [],
@@ -164,6 +166,7 @@ describe('getContract', () => {
     }
 
     const abi: Program = {
+      kind: 'program',
       id: 'token.aleo', source: '', closures: [],
       mappings: [], functions: [{ name: 'mint', inputs: [], outputs: [], hasFinalize: false }],
     }
@@ -199,6 +202,7 @@ describe('getContract', () => {
     }
 
     const abi: Program = {
+      kind: 'program',
       id: 'token.aleo', source: '', closures: [],
       mappings: [],
       functions: [{
@@ -286,6 +290,7 @@ describe('getContract', () => {
     }
 
     const abi: Program = {
+      kind: 'program',
       id: 'token.aleo', source: '', closures: [],
       mappings: [],
       functions: [{

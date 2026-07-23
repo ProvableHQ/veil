@@ -84,6 +84,13 @@ export type ProgramMapping = {
  * @property closures Names of the closures the program defines.
  */
 export type Program = {
+  /**
+   * Permanent discriminator identifying this shape as a parsed program.
+   * Consumers that accept both `Program` and the structured `ABI` (e.g.
+   * `getContract`) branch on this field rather than probing for
+   * incidentally-unique properties, which break when either shape grows.
+   */
+  kind: 'program'
   id: string
   source: string
   mappings: ProgramMapping[]

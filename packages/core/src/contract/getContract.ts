@@ -145,11 +145,10 @@ export type ContractInstance = {
 
 // ── ABI detection ─────────────────────────────────────────────────────
 
-// Detect whether the abi is a structured ABI vs a legacy Program. Keys on
-// `storageVariables`, which only the ABI shape carries — `parseProgram`
-// output shares `structs`, `records`, `mappings`, and `functions` with it.
+// Detect whether the abi is a structured ABI vs a legacy Program. A Program
+// identifies itself with `kind: 'program'`; anything else is an ABI.
 function isABI(abi: ABI | Program): abi is ABI {
-  return 'storageVariables' in abi
+  return !('kind' in abi && abi.kind === 'program')
 }
 
 // ── Implementation ────────────────────────────────────────────────────
@@ -229,7 +228,7 @@ export function getContract(params: GetContractParameters): ContractInstance {
 
   /** Auto-encode inputs: native JS values → Aleo strings. InputRequests pass through un-encoded. */
   function resolveInputs(values: (InputValue | InputRequest)[], fnName: string): TransactionInput[] {
-    const legacyFn = (abi as Program | undefined)?.functions.find((f) => f.name === fnName)
+    const legacyFn = abi && !isABI(abi) ? abi.functions.find((f) => f.name === fnName) : undefined
 
     // Encode a single literal value at position `i` (legacy / no-ABI path).
     const encodeOne = (value: InputValue, i: number): string => {

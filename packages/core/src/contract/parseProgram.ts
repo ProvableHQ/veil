@@ -32,7 +32,7 @@ export function parseProgram(source: string): Program {
     fn.hasFinalize = finalizeNames.has(fn.name)
   }
 
-  return { id, source, functions, views, records, structs, mappings, closures }
+  return { kind: 'program', id, source, functions, views, records, structs, mappings, closures }
 }
 
 // A block body ends where indentation ends: the next top-level declaration

@@ -77,6 +77,7 @@ closure helper:
 
   it('handles minimal program', () => {
     const program = parseProgram('program test.aleo;\n')
+    expect(program.kind).toBe('program')
     expect(program.id).toBe('test.aleo')
     expect(program.functions).toHaveLength(0)
     expect(program.mappings).toHaveLength(0)
