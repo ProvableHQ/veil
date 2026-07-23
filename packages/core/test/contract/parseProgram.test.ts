@@ -225,6 +225,8 @@ function plaintexts:
     input r1 as credits.aleo/metadata.public;
     input r2 as Matrix.private;
     output r3 as [[u8; 4u32]; 2u32].public;
+    output r4 as Matrix.private;
+    output r5 as credits.aleo/metadata.public;
 `)
     const fn = program.functions[0]!
     expect(fn.inputs).toEqual([
@@ -232,9 +234,42 @@ function plaintexts:
       { kind: 'plaintext', name: 'r1', type: 'credits.aleo/metadata', visibility: 'public' },
       { kind: 'plaintext', name: 'r2', type: 'Matrix', visibility: 'private' },
     ])
-    expect(fn.outputs).toEqual([{ kind: 'plaintext', type: '[[u8; 4u32]; 2u32]', visibility: 'public' }])
+    expect(fn.outputs).toEqual([
+      { kind: 'plaintext', type: '[[u8; 4u32]; 2u32]', visibility: 'public' },
+      { kind: 'plaintext', type: 'Matrix', visibility: 'private' },
+      { kind: 'plaintext', type: 'credits.aleo/metadata', visibility: 'public' },
+    ])
     expect(program.structs).toEqual([
       { name: 'Matrix', fields: [{ name: 'rows', type: '[[field; 2u32]; 3u32]' }] },
+    ])
+  })
+
+  it('distinguishes struct-typed registers from record-typed registers by suffix alone', () => {
+    // A struct and a record with lookalike names at both input and output
+    // positions: only the .record/.private suffix decides the register kind.
+    const program = parseProgram(`program suffix_kinds.aleo;
+
+struct TokenInfo:
+    supply as u128;
+
+record Token:
+    owner as address.private;
+    amount as u128.private;
+
+function inspect:
+    input r0 as Token.record;
+    input r1 as TokenInfo.private;
+    output r2 as Token.record;
+    output r3 as TokenInfo.public;
+`)
+    const fn = program.functions[0]!
+    expect(fn.inputs).toEqual([
+      { kind: 'record', name: 'r0', type: 'Token' },
+      { kind: 'plaintext', name: 'r1', type: 'TokenInfo', visibility: 'private' },
+    ])
+    expect(fn.outputs).toEqual([
+      { kind: 'record', type: 'Token' },
+      { kind: 'plaintext', type: 'TokenInfo', visibility: 'public' },
     ])
   })
 
