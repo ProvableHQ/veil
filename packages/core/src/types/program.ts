@@ -2,9 +2,12 @@
  * One register in a function or view signature, discriminated by `kind` the
  * way snarkVM's `ValueType` is. Covers every variant:
  *
- * - `plaintext` — `u8.constant` / `address.public` / `u128.private`:
- *   a plaintext type (including arrays like `[field; 16u32]`) with its
- *   explicit visibility.
+ * - `plaintext` — a plaintext type with its explicit visibility
+ *   (`.constant` / `.public` / `.private`). The base type is any snarkVM
+ *   `PlaintextType`: a literal (`u8`, `address`, `signature`, `string`,
+ *   `identifier`, …), a struct name (`Matrix`), an external struct locator
+ *   (`credits.aleo/metadata`), or an array of any of these, which may nest
+ *   (`[[field; 2u32]; 3u32]`).
  * - `record` — `Token.record` (a record the program defines; `type` is the
  *   record name), `credits.aleo/credits.record` (an external record; `type`
  *   keeps the program-qualified locator), or `dynamic.record` (Leo

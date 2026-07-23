@@ -39,11 +39,11 @@ export function parseProgram(source: string): Program {
 // (any non-whitespace at column 0) or the end of the source.
 const BLOCK_BOUNDARY = String.raw`(?=\n\S|\n*$)`
 
-// One register type as written in source: bracketed segments may contain
-// semicolons ("[field; 16u32]"), everything else ends at the statement's
-// semicolon. The alternation is disjoint ("[" is excluded from the fallback
-// class) so matching stays linear on malformed input.
-const REGISTER_TYPE = String.raw`((?:\[[^\]]*\]|[^;[])+)`
+// One register type as written in source. Array types nest and carry
+// semicolons ("[[field; 2u32]; 3u32]"), so the type runs to the statement's
+// closing semicolon — the last one on the line, since declarations are one
+// per line and types never span lines.
+const REGISTER_TYPE = String.raw`([^\n]+)`
 
 // Splits a raw register type like "address.public", "Token.record",
 // "[MerkleProof; 2u32].private", or "prog.aleo/fn.future" into the register

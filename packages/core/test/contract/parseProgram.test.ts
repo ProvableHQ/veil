@@ -213,6 +213,30 @@ function kitchen_sink:
     ])
   })
 
+  it('parses nested array and external struct plaintext types', () => {
+    const program = parseProgram(`program plaintext_types.aleo;
+
+struct Matrix:
+    rows as [[field; 2u32]; 3u32];
+
+function plaintexts:
+    input r0 as [[field; 2u32]; 3u32].private;
+    input r1 as credits.aleo/metadata.public;
+    input r2 as Matrix.private;
+    output r3 as [[u8; 4u32]; 2u32].public;
+`)
+    const fn = program.functions[0]!
+    expect(fn.inputs).toEqual([
+      { kind: 'plaintext', name: 'r0', type: '[[field; 2u32]; 3u32]', visibility: 'private' },
+      { kind: 'plaintext', name: 'r1', type: 'credits.aleo/metadata', visibility: 'public' },
+      { kind: 'plaintext', name: 'r2', type: 'Matrix', visibility: 'private' },
+    ])
+    expect(fn.outputs).toEqual([{ kind: 'plaintext', type: '[[u8; 4u32]; 2u32]', visibility: 'public' }])
+    expect(program.structs).toEqual([
+      { name: 'Matrix', fields: [{ name: 'rows', type: '[[field; 2u32]; 3u32]' }] },
+    ])
+  })
+
   it('parses record entries with public owner and constant entry visibility', () => {
     const program = parseProgram(`program entry_types.aleo;
 
