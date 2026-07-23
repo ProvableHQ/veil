@@ -22,7 +22,7 @@ export type ParsedOutput = RecordValue | string
  * Configuration passed to {@link getContract} to bind a program to a client.
  *
  * @property program On-chain program ID the instance targets, such as `"credits.aleo"`.
- * @property abi Parsed ABI or legacy Program used to validate method names and
+ * @property abi Structured ABI or parsed Program used to validate method names and
  *   type inputs and outputs. When omitted, method names are not validated and
  *   values pass through the dynamic proxies unencoded. Defaults to undefined.
  * @property programSource Program source code, required for local proving and
@@ -121,7 +121,7 @@ export type ContractExecuteMethods = Record<string, (params: ContractExecutePara
  * is returned instead when the ABI is known at compile time.
  *
  * @property program On-chain program ID the instance targets.
- * @property abi ABI or legacy Program backing method-name validation, or
+ * @property abi Structured ABI or parsed Program backing method-name validation, or
  *   undefined when none was supplied. Updated in place by `fetchAbi`.
  * @property read Mapping reads keyed by mapping name. Requires a public client.
  * @property write Function calls keyed by function name that broadcast a
@@ -145,7 +145,7 @@ export type ContractInstance = {
 
 // ── ABI detection ─────────────────────────────────────────────────────
 
-// Detect whether the abi is a structured ABI vs a legacy Program. A Program
+// Detect whether the abi is a structured ABI vs a parsed Program. A Program
 // identifies itself with `kind: 'program'`; anything else is an ABI.
 function isABI(abi: ABI | Program): abi is ABI {
   return !('kind' in abi && abi.kind === 'program')
@@ -228,9 +228,9 @@ export function getContract(params: GetContractParameters): ContractInstance {
 
   /** Auto-encode inputs: native JS values → Aleo strings. InputRequests pass through un-encoded. */
   function resolveInputs(values: (InputValue | InputRequest)[], fnName: string): TransactionInput[] {
-    const legacyFn = abi && !isABI(abi) ? abi.functions.find((f) => f.name === fnName) : undefined
+    const programFn = abi && !isABI(abi) ? abi.functions.find((f) => f.name === fnName) : undefined
 
-    // Encode a single literal value at position `i` (legacy / no-ABI path).
+    // Encode a single literal value at position `i` (parsed-Program / no-ABI path).
     const encodeOne = (value: InputValue, i: number): string => {
       if (typeof value === 'object' && value !== null && 'owner' in value && 'fields' in value) {
         return serializeRecord(value as RecordValue)
@@ -238,7 +238,7 @@ export function getContract(params: GetContractParameters): ContractInstance {
       if (typeof value === 'string') return value
       if (typeof value === 'boolean') return String(value)
       if (typeof value === 'bigint' || typeof value === 'number') {
-        const input = legacyFn?.inputs[i]
+        const input = programFn?.inputs[i]
         const type = input?.kind === 'plaintext' ? (input.type as Primitive) : undefined
         if (type) return encodeValue(typeof value === 'number' ? BigInt(value) : value, type)
         return String(value)
@@ -288,7 +288,7 @@ export function getContract(params: GetContractParameters): ContractInstance {
       })
     }
 
-    // Legacy or no ABI — loose parse for anything that looks like a record
+    // Parsed Program or no ABI — loose parse for anything that looks like a record
     return rawOutputs.map((raw) => {
       if (raw.trimStart().startsWith('{')) {
         return parseRecordPlaintextLoose(raw, program)

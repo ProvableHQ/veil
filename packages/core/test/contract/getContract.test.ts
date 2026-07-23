@@ -312,7 +312,7 @@ describe('getContract', () => {
     expect(calledInputs[1]).toBe('2u8')
   })
 
-  it('treats a parseProgram result as a legacy Program, not a structured ABI', async () => {
+  it('treats a parseProgram result as a parsed Program, not a structured ABI', async () => {
     // parseProgram output now carries records/structs/views — the ABI-vs-Program
     // discrimination must not key on a field both shapes have.
     const simulateContract = vi.fn().mockResolvedValue({ outputs: [] })
