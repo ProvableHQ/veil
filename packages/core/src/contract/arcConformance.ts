@@ -1,4 +1,4 @@
-import type { ProgramFunction } from '../types/program.js'
+import type { ProgramFunction, ProgramRegister } from '../types/program.js'
 import { parseProgram } from './parseProgram.js'
 
 /** ARC token standard a program can be checked against. */
@@ -131,13 +131,13 @@ const IARC22: InterfaceSpec = {
 
 const INTERFACES: Record<ArcStandard, InterfaceSpec> = { arc20: IARC20, arc22: IARC22 }
 
-// Normalizes one parsed input/output to a bytecode-style comparison string.
+// Normalizes one parsed register to a bytecode-style comparison string.
 // Futures collapse to 'future'; program qualifiers on imported types are
 // stripped so `freezelist.aleo/MerkleProof` compares equal to `MerkleProof`.
-function canonicalType(io: { type: string; visibility: string }): string {
-  if (io.visibility === 'future') return 'future'
-  const type = io.type.replace(/\b[a-z][a-z0-9_]*\.aleo\//g, '')
-  return `${type}.${io.visibility}`
+function canonicalType(register: ProgramRegister): string {
+  if (register.kind === 'future') return 'future'
+  const type = register.type.replace(/\b[a-z][a-z0-9_]*\.aleo\//g, '')
+  return register.kind === 'record' ? `${type}.record` : `${type}.${register.visibility}`
 }
 
 // Compares one register list (inputs or outputs) position by position against

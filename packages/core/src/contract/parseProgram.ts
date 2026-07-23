@@ -1,4 +1,4 @@
-import type { Program, ProgramFunction, ProgramMapping, ProgramRecord, ProgramStruct } from '../types/program.js'
+import type { Program, ProgramFunction, ProgramMapping, ProgramRecord, ProgramRegister, ProgramStruct } from '../types/program.js'
 
 /**
  * Parses Aleo program source code into a structured Program object.
@@ -11,14 +11,11 @@ export function parseProgram(source: string): Program {
 
   const functions = parseCallables(source, 'function')
   const views = parseCallables(source, 'view')
-  // Record fields carry a visibility suffix (e.g. "address.private"); struct
+  // Record entries carry a visibility suffix (e.g. "address.private"); struct
   // fields carry none, so the parsed raw type is used verbatim.
   const records: ProgramRecord[] = parseFieldBlocks(source, 'record').map(({ name, fields }) => ({
     name,
-    fields: fields.map((field) => {
-      const { type, visibility } = splitRegisterType(field.type)
-      return { name: field.name, type, visibility: visibility as 'public' | 'private' }
-    }),
+    fields: fields.map((field) => ({ name: field.name, ...splitEntryType(field.type) })),
   }))
   const structs = parseFieldBlocks(source, 'struct')
   const mappings = parseMappings(source)
@@ -48,15 +45,25 @@ const BLOCK_BOUNDARY = String.raw`(?=\n\S|\n*$)`
 // class) so matching stays linear on malformed input.
 const REGISTER_TYPE = String.raw`((?:\[[^\]]*\]|[^;[])+)`
 
-type RegisterVisibility = ProgramFunction['inputs'][number]['visibility']
-
 // Splits a raw register type like "address.public", "Token.record",
-// "[MerkleProof; 2u32].private", or "prog.aleo/fn.future" into the base type
-// and its visibility suffix.
-function splitRegisterType(raw: string): { type: string; visibility: RegisterVisibility } {
-  const match = raw.match(/^(.*)\.(public|private|constant|record|future)$/)
+// "[MerkleProof; 2u32].private", or "prog.aleo/fn.future" into the register
+// kind (mirroring snarkVM's ValueType variants) plus the base type, with the
+// declared visibility on plaintext registers.
+function splitRegisterType(raw: string): ProgramRegister {
+  const match = raw.match(/^(.*)\.(constant|public|private|record|future)$/)
+  if (!match) return { kind: 'plaintext', type: raw, visibility: 'private' }
+  const type = match[1]!
+  const suffix = match[2]!
+  if (suffix === 'record' || suffix === 'future') return { kind: suffix, type }
+  return { kind: 'plaintext', type, visibility: suffix as 'constant' | 'public' | 'private' }
+}
+
+// Splits a record entry type like "address.public" or "u128.private" into the
+// base type and the entry's declared visibility (snarkVM EntryType).
+function splitEntryType(raw: string): { type: string; visibility: 'constant' | 'public' | 'private' } {
+  const match = raw.match(/^(.*)\.(constant|public|private)$/)
   if (!match) return { type: raw, visibility: 'private' }
-  return { type: match[1]!, visibility: match[2] as RegisterVisibility }
+  return { type: match[1]!, visibility: match[2] as 'constant' | 'public' | 'private' }
 }
 
 function parseCallables(source: string, keyword: 'function' | 'view'): ProgramFunction[] {
@@ -74,8 +81,7 @@ function parseCallables(source: string, keyword: 'function' | 'view'): ProgramFu
     inputRegex.lastIndex = 0
     let inputMatch: RegExpExecArray | null
     while ((inputMatch = inputRegex.exec(body)) !== null) {
-      const { type, visibility } = splitRegisterType(inputMatch[2]!.trim())
-      inputs.push({ name: inputMatch[1]!, type, visibility })
+      inputs.push({ ...splitRegisterType(inputMatch[2]!.trim()), name: inputMatch[1]! })
     }
 
     const outputs: ProgramFunction['outputs'] = []

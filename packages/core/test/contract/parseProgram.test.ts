@@ -41,14 +41,14 @@ closure helper:
 
     const transfer = program.functions.find(f => f.name === 'transfer')!
     expect(transfer.inputs).toHaveLength(2)
-    expect(transfer.inputs[0]).toEqual({ name: 'r0', type: 'address', visibility: 'public' })
-    expect(transfer.inputs[1]).toEqual({ name: 'r1', type: 'u64', visibility: 'public' })
+    expect(transfer.inputs[0]).toEqual({ kind: 'plaintext', name: 'r0', type: 'address', visibility: 'public' })
+    expect(transfer.inputs[1]).toEqual({ kind: 'plaintext', name: 'r1', type: 'u64', visibility: 'public' })
     expect(transfer.outputs).toHaveLength(1)
-    expect(transfer.outputs[0]).toEqual({ type: 'u64', visibility: 'public' })
+    expect(transfer.outputs[0]).toEqual({ kind: 'plaintext', type: 'u64', visibility: 'public' })
     expect(transfer.hasFinalize).toBe(true)
 
     const mint = program.functions.find(f => f.name === 'mint')!
-    expect(mint.inputs[0]).toEqual({ name: 'r0', type: 'u64', visibility: 'private' })
+    expect(mint.inputs[0]).toEqual({ kind: 'plaintext', name: 'r0', type: 'u64', visibility: 'private' })
     expect(mint.hasFinalize).toBe(false)
   })
 
@@ -143,14 +143,14 @@ view balance_of:
     const program = parseProgram(source)
     const fn = program.functions.find((f) => f.name === 'transfer_private')!
     expect(fn.inputs).toEqual([
-      { name: 'r0', type: 'address', visibility: 'private' },
-      { name: 'r1', type: 'u128', visibility: 'private' },
-      { name: 'r2', type: 'Token', visibility: 'record' },
-      { name: 'r3', type: '[freezelist.aleo/MerkleProof; 2u32]', visibility: 'private' },
+      { kind: 'plaintext', name: 'r0', type: 'address', visibility: 'private' },
+      { kind: 'plaintext', name: 'r1', type: 'u128', visibility: 'private' },
+      { kind: 'record', name: 'r2', type: 'Token' },
+      { kind: 'plaintext', name: 'r3', type: '[freezelist.aleo/MerkleProof; 2u32]', visibility: 'private' },
     ])
     expect(fn.outputs).toEqual([
-      { type: 'Token', visibility: 'record' },
-      { type: 'conformance_fixture.aleo/transfer_private', visibility: 'future' },
+      { kind: 'record', type: 'Token' },
+      { kind: 'future', type: 'conformance_fixture.aleo/transfer_private' },
     ])
   })
 
@@ -159,7 +159,7 @@ view balance_of:
     expect(program.views.map((v) => v.name)).toEqual(['name', 'balance_of'])
     const name = program.views.find((v) => v.name === 'name')!
     expect(name.inputs).toEqual([])
-    expect(name.outputs).toEqual([{ type: 'identifier', visibility: 'public' }])
+    expect(name.outputs).toEqual([{ kind: 'plaintext', type: 'identifier', visibility: 'public' }])
   })
 
   it('function block parsing stops at view/record/struct boundaries', () => {
@@ -192,24 +192,44 @@ function kitchen_sink:
   it('parses every input variant', () => {
     const fn = parseProgram(source).functions[0]!
     expect(fn.inputs).toEqual([
-      { name: 'r0', type: 'u8', visibility: 'constant' },
-      { name: 'r1', type: 'address', visibility: 'public' },
-      { name: 'r2', type: 'u128', visibility: 'private' },
-      { name: 'r3', type: 'Token', visibility: 'record' },
-      { name: 'r4', type: 'credits.aleo/credits', visibility: 'record' },
-      { name: 'r5', type: 'dynamic', visibility: 'record' },
+      { kind: 'plaintext', name: 'r0', type: 'u8', visibility: 'constant' },
+      { kind: 'plaintext', name: 'r1', type: 'address', visibility: 'public' },
+      { kind: 'plaintext', name: 'r2', type: 'u128', visibility: 'private' },
+      { kind: 'record', name: 'r3', type: 'Token' },
+      { kind: 'record', name: 'r4', type: 'credits.aleo/credits' },
+      { kind: 'record', name: 'r5', type: 'dynamic' },
     ])
   })
 
   it('parses every output variant', () => {
     const fn = parseProgram(source).functions[0]!
     expect(fn.outputs).toEqual([
-      { type: 'u8', visibility: 'constant' },
-      { type: 'Token', visibility: 'record' },
-      { type: 'credits.aleo/credits', visibility: 'record' },
-      { type: 'dynamic', visibility: 'record' },
-      { type: 'value_types.aleo/kitchen_sink', visibility: 'future' },
-      { type: 'dynamic', visibility: 'future' },
+      { kind: 'plaintext', type: 'u8', visibility: 'constant' },
+      { kind: 'record', type: 'Token' },
+      { kind: 'record', type: 'credits.aleo/credits' },
+      { kind: 'record', type: 'dynamic' },
+      { kind: 'future', type: 'value_types.aleo/kitchen_sink' },
+      { kind: 'future', type: 'dynamic' },
+    ])
+  })
+
+  it('parses record entries with public owner and constant entry visibility', () => {
+    const program = parseProgram(`program entry_types.aleo;
+
+record PublicToken:
+    owner as address.public;
+    amount as u128.private;
+    decimals as u8.constant;
+`)
+    expect(program.records).toEqual([
+      {
+        name: 'PublicToken',
+        fields: [
+          { name: 'owner', type: 'address', visibility: 'public' },
+          { name: 'amount', type: 'u128', visibility: 'private' },
+          { name: 'decimals', type: 'u8', visibility: 'constant' },
+        ],
+      },
     ])
   })
 })

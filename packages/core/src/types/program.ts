@@ -1,28 +1,27 @@
 /**
- * One register in a function or view signature, split into the base type and
- * the visibility suffix as written in Aleo instructions. Together the two
- * fields cover every snarkVM `ValueType` variant:
+ * One register in a function or view signature, discriminated by `kind` the
+ * way snarkVM's `ValueType` is. Covers every variant:
  *
- * - `u8.constant` / `address.public` / `u128.private` — plaintext types
- *   (including arrays like `[field; 16u32]`) with explicit visibility.
- * - `Token.record` — a record the program defines; `type` is the record name.
- * - `credits.aleo/credits.record` — an external record; `type` keeps the
- *   program-qualified locator.
- * - `token.aleo/fn.future` — a future; `type` keeps the locator.
- * - `dynamic.record` / `dynamic.future` — dynamic records and futures
- *   (Leo `dyn record`); `type` is the literal `dynamic`.
+ * - `plaintext` — `u8.constant` / `address.public` / `u128.private`:
+ *   a plaintext type (including arrays like `[field; 16u32]`) with its
+ *   explicit visibility.
+ * - `record` — `Token.record` (a record the program defines; `type` is the
+ *   record name), `credits.aleo/credits.record` (an external record; `type`
+ *   keeps the program-qualified locator), or `dynamic.record` (Leo
+ *   `dyn record`; `type` is the literal `dynamic`). Records carry no
+ *   visibility at the signature level — visibility is declared per entry on
+ *   the record type itself (see {@link ProgramRecord}).
+ * - `future` — `token.aleo/fn.future` (`type` keeps the locator) or
+ *   `dynamic.future` (`type` is the literal `dynamic`).
  *
  * @property name Register name (e.g. `r0`); absent on outputs.
- * @property type Base type with any visibility suffix removed.
- * @property visibility The suffix: `record` and `future` registers inherit
- *   visibility from their definition, so the suffix names the register kind
- *   rather than a plain/private split.
+ * @property type Base type with the kind/visibility suffix removed.
+ * @property visibility Plaintext registers only — the declared visibility.
  */
-export type ProgramRegister = {
-  name?: string
-  type: string
-  visibility: 'public' | 'private' | 'constant' | 'record' | 'future'
-}
+export type ProgramRegister =
+  | { name?: string; kind: 'plaintext'; type: string; visibility: 'constant' | 'public' | 'private' }
+  | { name?: string; kind: 'record'; type: string }
+  | { name?: string; kind: 'future'; type: string }
 
 /**
  * A function signature parsed from program source. Input and output types are
@@ -40,15 +39,17 @@ export type ProgramFunction = {
 }
 
 /**
- * A record declaration parsed from program source.
+ * A record declaration parsed from program source. Each entry declares its
+ * own visibility (snarkVM `EntryType`): `constant`, `public`, or `private`.
+ * The `owner` entry is restricted to `public` or `private` by the VM.
  *
  * @property name Record type name, e.g. "Token".
- * @property fields Field entries in declaration order, with raw Aleo type
- *   strings and the on-chain visibility of each field.
+ * @property fields Entries in declaration order, with raw Aleo type strings
+ *   and each entry's declared visibility.
  */
 export type ProgramRecord = {
   name: string
-  fields: Array<{ name: string; type: string; visibility: 'public' | 'private' }>
+  fields: Array<{ name: string; type: string; visibility: 'constant' | 'public' | 'private' }>
 }
 
 /**
