@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { getContract } from '../../src/contract/getContract.js'
+import { parseProgram } from '../../src/contract/parseProgram.js'
 import { createPublicClient } from '../../src/clients/createPublicClient.js'
 import { custom } from '../../src/transports/custom.js'
 import type { Program } from '../../src/types/program.js'
@@ -304,6 +305,35 @@ describe('getContract', () => {
     const calledInputs = simulateContract.mock.calls[0][0].inputs
     expect(calledInputs[0]).toBe('true')
     expect(calledInputs[1]).toBe('2u8')
+  })
+
+  it('treats a parseProgram result as a legacy Program, not a structured ABI', async () => {
+    // parseProgram output now carries records/structs/views — the ABI-vs-Program
+    // discrimination must not key on a field both shapes have.
+    const simulateContract = vi.fn().mockResolvedValue({ outputs: [] })
+    const mockWallet = {
+      writeContract: vi.fn(), simulateContract, executeTransaction: vi.fn(),
+      key: 'wallet', name: 'test',
+      request: vi.fn(), transport: { config: {} as any, request: vi.fn() },
+      uid: 'test', extend: vi.fn(),
+      account: { type: 'local' as const, source: 'privateKey', address: 'aleo1abc', privateKey: 'pk', viewKey: 'vk', sign: vi.fn(), signMessage: vi.fn() },
+      proving: { mode: 'local' as const },
+      records: undefined,
+    }
+
+    const abi = parseProgram(`program token.aleo;
+
+struct Meta:
+    tag as field;
+
+function set_tier:
+    input r0 as u8.private;
+`)
+    expect(abi.structs).toHaveLength(1)
+
+    const contract = getContract({ program: 'token.aleo', abi, client: mockWallet as any })
+    await contract.simulate.set_tier({ inputs: [2] })
+    expect(simulateContract.mock.calls[0][0].inputs).toEqual(['2u8'])
   })
 
   it('non-record outputs stay as strings', async () => {

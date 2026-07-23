@@ -145,9 +145,11 @@ export type ContractInstance = {
 
 // ── ABI detection ─────────────────────────────────────────────────────
 
-/** Detect whether the abi is a parsed ABI (has `structs`) vs legacy Program */
+// Detect whether the abi is a structured ABI vs a legacy Program. Keys on
+// `storageVariables`, which only the ABI shape carries — `parseProgram`
+// output shares `structs`, `records`, `mappings`, and `functions` with it.
 function isABI(abi: ABI | Program): abi is ABI {
-  return 'structs' in abi
+  return 'storageVariables' in abi
 }
 
 // ── Implementation ────────────────────────────────────────────────────
