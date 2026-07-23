@@ -179,12 +179,12 @@ describe('Example: Autonomous Agent with Local Proving', () => {
 
     console.log('  Discovered program:', abi.id)
     console.log('  Functions:', abi.functions.map(f =>
-      `${f.name}(${f.inputs.map(i => `${i.type}.${i.visibility}`).join(', ')})`
+      `${f.name}(${f.inputs.map(i => (i.kind === 'plaintext' ? `${i.type}.${i.visibility}` : i.kind)).join(', ')})`
     ).join(', '))
 
     // Agent can reason about the program structure
     const swapFn = abi.functions.find(f => f.name === 'swap_private')!
-    expect(swapFn.inputs.every(i => i.visibility === 'private')).toBe(true)
+    expect(swapFn.inputs.every(i => i.kind === 'plaintext' && i.visibility === 'private')).toBe(true)
     console.log('  swap_private uses all private inputs — good for privacy')
   })
 
