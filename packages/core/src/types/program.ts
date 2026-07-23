@@ -9,13 +9,14 @@
  *   (`credits.aleo/metadata`), or an array of any of these, which may nest
  *   (`[[field; 2u32]; 3u32]`).
  * - `record` — `Token.record` (a record the program defines; `type` is the
- *   record name), `credits.aleo/credits.record` (an external record; `type`
- *   keeps the program-qualified locator), or `dynamic.record` (Leo
- *   `dyn record`; `type` is the literal `dynamic`). Records carry no
- *   visibility at the signature level — visibility is declared per entry on
- *   the record type itself (see {@link ProgramRecord}).
- * - `future` — `token.aleo/fn.future` (`type` keeps the locator) or
- *   `dynamic.future` (`type` is the literal `dynamic`).
+ *   record name) or `credits.aleo/credits.record` (an external record;
+ *   `type` keeps the program-qualified locator). Records carry no visibility
+ *   at the signature level — visibility is declared per entry on the record
+ *   type itself (see {@link ProgramRecord}).
+ * - `future` — `token.aleo/fn.future`; `type` keeps the locator.
+ * - `dynamicRecord` / `dynamicFuture` — `dynamic.record` / `dynamic.future`
+ *   (Leo `dyn record` and dynamic-dispatch futures). Distinct variants, not
+ *   records or futures named `dynamic`; they carry no type.
  *
  * @property name Register name (e.g. `r0`); absent on outputs.
  * @property type Base type with the kind/visibility suffix removed.
@@ -25,6 +26,8 @@ export type ProgramRegister =
   | { name?: string; kind: 'plaintext'; type: string; visibility: 'constant' | 'public' | 'private' }
   | { name?: string; kind: 'record'; type: string }
   | { name?: string; kind: 'future'; type: string }
+  | { name?: string; kind: 'dynamicRecord' }
+  | { name?: string; kind: 'dynamicFuture' }
 
 /**
  * A function signature parsed from program source. Input and output types are

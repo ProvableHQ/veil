@@ -203,10 +203,10 @@ describe('getContract', () => {
       functions: [{
         name: 'mint',
         inputs: [
-          { name: 'recipient', type: 'address', visibility: 'private' as const },
-          { name: 'amount', type: 'u64', visibility: 'private' as const },
+          { kind: 'plaintext' as const, name: 'recipient', type: 'address', visibility: 'private' as const },
+          { kind: 'plaintext' as const, name: 'amount', type: 'u64', visibility: 'private' as const },
         ],
-        outputs: [{ type: 'Token', visibility: 'private' as const }],
+        outputs: [{ kind: 'record' as const, type: 'Token' }],
         hasFinalize: false,
       }],
     }
@@ -290,8 +290,8 @@ describe('getContract', () => {
       functions: [{
         name: 'set_active',
         inputs: [
-          { name: 'active', type: 'boolean', visibility: 'private' as const },
-          { name: 'tier', type: 'u8', visibility: 'private' as const },
+          { kind: 'plaintext' as const, name: 'active', type: 'boolean', visibility: 'private' as const },
+          { kind: 'plaintext' as const, name: 'tier', type: 'u8', visibility: 'private' as const },
         ],
         outputs: [],
         hasFinalize: false,

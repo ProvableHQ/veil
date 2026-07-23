@@ -237,7 +237,8 @@ export function getContract(params: GetContractParameters): ContractInstance {
       if (typeof value === 'string') return value
       if (typeof value === 'boolean') return String(value)
       if (typeof value === 'bigint' || typeof value === 'number') {
-        const type = legacyFn?.inputs[i]?.type as Primitive | undefined
+        const input = legacyFn?.inputs[i]
+        const type = input?.kind === 'plaintext' ? (input.type as Primitive) : undefined
         if (type) return encodeValue(typeof value === 'number' ? BigInt(value) : value, type)
         return String(value)
       }

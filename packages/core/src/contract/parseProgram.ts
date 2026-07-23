@@ -47,9 +47,14 @@ const REGISTER_TYPE = String.raw`([^\n]+)`
 
 // Splits a raw register type like "address.public", "Token.record",
 // "[MerkleProof; 2u32].private", or "prog.aleo/fn.future" into the register
-// kind (mirroring snarkVM's ValueType variants) plus the base type, with the
-// declared visibility on plaintext registers.
+// kind plus the base type, with the declared visibility on plaintext
+// registers. Mirrors snarkVM's ValueType parse: the dynamic variants match
+// first (`dynamic` is not an identifier), then the suffix decides the kind.
+// Text without a valid suffix would be rejected by snarkVM; it is kept
+// leniently as a private plaintext rather than failing the whole parse.
 function splitRegisterType(raw: string): ProgramRegister {
+  if (raw === 'dynamic.record') return { kind: 'dynamicRecord' }
+  if (raw === 'dynamic.future') return { kind: 'dynamicFuture' }
   const match = raw.match(/^(.*)\.(constant|public|private|record|future)$/)
   if (!match) return { kind: 'plaintext', type: raw, visibility: 'private' }
   const type = match[1]!

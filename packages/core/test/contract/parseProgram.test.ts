@@ -197,7 +197,7 @@ function kitchen_sink:
       { kind: 'plaintext', name: 'r2', type: 'u128', visibility: 'private' },
       { kind: 'record', name: 'r3', type: 'Token' },
       { kind: 'record', name: 'r4', type: 'credits.aleo/credits' },
-      { kind: 'record', name: 'r5', type: 'dynamic' },
+      { kind: 'dynamicRecord', name: 'r5' },
     ])
   })
 
@@ -207,9 +207,9 @@ function kitchen_sink:
       { kind: 'plaintext', type: 'u8', visibility: 'constant' },
       { kind: 'record', type: 'Token' },
       { kind: 'record', type: 'credits.aleo/credits' },
-      { kind: 'record', type: 'dynamic' },
+      { kind: 'dynamicRecord' },
       { kind: 'future', type: 'value_types.aleo/kitchen_sink' },
-      { kind: 'future', type: 'dynamic' },
+      { kind: 'dynamicFuture' },
     ])
   })
 

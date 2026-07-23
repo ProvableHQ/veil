@@ -135,9 +135,18 @@ const INTERFACES: Record<ArcStandard, InterfaceSpec> = { arc20: IARC20, arc22: I
 // Futures collapse to 'future'; program qualifiers on imported types are
 // stripped so `freezelist.aleo/MerkleProof` compares equal to `MerkleProof`.
 function canonicalType(register: ProgramRegister): string {
-  if (register.kind === 'future') return 'future'
-  const type = register.type.replace(/\b[a-z][a-z0-9_]*\.aleo\//g, '')
-  return register.kind === 'record' ? `${type}.record` : `${type}.${register.visibility}`
+  switch (register.kind) {
+    case 'future':
+      return 'future'
+    case 'dynamicRecord':
+      return 'dynamic.record'
+    case 'dynamicFuture':
+      return 'dynamic.future'
+    default: {
+      const type = register.type.replace(/\b[a-z][a-z0-9_]*\.aleo\//g, '')
+      return register.kind === 'record' ? `${type}.record` : `${type}.${register.visibility}`
+    }
+  }
 }
 
 // Compares one register list (inputs or outputs) position by position against
