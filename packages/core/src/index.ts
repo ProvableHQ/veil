@@ -65,7 +65,7 @@ export type {
   VerifyingKey,
   Owner,
 } from './types/transaction.js'
-export type { Program, ProgramFunction, ProgramMapping, MappingValue } from './types/program.js'
+export type { Program, ProgramFunction, ProgramRegister, ProgramMapping, ProgramRecord, ProgramStruct, MappingValue } from './types/program.js'
 export type {
   BlockSummary,
   TransactionSummary,
@@ -242,3 +242,17 @@ export { withRecords } from './extensions/withRecords.js'
 // Contract
 export { getContract, type ContractInstance } from './contract/getContract.js'
 export { parseProgram } from './contract/parseProgram.js'
+export {
+  checkProgramConformance,
+  type ArcStandard,
+  type ArcViolation,
+  type ArcConformanceReport,
+} from './contract/arcConformance.js'
+export {
+  checkArcConformance,
+  type ArcProgramSource,
+  type CheckArcConformanceParameters,
+  type CheckArcConformanceReturnType,
+} from './actions/public/checkArcConformance.js'
+export { isArc20, type IsArc20Parameters, type IsArc20ReturnType } from './actions/public/isArc20.js'
+export { isArc22, type IsArc22Parameters, type IsArc22ReturnType } from './actions/public/isArc22.js'

@@ -57,13 +57,13 @@ describe('getContract resolveInputs — rich ABI mixed path', () => {
   })
 })
 
-// ── Legacy Program path (parseProgram) with a realistic swap signature ──
+// ── Parsed Program path (parseProgram) with a realistic swap signature ──
 //
 // Mirrors the shape of a real private-swap function (record + derived field +
 // derived/injected address + literal tail) without committing a large deployed
-// program blob. Exercises the legacy encode branch of resolveInputs.
+// program blob. Exercises the parsed-Program encode branch of resolveInputs.
 
-describe('getContract resolveInputs — legacy Program path, private-swap shape', () => {
+describe('getContract resolveInputs — parsed Program path, private-swap shape', () => {
   const source = `program amm_demo.aleo;
 
 record Position:

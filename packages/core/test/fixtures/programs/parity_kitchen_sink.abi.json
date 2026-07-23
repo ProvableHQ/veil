@@ -1,0 +1,220 @@
+{
+  "program": "parity_kitchen_sink.aleo",
+  "structs": [
+    {
+      "path": [
+        "Inner"
+      ],
+      "fields": [
+        {
+          "name": "tag",
+          "ty": {
+            "Primitive": "Field"
+          }
+        }
+      ]
+    },
+    {
+      "path": [
+        "Outer"
+      ],
+      "fields": [
+        {
+          "name": "inner",
+          "ty": {
+            "Struct": {
+              "path": [
+                "Inner"
+              ],
+              "program": "parity_kitchen_sink.aleo"
+            }
+          }
+        },
+        {
+          "name": "grid",
+          "ty": {
+            "Array": {
+              "element": {
+                "Array": {
+                  "element": {
+                    "Primitive": {
+                      "UInt": "U8"
+                    }
+                  },
+                  "length": 2
+                }
+              },
+              "length": 2
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "records": [
+    {
+      "path": [
+        "Item"
+      ],
+      "fields": [
+        {
+          "name": "owner",
+          "ty": {
+            "Primitive": "Address"
+          },
+          "mode": "Public"
+        },
+        {
+          "name": "score",
+          "ty": {
+            "Primitive": {
+              "UInt": "U64"
+            }
+          },
+          "mode": "Private"
+        }
+      ]
+    }
+  ],
+  "mappings": [
+    {
+      "name": "totals",
+      "key": {
+        "Primitive": "Boolean"
+      },
+      "value": {
+        "Primitive": {
+          "UInt": "U128"
+        }
+      }
+    }
+  ],
+  "storage_variables": [],
+  "functions": [
+    {
+      "name": "mix",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Struct": {
+                "path": [
+                  "Outer"
+                ],
+                "program": "parity_kitchen_sink.aleo"
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Record": {
+            "path": [
+              "Item"
+            ],
+            "program": "parity_kitchen_sink.aleo"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U8"
+              }
+            },
+            "mode": "Public"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Struct": {
+                    "path": [
+                      "Inner"
+                    ],
+                    "program": "parity_kitchen_sink.aleo"
+                  }
+                },
+                "length": 3
+              }
+            },
+            "mode": "Public"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Struct": {
+                "path": [
+                  "Outer"
+                ],
+                "program": "parity_kitchen_sink.aleo"
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Record": {
+            "path": [
+              "Item"
+            ],
+            "program": "parity_kitchen_sink.aleo"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Struct": {
+                    "path": [
+                      "Inner"
+                    ],
+                    "program": "parity_kitchen_sink.aleo"
+                  }
+                },
+                "length": 3
+              }
+            },
+            "mode": "Public"
+          }
+        }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "name": "peek",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Boolean"
+            },
+            "mode": "Public"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Struct": {
+                "path": [
+                  "Inner"
+                ],
+                "program": "parity_kitchen_sink.aleo"
+              }
+            },
+            "mode": "Public"
+          }
+        }
+      ]
+    }
+  ]
+}

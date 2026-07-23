@@ -1,14 +1,23 @@
-import type { Program, ProgramFunction, ProgramMapping } from '../types/program.js'
+import type { Program, ProgramFunction, ProgramMapping, ProgramRecord, ProgramRegister, ProgramStruct } from '../types/program.js'
 
 /**
  * Parses Aleo program source code into a structured Program object.
- * Extracts function signatures, mapping types, and closure names.
+ * Extracts function and view signatures, record and struct declarations,
+ * mapping types, and closure names. Pure and local — no network access.
  */
 export function parseProgram(source: string): Program {
   const idMatch = source.match(/program\s+([\w.]+)\s*;/)
   const id = idMatch ? idMatch[1]! : 'unknown.aleo'
 
-  const functions = parseFunctions(source)
+  const functions = parseCallables(source, 'function')
+  const views = parseCallables(source, 'view')
+  // Record entries carry a visibility suffix (e.g. "address.private"); struct
+  // fields carry none, so the parsed raw type is used verbatim.
+  const records: ProgramRecord[] = parseFieldBlocks(source, 'record').map(({ name, fields }) => ({
+    name,
+    fields: fields.map((field) => ({ name: field.name, ...splitEntryType(field.type) })),
+  }))
+  const structs = parseFieldBlocks(source, 'struct')
   const mappings = parseMappings(source)
   const closures = parseClosures(source)
 
@@ -23,44 +32,95 @@ export function parseProgram(source: string): Program {
     fn.hasFinalize = finalizeNames.has(fn.name)
   }
 
-  return { id, source, functions, mappings, closures }
+  return { kind: 'program', id, source, functions, views, records, structs, mappings, closures }
 }
 
-function parseFunctions(source: string): ProgramFunction[] {
-  const functions: ProgramFunction[] = []
-  // Match function blocks: "function name:" followed by inputs/outputs until the next block
-  const fnRegex = /function\s+(\w+)\s*:([\s\S]*?)(?=\n(?:function|finalize|closure|mapping)\s|\n*$)/g
+// A block body ends where indentation ends: the next top-level declaration
+// (any non-whitespace at column 0) or the end of the source.
+const BLOCK_BOUNDARY = String.raw`(?=\n\S|\n*$)`
+
+// One register type as written in source. Array types nest and carry
+// semicolons ("[[field; 2u32]; 3u32]"), so the type runs to the statement's
+// closing semicolon — the last one on the line, since declarations are one
+// per line and types never span lines.
+const REGISTER_TYPE = String.raw`([^\n]+)`
+
+// Splits a raw register type like "address.public", "Token.record",
+// "[MerkleProof; 2u32].private", or "prog.aleo/fn.future" into the register
+// kind plus the base type, with the declared visibility on plaintext
+// registers. Mirrors snarkVM's ValueType parse: the dynamic variants match
+// first (`dynamic` is not an identifier), then the suffix decides the kind.
+// Text without a valid suffix would be rejected by snarkVM; it is kept
+// leniently as a private plaintext rather than failing the whole parse.
+function splitRegisterType(raw: string): ProgramRegister {
+  if (raw === 'dynamic.record') return { kind: 'dynamicRecord' }
+  if (raw === 'dynamic.future') return { kind: 'dynamicFuture' }
+  const match = raw.match(/^(.*)\.(constant|public|private|record|future)$/)
+  if (!match) return { kind: 'plaintext', type: raw, visibility: 'private' }
+  const type = match[1]!
+  const suffix = match[2]!
+  if (suffix === 'record' || suffix === 'future') return { kind: suffix, type }
+  return { kind: 'plaintext', type, visibility: suffix as 'constant' | 'public' | 'private' }
+}
+
+// Splits a record entry type like "address.public" or "u128.private" into the
+// base type and the entry's declared visibility (snarkVM EntryType).
+function splitEntryType(raw: string): { type: string; visibility: 'constant' | 'public' | 'private' } {
+  const match = raw.match(/^(.*)\.(constant|public|private)$/)
+  if (!match) return { type: raw, visibility: 'private' }
+  return { type: match[1]!, visibility: match[2] as 'constant' | 'public' | 'private' }
+}
+
+function parseCallables(source: string, keyword: 'function' | 'view'): ProgramFunction[] {
+  const callables: ProgramFunction[] = []
+  const blockRegex = new RegExp(`${keyword}\\s+(\\w+)\\s*:([\\s\\S]*?)${BLOCK_BOUNDARY}`, 'g')
+  const inputRegex = new RegExp(String.raw`input\s+(\S+)\s+as\s+${REGISTER_TYPE};`, 'g')
+  const outputRegex = new RegExp(String.raw`output\s+\S+\s+as\s+${REGISTER_TYPE};`, 'g')
   let match: RegExpExecArray | null
 
-  while ((match = fnRegex.exec(source)) !== null) {
+  while ((match = blockRegex.exec(source)) !== null) {
     const name = match[1]!
     const body = match[2]!
 
     const inputs: ProgramFunction['inputs'] = []
-    const inputRegex = /input\s+(\w+)\s+as\s+(\w+(?:\.\w+)?)\.(\w+)\s*;/g
+    inputRegex.lastIndex = 0
     let inputMatch: RegExpExecArray | null
     while ((inputMatch = inputRegex.exec(body)) !== null) {
-      inputs.push({
-        name: inputMatch[1]!,
-        type: inputMatch[2]!,
-        visibility: inputMatch[3] as 'public' | 'private' | 'constant',
-      })
+      inputs.push({ ...splitRegisterType(inputMatch[2]!.trim()), name: inputMatch[1]! })
     }
 
     const outputs: ProgramFunction['outputs'] = []
-    const outputRegex = /output\s+\w+\s+as\s+(\w+(?:\.\w+)?)\.(\w+)\s*;/g
+    outputRegex.lastIndex = 0
     let outputMatch: RegExpExecArray | null
     while ((outputMatch = outputRegex.exec(body)) !== null) {
-      outputs.push({
-        type: outputMatch[1]!,
-        visibility: outputMatch[2] as 'public' | 'private',
-      })
+      outputs.push(splitRegisterType(outputMatch[1]!.trim()))
     }
 
-    functions.push({ name, inputs, outputs, hasFinalize: false })
+    callables.push({ name, inputs, outputs, hasFinalize: false })
   }
 
-  return functions
+  return callables
+}
+
+// Parses "record Name:" / "struct Name:" blocks into name plus raw field
+// types — the caller strips visibility suffixes where the grammar has them.
+function parseFieldBlocks(source: string, keyword: 'record' | 'struct'): ProgramStruct[] {
+  const blocks: ProgramStruct[] = []
+  const blockRegex = new RegExp(`^${keyword}\\s+(\\w+)\\s*:\\n((?:[ \\t]+.*\\n?)*)`, 'gm')
+  const fieldRegex = new RegExp(String.raw`(\w+)\s+as\s+${REGISTER_TYPE};`, 'g')
+  let match: RegExpExecArray | null
+
+  while ((match = blockRegex.exec(source)) !== null) {
+    const fields: ProgramStruct['fields'] = []
+    fieldRegex.lastIndex = 0
+    let fieldMatch: RegExpExecArray | null
+    while ((fieldMatch = fieldRegex.exec(match[2]!)) !== null) {
+      fields.push({ name: fieldMatch[1]!, type: fieldMatch[2]!.trim() })
+    }
+    blocks.push({ name: match[1]!, fields })
+  }
+
+  return blocks
 }
 
 function parseMappings(source: string): ProgramMapping[] {

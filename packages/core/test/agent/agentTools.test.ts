@@ -1,8 +1,12 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, it, expect, vi } from 'vitest'
 import { aleoAgentTools, aleoAgentToolSchemas, createAgentTools } from '../../src/agent/index.js'
 import { createPublicClient } from '../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../src/clients/createWalletClient.js'
 import { custom } from '../../src/transports/custom.js'
+
+const arc20Vector = readFileSync(join(__dirname, '../fixtures/programs/test_arc20_eth.aleo'), 'utf8')
 
 describe('aleoAgentTools', () => {
   describe('with public client only', () => {
@@ -19,6 +23,7 @@ describe('aleoAgentTools', () => {
       expect(names).toContain('aleo_get_block')
       expect(names).toContain('aleo_get_transaction')
       expect(names).toContain('aleo_describe_program')
+      expect(names).toContain('aleo_check_arc_conformance')
       // No wallet tools
       expect(names).not.toContain('aleo_execute')
       expect(names).not.toContain('aleo_transfer')
@@ -152,6 +157,29 @@ describe('aleoAgentTools', () => {
       expect(result.mappings[0].keyType).toBe('address')
       expect(result.mappings[0].valueType).toBe('u64')
     })
+
+    it('aleo_check_arc_conformance handler checks a fetched program against a standard', async () => {
+      const request = vi.fn().mockResolvedValue(arc20Vector)
+      const client = createPublicClient({ transport: custom({ request }) })
+      const tools = aleoAgentTools({ client })
+
+      const tool = tools.find((t) => t.name === 'aleo_check_arc_conformance')!
+      const result = (await tool.handler({ program: 'test_arc20_eth.aleo', standard: 'arc20' })) as any
+      expect(result.conforms).toBe(true)
+      expect(result.programId).toBe('test_arc20_eth.aleo')
+      expect(result.violations).toEqual([])
+    })
+
+    it('aleo_check_arc_conformance handler analyzes provided source without fetching', async () => {
+      const request = vi.fn()
+      const client = createPublicClient({ transport: custom({ request }) })
+      const tools = aleoAgentTools({ client })
+
+      const tool = tools.find((t) => t.name === 'aleo_check_arc_conformance')!
+      const result = (await tool.handler({ source: arc20Vector, standard: 'arc22' })) as any
+      expect(request).not.toHaveBeenCalled()
+      expect(result.conforms).toBe(false)
+    })
   })
 
   describe('with wallet client only', () => {
@@ -251,7 +279,7 @@ describe('aleoAgentTools', () => {
       expect(names).toContain('aleo_execute')
       expect(names).toContain('aleo_transfer')
       expect(names).toContain('aleo_deploy')
-      expect(tools).toHaveLength(10)
+      expect(tools).toHaveLength(11)
     })
   })
 

@@ -7,7 +7,7 @@ function mockWalletClient() {
   return { client: { writeContract } as any, writeContract }
 }
 
-describe('resolveInputs passthrough (no ABI / legacy)', () => {
+describe('resolveInputs passthrough (no ABI / parsed Program)', () => {
   it('encodes literals and passes InputRequests through untouched', async () => {
     const { client, writeContract } = mockWalletClient()
     const c = getContract({ program: 'credits.aleo', client })
