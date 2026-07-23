@@ -105,6 +105,32 @@ describe('parseProgram / parseAbi parity on the same leo build', () => {
     }
   })
 
+  it('derives every ABI struct with identical fields', () => {
+    // The ABI is pruned to interface-reachable types, so it is a subset of the
+    // program text's structs; every ABI struct must parse identically.
+    expect(abi.structs.length).toBeGreaterThan(0)
+    for (const abiStruct of abi.structs) {
+      const name = abiStruct.path.join('.')
+      const programStruct = program.structs.find((s) => s.name === name)!
+      expect(programStruct, `struct ${name} missing from parsed program`).toBeDefined()
+      expect(programStruct.fields, name).toEqual(
+        abiStruct.fields.map((f) => ({ name: f.name, type: plaintextToText(f.type) })),
+      )
+    }
+  })
+
+  it('derives every ABI record with identical fields and entry visibility', () => {
+    expect(abi.records.length).toBeGreaterThan(0)
+    for (const abiRecord of abi.records) {
+      const name = abiRecord.path.join('.')
+      const programRecord = program.records.find((r) => r.name === name)!
+      expect(programRecord, `record ${name} missing from parsed program`).toBeDefined()
+      expect(programRecord.fields, name).toEqual(
+        abiRecord.fields.map((f) => ({ name: f.name, type: plaintextToText(f.type), visibility: f.mode })),
+      )
+    }
+  })
+
   it('hasFinalize agrees with isFinal for every function', () => {
     for (const abiFn of abi.functions) {
       const programFn = program.functions.find((f) => f.name === abiFn.name)!

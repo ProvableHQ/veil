@@ -47,6 +47,24 @@ describe('checkProgramConformance', () => {
     expect(checkProgramConformance(arc22Vector, 'arc20').conforms).toBe(false)
   })
 
+  it('shape-checks a locally defined MerkleProof struct on a real vector', () => {
+    // test_usdcx_stablecoin defines MerkleProof in-file; corrupting a field
+    // type must surface as a violation on top of the seven missing views.
+    const corrupted = arc22Vector.replace(
+      'struct MerkleProof:\n    siblings as [field; 16u32];\n    leaf_index as u32;',
+      'struct MerkleProof:\n    siblings as [field; 16u32];\n    leaf_index as u64;',
+    )
+    expect(corrupted).not.toBe(arc22Vector)
+    const report = checkProgramConformance(corrupted, 'arc22')
+    expect(report.violations).toContainEqual({
+      kind: 'record_field_mismatch',
+      record: 'MerkleProof',
+      field: 'leaf_index',
+      expected: 'u32',
+      actual: 'u64',
+    })
+  })
+
   it('reports a missing function with its name', () => {
     const gutted = arc20Vector.replace(/function unapprove_public:/, 'function renamed_unapprove:')
     const report = checkProgramConformance(gutted, 'arc20')
