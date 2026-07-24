@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  LEO_RELEASE: leo-lang-v4.3.2
+  LEO_RELEASE: leo-lang-v4.3.4
   DEVNODE_RELEASE: v0.2.0
 
 jobs:
