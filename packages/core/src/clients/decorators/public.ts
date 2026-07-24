@@ -12,6 +12,9 @@ import {
   type GetProgramParameters,
   type GetProgramReturnType,
 } from '../../actions/public/getCode.js'
+import { checkArcConformance, type CheckArcConformanceParameters, type CheckArcConformanceReturnType } from '../../actions/public/checkArcConformance.js'
+import { isArc20, type IsArc20Parameters, type IsArc20ReturnType } from '../../actions/public/isArc20.js'
+import { isArc22, type IsArc22Parameters, type IsArc22ReturnType } from '../../actions/public/isArc22.js'
 import { getTransitionViewKeys, type GetTransitionViewKeysParameters, type GetTransitionViewKeysReturnType } from '../../actions/public/getTransitionViewKeys.js'
 import { getBlockHash, type GetBlockHashReturnType } from '../../actions/public/getBlockHash.js'
 import { getBlockTransactions, type GetBlockTransactionsParameters, type GetBlockTransactionsReturnType } from '../../actions/public/getBlockTransactions.js'
@@ -77,6 +80,9 @@ export type PublicActions = {
   readContract: (params: ReadContractParameters) => Promise<ReadContractReturnType>
   getCode: (params: GetCodeParameters) => Promise<GetCodeReturnType>
   getProgram: (params: GetProgramParameters) => Promise<GetProgramReturnType>
+  checkArcConformance: (params: CheckArcConformanceParameters) => Promise<CheckArcConformanceReturnType>
+  isArc20: (params: IsArc20Parameters) => Promise<IsArc20ReturnType>
+  isArc22: (params: IsArc22Parameters) => Promise<IsArc22ReturnType>
   getTransitionViewKeys: (params: GetTransitionViewKeysParameters) => Promise<GetTransitionViewKeysReturnType>
   getBlockHash: () => Promise<GetBlockHashReturnType>
   getBlockTransactions: (params: GetBlockTransactionsParameters) => Promise<GetBlockTransactionsReturnType>
@@ -151,6 +157,9 @@ export function publicActions(client: Client): PublicActions {
     readContract: (params) => readContract(client, params),
     getCode: (params) => getCode(client, params),
     getProgram: (params) => getProgram(client, params),
+    checkArcConformance: (params) => checkArcConformance(client, params),
+    isArc20: (params) => isArc20(client, params),
+    isArc22: (params) => isArc22(client, params),
     getTransitionViewKeys: (params) => getTransitionViewKeys(client, params),
     getBlockHash: () => getBlockHash(client),
     getBlockTransactions: (params) => getBlockTransactions(client, params),

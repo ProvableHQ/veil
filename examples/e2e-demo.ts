@@ -67,6 +67,18 @@ describe('E2E: veil against live Aleo mainnet', () => {
     console.log('  Mappings:', parsed.mappings.map(m => `${m.name}(${m.keyType}→${m.valueType})`).join(', '))
   })
 
+  it('isArc20() / checkArcConformance() classify credits.aleo as non-ARC-20', async () => {
+    // credits.aleo is the spec's canonical non-ARC-20 program: its record is
+    // `credits` with `microcredits: u64`, not `Token` with `amount: u128`.
+    const conforms = await publicClient.isArc20({ programId: 'credits.aleo' })
+    expect(conforms).toBe(false)
+
+    const report = await publicClient.checkArcConformance({ programId: 'credits.aleo', standard: 'arc20' })
+    expect(report.conforms).toBe(false)
+    expect(report.violations).toContainEqual({ kind: 'missing_record', name: 'Token' })
+    console.log('  credits.aleo is ARC-20:', conforms, '—', report.violations.length, 'violations')
+  })
+
   it('readContract() reads a program mapping value', async () => {
     // Use committee mapping which has well-known validator entries
     // Note: 404 means the key doesn't exist in the mapping — handle gracefully

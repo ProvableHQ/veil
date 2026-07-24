@@ -1,6 +1,8 @@
 import type { PublicClient } from '../clients/createPublicClient.js'
 import type { WalletClient } from '../clients/createWalletClient.js'
 import type { AgentToolHandler } from './types.js'
+import type { ArcStandard } from '../contract/arcConformance.js'
+import type { CheckArcConformanceParameters } from '../actions/public/checkArcConformance.js'
 import { parseProgram } from '../contract/parseProgram.js'
 
 // ---------------------------------------------------------------------------
@@ -87,6 +89,14 @@ export function createPublicHandlers(client: PublicClient): Record<string, Agent
         closures: parsed.closures,
       }
     },
+
+    aleo_check_arc_conformance: async (input) =>
+      // Both fields pass through; the action validates that exactly one is set.
+      client.checkArcConformance({
+        programId: input.program as string | undefined,
+        source: input.source as string | undefined,
+        standard: input.standard as ArcStandard,
+      } as CheckArcConformanceParameters),
   }
 }
 

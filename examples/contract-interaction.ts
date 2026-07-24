@@ -157,11 +157,13 @@ describe('Contract Interaction: the getContract() pattern', () => {
       expect(transferPublic).toBeDefined()
       expect(transferPublic.inputs).toHaveLength(2)
       expect(transferPublic.inputs[0]).toEqual({
+        kind: 'plaintext',
         name: 'r0',
         type: 'address',
         visibility: 'public',
       })
       expect(transferPublic.inputs[1]).toEqual({
+        kind: 'plaintext',
         name: 'r1',
         type: 'u64',
         visibility: 'public',

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { getContract } from '../../src/contract/getContract.js'
+import { parseProgram } from '../../src/contract/parseProgram.js'
 import { createPublicClient } from '../../src/clients/createPublicClient.js'
 import { custom } from '../../src/transports/custom.js'
 import type { Program } from '../../src/types/program.js'
@@ -24,6 +25,7 @@ describe('getContract', () => {
     const client = createPublicClient({ transport: custom({ request }) })
 
     const abi: Program = {
+      kind: 'program',
       id: 'token.aleo',
       source: '',
       mappings: [{ name: 'balances', keyType: 'address', valueType: 'u64' }],
@@ -43,6 +45,7 @@ describe('getContract', () => {
     const client = createPublicClient({ transport: custom({ request }) })
 
     const abi: Program = {
+      kind: 'program',
       id: 'token.aleo',
       source: '',
       mappings: [],
@@ -163,6 +166,7 @@ describe('getContract', () => {
     }
 
     const abi: Program = {
+      kind: 'program',
       id: 'token.aleo', source: '', closures: [],
       mappings: [], functions: [{ name: 'mint', inputs: [], outputs: [], hasFinalize: false }],
     }
@@ -198,15 +202,16 @@ describe('getContract', () => {
     }
 
     const abi: Program = {
+      kind: 'program',
       id: 'token.aleo', source: '', closures: [],
       mappings: [],
       functions: [{
         name: 'mint',
         inputs: [
-          { name: 'recipient', type: 'address', visibility: 'private' as const },
-          { name: 'amount', type: 'u64', visibility: 'private' as const },
+          { kind: 'plaintext' as const, name: 'recipient', type: 'address', visibility: 'private' as const },
+          { kind: 'plaintext' as const, name: 'amount', type: 'u64', visibility: 'private' as const },
         ],
-        outputs: [{ type: 'Token', visibility: 'private' as const }],
+        outputs: [{ kind: 'record' as const, type: 'Token' }],
         hasFinalize: false,
       }],
     }
@@ -285,13 +290,14 @@ describe('getContract', () => {
     }
 
     const abi: Program = {
+      kind: 'program',
       id: 'token.aleo', source: '', closures: [],
       mappings: [],
       functions: [{
         name: 'set_active',
         inputs: [
-          { name: 'active', type: 'boolean', visibility: 'private' as const },
-          { name: 'tier', type: 'u8', visibility: 'private' as const },
+          { kind: 'plaintext' as const, name: 'active', type: 'boolean', visibility: 'private' as const },
+          { kind: 'plaintext' as const, name: 'tier', type: 'u8', visibility: 'private' as const },
         ],
         outputs: [],
         hasFinalize: false,
@@ -304,6 +310,35 @@ describe('getContract', () => {
     const calledInputs = simulateContract.mock.calls[0][0].inputs
     expect(calledInputs[0]).toBe('true')
     expect(calledInputs[1]).toBe('2u8')
+  })
+
+  it('treats a parseProgram result as a parsed Program, not a structured ABI', async () => {
+    // parseProgram output now carries records/structs/views — the ABI-vs-Program
+    // discrimination must not key on a field both shapes have.
+    const simulateContract = vi.fn().mockResolvedValue({ outputs: [] })
+    const mockWallet = {
+      writeContract: vi.fn(), simulateContract, executeTransaction: vi.fn(),
+      key: 'wallet', name: 'test',
+      request: vi.fn(), transport: { config: {} as any, request: vi.fn() },
+      uid: 'test', extend: vi.fn(),
+      account: { type: 'local' as const, source: 'privateKey', address: 'aleo1abc', privateKey: 'pk', viewKey: 'vk', sign: vi.fn(), signMessage: vi.fn() },
+      proving: { mode: 'local' as const },
+      records: undefined,
+    }
+
+    const abi = parseProgram(`program token.aleo;
+
+struct Meta:
+    tag as field;
+
+function set_tier:
+    input r0 as u8.private;
+`)
+    expect(abi.structs).toHaveLength(1)
+
+    const contract = getContract({ program: 'token.aleo', abi, client: mockWallet as any })
+    await contract.simulate.set_tier({ inputs: [2] })
+    expect(simulateContract.mock.calls[0][0].inputs).toEqual(['2u8'])
   })
 
   it('non-record outputs stay as strings', async () => {

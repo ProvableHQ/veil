@@ -94,6 +94,32 @@ const supply = await client.readContract({
 `readContract` returns the raw literal (e.g. `"5000000u64"`). Decode it with
 `parseValue` from the package's utils when you need a structured value.
 
+### Token standard conformance
+
+`isArc20` and `isArc22` check whether a program implements the ARC-20 or
+ARC-22 fungible token interface. The Leo-level interface declaration does not
+survive compilation, so the check verifies the compiled instructions
+structurally: every interface function and view must exist with the exact
+type and visibility at each register position, and the required record types
+must carry the required fields. Extra functions, views, or record fields do
+not disqualify a program.
+
+Pass a `programId` to fetch a deployed program from the connected node, or
+`source` to analyze program text locally without network access.
+`checkArcConformance` returns the full report when the boolean verdict is not
+enough — each violation names the missing or mismatched function, view, or
+record and the expected and actual type at the failing position.
+
+```ts
+const ok = await client.isArc20({ programId: 'token.aleo' })
+
+const report = await client.checkArcConformance({
+  programId: 'stablecoin.aleo',
+  standard: 'arc22',
+})
+if (!report.conforms) console.log(report.violations)
+```
+
 ## Writing to contracts
 
 A wallet client pairs a transport with an `account` that signs and proves. Core

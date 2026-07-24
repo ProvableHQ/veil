@@ -146,6 +146,32 @@ export const describeProgramSchema: AgentToolSchema = {
   },
 }
 
+/**
+ * Describes the `aleo_check_arc_conformance` tool: checks a program against
+ * the ARC-20 or ARC-22 token standard.
+ *
+ * The paired handler calls `checkArcConformance` on the public client and
+ * returns the full conformance report, including every missing or mismatched
+ * function, view, and record.
+ */
+export const checkArcConformanceSchema: AgentToolSchema = {
+  name: 'aleo_check_arc_conformance',
+  description:
+    'Check whether an Aleo program conforms to the ARC-20 or ARC-22 fungible token standard. ' +
+    'Provide exactly one of program (a deployed program id, fetched from the node) or source ' +
+    '(full program text, analyzed locally). Returns { programId, standard, conforms, violations } ' +
+    'listing every missing or mismatched function, view, and record.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      standard: { type: 'string', enum: ['arc20', 'arc22'], description: 'Token standard to check against' },
+      program: { type: 'string', description: "Deployed program ID to fetch, e.g. 'token.aleo'" },
+      source: { type: 'string', description: 'Full Aleo instructions text to analyze instead of fetching' },
+    },
+    required: ['standard'],
+  },
+}
+
 // ---------------------------------------------------------------------------
 // Wallet (write) tool schemas
 // ---------------------------------------------------------------------------
@@ -258,6 +284,7 @@ export const publicToolSchemas: AgentToolSchema[] = [
   getBlockSchema,
   getTransactionSchema,
   describeProgramSchema,
+  checkArcConformanceSchema,
 ]
 
 /**
