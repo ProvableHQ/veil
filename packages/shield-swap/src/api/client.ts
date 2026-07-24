@@ -44,6 +44,20 @@ export class ApiError extends Error {
   }
 }
 
+// Extracts the session credential from a verify response. Current servers
+// deliver the session JWT as the `ss_access` httpOnly cookie (the middleware
+// also accepts it as a Bearer); a body token, returned by older servers, is
+// the fallback.
+function sessionTokenFrom(res: Response, body: unknown): string | undefined {
+  const cookies: string[] =
+    res.headers.getSetCookie?.() ?? (res.headers.get('set-cookie') ? [res.headers.get('set-cookie')!] : [])
+  for (const cookie of cookies) {
+    const match = cookie.match(/^ss_access=([^;]+)/)
+    if (match) return decodeURIComponent(match[1]!)
+  }
+  return (body as { data?: { token?: string } } | undefined)?.data?.token
+}
+
 /**
  * Typed client for the off-chain DEX (AMM) REST API.
  *
@@ -90,6 +104,18 @@ export class ApiClient {
   private async request<T>(
     method: 'GET' | 'POST' | 'DELETE',
     path: string,
+    opts: Parameters<ApiClient['send']>[2] = {},
+  ): Promise<T> {
+    const res = await this.send(method, path, opts)
+    return (await res.json()) as T
+  }
+
+  // Performs the HTTP exchange and returns the raw Response — the JSON-body
+  // convenience lives in request(); callers that need headers (e.g. the
+  // session cookie on /auth/verify) use this directly.
+  private async send(
+    method: 'GET' | 'POST' | 'DELETE',
+    path: string,
     opts: {
       query?: Record<string, string | number | undefined>
       body?: unknown
@@ -99,7 +125,7 @@ export class ApiClient {
       // Set internally on the post-re-auth retry so one 401 never loops.
       isRetry?: boolean
     } = {},
-  ): Promise<T> {
+  ): Promise<Response> {
     const url = new URL(this.baseUrl + path)
     for (const [k, v] of Object.entries(opts.query ?? {})) {
       if (v !== undefined) url.searchParams.set(k, String(v))
@@ -133,11 +159,11 @@ export class ApiClient {
         } catch {
           throw error
         }
-        return this.request(method, path, { ...opts, isRetry: true })
+        return this.send(method, path, { ...opts, isRetry: true })
       }
       throw error
     }
-    return (await res.json()) as T
+    return res
   }
 
   /** Renews the session JWT via the stored signer, deduping concurrent renewals. */
@@ -183,11 +209,17 @@ export class ApiClient {
           body: { address },
         })
         const signature = await sign(challenge.data.message)
-        const verified = await this.request<Schemas['AuthTokenResponseDoc']>('POST', '/auth/verify', {
-          body: { address, signature },
+        // The session arrives as httpOnly cookies on the verify response, so
+        // this call needs the raw Response headers — not just the JSON body.
+        const res = await this.send('POST', '/auth/verify', {
+          body: { address, signature, challenge_id: challenge.data.challenge_id },
         })
+        const token = sessionTokenFrom(res, await res.json())
+        if (!token) {
+          throw new ApiError(res.status, '/auth/verify', 'verify succeeded but carried no session credential (ss_access cookie or body token)')
+        }
         this.signer = { address, sign }
-        this.token = verified.data.token
+        this.token = token
         return this.token
       } catch (err) {
         if (!(err instanceof ApiError) || err.status !== 401 || attempt >= attempts) throw err
@@ -274,13 +306,14 @@ export class ApiClient {
   /**
    * Redeems an invite code, unlocking the gated endpoints for the account.
    *
-   * The response carries an upgraded session token with the access grant;
-   * it replaces the session JWT held on this instance, so subsequent calls
-   * are unlocked without a new handshake. One-time: the server rejects an
-   * already-used code with a 400. Requires a session JWT.
+   * The access grant is recorded server-side against the session — no new
+   * credential is issued, and subsequent calls are unlocked without a new
+   * handshake. One-time: the server rejects an already-used code with a
+   * 400. Requires a session JWT.
    *
    * @param code The invite code to redeem.
-   * @returns The redemption result (code, status, and the upgraded token).
+   * @returns The redemption result (code and status). The access grant is
+   *   recorded server-side against the session — no new credential is issued.
    * @throws When no session JWT is held, or the code is invalid or already
    *   used (400).
    *
@@ -295,7 +328,6 @@ export class ApiClient {
       body: { code },
       auth: 'session',
     })
-    if (res.data.token) this.token = res.data.token
     return res.data
   }
 
@@ -304,12 +336,12 @@ export class ApiClient {
    * account — operationally interchangeable with {@link redeemAccessCode}
    * for first-time access (distributed codes are commonly referral codes).
    *
-   * The response carries an upgraded session token with the access grant;
-   * it replaces the session JWT held on this instance. One-time: the server
-   * rejects an already-used code with a 400. Requires a session JWT.
+   * The access grant is recorded server-side against the session. One-time:
+   * the server rejects an already-used code with a 400. Requires a session
+   * JWT.
    *
    * @param code The referral code to redeem.
-   * @returns The redemption result (code, status, and the upgraded token).
+   * @returns The redemption result (code and status).
    * @throws When no session JWT is held, or the code is invalid or already
    *   used (400).
    */
@@ -318,7 +350,6 @@ export class ApiClient {
       body: { code },
       auth: 'session',
     })
-    if (res.data.token) this.token = res.data.token
     return res.data
   }
 

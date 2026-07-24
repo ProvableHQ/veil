@@ -3,6 +3,9 @@ import { loadNetwork, generateAccount } from '@provablehq/veil-aleo-sdk'
 import type { AnyAccount, Client } from '@provablehq/veil-core'
 import { ApiClient, ApiError, authenticateWithAccount } from '../../src/api/client.js'
 
+// Point at a local DEX API (e.g. the local-dex stack) with VEIL_DEX_API_URL.
+const API_OPTS = process.env.VEIL_DEX_API_URL ? { baseUrl: process.env.VEIL_DEX_API_URL } : {}
+
 /**
  * Real-API integration: the whole read surface plus both auth flows against
  * the live DEX API. Never mocked — the generated OpenAPI types plus these
@@ -33,7 +36,7 @@ async function sweepTestTokens(api: ApiClient): Promise<void> {
 }
 
 describe.runIf(RUN)('ApiClient against the live DEX API (public surface)', () => {
-  const api = new ApiClient()
+  const api = new ApiClient(API_OPTS)
 
   it('pools: list → detail for a live pool', async () => {
     const pools = await api.getPools({ limit: 2 })
@@ -57,7 +60,7 @@ describe.runIf(RUN)('ApiClient against the live DEX API (public surface)', () =>
   it('gated endpoints reject a bad credential (server-side 401)', async () => {
     // An invalid token passes the client-side fail-fast, proving the server
     // itself gates — one request, both assertions on the captured error.
-    const err = await new ApiClient({ apiToken: 'ss_invalid' }).getFeeTiers().catch((e: unknown) => e)
+    const err = await new ApiClient({ ...API_OPTS, apiToken: 'ss_invalid' }).getFeeTiers().catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ApiError)
     expect((err as ApiError).status).toBe(401)
   }, 30_000)
@@ -73,7 +76,7 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     account = aleo.privateKeyToAccount(PRIVATE_KEY!)
     address = account.address
 
-    api = new ApiClient()
+    api = new ApiClient(API_OPTS)
     const jwt = await authenticateWithAccount(api, account)
     expect(jwt.length).toBeGreaterThan(0)
 
@@ -156,7 +159,7 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
 
     try {
       // The ss_ token alone covers data endpoints on a fresh client.
-      const tokenClient = new ApiClient({ apiToken: created.token })
+      const tokenClient = new ApiClient({ ...API_OPTS, apiToken: created.token })
       const tiers = await tokenClient.getFeeTiers()
       expect(tiers.data.length).toBeGreaterThan(0)
       const balances = await tokenClient.getPublicBalances({ user: address })
@@ -173,16 +176,25 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     }
 
     // The revoked secret stops authenticating immediately.
-    const revokedClient = new ApiClient({ apiToken: created.token })
+    const revokedClient = new ApiClient({ ...API_OPTS, apiToken: created.token })
     const err = await revokedClient.getFeeTiers().catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ApiError)
     expect((err as ApiError).status).toBe(401)
   }, 60_000)
 
-  it('access status: the e2e account has redeemed an invite code', async () => {
-    // The gated reads above only pass because this account holds access —
-    // assert the status endpoint agrees.
-    const status = await api.getAccessStatus()
+  it('access status: the e2e account has redeemed an invite code', async (ctx) => {
+    // On the shared dev instance this account holds access from a past
+    // redemption. A local stack (VEIL_DEX_API_URL) starts with a fresh
+    // database, so redeem when a code is on hand; otherwise skip rather
+    // than assert another instance's state.
+    let status = await api.getAccessStatus()
+    if (!status.has_access && process.env.SHIELD_SWAP_INVITE_CODE) {
+      // The code in the environment may belong to a different instance
+      // (e.g. dev code against a local stack) — treat rejection as no-code.
+      await api.redeemAccessCode(process.env.SHIELD_SWAP_INVITE_CODE).catch(() => {})
+      status = await api.getAccessStatus()
+    }
+    if (!status.has_access && process.env.VEIL_DEX_API_URL) ctx.skip()
     expect(status.has_access).toBe(true)
   }, 30_000)
 
@@ -191,7 +203,7 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     // completes the handshake, yet gated endpoints 403 until an invite code
     // is redeemed.
     const fresh = generateAccount()
-    const freshApi = new ApiClient()
+    const freshApi = new ApiClient(API_OPTS)
     await authenticateWithAccount(freshApi, fresh)
 
     const status = await freshApi.getAccessStatus()
@@ -219,7 +231,7 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
   it('agent auth tools drive the full token lifecycle end-to-end', async () => {
     const { createShieldSwapAgentTools } = await import('../../src/agent/index.js')
     // The auth tools need only the signing account from the client.
-    const toolApi = new ApiClient()
+    const toolApi = new ApiClient(API_OPTS)
     const tools = createShieldSwapAgentTools({
       client: { account } as unknown as Client,
       api: toolApi,

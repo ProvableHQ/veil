@@ -9,6 +9,9 @@ import { getSqrtPriceAtTick, roundTickToSpacing } from '../../src/utils/tick-mat
 import type { PoolState } from '../../src/generated/shield_swap.js'
 import type { GetSlotReturnType } from '../../src/actions/reads/getSlot.js'
 
+// Point at a local DEX API (e.g. the local-dex stack) with VEIL_DEX_API_URL.
+const API_OPTS = process.env.VEIL_DEX_API_URL ? { baseUrl: process.env.VEIL_DEX_API_URL } : {}
+
 /**
  * Real-API integration for the analyses a trader actually runs — price
  * impact, LP range selection, and fee-APR estimation — exercising the pure
@@ -41,7 +44,7 @@ describe.runIf(RUN)('trader workflows against live pool + route data', () => {
 
   beforeAll(async () => {
     client = createPublicClient({ transport: http(NODE, { network: 'testnet' }) })
-    api = new ApiClient()
+    api = new ApiClient(API_OPTS)
     // OHLCV is bearer-gated; authenticate when a key is on hand (the
     // key-less run skips the candle-backed test below).
     if (PRIVATE_KEY) {
