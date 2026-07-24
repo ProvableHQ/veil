@@ -46,7 +46,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@provablehq/sdk": "^0.11.3"
+    "@provablehq/sdk": "^0.11.4"
   },
   "peerDependenciesMeta": {
     "@provablehq/sdk": {
@@ -57,7 +57,7 @@
     "@provablehq/veil-core": "workspace:*"
   },
   "devDependencies": {
-    "@provablehq/sdk": "^0.11.3",
+    "@provablehq/sdk": "^0.11.4",
     "@provablehq/veil-codegen": "workspace:*",
     "@provablehq/veil-aleo-sdk": "workspace:*",
     "openapi-typescript": "^7.13.0",
