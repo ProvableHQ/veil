@@ -30,7 +30,7 @@ function recordsClient(byProgram: Record<string, string[]>): Client {
 describe('parseTokenRecordInfo', () => {
   it('parses wrapper records (no token_id)', () => {
     const info = parseTokenRecordInfo(wrapperRecord('5000u128'))
-    expect(info).toEqual({ amount: 5000n, tokenId: undefined })
+    expect(info).toEqual({ amount: 5000n, tokenId: undefined, recipientBound: false, boundRecipient: undefined })
   })
 
   it('parses registry records with token_id', () => {

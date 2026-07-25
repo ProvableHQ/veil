@@ -30,7 +30,9 @@ export interface TokenRecordInfo {
  * parseTokenRecordInfo('{ owner: aleo1…, amount: 5000u128.private, _nonce: 1group.public }')
  * // → { amount: 5000n }
  */
-export function parseTokenRecordInfo(plaintext: string): { amount: bigint; tokenId?: string } | null {
+export function parseTokenRecordInfo(
+  plaintext: string,
+): { amount: bigint; tokenId?: string; recipientBound: boolean; boundRecipient?: string } | null {
   let value
   try {
     value = parseRecordPlaintextLoose(plaintext)
@@ -42,7 +44,13 @@ export function parseTokenRecordInfo(plaintext: string): { amount: bigint; token
   const tokenIdRaw = value.fields.token_id?.value
   const tokenId =
     typeof tokenIdRaw === 'bigint' ? `${tokenIdRaw}field` : typeof tokenIdRaw === 'string' ? tokenIdRaw : undefined
-  return { amount: amountRaw, tokenId }
+  // The shield wrapper Token carries recipient binding: a bound record can
+  // only be unwrapped to its bound recipient — transfer/join/split reject it,
+  // so it must never be selected as ordinary spendable inventory.
+  const recipientBound = value.fields.recipient_bound?.value === true
+  const boundRaw = value.fields.bound_recipient?.value
+  const boundRecipient = typeof boundRaw === 'string' && recipientBound ? boundRaw : undefined
+  return { amount: amountRaw, tokenId, recipientBound, boundRecipient }
 }
 
 /**
@@ -94,6 +102,9 @@ export async function selectTokenRecord(client: Client, params: SelectTokenRecor
     if (!record.recordPlaintext) continue
     const info = parseTokenRecordInfo(record.recordPlaintext)
     if (!info) continue
+    // Recipient-bound wrapper records are single-purpose (unwrap to the bound
+    // address via the LP router) — never spendable inventory.
+    if (info.recipientBound) continue
     if (params.tokenId !== undefined && info.tokenId !== undefined && info.tokenId !== params.tokenId) continue
     if (info.amount < params.minAmount) continue
     if (!best || info.amount < best.amount) best = { ...info, record }
