@@ -786,6 +786,57 @@ describe('generate', () => {
       expect(exitCode, `tsc reported errors:\n${stderr}`).toBe(0)
     })
 
+    it('array-typed fields and inputs generate compiling decoders (shield_swap shapes)', () => {
+      // The new shield_swap stack passes [MerkleProof; 2] proof arrays on
+      // nearly every entrypoint and stores [field; 16] inside the struct.
+      const arrayAbi: ABI = {
+        program: 'proofy.aleo',
+        structs: [
+          {
+            path: ['MerkleProof'],
+            fields: [
+              { name: 'siblings', type: { kind: 'array', element: { kind: 'primitive', primitive: 'field' }, length: 16 } },
+              { name: 'leaf_index', type: { kind: 'primitive', primitive: 'u32' } },
+            ],
+          },
+        ],
+        records: [
+          {
+            path: ['Receipt'],
+            fields: [
+              { name: 'owner', type: { kind: 'primitive', primitive: 'address' }, mode: 'private' },
+              { name: 'counts', type: { kind: 'array', element: { kind: 'primitive', primitive: 'u8' }, length: 4 }, mode: 'private' },
+              { name: 'tags', type: { kind: 'array', element: { kind: 'primitive', primitive: 'field' }, length: 2 }, mode: 'private' },
+            ],
+          },
+        ],
+        mappings: [],
+        storageVariables: [],
+        functions: [
+          {
+            name: 'prove',
+            isFinal: false,
+            inputs: [
+              {
+                name: 'proofs',
+                type: { kind: 'plaintext', type: { kind: 'array', element: { kind: 'struct', path: ['MerkleProof'] }, length: 2 } },
+                mode: 'private',
+              },
+            ],
+            outputs: [{ type: { kind: 'record', path: ['Receipt'] }, mode: 'none' }],
+          },
+        ],
+      }
+      const generated = generate({ abi: arrayAbi, coreImport: '@provablehq/veil-core' })
+      const { exitCode, stderr } = runTscCheck(generated, 'arrays_test.ts', 'veil-codegen-arrays-')
+      expect(exitCode, `tsc reported errors:\n${stderr}`).toBe(0)
+      // Small-int arrays convert element-wise to number[].
+      expect(generated).toContain('.map((el) =>')
+      // The interface exposes typed arrays.
+      expect(generated).toContain('counts: number[]')
+      expect(generated).toContain('proofs: MerkleProof[]')
+    })
+
     it('generated execute wrappers do not include fee anywhere', () => {
       // Fee is a proving-config concern, not a per-call param. Neither the interface
       // nor the internal call may carry a fee field.

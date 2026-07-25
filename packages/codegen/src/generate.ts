@@ -389,11 +389,20 @@ function primitiveToTsType(p: Primitive): string {
  * @param rawAccess - Expression yielding the raw PlaintextValue, e.g. `record.fields.x?.value`
  */
 function plaintextFieldExpr(rawAccess: string, pt: Plaintext): string {
-  // TODO(follow-up): non-primitive record fields other than struct (i.e. `array`,
-  // `optional`) are NOT yet handled and fall through to the raw expression.
-  // This is a known gap — ABIs containing such fields will produce non-compiling
-  // output. Implement `array` and `optional` handling before using codegen with
-  // such ABIs.
+  // Arrays decode element-by-element with the same conversions as scalar
+  // fields; the runtime parser (parseCompositeValue in core) delivers them
+  // as PlaintextValue[]. Structs pass through as parsed objects; optionals
+  // convert their inner value when present.
+  if (pt.kind === 'array') {
+    const element = plaintextFieldExpr('el', pt.element)
+    // Identity element conversion needs no map at all.
+    if (element === 'el') return `${rawAccess} as ${plaintextToTsType(pt)}`
+    return `((${rawAccess} ?? []) as PlaintextValue[]).map((el) => ${element}) as ${plaintextToTsType(pt)}`
+  }
+  if (pt.kind === 'optional') {
+    const inner = plaintextFieldExpr(rawAccess, pt.inner)
+    return `(${rawAccess} === undefined ? undefined : ${inner})`
+  }
   if (pt.kind !== 'primitive') return rawAccess
   const p = pt.primitive
   // Small integers stored as bigint at runtime, exposed as number in the interface.
@@ -427,8 +436,8 @@ function plaintextFieldExpr(rawAccess: string, pt: Plaintext): string {
 }
 
 function plaintextDefault(pt: Plaintext): string {
-  // TODO(follow-up): see plaintextFieldExpr for the known array/optional gap.
-  // Non-primitive record fields fall through to "''" (empty string default).
+  if (pt.kind === 'array') return '[]'
+  if (pt.kind === 'optional') return 'undefined'
   if (pt.kind !== 'primitive') return "''"
   if (isSmallInt(pt.primitive)) return '0'
   switch (pt.primitive) {
