@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
-import type { PoolState, Slot } from '../../src/generated/shield_swap.js'
+import type { PoolState, Slot } from '../../src/generated/shield_swap_v3.js'
 import {
   Q64,
   MIN_TICK,

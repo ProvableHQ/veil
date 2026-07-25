@@ -39,6 +39,7 @@ export interface GenerateOptions {
  */
 export function generate(options: GenerateOptions): string {
   const { abi, coreImport = '@provablehq/veil-core', programId = abi.program } = options
+  currentProgram = abi.program
   const lines: string[] = []
 
   // Header
@@ -46,7 +47,7 @@ export function generate(options: GenerateOptions): string {
   lines.push(`// Do not edit manually.`)
   lines.push('')
   lines.push(`import { getContract } from '${coreImport}'`)
-  lines.push(`import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '${coreImport}'`)
+  lines.push(`import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue, StructValue } from '${coreImport}'`)
   lines.push('')
 
   // Program ID constant — the program these bindings target (see programId option).
@@ -165,6 +166,10 @@ function mapperFieldLines(
     // Cast through unknown to the generated struct interface so the return type
     // is correct. A missing field falls back to an empty object cast the same way.
     if (field.type.kind === 'struct') {
+      if (isExternalStructRef(field.type)) {
+        lines.push(`    ${field.name}: ${fieldsVar}.${field.name}?.value as unknown as StructValue ?? {},`)
+        continue
+      }
       const structName = field.type.path.at(-1)
       if (!structName) {
         throw new Error(
@@ -338,6 +343,18 @@ function isSmallInt(p: Primitive): boolean {
   return p === 'u8' || p === 'u16' || p === 'u32' || p === 'i8' || p === 'i16' || p === 'i32'
 }
 
+// Set by generate() so struct references resolve relative to the program
+// being generated; external struct refs have no local interface.
+let currentProgram = ''
+
+// True when a struct reference points into another program — its definition
+// is not in this ABI (leo prunes to local types), so the generated code
+// treats the value as an opaque StructValue.
+function isExternalStructRef(pt: Extract<Plaintext, { kind: 'struct' }>): boolean {
+  if (!pt.program) return false
+  return pt.program.replace(/\.aleo$/, '') !== currentProgram.replace(/\.aleo$/, '')
+}
+
 function plaintextToTsType(pt: Plaintext): string {
   switch (pt.kind) {
     case 'primitive':
@@ -345,6 +362,7 @@ function plaintextToTsType(pt: Plaintext): string {
     case 'array':
       return `${plaintextToTsType(pt.element)}[]`
     case 'struct':
+      if (isExternalStructRef(pt)) return 'StructValue'
       return pt.path[pt.path.length - 1] ?? 'unknown'
     case 'optional':
       return `${plaintextToTsType(pt.inner)} | undefined`

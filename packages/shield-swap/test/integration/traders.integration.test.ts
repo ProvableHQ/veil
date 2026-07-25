@@ -6,7 +6,7 @@ import { getPool } from '../../src/actions/reads/getPool.js'
 import { getSlot } from '../../src/actions/reads/getSlot.js'
 import { poolPrice, priceImpact, feeAprEstimate } from '../../src/utils/derivations.js'
 import { getSqrtPriceAtTick, roundTickToSpacing } from '../../src/utils/tick-math.js'
-import type { PoolState } from '../../src/generated/shield_swap.js'
+import type { PoolState } from '../../src/generated/shield_swap_v3.js'
 import type { GetSlotReturnType } from '../../src/actions/reads/getSlot.js'
 
 // Point at a local DEX API (e.g. the local-dex stack) with VEIL_DEX_API_URL.

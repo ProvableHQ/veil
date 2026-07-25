@@ -8,7 +8,7 @@ import { createTestClient, http } from '@provablehq/veil-core'
 import type { PublicClient, WalletClient, TestClient, LocalAccount, ConfirmedTransaction } from '@provablehq/veil-core'
 
 import { buildLeoProgram } from '../../../provable-sdk/test/integration/leoProject.js'
-import { createShieldSwapV3Contract } from '../../src/generated/shield_swap.js'
+import { createShieldSwapV3Contract } from '../../src/generated/shield_swap_v3.js'
 
 /**
  * Shared devnode fixture for the AMM lifecycle e2e suites: deploys the

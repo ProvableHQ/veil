@@ -1,6 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
 import { readStructMapping } from './internal.js'
-import { toPosition, type Position } from '../../generated/shield_swap.js'
+import { toPosition, type Position } from '../../generated/shield_swap_v3.js'
 
 /**
  * Parameters for {@link getPosition}.

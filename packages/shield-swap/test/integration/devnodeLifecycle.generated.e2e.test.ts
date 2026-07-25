@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 
-import { createShieldSwapV3Contract } from '../../src/generated/shield_swap.js'
+import { createShieldSwapV3Contract } from '../../src/generated/shield_swap_v3.js'
 import { formatMintPositionRequest } from '../../src/utils/params.js'
 import { nextBlindedIdentity, viewKeyToScalar } from '../../src/utils/blinding/identity.js'
 import { getSqrtPriceAtTick, MIN_SQRT_PRICE, MAX_SQRT_PRICE } from '../../src/utils/tick-math.js'

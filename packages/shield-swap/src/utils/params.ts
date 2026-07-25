@@ -1,5 +1,5 @@
 import { getBlockNumber, type Client } from '@provablehq/veil-core'
-import type { PoolState, Slot } from '../generated/shield_swap.js'
+import type { PoolState, Slot } from '../generated/shield_swap_v3.js'
 import { MIN_SQRT_PRICE, MAX_SQRT_PRICE, Q64 } from './tick-math.js'
 
 /**

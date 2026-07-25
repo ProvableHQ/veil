@@ -9,7 +9,7 @@ import {
   type Slot,
   type PoolState,
   type Position,
-} from '../src/generated/shield_swap.js'
+} from '../src/generated/shield_swap_v3.js'
 
 // PROGRAM_ID is the program the bindings target, stamped by codegen from the
 // ABI named in veil.config.json — currently shield_swap_v3.

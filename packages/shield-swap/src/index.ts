@@ -1,6 +1,6 @@
 // Generated bindings: typed structs/records, decoders, and the contract factory
 // for shield_swap. Regenerate with `pnpm generate` (ABI via `pnpm regen-abi`).
-export * from './generated/shield_swap.js'
+export * from './generated/shield_swap_v3.js'
 
 // Chain-direct reads (trust-critical: values come from the node, not the API).
 export { getPool, type GetPoolParameters, type GetPoolReturnType } from './actions/reads/getPool.js'

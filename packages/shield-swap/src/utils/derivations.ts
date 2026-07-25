@@ -1,4 +1,4 @@
-import type { PoolState, Slot } from '../generated/shield_swap.js'
+import type { PoolState, Slot } from '../generated/shield_swap_v3.js'
 import { Q64 } from './tick-math.js'
 
 // Pure strategy primitives — no network I/O, no loops, no state. The un-fancy

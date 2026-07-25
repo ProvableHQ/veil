@@ -1,5 +1,5 @@
 import type { Client } from '@provablehq/veil-core'
-import { toSwapOutput, type SwapOutput } from '../../generated/shield_swap.js'
+import { toSwapOutput, type SwapOutput } from '../../generated/shield_swap_v3.js'
 import { readStructMapping } from './internal.js'
 
 /**

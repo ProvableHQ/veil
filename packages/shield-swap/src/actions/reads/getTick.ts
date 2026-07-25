@@ -1,6 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
 import { readStructMapping } from './internal.js'
-import { toTick, type Tick } from '../../generated/shield_swap.js'
+import { toTick, type Tick } from '../../generated/shield_swap_v3.js'
 import { deriveTickKey } from '../../utils/keys.js'
 
 /**

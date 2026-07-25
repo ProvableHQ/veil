@@ -19,7 +19,7 @@ import { getFrozenPosition } from '../../src/actions/reads/getFrozenPosition.js'
 import { getTokenDecimals } from '../../src/actions/reads/getTokenDecimals.js'
 import { getTradeControls } from '../../src/actions/reads/getTradeControls.js'
 import { ApiClient, authenticateWithAccount } from '../../src/api/client.js'
-import { PROGRAM_ID } from '../../src/generated/shield_swap.js'
+import { PROGRAM_ID } from '../../src/generated/shield_swap_v3.js'
 
 // Real-API integration: hits the live testnet node and the live DEX API.
 // Never mocked — these tests exist to catch drift between this client and the
