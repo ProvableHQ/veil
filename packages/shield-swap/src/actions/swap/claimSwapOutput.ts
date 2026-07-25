@@ -1,8 +1,12 @@
 import { executeContract, writeContract, type Client, type TransactionInput } from '@provablehq/veil-core'
 import type { SwapHandle } from './swap.js'
+import type { MultiHopSwapHandle } from './swapMultiHop.js'
 import { getSwapOutput } from '../reads/getSwapOutput.js'
 import { requireAccount } from '../../utils/guards.js'
 import { blindingFactorResolveRequest, blindedAddressResolveRequest } from '../../utils/blinding/requests.js'
+import { resolveTokenRoute } from '../../utils/routing.js'
+import { resolveProofPair, formatMerkleProofPair, type ProofProvider } from '../../utils/proofs.js'
+import { SHIELD_SWAP_ROUTER, SHIELD_SWAP_FREEZELIST } from '../../constants.js'
 
 /**
  * The swap output is not in the mapping yet (request not finalized) —
@@ -23,20 +27,30 @@ export class SwapOutputNotFinalizedError extends Error {
 /**
  * Parameters for {@link claimSwapOutput}.
  *
- * @property handle The {@link SwapHandle} from `swap`. Local-signer
- *   handles are complete; wallet-path handles need `swapId` and
- *   `blindedAddress` resolved from the confirmed request transaction first.
+ * @property handle The {@link SwapHandle} from `swap` or the
+ *   {@link MultiHopSwapHandle} from `swapMultiHop` — the claim is unified
+ *   across both. Local-signer handles are complete; wallet-path handles need
+ *   `swapId` and `blindedAddress` resolved from the confirmed request
+ *   transaction first.
+ * @property proofs Freezelist witness provider for populated freezelists —
+ *   the claim proves the signer against the AMM freezelist, and against each
+ *   wrapped token's wrapper list when unwrapping. Defaults to the empty-tree
+ *   witness, which the contracts accept while the lists are empty.
  * @property imports Program sources for dynamic-dispatch dependencies
- *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
- *   callees statically — pass the involved token programs' sources when
- *   proving locally or via a service that requires them.
- * @property program shield_swap program override. Defaults to the handle's
+ *   (`{ 'token.aleo': source }`). The prover cannot discover dynamic callees
+ *   statically — pass the involved token programs' sources when proving
+ *   locally or via a service that requires them.
+ * @property program Core AMM program override. Defaults to the handle's
  *   program.
+ * @property routerProgram Swap router override for wrapped-claim dispatch.
+ *   Defaults to `shield_swap_router.aleo`.
  */
 export type ClaimSwapOutputParameters = {
-  handle: SwapHandle
+  handle: SwapHandle | MultiHopSwapHandle
+  proofs?: ProofProvider
   imports?: Record<string, string>
   program?: string
+  routerProgram?: string
 }
 
 /**
@@ -44,9 +58,10 @@ export type ClaimSwapOutputParameters = {
  *
  * @property transactionId The claim transaction's id.
  * @property amountOut Raw atomic amount received (u128), as computed on
- *   chain.
+ *   chain. Paid in the UNDERLYING asset when the output token is wrapped.
  * @property amountRemaining Raw atomic input refund (u128) — non-zero when
- *   the swap partially filled at the price limit.
+ *   the swap partially filled at a price limit. Paid in the underlying asset
+ *   when the input token is wrapped.
  */
 export type ClaimSwapOutputReturnType = {
   transactionId: string
@@ -55,21 +70,25 @@ export type ClaimSwapOutputReturnType = {
 }
 
 /**
- * Claims a private swap's output — phase two of the lifecycle.
+ * Claims a private swap's output — phase two of the lifecycle, for single
+ * and multi-hop swaps alike.
  *
  * Reads the chain-computed result from `swap_outputs` (never an off-chain
- * service — these amounts gate money movement), proves ownership of the
- * blinded identity, and submits `claim_swap_output`. The output and
- * any refund arrive as private records owned by the signer; the mapping
- * entry is consumed.
+ * service — these amounts gate money movement), resolves the wrapped-ness of
+ * the output and refund tokens, proves ownership of the blinded identity,
+ * and dispatches to the matching claim transition: `claim_swap_output` on
+ * the core AMM when both tokens are plain, or the router's
+ * `claim_to_wrapped_refund_arc20` / `claim_to_arc20_refund_wrapped` /
+ * `claim_to_wrapped_refund_wrapped` when either side is wrapped — the router
+ * unwraps in the same transaction, so the caller always receives UNDERLYING
+ * records (wrappers stay invisible). The mapping entry is consumed.
  *
- * Signer paths mirror `swap`: a local account passes the handle's
- * literal `blindingFactor`; a wallet account gets resolve-mode derived
- * requests targeting the handle's `blindedAddress` and re-derives the factor
- * itself.
+ * Signer paths mirror `swap`: a local account passes the handle's literal
+ * `blindingFactor`; a wallet account gets resolve-mode derived requests
+ * targeting the handle's `blindedAddress` and re-derives the factor itself.
  *
- * Hits the network: one mapping read plus the transaction. Signs, and on the
- * local path proves locally.
+ * Hits the network: one mapping read, route reads (cached), and the
+ * transaction. Signs, and on the local path proves locally.
  *
  * @param client A Veil wallet client (local or wallet account).
  * @param params The handle to claim.
@@ -87,11 +106,12 @@ export async function claimSwapOutput(
 ): Promise<ClaimSwapOutputReturnType> {
   const { handle } = params
   const program = params.program ?? handle.program
+  const routerProgram = params.routerProgram ?? SHIELD_SWAP_ROUTER
 
   if (!handle.swapId) {
     throw new Error(
       'handle.swapId is not set — on the wallet path, resolve it from the confirmed ' +
-        'request transaction (first public output of the swap transition) before claiming.',
+        'request transaction (the public swap-id output of the request transition) before claiming.',
     )
   }
 
@@ -99,24 +119,76 @@ export async function claimSwapOutput(
   const out = await getSwapOutput(client, { swapId: handle.swapId, program })
   if (!out) throw new SwapOutputNotFinalizedError(handle.swapId)
 
-  const isLocal = requireAccount(client, 'claimSwapOutput').type === 'local'
+  const account = requireAccount(client, 'claimSwapOutput')
+  const isLocal = account.type === 'local'
 
-  // Everything after the two blinding slots, verbatim from chain state.
+  // Wrapped-ness of the output and the refund (the input token) picks the
+  // claim transition; on-chain mappings are the routing truth, so resolve
+  // from the SwapOutput entry rather than trusting persisted handle flags.
+  const outRoute = await resolveTokenRoute(client, { tokenId: out.token_out, program })
+  const refundRoute = await resolveTokenRoute(client, { tokenId: out.token_in, program })
+
+  // Every claim path proves the signer against the AMM freezelist; wrapped
+  // sides additionally prove the receiver against the wrapper's list.
+  const ammProof = formatMerkleProofPair(
+    await resolveProofPair(params.proofs, {
+      list: 'amm',
+      program: SHIELD_SWAP_FREEZELIST,
+      subject: account.address,
+    }),
+  )
+  const receiverProof = async (wrapperProgram: string): Promise<string> =>
+    formatMerkleProofPair(
+      await resolveProofPair(params.proofs, {
+        list: 'wrapper',
+        program: wrapperProgram,
+        subject: account.address,
+      }),
+    )
+
+  // Dispatch: (output, refund) wrapped-ness → transition + trailing proof
+  // slots, per the deployed router ABI. Proof order on the both-wrapped
+  // variant is (amm, receiver_out, receiver_refund).
+  let targetProgram: string
+  let fn: string
+  const proofTail: string[] = [ammProof]
+  if (outRoute.wrapped && refundRoute.wrapped) {
+    targetProgram = routerProgram
+    fn = 'claim_to_wrapped_refund_wrapped'
+    proofTail.push(await receiverProof(outRoute.wrapperProgram), await receiverProof(refundRoute.wrapperProgram))
+  } else if (outRoute.wrapped) {
+    targetProgram = routerProgram
+    fn = 'claim_to_wrapped_refund_arc20'
+    proofTail.push(await receiverProof(outRoute.wrapperProgram))
+  } else if (refundRoute.wrapped) {
+    targetProgram = routerProgram
+    fn = 'claim_to_arc20_refund_wrapped'
+    proofTail.push(await receiverProof(refundRoute.wrapperProgram))
+  } else {
+    targetProgram = program
+    fn = 'claim_swap_output'
+  }
+
+  // Everything after the two blinding slots, verbatim from chain state,
+  // then the proof arrays (the core claim takes the AMM pair last).
   const tail: string[] = [
     handle.swapId,
     out.token_in,
     out.token_out,
     `${out.amount_out}u128`,
     `${out.amount_remaining}u128`,
+    ...proofTail,
   ]
 
   if (isLocal) {
     if (!handle.blindingFactor || !handle.blindedAddress) {
-      throw new Error('Local claims need handle.blindingFactor and handle.blindedAddress (set by swap on the local path)')
+      throw new Error(
+        'Local claims need handle.blindingFactor and handle.blindedAddress (set by the swap on the local path)',
+      )
     }
     const result = await executeContract(client, {
-      program,
-      function: 'claim_swap_output',
+      program: targetProgram,
+      function: fn,
       imports: params.imports,
       inputs: [handle.blindingFactor, handle.blindedAddress, ...tail],
     })
@@ -129,12 +201,18 @@ export async function claimSwapOutput(
         "(or the API's swap.recipient) so the wallet can re-derive the blinding factor.",
     )
   }
+  // The derivation scope is the CORE program even for router-submitted
+  // claims — the blinding scheme and its membership mapping live on the AMM.
   const inputs: TransactionInput[] = [
     blindingFactorResolveRequest(handle.blindedAddress, program),
     blindedAddressResolveRequest(handle.blindedAddress, program),
     ...tail,
   ]
-  const transactionId = await writeContract(client, { program, function: 'claim_swap_output',
-      imports: params.imports ? Object.keys(params.imports) : undefined, inputs })
+  const transactionId = await writeContract(client, {
+    program: targetProgram,
+    function: fn,
+    imports: params.imports ? Object.keys(params.imports) : undefined,
+    inputs,
+  })
   return { transactionId, amountOut: out.amount_out, amountRemaining: out.amount_remaining }
 }

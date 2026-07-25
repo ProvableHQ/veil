@@ -1,5 +1,5 @@
 import { readMapping, parseRecordPlaintextLoose, type Client, type RecordValue } from '@provablehq/veil-core'
-import { DEFAULT_PROGRAM } from '../../constants.js'
+import { SHIELD_SWAP } from '../../constants.js'
 
 /**
  * Reads a struct-valued mapping entry and decodes it with a generated decoder.
@@ -9,7 +9,7 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  * then the width-correct generated decoder.
  *
  * @param client A Veil client whose transport can reach an Aleo node.
- * @param program Program to read from; defaults to `DEFAULT_PROGRAM`.
+ * @param program Program to read from; defaults to `shield_swap.aleo`.
  * @param mapping On-chain mapping name (e.g. `"slots"`).
  * @param key Mapping key as an Aleo literal, including its type suffix.
  * @param decode Generated struct decoder (e.g. `toSlot`).
@@ -22,7 +22,7 @@ export async function readStructMapping<T>(
   key: string,
   decode: (value: RecordValue) => T,
 ): Promise<T | null> {
-  const programId = program ?? DEFAULT_PROGRAM
+  const programId = program ?? SHIELD_SWAP
   const raw = await readMapping(client, { programId, mapping, key })
   // The node returns JSON null for a key that is not in the mapping.
   if (raw == null || raw === 'null') return null
@@ -38,7 +38,7 @@ export async function readStructMapping<T>(
  * negative answer, not an error.
  *
  * @param client A Veil client whose transport can reach an Aleo node.
- * @param program Program to read from; defaults to `DEFAULT_PROGRAM`.
+ * @param program Program to read from; defaults to `shield_swap.aleo`.
  * @param mapping On-chain flag mapping name.
  * @param key Mapping key as an Aleo literal, including its type suffix.
  * @returns `true` when the key is set to true on chain, otherwise `false`.
@@ -49,7 +49,7 @@ export async function readBoolMapping(
   mapping: string,
   key: string,
 ): Promise<boolean> {
-  const raw = await readMapping(client, { programId: program ?? DEFAULT_PROGRAM, mapping, key })
+  const raw = await readMapping(client, { programId: program ?? SHIELD_SWAP, mapping, key })
   return raw === 'true'
 }
 
@@ -58,12 +58,12 @@ export async function readBoolMapping(
  * literal strictly.
  *
  * Shared by the numeric config reads (`getFeeToTickSpacing`,
- * `getFrozenPosition`, `getTokenDecimals`): one node request, JSON-null
- * guard, then a strict `<digits>u8|u16|u32` parse — a malformed response
- * fails loudly instead of yielding a silent zero.
+ * `getFrozenPosition`): one node request, JSON-null guard, then a strict
+ * `<digits>u8|u16|u32` parse — a malformed response fails loudly instead of
+ * yielding a silent zero.
  *
  * @param client A Veil client whose transport can reach an Aleo node.
- * @param program Program to read from; defaults to `DEFAULT_PROGRAM`.
+ * @param program Program to read from; defaults to `shield_swap.aleo`.
  * @param mapping On-chain mapping name.
  * @param key Mapping key as an Aleo literal, including its type suffix.
  * @returns The decoded value, or `null` when the key is not in the mapping.
@@ -75,7 +75,7 @@ export async function readUintMapping(
   mapping: string,
   key: string,
 ): Promise<number | null> {
-  const raw = await readMapping(client, { programId: program ?? DEFAULT_PROGRAM, mapping, key })
+  const raw = await readMapping(client, { programId: program ?? SHIELD_SWAP, mapping, key })
   if (raw == null || raw === 'null') return null
   const match = /^(\d+)u(?:8|16|32)$/.exec(String(raw))
   if (!match) throw new Error(`${mapping} returned an unexpected value: ${raw}`)

@@ -1,24 +1,19 @@
-import type { PoolState, Slot } from '../generated/shield_swap_v3.js'
-import { Q64 } from './tick-math.js'
+import { Q128 } from './q128.js'
 
 // Pure strategy primitives — no network I/O, no loops, no state. The un-fancy
 // math every strategy re-derives, exported once so nobody re-implements the
 // fixed-point conversions subtly wrong.
 
-/** Caps a token's decimals at the AMM's 9-decimal internal precision. */
-function normDecimals(decimals: number): number {
-  return Math.min(decimals, 9)
-}
-
 /**
  * Parameters for {@link poolPrice}.
  *
- * @property slot Live pool state (`sqrt_price` is Q64 over normalized units).
- * @property decimals0 token0's decimal places (from token metadata).
+ * @property slot Live pool state (`sqrt_price` is Q128.128 over raw units).
+ * @property decimals0 token0's decimal places — display metadata only; the
+ *   AMM accounts in raw units.
  * @property decimals1 token1's decimal places.
  */
 export type PoolPriceInput = {
-  slot: Pick<Slot, 'sqrt_price'>
+  slot: { sqrt_price: bigint }
   decimals0: number
   decimals1: number
 }
@@ -26,9 +21,9 @@ export type PoolPriceInput = {
 /**
  * Converts a pool's live sqrt price into human prices, both directions.
  *
- * The contract accounts in 9-decimal-normalized units: `sqrt_price` encodes
- * `sqrt(token1_norm / token0_norm)` in Q64. The human price re-applies the
- * decimal shift `10^(min(d0,9) − min(d1,9))`. Pure and local.
+ * The contract accounts in raw atomic units: `sqrt_price` encodes
+ * `sqrt(token1_raw / token0_raw)` in Q128.128. The human price applies the
+ * display shift `10^(decimals0 − decimals1)`. Pure and local.
  *
  * @param input The slot and both tokens' decimals.
  * @returns `price1Per0` (token1 per 1.0 token0) and its inverse. `0` when
@@ -38,10 +33,10 @@ export type PoolPriceInput = {
  * const { price1Per0 } = poolPrice({ slot, decimals0: 18, decimals1: 6 })
  */
 export function poolPrice(input: PoolPriceInput): { price1Per0: number; price0Per1: number } {
-  const ratio = Number(input.slot.sqrt_price) / Number(Q64)
+  const ratio = Number(input.slot.sqrt_price) / Number(Q128)
   const normalized = ratio * ratio
   if (!Number.isFinite(normalized) || normalized <= 0) return { price1Per0: 0, price0Per1: 0 }
-  const shift = 10 ** (normDecimals(input.decimals0) - normDecimals(input.decimals1))
+  const shift = 10 ** (input.decimals0 - input.decimals1)
   const price1Per0 = normalized * shift
   return { price1Per0, price0Per1: 1 / price1Per0 }
 }
@@ -49,14 +44,12 @@ export function poolPrice(input: PoolPriceInput): { price1Per0: number; price0Pe
 /**
  * Parameters for {@link priceImpact}.
  *
- * @property pool Static pool config (normalization scales).
  * @property slot Live state (`sqrt_price`, in-range `liquidity`).
  * @property amountIn Raw atomic input amount (u128).
  * @property zeroForOne Trade direction (selling token0 when true).
  */
 export type PriceImpactInput = {
-  pool: Pick<PoolState, 'scale0' | 'scale1'>
-  slot: Pick<Slot, 'sqrt_price' | 'liquidity'>
+  slot: { sqrt_price: bigint; liquidity: bigint }
   amountIn: bigint
   zeroForOne: boolean
 }
@@ -70,41 +63,39 @@ export type PriceImpactInput = {
  * ticks and charges fees) is authoritative; expect the real output to be
  * slightly lower. Pure and local.
  *
- * @param input Pool scales, live slot, amount, and direction.
+ * @param input Live slot, raw amount, and direction.
  * @returns Expected raw output (u128), and the impact in basis points
  *   (spot-vs-effective price). Zeroes when the pool has no liquidity.
  *
  * @example
- * const { expectedOut, impactBps } = priceImpact({ pool, slot, amountIn, zeroForOne: true })
+ * const { expectedOut, impactBps } = priceImpact({ slot, amountIn, zeroForOne: true })
  */
 export function priceImpact(input: PriceImpactInput): { expectedOut: bigint; impactBps: number } {
   const L = input.slot.liquidity
   const sqrtP = input.slot.sqrt_price
   if (L === 0n || sqrtP === 0n || input.amountIn === 0n) return { expectedOut: 0n, impactBps: 0 }
 
-  const scaleIn = input.zeroForOne ? input.pool.scale0 : input.pool.scale1
-  const scaleOut = input.zeroForOne ? input.pool.scale1 : input.pool.scale0
-  const dIn = input.amountIn / scaleIn // normalized input
+  const dIn = input.amountIn // raw atomic input — the AMM does not scale
 
   let normOut: bigint
   let sqrtPNew: bigint
   if (input.zeroForOne) {
-    // Selling token0: √P falls. √P' = L·√P / (L + Δx·√P/Q64)
-    const denom = L + (dIn * sqrtP) / Q64
+    // Selling token0: √P falls. √P' = L·√P / (L + Δx·√P/Q128)
+    const denom = L + (dIn * sqrtP) / Q128
     sqrtPNew = (L * sqrtP) / denom
-    // Δy = L·(√P − √P') / Q64
-    normOut = (L * (sqrtP - sqrtPNew)) / Q64
+    // Δy = L·(√P − √P') / Q128
+    normOut = (L * (sqrtP - sqrtPNew)) / Q128
   } else {
-    // Selling token1: √P rises. √P' = √P + Δy·Q64/L
-    sqrtPNew = sqrtP + (dIn * Q64) / L
-    // Δx = L·(√P' − √P)·Q64 / (√P'·√P)
-    normOut = (L * (sqrtPNew - sqrtP) * Q64) / (sqrtPNew * sqrtP)
+    // Selling token1: √P rises. √P' = √P + Δy·Q128/L
+    sqrtPNew = sqrtP + (dIn * Q128) / L
+    // Δx = L·(√P' − √P)·Q128 / (√P'·√P)
+    normOut = (L * (sqrtPNew - sqrtP) * Q128) / (sqrtPNew * sqrtP)
   }
 
-  const expectedOut = normOut * scaleOut
+  const expectedOut = normOut
 
   // Impact: effective price vs spot, in basis points.
-  const spot = Number(sqrtP) / Number(Q64)
+  const spot = Number(sqrtP) / Number(Q128)
   const spotPrice = input.zeroForOne ? spot * spot : 1 / (spot * spot)
   const effective = dIn === 0n ? spotPrice : Number(normOut) / Number(dIn)
   const impact = spotPrice === 0 ? 0 : Math.abs(1 - effective / spotPrice) * 10_000

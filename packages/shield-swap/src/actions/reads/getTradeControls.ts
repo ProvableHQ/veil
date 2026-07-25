@@ -1,6 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
 import { requirePool } from '../../utils/guards.js'
-import { DEFAULT_PROGRAM } from '../../constants.js'
+import { SHIELD_SWAP } from '../../constants.js'
 import { isGlobalPaused } from './isGlobalPaused.js'
 import { isTokenAllowed } from './isTokenAllowed.js'
 import { isTokenPaused } from './isTokenPaused.js'
@@ -43,7 +43,7 @@ export type GetTradeControlsReturnType = {
  *
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param params The pool key, and optionally the program to read from
- *   (defaults to `DEFAULT_PROGRAM`).
+ *   (defaults to `shield_swap.aleo`).
  * @returns The per-gate states and the combined `tradeable` verdict.
  * @throws When the pool does not exist under the key.
  *
@@ -55,7 +55,7 @@ export async function getTradeControls(
   client: Client,
   params: { poolKey: string; program?: string },
 ): Promise<GetTradeControlsReturnType> {
-  const pool = await requirePool(client, params.poolKey, params.program ?? DEFAULT_PROGRAM)
+  const pool = await requirePool(client, params.poolKey, params.program ?? SHIELD_SWAP)
   const p = { program: params.program }
   const [globalPaused, t0Allowed, t0Paused, t1Allowed, t1Paused, pairPaused] = await Promise.all([
     isGlobalPaused(client, p),

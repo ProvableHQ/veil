@@ -30,7 +30,6 @@ export { isTokenAllowed } from './actions/reads/isTokenAllowed.js'
 export { isTokenPaused } from './actions/reads/isTokenPaused.js'
 export { isPairPaused } from './actions/reads/isPairPaused.js'
 export { getFrozenPosition } from './actions/reads/getFrozenPosition.js'
-export { getTokenDecimals } from './actions/reads/getTokenDecimals.js'
 export {
   getTradeControls,
   type GetTradeControlsReturnType,
@@ -63,18 +62,14 @@ export {
   type ClaimSwapOutputReturnType,
 } from './actions/swap/claimSwapOutput.js'
 
-// The multi-hop variant: 2–3 pools in one atomic route, same two-phase shape.
+// The multi-hop variant: 2–3 pools in one atomic route, same two-phase
+// shape. claimSwapOutput is unified — it claims multi-hop handles too.
 export {
   swapMultiHop,
   type MultiHopSwapHandle,
   type SwapMultiHopParameters,
   type SwapMultiHopReturnType,
 } from './actions/swap/swapMultiHop.js'
-export {
-  claimMultiHopOutput,
-  type ClaimMultiHopOutputParameters,
-  type ClaimMultiHopOutputReturnType,
-} from './actions/swap/claimMultiHopOutput.js'
 
 // Off-chain DEX API client (trusted convenience layer; typed from the
 // service's own OpenAPI via `pnpm regen-openapi`).
@@ -90,6 +85,7 @@ export {
 export {
   SHIELD_SWAP_ALGORITHM_GRANTS,
   shieldSwapAlgorithmGrants,
+  type ShieldSwapAlgorithmGrantsParameters,
   BLINDING_MEMBERSHIP_MAPPING,
   BLINDING_FACTOR_ALGORITHM,
   BLINDED_ADDRESS_ALGORITHM,
@@ -155,6 +151,8 @@ export {
   deriveSwapId,
   derivePositionTokenId,
   deriveMultiHopSwapId,
+  formatSwapKeyPreimage,
+  formatSwapMultiHopRequestPreimage,
   sortTokenPair,
   type DerivePoolKeyParameters,
   type DeriveTickKeyParameters,
@@ -178,8 +176,8 @@ export {
 // One-surface composition: chain reads flat, API under `.api`.
 export { shieldSwapActions, type ShieldSwapActionsConfig, type ShieldSwapActions } from './decorators/shieldSwapActions.js'
 
-// Swap parameter helpers: intent → contract args (pure), deadline, nonces,
-// and the contract's Q64 tick math table.
+// Swap parameter helpers: intent → contract args (pure), deadline, and
+// nonces.
 export {
   resolveSwapParams,
   resolveMultiHopParams,
@@ -194,14 +192,45 @@ export {
   type ResolveMultiHopParamsInput,
   type ResolvedMultiHopParams,
   type SwapHopInput,
+  type SwapPoolState,
+  type SwapSlotState,
 } from './utils/params.js'
+export { roundTickToSpacing } from './utils/tick-math.js'
 export {
-  Q64,
+  Q128,
+  U256_MAX,
   MIN_TICK,
   MAX_TICK,
-  MIN_SQRT_PRICE,
-  MAX_SQRT_PRICE,
-  getSqrtPriceAtTick,
-  roundTickToSpacing,
-  dustScale,
-} from './utils/tick-math.js'
+  MIN_SQRT_RATIO_X128,
+  MAX_SQRT_RATIO_X128,
+  toU256Parts,
+  fromU256Parts,
+  formatU256Literal,
+  mulDiv,
+  amount0DeltaX128,
+  amount1DeltaX128,
+  getSqrtPriceAtTickX128,
+  getTickEstimateX128,
+} from './utils/q128.js'
+export {
+  resolveTokenRoute,
+  tokenIdToProgram,
+  programToTokenId,
+  clearRouteCache,
+  type TokenRoute,
+  type ResolveTokenRouteParameters,
+} from './utils/routing.js'
+export {
+  EMPTY_MERKLE_PROOF,
+  EMPTY_MERKLE_PROOFS,
+  resolveProofPair,
+  formatMerkleProofPair,
+  type MerkleProofInput,
+  type ProofContext,
+  type ProofProvider,
+} from './utils/proofs.js'
+export {
+  detectTokenStandard,
+  type TokenStandard,
+  type DetectTokenStandardParameters,
+} from './utils/detectTokenStandard.js'

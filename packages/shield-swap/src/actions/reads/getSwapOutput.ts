@@ -1,14 +1,14 @@
 import type { Client } from '@provablehq/veil-core'
-import { toSwapOutput, type SwapOutput } from '../../generated/shield_swap_v3.js'
+import { toSwapOutput, type SwapOutput } from '../../generated/shield_swap.js'
 import { readStructMapping } from './internal.js'
 
 /**
  * Parameters for {@link getSwapOutput}.
  *
- * @property swapId Swap id as an Aleo field literal (returned by
- *   `swap` as its first output), including the `field` suffix.
- * @property program Program to read from. Defaults to the generated
- *   `DEFAULT_PROGRAM`.
+ * @property swapId Swap id as an Aleo field literal (returned by `swap` and
+ *   `swapMultiHop` as the request's public output), including the `field`
+ *   suffix. Single- and multi-hop swaps share this key space.
+ * @property program Program to read from. Defaults to `shield_swap.aleo`.
  */
 export type GetSwapOutputParameters = {
   swapId: string
@@ -28,6 +28,9 @@ export type GetSwapOutputReturnType = SwapOutput | null
  * stores it here: `amount_out` and `amount_remaining` (both u128 `bigint`) are
  * the values `claim_swap_output` MUST be called with. Read them from
  * chain — never from an off-chain service — because they gate money movement.
+ * The entry is one six-field struct (recipient, caller, token pair, the two
+ * amounts) for single- and multi-hop swaps alike — a multi-hop entry carries
+ * only the final output token and one remaining amount.
  *
  * `null` has two meanings the caller must distinguish by context: the request
  * transaction has not finalized yet (retry), or the output was already claimed

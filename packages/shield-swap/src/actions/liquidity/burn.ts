@@ -1,7 +1,7 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@provablehq/veil-core'
 import { resolvePositionRecord, positionTokenIdFromPlaintext } from '../../utils/records.js'
 import { requireAccount } from '../../utils/guards.js'
-import { DEFAULT_PROGRAM } from '../../constants.js'
+import { SHIELD_SWAP } from '../../constants.js'
 
 /**
  * Parameters for {@link burn}.
@@ -14,7 +14,8 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  * @property positionRecord Explicit PositionNFT record input (plaintext
  *   literal, or a `record` InputRequest for wallet signers — REQUIRED for
  *   wallets).
- * @property program shield_swap program override. Defaults to `DEFAULT_PROGRAM`.
+ * @property program shield_swap program override. Defaults to
+ *   `shield_swap.aleo`. Always a direct core call — no router is involved.
  */
 export type BurnParameters = {
   poolKey: string
@@ -63,7 +64,7 @@ export type BurnReturnType = {
  * await burn(client, { poolKey, positionTokenId })
  */
 export async function burn(client: Client, params: BurnParameters): Promise<BurnReturnType> {
-  const program = params.program ?? DEFAULT_PROGRAM
+  const program = params.program ?? SHIELD_SWAP
 
   const isLocal = requireAccount(client, 'burn').type === 'local'
 

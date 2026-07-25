@@ -5,13 +5,14 @@ import {
   deriveBlindedAddress,
   nextBlindedIdentity,
 } from '../../../src/utils/blinding/identity.js'
-import { SHIELD_SWAP_V3 } from '../../../src/constants.js'
 
-// Golden vectors pinned to the SHIELD_SWAP_V3 program scope (the derivation
-// hashes the program address, so vectors are scope-specific). Our port must
-// reproduce them exactly — the program's verify_blinded_address re-computes
-// this hash and rejects any deviation. Final authority is the on-chain assert,
-// exercised by the e2e.
+// Golden vectors pinned to the shield_swap_v3.aleo program scope (the
+// derivation hashes the program address, so vectors are scope-specific; the
+// scope is an input, so v3-scoped vectors stay valid regression anchors for
+// the unchanged algorithm). The program's verify_blinded_address re-computes
+// this hash and rejects any deviation. Final authority is the on-chain
+// assert, exercised by the e2e against shield_swap.aleo.
+const SHIELD_SWAP_V3 = 'shield_swap_v3.aleo'
 const VIEW_KEY_SCALAR = '334926304971763782347498121479281870911723639068413954564748091722770623877scalar'
 const SIGNER = 'aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px'
 const VECTORS = [

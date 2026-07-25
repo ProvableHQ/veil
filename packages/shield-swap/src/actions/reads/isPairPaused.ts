@@ -15,7 +15,7 @@ import { sortTokenPair } from '../../utils/keys.js'
  *
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param params The two token ids (field literals, either order), and
- *   optionally the program to read from (defaults to `DEFAULT_PROGRAM`).
+ *   optionally the program to read from (defaults to `shield_swap.aleo`).
  * @returns `true` when the pair is paused, otherwise `false`.
  *
  * @example

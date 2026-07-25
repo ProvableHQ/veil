@@ -12,7 +12,7 @@ import { readUintMapping } from './internal.js'
  *
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param params The position `token_id` (field literal), and optionally the
- *   program to read from (defaults to `DEFAULT_PROGRAM`).
+ *   program to read from (defaults to `shield_swap.aleo`).
  * @returns The freeze block height (u32), or `null` when not frozen.
  *
  * @example

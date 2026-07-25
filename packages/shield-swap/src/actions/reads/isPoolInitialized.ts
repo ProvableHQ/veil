@@ -11,7 +11,7 @@ import { readBoolMapping } from './internal.js'
  *
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param params The pool key (field literal with suffix), and optionally the
- *   program to read from (defaults to `DEFAULT_PROGRAM`).
+ *   program to read from (defaults to `shield_swap.aleo`).
  * @returns `true` when the pool exists, otherwise `false`.
  *
  * @example

@@ -1,6 +1,6 @@
-import { readMapping, parseRecordPlaintextLoose, type Client } from '@provablehq/veil-core'
-import { toPoolState, type PoolState } from '../../generated/shield_swap_v3.js'
-import { DEFAULT_PROGRAM } from '../../constants.js'
+import type { Client } from '@provablehq/veil-core'
+import { toPoolState, type PoolState } from '../../generated/shield_swap.js'
+import { readStructMapping } from './internal.js'
 
 /**
  * Parameters for {@link getPool}.
@@ -8,7 +8,7 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  * @property poolKey Pool key as an Aleo field literal, including the `field`
  *   suffix (e.g. `"4719…024field"`). Obtain keys from the API's `/pools`
  *   endpoint or compute them from a `PoolKey` struct hash.
- * @property program Program to read from. Defaults to `DEFAULT_PROGRAM`.
+ * @property program Program to read from. Defaults to `shield_swap.aleo`.
  *   Override to read the same mapping layout from another shield_swap program.
  */
 export type GetPoolParameters = {
@@ -22,8 +22,9 @@ export type GetPoolReturnType = PoolState | null
 /**
  * Reads a pool's static configuration from the on-chain `pools` mapping.
  *
- * Returns the token pair, fee tier, enabled flag, and decimal scales — the
- * values that never change after `create_pool`. For live trading state
+ * Returns the token pair, fee tier, and enabled flag — the values that never
+ * change after `create_pool`. Amounts throughout the stack are raw native
+ * units, so there are no per-pool decimal scales. For live trading state
  * (price, tick, liquidity) read the `slots` mapping via `getSlot` instead.
  *
  * Hits the network: one node request via the client's transport.
@@ -40,9 +41,5 @@ export type GetPoolReturnType = PoolState | null
  * if (pool) console.log(pool.fee, pool.token0, pool.token1)
  */
 export async function getPool(client: Client, params: GetPoolParameters): Promise<GetPoolReturnType> {
-  const program = params.program ?? DEFAULT_PROGRAM
-  const raw = await readMapping(client, { programId: program, mapping: 'pools', key: params.poolKey })
-  // The node returns JSON null for a key that is not in the mapping.
-  if (raw == null || raw === 'null') return null
-  return toPoolState(parseRecordPlaintextLoose(raw, program, 'PoolState'))
+  return readStructMapping(client, params.program, 'pools', params.poolKey, toPoolState)
 }

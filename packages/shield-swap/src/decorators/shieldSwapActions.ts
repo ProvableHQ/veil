@@ -23,7 +23,6 @@ import { isTokenAllowed } from '../actions/reads/isTokenAllowed.js'
 import { isTokenPaused } from '../actions/reads/isTokenPaused.js'
 import { isPairPaused } from '../actions/reads/isPairPaused.js'
 import { getFrozenPosition } from '../actions/reads/getFrozenPosition.js'
-import { getTokenDecimals } from '../actions/reads/getTokenDecimals.js'
 import {
   getTradeControls,
   type GetTradeControlsReturnType,
@@ -39,11 +38,6 @@ import {
   type SwapMultiHopParameters,
   type SwapMultiHopReturnType,
 } from '../actions/swap/swapMultiHop.js'
-import {
-  claimMultiHopOutput,
-  type ClaimMultiHopOutputParameters,
-  type ClaimMultiHopOutputReturnType,
-} from '../actions/swap/claimMultiHopOutput.js'
 import { createPool, type CreatePoolParameters, type CreatePoolReturnType } from '../actions/liquidity/createPool.js'
 import { mint, type MintParameters, type MintReturnType } from '../actions/liquidity/mint.js'
 import {
@@ -112,7 +106,6 @@ export type ShieldSwapActions = {
   isTokenPaused: (params: { tokenId: string; program?: string }) => Promise<boolean>
   isPairPaused: (params: { token0: string; token1: string; program?: string }) => Promise<boolean>
   getFrozenPosition: (params: { positionTokenId: string; program?: string }) => Promise<number | null>
-  getTokenDecimals: (params: { tokenId: string; program?: string }) => Promise<number | null>
   getTradeControls: (params: { poolKey: string; program?: string }) => Promise<GetTradeControlsReturnType>
   getPrivateBalances: (params: GetPrivateBalancesParameters) => Promise<GetPrivateBalancesReturnType>
   getBalances: (params?: GetBalancesParameters) => Promise<GetBalancesReturnType>
@@ -120,7 +113,6 @@ export type ShieldSwapActions = {
   swap: (params: SwapParameters) => Promise<SwapReturnType>
   claimSwapOutput: (params: ClaimSwapOutputParameters) => Promise<ClaimSwapOutputReturnType>
   swapMultiHop: (params: SwapMultiHopParameters) => Promise<SwapMultiHopReturnType>
-  claimMultiHopOutput: (params: ClaimMultiHopOutputParameters) => Promise<ClaimMultiHopOutputReturnType>
   createPool: (params: CreatePoolParameters) => Promise<CreatePoolReturnType>
   mint: (params: MintParameters) => Promise<MintReturnType>
   increaseLiquidity: (params: IncreaseLiquidityParameters) => Promise<IncreaseLiquidityReturnType>
@@ -187,7 +179,6 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     isTokenPaused: (p) => isTokenPaused(client, withProgram(p)),
     isPairPaused: (p) => isPairPaused(client, withProgram(p)),
     getFrozenPosition: (p) => getFrozenPosition(client, withProgram(p)),
-    getTokenDecimals: (p) => getTokenDecimals(client, withProgram(p)),
     getTradeControls: (p) => getTradeControls(client, withProgram(p)),
     getPrivateBalances: (p) => getPrivateBalances(client, p),
     getBalances: (p) => getBalances(client, api ?? missingApi, p),
@@ -195,7 +186,6 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     swap: (p) => swap(client, withProgram(p)),
     claimSwapOutput: (p) => claimSwapOutput(client, p),
     swapMultiHop: (p) => swapMultiHop(client, withProgram(p)),
-    claimMultiHopOutput: (p) => claimMultiHopOutput(client, p),
     createPool: (p) => createPool(client, withProgram(p)),
     mint: (p) => mint(client, withProgram(p)),
     increaseLiquidity: (p) => increaseLiquidity(client, withProgram(p)),

@@ -6,6 +6,8 @@ import {
   deriveSwapId,
   derivePositionTokenId,
   deriveMultiHopSwapId,
+  formatSwapKeyPreimage,
+  formatSwapMultiHopRequestPreimage,
 } from '../src/utils/keys.js'
 
 /**
@@ -59,13 +61,10 @@ describe('deriveSwapId / derivePositionTokenId / deriveMultiHopSwapId', () => {
   const blinded = 'aleo1t08epjqqv8h7jpuy2m2cxm80zy2pcy5c4f3m82hnac4sjmdrjyysvx3s2h'
   const poolKey =
     '5004171258545595848890767719949996982906438837519254032156408929642095152812field'
-  // Pinned regression vectors (chain parity is asserted by the devnode e2e).
-  const SWAP_ID_VECTOR =
-    '5672374475698118395859741415978340165963739535460816907224147244313692411831field'
+  // Position token ids hash the unchanged TokenIDPreimage — the pinned vector
+  // survives the shield_swap.aleo migration.
   const POSITION_TOKEN_ID_VECTOR =
     '3485933773882122087930662045960488901064798188645166514302897100258129294621field'
-  const MULTI_HOP_SWAP_ID_VECTOR =
-    '8050118009818470404591482301814148643639559408446190751023670785460336994048field'
 
   const swapArgs = {
     poolKey,
@@ -76,11 +75,27 @@ describe('deriveSwapId / derivePositionTokenId / deriveMultiHopSwapId', () => {
     nonce: 42n,
   }
 
+  // TODO(devnode): re-pin exact swap-id hash vectors against a deployed
+  // shield_swap.aleo once the devnode matrix runs — the U256-bearing SwapKey/
+  // SwapMultiHopRequest preimages cannot be re-derived offline. Until then
+  // the preimage literals below are pinned exactly and chain parity is the
+  // devnode e2e's job.
+  it('hashes the exact SwapKey preimage (U256 limit, blinded address twice)', async () => {
+    expect(formatSwapKeyPreimage(swapArgs)).toBe(
+      `{ pool: ${poolKey}, zero_for_one: true, amount_in: 1000000000u128, ` +
+        `sqrt_price_limit: { hi: 0u128, lo: 19029805711u128 }, recipient: ${blinded}, ` +
+        `nonce: 42u64, caller: ${blinded} }`,
+    )
+    // A limit above 2^128 splits into a non-zero hi half.
+    expect(
+      formatSwapKeyPreimage({ ...swapArgs, sqrtPriceLimit: (1n << 128n) + 7n }),
+    ).toContain('sqrt_price_limit: { hi: 1u128, lo: 7u128 }')
+  })
+
   it('derives a deterministic swap id field literal', async () => {
     const id = await deriveSwapId(swapArgs)
     expect(id).toMatch(/field$/)
     expect(await deriveSwapId(swapArgs)).toBe(id)
-    expect(id).toBe(SWAP_ID_VECTOR)
   })
 
   it('changes the swap id when the nonce changes', async () => {
@@ -89,7 +104,7 @@ describe('deriveSwapId / derivePositionTokenId / deriveMultiHopSwapId', () => {
 
   it('accepts a bare pool key literal', async () => {
     expect(await deriveSwapId({ ...swapArgs, poolKey: poolKey.replace(/field$/, '') })).toBe(
-      SWAP_ID_VECTOR,
+      await deriveSwapId(swapArgs),
     )
   })
 
@@ -124,16 +139,29 @@ describe('deriveSwapId / derivePositionTokenId / deriveMultiHopSwapId', () => {
     deadline: 5000000,
   }
 
-  it('derives a deterministic multi-hop swap id, zero-padding the unused hop', async () => {
-    expect(await deriveMultiHopSwapId(twoHop)).toBe(MULTI_HOP_SWAP_ID_VECTOR)
+  it('hashes the exact SwapMultiHopRequest preimage, zero-padding the unused hop', async () => {
+    expect(formatSwapMultiHopRequestPreimage(twoHop)).toBe(
+      `{ token_in: 1234567890123456789field, token_out: 9876543210987654321field, ` +
+        `amount_in: 1000000000u128, amount_out_min: 1u128, recipient: ${blinded}, ` +
+        `hop0: { pool: ${poolKey}, zero_for_one: true, sqrt_price_limit: { hi: 0u128, lo: 19029805711u128 } }, ` +
+        `hop1: { pool: ${poolKey}, zero_for_one: false, sqrt_price_limit: { hi: 0u128, lo: 4470386772317930780047134862u128 } }, ` +
+        `hop2: { pool: 0field, zero_for_one: false, sqrt_price_limit: { hi: 0u128, lo: 0u128 } }, ` +
+        `hop_count: 2u8, nonce: 42u64, deadline: 5000000u32, caller: ${blinded} }`,
+    )
+  })
+
+  it('derives a deterministic multi-hop swap id, distinct from padding-as-hop', async () => {
+    const id = await deriveMultiHopSwapId(twoHop)
+    expect(id).toMatch(/field$/)
+    expect(await deriveMultiHopSwapId(twoHop)).toBe(id)
     // A third real hop changes the hash — padding is not equivalent to a hop.
     expect(
-      await deriveMultiHopSwapId({ ...twoHop, hops: [...twoHop.hops, twoHop.hops[0]] }),
-    ).not.toBe(MULTI_HOP_SWAP_ID_VECTOR)
+      await deriveMultiHopSwapId({ ...twoHop, hops: [...twoHop.hops, twoHop.hops[0]!] }),
+    ).not.toBe(id)
   })
 
   it('rejects a hop count outside 2–3', async () => {
-    await expect(deriveMultiHopSwapId({ ...twoHop, hops: [twoHop.hops[0]] })).rejects.toThrow(
+    await expect(deriveMultiHopSwapId({ ...twoHop, hops: [twoHop.hops[0]!] })).rejects.toThrow(
       /2 or 3 hops/,
     )
     await expect(

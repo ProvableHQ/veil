@@ -1,6 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
 import { getSlot } from '../actions/reads/getSlot.js'
-import { MIN_TICK } from './tick-math.js'
+import { MIN_TICK } from './q128.js'
 
 /**
  * Parameters for {@link pickInsertHint}.

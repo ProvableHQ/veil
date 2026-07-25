@@ -32,7 +32,6 @@ export {
   getTickSchema,
   getTradeControlsSchema,
   getFrozenPositionSchema,
-  getTokenDecimalsSchema,
   isPoolCreationOpenSchema,
   isPoolInitializedSchema,
   getFeeToTickSpacingSchema,

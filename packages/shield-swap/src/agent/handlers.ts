@@ -9,7 +9,6 @@ import { getPosition } from '../actions/reads/getPosition.js'
 import { getTick } from '../actions/reads/getTick.js'
 import { getTradeControls } from '../actions/reads/getTradeControls.js'
 import { getFrozenPosition } from '../actions/reads/getFrozenPosition.js'
-import { getTokenDecimals } from '../actions/reads/getTokenDecimals.js'
 import { isPoolCreationOpen } from '../actions/reads/isPoolCreationOpen.js'
 import { isPoolInitialized } from '../actions/reads/isPoolInitialized.js'
 import { getFeeToTickSpacing } from '../actions/reads/getFeeToTickSpacing.js'
@@ -26,7 +25,6 @@ import { swap } from '../actions/swap/swap.js'
 import { claimSwapOutput } from '../actions/swap/claimSwapOutput.js'
 import type { SwapHandle } from '../actions/swap/swap.js'
 import { swapMultiHop } from '../actions/swap/swapMultiHop.js'
-import { claimMultiHopOutput } from '../actions/swap/claimMultiHopOutput.js'
 import type { MultiHopSwapHandle } from '../actions/swap/swapMultiHop.js'
 import { createPool } from '../actions/liquidity/createPool.js'
 import { mint } from '../actions/liquidity/mint.js'
@@ -66,9 +64,6 @@ export function createChainHandlers(client: Client, program?: string): Record<st
       jsonSafe(await getTradeControls(client, { poolKey: i.poolKey as string, program })),
     shield_swap_get_frozen_position: async (i) => ({
       frozenAtHeight: await getFrozenPosition(client, { positionTokenId: i.positionTokenId as string, program }),
-    }),
-    shield_swap_get_token_decimals: async (i) => ({
-      decimals: await getTokenDecimals(client, { tokenId: i.tokenId as string, program }),
     }),
     shield_swap_is_pool_creation_open: async () => ({
       open: await isPoolCreationOpen(client, { program }),
@@ -245,7 +240,6 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
           poolKey: i.poolKey as string,
           tokenInId: i.tokenInId as string,
           amountIn: BigInt(i.amountIn as string),
-          tokenInProgram: i.tokenInProgram as string,
           expectedOut: i.expectedOut !== undefined ? BigInt(i.expectedOut as string) : undefined,
           slippageBps: i.slippageBps as number | undefined,
           imports,
@@ -267,20 +261,11 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
           poolKeys: i.poolKeys as string[],
           tokenInId: i.tokenInId as string,
           amountIn: BigInt(i.amountIn as string),
-          tokenInProgram: (i.tokenPrograms as string[])[0],
           expectedOut: i.expectedOut !== undefined ? BigInt(i.expectedOut as string) : undefined,
           slippageBps: i.slippageBps as number | undefined,
           imports,
           program,
         }),
-      )
-    },
-
-    shield_swap_claim_multi_hop: async (i) => {
-      const imports = await fetchImports(client, i.tokenPrograms as string[], program)
-      // The handle keeps its own program; do not override it with the config default.
-      return jsonSafe(
-        await claimMultiHopOutput(client, { handle: i.handle as unknown as MultiHopSwapHandle, imports }),
       )
     },
 
@@ -293,8 +278,8 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
           tickUpper: i.tickUpper as number,
           amount0Desired: BigInt(i.amount0Desired as string),
           amount1Desired: BigInt(i.amount1Desired as string),
-          token0Program: i.token0Program as string,
-          token1Program: i.token1Program as string,
+          recipient: i.recipient as string,
+          withdrawal: i.withdrawal as string,
           imports,
           program,
         }),
