@@ -15,6 +15,7 @@ import { resolveProofPair, formatMerkleProofPair, type ProofProvider } from '../
 import { formatU256Literal } from '../../utils/q128.js'
 import { tryLoadSdk } from '../../utils/sdk.js'
 import { deriveSwapId } from '../../utils/keys.js'
+import { requireFieldOutput } from '../../utils/outputs.js'
 import { SHIELD_SWAP, SHIELD_SWAP_ROUTER } from '../../constants.js'
 
 /**
@@ -297,12 +298,7 @@ export async function swap(client: Client, params: SwapParameters): Promise<Swap
           inputs: [recordInput, identity.blindingFactor, identity.blindedAddress, ...tail],
         })
 
-    // The public swap id is output 0 on the core, output 1 on the router
-    // (the router's output 0 is the underlying change record).
-    const swapId = result.outputs[route.wrapped ? 1 : 0]
-    if (!swapId?.endsWith('field')) {
-      throw new Error(`Unexpected swap output shape: ${JSON.stringify(result.outputs)}`)
-    }
+    const swapId = requireFieldOutput(result.outputs, 'swap')
 
     return {
       ...handleBase,

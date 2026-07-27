@@ -20,11 +20,9 @@ import {
  * owner), and burn — asserting the on-chain mappings after every step.
  *
  * The wrapped-side matrix (wrapped/plain, wrapped/wrapped mint/increase/collect
- * and a wrapped-input swap) is written against the SDK's internal router
- * dispatch but GATED — see {@link WRAPPED_SDK_BLOCKED}. The stack itself
- * deploys, registers the wrapper→underlying bindings, and creates the wrapped
- * pools (asserted below); only the SDK local-path return parsing is blocked on
- * the devnode.
+ * and a wrapped-input swap) exercises the SDK's internal router dispatch. The
+ * stack deploys, registers the wrapper→underlying bindings, and creates the
+ * wrapped pools (asserted below).
  *
  * Gated behind VEIL_DEVNODE_INTEGRATION=1 and a resolvable amm-v3 checkout
  * (AMM_V3_ROOT or ~/dev/amm-v3); requires leo and aleo-devnode on PATH.
@@ -37,19 +35,16 @@ import {
 const RUN = process.env.VEIL_DEVNODE_INTEGRATION === '1' && ammV3SourceAvailable()
 
 /**
- * The SDK's routed-liquidity and routed-swap local paths read the public id
- * (position token id / swap id) at a FIXED output offset that assumes the LP
- * router's leading underlying-change record occupies output slot 0
- * (`mint.ts:250` uses `tokenIdIndex` 1/2; `swap.ts:302` reads `outputs[1]`).
- * On the devnode, veil-core's `extractTransitions` drops router-forwarded
- * external/dynamic records that carry no plaintext value, so the public id
- * lands at index 0 instead and those actions throw an "Unexpected … output
- * shape" error AFTER the on-chain effect. The wrapped pools deploy, register,
- * and create fine; only the SDK's local-path return parsing is affected. Flip
- * this to `false` once the SDK anchors on the public field output rather than a
- * positional offset (or veil-core surfaces the forwarded records).
+ * Formerly gated the wrapped-side matrix: the routed-liquidity and routed-swap
+ * local paths read the public id (position token id / swap id) at a FIXED
+ * output offset that assumed the LP router's leading underlying-change record
+ * occupied output slot 0. On the devnode, veil-core's `extractTransitions`
+ * drops router-forwarded external/dynamic records that carry no plaintext
+ * value, so the public id landed at index 0 and those actions threw AFTER the
+ * on-chain effect. The SDK now anchors on the public `field` output
+ * (`requireFieldOutput`), so the offset no longer matters and the matrix runs.
  */
-const WRAPPED_SDK_BLOCKED = true
+const WRAPPED_SDK_BLOCKED = false
 
 /** Reads `liquidity`/`tokens_owed*` numbers out of a Position plaintext. */
 function positionNumbers(plaintext: string): { liquidity: bigint; owed0: bigint; owed1: bigint } {
@@ -311,10 +306,9 @@ describe.runIf(RUN)('e2e: shield_swap lifecycle on devnode (SDK write actions)',
     expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'positions', key: positionTokenId })).toBeFalsy()
   }, 480_000)
 
-  // ── Wrapped-side matrix (router dispatch). Written against the SDK's internal
-  // dispatch and gated on WRAPPED_SDK_BLOCKED: the routed local paths misread
-  // their public-id output offset on the devnode (see the constant's doc). Flip
-  // the gate once the SDK anchors on the public field output.
+  // ── Wrapped-side matrix (router dispatch). Drives the SDK's internal router
+  // dispatch end to end: mint/increase/collect and a wrapped-input swap through
+  // the LP and swap routers.
   describe.skipIf(WRAPPED_SDK_BLOCKED)('wrapped-side router dispatch', () => {
     /** Seeds a fresh position in a wrapped pool via the SDK's router dispatch. */
     async function mintWrapped(pool: PoolInfo): Promise<{ id: string; nft: string }> {

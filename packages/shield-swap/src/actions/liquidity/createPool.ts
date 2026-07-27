@@ -2,6 +2,7 @@ import { executeContract, writeContract, type Client } from '@provablehq/veil-co
 import { isFeeTierValid } from '../reads/isFeeTierValid.js'
 import { getFeeToTickSpacing } from '../reads/getFeeToTickSpacing.js'
 import { MIN_TICK, MAX_TICK, getSqrtPriceAtTickX128, formatU256Literal } from '../../utils/q128.js'
+import { requireFieldOutput } from '../../utils/outputs.js'
 import { SHIELD_SWAP } from '../../constants.js'
 
 /**
@@ -108,10 +109,7 @@ export async function createPool(client: Client, params: CreatePoolParameters): 
   if (account?.type === 'local') {
     const result = await executeContract(client, { program, function: 'create_pool',
       imports: params.imports, inputs })
-    const poolKey = result.outputs[0]
-    if (!poolKey?.endsWith('field')) {
-      throw new Error(`Unexpected create_pool output shape: ${JSON.stringify(result.outputs)}`)
-    }
+    const poolKey = requireFieldOutput(result.outputs, 'create_pool')
     return { poolKey, transactionId: result.transactionId }
   }
 

@@ -1,6 +1,7 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@provablehq/veil-core'
 import { resolvePositionRecord, positionTokenIdFromPlaintext } from '../../utils/records.js'
 import { requireAccount } from '../../utils/guards.js'
+import { requireFieldOutput } from '../../utils/outputs.js'
 import { SHIELD_SWAP } from '../../constants.js'
 
 /**
@@ -81,10 +82,7 @@ export async function burn(client: Client, params: BurnParameters): Promise<Burn
       function: 'burn',
       inputs: [positionPlaintext],
     })
-    const positionTokenId = result.outputs[0]
-    if (!positionTokenId?.endsWith('field')) {
-      throw new Error(`Unexpected burn output shape: ${JSON.stringify(result.outputs)}`)
-    }
+    const positionTokenId = requireFieldOutput(result.outputs, 'burn')
     return { positionTokenId, transactionId: result.transactionId }
   }
 

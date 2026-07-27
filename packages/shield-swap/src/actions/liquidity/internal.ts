@@ -162,24 +162,19 @@ export async function ammProofPair(provider: ProofProvider | undefined, subject:
 }
 
 /**
- * A resolved liquidity dispatch: which program and transition to call, the
- * record slots (with wrapper sender proofs interleaved), and where the
- * public `token_id` output sits in the transition's output list.
+ * A resolved liquidity dispatch: which program and transition to call and the
+ * record slots (with wrapper sender proofs interleaved).
  *
  * @property program The program to execute (`shield_swap.aleo` or the LP
  *   router).
  * @property functionName The exact transition name.
  * @property recordInputs The record slots in positional order — each
  *   wrapped side's record is immediately followed by its sender proof.
- * @property tokenIdIndex Index of the public `token_id` in the outputs
- *   (0 direct, 1 one wrapped side, 2 both wrapped) — each wrapped side
- *   prepends an underlying change record.
  */
 export interface LiquidityDispatch {
   program: string
   functionName: string
   recordInputs: TransactionInput[]
-  tokenIdIndex: number
 }
 
 /**
@@ -194,8 +189,7 @@ export interface LiquidityDispatch {
  * @param params The core program/transition, the router transition prefix
  *   (`mint_from`, `increase_from`), both routes, both record inputs, and the
  *   wrapped sides' sender-proof literals.
- * @returns The dispatch with positional record inputs and the token-id
- *   output index.
+ * @returns The dispatch with positional record inputs.
  * @throws When a wrapped side is missing its sender proof (an internal
  *   assembly error, not a caller mistake).
  */
@@ -219,7 +213,6 @@ export function dispatchLiquidityCall(params: {
       program: params.coreProgram,
       functionName: params.coreFunction,
       recordInputs: [record0, record1],
-      tokenIdIndex: 0,
     }
   }
   if (route0.wrapped && !route1.wrapped) {
@@ -227,7 +220,6 @@ export function dispatchLiquidityCall(params: {
       program: SHIELD_SWAP_LP_ROUTER,
       functionName: `${params.routerPrefix}_wrapped_arc20`,
       recordInputs: [record0, senderProof0!, record1],
-      tokenIdIndex: 1,
     }
   }
   if (!route0.wrapped && route1.wrapped) {
@@ -235,13 +227,11 @@ export function dispatchLiquidityCall(params: {
       program: SHIELD_SWAP_LP_ROUTER,
       functionName: `${params.routerPrefix}_arc20_wrapped`,
       recordInputs: [record0, record1, senderProof1!],
-      tokenIdIndex: 1,
     }
   }
   return {
     program: SHIELD_SWAP_LP_ROUTER,
     functionName: `${params.routerPrefix}_wrapped_wrapped`,
     recordInputs: [record0, senderProof0!, record1, senderProof1!],
-    tokenIdIndex: 2,
   }
 }

@@ -20,6 +20,7 @@ import { resolveTokenRoute, tokenIdToProgram, type TokenRoute } from '../../util
 import { resolveProofPair, formatMerkleProofPair, type ProofProvider } from '../../utils/proofs.js'
 import { tryLoadSdk } from '../../utils/sdk.js'
 import { deriveMultiHopSwapId } from '../../utils/keys.js'
+import { requireFieldOutput } from '../../utils/outputs.js'
 import { SHIELD_SWAP, SHIELD_SWAP_ROUTER } from '../../constants.js'
 
 /**
@@ -296,12 +297,7 @@ export async function swapMultiHop(client: Client, params: SwapMultiHopParameter
           inputs: [identity.blindingFactor, identity.blindedAddress, recordInput, ...tail],
         })
 
-    // The public swap id is output 0 on the core, output 1 on the router
-    // (the router's output 0 is the underlying change record).
-    const swapId = result.outputs[route.wrapped ? 1 : 0]
-    if (!swapId?.endsWith('field')) {
-      throw new Error(`Unexpected swap_multi_hop output shape: ${JSON.stringify(result.outputs)}`)
-    }
+    const swapId = requireFieldOutput(result.outputs, 'swap_multi_hop')
     return {
       ...handleBase,
       swapId,

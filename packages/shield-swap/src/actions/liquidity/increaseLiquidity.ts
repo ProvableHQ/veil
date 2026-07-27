@@ -2,6 +2,7 @@ import { executeContract, writeContract, type Client, type InputRequest, type Tr
 import { resolvePositionRecord, positionTokenIdFromPlaintext } from '../../utils/records.js'
 import { requireAccount, requirePool } from '../../utils/guards.js'
 import { pickInsertHint } from '../../utils/tick-hints.js'
+import { requireFieldOutput } from '../../utils/outputs.js'
 import type { TokenRoute } from '../../utils/routing.js'
 import type { ProofProvider } from '../../utils/proofs.js'
 import { SHIELD_SWAP } from '../../constants.js'
@@ -207,12 +208,7 @@ export async function increaseLiquidity(
       imports: params.imports,
       inputs: [positionPlaintext, ...dispatch.recordInputs, ...tail(tickLowerHint, tickUpperHint)],
     })
-    // Each wrapped side prepends an underlying change record, shifting the
-    // public token_id output right — the dispatch knows the index.
-    const positionTokenId = result.outputs[dispatch.tokenIdIndex]
-    if (!positionTokenId?.endsWith('field')) {
-      throw new Error(`Unexpected ${dispatch.functionName} output shape: ${JSON.stringify(result.outputs)}`)
-    }
+    const positionTokenId = requireFieldOutput(result.outputs, dispatch.functionName)
     return { positionTokenId, transactionId: result.transactionId }
   }
 

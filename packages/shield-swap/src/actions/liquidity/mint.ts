@@ -3,6 +3,7 @@ import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
 import { generateFieldNonce, formatMintPositionRequest } from '../../utils/params.js'
 import { tryLoadSdk } from '../../utils/sdk.js'
 import { derivePositionTokenId } from '../../utils/keys.js'
+import { requireFieldOutput } from '../../utils/outputs.js'
 import { roundTickToSpacing } from '../../utils/tick-math.js'
 import { pickInsertHint } from '../../utils/tick-hints.js'
 import type { TokenRoute } from '../../utils/routing.js'
@@ -245,12 +246,7 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
       imports: params.imports,
       inputs: [nonce, ...dispatch.recordInputs, ...tail],
     })
-    // Each wrapped side prepends an underlying change record, shifting the
-    // public token_id output right — the dispatch knows the index.
-    const positionTokenId = result.outputs[dispatch.tokenIdIndex]
-    if (!positionTokenId?.endsWith('field')) {
-      throw new Error(`Unexpected ${dispatch.functionName} output shape: ${JSON.stringify(result.outputs)}`)
-    }
+    const positionTokenId = requireFieldOutput(result.outputs, dispatch.functionName)
     return { positionTokenId, transactionId: result.transactionId }
   }
 

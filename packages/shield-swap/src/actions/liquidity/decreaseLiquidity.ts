@@ -1,6 +1,7 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@provablehq/veil-core'
 import { resolvePositionRecord, positionTokenIdFromPlaintext } from '../../utils/records.js'
 import { requireAccount } from '../../utils/guards.js'
+import { requireFieldOutput } from '../../utils/outputs.js'
 import { SHIELD_SWAP } from '../../constants.js'
 
 /**
@@ -98,10 +99,7 @@ export async function decreaseLiquidity(
       function: 'decrease_liquidity',
       inputs: [positionPlaintext, ...tail],
     })
-    const positionTokenId = result.outputs[0]
-    if (!positionTokenId?.endsWith('field')) {
-      throw new Error(`Unexpected decrease_liquidity output shape: ${JSON.stringify(result.outputs)}`)
-    }
+    const positionTokenId = requireFieldOutput(result.outputs, 'decrease_liquidity')
     return { positionTokenId, transactionId: result.transactionId }
   }
 
