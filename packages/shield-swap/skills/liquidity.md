@@ -32,7 +32,7 @@ const held = (id: string) => holdings.find((h) => h.tokenId === id && h.privateA
 
 let pool, slot: Awaited<ReturnType<typeof client.getSlot>>, spacing: number | null = null
 for (const p of pools) {
-  if (!held(p.token0) || !held(p.token1) || !p.token0_info?.wrapper_program || !p.token1_info?.wrapper_program) continue
+  if (!held(p.token0) || !held(p.token1) || !p.token0_info?.amm_token_program || !p.token1_info?.amm_token_program) continue
   const poolState = await client.getPool({ poolKey: p.key })
   if (!poolState || !(await client.isFeeTierValid({ fee: poolState.fee }))) continue
   const s = await client.getSlot({ poolKey: p.key })
@@ -56,24 +56,23 @@ valid but earns nothing until price enters it.
 ## Mint the position
 
 ```ts
-import { appendPosition, buildDexImports, floorToDust } from '$SKILLS/scripts/session.js'
+import { appendPosition, buildDexImports } from '$SKILLS/scripts/session.js'
 
-const p0 = pool.token0_info!.wrapper_program!
-const p1 = pool.token1_info!.wrapper_program!
+const p0 = pool.token0_info!.amm_token_program!
+const p1 = pool.token1_info!.amm_token_program!
 // Token programs + the DEX program's own declared imports.
 const imports = await buildDexImports(client, [p0, p1])
 
 // Deposit a small slice of each holding; the contract balances the two
 // against the range and refunds the excess side as change. Deposits obey
-// the same no-dust rule as swaps — always floor.
 const h0 = held(pool.token0)!
 const h1 = held(pool.token1)!
 const { positionTokenId, transactionId } = await client.mint({
   poolKey: pool.key,
   tickLower,
   tickUpper,
-  amount0Desired: floorToDust(h0.privateAmount / 20n, h0.decimals), // 5%, dust-safe
-  amount1Desired: floorToDust(h1.privateAmount / 20n, h1.decimals),
+  amount0Desired: h0.privateAmount / 20n, // 5% of the holding
+  amount1Desired: h1.privateAmount / 20n,
   token0Program: p0,
   token1Program: p1,
   imports,

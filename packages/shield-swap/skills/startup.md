@@ -78,8 +78,8 @@ The final report lists funded tokens with their wrapper programs, e.g.:
 ```
 Account aleo1… is ready:
   ETH: public 0, private 6000000000000000 (test_arc20_eth.aleo)
-  wALEO: public 0, private 400000000 (test_arc20_wrapped_credits.aleo)
-  wUSDCx: public 0, private 10000000 (test_arc20_wusdcx.aleo)
+  ALEO: public 0, private 400000000 (records held in credits.aleo)
+  USDCx: public 0, private 10000000 (records held in test_usdcx_stablecoin.aleo)
 ```
 
 Private balances funded + exit 0 = ready to trade. Note the wrapper

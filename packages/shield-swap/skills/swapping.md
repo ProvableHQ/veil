@@ -20,14 +20,14 @@ const { client, account } = await loadSession()
 
 // What the account can sell (private side funds swaps).
 const holdings = await getHoldings(client, account.address)
-const funded = holdings.filter((h) => h.privateAmount > 0n && h.wrapperProgram)
+const funded = holdings.filter((h) => h.privateAmount > 0n && h.underlyingProgram)
 
 // Pools whose input token the account holds, with live liquidity.
 const pools = (await client.api.getPools({ limit: 50 })).data
 const candidates = []
 for (const pool of pools) {
   const holdIn = funded.find((h) => h.tokenId === pool.token0 || h.tokenId === pool.token1)
-  if (!holdIn || !pool.token0_info?.wrapper_program || !pool.token1_info?.wrapper_program) continue
+  if (!holdIn || !pool.token0_info?.amm_token_program || !pool.token1_info?.amm_token_program) continue
   const slot = await client.getSlot({ poolKey: pool.key })
   if (slot && slot.liquidity > 0n) candidates.push({ pool, holdIn, slot })
 }
@@ -37,24 +37,27 @@ Sizing: sell a small fraction of the holding (1–10%) so repeated swaps
 don't drain a record, and stay well under the pool's liquidity. Two hard
 rules on `amountIn`:
 
-- **No-dust rule.** The contract rejects amounts whose low `decimals - 9`
-  digits are non-zero (tokens with more than 9 decimals). ALWAYS floor
-  through the session helper: `floorToDust(amount, token.decimals)`.
+- **Raw atomic units.** The AMM accounts in raw token base units — pass
+  `amountIn` as the integer base-unit amount (no decimal scaling, no dust
+  flooring; that rule is gone in the new stack).
 - **One covering record.** Record selection picks ONE private record big
   enough for `amountIn`; it does not aggregate. After many swaps the change
   fragments — if a swap reports no covering record, lower `amountIn`.
 
 ## One private swap
 
+The token in/out are named by their AMM token ids; the SDK resolves whether
+they're wrapped and routes through the correct program internally — you never
+name a wrapper.
+
 ```ts
 import { ApiError } from '@provablehq/shield-swap-sdk'
-import { appendSwapHandle, buildDexImports, floorToDust, formatAmount } from '$SKILLS/scripts/session.js'
+import { appendSwapHandle, buildDexImports, formatAmount } from '$SKILLS/scripts/session.js'
 
 const { pool, holdIn } = candidates[0]
 const tokenInId = holdIn.tokenId
 const tokenOutInfo = tokenInId === pool.token0 ? pool.token1_info : pool.token0_info
-const tokenInProgram = holdIn.wrapperProgram!
-const amountIn = floorToDust(holdIn.privateAmount / 100n, holdIn.decimals) // 1%, dust-safe
+const amountIn = holdIn.privateAmount / 100n // 1% of the covering record
 
 // Quote → slippage floor. The quote is informational: a missing estimate
 // or a 404 ("no executable route … for the requested amount") is fine —
@@ -80,15 +83,14 @@ try {
 // the DEX program's own declared imports (the prover does not resolve
 // those). buildDexImports assembles all of it.
 const imports = await buildDexImports(client, [
-  pool.token0_info!.wrapper_program!,
-  pool.token1_info!.wrapper_program!,
+  pool.token0_info!.amm_token_program!,
+  pool.token1_info!.amm_token_program!,
 ])
 
 const handle = await client.swap({
   poolKey: pool.key,
   tokenInId,
   amountIn,
-  tokenInProgram,
   expectedOut,
   slippageBps: 100, // 1%
   imports,
@@ -240,7 +242,6 @@ each with the right action.
 | `requires auth` / 401 | Session missing or expired | `loadSession()` authenticates; it auto-renews. Re-run the script. |
 | 403 `redeem an invite code` | Access gate | Back to [startup.md](./startup.md) — redeem a code. |
 | No covering record for `amountIn` | Fragmented/small records | Lower `amountIn`, or airdrop again if truly empty. |
-| `rejects amounts with non-zero dust digits` | `amountIn` violates the no-dust rule | Floor it: `floorToDust(amount, decimals)`. |
 | Duplicate blinded address rejection | Concurrent swaps raced the counter scan | Use the explicit-identity recipe above. |
 | Double-spend rejection | Two swaps selected the same record | Different input tokens per concurrent swap. |
 | `/route` 404 `no executable route … for the requested amount` | Quote unavailable at that size | Proceed without `expectedOut` (spot floor applies), or resize the trade. |

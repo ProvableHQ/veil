@@ -48,7 +48,7 @@ depth in the trading runbooks:
 - **Tokens are private records**: balances users can spend do not appear
   in public balance reads; one covering record funds an amount, no
   aggregation ([swapping.md](./swapping.md)).
-- **Amounts obey the no-dust rule** on the way in AND on collect
+- **Amounts are raw atomic units** — no dust rule (removed in the new stack)
   ([collecting.md](./collecting.md)); display in human units, transact in
   raw base units.
 - **A `SwapHandle` is the only key to a swap's output** — persist it

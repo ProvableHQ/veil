@@ -136,18 +136,6 @@ export function deserializeHandle(stored: Record<string, unknown>): SwapHandle |
 }
 
 /**
- * Returns the amount unchanged. The shield_swap.aleo AMM accounts in raw
- * atomic units and imposes no dust rule (the old 9-decimal normalization is
- * gone), so no flooring is needed. Retained as an identity pass-through so
- * runbook call sites keep working; a future runbook cleanup drops it.
- *
- * @param amount Raw atomic amount, returned as-is.
- */
-export function floorToDust(amount: bigint, _decimals: number): bigint {
-  return amount
-}
-
-/**
  * Renders a raw base-unit amount in human units ("0.0534 ETH"), the ONLY
  * format that should ever reach the user. Raw units (wei-style integers)
  * are SDK-facing; showing them to a person misstates their balances by
@@ -221,7 +209,7 @@ export async function getHoldings(
     tokenId: string
     symbol: string
     decimals: number
-    wrapperProgram?: string
+    underlyingProgram?: string
     publicAmount: bigint
     privateAmount: bigint
   }>
@@ -230,15 +218,17 @@ export async function getHoldings(
   const pub = new Map(
     (await client.api.getPublicBalances({ user: address })).data.map((b) => [b.token_id, BigInt(b.balance ?? 0)]),
   )
-  const programs = tokens.map((t) => t.wrapper_program).filter((p): p is string => !!p)
+  // Private records live in the underlying program (a plain token's own, or a
+  // wrapped asset's underlying — credits for ALEO).
+  const programs = tokens.map((t) => t.underlying_program).filter((p): p is string => !!p)
   const priv = await getPrivateBalances(client, { programs })
   return tokens.map((t) => ({
     tokenId: t.address,
     symbol: t.symbol,
     decimals: t.decimals,
-    wrapperProgram: t.wrapper_program ?? undefined,
+    underlyingProgram: t.underlying_program ?? undefined,
     publicAmount: pub.get(t.address) ?? 0n,
-    privateAmount: t.wrapper_program ? (priv[t.wrapper_program] ?? 0n) : 0n,
+    privateAmount: t.underlying_program ? (priv[t.underlying_program] ?? 0n) : 0n,
   }))
 }
 
