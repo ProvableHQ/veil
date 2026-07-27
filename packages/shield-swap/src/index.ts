@@ -1,6 +1,6 @@
 // Generated bindings: typed structs/records, decoders, and the contract factory
 // for shield_swap. Regenerate with `pnpm generate` (ABI via `pnpm regen-abi`).
-export * from './generated/shield_swap_v3.js'
+export * from './generated/shield_swap.js'
 
 // Chain-direct reads (trust-critical: values come from the node, not the API).
 export { getPool, type GetPoolParameters, type GetPoolReturnType } from './actions/reads/getPool.js'
@@ -94,7 +94,16 @@ export {
   blindingFactorResolveRequest,
   blindedAddressResolveRequest,
 } from './utils/blinding/requests.js'
-export { SHIELD_SWAP_V3, DEFAULT_PROGRAM } from './constants.js'
+export {
+  DEFAULT_PROGRAM,
+  SHIELD_SWAP,
+  SHIELD_SWAP_ROUTER,
+  SHIELD_SWAP_LP_ROUTER,
+  SHIELD_SWAP_FREEZELIST,
+  SHIELD_SWAP_MULTISIG,
+  ROUTER_ADDRESSES,
+  SHIELD_WRAPPERS,
+} from './constants.js'
 
 // Record selection + record-derived balances (local-signer path; wallet
 // signers select records wallet-side via record InputRequests).

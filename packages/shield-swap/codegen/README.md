@@ -19,4 +19,6 @@ pnpm regen-abi      # refetch program bytecode + ABI into abi/
 pnpm regen-openapi  # refetch the OpenAPI spec + regenerate src/api/openapi.ts
 ```
 
-Bindings are generated from `shield_swap_v3.aleo`.
+Bindings are generated from the `shield_swap.aleo` stack — the core AMM plus
+`shield_swap_router.aleo` and `shield_swap_lp_router.aleo` (see
+`veil.config.json`).

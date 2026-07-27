@@ -13,7 +13,7 @@ description: >
 # Trading on Shield Swap
 
 Shield Swap is a concentrated-liquidity AMM on Aleo testnet
-(`shield_swap_v3.aleo`). This skill drives it end-to-end with
+(`shield_swap.aleo`). This skill drives it end-to-end with
 `@provablehq/shield-swap-sdk`. Everything here works the same for any agent:
 the runbooks are plain markdown, the scripts run with `npx tsx`.
 

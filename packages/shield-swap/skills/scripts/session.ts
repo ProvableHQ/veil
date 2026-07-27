@@ -14,7 +14,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadNetwork, generateAccount } from '@provablehq/veil-aleo-sdk'
-import { shieldSwapActions, authenticateWithAccount, getPrivateBalances, dustScale } from '@provablehq/shield-swap-sdk'
+import { shieldSwapActions, authenticateWithAccount, getPrivateBalances, DEFAULT_PROGRAM } from '@provablehq/shield-swap-sdk'
 import type { SwapHandle, MultiHopSwapHandle } from '@provablehq/shield-swap-sdk'
 
 export const NETWORK = 'testnet' as const
@@ -136,13 +136,15 @@ export function deserializeHandle(stored: Record<string, unknown>): SwapHandle |
 }
 
 /**
- * Floors an amount to the token's no-dust rule. The contract rejects
- * amounts whose low `decimals - 9` digits are non-zero (tokens with more
- * than 9 decimals) — every swap or deposit amount MUST pass through this.
+ * Returns the amount unchanged. The shield_swap.aleo AMM accounts in raw
+ * atomic units and imposes no dust rule (the old 9-decimal normalization is
+ * gone), so no flooring is needed. Retained as an identity pass-through so
+ * runbook call sites keep working; a future runbook cleanup drops it.
+ *
+ * @param amount Raw atomic amount, returned as-is.
  */
-export function floorToDust(amount: bigint, decimals: number): bigint {
-  const scale = dustScale(decimals)
-  return amount - (amount % scale)
+export function floorToDust(amount: bigint, _decimals: number): bigint {
+  return amount
 }
 
 /**
@@ -250,7 +252,7 @@ export async function getHoldings(
 export async function buildDexImports(
   client: Awaited<ReturnType<typeof loadSession>>['client'],
   tokenPrograms: string[],
-  program = 'shield_swap_v3.aleo',
+  program = DEFAULT_PROGRAM,
 ): Promise<Record<string, string>> {
   const { getProgram } = await import('@provablehq/veil-core')
   const imports: Record<string, string> = {}

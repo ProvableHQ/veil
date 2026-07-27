@@ -6,48 +6,47 @@ import {
   nextBlindedIdentity,
 } from '../../../src/utils/blinding/identity.js'
 
-// Golden vectors pinned to the shield_swap_v3.aleo program scope (the
-// derivation hashes the program address, so vectors are scope-specific; the
-// scope is an input, so v3-scoped vectors stay valid regression anchors for
-// the unchanged algorithm). The program's verify_blinded_address re-computes
-// this hash and rejects any deviation. Final authority is the on-chain
-// assert, exercised by the e2e against shield_swap.aleo.
-const SHIELD_SWAP_V3 = 'shield_swap_v3.aleo'
+// Golden vectors pinned to the shield_swap.aleo program scope. The derivation
+// hashes the program address, so both the blinding factor and the blinded
+// address are scope-specific. The program's verify_blinded_address recomputes
+// this hash and rejects any deviation; the on-chain assert (exercised by the
+// devnode/e2e suites) is the final authority.
+const SHIELD_SWAP = 'shield_swap.aleo'
 const VIEW_KEY_SCALAR = '334926304971763782347498121479281870911723639068413954564748091722770623877scalar'
 const SIGNER = 'aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px'
 const VECTORS = [
   {
     counter: 0,
-    blindingFactor: '4588552248780721950435785476596782217652350429588181106944985529417784595808field',
-    blindedAddress: 'aleo1tucdl48jvu54emu9atq3vf0rslwtdpze83zcc2jrc8zxema0r5gq3zd76l',
+    blindingFactor: '1084832000575072863530983109046262857691989153364570676666410266416291033880field',
+    blindedAddress: 'aleo15mstsvdtzqf5nw8rfzx8mrllwxt907amfpt8nx3p8cskj4wd3uxq4uywn9',
   },
   {
     counter: 1,
-    blindingFactor: '6996211042158127437642182917952771252908546914090630418129936449807650494378field',
-    blindedAddress: 'aleo17gc56avc2x3dwj3mjazag8szl5skm8y4u5h6ep37kvl34cynrqyqm0cuj8',
+    blindingFactor: '5141395481140237504655245554781696675111779262144509416611105050866132602799field',
+    blindedAddress: 'aleo1kafjl7kvfh8dwtqdwgje2maw5ugkm63pph5qt5d503yt8spg3u8s38haku',
   },
   {
     counter: 7,
-    blindingFactor: '4426391170839722244039367865632426610408126795108463201618230895243256084792field',
-    blindedAddress: 'aleo1jjq9qtr2uv86pans7f7v3tgcesg0autqhhu2cp2eecfxhtv4acgskyz80k',
+    blindingFactor: '3586646586411194490118647465634943263277589324082503715221872233042073645843field',
+    blindedAddress: 'aleo1xfe9cwtftdg5fhkcmtjh4xnuuqjlwqgzk5hz762rf7zef088tqzqgvpkj6',
   },
 ]
 
 describe('blinded identity derivation (golden vectors)', () => {
   for (const v of VECTORS) {
     it(`counter ${v.counter} reproduces the reference derivation`, async () => {
-      const bf = await deriveBlindingFactor(VIEW_KEY_SCALAR, v.counter, SHIELD_SWAP_V3)
+      const bf = await deriveBlindingFactor(VIEW_KEY_SCALAR, v.counter, SHIELD_SWAP)
       expect(bf).toBe(v.blindingFactor)
-      const addr = await deriveBlindedAddress(bf, SIGNER, SHIELD_SWAP_V3)
+      const addr = await deriveBlindedAddress(bf, SIGNER, SHIELD_SWAP)
       expect(addr).toBe(v.blindedAddress)
     })
   }
 
   it('is deterministic across calls (no wasm object reuse bugs)', async () => {
-    const a = await deriveBlindingFactor(VIEW_KEY_SCALAR, 0, SHIELD_SWAP_V3)
-    const b = await deriveBlindingFactor(VIEW_KEY_SCALAR, 0, SHIELD_SWAP_V3)
+    const a = await deriveBlindingFactor(VIEW_KEY_SCALAR, 0, SHIELD_SWAP)
+    const b = await deriveBlindingFactor(VIEW_KEY_SCALAR, 0, SHIELD_SWAP)
     expect(a).toBe(b)
-    expect(await deriveBlindedAddress(a, SIGNER, SHIELD_SWAP_V3)).toBe(await deriveBlindedAddress(b, SIGNER, SHIELD_SWAP_V3))
+    expect(await deriveBlindedAddress(a, SIGNER, SHIELD_SWAP)).toBe(await deriveBlindedAddress(b, SIGNER, SHIELD_SWAP))
   })
 })
 
@@ -63,7 +62,7 @@ describe('nextBlindedIdentity (counter scan)', () => {
     const id = await nextBlindedIdentity(scanClient(new Set()), {
       viewKeyScalar: VIEW_KEY_SCALAR,
       signer: SIGNER,
-      program: SHIELD_SWAP_V3,
+      program: SHIELD_SWAP,
     })
     expect(id.counter).toBe(0)
     expect(id.blindingFactor).toBe(VECTORS[0]!.blindingFactor)
@@ -75,7 +74,7 @@ describe('nextBlindedIdentity (counter scan)', () => {
     const id = await nextBlindedIdentity(scanClient(used), {
       viewKeyScalar: VIEW_KEY_SCALAR,
       signer: SIGNER,
-      program: SHIELD_SWAP_V3,
+      program: SHIELD_SWAP,
     })
     expect(id.counter).toBe(2)
     expect(id.blindedAddress).not.toBe(VECTORS[0]!.blindedAddress)
@@ -86,7 +85,7 @@ describe('nextBlindedIdentity (counter scan)', () => {
     const id = await nextBlindedIdentity(scanClient(new Set()), {
       viewKeyScalar: VIEW_KEY_SCALAR,
       signer: SIGNER,
-      program: SHIELD_SWAP_V3,
+      program: SHIELD_SWAP,
       startCounter: 7,
     })
     expect(id.counter).toBe(7)
@@ -95,7 +94,7 @@ describe('nextBlindedIdentity (counter scan)', () => {
     // Every address reads as used → the window exhausts.
     const allUsed = { request: async () => 'true' } as unknown as Client
     await expect(
-      nextBlindedIdentity(allUsed, { viewKeyScalar: VIEW_KEY_SCALAR, signer: SIGNER, program: SHIELD_SWAP_V3, maxScan: 3 }),
+      nextBlindedIdentity(allUsed, { viewKeyScalar: VIEW_KEY_SCALAR, signer: SIGNER, program: SHIELD_SWAP, maxScan: 3 }),
     ).rejects.toThrow(/No unused blinded address/)
   })
 })

@@ -1,11 +1,8 @@
 import { PROGRAM_ID } from './generated/shield_swap.js'
 
-/** The shield_swap deployment — the default every DEX action targets. */
-export const SHIELD_SWAP_V3 = 'shield_swap_v3.aleo'
+// ── The shield_swap.aleo stack ────────────────────────────────────────
 
-// ── The shield_swap.aleo stack (successor deployment) ─────────────────
-
-/** The core AMM of the current stack. */
+/** The core AMM every DEX action targets by default. */
 export const SHIELD_SWAP = 'shield_swap.aleo'
 /** Swap and claim router — required entry for wrapped-input swaps and wrapped claims. */
 export const SHIELD_SWAP_ROUTER = 'shield_swap_router.aleo'

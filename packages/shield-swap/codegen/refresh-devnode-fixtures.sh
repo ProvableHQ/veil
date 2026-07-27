@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Refreshes the vendored AMM program sources the devnode lifecycle e2e suites
-# deploy. Fetches the deployed shield_swap_v3.aleo and its multisig import from
+# deploy. Fetches the deployed shield_swap.aleo stack and its multisig import from
 # the testnet API and writes them under test/fixtures/programs/. Run when the
 # deployed contract changes:
 #
@@ -13,7 +13,7 @@ set -euo pipefail
 API="${VEIL_API_URL:-https://api.provable.com/v2}/testnet/program"
 DIR="$(cd "$(dirname "$0")/../test/fixtures/programs" && pwd)"
 
-for program in shield_swap_v3.aleo test_shield_swap_multisig_core.aleo; do
+for program in shield_swap.aleo shield_swap_router.aleo shield_swap_lp_router.aleo shield_swap_freezelist.aleo shield_swap_multisig_core.aleo; do
   echo "Fetching $program …"
   # The API returns the source as a JSON string literal; jq -r unwraps it.
   curl -fsSL "$API/$program" | jq -r '.' > "$DIR/$program"
