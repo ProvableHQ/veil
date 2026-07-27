@@ -31,7 +31,7 @@ const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
 
 const API_BASE = 'https://api.provable.com/v2'
 const NODE_URL = `${API_BASE}/testnet`
-const INDEXER_URL = 'https://amm-api.dev.provable.com'
+const INDEXER_URL = process.env.VEIL_DEX_API_URL ?? 'https://amm-api.dev.provable.com'
 
 // Reads default to PROGRAM_ID (shield_swap_v3), so a pool discovered via the
 // API decodes directly off chain, no fallback needed.

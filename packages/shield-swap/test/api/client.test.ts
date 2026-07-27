@@ -1,15 +1,23 @@
 import { describe, it, expect, vi } from 'vitest'
 import { ApiClient, ApiError, DEFAULT_API_URL } from '../../src/api/client.js'
 
-function fetchMock(responses: Array<{ status?: number; json: unknown }>) {
+function fetchMock(responses: Array<{ status?: number; json: unknown; headers?: Record<string, string> }>) {
   const calls: Array<{ url: string; init: RequestInit }> = []
   let i = 0
   const impl = vi.fn(async (url: URL | string, init?: RequestInit) => {
     calls.push({ url: String(url), init: init ?? {} })
     const r = responses[Math.min(i++, responses.length - 1)]!
-    return new Response(JSON.stringify(r.json), { status: r.status ?? 200 })
+    return new Response(JSON.stringify(r.json), { status: r.status ?? 200, headers: r.headers })
   }) as unknown as typeof fetch
   return { impl, calls }
+}
+
+// The current API delivers the session as httpOnly cookies on /auth/verify.
+const SESSION_BODY = {
+  data: { address: 'aleo1me', expires_at: 1753500000, csrf_token: 'csrf1', session_id: null, session_version: 1 },
+}
+const SESSION_HEADERS = {
+  'set-cookie': 'ss_access=jwt123; HttpOnly; Path=/; SameSite=Lax',
 }
 
 describe('ApiClient', () => {
@@ -27,10 +35,10 @@ describe('ApiClient', () => {
     expect(calls[0]!.url).toContain('amount_in=1000000000000000000')
   })
 
-  it('authenticate: challenge → sign → verify → bearer attached to gated calls', async () => {
+  it('authenticate: challenge → sign → verify with challenge_id → session cookie becomes the bearer', async () => {
     const { impl, calls } = fetchMock([
-      { json: { data: { message: 'sign me', nonce: 'n1' } } },
-      { json: { data: { token: 'jwt123' } } },
+      { json: { data: { challenge_id: 'ch1', message: 'sign me', nonce: 'n1' } } },
+      { json: SESSION_BODY, headers: SESSION_HEADERS },
       { json: { data: { address: '1field', name: 'T', symbol: 'T', decimals: 6 } } },
     ])
     const client = new ApiClient({ fetch: impl })
@@ -39,10 +47,34 @@ describe('ApiClient', () => {
 
     expect(token).toBe('jwt123')
     expect(sign).toHaveBeenCalledWith('sign me')
-    expect(JSON.parse(String(calls[1]!.init.body))).toEqual({ address: 'aleo1me', signature: 'sign1-over-sign me' })
+    expect(JSON.parse(String(calls[1]!.init.body))).toEqual({
+      address: 'aleo1me',
+      signature: 'sign1-over-sign me',
+      challenge_id: 'ch1',
+    })
 
     await client.registerToken({ address: '1field', name: 'T', symbol: 'T', decimals: 6 })
     expect((calls[2]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt123')
+  })
+
+  it('authenticate accepts a body token from servers that still return one', async () => {
+    const { impl } = fetchMock([
+      { json: { data: { challenge_id: 'ch1', message: 'sign me', nonce: 'n1' } } },
+      { json: { data: { token: 'jwt-body' } } },
+    ])
+    const client = new ApiClient({ fetch: impl })
+    await expect(client.authenticate('aleo1me', async (m) => `sign1-over-${m}`)).resolves.toBe('jwt-body')
+  })
+
+  it('authenticate fails clearly when verify returns neither cookie nor token', async () => {
+    const { impl } = fetchMock([
+      { json: { data: { challenge_id: 'ch1', message: 'sign me', nonce: 'n1' } } },
+      { json: SESSION_BODY },
+    ])
+    const client = new ApiClient({ fetch: impl })
+    await expect(client.authenticate('aleo1me', async (m) => `sign1-over-${m}`)).rejects.toThrow(
+      /no session credential/,
+    )
   })
 
   it('auth-gated calls without a token fail fast with the remedy', async () => {
@@ -196,20 +228,20 @@ describe('ApiClient', () => {
     expect((calls[0]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt123')
   })
 
-  it('redeemAccessCode posts the code and adopts the upgraded token', async () => {
+  it('redeemAccessCode posts the code; the session keeps its credential', async () => {
     const { impl, calls } = fetchMock([
-      { json: { data: { code: 'INVITE1', status: 'redeemed', token: 'jwt-with-access' } } },
+      { json: { data: { code: 'INVITE1', status: 'redeemed' } } },
       { json: { data: [] } }, // subsequent gated call
     ])
     const client = new ApiClient({ fetch: impl })
-    client.setToken('jwt-no-access')
+    client.setToken('jwt-session')
     const redeemed = await client.redeemAccessCode('INVITE1')
     expect(redeemed.status).toBe('redeemed')
     expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ code: 'INVITE1' })
 
-    // The returned token carries the access grant — later calls use it.
+    // The access grant is server-side; later calls keep the same session JWT.
     await client.getFeeTiers()
-    expect((calls[1]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt-with-access')
+    expect((calls[1]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt-session')
   })
 
   it('access endpoints refuse to run on an API token alone', async () => {
@@ -217,20 +249,20 @@ describe('ApiClient', () => {
     await expect(client.getAccessStatus()).rejects.toThrow(/session JWT/)
   })
 
-  it('redeemReferralCode posts the code and adopts the upgraded token', async () => {
+  it('redeemReferralCode posts the code; the session keeps its credential', async () => {
     const { impl, calls } = fetchMock([
-      { json: { data: { code: 'REF1', status: 'redeemed', token: 'jwt-with-access' } } },
+      { json: { data: { code: 'REF1', status: 'redeemed' } } },
       { json: { data: [] } },
     ])
     const client = new ApiClient({ fetch: impl })
-    client.setToken('jwt-no-access')
+    client.setToken('jwt-session')
     const redeemed = await client.redeemReferralCode('REF1')
     expect(redeemed.status).toBe('redeemed')
     expect(calls[0]!.url).toBe(`${DEFAULT_API_URL}/referral/redeem`)
     expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ code: 'REF1' })
 
     await client.getFeeTiers()
-    expect((calls[1]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt-with-access')
+    expect((calls[1]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt-session')
   })
 
   it('admin access-code inventory and generation round-trip under the session JWT', async () => {

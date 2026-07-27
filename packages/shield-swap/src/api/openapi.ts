@@ -68,6 +68,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/sessions/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["admin_revoke_sessions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/airdrop": {
         parameters: {
             query?: never;
@@ -170,6 +186,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["logout_all"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["session"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_sessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sessions/{session_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["revoke_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/verify": {
         parameters: {
             query?: never;
@@ -180,6 +292,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/ws-ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ws_ticket"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -827,7 +955,6 @@ export interface components {
         AccessRedeemResponse: {
             code: string;
             status: string;
-            token: string;
         };
         AccessRedeemResponseDoc: {
             data: components["schemas"]["AccessRedeemResponse"];
@@ -837,6 +964,21 @@ export interface components {
         };
         AccessStatusResponseDoc: {
             data: components["schemas"]["AccessStatusResponse"];
+        };
+        ActiveSessionPayload: {
+            current: boolean;
+            /** Format: int64 */
+            expires_at: number;
+            /** Format: int64 */
+            last_refreshed_at: number;
+            /** Format: uuid */
+            session_id: string;
+            /** Format: int64 */
+            started_at: number;
+            user_agent?: string | null;
+        };
+        ActiveSessionsResponseDoc: {
+            data: components["schemas"]["ActiveSessionPayload"][];
         };
         /**
          * @description Status of a background airdrop job. `status` is `"running"` until every token
@@ -923,6 +1065,8 @@ export interface components {
             token_prefix: string;
         };
         AuthTokenPayload: {
+            /** Format: int64 */
+            expires_at: number;
             token: string;
         };
         AuthTokenResponseDoc: {
@@ -932,6 +1076,7 @@ export interface components {
             data: components["schemas"]["TokenBalanceDoc"][];
         };
         ChallengePayload: {
+            challenge_id: string;
             message: string;
             nonce: string;
         };
@@ -992,7 +1137,7 @@ export interface components {
         FeeTierListResponseDoc: {
             data: components["schemas"]["FeeTierDoc"][];
         };
-        /** @description Full schema for a single trading / liquidity operation on the Aleo AMM. */
+        /** @description Input schema for one Shield Swap operation. */
         FunctionSchema: {
             /** @description One-line human summary. */
             description: string;
@@ -1023,6 +1168,25 @@ export interface components {
         };
         LiquidityDistributionResponseDoc: {
             data: components["schemas"]["TickLiquidityDoc"][];
+        };
+        LogoutAllResponse: {
+            address: string;
+            ended: boolean;
+            ok: boolean;
+            /** Format: int64 */
+            session_version: number;
+        };
+        LogoutAllResponseDoc: {
+            data: components["schemas"]["LogoutAllResponse"];
+        };
+        LogoutResponse: {
+            ended: boolean;
+            ok: boolean;
+            /** Format: uuid */
+            session_id?: string | null;
+        };
+        LogoutResponseDoc: {
+            data: components["schemas"]["LogoutResponse"];
         };
         MintTokenRequest: {
             /** @description Amount in BASE units (already scaled by 10^decimals), as a string. */
@@ -1112,6 +1276,10 @@ export interface components {
             pagination: components["schemas"]["PaginationMeta"];
         };
         PoolResponseDoc: components["schemas"]["PoolStateDoc"] & {
+            base_token?: null | components["schemas"]["TokenDoc"];
+            /** @description True when the canonical display orientation is (token1, token0). */
+            display_flipped: boolean;
+            quote_token?: null | components["schemas"]["TokenDoc"];
             token0_info?: null | components["schemas"]["TokenDoc"];
             token1_info?: null | components["schemas"]["TokenDoc"];
         };
@@ -1135,6 +1303,15 @@ export interface components {
         };
         PoolStats24hDoc: {
             change_24h_pct?: string | null;
+            display_change_24h_pct?: string | null;
+            /** @description True when display fields are inverted relative to token0/token1 order. */
+            display_flipped: boolean;
+            /** @description Inverted windows swap extremes: display_high = 1 / low_24h. */
+            display_high_24h: string;
+            display_low_24h: string;
+            display_open_24h: string;
+            /** @description Current price in canonical display orientation (quote per base). */
+            display_price: string;
             /** @description Highest normalized price; execution price after migration 0028, preserved legacy baseline before it. */
             high_24h: string;
             liquidity: string;
@@ -1190,6 +1367,10 @@ export interface components {
             pagination: components["schemas"]["PaginationMeta"];
         };
         PoolWithStatsDoc: components["schemas"]["PoolStateDoc"] & {
+            base_token?: null | components["schemas"]["TokenDoc"];
+            /** @description True when the canonical display orientation is (token1, token0). */
+            display_flipped: boolean;
+            quote_token?: null | components["schemas"]["TokenDoc"];
             stats?: null | components["schemas"]["PoolStatsDoc"];
             token0_info?: null | components["schemas"]["TokenDoc"];
             token1_info?: null | components["schemas"]["TokenDoc"];
@@ -1298,7 +1479,6 @@ export interface components {
         ReferralRedeemResponse: {
             code: string;
             status: string;
-            token: string;
         };
         ReferralRedeemResponseDoc: {
             data: components["schemas"]["ReferralRedeemResponse"];
@@ -1326,6 +1506,26 @@ export interface components {
             codes_per_user: number;
             /** Format: int32 */
             max_users?: number | null;
+        };
+        RevokeSessionPayload: {
+            current: boolean;
+            ok: boolean;
+            revoked: boolean;
+        };
+        RevokeSessionResponseDoc: {
+            data: components["schemas"]["RevokeSessionPayload"];
+        };
+        RevokeSessionsRequest: {
+            address: string;
+        };
+        RevokeSessionsResponse: {
+            /** Format: int64 */
+            refresh_tokens_revoked: number;
+            /** Format: int64 */
+            session_version: number;
+        };
+        RevokeSessionsResponseDoc: {
+            data: components["schemas"]["RevokeSessionsResponse"];
         };
         RouteHopDoc: {
             /** Format: int32 */
@@ -1366,6 +1566,24 @@ export interface components {
             type: string;
             /** @description `public` or `private` — controls whether the value is revealed on-chain. */
             visibility: string;
+        };
+        /**
+         * @description Session identity returned on verify/refresh/session. The access + refresh
+         *     tokens are set as httpOnly cookies (not in the body); `csrf_token` is held in
+         *     memory by the SPA and echoed in the `X-CSRF-Token` header.
+         */
+        SessionPayload: {
+            address: string;
+            csrf_token: string;
+            /** Format: int64 */
+            expires_at: number;
+            /** Format: uuid */
+            session_id?: string | null;
+            /** Format: int64 */
+            session_version: number;
+        };
+        SessionResponseDoc: {
+            data: components["schemas"]["SessionPayload"];
         };
         SwapDoc: {
             amount_remaining: string;
@@ -1476,6 +1694,7 @@ export interface components {
         };
         VerifyRequestDoc: {
             address: string;
+            challenge_id: string;
             signature: string;
         };
     };
@@ -1733,6 +1952,93 @@ export interface operations {
             };
             /** @description Authentication required */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    admin_revoke_sessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevokeSessionsRequest"];
+            };
+        };
+        responses: {
+            /** @description All of the wallet's sessions revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevokeSessionsResponseDoc"];
+                };
+            };
+            /** @description Malformed JSON or invalid address */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Administrator authorization required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Content-Type must be application/json */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body does not match schema */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2177,6 +2483,362 @@ export interface operations {
             };
         };
     };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Presented refresh-token family ended */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogoutResponseDoc"];
+                };
+            };
+            /** @description Invalid session binding */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Missing or invalid CSRF token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Session identity changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    logout_all: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every wallet session revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogoutAllResponseDoc"];
+                };
+            };
+            /** @description No valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Missing or invalid CSRF token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Session identity changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Session revocation state unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Refresh token rotated; fresh access + refresh cookies set */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResponseDoc"];
+                };
+            };
+            /** @description Missing, invalid, expired, or revoked refresh token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Session identity changed or a concurrent refresh already rotated this token */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current session identity + access expiry; re-seeds the CSRF token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResponseDoc"];
+                };
+            };
+            /** @description No valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Session revocation state unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    list_sessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active sessions for the signed-in wallet */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActiveSessionsResponseDoc"];
+                };
+            };
+            /** @description Missing or invalid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Session management rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Session lookup failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Session validation unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    revoke_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session revoked, or already inactive */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevokeSessionResponseDoc"];
+                };
+            };
+            /** @description Missing or invalid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Missing or mismatched CSRF token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Session management rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Revocation failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Session validation unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
     verify: {
         parameters: {
             query?: never;
@@ -2190,13 +2852,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description JWT bearer token */
+            /** @description Session established via httpOnly cookies; body carries the CSRF token */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthTokenResponseDoc"];
+                    "application/json": components["schemas"]["SessionResponseDoc"];
                 };
             };
             /** @description Malformed JSON */
@@ -2210,6 +2872,15 @@ export interface operations {
             };
             /** @description Invalid / expired signature */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Session state changed during verification */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2255,6 +2926,53 @@ export interface operations {
             };
             /** @description Internal error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    ws_ticket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Short-lived (60s) JWT the WebSocket client presents in its authenticate frame */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokenResponseDoc"];
+                };
+            };
+            /** @description No valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Session revocation state unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2676,6 +3394,8 @@ export interface operations {
                 from: number;
                 /** @description Exclusive unix-second end */
                 to: number;
+                /** @description `raw` (default) keeps stored token1-per-token0 prices; `display` inverts candles when the pool's canonical display orientation is flipped */
+                orientation?: string;
             };
             header?: never;
             path: {
