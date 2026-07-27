@@ -26,6 +26,10 @@ export interface TokenRecordInfo {
  * @returns The decoded amount/token id, or `null` when the plaintext has no
  *   parseable `amount` — i.e. it is not a token record.
  *
+ * Reads the balance from either an ARC-20 `Token` (`amount`) or a native
+ * `credits` record (`microcredits`), so underlying holdings sum correctly for
+ * both the stablecoin/plain tokens and wrapped ALEO's credits underlying.
+ *
  * @example
  * parseTokenRecordInfo('{ owner: aleo1…, amount: 5000u128.private, _nonce: 1group.public }')
  * // → { amount: 5000n }
@@ -39,7 +43,9 @@ export function parseTokenRecordInfo(
   } catch {
     return null
   }
-  const amountRaw = value.fields.amount?.value
+  // credits.aleo names the balance field `microcredits`; every ARC-20 Token
+  // uses `amount`.
+  const amountRaw = value.fields.amount?.value ?? value.fields.microcredits?.value
   if (typeof amountRaw !== 'bigint') return null
   const tokenIdRaw = value.fields.token_id?.value
   const tokenId =

@@ -3,11 +3,16 @@ import type { Client } from '@provablehq/veil-core'
 import { getBalances } from '../../src/utils/balances.js'
 import type { ApiClient } from '../../src/api/client.js'
 
-const wrapperRecord = (amount: string) =>
-  `{\n  owner: aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc.private,\n  amount: ${amount}.private,\n  _nonce: 1group.public\n}`
+const HOLDER = 'aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px'
+
+const arc20Record = (amount: string) =>
+  `{\n  owner: ${HOLDER}.private,\n  amount: ${amount}.private,\n  _nonce: 1group.public\n}`
+// credits.aleo names its balance field microcredits, not amount.
+const creditsRecord = (microcredits: string) =>
+  `{\n  owner: ${HOLDER}.private,\n  microcredits: ${microcredits}.private,\n  _nonce: 1group.public\n}`
 
 /** Wallet-client fake whose scanner returns the given plaintexts as unspent records. */
-function recordsClient(byProgram: Record<string, string[]>, address = 'aleo1me'): Client {
+function recordsClient(byProgram: Record<string, string[]>, address = HOLDER): Client {
   return {
     account: { type: 'rpc', address },
     request: async (req: { method: string; params: { program: string } }) => {
@@ -30,23 +35,30 @@ function fakeApi(tokens: unknown[], publicBalances: unknown[]): ApiClient {
   } as unknown as ApiClient
 }
 
+// Token rows in the new shape: private records live in `underlying_program`
+// (a plain ARC-20's own program, or a wrapped asset's underlying — credits
+// for ALEO).
 const TOKENS = [
-  { address: 'ethxField', symbol: 'ETHx', decimals: 18, wrapper_program: 'ethx.aleo', id: '1', name: 'ETHx' },
-  { address: 'usdcField', symbol: 'USDCx', decimals: 6, wrapper_program: 'usdc.aleo', id: '2', name: 'USDC' },
-  { address: 'zzzField', symbol: 'ZZZ', decimals: 6, wrapper_program: 'zzz.aleo', id: '3', name: 'ZZZ' },
+  { address: 'ethField', symbol: 'ETH', decimals: 18, underlying_program: 'test_arc20_eth.aleo', amm_token_program: 'test_arc20_eth.aleo', id: '1', name: 'ETH' },
+  { address: 'aleoField', symbol: 'ALEO', decimals: 6, underlying_program: 'credits.aleo', amm_token_program: 'shield_swap_arc20_credits.aleo', id: '2', name: 'Aleo' },
+  { address: 'zzzField', symbol: 'ZZZ', decimals: 6, underlying_program: 'zzz.aleo', amm_token_program: 'zzz.aleo', id: '3', name: 'ZZZ' },
 ]
 
 describe('getBalances', () => {
-  it('joins public (API) + private (records) into a per-token total, keyed by token id', async () => {
-    const client = recordsClient({ 'ethx.aleo': [wrapperRecord('3u128'), wrapperRecord('2u128')], 'usdc.aleo': [] })
+  it('joins public (API) + private (records) per token; sums ARC-20 amounts and credits microcredits', async () => {
+    const client = recordsClient({
+      'test_arc20_eth.aleo': [arc20Record('3u128'), arc20Record('2u128')],
+      'credits.aleo': [creditsRecord('7u64')], // wrapped ALEO's underlying uses microcredits
+    })
     const api = fakeApi(TOKENS, [
-      { token_id: 'ethxField', token_address: 'ethxField', symbol: 'ETHx', decimals: 18, name: 'ETHx', balance: '5' },
-      { token_id: 'usdcField', token_address: 'usdcField', symbol: 'USDCx', decimals: 6, name: 'USDC', balance: '100' },
+      { token_id: 'ethField', token_address: 'ethField', symbol: 'ETH', decimals: 18, name: 'ETH', balance: '5' },
+      { token_id: 'aleoField', token_address: 'aleoField', symbol: 'ALEO', decimals: 6, name: 'Aleo', balance: '100' },
     ])
 
-    const bals = await getBalances(client, api, { user: 'aleo1me' })
-    expect(bals['ethxField']).toEqual({ symbol: 'ETHx', decimals: 18, public: 5n, private: 5n, total: 10n })
-    expect(bals['usdcField']).toEqual({ symbol: 'USDCx', decimals: 6, public: 100n, private: 0n, total: 100n })
+    const bals = await getBalances(client, api, { user: HOLDER })
+    expect(bals['ethField']).toEqual({ symbol: 'ETH', decimals: 18, public: 5n, private: 5n, total: 10n })
+    // ALEO's private balance comes from credits records (microcredits field).
+    expect(bals['aleoField']).toEqual({ symbol: 'ALEO', decimals: 6, public: 100n, private: 7n, total: 107n })
     // ZZZ is held in neither → omitted when no explicit token filter is given.
     expect(bals['zzzField']).toBeUndefined()
   })

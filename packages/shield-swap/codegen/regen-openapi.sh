@@ -5,7 +5,9 @@
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-curl -fsS "https://amm-api.dev.provable.com/openapi.json" > "$tmp/openapi.json"
+# Override the source with VEIL_DEX_API_URL (e.g. the staging or a local stack).
+API_BASE="${VEIL_DEX_API_URL:-https://amm-api.dev.provable.com}"
+curl -fsS "${API_BASE%/}/openapi.json" > "$tmp/openapi.json"
 mv "$tmp/openapi.json" "$DIR/codegen/amm-api/amm-api.json"
 (cd "$DIR" && pnpm exec openapi-typescript codegen/amm-api/amm-api.json -o src/api/openapi.ts)
 echo "wrote $DIR/codegen/amm-api/amm-api.json + src/api/openapi.ts"
