@@ -91,12 +91,10 @@ for (const tracked of state.positions) {
   const position = await client.getPosition({ positionTokenId: tracked.positionTokenId })
   if (!position) continue
 
-  // DUST TRAP: owed balances accrue in raw units, but withdrawals must be
-  // representable at the token's scale — a request with non-zero dust
-  // digits reverts at finalize (fee consumed, nothing collected). Floor
-  // each request; the sub-scale remainder stays owed on the position.
-  const amount0 = position.tokens_owed0)
-  const amount1 = position.tokens_owed1)
+  // Owed balances accrue in raw base units; collect requests them directly
+  // (the dust-flooring rule of the old stack is gone).
+  const amount0 = position.tokens_owed0
+  const amount1 = position.tokens_owed1
   if (amount0 === 0n && amount1 === 0n) continue // nothing collectable yet
 
   const imports = await buildDexImports(client, [tracked.token0Program, tracked.token1Program])
@@ -116,10 +114,8 @@ for (const tracked of state.positions) {
 }
 ```
 
-Collecting everything representable is the normal move; fees keep accruing
-while the position has in-range liquidity — sweep periodically. Owed
-amounts below one unit of the token's scale are not collectable until more
-accrues on top of them.
+Collecting everything owed is the normal move; fees keep accruing while the
+position has in-range liquidity — sweep periodically.
 
 ## Verify the take
 
