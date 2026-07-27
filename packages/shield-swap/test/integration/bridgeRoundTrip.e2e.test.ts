@@ -45,7 +45,7 @@ const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://api.provable.com/scanner'
 
 // The DEX leg's network and deployment (testnet today).
 const DEX_NETWORK = (process.env.VEIL_DEX_NETWORK ?? 'testnet') as 'mainnet' | 'testnet'
-const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap_v3.aleo'
+const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap.aleo'
 
 // The bridge legs' route endpoints — the e2e wallets.
 const ETH_ADDR = '0x734C0a5AB55885974cEDb9D6ff71d8E8448c7375'
@@ -220,7 +220,6 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
       tokenInId: tokenIn,
       amountIn,
       slippageBps: 500,
-      tokenInProgram: inInfo.wrapper_program!,
       imports,
     })
     expect(handle.swapId).toMatch(/field$/)

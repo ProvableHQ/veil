@@ -15,7 +15,7 @@ import { SwapOutputNotFinalizedError } from '../../src/actions/swap/claimSwapOut
  *   VEIL_E2E_PRIVATE_KEY   funded testnet account (credits for fees)
  *   ALEO_DPS_API_KEY, ALEO_CONSUMER_ID   delegated proving credentials
  * Optional: ALEO_DPS_URL, ALEO_RSS_URL, and VEIL_DEX_PROGRAM to pick the
- * program under test — defaults to shield_swap_v3.aleo.
+ * program under test — defaults to shield_swap.aleo.
  */
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
 const DPS_API_KEY = process.env.ALEO_DPS_API_KEY
@@ -25,7 +25,7 @@ const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!DPS_API_K
 const NETWORK_URL = 'https://api.provable.com/v2'
 const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove/testnet'
 const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://api.provable.com/scanner'
-const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap_v3.aleo'
+const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap.aleo'
 const TX_TIMEOUT = 420_000
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -232,7 +232,6 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
       tokenInId: tokenIn,
       amountIn,
       slippageBps: 500,
-      tokenInProgram: inMeta.program,
       imports: state.imports,
     })
     expect(state.handle.swapId).toMatch(/field$/)

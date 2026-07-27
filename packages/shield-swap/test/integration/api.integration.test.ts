@@ -4,7 +4,7 @@ import type { AnyAccount, Client } from '@provablehq/veil-core'
 import { ApiClient, ApiError, authenticateWithAccount } from '../../src/api/client.js'
 
 // Point at a local DEX API (e.g. the local-dex stack) with VEIL_DEX_API_URL.
-const API_OPTS = process.env.VEIL_DEX_API_URL ? { baseUrl: process.env.VEIL_DEX_API_URL } : {}
+const API_OPTS = { baseUrl: process.env.VEIL_DEX_API_URL ?? 'https://amm-api-staging.dev.provable.com' }
 
 /**
  * Real-API integration: the whole read surface plus both auth flows against
