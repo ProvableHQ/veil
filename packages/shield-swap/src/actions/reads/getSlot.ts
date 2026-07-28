@@ -1,7 +1,7 @@
 import type { Client } from '@provablehq/veil-core'
-import { toSlot } from '../../generated/shield_swap.js'
+import { toSlotsMappingValue } from '../../generated/shield_swap.js'
 import { fromU256Parts } from '../../utils/q128.js'
-import { readStructMapping } from './internal.js'
+import { readDecodedMapping } from './internal.js'
 
 /**
  * Parameters for {@link getSlot}.
@@ -77,7 +77,7 @@ export type GetSlotReturnType = Slot | null
  * if (slot) console.log(slot.sqrt_price, slot.tick, slot.liquidity)
  */
 export async function getSlot(client: Client, params: GetSlotParameters): Promise<GetSlotReturnType> {
-  const raw = await readStructMapping(client, params.program, 'slots', params.poolKey, toSlot)
+  const raw = await readDecodedMapping(client, params.program, 'slots', params.poolKey, toSlotsMappingValue)
   if (!raw) return null
   return {
     ...raw,

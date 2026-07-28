@@ -1978,7 +1978,7 @@ export const PROGRAM_ABI: ABI = {
 export interface ShieldSwapLpRouterContract {
   program: string
   abi: ABI
-  read: Record<string, (params: { key: string }) => Promise<unknown>>
+  read: Record<string, (params: { key: string }) => Promise<string | null>>
   write: {
     mint_from_wrapped_arc20: (params: { arg0: string | InputRequest, arg1: RecordValue | string | InputRequest, arg2: MerkleProof[] | InputRequest, arg3: RecordValue | string | InputRequest, arg4: string | InputRequest, arg5: string | InputRequest, arg6: StructValue | InputRequest, arg7: string | InputRequest, arg8: string | InputRequest, arg9: StructValue[] | InputRequest, arg10: StructValue[] | InputRequest, arg11: StructValue[] | InputRequest }) => Promise<string>
     mint_from_arc20_wrapped: (params: { arg0: string | InputRequest, arg1: RecordValue | string | InputRequest, arg2: RecordValue | string | InputRequest, arg3: MerkleProof[] | InputRequest, arg4: string | InputRequest, arg5: string | InputRequest, arg6: StructValue | InputRequest, arg7: string | InputRequest, arg8: string | InputRequest, arg9: StructValue[] | InputRequest, arg10: StructValue[] | InputRequest, arg11: StructValue[] | InputRequest }) => Promise<string>

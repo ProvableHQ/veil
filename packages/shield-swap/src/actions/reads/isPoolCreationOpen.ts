@@ -1,5 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { readBoolMapping } from './internal.js'
+import { toPoolCreationIsOpenMappingValue } from '../../generated/shield_swap.js'
+import { readFlagMapping } from './internal.js'
 
 /**
  * Checks whether permissionless pool creation is open.
@@ -18,5 +19,5 @@ import { readBoolMapping } from './internal.js'
  * const open = await isPoolCreationOpen(client)
  */
 export async function isPoolCreationOpen(client: Client, params?: { program?: string }): Promise<boolean> {
-  return readBoolMapping(client, params?.program, 'pool_creation_is_open', 'true')
+  return readFlagMapping(client, params?.program, 'pool_creation_is_open', 'true', toPoolCreationIsOpenMappingValue)
 }

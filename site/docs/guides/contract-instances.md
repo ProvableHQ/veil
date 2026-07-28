@@ -44,12 +44,14 @@ name:
 
 ```ts
 const balance = await credits.read.account({ key: 'aleo1...' })
+// '5000000u64', or null when the key is not in the mapping
 ```
 
 This is equivalent to calling `publicClient.readContract({ programId: 'credits.aleo', mapping: 'account', key })`
 directly, but the program id and mapping name no longer need repeating at
 every call site, and a typo in the mapping name throws immediately rather
-than reaching the network.
+than reaching the network. An absent key resolves to `null` — never an
+error — so `?? 0n`-style fallbacks read naturally at the call site.
 
 ## Writing functions
 

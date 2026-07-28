@@ -6,9 +6,11 @@ Generates TypeScript bindings from an Aleo program's ABI, and ships the
 It applies to package maintainers, not consumers: point it at a program's
 `abi.json` and it emits a `.ts` module of struct and record interfaces, record
 decoders (`RecordValue` → typed interface), struct decoders (`StructValue` →
-typed interface), per-function input and output types, mapping and storage
-types, the parsed `PROGRAM_ABI` constant, and a typed contract factory
-(`read`/`write`/`simulate`/`execute`). A package like
+typed interface), per-function input and output types, mapping key/value
+types with value decoders (raw Aleo literal → typed value), storage types,
+the parsed `PROGRAM_ABI` constant, and a typed contract factory
+(`read`/`write`/`simulate`/`execute`) whose read methods encode the typed
+key, decode the value, and resolve to `null` for an absent key. A package like
 `@provablehq/shield-swap-sdk` commits that output and ships it — a consumer installing the
 package gets the bindings already. You run codegen when the upstream contract
 drifts (redeploy, a new or renamed entrypoint, struct, or mapping) and the

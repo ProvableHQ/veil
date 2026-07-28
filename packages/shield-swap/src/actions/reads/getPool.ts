@@ -1,6 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { toPoolState, type PoolState } from '../../generated/shield_swap.js'
-import { readStructMapping } from './internal.js'
+import { toPoolsMappingValue, type PoolState } from '../../generated/shield_swap.js'
+import { readDecodedMapping } from './internal.js'
 
 /**
  * Parameters for {@link getPool}.
@@ -41,5 +41,5 @@ export type GetPoolReturnType = PoolState | null
  * if (pool) console.log(pool.fee, pool.token0, pool.token1)
  */
 export async function getPool(client: Client, params: GetPoolParameters): Promise<GetPoolReturnType> {
-  return readStructMapping(client, params.program, 'pools', params.poolKey, toPoolState)
+  return readDecodedMapping(client, params.program, 'pools', params.poolKey, toPoolsMappingValue)
 }

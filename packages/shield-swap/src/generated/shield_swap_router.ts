@@ -961,7 +961,7 @@ export const PROGRAM_ABI: ABI = {
 export interface ShieldSwapRouterContract {
   program: string
   abi: ABI
-  read: Record<string, (params: { key: string }) => Promise<unknown>>
+  read: Record<string, (params: { key: string }) => Promise<string | null>>
   write: {
     swap_from_wrapped: (params: { arg0: RecordValue | string | InputRequest, arg1: MerkleProof[] | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: boolean | InputRequest, arg6: bigint | InputRequest, arg7: bigint | InputRequest, arg8: U256__8JquwLopp8 | InputRequest, arg9: bigint | InputRequest, arg10: number | InputRequest, arg11: string | InputRequest, arg12: string | InputRequest }) => Promise<string>
     swap_mh_from_wrapped: (params: { arg0: RecordValue | string | InputRequest, arg1: MerkleProof[] | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: string | InputRequest, arg6: bigint | InputRequest, arg7: bigint | InputRequest, arg8: StructValue | InputRequest, arg9: StructValue | InputRequest, arg10: StructValue | InputRequest, arg11: number | InputRequest, arg12: bigint | InputRequest, arg13: number | InputRequest }) => Promise<string>

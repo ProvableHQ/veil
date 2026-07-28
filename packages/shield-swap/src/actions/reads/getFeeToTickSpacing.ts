@@ -1,5 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { readUintMapping } from './internal.js'
+import { toFeeToTickSpacingMappingValue } from '../../generated/shield_swap.js'
+import { readDecodedMapping } from './internal.js'
 
 /**
  * Reads the canonical tick spacing bound to a fee tier.
@@ -22,7 +23,5 @@ export async function getFeeToTickSpacing(
   client: Client,
   params: { fee: number; program?: string },
 ): Promise<number | null> {
-  // Strict decode — a NaN tick spacing passed downstream would silently
-  // corrupt key encoding and pool creation.
-  return readUintMapping(client, params.program, 'fee_to_tick_spacing', `${params.fee}u16`)
+  return readDecodedMapping(client, params.program, 'fee_to_tick_spacing', `${params.fee}u16`, toFeeToTickSpacingMappingValue)
 }

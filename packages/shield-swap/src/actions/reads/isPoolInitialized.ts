@@ -1,5 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { readBoolMapping } from './internal.js'
+import { toInitializedPoolsMappingValue } from '../../generated/shield_swap.js'
+import { readFlagMapping } from './internal.js'
 
 /**
  * Checks whether a pool has been initialized under a pool key.
@@ -21,5 +22,5 @@ export async function isPoolInitialized(
   client: Client,
   params: { poolKey: string; program?: string },
 ): Promise<boolean> {
-  return readBoolMapping(client, params.program, 'initialized_pools', params.poolKey)
+  return readFlagMapping(client, params.program, 'initialized_pools', params.poolKey, toInitializedPoolsMappingValue)
 }

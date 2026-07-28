@@ -4,7 +4,10 @@ import { readContract, type ReadContractParameters, type ReadContractReturnType 
 /** Alias of {@link ReadContractParameters}. */
 export type ReadMappingParameters = ReadContractParameters
 
-/** Alias of {@link ReadContractReturnType} — the raw Aleo literal stored under the key. */
+/**
+ * Alias of {@link ReadContractReturnType} — the raw Aleo literal stored under
+ * the key, or `null` when the key is not in the mapping.
+ */
 export type ReadMappingReturnType = ReadContractReturnType
 
 /**
@@ -16,7 +19,8 @@ export type ReadMappingReturnType = ReadContractReturnType
  *
  * @param client Client whose transport serves the query.
  * @param params Program, mapping, and key to read.
- * @returns The raw Aleo literal stored under the key; decode with `parseValue`.
+ * @returns The raw Aleo literal stored under the key, or `null` when the key
+ *   is not in the mapping; decode non-null values with `parsePlaintextValue`.
  *
  * @example
  * const balance = await client.readMapping({

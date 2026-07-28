@@ -121,7 +121,7 @@ export async function resolveTokenRoute(
 
   const raw = await readMapping(client, { programId: program, mapping: 'from_wrapper_token_id', key: tokenId })
   let route: TokenRoute
-  if (raw == null || raw === 'null') {
+  if (raw == null) {
     route = { tokenId, wrapped: false }
   } else {
     const underlyingId = raw.trim()

@@ -1,6 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { toSwapOutput, type SwapOutput } from '../../generated/shield_swap.js'
-import { readStructMapping } from './internal.js'
+import { toSwapOutputsMappingValue, type SwapOutput } from '../../generated/shield_swap.js'
+import { readDecodedMapping } from './internal.js'
 
 /**
  * Parameters for {@link getSwapOutput}.
@@ -50,5 +50,5 @@ export type GetSwapOutputReturnType = SwapOutput | null
  * if (out) await claimSwapOutput(client, { handle, amountOut: out.amount_out })
  */
 export async function getSwapOutput(client: Client, params: GetSwapOutputParameters): Promise<GetSwapOutputReturnType> {
-  return readStructMapping(client, params.program, 'swap_outputs', params.swapId, toSwapOutput)
+  return readDecodedMapping(client, params.program, 'swap_outputs', params.swapId, toSwapOutputsMappingValue)
 }

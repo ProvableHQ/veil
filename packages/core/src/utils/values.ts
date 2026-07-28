@@ -5,7 +5,7 @@ import type { Primitive } from '../types/primitives.js'
  *
  * @property value Decoded payload — `bigint` for numeric types (all widths,
  *   including field/scalar/group), `boolean` for booleans, `string` for
- *   addresses.
+ *   addresses and signatures.
  * @property type Leo primitive type the literal carried.
  */
 export type ParsedValue = {
@@ -24,7 +24,9 @@ const INTEGER_REGEX = /^(-?\d+)(u8|u16|u32|u64|u128|i8|i16|i32|i64|i128|field|sc
  * of width; the caller converts to `number` for u64 and smaller if needed.
  *
  * @param raw Leo literal: a suffixed integer (`'5u8'`, `'-3i64'`,
- *   `'7field'`), `'true'`/`'false'`, or an `aleo1...` address.
+ *   `'7field'`), `'true'`/`'false'`, an `aleo1...` address, or a `sign1...`
+ *   signature. Identifier literals are bare tokens with no recognizable
+ *   shape and are not parsed here.
  * @returns The decoded value with its Leo type.
  * @throws If the string is not a recognizable Leo literal.
  *
@@ -36,6 +38,7 @@ export function parseValue(raw: string): ParsedValue {
   if (raw === 'true') return { value: true, type: 'boolean' }
   if (raw === 'false') return { value: false, type: 'boolean' }
   if (raw.startsWith('aleo1')) return { value: raw, type: 'address' }
+  if (raw.startsWith('sign1')) return { value: raw, type: 'signature' }
 
   const match = raw.match(INTEGER_REGEX)
   if (match) {

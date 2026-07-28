@@ -1,5 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { readBoolMapping } from './internal.js'
+import { toTokenAllowedMappingValue } from '../../generated/shield_swap.js'
+import { readFlagMapping } from './internal.js'
 
 /**
  * Checks whether a token is on the program's allowlist.
@@ -23,5 +24,5 @@ export async function isTokenAllowed(
   client: Client,
   params: { tokenId: string; program?: string },
 ): Promise<boolean> {
-  return readBoolMapping(client, params.program, 'token_allowed', params.tokenId)
+  return readFlagMapping(client, params.program, 'token_allowed', params.tokenId, toTokenAllowedMappingValue)
 }

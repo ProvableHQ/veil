@@ -1,5 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { readBoolMapping } from './internal.js'
+import { toTokenPausedMappingValue } from '../../generated/shield_swap.js'
+import { readFlagMapping } from './internal.js'
 
 /**
  * Checks whether a token is individually paused.
@@ -22,5 +23,5 @@ export async function isTokenPaused(
   client: Client,
   params: { tokenId: string; program?: string },
 ): Promise<boolean> {
-  return readBoolMapping(client, params.program, 'token_paused', params.tokenId)
+  return readFlagMapping(client, params.program, 'token_paused', params.tokenId, toTokenPausedMappingValue)
 }

@@ -15,11 +15,20 @@ export class BaseError extends Error {
  * Thrown when a transport request fails — the node returned an error
  * response or could not be reached. Check the endpoint URL and network
  * reachability, then retry.
+ *
+ * @property status HTTP status code of the failed response, when the failure
+ *   was an HTTP error rather than an unreachable endpoint.
+ * @property body Raw response body of the failed response, when one was read.
  */
 export class TransportError extends BaseError {
-  constructor(message: string, options?: ErrorOptions) {
+  readonly status?: number
+  readonly body?: string
+
+  constructor(message: string, options?: ErrorOptions & { status?: number; body?: string }) {
     super(message, options)
     this.name = 'TransportError'
+    this.status = options?.status
+    this.body = options?.body
   }
 }
 

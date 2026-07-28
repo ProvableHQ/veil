@@ -57,7 +57,7 @@ describe('control readers', () => {
 
   it('rejects an unexpected numeric literal shape', async () => {
     const client = fakeClient({ frozen_position: 'garbage' })
-    await expect(getFrozenPosition(client, { positionTokenId: '5field' })).rejects.toThrow(/unexpected value/)
+    await expect(getFrozenPosition(client, { positionTokenId: '5field' })).rejects.toThrow(/Cannot parse value/)
   })
 })
 
