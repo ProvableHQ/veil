@@ -3,33 +3,26 @@ import type { WalletClient } from '../clients/createWalletClient.js'
 import type { Program, ProgramFunction, ProgramMapping } from '../types/program.js'
 import type { ABI, AbiFunction, Mapping as AbiMapping } from '../types/abi.js'
 import type { TypedContractInstance } from '../types/inference.js'
-import type { RecordValue, PlaintextValue, Primitive } from '../types/primitives.js'
+import type { RecordValue, Primitive } from '../types/primitives.js'
 import { parseProgram } from './parseProgram.js'
 import { encodeValue } from '../utils/values.js'
-import { encodeInputs, getInputTypes, getRecordDef, parseRecord, parsePlaintextValue, toString as serializeRecord } from '../utils/records.js'
+import { encodeInputs, getInputTypes, getRecordDef, isRecordPlaintext, parseRecord, parsePlaintextValue, toString as serializeRecord } from '../utils/records.js'
 
 import type { InputValue } from '../types/contract.js'
 export type { InputValue } from '../types/contract.js'
 import { isInputRequest } from '../types/inputRequest.js'
 import type { InputRequest, TransactionInput } from '../types/inputRequest.js'
+import type { ParsedOutput } from '../types/inference.js'
+export type { ParsedOutput } from '../types/inference.js'
 
 /**
- * Parsed output from the proxy: a RecordValue for record plaintext, a
- * PlaintextValue for struct plaintext, or the raw string for everything else
- * (literals, ciphertext, futures).
+ * Parses a raw output by shape: record plaintext parses as a record, other
+ * brace-delimited plaintext as a struct, and everything else (literals,
+ * ciphertext, futures) passes through as the raw string.
  */
-export type ParsedOutput = RecordValue | PlaintextValue
-
-/**
- * Parses a brace-delimited output by shape: record plaintext parses as a
- * record, anything else as struct plaintext. Every record prints a `_nonce`
- * tag, and no struct member can be named `_nonce` — Aleo identifiers cannot
- * start with an underscore — so the tag's presence is decisive.
- */
-function parseBraceOutput(raw: string, program?: string): ParsedOutput {
-  return /(^|[,{\s])_nonce\s*:/.test(raw)
-    ? parseRecord(raw, { program })
-    : parsePlaintextValue(raw)
+function parseRawOutput(raw: string, program?: string): ParsedOutput {
+  if (!raw.trimStart().startsWith('{')) return raw
+  return isRecordPlaintext(raw) ? parseRecord(raw, { program }) : parsePlaintextValue(raw)
 }
 
 // ── Parameter types ───────────────────────────────────────────────────
@@ -82,8 +75,8 @@ export type ContractWriteMethods = Record<string, (params: ContractWriteParams) 
  * @property transitionId On-chain transition id.
  * @property program Program ID the transition ran against.
  * @property function Function name the transition invoked.
- * @property outputs Transition outputs, parsed to `RecordValue` where an output
- *   looks like a record and left as the raw string otherwise.
+ * @property outputs Transition outputs: records parse to `RecordValue`, struct
+ *   plaintext to `PlaintextValue`, everything else stays the raw string.
  */
 export type ContractTransitionResult = { transitionId: string; program: string; function: string; outputs: ParsedOutput[] }
 
@@ -300,20 +293,12 @@ export function getContract(params: GetContractParameters): ContractInstance {
             }
           }
         }
-        return parseBraceOutput(raw, program)
+        return parseRawOutput(raw, program)
       })
     }
 
-    // Parsed Program or no ABI — route each brace-delimited output by shape.
-    return rawOutputs.map((raw) =>
-      raw.trimStart().startsWith('{') ? parseBraceOutput(raw, program) : raw,
-    )
-  }
-
-  /** Parse a single output without ABI type information. */
-  function parseLooseOutput(raw: string): ParsedOutput {
-    if (!raw.trimStart().startsWith('{')) return raw
-    return parseBraceOutput(raw)
+    // Parsed Program or no ABI — route each output by shape.
+    return rawOutputs.map((raw) => parseRawOutput(raw, program))
   }
 
   const read = new Proxy({} as ContractReadMethods, {
@@ -393,7 +378,7 @@ export function getContract(params: GetContractParameters): ContractInstance {
           function: t.function,
           outputs: t.program === program
             ? parseOutputs(t.outputs, t.function)
-            : t.outputs.map(o => parseLooseOutput(o)),
+            : t.outputs.map(o => parseRawOutput(o)),
         }))
 
         // Raw `outputs` is already the called function's transition outputs.
@@ -428,7 +413,7 @@ export function getContract(params: GetContractParameters): ContractInstance {
           function: t.function,
           outputs: t.program === program
             ? parseOutputs(t.outputs, t.function)
-            : t.outputs.map(o => parseLooseOutput(o)),
+            : t.outputs.map(o => parseRawOutput(o)),
         }))
 
         // Raw `outputs` is already the called function's transition outputs (set by extractTransitions).

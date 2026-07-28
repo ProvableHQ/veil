@@ -78,6 +78,18 @@ describe('parseRecord', () => {
     expect(() => parseRecord('{ token0: 11field, fee: 3000u32 }')).toThrow(/parsePlaintextValue/)
   })
 
+  it('hoists metadata out of fields (owner, _nonce, _version)', () => {
+    const record = parseRecord(`{
+  owner: ${OWNER}.private,
+  points: 1000u64.private,
+  _nonce: 123group.public,
+  _version: 1u8.public
+}`)
+    expect(record.fields['owner']).toBeUndefined()
+    expect(record.fields['_nonce']).toBeUndefined()
+    expect(record.fields['_version']).toBeUndefined()
+  })
+
   it('enriches type descriptors from an optional RecordDef', () => {
     const def: RecordDef = {
       path: ['LoyaltyCard'],

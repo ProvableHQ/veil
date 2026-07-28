@@ -180,8 +180,25 @@ export function parsePlaintextValue(text: string): PlaintextValue {
 // Visibility suffix on a record entry leaf: `.constant`, `.public`, or
 // `.private` followed by a value boundary. Record plaintext stamps the
 // entry's mode on every leaf literal, including leaves nested inside
-// composite entries.
+// composite entries. The `_G` variant strips every occurrence in one pass.
 const ENTRY_MODE_REGEX = /\.(constant|public|private)(?=[,\s\]}]|$)/
+const ENTRY_MODE_REGEX_G = /\.(constant|public|private)(?=[,\s\]}]|$)/g
+
+/**
+ * Tests whether a plaintext string is record plaintext rather than struct
+ * plaintext. Every record prints an `owner` and a `_nonce` key; a struct can
+ * declare a member named `owner`, but never `_nonce` — identifiers cannot
+ * start with an underscore — so requiring both is decisive. Uses the same
+ * criterion as `parseRecord`'s guard. Pure and local.
+ *
+ * @param text Brace-delimited plaintext of unknown shape.
+ * @returns `true` when `parseRecord` accepts the text, `false` when it is
+ *   struct or other non-record plaintext.
+ */
+export function isRecordPlaintext(text: string): boolean {
+  const rawFields = parseRawFields(text)
+  return Boolean(rawFields['owner'] && rawFields['_nonce'])
+}
 
 /**
  * Options for {@link parseRecord}.
@@ -244,7 +261,7 @@ export function parseRecord(plaintext: string, options: ParseRecordOptions = {})
     if (key === 'owner' || key.startsWith('_')) continue
 
     const mode = (ENTRY_MODE_REGEX.exec(rawValue)?.[1] ?? 'private') as RecordFieldValue['mode']
-    const cleaned = rawValue.replace(new RegExp(ENTRY_MODE_REGEX, 'g'), '').trim()
+    const cleaned = rawValue.replace(ENTRY_MODE_REGEX_G, '').trim()
 
     if (cleaned.startsWith('[') || cleaned.startsWith('{')) {
       fields[key] = {
@@ -271,7 +288,7 @@ export function parseRecord(plaintext: string, options: ParseRecordOptions = {})
   }
 
   const ownerRaw = rawFields['owner'].trim()
-  const ownerMode = (/\.public$/.test(ownerRaw) ? 'public' : 'private') as 'public' | 'private'
+  const ownerMode: 'public' | 'private' = ownerRaw.endsWith('.public') ? 'public' : 'private'
   const owner = ownerRaw.replace(/\.(public|private)$/, '')
 
   const nonce = rawFields['_nonce'].replace(/\.public$/, '').trim()
@@ -305,7 +322,9 @@ export function parseRecord(plaintext: string, options: ParseRecordOptions = {})
  * value without `raw` is synthesized from its parts, using the `type` field on
  * each RecordFieldValue for the literal suffix. This is why RecordFieldValue
  * carries `type: Plaintext` — without it, a bigint value of 1000n could be
- * u64, u128, field, or i64.
+ * u64, u128, field, or i64. The synthesized path handles scalar entries only:
+ * composite (struct or array) entries serialize correctly only through `raw`,
+ * so a record with composite entries MUST come from `parseRecord`.
  *
  * Also exported as `serializeRecord` for contexts where `toString` collides
  * with the global.
@@ -465,7 +484,7 @@ function splitFields(input: string): string[] {
 
 // Parses a plaintext value that may be composite: '[…]' arrays and '{…}'
 // structs recurse; scalars defer to parseValue. Unparseable scalars (e.g.
-// program ids) stay as raw strings, matching the loose-parse convention.
+// program ids) stay as raw strings rather than being rejected.
 function parseCompositeValue(raw: string): PlaintextValue {
   const trimmed = raw.trim()
   if (trimmed.startsWith('[')) {

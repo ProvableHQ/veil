@@ -99,50 +99,8 @@ describe('getInputTypes', () => {
   })
 })
 
-// ── parseRecord ───────────────────────────────────────────────────────
-
-describe('parseRecord', () => {
-  it('parses with a RecordDef', () => {
-    const record = parseRecord(SAMPLE_PLAINTEXT, { def: loyaltyCardDef, program: 'loyalty_token.aleo' })
-
-    expect(record.owner).toBe('aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px')
-    expect(record.program).toBe('loyalty_token.aleo')
-    expect(record.recordName).toBe('LoyaltyCard')
-    expect(record.nonce).toBe('456group')
-
-    expect(record.fields.card_id.value).toBe(123n)
-    expect(record.fields.card_id.mode).toBe('private')
-    expect(record.fields.card_id.type).toEqual({ kind: 'primitive', primitive: 'field' })
-
-    expect(record.fields.points.value).toBe(1000n)
-    expect(record.fields.points.type).toEqual({ kind: 'primitive', primitive: 'u64' })
-
-    expect(record.fields.tier.value).toBe(1n)
-    expect(record.fields.tier.type).toEqual({ kind: 'primitive', primitive: 'u8' })
-  })
-
-  it('infers types from literal suffixes without a RecordDef', () => {
-    const record = parseRecord(SAMPLE_PLAINTEXT)
-
-    expect(record.fields.points.value).toBe(1000n)
-    expect(record.fields.points.type).toEqual({ kind: 'primitive', primitive: 'u64' })
-
-    expect(record.fields.tier.value).toBe(1n)
-    expect(record.fields.tier.type).toEqual({ kind: 'primitive', primitive: 'u8' })
-  })
-
-  it('hoists metadata out of fields (owner, _nonce)', () => {
-    const record = parseRecord(SAMPLE_PLAINTEXT, { def: loyaltyCardDef })
-    expect(record.fields['_nonce']).toBeUndefined()
-    expect(record.fields['owner']).toBeUndefined()
-  })
-
-  it('extracts owner without visibility suffix', () => {
-    const record = parseRecord(SAMPLE_PLAINTEXT, { def: loyaltyCardDef })
-    expect(record.owner).not.toContain('.private')
-    expect(record.ownerMode).toBe('private')
-  })
-})
+// parseRecord's own suite lives in parseRecord.test.ts; this file covers the
+// ABI-adjacent helpers and serialization around it.
 
 // ── toString / serializeRecord ────────────────────────────────────────
 

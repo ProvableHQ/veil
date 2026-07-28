@@ -97,7 +97,12 @@ export type ExtractMapping<A extends ABI, N extends string> =
 // ── Typed contract namespaces ────────────────────────────────────────
 
 /** Parsed output from the proxy — either a RecordValue or the raw string */
-type ParsedOutput = RecordValue | PlaintextValue
+/**
+ * Parsed output of a contract call: a RecordValue for record plaintext, a
+ * PlaintextValue for struct plaintext, or the raw string for everything else
+ * (literals, ciphertext, futures).
+ */
+export type ParsedOutput = RecordValue | PlaintextValue
 
 type SimulateParams = { inputs: (InputValue | InputRequest)[]; imports?: Record<string, string> }
 type ExecuteParams = { inputs: (InputValue | InputRequest)[]; imports?: Record<string, string> }

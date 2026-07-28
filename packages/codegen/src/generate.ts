@@ -152,23 +152,20 @@ function generateRecordInterface(record: RecordDef): string[] {
 }
 
 // Emit the `field: <converted value>` lines shared by record and struct mappers.
-// `container` names the enclosing type for error messages. Records store each
-// entry as `{ value, mode, type }` behind `fieldsVar` and reserve the `owner`
-// name, so record access goes through `.<name>?.value` and skips `owner`.
-// Structs are plain StructValue objects — direct member access, and `owner`
-// is a legal member name that must decode like any other.
+// `container` names the enclosing type for error messages. `access` yields the
+// raw-value expression for a field name — records reach through their
+// `{ value, mode, type }` entries (`fields.<name>?.value`), structs are plain
+// StructValue objects with direct member access. Record-only policy (the
+// reserved `owner` entry) stays in the record mapper, which filters its field
+// list before calling; a struct member named `owner` is data like any other.
 function mapperFieldLines(
   fields: readonly { name: string; type: Plaintext }[],
   container: string,
-  fieldsVar: string,
-  kind: 'record' | 'struct',
+  access: (name: string) => string,
 ): string[] {
   const lines: string[] = []
   for (const field of fields) {
-    if (kind === 'record' && field.name === 'owner') continue
-    const rawAccess = kind === 'record'
-      ? `${fieldsVar}.${field.name}?.value`
-      : `${fieldsVar}.${field.name}`
+    const rawAccess = access(field.name)
     // Struct-typed fields: the raw PlaintextValue is a StructValue at runtime.
     // Cast through unknown to the generated struct interface so the return type
     // is correct. A missing field falls back to an empty object cast the same way.
@@ -214,7 +211,11 @@ function generateRecordMapper(record: RecordDef): string[] {
   lines.push(fieldsGuardLine('record'))
   lines.push(`  return {`)
   lines.push(`    owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,`)
-  lines.push(...mapperFieldLines(record.fields, name, 'fields', 'record'))
+  lines.push(...mapperFieldLines(
+    record.fields.filter((f) => f.name !== 'owner'),
+    name,
+    (n) => `fields.${n}?.value`,
+  ))
   lines.push(`    _record: record as unknown as RecordValue,`)
   lines.push(`  }`)
   lines.push(`}`)
@@ -232,7 +233,7 @@ function generateStructMapper(struct: StructDef): string[] {
   // should still fail loudly rather than return a silently-zeroed struct.
   lines.push(`export function to${name}(value: StructValue): ${name} {`)
   lines.push(`  return {`)
-  lines.push(...mapperFieldLines(struct.fields, name, 'value', 'struct'))
+  lines.push(...mapperFieldLines(struct.fields, name, (n) => `value.${n}`))
   lines.push(`  }`)
   lines.push(`}`)
   return lines
