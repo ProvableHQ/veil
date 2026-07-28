@@ -145,6 +145,38 @@ export const getPrivateBalancesSchema: AgentToolSchema = {
   },
 }
 
+/** Declares the `shield_swap_get_owned_positions` tool — lists the caller's liquidity positions from their PositionNFT records with on-chain state and derived values (backed by `getOwnedPositions`). */
+export const getOwnedPositionsSchema: AgentToolSchema = {
+  name: 'shield_swap_get_owned_positions',
+  description:
+    "List the caller's own liquidity positions from their PositionNFT records, joined with " +
+    'on-chain state: liquidity, current token amounts, and uncollected fees (raw base-unit ' +
+    "strings; state is null while a fresh mint finalizes). Needs the caller's record provider.",
+  inputSchema: {
+    type: 'object',
+    properties: {
+      poolKey: { type: 'string', description: 'Optional pool key field literal — restricts the listing to one pool.' },
+    },
+    required: [],
+  },
+}
+
+/** Declares the `shield_swap_get_owned_position` tool — resolves one owned position by its token id (backed by `getOwnedPosition`). */
+export const getOwnedPositionSchema: AgentToolSchema = {
+  name: 'shield_swap_get_owned_position',
+  description:
+    "Resolve one of the caller's own liquidity positions by position token id, with on-chain " +
+    'state and derived amounts/fees (raw base-unit strings). Returns null when the caller owns ' +
+    "no such position. Needs the caller's record provider.",
+  inputSchema: {
+    type: 'object',
+    properties: {
+      positionTokenId: { type: 'string', description: "The position's token_id field literal." },
+    },
+    required: ['positionTokenId'],
+  },
+}
+
 // ---------------------------------------------------------------------------
 // Off-chain DEX API read tools (backed by the ApiClient).
 // ---------------------------------------------------------------------------
@@ -626,6 +658,8 @@ export const chainToolSchemas: AgentToolSchema[] = [
   isPoolInitializedSchema,
   getFeeToTickSpacingSchema,
   getPrivateBalancesSchema,
+  getOwnedPositionsSchema,
+  getOwnedPositionSchema,
 ]
 
 /** Pure derivation tools — no client or API backing; always available. */
