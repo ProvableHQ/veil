@@ -296,8 +296,8 @@ export function feeOwed(feeGrowthInsideNowX128: bigint, feeGrowthInsideLastX128:
  * @param sqrtAX128 One range bound as a sqrt price, Q128.128.
  * @param sqrtBX128 The other range bound as a sqrt price, Q128.128.
  * @param liquidity The position's liquidity (u128).
- * @param roundUp Rounds each amount up instead of down. The contract passes
- *   `false` for withdrawal-side views; pass `true` only to mirror
+ * @param roundUp Rounds each amount up instead of down. Defaults to `false`
+ *   (the withdrawal-side convention); pass `true` only to mirror
  *   deposit-side checks.
  * @returns Raw base-unit amounts of each pool token backing the liquidity.
  *
@@ -307,7 +307,6 @@ export function feeOwed(feeGrowthInsideNowX128: bigint, feeGrowthInsideLastX128:
  *   getSqrtPriceAtTickX128(tickLower),
  *   getSqrtPriceAtTickX128(tickUpper),
  *   position.liquidity,
- *   false,
  * )
  */
 export function amountsForLiquidity(
@@ -315,7 +314,7 @@ export function amountsForLiquidity(
   sqrtAX128: bigint,
   sqrtBX128: bigint,
   liquidity: bigint,
-  roundUp: boolean,
+  roundUp = false,
 ): { amount0: bigint; amount1: bigint } {
   const lower = sqrtAX128 < sqrtBX128 ? sqrtAX128 : sqrtBX128
   const upper = sqrtAX128 < sqrtBX128 ? sqrtBX128 : sqrtAX128

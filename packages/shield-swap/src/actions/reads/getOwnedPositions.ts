@@ -86,27 +86,28 @@ export type GetOwnedPositionsReturnType = OwnedPosition[]
  * values. Internal to the actions layer — {@link getOwnedPositions} and
  * `getOwnedPosition` share it; it is not part of the package surface.
  *
- * Hits the network: `positions` and `frozen_position` reads, a `slots` read
- * unless the caller supplies one, and two `ticks` reads when the position is
- * live.
+ * Hits the network: `positions`, `frozen_position`, and two `ticks` reads,
+ * all in one wave alongside the caller's slot read. The tick reads are
+ * speculative — discarded when the position turns out not to be finalized.
  *
  * @param client A Veil client whose transport can reach an Aleo node.
- * @param params The scanned record, the program override, and optionally the
- *   pool's pre-read slot (`null` marks a pool the caller found absent).
+ * @param params The scanned record, the program override, and the pool's
+ *   slot — pass the (possibly shared) `getSlot` promise so it resolves
+ *   concurrently with this call's own reads.
  * @returns The joined view; `state` is `null` when the `positions` entry or
  *   the pool slot is missing (finalize lag).
  */
 export async function enrichOwnedPosition(
   client: Client,
-  params: { nft: PositionNFTInfo; program?: string; slot?: Slot | null },
+  params: { nft: PositionNFTInfo; program?: string; slot: Slot | null | Promise<Slot | null> },
 ): Promise<OwnedPosition> {
   const { nft } = params
-  const [position, frozenAt, slot] = await Promise.all([
+  const [position, frozenAt, slot, lowerTick, upperTick] = await Promise.all([
     getPosition(client, { positionTokenId: nft.tokenId, program: params.program }),
     getFrozenPosition(client, { positionTokenId: nft.tokenId, program: params.program }),
-    params.slot !== undefined
-      ? Promise.resolve(params.slot)
-      : getSlot(client, { poolKey: nft.poolKey, program: params.program }),
+    params.slot,
+    getTick(client, { poolKey: nft.poolKey, tick: nft.tickLower, program: params.program }),
+    getTick(client, { poolKey: nft.poolKey, tick: nft.tickUpper, program: params.program }),
   ])
 
   const base = {
@@ -123,33 +124,27 @@ export async function enrichOwnedPosition(
   // No positions entry yet (finalize lag) — the record side alone.
   if (!position || !slot) return { ...base, state: null }
 
-  const [lowerTick, upperTick] = await Promise.all([
-    getTick(client, { poolKey: nft.poolKey, tick: nft.tickLower, program: params.program }),
-    getTick(client, { poolKey: nft.poolKey, tick: nft.tickUpper, program: params.program }),
-  ])
-
   const { amount0, amount1 } = amountsForLiquidity(
     slot.sqrt_price,
     getSqrtPriceAtTickX128(nft.tickLower),
     getSqrtPriceAtTickX128(nft.tickUpper),
     position.liquidity,
-    false,
   )
   // An uninitialized boundary tick reads as zero outside-growth; that state
   // is only reachable at zero liquidity, where the fee delta multiplies out.
-  const shared = { tickCurrent: slot.tick, tickLower: nft.tickLower, tickUpper: nft.tickUpper }
-  const inside0 = feeGrowthInside({
-    ...shared,
-    feeGrowthOutsideLowerX128: lowerTick?.fee_growth_outside0_x_128 ?? 0n,
-    feeGrowthOutsideUpperX128: upperTick?.fee_growth_outside0_x_128 ?? 0n,
-    feeGrowthGlobalX128: slot.fee_growth_global0_x_128,
-  })
-  const inside1 = feeGrowthInside({
-    ...shared,
-    feeGrowthOutsideLowerX128: lowerTick?.fee_growth_outside1_x_128 ?? 0n,
-    feeGrowthOutsideUpperX128: upperTick?.fee_growth_outside1_x_128 ?? 0n,
-    feeGrowthGlobalX128: slot.fee_growth_global1_x_128,
-  })
+  const owedSince = (outsideLower: bigint, outsideUpper: bigint, global: bigint, last: bigint) =>
+    feeOwed(
+      feeGrowthInside({
+        tickCurrent: slot.tick,
+        tickLower: nft.tickLower,
+        tickUpper: nft.tickUpper,
+        feeGrowthOutsideLowerX128: outsideLower,
+        feeGrowthOutsideUpperX128: outsideUpper,
+        feeGrowthGlobalX128: global,
+      }),
+      last,
+      position.liquidity,
+    )
 
   return {
     ...base,
@@ -160,9 +155,21 @@ export async function enrichOwnedPosition(
       amount0,
       amount1,
       uncollectedFees0:
-        position.tokens_owed0 + feeOwed(inside0, position.fee_growth_inside0_last_x_128, position.liquidity),
+        position.tokens_owed0 +
+        owedSince(
+          lowerTick?.fee_growth_outside0_x_128 ?? 0n,
+          upperTick?.fee_growth_outside0_x_128 ?? 0n,
+          slot.fee_growth_global0_x_128,
+          position.fee_growth_inside0_last_x_128,
+        ),
       uncollectedFees1:
-        position.tokens_owed1 + feeOwed(inside1, position.fee_growth_inside1_last_x_128, position.liquidity),
+        position.tokens_owed1 +
+        owedSince(
+          lowerTick?.fee_growth_outside1_x_128 ?? 0n,
+          upperTick?.fee_growth_outside1_x_128 ?? 0n,
+          slot.fee_growth_global1_x_128,
+          position.fee_growth_inside1_last_x_128,
+        ),
     },
   }
 }
@@ -206,17 +213,10 @@ export async function getOwnedPositions(
   const program = params.program ?? SHIELD_SWAP
   const nfts = await listPositionNFTs(client, { program, poolKey: params.poolKey })
 
-  // One slot read per pool, shared by every position in that pool.
+  // One slot read per pool, shared as an un-awaited promise so it resolves
+  // concurrently with every position's own reads.
   const poolKeys = [...new Set(nfts.map((nft) => nft.poolKey))]
-  const slots = new Map(
-    await Promise.all(
-      poolKeys.map(async (key) => [key, await getSlot(client, { poolKey: key, program: params.program })] as const),
-    ),
-  )
+  const slots = new Map(poolKeys.map((key) => [key, getSlot(client, { poolKey: key, program })]))
 
-  return Promise.all(
-    nfts.map((nft) =>
-      enrichOwnedPosition(client, { nft, program: params.program, slot: slots.get(nft.poolKey) ?? null }),
-    ),
-  )
+  return Promise.all(nfts.map((nft) => enrichOwnedPosition(client, { nft, program, slot: slots.get(nft.poolKey)! })))
 }

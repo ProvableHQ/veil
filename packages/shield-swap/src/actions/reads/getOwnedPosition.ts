@@ -1,6 +1,7 @@
 import type { Client } from '@provablehq/veil-core'
 import { SHIELD_SWAP } from '../../constants.js'
 import { listPositionNFTs } from '../../utils/records.js'
+import { getSlot } from './getSlot.js'
 import { enrichOwnedPosition, type OwnedPosition } from './getOwnedPositions.js'
 
 /**
@@ -51,8 +52,7 @@ export async function getOwnedPosition(
   params: GetOwnedPositionParameters,
 ): Promise<GetOwnedPositionReturnType> {
   const program = params.program ?? SHIELD_SWAP
-  const nfts = await listPositionNFTs(client, { program })
-  const nft = nfts.find((n) => n.tokenId === params.positionTokenId)
+  const [nft] = await listPositionNFTs(client, { program, tokenId: params.positionTokenId })
   if (!nft) return null
-  return enrichOwnedPosition(client, { nft, program: params.program })
+  return enrichOwnedPosition(client, { nft, program, slot: getSlot(client, { poolKey: nft.poolKey, program }) })
 }

@@ -49,22 +49,29 @@ function fakeClient(opts: { records: string[]; mappings: Record<string, string |
   } as unknown as Client
 }
 
+/** The default happy-path chain state; override individual entries per test. */
+async function positionClient(
+  overrides: Record<string, string | null> = {},
+  records: string[] = [POSITION_RECORD],
+): Promise<Client> {
+  const lowerKey = await deriveTickKey({ pool: POOL, tick: -64400 })
+  const upperKey = await deriveTickKey({ pool: POOL, tick: -60200 })
+  return fakeClient({
+    records,
+    mappings: {
+      'positions:555field': POSITION_PLAINTEXT,
+      'frozen_position:555field': null,
+      [`slots:${POOL}`]: SLOT_PLAINTEXT,
+      [`ticks:${lowerKey}`]: tickPlaintext(-64400, 1000n, 2000n),
+      [`ticks:${upperKey}`]: tickPlaintext(-60200, 500n, 700n),
+      ...overrides,
+    },
+  })
+}
+
 describe('getOwnedPositions', () => {
   it('joins record, mappings, and derived state for an in-range position', async () => {
-    const lowerKey = await deriveTickKey({ pool: POOL, tick: -64400 })
-    const upperKey = await deriveTickKey({ pool: POOL, tick: -60200 })
-    const client = fakeClient({
-      records: [POSITION_RECORD],
-      mappings: {
-        'positions:555field': POSITION_PLAINTEXT,
-        'frozen_position:555field': null,
-        [`slots:${POOL}`]: SLOT_PLAINTEXT,
-        [`ticks:${lowerKey}`]: tickPlaintext(-64400, 1000n, 2000n),
-        [`ticks:${upperKey}`]: tickPlaintext(-60200, 500n, 700n),
-      },
-    })
-
-    const positions = await getOwnedPositions(client)
+    const positions = await getOwnedPositions(await positionClient())
     expect(positions).toHaveLength(1)
     const p = positions[0]!
     expect(p.positionTokenId).toBe('555field')
@@ -87,23 +94,19 @@ describe('getOwnedPositions', () => {
       getSqrtPriceAtTickX128(-64400),
       getSqrtPriceAtTickX128(-60200),
       LIQ,
-      false,
     )
     expect(p.state!.amount0).toBe(expected.amount0)
     expect(p.state!.amount1).toBe(expected.amount1)
+    const range = { tickCurrent: -62000, tickLower: -64400, tickUpper: -60200 }
     const inside0 = feeGrowthInside({
-      tickCurrent: -62000,
-      tickLower: -64400,
-      tickUpper: -60200,
+      ...range,
       feeGrowthOutsideLowerX128: 1000n,
       feeGrowthOutsideUpperX128: 500n,
       feeGrowthGlobalX128: 5000n,
     })
     expect(p.state!.uncollectedFees0).toBe(10n + feeOwed(inside0, 100n, LIQ))
     const inside1 = feeGrowthInside({
-      tickCurrent: -62000,
-      tickLower: -64400,
-      tickUpper: -60200,
+      ...range,
       feeGrowthOutsideLowerX128: 2000n,
       feeGrowthOutsideUpperX128: 700n,
       feeGrowthGlobalX128: 9000n,
@@ -112,61 +115,32 @@ describe('getOwnedPositions', () => {
   })
 
   it('reports frozen from the frozen_position mapping', async () => {
-    const lowerKey = await deriveTickKey({ pool: POOL, tick: -64400 })
-    const upperKey = await deriveTickKey({ pool: POOL, tick: -60200 })
-    const client = fakeClient({
-      records: [POSITION_RECORD],
-      mappings: {
-        'positions:555field': POSITION_PLAINTEXT,
-        'frozen_position:555field': '123456u32',
-        [`slots:${POOL}`]: SLOT_PLAINTEXT,
-        [`ticks:${lowerKey}`]: tickPlaintext(-64400, 0n, 0n),
-        [`ticks:${upperKey}`]: tickPlaintext(-60200, 0n, 0n),
-      },
-    })
+    const client = await positionClient({ 'frozen_position:555field': '123456u32' })
     expect((await getOwnedPositions(client))[0]!.frozen).toBe(true)
   })
 
   it('returns state: null when the mint has not finalized (no positions entry)', async () => {
-    const client = fakeClient({
-      records: [POSITION_RECORD],
-      mappings: { [`slots:${POOL}`]: SLOT_PLAINTEXT },
-    })
+    const client = await positionClient({ 'positions:555field': null })
     const [p] = await getOwnedPositions(client)
     expect(p!.state).toBeNull()
     expect(p!.positionTokenId).toBe('555field') // record side still present
   })
 
   it('filters by poolKey and returns [] for an account with no positions', async () => {
-    const client = fakeClient({ records: [POSITION_RECORD], mappings: {} })
-    expect(await getOwnedPositions(client, { poolKey: '888field' })).toEqual([])
-    const empty = fakeClient({ records: [], mappings: {} })
-    expect(await getOwnedPositions(empty)).toEqual([])
+    expect(await getOwnedPositions(await positionClient(), { poolKey: '888field' })).toEqual([])
+    expect(await getOwnedPositions(await positionClient({}, []))).toEqual([])
   })
 })
 
 describe('getOwnedPosition', () => {
   it('resolves one owned position by token id', async () => {
-    const lowerKey = await deriveTickKey({ pool: POOL, tick: -64400 })
-    const upperKey = await deriveTickKey({ pool: POOL, tick: -60200 })
-    const client = fakeClient({
-      records: [POSITION_RECORD],
-      mappings: {
-        'positions:555field': POSITION_PLAINTEXT,
-        'frozen_position:555field': null,
-        [`slots:${POOL}`]: SLOT_PLAINTEXT,
-        [`ticks:${lowerKey}`]: tickPlaintext(-64400, 0n, 0n),
-        [`ticks:${upperKey}`]: tickPlaintext(-60200, 0n, 0n),
-      },
-    })
-    const p = await getOwnedPosition(client, { positionTokenId: '555field' })
+    const p = await getOwnedPosition(await positionClient(), { positionTokenId: '555field' })
     expect(p).not.toBeNull()
     expect(p!.positionTokenId).toBe('555field')
     expect(p!.state!.liquidity).toBe(LIQ)
   })
 
   it('returns null when the account owns no record with that token id', async () => {
-    const client = fakeClient({ records: [POSITION_RECORD], mappings: {} })
-    expect(await getOwnedPosition(client, { positionTokenId: '404field' })).toBeNull()
+    expect(await getOwnedPosition(await positionClient(), { positionTokenId: '404field' })).toBeNull()
   })
 })

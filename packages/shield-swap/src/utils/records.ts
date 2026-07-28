@@ -1,4 +1,5 @@
 import { requestRecords, parseRecord, type Client, type InputRequest, type OwnedRecord } from '@provablehq/veil-core'
+import { toPositionNFT } from '../generated/shield_swap.js'
 
 /**
  * A token record's decoded essentials, alongside the record it came from.
@@ -171,10 +172,13 @@ export interface PositionNFTInfo {
  * @property program The shield_swap program owning the PositionNFT records.
  * @property poolKey Restricts the listing to one pool's positions. Optional —
  *   without it, every owned position is returned.
+ * @property tokenId Restricts the listing to one position by its `token_id`
+ *   field literal. Optional.
  */
 export type ListPositionNFTsParameters = {
   program: string
   poolKey?: string
+  tokenId?: string
 }
 
 /**
@@ -204,32 +208,32 @@ export async function listPositionNFTs(client: Client, params: ListPositionNFTsP
   const positions: PositionNFTInfo[] = []
   for (const record of records) {
     if (!record.recordPlaintext) continue
-    let value
+    // Providers that name records rule non-positions out cheaply; the shape
+    // guard below covers providers that omit recordName.
+    if (record.recordName && record.recordName !== 'PositionNFT') continue
+    // Only PositionNFTs carry all of token_id/pool/tick_lower/tick_upper —
+    // the program's other record shapes miss at least one and are skipped.
+    // Decoding is delegated to the generated toPositionNFT so the ABI stays
+    // the source of truth for the field shapes.
+    let nft
     try {
-      value = parseRecord(record.recordPlaintext)
+      const value = parseRecord(record.recordPlaintext)
+      const { pool, token_id, tick_lower, tick_upper } = value.fields
+      if (!pool || !token_id || !tick_lower || !tick_upper) continue
+      nft = toPositionNFT(value)
     } catch {
       continue
     }
-    // Only PositionNFTs carry all of token_id/pool/tick_lower/tick_upper —
-    // the program's other record shapes miss at least one and are skipped.
-    const pool = value.fields.pool?.value
-    const poolKey = typeof pool === 'bigint' ? `${pool}field` : typeof pool === 'string' ? pool : undefined
-    const tokenIdRaw = value.fields.token_id?.value
-    const tickLower = value.fields.tick_lower?.value
-    const tickUpper = value.fields.tick_upper?.value
-    if (!poolKey || typeof tokenIdRaw !== 'bigint' || typeof tickLower !== 'bigint' || typeof tickUpper !== 'bigint')
-      continue
-    if (params.poolKey !== undefined && poolKey !== params.poolKey) continue
-    const token0Raw = value.fields.token0_id?.value
-    const token1Raw = value.fields.token1_id?.value
+    if (params.poolKey !== undefined && nft.pool !== params.poolKey) continue
+    if (params.tokenId !== undefined && nft.token_id !== params.tokenId) continue
     positions.push({
-      tokenId: `${tokenIdRaw}field`,
-      poolKey,
-      token0Id: typeof token0Raw === 'bigint' ? `${token0Raw}field` : String(token0Raw ?? ''),
-      token1Id: typeof token1Raw === 'bigint' ? `${token1Raw}field` : String(token1Raw ?? ''),
-      withdrawal: String(value.fields.withdrawal?.value ?? ''),
-      tickLower: Number(tickLower),
-      tickUpper: Number(tickUpper),
+      tokenId: nft.token_id,
+      poolKey: nft.pool,
+      token0Id: nft.token0_id,
+      token1Id: nft.token1_id,
+      withdrawal: nft.withdrawal,
+      tickLower: nft.tick_lower,
+      tickUpper: nft.tick_upper,
       record,
     })
   }
@@ -255,8 +259,8 @@ export async function listPositionNFTs(client: Client, params: ListPositionNFTsP
  * const pos = await selectPositionNFT(client, { program: DEFAULT_PROGRAM, poolKey })
  */
 export async function selectPositionNFT(client: Client, params: SelectPositionNFTParameters): Promise<PositionNFTInfo> {
-  const positions = await listPositionNFTs(client, { program: params.program, poolKey: params.poolKey })
-  const match = params.tokenId === undefined ? positions[0] : positions.find((p) => p.tokenId === params.tokenId)
+  const positions = await listPositionNFTs(client, params)
+  const match = positions[0]
   if (!match) {
     throw new Error(
       `No unspent PositionNFT for pool ${params.poolKey} on ${params.program}` +

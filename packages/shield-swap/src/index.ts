@@ -234,6 +234,10 @@ export {
   amount1DeltaX128,
   getSqrtPriceAtTickX128,
   getTickEstimateX128,
+  u256WrappingSub,
+  feeGrowthInside,
+  feeOwed,
+  amountsForLiquidity,
 } from './utils/q128.js'
 export {
   resolveTokenRoute,
