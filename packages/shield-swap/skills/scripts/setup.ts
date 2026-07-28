@@ -18,12 +18,13 @@
  *   npx tsx setup.ts --new                            # brand-new account
  *   npx tsx setup.ts --private-key-file <path>        # returning user (key in a file)
  *   npx tsx setup.ts --invite-code CODE               # when access is locked
+ *   npx tsx setup.ts --api-url <origin>               # pin a DEX API deployment
  *
  * A private key is NEVER pasted into a conversation or command history: a
  * returning user either writes it to a file and passes the path, or exports
  * SHIELD_SWAP_PRIVATE_KEY (or SHIELD_SWAP_PRIVATE_KEY_FILE) in their own
  * shell. Other environment fallbacks: ALEO_CONSUMER_ID + ALEO_DPS_API_KEY,
- * SHIELD_SWAP_INVITE_CODE.
+ * SHIELD_SWAP_INVITE_CODE, SHIELD_SWAP_API_URL.
  *
  * Exit codes: 0 ready · 2 needs input from the user (message says what) ·
  * 3 airdrop still pending · 1 anything else.
@@ -32,7 +33,7 @@
  * gitignore it, treat it like a wallet file).
  */
 import { readFileSync } from 'node:fs'
-import { ApiError } from '@provablehq/shield-swap-sdk'
+import { ApiError, DEFAULT_API_URL } from '@provablehq/shield-swap-sdk'
 import {
   loadState,
   saveState,
@@ -53,6 +54,10 @@ function argValue(flag: string): string | undefined {
 const inviteCode = argValue('--invite-code') ?? process.env.SHIELD_SWAP_INVITE_CODE
 const consumerId = argValue('--consumer-id') ?? process.env.ALEO_CONSUMER_ID
 const apiKey = argValue('--api-key') ?? process.env.ALEO_DPS_API_KEY
+// Flag-only on purpose: SHIELD_SWAP_API_URL stays an ephemeral per-run
+// override (see loadSession); only an explicit --api-url pins the
+// deployment and resets deployment-scoped state.
+const apiUrl = argValue('--api-url')?.replace(/\/$/, '')
 const allowGenerate = process.argv.includes('--new')
 
 // The key itself never travels through a conversation or the command line:
@@ -72,6 +77,20 @@ const importKey = resolveImportKey()
 async function main() {
   // ── 1 + 2: key material and Provable API credentials ────────────────
   let state = loadState()
+
+  // Pin the DEX API deployment. The access grant, API token, and airdrop
+  // job all live in one deployment's database — switching deployments
+  // invalidates them, so clear them and let the later steps re-derive.
+  // Account key material and Provable API credentials are NOT touched
+  // (chain- and prover-scoped, not DEX-scoped).
+  if (apiUrl && apiUrl !== (state.apiUrl ?? DEFAULT_API_URL)) {
+    state.apiUrl = apiUrl
+    state.dexApiToken = undefined
+    state.accessRedeemed = undefined
+    state.airdropJobId = undefined
+    saveState(state)
+    console.log(`✓ DEX API pinned to ${state.apiUrl} (deployment-scoped state reset)`)
+  }
   try {
     state = await ensureKeyMaterial(state, { importKey, allowGenerate })
   } catch (err) {
@@ -223,7 +242,7 @@ async function main() {
     if (h.publicAmount > 0n || h.privateAmount > 0n) {
       const priv = formatAmount(h.privateAmount, h.decimals, h.symbol)
       const pub = formatAmount(h.publicAmount, h.decimals, h.symbol)
-      console.log(`  ${h.symbol}: ${priv} private, ${pub} public (${h.wrapperProgram ?? 'no wrapper'})`)
+      console.log(`  ${h.symbol}: ${priv} private, ${pub} public (${h.underlyingProgram ?? 'plain token'})`)
     }
   }
   console.log(

@@ -35,6 +35,13 @@ export type TrackedPosition = {
 /** Everything that must survive between agent sessions. */
 export type ShieldSwapState = {
   network: string
+  /**
+   * DEX API origin this session targets. Unset means the SDK's default
+   * hosted deployment. Set by setup.ts (`--api-url` / SHIELD_SWAP_API_URL);
+   * the access grant, API token, and airdrop job are scoped to one
+   * deployment, so setup clears them when this changes.
+   */
+  apiUrl?: string
   privateKey?: string
   address?: string
   provableApi?: { consumerId: string; apiKey: string }
@@ -188,7 +195,10 @@ export async function loadSession() {
     useFeeMaster: process.env.SHIELD_SWAP_FEE_MASTER !== '0',
     records: scanner,
   })
-  const client = walletClient.extend(shieldSwapActions({ api: {} }))
+  // SHIELD_SWAP_API_URL overrides for one-off runs; the persistent choice
+  // lives in the state file (setup.ts --api-url).
+  const apiUrl = process.env.SHIELD_SWAP_API_URL ?? state.apiUrl
+  const client = walletClient.extend(shieldSwapActions({ api: { baseUrl: apiUrl } }))
   await authenticateWithAccount(client.api, account)
 
   return { client, account, scanner, state, aleo }
