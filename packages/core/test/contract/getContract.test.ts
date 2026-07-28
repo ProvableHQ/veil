@@ -239,7 +239,7 @@ describe('getContract', () => {
     const output = result.outputs[0]
     expect(typeof output).not.toBe('string')
     expect((output as RecordValue).owner).toBe('aleo1abc')
-    expect((output as RecordValue).entries.amount?.value).toBe(500n)
+    expect((output as RecordValue).fields.amount?.value).toBe(500n)
   })
 
   it('auto-encodes RecordValue inputs via serializeRecord', async () => {
@@ -261,8 +261,8 @@ describe('getContract', () => {
       ownerVisibility: 'private',
       program: 'token.aleo',
       recordName: 'Token',
-      entries: {
-        amount: { value: 500n, visibility: 'private', type: { kind: 'primitive', primitive: 'u64' } },
+      fields: {
+        amount: { value: 500n, mode: 'private', type: { kind: 'primitive', primitive: 'u64' } },
       },
       nonce: '0group',
       version: 0,
@@ -390,7 +390,7 @@ function set_tier:
     expect(result.transactionId).toBe('tx123')
     expect(typeof result.outputs[0]).not.toBe('string')
     expect((result.outputs[0] as RecordValue).owner).toBe('aleo1abc')
-    expect((result.outputs[0] as RecordValue).entries.points?.value).toBe(1000n)
+    expect((result.outputs[0] as RecordValue).fields.points?.value).toBe(1000n)
   })
 
   it('write returns raw tx ID without auto-parsing', async () => {
@@ -540,7 +540,7 @@ describe('getContract execute proxy — per-transition outputs', () => {
     expect(result.transitions[0].outputs).toHaveLength(1)
     const output = result.transitions[0].outputs[0] as RecordValue
     expect(output.owner).toBe('aleo1abc')
-    expect(output.entries.amount?.value).toBe(500n)
+    expect(output.fields.amount?.value).toBe(500n)
   })
 
   it('handles cross-program transitions with loose parsing', async () => {

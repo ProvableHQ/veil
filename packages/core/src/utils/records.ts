@@ -3,7 +3,7 @@
 // These functions bridge between Aleo's plaintext record format (the string
 // representation used by snarkvm) and Veil's typed RecordValue objects.
 
-import type { Primitive, Plaintext, PlaintextValue, RecordValue, RecordEntryValue, FutureValue, DynamicFutureValue } from '../types/primitives.js'
+import type { Primitive, Plaintext, PlaintextValue, RecordValue, RecordFieldValue, FutureValue, DynamicFutureValue } from '../types/primitives.js'
 import type { ABI, RecordDef, StructDef, FunctionInput } from '../types/abi.js'
 import { parseValue, encodeValue, type ParsedValue } from './values.js'
 
@@ -103,13 +103,13 @@ export function encodePlaintextValue(value: unknown, type: Plaintext, abi?: ABI)
       }
       const def = getStructDef(abi, structName)
       const object = value as Record<string, unknown>
-      const members = def.members.map((field) => {
+      const fields = def.fields.map((field) => {
         if (!(field.name in object)) {
           throw new Error(`Struct "${structName}" value is missing field "${field.name}"`)
         }
         return `${field.name}: ${encodePlaintextValue(object[field.name], field.type, abi)}`
       })
-      return `{ ${members.join(', ')} }`
+      return `{ ${fields.join(', ')} }`
     }
     case 'optional':
       return encodePlaintextValue(value, type.inner, abi)
@@ -265,7 +265,7 @@ function futureFromValue(value: PlaintextValue): FutureValue | DynamicFutureValu
  * @returns `true` when the text carries the future grammar's top-level keys.
  */
 export function isFutureText(text: string): boolean {
-  const rawFields = parseTopLevelPairs(text)
+  const rawFields = parseRawFields(text)
   return Boolean(rawFields['program_id'] && rawFields['function_name'] && rawFields['arguments'])
 }
 
@@ -307,7 +307,7 @@ export function parseFuture(text: string): FutureValue {
  * @returns `true` when the text carries a dynamic future's top-level keys.
  */
 export function isDynamicFutureText(text: string): boolean {
-  const rawFields = parseTopLevelPairs(text)
+  const rawFields = parseRawFields(text)
   if (!rawFields['_function_name'] || !rawFields['_checksum']) return false
   return Boolean(rawFields['_program_id'] || (rawFields['_program_name'] && rawFields['_program_network']))
 }
@@ -360,7 +360,7 @@ const ENTRY_MODE_REGEX_G = /\.(constant|public|private)(?=[,\s\]}]|$)/g
  *   struct or other non-record plaintext.
  */
 export function isRecordPlaintext(text: string): boolean {
-  const rawFields = parseTopLevelPairs(text)
+  const rawFields = parseRawFields(text)
   return Boolean(rawFields['owner'] && rawFields['_nonce'])
 }
 
@@ -404,10 +404,10 @@ export type ParseRecordOptions = {
  *
  * @example
  * const record = parseRecord(text, { program: 'loyalty_token.aleo', recordName: 'LoyaltyCard' })
- * record.entries.points?.value // 1000n
+ * record.fields.points?.value // 1000n
  */
 export function parseRecord(plaintext: string, options: ParseRecordOptions = {}): RecordValue {
-  const rawFields = parseTopLevelPairs(plaintext)
+  const rawFields = parseRawFields(plaintext)
 
   if (!rawFields['owner'] || !rawFields['_nonce']) {
     throw new Error(
@@ -415,8 +415,8 @@ export function parseRecord(plaintext: string, options: ParseRecordOptions = {})
     )
   }
 
-  const typeLookup = new Map(options.def?.entries.map((e) => [e.name, e.type]) ?? [])
-  const entries: { [name: string]: RecordEntryValue } = {}
+  const typeLookup = new Map(options.def?.fields.map((f) => [f.name, f.type]) ?? [])
+  const fields: { [name: string]: RecordFieldValue } = {}
 
   for (const [key, rawValue] of Object.entries(rawFields)) {
     // `owner` and the `_`-prefixed tags are record metadata, hoisted below.
@@ -424,13 +424,13 @@ export function parseRecord(plaintext: string, options: ParseRecordOptions = {})
     // cannot start with an underscore.
     if (key === 'owner' || key.startsWith('_')) continue
 
-    const visibility = (ENTRY_MODE_REGEX.exec(rawValue)?.[1] ?? 'private') as RecordEntryValue['visibility']
+    const mode = (ENTRY_MODE_REGEX.exec(rawValue)?.[1] ?? 'private') as RecordFieldValue['mode']
     const cleaned = rawValue.replace(ENTRY_MODE_REGEX_G, '').trim()
 
     if (cleaned.startsWith('[') || cleaned.startsWith('{')) {
-      entries[key] = {
+      fields[key] = {
         value: parseCompositeValue(cleaned),
-        visibility,
+        mode,
         type: typeLookup.get(key) ?? { kind: 'primitive', primitive: 'field' },
       }
       continue
@@ -444,9 +444,9 @@ export function parseRecord(plaintext: string, options: ParseRecordOptions = {})
       parsed = { value: cleaned, type: 'field' as Primitive }
     }
 
-    entries[key] = {
+    fields[key] = {
       value: parsed.value,
-      visibility,
+      mode,
       type: typeLookup.get(key) ?? { kind: 'primitive', primitive: parsed.type },
     }
   }
@@ -469,7 +469,7 @@ export function parseRecord(plaintext: string, options: ParseRecordOptions = {})
     ownerVisibility,
     program: options.program ?? 'unknown',
     recordName,
-    entries,
+    fields,
     nonce,
     version,
     raw: plaintext,
@@ -484,7 +484,7 @@ export function parseRecord(plaintext: string, options: ParseRecordOptions = {})
  * A record parsed by `parseRecord` carries its original plaintext on `raw`
  * and serializes back to it verbatim — an exact round-trip. A hand-constructed
  * value without `raw` is synthesized from its parts, using the `type` field on
- * each RecordEntryValue for the literal suffix. This is why RecordEntryValue
+ * each RecordFieldValue for the literal suffix. This is why RecordFieldValue
  * carries `type: Plaintext` — without it, a bigint value of 1000n could be
  * u64, u128, field, or i64. The synthesized path handles scalar entries only:
  * composite (struct or array) entries serialize correctly only through `raw`,
@@ -506,10 +506,10 @@ export function toString(record: RecordValue): string {
 
   lines.push(`  owner: ${record.owner}.${record.ownerVisibility}`)
 
-  for (const [name, entry] of Object.entries(record.entries)) {
-    const primitive = extractPrimitive(entry.type)
-    const encoded = encodeValue(entry.value as bigint | boolean | string, primitive)
-    lines.push(`  ${name}: ${encoded}.${entry.visibility}`)
+  for (const [name, field] of Object.entries(record.fields)) {
+    const primitive = extractPrimitive(field.type)
+    const encoded = encodeValue(field.value as bigint | boolean | string, primitive)
+    lines.push(`  ${name}: ${encoded}.${field.mode}`)
   }
 
   lines.push(`  _nonce: ${record.nonce}.public`)
@@ -562,7 +562,7 @@ export function encodeInputs(
 
   return values.map((value, i) => {
     // RecordValue — serialize to plaintext
-    if (typeof value === 'object' && value !== null && 'owner' in value && 'entries' in value) {
+    if (typeof value === 'object' && value !== null && 'owner' in value && 'fields' in value) {
       return toString(value as RecordValue)
     }
 
@@ -603,7 +603,7 @@ function extractPrimitive(pt: Plaintext): Primitive {
  * Parse raw fields from a record plaintext string.
  * Returns a map of field name to raw value string (with visibility suffix intact).
  */
-function parseTopLevelPairs(plaintext: string): Record<string, string> {
+function parseRawFields(plaintext: string): Record<string, string> {
   const fields: Record<string, string> = {}
 
   const inner = plaintext.replace(/^\s*\{/, '').replace(/\}\s*$/, '').trim()

@@ -45,16 +45,16 @@ export function parseTokenRecordInfo(
   }
   // credits.aleo names the balance field `microcredits`; every ARC-20 Token
   // uses `amount`.
-  const amountRaw = value.entries.amount?.value ?? value.entries.microcredits?.value
+  const amountRaw = value.fields.amount?.value ?? value.fields.microcredits?.value
   if (typeof amountRaw !== 'bigint') return null
-  const tokenIdRaw = value.entries.token_id?.value
+  const tokenIdRaw = value.fields.token_id?.value
   const tokenId =
     typeof tokenIdRaw === 'bigint' ? `${tokenIdRaw}field` : typeof tokenIdRaw === 'string' ? tokenIdRaw : undefined
   // The shield wrapper Token carries recipient binding: a bound record can
   // only be unwrapped to its bound recipient — transfer/join/split reject it,
   // so it must never be selected as ordinary spendable inventory.
-  const recipientBound = value.entries.recipient_bound?.value === true
-  const boundRaw = value.entries.bound_recipient?.value
+  const recipientBound = value.fields.recipient_bound?.value === true
+  const boundRaw = value.fields.bound_recipient?.value
   const boundRecipient = typeof boundRaw === 'string' && recipientBound ? boundRaw : undefined
   return { amount: amountRaw, tokenId, recipientBound, boundRecipient }
 }
@@ -190,14 +190,14 @@ export async function selectPositionNFT(client: Client, params: SelectPositionNF
       continue
     }
     // PositionNFT shape: token_id/token0_id/token1_id/pool/tick_lower/tick_upper.
-    const pool = value.entries.pool?.value
+    const pool = value.fields.pool?.value
     const poolField = typeof pool === 'bigint' ? `${pool}field` : pool
     if (poolField !== params.poolKey) continue
-    const tokenIdRaw = value.entries.token_id?.value
+    const tokenIdRaw = value.fields.token_id?.value
     const tokenId = typeof tokenIdRaw === 'bigint' ? `${tokenIdRaw}field` : String(tokenIdRaw ?? '')
     if (params.tokenId !== undefined && tokenId !== params.tokenId) continue
-    const tickLower = value.entries.tick_lower?.value
-    const tickUpper = value.entries.tick_upper?.value
+    const tickLower = value.fields.tick_lower?.value
+    const tickUpper = value.fields.tick_upper?.value
     if (typeof tickLower !== 'bigint' || typeof tickUpper !== 'bigint') continue
     return { tokenId, tickLower: Number(tickLower), tickUpper: Number(tickUpper), record }
   }
@@ -320,7 +320,7 @@ export async function resolveTokenRecord(
  */
 export function positionTokenIdFromPlaintext(plaintext: string): string | undefined {
   try {
-    const raw = parseRecord(plaintext).entries.token_id?.value
+    const raw = parseRecord(plaintext).fields.token_id?.value
     return typeof raw === 'bigint' ? `${raw}field` : undefined
   } catch {
     return undefined

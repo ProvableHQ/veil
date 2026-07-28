@@ -24,12 +24,12 @@ export interface RewardVoucher {
 }
 
 export function toRewardVoucher(record: RecordValue | string): RewardVoucher {
-  const entries = (typeof record === 'object' && record !== null ? record.entries : undefined) ?? {}
+  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
   return {
     owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
-    voucher_id: litStr(entries.voucher_id?.value, 'field') ?? '',
-    reward_type: Number((entries.reward_type?.value ?? 0n) as bigint) ?? 0,
-    amount: entries.amount?.value as bigint ?? 0n,
+    voucher_id: litStr(fields.voucher_id?.value, 'field') ?? '',
+    reward_type: Number((fields.reward_type?.value ?? 0n) as bigint) ?? 0,
+    amount: fields.amount?.value as bigint ?? 0n,
     _record: record as unknown as RecordValue,
   }
 }
@@ -88,7 +88,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "RewardVoucher"
       ],
-      "entries": [
+      "fields": [
         {
           "name": "owner",
           "type": {

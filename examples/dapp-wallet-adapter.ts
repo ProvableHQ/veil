@@ -70,7 +70,7 @@ function createMockLeoWallet(): AleoWalletAdapter {
         recordName: 'credits',
         spent: false,
         uid: 'uid_abc123',
-        recordView: { entries: { microcredits: '500u64' } },
+        recordView: { fields: { microcredits: '500u64' } },
       },
     ]),
     transitionViewKeys: vi.fn().mockResolvedValue(['tvk1abc']),

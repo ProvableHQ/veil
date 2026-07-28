@@ -37,9 +37,9 @@ type FindStruct<Structs extends readonly StructDef[], Name extends string> =
 /** Max recursion depth for nested struct resolution (tuple length as counter) */
 type MaxDepth = [0, 0, 0, 0, 0, 0, 0, 0]  // 8 levels
 
-/** Resolve a StructDef's members into a typed object, with depth tracking */
-type ResolveStructMembers<S extends StructDef, A extends ABI, Depth extends any[]> = {
-  [M in S['members'][number] as M['name']]: PlaintextToTsD<M['type'], A, Depth>
+/** Resolve a StructDef's fields into a typed object, with depth tracking */
+type ResolveStructFields<S extends StructDef, A extends ABI, Depth extends any[]> = {
+  [F in S['fields'][number] as F['name']]: PlaintextToTsD<F['type'], A, Depth>
 }
 
 /** Depth-limited plaintext mapping — caps struct recursion to prevent TS2589 */
@@ -51,7 +51,7 @@ type PlaintextToTsD<P extends Plaintext, A extends ABI, Depth extends any[]> =
     ? Depth['length'] extends MaxDepth['length']
       ? Record<string, unknown>  // depth exceeded — fall back
       : FindStruct<A['structs'], LastElement<Path>> extends infer S extends StructDef
-        ? ResolveStructMembers<S, A, [...Depth, 0]>
+        ? ResolveStructFields<S, A, [...Depth, 0]>
         : Record<string, unknown>
     :
   unknown

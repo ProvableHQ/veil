@@ -127,7 +127,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "U256__8JquwLopp8"
       ],
-      "members": [
+      "fields": [
         {
           "name": "hi",
           "type": {
@@ -148,7 +148,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "MerkleProof"
       ],
-      "members": [
+      "fields": [
         {
           "name": "siblings",
           "type": {

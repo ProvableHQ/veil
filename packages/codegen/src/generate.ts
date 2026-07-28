@@ -31,8 +31,8 @@ export interface GenerateOptions {
  *
  * Produces:
  * - Struct interfaces
- * - Record interfaces with correctly typed entries
- * - Record and struct decoder functions (RecordValue/StructValue → typed interface)
+ * - Record interfaces with correctly typed fields
+ * - Record mapper functions (RecordValue → typed interface)
  * - Function input and output types
  * - Mapping key/value types
  * - Storage variable types
@@ -72,7 +72,7 @@ export function generate(options: GenerateOptions): string {
   for (const struct of abi.structs) {
     lines.push(...generateStructInterface(struct))
     lines.push('')
-    lines.push(...generateStructDecoder(struct))
+    lines.push(...generateStructMapper(struct))
     lines.push('')
   }
 
@@ -80,7 +80,7 @@ export function generate(options: GenerateOptions): string {
   for (const record of abi.records) {
     lines.push(...generateRecordInterface(record))
     lines.push('')
-    lines.push(...generateRecordDecoder(record))
+    lines.push(...generateRecordMapper(record))
     lines.push('')
   }
 
@@ -121,9 +121,9 @@ function generateStructInterface(struct: StructDef): string[] {
 
   lines.push(`export interface ${name} {`)
 
-  for (const member of struct.members) {
-    const tsType = plaintextToTsType(member.type)
-    lines.push(`  ${member.name}: ${tsType}`)
+  for (const field of struct.fields) {
+    const tsType = plaintextToTsType(field.type)
+    lines.push(`  ${field.name}: ${tsType}`)
   }
 
   lines.push(`}`)
@@ -139,10 +139,10 @@ function generateRecordInterface(record: RecordDef): string[] {
   lines.push(`export interface ${name} {`)
   lines.push(`  owner: string`)
 
-  for (const entry of record.entries) {
-    if (entry.name === 'owner') continue
-    const tsType = plaintextToTsType(entry.type)
-    lines.push(`  ${entry.name}: ${tsType}`)
+  for (const field of record.fields) {
+    if (field.name === 'owner') continue
+    const tsType = plaintextToTsType(field.type)
+    lines.push(`  ${field.name}: ${tsType}`)
   }
 
   // Carry the underlying RecordValue so typed records can be passed back as inputs
@@ -151,20 +151,20 @@ function generateRecordInterface(record: RecordDef): string[] {
   return lines
 }
 
-// Emit the `name: <converted value>` lines shared by record and struct decoders.
+// Emit the `field: <converted value>` lines shared by record and struct mappers.
 // `container` names the enclosing type for error messages. `access` yields the
 // raw-value expression for a field name — records reach through their
-// `{ value, visibility, type }` entries (`entries.<name>?.value`), structs are plain
+// `{ value, mode, type }` entries (`fields.<name>?.value`), structs are plain
 // StructValue objects with direct member access. Record-only policy (the
 // reserved `owner` entry) stays in the record mapper, which filters its field
 // list before calling; a struct member named `owner` is data like any other.
-function generateMemberConversions(
-  members: readonly { name: string; type: Plaintext }[],
+function mapperFieldLines(
+  fields: readonly { name: string; type: Plaintext }[],
   container: string,
   access: (name: string) => string,
 ): string[] {
   const lines: string[] = []
-  for (const field of members) {
+  for (const field of fields) {
     const rawAccess = access(field.name)
     // Struct-typed fields: the raw PlaintextValue is a StructValue at runtime.
     // Cast through unknown to the generated struct interface so the return type
@@ -183,7 +183,7 @@ function generateMemberConversions(
       }
       lines.push(`    ${field.name}: ${rawAccess} as unknown as ${structName} ?? {} as unknown as ${structName},`)
     } else {
-      const expr = plaintextConversionExpr(rawAccess, field.type)
+      const expr = plaintextFieldExpr(rawAccess, field.type)
       lines.push(`    ${field.name}: ${expr} ?? ${plaintextDefault(field.type)},`)
     }
   }
@@ -191,30 +191,30 @@ function generateMemberConversions(
 }
 
 /**
- * Emits a `const entries = …` guard so a decoder tolerates an undecryptable
+ * Emits a `const fields = …` guard so a mapper tolerates an undecryptable
  * output. Record outputs owned by another party (e.g. a compliance record
  * minted to an authority) arrive as ciphertext strings, and every record
  * output arrives as ciphertext on the wallet path — the mapper then returns
- * defaulted entries with the raw ciphertext preserved on `_record`, rather
- * than dereferencing `.entries` on a string and throwing.
+ * defaulted fields with the raw ciphertext preserved on `_record`, rather
+ * than dereferencing `.fields` on a string and throwing.
  */
-function entriesGuardLine(varName: string): string {
-  return `  const entries = (typeof ${varName} === 'object' && ${varName} !== null ? ${varName}.entries : undefined) ?? {}`
+function fieldsGuardLine(varName: string): string {
+  return `  const fields = (typeof ${varName} === 'object' && ${varName} !== null ? ${varName}.fields : undefined) ?? {}`
 }
 
-function generateRecordDecoder(record: RecordDef): string[] {
+function generateRecordMapper(record: RecordDef): string[] {
   const name = recordName(record)
   const lines: string[] = []
 
   // Accepts a ciphertext string for records the caller cannot decrypt.
   lines.push(`export function to${name}(record: RecordValue | string): ${name} {`)
-  lines.push(entriesGuardLine('record'))
+  lines.push(fieldsGuardLine('record'))
   lines.push(`  return {`)
   lines.push(`    owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,`)
-  lines.push(...generateMemberConversions(
-    record.entries.filter((f) => f.name !== 'owner'),
+  lines.push(...mapperFieldLines(
+    record.fields.filter((f) => f.name !== 'owner'),
     name,
-    (n) => `entries.${n}?.value`,
+    (n) => `fields.${n}?.value`,
   ))
   lines.push(`    _record: record as unknown as RecordValue,`)
   lines.push(`  }`)
@@ -223,8 +223,8 @@ function generateRecordDecoder(record: RecordDef): string[] {
 }
 
 // Decoder for a struct (e.g. a mapping value like PoolState/Slot). Same per-field
-// width conversions as records, without the record-only `owner`/`_record` properties.
-function generateStructDecoder(struct: StructDef): string[] {
+// width conversions as records, without the record-only `owner`/`_record` fields.
+function generateStructMapper(struct: StructDef): string[] {
   const name = struct.path[struct.path.length - 1] ?? 'UnknownStruct'
   const lines: string[] = []
 
@@ -233,7 +233,7 @@ function generateStructDecoder(struct: StructDef): string[] {
   // should still fail loudly rather than return a silently-zeroed struct.
   lines.push(`export function to${name}(value: StructValue): ${name} {`)
   lines.push(`  return {`)
-  lines.push(...generateMemberConversions(struct.members, name, (n) => `value.${n}`))
+  lines.push(...mapperFieldLines(struct.fields, name, (n) => `value.${n}`))
   lines.push(`  }`)
   lines.push(`}`)
   return lines
@@ -406,28 +406,28 @@ function primitiveToTsType(p: Primitive): string {
 /**
  * Builds the full typed expression for a primitive record field access.
  *
- * The raw value stored in RecordEntryValue is always a bigint for all integer
+ * The raw value stored in RecordFieldValue is always a bigint for all integer
  * widths (parsed by core's parseValue). For u8/u16/u32 and i8/i16/i32 fields
  * (typed as `number`), the access is wrapped with Number() to convert at
  * runtime. For u64+ (typed as `bigint`), it is cast directly. For non-primitive types (array,
  * optional) the raw access is returned unchanged — those fall through to the
  * caller's existing handling.
  *
- * @param rawAccess - Expression yielding the raw PlaintextValue, e.g. `entries.x?.value`
+ * @param rawAccess - Expression yielding the raw PlaintextValue, e.g. `record.fields.x?.value`
  */
-function plaintextConversionExpr(rawAccess: string, pt: Plaintext): string {
+function plaintextFieldExpr(rawAccess: string, pt: Plaintext): string {
   // Arrays decode element-by-element with the same conversions as scalar
   // fields; the runtime parser (parseCompositeValue in core) delivers them
   // as PlaintextValue[]. Structs pass through as parsed objects; optionals
   // convert their inner value when present.
   if (pt.kind === 'array') {
-    const element = plaintextConversionExpr('el', pt.element)
+    const element = plaintextFieldExpr('el', pt.element)
     // Identity element conversion needs no map at all.
     if (element === 'el') return `${rawAccess} as ${plaintextToTsType(pt)}`
     return `((${rawAccess} ?? []) as PlaintextValue[]).map((el) => ${element}) as ${plaintextToTsType(pt)}`
   }
   if (pt.kind === 'optional') {
-    const inner = plaintextConversionExpr(rawAccess, pt.inner)
+    const inner = plaintextFieldExpr(rawAccess, pt.inner)
     return `(${rawAccess} === undefined ? undefined : ${inner})`
   }
   if (pt.kind !== 'primitive') return rawAccess
@@ -558,7 +558,7 @@ function resolveRecordInputs(fn: AbiFunction): { resolveLines: string[], resolve
 }
 
 /** Generate output mapper expression for a single output at index i */
-function generateOutputDecodeExpr(output: AbiFunction['outputs'][number], i: number, abi: ABI): string {
+function outputMapperExpr(output: AbiFunction['outputs'][number], i: number, abi: ABI): string {
   if (output.type.kind === 'record') {
     const recName = output.type.path[output.type.path.length - 1] ?? ''
     const isLocal = !output.type.program || output.type.program.replace(/\.aleo$/, '') === abi.program.replace(/\.aleo$/, '')
@@ -697,9 +697,9 @@ function generateContractFactory(abi: ABI): string[] {
       if (fn.outputs.length === 0) {
         // void return
       } else if (fn.outputs.length === 1) {
-        lines.push(`        return ${generateOutputDecodeExpr(fn.outputs[0], 0, abi)}`)
+        lines.push(`        return ${outputMapperExpr(fn.outputs[0], 0, abi)}`)
       } else {
-        const mappers = fn.outputs.map((o, i) => generateOutputDecodeExpr(o, i, abi))
+        const mappers = fn.outputs.map((o, i) => outputMapperExpr(o, i, abi))
         lines.push(`        return [${mappers.join(', ')}] as const`)
       }
 
@@ -722,9 +722,9 @@ function generateContractFactory(abi: ABI): string[] {
       if (fn.outputs.length === 0) {
         lines.push(`        return { transactionId: result.transactionId }`)
       } else if (fn.outputs.length === 1) {
-        lines.push(`        return { transactionId: result.transactionId, result: ${generateOutputDecodeExpr(fn.outputs[0], 0, abi)} }`)
+        lines.push(`        return { transactionId: result.transactionId, result: ${outputMapperExpr(fn.outputs[0], 0, abi)} }`)
       } else {
-        const mappers = fn.outputs.map((o, i) => generateOutputDecodeExpr(o, i, abi))
+        const mappers = fn.outputs.map((o, i) => outputMapperExpr(o, i, abi))
         lines.push(`        return { transactionId: result.transactionId, result: [${mappers.join(', ')}] as const }`)
       }
 

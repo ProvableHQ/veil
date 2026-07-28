@@ -52,10 +52,10 @@ export interface Token {
 }
 
 export function toToken(record: RecordValue | string): Token {
-  const entries = (typeof record === 'object' && record !== null ? record.entries : undefined) ?? {}
+  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
   return {
     owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
-    amount: entries.amount?.value as bigint ?? 0n,
+    amount: fields.amount?.value as bigint ?? 0n,
     _record: record as unknown as RecordValue,
   }
 }
@@ -189,7 +189,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "TokenInfo"
       ],
-      "members": [
+      "fields": [
         {
           "name": "name",
           "type": {
@@ -231,7 +231,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "TokenAllowance"
       ],
-      "members": [
+      "fields": [
         {
           "name": "account",
           "type": {
@@ -254,7 +254,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "Token"
       ],
-      "entries": [
+      "fields": [
         {
           "name": "owner",
           "type": {

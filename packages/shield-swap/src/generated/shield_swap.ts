@@ -326,16 +326,16 @@ export interface PositionNFT {
 }
 
 export function toPositionNFT(record: RecordValue | string): PositionNFT {
-  const entries = (typeof record === 'object' && record !== null ? record.entries : undefined) ?? {}
+  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
   return {
     owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
-    withdrawal: entries.withdrawal?.value as string ?? '',
-    token_id: litStr(entries.token_id?.value, 'field') ?? '',
-    token0_id: litStr(entries.token0_id?.value, 'field') ?? '',
-    token1_id: litStr(entries.token1_id?.value, 'field') ?? '',
-    pool: litStr(entries.pool?.value, 'field') ?? '',
-    tick_lower: Number((entries.tick_lower?.value ?? 0n) as bigint) ?? 0,
-    tick_upper: Number((entries.tick_upper?.value ?? 0n) as bigint) ?? 0,
+    withdrawal: fields.withdrawal?.value as string ?? '',
+    token_id: litStr(fields.token_id?.value, 'field') ?? '',
+    token0_id: litStr(fields.token0_id?.value, 'field') ?? '',
+    token1_id: litStr(fields.token1_id?.value, 'field') ?? '',
+    pool: litStr(fields.pool?.value, 'field') ?? '',
+    tick_lower: Number((fields.tick_lower?.value ?? 0n) as bigint) ?? 0,
+    tick_upper: Number((fields.tick_upper?.value ?? 0n) as bigint) ?? 0,
     _record: record as unknown as RecordValue,
   }
 }
@@ -353,16 +353,16 @@ export interface SwapComplianceRecord {
 }
 
 export function toSwapComplianceRecord(record: RecordValue | string): SwapComplianceRecord {
-  const entries = (typeof record === 'object' && record !== null ? record.entries : undefined) ?? {}
+  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
   return {
     owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
-    swap_id: litStr(entries.swap_id?.value, 'field') ?? '',
-    token_in: litStr(entries.token_in?.value, 'field') ?? '',
-    token_out: litStr(entries.token_out?.value, 'field') ?? '',
-    request: entries.request?.value as unknown as SwapRequest ?? {} as unknown as SwapRequest,
-    caller: entries.caller?.value as string ?? '',
-    signer: entries.signer?.value as string ?? '',
-    blinded_address: entries.blinded_address?.value as string ?? '',
+    swap_id: litStr(fields.swap_id?.value, 'field') ?? '',
+    token_in: litStr(fields.token_in?.value, 'field') ?? '',
+    token_out: litStr(fields.token_out?.value, 'field') ?? '',
+    request: fields.request?.value as unknown as SwapRequest ?? {} as unknown as SwapRequest,
+    caller: fields.caller?.value as string ?? '',
+    signer: fields.signer?.value as string ?? '',
+    blinded_address: fields.blinded_address?.value as string ?? '',
     _record: record as unknown as RecordValue,
   }
 }
@@ -378,14 +378,14 @@ export interface MultiHopSwapComplianceRecord {
 }
 
 export function toMultiHopSwapComplianceRecord(record: RecordValue | string): MultiHopSwapComplianceRecord {
-  const entries = (typeof record === 'object' && record !== null ? record.entries : undefined) ?? {}
+  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
   return {
     owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
-    swap_id: litStr(entries.swap_id?.value, 'field') ?? '',
-    request: entries.request?.value as unknown as SwapMultiHopRequest ?? {} as unknown as SwapMultiHopRequest,
-    caller: entries.caller?.value as string ?? '',
-    signer: entries.signer?.value as string ?? '',
-    blinded_address: entries.blinded_address?.value as string ?? '',
+    swap_id: litStr(fields.swap_id?.value, 'field') ?? '',
+    request: fields.request?.value as unknown as SwapMultiHopRequest ?? {} as unknown as SwapMultiHopRequest,
+    caller: fields.caller?.value as string ?? '',
+    signer: fields.signer?.value as string ?? '',
+    blinded_address: fields.blinded_address?.value as string ?? '',
     _record: record as unknown as RecordValue,
   }
 }
@@ -405,18 +405,18 @@ export interface MintComplianceRecord {
 }
 
 export function toMintComplianceRecord(record: RecordValue | string): MintComplianceRecord {
-  const entries = (typeof record === 'object' && record !== null ? record.entries : undefined) ?? {}
+  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
   return {
     owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
-    token_id: litStr(entries.token_id?.value, 'field') ?? '',
-    token0_id: litStr(entries.token0_id?.value, 'field') ?? '',
-    token1_id: litStr(entries.token1_id?.value, 'field') ?? '',
-    nonce: litStr(entries.nonce?.value, 'field') ?? '',
-    request: entries.request?.value as unknown as MintPositionRequest ?? {} as unknown as MintPositionRequest,
-    caller: entries.caller?.value as string ?? '',
-    signer: entries.signer?.value as string ?? '',
-    recipient: entries.recipient?.value as string ?? '',
-    withdrawal: entries.withdrawal?.value as string ?? '',
+    token_id: litStr(fields.token_id?.value, 'field') ?? '',
+    token0_id: litStr(fields.token0_id?.value, 'field') ?? '',
+    token1_id: litStr(fields.token1_id?.value, 'field') ?? '',
+    nonce: litStr(fields.nonce?.value, 'field') ?? '',
+    request: fields.request?.value as unknown as MintPositionRequest ?? {} as unknown as MintPositionRequest,
+    caller: fields.caller?.value as string ?? '',
+    signer: fields.signer?.value as string ?? '',
+    recipient: fields.recipient?.value as string ?? '',
+    withdrawal: fields.withdrawal?.value as string ?? '',
     _record: record as unknown as RecordValue,
   }
 }
@@ -708,7 +708,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "U256__8JquwLopp8"
       ],
-      "members": [
+      "fields": [
         {
           "name": "hi",
           "type": {
@@ -729,7 +729,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "SwapRequest"
       ],
-      "members": [
+      "fields": [
         {
           "name": "pool",
           "type": {
@@ -795,7 +795,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "SwapHop"
       ],
-      "members": [
+      "fields": [
         {
           "name": "pool",
           "type": {
@@ -826,7 +826,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "SwapMultiHopRequest"
       ],
-      "members": [
+      "fields": [
         {
           "name": "token_in",
           "type": {
@@ -926,7 +926,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "MintPositionRequest"
       ],
-      "members": [
+      "fields": [
         {
           "name": "pool",
           "type": {
@@ -996,7 +996,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "MerkleProof"
       ],
-      "members": [
+      "fields": [
         {
           "name": "siblings",
           "type": {
@@ -1021,7 +1021,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "PoolState"
       ],
-      "members": [
+      "fields": [
         {
           "name": "token0",
           "type": {
@@ -1056,7 +1056,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "Slot"
       ],
-      "members": [
+      "fields": [
         {
           "name": "tick",
           "type": {
@@ -1156,7 +1156,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "Tick"
       ],
-      "members": [
+      "fields": [
         {
           "name": "pool",
           "type": {
@@ -1225,7 +1225,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "Position"
       ],
-      "members": [
+      "fields": [
         {
           "name": "token_id",
           "type": {
@@ -1301,7 +1301,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "PairKey"
       ],
-      "members": [
+      "fields": [
         {
           "name": "token0",
           "type": {
@@ -1322,7 +1322,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "SwapIterCfg"
       ],
-      "members": [
+      "fields": [
         {
           "name": "z",
           "type": {
@@ -1380,7 +1380,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "SwapIterState"
       ],
-      "members": [
+      "fields": [
         {
           "name": "sp",
           "type": {
@@ -1463,7 +1463,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "SwapOutput"
       ],
-      "members": [
+      "fields": [
         {
           "name": "recipient",
           "type": {
@@ -1514,7 +1514,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "PositionNFT"
       ],
-      "entries": [
+      "fields": [
         {
           "name": "owner",
           "type": {
@@ -1585,7 +1585,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "SwapComplianceRecord"
       ],
-      "entries": [
+      "fields": [
         {
           "name": "owner",
           "type": {
@@ -1659,7 +1659,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "MultiHopSwapComplianceRecord"
       ],
-      "entries": [
+      "fields": [
         {
           "name": "owner",
           "type": {
@@ -1717,7 +1717,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "MintComplianceRecord"
       ],
-      "entries": [
+      "fields": [
         {
           "name": "owner",
           "type": {

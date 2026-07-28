@@ -235,7 +235,7 @@ export function checkProgramConformance(source: string, standard: ArcStandard): 
       violations.push({ kind: 'missing_record', name: recordName })
       continue
     }
-    const actualFields = new Map(record.entries.map((f) => [f.name, `${f.type}.${f.visibility}`]))
+    const actualFields = new Map(record.fields.map((f) => [f.name, `${f.type}.${f.visibility}`]))
     checkFields(recordName, fields, actualFields, violations)
   }
 
@@ -245,7 +245,7 @@ export function checkProgramConformance(source: string, standard: ArcStandard): 
   for (const [structName, fields] of Object.entries(spec.structs)) {
     const struct = program.structs.find((s) => s.name === structName)
     if (!struct) continue
-    checkFields(structName, fields, new Map(struct.members.map((f) => [f.name, f.type])), violations)
+    checkFields(structName, fields, new Map(struct.fields.map((f) => [f.name, f.type])), violations)
   }
 
   checkCallables(spec.functions, program.functions, 'missing_function', violations)

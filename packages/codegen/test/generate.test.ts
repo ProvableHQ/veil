@@ -69,7 +69,7 @@ const minimalAbi: ABI = {
   structs: [
     {
       path: ['Config'],
-      members: [
+      fields: [
         { name: 'max_supply', type: { kind: 'primitive', primitive: 'u64' } },
         { name: 'admin', type: { kind: 'primitive', primitive: 'address' } },
         { name: 'active', type: { kind: 'primitive', primitive: 'boolean' } },
@@ -79,7 +79,7 @@ const minimalAbi: ABI = {
   records: [
     {
       path: ['Token'],
-      entries: [
+      fields: [
         { name: 'owner', type: { kind: 'primitive', primitive: 'address' }, mode: 'private' },
         { name: 'amount', type: { kind: 'primitive', primitive: 'u64' }, mode: 'private' },
         { name: 'active', type: { kind: 'primitive', primitive: 'boolean' }, mode: 'private' },
@@ -150,7 +150,7 @@ const advancedAbi: ABI = {
   structs: [
     {
       path: ['Vector3'],
-      members: [
+      fields: [
         { name: 'x', type: { kind: 'primitive', primitive: 'field' } },
         { name: 'y', type: { kind: 'primitive', primitive: 'field' } },
         { name: 'z', type: { kind: 'primitive', primitive: 'field' } },
@@ -158,7 +158,7 @@ const advancedAbi: ABI = {
     },
     {
       path: ['Transform'],
-      members: [
+      fields: [
         { name: 'position', type: { kind: 'struct', path: ['Vector3'], program: 'advanced.aleo' } },
         { name: 'scale', type: { kind: 'primitive', primitive: 'u32' } },
       ],
@@ -167,7 +167,7 @@ const advancedAbi: ABI = {
   records: [
     {
       path: ['Checksum'],
-      entries: [
+      fields: [
         { name: 'data', type: { kind: 'array', element: { kind: 'primitive', primitive: 'u8' }, length: 32 }, mode: 'private' },
         { name: 'nested_array', type: { kind: 'array', element: { kind: 'array', element: { kind: 'primitive', primitive: 'u8' }, length: 3 }, length: 4 }, mode: 'private' },
         { name: 'valid', type: { kind: 'optional', inner: { kind: 'primitive', primitive: 'boolean' } }, mode: 'private' },
@@ -247,7 +247,7 @@ describe('generate', () => {
         ...minimalAbi,
         records: [{
           path: ['SmallRecord'],
-          entries: [
+          fields: [
             { name: 'tier', type: { kind: 'primitive', primitive: 'u8' }, mode: 'private' },
             { name: 'level', type: { kind: 'primitive', primitive: 'u32' }, mode: 'private' },
           ],
@@ -265,9 +265,9 @@ describe('generate', () => {
       expect(output).toContain('export function toToken(record: RecordValue | string): Token {')
       // owner is read through the type guard so a ciphertext string is tolerated.
       expect(output).toContain("owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,")
-      expect(output).toContain('const entries = (')
-      expect(output).toContain('entries.amount?.value as bigint')
-      expect(output).toContain('entries.active?.value as boolean')
+      expect(output).toContain('const fields = (')
+      expect(output).toContain('fields.amount?.value as bigint')
+      expect(output).toContain('fields.active?.value as boolean')
       expect(output).toContain('_record: record as unknown as RecordValue,')
     })
   })
@@ -614,11 +614,11 @@ describe('generate', () => {
       const cardRecord = parsedAbi.records.find((r: any) => r.path.includes('LoyaltyCard'))
       expect(cardRecord).toBeDefined()
 
-      const pointsField = cardRecord.entries.find((f: any) => f.name === 'points')
+      const pointsField = cardRecord.fields.find((f: any) => f.name === 'points')
       expect(pointsField).toBeDefined()
       expect(pointsField.type).toEqual({ kind: 'primitive', primitive: 'u64' })
 
-      const tierField = cardRecord.entries.find((f: any) => f.name === 'tier')
+      const tierField = cardRecord.fields.find((f: any) => f.name === 'tier')
       expect(tierField).toBeDefined()
       expect(tierField.type).toEqual({ kind: 'primitive', primitive: 'u8' })
     })
@@ -629,12 +629,12 @@ describe('generate', () => {
       const source = generate({ abi: tokenAbi })
 
       // points is u64 → direct bigint cast
-      expect(source).toContain('entries.points?.value as bigint')
+      expect(source).toContain('fields.points?.value as bigint')
       // tier is u8 → Number() with inner ?? guard to prevent NaN for missing fields
-      expect(source).toContain('Number((entries.tier?.value ?? 0n) as bigint)')
+      expect(source).toContain('Number((fields.tier?.value ?? 0n) as bigint)')
       // field literals go through litStr so bigint runtime values are
       // canonicalized to the suffixed string form
-      expect(source).toContain("litStr(entries.card_id?.value, 'field')")
+      expect(source).toContain("litStr(fields.card_id?.value, 'field')")
     })
 
     it('generated typed interface uses named params and typed returns (not raw arrays)', () => {
@@ -760,7 +760,7 @@ describe('generate', () => {
       records: [
         {
           path: ['Vault'],
-          entries: [
+          fields: [
             { name: 'owner', type: { kind: 'primitive', primitive: 'address' }, mode: 'private' },
             { name: 'amount', type: { kind: 'primitive', primitive: 'u64' }, mode: 'private' },
             { name: 'config', type: { kind: 'struct', path: ['Config'], program: 'strict_test.aleo' }, mode: 'private' },
@@ -802,7 +802,7 @@ describe('generate', () => {
         structs: [
           {
             path: ['MerkleProof'],
-            members: [
+            fields: [
               { name: 'siblings', type: { kind: 'array', element: { kind: 'primitive', primitive: 'field' }, length: 16 } },
               { name: 'leaf_index', type: { kind: 'primitive', primitive: 'u32' } },
             ],
@@ -811,7 +811,7 @@ describe('generate', () => {
         records: [
           {
             path: ['Receipt'],
-            entries: [
+            fields: [
               { name: 'owner', type: { kind: 'primitive', primitive: 'address' }, mode: 'private' },
               { name: 'counts', type: { kind: 'array', element: { kind: 'primitive', primitive: 'u8' }, length: 4 }, mode: 'private' },
               { name: 'tags', type: { kind: 'array', element: { kind: 'primitive', primitive: 'field' }, length: 2 }, mode: 'private' },
@@ -854,7 +854,7 @@ describe('generate', () => {
         structs: [
           {
             path: ['Wrapper'],
-            members: [
+            fields: [
               { name: 'request', type: { kind: 'struct', path: ['MintPositionRequest'], program: 'core.aleo' } },
             ],
           },
@@ -904,7 +904,7 @@ describe('generate', () => {
 
     it('generated record mapper uses double-cast for nested struct fields', () => {
       // config is a struct field — must be cast through unknown, not left as PlaintextValue
-      expect(strictOutput).toContain('entries.config?.value as unknown as Config')
+      expect(strictOutput).toContain('fields.config?.value as unknown as Config')
     })
 
   })
@@ -917,7 +917,7 @@ describe('generate', () => {
   // RED evidence (before fix): this suite failed because primitiveToTsType mapped
   //   ALL integer widths to 'bigint', so:
   //   - widthAbi record produced `tier: bigint` and `points: bigint` (wrong for tier)
-  //   - mapper produced `record.entries.tier?.value as bigint` (no Number() wrapper)
+  //   - mapper produced `record.fields.tier?.value as bigint` (no Number() wrapper)
   //   - tsc strict-mode check reported type errors on Number/bigint mismatches
   // GREEN evidence (after fix): all three assertions pass and tsc exits 0.
   describe('numeric width mapping (u8–u32 → number, u64+ → bigint)', () => {
@@ -930,7 +930,7 @@ describe('generate', () => {
       records: [
         {
           path: ['WidthRecord'],
-          entries: [
+          fields: [
             { name: 'owner', type: { kind: 'primitive', primitive: 'address' }, mode: 'private' },
             // u32 → number
             { name: 'tier', type: { kind: 'primitive', primitive: 'u32' }, mode: 'private' },
@@ -970,20 +970,20 @@ describe('generate', () => {
     // Mapper expressions: u32 must use Number(...) wrapper; u64 must cast directly
     it('mapper uses Number() with inner ?? guard for u32 field', () => {
       // Inner ?? 0n guard prevents NaN: Number(undefined) = NaN, and NaN ?? 0 does not rescue it.
-      expect(widthOutput).toContain('Number((entries.tier?.value ?? 0n) as bigint)')
+      expect(widthOutput).toContain('Number((fields.tier?.value ?? 0n) as bigint)')
     })
 
     it('mapper uses direct cast for u64 field', () => {
-      expect(widthOutput).toContain('entries.amount?.value as bigint')
+      expect(widthOutput).toContain('fields.amount?.value as bigint')
     })
 
     // u32 default is 0, u64 default is 0n
     it('mapper defaults u32 field to 0 (inner guard prevents NaN)', () => {
-      expect(widthOutput).toContain('Number((entries.tier?.value ?? 0n) as bigint) ?? 0,')
+      expect(widthOutput).toContain('Number((fields.tier?.value ?? 0n) as bigint) ?? 0,')
     })
 
     it('mapper defaults u64 field to 0n', () => {
-      expect(widthOutput).toContain('entries.amount?.value as bigint ?? 0n,')
+      expect(widthOutput).toContain('fields.amount?.value as bigint ?? 0n,')
     })
 
     // (b) tsc strict-mode: generated code with both widths must typecheck
@@ -995,7 +995,7 @@ describe('generate', () => {
 
     // (c) Runtime decode: u32 decodes to JS number, u64 decodes to bigint
     it('decoder produces number for u32 field and bigint for u64 field', () => {
-      // Simulate the mapper at runtime: RecordEntryValue stores bigint for all ints.
+      // Simulate the mapper at runtime: RecordFieldValue stores bigint for all ints.
       // The generated mapper wraps u32 with Number() and leaves u64 as bigint.
       // We run the mapper logic inline to verify the runtime types without eval().
       const fakeRecord = {
@@ -1003,17 +1003,17 @@ describe('generate', () => {
         program: 'widths_test.aleo',
         recordName: 'WidthRecord',
         nonce: '0group',
-        entries: {
-          tier:   { value: 5n,    visibility: 'private' as const, type: { kind: 'primitive' as const, primitive: 'u32' as const } },
-          amount: { value: 1000n, visibility: 'private' as const, type: { kind: 'primitive' as const, primitive: 'u64' as const } },
+        fields: {
+          tier:   { value: 5n,    mode: 'private' as const, type: { kind: 'primitive' as const, primitive: 'u32' as const } },
+          amount: { value: 1000n, mode: 'private' as const, type: { kind: 'primitive' as const, primitive: 'u64' as const } },
         },
       }
 
       // Replicate what the generated mapper does:
-      //   tier:   Number((record.entries.tier?.value ?? 0n) as bigint) ?? 0
-      //   amount: record.entries.amount?.value as bigint                  ?? 0n
-      const tier   = Number((fakeRecord.entries.tier?.value ?? 0n) as bigint) ?? 0
-      const amount = (fakeRecord.entries.amount?.value as bigint)     ?? 0n
+      //   tier:   Number((record.fields.tier?.value ?? 0n) as bigint) ?? 0
+      //   amount: record.fields.amount?.value as bigint                  ?? 0n
+      const tier   = Number((fakeRecord.fields.tier?.value ?? 0n) as bigint) ?? 0
+      const amount = (fakeRecord.fields.amount?.value as bigint)     ?? 0n
 
       expect(typeof tier).toBe('number')
       expect(tier).toBe(5)

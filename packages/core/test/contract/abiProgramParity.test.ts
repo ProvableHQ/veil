@@ -140,8 +140,8 @@ describe.each([
       const name = abiStruct.path.join('.')
       const programStruct = program.structs.find((s) => s.name === name)!
       expect(programStruct, `struct ${name} missing from parsed program`).toBeDefined()
-      expect(programStruct.members, name).toEqual(
-        abiStruct.members.map((f) => ({ name: f.name, type: plaintextToText(f.type, abi.program) })),
+      expect(programStruct.fields, name).toEqual(
+        abiStruct.fields.map((f) => ({ name: f.name, type: plaintextToText(f.type, abi.program) })),
       )
     }
   })
@@ -153,14 +153,14 @@ describe.each([
       const programRecord = program.records.find((r) => r.name === name)!
       expect(programRecord, `record ${name} missing from parsed program`).toBeDefined()
       if (recordModesTrustworthy) {
-        expect(programRecord.entries, name).toEqual(
-          abiRecord.entries.map((f) => ({ name: f.name, type: plaintextToText(f.type, abi.program), visibility: f.mode })),
+        expect(programRecord.fields, name).toEqual(
+          abiRecord.fields.map((f) => ({ name: f.name, type: plaintextToText(f.type, abi.program), visibility: f.mode })),
         )
       } else {
         // Disassembler-produced ABI: field names and types only (modes are
         // wrong upstream — see the fixture table comment).
-        expect(programRecord.entries.map(({ name: n, type }) => ({ name: n, type })), name).toEqual(
-          abiRecord.entries.map((f) => ({ name: f.name, type: plaintextToText(f.type, abi.program) })),
+        expect(programRecord.fields.map(({ name: n, type }) => ({ name: n, type })), name).toEqual(
+          abiRecord.fields.map((f) => ({ name: f.name, type: plaintextToText(f.type, abi.program) })),
         )
       }
     }

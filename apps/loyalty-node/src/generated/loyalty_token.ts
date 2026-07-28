@@ -24,12 +24,12 @@ export interface LoyaltyCard {
 }
 
 export function toLoyaltyCard(record: RecordValue | string): LoyaltyCard {
-  const entries = (typeof record === 'object' && record !== null ? record.entries : undefined) ?? {}
+  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
   return {
     owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
-    card_id: litStr(entries.card_id?.value, 'field') ?? '',
-    points: entries.points?.value as bigint ?? 0n,
-    tier: Number((entries.tier?.value ?? 0n) as bigint) ?? 0,
+    card_id: litStr(fields.card_id?.value, 'field') ?? '',
+    points: fields.points?.value as bigint ?? 0n,
+    tier: Number((fields.tier?.value ?? 0n) as bigint) ?? 0,
     _record: record as unknown as RecordValue,
   }
 }
@@ -111,7 +111,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "LoyaltyCard"
       ],
-      "entries": [
+      "fields": [
         {
           "name": "owner",
           "type": {
