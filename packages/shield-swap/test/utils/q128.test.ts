@@ -17,6 +17,11 @@ import {
   amount1DeltaX128,
   getSqrtPriceAtTickX128,
   getTickEstimateX128,
+  U256_MAX,
+  u256WrappingSub,
+  feeGrowthInside,
+  feeOwed,
+  amountsForLiquidity,
 } from '../../src/utils/q128.js'
 
 // Vectors generated once from amm-v3's scripts/q128 Python oracles — the
@@ -119,5 +124,125 @@ describe('getTickEstimateX128', () => {
     for (const v of vectors.tickEstimateX128) {
       expect(getTickEstimateX128(BigInt(v.sqrtPriceX128)), `sp ${v.sqrtPriceX128}`).toBe(v.tickEstimate)
     }
+  })
+})
+
+describe('u256WrappingSub', () => {
+  it('subtracts normally when a >= b', () => {
+    expect(u256WrappingSub(10n, 3n)).toBe(7n)
+  })
+
+  it('wraps modulo 2^256 when b > a (the contract u256_sub)', () => {
+    expect(u256WrappingSub(5n, 7n)).toBe(U256_MAX - 1n)
+  })
+})
+
+// Vectors ported from amm-v3 tests/test_amm_helpers.leo (t_fee_growth_inside,
+// t_fee_growth_inside_wrapped): lower tick -100 out0=10/out1=20, upper tick
+// 100 out0=5/out1=8, globals g0=1000/g1=2000.
+describe('feeGrowthInside', () => {
+  const base = { tickLower: -100, tickUpper: 100 }
+  const vec = (tickCurrent: number, token: 0 | 1) =>
+    feeGrowthInside({
+      ...base,
+      tickCurrent,
+      feeGrowthOutsideLowerX128: token === 0 ? 10n : 20n,
+      feeGrowthOutsideUpperX128: token === 0 ? 5n : 8n,
+      feeGrowthGlobalX128: token === 0 ? 1000n : 2000n,
+    })
+
+  it('current tick in range: global minus both outsides', () => {
+    expect(vec(0, 0)).toBe(985n)
+    expect(vec(0, 1)).toBe(1972n)
+  })
+
+  it('current tick below the range', () => {
+    expect(vec(-200, 0)).toBe(5n)
+    expect(vec(-200, 1)).toBe(12n)
+  })
+
+  it('current tick above the range wraps at 2^256 (modular accounting)', () => {
+    expect(vec(150, 0)).toBe(U256_MAX - 4n) // −5 mod 2^256
+    expect(vec(150, 1)).toBe(U256_MAX - 11n) // −12 mod 2^256
+  })
+
+  it('exactly at the lower bound takes the in-range arm', () => {
+    expect(vec(-100, 0)).toBe(985n)
+    expect(vec(-100, 1)).toBe(1972n)
+  })
+
+  it('outside counters exceeding the global wrap negative (t_fee_growth_inside_wrapped)', () => {
+    const w0 = feeGrowthInside({
+      ...base,
+      tickCurrent: 0,
+      feeGrowthOutsideLowerX128: 3000n,
+      feeGrowthOutsideUpperX128: 2500n,
+      feeGrowthGlobalX128: 2000n,
+    })
+    expect(w0).toBe(U256_MAX - 3499n) // −3500 mod 2^256
+  })
+})
+
+describe('feeOwed', () => {
+  it('floors delta·L / 2^128', () => {
+    expect(feeOwed(Q128, 0n, 5n)).toBe(5n)
+    expect(feeOwed(1n << 127n, 0n, 4n)).toBe(2n)
+    expect(feeOwed(1n << 127n, 0n, 1n)).toBe(0n)
+  })
+
+  it('matches the Leo vector: delta 3·2^128 at liquidity 7 → 21', () => {
+    expect(feeOwed(3n * Q128, 0n, 7n)).toBe(21n)
+  })
+
+  it('uses the wrapped 256-bit delta when now < last', () => {
+    expect(feeOwed(0n, Q128, 1n)).toBe(Q128 - 1n)
+  })
+
+  it('is zero at zero liquidity', () => {
+    expect(feeOwed(Q128, 0n, 0n)).toBe(0n)
+  })
+})
+
+describe('amountsForLiquidity', () => {
+  const L = 94217047056n
+  const lower = getSqrtPriceAtTickX128(-64400)
+  const upper = getSqrtPriceAtTickX128(-60200)
+
+  it('price below the range: all token0, amount1 = 0', () => {
+    const price = getSqrtPriceAtTickX128(-70000)
+    const { amount0, amount1 } = amountsForLiquidity(price, lower, upper, L, false)
+    expect(amount0).toBe(amount0DeltaX128(lower, upper, L, false))
+    expect(amount1).toBe(0n)
+  })
+
+  it('price at the lower bound counts as below (contract: sr <= lower)', () => {
+    const { amount0, amount1 } = amountsForLiquidity(lower, lower, upper, L, false)
+    expect(amount0).toBe(amount0DeltaX128(lower, upper, L, false))
+    expect(amount1).toBe(0n)
+  })
+
+  it('price inside the range: token0 above price, token1 below price', () => {
+    const price = getSqrtPriceAtTickX128(-62000)
+    const { amount0, amount1 } = amountsForLiquidity(price, lower, upper, L, false)
+    expect(amount0).toBe(amount0DeltaX128(price, upper, L, false))
+    expect(amount1).toBe(amount1DeltaX128(lower, price, L, false))
+    expect(amount0 > 0n && amount1 > 0n).toBe(true)
+  })
+
+  it('price at/above the upper bound: all token1, amount0 = 0', () => {
+    const { amount0, amount1 } = amountsForLiquidity(upper, lower, upper, L, false)
+    expect(amount0).toBe(0n)
+    expect(amount1).toBe(amount1DeltaX128(lower, upper, L, false))
+  })
+
+  it('orders the bounds itself (sa/sb may arrive swapped)', () => {
+    const price = getSqrtPriceAtTickX128(-62000)
+    expect(amountsForLiquidity(price, upper, lower, L, false)).toEqual(
+      amountsForLiquidity(price, lower, upper, L, false),
+    )
+  })
+
+  it('zero liquidity yields zero amounts', () => {
+    expect(amountsForLiquidity(lower, lower, upper, 0n, false)).toEqual({ amount0: 0n, amount1: 0n })
   })
 })

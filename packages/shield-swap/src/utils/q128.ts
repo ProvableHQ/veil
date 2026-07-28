@@ -207,3 +207,124 @@ export function getTickEstimateX128(sqrtPriceX128: bigint): number {
   }
   return Number(estimate)
 }
+
+/**
+ * Subtracts two u256 values with 256-bit modular wrap-around — the
+ * contract's `u256::u256_sub`. Fee-growth accumulators rely on modular
+ * arithmetic, so a "negative" delta is meaningful, not an error. Pure and
+ * local.
+ */
+export function u256WrappingSub(a: bigint, b: bigint): bigint {
+  return (a - b) & U256_MAX
+}
+
+/**
+ * Computes fee growth inside a tick range for one fee accumulator —
+ * bit-exact mirror of the contract's `get_fee_growth_inside` (amm-v3
+ * `main.leo`), applied one token at a time. All `*X128` inputs and the
+ * return value are Q128.128 accumulators (u256, modular). Pure and local.
+ *
+ * @param params.tickCurrent The pool's current tick (`slot.tick`).
+ * @param params.tickLower Lower bound of the position's range.
+ * @param params.tickUpper Upper bound of the position's range.
+ * @param params.feeGrowthOutsideLowerX128 The lower tick's
+ *   `fee_growth_outside*_x_128`. Pass 0n for an uninitialized tick — only
+ *   reachable at zero position liquidity, where the result multiplies out.
+ * @param params.feeGrowthOutsideUpperX128 The upper tick's counterpart.
+ * @param params.feeGrowthGlobalX128 The pool-wide accumulator
+ *   (`slot.fee_growth_global*_x_128`).
+ * @returns The Q128.128 fee growth inside the range, modular at 2^256.
+ *
+ * @example
+ * const inside0 = feeGrowthInside({
+ *   tickCurrent: slot.tick,
+ *   tickLower: -100,
+ *   tickUpper: 100,
+ *   feeGrowthOutsideLowerX128: lower.fee_growth_outside0_x_128,
+ *   feeGrowthOutsideUpperX128: upper.fee_growth_outside0_x_128,
+ *   feeGrowthGlobalX128: slot.fee_growth_global0_x_128,
+ * })
+ */
+export function feeGrowthInside(params: {
+  tickCurrent: number
+  tickLower: number
+  tickUpper: number
+  feeGrowthOutsideLowerX128: bigint
+  feeGrowthOutsideUpperX128: bigint
+  feeGrowthGlobalX128: bigint
+}): bigint {
+  const below =
+    params.tickCurrent >= params.tickLower
+      ? params.feeGrowthOutsideLowerX128
+      : u256WrappingSub(params.feeGrowthGlobalX128, params.feeGrowthOutsideLowerX128)
+  const above =
+    params.tickCurrent < params.tickUpper
+      ? params.feeGrowthOutsideUpperX128
+      : u256WrappingSub(params.feeGrowthGlobalX128, params.feeGrowthOutsideUpperX128)
+  return u256WrappingSub(u256WrappingSub(params.feeGrowthGlobalX128, below), above)
+}
+
+/**
+ * Settles a fee-growth delta into owed tokens — the contract's `fee_owed`:
+ * floor((now − last) · liquidity / 2^128) over the 256-bit modular delta.
+ * The contract additionally asserts the result fits u128; this mirror
+ * returns the floored value unchecked (a read never rejects chain state).
+ * Amounts are raw base units (u128 on chain). Pure and local.
+ *
+ * @param feeGrowthInsideNowX128 Current fee growth inside the range, Q128.128.
+ * @param feeGrowthInsideLastX128 The position's checkpoint
+ *   (`fee_growth_inside*_last_x_128`), Q128.128.
+ * @param liquidity The position's live liquidity (u128).
+ * @returns Raw base units owed since the checkpoint.
+ *
+ * @example
+ * const owed0 = feeOwed(inside0, position.fee_growth_inside0_last_x_128, position.liquidity)
+ */
+export function feeOwed(feeGrowthInsideNowX128: bigint, feeGrowthInsideLastX128: bigint, liquidity: bigint): bigint {
+  const delta = u256WrappingSub(feeGrowthInsideNowX128, feeGrowthInsideLastX128)
+  return (delta * liquidity) >> 128n
+}
+
+/**
+ * Splits a position's liquidity into current token amounts — bit-exact
+ * mirror of the contract's `view_amounts_for_liquidity`: all token0 when the
+ * price sits at or below the range, all token1 at or above it, a mix inside.
+ * Bounds may arrive in either order. Amounts are raw base units. Pure and
+ * local.
+ *
+ * @param sqrtPriceX128 The pool's current sqrt price (`slot.sqrt_price`), Q128.128.
+ * @param sqrtAX128 One range bound as a sqrt price, Q128.128.
+ * @param sqrtBX128 The other range bound as a sqrt price, Q128.128.
+ * @param liquidity The position's liquidity (u128).
+ * @param roundUp Rounds each amount up instead of down. The contract passes
+ *   `false` for withdrawal-side views; pass `true` only to mirror
+ *   deposit-side checks.
+ * @returns Raw base-unit amounts of each pool token backing the liquidity.
+ *
+ * @example
+ * const { amount0, amount1 } = amountsForLiquidity(
+ *   slot.sqrt_price,
+ *   getSqrtPriceAtTickX128(tickLower),
+ *   getSqrtPriceAtTickX128(tickUpper),
+ *   position.liquidity,
+ *   false,
+ * )
+ */
+export function amountsForLiquidity(
+  sqrtPriceX128: bigint,
+  sqrtAX128: bigint,
+  sqrtBX128: bigint,
+  liquidity: bigint,
+  roundUp: boolean,
+): { amount0: bigint; amount1: bigint } {
+  const lower = sqrtAX128 < sqrtBX128 ? sqrtAX128 : sqrtBX128
+  const upper = sqrtAX128 < sqrtBX128 ? sqrtBX128 : sqrtAX128
+  // Contract: below := !(lower < price), i.e. price <= lower.
+  if (sqrtPriceX128 <= lower) return { amount0: amount0DeltaX128(lower, upper, liquidity, roundUp), amount1: 0n }
+  if (sqrtPriceX128 < upper)
+    return {
+      amount0: amount0DeltaX128(sqrtPriceX128, upper, liquidity, roundUp),
+      amount1: amount1DeltaX128(lower, sqrtPriceX128, liquidity, roundUp),
+    }
+  return { amount0: 0n, amount1: amount1DeltaX128(lower, upper, liquidity, roundUp) }
+}
