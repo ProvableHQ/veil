@@ -1,12 +1,12 @@
-import { readMapping, parseRecordPlaintextLoose, type Client, type RecordValue } from '@provablehq/veil-core'
+import { readMapping, parsePlaintextValue, type Client, type StructValue } from '@provablehq/veil-core'
 import { SHIELD_SWAP } from '../../constants.js'
 
 /**
  * Reads a struct-valued mapping entry and decodes it with a generated decoder.
  *
  * Shared by the chain-direct struct reads (`getPool`, `getSlot`,
- * `getSwapOutput`): one node request, JSON-null guard, loose plaintext parse,
- * then the width-correct generated decoder.
+ * `getSwapOutput`): one node request, JSON-null guard, plaintext parse, then
+ * the width-correct generated decoder.
  *
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param program Program to read from; defaults to `shield_swap.aleo`.
@@ -14,19 +14,25 @@ import { SHIELD_SWAP } from '../../constants.js'
  * @param key Mapping key as an Aleo literal, including its type suffix.
  * @param decode Generated struct decoder (e.g. `toSlot`).
  * @returns The decoded struct, or `null` when the key is not in the mapping.
+ * @throws When the mapping value parses to a literal or an array instead of a
+ *   struct — the mapping's declared value type does not match `decode`.
  */
 export async function readStructMapping<T>(
   client: Client,
   program: string | undefined,
   mapping: string,
   key: string,
-  decode: (value: RecordValue) => T,
+  decode: (value: StructValue) => T,
 ): Promise<T | null> {
   const programId = program ?? SHIELD_SWAP
   const raw = await readMapping(client, { programId, mapping, key })
   // The node returns JSON null for a key that is not in the mapping.
   if (raw == null || raw === 'null') return null
-  return decode(parseRecordPlaintextLoose(raw, programId, mapping))
+  const parsed = parsePlaintextValue(raw)
+  if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`${mapping} returned a non-struct value: ${raw}`)
+  }
+  return decode(parsed)
 }
 
 /**

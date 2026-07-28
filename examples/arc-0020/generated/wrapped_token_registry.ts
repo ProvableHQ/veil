@@ -2,7 +2,7 @@
 // Do not edit manually.
 
 import { getContract } from '@provablehq/veil-core'
-import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '@provablehq/veil-core'
+import type { RecordValue, FutureValue, DynamicFutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue, StructValue } from '@provablehq/veil-core'
 
 export const PROGRAM_ID = 'wrapped_token_registry.aleo' as const
 
@@ -23,13 +23,13 @@ export interface TokenInfo {
   max_supply: bigint
 }
 
-export function toTokenInfo(value: RecordValue): TokenInfo {
+export function toTokenInfo(value: StructValue): TokenInfo {
   return {
-    name: value.fields.name?.value as bigint ?? 0n,
-    symbol: value.fields.symbol?.value as bigint ?? 0n,
-    decimals: Number((value.fields.decimals?.value ?? 0n) as bigint) ?? 0,
-    supply: value.fields.supply?.value as bigint ?? 0n,
-    max_supply: value.fields.max_supply?.value as bigint ?? 0n,
+    name: value.name as bigint ?? 0n,
+    symbol: value.symbol as bigint ?? 0n,
+    decimals: Number((value.decimals ?? 0n) as bigint) ?? 0,
+    supply: value.supply as bigint ?? 0n,
+    max_supply: value.max_supply as bigint ?? 0n,
   }
 }
 
@@ -38,10 +38,10 @@ export interface TokenAllowance {
   spender: string
 }
 
-export function toTokenAllowance(value: RecordValue): TokenAllowance {
+export function toTokenAllowance(value: StructValue): TokenAllowance {
   return {
-    account: value.fields.account?.value as string ?? '',
-    spender: value.fields.spender?.value as string ?? '',
+    account: value.account as string ?? '',
+    spender: value.spender as string ?? '',
   }
 }
 
@@ -51,11 +51,12 @@ export interface Token {
   _record: RecordValue
 }
 
-export function toToken(record: RecordValue): Token {
+export function toToken(record: RecordValue | string): Token {
+  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
   return {
-    owner: record.owner,
-    amount: record.fields.amount?.value as bigint ?? 0n,
-    _record: record,
+    owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
+    amount: fields.amount?.value as bigint ?? 0n,
+    _record: record as unknown as RecordValue,
   }
 }
 

@@ -1,4 +1,4 @@
-import { requestRecords, parseRecordPlaintextLoose, type Client, type InputRequest, type OwnedRecord } from '@provablehq/veil-core'
+import { requestRecords, parseRecord, type Client, type InputRequest, type OwnedRecord } from '@provablehq/veil-core'
 
 /**
  * A token record's decoded essentials, alongside the record it came from.
@@ -39,7 +39,7 @@ export function parseTokenRecordInfo(
 ): { amount: bigint; tokenId?: string; recipientBound: boolean; boundRecipient?: string } | null {
   let value
   try {
-    value = parseRecordPlaintextLoose(plaintext)
+    value = parseRecord(plaintext)
   } catch {
     return null
   }
@@ -185,7 +185,7 @@ export async function selectPositionNFT(client: Client, params: SelectPositionNF
     if (!record.recordPlaintext) continue
     let value
     try {
-      value = parseRecordPlaintextLoose(record.recordPlaintext)
+      value = parseRecord(record.recordPlaintext)
     } catch {
       continue
     }
@@ -320,7 +320,7 @@ export async function resolveTokenRecord(
  */
 export function positionTokenIdFromPlaintext(plaintext: string): string | undefined {
   try {
-    const raw = parseRecordPlaintextLoose(plaintext).fields.token_id?.value
+    const raw = parseRecord(plaintext).fields.token_id?.value
     return typeof raw === 'bigint' ? `${raw}field` : undefined
   } catch {
     return undefined

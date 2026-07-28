@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseRecordPlaintext, parseRecordPlaintextLoose, toString, serializeRecord, encodeInputs, getRecordDef, getInputTypes } from '../../src/utils/records.js'
+import { parseRecord, toString, serializeRecord, encodeInputs, getRecordDef, getInputTypes } from '../../src/utils/records.js'
 import type { ABI, RecordDef } from '../../src/types/abi.js'
 import type { RecordValue, Plaintext } from '../../src/types/primitives.js'
 
@@ -99,67 +99,8 @@ describe('getInputTypes', () => {
   })
 })
 
-// ── parseRecordPlaintext ──────────────────────────────────────────────
-
-describe('parseRecordPlaintext', () => {
-  it('parses with RecordDef directly', () => {
-    const record = parseRecordPlaintext(SAMPLE_PLAINTEXT, loyaltyCardDef, 'loyalty_token.aleo')
-
-    expect(record.owner).toBe('aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px')
-    expect(record.program).toBe('loyalty_token.aleo')
-    expect(record.recordName).toBe('LoyaltyCard')
-    expect(record.nonce).toBe('456group')
-
-    expect(record.fields.card_id.value).toBe(123n)
-    expect(record.fields.card_id.mode).toBe('private')
-    expect(record.fields.card_id.type).toEqual({ kind: 'primitive', primitive: 'field' })
-
-    expect(record.fields.points.value).toBe(1000n)
-    expect(record.fields.points.type).toEqual({ kind: 'primitive', primitive: 'u64' })
-
-    expect(record.fields.tier.value).toBe(1n)
-    expect(record.fields.tier.type).toEqual({ kind: 'primitive', primitive: 'u8' })
-  })
-
-  it('parses with ABI + record name (convenience overload)', () => {
-    const record = parseRecordPlaintext(SAMPLE_PLAINTEXT, testAbi, 'LoyaltyCard', 'loyalty_token.aleo')
-
-    expect(record.owner).toBe('aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px')
-    expect(record.program).toBe('loyalty_token.aleo')
-    expect(record.recordName).toBe('LoyaltyCard')
-    expect(record.fields.points.value).toBe(1000n)
-    expect(record.fields.points.type).toEqual({ kind: 'primitive', primitive: 'u64' })
-  })
-
-  it('defaults program from ABI when not provided', () => {
-    const record = parseRecordPlaintext(SAMPLE_PLAINTEXT, testAbi, 'LoyaltyCard')
-    expect(record.program).toBe('loyalty_token.aleo')
-  })
-
-  it('skips internal fields (_nonce, _version)', () => {
-    const record = parseRecordPlaintext(SAMPLE_PLAINTEXT, loyaltyCardDef, 'loyalty_token.aleo')
-    expect(record.fields['_nonce']).toBeUndefined()
-  })
-
-  it('extracts owner without visibility suffix', () => {
-    const record = parseRecordPlaintext(SAMPLE_PLAINTEXT, loyaltyCardDef, 'loyalty_token.aleo')
-    expect(record.owner).not.toContain('.private')
-  })
-})
-
-// ── parseRecordPlaintextLoose ─────────────────────────────────────────
-
-describe('parseRecordPlaintextLoose', () => {
-  it('parses without RecordDef by inferring types from values', () => {
-    const record = parseRecordPlaintextLoose(SAMPLE_PLAINTEXT)
-
-    expect(record.fields.points.value).toBe(1000n)
-    expect(record.fields.points.type).toEqual({ kind: 'primitive', primitive: 'u64' })
-
-    expect(record.fields.tier.value).toBe(1n)
-    expect(record.fields.tier.type).toEqual({ kind: 'primitive', primitive: 'u8' })
-  })
-})
+// parseRecord's own suite lives in parseRecord.test.ts; this file covers the
+// ABI-adjacent helpers and serialization around it.
 
 // ── toString / serializeRecord ────────────────────────────────────────
 
@@ -167,6 +108,7 @@ describe('toString', () => {
   it('serializes a RecordValue back to plaintext format', () => {
     const record: RecordValue = {
       owner: 'aleo1abc',
+      ownerVisibility: 'private',
       program: 'test.aleo',
       recordName: 'TestRecord',
       fields: {
@@ -174,6 +116,7 @@ describe('toString', () => {
         tier: { value: 2n, mode: 'private', type: { kind: 'primitive', primitive: 'u8' } },
       },
       nonce: '789group',
+      version: 0,
     }
 
     const result = toString(record)
@@ -182,14 +125,15 @@ describe('toString', () => {
     expect(result).toContain('points: 1000u64.private')
     expect(result).toContain('tier: 2u8.private')
     expect(result).toContain('_nonce: 789group.public')
+    expect(result).toContain('_version: 0u8.public')
   })
 
   it('serializeRecord is an alias for toString', () => {
     expect(serializeRecord).toBe(toString)
   })
 
-  it('round-trips: parseRecordPlaintext → toString produces equivalent output', () => {
-    const parsed = parseRecordPlaintext(SAMPLE_PLAINTEXT, loyaltyCardDef, 'loyalty_token.aleo')
+  it('round-trips: parseRecord → toString produces equivalent output', () => {
+    const parsed = parseRecord(SAMPLE_PLAINTEXT, { def: loyaltyCardDef, program: 'loyalty_token.aleo' })
     const serialized = toString(parsed)
 
     expect(serialized).toContain('owner: aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px.private')
@@ -232,9 +176,9 @@ describe('RecordFieldValue.type proves necessary for serialization', () => {
       type: { kind: 'primitive', primitive: 'field' },
     }
 
-    const recordU64: RecordValue = { owner: 'aleo1x', program: 'test.aleo', recordName: 'Test', fields: { val: fieldU64 }, nonce: '0group' }
-    const recordU128: RecordValue = { owner: 'aleo1x', program: 'test.aleo', recordName: 'Test', fields: { val: fieldU128 }, nonce: '0group' }
-    const recordField: RecordValue = { owner: 'aleo1x', program: 'test.aleo', recordName: 'Test', fields: { val: fieldField }, nonce: '0group' }
+    const recordU64: RecordValue = { owner: 'aleo1x', ownerVisibility: 'private', program: 'test.aleo', recordName: 'Test', fields: { val: fieldU64 }, nonce: '0group', version: 0 }
+    const recordU128: RecordValue = { owner: 'aleo1x', ownerVisibility: 'private', program: 'test.aleo', recordName: 'Test', fields: { val: fieldU128 }, nonce: '0group', version: 0 }
+    const recordField: RecordValue = { owner: 'aleo1x', ownerVisibility: 'private', program: 'test.aleo', recordName: 'Test', fields: { val: fieldField }, nonce: '0group', version: 0 }
 
     expect(toString(recordU64)).toContain('val: 1000u64.private')
     expect(toString(recordU128)).toContain('val: 1000u128.private')
@@ -295,12 +239,14 @@ describe('encodeInputs', () => {
   it('serializes RecordValue inputs via toString', () => {
     const record: RecordValue = {
       owner: 'aleo1abc',
+      ownerVisibility: 'private',
       program: 'test.aleo',
       recordName: 'Test',
       fields: {
         points: { value: 500n, mode: 'private', type: { kind: 'primitive', primitive: 'u64' } },
       },
       nonce: '0group',
+      version: 0,
     }
 
     const encoded = encodeInputs([record], [{ kind: 'primitive', primitive: 'u64' }])

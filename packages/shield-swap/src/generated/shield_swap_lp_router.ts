@@ -2,7 +2,7 @@
 // Do not edit manually.
 
 import { getContract } from '@provablehq/veil-core'
-import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue, StructValue } from '@provablehq/veil-core'
+import type { RecordValue, FutureValue, DynamicFutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue, StructValue } from '@provablehq/veil-core'
 
 export const PROGRAM_ID = 'shield_swap_lp_router.aleo' as const
 
@@ -20,10 +20,10 @@ export interface MerkleProof {
   leaf_index: number
 }
 
-export function toMerkleProof(value: RecordValue): MerkleProof {
+export function toMerkleProof(value: StructValue): MerkleProof {
   return {
-    siblings: ((value.fields.siblings?.value ?? []) as PlaintextValue[]).map((el) => litStr(el, 'field')) as string[] ?? [],
-    leaf_index: Number((value.fields.leaf_index?.value ?? 0n) as bigint) ?? 0,
+    siblings: ((value.siblings ?? []) as PlaintextValue[]).map((el) => litStr(el, 'field')) as string[] ?? [],
+    leaf_index: Number((value.leaf_index ?? 0n) as bigint) ?? 0,
   }
 }
 

@@ -6,15 +6,28 @@ import type { TypedContractInstance } from '../types/inference.js'
 import type { RecordValue, Primitive } from '../types/primitives.js'
 import { parseProgram } from './parseProgram.js'
 import { encodeValue } from '../utils/values.js'
-import { encodeInputs, getInputTypes, getRecordDef, parseRecordPlaintext, parseRecordPlaintextLoose, toString as serializeRecord } from '../utils/records.js'
+import { encodeInputs, getInputTypes, getRecordDef, isRecordPlaintext, isFutureText, isDynamicFutureText, parseRecord, parseFuture, parseDynamicFuture, parsePlaintextValue, toString as serializeRecord } from '../utils/records.js'
 
 import type { InputValue } from '../types/contract.js'
 export type { InputValue } from '../types/contract.js'
 import { isInputRequest } from '../types/inputRequest.js'
 import type { InputRequest, TransactionInput } from '../types/inputRequest.js'
+import type { ParsedOutput } from '../types/inference.js'
+export type { ParsedOutput } from '../types/inference.js'
 
-/** Parsed output from the proxy — either a RecordValue (if it looks like a record) or the raw string */
-export type ParsedOutput = RecordValue | string
+/**
+ * Parses a raw output by shape: record plaintext parses as a record, future
+ * text as a FutureValue, dynamic future text as a DynamicFutureValue, other
+ * brace-delimited plaintext as a struct, and everything else (literals,
+ * ciphertext) passes through as the raw string.
+ */
+function parseRawOutput(raw: string, program?: string): ParsedOutput {
+  if (!raw.trimStart().startsWith('{')) return raw
+  if (isRecordPlaintext(raw)) return parseRecord(raw, { program })
+  if (isDynamicFutureText(raw)) return parseDynamicFuture(raw)
+  if (isFutureText(raw)) return parseFuture(raw)
+  return parsePlaintextValue(raw)
+}
 
 // ── Parameter types ───────────────────────────────────────────────────
 
@@ -66,8 +79,8 @@ export type ContractWriteMethods = Record<string, (params: ContractWriteParams) 
  * @property transitionId On-chain transition id.
  * @property program Program ID the transition ran against.
  * @property function Function name the transition invoked.
- * @property outputs Transition outputs, parsed to `RecordValue` where an output
- *   looks like a record and left as the raw string otherwise.
+ * @property outputs Transition outputs: records parse to `RecordValue`, struct
+ *   plaintext to `PlaintextValue`, everything else stays the raw string.
  */
 export type ContractTransitionResult = { transitionId: string; program: string; function: string; outputs: ParsedOutput[] }
 
@@ -263,7 +276,7 @@ export function getContract(params: GetContractParameters): ContractInstance {
     })
   }
 
-  /** Parse raw output strings — detect records and parse them */
+  /** Parse raw output strings — records as records, structs as plaintext */
   function parseOutputs(rawOutputs: string[], fnName: string): ParsedOutput[] {
     // With a rich ABI, look up RecordDefs for typed parsing
     if (resolvedAbi) {
@@ -271,38 +284,32 @@ export function getContract(params: GetContractParameters): ContractInstance {
       return rawOutputs.map((raw, i) => {
         if (!raw.trimStart().startsWith('{')) return raw
 
-        // Check if this output is a known record type
+        // Route by the declared output kind where the ABI knows it — decisive,
+        // unlike the static-future text sniff in parseRawOutput.
         const outputDef = fn?.outputs[i]
+        if (outputDef?.type.kind === 'future') {
+          return parseFuture(raw)
+        }
+        if (outputDef?.type.kind === 'dynamicFuture') {
+          return parseDynamicFuture(raw)
+        }
         if (outputDef?.type.kind === 'record') {
           const recordName = outputDef.type.path[outputDef.type.path.length - 1]
           if (recordName) {
             try {
               const recordDef = getRecordDef(resolvedAbi!, recordName)
-              return parseRecordPlaintext(raw, recordDef, program)
+              return parseRecord(raw, { def: recordDef, program })
             } catch {
-              // Record not found in this program's ABI (cross-program), fall back to loose
+              // Record not in this program's ABI (cross-program) — parse from the text alone.
             }
           }
         }
-        return parseRecordPlaintextLoose(raw, program)
+        return parseRawOutput(raw, program)
       })
     }
 
-    // Parsed Program or no ABI — loose parse for anything that looks like a record
-    return rawOutputs.map((raw) => {
-      if (raw.trimStart().startsWith('{')) {
-        return parseRecordPlaintextLoose(raw, program)
-      }
-      return raw
-    })
-  }
-
-  /** Loose-parse a single output — try record detection, fall back to raw string */
-  function parseLooseOutput(raw: string): ParsedOutput {
-    if (raw.trimStart().startsWith('{')) {
-      return parseRecordPlaintextLoose(raw)
-    }
-    return raw
+    // Parsed Program or no ABI — route each output by shape.
+    return rawOutputs.map((raw) => parseRawOutput(raw, program))
   }
 
   const read = new Proxy({} as ContractReadMethods, {
@@ -382,7 +389,7 @@ export function getContract(params: GetContractParameters): ContractInstance {
           function: t.function,
           outputs: t.program === program
             ? parseOutputs(t.outputs, t.function)
-            : t.outputs.map(o => parseLooseOutput(o)),
+            : t.outputs.map(o => parseRawOutput(o)),
         }))
 
         // Raw `outputs` is already the called function's transition outputs.
@@ -417,7 +424,7 @@ export function getContract(params: GetContractParameters): ContractInstance {
           function: t.function,
           outputs: t.program === program
             ? parseOutputs(t.outputs, t.function)
-            : t.outputs.map(o => parseLooseOutput(o)),
+            : t.outputs.map(o => parseRawOutput(o)),
         }))
 
         // Raw `outputs` is already the called function's transition outputs (set by extractTransitions).

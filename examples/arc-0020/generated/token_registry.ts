@@ -2,7 +2,7 @@
 // Do not edit manually.
 
 import { getContract } from '@provablehq/veil-core'
-import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '@provablehq/veil-core'
+import type { RecordValue, FutureValue, DynamicFutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue, StructValue } from '@provablehq/veil-core'
 
 export const PROGRAM_ID = 'token_registry.aleo' as const
 
@@ -27,17 +27,17 @@ export interface TokenMetadata {
   external_authorization_party: string
 }
 
-export function toTokenMetadata(value: RecordValue): TokenMetadata {
+export function toTokenMetadata(value: StructValue): TokenMetadata {
   return {
-    token_id: litStr(value.fields.token_id?.value, 'field') ?? '',
-    name: value.fields.name?.value as bigint ?? 0n,
-    symbol: value.fields.symbol?.value as bigint ?? 0n,
-    decimals: Number((value.fields.decimals?.value ?? 0n) as bigint) ?? 0,
-    supply: value.fields.supply?.value as bigint ?? 0n,
-    max_supply: value.fields.max_supply?.value as bigint ?? 0n,
-    admin: value.fields.admin?.value as string ?? '',
-    external_authorization_required: value.fields.external_authorization_required?.value as boolean ?? false,
-    external_authorization_party: value.fields.external_authorization_party?.value as string ?? '',
+    token_id: litStr(value.token_id, 'field') ?? '',
+    name: value.name as bigint ?? 0n,
+    symbol: value.symbol as bigint ?? 0n,
+    decimals: Number((value.decimals ?? 0n) as bigint) ?? 0,
+    supply: value.supply as bigint ?? 0n,
+    max_supply: value.max_supply as bigint ?? 0n,
+    admin: value.admin as string ?? '',
+    external_authorization_required: value.external_authorization_required as boolean ?? false,
+    external_authorization_party: value.external_authorization_party as string ?? '',
   }
 }
 
@@ -46,10 +46,10 @@ export interface TokenOwner {
   token_id: string
 }
 
-export function toTokenOwner(value: RecordValue): TokenOwner {
+export function toTokenOwner(value: StructValue): TokenOwner {
   return {
-    account: value.fields.account?.value as string ?? '',
-    token_id: litStr(value.fields.token_id?.value, 'field') ?? '',
+    account: value.account as string ?? '',
+    token_id: litStr(value.token_id, 'field') ?? '',
   }
 }
 
@@ -60,12 +60,12 @@ export interface Balance {
   authorized_until: number
 }
 
-export function toBalance(value: RecordValue): Balance {
+export function toBalance(value: StructValue): Balance {
   return {
-    token_id: litStr(value.fields.token_id?.value, 'field') ?? '',
-    account: value.fields.account?.value as string ?? '',
-    balance: value.fields.balance?.value as bigint ?? 0n,
-    authorized_until: Number((value.fields.authorized_until?.value ?? 0n) as bigint) ?? 0,
+    token_id: litStr(value.token_id, 'field') ?? '',
+    account: value.account as string ?? '',
+    balance: value.balance as bigint ?? 0n,
+    authorized_until: Number((value.authorized_until ?? 0n) as bigint) ?? 0,
   }
 }
 
@@ -78,14 +78,15 @@ export interface Token {
   _record: RecordValue
 }
 
-export function toToken(record: RecordValue): Token {
+export function toToken(record: RecordValue | string): Token {
+  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
   return {
-    owner: record.owner,
-    amount: record.fields.amount?.value as bigint ?? 0n,
-    token_id: litStr(record.fields.token_id?.value, 'field') ?? '',
-    external_authorization_required: record.fields.external_authorization_required?.value as boolean ?? false,
-    authorized_until: Number((record.fields.authorized_until?.value ?? 0n) as bigint) ?? 0,
-    _record: record,
+    owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
+    amount: fields.amount?.value as bigint ?? 0n,
+    token_id: litStr(fields.token_id?.value, 'field') ?? '',
+    external_authorization_required: fields.external_authorization_required?.value as boolean ?? false,
+    authorized_until: Number((fields.authorized_until?.value ?? 0n) as bigint) ?? 0,
+    _record: record as unknown as RecordValue,
   }
 }
 

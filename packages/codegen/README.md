@@ -3,11 +3,12 @@
 Generates TypeScript bindings from an Aleo program's ABI, and ships the
 `veil-codegen` CLI that drives it.
 
-Reach for it as a package maintainer, not a consumer: point it at a program's
+It applies to package maintainers, not consumers: point it at a program's
 `abi.json` and it emits a `.ts` module of struct and record interfaces, record
-and struct decoders (`RecordValue` → typed interface), per-function input and
-output types, mapping and storage types, the parsed `PROGRAM_ABI` constant, and
-a typed contract factory (`read`/`write`/`simulate`/`execute`). A package like
+decoders (`RecordValue` → typed interface), struct decoders (`StructValue` →
+typed interface), per-function input and output types, mapping and storage
+types, the parsed `PROGRAM_ABI` constant, and a typed contract factory
+(`read`/`write`/`simulate`/`execute`). A package like
 `@provablehq/shield-swap-sdk` commits that output and ships it — a consumer installing the
 package gets the bindings already. You run codegen when the upstream contract
 drifts (redeploy, a new or renamed entrypoint, struct, or mapping) and the
