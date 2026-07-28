@@ -17,8 +17,8 @@ export type { ParsedOutput } from '../types/inference.js'
 
 /**
  * Parses a raw output by shape: record plaintext parses as a record, other
- * brace-delimited plaintext as a struct, and everything else (literals,
- * ciphertext, futures) passes through as the raw string.
+ * brace-delimited plaintext (structs, future text) as struct plaintext, and
+ * everything else (literals, ciphertext) passes through as the raw string.
  */
 function parseRawOutput(raw: string, program?: string): ParsedOutput {
   if (!raw.trimStart().startsWith('{')) return raw

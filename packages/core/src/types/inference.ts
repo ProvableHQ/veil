@@ -99,8 +99,9 @@ export type ExtractMapping<A extends ABI, N extends string> =
 /** Parsed output from the proxy — either a RecordValue or the raw string */
 /**
  * Parsed output of a contract call: a RecordValue for record plaintext, a
- * PlaintextValue for struct plaintext, or the raw string for everything else
- * (literals, ciphertext, futures).
+ * PlaintextValue for struct plaintext (including future text, which parses as
+ * a struct with `program_id`/`function_name`/`arguments` members), or the raw
+ * string for everything else (literals, ciphertext).
  */
 export type ParsedOutput = RecordValue | PlaintextValue
 
