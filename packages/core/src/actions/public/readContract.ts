@@ -56,13 +56,12 @@ export async function readContract(client: Client, params: ReadContractParameter
       params: { programId: params.programId, mapping: params.mapping, key: params.key },
     })
   } catch (error) {
-    // The Provable API answers 404 only for a malformed request — an absent
-    // key is a 200 with null — and its 404 body blames the program even when
-    // the key literal is what failed to parse. Rethrow with the actionable
-    // cause.
+    // An absent key is not an error — the node answers 200 with null — so a
+    // 404 means the request itself failed. Add the read context and keep the
+    // original error as the cause.
     if (error instanceof TransportError && error.status === 404) {
       throw new TransportError(
-        `Reading ${params.programId}/${params.mapping} failed with HTTP 404 — the key ${JSON.stringify(params.key)} is not a valid Aleo literal, or the program id is malformed. An absent key is not an error; it resolves to null.`,
+        `Reading ${params.programId}/${params.mapping} failed with HTTP 404. An absent key is not an error — it resolves to null.`,
         { cause: error, status: error.status, body: error.body },
       )
     }
