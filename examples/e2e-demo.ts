@@ -80,22 +80,15 @@ describe('E2E: veil against live Aleo mainnet', () => {
   })
 
   it('readContract() reads a program mapping value', async () => {
-    // Use committee mapping which has well-known validator entries
-    // Note: 404 means the key doesn't exist in the mapping — handle gracefully
-    try {
-      const result = await publicClient.readContract({
-        programId: 'credits.aleo',
-        mapping: 'account',
-        key: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
-      })
-      console.log('  Mapping value:', result)
-      // If we get here, the key exists
-      expect(result).toBeDefined()
-    } catch (e: any) {
-      // 404 = key not found in mapping, which is valid behavior
-      console.log('  Key not in mapping (404) — expected for this address')
-      expect(e.message).toContain('404')
-    }
+    // An absent key is not an error — the read resolves to null. A 404 only
+    // means the request itself was malformed (bad key literal or program id).
+    const result = await publicClient.readContract({
+      programId: 'credits.aleo',
+      mapping: 'account',
+      key: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
+    })
+    console.log('  Mapping value:', result)
+    expect(result === null || /u64$/.test(result)).toBe(true)
   })
 
   it('getContract() creates a typed contract instance', async () => {
@@ -111,16 +104,12 @@ describe('E2E: veil against live Aleo mainnet', () => {
     expect(credits.program).toBe('credits.aleo')
     expect(credits.abi).toBeDefined()
 
-    // Read through contract instance — use try/catch since 404 = key not found
-    try {
-      const value = await credits.read.account({
-        key: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
-      })
-      console.log('  credits.read.account():', value)
-    } catch (e: any) {
-      console.log('  credits.read.account(): key not found (404) — expected')
-      expect(e.message).toContain('404')
-    }
+    // Read through the contract instance — an absent key resolves to null
+    const value = await credits.read.account({
+      key: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
+    })
+    console.log('  credits.read.account():', value)
+    expect(value === null || /u64$/.test(value)).toBe(true)
 
     // ABI validation — nonexistent mapping throws
     expect(() => credits.read.nonexistent({ key: 'test' })).toThrow('does not exist')

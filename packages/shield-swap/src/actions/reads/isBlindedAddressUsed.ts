@@ -1,5 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { readBoolMapping } from './internal.js'
+import { toUsedBlindedAddressesMappingValue } from '../../generated/shield_swap.js'
+import { readFlagMapping } from './internal.js'
 
 /**
  * Checks whether a blinded address has already been consumed by a private
@@ -13,7 +14,7 @@ import { readBoolMapping } from './internal.js'
  *
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param params The blinded address (`aleo1…`) to check, and optionally the
- *   program to read from (defaults to `DEFAULT_PROGRAM`).
+ *   program to read from (defaults to `shield_swap.aleo`).
  * @returns `true` when the address has been used, otherwise `false`.
  *
  * @example
@@ -23,5 +24,5 @@ export async function isBlindedAddressUsed(
   client: Client,
   params: { address: string; program?: string },
 ): Promise<boolean> {
-  return readBoolMapping(client, params.program, 'used_blinded_addresses', params.address)
+  return readFlagMapping(client, params.program, 'used_blinded_addresses', params.address, toUsedBlindedAddressesMappingValue)
 }

@@ -2,7 +2,7 @@
 // Do not edit manually.
 
 import { getContract } from '@provablehq/veil-core'
-import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '@provablehq/veil-core'
+import type { RecordValue, FutureValue, DynamicFutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue, StructValue } from '@provablehq/veil-core'
 
 export const PROGRAM_ID = 'loyalty_rewards.aleo' as const
 
@@ -23,13 +23,14 @@ export interface RewardVoucher {
   _record: RecordValue
 }
 
-export function toRewardVoucher(record: RecordValue): RewardVoucher {
+export function toRewardVoucher(record: RecordValue | string): RewardVoucher {
+  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
   return {
-    owner: record.owner,
-    voucher_id: litStr(record.fields.voucher_id?.value, 'field') ?? '',
-    reward_type: Number((record.fields.reward_type?.value ?? 0n) as bigint) ?? 0,
-    amount: record.fields.amount?.value as bigint ?? 0n,
-    _record: record,
+    owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
+    voucher_id: litStr(fields.voucher_id?.value, 'field') ?? '',
+    reward_type: Number((fields.reward_type?.value ?? 0n) as bigint) ?? 0,
+    amount: fields.amount?.value as bigint ?? 0n,
+    _record: record as unknown as RecordValue,
   }
 }
 

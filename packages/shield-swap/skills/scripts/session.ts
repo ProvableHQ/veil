@@ -14,7 +14,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadNetwork, generateAccount } from '@provablehq/veil-aleo-sdk'
-import { shieldSwapActions, authenticateWithAccount, getPrivateBalances, dustScale } from '@provablehq/shield-swap-sdk'
+import { shieldSwapActions, authenticateWithAccount, getPrivateBalances, DEFAULT_PROGRAM } from '@provablehq/shield-swap-sdk'
 import type { SwapHandle, MultiHopSwapHandle } from '@provablehq/shield-swap-sdk'
 
 export const NETWORK = 'testnet' as const
@@ -35,6 +35,13 @@ export type TrackedPosition = {
 /** Everything that must survive between agent sessions. */
 export type ShieldSwapState = {
   network: string
+  /**
+   * DEX API origin this session targets. Unset means the SDK's default
+   * hosted deployment. Set by setup.ts (`--api-url` / SHIELD_SWAP_API_URL);
+   * the access grant, API token, and airdrop job are scoped to one
+   * deployment, so setup clears them when this changes.
+   */
+  apiUrl?: string
   privateKey?: string
   address?: string
   provableApi?: { consumerId: string; apiKey: string }
@@ -136,16 +143,6 @@ export function deserializeHandle(stored: Record<string, unknown>): SwapHandle |
 }
 
 /**
- * Floors an amount to the token's no-dust rule. The contract rejects
- * amounts whose low `decimals - 9` digits are non-zero (tokens with more
- * than 9 decimals) — every swap or deposit amount MUST pass through this.
- */
-export function floorToDust(amount: bigint, decimals: number): bigint {
-  const scale = dustScale(decimals)
-  return amount - (amount % scale)
-}
-
-/**
  * Renders a raw base-unit amount in human units ("0.0534 ETH"), the ONLY
  * format that should ever reach the user. Raw units (wei-style integers)
  * are SDK-facing; showing them to a person misstates their balances by
@@ -198,7 +195,10 @@ export async function loadSession() {
     useFeeMaster: process.env.SHIELD_SWAP_FEE_MASTER !== '0',
     records: scanner,
   })
-  const client = walletClient.extend(shieldSwapActions({ api: {} }))
+  // SHIELD_SWAP_API_URL overrides for one-off runs; the persistent choice
+  // lives in the state file (setup.ts --api-url).
+  const apiUrl = process.env.SHIELD_SWAP_API_URL ?? state.apiUrl
+  const client = walletClient.extend(shieldSwapActions({ api: { baseUrl: apiUrl } }))
   await authenticateWithAccount(client.api, account)
 
   return { client, account, scanner, state, aleo }
@@ -219,7 +219,7 @@ export async function getHoldings(
     tokenId: string
     symbol: string
     decimals: number
-    wrapperProgram?: string
+    underlyingProgram?: string
     publicAmount: bigint
     privateAmount: bigint
   }>
@@ -228,15 +228,17 @@ export async function getHoldings(
   const pub = new Map(
     (await client.api.getPublicBalances({ user: address })).data.map((b) => [b.token_id, BigInt(b.balance ?? 0)]),
   )
-  const programs = tokens.map((t) => t.wrapper_program).filter((p): p is string => !!p)
+  // Private records live in the underlying program (a plain token's own, or a
+  // wrapped asset's underlying — credits for ALEO).
+  const programs = tokens.map((t) => t.underlying_program).filter((p): p is string => !!p)
   const priv = await getPrivateBalances(client, { programs })
   return tokens.map((t) => ({
     tokenId: t.address,
     symbol: t.symbol,
     decimals: t.decimals,
-    wrapperProgram: t.wrapper_program ?? undefined,
+    underlyingProgram: t.underlying_program ?? undefined,
     publicAmount: pub.get(t.address) ?? 0n,
-    privateAmount: t.wrapper_program ? (priv[t.wrapper_program] ?? 0n) : 0n,
+    privateAmount: t.underlying_program ? (priv[t.underlying_program] ?? 0n) : 0n,
   }))
 }
 
@@ -250,7 +252,7 @@ export async function getHoldings(
 export async function buildDexImports(
   client: Awaited<ReturnType<typeof loadSession>>['client'],
   tokenPrograms: string[],
-  program = 'shield_swap_v3.aleo',
+  program = DEFAULT_PROGRAM,
 ): Promise<Record<string, string>> {
   const { getProgram } = await import('@provablehq/veil-core')
   const imports: Record<string, string> = {}

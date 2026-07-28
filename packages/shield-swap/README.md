@@ -10,7 +10,7 @@ viem-style actions for the following:
 > This README documents the SDK surface itself.
 
 ### Executing DEX smart-contract functions
-Actions for executing the functions of the `shield_swap_v3.aleo` contract.
+Actions for executing the functions of the `shield_swap.aleo` contract.
 - **Private swaps** — Runs the `swap` --> `claim_swap_output` flows, and the
 multi-hop variants (`swap_multi_hop` --> `claim_multi_hop_output`) for 2–3
 pool routes.
@@ -117,7 +117,7 @@ Either way, `shieldSwapActions` adds the DEX methods to the client. On-chain
 reads and writes go directly on the client (`client.getPool`,
 `client.swap`), and the off-chain DEX API is namespaced under
 `client.api` — so a call site always shows whether a value came from the chain
-or the service. By default everything targets `shield_swap_v3.aleo` and the
+or the service. By default everything targets `shield_swap.aleo` and the
 Provable dev API; override either with
 `shieldSwapActions({ program, api: { baseUrl } })`.
 
@@ -486,7 +486,7 @@ await client.increaseLiquidity({
   amount0Desired,
   amount1Desired,
   imports,
-  positionRecord: { type: 'record', program: 'shield_swap_v3.aleo', recordname: 'PositionNFT', filters: { pool: { eq: poolKey } } },
+  positionRecord: { type: 'record', program: 'shield_swap.aleo', recordname: 'PositionNFT', filters: { pool: { eq: poolKey } } },
   token0Record: { type: 'record', program: token0Program, recordname: 'Token', filters: { amount: { gte: `${amount0Desired}u128` } } },
   token1Record: { type: 'record', program: token1Program, recordname: 'Token', filters: { amount: { gte: `${amount1Desired}u128` } } },
 })
@@ -525,10 +525,9 @@ if (!controls.tradeable) {
 The individual readers are there too when you need one gate —
 `isGlobalPaused`, `isTokenPaused`, `isPairPaused`, `isTokenAllowed` (gates
 pool creation, not trading), `isPoolCreationOpen`, and `getFrozenPosition`
-(a frozen position blocks liquidity operations until unfrozen).
-`getTokenDecimals` reads a token's registered decimal count, which pairs
-with `dustScale` to validate raw amounts. Control state can change before
-your transaction finalizes, so treat a green read as advisory.
+(a frozen position blocks liquidity operations until unfrozen). Control
+state can change before your transaction finalizes, so treat a green read
+as advisory.
 
 Two more chain reads round out reconciliation after liquidity operations:
 `getPosition` returns a position's public state by its token id (liquidity,
@@ -536,6 +535,26 @@ range, and the `tokens_owed` balances that `decreaseLiquidity` and fee
 accrual settle into), and `getTick` returns an initialized tick — pass
 `{ poolKey, tick }` to derive the key locally, or a pre-derived `tickKey`
 to stay off the WASM peer.
+
+## Owned positions
+
+`getOwnedPositions` scans the account's PositionNFT records and returns every
+live position joined with its on-chain state — liquidity, the current token
+amounts behind it, and the fees it could collect today. The private record
+carries the identity (pool, range, withdrawal address) and the public
+mappings carry the amounts; the action does the join and the two contract
+calculations (`view_amounts_for_liquidity`, fee-growth settlement) so a
+wallet or bot does not have to persist token ids or re-derive the math.
+`getOwnedPosition` resolves a single position by its token id. Both need
+record access (a connected wallet, or a local account with a record
+provider); each entry's `state` is `null` while a fresh mint finalizes.
+
+```ts
+const positions = await client.getOwnedPositions()
+for (const p of positions) {
+  console.log(p.positionTokenId, p.state?.amount0, p.state?.uncollectedFees0)
+}
+```
 
 ## Deriving keys and ids locally
 
@@ -704,5 +723,5 @@ VEIL_INTEGRATION=1 pnpm exec vitest run packages/shield-swap/test/integration
 
 A test that reports as skipped is missing a required variable for its tier. The
 write tier spends real testnet funds on each run. Optional overrides:
-`VEIL_DEX_PROGRAM` (defaults to `shield_swap_v3.aleo`), `ALEO_DPS_URL`, and
+`VEIL_DEX_PROGRAM` (defaults to `shield_swap.aleo`), `ALEO_DPS_URL`, and
 `ALEO_RSS_URL`.

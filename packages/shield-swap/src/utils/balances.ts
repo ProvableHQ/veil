@@ -72,21 +72,23 @@ export async function getBalances(
     throw new Error('getBalances needs a user address — pass params.user or use a client with an account')
   }
 
-  // Registry: token id ↔ wrapper program, plus symbol/decimals for the result.
+  // Registry: token id ↔ underlying program, plus symbol/decimals for the result.
   const tokens = (await api.getTokens()).data
   const scoped = params.tokens ? tokens.filter((t) => params.tokens!.includes(t.address)) : tokens
 
-  // Public balances key by token id; private records key by wrapper program.
+  // Public balances key by token id; private records live in the underlying
+  // program — the spendable inventory users actually hold (a plain ARC-20's
+  // own records, or a wrapped asset's underlying, e.g. credits for ALEO).
   const publicByToken = new Map(
     (await api.getPublicBalances({ user })).data.map((b) => [b.token_id, BigInt(b.balance)]),
   )
-  const programs = scoped.map((t) => t.wrapper_program).filter((p): p is string => !!p)
+  const programs = scoped.map((t) => t.underlying_program).filter((p): p is string => !!p)
   const priv = await getPrivateBalances(client, { programs })
 
   const out: GetBalancesReturnType = {}
   for (const t of scoped) {
     const pub = publicByToken.get(t.address) ?? 0n
-    const prv = t.wrapper_program ? (priv[t.wrapper_program] ?? 0n) : 0n
+    const prv = t.underlying_program ? (priv[t.underlying_program] ?? 0n) : 0n
     // With an explicit token filter, report every requested token; otherwise
     // skip tokens the user does not hold at all.
     if (!params.tokens && pub === 0n && prv === 0n) continue

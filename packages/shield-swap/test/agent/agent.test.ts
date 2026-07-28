@@ -3,9 +3,9 @@ import type { Client } from '@provablehq/veil-core'
 import type { ApiClient } from '../../src/api/client.js'
 import { shieldSwapAgentToolSchemas, createShieldSwapAgentTools } from '../../src/agent/index.js'
 
-// Real captured testnet pool plaintext (ETHx/USDC) — has bigint fields (scale0/scale1).
+// Captured testnet pool plaintext (ETHx/USDC). The new PoolState has no scale fields.
 const POOL_PLAINTEXT =
-  '{\n  token0: 122352848155208110005843045field,\n  token1: 15594200448253854747971580789field,\n  fee: 10000u16,\n  enabled: true,\n  scale0: 1000000000u128,\n  scale1: 1u128\n}'
+  '{\n  token0: 122352848155208110005843045field,\n  token1: 15594200448253854747971580789field,\n  fee: 10000u16,\n  enabled: true\n}'
 
 /** Scripted client: answers the `pools` mapping read getPool performs. */
 function fakeClient(): Client {
@@ -80,7 +80,6 @@ describe('shieldSwapAgentToolSchemas — gating', () => {
         'shield_swap_claim',
         'shield_swap_create_pool',
         'shield_swap_swap_multi_hop',
-        'shield_swap_claim_multi_hop',
       ]),
     )
     // No config returns everything, writes included.
@@ -138,8 +137,8 @@ describe('createShieldSwapAgentTools — wiring', () => {
     const getPool = tools.find((t) => t.schema.name === 'shield_swap_get_pool')!
     const result = (await getPool.handler({ poolKey: '4719field' })) as Record<string, unknown>
     expect(result.token0).toBe('122352848155208110005843045field')
-    expect(result.scale0).toBe('1000000000') // bigint → string
-    expect(typeof result.scale0).toBe('string')
+    expect(result.fee).toBe(10000) // small int → number
+    expect(result.enabled).toBe(true)
   })
 
   it('get_route handler coerces the string amount to a bigint for the API', async () => {

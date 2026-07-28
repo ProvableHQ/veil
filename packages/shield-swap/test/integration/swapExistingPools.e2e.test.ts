@@ -15,7 +15,7 @@ import { parseTokenRecordInfo } from '../../src/utils/records.js'
  *   VEIL_E2E_PRIVATE_KEY   funded testnet account (credits for fees)
  *   ALEO_DPS_API_KEY, ALEO_CONSUMER_ID   delegated proving credentials
  * Optional: ALEO_DPS_URL, ALEO_RSS_URL, VEIL_DEX_PROGRAM (defaults to
- * shield_swap_v3.aleo).
+ * shield_swap.aleo).
  *
  * Run with:
  *   VEIL_INTEGRATION=1 npx vitest run packages/shield-swap/test/integration/swapExistingPools.e2e.test.ts
@@ -29,7 +29,7 @@ const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!DPS_API_K
 const NETWORK_URL = 'https://api.provable.com/v2'
 const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove/testnet'
 const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://api.provable.com/scanner'
-const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap_v3.aleo'
+const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap.aleo'
 const TX_TIMEOUT = 420_000
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -161,7 +161,6 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
       tokenInId: state.tokenIn!.address,
       amountIn,
       slippageBps: 500,
-      tokenInProgram: state.tokenIn!.program,
       imports: state.imports,
     })
     expect(state.handle.swapId).toMatch(/field$/)

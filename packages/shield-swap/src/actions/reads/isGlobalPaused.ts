@@ -1,5 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { readBoolMapping } from './internal.js'
+import { toGlobalPausedMappingValue } from '../../generated/shield_swap.js'
+import { readFlagMapping } from './internal.js'
 
 /**
  * Checks whether the whole program is paused.
@@ -13,12 +14,12 @@ import { readBoolMapping } from './internal.js'
  *
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param params Optionally the program to read from (defaults to
- *   `DEFAULT_PROGRAM`).
+ *   `shield_swap.aleo`).
  * @returns `true` when globally paused, otherwise `false`.
  *
  * @example
  * if (await isGlobalPaused(client)) throw new Error('trading is paused')
  */
 export async function isGlobalPaused(client: Client, params?: { program?: string }): Promise<boolean> {
-  return readBoolMapping(client, params?.program, 'global_paused', 'true')
+  return readFlagMapping(client, params?.program, 'global_paused', 'true', toGlobalPausedMappingValue)
 }

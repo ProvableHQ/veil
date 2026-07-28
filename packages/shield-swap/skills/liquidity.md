@@ -8,7 +8,9 @@ together.
 
 A position is a private PositionNFT record plus public state under its
 `positionTokenId`. Track every minted `positionTokenId` in the state file;
-it is the key to every later operation.
+it is the key to every later operation. A lost id is recoverable —
+`client.getOwnedPositions()` re-discovers every owned position (id, pool,
+range, live amounts, uncollected fees) from the account's records.
 
 ## Pick a pool and a range
 
@@ -32,7 +34,7 @@ const held = (id: string) => holdings.find((h) => h.tokenId === id && h.privateA
 
 let pool, slot: Awaited<ReturnType<typeof client.getSlot>>, spacing: number | null = null
 for (const p of pools) {
-  if (!held(p.token0) || !held(p.token1) || !p.token0_info?.wrapper_program || !p.token1_info?.wrapper_program) continue
+  if (!held(p.token0) || !held(p.token1) || !p.token0_info?.amm_token_program || !p.token1_info?.amm_token_program) continue
   const poolState = await client.getPool({ poolKey: p.key })
   if (!poolState || !(await client.isFeeTierValid({ fee: poolState.fee }))) continue
   const s = await client.getSlot({ poolKey: p.key })
@@ -56,26 +58,31 @@ valid but earns nothing until price enters it.
 ## Mint the position
 
 ```ts
-import { appendPosition, buildDexImports, floorToDust } from '$SKILLS/scripts/session.js'
+import { appendPosition, buildDexImports } from '$SKILLS/scripts/session.js'
 
-const p0 = pool.token0_info!.wrapper_program!
-const p1 = pool.token1_info!.wrapper_program!
-// Token programs + the DEX program's own declared imports.
+// The AMM-side token programs feed the imports ONLY. Do not pass them as
+// `token0Program`/`token1Program` — those name the programs holding the
+// caller's RECORDS, and for a wrapped token the records live in the
+// UNDERLYING program, which the SDK resolves on chain by itself.
+const p0 = pool.token0_info!.amm_token_program!
+const p1 = pool.token1_info!.amm_token_program!
 const imports = await buildDexImports(client, [p0, p1])
 
 // Deposit a small slice of each holding; the contract balances the two
 // against the range and refunds the excess side as change. Deposits obey
-// the same no-dust rule as swaps — always floor.
 const h0 = held(pool.token0)!
 const h1 = held(pool.token1)!
 const { positionTokenId, transactionId } = await client.mint({
   poolKey: pool.key,
   tickLower,
   tickUpper,
-  amount0Desired: floorToDust(h0.privateAmount / 20n, h0.decimals), // 5%, dust-safe
-  amount1Desired: floorToDust(h1.privateAmount / 20n, h1.decimals),
-  token0Program: p0,
-  token1Program: p1,
+  amount0Desired: h0.privateAmount / 20n, // 5% of the holding
+  amount1Desired: h1.privateAmount / 20n,
+  // Both REQUIRED, no defaults. `withdrawal` is where collect pays out,
+  // fixed for the position's life at mint — a cold payout address is a
+  // deliberate choice here; for a self-custodied agent both are the account.
+  recipient: account.address,
+  withdrawal: account.address,
   imports,
 })
 
@@ -101,19 +108,16 @@ const position = await client.getPosition({ positionTokenId })
 ## Add liquidity to an existing position
 
 `increaseLiquidity` deposits more of both tokens into the position's
-existing range. The PositionNFT record is auto-selected **by pool** — the
-action has no `positionTokenId` parameter, so with more than one position
-in the same pool its target is ambiguous. Keep ONE position per pool when
-using it; otherwise treat the second position as its own mint/decrease
-lifecycle.
+existing range. Pin the position with `positionTokenId` — without it the
+PositionNFT record is auto-selected by pool, which is ambiguous the moment
+a second position exists in the same pool.
 
 ```ts
 await client.increaseLiquidity({
   poolKey: pool.key,
+  positionTokenId, // pin the position — pool-only selection is ambiguous
   amount0Desired: extra0, // raw base units, bigint, dust-floored
   amount1Desired: extra1,
-  token0Program: p0,
-  token1Program: p1,
   imports, // same two program sources as mint
 })
 ```

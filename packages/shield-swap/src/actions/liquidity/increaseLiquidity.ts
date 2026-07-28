@@ -1,8 +1,12 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@provablehq/veil-core'
-import { selectTokenRecord, resolvePositionRecord, positionTokenIdFromPlaintext } from '../../utils/records.js'
+import { resolvePositionRecord, positionTokenIdFromPlaintext } from '../../utils/records.js'
 import { requireAccount, requirePool } from '../../utils/guards.js'
 import { pickInsertHint } from '../../utils/tick-hints.js'
-import { DEFAULT_PROGRAM } from '../../constants.js'
+import { requireFieldOutput } from '../../utils/outputs.js'
+import type { TokenRoute } from '../../utils/routing.js'
+import type { ProofProvider } from '../../utils/proofs.js'
+import { SHIELD_SWAP } from '../../constants.js'
+import { autoSelectSideRecord, dispatchLiquidityCall, resolveSideRoutes, wrapperSenderProof } from './internal.js'
 
 /**
  * Parameters for {@link increaseLiquidity}.
@@ -18,11 +22,19 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  * @property positionRecord Explicit PositionNFT record input (plaintext
  *   literal, or a `record` InputRequest for wallet signers — REQUIRED for
  *   wallets, along with both token records).
- * @property token0Program Program holding token0 records (local path
- *   auto-select).
- * @property token1Program Program holding token1 records.
- * @property token0Record Explicit token0 record input.
- * @property token1Record Explicit token1 record input.
+ * @property token0Program Program holding the caller's token0 records.
+ *   Optional — defaults to the route's underlying program (wrapped side) or
+ *   the program decoded from the token id (plain side).
+ * @property token1Program Program holding the caller's token1 records.
+ * @property token0Record Explicit token0 record input. A wrapped side's
+ *   record is the UNDERLYING asset's record, never a wrapper record.
+ * @property token1Record Explicit token1 record input, same rule.
+ * @property token0Route Pre-resolved route override for token0 — skips the
+ *   on-chain wrapped-ness read (offline/advanced use).
+ * @property token1Route Pre-resolved route override for token1.
+ * @property proofs Freezelist proof provider for populated freezelists.
+ *   Defaults to the empty-tree witness on the wrapped sides' sender-proof
+ *   slots (the only proof slots this transition has).
  * @property tickLowerHint Explicit hint override; defaults to
  *   `pickInsertHint` for the position's own bounds.
  * @property tickUpperHint Explicit hint override.
@@ -30,7 +42,9 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
  *   callees statically — pass the involved token programs' sources when
  *   proving locally or via a service that requires them.
- * @property program shield_swap program override.
+ * @property program shield_swap core program override. Defaults to
+ *   `shield_swap.aleo`. Router calls always target
+ *   `shield_swap_lp_router.aleo`.
  */
 export type IncreaseLiquidityParameters = {
   poolKey: string
@@ -44,6 +58,9 @@ export type IncreaseLiquidityParameters = {
   token1Program?: string
   token0Record?: string | InputRequest
   token1Record?: string | InputRequest
+  token0Route?: TokenRoute
+  token1Route?: TokenRoute
+  proofs?: ProofProvider
   tickLowerHint?: number
   tickUpperHint?: number
   imports?: Record<string, string>
@@ -53,7 +70,7 @@ export type IncreaseLiquidityParameters = {
 /**
  * The increase's essentials.
  *
- * @property positionTokenId The grown position's `token_id` (first public
+ * @property positionTokenId The grown position's `token_id` (a public
  *   output on the local path; on the wallet path, echoes the
  *   caller-supplied `positionTokenId` — the id is stable across position
  *   operations — and is `undefined` when only `positionRecord` was given).
@@ -69,14 +86,21 @@ export type IncreaseLiquidityReturnType = {
  *
  * Consumes the PositionNFT record plus two token records and re-issues them
  * (updated NFT, change records). The position's tick range is fixed at mint
- * — this only deepens it.
+ * — this only deepens it. Dispatches on the pair's wrapped-ness like
+ * {@link mint}: both plain calls the core `increase_liquidity` directly;
+ * any wrapped side routes through `shield_swap_lp_router.aleo`
+ * (`increase_from_wrapped_arc20` / `increase_from_arc20_wrapped` /
+ * `increase_from_wrapped_wrapped`), where the wrapped side's record slot
+ * takes the caller's UNDERLYING record followed by that wrapper's
+ * freezelist sender proof.
  *
- * Signer paths mirror `mint`: local accounts auto-select the
- * position and token records; wallet accounts must supply all three record
- * inputs explicitly.
+ * Signer paths mirror `mint`: local accounts auto-select the position and
+ * token records; wallet accounts must supply all three record inputs
+ * explicitly.
  *
- * Hits the network: pool read, record scans, hint reads, and the
- * transaction. Signs, and on the local path proves locally.
+ * Hits the network: pool read, route reads (cached per token), record
+ * scans, hint reads, and the transaction. Signs, and on the local path
+ * proves locally.
  *
  * @param client A Veil wallet client (local or wallet account).
  * @param params The amounts and optional overrides.
@@ -88,18 +112,44 @@ export type IncreaseLiquidityReturnType = {
  * @example
  * await increaseLiquidity(client, {
  *   poolKey, amount0Desired: 10n ** 17n, amount1Desired: 200_000n,
- *   token0Program: 'ethx_5a095e.aleo', token1Program: 'usdc_5a095e.aleo',
  * })
  */
 export async function increaseLiquidity(
   client: Client,
   params: IncreaseLiquidityParameters,
 ): Promise<IncreaseLiquidityReturnType> {
-  const program = params.program ?? DEFAULT_PROGRAM
+  const program = params.program ?? SHIELD_SWAP
 
   const pool = await requirePool(client, params.poolKey, program)
 
-  const isLocal = requireAccount(client, 'increaseLiquidity').type === 'local'
+  const account = requireAccount(client, 'increaseLiquidity')
+  const isLocal = account.type === 'local'
+
+  const [route0, route1] = await resolveSideRoutes(client, {
+    token0Id: pool.token0,
+    token1Id: pool.token1,
+    program,
+    token0Route: params.token0Route,
+    token1Route: params.token1Route,
+  })
+
+  // The only proof slots on increase are the wrapped sides' sender proofs.
+  const [senderProof0, senderProof1] = await Promise.all([
+    wrapperSenderProof(params.proofs, route0, account.address),
+    wrapperSenderProof(params.proofs, route1, account.address),
+  ])
+
+  // Everything after the record slots is identical across all four variants.
+  const tail = (tickLowerHint: number, tickUpperHint: number): string[] => [
+    `${params.amount0Desired}u128`,
+    `${params.amount1Desired}u128`,
+    `${params.amount0Min ?? 0n}u128`,
+    `${params.amount1Min ?? 0n}u128`,
+    pool.token0,
+    pool.token1,
+    `${tickLowerHint}i32`,
+    `${tickUpperHint}i32`,
+  ]
 
   if (isLocal) {
     // Token records must be literals on the local path; resolvePositionRecord
@@ -109,6 +159,7 @@ export async function increaseLiquidity(
     }
 
     // Resolve the position for its record AND its tick bounds (→ hints).
+    // PositionNFTs live in the core program regardless of dispatch.
     const {
       plaintext: positionPlaintext,
       tickLower,
@@ -134,31 +185,30 @@ export async function increaseLiquidity(
       throw new Error('tickLowerHint/tickUpperHint are required when passing positionRecord explicitly')
     }
 
-    const record0 = params.token0Record ?? (await autoSelect(client, params.token0Program, pool.token0, params.amount0Desired, 'token0'))
-    const record1 = params.token1Record ?? (await autoSelect(client, params.token1Program, pool.token1, params.amount1Desired, 'token1'))
+    const record0 =
+      params.token0Record ?? (await autoSelectSideRecord(client, route0, params.amount0Desired, params.token0Program))
+    const record1 =
+      params.token1Record ?? (await autoSelectSideRecord(client, route1, params.amount1Desired, params.token1Program))
+
+    const dispatch = dispatchLiquidityCall({
+      coreProgram: program,
+      coreFunction: 'increase_liquidity',
+      routerPrefix: 'increase_from',
+      route0,
+      route1,
+      record0,
+      record1,
+      senderProof0,
+      senderProof1,
+    })
 
     const result = await executeContract(client, {
-      program,
-      function: 'increase_liquidity',
+      program: dispatch.program,
+      function: dispatch.functionName,
       imports: params.imports,
-      inputs: [
-        positionPlaintext,
-        record0,
-        record1,
-        `${params.amount0Desired}u128`,
-        `${params.amount1Desired}u128`,
-        `${params.amount0Min ?? 0n}u128`,
-        `${params.amount1Min ?? 0n}u128`,
-        pool.token0,
-        pool.token1,
-        `${tickLowerHint}i32`,
-        `${tickUpperHint}i32`,
-      ],
+      inputs: [positionPlaintext, ...dispatch.recordInputs, ...tail(tickLowerHint, tickUpperHint)],
     })
-    const positionTokenId = result.outputs[0]
-    if (!positionTokenId?.endsWith('field')) {
-      throw new Error(`Unexpected increase_liquidity output shape: ${JSON.stringify(result.outputs)}`)
-    }
+    const positionTokenId = requireFieldOutput(result.outputs, dispatch.functionName)
     return { positionTokenId, transactionId: result.transactionId }
   }
 
@@ -170,21 +220,28 @@ export async function increaseLiquidity(
   if (params.tickLowerHint === undefined || params.tickUpperHint === undefined) {
     throw new Error('Wallet accounts must provide tickLowerHint/tickUpperHint (the position bounds are wallet-side)')
   }
+  const dispatch = dispatchLiquidityCall({
+    coreProgram: program,
+    coreFunction: 'increase_liquidity',
+    routerPrefix: 'increase_from',
+    route0,
+    route1,
+    record0: params.token0Record,
+    record1: params.token1Record,
+    senderProof0,
+    senderProof1,
+  })
   const inputs: TransactionInput[] = [
     params.positionRecord,
-    params.token0Record,
-    params.token1Record,
-    `${params.amount0Desired}u128`,
-    `${params.amount1Desired}u128`,
-    `${params.amount0Min ?? 0n}u128`,
-    `${params.amount1Min ?? 0n}u128`,
-    pool.token0,
-    pool.token1,
-    `${params.tickLowerHint}i32`,
-    `${params.tickUpperHint}i32`,
+    ...dispatch.recordInputs,
+    ...tail(params.tickLowerHint, params.tickUpperHint),
   ]
-  const transactionId = await writeContract(client, { program, function: 'increase_liquidity',
-      imports: params.imports ? Object.keys(params.imports) : undefined, inputs })
+  const transactionId = await writeContract(client, {
+    program: dispatch.program,
+    function: dispatch.functionName,
+    imports: params.imports ? Object.keys(params.imports) : undefined,
+    inputs,
+  })
   // The id is stable across position operations. Prefer the id inside a
   // granted plaintext (the position actually spent); fall back to the
   // caller-supplied id for opaque record requests.
@@ -193,19 +250,4 @@ export async function increaseLiquidity(
       ? positionTokenIdFromPlaintext(params.positionRecord)
       : undefined) ?? params.positionTokenId
   return { positionTokenId, transactionId }
-}
-
-/** Auto-select a token record on the local path, with an actionable error. */
-async function autoSelect(
-  client: Client,
-  tokenProgram: string | undefined,
-  tokenId: string,
-  minAmount: bigint,
-  label: string,
-): Promise<string> {
-  if (!tokenProgram) {
-    throw new Error(`${label}Program is required to auto-select a record (or pass ${label}Record explicitly)`)
-  }
-  const picked = await selectTokenRecord(client, { program: tokenProgram, minAmount, tokenId })
-  return picked.record.recordPlaintext
 }

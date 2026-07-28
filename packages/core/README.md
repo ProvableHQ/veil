@@ -91,8 +91,10 @@ const supply = await client.readContract({
 })
 ```
 
-`readContract` returns the raw literal (e.g. `"5000000u64"`). Decode it with
-`parseValue` from the package's utils when you need a structured value.
+`readContract` returns the raw literal (e.g. `"5000000u64"`), or `null` when
+the key is not in the mapping — absence is a normal answer, not an error.
+Decode a non-null value with `parseValue` from the package's utils when you
+need a structured value.
 
 ### Token standard conformance
 

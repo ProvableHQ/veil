@@ -1,8 +1,16 @@
 {
   "programs": [
     {
-      "abi": "./abi/shield_swap_v3.json",
+      "abi": "./abi/shield_swap.json",
       "out": "../src/generated/shield_swap.ts"
+    },
+    {
+      "abi": "./abi/shield_swap_router.json",
+      "out": "../src/generated/shield_swap_router.ts"
+    },
+    {
+      "abi": "./abi/shield_swap_lp_router.json",
+      "out": "../src/generated/shield_swap_lp_router.ts"
     }
   ],
   "coreImport": "@provablehq/veil-core"

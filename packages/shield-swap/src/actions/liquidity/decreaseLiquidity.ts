@@ -1,7 +1,8 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@provablehq/veil-core'
 import { resolvePositionRecord, positionTokenIdFromPlaintext } from '../../utils/records.js'
 import { requireAccount } from '../../utils/guards.js'
-import { DEFAULT_PROGRAM } from '../../constants.js'
+import { requireFieldOutput } from '../../utils/outputs.js'
+import { SHIELD_SWAP } from '../../constants.js'
 
 /**
  * Parameters for {@link decreaseLiquidity}.
@@ -19,7 +20,8 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  * @property positionRecord Explicit PositionNFT record input (plaintext
  *   literal, or a `record` InputRequest for wallet signers — REQUIRED for
  *   wallets).
- * @property program shield_swap program override. Defaults to `DEFAULT_PROGRAM`.
+ * @property program shield_swap program override. Defaults to
+ *   `shield_swap.aleo`. Always a direct core call — no router is involved.
  */
 export type DecreaseLiquidityParameters = {
   poolKey: string
@@ -73,7 +75,7 @@ export async function decreaseLiquidity(
   client: Client,
   params: DecreaseLiquidityParameters,
 ): Promise<DecreaseLiquidityReturnType> {
-  const program = params.program ?? DEFAULT_PROGRAM
+  const program = params.program ?? SHIELD_SWAP
 
   const isLocal = requireAccount(client, 'decreaseLiquidity').type === 'local'
 
@@ -97,10 +99,7 @@ export async function decreaseLiquidity(
       function: 'decrease_liquidity',
       inputs: [positionPlaintext, ...tail],
     })
-    const positionTokenId = result.outputs[0]
-    if (!positionTokenId?.endsWith('field')) {
-      throw new Error(`Unexpected decrease_liquidity output shape: ${JSON.stringify(result.outputs)}`)
-    }
+    const positionTokenId = requireFieldOutput(result.outputs, 'decrease_liquidity')
     return { positionTokenId, transactionId: result.transactionId }
   }
 

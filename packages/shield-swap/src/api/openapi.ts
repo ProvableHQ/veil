@@ -586,6 +586,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/protocol/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_protocol_state"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/referral/admin": {
         parameters: {
             query?: never;
@@ -833,11 +849,11 @@ export interface paths {
          * POST /tokens/deploy
          * @description Deploys a fresh self-contained ARC-20 token (the treasury/deployer key is its
          *     baked-in admin) and mints the initial supply to the creator (`recipient`),
-         *     then registers it (with `wrapper_program`) so it is swap- and airdrop-ready.
+         *     then registers it (with `amm_token_program`) so it is swap- and airdrop-ready.
          *
          *     Deploy + mint are two on-chain txs that take minutes, so this returns
          *     immediately with `status: "deploying"` and finishes in the background. Poll
-         *     `GET /tokens` for a row whose `wrapper_program` equals the returned
+         *     `GET /tokens` for a row whose `amm_token_program` equals the returned
          *     `program_id` to know it completed.
          *
          *     Required env: `DEPLOYER_PRIVATE_KEY` (treasury/admin; `AIRDROP_PRIVATE_KEY`
@@ -861,9 +877,7 @@ export interface paths {
         put?: never;
         /**
          * POST /tokens/mint
-         * @description Admin-mints `amount` (base units) of an existing wrapper to `recipient`,
-         *     signed by the treasury/deployer key (the token's admin). Synchronous — a
-         *     single mint tx. Reuses scripts/airdrop-helper.mjs (which calls mint_public).
+         * @description Admin-mints `amount` (base units) of an existing AMM token to `recipient`.
          */
         post: operations["mint_token"];
         delete?: never;
@@ -998,6 +1012,7 @@ export interface components {
             address: string;
         };
         AirdropResult: {
+            amm_token_program: string;
             /** @description Base-unit amount delivered. */
             amount: string;
             error?: string | null;
@@ -1009,7 +1024,6 @@ export interface components {
             status: string;
             symbol: string;
             tx_id?: string | null;
-            wrapper_program: string;
         };
         AirdropStartResponseDoc: {
             data: components["schemas"]["AirdropStartResult"];
@@ -1089,12 +1103,12 @@ export interface components {
         CreateTokenRequestDoc: {
             /** @description Aleo field ID (e.g. `1234567890field`). */
             address: string;
+            /** @description Program for the token representation used by the AMM; the wrapper program for wrapped assets. */
+            amm_token_program?: string | null;
             /** Format: int32 */
             decimals: number;
             name: string;
             symbol: string;
-            /** @description Deployed ARC-20 wrapper program ID (e.g. `mtk_a1b2c3.aleo`). Optional. */
-            wrapper_program?: string | null;
         };
         DeployTokenRequest: {
             /** Format: int32 */
@@ -1110,12 +1124,12 @@ export interface components {
             data: components["schemas"]["DeployTokenResult"];
         };
         DeployTokenResult: {
-            /** @description `<symbol>_<rand>.aleo` — the deployed wrapper program id. */
+            /** @description `<symbol>_<rand>.aleo` — the deployed AMM token program id. */
             program_id: string;
             recipient: string;
             /**
              * @description Always `"deploying"`. Deploy + initial mint run in the background
-             *     (minutes); poll `GET /tokens` until a token with this `wrapper_program`
+             *     (minutes); poll `GET /tokens` until a token with this `amm_token_program`
              *     appears to know it finished and was registered.
              */
             status: string;
@@ -1123,6 +1137,12 @@ export interface components {
         ErrorResponseDoc: {
             error: string;
             ref?: string | null;
+        };
+        FeeBinding: {
+            /** Format: int32 */
+            fee_tier: number;
+            /** Format: int32 */
+            tick_spacing: number;
         };
         FeeTierDoc: {
             created_at: string;
@@ -1132,6 +1152,11 @@ export interface components {
              */
             fee_tier: number;
             id: string;
+            /**
+             * Format: int32
+             * @description Current binding, or null when the registered fee has not been bound.
+             */
+            tick_spacing?: number | null;
             transaction: string;
         };
         FeeTierListResponseDoc: {
@@ -1169,6 +1194,21 @@ export interface components {
         LiquidityDistributionResponseDoc: {
             data: components["schemas"]["TickLiquidityDoc"][];
         };
+        LiveCompatibility: {
+            artifacts_checked: number;
+            /** Format: date-time */
+            checked_at: string;
+            failures: components["schemas"]["LiveCompatibilityFailure"][];
+            status: components["schemas"]["LiveCompatibilityStatus"];
+        };
+        LiveCompatibilityFailure: {
+            code: components["schemas"]["LiveCompatibilityFailureCode"];
+            program_id?: string | null;
+        };
+        /** @enum {string} */
+        LiveCompatibilityFailureCode: "cache_unavailable" | "edition_mismatch" | "edition_unavailable" | "rate_limited" | "rpc_unavailable" | "source_mismatch" | "source_unavailable" | "verification_timeout";
+        /** @enum {string} */
+        LiveCompatibilityStatus: "compatible" | "incompatible" | "unavailable";
         LogoutAllResponse: {
             address: string;
             ended: boolean;
@@ -1189,12 +1229,12 @@ export interface components {
             data: components["schemas"]["LogoutResponse"];
         };
         MintTokenRequest: {
+            /** @description Program for the token representation used by the AMM. */
+            amm_token_program: string;
             /** @description Amount in BASE units (already scaled by 10^decimals), as a string. */
             amount: string;
             /** @description Recipient Aleo address (`aleo1...`). */
             recipient: string;
-            /** @description The token's wrapper program id (e.g. `mtk_a1b2c3.aleo`). */
-            wrapper_program: string;
         };
         MintTokenResponseDoc: {
             data: components["schemas"]["MintTokenResult"];
@@ -1204,19 +1244,19 @@ export interface components {
             tx_id?: string | null;
         };
         OhlcvDoc: {
-            /** @description Last normalized token1-per-token0 price; execution price after migration 0028, preserved legacy baseline before it. */
+            /** @description Last raw atomic token1-per-token0 execution price. */
             c: string;
             granularity: components["schemas"]["GranularityDoc"];
-            /** @description Highest normalized token1-per-token0 price; execution price after migration 0028, preserved legacy baseline before it. */
+            /** @description Highest raw atomic token1-per-token0 execution price. */
             h: string;
-            /** @description Lowest normalized token1-per-token0 price; execution price after migration 0028, preserved legacy baseline before it. */
+            /** @description Lowest raw atomic token1-per-token0 execution price. */
             l: string;
-            /** @description First normalized token1-per-token0 price; execution price after migration 0028, preserved legacy baseline before it. */
+            /** @description First raw atomic token1-per-token0 execution price. */
             o: string;
             pool: string;
             /** Format: int64 */
             timestamp: number;
-            /** @description Raw token0 volume; exact consumed units after migration 0028, preserved legacy baseline before it. */
+            /** @description Raw token0 units consumed. */
             v: string;
         };
         OhlcvResponseDoc: {
@@ -1250,12 +1290,8 @@ export interface components {
         PendingSwapOutputDoc: {
             amount_out: string;
             amount_remaining: string;
-            amount_remaining_1?: string | null;
-            amount_remaining_2?: string | null;
             recipient: string;
             token_in: string;
-            token_in_1?: string | null;
-            token_in_2?: string | null;
             token_out: string;
         };
         PoolDebugInfoDoc: {
@@ -1270,6 +1306,11 @@ export interface components {
         };
         PoolDebugResponseDoc: {
             data: components["schemas"]["PoolDebugInfoDoc"];
+        };
+        PoolFeeProtocol: {
+            /** Format: int32 */
+            fee_protocol: number;
+            pool_key: string;
         };
         PoolListResponseDoc: {
             data: components["schemas"]["PoolResponseDoc"][];
@@ -1287,12 +1328,10 @@ export interface components {
             created_at: string;
             creator: string;
             enabled: boolean;
-            fee: string;
+            fee_percent: string;
             id: string;
             init_tx: string;
             key: string;
-            scale0: string;
-            scale1: string;
             token0: string;
             token1: string;
         };
@@ -1312,16 +1351,16 @@ export interface components {
             display_open_24h: string;
             /** @description Current price in canonical display orientation (quote per base). */
             display_price: string;
-            /** @description Highest normalized price; execution price after migration 0028, preserved legacy baseline before it. */
+            /** @description Highest raw atomic execution price. */
             high_24h: string;
             liquidity: string;
-            /** @description Lowest normalized price; execution price after migration 0028, preserved legacy baseline before it. */
+            /** @description Lowest raw atomic execution price. */
             low_24h: string;
-            /** @description Earliest normalized price; execution price after migration 0028, preserved legacy baseline before it. */
+            /** @description Earliest raw atomic execution price. */
             open_24h: string;
             price: string;
             price_reversed: string;
-            /** @description Raw token0 volume; exact consumed units after migration 0028, preserved legacy baseline before it. */
+            /** @description Raw token0 units consumed. */
             volume_24h: string;
         };
         PoolStats24hResponseDoc: {
@@ -1330,8 +1369,8 @@ export interface components {
         PoolStatsDoc: {
             /** Format: int32 */
             active_tick: number;
-            fee_growth_global0_x_64: string;
-            fee_growth_global1_x_64: string;
+            fee_growth_global0_x_128: string;
+            fee_growth_global1_x_128: string;
             /** Format: int32 */
             fee_protocol: number;
             id: string;
@@ -1382,13 +1421,17 @@ export interface components {
             amount0: string;
             amount1: string;
             created_at: string;
-            fee_growth_inside0_last_64: string;
-            fee_growth_inside1_last_64: string;
+            created_transaction: string;
+            created_transaction_hash?: string | null;
+            fee_growth_inside0_last_x_128: string;
+            fee_growth_inside1_last_x_128: string;
             frozen_at?: string | null;
             id: string;
             is_burned: boolean;
             is_frozen: boolean;
             is_private: boolean;
+            last_transaction: string;
+            last_transaction_hash?: string | null;
             liquidity: string;
             pool: string;
             /** Format: int32 */
@@ -1398,8 +1441,6 @@ export interface components {
             token_id: string;
             tokens_owed0: string;
             tokens_owed1: string;
-            transaction: string;
-            transaction_hash?: string | null;
             user: string;
         };
         PositionListResponseDoc: {
@@ -1410,10 +1451,11 @@ export interface components {
             data: components["schemas"]["PositionDoc"];
         };
         PositionWithOwedDoc: {
+            frozen_at?: string | null;
+            is_frozen: boolean;
             is_private: boolean;
+            last_transaction_hash?: string | null;
             pool: string;
-            scale0: string;
-            scale1: string;
             /** Format: int32 */
             tick_lower: number;
             /** Format: int32 */
@@ -1423,7 +1465,90 @@ export interface components {
             token_id: string;
             tokens_owed0: string;
             tokens_owed1: string;
-            transaction_hash?: string | null;
+        };
+        ProtocolCapabilities: {
+            debug_api: boolean;
+            faucet: boolean;
+            freezelist_proofs: string;
+            protocol_config_websocket: boolean;
+            token_admin: boolean;
+        };
+        ProtocolControls: {
+            allowed_tokens: string[];
+            disabled_pools: string[];
+            global_paused: boolean;
+            paused_pairs: components["schemas"]["ProtocolPair"][];
+            paused_tokens: string[];
+            pool_creation_is_open: boolean;
+        };
+        ProtocolDeployment: {
+            /** Format: int32 */
+            abi_version: number;
+            /** Format: int64 */
+            amm_start_block: number;
+            contract_ref: string;
+            contract_repository: string;
+            deployment_fingerprint: string;
+            freezelist_proof_version: string;
+            math_version: string;
+            network: string;
+            profile: string;
+            programs: {
+                [key: string]: components["schemas"]["ProtocolProgram"];
+            };
+            /** Format: int32 */
+            protocol_version: number;
+            verified_at: string;
+        };
+        ProtocolFeeConfiguration: {
+            pool_fee_protocols: components["schemas"]["PoolFeeProtocol"][];
+            registered_fee_tiers: number[];
+            registered_tick_spacings: number[];
+            valid_bindings: components["schemas"]["FeeBinding"][];
+        };
+        ProtocolFreshness: {
+            /** Format: int64 */
+            confirmed_head?: number | null;
+            /** Format: int64 */
+            indexed_block?: number | null;
+            /** Format: int64 */
+            lag_blocks?: number | null;
+            ready_for_entry: boolean;
+            /** Format: date-time */
+            updated_at?: string | null;
+        };
+        ProtocolPair: {
+            token0: string;
+            token1: string;
+        };
+        ProtocolProgram: {
+            /** Format: int32 */
+            edition?: number | null;
+            program_id: string;
+            role: string;
+            source_sha256: string;
+        };
+        ProtocolRevisionPending: {
+            code: string;
+            /** Format: int64 */
+            current_revision: number;
+            error: string;
+            /** Format: int64 */
+            minimum_revision: number;
+        };
+        ProtocolStateResponse: {
+            capabilities: components["schemas"]["ProtocolCapabilities"];
+            /** Format: date-time */
+            changed_at?: string | null;
+            controls: components["schemas"]["ProtocolControls"];
+            deployment: components["schemas"]["ProtocolDeployment"];
+            fee_configuration: components["schemas"]["ProtocolFeeConfiguration"];
+            freshness: components["schemas"]["ProtocolFreshness"];
+            live_compatibility: components["schemas"]["LiveCompatibility"];
+            /** Format: int64 */
+            observed_block?: number | null;
+            /** Format: int64 */
+            revision: number;
         };
         ReferralAdminCheckResponse: {
             is_admin: boolean;
@@ -1548,6 +1673,10 @@ export interface components {
         RouteResultDoc: {
             estimated_amount_out?: string | null;
             hops: components["schemas"]["RouteHopDoc"][];
+            /** Format: int64 */
+            protocol_config_observed_block?: number | null;
+            /** Format: int64 */
+            protocol_revision: number;
             token_in: string;
             token_out: string;
         };
@@ -1587,8 +1716,6 @@ export interface components {
         };
         SwapDoc: {
             amount_remaining: string;
-            amount_remaining_1: string;
-            amount_remaining_2: string;
             claim_tx?: string | null;
             claimed_at?: string | null;
             executed_at: string;
@@ -1607,8 +1734,6 @@ export interface components {
             pool: string;
             recipient: string;
             swap_id: string;
-            token_in_1?: string | null;
-            token_in_2?: string | null;
             /** @description Pool analytics trade; absent when a route lacks authoritative per-hop amounts. */
             trade?: string | null;
             transaction: string;
@@ -1665,13 +1790,16 @@ export interface components {
         };
         TokenDoc: {
             address: string;
+            /** @description Program for the token representation used by the AMM; the wrapper program for wrapped assets. */
+            amm_token_program?: string | null;
             /** Format: int32 */
             decimals: number;
             id: string;
             image?: string | null;
             name: string;
             symbol: string;
-            wrapper_program?: string | null;
+            underlying_program?: string | null;
+            underlying_token_id?: string | null;
         };
         TokenListResponseDoc: {
             data: components["schemas"]["TokenDoc"][];
@@ -2953,8 +3081,35 @@ export interface operations {
                     "application/json": components["schemas"]["AuthTokenResponseDoc"];
                 };
             };
-            /** @description No valid session */
+            /** @description Invalid identity binding */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description No valid session or API token */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Credential identity changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description API token rate limit exceeded */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3167,7 +3322,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Registered fee tiers */
+            /** @description Registered fee tiers and current tick-spacing bindings */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3631,6 +3786,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    get_protocol_state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                minimum_revision: number | null;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canonical versioned protocol state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProtocolStateResponse"];
+                };
+            };
+            /** @description Protocol state matches If-None-Match */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description The requested protocol revision has not been indexed */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProtocolRevisionPending"];
                 };
             };
         };
@@ -4170,7 +4372,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
-            /** @description Routing dependencies are temporarily unavailable or the quote candidate set exceeds the safe limit */
+            /** @description The live deployment is incompatible, routing dependencies are unavailable, or the quote candidate set exceeds the safe limit */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -4206,7 +4408,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Operation ID (swap, mint, create_pool, burn, collect, decrease_liquidity, swap_multi_hop, claim_swap_output, claim_multi_hop_output, register_token, mint_public, mint_private, transfer_public_to_private, add_fee_tier, add_tick_spacing, set_pool_enabled) */
+                /** @description Operation ID (swap, mint, create_pool, burn, collect, decrease_liquidity, swap_multi_hop, claim_swap_output, register_token, mint_public, mint_private, transfer_public_to_private, add_fee_tier, add_tick_spacing, bind_fee_to_tick_spacing, set_pool_enabled) */
                 id: string;
             };
             cookie?: never;

@@ -1,13 +1,22 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@provablehq/veil-core'
-import { selectTokenRecord } from '../../utils/records.js'
 import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
 import { generateFieldNonce, formatMintPositionRequest } from '../../utils/params.js'
 import { tryLoadSdk } from '../../utils/sdk.js'
 import { derivePositionTokenId } from '../../utils/keys.js'
+import { requireFieldOutput } from '../../utils/outputs.js'
 import { roundTickToSpacing } from '../../utils/tick-math.js'
 import { pickInsertHint } from '../../utils/tick-hints.js'
-import { DEFAULT_PROGRAM } from '../../constants.js'
-
+import type { TokenRoute } from '../../utils/routing.js'
+import type { ProofProvider } from '../../utils/proofs.js'
+import { SHIELD_SWAP } from '../../constants.js'
+import {
+  ammProofPair,
+  assertPayoutAddress,
+  autoSelectSideRecord,
+  dispatchLiquidityCall,
+  resolveSideRoutes,
+  wrapperSenderProof,
+} from './internal.js'
 
 /**
  * Parameters for {@link mint}.
@@ -21,14 +30,27 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  * @property amount0Min Minimum token0 actually taken (slippage guard).
  *   Defaults to 0 — set it for pools with volatile in-range price.
  * @property amount1Min Minimum token1 actually taken. Defaults to 0.
- * @property recipient Position owner. Defaults to the account address.
- *   MUST NOT be the program address.
- * @property token0Program Program holding the caller's token0 records —
- *   required on the local path unless `token0Record` is given.
+ * @property recipient Position owner — the PositionNFT record's owner.
+ *   Required and validated: MUST NOT be the zero address or a program
+ *   account of the stack.
+ * @property withdrawal Address `collect` pays the position's tokens to,
+ *   fixed at mint. Required and validated like `recipient` — there is no
+ *   defaulting, so a custodial owner and a cold payout address are both
+ *   explicit decisions.
+ * @property token0Program Program holding the caller's token0 records.
+ *   Optional — defaults to the route's underlying program (wrapped side) or
+ *   the program decoded from the token id (plain side).
  * @property token1Program Program holding the caller's token1 records.
  * @property token0Record Explicit record input (plaintext literal, or a
- *   `record` InputRequest for wallet signers — REQUIRED for wallets).
- * @property token1Record Explicit record input for token1.
+ *   `record` InputRequest for wallet signers — REQUIRED for wallets). A
+ *   wrapped side's record is the UNDERLYING asset's record (e.g. a credits
+ *   record for wALEO), never a wrapper record.
+ * @property token1Record Explicit record input for token1, same rule.
+ * @property token0Route Pre-resolved route override for token0 — skips the
+ *   on-chain wrapped-ness read (offline/advanced use).
+ * @property token1Route Pre-resolved route override for token1.
+ * @property proofs Freezelist proof provider for populated freezelists.
+ *   Defaults to the empty-tree witness on every proof slot.
  * @property tickLowerHint Explicit insert hint. Defaults to
  *   `pickInsertHint` (best-effort — see its limitation).
  * @property tickUpperHint Explicit insert hint for the upper bound.
@@ -37,7 +59,9 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
  *   callees statically — pass the involved token programs' sources when
  *   proving locally or via a service that requires them.
- * @property program shield_swap program override.
+ * @property program shield_swap core program override. Defaults to
+ *   `shield_swap.aleo`. Router calls always target
+ *   `shield_swap_lp_router.aleo`.
  */
 export type MintParameters = {
   poolKey: string
@@ -47,11 +71,15 @@ export type MintParameters = {
   amount1Desired: bigint
   amount0Min?: bigint
   amount1Min?: bigint
-  recipient?: string
+  recipient: string
+  withdrawal: string
   token0Program?: string
   token1Program?: string
   token0Record?: string | InputRequest
   token1Record?: string | InputRequest
+  token0Route?: TokenRoute
+  token1Route?: TokenRoute
+  proofs?: ProofProvider
   tickLowerHint?: number
   tickUpperHint?: number
   nonce?: string
@@ -62,8 +90,8 @@ export type MintParameters = {
 /**
  * The minted position's essentials.
  *
- * @property positionTokenId The position's `token_id` (first public
- *   output) — the key for `getPosition` and later liquidity changes. Known
+ * @property positionTokenId The position's `token_id` (a public output) —
+ *   the key for `getPosition` and later liquidity changes. Known
  *   immediately on the local path; on the wallet path it is derived locally
  *   when `@provablehq/sdk` is installed, and `undefined` otherwise — recover
  *   it from the confirmed transaction or compute it with
@@ -79,34 +107,46 @@ export type MintReturnType = {
  * Mints a new concentrated-liquidity position as a private PositionNFT.
  *
  * Deposits both tokens privately (records in, change back), aligns the tick
- * range to the pool's spacing, computes insert hints, and submits
- * `mint`. The PositionNFT record the transition returns is the key
- * to all later liquidity operations — the scanner will pick it up.
+ * range to the pool's spacing, computes insert hints, and dispatches on the
+ * pair's wrapped-ness: both tokens plain calls the core `mint` directly;
+ * any wrapped side routes through `shield_swap_lp_router.aleo`
+ * (`mint_from_wrapped_arc20` / `mint_from_arc20_wrapped` /
+ * `mint_from_wrapped_wrapped`), where the wrapped side's record slot takes
+ * the caller's UNDERLYING record and is followed by that wrapper's
+ * freezelist sender proof. The three AMM freezelist proof slots (signer,
+ * recipient, withdrawal) default to the empty-tree witness.
  *
  * Signer paths mirror `swap`: local accounts auto-select records and
- * pass literals; wallet accounts must supply both `tokenNRecord` inputs and
- * get the recipient defaulted to their address.
+ * pass literals; wallet accounts must supply both `tokenNRecord` inputs.
  *
- * Hits the network: pool/slot reads, hint reads, record scans, and the
- * transaction. Signs, and on the local path proves locally.
+ * Hits the network: pool/slot reads, route reads (cached per token), hint
+ * reads, record scans, and the transaction. Signs, and on the local path
+ * proves locally.
  *
  * @param client A Veil wallet client (local or wallet account).
- * @param params The range, amounts, and optional overrides.
+ * @param params The range, amounts, both payout addresses, and optional
+ *   overrides.
  * @returns The position token id (derived locally on the wallet path when
  *   the WASM peer is present) and transaction id.
- * @throws When the pool does not exist; when the range is empty after
- *   spacing alignment; when records are missing (local) or not provided
- *   (wallet); and on transport/proving errors.
+ * @throws When `recipient` or `withdrawal` is missing or invalid; when the
+ *   pool does not exist; when the range is empty after spacing alignment;
+ *   when records are missing (local) or not provided (wallet); and on
+ *   transport/proving errors.
  *
  * @example
  * const { positionTokenId } = await mint(client, {
  *   poolKey, tickLower: -62400, tickUpper: -60000,
  *   amount0Desired: 10n ** 18n, amount1Desired: 2_000_000n,
- *   token0Program: 'ethx_5a095e.aleo', token1Program: 'usdc_5a095e.aleo',
+ *   recipient: account.address, withdrawal: account.address,
  * })
  */
 export async function mint(client: Client, params: MintParameters): Promise<MintReturnType> {
-  const program = params.program ?? DEFAULT_PROGRAM
+  const program = params.program ?? SHIELD_SWAP
+
+  // Both payout addresses are deliberate, validated inputs — a mistyped or
+  // defaulted address here strands the position or its withdrawals.
+  assertPayoutAddress('recipient', params.recipient)
+  assertPayoutAddress('withdrawal', params.withdrawal)
 
   const pool = await requirePool(client, params.poolKey, program)
   const slot = await requireSlot(client, params.poolKey, program)
@@ -144,7 +184,38 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
   const account = requireAccount(client, 'mint')
   const isLocal = account.type === 'local'
   const nonce = params.nonce ?? generateFieldNonce()
-  const recipient = params.recipient ?? account.address
+
+  // Wrapped-ness decides the target transition and which program each
+  // side's record comes from.
+  const [route0, route1] = await resolveSideRoutes(client, {
+    token0Id: pool.token0,
+    token1Id: pool.token1,
+    program,
+    token0Route: params.token0Route,
+    token1Route: params.token1Route,
+  })
+
+  // Wrapper freezelist proofs prove the SENDER; AMM proofs prove the three
+  // mint parties. All default to the empty-tree witness.
+  const [senderProof0, senderProof1, signerProofs, recipientProofs, withdrawalProofs] = await Promise.all([
+    wrapperSenderProof(params.proofs, route0, account.address),
+    wrapperSenderProof(params.proofs, route1, account.address),
+    ammProofPair(params.proofs, account.address),
+    ammProofPair(params.proofs, params.recipient),
+    ammProofPair(params.proofs, params.withdrawal),
+  ])
+
+  // Everything after the record slots is identical across all four variants.
+  const tail: string[] = [
+    params.recipient,
+    params.withdrawal,
+    request,
+    pool.token0,
+    pool.token1,
+    signerProofs,
+    recipientProofs,
+    withdrawalProofs,
+  ]
 
   if (isLocal) {
     // Reject InputRequests BEFORE any selection work — an object here must
@@ -153,20 +224,29 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
       throw new Error('Local accounts cannot use InputRequests — pass record plaintext literals instead')
     }
     const record0 =
-      params.token0Record ?? (await autoSelect(client, params.token0Program, pool.token0, params.amount0Desired, 'token0'))
+      params.token0Record ?? (await autoSelectSideRecord(client, route0, params.amount0Desired, params.token0Program))
     const record1 =
-      params.token1Record ?? (await autoSelect(client, params.token1Program, pool.token1, params.amount1Desired, 'token1'))
+      params.token1Record ?? (await autoSelectSideRecord(client, route1, params.amount1Desired, params.token1Program))
+
+    const dispatch = dispatchLiquidityCall({
+      coreProgram: program,
+      coreFunction: 'mint',
+      routerPrefix: 'mint_from',
+      route0,
+      route1,
+      record0,
+      record1,
+      senderProof0,
+      senderProof1,
+    })
 
     const result = await executeContract(client, {
-      program,
-      function: 'mint',
+      program: dispatch.program,
+      function: dispatch.functionName,
       imports: params.imports,
-      inputs: [nonce, record0, record1, recipient, request, pool.token0, pool.token1],
+      inputs: [nonce, ...dispatch.recordInputs, ...tail],
     })
-    const positionTokenId = result.outputs[0]
-    if (!positionTokenId?.endsWith('field')) {
-      throw new Error(`Unexpected mint output shape: ${JSON.stringify(result.outputs)}`)
-    }
+    const positionTokenId = requireFieldOutput(result.outputs, dispatch.functionName)
     return { positionTokenId, transactionId: result.transactionId }
   }
 
@@ -175,38 +255,30 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
       'Wallet accounts must provide token0Record and token1Record (record InputRequests or granted plaintext)',
     )
   }
-  const inputs: TransactionInput[] = [
-    nonce,
-    params.token0Record,
-    params.token1Record,
-    recipient,
-    request,
-    pool.token0,
-    pool.token1,
-  ]
+  const dispatch = dispatchLiquidityCall({
+    coreProgram: program,
+    coreFunction: 'mint',
+    routerPrefix: 'mint_from',
+    route0,
+    route1,
+    record0: params.token0Record,
+    record1: params.token1Record,
+    senderProof0,
+    senderProof1,
+  })
+  const inputs: TransactionInput[] = [nonce, ...dispatch.recordInputs, ...tail]
   // Best-effort id: every preimage field is client-known, so when the
   // optional WASM peer is present the id is computable ahead of submission.
   // A derivation fault (broken WASM asset, CSP, version skew) degrades to
   // undefined rather than blocking a submittable transaction.
   const positionTokenId = (await tryLoadSdk())
-    ? await derivePositionTokenId({ request: requestInput, recipient, nonce }).catch(() => undefined)
+    ? await derivePositionTokenId({ request: requestInput, recipient: params.recipient, nonce }).catch(() => undefined)
     : undefined
-  const transactionId = await writeContract(client, { program, function: 'mint',
-      imports: params.imports ? Object.keys(params.imports) : undefined, inputs })
+  const transactionId = await writeContract(client, {
+    program: dispatch.program,
+    function: dispatch.functionName,
+    imports: params.imports ? Object.keys(params.imports) : undefined,
+    inputs,
+  })
   return { positionTokenId, transactionId }
-}
-
-/** Auto-select a token record on the local path, with an actionable error. */
-async function autoSelect(
-  client: Client,
-  tokenProgram: string | undefined,
-  tokenId: string,
-  minAmount: bigint,
-  label: string,
-): Promise<string> {
-  if (!tokenProgram) {
-    throw new Error(`${label}Program is required to auto-select a record (or pass ${label}Record explicitly)`)
-  }
-  const picked = await selectTokenRecord(client, { program: tokenProgram, minAmount, tokenId })
-  return picked.record.recordPlaintext
 }

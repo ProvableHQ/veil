@@ -1,8 +1,9 @@
 import { executeContract, writeContract, type Client } from '@provablehq/veil-core'
 import { isFeeTierValid } from '../reads/isFeeTierValid.js'
 import { getFeeToTickSpacing } from '../reads/getFeeToTickSpacing.js'
-import { MIN_TICK, MAX_TICK, getSqrtPriceAtTick } from '../../utils/tick-math.js'
-import { DEFAULT_PROGRAM } from '../../constants.js'
+import { MIN_TICK, MAX_TICK, getSqrtPriceAtTickX128, formatU256Literal } from '../../utils/q128.js'
+import { requireFieldOutput } from '../../utils/outputs.js'
+import { SHIELD_SWAP } from '../../constants.js'
 
 /**
  * Parameters for {@link createPool}.
@@ -13,10 +14,12 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  * @property fee Fee tier in pips (u16, e.g. `3000` = 0.30%). Must be
  *   registered with the program — validated pre-flight.
  * @property initialTick Tick whose price the pool opens at. The initial
- *   sqrt price is derived from it via the contract's own table.
- * @property initialSqrtPrice Explicit Q64 initial sqrt price. Defaults to
- *   `getSqrtPriceAtTick(initialTick)` — override only when reproducing an
- *   exact historical price.
+ *   sqrt price is derived from it via the contract's own magic-constant
+ *   cascade.
+ * @property initialSqrtPrice Explicit Q128.128 initial sqrt price (u256,
+ *   encoded to the `{ hi, lo }` struct internally). Defaults to
+ *   `getSqrtPriceAtTickX128(initialTick)` — override only when reproducing
+ *   an exact historical price.
  * @property tickSpacing Explicit tick spacing. Defaults to the canonical
  *   spacing bound to `fee` on chain (`fee_to_tick_spacing`) — overriding is
  *   almost never right.
@@ -24,7 +27,8 @@ import { DEFAULT_PROGRAM } from '../../constants.js'
  *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
  *   callees statically — pass the involved token programs' sources when
  *   proving locally or via a service that requires them.
- * @property program shield_swap program override. Defaults to `DEFAULT_PROGRAM`.
+ * @property program shield_swap program override. Defaults to
+ *   `shield_swap.aleo`.
  */
 export type CreatePoolParameters = {
   token0ProgramId: string
@@ -74,7 +78,7 @@ export type CreatePoolReturnType = {
  * })
  */
 export async function createPool(client: Client, params: CreatePoolParameters): Promise<CreatePoolReturnType> {
-  const program = params.program ?? DEFAULT_PROGRAM
+  const program = params.program ?? SHIELD_SWAP
 
   if (params.initialTick < MIN_TICK || params.initialTick >= MAX_TICK) {
     throw new Error(`initialTick ${params.initialTick} outside [${MIN_TICK}, ${MAX_TICK})`)
@@ -88,14 +92,15 @@ export async function createPool(client: Client, params: CreatePoolParameters): 
     throw new Error(`Fee ${params.fee} has no tick spacing bound on chain — pass tickSpacing explicitly`)
   }
 
-  const initialSqrtPrice = params.initialSqrtPrice ?? getSqrtPriceAtTick(params.initialTick)
+  const initialSqrtPrice = params.initialSqrtPrice ?? getSqrtPriceAtTickX128(params.initialTick)
 
-  // All-public inputs — identical literals on both signer paths.
+  // All-public inputs — identical literals on both signer paths. The sqrt
+  // price crosses the wire as the contract's { hi, lo } u256 struct.
   const inputs = [
     params.token0ProgramId,
     params.token1ProgramId,
     `${params.fee}u16`,
-    `${initialSqrtPrice}u128`,
+    formatU256Literal(initialSqrtPrice),
     `${tickSpacing}u32`,
     `${params.initialTick}i32`,
   ]
@@ -104,10 +109,7 @@ export async function createPool(client: Client, params: CreatePoolParameters): 
   if (account?.type === 'local') {
     const result = await executeContract(client, { program, function: 'create_pool',
       imports: params.imports, inputs })
-    const poolKey = result.outputs[0]
-    if (!poolKey?.endsWith('field')) {
-      throw new Error(`Unexpected create_pool output shape: ${JSON.stringify(result.outputs)}`)
-    }
+    const poolKey = requireFieldOutput(result.outputs, 'create_pool')
     return { poolKey, transactionId: result.transactionId }
   }
 

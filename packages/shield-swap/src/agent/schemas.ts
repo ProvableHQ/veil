@@ -22,7 +22,7 @@ export const getPoolSchema: AgentToolSchema = {
 export const getSlotSchema: AgentToolSchema = {
   name: 'shield_swap_get_slot',
   description:
-    "Read a pool's live trading state from chain — current tick, Q64 sqrt price, " +
+    "Read a pool's live trading state from chain — current tick, Q128.128 sqrt price, " +
     'in-range liquidity, and tick spacing. Returns null when the pool has no slot.',
   inputSchema: { type: 'object', properties: poolKeyProp, required: ['poolKey'] },
 }
@@ -97,19 +97,6 @@ export const getFrozenPositionSchema: AgentToolSchema = {
   },
 }
 
-/** Declares the `shield_swap_get_token_decimals` tool — a chain-direct token-registration read (backed by `getTokenDecimals`). */
-export const getTokenDecimalsSchema: AgentToolSchema = {
-  name: 'shield_swap_get_token_decimals',
-  description:
-    "Read a token's registered decimal count — feeds the no-dust rule for raw amounts. " +
-    'Returns null for an unregistered token (create_pool would fail on it).',
-  inputSchema: {
-    type: 'object',
-    properties: { tokenId: { type: 'string', description: 'Token id (field literal).' } },
-    required: ['tokenId'],
-  },
-}
-
 /** Declares the `shield_swap_is_pool_creation_open` tool — a chain-direct permissionless-creation check (backed by `isPoolCreationOpen`). */
 export const isPoolCreationOpenSchema: AgentToolSchema = {
   name: 'shield_swap_is_pool_creation_open',
@@ -155,6 +142,38 @@ export const getPrivateBalancesSchema: AgentToolSchema = {
       },
     },
     required: ['programs'],
+  },
+}
+
+/** Declares the `shield_swap_get_owned_positions` tool — lists the caller's liquidity positions from their PositionNFT records with on-chain state and derived values (backed by `getOwnedPositions`). */
+export const getOwnedPositionsSchema: AgentToolSchema = {
+  name: 'shield_swap_get_owned_positions',
+  description:
+    "List the caller's own liquidity positions from their PositionNFT records, joined with " +
+    'on-chain state: liquidity, current token amounts, and uncollected fees (raw base-unit ' +
+    "strings; state is null while a fresh mint finalizes). Needs the caller's record provider.",
+  inputSchema: {
+    type: 'object',
+    properties: {
+      poolKey: { type: 'string', description: 'Optional pool key field literal — restricts the listing to one pool.' },
+    },
+    required: [],
+  },
+}
+
+/** Declares the `shield_swap_get_owned_position` tool — resolves one owned position by its token id (backed by `getOwnedPosition`). */
+export const getOwnedPositionSchema: AgentToolSchema = {
+  name: 'shield_swap_get_owned_position',
+  description:
+    "Resolve one of the caller's own liquidity positions by position token id, with on-chain " +
+    'state and derived amounts/fees (raw base-unit strings). Returns null when the caller owns ' +
+    "no such position. Needs the caller's record provider.",
+  inputSchema: {
+    type: 'object',
+    properties: {
+      positionTokenId: { type: 'string', description: "The position's token_id field literal." },
+    },
+    required: ['positionTokenId'],
   },
 }
 
@@ -387,7 +406,7 @@ export const swapMultiHopSchema: AgentToolSchema = {
   name: 'shield_swap_swap_multi_hop',
   description:
     'Request a private multi-hop swap across 2–3 pools (phase one). Returns a handle to ' +
-    'pass to shield_swap_claim_multi_hop once the request finalizes. Get the route and ' +
+    'pass to shield_swap_claim once the request finalizes (one claim tool serves both swap kinds). Get the route and ' +
     'quoted output from shield_swap_get_route; a single-hop trade uses shield_swap_swap.',
   inputSchema: {
     type: 'object',
@@ -413,32 +432,13 @@ export const swapMultiHopSchema: AgentToolSchema = {
   },
 }
 
-/** Declares the `shield_swap_claim_multi_hop` write tool — phase two of a private multi-hop swap; collects the output and refunds as private records (backed by `claimMultiHopOutput`). */
-export const claimMultiHopSchema: AgentToolSchema = {
-  name: 'shield_swap_claim_multi_hop',
-  description:
-    'Claim a finalized private multi-hop swap (phase two), collecting the output and any ' +
-    'per-hop refunds as private records. Retry if it reports the output is not finalized yet.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      handle: { type: 'object', description: 'The handle returned by shield_swap_swap_multi_hop.' },
-      tokenPrograms: {
-        type: 'array',
-        items: { type: 'string' },
-        description: 'Wrapper programs of every token on the route (the claim can transfer up to four).',
-      },
-    },
-    required: ['handle', 'tokenPrograms'],
-  },
-}
-
 /** Declares the `shield_swap_mint` write tool — mints a concentrated-liquidity position over a tick range (backed by `mint`). */
 export const mintSchema: AgentToolSchema = {
   name: 'shield_swap_mint',
   description:
     'Mint a concentrated-liquidity position over a tick range. Ticks are rounded to the ' +
-    "pool's spacing. Returns the position token id.",
+    "pool's spacing. The withdrawal address is immutable for the position's life — every " +
+    'collect pays it. Returns the position token id.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -447,10 +447,12 @@ export const mintSchema: AgentToolSchema = {
       tickUpper: { type: 'number', description: 'Upper tick of the range.' },
       amount0Desired: { type: 'string', description: 'Desired token0 amount, raw base units (u128) string.' },
       amount1Desired: { type: 'string', description: 'Desired token1 amount, raw base units (u128) string.' },
-      token0Program: { type: 'string', description: "token0's wrapper program." },
-      token1Program: { type: 'string', description: "token1's wrapper program." },
+      recipient: { type: 'string', description: 'Position owner address (holds the PositionNFT).' },
+      withdrawal: { type: 'string', description: 'Immutable payout address every collect pays. Often equals recipient.' },
+      token0Program: { type: 'string', description: "token0's program — used to prefetch sources for local proving." },
+      token1Program: { type: 'string', description: "token1's program — used to prefetch sources for local proving." },
     },
-    required: ['poolKey', 'tickLower', 'tickUpper', 'amount0Desired', 'amount1Desired', 'token0Program', 'token1Program'],
+    required: ['poolKey', 'tickLower', 'tickUpper', 'amount0Desired', 'amount1Desired', 'recipient', 'withdrawal', 'token0Program', 'token1Program'],
   },
 }
 
@@ -652,11 +654,12 @@ export const chainToolSchemas: AgentToolSchema[] = [
   getTickSchema,
   getTradeControlsSchema,
   getFrozenPositionSchema,
-  getTokenDecimalsSchema,
   isPoolCreationOpenSchema,
   isPoolInitializedSchema,
   getFeeToTickSpacingSchema,
   getPrivateBalancesSchema,
+  getOwnedPositionsSchema,
+  getOwnedPositionSchema,
 ]
 
 /** Pure derivation tools — no client or API backing; always available. */
@@ -695,7 +698,6 @@ export const writeToolSchemas: AgentToolSchema[] = [
   swapSchema,
   claimSchema,
   swapMultiHopSchema,
-  claimMultiHopSchema,
   mintSchema,
   increaseLiquiditySchema,
   decreaseLiquiditySchema,

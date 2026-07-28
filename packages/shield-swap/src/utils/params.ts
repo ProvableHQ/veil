@@ -1,32 +1,60 @@
 import { getBlockNumber, type Client } from '@provablehq/veil-core'
-import type { PoolState, Slot } from '../generated/shield_swap.js'
-import { MIN_SQRT_PRICE, MAX_SQRT_PRICE, Q64 } from './tick-math.js'
+import {
+  Q128,
+  MIN_SQRT_RATIO_X128,
+  MAX_SQRT_RATIO_X128,
+  formatU256Literal,
+  fromU256Parts,
+  mulDiv,
+} from './q128.js'
+
+/**
+ * The pool fields the swap resolvers consume — a structural subset of the
+ * generated `PoolState`, so both the raw decoded state and any enriched
+ * read-layer shape satisfy it.
+ *
+ * @property token0 The pool's lower-sorted token id as a `field` literal.
+ * @property token1 The pool's higher-sorted token id as a `field` literal.
+ */
+export type SwapPoolState = { token0: string; token1: string }
+
+/**
+ * The slot fields the swap resolvers consume. `sqrt_price` is the pool's
+ * current sqrt price in Q128.128, accepted either as the joined bigint or as
+ * the on-chain `{ hi, lo }` u128 halves — whichever shape the read layer
+ * delivers.
+ */
+export type SwapSlotState = { sqrt_price: bigint | { hi: bigint; lo: bigint } }
+
+/** Joins a slot's sqrt price to a bigint, whichever shape it arrived in. */
+function sqrtPriceOf(slot: SwapSlotState): bigint {
+  return typeof slot.sqrt_price === 'bigint' ? slot.sqrt_price : fromU256Parts(slot.sqrt_price)
+}
 
 /**
  * Parameters for {@link resolveSwapParams}.
  *
- * @property pool Static pool config from `getPool` (token ordering + scales).
+ * @property pool Static pool config from `getPool` (token ordering).
  * @property slot Live pool state from `getSlot` (current sqrt price) — used
  *   for the spot-estimate fallback when `expectedOut` is not given.
  * @property tokenInId Token id (field literal) of the token being sold. Must
  *   be one of the pool's two tokens.
- * @property amountIn Raw atomic amount to sell (u128). Must be a multiple of
- *   the token's normalization scale (see `dustScale`) — checked here so a
- *   doomed transaction is never submitted.
+ * @property amountIn Raw atomic amount to sell (u128). Amounts are native
+ *   units throughout — the contract applies no decimal scaling.
  * @property slippageBps Slippage tolerance in basis points (e.g. 50 = 0.5%)
  *   applied to `expectedOut` (or the spot estimate) to produce
  *   `amount_out_min`.
- * @property expectedOut Expected output amount from a quote (e.g. the
- *   the API's `/route`). Optional; without it a spot-price estimate from
+ * @property expectedOut Expected output amount from a quote (e.g. the API's
+ *   `/route`). Optional; without it a spot-price estimate from
  *   `slot.sqrt_price` is used, which ignores price impact and fees — fine
  *   for small trades, too loose for large ones.
- * @property sqrtPriceLimit Explicit Q64 price bound. Defaults to the
- *   directional extreme (MIN/MAX_SQRT_PRICE), i.e. "no price limit — rely on
- *   amount_out_min", the common Uniswap-style configuration.
+ * @property sqrtPriceLimit Explicit Q128.128 price bound. Defaults to the
+ *   directional extreme (MIN/MAX_SQRT_RATIO_X128), i.e. "no price limit —
+ *   rely on amount_out_min", the common Uniswap-style configuration.
  */
 export type ResolveSwapParamsInput = {
-  pool: PoolState
-  slot: Slot
+  pool: SwapPoolState
+  slot: SwapSlotState
   tokenInId: string
   amountIn: bigint
   slippageBps: number
@@ -40,7 +68,7 @@ export type ResolveSwapParamsInput = {
  * @property zeroForOne True when selling the pool's token0 for token1.
  * @property tokenOutId Token id (field literal) of the token being bought.
  * @property amountOutMin Minimum acceptable output (u128) after slippage.
- * @property sqrtPriceLimit Q64 price bound for the swap.
+ * @property sqrtPriceLimit Q128.128 price bound for the swap.
  */
 export type ResolvedSwapParams = {
   zeroForOne: boolean
@@ -52,20 +80,19 @@ export type ResolvedSwapParams = {
 /**
  * Resolves a friendly swap intent into the contract's raw arguments.
  *
- * Determines trade direction from the pool's token ordering, validates the
- * amount against the contract's no-dust rule, and computes `amount_out_min`
- * from the slippage tolerance. Pure and local — read `pool`/`slot` first.
+ * Determines trade direction from the pool's token ordering and computes
+ * `amount_out_min` from the slippage tolerance. Pure and local — read
+ * `pool`/`slot` first.
  *
  * @param params The intent plus the pool state it executes against.
  * @returns Direction, output token, minimum output, and price bound.
- * @throws When `tokenInId` is not in the pool; when `amountIn` violates the
- *   no-dust rule (would revert on-chain); when `slippageBps` is outside
+ * @throws When `tokenInId` is not in the pool; when `slippageBps` is outside
  *   [0, 10000]; or when an explicit `sqrtPriceLimit` lies outside the
  *   contract's accepted range or not strictly beyond the current price in
  *   the trade direction (the finalize rejects both).
  *
  * @example
- * const p = resolveSwapParams({ pool, slot, tokenInId, amountIn: 1_000_000_000n, slippageBps: 50 })
+ * const p = resolveSwapParams({ pool, slot, tokenInId, amountIn: 1_000_000n, slippageBps: 50 })
  * // p.zeroForOne, p.amountOutMin, p.sqrtPriceLimit → swap args
  */
 export function resolveSwapParams(params: ResolveSwapParamsInput): ResolvedSwapParams {
@@ -81,27 +108,17 @@ export function resolveSwapParams(params: ResolveSwapParamsInput): ResolvedSwapP
   }
   const tokenOutId = zeroForOne ? pool.token1 : pool.token0
 
-  // The contract normalizes amounts by the token's scale and asserts
-  // raw % scale == 0 — reject dust here instead of paying for a revert.
-  const scaleIn = zeroForOne ? pool.scale0 : pool.scale1
-  if (amountIn % scaleIn !== 0n) {
-    throw new Error(
-      `amountIn ${amountIn} is not a multiple of the token's scale ${scaleIn} — ` +
-        'the contract rejects amounts with non-zero dust digits',
-    )
-  }
-
   // Expected output: caller-provided quote, or a spot estimate from the
-  // current sqrt price (normalized units: price = (sqrtP/Q64)^2 token1/token0).
-  const expected = params.expectedOut ?? spotOutEstimate(pool, slot.sqrt_price, amountIn, zeroForOne)
+  // current sqrt price (price = (sqrtP / 2^128)^2 token1/token0).
+  const expected = params.expectedOut ?? spotOutEstimate(sqrtPriceOf(slot), amountIn, zeroForOne)
 
   const amountOutMin = (expected * BigInt(10000 - slippageBps)) / 10000n
 
   // Default price bound: the directional extreme — amount_out_min is the
   // real protection; a tight sqrt limit turns into partial fills instead.
-  const defaultLimit = zeroForOne ? MIN_SQRT_PRICE : MAX_SQRT_PRICE
+  const defaultLimit = zeroForOne ? MIN_SQRT_RATIO_X128 : MAX_SQRT_RATIO_X128
   const sqrtPriceLimit = params.sqrtPriceLimit ?? defaultLimit
-  assertSqrtPriceLimit(sqrtPriceLimit, slot.sqrt_price, zeroForOne, 'swap')
+  assertSqrtPriceLimit(sqrtPriceLimit, sqrtPriceOf(slot), zeroForOne, 'swap')
 
   return { zeroForOne, tokenOutId, amountOutMin, sqrtPriceLimit }
 }
@@ -115,19 +132,18 @@ export function resolveSwapParams(params: ResolveSwapParamsInput): ResolvedSwapP
  * @property poolKeys The 2–3 pool keys, in route order.
  * @property tokenInId Token id (field literal) sold into the route. Must be
  *   in the first pool.
- * @property amountIn Raw atomic input amount (u128). Must be a multiple of
- *   the input token's scale (the contract's no-dust rule).
+ * @property amountIn Raw atomic input amount (u128), in native units.
  * @property slippageBps Slippage tolerance in basis points, applied once to
  *   the route's expected final output.
  * @property expectedOut Quoted final output (e.g. the API's `/route`).
  *   Optional; without it a chained spot estimate is used, which ignores
  *   price impact and fees on every hop — too loose for large trades.
- * @property sqrtPriceLimits Per-hop Q64 price bounds. Defaults each hop to
- *   its directional extreme (rely on `amount_out_min`).
+ * @property sqrtPriceLimits Per-hop Q128.128 price bounds. Defaults each hop
+ *   to its directional extreme (rely on `amount_out_min`).
  */
 export type ResolveMultiHopParamsInput = {
-  pools: PoolState[]
-  slots: Slot[]
+  pools: SwapPoolState[]
+  slots: SwapSlotState[]
   poolKeys: string[]
   tokenInId: string
   amountIn: bigint
@@ -156,21 +172,19 @@ export type ResolvedMultiHopParams = {
  * arguments.
  *
  * Walks the token path from `tokenInId` through each pool's token pair to
- * fix hop directions and the final output token, validates the input against
- * the first pool's no-dust rule, and computes `amount_out_min` by applying
- * the slippage tolerance once to the route's expected output. Pure and
- * local — read `pools`/`slots` first.
+ * fix hop directions and the final output token, and computes
+ * `amount_out_min` by applying the slippage tolerance once to the route's
+ * expected output. Pure and local — read `pools`/`slots` first.
  *
  * @param input The intent plus the per-hop pool state it executes against.
  * @returns Resolved hops, output token, and minimum output.
  * @throws When the hop count is not 2 or 3; when `pools`/`slots` do not
  *   align one-to-one with `poolKeys`; when the token path does not connect
- *   through the pools; when `amountIn` violates the first pool's no-dust
- *   rule; when `slippageBps` is outside [0, 10000]; when `sqrtPriceLimits`
- *   is given with a length other than one entry per hop; or when a price
- *   limit lies outside the contract's accepted range or not strictly beyond
- *   the hop's current price in the trade direction (the finalize rejects
- *   both).
+ *   through the pools; when `slippageBps` is outside [0, 10000]; when
+ *   `sqrtPriceLimits` is given with a length other than one entry per hop;
+ *   or when a price limit lies outside the contract's accepted range or not
+ *   strictly beyond the hop's current price in the trade direction (the
+ *   finalize rejects both).
  *
  * @example
  * const r = resolveMultiHopParams({ pools, slots, poolKeys, tokenInId, amountIn, slippageBps: 50 })
@@ -204,24 +218,13 @@ export function resolveMultiHopParams(input: ResolveMultiHopParamsInput): Resolv
           `(${pool.token0} / ${pool.token1}) — the hop path does not connect`,
       )
     }
-    // The contract's no-dust rule applies to the route input only; the chain
-    // normalizes intermediate amounts itself.
-    if (i === 0) {
-      const scaleIn = zeroForOne ? pool.scale0 : pool.scale1
-      if (amountIn % scaleIn !== 0n) {
-        throw new Error(
-          `amountIn ${amountIn} is not a multiple of the input token's scale ${scaleIn} — ` +
-            'the contract rejects amounts with non-zero dust digits',
-        )
-      }
-    }
     if (estimate !== undefined) {
-      estimate = spotOutEstimate(pool, slots[i]!.sqrt_price, estimate, zeroForOne)
+      estimate = spotOutEstimate(sqrtPriceOf(slots[i]!), estimate, zeroForOne)
     }
 
-    const defaultLimit = zeroForOne ? MIN_SQRT_PRICE : MAX_SQRT_PRICE
+    const defaultLimit = zeroForOne ? MIN_SQRT_RATIO_X128 : MAX_SQRT_RATIO_X128
     const sqrtPriceLimit = input.sqrtPriceLimits?.[i] ?? defaultLimit
-    assertSqrtPriceLimit(sqrtPriceLimit, slots[i]!.sqrt_price, zeroForOne, `Hop ${i}`)
+    assertSqrtPriceLimit(sqrtPriceLimit, sqrtPriceOf(slots[i]!), zeroForOne, `Hop ${i}`)
     hops.push({ poolKey: poolKeys[i]!, zeroForOne, sqrtPriceLimit })
     currentToken = zeroForOne ? pool.token1 : pool.token0
   })
@@ -309,24 +312,26 @@ export function formatMintPositionRequest(req: MintPositionRequestInput): string
  *
  * @property poolKey Pool key field literal the hop trades against.
  * @property zeroForOne True when the hop sells the pool's token0 for token1.
- * @property sqrtPriceLimit Q64 price bound for the hop (u128).
+ * @property sqrtPriceLimit Q128.128 price bound for the hop, encoded to the
+ *   on-chain `{ hi, lo }` u256 struct by `formatSwapHop`.
  */
 export type SwapHopInput = { poolKey: string; zeroForOne: boolean; sqrtPriceLimit: bigint }
 
 /**
- * Formats a SwapHop struct literal in the contract's exact field order.
- * Order is load-bearing: the multi-hop request hash and the transition
- * inputs both depend on it. Pure and local.
+ * Formats a SwapHop struct literal in the contract's exact field order,
+ * encoding the Q128.128 price bound as the `{ hi, lo }` u256 struct. Order
+ * is load-bearing: the multi-hop request hash and the transition inputs both
+ * depend on it. Pure and local.
  *
  * @param hop The resolved hop; the pool key MUST carry its `field` suffix.
  * @returns The struct literal the `swap_multi_hop` transition and the
  *   multi-hop request hash consume.
  *
  * @example
- * const hop0 = formatSwapHop({ poolKey, zeroForOne: true, sqrtPriceLimit: MIN_SQRT_PRICE })
+ * const hop0 = formatSwapHop({ poolKey, zeroForOne: true, sqrtPriceLimit: MIN_SQRT_RATIO_X128 })
  */
 export function formatSwapHop(hop: SwapHopInput): string {
-  return `{ pool: ${hop.poolKey}, zero_for_one: ${hop.zeroForOne}, sqrt_price_limit: ${hop.sqrtPriceLimit}u128 }`
+  return `{ pool: ${hop.poolKey}, zero_for_one: ${hop.zeroForOne}, sqrt_price_limit: ${formatU256Literal(hop.sqrtPriceLimit)} }`
 }
 
 /**
@@ -370,18 +375,19 @@ export function formatSwapHopSlots(hops: SwapHopInput[]): [string, string, strin
 }
 
 /**
- * Estimates a hop's output at the current spot price, ignoring price impact
- * and fees — the quote-free fallback both swap resolvers share.
+ * Estimates a hop's output at the current spot price — the quote-free
+ * fallback both swap resolvers share. Estimate only: ignores price impact,
+ * fees, and liquidity depth, so it is a sanity anchor for `amount_out_min`,
+ * never an execution prediction.
  *
- * Normalizes by the pool scales and applies the Q64 price square in the
- * trade direction. Fine for small trades; too loose for large ones.
+ * Applies the Q128.128 price square in the trade direction as two chained
+ * full-width mul-divs: `amountIn * sp^2 / 2^256` selling token0,
+ * `amountIn * 2^256 / sp^2` selling token1.
  */
-function spotOutEstimate(pool: PoolState, sqrtPrice: bigint, amountIn: bigint, zeroForOne: boolean): bigint {
-  const scaleIn = zeroForOne ? pool.scale0 : pool.scale1
-  const scaleOut = zeroForOne ? pool.scale1 : pool.scale0
-  const normIn = amountIn / scaleIn
-  const normOut = zeroForOne ? (normIn * sqrtPrice * sqrtPrice) / (Q64 * Q64) : (normIn * Q64 * Q64) / (sqrtPrice * sqrtPrice)
-  return normOut * scaleOut
+function spotOutEstimate(sqrtPrice: bigint, amountIn: bigint, zeroForOne: boolean): bigint {
+  return zeroForOne
+    ? mulDiv(mulDiv(amountIn, sqrtPrice, Q128, false), sqrtPrice, Q128, false)
+    : mulDiv(mulDiv(amountIn, Q128, sqrtPrice, false), Q128, sqrtPrice, false)
 }
 
 /**
@@ -391,9 +397,9 @@ function spotOutEstimate(pool: PoolState, sqrtPrice: bigint, amountIn: bigint, z
  * transaction that can only revert — reject it before proving.
  */
 function assertSqrtPriceLimit(limit: bigint, currentSqrtPrice: bigint, zeroForOne: boolean, label: string): void {
-  if (limit < MIN_SQRT_PRICE || limit > MAX_SQRT_PRICE) {
+  if (limit < MIN_SQRT_RATIO_X128 || limit > MAX_SQRT_RATIO_X128) {
     throw new Error(
-      `${label}: sqrtPriceLimit ${limit} outside the contract's accepted range [${MIN_SQRT_PRICE}, ${MAX_SQRT_PRICE}]`,
+      `${label}: sqrtPriceLimit ${limit} outside the contract's accepted range [${MIN_SQRT_RATIO_X128}, ${MAX_SQRT_RATIO_X128}]`,
     )
   }
   if (zeroForOne ? limit >= currentSqrtPrice : limit <= currentSqrtPrice) {

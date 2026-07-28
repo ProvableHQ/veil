@@ -19,16 +19,16 @@ describe('resolveDexImports', () => {
     const client = fakeClient({
       'token_a.aleo': 'program token_a.aleo;',
       'token_b.aleo': 'program token_b.aleo;',
-      'shield_swap_v3.aleo': 'import test_shield_swap_multisig_core.aleo;\nprogram shield_swap_v3.aleo;',
+      'shield_swap.aleo': 'import test_shield_swap_multisig_core.aleo;\nprogram shield_swap.aleo;',
       'test_shield_swap_multisig_core.aleo': 'program test_shield_swap_multisig_core.aleo;',
     })
     const imports = await resolveDexImports(client, { tokenPrograms: ['token_a.aleo', 'token_b.aleo'] })
     expect(Object.keys(imports).sort()).toEqual([
-      'shield_swap_v3.aleo',
+      'shield_swap.aleo',
       'test_shield_swap_multisig_core.aleo',
       'token_a.aleo',
       'token_b.aleo',
-    ].filter((p) => p !== 'shield_swap_v3.aleo'))
+    ].filter((p) => p !== 'shield_swap.aleo'))
     expect(imports['test_shield_swap_multisig_core.aleo']).toContain('program test_shield_swap_multisig_core')
   })
 
@@ -38,7 +38,7 @@ describe('resolveDexImports', () => {
       new Proxy(
         {
           'token_a.aleo': 'program token_a.aleo;',
-          'shield_swap_v3.aleo': 'import token_a.aleo;\nprogram shield_swap_v3.aleo;',
+          'shield_swap.aleo': 'import token_a.aleo;\nprogram shield_swap.aleo;',
         },
         {
           get(t, k) {

@@ -15,15 +15,16 @@ vi.mock('../../../src/utils/sdk.js', async (importOriginal) => {
 
 import { writeContract } from '@provablehq/veil-core'
 import { mint } from '../../../src/actions/liquidity/mint.js'
+import { clearRouteCache } from '../../../src/utils/routing.js'
 
 const writeMock = vi.mocked(writeContract)
 
 const POOL_KEY = '4719270064611482818245310300232007815222047549513360085395965112315873598024field'
 const TOKEN0 = '122352848155208110005843045field'
 const TOKEN1 = '15594200448253854747971580789field'
-const POOL_PLAINTEXT = `{\n  token0: ${TOKEN0},\n  token1: ${TOKEN1},\n  fee: 10000u16,\n  enabled: true,\n  scale0: 1000000000u128,\n  scale1: 1u128\n}`
+const POOL_PLAINTEXT = `{\n  token0: ${TOKEN0},\n  token1: ${TOKEN1},\n  fee: 10000u16,\n  enabled: true\n}`
 const SLOT_PLAINTEXT =
-  '{\n  tick: -62200i32,\n  tick_spacing: 200u32,\n  sqrt_price: 411435173233802309u128,\n  fee_protocol: 0u8,\n  liquidity: 94217047056u128,\n  fee_growth_global0_x_64: 0u128,\n  fee_growth_global1_x_64: 0u128,\n  fee_residual0_x_64: 0u128,\n  fee_residual1_x_64: 0u128,\n  max_liquidity_per_tick: 9223372036854775808u128,\n  protocol_fees0: 0u128,\n  protocol_fees1: 0u128,\n  next_init_below: -64400i32,\n  next_init_above: -60000i32\n}'
+  '{\n  tick: -62200i32,\n  tick_spacing: 200u32,\n  sqrt_price: { hi: 1u128, lo: 0u128 },\n  fee_protocol: 0u8,\n  liquidity: 94217047056u128,\n  fee_growth_global0_x_128: { hi: 0u128, lo: 0u128 },\n  fee_growth_global1_x_128: { hi: 0u128, lo: 0u128 },\n  max_liquidity_per_tick: 9223372036854775808u128,\n  protocol_fees0: 0u128,\n  protocol_fees1: 0u128,\n  next_init_below: -64400i32,\n  next_init_above: -60000i32\n}'
 
 function walletClient(): Client {
   return {
@@ -33,6 +34,7 @@ function walletClient(): Client {
         switch (req.params?.mapping) {
           case 'pools': return POOL_PLAINTEXT
           case 'slots': return SLOT_PLAINTEXT
+          // Both tokens plain — from_wrapper_token_id has no entry.
           default: return null
         }
       }
@@ -43,6 +45,7 @@ function walletClient(): Client {
 
 beforeEach(() => {
   writeMock.mockReset()
+  clearRouteCache()
 })
 
 describe('mint — wallet path without the WASM peer', () => {
@@ -60,6 +63,7 @@ describe('mint — wallet path without the WASM peer', () => {
       tickUpperHint: -64400,
       nonce: '7field',
       recipient: 'aleo1t08epjqqv8h7jpuy2m2cxm80zy2pcy5c4f3m82hnac4sjmdrjyysvx3s2h',
+      withdrawal: 'aleo1t08epjqqv8h7jpuy2m2cxm80zy2pcy5c4f3m82hnac4sjmdrjyysvx3s2h',
     })
     expect(res.transactionId).toBe('at1walletmint')
     expect(res.positionTokenId).toBeUndefined()

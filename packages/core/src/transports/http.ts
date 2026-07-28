@@ -329,7 +329,7 @@ export function http(
 
       if (!response.ok) {
         const text = await response.text()
-        throw new TransportError(`HTTP ${response.status}: ${text}`)
+        throw new TransportError(`HTTP ${response.status}: ${text}`, { status: response.status, body: text })
       }
 
       return response.json()

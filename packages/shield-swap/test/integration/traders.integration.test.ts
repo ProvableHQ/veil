@@ -5,12 +5,13 @@ import { ApiClient, authenticateWithAccount } from '../../src/api/client.js'
 import { getPool } from '../../src/actions/reads/getPool.js'
 import { getSlot } from '../../src/actions/reads/getSlot.js'
 import { poolPrice, priceImpact, feeAprEstimate } from '../../src/utils/derivations.js'
-import { getSqrtPriceAtTick, roundTickToSpacing } from '../../src/utils/tick-math.js'
+import { roundTickToSpacing } from '../../src/utils/tick-math.js'
+import { getSqrtPriceAtTickX128 } from '../../src/utils/q128.js'
 import type { PoolState } from '../../src/generated/shield_swap.js'
 import type { GetSlotReturnType } from '../../src/actions/reads/getSlot.js'
 
 // Point at a local DEX API (e.g. the local-dex stack) with VEIL_DEX_API_URL.
-const API_OPTS = process.env.VEIL_DEX_API_URL ? { baseUrl: process.env.VEIL_DEX_API_URL } : {}
+const API_OPTS = { baseUrl: process.env.VEIL_DEX_API_URL ?? 'https://amm-api-staging.dev.provable.com' }
 
 /**
  * Real-API integration for the analyses a trader actually runs — price
@@ -101,8 +102,8 @@ describe.runIf(RUN)('trader workflows against live pool + route data', () => {
 
     // The chosen range must straddle the pool's live sqrt price — i.e. the
     // position is in range and earns fees now.
-    expect(getSqrtPriceAtTick(lower)).toBeLessThanOrEqual(slot.sqrt_price)
-    expect(getSqrtPriceAtTick(upper)).toBeGreaterThan(slot.sqrt_price)
+    expect(getSqrtPriceAtTickX128(lower)).toBeLessThanOrEqual(slot.sqrt_price)
+    expect(getSqrtPriceAtTickX128(upper)).toBeGreaterThan(slot.sqrt_price)
   })
 
   it.runIf(!!PRIVATE_KEY)('estimates LP fee APR from live 24h volume (OHLCV)', async () => {

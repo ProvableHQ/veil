@@ -27,6 +27,9 @@ npx tsx $SKILLS/scripts/setup.ts --private-key-file <path> --consumer-id <id> --
 
 # when setup asks for an invite code
 npx tsx $SKILLS/scripts/setup.ts --invite-code <code>
+
+# target a specific DEX API deployment (e.g. staging) instead of the default
+npx tsx $SKILLS/scripts/setup.ts --api-url <origin>
 ```
 
 **Private keys never transit the conversation.** When the user has an
@@ -39,6 +42,15 @@ one if pasted anyway.
 Environment variables work as fallbacks for the other flags too:
 `ALEO_CONSUMER_ID`, `ALEO_DPS_API_KEY`, `SHIELD_SWAP_INVITE_CODE`. State
 location overrides with `SHIELD_SWAP_STATE_DIR` (default `./.shield-swap`).
+
+The API URL persists in the state file, so `--api-url` is needed once, not
+per command. Switching deployments resets the deployment-scoped state
+(access grant, API token, pending airdrop job) — expect setup to walk the
+invite and token gates again on the new deployment. Key material and
+Provable API credentials carry over unchanged. `SHIELD_SWAP_API_URL` is
+deliberately different: it is an ephemeral per-run override honored by
+every session script, and it neither persists nor resets anything — use
+the flag to switch deployments, the env var to peek at one.
 
 ## Exit-code contract
 
@@ -78,8 +90,8 @@ The final report lists funded tokens with their wrapper programs, e.g.:
 ```
 Account aleo1… is ready:
   ETH: public 0, private 6000000000000000 (test_arc20_eth.aleo)
-  wALEO: public 0, private 400000000 (test_arc20_wrapped_credits.aleo)
-  wUSDCx: public 0, private 10000000 (test_arc20_wusdcx.aleo)
+  ALEO: public 0, private 400000000 (records held in credits.aleo)
+  USDCx: public 0, private 10000000 (records held in test_usdcx_stablecoin.aleo)
 ```
 
 Private balances funded + exit 0 = ready to trade. Note the wrapper

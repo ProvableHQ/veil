@@ -1,5 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { readBoolMapping } from './internal.js'
+import { toFeeTiersMappingValue } from '../../generated/shield_swap.js'
+import { readFlagMapping } from './internal.js'
 
 /**
  * Checks whether a fee tier is registered with the program.
@@ -21,5 +22,5 @@ export async function isFeeTierValid(
   client: Client,
   params: { fee: number; program?: string },
 ): Promise<boolean> {
-  return readBoolMapping(client, params.program, 'fee_tiers', `${params.fee}u16`)
+  return readFlagMapping(client, params.program, 'fee_tiers', `${params.fee}u16`, toFeeTiersMappingValue)
 }

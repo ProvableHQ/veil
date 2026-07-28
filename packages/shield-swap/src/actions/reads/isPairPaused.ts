@@ -1,5 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { readBoolMapping } from './internal.js'
+import { toPairPausedMappingValue } from '../../generated/shield_swap.js'
+import { readFlagMapping } from './internal.js'
 import { sortTokenPair } from '../../utils/keys.js'
 
 /**
@@ -15,7 +16,7 @@ import { sortTokenPair } from '../../utils/keys.js'
  *
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param params The two token ids (field literals, either order), and
- *   optionally the program to read from (defaults to `DEFAULT_PROGRAM`).
+ *   optionally the program to read from (defaults to `shield_swap.aleo`).
  * @returns `true` when the pair is paused, otherwise `false`.
  *
  * @example
@@ -26,5 +27,5 @@ export async function isPairPaused(
   params: { token0: string; token1: string; program?: string },
 ): Promise<boolean> {
   const [t0, t1] = sortTokenPair(params.token0, params.token1)
-  return readBoolMapping(client, params.program, 'pair_paused', `{ token0: ${t0}field, token1: ${t1}field }`)
+  return readFlagMapping(client, params.program, 'pair_paused', `{ token0: ${t0}field, token1: ${t1}field }`, toPairPausedMappingValue)
 }

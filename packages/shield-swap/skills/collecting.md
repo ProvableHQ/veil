@@ -16,11 +16,9 @@ claimable once the swap transaction finalizes; claiming before that throws
 
 ```ts
 import { SwapOutputNotFinalizedError } from '@provablehq/shield-swap-sdk'
-import type { SwapHandle, MultiHopSwapHandle } from '@provablehq/shield-swap-sdk'
 import {
   loadSession,
   deserializeHandle,
-  isMultiHopHandle,
   removeSwapHandle,
   buildDexImports,
   formatAmount,
@@ -28,12 +26,11 @@ import {
 
 const { client, account, state } = await loadSession()
 const tokens = (await client.api.getTokens()).data
-const programOf = (tokenId: string) => tokens.find((t) => t.address === tokenId)?.wrapper_program
+const programOf = (tokenId: string) => tokens.find((t) => t.address === tokenId)?.amm_token_program
 const infoOf = (tokenId: string) => tokens.find((t) => t.address === tokenId)
 
 for (const stored of [...state.swapHandles]) {
   const handle = deserializeHandle(stored)
-  const multiHop = isMultiHopHandle(stored) // multi-hop handles carry poolKeys
   const pIn = programOf(handle.tokenInId)
   const pOut = programOf(handle.tokenOutId)
   if (!pIn || !pOut) {
@@ -44,9 +41,9 @@ for (const stored of [...state.swapHandles]) {
 
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
-      const result = multiHop
-        ? await client.claimMultiHopOutput({ handle: handle as MultiHopSwapHandle, imports })
-        : await client.claimSwapOutput({ handle: handle as SwapHandle, imports })
+      // One claim serves both single- and multi-hop swaps; it accepts either
+      // handle type and routes the withdrawal (wrapped vs plain) internally.
+      const result = await client.claimSwapOutput({ handle, imports })
       const out = infoOf(handle.tokenOutId)
       console.log(`claimed ${formatAmount(result.amountOut, out?.decimals ?? 0, out?.symbol)} (tx ${result.transactionId})`)
       // Drop the handle the moment its claim confirms — never later, so a
@@ -84,22 +81,23 @@ settles withdrawn principal into the same place. `collect` withdraws owed
 balances to private records.
 
 ```ts
-import { floorToDust, formatAmount } from '$SKILLS/scripts/session.js'
+import { formatAmount } from '$SKILLS/scripts/session.js'
 
 const tokens = (await client.api.getTokens()).data
-const tokenOf = (wrapperProgram: string) => tokens.find((t) => t.wrapper_program === wrapperProgram)
-const decimalsOf = (wrapperProgram: string) => tokenOf(wrapperProgram)?.decimals ?? 0
+const tokenOf = (program: string) => tokens.find((t) => t.amm_token_program === program)
+const decimalsOf = (program: string) => tokenOf(program)?.decimals ?? 0
 
+// When state.positions is missing or stale, rebuild it on the spot:
+// `client.getOwnedPositions()` re-discovers every owned position from the
+// account's records, including what each one could collect right now.
 for (const tracked of state.positions) {
   const position = await client.getPosition({ positionTokenId: tracked.positionTokenId })
   if (!position) continue
 
-  // DUST TRAP: owed balances accrue in raw units, but withdrawals must be
-  // representable at the token's scale — a request with non-zero dust
-  // digits reverts at finalize (fee consumed, nothing collected). Floor
-  // each request; the sub-scale remainder stays owed on the position.
-  const amount0 = floorToDust(position.tokens_owed0, decimalsOf(tracked.token0Program))
-  const amount1 = floorToDust(position.tokens_owed1, decimalsOf(tracked.token1Program))
+  // Owed balances accrue in raw base units; collect requests them directly
+  // (the dust-flooring rule of the old stack is gone).
+  const amount0 = position.tokens_owed0
+  const amount1 = position.tokens_owed1
   if (amount0 === 0n && amount1 === 0n) continue // nothing collectable yet
 
   const imports = await buildDexImports(client, [tracked.token0Program, tracked.token1Program])
@@ -119,10 +117,8 @@ for (const tracked of state.positions) {
 }
 ```
 
-Collecting everything representable is the normal move; fees keep accruing
-while the position has in-range liquidity — sweep periodically. Owed
-amounts below one unit of the token's scale are not collectable until more
-accrues on top of them.
+Collecting everything owed is the normal move; fees keep accruing while the
+position has in-range liquidity — sweep periodically.
 
 ## Verify the take
 
@@ -143,6 +139,5 @@ minutes before treating a missing balance bump as a failure.
 | --- | --- | --- |
 | `SwapOutputNotFinalizedError` persists past ~5 min | Swap tx rejected, or never confirmed | Look up `handle.transactionId` on chain; a rejected swap has nothing to claim — keep the handle and investigate. |
 | Claim reverts (not the finalize error) | Wrong imports, or output already claimed | Rebuild imports from BOTH tokens' wrapper programs; check `getSwapOutput({ swapId })` — `null` after a prior claim is normal. |
-| `collect` reverts at finalize | Requested amount has dust digits below the token scale | Floor requests with `floorToDust(owed, decimals)`; sub-scale dust stays owed. |
 | `collect` reverts | Zero owed, or position record not scannable yet | Re-read `getPosition`; wait for the scanner if the position was just changed. |
 | Claimed record not in holdings | Scanner lag | Wait a few minutes; the record service indexes asynchronously. |

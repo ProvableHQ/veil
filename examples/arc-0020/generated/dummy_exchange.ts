@@ -2,7 +2,7 @@
 // Do not edit manually.
 
 import { getContract } from '@provablehq/veil-core'
-import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '@provablehq/veil-core'
+import type { RecordValue, FutureValue, DynamicFutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue, StructValue } from '@provablehq/veil-core'
 
 export const PROGRAM_ID = 'dummy_exchange.aleo' as const
 

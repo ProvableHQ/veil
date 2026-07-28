@@ -1,20 +1,20 @@
 import { describe, it, expect } from 'vitest'
 import { poolPrice, priceImpact, portfolioValue, feeAprEstimate } from '../../src/utils/derivations.js'
-import { Q64 } from '../../src/utils/tick-math.js'
+import { Q128 } from '../../src/utils/q128.js'
 
-// Live ETHx(18)/USDC(6) pool fixture: sqrt_price and scales captured from testnet.
-const LIVE_SLOT = { sqrt_price: 411435173233802309n, liquidity: 94217047056n }
-const LIVE_POOL = { scale0: 1_000_000_000n, scale1: 1n }
+// Q128.128 raw-unit pool fixtures. sqrt_price encodes sqrt(token1_raw/token0_raw).
+// An ~2-USDC(6)/ETH(18) pool: normalized ≈ 2e-12, shift 10^(18−6).
+const LIVE_SLOT = { sqrt_price: 481231938336008987585635023847424n, liquidity: 1_000_000_000_000n }
 
 describe('poolPrice', () => {
   it('price 1.0 at tick 0 for same-decimals tokens', () => {
-    const { price1Per0, price0Per1 } = poolPrice({ slot: { sqrt_price: Q64 }, decimals0: 6, decimals1: 6 })
+    const { price1Per0, price0Per1 } = poolPrice({ slot: { sqrt_price: Q128 }, decimals0: 6, decimals1: 6 })
     expect(price1Per0).toBeCloseTo(1, 10)
     expect(price0Per1).toBeCloseTo(1, 10)
   })
 
-  it('applies the capped-decimal shift for an 18/6 pair (live fixture)', () => {
-    // normalized (sqrtP/Q64)^2 ≈ 0.00199; shift = 10^(9−6) → ≈1.99 USDC per ETHx.
+  it('applies the display-decimal shift for an 18/6 pair', () => {
+    // normalized (sqrtP/Q128)^2 ≈ 2e-12; shift = 10^(18−6) → ≈2.0 USDC per ETH.
     const { price1Per0 } = poolPrice({ slot: LIVE_SLOT, decimals0: 18, decimals1: 6 })
     expect(price1Per0).toBeGreaterThan(1.9)
     expect(price1Per0).toBeLessThan(2.1)
@@ -30,8 +30,8 @@ describe('poolPrice', () => {
 
 describe('priceImpact', () => {
   it('small trades approach spot (tiny impact), large trades diverge', () => {
-    const small = priceImpact({ pool: LIVE_POOL, slot: LIVE_SLOT, amountIn: 10n ** 15n, zeroForOne: true })
-    const large = priceImpact({ pool: LIVE_POOL, slot: LIVE_SLOT, amountIn: 10n ** 20n, zeroForOne: true })
+    const small = priceImpact({ slot: LIVE_SLOT, amountIn: 10n ** 15n, zeroForOne: true })
+    const large = priceImpact({ slot: LIVE_SLOT, amountIn: 10n ** 20n, zeroForOne: true })
     expect(small.expectedOut > 0n).toBe(true)
     expect(small.impactBps).toBeLessThan(large.impactBps)
     // Larger input must not yield proportionally larger output (price moves away).
@@ -41,13 +41,13 @@ describe('priceImpact', () => {
   })
 
   it('is direction-consistent: out-and-back never profits', () => {
-    const fwd = priceImpact({ pool: LIVE_POOL, slot: LIVE_SLOT, amountIn: 10n ** 18n, zeroForOne: true })
-    const back = priceImpact({ pool: LIVE_POOL, slot: LIVE_SLOT, amountIn: fwd.expectedOut, zeroForOne: false })
+    const fwd = priceImpact({ slot: LIVE_SLOT, amountIn: 10n ** 18n, zeroForOne: true })
+    const back = priceImpact({ slot: LIVE_SLOT, amountIn: fwd.expectedOut, zeroForOne: false })
     expect(back.expectedOut <= 10n ** 18n).toBe(true)
   })
 
   it('degrades safely on empty pools', () => {
-    expect(priceImpact({ pool: LIVE_POOL, slot: { sqrt_price: 0n, liquidity: 0n }, amountIn: 1n, zeroForOne: true }))
+    expect(priceImpact({ slot: { sqrt_price: 0n, liquidity: 0n }, amountIn: 1n, zeroForOne: true }))
       .toEqual({ expectedOut: 0n, impactBps: 0 })
   })
 })

@@ -1,4 +1,5 @@
 import { loadSdk } from './sdk.js'
+import { formatU256Literal } from './q128.js'
 import {
   formatMintPositionRequest,
   formatSwapHopSlots,
@@ -143,7 +144,8 @@ export async function deriveTickKey(params: DeriveTickKeyParameters): Promise<st
  *   `field` suffix is optional).
  * @property zeroForOne True when selling the pool's token0 for token1.
  * @property amountIn Raw atomic amount sold (u128), as passed to `swap`.
- * @property sqrtPriceLimit Q64 price bound (u128), as passed to `swap`.
+ * @property sqrtPriceLimit Q128.128 price bound, as passed to `swap` —
+ *   hashed as the on-chain `{ hi, lo }` u256 struct.
  * @property blindedAddress The swap's single-use blinded address — the
  *   contract records it as both `recipient` and `caller` in the preimage.
  * @property nonce The swap's u64 nonce.
@@ -155,6 +157,29 @@ export interface DeriveSwapIdParameters {
   sqrtPriceLimit: bigint
   blindedAddress: string
   nonce: bigint
+}
+
+/**
+ * Formats the `SwapKey` struct literal `swap` hashes into its swap id —
+ * pool, direction, amount, the Q128.128 limit as `{ hi, lo }`, and the
+ * blinded address in both the `recipient` and `caller` slots. Order and
+ * spelling are load-bearing: the literal must hash byte-for-byte like the
+ * contract's own cast. Pure and local.
+ *
+ * @param params The swap's preimage fields, exactly as submitted.
+ * @returns The struct literal {@link deriveSwapId} hashes.
+ *
+ * @example
+ * const preimage = formatSwapKeyPreimage({ poolKey, zeroForOne: true,
+ *   amountIn, sqrtPriceLimit, blindedAddress, nonce })
+ */
+export function formatSwapKeyPreimage(params: DeriveSwapIdParameters): string {
+  const pool = fieldLiteral(params.poolKey)
+  return (
+    `{ pool: ${pool}, zero_for_one: ${params.zeroForOne}, amount_in: ${params.amountIn}u128, ` +
+    `sqrt_price_limit: ${formatU256Literal(params.sqrtPriceLimit)}, recipient: ${params.blindedAddress}, ` +
+    `nonce: ${params.nonce}u64, caller: ${params.blindedAddress} }`
+  )
 }
 
 /**
@@ -181,12 +206,7 @@ export interface DeriveSwapIdParameters {
  * const out = await getSwapOutput(client, { swapId })
  */
 export async function deriveSwapId(params: DeriveSwapIdParameters): Promise<string> {
-  const pool = fieldLiteral(params.poolKey)
-  return hashStruct(
-    `{ pool: ${pool}, zero_for_one: ${params.zeroForOne}, amount_in: ${params.amountIn}u128, ` +
-      `sqrt_price_limit: ${params.sqrtPriceLimit}u128, recipient: ${params.blindedAddress}, ` +
-      `nonce: ${params.nonce}u64, caller: ${params.blindedAddress} }`,
-  )
+  return hashStruct(formatSwapKeyPreimage(params))
 }
 
 /**
@@ -245,7 +265,8 @@ export async function derivePositionTokenId(params: DerivePositionTokenIdParamet
  * @property amountOutMin Minimum acceptable final output (u128).
  * @property blindedAddress The swap's single-use blinded address (occupies
  *   both `recipient` and `caller` in the preimage).
- * @property hops The 2–3 resolved hops, in route order.
+ * @property hops The 2–3 resolved hops, in route order (Q128.128 price
+ *   bounds, hashed as `{ hi, lo }` u256 structs).
  * @property nonce The swap's u64 nonce.
  * @property deadline Absolute block height (u32) — part of the multi-hop
  *   preimage, unlike the single-hop `SwapKey`.
@@ -259,6 +280,37 @@ export interface DeriveMultiHopSwapIdParameters {
   hops: SwapHopInput[]
   nonce: bigint
   deadline: number
+}
+
+/**
+ * Formats the `SwapMultiHopRequest` struct literal `swap_multi_hop` hashes
+ * into its swap id — tokens, amounts, the blinded address as `recipient`
+ * and `caller`, the three zero-padded hop slots, hop count, nonce, and
+ * deadline. Order and spelling are load-bearing: the literal must hash
+ * byte-for-byte like the contract's own cast. Pure and local.
+ *
+ * @param params The multi-hop request fields, exactly as submitted.
+ * @returns The struct literal {@link deriveMultiHopSwapId} hashes.
+ * @throws When `hops` is not 2 or 3 entries, or contains an empty slot.
+ *
+ * @example
+ * const preimage = formatSwapMultiHopRequestPreimage({ tokenInId, tokenOutId,
+ *   amountIn, amountOutMin, blindedAddress, hops, nonce, deadline })
+ */
+export function formatSwapMultiHopRequestPreimage(params: DeriveMultiHopSwapIdParameters): string {
+  // Normalize pool literals so bare and suffixed keys hash identically;
+  // formatSwapHopSlots enforces the 2–3 count and zero-pads the third slot.
+  const [hop0, hop1, hop2] = formatSwapHopSlots(
+    params.hops.map((h) => (h ? { ...h, poolKey: fieldLiteral(h.poolKey) } : h)),
+  )
+  const tokenIn = fieldLiteral(params.tokenInId)
+  const tokenOut = fieldLiteral(params.tokenOutId)
+  return (
+    `{ token_in: ${tokenIn}, token_out: ${tokenOut}, amount_in: ${params.amountIn}u128, ` +
+    `amount_out_min: ${params.amountOutMin}u128, recipient: ${params.blindedAddress}, ` +
+    `hop0: ${hop0}, hop1: ${hop1}, hop2: ${hop2}, hop_count: ${params.hops.length}u8, ` +
+    `nonce: ${params.nonce}u64, deadline: ${params.deadline}u32, caller: ${params.blindedAddress} }`
+  )
 }
 
 /**
@@ -284,17 +336,5 @@ export interface DeriveMultiHopSwapIdParameters {
  * })
  */
 export async function deriveMultiHopSwapId(params: DeriveMultiHopSwapIdParameters): Promise<string> {
-  // Normalize pool literals so bare and suffixed keys hash identically;
-  // formatSwapHopSlots enforces the 2–3 count and zero-pads the third slot.
-  const [hop0, hop1, hop2] = formatSwapHopSlots(
-    params.hops.map((h) => (h ? { ...h, poolKey: fieldLiteral(h.poolKey) } : h)),
-  )
-  const tokenIn = fieldLiteral(params.tokenInId)
-  const tokenOut = fieldLiteral(params.tokenOutId)
-  return hashStruct(
-    `{ token_in: ${tokenIn}, token_out: ${tokenOut}, amount_in: ${params.amountIn}u128, ` +
-      `amount_out_min: ${params.amountOutMin}u128, recipient: ${params.blindedAddress}, ` +
-      `hop0: ${hop0}, hop1: ${hop1}, hop2: ${hop2}, hop_count: ${params.hops.length}u8, ` +
-      `nonce: ${params.nonce}u64, deadline: ${params.deadline}u32, caller: ${params.blindedAddress} }`,
-  )
+  return hashStruct(formatSwapMultiHopRequestPreimage(params))
 }

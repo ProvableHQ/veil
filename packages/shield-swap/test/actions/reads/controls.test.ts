@@ -6,12 +6,11 @@ import { isTokenAllowed } from '../../../src/actions/reads/isTokenAllowed.js'
 import { isTokenPaused } from '../../../src/actions/reads/isTokenPaused.js'
 import { isPairPaused } from '../../../src/actions/reads/isPairPaused.js'
 import { getFrozenPosition } from '../../../src/actions/reads/getFrozenPosition.js'
-import { getTokenDecimals } from '../../../src/actions/reads/getTokenDecimals.js'
 import { getTradeControls } from '../../../src/actions/reads/getTradeControls.js'
 
 const TOKEN0 = '122352848155208110005843045field'
 const TOKEN1 = '15594200448253854747971580789field'
-const POOL_PLAINTEXT = `{\n  token0: ${TOKEN0},\n  token1: ${TOKEN1},\n  fee: 10000u16,\n  enabled: true,\n  scale0: 1000000000u128,\n  scale1: 1u128\n}`
+const POOL_PLAINTEXT = `{\n  token0: ${TOKEN0},\n  token1: ${TOKEN1},\n  fee: 10000u16,\n  enabled: true\n}`
 
 /** Scripted client answering getMappingValue by mapping name (and key). */
 function fakeClient(responses: Record<string, unknown | ((key?: string) => unknown)>): Client {
@@ -33,7 +32,6 @@ describe('control readers', () => {
     expect(await isTokenPaused(client, { tokenId: TOKEN0 })).toBe(false)
     expect(await isPairPaused(client, { token0: TOKEN0, token1: TOKEN1 })).toBe(false)
     expect(await getFrozenPosition(client, { positionTokenId: '5field' })).toBeNull()
-    expect(await getTokenDecimals(client, { tokenId: TOKEN0 })).toBeNull()
   })
 
   it('reads set entries with the right key literals', async () => {
@@ -41,12 +39,10 @@ describe('control readers', () => {
     const client = fakeClient({
       global_paused: (key?: string) => (seen.push(`global:${key}`), 'true'),
       frozen_position: '123456u32',
-      token_decimals: '18u8',
     })
     expect(await isGlobalPaused(client)).toBe(true)
     expect(seen).toEqual(['global:true'])
     expect(await getFrozenPosition(client, { positionTokenId: '5field' })).toBe(123456)
-    expect(await getTokenDecimals(client, { tokenId: TOKEN0 })).toBe(18)
   })
 
   it('sorts the pair key ascending, order-independent, matching set_pair_paused', async () => {
@@ -60,8 +56,8 @@ describe('control readers', () => {
   })
 
   it('rejects an unexpected numeric literal shape', async () => {
-    const client = fakeClient({ token_decimals: 'garbage' })
-    await expect(getTokenDecimals(client, { tokenId: TOKEN0 })).rejects.toThrow(/unexpected value/)
+    const client = fakeClient({ frozen_position: 'garbage' })
+    await expect(getFrozenPosition(client, { positionTokenId: '5field' })).rejects.toThrow(/Cannot parse value/)
   })
 })
 

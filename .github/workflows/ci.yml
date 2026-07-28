@@ -32,6 +32,35 @@ jobs:
       - name: Typecheck reference dApp
         run: pnpm --filter @provablehq/veil-loyalty-dapp exec tsc --noEmit
 
+  # Shape-parity check against the migrated staging DEX API: the unkeyed read +
+  # auth subset (public pool/token discovery, on-chain decode + Q128 tick
+  # bracketing, the challenge/verify handshake with a generated account). Its
+  # job is to catch drift between this client and the live migrated API. No
+  # funded key, so write/keyed assertions inside these files self-skip.
+  # continue-on-error: a staging outage must not red the whole CI run.
+  staging-shapes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    env:
+      VEIL_INTEGRATION: '1'
+      VEIL_DEX_API_URL: 'https://amm-api-staging.dev.provable.com'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Staging read + auth shape parity
+        run: >
+          pnpm vitest run --retry=2
+          packages/shield-swap/test/integration/reads.integration.test.ts
+          packages/shield-swap/test/integration/api.integration.test.ts
+
   # Core devnode plumbing (deploy / execute / records / snapshots / codegen).
   devnode:
     runs-on: ubuntu-latest

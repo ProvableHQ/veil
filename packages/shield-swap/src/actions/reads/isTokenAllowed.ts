@@ -1,5 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { readBoolMapping } from './internal.js'
+import { toTokenAllowedMappingValue } from '../../generated/shield_swap.js'
+import { readFlagMapping } from './internal.js'
 
 /**
  * Checks whether a token is on the program's allowlist.
@@ -13,7 +14,7 @@ import { readBoolMapping } from './internal.js'
  *
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param params The token id (field literal), and optionally the program to
- *   read from (defaults to `DEFAULT_PROGRAM`).
+ *   read from (defaults to `shield_swap.aleo`).
  * @returns `true` when the token is allowed, otherwise `false`.
  *
  * @example
@@ -23,5 +24,5 @@ export async function isTokenAllowed(
   client: Client,
   params: { tokenId: string; program?: string },
 ): Promise<boolean> {
-  return readBoolMapping(client, params.program, 'token_allowed', params.tokenId)
+  return readFlagMapping(client, params.program, 'token_allowed', params.tokenId, toTokenAllowedMappingValue)
 }

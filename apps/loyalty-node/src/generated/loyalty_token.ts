@@ -2,7 +2,7 @@
 // Do not edit manually.
 
 import { getContract } from '@provablehq/veil-core'
-import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue } from '@provablehq/veil-core'
+import type { RecordValue, FutureValue, DynamicFutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue, StructValue } from '@provablehq/veil-core'
 
 export const PROGRAM_ID = 'loyalty_token.aleo' as const
 
@@ -23,13 +23,14 @@ export interface LoyaltyCard {
   _record: RecordValue
 }
 
-export function toLoyaltyCard(record: RecordValue): LoyaltyCard {
+export function toLoyaltyCard(record: RecordValue | string): LoyaltyCard {
+  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
   return {
-    owner: record.owner,
-    card_id: litStr(record.fields.card_id?.value, 'field') ?? '',
-    points: record.fields.points?.value as bigint ?? 0n,
-    tier: Number((record.fields.tier?.value ?? 0n) as bigint) ?? 0,
-    _record: record,
+    owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
+    card_id: litStr(fields.card_id?.value, 'field') ?? '',
+    points: fields.points?.value as bigint ?? 0n,
+    tier: Number((fields.tier?.value ?? 0n) as bigint) ?? 0,
+    _record: record as unknown as RecordValue,
   }
 }
 

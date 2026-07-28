@@ -16,12 +16,12 @@ import { isTokenAllowed } from '../../src/actions/reads/isTokenAllowed.js'
 import { isTokenPaused } from '../../src/actions/reads/isTokenPaused.js'
 import { isPairPaused } from '../../src/actions/reads/isPairPaused.js'
 import { getFrozenPosition } from '../../src/actions/reads/getFrozenPosition.js'
-import { getTokenDecimals } from '../../src/actions/reads/getTokenDecimals.js'
 import { getTradeControls } from '../../src/actions/reads/getTradeControls.js'
+import { getSqrtPriceAtTickX128 } from '../../src/utils/q128.js'
 import { ApiClient, authenticateWithAccount } from '../../src/api/client.js'
 import { PROGRAM_ID } from '../../src/generated/shield_swap.js'
 
-// Real-API integration: hits the live testnet node and the live DEX API.
+// Real-API integration: hits the live testnet node and the migrated DEX API.
 // Never mocked — these tests exist to catch drift between this client and the
 // deployed contract/API. Gated so the default offline suite stays fast.
 // The fee-tier registry endpoint is bearer-gated, so that one test
@@ -31,9 +31,10 @@ const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
 
 const API_BASE = 'https://api.provable.com/v2'
 const NODE_URL = `${API_BASE}/testnet`
-const INDEXER_URL = process.env.VEIL_DEX_API_URL ?? 'https://amm-api.dev.provable.com'
+// The migrated shapes are served by staging; override for another endpoint.
+const INDEXER_URL = process.env.VEIL_DEX_API_URL ?? 'https://amm-api-staging.dev.provable.com'
 
-// Reads default to PROGRAM_ID (shield_swap_v3), so a pool discovered via the
+// Reads default to PROGRAM_ID (shield_swap.aleo), so a pool discovered via the
 // API decodes directly off chain, no fallback needed.
 
 describe.runIf(RUN)('reads against the real API', () => {
@@ -55,8 +56,8 @@ describe.runIf(RUN)('reads against the real API', () => {
     expect(typeof pool!.token1).toBe('string')
     expect(typeof pool!.fee).toBe('number')
     expect(typeof pool!.enabled).toBe('boolean')
-    expect(typeof pool!.scale0).toBe('bigint')
-    expect(typeof pool!.scale1).toBe('bigint')
+    // The migrated PoolState carries no per-pool decimal scales.
+    expect('scale0' in pool!).toBe(false)
   }, 30_000)
 
   it('getPool returns null for a key that is not in the mapping', async () => {
@@ -117,16 +118,15 @@ describe.runIf(RUN)('reads against the real API', () => {
   }, 30_000)
 
   it('tick math brackets a live pool sqrt_price (table agrees with chain)', async () => {
-    const { getSqrtPriceAtTick } = await import('../../src/utils/tick-math.js')
     const res = await fetch(`${INDEXER_URL}/pools?limit=1`)
     const body = (await res.json()) as { data: { key: string }[] }
     const poolKey = body.data[0]!.key
     const slot = await getSlot(client, { poolKey })
     expect(slot).not.toBeNull()
-    // The live sqrt_price must sit inside its active tick's bracket — a
-    // one-off magic constant in our port would break this immediately.
-    expect(slot!.sqrt_price >= getSqrtPriceAtTick(slot!.tick)).toBe(true)
-    expect(slot!.sqrt_price < getSqrtPriceAtTick(slot!.tick + 1)).toBe(true)
+    // The live Q128.128 sqrt_price must sit inside its active tick's bracket —
+    // a one-off magic constant in our port would break this immediately.
+    expect(slot!.sqrt_price >= getSqrtPriceAtTickX128(slot!.tick)).toBe(true)
+    expect(slot!.sqrt_price < getSqrtPriceAtTickX128(slot!.tick + 1)).toBe(true)
   }, 30_000)
 
   it('a freshly derived blinded identity is unused on chain', async () => {
@@ -150,7 +150,8 @@ describe.runIf(RUN)('reads against the real API', () => {
     for (const m of [
       'pools', 'slots', 'swap_outputs', 'used_blinded_addresses',
       'positions', 'ticks', 'global_paused', 'token_allowed', 'token_paused',
-      'pair_paused', 'frozen_position', 'token_decimals', 'pool_creation_is_open',
+      'pair_paused', 'frozen_position', 'pool_creation_is_open',
+      'from_wrapper_token_id', 'to_wrapper_token_id',
     ]) {
       expect(mappings).toContain(m)
     }
@@ -181,15 +182,14 @@ describe.runIf(RUN)('reads against the real API', () => {
     )
   }, 60_000)
 
-  it('token decimals are registered for a live pool pair', async () => {
+  it('a live pool token resolves through the wrapper registry', async () => {
     const res = await fetch(`${INDEXER_URL}/pools?limit=1`)
     const body = (await res.json()) as { data: { key: string }[] }
     const pool = await getPool(client, { poolKey: body.data[0]!.key })
 
-    // create_pool hard-requires registration, so a live pool's tokens read back.
-    const decimals0 = await getTokenDecimals(client, { tokenId: pool!.token0 })
-    expect(decimals0).not.toBeNull()
-    expect(decimals0!).toBeGreaterThanOrEqual(0)
+    // create_pool hard-requires the token be allowed, so a live pool's tokens
+    // read back as allowed; wrapped ones also carry a from_wrapper_token_id row.
+    expect(await isTokenAllowed(client, { tokenId: pool!.token0 })).toBe(true)
     // Absent controls read their get_or_use defaults, not errors.
     expect(typeof (await isPoolCreationOpen(client))).toBe('boolean')
     expect(await getFrozenPosition(client, { positionTokenId: '444444444444444444field' })).toBeNull()
