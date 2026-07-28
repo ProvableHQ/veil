@@ -373,13 +373,10 @@ export async function setupAmmDevnode(): Promise<AmmDevnode> {
   }
 
   // ── Seed the plain pool with liquidity through the SDK mint so its swaps
-  // have depth. The wrapped pools (wp, ww) are created but NOT seeded here:
-  // the SDK's routed mint/swap local paths read the public id at a fixed
-  // output offset that assumes the router's leading change record is present,
-  // but veil-core's devnode `extractTransitions` drops router-forwarded
-  // external/dynamic records that carry no plaintext value, shifting the id to
-  // index 0 (mint.ts:250, swap.ts:302 then throw). Wrapped SDK dispatch is
-  // therefore gated in the suites until that offset is resolved.
+  // have depth. The wrapped pools (wp, ww) are created here but seeded by the
+  // wrapped-side suites themselves: their matrix mints a position through the
+  // LP router before swapping, so each wrapped test provides its own depth via
+  // the same router dispatch it exercises.
   const SEED = 200_000_000n
   {
     const record0 = await mintPlainTo(admin, pp.token0.program, SEED)

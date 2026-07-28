@@ -10,6 +10,7 @@ import {
   MAX_SQRT_RATIO_X128,
 } from '../../src/utils/q128.js'
 import { EMPTY_MERKLE_PROOFS, formatMerkleProofPair } from '../../src/utils/proofs.js'
+import { requireFieldOutput } from '../../src/utils/outputs.js'
 import { parseTokenRecordInfo } from '../../src/utils/records.js'
 import {
   setupAmmDevnode,
@@ -46,12 +47,10 @@ const FEE = 500
 const TICK_SPACING = 10
 const EMPTY_PROOFS = formatMerkleProofPair(EMPTY_MERKLE_PROOFS)
 
-/** Finds the first field literal in a generated execute result tuple. */
+/** Pulls the field-literal id out of a generated execute result tuple. */
 function firstField(result: unknown): string {
-  const flat = Array.isArray(result) ? result : [result]
-  const field = flat.find((v): v is string => typeof v === 'string' && /^\d+field$/.test(v))
-  if (!field) throw new Error(`No field literal in result: ${JSON.stringify(result)}`)
-  return field
+  const flat = (Array.isArray(result) ? result : [result]).filter((v): v is string => typeof v === 'string')
+  return requireFieldOutput(flat, 'generated execute')
 }
 
 /** Pulls a named literal value out of a struct plaintext. */
