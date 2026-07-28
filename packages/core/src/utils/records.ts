@@ -175,105 +175,82 @@ export function parsePlaintextValue(text: string): PlaintextValue {
   return parseCompositeValue(trimmed)
 }
 
-// ── parseRecordPlaintext ──────────────────────────────────────────────
+// ── parseRecord ───────────────────────────────────────────────────────
+
+// Visibility suffix on a record entry leaf: `.constant`, `.public`, or
+// `.private` followed by a value boundary. Record plaintext stamps the
+// entry's mode on every leaf literal, including leaves nested inside
+// composite entries.
+const ENTRY_MODE_REGEX = /\.(constant|public|private)(?=[,\s\]}]|$)/
+
+/**
+ * Options for {@link parseRecord}.
+ *
+ * @property def Record definition from the program ABI. Optional — record
+ *   plaintext is self-describing, so the definition only enriches entry type
+ *   descriptors (exact composite types instead of best-effort inference) and
+ *   supplies the record name.
+ * @property program Program the record belongs to. Defaults to `"unknown"`.
+ * @property recordName Record type name. Defaults to the `def` path's last
+ *   segment, or `"unknown"` without a definition.
+ */
+export type ParseRecordOptions = {
+  def?: RecordDef
+  program?: string
+  recordName?: string
+}
 
 /**
  * Parses an Aleo record plaintext string into a typed RecordValue.
  *
- * Accepts either a RecordDef directly or an ABI + record name (convenience).
- * Each field's Aleo type is embedded in the resulting RecordFieldValue,
- * enabling toString() to serialize back without needing the RecordDef again.
+ * Mirrors snarkVM's record grammar: a visibility-scoped `owner`, data entries
+ * whose mode (`constant`, `public`, or `private`) comes from their leaf
+ * suffixes, a `_nonce`, and an optional `_version` (defaulting to 0). Entry
+ * types are inferred from the self-describing literal suffixes; pass a
+ * `RecordDef` to enrich composite entry types. The original plaintext is kept
+ * on `raw`, so `serializeRecord` round-trips exactly. Pure and local.
+ *
+ * For plain struct, literal, or array plaintext — mapping values,
+ * struct-typed outputs — use `parsePlaintextValue`: structs have no owner or
+ * per-member visibility, and a struct member named `owner` is data, not
+ * metadata.
+ *
+ * @param plaintext Record plaintext as printed by snarkVM.
+ * @param options Optional record definition, program id, and record name.
+ * @returns The parsed record.
+ * @throws When the plaintext has no `owner` or `_nonce` key — the input is a
+ *   struct or other non-record plaintext.
  *
  * @example
- * ```ts
- * // With ABI (recommended — no manual RecordDef lookup)
- * const record = parseRecordPlaintext(plaintext, tokenAbi, 'LoyaltyCard', 'loyalty_token.aleo')
- *
- * // With RecordDef directly
- * const record = parseRecordPlaintext(plaintext, loyaltyCardDef, 'loyalty_token.aleo')
- * ```
+ * const record = parseRecord(text, { program: 'loyalty_token.aleo', recordName: 'LoyaltyCard' })
+ * record.fields.points?.value // 1000n
  */
-export function parseRecordPlaintext(
-  plaintext: string,
-  abiOrRecordDef: ABI | RecordDef,
-  recordNameOrProgram: string,
-  program?: string,
-): RecordValue {
-  let recordDef: RecordDef
-  let resolvedProgram: string
-
-  if ('functions' in abiOrRecordDef) {
-    // ABI overload: parseRecordPlaintext(plaintext, abi, recordName, program)
-    const abi = abiOrRecordDef as ABI
-    recordDef = getRecordDef(abi, recordNameOrProgram)
-    resolvedProgram = program ?? abi.program
-  } else {
-    // RecordDef overload: parseRecordPlaintext(plaintext, recordDef, program)
-    recordDef = abiOrRecordDef as RecordDef
-    resolvedProgram = recordNameOrProgram
-  }
-
+export function parseRecord(plaintext: string, options: ParseRecordOptions = {}): RecordValue {
   const rawFields = parseRawFields(plaintext)
 
-  const fieldTypeLookup = new Map(
-    recordDef.fields.map((f) => [f.name, { type: f.type, mode: f.mode }]),
-  )
+  if (!rawFields['owner'] || !rawFields['_nonce']) {
+    throw new Error(
+      'Not a record plaintext: missing owner/_nonce. Parse struct or literal plaintext with parsePlaintextValue.',
+    )
+  }
 
+  const typeLookup = new Map(options.def?.fields.map((f) => [f.name, f.type]) ?? [])
   const fields: { [name: string]: RecordFieldValue } = {}
 
   for (const [key, rawValue] of Object.entries(rawFields)) {
+    // `owner` and the `_`-prefixed tags are record metadata, hoisted below.
+    // Data entries cannot collide: snarkVM reserves `owner`, and identifiers
+    // cannot start with an underscore.
     if (key === 'owner' || key.startsWith('_')) continue
 
-    const cleaned = rawValue.replace(/\.(private|public)$/, '').trim()
-    const defInfo = fieldTypeLookup.get(key)
-    const isComposite = cleaned.startsWith('[') || cleaned.startsWith('{')
-    const value = isComposite ? parseCompositeValue(cleaned) : parseValue(cleaned).value
-    const fallbackType: Plaintext = isComposite
-      ? { kind: 'primitive', primitive: 'field' }
-      : { kind: 'primitive', primitive: parseValue(cleaned).type }
-
-    fields[key] = {
-      value,
-      mode: (defInfo?.mode === 'public' ? 'public' : 'private') as 'public' | 'private',
-      type: defInfo?.type ?? fallbackType,
-    }
-  }
-
-  const ownerRaw = rawFields['owner'] ?? ''
-  const owner = ownerRaw.replace(/\.private$/, '').trim()
-
-  const nonceRaw = rawFields['_nonce'] ?? ''
-  const nonce = nonceRaw.replace(/\.public$/, '').trim()
-
-  const recordName = recordDef.path[recordDef.path.length - 1] ?? 'unknown'
-  return { owner, program: resolvedProgram, recordName, fields, nonce }
-}
-
-/**
- * Parses a record plaintext string without a RecordDef.
- * Fields will have their type inferred from the value suffix (e.g. "1000u64" → u64).
- * Less precise than parseRecordPlaintext with ABI but works when no ABI is available.
- */
-export function parseRecordPlaintextLoose(
-  plaintext: string,
-  program = 'unknown',
-  recordName = 'unknown',
-): RecordValue {
-  const rawFields = parseRawFields(plaintext)
-
-  const fields: { [name: string]: RecordFieldValue } = {}
-
-  for (const [key, rawValue] of Object.entries(rawFields)) {
-    if (key === 'owner' || key.startsWith('_')) continue
-
-    const isPublic = rawValue.endsWith('.public')
-    const cleaned = rawValue.replace(/\.(private|public)$/, '').trim()
+    const mode = (ENTRY_MODE_REGEX.exec(rawValue)?.[1] ?? 'private') as RecordFieldValue['mode']
+    const cleaned = rawValue.replace(new RegExp(ENTRY_MODE_REGEX, 'g'), '').trim()
 
     if (cleaned.startsWith('[') || cleaned.startsWith('{')) {
       fields[key] = {
         value: parseCompositeValue(cleaned),
-        mode: isPublic ? 'public' : 'private',
-        type: { kind: 'primitive', primitive: 'field' },
+        mode,
+        type: typeLookup.get(key) ?? { kind: 'primitive', primitive: 'field' },
       }
       continue
     }
@@ -282,24 +259,40 @@ export function parseRecordPlaintextLoose(
     try {
       parsed = parseValue(cleaned)
     } catch {
-      // Unrecognized value format (e.g. program IDs like "loyalty_token.aleo") — store as string
+      // Unrecognized literal form (e.g. a program id) — keep the raw string.
       parsed = { value: cleaned, type: 'field' as Primitive }
     }
 
     fields[key] = {
       value: parsed.value,
-      mode: isPublic ? 'public' : 'private',
-      type: { kind: 'primitive', primitive: parsed.type },
+      mode,
+      type: typeLookup.get(key) ?? { kind: 'primitive', primitive: parsed.type },
     }
   }
 
-  const ownerRaw = rawFields['owner'] ?? ''
-  const owner = ownerRaw.replace(/\.private$/, '').trim()
+  const ownerRaw = rawFields['owner'].trim()
+  const ownerMode = (/\.public$/.test(ownerRaw) ? 'public' : 'private') as 'public' | 'private'
+  const owner = ownerRaw.replace(/\.(public|private)$/, '')
 
-  const nonceRaw = rawFields['_nonce'] ?? ''
-  const nonce = nonceRaw.replace(/\.public$/, '').trim()
+  const nonce = rawFields['_nonce'].replace(/\.public$/, '').trim()
 
-  return { owner, program, recordName, fields, nonce }
+  // `_version` is optional in the grammar; snarkVM prints it as `<n>u8.public`.
+  const versionMatch = /^(\d+)u8$/.exec((rawFields['_version'] ?? '').replace(/\.public$/, '').trim())
+  const version = versionMatch ? Number(versionMatch[1]) : 0
+
+  const recordName =
+    options.recordName ?? options.def?.path[options.def.path.length - 1] ?? 'unknown'
+
+  return {
+    owner,
+    ownerMode,
+    program: options.program ?? 'unknown',
+    recordName,
+    fields,
+    nonce,
+    version,
+    raw: plaintext,
+  }
 }
 
 // ── toString ──────────────────────────────────────────────────────────
@@ -307,9 +300,12 @@ export function parseRecordPlaintextLoose(
 /**
  * Serializes a RecordValue back to Aleo record plaintext format.
  *
- * Uses the `type` field on each RecordFieldValue to determine the correct
- * Aleo type suffix. This is why RecordFieldValue carries `type: Plaintext` —
- * without it, a bigint value of 1000n could be u64, u128, field, or i64.
+ * A record parsed by `parseRecord` carries its original plaintext on `raw`
+ * and serializes back to it verbatim — an exact round-trip. A hand-constructed
+ * value without `raw` is synthesized from its parts, using the `type` field on
+ * each RecordFieldValue for the literal suffix. This is why RecordFieldValue
+ * carries `type: Plaintext` — without it, a bigint value of 1000n could be
+ * u64, u128, field, or i64.
  *
  * Also exported as `serializeRecord` for contexts where `toString` collides
  * with the global.
@@ -317,13 +313,15 @@ export function parseRecordPlaintextLoose(
  * @example
  * ```ts
  * const plaintext = toString(record)
- * // "{\n  owner: aleo1abc.private,\n  points: 1000u64.private,\n  _nonce: 123group.public\n}"
+ * // "{\n  owner: aleo1abc.private,\n  points: 1000u64.private,\n  _nonce: 123group.public,\n  _version: 0u8.public\n}"
  * ```
  */
 export function toString(record: RecordValue): string {
+  if (record.raw) return record.raw
+
   const lines: string[] = []
 
-  lines.push(`  owner: ${record.owner}.private`)
+  lines.push(`  owner: ${record.owner}.${record.ownerMode}`)
 
   for (const [name, field] of Object.entries(record.fields)) {
     const primitive = extractPrimitive(field.type)
@@ -332,6 +330,7 @@ export function toString(record: RecordValue): string {
   }
 
   lines.push(`  _nonce: ${record.nonce}.public`)
+  lines.push(`  _version: ${record.version}u8.public`)
 
   return `{\n${lines.join(',\n')}\n}`
 }

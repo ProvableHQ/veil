@@ -258,12 +258,14 @@ describe('getContract', () => {
 
     const record: RecordValue = {
       owner: 'aleo1abc',
+      ownerMode: 'private',
       program: 'token.aleo',
       recordName: 'Token',
       fields: {
         amount: { value: 500n, mode: 'private', type: { kind: 'primitive', primitive: 'u64' } },
       },
       nonce: '0group',
+      version: 0,
     }
 
     const contract = getContract({ program: 'token.aleo', client: mockWallet as any })

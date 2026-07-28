@@ -3,18 +3,34 @@ import type { WalletClient } from '../clients/createWalletClient.js'
 import type { Program, ProgramFunction, ProgramMapping } from '../types/program.js'
 import type { ABI, AbiFunction, Mapping as AbiMapping } from '../types/abi.js'
 import type { TypedContractInstance } from '../types/inference.js'
-import type { RecordValue, Primitive } from '../types/primitives.js'
+import type { RecordValue, PlaintextValue, Primitive } from '../types/primitives.js'
 import { parseProgram } from './parseProgram.js'
 import { encodeValue } from '../utils/values.js'
-import { encodeInputs, getInputTypes, getRecordDef, parseRecordPlaintext, parseRecordPlaintextLoose, toString as serializeRecord } from '../utils/records.js'
+import { encodeInputs, getInputTypes, getRecordDef, parseRecord, parsePlaintextValue, toString as serializeRecord } from '../utils/records.js'
 
 import type { InputValue } from '../types/contract.js'
 export type { InputValue } from '../types/contract.js'
 import { isInputRequest } from '../types/inputRequest.js'
 import type { InputRequest, TransactionInput } from '../types/inputRequest.js'
 
-/** Parsed output from the proxy — either a RecordValue (if it looks like a record) or the raw string */
-export type ParsedOutput = RecordValue | string
+/**
+ * Parsed output from the proxy: a RecordValue for record plaintext, a
+ * PlaintextValue for struct plaintext, or the raw string for everything else
+ * (literals, ciphertext, futures).
+ */
+export type ParsedOutput = RecordValue | PlaintextValue
+
+/**
+ * Parses a brace-delimited output by shape: record plaintext parses as a
+ * record, anything else as struct plaintext. Every record prints a `_nonce`
+ * tag, and no struct member can be named `_nonce` — Aleo identifiers cannot
+ * start with an underscore — so the tag's presence is decisive.
+ */
+function parseBraceOutput(raw: string, program?: string): ParsedOutput {
+  return /(^|[,{\s])_nonce\s*:/.test(raw)
+    ? parseRecord(raw, { program })
+    : parsePlaintextValue(raw)
+}
 
 // ── Parameter types ───────────────────────────────────────────────────
 
@@ -263,7 +279,7 @@ export function getContract(params: GetContractParameters): ContractInstance {
     })
   }
 
-  /** Parse raw output strings — detect records and parse them */
+  /** Parse raw output strings — records as records, structs as plaintext */
   function parseOutputs(rawOutputs: string[], fnName: string): ParsedOutput[] {
     // With a rich ABI, look up RecordDefs for typed parsing
     if (resolvedAbi) {
@@ -278,31 +294,26 @@ export function getContract(params: GetContractParameters): ContractInstance {
           if (recordName) {
             try {
               const recordDef = getRecordDef(resolvedAbi!, recordName)
-              return parseRecordPlaintext(raw, recordDef, program)
+              return parseRecord(raw, { def: recordDef, program })
             } catch {
-              // Record not found in this program's ABI (cross-program), fall back to loose
+              // Record not in this program's ABI (cross-program) — parse from the text alone.
             }
           }
         }
-        return parseRecordPlaintextLoose(raw, program)
+        return parseBraceOutput(raw, program)
       })
     }
 
-    // Parsed Program or no ABI — loose parse for anything that looks like a record
-    return rawOutputs.map((raw) => {
-      if (raw.trimStart().startsWith('{')) {
-        return parseRecordPlaintextLoose(raw, program)
-      }
-      return raw
-    })
+    // Parsed Program or no ABI — route each brace-delimited output by shape.
+    return rawOutputs.map((raw) =>
+      raw.trimStart().startsWith('{') ? parseBraceOutput(raw, program) : raw,
+    )
   }
 
-  /** Loose-parse a single output — try record detection, fall back to raw string */
+  /** Parse a single output without ABI type information. */
   function parseLooseOutput(raw: string): ParsedOutput {
-    if (raw.trimStart().startsWith('{')) {
-      return parseRecordPlaintextLoose(raw)
-    }
-    return raw
+    if (!raw.trimStart().startsWith('{')) return raw
+    return parseBraceOutput(raw)
   }
 
   const read = new Proxy({} as ContractReadMethods, {

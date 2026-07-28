@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { encodePlaintextValue, encodeInputs, parseRecordPlaintextLoose } from '../../src/utils/records.js'
+import { encodePlaintextValue, encodeInputs, parseRecord } from '../../src/utils/records.js'
 import type { ABI } from '../../src/types/abi.js'
 import type { Plaintext } from '../../src/types/primitives.js'
 
@@ -109,20 +109,18 @@ describe('encodeInputs with composite values', () => {
 
 describe('record parsing with array-valued fields', () => {
   it('splits fields bracket-aware and parses array values', () => {
-    const record = parseRecordPlaintextLoose(
+    const record = parseRecord(
       '{ owner: aleo1abc.private, siblings: [1field, 2field].private, amount: 5u64.private, _nonce: 7group.public }',
-      'p.aleo',
-      'R',
+      { program: 'p.aleo', recordName: 'R' },
     )
     expect(record.fields.amount!.value).toBe(5n)
     expect(record.fields.siblings!.value).toEqual([1n, 2n])
   })
 
   it('parses nested struct values inside records', () => {
-    const record = parseRecordPlaintextLoose(
+    const record = parseRecord(
       '{ owner: aleo1abc.private, limit: { hi: 1u128, lo: 0u128 }.private, _nonce: 7group.public }',
-      'p.aleo',
-      'R',
+      { program: 'p.aleo', recordName: 'R' },
     )
     expect(record.fields.limit!.value).toEqual({ hi: 1n, lo: 0n })
   })

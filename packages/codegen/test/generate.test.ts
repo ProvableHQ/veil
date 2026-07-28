@@ -610,7 +610,7 @@ describe('generate', () => {
       const abiMatch = source.match(/export const PROGRAM_ABI: ABI = ({[\s\S]*?})\n\n/)
       const parsedAbi = JSON.parse(abiMatch![1])
 
-      // Verify record fields have the right type structure for parseRecordPlaintext
+      // Verify record fields have the right type structure for parseRecord
       const cardRecord = parsedAbi.records.find((r: any) => r.path.includes('LoyaltyCard'))
       expect(cardRecord).toBeDefined()
 

@@ -79,8 +79,9 @@ export type ArrayValue = PlaintextValue[]
 export type PlaintextValue = Literal | StructValue | ArrayValue
 
 /**
- * One field of a record value at runtime: its value, visibility mode, and
- * Aleo type descriptor.
+ * One entry of a record value at runtime: its value, visibility mode, and
+ * Aleo type descriptor. Mirrors snarkVM's `Entry`, which scopes visibility
+ * per entry — `constant`, `public`, or `private`.
  *
  * @property type Aleo type of `value` (e.g. `{ kind: 'primitive', primitive: 'u64' }`).
  *   Carried so a RecordValue can self-serialize back to plaintext without the
@@ -89,24 +90,36 @@ export type PlaintextValue = Literal | StructValue | ArrayValue
  */
 export type RecordFieldValue = {
   value: PlaintextValue
-  mode: 'public' | 'private'
+  mode: 'constant' | 'public' | 'private'
   type: Plaintext
 }
 
 /**
- * A record value at runtime. Always has an owner and a nonce, plus named
- * fields carrying their visibility mode and Aleo type descriptor.
+ * A record value at runtime. Mirrors snarkVM's `Record`: a visibility-scoped
+ * owner, named entries carrying their own visibility mode and Aleo type
+ * descriptor, a nonce, and a commitment-scheme version.
  *
+ * @property ownerMode Visibility of the owner address — the owner is itself
+ *   visibility-scoped in snarkVM, independently of the data entries.
  * @property program Program the record belongs to (e.g. "loyalty_token.aleo").
  * @property recordName Record type name (e.g. "LoyaltyCard").
  * @property nonce Group element that makes the record's commitment unique.
+ * @property version Record commitment version: 0 derives the commitment with
+ *   a BHP hash, 1 with a BHP commitment. Defaults to 0 when the plaintext
+ *   carries no `_version` tag.
+ * @property raw Original record plaintext when the value came from
+ *   `parseRecord`. Serialization returns it verbatim, making the round-trip
+ *   exact; absent on hand-constructed values.
  */
 export type RecordValue = {
   owner: Address
+  ownerMode: 'public' | 'private'
   program: string
   recordName: string
   fields: { [name: string]: RecordFieldValue }
   nonce: string
+  version: number
+  raw?: string
 }
 
 /**

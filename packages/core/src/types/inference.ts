@@ -6,7 +6,7 @@
 // record interfaces), while these types provide autocomplete and basic type
 // safety without a build step.
 
-import type { Primitive, Plaintext, RecordValue, FutureValue } from './primitives.js'
+import type { Primitive, Plaintext, PlaintextValue, RecordValue, FutureValue } from './primitives.js'
 import type { ABI, StructDef, FunctionOutput } from './abi.js'
 import type { Program } from './program.js'
 import type { InputValue } from './contract.js'
@@ -97,7 +97,7 @@ export type ExtractMapping<A extends ABI, N extends string> =
 // ── Typed contract namespaces ────────────────────────────────────────
 
 /** Parsed output from the proxy — either a RecordValue or the raw string */
-type ParsedOutput = RecordValue | string
+type ParsedOutput = RecordValue | PlaintextValue
 
 type SimulateParams = { inputs: (InputValue | InputRequest)[]; imports?: Record<string, string> }
 type ExecuteParams = { inputs: (InputValue | InputRequest)[]; imports?: Record<string, string> }
