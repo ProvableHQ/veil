@@ -1,5 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { readUintMapping } from './internal.js'
+import { toFrozenPositionMappingValue } from '../../generated/shield_swap.js'
+import { readDecodedMapping } from './internal.js'
 
 /**
  * Reads the block height at which a position was frozen.
@@ -22,5 +23,5 @@ export async function getFrozenPosition(
   client: Client,
   params: { positionTokenId: string; program?: string },
 ): Promise<number | null> {
-  return readUintMapping(client, params.program, 'frozen_position', params.positionTokenId)
+  return readDecodedMapping(client, params.program, 'frozen_position', params.positionTokenId, toFrozenPositionMappingValue)
 }

@@ -56,8 +56,14 @@ export type GetContractParameters = {
     | { public: PublicClient; wallet: WalletClient }
 }
 
-/** Mapping-name-keyed read methods that fetch an on-chain mapping value by key. */
-export type ContractReadMethods = Record<string, (params: { key: string }) => Promise<unknown>>
+/**
+ * Mapping-name-keyed read methods that fetch an on-chain mapping value by key.
+ *
+ * Each method resolves to the raw Aleo literal stored under the key, or `null`
+ * when the key is not in the mapping. Decode non-null values with
+ * `parsePlaintextValue`, or use a codegen-typed instance for decoded reads.
+ */
+export type ContractReadMethods = Record<string, (params: { key: string }) => Promise<string | null>>
 
 /**
  * Arguments to a contract write method.

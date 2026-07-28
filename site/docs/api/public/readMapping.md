@@ -27,17 +27,19 @@ const raw = await client.readMapping({
   mapping: 'account',
   key: 'aleo1q6qstg8q8shwqf5m6q5fcenuwsdqsvp4hhsgfnx5chzjm3secyzqt9mxm8',
 })
-// '5000000u64'
+// '5000000u64', or null when the account holds no public credits
 
-const balance = parseValue(raw)
+const balance = raw === null ? 0n : parseValue(raw).value
 ```
 
 ## Returns
 
-`string`
+`string | null`
 
-The raw Aleo literal stored under the key. Decode it with `parseValue` from
-`@provablehq/veil-core` into a structured `ParsedValue`.
+The raw Aleo literal stored under the key, or `null` when the key is not in
+the mapping. Decode a non-null value with `parseValue` from `@provablehq/veil-core`
+into a structured `ParsedValue`. See
+[readContract](/api/public/readContract) for the full absent-key semantics.
 
 ## Parameters
 

@@ -1,6 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { readStructMapping } from './internal.js'
-import { toPosition } from '../../generated/shield_swap.js'
+import { readDecodedMapping } from './internal.js'
+import { toPositionsMappingValue } from '../../generated/shield_swap.js'
 import { fromU256Parts } from '../../utils/q128.js'
 
 /**
@@ -71,7 +71,7 @@ export type GetPositionReturnType = Position | null
  * if (position) console.log(position.liquidity, position.tokens_owed0)
  */
 export async function getPosition(client: Client, params: GetPositionParameters): Promise<GetPositionReturnType> {
-  const raw = await readStructMapping(client, params.program, 'positions', params.positionTokenId, toPosition)
+  const raw = await readDecodedMapping(client, params.program, 'positions', params.positionTokenId, toPositionsMappingValue)
   if (!raw) return null
   return {
     ...raw,

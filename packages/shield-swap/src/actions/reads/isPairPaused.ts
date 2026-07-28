@@ -1,5 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { readBoolMapping } from './internal.js'
+import { toPairPausedMappingValue } from '../../generated/shield_swap.js'
+import { readFlagMapping } from './internal.js'
 import { sortTokenPair } from '../../utils/keys.js'
 
 /**
@@ -26,5 +27,5 @@ export async function isPairPaused(
   params: { token0: string; token1: string; program?: string },
 ): Promise<boolean> {
   const [t0, t1] = sortTokenPair(params.token0, params.token1)
-  return readBoolMapping(client, params.program, 'pair_paused', `{ token0: ${t0}field, token1: ${t1}field }`)
+  return readFlagMapping(client, params.program, 'pair_paused', `{ token0: ${t0}field, token1: ${t1}field }`, toPairPausedMappingValue)
 }

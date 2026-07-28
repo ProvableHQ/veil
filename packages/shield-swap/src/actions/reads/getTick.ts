@@ -1,6 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { readStructMapping } from './internal.js'
-import { toTick } from '../../generated/shield_swap.js'
+import { readDecodedMapping } from './internal.js'
+import { toTicksMappingValue } from '../../generated/shield_swap.js'
 import { fromU256Parts } from '../../utils/q128.js'
 import { deriveTickKey } from '../../utils/keys.js'
 
@@ -78,7 +78,7 @@ export type GetTickReturnType = Tick | null
 export async function getTick(client: Client, params: GetTickParameters): Promise<GetTickReturnType> {
   // A pre-derived key skips the WASM peer — wallet-only bundles pass tickKey.
   const key = params.tickKey ?? (await deriveTickKey({ pool: params.poolKey, tick: params.tick }))
-  const raw = await readStructMapping(client, params.program, 'ticks', key, toTick)
+  const raw = await readDecodedMapping(client, params.program, 'ticks', key, toTicksMappingValue)
   if (!raw) return null
   return {
     ...raw,

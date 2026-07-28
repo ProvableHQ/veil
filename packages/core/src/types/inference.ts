@@ -114,8 +114,8 @@ type IsLiteral<T extends string> = string extends T ? false : true
 /** Typed read methods — narrows to known mapping names when ABI is literal */
 export type TypedReadMethods<A extends ABI> =
   IsLiteral<MappingNames<A>> extends true
-    ? { [N in MappingNames<A>]: (params: { key: string }) => Promise<unknown> }
-    : Record<string, (params: { key: string }) => Promise<unknown>>
+    ? { [N in MappingNames<A>]: (params: { key: string }) => Promise<string | null> }
+    : Record<string, (params: { key: string }) => Promise<string | null>>
 
 /** Typed simulate methods — narrows to known function names when ABI is literal */
 export type TypedSimulateMethods<A extends ABI> =

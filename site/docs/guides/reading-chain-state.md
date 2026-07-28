@@ -39,9 +39,9 @@ const raw = await publicClient.readContract({
   mapping: 'account',
   key: 'aleo1q6qstg8q8shwqf5m6q5fcenuwsdqsvp4hhsgfnx5chzjm3secyzqt9mxm8',
 })
-// '5000000u64'
+// '5000000u64', or null when the account holds no public credits
 
-const balance = parseValue(raw)
+const balance = raw === null ? 0n : parseValue(raw).value
 ```
 
 The value comes back as the raw Aleo literal the node stores — a number,
@@ -53,10 +53,14 @@ parsing, or ABI-based decoding through a
 [contract instance](/guides/contract-instances). Skip `parseValue` when the
 raw string is all that is needed.
 
-A key that has never been written does not resolve to an empty value: the
-node answers 404 and the call rejects with a transport error
-(`HTTP 404: ...`). Wrap the read in try/catch when the key may not exist — a
-mapping only holds entries a transaction has actually inserted.
+A key that has never been written resolves to `null` — a mapping only holds
+entries a transaction has actually inserted, and absence is a normal answer,
+not an error. Two caveats. First, the node also answers `null` for a mapping
+or program name that does not exist, so a typo is indistinguishable from an
+absent key on this raw path; a [contract instance](/guides/contract-instances)
+validates both names against the ABI before requesting. Second, a malformed
+key literal does throw — a `TransportError` (HTTP 404 on the Provable API) —
+because the request itself is invalid, not because the key is absent.
 
 For a typed read bound to a program's ABI instead of a raw mapping name and
 key, see [Contract instances](/guides/contract-instances).

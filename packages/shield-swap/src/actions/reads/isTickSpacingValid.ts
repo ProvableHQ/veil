@@ -1,5 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
-import { readBoolMapping } from './internal.js'
+import { toTickSpacingsMappingValue } from '../../generated/shield_swap.js'
+import { readFlagMapping } from './internal.js'
 
 /**
  * Checks whether a tick spacing is registered with the program.
@@ -20,5 +21,5 @@ export async function isTickSpacingValid(
   client: Client,
   params: { tickSpacing: number; program?: string },
 ): Promise<boolean> {
-  return readBoolMapping(client, params.program, 'tick_spacings', `${params.tickSpacing}u32`)
+  return readFlagMapping(client, params.program, 'tick_spacings', `${params.tickSpacing}u32`, toTickSpacingsMappingValue)
 }
