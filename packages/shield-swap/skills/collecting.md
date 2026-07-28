@@ -87,6 +87,9 @@ const tokens = (await client.api.getTokens()).data
 const tokenOf = (program: string) => tokens.find((t) => t.amm_token_program === program)
 const decimalsOf = (program: string) => tokenOf(program)?.decimals ?? 0
 
+// When state.positions is missing or stale, rebuild it on the spot:
+// `client.getOwnedPositions()` re-discovers every owned position from the
+// account's records, including what each one could collect right now.
 for (const tracked of state.positions) {
   const position = await client.getPosition({ positionTokenId: tracked.positionTokenId })
   if (!position) continue

@@ -1,4 +1,5 @@
 import { requestRecords, parseRecord, type Client, type InputRequest, type OwnedRecord } from '@provablehq/veil-core'
+import { toPositionNFT } from '../generated/shield_swap.js'
 
 /**
  * A token record's decoded essentials, alongside the record it came from.
@@ -145,6 +146,10 @@ export type SelectPositionNFTParameters = {
  * A PositionNFT record's decoded essentials.
  *
  * @property tokenId The position's `token_id` field literal.
+ * @property poolKey Pool key field literal the position belongs to.
+ * @property token0Id The pair's first AMM token id field literal.
+ * @property token1Id The pair's second AMM token id field literal.
+ * @property withdrawal The immutable withdrawal address `collect` pays out to.
  * @property tickLower Lower bound tick of the position's range.
  * @property tickUpper Upper bound tick of the position's range.
  * @property record The owning record — pass its `recordPlaintext` as
@@ -152,9 +157,87 @@ export type SelectPositionNFTParameters = {
  */
 export interface PositionNFTInfo {
   tokenId: string
+  poolKey: string
+  token0Id: string
+  token1Id: string
+  withdrawal: string
   tickLower: number
   tickUpper: number
   record: OwnedRecord
+}
+
+/**
+ * Parameters for {@link listPositionNFTs}.
+ *
+ * @property program The shield_swap program owning the PositionNFT records.
+ * @property poolKey Restricts the listing to one pool's positions. Optional —
+ *   without it, every owned position is returned.
+ * @property tokenId Restricts the listing to one position by its `token_id`
+ *   field literal. Optional.
+ */
+export type ListPositionNFTsParameters = {
+  program: string
+  poolKey?: string
+  tokenId?: string
+}
+
+/**
+ * Lists the account's unspent PositionNFT records with their decoded fields.
+ *
+ * The discovery primitive for owned positions: one record per live position
+ * (mint issues it; increase/decrease/collect re-issue it; burn consumes it).
+ * Non-position records in the program and records whose plaintext the wallet
+ * withholds are skipped silently.
+ *
+ * Hits the network (or the wallet's scanner): one `requestRecords` call.
+ * Requires the client to have a record provider or a wallet adapter.
+ *
+ * @param client A Veil wallet client with record access.
+ * @param params Program, and optionally a pool to filter by.
+ * @returns The decoded positions — empty when the account holds none.
+ *
+ * @example
+ * const positions = await listPositionNFTs(client, { program: 'shield_swap.aleo' })
+ */
+export async function listPositionNFTs(client: Client, params: ListPositionNFTsParameters): Promise<PositionNFTInfo[]> {
+  const records = (await requestRecords(client, {
+    program: params.program,
+    statusFilter: 'unspent',
+  })) as OwnedRecord[]
+
+  const positions: PositionNFTInfo[] = []
+  for (const record of records) {
+    if (!record.recordPlaintext) continue
+    // Providers that name records rule non-positions out cheaply; the shape
+    // guard below covers providers that omit recordName.
+    if (record.recordName && record.recordName !== 'PositionNFT') continue
+    // Only PositionNFTs carry all of token_id/pool/tick_lower/tick_upper —
+    // the program's other record shapes miss at least one and are skipped.
+    // Decoding is delegated to the generated toPositionNFT so the ABI stays
+    // the source of truth for the field shapes.
+    let nft
+    try {
+      const value = parseRecord(record.recordPlaintext)
+      const { pool, token_id, tick_lower, tick_upper } = value.fields
+      if (!pool || !token_id || !tick_lower || !tick_upper) continue
+      nft = toPositionNFT(value)
+    } catch {
+      continue
+    }
+    if (params.poolKey !== undefined && nft.pool !== params.poolKey) continue
+    if (params.tokenId !== undefined && nft.token_id !== params.tokenId) continue
+    positions.push({
+      tokenId: nft.token_id,
+      poolKey: nft.pool,
+      token0Id: nft.token0_id,
+      token1Id: nft.token1_id,
+      withdrawal: nft.withdrawal,
+      tickLower: nft.tick_lower,
+      tickUpper: nft.tick_upper,
+      record,
+    })
+  }
+  return positions
 }
 
 /**
@@ -176,37 +259,16 @@ export interface PositionNFTInfo {
  * const pos = await selectPositionNFT(client, { program: DEFAULT_PROGRAM, poolKey })
  */
 export async function selectPositionNFT(client: Client, params: SelectPositionNFTParameters): Promise<PositionNFTInfo> {
-  const records = (await requestRecords(client, {
-    program: params.program,
-    statusFilter: 'unspent',
-  })) as OwnedRecord[]
-
-  for (const record of records) {
-    if (!record.recordPlaintext) continue
-    let value
-    try {
-      value = parseRecord(record.recordPlaintext)
-    } catch {
-      continue
-    }
-    // PositionNFT shape: token_id/token0_id/token1_id/pool/tick_lower/tick_upper.
-    const pool = value.fields.pool?.value
-    const poolField = typeof pool === 'bigint' ? `${pool}field` : pool
-    if (poolField !== params.poolKey) continue
-    const tokenIdRaw = value.fields.token_id?.value
-    const tokenId = typeof tokenIdRaw === 'bigint' ? `${tokenIdRaw}field` : String(tokenIdRaw ?? '')
-    if (params.tokenId !== undefined && tokenId !== params.tokenId) continue
-    const tickLower = value.fields.tick_lower?.value
-    const tickUpper = value.fields.tick_upper?.value
-    if (typeof tickLower !== 'bigint' || typeof tickUpper !== 'bigint') continue
-    return { tokenId, tickLower: Number(tickLower), tickUpper: Number(tickUpper), record }
+  const positions = await listPositionNFTs(client, params)
+  const match = positions[0]
+  if (!match) {
+    throw new Error(
+      `No unspent PositionNFT for pool ${params.poolKey} on ${params.program}` +
+        (params.tokenId ? ` with token_id ${params.tokenId}` : '') +
+        ' — mint a position first.',
+    )
   }
-
-  throw new Error(
-    `No unspent PositionNFT for pool ${params.poolKey} on ${params.program}` +
-      (params.tokenId ? ` with token_id ${params.tokenId}` : '') +
-      ' — mint a position first.',
-  )
+  return match
 }
 
 /**

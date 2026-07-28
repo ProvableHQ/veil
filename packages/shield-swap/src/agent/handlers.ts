@@ -6,6 +6,8 @@ import { getPool } from '../actions/reads/getPool.js'
 import { getSlot } from '../actions/reads/getSlot.js'
 import { getSwapOutput } from '../actions/reads/getSwapOutput.js'
 import { getPosition } from '../actions/reads/getPosition.js'
+import { getOwnedPositions, type OwnedPosition } from '../actions/reads/getOwnedPositions.js'
+import { getOwnedPosition } from '../actions/reads/getOwnedPosition.js'
 import { getTick } from '../actions/reads/getTick.js'
 import { getTradeControls } from '../actions/reads/getTradeControls.js'
 import { getFrozenPosition } from '../actions/reads/getFrozenPosition.js'
@@ -76,7 +78,22 @@ export function createChainHandlers(client: Client, program?: string): Record<st
     }),
     shield_swap_get_private_balances: async (i) =>
       jsonSafe(await getPrivateBalances(client, { programs: i.programs as string[] })),
+    shield_swap_get_owned_positions: async (i) =>
+      jsonSafe(
+        (await getOwnedPositions(client, { poolKey: i.poolKey as string | undefined, program })).map(stripRecord),
+      ),
+    shield_swap_get_owned_position: async (i) => {
+      const position = await getOwnedPosition(client, { positionTokenId: i.positionTokenId as string, program })
+      return jsonSafe(position ? stripRecord(position) : null)
+    },
   }
+}
+
+// Owned-position views carry the PositionNFT record itself; an agent acts by
+// positionTokenId (writes re-select records), so the record stays out of the
+// model context.
+function stripRecord({ record: _record, ...position }: OwnedPosition): Omit<OwnedPosition, 'record'> {
+  return position
 }
 
 /** Off-chain DEX API handlers, keyed by tool name. */

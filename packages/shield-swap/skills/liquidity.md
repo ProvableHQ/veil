@@ -8,7 +8,9 @@ together.
 
 A position is a private PositionNFT record plus public state under its
 `positionTokenId`. Track every minted `positionTokenId` in the state file;
-it is the key to every later operation.
+it is the key to every later operation. A lost id is recoverable —
+`client.getOwnedPositions()` re-discovers every owned position (id, pool,
+range, live amounts, uncollected fees) from the account's records.
 
 ## Pick a pool and a range
 

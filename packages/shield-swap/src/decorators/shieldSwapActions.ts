@@ -17,6 +17,16 @@ import {
   type GetPositionReturnType,
 } from '../actions/reads/getPosition.js'
 import { getTick, type GetTickParameters, type GetTickReturnType } from '../actions/reads/getTick.js'
+import {
+  getOwnedPositions,
+  type GetOwnedPositionsParameters,
+  type GetOwnedPositionsReturnType,
+} from '../actions/reads/getOwnedPositions.js'
+import {
+  getOwnedPosition,
+  type GetOwnedPositionParameters,
+  type GetOwnedPositionReturnType,
+} from '../actions/reads/getOwnedPosition.js'
 import { isGlobalPaused } from '../actions/reads/isGlobalPaused.js'
 import { isPoolCreationOpen } from '../actions/reads/isPoolCreationOpen.js'
 import { isTokenAllowed } from '../actions/reads/isTokenAllowed.js'
@@ -94,6 +104,8 @@ export type ShieldSwapActions = {
   getSlot: (params: GetSlotParameters) => Promise<GetSlotReturnType>
   getSwapOutput: (params: GetSwapOutputParameters) => Promise<GetSwapOutputReturnType>
   getPosition: (params: GetPositionParameters) => Promise<GetPositionReturnType>
+  getOwnedPositions: (params?: GetOwnedPositionsParameters) => Promise<GetOwnedPositionsReturnType>
+  getOwnedPosition: (params: GetOwnedPositionParameters) => Promise<GetOwnedPositionReturnType>
   getTick: (params: GetTickParameters) => Promise<GetTickReturnType>
   isBlindedAddressUsed: (params: { address: string; program?: string }) => Promise<boolean>
   isPoolInitialized: (params: { poolKey: string; program?: string }) => Promise<boolean>
@@ -167,6 +179,8 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     getSlot: (p) => getSlot(client, withProgram(p)),
     getSwapOutput: (p) => getSwapOutput(client, withProgram(p)),
     getPosition: (p) => getPosition(client, withProgram(p)),
+    getOwnedPositions: (p) => getOwnedPositions(client, withProgram(p ?? {})),
+    getOwnedPosition: (p) => getOwnedPosition(client, withProgram(p)),
     getTick: (p) => getTick(client, withProgram(p) as GetTickParameters),
     isBlindedAddressUsed: (p) => isBlindedAddressUsed(client, withProgram(p)),
     isPoolInitialized: (p) => isPoolInitialized(client, withProgram(p)),

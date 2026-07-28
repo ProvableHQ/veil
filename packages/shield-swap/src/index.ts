@@ -21,6 +21,18 @@ export {
   type GetPositionReturnType,
 } from './actions/reads/getPosition.js'
 export { getTick, type GetTickParameters, type GetTickReturnType } from './actions/reads/getTick.js'
+export {
+  getOwnedPositions,
+  type GetOwnedPositionsParameters,
+  type GetOwnedPositionsReturnType,
+  type OwnedPosition,
+  type OwnedPositionState,
+} from './actions/reads/getOwnedPositions.js'
+export {
+  getOwnedPosition,
+  type GetOwnedPositionParameters,
+  type GetOwnedPositionReturnType,
+} from './actions/reads/getOwnedPosition.js'
 
 // Control-state reads: the pause/allowlist/freeze gates the finalize asserts,
 // as cheap pre-flight checks, plus the batched getTradeControls verdict.
@@ -111,6 +123,7 @@ export {
   parseTokenRecordInfo,
   selectTokenRecord,
   selectPositionNFT,
+  listPositionNFTs,
   resolveTokenRecord,
   positionTokenIdFromPlaintext,
   getPrivateBalances,
@@ -118,6 +131,7 @@ export {
   type PositionNFTInfo,
   type SelectTokenRecordParameters,
   type SelectPositionNFTParameters,
+  type ListPositionNFTsParameters,
   type GetPrivateBalancesParameters,
   type GetPrivateBalancesReturnType,
 } from './utils/records.js'
@@ -220,6 +234,10 @@ export {
   amount1DeltaX128,
   getSqrtPriceAtTickX128,
   getTickEstimateX128,
+  u256WrappingSub,
+  feeGrowthInside,
+  feeOwed,
+  amountsForLiquidity,
 } from './utils/q128.js'
 export {
   resolveTokenRoute,

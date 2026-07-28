@@ -536,6 +536,26 @@ accrual settle into), and `getTick` returns an initialized tick — pass
 `{ poolKey, tick }` to derive the key locally, or a pre-derived `tickKey`
 to stay off the WASM peer.
 
+## Owned positions
+
+`getOwnedPositions` scans the account's PositionNFT records and returns every
+live position joined with its on-chain state — liquidity, the current token
+amounts behind it, and the fees it could collect today. The private record
+carries the identity (pool, range, withdrawal address) and the public
+mappings carry the amounts; the action does the join and the two contract
+calculations (`view_amounts_for_liquidity`, fee-growth settlement) so a
+wallet or bot does not have to persist token ids or re-derive the math.
+`getOwnedPosition` resolves a single position by its token id. Both need
+record access (a connected wallet, or a local account with a record
+provider); each entry's `state` is `null` while a fresh mint finalizes.
+
+```ts
+const positions = await client.getOwnedPositions()
+for (const p of positions) {
+  console.log(p.positionTokenId, p.state?.amount0, p.state?.uncollectedFees0)
+}
+```
+
 ## Deriving keys and ids locally
 
 Every id the contract computes by hashing a struct is computable client-side,

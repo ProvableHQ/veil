@@ -36,6 +36,8 @@ export {
   isPoolInitializedSchema,
   getFeeToTickSpacingSchema,
   getPrivateBalancesSchema,
+  getOwnedPositionsSchema,
+  getOwnedPositionSchema,
   derivePoolKeySchema,
   deriveTickKeySchema,
   deriveSwapIdSchema,
