@@ -152,22 +152,29 @@ function generateRecordInterface(record: RecordDef): string[] {
 }
 
 // Emit the `field: <converted value>` lines shared by record and struct mappers.
-// `varName` is the mapper's parameter name (the value being decoded); `container`
-// names the enclosing type for error messages.
+// `container` names the enclosing type for error messages. Records store each
+// entry as `{ value, mode, type }` behind `fieldsVar` and reserve the `owner`
+// name, so record access goes through `.<name>?.value` and skips `owner`.
+// Structs are plain StructValue objects — direct member access, and `owner`
+// is a legal member name that must decode like any other.
 function mapperFieldLines(
   fields: readonly { name: string; type: Plaintext }[],
   container: string,
   fieldsVar: string,
+  kind: 'record' | 'struct',
 ): string[] {
   const lines: string[] = []
   for (const field of fields) {
-    if (field.name === 'owner') continue
+    if (kind === 'record' && field.name === 'owner') continue
+    const rawAccess = kind === 'record'
+      ? `${fieldsVar}.${field.name}?.value`
+      : `${fieldsVar}.${field.name}`
     // Struct-typed fields: the raw PlaintextValue is a StructValue at runtime.
     // Cast through unknown to the generated struct interface so the return type
     // is correct. A missing field falls back to an empty object cast the same way.
     if (field.type.kind === 'struct') {
       if (isExternalStructRef(field.type)) {
-        lines.push(`    ${field.name}: ${fieldsVar}.${field.name}?.value as unknown as StructValue ?? {},`)
+        lines.push(`    ${field.name}: ${rawAccess} as unknown as StructValue ?? {},`)
         continue
       }
       const structName = field.type.path.at(-1)
@@ -177,9 +184,8 @@ function mapperFieldLines(
           `Cannot derive struct name for code generation.`
         )
       }
-      lines.push(`    ${field.name}: ${fieldsVar}.${field.name}?.value as unknown as ${structName} ?? {} as unknown as ${structName},`)
+      lines.push(`    ${field.name}: ${rawAccess} as unknown as ${structName} ?? {} as unknown as ${structName},`)
     } else {
-      const rawAccess = `${fieldsVar}.${field.name}?.value`
       const expr = plaintextFieldExpr(rawAccess, field.type)
       lines.push(`    ${field.name}: ${expr} ?? ${plaintextDefault(field.type)},`)
     }
@@ -208,7 +214,7 @@ function generateRecordMapper(record: RecordDef): string[] {
   lines.push(fieldsGuardLine('record'))
   lines.push(`  return {`)
   lines.push(`    owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,`)
-  lines.push(...mapperFieldLines(record.fields, name, 'fields'))
+  lines.push(...mapperFieldLines(record.fields, name, 'fields', 'record'))
   lines.push(`    _record: record as unknown as RecordValue,`)
   lines.push(`  }`)
   lines.push(`}`)
@@ -224,9 +230,9 @@ function generateStructMapper(struct: StructDef): string[] {
   // Struct values (mapping reads, nested struct fields) are always readable
   // plaintext — never ciphertext — so no tolerance guard: a shape mismatch
   // should still fail loudly rather than return a silently-zeroed struct.
-  lines.push(`export function to${name}(value: RecordValue): ${name} {`)
+  lines.push(`export function to${name}(value: StructValue): ${name} {`)
   lines.push(`  return {`)
-  lines.push(...mapperFieldLines(struct.fields, name, 'value.fields'))
+  lines.push(...mapperFieldLines(struct.fields, name, 'value', 'struct'))
   lines.push(`  }`)
   lines.push(`}`)
   return lines

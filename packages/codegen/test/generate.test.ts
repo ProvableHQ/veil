@@ -484,6 +484,14 @@ describe('generate', () => {
       const output = generate({ abi: ammAbi })
       expect(output).not.toMatch(/: unknown\b/)
     })
+
+    it('struct mappers decode a StructValue directly, not a RecordValue', () => {
+      const output = generate({ abi: ammAbi })
+      // Struct values come from parsePlaintextValue: plain field-to-value
+      // objects with no record-entry indirection.
+      expect(output).toContain('export function toreserves(value: StructValue): reserves')
+      expect(output).not.toContain('value.fields.')
+    })
   })
 
   describe('contract factory', () => {
