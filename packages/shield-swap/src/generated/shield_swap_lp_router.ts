@@ -200,7 +200,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "MerkleProof"
       ],
-      "fields": [
+      "members": [
         {
           "name": "siblings",
           "type": {

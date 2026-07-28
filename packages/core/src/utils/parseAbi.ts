@@ -25,8 +25,8 @@ import type {
   Mode,
   StructDef,
   RecordDef,
-  StructField,
-  RecordField,
+  StructMember,
+  RecordEntry,
   Mapping,
   StorageVariable,
   StorageType,
@@ -183,24 +183,26 @@ function parseFunction(raw: unknown): AbiFunction {
 
 // ---- Struct / Record ----
 
-function parseStructField(raw: unknown): StructField {
+function parseStructMember(raw: unknown): StructMember {
   const obj = raw as { name: string; ty: unknown }
   return { name: obj.name, type: parsePlaintext(obj.ty) }
 }
 
-function parseRecordField(raw: unknown): RecordField {
+function parseRecordEntry(raw: unknown): RecordEntry {
   const obj = raw as { name: string; ty: unknown; mode: unknown }
   return { name: obj.name, type: parsePlaintext(obj.ty), mode: parseMode(obj.mode) }
 }
 
 function parseStruct(raw: unknown): StructDef {
+  // The raw `leo abi` JSON calls struct members "fields"; translate at the boundary.
   const obj = raw as { path: string[]; fields: unknown[] }
-  return { path: obj.path, fields: obj.fields.map(parseStructField) }
+  return { path: obj.path, members: obj.fields.map(parseStructMember) }
 }
 
 function parseRecord(raw: unknown): RecordDef {
+  // The raw `leo abi` JSON calls record entries "fields"; translate at the boundary.
   const obj = raw as { path: string[]; fields: unknown[] }
-  return { path: obj.path, fields: obj.fields.map(parseRecordField) }
+  return { path: obj.path, entries: obj.fields.map(parseRecordEntry) }
 }
 
 // ---- Mapping ----

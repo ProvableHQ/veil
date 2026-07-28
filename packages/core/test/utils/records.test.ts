@@ -7,7 +7,7 @@ import type { RecordValue, Plaintext } from '../../src/types/primitives.js'
 
 const loyaltyCardDef: RecordDef = {
   path: ['LoyaltyCard'],
-  fields: [
+  entries: [
     { name: 'card_id', type: { kind: 'primitive', primitive: 'field' }, mode: 'private' },
     { name: 'points', type: { kind: 'primitive', primitive: 'u64' }, mode: 'private' },
     { name: 'tier', type: { kind: 'primitive', primitive: 'u8' }, mode: 'private' },
@@ -62,8 +62,8 @@ describe('getRecordDef', () => {
   it('looks up a RecordDef by name from ABI', () => {
     const def = getRecordDef(testAbi, 'LoyaltyCard')
     expect(def.path).toEqual(['LoyaltyCard'])
-    expect(def.fields).toHaveLength(3)
-    expect(def.fields[0].name).toBe('card_id')
+    expect(def.entries).toHaveLength(3)
+    expect(def.entries[0].name).toBe('card_id')
   })
 
   it('throws with helpful message for nonexistent record', () => {
@@ -111,9 +111,9 @@ describe('toString', () => {
       ownerVisibility: 'private',
       program: 'test.aleo',
       recordName: 'TestRecord',
-      fields: {
-        points: { value: 1000n, mode: 'private', type: { kind: 'primitive', primitive: 'u64' } },
-        tier: { value: 2n, mode: 'private', type: { kind: 'primitive', primitive: 'u8' } },
+      entries: {
+        points: { value: 1000n, visibility: 'private', type: { kind: 'primitive', primitive: 'u64' } },
+        tier: { value: 2n, visibility: 'private', type: { kind: 'primitive', primitive: 'u8' } },
       },
       nonce: '789group',
       version: 0,
@@ -144,9 +144,9 @@ describe('toString', () => {
   })
 })
 
-// ── RecordFieldValue.type necessity ───────────────────────────────────
+// ── RecordEntryValue.type necessity ───────────────────────────────────
 
-describe('RecordFieldValue.type proves necessary for serialization', () => {
+describe('RecordEntryValue.type proves necessary for serialization', () => {
   it('cannot determine Aleo type from bigint alone', () => {
     const asU64 = 1000n
     const asU128 = 1000n
@@ -163,22 +163,22 @@ describe('RecordFieldValue.type proves necessary for serialization', () => {
   })
 
   it('with type: Plaintext, serialization is unambiguous', () => {
-    const fieldU64: RecordValue['fields'][string] = {
-      value: 1000n, mode: 'private',
+    const fieldU64: RecordValue['entries'][string] = {
+      value: 1000n, visibility: 'private',
       type: { kind: 'primitive', primitive: 'u64' },
     }
-    const fieldU128: RecordValue['fields'][string] = {
-      value: 1000n, mode: 'private',
+    const fieldU128: RecordValue['entries'][string] = {
+      value: 1000n, visibility: 'private',
       type: { kind: 'primitive', primitive: 'u128' },
     }
-    const fieldField: RecordValue['fields'][string] = {
-      value: 1000n, mode: 'private',
+    const fieldField: RecordValue['entries'][string] = {
+      value: 1000n, visibility: 'private',
       type: { kind: 'primitive', primitive: 'field' },
     }
 
-    const recordU64: RecordValue = { owner: 'aleo1x', ownerVisibility: 'private', program: 'test.aleo', recordName: 'Test', fields: { val: fieldU64 }, nonce: '0group', version: 0 }
-    const recordU128: RecordValue = { owner: 'aleo1x', ownerVisibility: 'private', program: 'test.aleo', recordName: 'Test', fields: { val: fieldU128 }, nonce: '0group', version: 0 }
-    const recordField: RecordValue = { owner: 'aleo1x', ownerVisibility: 'private', program: 'test.aleo', recordName: 'Test', fields: { val: fieldField }, nonce: '0group', version: 0 }
+    const recordU64: RecordValue = { owner: 'aleo1x', ownerVisibility: 'private', program: 'test.aleo', recordName: 'Test', entries: { val: fieldU64 }, nonce: '0group', version: 0 }
+    const recordU128: RecordValue = { owner: 'aleo1x', ownerVisibility: 'private', program: 'test.aleo', recordName: 'Test', entries: { val: fieldU128 }, nonce: '0group', version: 0 }
+    const recordField: RecordValue = { owner: 'aleo1x', ownerVisibility: 'private', program: 'test.aleo', recordName: 'Test', entries: { val: fieldField }, nonce: '0group', version: 0 }
 
     expect(toString(recordU64)).toContain('val: 1000u64.private')
     expect(toString(recordU128)).toContain('val: 1000u128.private')
@@ -242,8 +242,8 @@ describe('encodeInputs', () => {
       ownerVisibility: 'private',
       program: 'test.aleo',
       recordName: 'Test',
-      fields: {
-        points: { value: 500n, mode: 'private', type: { kind: 'primitive', primitive: 'u64' } },
+      entries: {
+        points: { value: 500n, visibility: 'private', type: { kind: 'primitive', primitive: 'u64' } },
       },
       nonce: '0group',
       version: 0,

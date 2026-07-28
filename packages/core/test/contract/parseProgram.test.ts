@@ -119,7 +119,7 @@ view balance_of:
     expect(program.records).toEqual([
       {
         name: 'Token',
-        fields: [
+        entries: [
           { name: 'owner', type: 'address', visibility: 'private' },
           { name: 'amount', type: 'u128', visibility: 'private' },
         ],
@@ -132,7 +132,7 @@ view balance_of:
     expect(program.structs).toEqual([
       {
         name: 'MerkleProof',
-        fields: [
+        members: [
           { name: 'siblings', type: '[field; 16u32]' },
           { name: 'leaf_index', type: 'u32' },
         ],
@@ -240,7 +240,7 @@ function plaintexts:
       { kind: 'plaintext', type: 'credits.aleo/metadata', visibility: 'public' },
     ])
     expect(program.structs).toEqual([
-      { name: 'Matrix', fields: [{ name: 'rows', type: '[[field; 2u32]; 3u32]' }] },
+      { name: 'Matrix', members: [{ name: 'rows', type: '[[field; 2u32]; 3u32]' }] },
     ])
   })
 
@@ -284,7 +284,7 @@ record PublicToken:
     expect(program.records).toEqual([
       {
         name: 'PublicToken',
-        fields: [
+        entries: [
           { name: 'owner', type: 'address', visibility: 'public' },
           { name: 'amount', type: 'u128', visibility: 'private' },
           { name: 'decimals', type: 'u8', visibility: 'constant' },

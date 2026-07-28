@@ -50,23 +50,23 @@ export type ProgramFunction = {
  * The `owner` entry is restricted to `public` or `private` by the VM.
  *
  * @property name Record type name, e.g. "Token".
- * @property fields Entries in declaration order, with raw Aleo type strings
+ * @property entries Data entries in declaration order, with raw Aleo type strings
  *   and each entry's declared visibility.
  */
 export type ProgramRecord = {
   name: string
-  fields: Array<{ name: string; type: string; visibility: 'constant' | 'public' | 'private' }>
+  entries: Array<{ name: string; type: string; visibility: 'constant' | 'public' | 'private' }>
 }
 
 /**
- * A struct declaration parsed from program source. Struct fields carry no
+ * A struct declaration parsed from program source. Struct members carry no
  * visibility — they take the visibility of the value that contains them.
  *
- * @property fields Field entries in declaration order with raw Aleo type strings.
+ * @property members Members in declaration order with raw Aleo type strings.
  */
 export type ProgramStruct = {
   name: string
-  fields: Array<{ name: string; type: string }>
+  members: Array<{ name: string; type: string }>
 }
 
 /** A mapping declaration parsed from program source, with raw Aleo type strings for key and value. */

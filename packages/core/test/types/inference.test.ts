@@ -19,7 +19,7 @@ const testAbi = {
   structs: [
     {
       path: ['Config'],
-      fields: [
+      members: [
         { name: 'max_supply', type: { kind: 'primitive', primitive: 'u64' } as const },
         { name: 'admin', type: { kind: 'primitive', primitive: 'address' } as const },
         { name: 'active', type: { kind: 'primitive', primitive: 'boolean' } as const },
@@ -29,7 +29,7 @@ const testAbi = {
   records: [
     {
       path: ['Token'],
-      fields: [
+      entries: [
         { name: 'owner', type: { kind: 'primitive', primitive: 'address' } as const, mode: 'private' as const },
         { name: 'amount', type: { kind: 'primitive', primitive: 'u64' } as const, mode: 'private' as const },
       ],
@@ -152,11 +152,11 @@ describe('type-level inference', () => {
       const nestedAbi = {
         program: 'nested.aleo',
         structs: [
-          { path: ['L5'], fields: [{ name: 'value', type: { kind: 'primitive', primitive: 'u64' } as const }] },
-          { path: ['L4'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L5'] } as const }] },
-          { path: ['L3'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L4'] } as const }] },
-          { path: ['L2'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L3'] } as const }] },
-          { path: ['L1'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L2'] } as const }] },
+          { path: ['L5'], members: [{ name: 'value', type: { kind: 'primitive', primitive: 'u64' } as const }] },
+          { path: ['L4'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L5'] } as const }] },
+          { path: ['L3'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L4'] } as const }] },
+          { path: ['L2'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L3'] } as const }] },
+          { path: ['L1'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L2'] } as const }] },
         ],
         records: [],
         mappings: [],
@@ -173,14 +173,14 @@ describe('type-level inference', () => {
       const deepAbi = {
         program: 'deep.aleo',
         structs: [
-          { path: ['L8'], fields: [{ name: 'value', type: { kind: 'primitive', primitive: 'u64' } as const }] },
-          { path: ['L7'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L8'] } as const }] },
-          { path: ['L6'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L7'] } as const }] },
-          { path: ['L5'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L6'] } as const }] },
-          { path: ['L4'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L5'] } as const }] },
-          { path: ['L3'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L4'] } as const }] },
-          { path: ['L2'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L3'] } as const }] },
-          { path: ['L1'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L2'] } as const }] },
+          { path: ['L8'], members: [{ name: 'value', type: { kind: 'primitive', primitive: 'u64' } as const }] },
+          { path: ['L7'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L8'] } as const }] },
+          { path: ['L6'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L7'] } as const }] },
+          { path: ['L5'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L6'] } as const }] },
+          { path: ['L4'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L5'] } as const }] },
+          { path: ['L3'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L4'] } as const }] },
+          { path: ['L2'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L3'] } as const }] },
+          { path: ['L1'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L2'] } as const }] },
         ],
         records: [], mappings: [], storageVariables: [], functions: [],
       } as const satisfies ABI
@@ -195,15 +195,15 @@ describe('type-level inference', () => {
       const deepAbi = {
         program: 'deep.aleo',
         structs: [
-          { path: ['L9'], fields: [{ name: 'value', type: { kind: 'primitive', primitive: 'u64' } as const }] },
-          { path: ['L8'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L9'] } as const }] },
-          { path: ['L7'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L8'] } as const }] },
-          { path: ['L6'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L7'] } as const }] },
-          { path: ['L5'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L6'] } as const }] },
-          { path: ['L4'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L5'] } as const }] },
-          { path: ['L3'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L4'] } as const }] },
-          { path: ['L2'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L3'] } as const }] },
-          { path: ['L1'], fields: [{ name: 'inner', type: { kind: 'struct', path: ['L2'] } as const }] },
+          { path: ['L9'], members: [{ name: 'value', type: { kind: 'primitive', primitive: 'u64' } as const }] },
+          { path: ['L8'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L9'] } as const }] },
+          { path: ['L7'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L8'] } as const }] },
+          { path: ['L6'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L7'] } as const }] },
+          { path: ['L5'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L6'] } as const }] },
+          { path: ['L4'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L5'] } as const }] },
+          { path: ['L3'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L4'] } as const }] },
+          { path: ['L2'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L3'] } as const }] },
+          { path: ['L1'], members: [{ name: 'inner', type: { kind: 'struct', path: ['L2'] } as const }] },
         ],
         records: [], mappings: [], storageVariables: [], functions: [],
       } as const satisfies ABI

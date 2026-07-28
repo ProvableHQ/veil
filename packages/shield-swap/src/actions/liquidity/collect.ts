@@ -203,7 +203,7 @@ export async function collect(client: Client, params: CollectParameters): Promis
 /** Extracts the `withdrawal` address from a PositionNFT plaintext, if parseable. */
 function withdrawalFromPlaintext(plaintext: string): string | undefined {
   try {
-    const raw = parseRecord(plaintext).fields.withdrawal?.value
+    const raw = parseRecord(plaintext).entries.withdrawal?.value
     return typeof raw === 'string' && raw.startsWith('aleo1') ? raw : undefined
   } catch {
     return undefined

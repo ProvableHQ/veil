@@ -13,9 +13,9 @@ export function parseProgram(source: string): Program {
   const views = parseCallables(source, 'view')
   // Record entries carry a visibility suffix (e.g. "address.private"); struct
   // fields carry none, so the parsed raw type is used verbatim.
-  const records: ProgramRecord[] = parseFieldBlocks(source, 'record').map(({ name, fields }) => ({
+  const records: ProgramRecord[] = parseFieldBlocks(source, 'record').map(({ name, members }) => ({
     name,
-    fields: fields.map((field) => ({ name: field.name, ...splitEntryType(field.type) })),
+    entries: members.map((member) => ({ name: member.name, ...splitEntryType(member.type) })),
   }))
   const structs = parseFieldBlocks(source, 'struct')
   const mappings = parseMappings(source)
@@ -111,13 +111,13 @@ function parseFieldBlocks(source: string, keyword: 'record' | 'struct'): Program
   let match: RegExpExecArray | null
 
   while ((match = blockRegex.exec(source)) !== null) {
-    const fields: ProgramStruct['fields'] = []
+    const members: ProgramStruct['members'] = []
     fieldRegex.lastIndex = 0
     let fieldMatch: RegExpExecArray | null
     while ((fieldMatch = fieldRegex.exec(match[2]!)) !== null) {
-      fields.push({ name: fieldMatch[1]!, type: fieldMatch[2]!.trim() })
+      members.push({ name: fieldMatch[1]!, type: fieldMatch[2]!.trim() })
     }
-    blocks.push({ name: match[1]!, fields })
+    blocks.push({ name: match[1]!, members })
   }
 
   return blocks

@@ -76,14 +76,14 @@ describe('toPositionNFT', () => {
     program: 'shield_swap.aleo',
     recordName: 'PositionNFT',
     nonce: '0group',
-    fields: {
-      withdrawal: { value: ZERO, mode: 'private', type: { kind: 'primitive', primitive: 'address' } },
-      token_id: { value: '1234field', mode: 'private', type: { kind: 'primitive', primitive: 'field' } },
-      token0_id: { value: '11field', mode: 'private', type: { kind: 'primitive', primitive: 'field' } },
-      token1_id: { value: '22field', mode: 'private', type: { kind: 'primitive', primitive: 'field' } },
-      pool: { value: '99field', mode: 'private', type: { kind: 'primitive', primitive: 'field' } },
-      tick_lower: { value: -887272n, mode: 'private', type: { kind: 'primitive', primitive: 'i32' } },
-      tick_upper: { value: 887272n, mode: 'private', type: { kind: 'primitive', primitive: 'i32' } },
+    entries: {
+      withdrawal: { value: ZERO, visibility: 'private', type: { kind: 'primitive', primitive: 'address' } },
+      token_id: { value: '1234field', visibility: 'private', type: { kind: 'primitive', primitive: 'field' } },
+      token0_id: { value: '11field', visibility: 'private', type: { kind: 'primitive', primitive: 'field' } },
+      token1_id: { value: '22field', visibility: 'private', type: { kind: 'primitive', primitive: 'field' } },
+      pool: { value: '99field', visibility: 'private', type: { kind: 'primitive', primitive: 'field' } },
+      tick_lower: { value: -887272n, visibility: 'private', type: { kind: 'primitive', primitive: 'i32' } },
+      tick_upper: { value: 887272n, visibility: 'private', type: { kind: 'primitive', primitive: 'i32' } },
     },
   }
 
@@ -150,14 +150,14 @@ describe('toSwapComplianceRecord', () => {
       program: 'shield_swap.aleo',
       recordName: 'SwapComplianceRecord',
       nonce: '0group',
-      fields: {
-        swap_id: { value: '7field', mode: 'private', type: { kind: 'primitive', primitive: 'field' } },
-        token_in: { value: '11field', mode: 'private', type: { kind: 'primitive', primitive: 'field' } },
-        token_out: { value: '22field', mode: 'private', type: { kind: 'primitive', primitive: 'field' } },
-        request: { value: {}, mode: 'private', type: { kind: 'struct', path: ['SwapRequest'], program: 'shield_swap.aleo' } },
-        caller: { value: ZERO, mode: 'private', type: { kind: 'primitive', primitive: 'address' } },
-        signer: { value: ZERO, mode: 'private', type: { kind: 'primitive', primitive: 'address' } },
-        blinded_address: { value: ZERO, mode: 'private', type: { kind: 'primitive', primitive: 'address' } },
+      entries: {
+        swap_id: { value: '7field', visibility: 'private', type: { kind: 'primitive', primitive: 'field' } },
+        token_in: { value: '11field', visibility: 'private', type: { kind: 'primitive', primitive: 'field' } },
+        token_out: { value: '22field', visibility: 'private', type: { kind: 'primitive', primitive: 'field' } },
+        request: { value: {}, visibility: 'private', type: { kind: 'struct', path: ['SwapRequest'], program: 'shield_swap.aleo' } },
+        caller: { value: ZERO, visibility: 'private', type: { kind: 'primitive', primitive: 'address' } },
+        signer: { value: ZERO, visibility: 'private', type: { kind: 'primitive', primitive: 'address' } },
+        blinded_address: { value: ZERO, visibility: 'private', type: { kind: 'primitive', primitive: 'address' } },
       },
     }
 

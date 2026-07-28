@@ -245,7 +245,7 @@ export function getContract(params: GetContractParameters): ContractInstance {
 
     // Encode a single literal value at position `i` (parsed-Program / no-ABI path).
     const encodeOne = (value: InputValue, i: number): string => {
-      if (typeof value === 'object' && value !== null && 'owner' in value && 'fields' in value) {
+      if (typeof value === 'object' && value !== null && 'owner' in value && 'entries' in value) {
         return serializeRecord(value as RecordValue)
       }
       if (typeof value === 'string') return value

@@ -79,13 +79,13 @@ export interface Token {
 }
 
 export function toToken(record: RecordValue | string): Token {
-  const fields = (typeof record === 'object' && record !== null ? record.fields : undefined) ?? {}
+  const entries = (typeof record === 'object' && record !== null ? record.entries : undefined) ?? {}
   return {
     owner: ((typeof record === 'object' && record !== null ? record.owner : undefined) ?? '') as string,
-    amount: fields.amount?.value as bigint ?? 0n,
-    token_id: litStr(fields.token_id?.value, 'field') ?? '',
-    external_authorization_required: fields.external_authorization_required?.value as boolean ?? false,
-    authorized_until: Number((fields.authorized_until?.value ?? 0n) as bigint) ?? 0,
+    amount: entries.amount?.value as bigint ?? 0n,
+    token_id: litStr(entries.token_id?.value, 'field') ?? '',
+    external_authorization_required: entries.external_authorization_required?.value as boolean ?? false,
+    authorized_until: Number((entries.authorized_until?.value ?? 0n) as bigint) ?? 0,
     _record: record as unknown as RecordValue,
   }
 }
@@ -279,7 +279,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "TokenMetadata"
       ],
-      "fields": [
+      "members": [
         {
           "name": "token_id",
           "type": {
@@ -349,7 +349,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "TokenOwner"
       ],
-      "fields": [
+      "members": [
         {
           "name": "account",
           "type": {
@@ -370,7 +370,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "Balance"
       ],
-      "fields": [
+      "members": [
         {
           "name": "token_id",
           "type": {
@@ -407,7 +407,7 @@ export const PROGRAM_ABI: ABI = {
       "path": [
         "Token"
       ],
-      "fields": [
+      "entries": [
         {
           "name": "owner",
           "type": {

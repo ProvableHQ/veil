@@ -79,7 +79,7 @@ export type ArrayValue = PlaintextValue[]
 export type PlaintextValue = Literal | StructValue | ArrayValue
 
 /**
- * One entry of a record value at runtime: its value, visibility mode, and
+ * One entry of a record value at runtime: its value, visibility, and
  * Aleo type descriptor. Mirrors snarkVM's `Entry`, which scopes visibility
  * per entry — `constant`, `public`, or `private`.
  *
@@ -88,15 +88,15 @@ export type PlaintextValue = Literal | StructValue | ArrayValue
  *   RecordDef — a bigint value of 1000n could be u64, u128, field, or i64,
  *   indistinguishable at runtime since the TypeScript aliases (U64 = bigint) erase.
  */
-export type RecordFieldValue = {
+export type RecordEntryValue = {
   value: PlaintextValue
-  mode: 'constant' | 'public' | 'private'
+  visibility: 'constant' | 'public' | 'private'
   type: Plaintext
 }
 
 /**
  * A record value at runtime. Mirrors snarkVM's `Record`: a visibility-scoped
- * owner, named entries carrying their own visibility mode and Aleo type
+ * owner, named data entries carrying their own visibility and Aleo type
  * descriptor, a nonce, and a commitment-scheme version.
  *
  * @property ownerVisibility Visibility of the owner address — the owner is itself
@@ -116,7 +116,7 @@ export type RecordValue = {
   ownerVisibility: 'public' | 'private'
   program: string
   recordName: string
-  fields: { [name: string]: RecordFieldValue }
+  entries: { [name: string]: RecordEntryValue }
   nonce: string
   version: number
   raw?: string

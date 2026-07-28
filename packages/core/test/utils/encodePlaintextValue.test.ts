@@ -9,7 +9,7 @@ const abi: ABI = {
   structs: [
     {
       path: ['MerkleProof'],
-      fields: [
+      members: [
         {
           name: 'siblings',
           type: { kind: 'array', element: { kind: 'primitive', primitive: 'field' }, length: 16 },
@@ -19,7 +19,7 @@ const abi: ABI = {
     },
     {
       path: ['U256'],
-      fields: [
+      members: [
         { name: 'hi', type: { kind: 'primitive', primitive: 'u128' } },
         { name: 'lo', type: { kind: 'primitive', primitive: 'u128' } },
       ],
@@ -113,8 +113,8 @@ describe('record parsing with array-valued fields', () => {
       '{ owner: aleo1abc.private, siblings: [1field, 2field].private, amount: 5u64.private, _nonce: 7group.public }',
       { program: 'p.aleo', recordName: 'R' },
     )
-    expect(record.fields.amount!.value).toBe(5n)
-    expect(record.fields.siblings!.value).toEqual([1n, 2n])
+    expect(record.entries.amount!.value).toBe(5n)
+    expect(record.entries.siblings!.value).toEqual([1n, 2n])
   })
 
   it('parses nested struct values inside records', () => {
@@ -122,6 +122,6 @@ describe('record parsing with array-valued fields', () => {
       '{ owner: aleo1abc.private, limit: { hi: 1u128, lo: 0u128 }.private, _nonce: 7group.public }',
       { program: 'p.aleo', recordName: 'R' },
     )
-    expect(record.fields.limit!.value).toEqual({ hi: 1n, lo: 0n })
+    expect(record.entries.limit!.value).toEqual({ hi: 1n, lo: 0n })
   })
 })

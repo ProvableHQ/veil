@@ -112,7 +112,7 @@ describe('parseAbi — tictactoe', () => {
     expect(abi.structs).toHaveLength(2)
     expect(abi.structs[0]).toEqual({
       path: ['Row'],
-      fields: [
+      members: [
         { name: 'c1', type: { kind: 'primitive', primitive: 'u8' } },
         { name: 'c2', type: { kind: 'primitive', primitive: 'u8' } },
         { name: 'c3', type: { kind: 'primitive', primitive: 'u8' } },
@@ -120,7 +120,7 @@ describe('parseAbi — tictactoe', () => {
     })
     expect(abi.structs[1]).toEqual({
       path: ['Board'],
-      fields: [
+      members: [
         { name: 'r1', type: { kind: 'struct', path: ['Row'], program: 'tictactoe.aleo' } },
         { name: 'r2', type: { kind: 'struct', path: ['Row'], program: 'tictactoe.aleo' } },
         { name: 'r3', type: { kind: 'struct', path: ['Row'], program: 'tictactoe.aleo' } },
@@ -132,7 +132,7 @@ describe('parseAbi — tictactoe', () => {
     const abi = parseAbi(TICTACTOE_ABI)
     expect(abi.records).toHaveLength(1)
     expect(abi.records[0]!.path).toEqual(['BoardState'])
-    expect(abi.records[0]!.fields[0]).toEqual({
+    expect(abi.records[0]!.entries[0]).toEqual({
       name: 'player_1',
       type: { kind: 'primitive', primitive: 'address' },
       mode: 'private',

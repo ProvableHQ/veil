@@ -7,43 +7,47 @@ import type { Plaintext } from './primitives.js'
 
 // ---- Mode ----
 
-/** Visibility of a function input, output, or record field. */
+/** Visibility of a function input, output, or record entry. */
 export type Mode = 'none' | 'constant' | 'private' | 'public'
 
 // ---- Struct and Record definitions ----
-// Full definitions including fields, not just references by name.
+// Full definitions including members/entries, not just references by name.
+// Vocabulary follows snarkVM: structs have members, records have entries;
+// "field" is reserved for the base-field element type. The raw `leo abi`
+// JSON calls both lists "fields" — parseAbi translates at the boundary.
 
-/** One named field of a struct definition. */
-export type StructField = {
+/** One named member of a struct definition. */
+export type StructMember = {
   name: string
   type: Plaintext
 }
 
-/** One named field of a record definition, with its on-chain visibility. */
-export type RecordField = {
+/** One named data entry of a record definition, with its on-chain visibility. */
+export type RecordEntry = {
   name: string
   type: Plaintext
   mode: Mode
 }
 
 /**
- * A struct definition with its full field list.
+ * A struct definition with its full member list.
  *
  * @property path Struct name path — single-element for top-level structs,
  *   multi-element for module structs (e.g. `['utils', 'Vector3']`).
  */
 export type StructDef = {
   path: string[]
-  fields: StructField[]
+  members: StructMember[]
 }
 
 /**
- * A record definition with its full field list. Records always have an
- * implicit `owner: address` field in addition to the fields listed here.
+ * A record definition with its full entry list. Records always have an
+ * implicit visibility-scoped `owner` address in addition to the entries
+ * listed here.
  */
 export type RecordDef = {
   path: string[]
-  fields: RecordField[]
+  entries: RecordEntry[]
 }
 
 // ---- Function input/output types ----
