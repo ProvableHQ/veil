@@ -97,7 +97,7 @@ export type GetOwnedPositionsReturnType = OwnedPosition[]
  * @returns The joined view; `state` is `null` when the `positions` entry or
  *   the pool slot is missing (finalize lag).
  */
-export async function enrichOwnedPosition(
+export async function resolveOwnedPosition(
   client: Client,
   params: { nft: PositionNFTInfo; program?: string; slot: Slot | null | Promise<Slot | null> },
 ): Promise<OwnedPosition> {
@@ -218,5 +218,5 @@ export async function getOwnedPositions(
   const poolKeys = [...new Set(nfts.map((nft) => nft.poolKey))]
   const slots = new Map(poolKeys.map((key) => [key, getSlot(client, { poolKey: key, program })]))
 
-  return Promise.all(nfts.map((nft) => enrichOwnedPosition(client, { nft, program, slot: slots.get(nft.poolKey)! })))
+  return Promise.all(nfts.map((nft) => resolveOwnedPosition(client, { nft, program, slot: slots.get(nft.poolKey)! })))
 }
