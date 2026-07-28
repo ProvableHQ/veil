@@ -1,5 +1,16 @@
 # @provablehq/veil-aleo-sdk
 
+## 0.6.0
+
+### Patch Changes
+
+- Updated dependencies [387a580]
+- Updated dependencies [bc51d70]
+- Updated dependencies [bc51d70]
+- Updated dependencies [bc51d70]
+  - @provablehq/veil-core@0.6.0
+  - @provablehq/veil-aleo-devnode@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes
