@@ -69,6 +69,26 @@ describe('shieldSwapActions', () => {
     await expect(client.authenticateApi()).rejects.toThrow(/account/)
   })
 
+  it('exposes getOwnedPositions/getOwnedPosition and threads the program default into the record scan', async () => {
+    const scannedPrograms: string[] = []
+    const client = createClient({
+      transport: custom({
+        request: async ({ method, params }) => {
+          if (method === 'requestRecords') {
+            scannedPrograms.push((params as { program: string }).program)
+            return []
+          }
+          return null
+        },
+      }),
+      account: { type: 'rpc' } as never,
+    }).extend(shieldSwapActions({ program: 'shield_swap_alt.aleo' }))
+
+    expect(await client.getOwnedPositions()).toEqual([])
+    expect(await client.getOwnedPosition({ positionTokenId: '1field' })).toBeNull()
+    expect(scannedPrograms).toEqual(['shield_swap_alt.aleo', 'shield_swap_alt.aleo'])
+  })
+
   it('exposes a configured API, adopts a preconstructed one, and fails actionably without one', () => {
     const configured = baseClient(() => null).extend(shieldSwapActions({ api: { baseUrl: 'https://x.example' } }))
     expect(configured.api.baseUrl).toBe('https://x.example')
