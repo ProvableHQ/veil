@@ -108,7 +108,7 @@ describe('toString', () => {
   it('serializes a RecordValue back to plaintext format', () => {
     const record: RecordValue = {
       owner: 'aleo1abc',
-      ownerMode: 'private',
+      ownerVisibility: 'private',
       program: 'test.aleo',
       recordName: 'TestRecord',
       fields: {
@@ -176,9 +176,9 @@ describe('RecordFieldValue.type proves necessary for serialization', () => {
       type: { kind: 'primitive', primitive: 'field' },
     }
 
-    const recordU64: RecordValue = { owner: 'aleo1x', ownerMode: 'private', program: 'test.aleo', recordName: 'Test', fields: { val: fieldU64 }, nonce: '0group', version: 0 }
-    const recordU128: RecordValue = { owner: 'aleo1x', ownerMode: 'private', program: 'test.aleo', recordName: 'Test', fields: { val: fieldU128 }, nonce: '0group', version: 0 }
-    const recordField: RecordValue = { owner: 'aleo1x', ownerMode: 'private', program: 'test.aleo', recordName: 'Test', fields: { val: fieldField }, nonce: '0group', version: 0 }
+    const recordU64: RecordValue = { owner: 'aleo1x', ownerVisibility: 'private', program: 'test.aleo', recordName: 'Test', fields: { val: fieldU64 }, nonce: '0group', version: 0 }
+    const recordU128: RecordValue = { owner: 'aleo1x', ownerVisibility: 'private', program: 'test.aleo', recordName: 'Test', fields: { val: fieldU128 }, nonce: '0group', version: 0 }
+    const recordField: RecordValue = { owner: 'aleo1x', ownerVisibility: 'private', program: 'test.aleo', recordName: 'Test', fields: { val: fieldField }, nonce: '0group', version: 0 }
 
     expect(toString(recordU64)).toContain('val: 1000u64.private')
     expect(toString(recordU128)).toContain('val: 1000u128.private')
@@ -239,7 +239,7 @@ describe('encodeInputs', () => {
   it('serializes RecordValue inputs via toString', () => {
     const record: RecordValue = {
       owner: 'aleo1abc',
-      ownerMode: 'private',
+      ownerVisibility: 'private',
       program: 'test.aleo',
       recordName: 'Test',
       fields: {

@@ -15,7 +15,7 @@ describe('parseRecord', () => {
   it('parses entries with values, modes, and suffix-inferred types', () => {
     const record = parseRecord(basic, { program: 'loyalty_token.aleo', recordName: 'LoyaltyCard' })
     expect(record.owner).toBe(OWNER)
-    expect(record.ownerMode).toBe('private')
+    expect(record.ownerVisibility).toBe('private')
     expect(record.nonce).toBe('123group')
     expect(record.program).toBe('loyalty_token.aleo')
     expect(record.fields.points).toEqual({
@@ -41,14 +41,14 @@ describe('parseRecord', () => {
     expect(record.fields).not.toHaveProperty('_version')
   })
 
-  it('strips a public owner suffix and records ownerMode', () => {
+  it('strips a public owner suffix and records ownerVisibility', () => {
     const record = parseRecord(`{
   owner: ${OWNER}.public,
   points: 1000u64.private,
   _nonce: 123group.public
 }`)
     expect(record.owner).toBe(OWNER)
-    expect(record.ownerMode).toBe('public')
+    expect(record.ownerVisibility).toBe('public')
   })
 
   it('parses constant entries with their own mode', () => {
@@ -117,12 +117,12 @@ describe('parseRecord', () => {
 })
 
 describe('serializeRecord without raw text', () => {
-  it('synthesizes plaintext honoring ownerMode, entry modes, and version', () => {
+  it('synthesizes plaintext honoring ownerVisibility, entry modes, and version', () => {
     const record = parseRecord(basic)
     const synthesized = serializeRecord({ ...record, raw: undefined })
     const reparsed = parseRecord(synthesized)
     expect(reparsed.owner).toBe(OWNER)
-    expect(reparsed.ownerMode).toBe('private')
+    expect(reparsed.ownerVisibility).toBe('private')
     expect(reparsed.version).toBe(0)
     expect(reparsed.fields.points?.value).toBe(1000n)
     expect(reparsed.fields.tier?.mode).toBe('public')

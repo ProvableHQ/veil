@@ -452,7 +452,7 @@ export function parseRecord(plaintext: string, options: ParseRecordOptions = {})
   }
 
   const ownerRaw = rawFields['owner'].trim()
-  const ownerMode: 'public' | 'private' = ownerRaw.endsWith('.public') ? 'public' : 'private'
+  const ownerVisibility: 'public' | 'private' = ownerRaw.endsWith('.public') ? 'public' : 'private'
   const owner = ownerRaw.replace(/\.(public|private)$/, '')
 
   const nonce = rawFields['_nonce'].replace(/\.public$/, '').trim()
@@ -466,7 +466,7 @@ export function parseRecord(plaintext: string, options: ParseRecordOptions = {})
 
   return {
     owner,
-    ownerMode,
+    ownerVisibility,
     program: options.program ?? 'unknown',
     recordName,
     fields,
@@ -504,7 +504,7 @@ export function toString(record: RecordValue): string {
 
   const lines: string[] = []
 
-  lines.push(`  owner: ${record.owner}.${record.ownerMode}`)
+  lines.push(`  owner: ${record.owner}.${record.ownerVisibility}`)
 
   for (const [name, field] of Object.entries(record.fields)) {
     const primitive = extractPrimitive(field.type)

@@ -258,7 +258,7 @@ describe('getContract', () => {
 
     const record: RecordValue = {
       owner: 'aleo1abc',
-      ownerMode: 'private',
+      ownerVisibility: 'private',
       program: 'token.aleo',
       recordName: 'Token',
       fields: {

@@ -99,7 +99,7 @@ export type RecordFieldValue = {
  * owner, named entries carrying their own visibility mode and Aleo type
  * descriptor, a nonce, and a commitment-scheme version.
  *
- * @property ownerMode Visibility of the owner address — the owner is itself
+ * @property ownerVisibility Visibility of the owner address — the owner is itself
  *   visibility-scoped in snarkVM, independently of the data entries.
  * @property program Program the record belongs to (e.g. "loyalty_token.aleo").
  * @property recordName Record type name (e.g. "LoyaltyCard").
@@ -113,7 +113,7 @@ export type RecordFieldValue = {
  */
 export type RecordValue = {
   owner: Address
-  ownerMode: 'public' | 'private'
+  ownerVisibility: 'public' | 'private'
   program: string
   recordName: string
   fields: { [name: string]: RecordFieldValue }
