@@ -61,7 +61,7 @@ export async function readContract(client: Client, params: ReadContractParameter
     // original error as the cause.
     if (error instanceof TransportError && error.status === 404) {
       throw new TransportError(
-        `Reading ${params.programId}/${params.mapping} failed with HTTP 404. An absent key is not an error — it resolves to null.`,
+        `Reading ${params.programId}/${params.mapping} failed with HTTP 404.`,
         { cause: error, status: error.status, body: error.body },
       )
     }
