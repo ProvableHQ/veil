@@ -125,9 +125,28 @@ export type RecordValue = {
 /**
  * A future returned by an async transition: the pending on-chain finalize
  * call, naming the program, function, and arguments it will run with.
+ * Arguments are plaintexts, nested futures, or nested dynamic futures.
  */
 export type FutureValue = {
   programId: string
   function: string
-  arguments: (FutureValue | PlaintextValue)[]
+  arguments: (FutureValue | DynamicFutureValue | PlaintextValue)[]
+}
+
+/**
+ * A dynamic-dispatch future returned by an async transition, in snarkVM's
+ * normalized raw-field form. The program and function are identified by the
+ * field encoding of their identifiers (little-endian byte packing), and the
+ * arguments are committed to by a checksum rather than carried in the text.
+ *
+ * @property programName Field encoding of the program name identifier.
+ * @property programNetwork Field encoding of the network identifier (e.g. "aleo").
+ * @property functionName Field encoding of the function name identifier.
+ * @property checksum Field committing to the future's arguments.
+ */
+export type DynamicFutureValue = {
+  programName: Field
+  programNetwork: Field
+  functionName: Field
+  checksum: Field
 }

@@ -6,7 +6,7 @@
 // record interfaces), while these types provide autocomplete and basic type
 // safety without a build step.
 
-import type { Primitive, Plaintext, PlaintextValue, RecordValue, FutureValue } from './primitives.js'
+import type { Primitive, Plaintext, PlaintextValue, RecordValue, FutureValue, DynamicFutureValue } from './primitives.js'
 import type { ABI, StructDef, FunctionOutput } from './abi.js'
 import type { Program } from './program.js'
 import type { InputValue } from './contract.js'
@@ -75,7 +75,7 @@ export type OutputToTs<O extends FunctionOutput, A extends ABI = ABI> =
   O extends { kind: 'record' } ? RecordValue :
   O extends { kind: 'dynamicRecord' } ? RecordValue :
   O extends { kind: 'future' } ? FutureValue :
-  O extends { kind: 'dynamicFuture' } ? FutureValue :
+  O extends { kind: 'dynamicFuture' } ? DynamicFutureValue :
   unknown
 
 // ── ABI extraction ───────────────────────────────────────────────────
@@ -96,13 +96,13 @@ export type ExtractMapping<A extends ABI, N extends string> =
 
 // ── Typed contract namespaces ────────────────────────────────────────
 
-/** Parsed output from the proxy — either a RecordValue or the raw string */
 /**
  * Parsed output of a contract call: a RecordValue for record plaintext, a
- * FutureValue for future text, a PlaintextValue for struct plaintext, or the
- * raw string for everything else (literals, ciphertext).
+ * FutureValue for future text, a DynamicFutureValue for dynamic future text,
+ * a PlaintextValue for struct plaintext, or the raw string for everything
+ * else (literals, ciphertext).
  */
-export type ParsedOutput = RecordValue | FutureValue | PlaintextValue
+export type ParsedOutput = RecordValue | FutureValue | DynamicFutureValue | PlaintextValue
 
 type SimulateParams = { inputs: (InputValue | InputRequest)[]; imports?: Record<string, string> }
 type ExecuteParams = { inputs: (InputValue | InputRequest)[]; imports?: Record<string, string> }

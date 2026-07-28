@@ -82,7 +82,7 @@ export type {
   TokenPage,
 } from './types/network.js'
 
-export type { Primitive, Plaintext, PlaintextValue, StructValue, ArrayValue, RecordValue, RecordFieldValue, FutureValue, Literal } from './types/primitives.js'
+export type { Primitive, Plaintext, PlaintextValue, StructValue, ArrayValue, RecordValue, RecordFieldValue, FutureValue, DynamicFutureValue, Literal } from './types/primitives.js'
 export type { ABI, AbiFunction, Input as AbiInput, Output as AbiOutput, Mode, FunctionInput, FunctionOutput, StructDef, RecordDef, StructField, RecordField, Mapping, StorageVariable, StorageType } from './types/abi.js'
 export type {
   ParsedOutput, ParsedRecordOutput, ParsedPlaintextOutput, EncryptedRecordOutput, ParsedFutureOutput,
@@ -127,7 +127,7 @@ export {
 export { isAddress, assertAddress } from './utils/address.js'
 export { creditsToMicrocredits, microcreditsToCredits } from './utils/credits.js'
 export { parseValue, encodeValue, type ParsedValue } from './utils/values.js'
-export { parsePlaintextValue, parseRecord, type ParseRecordOptions, parseFuture, isRecordPlaintext, isFutureText, toString, serializeRecord, encodeInputs, encodePlaintextValue, getRecordDef, getStructDef, getInputTypes } from './utils/records.js'
+export { parsePlaintextValue, parseRecord, type ParseRecordOptions, parseFuture, parseDynamicFuture, isRecordPlaintext, isFutureText, isDynamicFutureText, toString, serializeRecord, encodeInputs, encodePlaintextValue, getRecordDef, getStructDef, getInputTypes } from './utils/records.js'
 export { parsePrimitive, parsePlaintext } from './utils/parsePrimitives.js'
 export { parseAbi } from './utils/parseAbi.js'
 export { waitForConfirmation } from './utils/waitForConfirmation.js'

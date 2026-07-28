@@ -47,7 +47,7 @@ export function generate(options: GenerateOptions): string {
   lines.push(`// Do not edit manually.`)
   lines.push('')
   lines.push(`import { getContract } from '${coreImport}'`)
-  lines.push(`import type { RecordValue, FutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue, StructValue } from '${coreImport}'`)
+  lines.push(`import type { RecordValue, FutureValue, DynamicFutureValue, PublicClient, WalletClient, ABI, InputRequest, PlaintextValue, StructValue } from '${coreImport}'`)
   lines.push('')
 
   // Program ID constant — the program these bindings target (see programId option).
@@ -299,8 +299,10 @@ function outputToTsType(output: AbiFunction['outputs'][number]['type'], abi: ABI
     return isLocal ? recName : 'RecordValue'
   } else if (output.kind === 'dynamicRecord') {
     return 'RecordValue'
-  } else if (output.kind === 'future' || output.kind === 'dynamicFuture') {
+  } else if (output.kind === 'future') {
     return 'FutureValue'
+  } else if (output.kind === 'dynamicFuture') {
+    return 'DynamicFutureValue'
   }
   return 'unknown'
 }
@@ -571,8 +573,11 @@ function outputMapperExpr(output: AbiFunction['outputs'][number], i: number, abi
   if (output.type.kind === 'plaintext') {
     return `result.outputs[${i}] as unknown as ${plaintextToTsType(output.type.type)}`
   }
-  if (output.type.kind === 'future' || output.type.kind === 'dynamicFuture') {
+  if (output.type.kind === 'future') {
     return `result.outputs[${i}] as unknown as FutureValue`
+  }
+  if (output.type.kind === 'dynamicFuture') {
+    return `result.outputs[${i}] as unknown as DynamicFutureValue`
   }
   return `result.outputs[${i}]`
 }

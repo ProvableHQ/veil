@@ -3,7 +3,7 @@
 // These functions bridge between Aleo's plaintext record format (the string
 // representation used by snarkvm) and Veil's typed RecordValue objects.
 
-import type { Primitive, Plaintext, PlaintextValue, RecordValue, RecordFieldValue, FutureValue } from '../types/primitives.js'
+import type { Primitive, Plaintext, PlaintextValue, RecordValue, RecordFieldValue, FutureValue, DynamicFutureValue } from '../types/primitives.js'
 import type { ABI, RecordDef, StructDef, FunctionInput } from '../types/abi.js'
 import { parseValue, encodeValue, type ParsedValue } from './values.js'
 
@@ -189,9 +189,58 @@ function isFutureShaped(value: PlaintextValue): value is { [field: string]: Plai
   )
 }
 
+// A value is dynamic-future-shaped when it is a non-array object carrying the
+// underscore-prefixed keys of either DynamicFuture textual form: human-readable
+// (_program_id) or raw fields (_program_name + _program_network), both with
+// _function_name and _checksum.
+function isDynamicFutureShaped(value: PlaintextValue): value is { [field: string]: PlaintextValue } {
+  if (typeof value !== 'object' || Array.isArray(value)) return false
+  if (!('_function_name' in value) || !('_checksum' in value)) return false
+  return '_program_id' in value || ('_program_name' in value && '_program_network' in value)
+}
+
+// Encodes an identifier the way snarkVM's Identifier::to_field does: the
+// ASCII bytes packed little-endian into a field element.
+function identifierToField(name: string): string {
+  let value = 0n
+  for (let i = name.length - 1; i >= 0; i--) {
+    value = (value << 8n) | BigInt(name.charCodeAt(i))
+  }
+  return `${value}field`
+}
+
+// Normalizes a parsed field literal to its canonical suffixed string form —
+// parseValue delivers field literals as bigint with the suffix stripped.
+function fieldStr(value: PlaintextValue | undefined): string {
+  return typeof value === 'bigint' ? `${value}field` : String(value ?? '')
+}
+
+// Converts a dynamic-future-shaped value to the normalized raw-field form,
+// packing human-readable identifiers into field encodings as snarkVM does.
+function dynamicFutureFromValue(value: { [field: string]: PlaintextValue }): DynamicFutureValue {
+  if ('_program_id' in value) {
+    const programId = String(value['_program_id'])
+    const dot = programId.lastIndexOf('.')
+    return {
+      programName: identifierToField(programId.slice(0, dot)),
+      programNetwork: identifierToField(programId.slice(dot + 1)),
+      functionName: identifierToField(String(value['_function_name'])),
+      checksum: fieldStr(value['_checksum']),
+    }
+  }
+  return {
+    programName: fieldStr(value['_program_name']),
+    programNetwork: fieldStr(value['_program_network']),
+    functionName: fieldStr(value['_function_name']),
+    checksum: fieldStr(value['_checksum']),
+  }
+}
+
 // Recursively converts future-shaped values to FutureValue (snake_case wire
-// keys to the camelCase type); everything else passes through as plaintext.
-function futureFromValue(value: PlaintextValue): FutureValue | PlaintextValue {
+// keys to the camelCase type) and dynamic-future-shaped values to
+// DynamicFutureValue; everything else passes through as plaintext.
+function futureFromValue(value: PlaintextValue): FutureValue | DynamicFutureValue | PlaintextValue {
+  if (isDynamicFutureShaped(value)) return dynamicFutureFromValue(value)
   if (!isFutureShaped(value)) return value
   return {
     programId: String(value['program_id']),
@@ -242,6 +291,52 @@ export function parseFuture(text: string): FutureValue {
     throw new Error('Not a future: missing program_id/function_name/arguments.')
   }
   return parsed as FutureValue
+}
+
+/**
+ * Tests whether a brace-delimited string is dynamic future text — a
+ * dynamic-dispatch finalize handle.
+ *
+ * Checks for the underscore-prefixed keys of either textual form:
+ * human-readable (`_program_id`) or raw fields (`_program_name` +
+ * `_program_network`), both with `_function_name` and `_checksum`. Decisive,
+ * like `isRecordPlaintext`: identifiers cannot start with an underscore, so
+ * no struct can carry these keys. Pure and local.
+ *
+ * @param text Brace-delimited text of unknown shape.
+ * @returns `true` when the text carries a dynamic future's top-level keys.
+ */
+export function isDynamicFutureText(text: string): boolean {
+  const rawFields = parseRawFields(text)
+  if (!rawFields['_function_name'] || !rawFields['_checksum']) return false
+  return Boolean(rawFields['_program_id'] || (rawFields['_program_name'] && rawFields['_program_network']))
+}
+
+/**
+ * Parses Aleo dynamic future text into a typed DynamicFutureValue.
+ *
+ * Accepts both textual forms snarkVM prints — human-readable
+ * (`{ _program_id: foo.aleo, _function_name: bar, _checksum: 0field }`) and
+ * raw fields (`{ _program_name: 0field, … }`) — and normalizes to the
+ * raw-field form, packing identifiers into their field encodings exactly as
+ * snarkVM's `Identifier::to_field` does. The text carries no arguments; the
+ * checksum commits to them. Pure and local.
+ *
+ * @param text Dynamic future text as printed by snarkVM.
+ * @returns The parsed dynamic future in normalized raw-field form.
+ * @throws When the text does not carry a dynamic future's top-level keys.
+ *
+ * @example
+ * parseDynamicFuture('{ _program_id: foo.aleo, _function_name: bar, _checksum: 3field }')
+ * // { programName: '7303014field', programNetwork: '1868917857field',
+ * //   functionName: '7496034field', checksum: '3field' }
+ */
+export function parseDynamicFuture(text: string): DynamicFutureValue {
+  const parsed = parsePlaintextValue(text)
+  if (typeof parsed !== 'object' || Array.isArray(parsed) || !isDynamicFutureShaped(parsed)) {
+    throw new Error('Not a dynamic future: missing _program_id/_function_name/_checksum.')
+  }
+  return dynamicFutureFromValue(parsed)
 }
 
 // ── parseRecord ───────────────────────────────────────────────────────
