@@ -6,7 +6,7 @@ import type { TypedContractInstance } from '../types/inference.js'
 import type { RecordValue, Primitive } from '../types/primitives.js'
 import { parseProgram } from './parseProgram.js'
 import { encodeValue } from '../utils/values.js'
-import { encodeInputs, getInputTypes, getRecordDef, isRecordPlaintext, parseRecord, parsePlaintextValue, toString as serializeRecord } from '../utils/records.js'
+import { encodeInputs, getInputTypes, getRecordDef, isRecordPlaintext, isFutureText, parseRecord, parseFuture, parsePlaintextValue, toString as serializeRecord } from '../utils/records.js'
 
 import type { InputValue } from '../types/contract.js'
 export type { InputValue } from '../types/contract.js'
@@ -16,13 +16,15 @@ import type { ParsedOutput } from '../types/inference.js'
 export type { ParsedOutput } from '../types/inference.js'
 
 /**
- * Parses a raw output by shape: record plaintext parses as a record, other
- * brace-delimited plaintext (structs, future text) as struct plaintext, and
+ * Parses a raw output by shape: record plaintext parses as a record, future
+ * text as a FutureValue, other brace-delimited plaintext as a struct, and
  * everything else (literals, ciphertext) passes through as the raw string.
  */
 function parseRawOutput(raw: string, program?: string): ParsedOutput {
   if (!raw.trimStart().startsWith('{')) return raw
-  return isRecordPlaintext(raw) ? parseRecord(raw, { program }) : parsePlaintextValue(raw)
+  if (isRecordPlaintext(raw)) return parseRecord(raw, { program })
+  if (isFutureText(raw)) return parseFuture(raw)
+  return parsePlaintextValue(raw)
 }
 
 // ── Parameter types ───────────────────────────────────────────────────
@@ -280,8 +282,12 @@ export function getContract(params: GetContractParameters): ContractInstance {
       return rawOutputs.map((raw, i) => {
         if (!raw.trimStart().startsWith('{')) return raw
 
-        // Check if this output is a known record type
+        // Route by the declared output kind where the ABI knows it — decisive,
+        // unlike the text sniffs in parseRawOutput.
         const outputDef = fn?.outputs[i]
+        if (outputDef?.type.kind === 'future' || outputDef?.type.kind === 'dynamicFuture') {
+          return parseFuture(raw)
+        }
         if (outputDef?.type.kind === 'record') {
           const recordName = outputDef.type.path[outputDef.type.path.length - 1]
           if (recordName) {

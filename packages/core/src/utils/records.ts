@@ -3,7 +3,7 @@
 // These functions bridge between Aleo's plaintext record format (the string
 // representation used by snarkvm) and Veil's typed RecordValue objects.
 
-import type { Primitive, Plaintext, PlaintextValue, RecordValue, RecordFieldValue } from '../types/primitives.js'
+import type { Primitive, Plaintext, PlaintextValue, RecordValue, RecordFieldValue, FutureValue } from '../types/primitives.js'
 import type { ABI, RecordDef, StructDef, FunctionInput } from '../types/abi.js'
 import { parseValue, encodeValue, type ParsedValue } from './values.js'
 
@@ -173,6 +173,75 @@ export function parsePlaintextValue(text: string): PlaintextValue {
   const trimmed = text.trim()
   if (!trimmed) throw new Error('Cannot parse empty plaintext')
   return parseCompositeValue(trimmed)
+}
+
+// ── parseFuture ───────────────────────────────────────────────────────
+
+// A value is future-shaped when it is a non-array object carrying the three
+// keys snarkVM's Future grammar prints: program_id, function_name, arguments.
+function isFutureShaped(value: PlaintextValue): value is { [field: string]: PlaintextValue } {
+  return (
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    'program_id' in value &&
+    'function_name' in value &&
+    'arguments' in value
+  )
+}
+
+// Recursively converts future-shaped values to FutureValue (snake_case wire
+// keys to the camelCase type); everything else passes through as plaintext.
+function futureFromValue(value: PlaintextValue): FutureValue | PlaintextValue {
+  if (!isFutureShaped(value)) return value
+  return {
+    programId: String(value['program_id']),
+    function: String(value['function_name']),
+    arguments: (Array.isArray(value['arguments']) ? value['arguments'] : []).map(futureFromValue),
+  }
+}
+
+/**
+ * Tests whether a brace-delimited string is future text — the on-chain
+ * finalize handle an async transition outputs. Futures are a third value
+ * kind beside plaintexts and records, and are never encrypted, so no
+ * plaintext/ciphertext qualifier applies.
+ *
+ * Checks the top-level keys of snarkVM's Future grammar: `program_id`,
+ * `function_name`, and `arguments`. Unlike `isRecordPlaintext`, this is a
+ * heuristic, not a proof — all three are legal struct member names, so a
+ * struct declaring exactly these members would misclassify. With an ABI in
+ * hand, route by the declared output kind instead. Pure and local.
+ *
+ * @param text Brace-delimited text of unknown shape.
+ * @returns `true` when the text carries the future grammar's top-level keys.
+ */
+export function isFutureText(text: string): boolean {
+  const rawFields = parseRawFields(text)
+  return Boolean(rawFields['program_id'] && rawFields['function_name'] && rawFields['arguments'])
+}
+
+/**
+ * Parses Aleo future text into a typed FutureValue.
+ *
+ * Mirrors snarkVM's `Future` grammar: `program_id`, `function_name`, and an
+ * `arguments` list whose elements are plaintexts or nested futures — nested
+ * futures parse recursively into `FutureValue`s. Pure and local.
+ *
+ * @param text Future text as printed by snarkVM.
+ * @returns The parsed future.
+ * @throws When the text does not carry the future grammar's top-level keys.
+ *
+ * @example
+ * const future = parseFuture(text)
+ * future.programId  // 'credits.aleo'
+ * future.arguments  // ['aleo1…', 100000n]
+ */
+export function parseFuture(text: string): FutureValue {
+  const parsed = futureFromValue(parsePlaintextValue(text))
+  if (typeof parsed !== 'object' || Array.isArray(parsed) || !('programId' in parsed)) {
+    throw new Error('Not a future: missing program_id/function_name/arguments.')
+  }
+  return parsed as FutureValue
 }
 
 // ── parseRecord ───────────────────────────────────────────────────────
