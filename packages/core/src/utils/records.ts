@@ -144,6 +144,37 @@ export function getInputTypes(abi: ABI, functionName: string): Plaintext[] {
   })
 }
 
+// ── parsePlaintextValue ────────────────────────────────────────────────────
+
+/**
+ * Parses an Aleo plaintext string into its runtime value.
+ *
+ * Covers every plaintext shape: a bare literal (`"3000u32"` → `3000n`,
+ * `"true"` → `true`, an `aleo1…` address → string), a struct (`"{ a: 1u8 }"`
+ * → nested `StructValue`), or an array (`"[1u8, 2u8]"` → `ArrayValue`).
+ * Suited to mapping values and struct-typed transition outputs, which the
+ * node returns as plaintext with self-describing literal suffixes. For
+ * record plaintext — visibility-scoped entries, owner, nonce — use
+ * `parseRecord` instead. Pure and local.
+ *
+ * Unrecognized scalars (e.g. program ids like `"registry.aleo"`) are kept
+ * as raw strings rather than rejected, since not every literal form is
+ * enumerable.
+ *
+ * @param text Aleo plaintext to parse.
+ * @returns The runtime value: a literal, a struct object, or an array.
+ * @throws When `text` is empty or blank.
+ *
+ * @example
+ * parsePlaintextValue('{ token0: 3412field, fee: 3000u32, enabled: true }')
+ * // { token0: 3412n, fee: 3000n, enabled: true }
+ */
+export function parsePlaintextValue(text: string): PlaintextValue {
+  const trimmed = text.trim()
+  if (!trimmed) throw new Error('Cannot parse empty plaintext')
+  return parseCompositeValue(trimmed)
+}
+
 // ── parseRecordPlaintext ──────────────────────────────────────────────
 
 /**
