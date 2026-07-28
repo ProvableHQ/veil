@@ -20,10 +20,10 @@ export interface U256__8JquwLopp8 {
   lo: bigint
 }
 
-export function toU256__8JquwLopp8(value: RecordValue): U256__8JquwLopp8 {
+export function toU256__8JquwLopp8(value: StructValue): U256__8JquwLopp8 {
   return {
-    hi: value.fields.hi?.value as bigint ?? 0n,
-    lo: value.fields.lo?.value as bigint ?? 0n,
+    hi: value.hi as bigint ?? 0n,
+    lo: value.lo as bigint ?? 0n,
   }
 }
 
@@ -38,16 +38,16 @@ export interface SwapRequest {
   deadline: number
 }
 
-export function toSwapRequest(value: RecordValue): SwapRequest {
+export function toSwapRequest(value: StructValue): SwapRequest {
   return {
-    pool: litStr(value.fields.pool?.value, 'field') ?? '',
-    zero_for_one: value.fields.zero_for_one?.value as boolean ?? false,
-    amount_in: value.fields.amount_in?.value as bigint ?? 0n,
-    amount_out_min: value.fields.amount_out_min?.value as bigint ?? 0n,
-    sqrt_price_limit: value.fields.sqrt_price_limit?.value as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
-    recipient: value.fields.recipient?.value as string ?? '',
-    nonce: value.fields.nonce?.value as bigint ?? 0n,
-    deadline: Number((value.fields.deadline?.value ?? 0n) as bigint) ?? 0,
+    pool: litStr(value.pool, 'field') ?? '',
+    zero_for_one: value.zero_for_one as boolean ?? false,
+    amount_in: value.amount_in as bigint ?? 0n,
+    amount_out_min: value.amount_out_min as bigint ?? 0n,
+    sqrt_price_limit: value.sqrt_price_limit as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
+    recipient: value.recipient as string ?? '',
+    nonce: value.nonce as bigint ?? 0n,
+    deadline: Number((value.deadline ?? 0n) as bigint) ?? 0,
   }
 }
 
@@ -57,11 +57,11 @@ export interface SwapHop {
   sqrt_price_limit: U256__8JquwLopp8
 }
 
-export function toSwapHop(value: RecordValue): SwapHop {
+export function toSwapHop(value: StructValue): SwapHop {
   return {
-    pool: litStr(value.fields.pool?.value, 'field') ?? '',
-    zero_for_one: value.fields.zero_for_one?.value as boolean ?? false,
-    sqrt_price_limit: value.fields.sqrt_price_limit?.value as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
+    pool: litStr(value.pool, 'field') ?? '',
+    zero_for_one: value.zero_for_one as boolean ?? false,
+    sqrt_price_limit: value.sqrt_price_limit as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
   }
 }
 
@@ -80,20 +80,20 @@ export interface SwapMultiHopRequest {
   caller: string
 }
 
-export function toSwapMultiHopRequest(value: RecordValue): SwapMultiHopRequest {
+export function toSwapMultiHopRequest(value: StructValue): SwapMultiHopRequest {
   return {
-    token_in: litStr(value.fields.token_in?.value, 'field') ?? '',
-    token_out: litStr(value.fields.token_out?.value, 'field') ?? '',
-    amount_in: value.fields.amount_in?.value as bigint ?? 0n,
-    amount_out_min: value.fields.amount_out_min?.value as bigint ?? 0n,
-    recipient: value.fields.recipient?.value as string ?? '',
-    hop0: value.fields.hop0?.value as unknown as SwapHop ?? {} as unknown as SwapHop,
-    hop1: value.fields.hop1?.value as unknown as SwapHop ?? {} as unknown as SwapHop,
-    hop2: value.fields.hop2?.value as unknown as SwapHop ?? {} as unknown as SwapHop,
-    hop_count: Number((value.fields.hop_count?.value ?? 0n) as bigint) ?? 0,
-    nonce: value.fields.nonce?.value as bigint ?? 0n,
-    deadline: Number((value.fields.deadline?.value ?? 0n) as bigint) ?? 0,
-    caller: value.fields.caller?.value as string ?? '',
+    token_in: litStr(value.token_in, 'field') ?? '',
+    token_out: litStr(value.token_out, 'field') ?? '',
+    amount_in: value.amount_in as bigint ?? 0n,
+    amount_out_min: value.amount_out_min as bigint ?? 0n,
+    recipient: value.recipient as string ?? '',
+    hop0: value.hop0 as unknown as SwapHop ?? {} as unknown as SwapHop,
+    hop1: value.hop1 as unknown as SwapHop ?? {} as unknown as SwapHop,
+    hop2: value.hop2 as unknown as SwapHop ?? {} as unknown as SwapHop,
+    hop_count: Number((value.hop_count ?? 0n) as bigint) ?? 0,
+    nonce: value.nonce as bigint ?? 0n,
+    deadline: Number((value.deadline ?? 0n) as bigint) ?? 0,
+    caller: value.caller as string ?? '',
   }
 }
 
@@ -109,17 +109,17 @@ export interface MintPositionRequest {
   tick_upper_hint: number
 }
 
-export function toMintPositionRequest(value: RecordValue): MintPositionRequest {
+export function toMintPositionRequest(value: StructValue): MintPositionRequest {
   return {
-    pool: litStr(value.fields.pool?.value, 'field') ?? '',
-    tick_lower: Number((value.fields.tick_lower?.value ?? 0n) as bigint) ?? 0,
-    tick_upper: Number((value.fields.tick_upper?.value ?? 0n) as bigint) ?? 0,
-    amount0_desired: value.fields.amount0_desired?.value as bigint ?? 0n,
-    amount1_desired: value.fields.amount1_desired?.value as bigint ?? 0n,
-    amount0_min: value.fields.amount0_min?.value as bigint ?? 0n,
-    amount1_min: value.fields.amount1_min?.value as bigint ?? 0n,
-    tick_lower_hint: Number((value.fields.tick_lower_hint?.value ?? 0n) as bigint) ?? 0,
-    tick_upper_hint: Number((value.fields.tick_upper_hint?.value ?? 0n) as bigint) ?? 0,
+    pool: litStr(value.pool, 'field') ?? '',
+    tick_lower: Number((value.tick_lower ?? 0n) as bigint) ?? 0,
+    tick_upper: Number((value.tick_upper ?? 0n) as bigint) ?? 0,
+    amount0_desired: value.amount0_desired as bigint ?? 0n,
+    amount1_desired: value.amount1_desired as bigint ?? 0n,
+    amount0_min: value.amount0_min as bigint ?? 0n,
+    amount1_min: value.amount1_min as bigint ?? 0n,
+    tick_lower_hint: Number((value.tick_lower_hint ?? 0n) as bigint) ?? 0,
+    tick_upper_hint: Number((value.tick_upper_hint ?? 0n) as bigint) ?? 0,
   }
 }
 
@@ -128,10 +128,10 @@ export interface MerkleProof {
   leaf_index: number
 }
 
-export function toMerkleProof(value: RecordValue): MerkleProof {
+export function toMerkleProof(value: StructValue): MerkleProof {
   return {
-    siblings: ((value.fields.siblings?.value ?? []) as PlaintextValue[]).map((el) => litStr(el, 'field')) as string[] ?? [],
-    leaf_index: Number((value.fields.leaf_index?.value ?? 0n) as bigint) ?? 0,
+    siblings: ((value.siblings ?? []) as PlaintextValue[]).map((el) => litStr(el, 'field')) as string[] ?? [],
+    leaf_index: Number((value.leaf_index ?? 0n) as bigint) ?? 0,
   }
 }
 
@@ -142,12 +142,12 @@ export interface PoolState {
   enabled: boolean
 }
 
-export function toPoolState(value: RecordValue): PoolState {
+export function toPoolState(value: StructValue): PoolState {
   return {
-    token0: litStr(value.fields.token0?.value, 'field') ?? '',
-    token1: litStr(value.fields.token1?.value, 'field') ?? '',
-    fee: Number((value.fields.fee?.value ?? 0n) as bigint) ?? 0,
-    enabled: value.fields.enabled?.value as boolean ?? false,
+    token0: litStr(value.token0, 'field') ?? '',
+    token1: litStr(value.token1, 'field') ?? '',
+    fee: Number((value.fee ?? 0n) as bigint) ?? 0,
+    enabled: value.enabled as boolean ?? false,
   }
 }
 
@@ -166,20 +166,20 @@ export interface Slot {
   next_init_above: number
 }
 
-export function toSlot(value: RecordValue): Slot {
+export function toSlot(value: StructValue): Slot {
   return {
-    tick: Number((value.fields.tick?.value ?? 0n) as bigint) ?? 0,
-    tick_spacing: Number((value.fields.tick_spacing?.value ?? 0n) as bigint) ?? 0,
-    sqrt_price: value.fields.sqrt_price?.value as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
-    fee_protocol: Number((value.fields.fee_protocol?.value ?? 0n) as bigint) ?? 0,
-    liquidity: value.fields.liquidity?.value as bigint ?? 0n,
-    fee_growth_global0_x_128: value.fields.fee_growth_global0_x_128?.value as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
-    fee_growth_global1_x_128: value.fields.fee_growth_global1_x_128?.value as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
-    max_liquidity_per_tick: value.fields.max_liquidity_per_tick?.value as bigint ?? 0n,
-    protocol_fees0: value.fields.protocol_fees0?.value as bigint ?? 0n,
-    protocol_fees1: value.fields.protocol_fees1?.value as bigint ?? 0n,
-    next_init_below: Number((value.fields.next_init_below?.value ?? 0n) as bigint) ?? 0,
-    next_init_above: Number((value.fields.next_init_above?.value ?? 0n) as bigint) ?? 0,
+    tick: Number((value.tick ?? 0n) as bigint) ?? 0,
+    tick_spacing: Number((value.tick_spacing ?? 0n) as bigint) ?? 0,
+    sqrt_price: value.sqrt_price as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
+    fee_protocol: Number((value.fee_protocol ?? 0n) as bigint) ?? 0,
+    liquidity: value.liquidity as bigint ?? 0n,
+    fee_growth_global0_x_128: value.fee_growth_global0_x_128 as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
+    fee_growth_global1_x_128: value.fee_growth_global1_x_128 as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
+    max_liquidity_per_tick: value.max_liquidity_per_tick as bigint ?? 0n,
+    protocol_fees0: value.protocol_fees0 as bigint ?? 0n,
+    protocol_fees1: value.protocol_fees1 as bigint ?? 0n,
+    next_init_below: Number((value.next_init_below ?? 0n) as bigint) ?? 0,
+    next_init_above: Number((value.next_init_above ?? 0n) as bigint) ?? 0,
   }
 }
 
@@ -194,16 +194,16 @@ export interface Tick {
   next: number
 }
 
-export function toTick(value: RecordValue): Tick {
+export function toTick(value: StructValue): Tick {
   return {
-    pool: litStr(value.fields.pool?.value, 'field') ?? '',
-    liquidity_net: value.fields.liquidity_net?.value as bigint ?? 0n,
-    liquidity_gross: value.fields.liquidity_gross?.value as bigint ?? 0n,
-    tick: Number((value.fields.tick?.value ?? 0n) as bigint) ?? 0,
-    fee_growth_outside0_x_128: value.fields.fee_growth_outside0_x_128?.value as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
-    fee_growth_outside1_x_128: value.fields.fee_growth_outside1_x_128?.value as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
-    prev: Number((value.fields.prev?.value ?? 0n) as bigint) ?? 0,
-    next: Number((value.fields.next?.value ?? 0n) as bigint) ?? 0,
+    pool: litStr(value.pool, 'field') ?? '',
+    liquidity_net: value.liquidity_net as bigint ?? 0n,
+    liquidity_gross: value.liquidity_gross as bigint ?? 0n,
+    tick: Number((value.tick ?? 0n) as bigint) ?? 0,
+    fee_growth_outside0_x_128: value.fee_growth_outside0_x_128 as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
+    fee_growth_outside1_x_128: value.fee_growth_outside1_x_128 as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
+    prev: Number((value.prev ?? 0n) as bigint) ?? 0,
+    next: Number((value.next ?? 0n) as bigint) ?? 0,
   }
 }
 
@@ -219,17 +219,17 @@ export interface Position {
   tokens_owed1: bigint
 }
 
-export function toPosition(value: RecordValue): Position {
+export function toPosition(value: StructValue): Position {
   return {
-    token_id: litStr(value.fields.token_id?.value, 'field') ?? '',
-    pool: litStr(value.fields.pool?.value, 'field') ?? '',
-    tick_lower: Number((value.fields.tick_lower?.value ?? 0n) as bigint) ?? 0,
-    tick_upper: Number((value.fields.tick_upper?.value ?? 0n) as bigint) ?? 0,
-    liquidity: value.fields.liquidity?.value as bigint ?? 0n,
-    fee_growth_inside0_last_x_128: value.fields.fee_growth_inside0_last_x_128?.value as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
-    fee_growth_inside1_last_x_128: value.fields.fee_growth_inside1_last_x_128?.value as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
-    tokens_owed0: value.fields.tokens_owed0?.value as bigint ?? 0n,
-    tokens_owed1: value.fields.tokens_owed1?.value as bigint ?? 0n,
+    token_id: litStr(value.token_id, 'field') ?? '',
+    pool: litStr(value.pool, 'field') ?? '',
+    tick_lower: Number((value.tick_lower ?? 0n) as bigint) ?? 0,
+    tick_upper: Number((value.tick_upper ?? 0n) as bigint) ?? 0,
+    liquidity: value.liquidity as bigint ?? 0n,
+    fee_growth_inside0_last_x_128: value.fee_growth_inside0_last_x_128 as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
+    fee_growth_inside1_last_x_128: value.fee_growth_inside1_last_x_128 as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
+    tokens_owed0: value.tokens_owed0 as bigint ?? 0n,
+    tokens_owed1: value.tokens_owed1 as bigint ?? 0n,
   }
 }
 
@@ -238,10 +238,10 @@ export interface PairKey {
   token1: string
 }
 
-export function toPairKey(value: RecordValue): PairKey {
+export function toPairKey(value: StructValue): PairKey {
   return {
-    token0: litStr(value.fields.token0?.value, 'field') ?? '',
-    token1: litStr(value.fields.token1?.value, 'field') ?? '',
+    token0: litStr(value.token0, 'field') ?? '',
+    token1: litStr(value.token1, 'field') ?? '',
   }
 }
 
@@ -254,14 +254,14 @@ export interface SwapIterCfg {
   slot_fg1: U256__8JquwLopp8
 }
 
-export function toSwapIterCfg(value: RecordValue): SwapIterCfg {
+export function toSwapIterCfg(value: StructValue): SwapIterCfg {
   return {
-    z: value.fields.z?.value as boolean ?? false,
-    lim: value.fields.lim?.value as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
-    fee_pips: Number((value.fields.fee_pips?.value ?? 0n) as bigint) ?? 0,
-    fee_protocol: Number((value.fields.fee_protocol?.value ?? 0n) as bigint) ?? 0,
-    slot_fg0: value.fields.slot_fg0?.value as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
-    slot_fg1: value.fields.slot_fg1?.value as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
+    z: value.z as boolean ?? false,
+    lim: value.lim as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
+    fee_pips: Number((value.fee_pips ?? 0n) as bigint) ?? 0,
+    fee_protocol: Number((value.fee_protocol ?? 0n) as bigint) ?? 0,
+    slot_fg0: value.slot_fg0 as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
+    slot_fg1: value.slot_fg1 as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
   }
 }
 
@@ -278,18 +278,18 @@ export interface SwapIterState {
   na: number
 }
 
-export function toSwapIterState(value: RecordValue): SwapIterState {
+export function toSwapIterState(value: StructValue): SwapIterState {
   return {
-    sp: value.fields.sp?.value as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
-    rem: value.fields.rem?.value as bigint ?? 0n,
-    out: value.fields.out?.value as bigint ?? 0n,
-    fg: value.fields.fg?.value as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
-    liq: value.fields.liq?.value as bigint ?? 0n,
-    tk: Number((value.fields.tk?.value ?? 0n) as bigint) ?? 0,
-    crossed: value.fields.crossed?.value as boolean ?? false,
-    pf: value.fields.pf?.value as bigint ?? 0n,
-    nb: Number((value.fields.nb?.value ?? 0n) as bigint) ?? 0,
-    na: Number((value.fields.na?.value ?? 0n) as bigint) ?? 0,
+    sp: value.sp as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
+    rem: value.rem as bigint ?? 0n,
+    out: value.out as bigint ?? 0n,
+    fg: value.fg as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
+    liq: value.liq as bigint ?? 0n,
+    tk: Number((value.tk ?? 0n) as bigint) ?? 0,
+    crossed: value.crossed as boolean ?? false,
+    pf: value.pf as bigint ?? 0n,
+    nb: Number((value.nb ?? 0n) as bigint) ?? 0,
+    na: Number((value.na ?? 0n) as bigint) ?? 0,
   }
 }
 
@@ -302,14 +302,14 @@ export interface SwapOutput {
   amount_remaining: bigint
 }
 
-export function toSwapOutput(value: RecordValue): SwapOutput {
+export function toSwapOutput(value: StructValue): SwapOutput {
   return {
-    recipient: value.fields.recipient?.value as string ?? '',
-    caller: value.fields.caller?.value as string ?? '',
-    token_in: litStr(value.fields.token_in?.value, 'field') ?? '',
-    token_out: litStr(value.fields.token_out?.value, 'field') ?? '',
-    amount_out: value.fields.amount_out?.value as bigint ?? 0n,
-    amount_remaining: value.fields.amount_remaining?.value as bigint ?? 0n,
+    recipient: value.recipient as string ?? '',
+    caller: value.caller as string ?? '',
+    token_in: litStr(value.token_in, 'field') ?? '',
+    token_out: litStr(value.token_out, 'field') ?? '',
+    amount_out: value.amount_out as bigint ?? 0n,
+    amount_remaining: value.amount_remaining as bigint ?? 0n,
   }
 }
 

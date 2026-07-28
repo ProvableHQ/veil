@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { RecordValue } from '@provablehq/veil-core'
+import type { RecordValue, StructValue } from '@provablehq/veil-core'
 import {
   PROGRAM_ID,
   toPositionNFT,
@@ -14,9 +14,9 @@ import {
 
 const ZERO = 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc'
 
-// U256 mapping values arrive as a decoded { hi, lo } struct (core's composite
-// plaintext parser yields plain objects with bigint members).
-const u256 = (hi: bigint, lo: bigint) => ({ value: { hi, lo }, mode: 'public' as const, type: { kind: 'struct' as const, path: ['U256__8JquwLopp8'] } })
+// U256 mapping values arrive as a decoded { hi, lo } struct (core's
+// parsePlaintextValue yields plain objects with bigint members).
+const u256 = (hi: bigint, lo: bigint) => ({ hi, lo })
 
 // PROGRAM_ID is the program the bindings target, stamped by codegen from the
 // ABI named in veil.config.json.
@@ -30,19 +30,14 @@ describe('PROGRAM_ID', () => {
 // Q128.128 U256 struct fields (sqrt_price, fee growth) that pass through as
 // { hi, lo } objects.
 describe('toSlot', () => {
-  const value: RecordValue = {
-    owner: ZERO,
-    program: 'shield_swap.aleo',
-    recordName: 'Slot',
-    nonce: '0group',
-    fields: {
-      tick: { value: -60n, mode: 'public', type: { kind: 'primitive', primitive: 'i32' } },
-      tick_spacing: { value: 60n, mode: 'public', type: { kind: 'primitive', primitive: 'u32' } },
-      sqrt_price: u256(1n, 0n),
-      liquidity: { value: 1000000n, mode: 'public', type: { kind: 'primitive', primitive: 'u128' } },
-      fee_growth_global0_x_128: u256(0n, 5n),
-      fee_growth_global1_x_128: u256(0n, 0n),
-    },
+  // Struct decoders take the plain StructValue parsePlaintextValue returns.
+  const value: StructValue = {
+    tick: -60n,
+    tick_spacing: 60n,
+    sqrt_price: u256(1n, 0n),
+    liquidity: 1000000n,
+    fee_growth_global0_x_128: u256(0n, 5n),
+    fee_growth_global1_x_128: u256(0n, 0n),
   }
 
   it('decodes i32/u32 as number, u128 as bigint, and U256 as a {hi,lo} struct', () => {
@@ -58,17 +53,11 @@ describe('toSlot', () => {
 })
 
 describe('toPoolState', () => {
-  const value: RecordValue = {
-    owner: ZERO,
-    program: 'shield_swap.aleo',
-    recordName: 'PoolState',
-    nonce: '0group',
-    fields: {
-      token0: { value: '11field', mode: 'public', type: { kind: 'primitive', primitive: 'field' } },
-      token1: { value: '22field', mode: 'public', type: { kind: 'primitive', primitive: 'field' } },
-      fee: { value: 3000n, mode: 'public', type: { kind: 'primitive', primitive: 'u16' } },
-      enabled: { value: true, mode: 'public', type: { kind: 'primitive', primitive: 'boolean' } },
-    },
+  const value: StructValue = {
+    token0: '11field',
+    token1: '22field',
+    fee: 3000n,
+    enabled: true,
   }
 
   it('decodes field→string, u16→number, bool→boolean; carries no scale fields', () => {

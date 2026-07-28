@@ -20,10 +20,10 @@ export interface U256__8JquwLopp8 {
   lo: bigint
 }
 
-export function toU256__8JquwLopp8(value: RecordValue): U256__8JquwLopp8 {
+export function toU256__8JquwLopp8(value: StructValue): U256__8JquwLopp8 {
   return {
-    hi: value.fields.hi?.value as bigint ?? 0n,
-    lo: value.fields.lo?.value as bigint ?? 0n,
+    hi: value.hi as bigint ?? 0n,
+    lo: value.lo as bigint ?? 0n,
   }
 }
 
@@ -32,10 +32,10 @@ export interface MerkleProof {
   leaf_index: number
 }
 
-export function toMerkleProof(value: RecordValue): MerkleProof {
+export function toMerkleProof(value: StructValue): MerkleProof {
   return {
-    siblings: ((value.fields.siblings?.value ?? []) as PlaintextValue[]).map((el) => litStr(el, 'field')) as string[] ?? [],
-    leaf_index: Number((value.fields.leaf_index?.value ?? 0n) as bigint) ?? 0,
+    siblings: ((value.siblings ?? []) as PlaintextValue[]).map((el) => litStr(el, 'field')) as string[] ?? [],
+    leaf_index: Number((value.leaf_index ?? 0n) as bigint) ?? 0,
   }
 }
 
