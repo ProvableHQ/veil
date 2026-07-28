@@ -24,6 +24,15 @@ describe('parseValue', () => {
     expect(parseValue(addr)).toEqual({ value: addr, type: 'address' })
   })
 
+  it('parses signature values', () => {
+    const sig = 'sign1nnrfycmcnrtnfyyxtx87mfw6cd6r82p22vs2gwvkxqqvpe0jyqqzk5zqy'
+    expect(parseValue(sig)).toEqual({ value: sig, type: 'signature' })
+  })
+
+  it('does not parse identifier literals — bare tokens stay unrecognized', () => {
+    expect(() => parseValue('some_identifier')).toThrow('Cannot parse value: some_identifier')
+  })
+
   it('throws on unrecognized formats', () => {
     expect(() => parseValue('unknown')).toThrow('Cannot parse value: unknown')
   })

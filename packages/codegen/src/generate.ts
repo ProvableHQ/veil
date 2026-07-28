@@ -354,12 +354,21 @@ function generateMappingType(mapping: Mapping): string[] {
 }
 
 // True when the mapping's value decodes through core's strict parseValue —
-// the literal types its grammar covers. Signature/identifier literals and
-// composite values fall back to parsePlaintextValue.
+// the literal types its grammar covers. Identifier literals (bare tokens
+// with no recognizable shape) and composite values fall back to
+// parsePlaintextValue.
 function mappingValueUsesParseValue(value: Plaintext): boolean {
   if (value.kind !== 'primitive') return false
   const p = value.primitive
-  return isIntPrimitive(p) || p === 'boolean' || p === 'address' || p === 'field' || p === 'group' || p === 'scalar'
+  return (
+    isIntPrimitive(p) ||
+    p === 'boolean' ||
+    p === 'address' ||
+    p === 'signature' ||
+    p === 'field' ||
+    p === 'group' ||
+    p === 'scalar'
+  )
 }
 
 // Decoder from a raw mapping value (Aleo plaintext string) to the typed
@@ -405,8 +414,8 @@ function generateMappingDecoder(mapping: Mapping): string[] {
       lines.push(`  return parsed.value as ${primitiveToTsType(p)}`)
     }
   } else {
-    // Signature/identifier literals, arrays, and optionals sit outside
-    // parseValue's grammar — decode leniently with the field conversions.
+    // Identifier literals, arrays, and optionals sit outside parseValue's
+    // grammar — decode leniently with the field conversions.
     lines.push(`  const value = parsePlaintextValue(raw)`)
     lines.push(`  return ${plaintextFieldExpr('value', mapping.value)}`)
   }
