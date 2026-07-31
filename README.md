@@ -298,9 +298,9 @@ flowchart LR
 ```
 
 A liquidity position is a range order: deposit into a chosen price range with
-`mint()`, earn fees while the pool price sits inside that range, and withdraw
-in two steps — `decreaseLiquidity()` credits the tokens, `collect()` transfers
-them:
+`mint()`, earn fees while the pool price sits inside that range, and grow the
+position at any point with `increaseLiquidity()`. Withdrawing is two steps —
+`decreaseLiquidity()` credits the tokens, `collect()` transfers them:
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {
@@ -312,13 +312,13 @@ them:
   "fontSize": "13px"
 }}}%%
 flowchart LR
-  A["<b>Open a position</b><br/>position = mint(pool,<br/>range, amounts)"]
-  A --> B["<b>Watch it</b><br/>getOwnedPositions()"]
-  B --> C["<b>In range: earning fees<br/>Out of range: idle</b>"]
-  C --> D["<b>Adjust anytime</b><br/>increaseLiquidity /<br/>decreaseLiquidity"]
+  A["<b>Open a position</b><br/>position = mint(pool,<br/>range, amounts)<br/>// deposit both tokens"]
+  A --> B["<b>Watch it</b><br/>positions = getOwnedPositions()"]
+  B --> C["<b>Earn fees</b><br/>// in range: earning<br/>// out of range: idle"]
+  C --> D["<b>Adjust anytime</b><br/>increaseLiquidity(position, amounts)<br/>decreaseLiquidity(position, share)"]
   D --> C
-  C --> E["<b>Collect earnings</b><br/>collect()<br/>// fees + withdrawn tokens"]
-  E --> F["<b>Close it out</b><br/>burn()"]
+  C --> E["<b>Collect earnings</b><br/>collect(position)<br/>// fees + withdrawn tokens"]
+  E --> F["<b>Close it out</b><br/>burn(position)"]
 ```
 
 The SDK surface, record handling, and multi-hop variants are documented in
