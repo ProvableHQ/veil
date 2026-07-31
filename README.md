@@ -290,11 +290,11 @@ the call returns, then claim:
 }}}%%
 flowchart LR
   A["<b>Create a client</b><br/>client = createAleoClient({ privateKey })<br/>.extend(shieldSwapActions())"]
-  A --> B["<b>Find a pool</b><br/>pool = getPool(tokenA,<br/>tokenB, fee)"]
-  B --> C["<b>Quote it</b><br/>route = api.getRoute(in, out)<br/>// estimate becomes expectedOut"]
-  C --> D["<b>Swap privately</b><br/>handle = swap(pool, amountIn,<br/>expectedOut, slippage)"]
+  A --> B["<b>Find a pool</b><br/>pool = client.getPool(tokenA,<br/>tokenB, fee)"]
+  B --> C["<b>Quote it</b><br/>route = client.api.getRoute(in, out)<br/>// estimate becomes expectedOut"]
+  C --> D["<b>Swap privately</b><br/>handle = client.swap(pool, amountIn,<br/>expectedOut, slippage)"]
   D --> E["<b>Save the SwapHandle</b><br/>save(handle)<br/>// the only key to the payout"]
-  E --> F["<b>Claim the payout</b><br/>claimSwapOutput(handle)<br/>// tokens land in your wallet"]
+  E --> F["<b>Claim the payout</b><br/>client.claimSwapOutput(handle)<br/>// tokens land in your wallet"]
 ```
 
 A liquidity position is a range order: deposit into a chosen price range with
@@ -312,13 +312,13 @@ position at any point with `increaseLiquidity()`. Withdrawing is two steps —
   "fontSize": "13px"
 }}}%%
 flowchart LR
-  A["<b>Open a position</b><br/>position = mint(pool,<br/>range, amounts)<br/>// deposit both tokens"]
-  A --> B["<b>Watch it</b><br/>positions = getOwnedPositions()"]
+  A["<b>Open a position</b><br/>position = client.mint(pool,<br/>range, amounts)<br/>// deposit both tokens"]
+  A --> B["<b>Watch it</b><br/>positions = client.getOwnedPositions()"]
   B --> C["<b>Earn fees</b><br/>// in range: earning<br/>// out of range: idle"]
-  C --> D["<b>Adjust anytime</b><br/>increaseLiquidity(position, amounts)<br/>decreaseLiquidity(position, share)"]
+  C --> D["<b>Adjust anytime</b><br/>client.increaseLiquidity(position, amounts)<br/>client.decreaseLiquidity(position, share)"]
   D --> C
-  C --> E["<b>Collect earnings</b><br/>collect(position)<br/>// fees + withdrawn tokens"]
-  E --> F["<b>Close it out</b><br/>burn(position)"]
+  C --> E["<b>Collect earnings</b><br/>client.collect(position)<br/>// fees + withdrawn tokens"]
+  E --> F["<b>Close it out</b><br/>client.burn(position)"]
 ```
 
 The SDK surface, record handling, and multi-hop variants are documented in
