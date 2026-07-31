@@ -295,13 +295,11 @@ configured with the following (reference:
   "fontSize": "13px"
 }}}%%
 flowchart LR
-  K["<b>Aleo key(s)</b><br/>privateKey<br/>// swapping + positions"]
-  API["<b>Endpoints + credentials</b><br/>networkUrl, api.baseUrl<br/>consumerId, apiKey"]
-  P["<b>Private data services (optional)</b><br/>provingMode = 'delegated', proverUrl<br/>records = createRemoteScanner(...)"]
-  K --> CL["<b>Compose the client</b><br/>client = createAleoClient({ ... })<br/>.extend(shieldSwapActions({ api }))"]
-  API --> CL
-  P --> CL
-  CL --> AUTH["<b>Authenticate the DEX API</b><br/>client.authenticateApi()<br/>// unlocks routes, positions, candles"]
+  A["<b>Register with the Provable API</b><br/>POST api.provable.com/consumers<br/>// one-time: consumerId + apiKey"]
+  A --> B["<b>Load the network</b><br/>aleo = loadNetwork('testnet')"]
+  B --> C["<b>Point at private data services</b><br/>scanner = aleo.createRemoteScanner({<br/>url, consumerId, apiKey })<br/>// optional: finds your records"]
+  C --> D["<b>Compose the client</b><br/>client = aleo.createAleoClient({ privateKey,<br/>provingMode: 'delegated', records: scanner })<br/>.extend(shieldSwapActions({ api }))"]
+  D --> E["<b>Authenticate the DEX API</b><br/>client.authenticateApi()<br/>// unlocks routes, positions, candles"]
 ```
 
 Configured once, two lifecycles cover most integrations.
