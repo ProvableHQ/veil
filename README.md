@@ -272,8 +272,39 @@ routes, and route discovery.
 ## Trading on Shield Swap
 
 `@provablehq/shield-swap-sdk` adds the Shield Swap DEX to any Veil client —
-private swaps and concentrated-liquidity positions on `shield_swap.aleo`. Two
-lifecycles cover most integrations.
+private swaps and concentrated-liquidity positions on `shield_swap.aleo`.
+
+To work with Shield Swap, one of the SDK clients above must be chosen and
+configured with the following (reference:
+[Setup](./packages/shield-swap/README.md#setup)):
+
+- **Aleo key(s)** — one or more Aleo keys used for swapping and/or liquidity
+  position management.
+- **API endpoints and credentials** — the Shield Swap API and Provable API
+  endpoints plus their access keys.
+- **Private data services (optional)** — registration with the private
+  Provable proving and record-scanning services.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {
+  "primaryColor": "#ffe6f2",
+  "primaryTextColor": "#3d1029",
+  "primaryBorderColor": "#ff007a",
+  "lineColor": "#ff007a",
+  "edgeLabelBackground": "#fff0f7",
+  "fontSize": "13px"
+}}}%%
+flowchart LR
+  K["<b>Aleo key(s)</b><br/>privateKey<br/>// swapping + positions"]
+  API["<b>Endpoints + credentials</b><br/>networkUrl, api.baseUrl<br/>consumerId, apiKey"]
+  P["<b>Private data services (optional)</b><br/>provingMode = 'delegated', proverUrl<br/>records = createRemoteScanner(...)"]
+  K --> CL["<b>Compose the client</b><br/>client = createAleoClient({ ... })<br/>.extend(shieldSwapActions({ api }))"]
+  API --> CL
+  P --> CL
+  CL --> AUTH["<b>Authenticate the DEX API</b><br/>client.authenticateApi()<br/>// unlocks routes, positions, candles"]
+```
+
+Configured once, two lifecycles cover most integrations.
 
 A private swap pays out to a single-use blinded address, and the `SwapHandle`
 returned by `swap()` is the only key to that payout — persist it the moment
