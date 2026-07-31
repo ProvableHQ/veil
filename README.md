@@ -269,6 +269,64 @@ chains bridge in → DEX swap → bridge out. See
 [`packages/bridge/README.md`](./packages/bridge/README.md) for providers,
 routes, and route discovery.
 
+## Trading on Shield Swap
+
+`@provablehq/shield-swap-sdk` adds the Shield Swap DEX to any Veil client —
+private swaps and concentrated-liquidity positions on `shield_swap.aleo`. Two
+lifecycles cover most integrations.
+
+A private swap pays out to a single-use blinded address, and the `SwapHandle`
+returned by `swap()` is the only key to that payout — persist it the moment
+the call returns, then claim:
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {
+  "primaryColor": "#ffe6f2",
+  "primaryTextColor": "#3d1029",
+  "primaryBorderColor": "#ff007a",
+  "lineColor": "#ff007a",
+  "edgeLabelBackground": "#fff0f7",
+  "fontSize": "13px"
+}}}%%
+flowchart LR
+  A["<b>Create a client</b><br/>client = createAleoClient({ privateKey })<br/>.extend(shieldSwapActions())"]
+  A --> B["<b>Find a pool</b><br/>pool = getPool(tokenA,<br/>tokenB, fee)"]
+  B --> C["<b>Quote it</b><br/>route = api.getRoute(in, out)<br/>// estimate becomes expectedOut"]
+  C --> D["<b>Swap privately</b><br/>handle = swap(pool, amountIn,<br/>expectedOut, slippage)"]
+  D --> E["<b>Save the SwapHandle</b><br/>save(handle)<br/>// the only key to the payout"]
+  E --> F["<b>Claim the payout</b><br/>claimSwapOutput(handle)<br/>// tokens land in your wallet"]
+```
+
+A liquidity position is a range order: deposit into a chosen price range with
+`mint()`, earn fees while the pool price sits inside that range, and withdraw
+in two steps — `decreaseLiquidity()` credits the tokens, `collect()` transfers
+them:
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {
+  "primaryColor": "#ffe6f2",
+  "primaryTextColor": "#3d1029",
+  "primaryBorderColor": "#ff007a",
+  "lineColor": "#ff007a",
+  "edgeLabelBackground": "#fff0f7",
+  "fontSize": "13px"
+}}}%%
+flowchart LR
+  A["<b>Open a position</b><br/>position = mint(pool,<br/>range, amounts)"]
+  A --> B["<b>Watch it</b><br/>getOwnedPositions()"]
+  B --> C["<b>In range: earning fees<br/>Out of range: idle</b>"]
+  C --> D["<b>Adjust anytime</b><br/>increaseLiquidity /<br/>decreaseLiquidity"]
+  D --> C
+  C --> E["<b>Collect earnings</b><br/>collect()<br/>// fees + withdrawn tokens"]
+  E --> F["<b>Close it out</b><br/>burn()"]
+```
+
+The SDK surface, record handling, and multi-hop variants are documented in
+[`packages/shield-swap/README.md`](./packages/shield-swap/README.md); for
+runnable end-to-end runbooks (account bootstrap, airdrop, every trading flow),
+start from
+[`packages/shield-swap/skills/SKILL.md`](./packages/shield-swap/skills/SKILL.md).
+
 ## Agent Usage
 
 veil is designed for two audiences equally: human developers who write code against the TypeScript library, and AI agents that either write code using viem patterns or call tools directly.
