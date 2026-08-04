@@ -6,10 +6,10 @@ import type { Client } from '@provablehq/veil-core'
 import {
   memoryBlindedIdentityStore,
   recordBlindedSwap,
-  reserveBlindedIdentity,
-  syncBlindedIdentities,
   type BlindedIdentityRecord,
 } from '../../../src/utils/blinding/store.js'
+import { reserveBlindedIdentity } from '../../../src/actions/blinding/reserveBlindedIdentity.js'
+import { syncBlindedIdentities } from '../../../src/actions/blinding/syncBlindedIdentities.js'
 import { fileBlindedIdentityStore } from '../../../src/node.js'
 
 const ADDRESS_A = 'aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px'

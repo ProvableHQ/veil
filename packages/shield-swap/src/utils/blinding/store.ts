@@ -1,13 +1,4 @@
-import type { Client } from '@provablehq/veil-core'
-import { getSwapOutput } from '../../actions/reads/getSwapOutput.js'
-import { isBlindedAddressUsed } from '../../actions/reads/isBlindedAddressUsed.js'
-import { requireAccount } from '../guards.js'
-import {
-  deriveBlindedAddress,
-  deriveBlindingFactor,
-  viewKeyToScalar,
-  type BlindedIdentity,
-} from './identity.js'
+import type { BlindedIdentity } from './identity.js'
 
 /**
  * Lifecycle of a reserved blinded identity.
@@ -94,7 +85,7 @@ export function memoryBlindedIdentityStore(initial: BlindedIdentityRecord[] = []
  */
 const queues = new WeakMap<BlindedIdentityStore, Promise<unknown>>()
 
-function withStoreLock<T>(store: BlindedIdentityStore, fn: () => Promise<T>): Promise<T> {
+export function withStoreLock<T>(store: BlindedIdentityStore, fn: () => Promise<T>): Promise<T> {
   // Chain onto the prior holder's settlement, not its value, so one caller's
   // failure does not strand the queue.
   const next = (queues.get(store) ?? Promise.resolve()).then(fn, fn)
@@ -103,91 +94,6 @@ function withStoreLock<T>(store: BlindedIdentityStore, fn: () => Promise<T>): Pr
     next.catch(() => {}),
   )
   return next
-}
-
-/**
- * Parameters for {@link reserveBlindedIdentity}.
- *
- * @property store Where reservations are recorded.
- * @property program shield_swap program to derive and scan against. Defaults
- *   to `DEFAULT_PROGRAM` inside the derivation.
- * @property maxScan Counters to try before giving up. Defaults to 64.
- */
-export type ReserveBlindedIdentityParameters = {
-  store: BlindedIdentityStore
-  program?: string
-  maxScan?: number
-}
-
-/**
- * Reserves the next unused blinded identity for the client's account.
- *
- * Blinded addresses must be unique — the program asserts the address is absent
- * from `used_blinded_addresses` and reverts on finalize otherwise. Deriving on
- * demand from a chain read alone is unsafe under concurrency: two swaps read
- * the same "unused" counter and the second reverts. This closes that window by
- * recording each reservation before returning it and never handing out a
- * counter at or below one already stored.
- *
- * Cold start (an empty store) scans upward from counter 0 for the first
- * address the chain does not know, so a lost store costs reads rather than
- * correctness. With records present it moves monotonically from the highest
- * known counter, and still skips any address the chain already carries — which
- * is what recovers from a store that another process has moved past.
- *
- * Requires a local account. A wallet derives and tracks its own blinded
- * identities, and reserving on its behalf would desynchronize both sides.
- *
- * Hits the network (one mapping read per candidate counter) and writes to the
- * store.
- *
- * @param client A wallet client with a local account.
- * @param params Store, program override, and scan bound.
- * @returns The reserved record, status `reserved`.
- * @throws When the account is missing or not local, or when `maxScan`
- *   consecutive counters are all already used on chain.
- *
- * @example
- * const identity = await client.reserveBlindedIdentity()
- * const handle = await client.swap({ poolKey, tokenInId, amountIn, blindedIdentity: identity })
- * await client.recordBlindedSwap({ blindedAddress: identity.blindedAddress, swapId: handle.swapId! })
- */
-export async function reserveBlindedIdentity(
-  client: Client,
-  params: ReserveBlindedIdentityParameters,
-): Promise<BlindedIdentityRecord> {
-  const account = requireAccount(client, 'reserveBlindedIdentity')
-  if (account.type !== 'local' || !account.viewKey) {
-    throw new Error(
-      'reserveBlindedIdentity requires a local account — a connected wallet derives and tracks its own ' +
-        'blinded identities. Omit `blindedIdentity` and let the wallet supply one.',
-    )
-  }
-  const viewKeyScalar = await viewKeyToScalar(account.viewKey)
-  const maxScan = params.maxScan ?? 64
-
-  return withStoreLock(params.store, async () => {
-    const records = await params.store.load()
-    // Monotonic from the highest known counter, so a still-unconfirmed
-    // (`reserved`) identity is never handed out a second time. An empty store
-    // starts at 0 and lets the chain reads find the frontier.
-    const start = records.length ? Math.max(...records.map((r) => r.counter)) + 1 : 0
-
-    for (let counter = start; counter < start + maxScan; counter++) {
-      const blindingFactor = await deriveBlindingFactor(viewKeyScalar, counter, params.program)
-      const blindedAddress = await deriveBlindedAddress(blindingFactor, account.address, params.program)
-      if (await isBlindedAddressUsed(client, { address: blindedAddress, program: params.program })) continue
-
-      const record: BlindedIdentityRecord = { counter, blindingFactor, blindedAddress, status: 'reserved' }
-      await params.store.save([...records, record])
-      return record
-    }
-
-    throw new Error(
-      `No unused blinded address in counters ${start}…${start + maxScan - 1} for ${account.address}. ` +
-        'Pass a higher maxScan, or check that the store and the program match the account.',
-    )
-  })
 }
 
 /**
@@ -217,75 +123,5 @@ export async function recordBlindedSwap(
     await store.save(
       records.map((r) => (r.blindedAddress === params.blindedAddress ? { ...r, swapId: params.swapId } : r)),
     )
-  })
-}
-
-/**
- * Parameters for {@link syncBlindedIdentities}.
- *
- * @property store The store to reconcile.
- * @property program shield_swap program to read. Defaults to
- *   `DEFAULT_PROGRAM` inside the reads.
- */
-export type SyncBlindedIdentitiesParameters = {
-  store: BlindedIdentityStore
-  program?: string
-}
-
-/**
- * Reconciles stored reservations against the chain and promotes their statuses.
- *
- * A reservation is recorded before its swap is submitted, so the store leads
- * the chain. This settles the difference: an identity absent from
- * `used_blinded_addresses` stays `reserved` (its swap is unconfirmed, or was
- * never submitted); one present with its swap output still in `swap_outputs`
- * becomes `swapped`; one present whose output is gone becomes `claimed`.
- *
- * An identity with no `swapId` cannot be distinguished once consumed and is
- * reported `swapped` — see {@link recordBlindedSwap}. Already-`claimed`
- * records are terminal and are not re-read.
- *
- * Hits the network (up to two mapping reads per unsettled record) and writes
- * the reconciled set back to the store.
- *
- * @param client A Veil client whose transport can reach an Aleo node.
- * @param params Store and program override.
- * @returns The reconciled records.
- *
- * @example
- * const settled = await client.syncBlindedIdentities()
- * const claimable = settled.filter((r) => r.status === 'swapped')
- */
-export async function syncBlindedIdentities(
-  client: Client,
-  params: SyncBlindedIdentitiesParameters,
-): Promise<BlindedIdentityRecord[]> {
-  return withStoreLock(params.store, async () => {
-    const records = await params.store.load()
-    const reconciled: BlindedIdentityRecord[] = []
-
-    for (const record of records) {
-      if (record.status === 'claimed') {
-        reconciled.push(record)
-        continue
-      }
-      const used = await isBlindedAddressUsed(client, {
-        address: record.blindedAddress,
-        program: params.program,
-      })
-      if (!used) {
-        reconciled.push({ ...record, status: 'reserved' })
-        continue
-      }
-      // Consumed on chain. The swap output still being present means the
-      // proceeds are unclaimed; its absence means they were collected.
-      const output = record.swapId
-        ? await getSwapOutput(client, { swapId: record.swapId, program: params.program })
-        : null
-      reconciled.push({ ...record, status: record.swapId && output === null ? 'claimed' : 'swapped' })
-    }
-
-    await params.store.save(reconciled)
-    return reconciled
   })
 }

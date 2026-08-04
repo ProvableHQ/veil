@@ -64,14 +64,18 @@ export {
 // never handing out a counter whose swap has not settled.
 export {
   reserveBlindedIdentity,
-  recordBlindedSwap,
+  type ReserveBlindedIdentityParameters,
+} from './actions/blinding/reserveBlindedIdentity.js'
+export {
   syncBlindedIdentities,
+  type SyncBlindedIdentitiesParameters,
+} from './actions/blinding/syncBlindedIdentities.js'
+export {
+  recordBlindedSwap,
   memoryBlindedIdentityStore,
   type BlindedIdentityRecord,
   type BlindedIdentityStatus,
   type BlindedIdentityStore,
-  type ReserveBlindedIdentityParameters,
-  type SyncBlindedIdentitiesParameters,
 } from './utils/blinding/store.js'
 
 // The two-phase private swap: request → (chain computes) → claim.

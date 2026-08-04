@@ -70,11 +70,11 @@ import {
 import { getBalances, type GetBalancesParameters, type GetBalancesReturnType } from '../utils/balances.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hints.js'
 import { resolveDexImports, type ResolveDexImportsParameters } from '../utils/imports.js'
+import { reserveBlindedIdentity } from '../actions/blinding/reserveBlindedIdentity.js'
+import { syncBlindedIdentities } from '../actions/blinding/syncBlindedIdentities.js'
 import {
   memoryBlindedIdentityStore,
   recordBlindedSwap,
-  reserveBlindedIdentity,
-  syncBlindedIdentities,
   type BlindedIdentityRecord,
   type BlindedIdentityStore,
 } from '../utils/blinding/store.js'
