@@ -16,6 +16,16 @@ export const MIN_TICK = -400_000
 /** Highest tick the protocol accepts. */
 export const MAX_TICK = 400_000
 
+/**
+ * Ticks anchoring each end of a pool's initialized-tick list.
+ *
+ * One step beyond the usable range, so they are never valid position bounds —
+ * they exist so the list always has a predecessor and successor to link
+ * against, which is what makes an insert hint resolvable for any target.
+ */
+export const MIN_TICK_SENTINEL = MIN_TICK - 1
+export const MAX_TICK_SENTINEL = MAX_TICK + 1
+
 /** sqrt price at MIN_TICK — the contract's lower price bound. */
 export const MIN_SQRT_RATIO_X128 = 702075911466779181339691826087n
 /** sqrt price at MAX_TICK — the contract's upper price bound. */

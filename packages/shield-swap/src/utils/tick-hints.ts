@@ -1,6 +1,9 @@
 import type { Client } from '@provablehq/veil-core'
-import { getSlot } from '../actions/reads/getSlot.js'
-import { MIN_TICK } from './q128.js'
+import { getTick } from '../actions/reads/getTick.js'
+import { MIN_TICK_SENTINEL } from './q128.js'
+
+/** Bound on the tick-list walk, so a malformed list cannot loop forever. */
+const MAX_HINT_HOPS = 1024
 
 /**
  * Parameters for {@link pickInsertHint}.
@@ -25,34 +28,36 @@ export type PickInsertHintParameters = {
  * (`next_init_below`/`next_init_above`), which covers pools with few
  * initialized ticks around the current price.
  *
- * Known limitation (inherited from the Provable reference client): when
- * multiple initialized ticks lie between the slot's neighbors and the
- * target, this helper does not walk the list to the true predecessor, so the
- * hint returned is best-effort; a wrong hint makes the transaction revert on
- * the contract's assert — pick bounds closer to the active range or pass
- * explicit hints. An exact walk is now possible with {@link deriveTickKey}
- * (read each tick's `prev`/`next` by its derived key); wiring it in here is a
- * follow-up.
- *
- * Hits the network: one slot read.
+ * Returns the true predecessor, so the hint is accepted for any target rather
+ * than only for one near the active range. Hits the network once per
+ * initialized tick below the target — a handful of reads on live pools, since
+ * the list holds one entry per initialized tick, not per tick in range.
  *
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param params Pool and the target tick.
- * @returns The hint tick — the presumed predecessor of `targetTick`, or the
- *   MIN_TICK list anchor for an empty/unknown neighborhood.
+ * @returns The greatest initialized tick below `targetTick`, or
+ *   {@link MIN_TICK_SENTINEL} when nothing is initialized below it.
+ * @throws When the list holds no entry below the target within the hop bound,
+ *   which means the pool's tick list is malformed rather than merely deep.
  *
  * @example
+ * const poolKey = '…field'
  * const hint = await pickInsertHint(client, { poolKey, targetTick: -62400 })
+ * await client.mint({ poolKey, tickLower: -62400, tickUpper: -61200, tickLowerHint: hint, ... })
  */
 export async function pickInsertHint(client: Client, params: PickInsertHintParameters): Promise<number> {
-  const slot = await getSlot(client, { poolKey: params.poolKey, program: params.program })
-  if (!slot) return MIN_TICK
-
-  // The chain's Slot always carries both neighbors (the tick list is anchored
-  // at the MIN/MAX sentinels), so the values are used verbatim.
-  if (params.targetTick > slot.tick) {
-    if (slot.next_init_above < params.targetTick) return slot.next_init_above
-    return slot.next_init_below
+  // Walk the initialized-tick list from the MIN sentinel to the last entry
+  // below the target. The slot's own neighbours only bracket the *current*
+  // tick, so using them returns a tick above the target whenever the target
+  // sits further out than one entry — which the contract rejects on finalize.
+  let cursor = MIN_TICK_SENTINEL
+  for (let hops = 0; hops < MAX_HINT_HOPS; hops++) {
+    const tick = await getTick(client, { poolKey: params.poolKey, tick: cursor, program: params.program })
+    const next = tick?.next
+    if (next === undefined || next >= params.targetTick) return cursor
+    cursor = next
   }
-  return slot.next_init_below
+  throw new Error(
+    `Could not find an insert hint for tick ${params.targetTick} within ${MAX_HINT_HOPS} initialized ticks of pool ${params.poolKey}.`,
+  )
 }
