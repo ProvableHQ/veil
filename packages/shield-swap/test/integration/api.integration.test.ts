@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { loadNetwork, generateAccount } from '@provablehq/veil-aleo-sdk'
 import type { AnyAccount, Client } from '@provablehq/veil-core'
-import { ApiClient, ApiError, authenticateWithAccount } from '../../src/api/client.js'
+import { ApiClient, ApiError, authenticateWithAccount, SHIELD_SWAP_API_URLS } from '../../src/api/client.js'
 
 // Point at a local DEX API (e.g. the local-dex stack) with VEIL_DEX_API_URL.
-const API_OPTS = { baseUrl: process.env.VEIL_DEX_API_URL ?? 'https://amm-api-staging.dev.provable.com' }
+const API_OPTS = { baseUrl: process.env.VEIL_DEX_API_URL ?? SHIELD_SWAP_API_URLS.testnet }
 
 /**
  * Real-API integration: the whole read surface plus both auth flows against

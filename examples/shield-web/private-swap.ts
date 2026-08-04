@@ -36,7 +36,7 @@ import {
 } from '@provablehq/shield-swap-sdk'
 
 const NODE_URL = 'https://api.provable.com/v2' // Aleo node — chain reads
-const AMM_API_URL = 'https://amm-api.dev.provable.com' // Shield Swap indexer — pool discovery
+const AMM_API_URL = 'https://api.testnet.swap.shield.fi' // Shield Swap indexer — pool discovery
 
 /**
  * Connects the Shield web wallet and runs one private swap end to end.

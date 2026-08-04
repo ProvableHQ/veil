@@ -223,7 +223,9 @@ export {
   Q128,
   U256_MAX,
   MIN_TICK,
+  MIN_TICK_SENTINEL,
   MAX_TICK,
+  MAX_TICK_SENTINEL,
   MIN_SQRT_RATIO_X128,
   MAX_SQRT_RATIO_X128,
   toU256Parts,
@@ -238,6 +240,7 @@ export {
   feeGrowthInside,
   feeOwed,
   amountsForLiquidity,
+  liquidityForAmounts,
 } from './utils/q128.js'
 export {
   resolveTokenRoute,

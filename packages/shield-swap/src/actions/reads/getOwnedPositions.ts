@@ -193,10 +193,22 @@ export async function resolveOwnedPosition(
  * optional `@provablehq/sdk` peer for tick-key derivation. Records whose
  * plaintext a privacy-preserving wallet withholds are skipped.
  *
+ * The record scan and the mappings lag each other in both directions, and a
+ * `null` `state` is where that shows. Just after a mint the record arrives
+ * first, so the entry is real and its state is merely pending. Just after a
+ * burn the opposite holds: the record scanner marks records spent on its own
+ * schedule — measured still serving a burned position more than four minutes
+ * after the burn confirmed — so the entry is a position that no longer exists.
+ * The public mapping settles which it is, either through `state` here or
+ * `getPosition` directly, and a caller rendering a portfolio should treat a
+ * `null` state as "not a live position" rather than as a value still loading.
+ *
  * @param client A Veil wallet client with record access.
  * @param params Optional pool filter and program override.
  * @returns Every owned position — empty when the account holds none. Each
- *   entry's `state` is `null` while its mint has not finalized on chain.
+ *   entry's `state` is `null` when the public mapping carries no entry for it:
+ *   a mint that has not finalized, or a position already burned whose record
+ *   the scanner still serves.
  * @throws When the client has no record access, when tick-key derivation
  *   needs the missing `@provablehq/sdk` peer, and on transport errors.
  *

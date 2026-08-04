@@ -80,7 +80,7 @@ const { walletClient, account } = aleo.createAleoClient({
 })
 
 const client = walletClient.extend(
-  shieldSwapActions({ api: { baseUrl: 'https://amm-api.dev.provable.com' } }),
+  shieldSwapActions({ api: {} }),
 )
 ```
 
@@ -103,7 +103,7 @@ await adapter.connect(network, decryptPermission, {
 
 const { account, transport } = fromWalletAdapter(adapter)
 const client = createWalletClient({ account, transport }).extend(
-  shieldSwapActions({ api: { baseUrl: 'https://amm-api.dev.provable.com' } }),
+  shieldSwapActions({ api: {} }),
 )
 ```
 
@@ -406,6 +406,21 @@ story all match the single-hop flow (the local helper there is
 `deriveMultiHopSwapId`, and unlike the single-hop preimage it includes the
 deadline).
 
+Multi-hop swaps confirm more slowly than anything else in this SDK — one has
+been measured at 322 seconds, against a default confirmation window of 60. A
+client that submits them should say so at construction:
+
+```ts
+const { walletClient } = aleo.createAleoClient({ /* … */, confirmationTimeout: 400_000 })
+```
+
+Leave it at the default and a multi-hop swap that is merely slow reports
+`TransactionTimeoutError` and then confirms anyway — after which resubmitting
+earns a `DuplicateTransactionError`. The window is per client, so a client doing
+both liquidity writes and multi-hop swaps takes the longer value; check
+`error.absentPolls` against `error.polls` on a timeout to tell a transaction the
+node never had from one it simply had not confirmed yet.
+
 ## Liquidity
 
 Positions are concentrated-liquidity ranges, held as private records. Both
@@ -552,7 +567,17 @@ calculations (`view_amounts_for_liquidity`, fee-growth settlement) so a
 wallet or bot does not have to persist token ids or re-derive the math.
 `getOwnedPosition` resolves a single position by its token id. Both need
 record access (a connected wallet, or a local account with a record
-provider); each entry's `state` is `null` while a fresh mint finalizes.
+provider).
+
+An entry's `state` is `null` whenever the public mapping carries no entry for
+it, and that happens at both ends of a position's life. Just after a mint the
+record arrives before the mapping, so the position is real and its state is
+still landing. Just after a burn the reverse holds — the record scanner marks
+records spent on its own schedule, and has been measured still serving a burned
+position more than four minutes after the burn confirmed — so the entry is a
+position that no longer exists. Treat a `null` state as "not a live position"
+rather than as a value still loading, and read `getPosition` when the difference
+matters.
 
 ```ts
 const positions = await client.getOwnedPositions()

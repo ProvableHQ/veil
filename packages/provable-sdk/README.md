@@ -70,7 +70,7 @@ action packages the same way a wallet-backed client does:
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 
 const client = walletClient.extend(
-  shieldSwapActions({ api: { baseUrl: 'https://amm-api.dev.provable.com' } }),
+  shieldSwapActions({ api: {} }),
 )
 ```
 

@@ -97,8 +97,14 @@ transaction outputs; omit for account-less reads.
 
 - **Type:** `number`
 - **Optional**
-- **Default:** `300_000` (5 minutes)
+- **Default:** `60_000` (1 minute)
 
 Milliseconds `execute` waits for the submitted transaction to reach
 `accepted` before it throws a timeout error. A `rejected` confirmation
 throws immediately, without waiting out the timeout.
+
+The default covers a healthy confirmation with room to spare; a transaction
+still absent after a minute is more often one the node never included than one
+about to land, and waiting longer only delays the report. Raise it for a path
+known to be slower — multi-hop swaps have been measured at 322 seconds, so a
+client submitting them should set around `400_000`.

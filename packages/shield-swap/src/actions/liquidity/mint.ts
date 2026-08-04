@@ -5,7 +5,7 @@ import { tryLoadSdk } from '../../utils/sdk.js'
 import { derivePositionTokenId } from '../../utils/keys.js'
 import { requireFieldOutput } from '../../utils/outputs.js'
 import { roundTickToSpacing } from '../../utils/tick-math.js'
-import { pickInsertHint } from '../../utils/tick-hints.js'
+import { pickInsertHint, type PickInsertHintParameters } from '../../utils/tick-hints.js'
 import type { TokenRoute } from '../../utils/routing.js'
 import type { ProofProvider } from '../../utils/proofs.js'
 import { SHIELD_SWAP } from '../../constants.js'
@@ -54,6 +54,10 @@ import {
  * @property tickLowerHint Explicit insert hint. Defaults to
  *   `pickInsertHint` (best-effort — see its limitation).
  * @property tickUpperHint Explicit insert hint for the upper bound.
+ * @property initializedTicks The pool's initialized ticks, or a supplier for
+ *   them, forwarded to `pickInsertHint`. Only consulted when the WASM peer is
+ *   absent, where it replaces a best-effort guess with the exact predecessor;
+ *   `shieldSwapActions` supplies it from the configured API.
  * @property nonce Explicit field nonce. Defaults to crypto-random.
  * @property imports Program sources for dynamic-dispatch dependencies
  *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
@@ -82,6 +86,7 @@ export type MintParameters = {
   proofs?: ProofProvider
   tickLowerHint?: number
   tickUpperHint?: number
+  initializedTicks?: PickInsertHintParameters['initializedTicks']
   nonce?: string
   imports?: Record<string, string>
   program?: string
@@ -158,10 +163,15 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
     throw new Error(`Empty tick range after spacing alignment: [${tickLower}, ${tickUpper})`)
   }
 
+  // Spread rather than assigned, so `exactOptionalPropertyTypes` is satisfied
+  // when the caller supplied nothing.
+  const ticks = params.initializedTicks ? { initializedTicks: params.initializedTicks } : {}
   const tickLowerHint =
-    params.tickLowerHint ?? (await pickInsertHint(client, { poolKey: params.poolKey, targetTick: tickLower, program }))
+    params.tickLowerHint ??
+    (await pickInsertHint(client, { poolKey: params.poolKey, targetTick: tickLower, program, ...ticks }))
   const upperPredecessor =
-    params.tickUpperHint ?? (await pickInsertHint(client, { poolKey: params.poolKey, targetTick: tickUpper, program }))
+    params.tickUpperHint ??
+    (await pickInsertHint(client, { poolKey: params.poolKey, targetTick: tickUpper, program, ...ticks }))
   // The finalize inserts tick_lower before validating the upper hint, so when
   // no initialized tick sits between the bounds, the upper tick's predecessor
   // is the just-inserted lower tick — not the predecessor visible on chain.

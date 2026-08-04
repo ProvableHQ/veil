@@ -69,7 +69,7 @@ import {
 } from '../utils/records.js'
 import { getBalances, type GetBalancesParameters, type GetBalancesReturnType } from '../utils/balances.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hints.js'
-import { ApiClient, authenticateWithAccount, type ApiClientOptions } from '../api/client.js'
+import { ApiClient, authenticateWithAccount, defaultApiUrl, type ApiClientOptions } from '../api/client.js'
 
 /**
  * Configuration for {@link shieldSwapActions}.
@@ -162,12 +162,28 @@ export type ShieldSwapActions = {
  * const pools = await client.api.getPools()        // REST
  */
 export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
-  const api =
-    config.api instanceof ApiClient
-      ? config.api
-      : config.api
-        ? new ApiClient(config.api)
-        : undefined
+  /**
+   * Builds the API client for a specific chain client.
+   *
+   * Deferred until the decorator receives its client, because the DEX API is
+   * deployed per-network on separate hosts and only the client knows which
+   * network it reads. Resolved per request, so `switchChain` re-targets the API
+   * rather than leaving it on the network the client started from. An explicit
+   * `baseUrl` still wins.
+   */
+  const buildApi = (client: Client): ApiClient | undefined => {
+    if (config.api instanceof ApiClient) return config.api
+    if (!config.api) return undefined
+    return new ApiClient({
+      ...config.api,
+      // Applied after the spread and coalesced, so only a baseUrl that is
+      // actually set overrides the derived host. Spreading `config.api` last
+      // would let an explicit-but-undefined `baseUrl` — `process.env.X` with X
+      // unset — win, and the ApiClient would fall back to its deprecated
+      // testnet constant, silently pointing a mainnet client at testnet.
+      baseUrl: config.api.baseUrl ?? (() => defaultApiUrl(client.transport.config.network)),
+    })
+  }
 
   // Thread the client-level program default under any per-call override.
   const withProgram = <P extends { program?: string }>(p: P): P => ({ ...p, program: p.program ?? config.program })
@@ -183,42 +199,62 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     },
   })
 
-  return (client: Client): ShieldSwapActions => ({
-    getPool: (p) => getPool(client, withProgram(p)),
-    getSlot: (p) => getSlot(client, withProgram(p)),
-    getSwapOutput: (p) => getSwapOutput(client, withProgram(p)),
-    getPosition: (p) => getPosition(client, withProgram(p)),
-    getOwnedPositions: (p) => getOwnedPositions(client, withProgram(p ?? {})),
-    getOwnedPosition: (p) => getOwnedPosition(client, withProgram(p)),
-    getTick: (p) => getTick(client, withProgram(p) as GetTickParameters),
-    isBlindedAddressUsed: (p) => isBlindedAddressUsed(client, withProgram(p)),
-    isPoolInitialized: (p) => isPoolInitialized(client, withProgram(p)),
-    isFeeTierValid: (p) => isFeeTierValid(client, withProgram(p)),
-    isTickSpacingValid: (p) => isTickSpacingValid(client, withProgram(p)),
-    getFeeToTickSpacing: (p) => getFeeToTickSpacing(client, withProgram(p)),
-    isGlobalPaused: (p) => isGlobalPaused(client, withProgram(p ?? {})),
-    isPoolCreationOpen: (p) => isPoolCreationOpen(client, withProgram(p ?? {})),
-    isTokenAllowed: (p) => isTokenAllowed(client, withProgram(p)),
-    isTokenPaused: (p) => isTokenPaused(client, withProgram(p)),
-    isPairPaused: (p) => isPairPaused(client, withProgram(p)),
-    getFrozenPosition: (p) => getFrozenPosition(client, withProgram(p)),
-    getTradeControls: (p) => getTradeControls(client, withProgram(p)),
-    getPrivateBalances: (p) => getPrivateBalances(client, p),
-    getBalances: (p) => getBalances(client, api ?? missingApi, p),
-    pickInsertHint: (p) => pickInsertHint(client, withProgram(p)),
-    swap: (p) => swap(client, withProgram(p)),
-    claimSwapOutput: (p) => claimSwapOutput(client, p),
-    swapMultiHop: (p) => swapMultiHop(client, withProgram(p)),
-    createPool: (p) => createPool(client, withProgram(p)),
-    mint: (p) => mint(client, withProgram(p)),
-    increaseLiquidity: (p) => increaseLiquidity(client, withProgram(p)),
-    decreaseLiquidity: (p) => decreaseLiquidity(client, withProgram(p)),
-    collect: (p) => collect(client, withProgram(p)),
-    burn: (p) => burn(client, withProgram(p)),
-    authenticateShieldSwap: () => authenticateWithAccount(api ?? missingApi, client.account),
-    // Same function, not a wrapper: the two names must not drift while the
-    // deprecated one is still supported.
-    authenticateApi: () => authenticateWithAccount(api ?? missingApi, client.account),
-    api: api ?? missingApi,
-  })
+  return (client: Client): ShieldSwapActions => {
+    const api = buildApi(client)
+    // Supplied to every hint-deriving action so a caller without the WASM peer
+    // gets the exact predecessor from the API's tick list rather than a
+    // best-effort guess from the slot. Only consulted on that path, so a client
+    // with the peer never pays the request.
+    const withTicks = <P extends { poolKey: string; initializedTicks?: unknown }>(p: P): P => {
+      if (p.initializedTicks || !api) return p
+      // Shared across the action's hints rather than fetched per hint: `mint`
+      // derives two and would otherwise request the same list twice. A rejection
+      // is cached with it, so both hints fall back to the slot together instead
+      // of disagreeing about their source.
+      let inFlight: Promise<number[]> | undefined
+      return {
+        ...p,
+        initializedTicks: () =>
+          (inFlight ??= api.getInitializedTicks(p.poolKey).then((r) => r.data ?? [])),
+      }
+    }
+    return {
+      getPool: (p) => getPool(client, withProgram(p)),
+      getSlot: (p) => getSlot(client, withProgram(p)),
+      getSwapOutput: (p) => getSwapOutput(client, withProgram(p)),
+      getPosition: (p) => getPosition(client, withProgram(p)),
+      getOwnedPositions: (p) => getOwnedPositions(client, withProgram(p ?? {})),
+      getOwnedPosition: (p) => getOwnedPosition(client, withProgram(p)),
+      getTick: (p) => getTick(client, withProgram(p) as GetTickParameters),
+      isBlindedAddressUsed: (p) => isBlindedAddressUsed(client, withProgram(p)),
+      isPoolInitialized: (p) => isPoolInitialized(client, withProgram(p)),
+      isFeeTierValid: (p) => isFeeTierValid(client, withProgram(p)),
+      isTickSpacingValid: (p) => isTickSpacingValid(client, withProgram(p)),
+      getFeeToTickSpacing: (p) => getFeeToTickSpacing(client, withProgram(p)),
+      isGlobalPaused: (p) => isGlobalPaused(client, withProgram(p ?? {})),
+      isPoolCreationOpen: (p) => isPoolCreationOpen(client, withProgram(p ?? {})),
+      isTokenAllowed: (p) => isTokenAllowed(client, withProgram(p)),
+      isTokenPaused: (p) => isTokenPaused(client, withProgram(p)),
+      isPairPaused: (p) => isPairPaused(client, withProgram(p)),
+      getFrozenPosition: (p) => getFrozenPosition(client, withProgram(p)),
+      getTradeControls: (p) => getTradeControls(client, withProgram(p)),
+      getPrivateBalances: (p) => getPrivateBalances(client, p),
+      getBalances: (p) => getBalances(client, api ?? missingApi, p),
+      pickInsertHint: (p) => pickInsertHint(client, withTicks(withProgram(p))),
+      swap: (p) => swap(client, withProgram(p)),
+      claimSwapOutput: (p) => claimSwapOutput(client, p),
+      swapMultiHop: (p) => swapMultiHop(client, withProgram(p)),
+      createPool: (p) => createPool(client, withProgram(p)),
+      mint: (p) => mint(client, withTicks(withProgram(p))),
+      increaseLiquidity: (p) => increaseLiquidity(client, withTicks(withProgram(p))),
+      decreaseLiquidity: (p) => decreaseLiquidity(client, withProgram(p)),
+      collect: (p) => collect(client, withProgram(p)),
+      burn: (p) => burn(client, withProgram(p)),
+      authenticateShieldSwap: () => authenticateWithAccount(api ?? missingApi, client.account),
+      // Same function, not a wrapper: the two names must not drift while the
+      // deprecated one is still supported.
+      authenticateApi: () => authenticateWithAccount(api ?? missingApi, client.account),
+        api: api ?? missingApi,
+    }
+  }
 }

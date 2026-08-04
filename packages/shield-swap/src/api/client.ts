@@ -3,8 +3,44 @@ import type { components } from './openapi.js'
 
 type Schemas = components['schemas']
 
-/** The dev DEX API this client defaults to. */
-export const DEFAULT_API_URL = 'https://amm-api.dev.provable.com'
+/**
+ * The DEX API host serving each network.
+ *
+ * The deployment is per-network on separate domains, not one host with a network
+ * segment — so a default has to know which chain the caller is on. Pointing a
+ * testnet client at the mainnet host yields pools that do not exist on the
+ * program it reads, which fails as a missing pool rather than as a bad URL.
+ */
+export const SHIELD_SWAP_API_URLS = {
+  mainnet: 'https://api.swap.shield.fi',
+  testnet: 'https://api.testnet.swap.shield.fi',
+} as const
+
+/**
+ * Returns the DEX API host for a network.
+ *
+ * @param network Network the client reads, e.g. `'testnet'`. Anything other than
+ *   `'mainnet'` resolves to the testnet host, since that is where a devnode or
+ *   unnamed network's pools are indexed.
+ * @returns The API origin, without a trailing slash.
+ *
+ * @example
+ * new ApiClient({ baseUrl: defaultApiUrl('testnet') })
+ */
+export function defaultApiUrl(network: string | null | undefined): string {
+  return network === 'mainnet' ? SHIELD_SWAP_API_URLS.mainnet : SHIELD_SWAP_API_URLS.testnet
+}
+
+/**
+ * The DEX API a client defaults to when no network is known.
+ *
+ * @deprecated The API is per-network — use {@link defaultApiUrl} with the
+ *   client's network, or let `shieldSwapActions` derive it. This constant
+ *   previously pointed at `amm-api.dev.provable.com`, which indexes the
+ *   pre-migration `shield_swap_v3.aleo` and serves pools that do not exist on
+ *   `shield_swap.aleo`. Removed in the next major.
+ */
+export const DEFAULT_API_URL = SHIELD_SWAP_API_URLS.testnet
 
 /**
  * Options for {@link ApiClient}.
@@ -26,7 +62,7 @@ export const DEFAULT_API_URL = 'https://amm-api.dev.provable.com'
  *   re-authenticate.
  */
 export type ApiClientOptions = {
-  baseUrl?: string
+  baseUrl?: string | (() => string)
   fetch?: typeof fetch
   apiToken?: string
   autoReauthenticate?: boolean
@@ -84,7 +120,18 @@ function sessionTokenFrom(res: Response, body: unknown): string | undefined {
  * const route = await api.getRoute({ tokenIn, tokenOut, amountIn: 10n ** 18n })
  */
 export class ApiClient {
-  readonly baseUrl: string
+  private readonly resolveBaseUrl: () => string
+
+  /**
+   * Origin every request is built against, without a trailing slash.
+   *
+   * Read per request rather than fixed at construction, so a caller that derives
+   * it from a client's network — as `shieldSwapActions` does — keeps talking to
+   * the right deployment after `switchChain`.
+   */
+  get baseUrl(): string {
+    return this.resolveBaseUrl()
+  }
   private readonly fetchImpl: typeof fetch
   private readonly apiToken: string | undefined
   private readonly autoReauthenticate: boolean
@@ -95,7 +142,11 @@ export class ApiClient {
   private reauthInFlight: Promise<string> | undefined
 
   constructor(options: ApiClientOptions = {}) {
-    this.baseUrl = (options.baseUrl ?? DEFAULT_API_URL).replace(/\/$/, '')
+    const configured = options.baseUrl ?? DEFAULT_API_URL
+    this.resolveBaseUrl =
+      typeof configured === 'function'
+        ? () => configured().replace(/\/$/, '')
+        : () => configured.replace(/\/$/, '')
     this.fetchImpl = options.fetch ?? fetch
     this.apiToken = options.apiToken
     this.autoReauthenticate = options.autoReauthenticate ?? true
@@ -477,6 +528,25 @@ export class ApiClient {
   /** Lists registered tick spacings. */
   async getTickSpacings(): Promise<Schemas['TickSpacingListResponseDoc']> {
     return this.request('GET', '/tick-spacings', { auth: true })
+  }
+
+  /**
+   * Lists a pool's initialized ticks, sorted ascending.
+   *
+   * Every `tick_lower` and `tick_upper` across the pool's non-burned positions,
+   * deduplicated — enough to compute the insert hints `mint` asserts on without
+   * deriving a tick key per candidate. `pickInsertHint` uses it when the WASM
+   * peer needed to walk the on-chain list is unavailable.
+   *
+   * Indexed from positions rather than read from the contract's own linked
+   * list, so it can lag a position minted moments ago. The chain is the
+   * authority when a caller can reach it.
+   *
+   * @param poolKey Pool key field literal.
+   * @returns `data` holds the sorted ticks as plain numbers (i32).
+   */
+  async getInitializedTicks(poolKey: string): Promise<Schemas['InitializedTicksResponseDoc']> {
+    return this.request('GET', `/pools/${encodeURIComponent(poolKey)}/initialized-ticks`, { auth: true })
   }
 
   /** Lists the on-chain operation schemas the API publishes. */

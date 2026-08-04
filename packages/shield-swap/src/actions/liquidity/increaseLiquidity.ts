@@ -1,7 +1,7 @@
 import { executeContract, writeContract, type Client, type InputRequest, type TransactionInput } from '@provablehq/veil-core'
 import { resolvePositionRecord, positionTokenIdFromPlaintext } from '../../utils/records.js'
 import { requireAccount, requirePool } from '../../utils/guards.js'
-import { pickInsertHint } from '../../utils/tick-hints.js'
+import { pickInsertHint, type PickInsertHintParameters } from '../../utils/tick-hints.js'
 import { requireFieldOutput } from '../../utils/outputs.js'
 import type { TokenRoute } from '../../utils/routing.js'
 import type { ProofProvider } from '../../utils/proofs.js'
@@ -38,6 +38,9 @@ import { autoSelectSideRecord, dispatchLiquidityCall, resolveSideRoutes, wrapper
  * @property tickLowerHint Explicit hint override; defaults to
  *   `pickInsertHint` for the position's own bounds.
  * @property tickUpperHint Explicit hint override.
+ * @property initializedTicks The pool's initialized ticks, or a supplier for
+ *   them, forwarded to `pickInsertHint`. Only consulted when the WASM peer is
+ *   absent; `shieldSwapActions` supplies it from the configured API.
  * @property imports Program sources for dynamic-dispatch dependencies
  *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
  *   callees statically — pass the involved token programs' sources when
@@ -63,6 +66,7 @@ export type IncreaseLiquidityParameters = {
   proofs?: ProofProvider
   tickLowerHint?: number
   tickUpperHint?: number
+  initializedTicks?: PickInsertHintParameters['initializedTicks']
   imports?: Record<string, string>
   program?: string
 }
@@ -171,15 +175,18 @@ export async function increaseLiquidity(
       tokenId: params.positionTokenId,
     })
 
+    // Spread rather than assigned, so `exactOptionalPropertyTypes` is satisfied
+    // when the caller supplied nothing.
+    const ticks = params.initializedTicks ? { initializedTicks: params.initializedTicks } : {}
     const tickLowerHint =
       params.tickLowerHint ??
       (tickLower !== undefined
-        ? await pickInsertHint(client, { poolKey: params.poolKey, targetTick: tickLower, program })
+        ? await pickInsertHint(client, { poolKey: params.poolKey, targetTick: tickLower, program, ...ticks })
         : undefined)
     const tickUpperHint =
       params.tickUpperHint ??
       (tickUpper !== undefined
-        ? await pickInsertHint(client, { poolKey: params.poolKey, targetTick: tickUpper, program })
+        ? await pickInsertHint(client, { poolKey: params.poolKey, targetTick: tickUpper, program, ...ticks })
         : undefined)
     if (tickLowerHint === undefined || tickUpperHint === undefined) {
       throw new Error('tickLowerHint/tickUpperHint are required when passing positionRecord explicitly')
