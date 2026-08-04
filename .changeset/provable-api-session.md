@@ -35,6 +35,13 @@ New in `@provablehq/veil-aleo-sdk`:
 - `session` on `createProvingConfig`, `createRemoteScanner`, and
   `createStandaloneScanner`, and `setSession` on the providers the first two
   return. `consumerId` is now optional on both scanners.
+- `username` on `createAleoClient`, choosing the name a consumer is registered
+  under when one has to be. Used verbatim, so the consumer is identifiable;
+  defaults to a name derived from the account address plus a random suffix.
+  A taken name now fails with an error stating that credentials cannot be
+  recovered from a username — the API has no endpoint that reads a consumer back
+  and a duplicate registration returns nothing usable, so the stored key is the
+  only copy.
 
 The delegated-proving path also gains the 401 re-mint retry that only record
 scanning had, and record scanning now replaces its token only when the token was

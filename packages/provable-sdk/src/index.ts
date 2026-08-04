@@ -265,6 +265,14 @@ export interface AleoSdk {
    * @param options.proverUrl Base URL of the delegated proving service, e.g.
    *   `https://api.provable.com/prove` — the network segment is appended, so do
    *   not include it. That is what lets `switchChain` re-target proving.
+   * @param options.username Optional handle to register a Provable API consumer
+   *   under, used only when no credentials and no stored pair are available.
+   *   A function is called lazily, at the moment registration happens. Defaults
+   *   to a name derived from the account address plus a random suffix — the
+   *   suffix matters because a username is spent once, so an account that lost
+   *   its stored key must still be able to register. Supplying a fixed name
+   *   makes the consumer identifiable but fails if that name is taken, since
+   *   credentials cannot be recovered from a username.
    * @param options.credentialStore Optional persistence for Provable API
    *   credentials. When neither `consumerId`/`apiKey` nor a stored pair is
    *   available, a consumer is registered under a name derived from the account
@@ -295,6 +303,7 @@ export interface AleoSdk {
     apiKey?: string
     consumerId?: string
     useFeeMaster?: boolean
+    username?: string | (() => string)
     credentialStore?: ProvableCredentialStore
     session?: ProvableSession
     /**
@@ -959,6 +968,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     consumerId?: string
     /** Forwarded to `createProvingConfig` — the delegated prover pays fees. Defaults to true. */
     useFeeMaster?: boolean
+    username?: string | (() => string)
     credentialStore?: ProvableCredentialStore
     session?: ProvableSession
     records?: RecordProvider & { setSession?: (session: ProvableSession) => void }
@@ -987,12 +997,14 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       createProvableSession({
         credentials,
         store: options.credentialStore ?? memoryCredentialStore(),
-        // Derived lazily: only a registration needs it. The random suffix
-        // matters because usernames are globally unique — an account that
-        // lost its stored credentials must be able to register again, and
-        // the old API key is unrecoverable.
-        username: () =>
-          `veil-${account.address.slice(5, 13)}-${Math.random().toString(36).slice(2, 8)}`,
+        // Resolved lazily: only a registration needs it. The derived default
+        // carries a random suffix because a username is spent once — an account
+        // that lost its stored key must still be able to register, and the old
+        // key is unrecoverable. A caller-supplied name is used verbatim, so a
+        // collision fails rather than quietly registering something else.
+        username:
+          options.username ??
+          (() => `veil-${account.address.slice(5, 13)}-${Math.random().toString(36).slice(2, 8)}`),
       })
 
     const proving = createProvingConfig({

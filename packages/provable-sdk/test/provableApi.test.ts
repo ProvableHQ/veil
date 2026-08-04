@@ -84,6 +84,20 @@ describe('provableApi', () => {
       )
     })
 
+    it('explains that a taken username cannot be traded for its credentials', async () => {
+      stubFetch({
+        register: () =>
+          new Response(JSON.stringify({ message: "UNIQUE violation detected on '{username=\"taken\"}'" }), {
+            status: 409,
+          }),
+      })
+      // The obvious next moves — look the consumer up, or re-register to get the
+      // key again — do not exist, so the error has to say so.
+      await expect(registerProvableApi({ username: 'taken' })).rejects.toThrow(
+        /username 'taken' is already registered.*cannot be recovered.*different name/s,
+      )
+    })
+
     it('rejects a 2xx response that omits the credentials', async () => {
       stubFetch({ register: () => new Response(JSON.stringify({ consumer: {} }), { status: 200 }) })
       await expect(registerProvableApi({ username: 'bot' })).rejects.toThrow(/no consumer id and key/)

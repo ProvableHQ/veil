@@ -276,14 +276,19 @@ export type ProvingConfigWithSession = ProvingConfig & {
  * Registers a Provable API consumer and returns its credentials.
  *
  * Unauthenticated — this is the call that issues the credentials everything
- * else authenticates with. Hits the network. Usernames are globally unique, so
- * a collision surfaces as a failed call and needs a different name.
+ * else authenticates with. Hits the network.
+ *
+ * A username is spent once. It is globally unique, the API exposes no endpoint
+ * that reads a consumer back, and a duplicate registration answers 409 with
+ * nothing usable in it — so a taken name cannot be traded for the credentials it
+ * belongs to, and the only remedy is the stored key or a different name.
  *
  * @param params Handle to register under, and optionally a non-default API root.
  * @returns The consumer id and API key. The key is shown only here, so the
  *   caller MUST persist it.
- * @throws When registration returns a non-2xx status, or when the response body
- *   does not carry a consumer id and key.
+ * @throws When the username is already registered, when registration returns any
+ *   other non-2xx status, or when the response body does not carry a consumer id
+ *   and key.
  *
  * @example
  * const credentials = await registerProvableApi({ username: 'my-bot-42' })
@@ -299,8 +304,19 @@ export async function registerProvableApi(
     body: JSON.stringify({ username: params.username }),
   })
   if (!response.ok) {
+    const body = await response.text()
+    // A 409 is the one failure a caller can act on, and the obvious next move —
+    // look the consumer up, or re-register to get the key again — does not
+    // exist. Say so here rather than leaving them to discover it.
+    if (response.status === 409) {
+      throw new Error(
+        `Provable API username '${params.username}' is already registered. Credentials cannot be ` +
+          'recovered from a username: supply the existing consumerId and apiKey, or register under ' +
+          `a different name. (HTTP 409: ${body})`,
+      )
+    }
     throw new Error(
-      `Provable API consumer registration failed (HTTP ${response.status}): ${await response.text()}`,
+      `Provable API consumer registration failed (HTTP ${response.status}): ${body}`,
     )
   }
   const body = (await response.json()) as { consumer?: { id?: string }; key?: string }

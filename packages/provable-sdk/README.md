@@ -122,8 +122,30 @@ const credentials = await registerProvableApi({ username: 'my-bot-42' })
 await writeFile('creds.json', JSON.stringify(credentials), { mode: 0o600 })
 ```
 
-Usernames are globally unique across the Provable API, so a taken name fails the
-call and needs a different one.
+A username is spent once. It is globally unique, the API exposes no endpoint that
+reads a consumer back, and a duplicate registration answers 409 with nothing
+usable in it — so a taken name cannot be traded for the credentials it belongs to.
+The stored key is the only copy, which is the real reason to give a client a
+persistent store rather than the in-memory default.
+
+When a client registers for you, `username` chooses the name:
+
+```ts
+const { walletClient } = aleo.createAleoClient({
+  privateKey: PRIVATE_KEY,
+  networkUrl: 'https://api.provable.com/v2',
+  proverUrl: 'https://api.provable.com/prove',
+  credentialStore: fileCredentialStore('./.provable-credentials.json'),
+  username: 'my-bot-42',        // or () => `bot-${shard}`, resolved at registration
+})
+```
+
+Supplied names are used verbatim, so the consumer is identifiable in your account
+— and a collision fails with an error saying the name is taken rather than quietly
+registering something else. Omit it and the name is derived from the account
+address with a random suffix, which keeps the zero-configuration path working:
+since a username cannot be reused, an account that lost its stored key still needs
+to be able to register.
 
 On Node, `fileCredentialStore` covers this. It writes with mode `0600`, treats a
 missing file as "not registered yet", and reports a corrupt one rather than
