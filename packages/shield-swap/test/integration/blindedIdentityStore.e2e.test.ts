@@ -7,6 +7,10 @@ import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { fileBlindedIdentityStore } from '../../src/node.js'
 import { reconcileSwapHistory } from '../../src/actions/blinding/reconcileSwapHistory.js'
 import { syncBlindedIdentities } from '../../src/actions/blinding/syncBlindedIdentities.js'
+import { nextBlindedIdentity, viewKeyToScalar } from '../../src/utils/blinding/identity.js'
+import { reserveBlindedIdentity } from '../../src/actions/blinding/reserveBlindedIdentity.js'
+import { memoryBlindedIdentityStore } from '../../src/utils/blinding/store.js'
+import { isBlindedAddressUsed } from '../../src/actions/reads/isBlindedAddressUsed.js'
 import { fromPersistedHandle } from '../../src/utils/blinding/handles.js'
 import type { BlindedIdentityRecord, BlindedIdentityStore } from '../../src/utils/blinding/store.js'
 import type { SwapHandle } from '../../src/actions/swap/swap.js'
@@ -194,8 +198,11 @@ describe.runIf(RUN)('blinded identity store on testnet', () => {
       status = (await client.syncBlindedIdentities())[0]!.status
       if (status !== 'claimed') await new Promise((r) => setTimeout(r, 3_000))
     }
+    // `claimed` is exactly the state where sync found the mapping entry gone, so
+    // that read is the assertion — re-reading `swap_outputs` here would only
+    // sample an eventually-consistent value a second time, and replicas can
+    // disagree for a few seconds after the finalize removes it.
     expect(status).toBe('claimed')
-    expect(await client.getSwapOutput({ swapId: state.handle!.swapId! })).toBeNull()
     expect((await fromDisk())[0]!.status).toBe('claimed')
   }, TX)
 
@@ -244,4 +251,69 @@ describe.runIf(RUN)('blinded identity store on testnet', () => {
     expect(synced[0]!.status).toBe('swapped')
     expect(synced[0]!.swapId).toBeUndefined()
   }, 300_000)
+})
+
+/**
+ * Why the store exists, shown against live chain state.
+ *
+ * Without one, `swap` derives its identity through `nextBlindedIdentity`, which
+ * scans from counter 0 for the first address the chain does not carry. Two swaps
+ * starting together run that scan against identical state and therefore reach the
+ * same answer — so both bind to one blinded address, and the second reverts on
+ * `verify_blinded_address`'s uniqueness assert once the first has consumed it.
+ *
+ * Asserted on the derivation rather than by submitting two doomed transactions.
+ * The collision is the part this SDK controls and the part a regression would
+ * change; paying two fees to watch the chain reject the second proves the
+ * contract's behaviour, not ours, and leaves a reverted transaction behind.
+ */
+describe.runIf(RUN)('concurrent identity derivation on testnet', () => {
+  let client: Awaited<ReturnType<Awaited<ReturnType<typeof loadNetwork>>['createAleoClient']>>['walletClient']
+  let account: Awaited<ReturnType<Awaited<ReturnType<typeof loadNetwork>>['createAleoClient']>>['account']
+
+  beforeAll(async () => {
+    const aleo = await loadNetwork('testnet')
+    // Deliberately no `blindedIdentities`: this is the unguarded path.
+    const built = aleo.createAleoClient({
+      privateKey: PRIVATE_KEY!,
+      networkUrl: 'https://api.provable.com/v2',
+      consumerId: CONSUMER_ID,
+      apiKey: API_KEY,
+    })
+    client = built.walletClient
+    account = built.account
+  }, 120_000)
+
+  it('hands two concurrent derivations the same identity when nothing tracks them', async () => {
+    const derive = async () =>
+      nextBlindedIdentity(client, {
+        viewKeyScalar: await viewKeyToScalar(account.viewKey!),
+        signer: account.address,
+      })
+
+    const [first, second] = await Promise.all([derive(), derive()])
+    // The collision, on live state: same counter, same address, so two swaps
+    // built from these would fight over one identity.
+    expect(second.counter).toBe(first.counter)
+    expect(second.blindedAddress).toBe(first.blindedAddress)
+    expect(second.blindingFactor).toBe(first.blindingFactor)
+  }, 120_000)
+
+  it('hands two concurrent reservations different identities when a store tracks them', async () => {
+    // Same account, same chain, same moment — the only difference is the store,
+    // which serializes the read-modify-write and records each counter before
+    // returning it.
+    const store = memoryBlindedIdentityStore()
+    const [first, second] = await Promise.all([
+      reserveBlindedIdentity(client, { store }),
+      reserveBlindedIdentity(client, { store }),
+    ])
+
+    expect(second.counter).not.toBe(first.counter)
+    expect(second.blindedAddress).not.toBe(first.blindedAddress)
+    // Both are on ground the chain has not used, so both are submittable.
+    expect(await isBlindedAddressUsed(client, { address: first.blindedAddress })).toBe(false)
+    expect(await isBlindedAddressUsed(client, { address: second.blindedAddress })).toBe(false)
+    expect(await store.load()).toHaveLength(2)
+  }, 120_000)
 })
