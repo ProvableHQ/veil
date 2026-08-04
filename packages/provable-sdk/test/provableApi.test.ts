@@ -197,6 +197,49 @@ describe('provableApi', () => {
       expect(session.registeredConsumer()).toBe(true)
     })
 
+    it('holds registered credentials even when persisting them fails', async () => {
+      stubFetch()
+      const store: ProvableCredentialStore = {
+        load: () => undefined,
+        save: () => {
+          throw new Error('disk full')
+        },
+      }
+      const session = createProvableSession({ store, username: 'bot' })
+
+      // Loud, because the key cannot be reissued and is now unstored.
+      await expect(session.getCredentials()).rejects.toThrow(
+        /Registered Provable API consumer consumer-new, but persisting.*failed/s,
+      )
+      // But held, so the process can still read and store them by hand.
+      expect(await session.getCredentials()).toEqual({ consumerId: 'consumer-new', apiKey: 'key-new' })
+    })
+
+    it('does not register a second consumer after a failed save', async () => {
+      const { calls } = stubFetch()
+      const store: ProvableCredentialStore = {
+        load: () => undefined,
+        save: () => {
+          throw new Error('disk full')
+        },
+      }
+      const session = createProvableSession({ store, username: 'bot' })
+
+      await expect(session.getCredentials()).rejects.toThrow(/persisting/)
+      await session.getCredentials().catch(() => {})
+      await session.getJwt().catch(() => {})
+      // A username is spent once, so retrying must not burn another name.
+      expect(calls.filter((c) => c.includes('/consumers'))).toHaveLength(1)
+    })
+
+    it('does not resolve the username function when an override is given', async () => {
+      stubFetch()
+      const username = vi.fn(() => 'derived-name')
+      const session = createProvableSession({ username })
+      await session.getCredentials({ username: 'explicit-name' })
+      expect(username).not.toHaveBeenCalled()
+    })
+
     it('registers once when several callers resolve credentials concurrently', async () => {
       const { calls } = stubFetch()
       const session = createProvableSession({ username: 'bot' })

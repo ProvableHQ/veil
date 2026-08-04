@@ -394,19 +394,33 @@ export function createProvableSession(options: CreateProvableSessionOptions = {}
       credentials = stored
       return credentials
     }
-    const configured = typeof options.username === 'function' ? options.username() : options.username
-    const username = usernameOverride ?? configured
+    // Resolved only if it will be used: a configured function may be doing real
+    // work, and the derived default has a random component.
+    const username =
+      usernameOverride ?? (typeof options.username === 'function' ? options.username() : options.username)
     if (!username) {
       throw new Error(
         'No Provable API credentials available — pass credentials, a store holding them, or a username to register with.',
       )
     }
     const issued = await registerProvableApi({ username, baseUrl })
-    // Persist before returning: the API key is issued once, so a failure
-    // between registration and the write orphans the consumer.
-    await options.store?.save(issued)
+    // Held before persisting, even though persisting is what makes them
+    // durable. A username is spent once and the key is issued once, so if the
+    // write fails the worst outcome is registering *again* on the next attempt
+    // and burning another name. Holding them first makes that impossible, and
+    // the throw below still tells the caller the key is not stored.
     credentials = issued
     registered = true
+    try {
+      await options.store?.save(issued)
+    } catch (cause) {
+      throw new Error(
+        `Registered Provable API consumer ${issued.consumerId}, but persisting its credentials failed. ` +
+          'They are live for this process — read them from getCredentials() and store them yourself — but ' +
+          'the API key cannot be reissued, so a restart loses it.',
+        { cause },
+      )
+    }
     return credentials
   }
 

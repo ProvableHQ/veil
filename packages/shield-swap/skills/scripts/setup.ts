@@ -112,8 +112,13 @@ async function main() {
   console.log(`✓ account: ${state.address}`)
 
   // Supplied credentials win over registering a new consumer, so a returning
-  // user keeps theirs. Absent both, the client registers one below.
-  if (consumerId && apiKey && !credentialStore.load()) credentialStore.save({ consumerId, apiKey })
+  // user keeps theirs. Absent both, the client registers one below. Awaited
+  // because ProvableCredentialStore permits async: this store happens to be
+  // synchronous, but reading a promise as a value would silently skip the seed
+  // and leave the write unobserved.
+  if (consumerId && apiKey && !(await credentialStore.load())) {
+    await credentialStore.save({ consumerId, apiKey })
+  }
 
   // ── 3: wire the client and authenticate with the DEX API ────────────
   const { client, account } = await loadSession()

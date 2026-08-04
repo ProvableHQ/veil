@@ -34,7 +34,9 @@ New in `@provablehq/veil-aleo-sdk`:
   key needs no state reset.
 - `session` on `createProvingConfig`, `createRemoteScanner`, and
   `createStandaloneScanner`, and `setSession` on the providers the first two
-  return. `consumerId` is now optional on both scanners.
+  return. `consumerId` is now optional on both scanners — but required alongside
+  `apiKey` when no session supplies tokens, since a JWT is minted from the pair;
+  an incomplete pair throws at construction rather than 401ing on the first scan.
 - `username` on `createAleoClient`, choosing the name a consumer is registered
   under when one has to be. Used verbatim, so the consumer is identifiable;
   defaults to a name derived from the account address plus a random suffix.

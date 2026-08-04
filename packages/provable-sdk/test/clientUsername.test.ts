@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, it, expect, vi } from 'vitest'
-import { loadNetwork, memoryCredentialStore, type AleoSdk } from '../src/index.js'
+import { loadNetwork, memoryCredentialStore, createProvableSession, type AleoSdk } from '../src/index.js'
 
 /**
  * The name a client registers a Provable API consumer under.
@@ -100,6 +100,37 @@ describe('createAleoClient username', () => {
     expect(result.registered).toBe(false)
     expect(result.credentials).toEqual({ consumerId: 'existing-consumer', apiKey: 'existing-key' })
   }, 30_000)
+
+  describe('scanner credential validation', () => {
+    it('rejects an apiKey without a consumerId on a remote scanner', () => {
+      // Half a pair authenticates nothing: the id is the path segment and the
+      // key the header, so this would 401 four times instead of failing here.
+      expect(() =>
+        aleo.createRemoteScanner({ url: 'https://api.provable.com/scanner', apiKey: 'k' }),
+      ).toThrow(/apiKey also needs consumerId/)
+    })
+
+    it('rejects an apiKey without a consumerId on a standalone scanner', () => {
+      expect(() =>
+        aleo.createStandaloneScanner({
+          url: 'https://api.provable.com/scanner',
+          viewKey: aleo.generateAccount().viewKey,
+          apiKey: 'k',
+        }),
+      ).toThrow(/apiKey also needs consumerId/)
+    })
+
+    it('accepts an apiKey without a consumerId when a session supplies tokens', () => {
+      const session = createProvableSession({ credentials: { consumerId: 'c', apiKey: 'k' } })
+      expect(() =>
+        aleo.createRemoteScanner({ url: 'https://api.provable.com/scanner', apiKey: 'k', session }),
+      ).not.toThrow()
+    })
+
+    it('accepts neither, for an unauthenticated service', () => {
+      expect(() => aleo.createRemoteScanner({ url: 'http://localhost:9000' })).not.toThrow()
+    })
+  })
 
   it('surfaces the unrecoverable-name error when the chosen name is taken', async () => {
     vi.stubGlobal(

@@ -204,7 +204,9 @@ export interface AleoSdk {
    * @param options.url Base URL of the service (the SDK appends the network
    *   segment — do not include it).
    * @param options.consumerId Optional consumer id used for JWT refresh.
-   *   Unnecessary when a `session` supplies the token.
+   *   Unnecessary when a `session` supplies the token. Required alongside
+   *   `apiKey` otherwise — a JWT is minted from the pair, so half of it
+   *   authenticates nothing and construction throws rather than 401ing later.
    * @param options.apiKey Optional API key for the authenticated service
    *   (e.g. the hosted Provable RSS). Omit for an open/unauthenticated service.
    * @param options.session Optional Provable API session to authenticate from,
@@ -232,7 +234,9 @@ export interface AleoSdk {
    *
    * @param options.url Base URL of the service (the SDK appends the network segment).
    * @param options.consumerId Optional consumer id used for JWT refresh.
-   *   Unnecessary when a `session` supplies the token.
+   *   Unnecessary when a `session` supplies the token. Required alongside
+   *   `apiKey` otherwise — a JWT is minted from the pair, so half of it
+   *   authenticates nothing and construction throws rather than 401ing later.
    * @param options.viewKey The view key (`AViewKey1…`) to scan and decrypt with.
    * @param options.apiKey Optional API key for the authenticated service. Omit
    *   for an open/unauthenticated service.
@@ -793,14 +797,16 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     scanner: InstanceType<SdkModule['RecordScanner']>,
     program: string,
     statusFilter: string | undefined,
-    hasApiKey: boolean,
+    hasCredentials: boolean,
     session?: ProvableSession,
   ): Promise<OwnedRecord[]> {
     const ALWAYS_RETRY = new Set([429, 500, 502, 503, 504])
     const AUTH_RETRY = new Set([401, 403])
-    // A JWT can be replaced when the SDK holds credentials to re-mint from, or
-    // when a session owns minting on the scanner's behalf.
-    const canReMint = hasApiKey || !!session
+    // A JWT can be replaced when the SDK holds a complete pair to re-mint from,
+    // or when a session owns minting on the scanner's behalf. `hasCredentials`
+    // is the pair, not just the key — half of it mints nothing, so treating a
+    // 401 as retryable would only burn backoff.
+    const canReMint = hasCredentials || !!session
     const retryable = (status: number) => ALWAYS_RETRY.has(status) || (canReMint && AUTH_RETRY.has(status))
     const MAX_ATTEMPTS = 4
     let last = ''
@@ -841,6 +847,15 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     session?: ProvableSession
     startBlock?: number
   }): RecordProvider & { setSession: (session: ProvableSession) => void } {
+    // A JWT is minted from the pair, so half of it authenticates nothing: the
+    // consumer id is the path segment and the key the header. Without a session
+    // to supply tokens instead, an incomplete pair would send unauthenticated
+    // requests and 401 — fail here rather than four retries later.
+    if (!options.session && options.apiKey && !options.consumerId) {
+      throw new ConfigurationError(
+        'Record scanning with an apiKey also needs consumerId — a JWT is minted from the pair. Pass both, pass a session, or omit both for an unauthenticated service.',
+      )
+    }
     // The RecordScanner class is network-bound: a scanner built from a given
     // SDK module scans that module's network. Network switching rebuilds the
     // scanner (and the wasm view key) from the target network's module.
@@ -909,7 +924,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         // registering a view key is itself an authenticated call.
         if (session) activeScanner.setJwtData(await session.getJwt())
         await activeRegistration.ensure(activeScanner, activeViewKey)
-        return scanOwned(activeScanner, params.program, params.statusFilter, !!options.apiKey, session)
+        return scanOwned(activeScanner, params.program, params.statusFilter, !!(options.apiKey && options.consumerId), session)
       },
 
       switchNetwork: async (newNetwork: string) => {
@@ -932,6 +947,15 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     session?: ProvableSession
     startBlock?: number
   }): StandaloneRecordScanner {
+    // A JWT is minted from the pair, so half of it authenticates nothing: the
+    // consumer id is the path segment and the key the header. Without a session
+    // to supply tokens instead, an incomplete pair would send unauthenticated
+    // requests and 401 — fail here rather than four retries later.
+    if (!options.session && options.apiKey && !options.consumerId) {
+      throw new ConfigurationError(
+        'Record scanning with an apiKey also needs consumerId — a JWT is minted from the pair. Pass both, pass a session, or omit both for an unauthenticated service.',
+      )
+    }
     const viewKey = ViewKey.from_string(options.viewKey)
     // Deliberately not attached: a standalone scanner is not pluggable into a
     // wallet client, so no client's `applied` report covers it.
@@ -954,7 +978,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         // Registration is authenticated too, so the token goes in first.
         if (session) scanner.setJwtData(await session.getJwt())
         await registration.ensure(scanner, viewKey)
-        return scanOwned(scanner, params.program, params.statusFilter, !!options.apiKey, session)
+        return scanOwned(scanner, params.program, params.statusFilter, !!(options.apiKey && options.consumerId), session)
       },
     }
   }
