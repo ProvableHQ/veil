@@ -31,9 +31,8 @@ const aleo = await loadNetwork('testnet')
 // A record scanner so the wallet client can find the private records that
 // program calls spend. The first requestRecords registers the view key with the
 // service (one network round-trip); later calls reuse it.
-const scanner = aleo.createRemoteScanner({
-  url: 'https://api.provable.com/scanner',
-})
+// `url` defaults to Provable's hosted scanner, so this needs no arguments.
+const scanner = aleo.createRemoteScanner()
 
 // A fully-wired client pair: an account from the private key, a public client
 // for reads, and a wallet client with proving + the scanner attached. The
@@ -44,8 +43,6 @@ import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
 const { publicClient, walletClient, account } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
   networkUrl: 'https://api.provable.com/v2',
-  provingMode: 'delegated',
-  proverUrl: 'https://api.provable.com/prove',
   credentialStore: fileCredentialStore('./.provable-credentials.json'),
   records: scanner,
 })
@@ -61,7 +58,9 @@ Pass `consumerId` and `apiKey` instead and drop the store — see
 `proverUrl` is a base URL — the active network is appended, the same way the
 record scanner's `url` works — so `switchChain` re-targets proving instead of
 leaving it on the network the client started from. Do not include the network
-segment yourself.
+segment yourself. It defaults to Provable's hosted prover
+(`DEFAULT_PROVER_URL`) under delegated proving, so the option only needs setting
+for a self-hosted one.
 
 Pass `provingMode: 'local'` to prove in-process instead of delegating to a prover
 service (drop `proverUrl`/`apiKey`/`consumerId`). The `walletClient` composes with

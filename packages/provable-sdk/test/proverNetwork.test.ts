@@ -1,5 +1,5 @@
 import { beforeAll, describe, it, expect } from 'vitest'
-import { loadNetwork, type AleoSdk } from '../src/index.js'
+import { loadNetwork, DEFAULT_PROVER_URL, type AleoSdk } from '../src/index.js'
 
 /**
  * `proverUrl` is a base URL and the network segment is appended, mirroring the
@@ -81,5 +81,52 @@ describe('prover endpoint derivation', () => {
       networkUrl: 'https://api.provable.com/v2',
     })
     expect(proving.url).toBeUndefined()
+  })
+
+  describe('the default endpoint', () => {
+    it('defaults to the hosted prover under delegated mode', () => {
+      const proving = aleo.createProvingConfig({
+        mode: 'delegated',
+        networkUrl: 'https://api.provable.com/v2',
+      })
+      // provingMode defaults to delegated, so without this a client built with
+      // no proverUrl would construct fine and fail on its first write.
+      expect(proving.url).toBe(`${DEFAULT_PROVER_URL}/testnet`)
+    })
+
+    it('re-targets the default across a switch, like an explicit base', async () => {
+      const proving = aleo.createProvingConfig({
+        mode: 'delegated',
+        networkUrl: 'https://api.provable.com/v2',
+      })
+      await proving.switchNetwork?.('mainnet')
+      expect(proving.url).toBe(`${DEFAULT_PROVER_URL}/mainnet`)
+    })
+
+    it('does not default under local mode, which reaches no prover', () => {
+      const proving = aleo.createProvingConfig({
+        mode: 'local',
+        networkUrl: 'https://api.provable.com/v2',
+      })
+      expect(proving.url).toBeUndefined()
+    })
+
+    it('prefers an explicit base over the default', () => {
+      const proving = aleo.createProvingConfig({
+        mode: 'delegated',
+        networkUrl: 'https://api.provable.com/v2',
+        proverUrl: 'https://prover.internal.example',
+      })
+      expect(proving.url).toBe('https://prover.internal.example/testnet')
+    })
+
+    it('reaches a delegated client built with no prover configured', () => {
+      const { walletClient } = aleo.createAleoClient({
+        privateKey: aleo.generateAccount().privateKey,
+        networkUrl: 'https://api.provable.com/v2',
+      })
+      expect(walletClient.proving.mode).toBe('delegated')
+      expect(walletClient.proving.url).toBe(`${DEFAULT_PROVER_URL}/testnet`)
+    }, 30_000)
   })
 })

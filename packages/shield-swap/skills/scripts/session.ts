@@ -13,16 +13,27 @@
  */
 import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
-import { loadNetwork, generateAccount } from '@provablehq/veil-aleo-sdk'
+import {
+  loadNetwork,
+  generateAccount,
+  DEFAULT_PROVER_URL,
+  DEFAULT_SCANNER_URL,
+} from '@provablehq/veil-aleo-sdk'
 import type { ProvableCredentialStore } from '@provablehq/veil-aleo-sdk'
 import { shieldSwapActions, getPrivateBalances, DEFAULT_PROGRAM } from '@provablehq/shield-swap-sdk'
 import type { SwapHandle, MultiHopSwapHandle } from '@provablehq/shield-swap-sdk'
 
 export const NETWORK = 'testnet' as const
 export const NETWORK_URL = 'https://api.provable.com/v2'
-/** Base URL of the prover — the SDK appends the active network. */
-export const PROVER_URL = 'https://api.provable.com/prove'
-export const SCANNER_URL = 'https://api.provable.com/scanner'
+/**
+ * Base URL of the prover — the SDK appends the active network.
+ *
+ * Re-exported from the SDK rather than restated so the two cannot drift; the
+ * client would default to it anyway under delegated proving.
+ */
+export const PROVER_URL = DEFAULT_PROVER_URL
+/** Base URL of the record scanner — re-exported so the two cannot drift. */
+export const SCANNER_URL = DEFAULT_SCANNER_URL
 
 /** A liquidity position the account opened, tracked for later operations. */
 export type TrackedPosition = {

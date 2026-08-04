@@ -1,5 +1,11 @@
 import { afterEach, beforeAll, describe, it, expect, vi } from 'vitest'
-import { loadNetwork, memoryCredentialStore, createProvableSession, type AleoSdk } from '../src/index.js'
+import {
+  loadNetwork,
+  memoryCredentialStore,
+  createProvableSession,
+  DEFAULT_PROVER_URL,
+  type AleoSdk,
+} from '../src/index.js'
 
 /**
  * The name a client registers a Provable API consumer under.
@@ -130,6 +136,30 @@ describe('createAleoClient username', () => {
     it('accepts neither, for an unauthenticated service', () => {
       expect(() => aleo.createRemoteScanner({ url: 'http://localhost:9000' })).not.toThrow()
     })
+  })
+
+  describe('default service URLs', () => {
+    it('builds a remote scanner with no options at all', () => {
+      // url was the only required field, so omitting it makes the whole options
+      // object optional — the zero-configuration path.
+      expect(() => aleo.createRemoteScanner()).not.toThrow()
+    })
+
+    it('builds a standalone scanner from just a view key', () => {
+      expect(() =>
+        aleo.createStandaloneScanner({ viewKey: aleo.generateAccount().viewKey }),
+      ).not.toThrow()
+    })
+
+    it('gives a client with nothing configured a working prover endpoint', () => {
+      const { walletClient } = aleo.createAleoClient({
+        privateKey: aleo.generateAccount().privateKey,
+        networkUrl: 'https://api.provable.com/v2',
+        records: aleo.createRemoteScanner(),
+      })
+      expect(walletClient.proving.mode).toBe('delegated')
+      expect(walletClient.proving.url).toBe(`${DEFAULT_PROVER_URL}/testnet`)
+    }, 30_000)
   })
 
   it('surfaces the unrecoverable-name error when the chosen name is taken', async () => {

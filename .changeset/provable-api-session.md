@@ -49,15 +49,27 @@ The delegated-proving path also gains the 401 re-mint retry that only record
 scanning had, and record scanning now replaces its token only when the token was
 what the service rejected, rather than on every transient failure.
 
-**`proverUrl` is now a base URL.** Pass `https://api.provable.com/prove` and the
-active network is appended, mirroring `createRemoteScanner`'s `url`. Previously
-the network was baked into the value the caller supplied, so `switchChain` left
-delegated proving pointed at the network the client started from — and
-confirmation polling with it, since it read the network the handle was loaded
-with rather than the one in force. Both now follow the switch. A value that still
-carries a trailing `/mainnet` or `/testnet` is re-targeted rather than doubled, so
-existing callers keep working; `ProvingConfig.url` reports the resolved endpoint
-for the network currently in force rather than echoing the input.
+**`proverUrl` is now a base URL, and defaults.** Pass
+`https://api.provable.com/prove` and the active network is appended, mirroring
+`createRemoteScanner`'s `url`. Omit it under `mode: 'delegated'` and it falls back
+to the new `DEFAULT_PROVER_URL` export — `provingMode` already defaulted to
+`'delegated'`, so a client built without a prover used to construct fine and then
+fail on its first write. Local proving still resolves no endpoint.
+
+The base-URL shape is also a fix. Previously the network was baked into the value
+the caller supplied, so `switchChain` left delegated proving pointed at the network
+the client started from — and confirmation polling with it, since it read the
+network the handle was loaded with rather than the one in force. Both now follow
+the switch. A value that still carries a trailing `/mainnet` or `/testnet` is
+re-targeted rather than doubled, so existing callers keep working, and
+`ProvingConfig.url` reports the endpoint for the network currently in force rather
+than echoing the input.
+
+**Scanner `url` is optional too**, defaulting to the new `DEFAULT_SCANNER_URL`.
+It was `createRemoteScanner`'s only required field, so that factory now takes no
+arguments at all, and `createStandaloneScanner` needs only a view key. Together
+with the credential store's in-memory default, a delegated client and its scanner
+are buildable from nothing but a private key and a node URL.
 
 In `@provablehq/veil-core`, `Client` takes an accumulating `extended` type
 parameter, defaulting to `{}`, and `extend` returns
