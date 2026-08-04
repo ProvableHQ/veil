@@ -175,8 +175,13 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     if (config.api instanceof ApiClient) return config.api
     if (!config.api) return undefined
     return new ApiClient({
-      baseUrl: () => defaultApiUrl(client.transport.config.network),
       ...config.api,
+      // Applied after the spread and coalesced, so only a baseUrl that is
+      // actually set overrides the derived host. Spreading `config.api` last
+      // would let an explicit-but-undefined `baseUrl` — `process.env.X` with X
+      // unset — win, and the ApiClient would fall back to its deprecated
+      // testnet constant, silently pointing a mainnet client at testnet.
+      baseUrl: config.api.baseUrl ?? (() => defaultApiUrl(client.transport.config.network)),
     })
   }
 

@@ -24,9 +24,12 @@ export type PickInsertHintParameters = {
  *
  * The contract keeps initialized ticks in a sorted linked list and asserts
  * `hint.tick < target && hint.next > target` — the hint must be the target's
- * predecessor. This derives the hint from the slot's active-range neighbors
- * (`next_init_below`/`next_init_above`), which covers pools with few
- * initialized ticks around the current price.
+ * predecessor. This walks that list from the {@link MIN_TICK_SENTINEL} anchor
+ * until the next entry reaches or passes the target, so the entry it stops on is
+ * the predecessor the contract requires. The slot's active-range neighbours
+ * (`next_init_below`/`next_init_above`) are deliberately not used: they bracket
+ * the pool's *current* tick, which is above the target whenever the target sits
+ * further out, and the contract rejects that on finalize.
  *
  * Returns the true predecessor, so the hint is accepted for any target rather
  * than only for one near the active range. Hits the network once per

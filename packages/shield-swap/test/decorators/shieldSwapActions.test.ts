@@ -163,6 +163,19 @@ describe('DEX API host derivation', () => {
     expect(urls).toEqual(['https://local.example'])
   })
 
+  it('keeps deriving the host when baseUrl is passed but undefined', async () => {
+    const { urls, fetchImpl } = spy()
+    // The shape a caller writes as `baseUrl: process.env.VEIL_DEX_API_URL` with
+    // the variable unset. The key is present, so a spread would let it beat the
+    // derived host and fall back to the deprecated testnet constant — pointing a
+    // mainnet client at testnet, silently.
+    const client = createClient({
+      transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+    }).extend(shieldSwapActions({ api: { baseUrl: undefined, fetch: fetchImpl } }))
+    await client.api.getPools()
+    expect(urls).toEqual([SHIELD_SWAP_API_URLS.mainnet])
+  })
+
   it('follows switchChain, because the host is resolved per request', async () => {
     const { urls, fetchImpl } = spy()
     const transport = http('https://api.provable.com/v2', { network: 'testnet' })
