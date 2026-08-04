@@ -65,7 +65,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   // Balances, the airdrop, and most other API reads are bearer-gated; a
   // beforeAll keeps later tests independent of the airdrop test running.
   beforeAll(async () => {
-    await client.authenticateApi()
+    await client.authenticateShieldSwap()
   }, 60_000)
 
   it('funds the account via the async airdrop when balances are empty', async () => {

@@ -131,7 +131,7 @@ balances, fee tiers, candles — are bearer-gated. Two credentials work:
   exchanged for the token. On a composed client this is one call:
 
   ```ts
-  await client.authenticateApi()
+  await client.authenticateShieldSwap()
   const route = await client.api.getRoute({ token_in, token_out })
   ```
 
@@ -142,13 +142,18 @@ balances, fee tiers, candles — are bearer-gated. Two credentials work:
   directly — the latter is what a wallet-backed frontend wires to its own
   signing prompt.
 
+  This action was called `authenticateApi` before. That name survives as a
+  deprecated alias and will be removed in the next major: a client can also carry
+  `authenticateProvableApi` from `@provablehq/veil-aleo-sdk`, and "the API" does
+  not say which of the two it signs into.
+
 - **A long-lived API token** (`ss_…`), minted once under a session JWT and
   passed at construction. Suited to bots, CI, and servers that should not
   re-sign on every boot:
 
   ```ts
   // One-time provisioning (keep the secret — it is shown only once):
-  await client.authenticateApi()
+  await client.authenticateShieldSwap()
   const { token } = await client.api.createApiToken({ name: 'trading-bot' })
 
   // Every run after that:
@@ -164,7 +169,7 @@ Authentication alone is not enough: the account must also have redeemed an
 `redeem an invite code to unlock access`. Check and redeem once per account:
 
 ```ts
-await client.authenticateApi()
+await client.authenticateShieldSwap()
 if (!(await client.api.getAccessStatus()).has_access) {
   await client.api.redeemAccessCode(inviteCode) // one-time; unlocks immediately
 }

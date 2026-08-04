@@ -102,7 +102,7 @@ discovery, quoting, the `imports` map — and the wallet-signer variants.
   [`getSlot`](/api/shield-swap/getSlot),
   [`getSwapOutput`](/api/shield-swap/getSwapOutput); combined balances via
   `getBalances` and `getPrivateBalances`.
-- **DEX API auth** — `client.authenticateApi()` (session handshake signed by
+- **DEX API auth** — `client.authenticateShieldSwap()` (session handshake signed by
   the account, auto-renewing), `ApiClient.getAccessStatus` /
   `redeemAccessCode` for the one-time invite-code gate, and
   `ApiClient.createApiToken` / `listApiTokens` / `revokeApiToken` for

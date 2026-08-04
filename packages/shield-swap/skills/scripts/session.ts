@@ -200,7 +200,7 @@ export async function loadSession() {
   // lives in the state file (setup.ts --api-url).
   const apiUrl = process.env.SHIELD_SWAP_API_URL ?? state.apiUrl
   const client = walletClient.extend(shieldSwapActions({ api: { baseUrl: apiUrl } }))
-  await client.authenticateApi()
+  await client.authenticateShieldSwap()
 
   return { client, account, scanner, state, aleo }
 }
