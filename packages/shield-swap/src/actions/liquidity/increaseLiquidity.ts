@@ -37,10 +37,10 @@ import { autoSelectSideRecord, dispatchLiquidityCall, resolveSideRoutes, wrapper
  *   slots (the only proof slots this transition has).
  * @property tickLowerHint Explicit hint override; defaults to
  *   `pickInsertHint` for the position's own bounds.
+ * @property tickUpperHint Explicit hint override.
  * @property initializedTicks The pool's initialized ticks, or a supplier for
  *   them, forwarded to `pickInsertHint`. Only consulted when the WASM peer is
  *   absent; `shieldSwapActions` supplies it from the configured API.
- * @property tickUpperHint Explicit hint override.
  * @property imports Program sources for dynamic-dispatch dependencies
  *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
  *   callees statically — pass the involved token programs' sources when

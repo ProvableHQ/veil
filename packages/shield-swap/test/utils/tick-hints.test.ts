@@ -191,3 +191,16 @@ describe('pickInsertHint from a supplied tick list', () => {
     expect(walkable.tickReads()).toBeGreaterThan(0)
   })
 })
+
+describe('pickInsertHint with an empty tick list', () => {
+  beforeEach(() => {
+    tryLoadSdk.mockResolvedValue(null)
+  })
+
+  it('falls back to the slot rather than trusting an empty list', async () => {
+    // An index that has not caught up returns []. Trusting it would hint below
+    // every real tick, which finalize rejects; the slot still knows a neighbour.
+    const { client } = chainWith({ tick: 500, next_init_below: 0, next_init_above: 900 }, {})
+    expect(await pickInsertHint(client, { poolKey: POOL, targetTick: 300, initializedTicks: [] })).toBe(0)
+  })
+})

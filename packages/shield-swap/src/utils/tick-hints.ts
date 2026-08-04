@@ -129,7 +129,12 @@ export async function pickInsertHint(client: Client, params: PickInsertHintParam
   // slot's neighbours are the best guess available.
   if (!(await tryLoadSdk())) {
     const ticks = await resolveTicks(params.initializedTicks)
-    return ticks ? predecessorOf(ticks, params.targetTick) : slotNeighborHint(client, params)
+    // An empty list falls through deliberately. A pool with no initialized ticks
+    // anchors at the sentinel, which the slot also reports as `next_init_below`,
+    // so nothing is lost — while an empty list from an index that has not caught
+    // up would otherwise produce a hint below every real tick, which finalize
+    // rejects.
+    return ticks?.length ? predecessorOf(ticks, params.targetTick) : slotNeighborHint(client, params)
   }
 
   // Walk the initialized-tick list from the MIN sentinel to the last entry

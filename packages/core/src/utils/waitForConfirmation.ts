@@ -55,7 +55,7 @@ export async function waitForConfirmation(
       lastError = e
       // A 404 is the node reporting the transaction absent, which is how a
       // pending transaction reads too — not a failure to reach the node.
-      if ((e as { status?: number }).status === 404) absentPolls++
+      if ((e as { status?: number } | null)?.status === 404) absentPolls++
     }
     await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
   }
