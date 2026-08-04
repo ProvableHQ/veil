@@ -290,6 +290,11 @@ export interface AleoSdk {
    *   `switchChain` re-target proving. Defaults to {@link DEFAULT_PROVER_URL},
    *   since `provingMode` itself defaults to `'delegated'`; pass an override for
    *   a self-hosted prover.
+   * @param options.confirmationTimeout Milliseconds to wait for a submitted
+   *   transaction to confirm. Defaults to 300_000 (5 minutes) inside
+   *   `createProvingConfig`. Multi-hop swaps and other multi-transition calls
+   *   can exceed that, so raise it rather than treating a slow confirmation as a
+   *   failure.
    * @param options.username Optional handle to register a Provable API consumer
    *   under, used only when no credentials and no stored pair are available.
    *   A function is called lazily, at the moment registration happens. Defaults
@@ -328,6 +333,7 @@ export interface AleoSdk {
     apiKey?: string
     consumerId?: string
     useFeeMaster?: boolean
+    confirmationTimeout?: number
     username?: string | (() => string)
     credentialStore?: ProvableCredentialStore
     session?: ProvableSession
@@ -1016,6 +1022,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     consumerId?: string
     /** Forwarded to `createProvingConfig` — the delegated prover pays fees. Defaults to true. */
     useFeeMaster?: boolean
+    confirmationTimeout?: number
     username?: string | (() => string)
     credentialStore?: ProvableCredentialStore
     session?: ProvableSession
@@ -1066,6 +1073,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       consumerId: options.consumerId,
       account,
       ...(options.useFeeMaster !== undefined ? { useFeeMaster: options.useFeeMaster } : {}),
+      ...(options.confirmationTimeout !== undefined
+        ? { confirmationTimeout: options.confirmationTimeout }
+        : {}),
     })
 
     const publicClient = createPublicClient({ transport })
