@@ -127,3 +127,67 @@ describe('pickInsertHint without the WASM peer', () => {
     expect(await pickInsertHint(client, { poolKey: POOL, targetTick: 0 })).toBe(MIN_TICK_SENTINEL)
   })
 })
+
+describe('pickInsertHint from a supplied tick list', () => {
+  beforeEach(() => {
+    tryLoadSdk.mockResolvedValue(null)
+  })
+
+  const { client, tickReads } = chainWith({ tick: 500, next_init_below: 0, next_init_above: 900 }, {})
+
+  it('returns the exact predecessor without deriving anything', async () => {
+    // The case the slot neighbours get wrong: the target sits below the current
+    // tick with initialized ticks between, so `next_init_below` (0) would be
+    // above the target and the contract would reject it.
+    const hint = await pickInsertHint(client, {
+      poolKey: POOL,
+      targetTick: -100,
+      initializedTicks: [-600, -300, 0, 900],
+    })
+    expect(hint).toBe(-300)
+    expect(tickReads()).toBe(0)
+  })
+
+  it('accepts a supplier and sorts a list that arrives out of order', async () => {
+    const hint = await pickInsertHint(client, {
+      poolKey: POOL,
+      targetTick: -100,
+      initializedTicks: async () => [0, -300, 900, -600],
+    })
+    expect(hint).toBe(-300)
+  })
+
+  it('returns the sentinel when every tick is above the target', async () => {
+    expect(
+      await pickInsertHint(client, { poolKey: POOL, targetTick: -900, initializedTicks: [-600, 0] }),
+    ).toBe(MIN_TICK_SENTINEL)
+  })
+
+  it('falls back to the slot when the supplier fails', async () => {
+    // An unauthenticated or unreachable API must not fail a mint outright.
+    const hint = await pickInsertHint(client, {
+      poolKey: POOL,
+      targetTick: -100,
+      initializedTicks: async () => {
+        throw new Error('401')
+      },
+    })
+    expect(hint).toBe(0)
+  })
+
+  it('is ignored when the WASM peer is present, because the chain is authoritative', async () => {
+    tryLoadSdk.mockResolvedValue({})
+    const walkable = chainWith(
+      { tick: 500, next_init_below: 0, next_init_above: 900 },
+      { [MIN_TICK_SENTINEL]: -600, [-600]: -300, [-300]: 0 },
+    )
+    // The list says -300 too, but a deliberately wrong one proves which won.
+    const hint = await pickInsertHint(walkable.client, {
+      poolKey: POOL,
+      targetTick: -100,
+      initializedTicks: [-599],
+    })
+    expect(hint).toBe(-300)
+    expect(walkable.tickReads()).toBeGreaterThan(0)
+  })
+})

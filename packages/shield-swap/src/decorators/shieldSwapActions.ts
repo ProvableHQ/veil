@@ -201,6 +201,14 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
 
   return (client: Client): ShieldSwapActions => {
     const api = buildApi(client)
+    // Supplied to every hint-deriving action so a caller without the WASM peer
+    // gets the exact predecessor from the API's tick list rather than a
+    // best-effort guess from the slot. Only consulted on that path, so a client
+    // with the peer never pays the request.
+    const withTicks = <P extends { poolKey: string; initializedTicks?: unknown }>(p: P): P =>
+      p.initializedTicks || !api
+        ? p
+        : { ...p, initializedTicks: () => api.getInitializedTicks(p.poolKey).then((r) => r.data ?? []) }
     return {
       getPool: (p) => getPool(client, withProgram(p)),
       getSlot: (p) => getSlot(client, withProgram(p)),
@@ -223,13 +231,13 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       getTradeControls: (p) => getTradeControls(client, withProgram(p)),
       getPrivateBalances: (p) => getPrivateBalances(client, p),
       getBalances: (p) => getBalances(client, api ?? missingApi, p),
-      pickInsertHint: (p) => pickInsertHint(client, withProgram(p)),
+      pickInsertHint: (p) => pickInsertHint(client, withTicks(withProgram(p))),
       swap: (p) => swap(client, withProgram(p)),
       claimSwapOutput: (p) => claimSwapOutput(client, p),
       swapMultiHop: (p) => swapMultiHop(client, withProgram(p)),
       createPool: (p) => createPool(client, withProgram(p)),
-      mint: (p) => mint(client, withProgram(p)),
-      increaseLiquidity: (p) => increaseLiquidity(client, withProgram(p)),
+      mint: (p) => mint(client, withTicks(withProgram(p))),
+      increaseLiquidity: (p) => increaseLiquidity(client, withTicks(withProgram(p))),
       decreaseLiquidity: (p) => decreaseLiquidity(client, withProgram(p)),
       collect: (p) => collect(client, withProgram(p)),
       burn: (p) => burn(client, withProgram(p)),

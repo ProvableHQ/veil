@@ -530,6 +530,25 @@ export class ApiClient {
     return this.request('GET', '/tick-spacings', { auth: true })
   }
 
+  /**
+   * Lists a pool's initialized ticks, sorted ascending.
+   *
+   * Every `tick_lower` and `tick_upper` across the pool's non-burned positions,
+   * deduplicated — enough to compute the insert hints `mint` asserts on without
+   * deriving a tick key per candidate. `pickInsertHint` uses it when the WASM
+   * peer needed to walk the on-chain list is unavailable.
+   *
+   * Indexed from positions rather than read from the contract's own linked
+   * list, so it can lag a position minted moments ago. The chain is the
+   * authority when a caller can reach it.
+   *
+   * @param poolKey Pool key field literal.
+   * @returns `data` holds the sorted ticks as plain numbers (i32).
+   */
+  async getInitializedTicks(poolKey: string): Promise<Schemas['InitializedTicksResponseDoc']> {
+    return this.request('GET', `/pools/${encodeURIComponent(poolKey)}/initialized-ticks`, { auth: true })
+  }
+
   /** Lists the on-chain operation schemas the API publishes. */
   async getTradingSchemas(): Promise<Schemas['TradingSchemaListResponse']> {
     return this.request('GET', '/schema/trading', { auth: true })

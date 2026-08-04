@@ -8,6 +8,33 @@ import { MIN_TICK_SENTINEL } from './q128.js'
 const MAX_HINT_HOPS = 1024
 
 /**
+ * Resolves the tick list, whether supplied as an array or a supplier.
+ *
+ * A supplier that fails resolves to `undefined` rather than rejecting, so an
+ * unreachable or unauthenticated API drops to the slot-neighbour guess instead
+ * of failing a mint outright.
+ */
+async function resolveTicks(
+  source: PickInsertHintParameters['initializedTicks'],
+): Promise<number[] | undefined> {
+  if (!source) return undefined
+  if (Array.isArray(source)) return source
+  return source().catch(() => undefined)
+}
+
+/**
+ * The greatest tick in `ticks` below `target`, or the sentinel when none is.
+ *
+ * Sorts defensively: the contract's assert compares against the immediate
+ * predecessor, so a list arriving out of order would otherwise yield a hint with
+ * an initialized tick between it and the target, which finalize rejects.
+ */
+function predecessorOf(ticks: number[], target: number): number {
+  const below = ticks.filter((tick) => tick < target).sort((a, b) => a - b)
+  return below.length ? below[below.length - 1]! : MIN_TICK_SENTINEL
+}
+
+/**
  * Picks a hint from the slot's initialized-tick neighbours alone.
  *
  * The fallback for callers without the WASM peer, and what this module returned
@@ -32,11 +59,16 @@ async function slotNeighborHint(client: Client, params: PickInsertHintParameters
  * @property targetTick The tick being initialized or updated (a position
  *   bound, spacing-aligned).
  * @property program shield_swap program override. Defaults inside `getSlot`.
+ * @property initializedTicks The pool's initialized ticks, ascending, or a
+ *   supplier for them — `client.api.getInitializedTicks` is one. Used only when
+ *   the WASM peer is unavailable, in place of walking the on-chain list; the
+ *   decorator supplies it from the configured API automatically.
  */
 export type PickInsertHintParameters = {
   poolKey: string
   targetTick: number
   program?: string
+  initializedTicks?: number[] | (() => Promise<number[]>)
 }
 
 /**
@@ -57,12 +89,23 @@ export type PickInsertHintParameters = {
  * the list holds one entry per initialized tick, not per tick in range.
  *
  * The `ticks` mapping is keyed by a hash of pool and tick, so the walk needs the
- * optional `@provablehq/sdk` peer to derive each key. Without it this falls back
- * to the slot's neighbours — best-effort, correct only for a target within one
- * initialized tick of the current price — rather than failing, so a wallet-backed
- * install that has no WASM keeps the behaviour it had before the walk existed. A
- * caller in that position who needs a distant range should pass `tickLowerHint`
- * and `tickUpperHint` explicitly.
+ * optional `@provablehq/sdk` peer to derive each key. Three sources, in
+ * descending order of authority:
+ *
+ * 1. The contract's own list, walked here — used whenever the peer is present.
+ * 2. `initializedTicks`, which the decorator fills from the DEX API's
+ *    `/pools/{key}/initialized-ticks`. Exact for any target and needs no
+ *    derivation, but it is indexed from positions rather than read from the
+ *    contract, so it can lag a position minted moments ago.
+ * 3. The slot's neighbours — one read, no derivation, and correct only for a
+ *    target within one initialized tick of the current price. The last resort,
+ *    and what this returned before the walk existed.
+ *
+ * Degrading rather than throwing matters because `mint` and `increaseLiquidity`
+ * both call this: `mint` loads the peer softly and `increaseLiquidity` not at
+ * all, so requiring it here would break wallet-backed installs that mint today.
+ * A caller on tier 3 who needs a distant range should pass `tickLowerHint` and
+ * `tickUpperHint` explicitly.
  *
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param params Pool and the target tick.
@@ -81,9 +124,13 @@ export async function pickInsertHint(client: Client, params: PickInsertHintParam
   // Deriving a tick key hashes with BHP256, which lives in the WASM peer. Read
   // paths and wallet-backed writes are meant never to require it — `mint` uses
   // the soft loader and `increaseLiquidity` touches it not at all — so an absent
-  // peer degrades to the slot's neighbours rather than throwing and taking those
-  // callers' mints with it.
-  if (!(await tryLoadSdk())) return slotNeighborHint(client, params)
+  // peer must not throw and take those callers' mints with it. A supplied tick
+  // list answers the question exactly, with no derivation; failing that, the
+  // slot's neighbours are the best guess available.
+  if (!(await tryLoadSdk())) {
+    const ticks = await resolveTicks(params.initializedTicks)
+    return ticks ? predecessorOf(ticks, params.targetTick) : slotNeighborHint(client, params)
+  }
 
   // Walk the initialized-tick list from the MIN sentinel to the last entry
   // below the target. The slot's own neighbours only bracket the *current*
