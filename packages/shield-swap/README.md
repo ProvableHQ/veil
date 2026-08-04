@@ -567,7 +567,17 @@ calculations (`view_amounts_for_liquidity`, fee-growth settlement) so a
 wallet or bot does not have to persist token ids or re-derive the math.
 `getOwnedPosition` resolves a single position by its token id. Both need
 record access (a connected wallet, or a local account with a record
-provider); each entry's `state` is `null` while a fresh mint finalizes.
+provider).
+
+An entry's `state` is `null` whenever the public mapping carries no entry for
+it, and that happens at both ends of a position's life. Just after a mint the
+record arrives before the mapping, so the position is real and its state is
+still landing. Just after a burn the reverse holds — the record scanner marks
+records spent on its own schedule, and has been measured still serving a burned
+position more than four minutes after the burn confirmed — so the entry is a
+position that no longer exists. Treat a `null` state as "not a live position"
+rather than as a value still loading, and read `getPosition` when the difference
+matters.
 
 ```ts
 const positions = await client.getOwnedPositions()
