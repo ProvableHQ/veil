@@ -69,6 +69,25 @@ describe('waitForConfirmation', () => {
     expect(error.message).toContain('did not reach the node')
   })
 
+  it('survives a rejection carrying no status at all', async () => {
+    vi.useFakeTimers()
+    // Reading `.status` off the caught value directly throws a TypeError on a
+    // null rejection, which would escape the loop whose whole purpose is
+    // surviving transient failures — the timeout must still be what surfaces.
+    const nullReject = () => {
+      throw null as unknown as Error
+    }
+    const { client } = pollingClient([nullReject])
+    const pending = waitForConfirmation(client, TX, 12_000).catch((e) => e)
+    await vi.advanceTimersByTimeAsync(20_000)
+    const error = (await pending) as TransactionTimeoutError
+
+    expect(error).toBeInstanceOf(TransactionTimeoutError)
+    // A rejection with no status is not evidence the node reported it absent.
+    expect(error.absentPolls).toBe(0)
+    expect(error.polls).toBeGreaterThan(0)
+  })
+
   it('defaults to a one-minute window', async () => {
     vi.useFakeTimers()
     const { client } = pollingClient([null])
