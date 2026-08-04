@@ -205,10 +205,19 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     // gets the exact predecessor from the API's tick list rather than a
     // best-effort guess from the slot. Only consulted on that path, so a client
     // with the peer never pays the request.
-    const withTicks = <P extends { poolKey: string; initializedTicks?: unknown }>(p: P): P =>
-      p.initializedTicks || !api
-        ? p
-        : { ...p, initializedTicks: () => api.getInitializedTicks(p.poolKey).then((r) => r.data ?? []) }
+    const withTicks = <P extends { poolKey: string; initializedTicks?: unknown }>(p: P): P => {
+      if (p.initializedTicks || !api) return p
+      // Shared across the action's hints rather than fetched per hint: `mint`
+      // derives two and would otherwise request the same list twice. A rejection
+      // is cached with it, so both hints fall back to the slot together instead
+      // of disagreeing about their source.
+      let inFlight: Promise<number[]> | undefined
+      return {
+        ...p,
+        initializedTicks: () =>
+          (inFlight ??= api.getInitializedTicks(p.poolKey).then((r) => r.data ?? [])),
+      }
+    }
     return {
       getPool: (p) => getPool(client, withProgram(p)),
       getSlot: (p) => getSlot(client, withProgram(p)),

@@ -190,3 +190,34 @@ describe('DEX API host derivation', () => {
     expect(urls).toEqual([SHIELD_SWAP_API_URLS.testnet, SHIELD_SWAP_API_URLS.mainnet])
   })
 })
+
+describe('insert hints and the API', () => {
+  const TICK_ENTRY =
+    '{\n  liquidity_gross: 1u128,\n  liquidity_net: 1i128,\n' +
+    '  fee_growth_outside0_x_128: { lo: 0u128, hi: 0u128 },\n' +
+    '  fee_growth_outside1_x_128: { lo: 0u128, hi: 0u128 },\n' +
+    '  prev: 0i32,\n  next: 900i32,\n  initialized: true\n}'
+
+  it('does not call the API for ticks when the WASM peer can walk the chain', async () => {
+    // The tick list is attached as a supplier rather than a fetched array, so
+    // the request only happens on the branch that needs it. A client that can
+    // derive tick keys must pay nothing for the fallback being wired up.
+    const paths: string[] = []
+    const fetchImpl = (async (url: URL | string) => {
+      paths.push(new URL(String(url)).pathname)
+      return new Response(JSON.stringify({ data: [] }))
+    }) as unknown as typeof fetch
+
+    const client = createClient({
+      transport: custom({
+        request: async ({ params }) =>
+          (params as { mapping?: string })?.mapping === 'ticks' ? TICK_ENTRY : null,
+      }),
+    }).extend(shieldSwapActions({ api: { fetch: fetchImpl } }))
+
+    // @provablehq/sdk is installed here, so this takes the chain-walk branch.
+    const hint = await client.pickInsertHint({ poolKey: '1field', targetTick: 300 })
+    expect(typeof hint).toBe('number')
+    expect(paths.filter((p) => p.includes('initialized-ticks'))).toEqual([])
+  })
+})
