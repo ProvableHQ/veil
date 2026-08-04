@@ -27,7 +27,7 @@ const CONSUMER_ID = process.env.ALEO_CONSUMER_ID
 const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!DPS_API_KEY && !!CONSUMER_ID
 
 const NETWORK_URL = 'https://api.provable.com/v2'
-const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove/testnet'
+const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove'
 const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://api.provable.com/scanner'
 const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap.aleo'
 const TX_TIMEOUT = 420_000

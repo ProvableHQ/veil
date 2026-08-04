@@ -35,7 +35,7 @@ const RUN =
 
 const BRIDGE_URL = process.env.VEIL_BRIDGE_API_URL ?? 'https://wallet.api.provable.com'
 const NETWORK_URL = 'https://api.provable.com/v2'
-const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove/mainnet'
+const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove'
 const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://api.provable.com/scanner'
 
 // The route: native ALEO → SOL to the e2e Solana wallet, via whichever

@@ -40,6 +40,16 @@ The delegated-proving path also gains the 401 re-mint retry that only record
 scanning had, and record scanning now replaces its token only when the token was
 what the service rejected, rather than on every transient failure.
 
+**`proverUrl` is now a base URL.** Pass `https://api.provable.com/prove` and the
+active network is appended, mirroring `createRemoteScanner`'s `url`. Previously
+the network was baked into the value the caller supplied, so `switchChain` left
+delegated proving pointed at the network the client started from — and
+confirmation polling with it, since it read the network the handle was loaded
+with rather than the one in force. Both now follow the switch. A value that still
+carries a trailing `/mainnet` or `/testnet` is re-targeted rather than doubled, so
+existing callers keep working; `ProvingConfig.url` reports the resolved endpoint
+for the network currently in force rather than echoing the input.
+
 In `@provablehq/veil-core`, `Client` takes an accumulating `extended` type
 parameter, defaulting to `undefined`, and `extend` returns
 `Client<added & existing>` instead of `Client & extended`. Chained `extend` calls

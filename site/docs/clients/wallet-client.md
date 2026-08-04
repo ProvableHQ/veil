@@ -78,7 +78,7 @@ const client = createWalletClient({
   proving: aleo.createProvingConfig({
     mode: 'delegated',
     networkUrl: 'https://api.provable.com/v2',
-    proverUrl: 'https://api.provable.com/prove/testnet',
+    proverUrl: 'https://api.provable.com/prove',
     account,
   }),
   recordProvider,
@@ -254,7 +254,7 @@ const walletClient = createWalletClient({
   proving: aleo.createProvingConfig({
     mode: 'delegated',
     networkUrl: 'https://api.provable.com/v2',
-    proverUrl: 'https://api.provable.com/prove/testnet',
+    proverUrl: 'https://api.provable.com/prove',
     account,
   }),
   recordProvider,

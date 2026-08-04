@@ -110,7 +110,7 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
       privateKey: PRIVATE_KEY!,
       networkUrl: NETWORK_URL,
       provingMode: 'delegated',
-      proverUrl: process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove/mainnet',
+      proverUrl: process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove',
       apiKey: DPS_API_KEY,
       consumerId: CONSUMER_ID,
       records: bridgeScanner,

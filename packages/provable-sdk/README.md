@@ -45,7 +45,7 @@ const { publicClient, walletClient, account } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
   networkUrl: 'https://api.provable.com/v2',
   provingMode: 'delegated',
-  proverUrl: 'https://api.provable.com/prove/testnet',
+  proverUrl: 'https://api.provable.com/prove',
   credentialStore: fileCredentialStore('./.provable-credentials.json'),
   records: scanner,
 })
@@ -57,6 +57,11 @@ No API key appears above: the store registers a Provable API consumer the first
 time something needs one and reuses it from then on. Already hold credentials?
 Pass `consumerId` and `apiKey` instead and drop the store — see
 [Provable API credentials](#provable-api-credentials).
+
+`proverUrl` is a base URL — the active network is appended, the same way the
+record scanner's `url` works — so `switchChain` re-targets proving instead of
+leaving it on the network the client started from. Do not include the network
+segment yourself.
 
 Pass `provingMode: 'local'` to prove in-process instead of delegating to a prover
 service (drop `proverUrl`/`apiKey`/`consumerId`). The `walletClient` composes with
@@ -131,7 +136,7 @@ import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
 const { walletClient } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
   networkUrl: 'https://api.provable.com/v2',
-  proverUrl: 'https://api.provable.com/prove/testnet',
+  proverUrl: 'https://api.provable.com/prove',
   credentialStore: fileCredentialStore('./.provable-credentials.json'),
   records: scanner,
 })

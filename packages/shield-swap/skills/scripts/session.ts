@@ -20,7 +20,8 @@ import type { SwapHandle, MultiHopSwapHandle } from '@provablehq/shield-swap-sdk
 
 export const NETWORK = 'testnet' as const
 export const NETWORK_URL = 'https://api.provable.com/v2'
-export const PROVER_URL = `https://api.provable.com/prove/${NETWORK}`
+/** Base URL of the prover — the SDK appends the active network. */
+export const PROVER_URL = 'https://api.provable.com/prove'
 export const SCANNER_URL = 'https://api.provable.com/scanner'
 
 /** A liquidity position the account opened, tracked for later operations. */

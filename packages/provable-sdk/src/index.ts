@@ -167,6 +167,11 @@ export interface AleoSdk {
   /**
    * Creates a `ProvingConfig` for `createWalletClient({ proving })`.
    *
+   * @param options.proverUrl Base URL of the delegated proving service, e.g.
+   *   `https://api.provable.com/prove` — the network segment is appended, so do
+   *   not include it. That is what lets `switchChain` re-target proving instead
+   *   of leaving it on the network the client started from. A base that already
+   *   ends in `/mainnet` or `/testnet` is re-targeted rather than doubled.
    * @param options.session Optional Provable API session. When present the
    *   configuration authenticates from it and withholds `apiKey`/`consumerId`
    *   from the prover client, so one party mints JWTs. The session is attached
@@ -257,6 +262,9 @@ export interface AleoSdk {
    * @param options.apiKey Optional Provable API key. Paired with `consumerId`,
    *   it seeds the session directly.
    * @param options.consumerId Optional Provable API consumer id.
+   * @param options.proverUrl Base URL of the delegated proving service, e.g.
+   *   `https://api.provable.com/prove` — the network segment is appended, so do
+   *   not include it. That is what lets `switchChain` re-target proving.
    * @param options.credentialStore Optional persistence for Provable API
    *   credentials. When neither `consumerId`/`apiKey` nor a stored pair is
    *   available, a consumer is registered under a name derived from the account
@@ -407,9 +415,34 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     keyProvider.useCache(true)
     options.session?.attach('proving')
 
+    // Tracked per configuration rather than read from the handle: the handle's
+    // `network` names the binaries it loaded, and confirmation polling has to
+    // follow this client's current chain instead.
+    let configNetwork: SupportedNetwork = network
+
+    /**
+     * Resolves the prover endpoint for the network in force.
+     *
+     * `proverUrl` is a base — the network segment is appended here, the same way
+     * the record scanner's base URL works — so a client that switches chains
+     * reaches the right prover without rebuilding. A base that already ends in a
+     * network segment is accepted and re-targeted rather than doubled, so a
+     * caller who passes the fully-qualified URL still switches correctly.
+     */
+    const resolveProverUrl = (): string | undefined => {
+      if (!options.proverUrl) return undefined
+      const base = options.proverUrl.replace(/\/+$/, '').replace(/\/(mainnet|testnet)$/, '')
+      return `${base}/${configNetwork}`
+    }
+
     return {
       mode: options.mode,
-      url: options.proverUrl,
+      // A getter, not a snapshot: the network segment moves with `switchChain`,
+      // and a fixed string here would report the network this config started on
+      // long after it left.
+      get url() {
+        return resolveProverUrl()
+      },
       // Carried for `authenticateProvableApi` to find on a client. Core never
       // reads binding-specific fields on a proving config — `url` and `apiKey`
       // already travel the same way.
@@ -552,10 +585,11 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 
         /** Build a Veil publicClient bound to the current networkUrl for chain polling. */
         const buildPollingClient = () =>
-          createPublicClient({ transport: http(networkUrl, { network: network as Network }) })
+          createPublicClient({ transport: http(networkUrl, { network: configNetwork as Network }) })
 
         if (options.mode === 'delegated') {
-          if (!options.proverUrl) throw new ConfigurationError('Delegated execution requires proverUrl. Pass proverUrl to createProvingConfig or createAleoClient.')
+          const proverUrl = resolveProverUrl()
+          if (!proverUrl) throw new ConfigurationError('Delegated execution requires proverUrl. Pass proverUrl to createProvingConfig or createAleoClient.')
 
           let response: any
           try {
@@ -571,7 +605,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               useFeeMaster: options.useFeeMaster ?? true,
             })
 
-            const dpsClient = new AleoNetworkClient(options.proverUrl)
+            const dpsClient = new AleoNetworkClient(proverUrl)
             // A session supplies the token and withholds the credentials, so
             // one party mints. Without one, the SDK mints from the pair as
             // before.
@@ -587,7 +621,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             let credentials = await auth(false)
             let result = await dpsClient.submitProvingRequestSafe({
               provingRequest,
-              url: options.proverUrl,
+              url: proverUrl,
               ...credentials,
             })
             // A freshly minted JWT can reach a prover that has not yet synced
@@ -596,7 +630,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               credentials = await auth(true)
               result = await dpsClient.submitProvingRequestSafe({
                 provingRequest,
-                url: options.proverUrl,
+                url: proverUrl,
                 ...credentials,
               })
             }
@@ -670,6 +704,10 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         currentSdk = (await loadSdk(newNetwork as SupportedNetwork)) as SdkModule
         keyProvider = new currentSdk.AleoKeyProvider()
         keyProvider.useCache(true)
+        // Confirmation polling and the prover endpoint both read this, so it
+        // must move with the switch or a delegated client proves and polls the
+        // chain it just left.
+        configNetwork = newNetwork as SupportedNetwork
       },
     }
   }

@@ -42,7 +42,7 @@ const { publicClient, walletClient } = aleo.createAleoClient({
   privateKey: 'APrivateKey1...',
   networkUrl: 'https://api.provable.com/v2',
   provingMode: 'delegated', // or 'local' to prove in-process
-  proverUrl: 'https://api.provable.com/prove/testnet',
+  proverUrl: 'https://api.provable.com/prove',
 })
 ```
 

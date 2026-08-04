@@ -223,7 +223,9 @@ describe('@provablehq/veil-aleo-sdk', () => {
       })
 
       expect(config.mode).toBe('delegated')
-      expect(config.url).toBe('https://prover.example.com')
+      // proverUrl is a base; the active network is appended so `switchChain`
+      // re-targets proving. See proverNetwork.test.ts.
+      expect(config.url).toBe('https://prover.example.com/testnet')
       expect(config.buildTransaction).toBeTypeOf('function')
     })
 

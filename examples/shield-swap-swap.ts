@@ -52,7 +52,7 @@ describe.runIf(RUN)('example: swap on Shield Swap', () => {
       privateKey: process.env.VEIL_E2E_PRIVATE_KEY!,
       networkUrl: 'https://api.provable.com/v2',
       provingMode: 'delegated',
-      proverUrl: 'https://api.provable.com/prove/testnet',
+      proverUrl: 'https://api.provable.com/prove',
       apiKey: process.env.ALEO_DPS_API_KEY,
       consumerId: process.env.ALEO_CONSUMER_ID,
       records: scanner,

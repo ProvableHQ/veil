@@ -36,7 +36,7 @@ const API_KEY = process.env.ALEO_DPS_API_KEY
 const API_URL = process.env.VEIL_PROVABLE_API_URL ?? 'https://api.provable.com'
 const SCANNER_URL = process.env.ALEO_RSS_URL ?? 'https://api.provable.com/scanner'
 const NETWORK_URL = process.env.VEIL_API_URL ?? 'https://api.provable.com/v2'
-const PROVER_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove/testnet'
+const PROVER_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove'
 
 const RUN = process.env.VEIL_INTEGRATION === '1' && !!CONSUMER_ID && !!API_KEY
 const RUN_REGISTRATION = RUN && process.env.VEIL_PROVABLE_REGISTER === '1'
