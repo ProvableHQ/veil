@@ -72,9 +72,9 @@ import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hin
 import { resolveDexImports, type ResolveDexImportsParameters } from '../utils/imports.js'
 import { reserveBlindedIdentity } from '../actions/blinding/reserveBlindedIdentity.js'
 import { syncBlindedIdentities } from '../actions/blinding/syncBlindedIdentities.js'
+import { recordBlindedSwap } from '../actions/blinding/recordBlindedSwap.js'
 import {
   memoryBlindedIdentityStore,
-  recordBlindedSwap,
   type BlindedIdentityRecord,
   type BlindedIdentityStore,
 } from '../utils/blinding/store.js'

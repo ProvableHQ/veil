@@ -3,11 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, it, expect, beforeAll } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
-import {
-  memoryBlindedIdentityStore,
-  recordBlindedSwap,
-  type BlindedIdentityRecord,
-} from '../../../src/utils/blinding/store.js'
+import { memoryBlindedIdentityStore, type BlindedIdentityRecord } from '../../../src/utils/blinding/store.js'
+import { recordBlindedSwap } from '../../../src/actions/blinding/recordBlindedSwap.js'
 import { reserveBlindedIdentity } from '../../../src/actions/blinding/reserveBlindedIdentity.js'
 import { syncBlindedIdentities } from '../../../src/actions/blinding/syncBlindedIdentities.js'
 import { fileBlindedIdentityStore } from '../../../src/node.js'

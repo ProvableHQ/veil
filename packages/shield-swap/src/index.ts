@@ -70,8 +70,8 @@ export {
   syncBlindedIdentities,
   type SyncBlindedIdentitiesParameters,
 } from './actions/blinding/syncBlindedIdentities.js'
+export { recordBlindedSwap } from './actions/blinding/recordBlindedSwap.js'
 export {
-  recordBlindedSwap,
   memoryBlindedIdentityStore,
   type BlindedIdentityRecord,
   type BlindedIdentityStatus,
