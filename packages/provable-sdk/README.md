@@ -37,19 +37,26 @@ const scanner = aleo.createRemoteScanner({
 
 // A fully-wired client pair: an account from the private key, a public client
 // for reads, and a wallet client with proving + the scanner attached. The
-// credentials build one Provable API session shared by proving and scanning.
+// credential store holds one Provable API session shared by proving and
+// scanning — it registers a consumer on the first run and reuses it after.
+import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
+
 const { publicClient, walletClient, account } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
   networkUrl: 'https://api.provable.com/v2',
   provingMode: 'delegated',
   proverUrl: 'https://api.provable.com/prove/testnet',
-  apiKey: DPS_API_KEY,
-  consumerId: CONSUMER_ID,
+  credentialStore: fileCredentialStore('./.provable-credentials.json'),
   records: scanner,
 })
 
 account.address // 'aleo1...'
 ```
+
+No API key appears above: the store registers a Provable API consumer the first
+time something needs one and reuses it from then on. Already hold credentials?
+Pass `consumerId` and `apiKey` instead and drop the store — see
+[Provable API credentials](#provable-api-credentials).
 
 Pass `provingMode: 'local'` to prove in-process instead of delegating to a prover
 service (drop `proverUrl`/`apiKey`/`consumerId`). The `walletClient` composes with
@@ -66,14 +73,27 @@ const client = walletClient.extend(
 ## Provable API credentials
 
 Delegated proving and the hosted record scanner both authenticate with a consumer
-id and API key, which the SDK exchanges for short-lived JWTs. Passing the pair to
-`createAleoClient` builds a single session that covers both services, so one
-credential mints one token instead of each service minting its own.
+id and API key, which the SDK exchanges for short-lived JWTs. A client builds a
+single session covering both services, so one credential mints one token instead
+of each service minting its own.
 
-If you already hold credentials, the example above is all you need — the session
-resolves on the first prove or scan. `authenticateProvableApi()` does it eagerly,
-which is worth doing at startup so a bad key fails before you have built a
-transaction:
+Where that credential comes from is the only decision. Three options:
+
+| | Use when | Registers? |
+| --- | --- | --- |
+| `fileCredentialStore(path)` from `/node` | Bots, scripts, servers, CI that can write to disk | On first run, then reuses |
+| `consumerId` + `apiKey` | You already hold credentials — from a secret manager or env | Never |
+| `memoryCredentialStore()` (the default) | Tests, ephemeral workers | Every process, key discarded at exit |
+
+`memoryCredentialStore()` is what a client falls back to when given neither, so
+delegated proving works with no configuration at all. It is only appropriate for
+a single short run: the API issues each key exactly once, so a process that
+registers into memory and runs again registers a second consumer nobody can
+reclaim. Anything long-lived wants a persistent store.
+
+The session resolves on the first prove or scan. `authenticateProvableApi()` does
+it eagerly, which is worth doing at startup so a bad key fails before you have
+built a transaction:
 
 ```ts
 const { credentials, expiration, registered, applied } =
@@ -100,33 +120,49 @@ await writeFile('creds.json', JSON.stringify(credentials), { mode: 0o600 })
 Usernames are globally unique across the Provable API, so a taken name fails the
 call and needs a different one.
 
-For a process that should register on first run and reuse the same consumer
-afterward, hand the client a `credentialStore` instead of a credential pair. The
-SDK reads through it, registers only when it comes back empty, and writes the new
-credentials back before returning. Persistence is yours to implement — a file, a
-keychain, `localStorage`, and a secret manager are all valid, and the SDK makes no
-assumption about which:
+On Node, `fileCredentialStore` covers this. It writes with mode `0600`, treats a
+missing file as "not registered yet", and reports a corrupt one rather than
+registering over credentials that might still be recoverable by hand. It lives on
+the `/node` subpath so the `node:fs` import never reaches a browser bundle:
 
 ```ts
-import type { ProvableCredentialStore } from '@provablehq/veil-aleo-sdk'
-
-const credentialStore: ProvableCredentialStore = {
-  load: async () => JSON.parse(await readFile(path, 'utf8')).provableApi,
-  save: async (c) =>
-    writeFile(path, JSON.stringify({ provableApi: c }), { mode: 0o600 }),
-}
+import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
 
 const { walletClient } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
   networkUrl: 'https://api.provable.com/v2',
   proverUrl: 'https://api.provable.com/prove/testnet',
-  credentialStore,
+  credentialStore: fileCredentialStore('./.provable-credentials.json'),
   records: scanner,
 })
 
 const { registered } = await walletClient.authenticateProvableApi()
 registered // true on the first run, false afterward
 ```
+
+Anywhere else, implement the two-method interface yourself — a keychain,
+`localStorage`, IndexedDB, or a secret manager all satisfy it, and the SDK assumes
+nothing about which:
+
+```ts
+import type { ProvableCredentialStore } from '@provablehq/veil-aleo-sdk'
+
+const credentialStore: ProvableCredentialStore = {
+  load: () => {
+    const raw = localStorage.getItem('provable-credentials')
+    return raw ? JSON.parse(raw) : undefined // undefined → register
+  },
+  save: (c) => localStorage.setItem('provable-credentials', JSON.stringify(c)),
+}
+```
+
+Two rules for a hand-written store. `load` MUST return `undefined` rather than
+throw when nothing is stored, or resolution fails instead of registering. And
+`save` must actually persist: it runs before the credentials are handed back
+precisely so a failed write fails the call, since a swallowed one orphans a
+consumer whose key cannot be reissued. That also means a genuinely read-only
+environment should supply `consumerId`/`apiKey` directly rather than rely on
+registration.
 
 An explicit `consumerId`/`apiKey` pair takes precedence over the store, so an
 operator can inject a rotated key or CI credentials without clearing persisted

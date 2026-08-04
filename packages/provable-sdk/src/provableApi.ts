@@ -1,4 +1,9 @@
-import type { Client, ProvingConfig, WalletClient } from '@provablehq/veil-core'
+import type {
+  Client,
+  ProvingConfig,
+  RecordProvider,
+  WalletActions,
+} from '@provablehq/veil-core'
 
 /** Root of the hosted Provable API. Consumer and JWT endpoints sit here, not under the versioned path. */
 const DEFAULT_PROVABLE_API_URL = 'https://api.provable.com'
@@ -49,6 +54,41 @@ export type ProvableApiCredentials = {
 export type ProvableCredentialStore = {
   load: () => Promise<ProvableApiCredentials | undefined> | ProvableApiCredentials | undefined
   save: (credentials: ProvableApiCredentials) => Promise<void> | void
+}
+
+/**
+ * Builds a credential store that keeps credentials for the life of the process.
+ *
+ * The default when a client is given no credentials and no store, and the right
+ * choice for tests and short-lived workers. Suited to any runtime, since it
+ * touches no storage.
+ *
+ * A consumer registered into this store is lost when the process exits, and its
+ * API key is issued once — so a process that registers here and runs again
+ * registers a second consumer that nobody can reclaim. Anything longer-lived
+ * than a single run belongs in a persistent store: `fileCredentialStore` from
+ * `@provablehq/veil-aleo-sdk/node`, or a caller-supplied
+ * {@link ProvableCredentialStore}.
+ *
+ * @param initial Optional credentials to start with, so a caller can seed the
+ *   store from an environment variable and skip registration.
+ * @returns A store backed by a closure variable.
+ *
+ * @example
+ * const store = memoryCredentialStore()
+ * // or seeded, in which case nothing registers:
+ * const seeded = memoryCredentialStore({ consumerId, apiKey })
+ */
+export function memoryCredentialStore(
+  initial?: ProvableApiCredentials,
+): ProvableCredentialStore {
+  let held = initial
+  return {
+    load: () => held,
+    save: (credentials) => {
+      held = credentials
+    },
+  }
 }
 
 /**
@@ -203,10 +243,19 @@ export type ProvableApiActions = {
  * carries forward only what sits in the action set, so an outer intersection
  * would be dropped on the next call.
  *
- * The wallet half is derived from `WalletClient` rather than restated, so it
- * follows any change to what a wallet client carries.
+ * The wallet half is restated rather than derived. `Omit<WalletClient, keyof
+ * Client>` reads better and was tried first, but `keyof Client` resolves to
+ * `never` against core's built declarations — so the Omit keeps every base field,
+ * violates the `Extended` constraint, and silently collapses to a type missing
+ * every wallet action. It typechecks against core's source and fails only for
+ * consumers, which is the worst place to find out.
+ *
+ * Keep this in step if core changes what a wallet client carries; a
+ * `WalletClientActions` export from core would remove the duplication safely.
  */
-export type ProvableWalletClient = Client<Omit<WalletClient, keyof Client> & ProvableApiActions>
+export type ProvableWalletClient = Client<
+  WalletActions & { recordProvider: RecordProvider | undefined } & ProvableApiActions
+>
 
 /**
  * A proving configuration carrying the Provable API session.

@@ -1,12 +1,17 @@
-import { afterEach, describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
+import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   registerProvableApi,
   createProvableSession,
+  memoryCredentialStore,
   authenticateProvableApi,
   provableApiActions,
   type ProvableApiCredentials,
   type ProvableCredentialStore,
 } from '../src/provableApi.js'
+import { fileCredentialStore } from '../src/node.js'
 import type { Client } from '@provablehq/veil-core'
 
 const CREDENTIALS: ProvableApiCredentials = { consumerId: 'consumer-1', apiKey: 'key-1' }
@@ -267,6 +272,97 @@ describe('provableApi', () => {
       await authenticateProvableApi(client)
       await authenticateProvableApi(client, { forceRefresh: true })
       expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe('memoryCredentialStore', () => {
+    it('starts empty, so a session registers into it', async () => {
+      stubFetch()
+      const store = memoryCredentialStore()
+      expect(await store.load()).toBeUndefined()
+
+      const session = createProvableSession({ store, username: 'bot' })
+      const credentials = await session.getCredentials()
+      expect(session.registeredConsumer()).toBe(true)
+      // Written through, so a second session over the same store reuses it.
+      expect(await store.load()).toEqual(credentials)
+    })
+
+    it('reuses credentials across sessions sharing the store', async () => {
+      const { calls } = stubFetch()
+      const store = memoryCredentialStore()
+      await createProvableSession({ store, username: 'bot' }).getCredentials()
+      const second = createProvableSession({ store, username: 'bot' })
+      await second.getCredentials()
+      expect(second.registeredConsumer()).toBe(false)
+      expect(calls.filter((c) => c.includes('/consumers'))).toHaveLength(1)
+    })
+
+    it('skips registration entirely when seeded', async () => {
+      const { calls } = stubFetch()
+      const session = createProvableSession({ store: memoryCredentialStore(CREDENTIALS) })
+      expect(await session.getCredentials()).toEqual(CREDENTIALS)
+      expect(calls.some((c) => c.includes('/consumers'))).toBe(false)
+    })
+  })
+
+  describe('fileCredentialStore', () => {
+    let dir: string
+
+    beforeEach(async () => {
+      dir = await mkdtemp(join(tmpdir(), 'veil-creds-'))
+    })
+    afterEach(async () => {
+      await rm(dir, { recursive: true, force: true })
+    })
+
+    it('reads a missing file as not-yet-registered', async () => {
+      const store = fileCredentialStore(join(dir, 'creds.json'))
+      expect(await store.load()).toBeUndefined()
+    })
+
+    it('round-trips credentials through the file', async () => {
+      const store = fileCredentialStore(join(dir, 'creds.json'))
+      await store.save(CREDENTIALS)
+      expect(await store.load()).toEqual(CREDENTIALS)
+    })
+
+    it('creates parent directories on save', async () => {
+      const store = fileCredentialStore(join(dir, 'nested', 'deeper', 'creds.json'))
+      await store.save(CREDENTIALS)
+      expect(await store.load()).toEqual(CREDENTIALS)
+    })
+
+    it('writes owner-only, since the key cannot be reissued', async () => {
+      const path = join(dir, 'creds.json')
+      await fileCredentialStore(path).save(CREDENTIALS)
+      expect((await stat(path)).mode & 0o777).toBe(0o600)
+    })
+
+    it('reports malformed JSON rather than silently re-registering over it', async () => {
+      const path = join(dir, 'creds.json')
+      await writeFile(path, '{ not json')
+      await expect(fileCredentialStore(path).load()).rejects.toThrow(/not valid JSON/)
+    })
+
+    it('reports a file missing either half of the pair', async () => {
+      const path = join(dir, 'creds.json')
+      await writeFile(path, JSON.stringify({ consumerId: 'only-half' }))
+      await expect(fileCredentialStore(path).load()).rejects.toThrow(/missing consumerId or apiKey/)
+    })
+
+    it('registers on the first session and reuses the file on the next', async () => {
+      const { calls } = stubFetch()
+      const path = join(dir, 'creds.json')
+
+      const first = createProvableSession({ store: fileCredentialStore(path), username: 'bot' })
+      const credentials = await first.getCredentials()
+      expect(first.registeredConsumer()).toBe(true)
+
+      const second = createProvableSession({ store: fileCredentialStore(path), username: 'bot' })
+      expect(await second.getCredentials()).toEqual(credentials)
+      expect(second.registeredConsumer()).toBe(false)
+      expect(calls.filter((c) => c.includes('/consumers'))).toHaveLength(1)
     })
   })
 

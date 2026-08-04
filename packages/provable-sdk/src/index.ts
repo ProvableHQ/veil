@@ -52,6 +52,7 @@ import type { Decryptor } from '@provablehq/veil-core'
 import { generateMnemonic, mnemonicToHDKey, type AleoDerivationId } from './mnemonic.js'
 import {
   createProvableSession,
+  memoryCredentialStore,
   provableApiActions,
   type ProvableCredentialStore,
   type ProvableSession,
@@ -62,6 +63,7 @@ import {
 export {
   registerProvableApi,
   createProvableSession,
+  memoryCredentialStore,
   authenticateProvableApi,
   provableApiActions,
   type ProvableApiCredentials,
@@ -258,7 +260,12 @@ export interface AleoSdk {
    * @param options.credentialStore Optional persistence for Provable API
    *   credentials. When neither `consumerId`/`apiKey` nor a stored pair is
    *   available, a consumer is registered under a name derived from the account
-   *   address and saved here.
+   *   address and saved here. Defaults to `memoryCredentialStore()`, which holds
+   *   a registered consumer only for the life of the process — pass
+   *   `fileCredentialStore` from `@provablehq/veil-aleo-sdk/node`, or any
+   *   {@link ProvableCredentialStore}, for anything longer-lived. A client left
+   *   fully unconfigured does not share its session with `records`, so a scanner
+   *   aimed at an open service keeps needing no credential.
    * @param options.session Optional pre-built session, for a caller that owns
    *   one already. Takes precedence over the credential options.
    * @returns A public client, a wallet client carrying
@@ -926,26 +933,29 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     const transport = http(options.networkUrl, { network: network as Network })
 
     // One session for the whole client, so a single authenticateProvableApi()
-    // covers proving and scanning. Built only when there is a credential source
-    // to build it from; without one the existing apiKey/consumerId path stands.
+    // covers proving and scanning.
     const credentials =
       options.consumerId && options.apiKey
         ? { consumerId: options.consumerId, apiKey: options.apiKey }
         : undefined
+    // Whether the caller named a credential source. Without one the session
+    // still exists — falling back to process-lifetime memory, so delegated
+    // proving works out of the box — but it is not shared with the record
+    // provider, since a scanner pointed at an open service needs no credential
+    // and must not start registering one.
+    const configured = !!(credentials || options.credentialStore || options.session)
     const session =
       options.session ??
-      (credentials || options.credentialStore
-        ? createProvableSession({
-            credentials,
-            store: options.credentialStore,
-            // Derived lazily: only a registration needs it. The random suffix
-            // matters because usernames are globally unique — an account that
-            // lost its stored credentials must be able to register again, and
-            // the old API key is unrecoverable.
-            username: () =>
-              `veil-${account.address.slice(5, 13)}-${Math.random().toString(36).slice(2, 8)}`,
-          })
-        : undefined)
+      createProvableSession({
+        credentials,
+        store: options.credentialStore ?? memoryCredentialStore(),
+        // Derived lazily: only a registration needs it. The random suffix
+        // matters because usernames are globally unique — an account that
+        // lost its stored credentials must be able to register again, and
+        // the old API key is unrecoverable.
+        username: () =>
+          `veil-${account.address.slice(5, 13)}-${Math.random().toString(36).slice(2, 8)}`,
+      })
 
     const proving = createProvingConfig({
       mode: options.provingMode ?? 'delegated',
@@ -965,8 +975,10 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     if (options.records) {
       // Session before account: sharing the session rebuilds the scanner to drop
       // any credentials it was constructed with, and setAccount is what triggers
-      // the one build that matters.
-      if (session) options.records.setSession?.(session)
+      // the one build that matters. Only shared when the caller named a
+      // credential source — an unconfigured client must leave a scanner aimed at
+      // an open service exactly as it was.
+      if (configured) options.records.setSession?.(session)
       options.records.setAccount({ viewKey: account.viewKey })
     }
 

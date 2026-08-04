@@ -22,10 +22,16 @@ New in `@provablehq/veil-aleo-sdk`:
   concurrent mints onto one request.
 - `authenticateProvableApi(client, params?)` and `provableApiActions()` — the
   action and its decorator.
-- `ProvableCredentialStore` — caller-implemented persistence. Passing a
-  `credentialStore` to `createAleoClient` registers on first run and reuses the
-  same consumer afterward. An explicit `consumerId`/`apiKey` pair takes
-  precedence, so a rotated key needs no state reset.
+- `ProvableCredentialStore`, with two implementations. `fileCredentialStore(path)`
+  from the new `@provablehq/veil-aleo-sdk/node` subpath persists to JSON at mode
+  `0600`, so a process registers on first run and reuses the consumer afterward;
+  it lives behind a subpath so `node:fs` never reaches a browser bundle.
+  `memoryCredentialStore()` holds credentials for the life of the process and is
+  the default when a client is given neither credentials nor a store, so delegated
+  proving works unconfigured — but a consumer registered there is lost at exit,
+  and the API issues each key once, so anything long-lived wants persistence. An
+  explicit `consumerId`/`apiKey` pair takes precedence over a store, so a rotated
+  key needs no state reset.
 - `session` on `createProvingConfig`, `createRemoteScanner`, and
   `createStandaloneScanner`, and `setSession` on the providers the first two
   return. `consumerId` is now optional on both scanners.
