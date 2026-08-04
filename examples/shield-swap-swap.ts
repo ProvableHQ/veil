@@ -35,7 +35,7 @@ const RUN =
   !!process.env.ALEO_DPS_API_KEY &&
   !!process.env.ALEO_CONSUMER_ID
 
-const AMM_API_URL = process.env.AMM_API_URL ?? 'https://amm-api.dev.provable.com'
+const AMM_API_URL = process.env.AMM_API_URL ?? 'https://api.testnet.swap.shield.fi'
 
 describe.runIf(RUN)('example: swap on Shield Swap', () => {
   it('quotes, swaps, and claims the output', async (ctx) => {

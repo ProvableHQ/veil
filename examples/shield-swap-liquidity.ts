@@ -35,7 +35,7 @@ const RUN =
   !!process.env.ALEO_DPS_API_KEY &&
   !!process.env.ALEO_CONSUMER_ID
 
-const AMM_API_URL = process.env.AMM_API_URL ?? 'https://amm-api.dev.provable.com'
+const AMM_API_URL = process.env.AMM_API_URL ?? 'https://api.testnet.swap.shield.fi'
 
 describe.runIf(RUN)('example: provide liquidity on Shield Swap', () => {
   it('creates a pool, mints, resizes, collects, and burns a position', async (ctx) => {

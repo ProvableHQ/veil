@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { createClient, custom } from '@provablehq/veil-core'
+import { createClient, custom, http } from '@provablehq/veil-core'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
-import { ApiClient } from '../../src/api/client.js'
+import { ApiClient, SHIELD_SWAP_API_URLS } from '../../src/api/client.js'
 
 const POOL_PLAINTEXT =
   '{\n  token0: 11field,\n  token1: 22field,\n  fee: 3000u16,\n  enabled: true,\n  scale0: 1u128,\n  scale1: 1u128\n}'
@@ -121,5 +121,59 @@ describe('shieldSwapActions', () => {
 
     const chainOnly = baseClient(() => null).extend(shieldSwapActions())
     expect(() => chainOnly.api.getPools).toThrow(/No DEX API configured/)
+  })
+})
+
+describe('DEX API host derivation', () => {
+  /** Records the origin each request went to. */
+  const spy = () => {
+    const urls: string[] = []
+    const fetchImpl = (async (url: URL | string) => {
+      urls.push(new URL(String(url)).origin)
+      return new Response(JSON.stringify({ data: [] }))
+    }) as unknown as typeof fetch
+    return { urls, fetchImpl }
+  }
+
+  const clientOn = (network: 'mainnet' | 'testnet', fetchImpl: typeof fetch) =>
+    createClient({ transport: http('https://api.provable.com/v2', { network }) }).extend(
+      shieldSwapActions({ api: { fetch: fetchImpl } }),
+    )
+
+  it('derives the testnet host from a testnet client', async () => {
+    const { urls, fetchImpl } = spy()
+    await clientOn('testnet', fetchImpl).api.getPools()
+    expect(urls).toEqual([SHIELD_SWAP_API_URLS.testnet])
+  })
+
+  it('derives the mainnet host from a mainnet client', async () => {
+    const { urls, fetchImpl } = spy()
+    await clientOn('mainnet', fetchImpl).api.getPools()
+    // A mainnet client reaching the testnet host would read pools that do not
+    // exist on the program it proves against.
+    expect(urls).toEqual([SHIELD_SWAP_API_URLS.mainnet])
+  })
+
+  it('lets an explicit baseUrl override the derived host', async () => {
+    const { urls, fetchImpl } = spy()
+    const client = createClient({
+      transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+    }).extend(shieldSwapActions({ api: { baseUrl: 'https://local.example', fetch: fetchImpl } }))
+    await client.api.getPools()
+    expect(urls).toEqual(['https://local.example'])
+  })
+
+  it('follows switchChain, because the host is resolved per request', async () => {
+    const { urls, fetchImpl } = spy()
+    const transport = http('https://api.provable.com/v2', { network: 'testnet' })
+    const client = createClient({ transport }).extend(
+      shieldSwapActions({ api: { fetch: fetchImpl } }),
+    )
+    await client.api.getPools()
+    // switchChain mutates the transport's network in place; the API host has to
+    // move with it rather than stay on the network the client started from.
+    transport.config.network = 'mainnet'
+    await client.api.getPools()
+    expect(urls).toEqual([SHIELD_SWAP_API_URLS.testnet, SHIELD_SWAP_API_URLS.mainnet])
   })
 })

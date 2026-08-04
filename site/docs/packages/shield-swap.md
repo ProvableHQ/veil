@@ -64,7 +64,7 @@ const { walletClient } = aleo.createAleoClient({
   }),
 })
 const client = walletClient.extend(
-  shieldSwapActions({ api: { baseUrl: 'https://amm-api.dev.provable.com' } }),
+  shieldSwapActions({ api: {} }),
 )
 
 const handle = await client.swap({

@@ -57,7 +57,7 @@ const { walletClient } = aleo.createAleoClient({
 })
 
 const client = walletClient.extend(
-  shieldSwapActions({ api: { baseUrl: 'https://amm-api.dev.provable.com' } }),
+  shieldSwapActions({ api: {} }),
 )
 ```
 
@@ -308,7 +308,7 @@ import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 
 const client = createPublicClient({
   transport: http('https://api.provable.com/v2', { network: 'testnet' }),
-}).extend(shieldSwapActions({ api: { baseUrl: 'https://amm-api.dev.provable.com' } }))
+}).extend(shieldSwapActions({ api: {} }))
 
 const pool = await client.getPool({ poolKey })  // static config: token pair, fee, decimals
 const slot = await client.getSlot({ poolKey })  // live state: price, tick, liquidity

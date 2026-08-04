@@ -112,7 +112,7 @@ import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 import { createShieldSwapAgentTools } from '@provablehq/shield-swap-sdk/agent'
 
 const swapClient = walletClient.extend(
-  shieldSwapActions({ api: { baseUrl: 'https://amm-api.dev.provable.com' } }),
+  shieldSwapActions({ api: {} }),
 )
 
 const tools = createShieldSwapAgentTools({

@@ -80,7 +80,7 @@ const { walletClient, account } = aleo.createAleoClient({
 })
 
 const client = walletClient.extend(
-  shieldSwapActions({ api: { baseUrl: 'https://amm-api.dev.provable.com' } }),
+  shieldSwapActions({ api: {} }),
 )
 ```
 
@@ -103,7 +103,7 @@ await adapter.connect(network, decryptPermission, {
 
 const { account, transport } = fromWalletAdapter(adapter)
 const client = createWalletClient({ account, transport }).extend(
-  shieldSwapActions({ api: { baseUrl: 'https://amm-api.dev.provable.com' } }),
+  shieldSwapActions({ api: {} }),
 )
 ```
 

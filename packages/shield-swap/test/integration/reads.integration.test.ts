@@ -18,7 +18,7 @@ import { isPairPaused } from '../../src/actions/reads/isPairPaused.js'
 import { getFrozenPosition } from '../../src/actions/reads/getFrozenPosition.js'
 import { getTradeControls } from '../../src/actions/reads/getTradeControls.js'
 import { getSqrtPriceAtTickX128 } from '../../src/utils/q128.js'
-import { ApiClient, authenticateWithAccount } from '../../src/api/client.js'
+import { ApiClient, authenticateWithAccount, SHIELD_SWAP_API_URLS } from '../../src/api/client.js'
 import { PROGRAM_ID } from '../../src/generated/shield_swap.js'
 
 // Real-API integration: hits the live testnet node and the migrated DEX API.
@@ -32,7 +32,7 @@ const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
 const API_BASE = 'https://api.provable.com/v2'
 const NODE_URL = `${API_BASE}/testnet`
 // The migrated shapes are served by staging; override for another endpoint.
-const INDEXER_URL = process.env.VEIL_DEX_API_URL ?? 'https://amm-api-staging.dev.provable.com'
+const INDEXER_URL = process.env.VEIL_DEX_API_URL ?? SHIELD_SWAP_API_URLS.testnet
 
 // Reads default to PROGRAM_ID (shield_swap.aleo), so a pool discovered via the
 // API decodes directly off chain, no fallback needed.
