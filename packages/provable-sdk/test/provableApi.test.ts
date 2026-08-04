@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -394,6 +394,28 @@ describe('provableApi', () => {
       const path = join(dir, 'creds.json')
       await fileCredentialStore(path).save(CREDENTIALS)
       expect((await stat(path)).mode & 0o777).toBe(0o600)
+    })
+
+    it('reports an unreadable file rather than registering a replacement', async () => {
+      const path = join(dir, 'creds.json')
+      await writeFile(path, JSON.stringify(CREDENTIALS), { mode: 0o600 })
+      await chmod(path, 0o000)
+      try {
+        // Treating EACCES as "absent" would register a new consumer and abandon
+        // the key in this file, which the API cannot reissue.
+        await expect(fileCredentialStore(path).load()).rejects.toThrow(
+          /could not be read \(EACCES\).*Refusing to register a replacement/s,
+        )
+      } finally {
+        await chmod(path, 0o600)
+      }
+    })
+
+    it('reads a path whose parent is not a directory as absent', async () => {
+      const file = join(dir, 'not-a-dir')
+      await writeFile(file, 'x')
+      // ENOTDIR, like ENOENT, means there is genuinely nothing stored there.
+      expect(await fileCredentialStore(join(file, 'creds.json')).load()).toBeUndefined()
     })
 
     it('reports malformed JSON rather than silently re-registering over it', async () => {

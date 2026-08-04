@@ -14,11 +14,15 @@ import type { ProvableApiCredentials, ProvableCredentialStore } from './provable
  * Applies to bots, scripts, servers, and CI — anything holding a private key
  * directly and able to write to disk. The file is written with mode `0600`
  * because it holds an API key the Provable API issues exactly once and cannot
- * reissue. Missing or unreadable files read as "not registered yet", so the
- * first run registers a consumer and writes it, and later runs reuse it.
+ * reissue. A missing file reads as "not registered yet", so the first run
+ * registers a consumer and writes it, and later runs reuse it.
  *
  * @param path Path to the JSON file. Parent directories are created on write.
  * @returns A store reading and writing that file.
+ * @throws From `load` when the file exists but cannot be read or parsed. Only an
+ *   absent file counts as "not registered": any other failure could otherwise
+ *   register a replacement consumer and abandon the unreissuable key in that
+ *   file.
  * @throws From `save` when the write fails — a swallowed failure would orphan a
  *   consumer whose key is unrecoverable, so it propagates and fails the call
  *   that triggered registration.
@@ -37,10 +41,19 @@ export function fileCredentialStore(path: string): ProvableCredentialStore {
       let raw: string
       try {
         raw = await readFile(path, 'utf8')
-      } catch {
-        // Absent or unreadable reads as "no consumer yet" so the caller
-        // registers, rather than failing the run.
-        return undefined
+      } catch (cause) {
+        // Only a genuinely absent file reads as "no consumer yet". Any other
+        // read failure — a permissions change, a busy or unreadable device — is
+        // reported, because treating it as absent would register a replacement
+        // consumer and abandon the key sitting in that file, which cannot be
+        // reissued. Same reasoning as the malformed-file case below.
+        const code = (cause as { code?: string } | undefined)?.code
+        if (code === 'ENOENT' || code === 'ENOTDIR') return undefined
+        throw new Error(
+          `Provable API credential file ${path} could not be read (${code ?? 'unknown error'}). ` +
+            'Refusing to register a replacement consumer, which would abandon any key stored there.',
+          { cause },
+        )
       }
       // A malformed or half-written file is reported rather than treated as
       // absent: registering over it would overwrite credentials that may still
