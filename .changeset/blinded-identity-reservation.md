@@ -39,3 +39,20 @@ recorded anywhere the account can see.
 the standalone export, which is unchanged. Every write needs its result and it
 already took `(client, params)`, so the action form removes an import for callers
 who have a composed client.
+
+`reconcileSwapHistory` recovers a store's past. Blinded identities are derived
+rather than recorded, and a claim deletes the `swap_outputs` entry it settles, so
+the `claim_swap_output` call is the only public trace tying an identity to its
+swap — its inputs carry the blinded address, swap id, token pair, and amounts. The
+action walks that history through `getProgramCallsPaginated` and `getTransaction`,
+marks matched identities `claimed`, and returns what it found. It stops as soon as
+every identity is accounted for, so a current store costs one page, and reports
+`complete: false` when it hit `maxPages` with history left. Recommended once when
+adopting a store for an account that already has history; `syncBlindedIdentities`
+remains the cheap call for routine use. It cannot surface unclaimed swaps, which
+by definition have no claim call.
+
+Verified against live testnet: seeded with a blinded address from a real claim, it
+recovered the swap id, both token ids, and the amounts in two pages, and the
+recovered id reads `null` from `swap_outputs` — which is what a settled claim
+should look like.

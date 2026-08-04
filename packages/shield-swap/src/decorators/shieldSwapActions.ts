@@ -74,6 +74,11 @@ import { reserveBlindedIdentity } from '../actions/blinding/reserveBlindedIdenti
 import { syncBlindedIdentities } from '../actions/blinding/syncBlindedIdentities.js'
 import { recordBlindedSwap } from '../actions/blinding/recordBlindedSwap.js'
 import {
+  reconcileSwapHistory,
+  type ReconcileSwapHistoryParameters,
+  type ReconcileSwapHistoryReturnType,
+} from '../actions/blinding/reconcileSwapHistory.js'
+import {
   memoryBlindedIdentityStore,
   type BlindedIdentityRecord,
   type BlindedIdentityStore,
@@ -120,6 +125,10 @@ export type ShieldSwapActionsConfig = {
  * @property syncBlindedIdentities Reconciles stored reservations against the
  *   chain, promoting each to `swapped` or `claimed` once its blinded address
  *   appears on chain. Hits the network per unsettled record.
+ * @property reconcileSwapHistory Walks the program's `claim_swap_output` history
+ *   to recover which stored identities have already been claimed, and the swap
+ *   ids and amounts involved. Expensive — one request per page plus one per
+ *   claim call — so run it on first adopting a store, not periodically.
  * @property authenticateShieldSwap Authenticates the `.api` client by signing
  *   its challenge with the client's account. Most DEX API endpoints are
  *   bearer-gated; call once per session — the JWT lasts ~24h and renews
@@ -159,6 +168,9 @@ export type ShieldSwapActions = {
   reserveBlindedIdentity: (params?: { program?: string; maxScan?: number }) => Promise<BlindedIdentityRecord>
   recordBlindedSwap: (params: { blindedAddress: string; swapId: string }) => Promise<void>
   syncBlindedIdentities: (params?: { program?: string }) => Promise<BlindedIdentityRecord[]>
+  reconcileSwapHistory: (
+    params?: Omit<ReconcileSwapHistoryParameters, 'store'>,
+  ) => Promise<ReconcileSwapHistoryReturnType>
   swap: (params: SwapParameters) => Promise<SwapReturnType>
   claimSwapOutput: (params: ClaimSwapOutputParameters) => Promise<ClaimSwapOutputReturnType>
   swapMultiHop: (params: SwapMultiHopParameters) => Promise<SwapMultiHopReturnType>
@@ -287,6 +299,8 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       recordBlindedSwap: (p) => recordBlindedSwap(blindedIdentities, p),
       syncBlindedIdentities: (p) =>
         syncBlindedIdentities(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
+      reconcileSwapHistory: (p) =>
+        reconcileSwapHistory(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
       swap: (p) => swap(client, withProgram(p)),
       claimSwapOutput: (p) => claimSwapOutput(client, p),
       swapMultiHop: (p) => swapMultiHop(client, withProgram(p)),

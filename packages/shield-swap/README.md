@@ -479,6 +479,69 @@ This applies to local accounts only. A connected wallet derives and tracks its
 own blinded identities, and `reserveBlindedIdentity` rejects a wallet client
 rather than desynchronize the two.
 
+#### Initializing the history on first run
+
+A new store knows nothing, and an account that has swapped before has a past the
+store cannot see. Blinded identities are derived rather than recorded anywhere the
+account can read, and the `swap_outputs` entry for a claimed swap is deleted by
+the very claim that settles it — so the only public trace linking an identity to
+its swap is the `claim_swap_output` call itself. Its inputs carry the blinded
+address, the swap id, both token ids, and the amounts.
+
+`reconcileSwapHistory` walks those calls and writes back what it finds. Run it
+once when adopting a store for an account that already has history:
+
+```ts
+const { claims, complete } = await client.reconcileSwapHistory({ maxPages: 40 })
+for (const claim of claims) {
+  console.log(claim.swapId, claim.tokenOut, claim.amountOut)
+}
+if (!complete) console.warn('history walk truncated — raise maxPages and run again')
+```
+
+It stops as soon as every identity in the store is accounted for, so a store that
+is already current usually costs a single page. It is expensive otherwise — one
+request per page plus one per claim call it examines — which is why it is a
+separate action rather than part of routine reconciliation. Check `complete`
+rather than assuming the walk reached the end; `false` means older claims may
+exist beyond `maxPages`.
+
+What it cannot do is find swaps that were never claimed, because an unclaimed swap
+has no claim call. Those come from `syncBlindedIdentities` and the `swap_outputs`
+mapping, and only for identities the store already holds — which is the real
+argument for a durable store rather than a fresh one each run.
+
+Day to day, `syncBlindedIdentities` is the cheap one and is safe to call at every
+startup. `reconcileSwapHistory` is for first adoption and for recovering from a
+lost or replaced store.
+
+#### Bringing your own store
+
+`BlindedIdentityStore` is two methods, so anything that can hold a list of records
+qualifies — a database table, a keychain entry, an encrypted blob, a remote
+service:
+
+```ts
+import type { BlindedIdentityStore } from '@provablehq/shield-swap-sdk'
+
+const store: BlindedIdentityStore = {
+  load: async () => db.query('select * from blinded_identities where account = $1', [address]),
+  save: async (records) => db.replaceAll('blinded_identities', address, records),
+}
+```
+
+`load` returns every known record in any order, and `save` replaces the stored set
+wholesale — reservation reads all known counters to pick the next one, so a store
+that cannot enumerate cannot serve it. Implementations need not be concurrency
+safe across processes: the actions serialize callers within one process and
+re-check the chain before handing out a counter, but two processes sharing an
+account should share one store.
+
+One caveat worth designing around: records carry no account or program. Identities
+are derived from view key, signer, and program together, so records from a
+different account or deployment are meaningless — key your storage by those, as
+the file store does by path.
+
 ## Liquidity
 
 Positions are concentrated-liquidity ranges, held as private records. Both
