@@ -227,6 +227,37 @@ describe('typed transaction errors', () => {
     expect(err).toBeInstanceOf(BaseError)
   })
 
+  it('TransactionTimeoutError reports what the polls observed', () => {
+    // Every poll answered cleanly and the node did not have it: the shape of a
+    // transaction that was never included, stated as an observation rather than
+    // as a diagnosis the confirmed endpoint cannot support on its own.
+    const absent = new TransactionTimeoutError({
+      transactionId: 'at1xyz',
+      timeoutMs: 60_000,
+      polls: 12,
+      absentPolls: 12,
+    })
+    expect(absent.message).toContain('absent on all 12 polls')
+    expect(absent.message).toContain('may never have been included')
+    expect(absent.polls).toBe(12)
+    expect(absent.absentPolls).toBe(12)
+
+    // Some polls never reached the node, so absence was not established.
+    const partial = new TransactionTimeoutError({
+      transactionId: 'at1xyz',
+      timeoutMs: 60_000,
+      polls: 12,
+      absentPolls: 5,
+    })
+    expect(partial.message).toContain('5 of 12 polls reported it absent')
+    expect(partial.message).toContain('did not reach the node')
+
+    // Counts are optional, so callers that omit them get the bare message.
+    const bare = new TransactionTimeoutError({ transactionId: 'at1xyz', timeoutMs: 60_000 })
+    expect(bare.message).not.toContain('polls')
+    expect(bare.polls).toBeUndefined()
+  })
+
   it('FinalizeRevertError includes txId', () => {
     const err = new FinalizeRevertError('at1def')
     expect(err.name).toBe('FinalizeRevertError')

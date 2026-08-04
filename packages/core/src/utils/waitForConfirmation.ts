@@ -2,7 +2,15 @@ import type { Client } from '../clients/createClient.js'
 import type { ConfirmedTransaction } from '../types/block.js'
 import { FinalizeRevertError, TransactionTimeoutError } from '../errors/errors.js'
 
-const DEFAULT_TIMEOUT_MS = 300_000
+/**
+ * Ceiling on the confirmation wait.
+ *
+ * Healthy confirmations on the public networks land inside a handful of blocks;
+ * a transaction still absent after a minute is far more often one the node
+ * never included than one about to arrive, and waiting longer only delays the
+ * report. Callers on a congested network can raise it per call.
+ */
+const DEFAULT_TIMEOUT_MS = 60_000
 const POLL_INTERVAL_MS = 5_000
 
 /**
@@ -22,7 +30,14 @@ export async function waitForConfirmation(
 ): Promise<Record<string, unknown>> {
   const startTime = Date.now()
   let lastError: unknown
+  // Counted so the timeout can report what the node actually said. A node that
+  // answered cleanly every time and simply did not have the transaction is a
+  // different situation from one that could not be reached, and the two call
+  // for opposite next steps.
+  let polls = 0
+  let absentPolls = 0
   while (Date.now() - startTime < timeoutMs) {
+    polls++
     try {
       const confirmed = await client.request({
         method: 'getConfirmedTransaction',
@@ -34,11 +49,21 @@ export async function waitForConfirmation(
         }
         return confirmed.transaction
       }
+      absentPolls++
     } catch (e) {
       if (e instanceof FinalizeRevertError) throw e
       lastError = e
+      // A 404 is the node reporting the transaction absent, which is how a
+      // pending transaction reads too — not a failure to reach the node.
+      if ((e as { status?: number }).status === 404) absentPolls++
     }
     await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
   }
-  throw new TransactionTimeoutError({ transactionId: txId, timeoutMs, cause: lastError as Error | undefined })
+  throw new TransactionTimeoutError({
+    transactionId: txId,
+    timeoutMs,
+    polls,
+    absentPolls,
+    cause: lastError as Error | undefined,
+  })
 }

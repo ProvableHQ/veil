@@ -60,7 +60,10 @@ describe.runIf(RUN)('live swaps on testnet', () => {
       consumerId: CONSUMER_ID,
       apiKey: API_KEY,
       records: aleo.createRemoteScanner(),
-      confirmationTimeout: 900_000,
+      // Above the default: multi-hop swaps are the slow path here, one measured
+      // at 322s. Not far above it — a write still absent after this is far more
+      // likely dropped than pending, and waiting only delays finding out.
+      confirmationTimeout: 400_000,
     })
     client = walletClient.extend(shieldSwapActions({ api: {} })) as typeof client
     await client.authenticateShieldSwap()

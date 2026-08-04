@@ -406,6 +406,21 @@ story all match the single-hop flow (the local helper there is
 `deriveMultiHopSwapId`, and unlike the single-hop preimage it includes the
 deadline).
 
+Multi-hop swaps confirm more slowly than anything else in this SDK — one has
+been measured at 322 seconds, against a default confirmation window of 60. A
+client that submits them should say so at construction:
+
+```ts
+const { walletClient } = aleo.createAleoClient({ /* … */, confirmationTimeout: 400_000 })
+```
+
+Leave it at the default and a multi-hop swap that is merely slow reports
+`TransactionTimeoutError` and then confirms anyway — after which resubmitting
+earns a `DuplicateTransactionError`. The window is per client, so a client doing
+both liquidity writes and multi-hop swaps takes the longer value; check
+`error.absentPolls` against `error.polls` on a timeout to tell a transaction the
+node never had from one it simply had not confirmed yet.
+
 ## Liquidity
 
 Positions are concentrated-liquidity ranges, held as private records. Both

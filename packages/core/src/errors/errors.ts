@@ -231,17 +231,38 @@ export class BroadcastError extends BaseError {
 export class TransactionTimeoutError extends BaseError {
   readonly transactionId: string
   readonly timeoutMs: number
+  readonly polls?: number
+  readonly absentPolls?: number
 
-  constructor(opts: { transactionId: string; timeoutMs: number; cause?: Error }) {
+  constructor(opts: {
+    transactionId: string
+    timeoutMs: number
+    polls?: number
+    absentPolls?: number
+    cause?: Error
+  }) {
+    // Report what the polls saw rather than asserting why. A node answering
+    // cleanly and consistently reporting the transaction absent is the shape of
+    // one that never made it into a block, but the confirmed-transaction
+    // endpoint alone cannot tell that from one still waiting for inclusion —
+    // so the message says what was observed and leaves the conclusion open.
+    const observed =
+      opts.polls === undefined || opts.absentPolls === undefined
+        ? ''
+        : opts.absentPolls === opts.polls
+          ? ` The node reported it absent on all ${opts.polls} polls.`
+          : ` ${opts.absentPolls} of ${opts.polls} polls reported it absent; the rest did not reach the node.`
     super(
-      `Transaction ${opts.transactionId} not confirmed within ${opts.timeoutMs / 1000}s. ` +
-      'The transaction may still be pending — check its status with getTransaction() ' +
-      'before resubmitting to avoid a DuplicateTransactionError.',
+      `Transaction ${opts.transactionId} not confirmed within ${opts.timeoutMs / 1000}s.${observed} ` +
+      'It may still be pending, or may never have been included — check its status with ' +
+      'getTransaction() before resubmitting to avoid a DuplicateTransactionError.',
       opts.cause ? { cause: opts.cause } : undefined,
     )
     this.name = 'TransactionTimeoutError'
     this.transactionId = opts.transactionId
     this.timeoutMs = opts.timeoutMs
+    if (opts.polls !== undefined) this.polls = opts.polls
+    if (opts.absentPolls !== undefined) this.absentPolls = opts.absentPolls
   }
 }
 
