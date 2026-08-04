@@ -22,6 +22,7 @@ import {
   feeGrowthInside,
   feeOwed,
   amountsForLiquidity,
+  liquidityForAmounts,
 } from '../../src/utils/q128.js'
 
 // Vectors generated once from amm-v3's scripts/q128 Python oracles — the
@@ -244,5 +245,82 @@ describe('amountsForLiquidity', () => {
 
   it('zero liquidity yields zero amounts', () => {
     expect(amountsForLiquidity(lower, lower, upper, 0n, false)).toEqual({ amount0: 0n, amount1: 0n })
+  })
+})
+
+describe('liquidityForAmounts', () => {
+  const lower = getSqrtPriceAtTickX128(-64400)
+  const upper = getSqrtPriceAtTickX128(-60200)
+  const inside = getSqrtPriceAtTickX128(-62000)
+
+  it('never asks for more than the amounts it was given', () => {
+    // The property that keeps a mint from reverting for want of a base unit:
+    // liquidity floors, so the deposit-side amounts for it fit inside the
+    // originals. Swept across the tick domain, range widths, and magnitudes
+    // rather than asserted on one case, since the failures live on rounding edges.
+    for (const t of [-300000, -62400, -1200, 0, 1200, 62400, 300000]) {
+      for (const w of [60, 1200, 12000]) {
+        const [lo, hi] = [getSqrtPriceAtTickX128(t - w), getSqrtPriceAtTickX128(t + w)]
+        for (const p of [lo, getSqrtPriceAtTickX128(t), hi]) {
+          for (const a0 of [1n, 10n ** 7n, 10n ** 20n]) {
+            for (const a1 of [1n, 10n ** 7n, 10n ** 20n]) {
+              const liquidity = liquidityForAmounts(p, lo, hi, a0, a1)
+              if (liquidity === 0n) continue
+              const back = amountsForLiquidity(p, lo, hi, liquidity, true)
+              expect(back.amount0 <= a0 && back.amount1 <= a1).toBe(true)
+            }
+          }
+        }
+      }
+    }
+  })
+
+  it('round-trips a liquidity figure without drifting below it', () => {
+    for (const liquidity of [1n, 10n ** 7n, 10n ** 15n, 10n ** 25n]) {
+      for (const p of [lower, inside, upper]) {
+        const { amount0, amount1 } = amountsForLiquidity(p, lower, upper, liquidity, true)
+        expect(liquidityForAmounts(p, lower, upper, amount0, amount1)).toBeGreaterThanOrEqual(liquidity)
+      }
+    }
+  })
+
+  it('price below the range: token0 binds and token1 is ignored', () => {
+    const price = getSqrtPriceAtTickX128(-70000)
+    const liquidity = liquidityForAmounts(price, lower, upper, 10n ** 9n, 0n)
+    expect(liquidity).toBeGreaterThan(0n)
+    // No token1 is consumed there, so its amount cannot change the answer.
+    expect(liquidityForAmounts(price, lower, upper, 10n ** 9n, 10n ** 30n)).toBe(liquidity)
+  })
+
+  it('price above the range: token1 binds and token0 is ignored', () => {
+    const price = getSqrtPriceAtTickX128(-50000)
+    const liquidity = liquidityForAmounts(price, lower, upper, 0n, 10n ** 9n)
+    expect(liquidity).toBeGreaterThan(0n)
+    expect(liquidityForAmounts(price, lower, upper, 10n ** 30n, 10n ** 9n)).toBe(liquidity)
+  })
+
+  it('in range: the shorter side caps the position', () => {
+    const plenty = 10n ** 30n
+    const short = 10n ** 6n
+    const capped0 = liquidityForAmounts(inside, lower, upper, short, plenty)
+    const capped1 = liquidityForAmounts(inside, lower, upper, plenty, short)
+    const both = liquidityForAmounts(inside, lower, upper, short, short)
+    // Whichever side is short governs, and shorting both cannot exceed either.
+    expect(both).toBe(capped0 < capped1 ? capped0 : capped1)
+    expect(both).toBeLessThanOrEqual(capped0)
+    expect(both).toBeLessThanOrEqual(capped1)
+  })
+
+  it('orders the bounds itself (sa/sb may arrive swapped)', () => {
+    expect(liquidityForAmounts(inside, upper, lower, 10n ** 9n, 10n ** 9n)).toBe(
+      liquidityForAmounts(inside, lower, upper, 10n ** 9n, 10n ** 9n),
+    )
+  })
+
+  it('is zero for dust against a wide range', () => {
+    const wide0 = getSqrtPriceAtTickX128(-400000)
+    const wide1 = getSqrtPriceAtTickX128(400000)
+    expect(liquidityForAmounts(wide0, wide0, wide1, 1n, 1n)).toBe(0n)
+    expect(liquidityForAmounts(inside, lower, upper, 0n, 0n)).toBe(0n)
   })
 })

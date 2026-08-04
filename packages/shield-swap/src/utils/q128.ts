@@ -337,3 +337,90 @@ export function amountsForLiquidity(
     }
   return { amount0: 0n, amount1: amount1DeltaX128(lower, upper, liquidity, roundUp) }
 }
+
+/**
+ * Liquidity that `amount0` of token0 supports across a sqrt-price span —
+ * the inverse of {@link amount0DeltaX128}, `a0 * SA * SB / (2^128 * (SB − SA))`.
+ * Floors, so the result never overstates what the amount covers.
+ */
+function liquidityForAmount0(lower: bigint, upper: bigint, amount0: bigint): bigint {
+  // Scaled down by 2^128 first, matching the forward direction's chained
+  // mul-divs rather than multiplying out to 2^256 and dividing back.
+  const intermediate = mulDiv(lower, upper, Q128, false)
+  return mulDiv(amount0, intermediate, upper - lower, false)
+}
+
+/**
+ * Liquidity that `amount1` of token1 supports across a sqrt-price span —
+ * the inverse of {@link amount1DeltaX128}, `a1 * 2^128 / (SB − SA)`. Floors.
+ */
+function liquidityForAmount1(lower: bigint, upper: bigint, amount1: bigint): bigint {
+  return mulDiv(amount1, Q128, upper - lower, false)
+}
+
+/**
+ * Derives the liquidity a pair of token amounts supports over a range — the
+ * inverse of {@link amountsForLiquidity}, and the direction a deposit starts
+ * from.
+ *
+ * Which amount binds depends on where the price sits: at or below the range
+ * only token0 is used, at or above it only token1, and inside the range the
+ * smaller of the two sides governs, because liquidity must be backed on both.
+ * Branch boundaries match the contract's (`price <= lower` counts as below).
+ *
+ * Every step floors, so the result is a lower bound. Feeding it back through
+ * {@link amountsForLiquidity} with deposit-side rounding returns amounts that
+ * do not exceed the ones passed here — which is what keeps a mint from
+ * reverting for want of a base unit — and recovers the same liquidity rather
+ * than drifting below it.
+ *
+ * Returns `0` when the amounts are dust relative to the range's width. Minting
+ * against zero liquidity wastes a fee, so treat it as "deposit more" rather
+ * than as a range to submit.
+ *
+ * Pure and local. Does not bound the result against the pool's
+ * `max_liquidity_per_tick`; the contract enforces that.
+ *
+ * @param sqrtPriceX128 The pool's current sqrt price (`slot.sqrt_price`), Q128.128.
+ * @param sqrtAX128 One range bound as a sqrt price, Q128.128.
+ * @param sqrtBX128 The other range bound as a sqrt price, Q128.128. Bounds may
+ *   arrive in either order.
+ * @param amount0 Raw base units of token0 available to deposit.
+ * @param amount1 Raw base units of token1 available to deposit.
+ * @returns The liquidity those amounts support (u128), floored.
+ *
+ * @example
+ * const liquidity = liquidityForAmounts(
+ *   slot.sqrt_price,
+ *   getSqrtPriceAtTickX128(tickLower),
+ *   getSqrtPriceAtTickX128(tickUpper),
+ *   held0,
+ *   held1,
+ * )
+ * // What the mint will actually consume of each side:
+ * const { amount0, amount1 } = amountsForLiquidity(
+ *   slot.sqrt_price,
+ *   getSqrtPriceAtTickX128(tickLower),
+ *   getSqrtPriceAtTickX128(tickUpper),
+ *   liquidity,
+ *   true,
+ * )
+ */
+export function liquidityForAmounts(
+  sqrtPriceX128: bigint,
+  sqrtAX128: bigint,
+  sqrtBX128: bigint,
+  amount0: bigint,
+  amount1: bigint,
+): bigint {
+  const lower = sqrtAX128 < sqrtBX128 ? sqrtAX128 : sqrtBX128
+  const upper = sqrtAX128 < sqrtBX128 ? sqrtBX128 : sqrtAX128
+  if (sqrtPriceX128 <= lower) return liquidityForAmount0(lower, upper, amount0)
+  if (sqrtPriceX128 < upper) {
+    // In range both sides are consumed, so the shorter side caps the position.
+    const from0 = liquidityForAmount0(sqrtPriceX128, upper, amount0)
+    const from1 = liquidityForAmount1(lower, sqrtPriceX128, amount1)
+    return from0 < from1 ? from0 : from1
+  }
+  return liquidityForAmount1(lower, upper, amount1)
+}

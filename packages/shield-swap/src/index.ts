@@ -240,6 +240,7 @@ export {
   feeGrowthInside,
   feeOwed,
   amountsForLiquidity,
+  liquidityForAmounts,
 } from './utils/q128.js'
 export {
   resolveTokenRoute,
