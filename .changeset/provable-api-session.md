@@ -51,7 +51,7 @@ existing callers keep working; `ProvingConfig.url` reports the resolved endpoint
 for the network currently in force rather than echoing the input.
 
 In `@provablehq/veil-core`, `Client` takes an accumulating `extended` type
-parameter, defaulting to `undefined`, and `extend` returns
+parameter, defaulting to `{}`, and `extend` returns
 `Client<added & existing>` instead of `Client & extended`. Chained `extend` calls
 previously dropped earlier layers from the type — a wallet client extended once
 lost `writeContract` and `recordProvider` from its type, though not at runtime.

@@ -69,7 +69,18 @@ export type Extended = { [K in keyof ClientBase]?: undefined } & { [key: string]
  * The `extended` parameter accumulates: each `extend` call intersects the new
  * decorator's properties with what earlier calls added, so a chained client
  * keeps every layer in its type and a decorator can build on the layer beneath
- * it. Defaults to `undefined`, so a bare `Client` is the base with no actions.
+ * it. Defaults to `{}`, so a bare `Client` is the base with no actions.
+ *
+ * That default is deliberately not viem's, which is `Extended | undefined`.
+ * viem's actions always name the axes they need — `Client<Transport, chain,
+ * account>` — so its bare `Client` is a shape nobody depends on. Veil's `Client`
+ * has one axis, and it is the one actions do not care about, so every action here
+ * takes a bare `Client`. That form therefore has to be a usable object type:
+ * under `Extended | undefined` the conditional leaves `keyof Client` unusable and
+ * `Omit`/`Pick`/`Exclude` against it silently collapse, which fails only in a
+ * consumer's build. `{}` keeps the constraint doing the work — primitives,
+ * `null`, `undefined`, and anything shadowing a base field are all still
+ * rejected — while leaving the bare form real.
  *
  * @property extend Returns a new client with the properties `fn` produces
  *   merged in, preserving everything earlier `extend` calls added. This is the
@@ -82,11 +93,11 @@ export type Extended = { [K in keyof ClientBase]?: undefined } & { [key: string]
  *   .extend((inner) => ({ pingTwice: () => [inner.ping(), inner.ping()] }))
  * await client.writeContract({ ... })
  */
-export type Client<extended extends Extended | undefined = undefined> = ClientBase &
-  (extended extends Extended ? extended : unknown) & {
+export type Client<extended extends Extended = {}> = ClientBase &
+  extended & {
     extend: <const added extends Extended>(
       fn: (client: Client<extended>) => added,
-    ) => Client<added & (extended extends Extended ? extended : unknown)>
+    ) => Client<added & extended>
   }
 
 /**
