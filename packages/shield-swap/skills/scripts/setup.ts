@@ -6,9 +6,9 @@
  *
  *   1. Key material        — reuse the stored account, import the user's
  *                            existing key, or (only with --new) generate one
- *   2. Provable API        — reuse/import credentials, else self-register a
+ *   2. DEX authentication  — challenge/verify session with the account
+ *   3. Provable API        — reuse/import credentials, else self-register a
  *                            consumer for proving + scanning
- *   3. DEX authentication  — challenge/verify session with the account
  *   4. Invite code         — check access; redeem a code when one is provided
  *   5. API token           — mint a long-lived ss_ token for later sessions
  *   6. Airdrop             — request testnet tokens when holdings are empty,
@@ -38,7 +38,7 @@ import {
   loadState,
   saveState,
   ensureKeyMaterial,
-  ensureProvableApiCredentials,
+  credentialStore,
   NeedsConfigDecisionError,
   loadSession,
   getHoldings,
@@ -111,12 +111,21 @@ async function main() {
   }
   console.log(`✓ account: ${state.address}`)
 
-  state = await ensureProvableApiCredentials(state, consumerId && apiKey ? { consumerId, apiKey } : undefined)
-  console.log(`✓ Provable API consumer: ${state.provableApi!.consumerId}`)
+  // Supplied credentials win over registering a new consumer, so a returning
+  // user keeps theirs. Absent both, the client registers one below.
+  if (consumerId && apiKey && !credentialStore.load()) credentialStore.save({ consumerId, apiKey })
 
   // ── 3: wire the client and authenticate with the DEX API ────────────
   const { client, account } = await loadSession()
   console.log('✓ DEX API session established (challenge/verify)')
+
+  // Front-loaded on purpose: registration would otherwise happen on the first
+  // prove or scan, and a newly issued API key is only reportable here.
+  const provable = await client.authenticateProvableApi()
+  console.log(
+    `✓ Provable API consumer: ${provable.credentials.consumerId}` +
+      (provable.registered ? ' (registered, saved to the state file)' : ''),
+  )
 
   // ── 4: invite-code access gate ───────────────────────────────────────
   const status = await client.api.getAccessStatus()

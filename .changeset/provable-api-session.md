@@ -1,0 +1,46 @@
+---
+'@provablehq/veil-core': minor
+'@provablehq/veil-aleo-sdk': minor
+---
+
+Add Provable API authentication to `@provablehq/veil-aleo-sdk`, and make `Client` carry the actions layered onto it.
+
+`createAleoClient` now builds a single Provable API session from its credential
+options and shares it across delegated proving and record scanning, so one
+credential mints one JWT rather than each service minting its own. The returned
+wallet client carries `authenticateProvableApi()`, which resolves that session —
+registering a consumer when none is configured — and reports the credentials, the
+token expiry, whether a consumer was registered, and which paths the session
+reaches.
+
+New in `@provablehq/veil-aleo-sdk`:
+
+- `registerProvableApi({ username })` — registers a consumer and returns its id
+  and API key. The key is issued once, so persist it.
+- `createProvableSession({ credentials | store, username })` — a session that
+  caches its JWT, refreshes inside a five-minute expiry margin, and collapses
+  concurrent mints onto one request.
+- `authenticateProvableApi(client, params?)` and `provableApiActions()` — the
+  action and its decorator.
+- `ProvableCredentialStore` — caller-implemented persistence. Passing a
+  `credentialStore` to `createAleoClient` registers on first run and reuses the
+  same consumer afterward. An explicit `consumerId`/`apiKey` pair takes
+  precedence, so a rotated key needs no state reset.
+- `session` on `createProvingConfig`, `createRemoteScanner`, and
+  `createStandaloneScanner`, and `setSession` on the providers the first two
+  return. `consumerId` is now optional on both scanners.
+
+The delegated-proving path also gains the 401 re-mint retry that only record
+scanning had, and record scanning now replaces its token only when the token was
+what the service rejected, rather than on every transient failure.
+
+In `@provablehq/veil-core`, `Client` takes an accumulating `extended` type
+parameter, defaulting to `undefined`, and `extend` returns
+`Client<added & existing>` instead of `Client & extended`. Chained `extend` calls
+previously dropped earlier layers from the type — a wallet client extended once
+lost `writeContract` and `recordProvider` from its type, though not at runtime.
+A decorator can now also build on the layer beneath it, and the new `Extended`
+constraint stops a decorator from shadowing `request`, `transport`, or `uid`.
+`PublicClient`, `WalletClient`, `TestClient`, and `BridgeClient` are expressed
+through the parameter. Existing code needs no change: the parameter's default
+makes a bare `Client` mean what it always did.

@@ -141,7 +141,7 @@ export { fallback } from './transports/fallback.js'
 export { version } from './version.js'
 
 // Clients
-export { createClient, type Client, type ClientConfig } from './clients/createClient.js'
+export { createClient, type Client, type ClientConfig, type Extended } from './clients/createClient.js'
 export { createPublicClient, type PublicClient, type PublicClientConfig } from './clients/createPublicClient.js'
 export {
   createWalletClient,

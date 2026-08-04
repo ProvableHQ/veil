@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+import { loadNetwork, registerProvableApi, createProvableSession } from '@provablehq/veil-aleo-sdk'
 
 /**
  * Scans the VEIL_E2E account's credits.aleo records on testnet AND mainnet
@@ -29,23 +29,20 @@ const AUTH_URL = process.env.VEIL_AUTH_URL ?? 'https://api.provable.com'
 
 /** Mints a JWT to prove the consumer credentials are valid. */
 async function credentialsWork(consumerId: string, apiKey: string): Promise<boolean> {
-  const res = await fetch(`${AUTH_URL}/jwts/${consumerId}`, {
-    method: 'POST',
-    headers: { 'X-Provable-API-Key': apiKey },
-  })
-  return res.ok
+  try {
+    await createProvableSession({ credentials: { consumerId, apiKey }, baseUrl: AUTH_URL }).getJwt()
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** Registers a throwaway consumer and returns its id and API key. */
 async function selfRegister(): Promise<{ consumerId: string; apiKey: string }> {
-  const res = await fetch(`${AUTH_URL}/consumers`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: `veil-records-it-${Math.floor(Date.now() / 1000)}` }),
+  return registerProvableApi({
+    username: `veil-records-it-${Math.floor(Date.now() / 1000)}`,
+    baseUrl: AUTH_URL,
   })
-  if (!res.ok) throw new Error(`Consumer registration failed: HTTP ${res.status}`)
-  const body = (await res.json()) as { consumer: { id: string }; key: string }
-  return { consumerId: body.consumer.id, apiKey: body.key }
 }
 
 /** Pre-registered env credentials when they verify; a fresh consumer otherwise. */

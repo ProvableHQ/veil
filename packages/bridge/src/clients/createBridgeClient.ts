@@ -18,7 +18,7 @@ export type BridgeClientConfig = Omit<ClientConfig, 'account' | 'key' | 'name' |
   wallet?: WalletClient | undefined
 }
 
-export type BridgeClient = Client & BridgeActions
+export type BridgeClient = Client<BridgeActions>
 
 /**
  * Creates a client for Provable's cross-chain bridge service, with every
