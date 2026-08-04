@@ -29,7 +29,7 @@ const DEMO_ADDRESS = 'aleo1vskzxa2qqgnhznxsqh6tgq93c30sfkj6xqwe7sr85lgjkexjlcxs3
 const NETWORK_URL = 'https://api.provable.com/v2'
 
 // DPS credentials — set via env vars for delegated tests
-const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove/testnet'
+const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove'
 const DPS_API_KEY = process.env.ALEO_DPS_API_KEY
 const DPS_CONSUMER_ID = process.env.ALEO_CONSUMER_ID
 

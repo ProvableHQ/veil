@@ -20,7 +20,7 @@ export type TestClientConfig = {
  * `shutdown`, `getMappingKeysValues`, `snapshot`, `listSnapshots`) for driving a
  * local devnode.
  */
-export type TestClient = Client & TestActions
+export type TestClient = Client<TestActions>
 
 /**
  * Creates a client for controlling a local devnode in tests.

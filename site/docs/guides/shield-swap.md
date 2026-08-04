@@ -50,7 +50,7 @@ const { walletClient } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
   networkUrl: 'https://api.provable.com/v2',
   provingMode: 'delegated',
-  proverUrl: 'https://api.provable.com/prove/testnet',
+  proverUrl: 'https://api.provable.com/prove',
   apiKey: DPS_API_KEY,
   consumerId: CONSUMER_ID,
   records: scanner,
@@ -90,7 +90,7 @@ positions, balances, fee tiers, candles — require a bearer credential. The
 account signs a challenge once per session:
 
 ```ts
-await client.authenticateApi()
+await client.authenticateShieldSwap()
 const route = await client.api.getRoute({ token_in, token_out })
 ```
 
@@ -102,7 +102,7 @@ long-lived API token (`ss_…`) once and passes it at construction instead:
 
 ```ts
 // One-time provisioning; the secret is shown only once.
-await client.authenticateApi()
+await client.authenticateShieldSwap()
 const { token } = await client.api.createApiToken({ name: 'trading-bot' })
 
 // Every run after that — no handshake, no signer needed for API reads.
@@ -118,7 +118,7 @@ redeemed an invite code, or gated endpoints return 403
 `redeem an invite code to unlock access`:
 
 ```ts
-await client.authenticateApi()
+await client.authenticateShieldSwap()
 if (!(await client.api.getAccessStatus()).has_access) {
   await client.api.redeemAccessCode(inviteCode) // one-time per account
 }

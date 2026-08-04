@@ -13,15 +13,27 @@
  */
 import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
-import { loadNetwork, generateAccount } from '@provablehq/veil-aleo-sdk'
-import { shieldSwapActions, authenticateWithAccount, getPrivateBalances, DEFAULT_PROGRAM } from '@provablehq/shield-swap-sdk'
+import {
+  loadNetwork,
+  generateAccount,
+  DEFAULT_PROVER_URL,
+  DEFAULT_SCANNER_URL,
+} from '@provablehq/veil-aleo-sdk'
+import type { ProvableCredentialStore } from '@provablehq/veil-aleo-sdk'
+import { shieldSwapActions, getPrivateBalances, DEFAULT_PROGRAM } from '@provablehq/shield-swap-sdk'
 import type { SwapHandle, MultiHopSwapHandle } from '@provablehq/shield-swap-sdk'
 
 export const NETWORK = 'testnet' as const
 export const NETWORK_URL = 'https://api.provable.com/v2'
-export const PROVER_URL = `https://api.provable.com/prove/${NETWORK}`
-export const SCANNER_URL = 'https://api.provable.com/scanner'
-export const CONSUMERS_URL = 'https://api.provable.com/consumers'
+/**
+ * Base URL of the prover — the SDK appends the active network.
+ *
+ * Re-exported from the SDK rather than restated so the two cannot drift; the
+ * client would default to it anyway under delegated proving.
+ */
+export const PROVER_URL = DEFAULT_PROVER_URL
+/** Base URL of the record scanner — re-exported so the two cannot drift. */
+export const SCANNER_URL = DEFAULT_SCANNER_URL
 
 /** A liquidity position the account opened, tracked for later operations. */
 export type TrackedPosition = {
@@ -165,30 +177,30 @@ export function formatAmount(amount: bigint, decimals: number, symbol?: string):
 /**
  * Builds the fully wired, authenticated session from the state file.
  *
- * Requires setup.ts to have run (key material + Provable API credentials in
- * the state file). Authenticates with the DEX API on every call — the
- * session JWT covers everything including access/token management, and
- * auto-renews on expiry.
+ * Requires setup.ts to have run (key material in the state file).
+ * Authenticates with the DEX API on every call — the session JWT covers
+ * everything including access/token management, and auto-renews on expiry.
+ *
+ * Provable API credentials are not required up front: the client registers a
+ * consumer through {@link credentialStore} on first prove or scan when the
+ * state file holds none.
  */
 export async function loadSession() {
   const state = loadState()
-  if (!state.privateKey || !state.provableApi) {
+  if (!state.privateKey) {
     throw new Error('No shield-swap session found — run setup.ts first (see startup.md).')
   }
 
   const aleo = await loadNetwork(NETWORK)
-  const scanner = aleo.createRemoteScanner({
-    url: SCANNER_URL,
-    consumerId: state.provableApi.consumerId,
-    apiKey: state.provableApi.apiKey,
-  })
+  // Credentials reach both the prover and the scanner through one session the
+  // client builds from the store, so a single JWT serves both.
+  const scanner = aleo.createRemoteScanner({ url: SCANNER_URL })
   const { walletClient, account } = aleo.createAleoClient({
     privateKey: state.privateKey,
     networkUrl: NETWORK_URL,
     provingMode: 'delegated',
     proverUrl: PROVER_URL,
-    apiKey: state.provableApi.apiKey,
-    consumerId: state.provableApi.consumerId,
+    credentialStore,
     // Faucet-funded accounts hold no public credits; the delegated prover
     // pays fees from its FeeMaster account. Opt out with
     // SHIELD_SWAP_FEE_MASTER=0 when the account funds its own fees.
@@ -199,7 +211,7 @@ export async function loadSession() {
   // lives in the state file (setup.ts --api-url).
   const apiUrl = process.env.SHIELD_SWAP_API_URL ?? state.apiUrl
   const client = walletClient.extend(shieldSwapActions({ api: { baseUrl: apiUrl } }))
-  await authenticateWithAccount(client.api, account)
+  await client.authenticateShieldSwap()
 
   return { client, account, scanner, state, aleo }
 }
@@ -319,34 +331,19 @@ export class NeedsConfigDecisionError extends Error {
 }
 
 /**
- * Registers a Provable API consumer for delegated proving + record scanning
- * (no-op when credentials exist). Imported credentials win over
- * registration, so returning users keep their consumer. The API key is
- * shown once at registration — it is stored in the state file immediately.
+ * Backs Provable API credentials with the state file.
+ *
+ * The SDK reads through this on first use and writes back once, immediately
+ * after registering a consumer — the API key is issued once, so the write
+ * must not be deferred. State is re-read on save rather than captured, so a
+ * concurrent update elsewhere in the run is not clobbered.
  */
-export async function ensureProvableApiCredentials(
-  state: ShieldSwapState,
-  imported?: { consumerId: string; apiKey: string },
-): Promise<ShieldSwapState> {
-  if (state.provableApi) return state
-  if (imported) {
-    state.provableApi = imported
+export const credentialStore: ProvableCredentialStore = {
+  load: () => loadState().provableApi,
+  save: (credentials) => {
+    const state = loadState()
+    state.provableApi = credentials
     saveState(state)
-    return state
-  }
-  // Random suffix: usernames are globally unique, and a returning user who
-  // lost their state file (new machine) must be able to register a fresh
-  // consumer for the same address — the old API key is unrecoverable.
-  const suffix = Math.random().toString(36).slice(2, 8)
-  const username = `ss-agent-${state.address!.slice(5, 13)}-${suffix}`
-  const res = await fetch(CONSUMERS_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username }),
-  })
-  if (!res.ok) throw new Error(`Provable API consumer registration failed (${res.status}): ${await res.text()}`)
-  const body = (await res.json()) as { consumer: { id: string }; key: string }
-  state.provableApi = { consumerId: body.consumer.id, apiKey: body.key }
-  saveState(state)
-  return state
+  },
 }
+

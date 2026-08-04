@@ -24,11 +24,10 @@ export type ClientConfig = {
 }
 
 /**
- * Base client returned by {@link createClient}.
+ * The fields every client carries, independent of the actions layered on it.
  *
- * Holds the transport, account, and proving configuration shared by every
- * client, plus `extend` for layering actions on top. The public, wallet, and
- * test clients are this base extended with their respective action decorators.
+ * Separated from {@link Client} so `Extended` can forbid a decorator from
+ * shadowing them.
  *
  * @property account The account that signs transactions, or `undefined` for a
  *   read-only client.
@@ -39,11 +38,8 @@ export type ClientConfig = {
  * @property request Transport request function, called to reach the network.
  * @property transport The transport backing `request`.
  * @property uid Unique identifier for this client instance.
- * @property extend Returns a new client with the properties `fn` produces merged
- *   in, preserving everything earlier `extend` calls added. This is the
- *   viem-style decorator pattern used to attach actions.
  */
-export type Client = {
+type ClientBase = {
   account: AnyAccount | undefined
   key: string
   name: string
@@ -51,10 +47,58 @@ export type Client = {
   request: Transport['request']
   transport: Transport
   uid: string
-  extend: <extended extends Record<string, unknown>>(
-    fn: (client: Client) => extended,
-  ) => Client & extended
 }
+
+/**
+ * What a decorator may contribute to a client.
+ *
+ * Every field {@link ClientBase} owns is constrained to `undefined`, so a
+ * decorator cannot replace `request`, `transport`, `uid`, or the rest.
+ * Substituting the transport's request function or a client's identity from a
+ * decorator is never intended, and doing it silently is hard to trace.
+ */
+export type Extended = { [K in keyof ClientBase]?: undefined } & { [key: string]: unknown }
+
+/**
+ * Base client returned by {@link createClient}, carrying the actions layered on it.
+ *
+ * Holds the transport, account, and proving configuration shared by every
+ * client, plus `extend` for layering actions on top. The public, wallet, and
+ * test clients are this base parameterized with their respective action sets.
+ *
+ * The `extended` parameter accumulates: each `extend` call intersects the new
+ * decorator's properties with what earlier calls added, so a chained client
+ * keeps every layer in its type and a decorator can build on the layer beneath
+ * it. Defaults to `{}`, so a bare `Client` is the base with no actions.
+ *
+ * That default is deliberately not viem's, which is `Extended | undefined`.
+ * viem's actions always name the axes they need — `Client<Transport, chain,
+ * account>` — so its bare `Client` is a shape nobody depends on. Veil's `Client`
+ * has one axis, and it is the one actions do not care about, so every action here
+ * takes a bare `Client`. That form therefore has to be a usable object type:
+ * under `Extended | undefined` the conditional leaves `keyof Client` unusable and
+ * `Omit`/`Pick`/`Exclude` against it silently collapse, which fails only in a
+ * consumer's build. `{}` keeps the constraint doing the work — primitives,
+ * `null`, `undefined`, and anything shadowing a base field are all still
+ * rejected — while leaving the bare form real.
+ *
+ * @property extend Returns a new client with the properties `fn` produces
+ *   merged in, preserving everything earlier `extend` calls added. This is the
+ *   viem-style decorator pattern used to attach actions.
+ *
+ * @example
+ * // Each layer stays visible, and the second decorator sees the first.
+ * const client = createWalletClient({ account, transport, proving })
+ *   .extend(() => ({ ping: () => 'pong' }))
+ *   .extend((inner) => ({ pingTwice: () => [inner.ping(), inner.ping()] }))
+ * await client.writeContract({ ... })
+ */
+export type Client<extended extends Extended = {}> = ClientBase &
+  extended & {
+    extend: <const added extends Extended>(
+      fn: (client: Client<extended>) => added,
+    ) => Client<added & extended>
+  }
 
 /**
  * Creates a base client from a transport and optional account.
@@ -93,13 +137,13 @@ export function createClient(config: ClientConfig): Client {
     request: transport.request,
     transport,
     uid,
-    extend<extended extends Record<string, unknown>>(fn: (client: Client) => extended) {
+    extend<added extends Extended>(fn: (client: Client) => added) {
       // Build on the receiver, not the captured base client, so chained
       // extends compose: each layer's own properties (wallet actions,
       // recordProvider, decorators) stay reachable through the prototype
       // chain of the next. Rooting at `client` would discard everything a
       // prior extend() added.
-      return Object.assign(Object.create(this), fn(this)) as Client & extended
+      return Object.assign(Object.create(this), fn(this)) as Client<added>
     },
   }
 

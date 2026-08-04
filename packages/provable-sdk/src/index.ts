@@ -50,6 +50,35 @@ import {
 } from '@provablehq/veil-core'
 import type { Decryptor } from '@provablehq/veil-core'
 import { generateMnemonic, mnemonicToHDKey, type AleoDerivationId } from './mnemonic.js'
+import {
+  createProvableSession,
+  memoryCredentialStore,
+  provableApiActions,
+  type ProvableCredentialStore,
+  type ProvableSession,
+  type ProvableWalletClient,
+  type ProvingConfigWithSession,
+} from './provableApi.js'
+
+export {
+  registerProvableApi,
+  createProvableSession,
+  memoryCredentialStore,
+  authenticateProvableApi,
+  provableApiActions,
+  type ProvableApiCredentials,
+  type ProvableCredentialStore,
+  type ProvableJwt,
+  type ProvableSession,
+  type ProvableSessionConsumers,
+  type ProvableWalletClient,
+  type ProvingConfigWithSession,
+  type RegisterProvableApiParameters,
+  type CreateProvableSessionOptions,
+  type AuthenticateProvableApiParameters,
+  type AuthenticateProvableApiReturnType,
+  type ProvableApiActions,
+} from './provableApi.js'
 
 export {
   BLS12377HDKey,
@@ -65,6 +94,22 @@ export {
 
 /** Networks supported by `@provablehq/sdk/dynamic.js`. */
 export type SupportedNetwork = 'mainnet' | 'testnet'
+
+/**
+ * Base URL of Provable's hosted delegated proving service.
+ *
+ * The default `proverUrl` for `mode: 'delegated'`. A base, so the active network
+ * is appended — which is what lets `switchChain` re-target proving.
+ */
+export const DEFAULT_PROVER_URL = 'https://api.provable.com/prove'
+
+/**
+ * Base URL of Provable's hosted Record Scanner Service.
+ *
+ * The default `url` for both scanner factories. A base — the SDK appends the
+ * network segment, which is what lets a scanner follow `switchChain`.
+ */
+export const DEFAULT_SCANNER_URL = 'https://api.provable.com/scanner'
 
 // `loadSdk('testnet')` and `loadSdk('mainnet')` return modules whose runtime
 // classes have the same shape. The narrowed-to-testnet type is used as the
@@ -135,7 +180,22 @@ export interface AleoSdk {
   /** Creates an `AleoNetworkClient` for direct SDK access. */
   createNetworkClient(url: string): InstanceType<SdkModule['AleoNetworkClient']>
 
-  /** Creates a `ProvingConfig` for `createWalletClient({ proving })`. */
+  /**
+   * Creates a `ProvingConfig` for `createWalletClient({ proving })`.
+   *
+   * @param options.proverUrl Base URL of the delegated proving service — the
+   *   network segment is appended, so do not include it. That is what lets
+   *   `switchChain` re-target proving instead of leaving it on the network the
+   *   client started from. A base that already ends in `/mainnet` or `/testnet`
+   *   is re-targeted rather than doubled. Defaults to
+   *   {@link DEFAULT_PROVER_URL} under `mode: 'delegated'`; unused under
+   *   `mode: 'local'`, which reaches no prover.
+   * @param options.session Optional Provable API session. When present the
+   *   configuration authenticates from it and withholds `apiKey`/`consumerId`
+   *   from the prover client, so one party mints JWTs. The session is attached
+   *   to the returned configuration, which is what lets
+   *   `authenticateProvableApi` find it on a client.
+   */
   createProvingConfig(options: {
     mode: 'delegated' | 'local'
     networkUrl: string
@@ -145,7 +205,8 @@ export interface AleoSdk {
     account?: LocalAccount<'privateKey'>
     confirmationTimeout?: number
     useFeeMaster?: boolean
-  }): ProvingConfig
+    session?: ProvableSession
+  }): ProvingConfigWithSession
 
   /**
    * Creates a record scanner backed by Provable's Record Scanner Service.
@@ -159,19 +220,29 @@ export interface AleoSdk {
    * against the new network and re-registers lazily on the next scan.
    *
    * @param options.url Base URL of the service (the SDK appends the network
-   *   segment — do not include it).
-   * @param options.consumerId Consumer id used for JWT refresh.
+   *   segment — do not include it). Defaults to {@link DEFAULT_SCANNER_URL}.
+   * @param options.consumerId Optional consumer id used for JWT refresh.
+   *   Unnecessary when a `session` supplies the token. Required alongside
+   *   `apiKey` otherwise — a JWT is minted from the pair, so half of it
+   *   authenticates nothing and construction throws rather than 401ing later.
    * @param options.apiKey Optional API key for the authenticated service
    *   (e.g. the hosted Provable RSS). Omit for an open/unauthenticated service.
+   * @param options.session Optional Provable API session to authenticate from,
+   *   shared with delegated proving. `createAleoClient` supplies its own
+   *   session through `setSession` on the returned provider, so a caller who
+   *   passes the scanner to that factory does not need this.
    * @param options.startBlock Optional block height to begin scanning from at
    *   registration. Defaults to 0 (full history).
+   * @returns The provider, plus `setSession` for a factory to share one session
+   *   across proving and scanning after construction.
    */
-  createRemoteScanner(options: {
-    url: string
-    consumerId: string
+  createRemoteScanner(options?: {
+    url?: string
+    consumerId?: string
     apiKey?: string
+    session?: ProvableSession
     startBlock?: number
-  }): RecordProvider
+  }): RecordProvider & { setSession: (session: ProvableSession) => void }
 
   /**
    * Creates a standalone record scanner with an explicit view key.
@@ -179,23 +250,76 @@ export interface AleoSdk {
    * Like {@link createRemoteScanner}, the first `requestRecords` registers the
    * view key with the service (a network round-trip) to obtain the scanning UUID.
    *
-   * @param options.url Base URL of the service (the SDK appends the network segment).
-   * @param options.consumerId Consumer id used for JWT refresh.
+   * @param options.url Base URL of the service (the SDK appends the network
+   *   segment). Defaults to {@link DEFAULT_SCANNER_URL}.
+   * @param options.consumerId Optional consumer id used for JWT refresh.
+   *   Unnecessary when a `session` supplies the token. Required alongside
+   *   `apiKey` otherwise — a JWT is minted from the pair, so half of it
+   *   authenticates nothing and construction throws rather than 401ing later.
    * @param options.viewKey The view key (`AViewKey1…`) to scan and decrypt with.
    * @param options.apiKey Optional API key for the authenticated service. Omit
    *   for an open/unauthenticated service.
+   * @param options.session Optional Provable API session to authenticate from.
+   *   Supplied at construction only — a standalone scanner is not pluggable
+   *   into a wallet client, so nothing shares a session with it later.
    * @param options.startBlock Optional block height to begin scanning from at
    *   registration. Defaults to 0 (full history).
    */
   createStandaloneScanner(options: {
-    url: string
-    consumerId: string
+    url?: string
+    consumerId?: string
     viewKey: string
     apiKey?: string
+    session?: ProvableSession
     startBlock?: number
   }): StandaloneRecordScanner
 
-  /** Creates a fully-wired Aleo client from a private key and network URL. */
+  /**
+   * Creates a fully-wired Aleo client from a private key and network URL.
+   *
+   * Builds one Provable API session from the credential options and shares it
+   * across delegated proving and record scanning, so a single
+   * `walletClient.authenticateProvableApi()` covers both. Omit the credential
+   * options for a client that authenticates neither.
+   *
+   * @param options.apiKey Optional Provable API key. Paired with `consumerId`,
+   *   it seeds the session directly.
+   * @param options.consumerId Optional Provable API consumer id.
+   * @param options.proverUrl Base URL of the delegated proving service — the
+   *   network segment is appended, so do not include it. That is what lets
+   *   `switchChain` re-target proving. Defaults to {@link DEFAULT_PROVER_URL},
+   *   since `provingMode` itself defaults to `'delegated'`; pass an override for
+   *   a self-hosted prover.
+   * @param options.username Optional handle to register a Provable API consumer
+   *   under, used only when no credentials and no stored pair are available.
+   *   A function is called lazily, at the moment registration happens. Defaults
+   *   to a name derived from the account address plus a random suffix — the
+   *   suffix matters because a username is spent once, so an account that lost
+   *   its stored key must still be able to register. Supplying a fixed name
+   *   makes the consumer identifiable but fails if that name is taken, since
+   *   credentials cannot be recovered from a username.
+   * @param options.credentialStore Optional persistence for Provable API
+   *   credentials. When neither `consumerId`/`apiKey` nor a stored pair is
+   *   available, a consumer is registered under a name derived from the account
+   *   address and saved here. Defaults to `memoryCredentialStore()`, which holds
+   *   a registered consumer only for the life of the process — pass
+   *   `fileCredentialStore` from `@provablehq/veil-aleo-sdk/node`, or any
+   *   {@link ProvableCredentialStore}, for anything longer-lived. A client left
+   *   fully unconfigured does not share its session with `records`, so a scanner
+   *   aimed at an open service keeps needing no credential.
+   * @param options.session Optional pre-built session, for a caller that owns
+   *   one already. Takes precedence over the credential options.
+   * @returns A public client, a wallet client carrying
+   *   `authenticateProvableApi`, and the account.
+   *
+   * @example
+   * const scanner = aleo.createRemoteScanner({ url: SCANNER_URL })
+   * const { walletClient } = aleo.createAleoClient({
+   *   privateKey, networkUrl, proverUrl, records: scanner, credentialStore: store,
+   * })
+   * const { credentials, registered } = await walletClient.authenticateProvableApi()
+   * if (registered) console.log('registered consumer', credentials.consumerId)
+   */
   createAleoClient(options: {
     privateKey: string
     networkUrl: string
@@ -204,14 +328,21 @@ export interface AleoSdk {
     apiKey?: string
     consumerId?: string
     useFeeMaster?: boolean
+    username?: string | (() => string)
+    credentialStore?: ProvableCredentialStore
+    session?: ProvableSession
     /**
      * Record provider for `requestRecords`. Not wired by default — pass
      * `aleo.createRemoteScanner(...)` or any
      * custom `RecordProvider`. `requestRecords` throws with a setup hint
      * when no provider is configured.
      */
-    records?: RecordProvider
-  }): { publicClient: PublicClient; walletClient: WalletClient; account: LocalAccount<'privateKey'> }
+    records?: RecordProvider & { setSession?: (session: ProvableSession) => void }
+  }): {
+    publicClient: PublicClient
+    walletClient: ProvableWalletClient
+    account: LocalAccount<'privateKey'>
+  }
 }
 
 /**
@@ -304,16 +435,56 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
      * transact. Set false when the account funds its own fees.
      */
     useFeeMaster?: boolean
-  }): ProvingConfig {
+    /**
+     * Provable API session to authenticate delegated proving with. When
+     * present it is the only party minting JWTs — `apiKey` and `consumerId`
+     * are withheld from the prover client so the SDK never mints in parallel.
+     */
+    session?: ProvableSession
+  }): ProvingConfigWithSession {
     // Each call reads from currentSdk so switchNetwork can swap the binary set
     // without rebuilding the wallet client.
     let networkUrl = options.networkUrl
     let keyProvider = new currentSdk.AleoKeyProvider()
     keyProvider.useCache(true)
+    options.session?.attach('proving')
+
+    // Tracked per configuration rather than read from the handle: the handle's
+    // `network` names the binaries it loaded, and confirmation polling has to
+    // follow this client's current chain instead.
+    let configNetwork: SupportedNetwork = network
+
+    /**
+     * Resolves the prover endpoint for the network in force.
+     *
+     * `proverUrl` is a base — the network segment is appended here, the same way
+     * the record scanner's base URL works — so a client that switches chains
+     * reaches the right prover without rebuilding. A base that already ends in a
+     * network segment is accepted and re-targeted rather than doubled, so a
+     * caller who passes the fully-qualified URL still switches correctly.
+     */
+    const resolveProverUrl = (): string | undefined => {
+      // Delegated proving has one obvious endpoint, so it defaults rather than
+      // failing on the first write. Local proving reaches no prover at all.
+      const configured =
+        options.proverUrl ?? (options.mode === 'delegated' ? DEFAULT_PROVER_URL : undefined)
+      if (!configured) return undefined
+      const base = configured.replace(/\/+$/, '').replace(/\/(mainnet|testnet)$/, '')
+      return `${base}/${configNetwork}`
+    }
 
     return {
       mode: options.mode,
-      url: options.proverUrl,
+      // A getter, not a snapshot: the network segment moves with `switchChain`,
+      // and a fixed string here would report the network this config started on
+      // long after it left.
+      get url() {
+        return resolveProverUrl()
+      },
+      // Carried for `authenticateProvableApi` to find on a client. Core never
+      // reads binding-specific fields on a proving config — `url` and `apiKey`
+      // already travel the same way.
+      session: options.session,
 
       buildTransaction: async (txOptions: BuildTransactionOptions) => {
         const programManager = new currentSdk.ProgramManager(
@@ -452,10 +623,11 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 
         /** Build a Veil publicClient bound to the current networkUrl for chain polling. */
         const buildPollingClient = () =>
-          createPublicClient({ transport: http(networkUrl, { network: network as Network }) })
+          createPublicClient({ transport: http(networkUrl, { network: configNetwork as Network }) })
 
         if (options.mode === 'delegated') {
-          if (!options.proverUrl) throw new ConfigurationError('Delegated execution requires proverUrl. Pass proverUrl to createProvingConfig or createAleoClient.')
+          const proverUrl = resolveProverUrl()
+          if (!proverUrl) throw new ConfigurationError('Delegated execution requires proverUrl. Pass proverUrl to createProvingConfig or createAleoClient.')
 
           let response: any
           try {
@@ -471,13 +643,40 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               useFeeMaster: options.useFeeMaster ?? true,
             })
 
-            const dpsClient = new AleoNetworkClient(options.proverUrl)
-            response = await dpsClient.submitProvingRequest({
+            const dpsClient = new AleoNetworkClient(proverUrl)
+
+            const auth = async (forceRefresh: boolean) =>
+              options.session
+                ? { jwtData: await options.session.getJwt({ forceRefresh }) }
+                : { apiKey: options.apiKey, consumerId: options.consumerId }
+
+            // The safe variant reports HTTP status instead of throwing, which is
+            // what makes a rejected credential distinguishable from a proving
+            // failure. Minting happens outside the submit so a mint failure
+            // surfaces as itself rather than as a proving error.
+            let credentials = await auth(false)
+            let result = await dpsClient.submitProvingRequestSafe({
               provingRequest,
-              url: options.proverUrl,
-              apiKey: options.apiKey,
-              consumerId: options.consumerId,
+              url: proverUrl,
+              ...credentials,
             })
+            // A freshly minted JWT can reach a prover that has not yet synced
+            // the credential, so one replacement attempt is worth making.
+            if (!result.ok && (result.status === 401 || result.status === 403) && options.session) {
+              credentials = await auth(true)
+              result = await dpsClient.submitProvingRequestSafe({
+                provingRequest,
+                url: proverUrl,
+                ...credentials,
+              })
+            }
+            if (!result.ok) {
+              throw new ProvingError({
+                message: `Delegated proving failed (HTTP ${result.status}): ${result.error?.message ?? 'unknown error'}`,
+                statusCode: result.status,
+              })
+            }
+            response = result.data
           } catch (e) {
             if (e instanceof BaseError) throw e
             throw classifyProvingError(e)
@@ -541,6 +740,10 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         currentSdk = (await loadSdk(newNetwork as SupportedNetwork)) as SdkModule
         keyProvider = new currentSdk.AleoKeyProvider()
         keyProvider.useCache(true)
+        // Confirmation polling and the prover endpoint both read this, so it
+        // must move with the switch or a delegated client proves and polls the
+        // chain it just left.
+        configNetwork = newNetwork as SupportedNetwork
       },
     }
   }
@@ -617,13 +820,20 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     scanner: InstanceType<SdkModule['RecordScanner']>,
     program: string,
     statusFilter: string | undefined,
-    canReMint: boolean,
+    hasCredentials: boolean,
+    session?: ProvableSession,
   ): Promise<OwnedRecord[]> {
     const ALWAYS_RETRY = new Set([429, 500, 502, 503, 504])
     const AUTH_RETRY = new Set([401, 403])
+    // A JWT can be replaced when the SDK holds a complete pair to re-mint from,
+    // or when a session owns minting on the scanner's behalf. `hasCredentials`
+    // is the pair, not just the key — half of it mints nothing, so treating a
+    // 401 as retryable would only burn backoff.
+    const canReMint = hasCredentials || !!session
     const retryable = (status: number) => ALWAYS_RETRY.has(status) || (canReMint && AUTH_RETRY.has(status))
     const MAX_ATTEMPTS = 4
     let last = ''
+    let lastStatus: number | undefined
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       try {
         const result = await scanner.owned({
@@ -632,25 +842,43 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         })
         if (result.ok) return (result.data ?? []).map((r) => toOwnedRecord(r as Record<string, unknown>))
         last = `HTTP ${result.status}: ${result.error?.message ?? 'unknown error'}`
+        lastStatus = result.status
         if (!retryable(result.status)) break
       } catch (err) {
         // owned() throws (rather than returning a result) on a network failure
         // or an invalidated UUID — treat as transient and retry.
         last = err instanceof Error ? err.message : String(err)
+        lastStatus = undefined
       }
       if (attempt === MAX_ATTEMPTS - 1) break
-      scanner.setJwtData(undefined) // drop the cached (rejected) JWT so the next call re-mints
+      // Replace the token only when it was the thing rejected. A 429 or 5xx says
+      // nothing about the credential, and re-minting on those costs a round-trip
+      // and swaps the token the proving path shares.
+      if (lastStatus !== undefined && AUTH_RETRY.has(lastStatus)) {
+        if (session) scanner.setJwtData(await session.getJwt({ forceRefresh: true }))
+        else scanner.setJwtData(undefined)
+      }
       await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt))
     }
     throw new Error(`Record scan failed (${last})`)
   }
 
   function createRemoteScanner(options: {
-    url: string
-    consumerId: string
+    url?: string
+    consumerId?: string
     apiKey?: string
+    session?: ProvableSession
     startBlock?: number
-  }): RecordProvider {
+  } = {}): RecordProvider & { setSession: (session: ProvableSession) => void } {
+    // A JWT is minted from the pair, so half of it authenticates nothing: the
+    // consumer id is the path segment and the key the header. Without a session
+    // to supply tokens instead, an incomplete pair would send unauthenticated
+    // requests and 401 — fail here rather than four retries later.
+    if (!options.session && options.apiKey && !options.consumerId) {
+      throw new ConfigurationError(
+        'Record scanning with an apiKey also needs consumerId — a JWT is minted from the pair. Pass both, pass a session, or omit both for an unauthenticated service.',
+      )
+    }
     // The RecordScanner class is network-bound: a scanner built from a given
     // SDK module scans that module's network. Network switching rebuilds the
     // scanner (and the wasm view key) from the target network's module.
@@ -659,14 +887,21 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     let viewKey: ReturnType<SdkModule['ViewKey']['from_string']> | undefined
     let viewKeyString: string | undefined
     let registration = makeRegisterOnce(options.startBlock ?? 0)
+    let session = options.session
+    session?.attach('recordScanning')
+    const url = options.url ?? DEFAULT_SCANNER_URL
 
     function buildScanner() {
       if (!viewKeyString) return // no active account yet — nothing to rebuild
       viewKey = scannerSdk.ViewKey.from_string(viewKeyString)
       scanner = new scannerSdk.RecordScanner({
-        url: options.url,
-        consumerId: options.consumerId,
-        ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+        url,
+        // A session supplies the token per scan, so the credentials stay out of
+        // the scanner and only one party mints.
+        ...(session ? {} : {
+          ...(options.consumerId ? { consumerId: options.consumerId } : {}),
+          ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+        }),
         viewKeys: [viewKey],
         decryptEnabled: true,
         autoReRegister: true,
@@ -683,6 +918,21 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         buildScanner()
       },
 
+      /**
+       * Shares a Provable API session with this scanner.
+       *
+       * Called by {@link createAleoClient} so one session covers proving and
+       * scanning. Takes effect on the next scan — the token is applied at the
+       * scan boundary, not at construction.
+       */
+      setSession: (next: ProvableSession) => {
+        session = next
+        next.attach('recordScanning')
+        // Rebuild so the scanner drops any credentials it was constructed with;
+        // leaving them in place would let the SDK mint alongside the session.
+        buildScanner()
+      },
+
       requestRecords: async (params: RequestRecordsParameters): Promise<OwnedRecord[]> => {
         if (!scanner) {
           throw new Error('No active account set on record scanner. Call setAccount() first.')
@@ -694,8 +944,11 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         const activeScanner = scanner
         const activeViewKey = viewKey!
         const activeRegistration = registration
+        // Apply the token before registration, not just before the scan:
+        // registering a view key is itself an authenticated call.
+        if (session) activeScanner.setJwtData(await session.getJwt())
         await activeRegistration.ensure(activeScanner, activeViewKey)
-        return scanOwned(activeScanner, params.program, params.statusFilter, !!options.apiKey)
+        return scanOwned(activeScanner, params.program, params.statusFilter, !!(options.apiKey && options.consumerId), session)
       },
 
       switchNetwork: async (newNetwork: string) => {
@@ -711,17 +964,33 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
   }
 
   function createStandaloneScanner(options: {
-    url: string
-    consumerId: string
+    url?: string
+    consumerId?: string
     viewKey: string
     apiKey?: string
+    session?: ProvableSession
     startBlock?: number
   }): StandaloneRecordScanner {
+    // A JWT is minted from the pair, so half of it authenticates nothing: the
+    // consumer id is the path segment and the key the header. Without a session
+    // to supply tokens instead, an incomplete pair would send unauthenticated
+    // requests and 401 — fail here rather than four retries later.
+    if (!options.session && options.apiKey && !options.consumerId) {
+      throw new ConfigurationError(
+        'Record scanning with an apiKey also needs consumerId — a JWT is minted from the pair. Pass both, pass a session, or omit both for an unauthenticated service.',
+      )
+    }
     const viewKey = ViewKey.from_string(options.viewKey)
+    // Deliberately not attached: a standalone scanner is not pluggable into a
+    // wallet client, so no client's `applied` report covers it.
+    const session = options.session
     const scanner = new RecordScanner({
-      url: options.url,
-      consumerId: options.consumerId,
-      ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+      url: options.url ?? DEFAULT_SCANNER_URL,
+      // Credentials only when no session mints on this scanner's behalf.
+      ...(session ? {} : {
+        ...(options.consumerId ? { consumerId: options.consumerId } : {}),
+        ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+      }),
       viewKeys: [viewKey],
       decryptEnabled: true,
       autoReRegister: true,
@@ -730,8 +999,10 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 
     return {
       requestRecords: async (params: RequestRecordsParameters): Promise<OwnedRecord[]> => {
+        // Registration is authenticated too, so the token goes in first.
+        if (session) scanner.setJwtData(await session.getJwt())
         await registration.ensure(scanner, viewKey)
-        return scanOwned(scanner, params.program, params.statusFilter, !!options.apiKey)
+        return scanOwned(scanner, params.program, params.statusFilter, !!(options.apiKey && options.consumerId), session)
       },
     }
   }
@@ -745,15 +1016,52 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     consumerId?: string
     /** Forwarded to `createProvingConfig` — the delegated prover pays fees. Defaults to true. */
     useFeeMaster?: boolean
-    records?: RecordProvider
-  }): { publicClient: PublicClient; walletClient: WalletClient; account: LocalAccount<'privateKey'> } {
+    username?: string | (() => string)
+    credentialStore?: ProvableCredentialStore
+    session?: ProvableSession
+    records?: RecordProvider & { setSession?: (session: ProvableSession) => void }
+  }): {
+    publicClient: PublicClient
+    walletClient: ProvableWalletClient
+    account: LocalAccount<'privateKey'>
+  } {
     const account = privateKeyToAccount(options.privateKey)
     const transport = http(options.networkUrl, { network: network as Network })
+
+    // One session for the whole client, so a single authenticateProvableApi()
+    // covers proving and scanning.
+    const credentials =
+      options.consumerId && options.apiKey
+        ? { consumerId: options.consumerId, apiKey: options.apiKey }
+        : undefined
+    // Whether the caller named a credential source. Without one the session
+    // still exists — falling back to process-lifetime memory, so delegated
+    // proving works out of the box — but it is not shared with the record
+    // provider, since a scanner pointed at an open service needs no credential
+    // and must not start registering one.
+    const configured = !!(credentials || options.credentialStore || options.session)
+    const session =
+      options.session ??
+      createProvableSession({
+        credentials,
+        store: options.credentialStore ?? memoryCredentialStore(),
+        // Resolved lazily: only a registration needs it. The derived default
+        // carries a random suffix because a username is spent once — an account
+        // that lost its stored key must still be able to register, and the old
+        // key is unrecoverable. A caller-supplied name is used verbatim, so a
+        // collision fails rather than quietly registering something else.
+        username:
+          options.username ??
+          (() => `veil-${account.address.slice(5, 13)}-${Math.random().toString(36).slice(2, 8)}`),
+      })
 
     const proving = createProvingConfig({
       mode: options.provingMode ?? 'delegated',
       networkUrl: options.networkUrl,
       proverUrl: options.proverUrl,
+      session,
+      // Ignored by the proving config whenever a session is present, which is
+      // where the one-minter rule is enforced.
       apiKey: options.apiKey,
       consumerId: options.consumerId,
       account,
@@ -763,6 +1071,12 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     const publicClient = createPublicClient({ transport })
 
     if (options.records) {
+      // Session before account: sharing the session rebuilds the scanner to drop
+      // any credentials it was constructed with, and setAccount is what triggers
+      // the one build that matters. Only shared when the caller named a
+      // credential source — an unconfigured client must leave a scanner aimed at
+      // an open service exactly as it was.
+      if (configured) options.records.setSession?.(session)
       options.records.setAccount({ viewKey: account.viewKey })
     }
 
@@ -771,7 +1085,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       transport,
       proving,
       ...(options.records ? { recordProvider: options.records } : {}),
-    })
+    }).extend(provableApiActions())
 
     return { publicClient, walletClient, account }
   }

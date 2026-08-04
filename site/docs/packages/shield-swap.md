@@ -54,7 +54,7 @@ const { walletClient } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
   networkUrl: 'https://api.provable.com/v2',
   provingMode: 'delegated',
-  proverUrl: 'https://api.provable.com/prove/testnet',
+  proverUrl: 'https://api.provable.com/prove',
   apiKey: DPS_API_KEY,
   consumerId: CONSUMER_ID,
   records: aleo.createRemoteScanner({
@@ -102,7 +102,7 @@ discovery, quoting, the `imports` map — and the wallet-signer variants.
   [`getSlot`](/api/shield-swap/getSlot),
   [`getSwapOutput`](/api/shield-swap/getSwapOutput); combined balances via
   `getBalances` and `getPrivateBalances`.
-- **DEX API auth** — `client.authenticateApi()` (session handshake signed by
+- **DEX API auth** — `client.authenticateShieldSwap()` (session handshake signed by
   the account, auto-renewing), `ApiClient.getAccessStatus` /
   `redeemAccessCode` for the one-time invite-code gate, and
   `ApiClient.createApiToken` / `listApiTokens` / `revokeApiToken` for

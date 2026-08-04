@@ -20,7 +20,7 @@ export type PublicClientConfig = Omit<ClientConfig, 'account' | 'key' | 'name' |
  * A base {@link Client} extended with the read-only public actions
  * (`getBlockNumber`, `getBalance`, `readContract`, and the rest).
  */
-export type PublicClient = Client & PublicActions
+export type PublicClient = Client<PublicActions>
 
 /**
  * Creates a read-only client for querying Aleo chain state.

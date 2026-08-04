@@ -45,7 +45,7 @@ const { walletClient } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
   networkUrl: 'https://api.provable.com/v2',
   provingMode: 'delegated',
-  proverUrl: 'https://api.provable.com/prove/testnet',
+  proverUrl: 'https://api.provable.com/prove',
   apiKey: DPS_API_KEY,
   consumerId: CONSUMER_ID,
   records: scanner,

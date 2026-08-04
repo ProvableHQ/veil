@@ -42,9 +42,9 @@ export type WalletClientConfig = RpcWalletClientConfig | LocalWalletClientConfig
  * @property recordProvider Source of unspent records for a local account, or
  *   `undefined` for an RPC account (whose wallet supplies records).
  */
-export type WalletClient = Client & WalletActions & {
+export type WalletClient = Client<WalletActions & {
   recordProvider: RecordProvider | undefined
-}
+}>
 
 /**
  * Creates a client that signs and submits transactions.

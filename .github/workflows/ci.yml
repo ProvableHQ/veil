@@ -29,6 +29,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Unit and example tests
         run: pnpm vitest run
+      # Type-level assertions (`*.test-d.ts`). Package tsconfigs only include
+      # `src`, so `tsc --noEmit` never reads `test/` and a `@ts-expect-error`
+      # there passes silently — these need their own run to mean anything.
+      - name: Type-level tests
+        run: pnpm vitest --typecheck.only run
       - name: Typecheck reference dApp
         run: pnpm --filter @provablehq/veil-loyalty-dapp exec tsc --noEmit
 

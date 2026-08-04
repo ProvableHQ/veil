@@ -23,7 +23,7 @@ const CONSUMER_ID = process.env.ALEO_CONSUMER_ID
 const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!DPS_API_KEY && !!CONSUMER_ID
 
 const NETWORK_URL = 'https://api.provable.com/v2'
-const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove/testnet'
+const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove'
 const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://api.provable.com/scanner'
 const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap.aleo'
 const TX_TIMEOUT = 420_000
@@ -65,7 +65,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   // Balances, the airdrop, and most other API reads are bearer-gated; a
   // beforeAll keeps later tests independent of the airdrop test running.
   beforeAll(async () => {
-    await client.authenticateApi()
+    await client.authenticateShieldSwap()
   }, 60_000)
 
   it('funds the account via the async airdrop when balances are empty', async () => {

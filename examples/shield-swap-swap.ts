@@ -52,7 +52,7 @@ describe.runIf(RUN)('example: swap on Shield Swap', () => {
       privateKey: process.env.VEIL_E2E_PRIVATE_KEY!,
       networkUrl: 'https://api.provable.com/v2',
       provingMode: 'delegated',
-      proverUrl: 'https://api.provable.com/prove/testnet',
+      proverUrl: 'https://api.provable.com/prove',
       apiKey: process.env.ALEO_DPS_API_KEY,
       consumerId: process.env.ALEO_CONSUMER_ID,
       records: scanner,
@@ -65,7 +65,7 @@ describe.runIf(RUN)('example: swap on Shield Swap', () => {
     // shieldSwapActions({ api: { apiToken: process.env.SHIELD_SWAP_API_TOKEN } }).
     // First-time accounts also need a one-time invite code:
     // await client.api.redeemAccessCode(code) when getAccessStatus() is false.
-    await client.authenticateApi()
+    await client.authenticateShieldSwap()
 
     // ---- Pick a pool. Discovery goes through the off-chain API, namespaced
     // under `client.api` so a call site shows chain vs service at a glance.

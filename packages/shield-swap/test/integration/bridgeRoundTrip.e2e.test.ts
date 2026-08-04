@@ -102,7 +102,7 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
     address = dexSide.account.address
     dex = dexSide.walletClient.extend(shieldSwapActions({ api: {}, program: DEX_PROGRAM }))
     // Balances and most other DEX API reads are bearer-gated.
-    await dex.authenticateApi()
+    await dex.authenticateShieldSwap()
 
     const mainnet = await loadNetwork('mainnet')
     const bridgeScanner = mainnet.createRemoteScanner({ url: RSS_URL, consumerId: CONSUMER_ID!, apiKey: DPS_API_KEY })
@@ -110,7 +110,7 @@ describe.runIf(RUN)('e2e: bridge in → Shield Swap → bridge out', () => {
       privateKey: PRIVATE_KEY!,
       networkUrl: NETWORK_URL,
       provingMode: 'delegated',
-      proverUrl: process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove/mainnet',
+      proverUrl: process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove',
       apiKey: DPS_API_KEY,
       consumerId: CONSUMER_ID,
       records: bridgeScanner,

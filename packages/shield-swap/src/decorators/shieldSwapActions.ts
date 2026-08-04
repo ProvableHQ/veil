@@ -89,13 +89,15 @@ export type ShieldSwapActionsConfig = {
 /**
  * The action surface {@link shieldSwapActions} adds to a client.
  *
- * @property authenticateApi Authenticates the `.api` client by signing its
- *   challenge with the client's account. Most DEX API endpoints are
+ * @property authenticateShieldSwap Authenticates the `.api` client by signing
+ *   its challenge with the client's account. Most DEX API endpoints are
  *   bearer-gated; call once per session — the JWT lasts ~24h and renews
  *   automatically on expiry — or skip it by configuring the api with a
  *   long-lived `apiToken`. Hits the network (challenge + verify) and signs.
  *   Returns the session JWT for callers that persist it; rejects when the
  *   client has no account.
+ * @property authenticateApi Deprecated alias for
+ *   {@link ShieldSwapActions.authenticateShieldSwap}.
  * @property api The off-chain DEX API client; throws on first use when no
  *   `api` was configured.
  */
@@ -131,6 +133,13 @@ export type ShieldSwapActions = {
   decreaseLiquidity: (params: DecreaseLiquidityParameters) => Promise<DecreaseLiquidityReturnType>
   collect: (params: CollectParameters) => Promise<CollectReturnType>
   burn: (params: BurnParameters) => Promise<BurnReturnType>
+  authenticateShieldSwap: () => Promise<string>
+  /**
+   * @deprecated Renamed to `authenticateShieldSwap`, which names the service it
+   *   signs into — a client can also carry `authenticateProvableApi`, and "the
+   *   API" does not say which one. Behaviour is identical. Removed in the next
+   *   major.
+   */
   authenticateApi: () => Promise<string>
   api: ApiClient
 }
@@ -206,6 +215,9 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     decreaseLiquidity: (p) => decreaseLiquidity(client, withProgram(p)),
     collect: (p) => collect(client, withProgram(p)),
     burn: (p) => burn(client, withProgram(p)),
+    authenticateShieldSwap: () => authenticateWithAccount(api ?? missingApi, client.account),
+    // Same function, not a wrapper: the two names must not drift while the
+    // deprecated one is still supported.
     authenticateApi: () => authenticateWithAccount(api ?? missingApi, client.account),
     api: api ?? missingApi,
   })
