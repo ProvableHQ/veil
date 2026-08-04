@@ -5,6 +5,18 @@ export default defineConfig({
   test: {
     globals: true,
     include: ['packages/*/test/**/*.test.ts', 'examples/*.ts', 'examples/**/*.test.ts'],
+    typecheck: {
+      // `*.test-d.ts` files assert type-level behaviour that no other check
+      // covers: package tsconfigs are `include: ["src"]`, so `tsc --noEmit`
+      // never reads `test/`, and a `@ts-expect-error` there would pass silently.
+      // Run them with `pnpm vitest --typecheck.only run`.
+      include: ['packages/*/test/**/*.test-d.ts'],
+      // Report only errors inside those files. The rest of the test tree has
+      // never been typechecked and currently has ~200 pre-existing errors;
+      // fixing those is its own change, and blocking on them would mean these
+      // assertions never run at all.
+      ignoreSourceErrors: true,
+    },
     onConsoleLog(log) {
       // Suppress SDK deployment noise: program-existence checks hit /latest_edition
       // and /amendment_count which return 500 on the devnode, causing retries and
