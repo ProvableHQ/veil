@@ -19,7 +19,9 @@ import type { GetPositionReturnType } from '../../src/actions/reads/getPosition.
  * from the pool's active tick. Insert hints come from `pickInsertHint`, whose
  * correctness this exercises — a hint above its target is rejected on finalize.
  *
- * Spends real testnet balances and leaves no position behind. Requirements:
+ * Spends real testnet balances. A completed run burns the position it minted; a
+ * run that aborts partway leaves it on chain, holding the amounts it deposited.
+ * Requirements:
  *   VEIL_INTEGRATION=1
  *   VEIL_E2E_PRIVATE_KEY   funded testnet account, both sides of some pool
  *   ALEO_CONSUMER_ID, ALEO_DPS_API_KEY   Provable API credentials
@@ -86,17 +88,33 @@ describe.runIf(RUN)('live liquidity lifecycle on testnet', () => {
    * heard of. Checking mere presence is not enough: the spent record satisfies
    * that too, which is why the tag has to change.
    *
+   * Polls every second for thirty seconds. Longer than the mapping waits because
+   * record indexing is measurably slower — the mint's record took roughly 15s to
+   * appear on a live run — and this wait failing means the next write builds on a
+   * spent record and is dropped.
+   *
    * Returns the new tag, to be passed as `staleTag` after the next write.
    */
   const waitForFreshRecord = async (staleTag?: string) => {
-    for (let i = 0; i < 40; i++) {
-      const mine = (await client.getOwnedPositions()).find(
-        (o) => o.positionTokenId === state.positionTokenId,
-      )
-      if (mine && mine.record.tag !== staleTag) return mine.record.tag
-      await new Promise((r) => setTimeout(r, 5_000))
+    let lastError: unknown
+    for (let i = 0; i < 30; i++) {
+      try {
+        const mine = (await client.getOwnedPositions()).find(
+          (o) => o.positionTokenId === state.positionTokenId,
+        )
+        if (mine && mine.record.tag !== staleTag) return mine.record.tag
+      } catch (e) {
+        // The hosted scanner answers with intermittent 401s. A poll that fails
+        // is retried inside the window rather than failing the step, and the
+        // last failure is attached if none of them succeed.
+        lastError = e
+      }
+      await new Promise((r) => setTimeout(r, 1_000))
     }
-    throw new Error(`scanner served no position record newer than ${staleTag} within 200s`)
+    throw new Error(
+      `scanner served no position record newer than ${staleTag} within 30s`,
+      lastError ? { cause: lastError } : undefined,
+    )
   }
 
   /**
@@ -109,19 +127,22 @@ describe.runIf(RUN)('live liquidity lifecycle on testnet', () => {
    * read back null seconds after the mint confirmed, and the burn's read back
    * with liquidity 0 after the entry had been removed.
    *
+   * Polls every second for ten seconds. Mapping propagation is quick, so a read
+   * that has not caught up by then is a signal rather than a slow network.
+   *
    * @param predicate What the entry must show before the step continues.
-   * @param what Completes "position did not … within 200s" on failure.
+   * @param what Completes "position did not … within 10s" on failure.
    */
   const waitForPosition = async (
     predicate: (position: GetPositionReturnType) => boolean,
     what: string,
   ): Promise<GetPositionReturnType> => {
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 10; i++) {
       const position = await client.getPosition({ positionTokenId: state.positionTokenId! })
       if (predicate(position)) return position
-      await new Promise((r) => setTimeout(r, 5_000))
+      await new Promise((r) => setTimeout(r, 1_000))
     }
-    throw new Error(`position did not ${what} within 200s`)
+    throw new Error(`position did not ${what} within 10s`)
   }
 
   beforeAll(async () => {
@@ -338,15 +359,11 @@ describe.runIf(RUN)('live liquidity lifecycle on testnet', () => {
       positionTokenId: state.positionTokenId!,
       poolKey: state.pool!.key,
     })
+    // The chain is the authority on the burn: the entry is gone from `positions`.
+    // The scanner's own view is deliberately not asserted — it marks the record
+    // spent on its own schedule (still serving it after 30s on one run), so
+    // gating on that would make the suite hostage to third-party indexing
+    // latency rather than to anything this SDK does.
     await waitForPosition((p) => p === null, 'disappear from the positions mapping')
-    // The scanner lags separately: it has to notice the NFT was spent before it
-    // stops serving the record.
-    let gone = false
-    for (let i = 0; i < 40 && !gone; i++) {
-      const owned = await client.getOwnedPositions()
-      gone = !owned.some((o) => o.positionTokenId === state.positionTokenId)
-      if (!gone) await new Promise((r) => setTimeout(r, 5_000))
-    }
-    expect(gone, 'the scanner still serves the burned position record after 200s').toBe(true)
   }, TX)
 })
