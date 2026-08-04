@@ -31,6 +31,9 @@ export type RecordBlindedSwapParameters = {
  *
  * @param store The store holding the reservation.
  * @param params The swap's handle.
+ * @returns `true` when a reservation was labelled, `false` when the store holds
+ *   no record for the handle's blinded address — which callers on the tracked
+ *   path treat as a failure, since there the reservation is supposed to exist.
  *
  * @example
  * const handle = await client.swap({ poolKey, tokenInId, amountIn, blindedIdentity: identity })
@@ -39,12 +42,12 @@ export type RecordBlindedSwapParameters = {
 export async function recordBlindedSwap(
   store: BlindedIdentityStore,
   params: RecordBlindedSwapParameters,
-): Promise<void> {
+): Promise<boolean> {
   const { blindedAddress } = params.handle
-  if (!blindedAddress) return
-  await withStoreLock(store, async () => {
+  if (!blindedAddress) return false
+  return withStoreLock(store, async () => {
     const records = await store.load()
-    if (!records.some((record) => record.blindedAddress === blindedAddress)) return
+    if (!records.some((record) => record.blindedAddress === blindedAddress)) return false
     await store.save(
       records.map((record) =>
         record.blindedAddress === blindedAddress
@@ -56,5 +59,6 @@ export async function recordBlindedSwap(
           : record,
       ),
     )
+    return true
   })
 }

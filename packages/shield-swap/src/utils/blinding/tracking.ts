@@ -52,10 +52,21 @@ export async function recordSwapOrThrow(
   store: BlindedIdentityStore,
   handle: SwapHandle | MultiHopSwapHandle,
 ): Promise<void> {
+  let recorded: boolean
   try {
-    await recordBlindedSwap(store, { handle })
+    recorded = await recordBlindedSwap(store, { handle })
   } catch (cause) {
     throw new SwapRecordingError(handle, cause)
+  }
+  // A write that matched nothing is as bad as one that threw: the reservation
+  // this swap consumed is missing from the store, so the swap id would be lost
+  // just as silently. Only reachable if something replaced the store's contents
+  // between the reservation and here.
+  if (!recorded) {
+    throw new SwapRecordingError(
+      handle,
+      new Error(`the store holds no reservation for ${handle.blindedAddress ?? '(no address)'}`),
+    )
   }
 }
 

@@ -119,9 +119,12 @@ export type ShieldSwapActionsConfig = {
  *   Required for concurrent swaps from one local account: deriving per swap
  *   from a chain read alone hands two swaps the same address and the second
  *   reverts on finalize. Local accounts only.
- * @property recordBlindedSwap Attaches a swap id to a reservation, which is
- *   what lets {@link ShieldSwapActions.syncBlindedIdentities} tell a swapped
- *   identity from a claimed one. Store write, no network.
+ * @property recordBlindedSwap Attaches a swap and its handle to the reservation
+ *   that funded it, which is what lets
+ *   {@link ShieldSwapActions.syncBlindedIdentities} tell a swapped identity from
+ *   a claimed one and what makes the swap claimable from the store later.
+ *   Resolves `false` when the store holds no reservation for the handle's
+ *   address, as a wallet-derived identity does not. Store write, no network.
  * @property syncBlindedIdentities Reconciles stored reservations against the
  *   chain, promoting each to `swapped` or `claimed` once its blinded address
  *   appears on chain. Hits the network per unsettled record.
@@ -166,7 +169,7 @@ export type ShieldSwapActions = {
   pickInsertHint: (params: PickInsertHintParameters) => Promise<number>
   resolveDexImports: (params: ResolveDexImportsParameters) => Promise<Record<string, string>>
   reserveBlindedIdentity: (params?: { program?: string; maxScan?: number }) => Promise<BlindedIdentityRecord>
-  recordBlindedSwap: (params: RecordBlindedSwapParameters) => Promise<void>
+  recordBlindedSwap: (params: RecordBlindedSwapParameters) => Promise<boolean>
   syncBlindedIdentities: (params?: { program?: string }) => Promise<BlindedIdentityRecord[]>
   reconcileSwapHistory: (
     params?: Omit<ReconcileSwapHistoryParameters, 'store'>,

@@ -220,7 +220,9 @@ describe('syncBlindedIdentities', () => {
 
   it('attaches the swap and its handle to the matching reservation only', async () => {
     const store = memoryBlindedIdentityStore([reserved(ADDRESS_A, 0), reserved(ADDRESS_B, 1)])
-    await recordBlindedSwap(store, { handle: handleFor(ADDRESS_B, 'swap9field') })
+    // Reports whether it matched, so a caller on the tracked path can treat a
+    // write that landed nowhere as the failure it is.
+    expect(await recordBlindedSwap(store, { handle: handleFor(ADDRESS_B, 'swap9field') })).toBe(true)
     const records = await store.load()
     expect(records.find((r) => r.blindedAddress === ADDRESS_A)!.swapId).toBeUndefined()
 
@@ -233,9 +235,7 @@ describe('syncBlindedIdentities', () => {
 
     // An unknown address is ignored rather than an error, so replaying is safe,
     // and so is a wallet handle whose identity the store never saw.
-    await expect(
-      recordBlindedSwap(store, { handle: handleFor('aleo1nope', 'x') }),
-    ).resolves.toBeUndefined()
+    await expect(recordBlindedSwap(store, { handle: handleFor('aleo1nope', 'x') })).resolves.toBe(false)
     expect(await store.load()).toHaveLength(2)
   })
 })
