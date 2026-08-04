@@ -72,7 +72,7 @@ import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hin
 import { resolveDexImports, type ResolveDexImportsParameters } from '../utils/imports.js'
 import { reserveBlindedIdentity } from '../actions/blinding/reserveBlindedIdentity.js'
 import { syncBlindedIdentities } from '../actions/blinding/syncBlindedIdentities.js'
-import { recordBlindedSwap } from '../actions/blinding/recordBlindedSwap.js'
+import { recordBlindedSwap, type RecordBlindedSwapParameters } from '../actions/blinding/recordBlindedSwap.js'
 import {
   reconcileSwapHistory,
   type ReconcileSwapHistoryParameters,
@@ -166,7 +166,7 @@ export type ShieldSwapActions = {
   pickInsertHint: (params: PickInsertHintParameters) => Promise<number>
   resolveDexImports: (params: ResolveDexImportsParameters) => Promise<Record<string, string>>
   reserveBlindedIdentity: (params?: { program?: string; maxScan?: number }) => Promise<BlindedIdentityRecord>
-  recordBlindedSwap: (params: { blindedAddress: string; swapId: string }) => Promise<void>
+  recordBlindedSwap: (params: RecordBlindedSwapParameters) => Promise<void>
   syncBlindedIdentities: (params?: { program?: string }) => Promise<BlindedIdentityRecord[]>
   reconcileSwapHistory: (
     params?: Omit<ReconcileSwapHistoryParameters, 'store'>,
@@ -257,6 +257,12 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     // gets the exact predecessor from the API's tick list rather than a
     // best-effort guess from the slot. Only consulted on that path, so a client
     // with the peer never pays the request.
+    // The configured store, threaded to the actions that track identities. A
+    // caller's own value wins, so a per-call store or an explicit opt-out both
+    // work without a flag.
+    const withStore = <P extends { blindedIdentities?: BlindedIdentityStore }>(p: P): P =>
+      p.blindedIdentities ? p : { ...p, blindedIdentities }
+
     const withTicks = <P extends { poolKey: string; initializedTicks?: unknown }>(p: P): P => {
       if (p.initializedTicks || !api) return p
       // Shared across the action's hints rather than fetched per hint: `mint`
@@ -301,9 +307,9 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
         syncBlindedIdentities(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
       reconcileSwapHistory: (p) =>
         reconcileSwapHistory(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
-      swap: (p) => swap(client, withProgram(p)),
-      claimSwapOutput: (p) => claimSwapOutput(client, p),
-      swapMultiHop: (p) => swapMultiHop(client, withProgram(p)),
+      swap: (p) => swap(client, withStore(withProgram(p))),
+      claimSwapOutput: (p) => claimSwapOutput(client, withStore(p)),
+      swapMultiHop: (p) => swapMultiHop(client, withStore(withProgram(p))),
       createPool: (p) => createPool(client, withProgram(p)),
       mint: (p) => mint(client, withTicks(withProgram(p))),
       increaseLiquidity: (p) => increaseLiquidity(client, withTicks(withProgram(p))),

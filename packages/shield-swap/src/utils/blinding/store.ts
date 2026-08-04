@@ -1,4 +1,5 @@
 import type { BlindedIdentity } from './identity.js'
+import type { PersistedHandle } from './handles.js'
 
 /**
  * Lifecycle of a reserved blinded identity.
@@ -24,10 +25,15 @@ export type BlindedIdentityStatus = 'reserved' | 'swapped' | 'claimed'
  * @property swapId The swap this identity was spent on, once known. Absent
  *   until {@link recordBlindedSwap} attaches it, and required to tell
  *   `swapped` from `claimed`.
+ * @property handle The swap's handle in storable form, when one was recorded.
+ *   A claim consumes a whole handle rather than a swap id, so this is what makes
+ *   an unclaimed swap claimable from the store instead of only from the process
+ *   that made it.
  * @property status Lifecycle position — see {@link BlindedIdentityStatus}.
  */
 export interface BlindedIdentityRecord extends BlindedIdentity {
   swapId?: string
+  handle?: PersistedHandle
   status: BlindedIdentityStatus
 }
 

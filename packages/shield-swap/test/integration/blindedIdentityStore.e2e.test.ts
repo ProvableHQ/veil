@@ -7,6 +7,7 @@ import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { fileBlindedIdentityStore } from '../../src/node.js'
 import { reconcileSwapHistory } from '../../src/actions/blinding/reconcileSwapHistory.js'
 import { syncBlindedIdentities } from '../../src/actions/blinding/syncBlindedIdentities.js'
+import { fromPersistedHandle } from '../../src/utils/blinding/handles.js'
 import type { BlindedIdentityRecord, BlindedIdentityStore } from '../../src/utils/blinding/store.js'
 import type { SwapHandle } from '../../src/actions/swap/swap.js'
 
@@ -122,6 +123,9 @@ describe.runIf(RUN)('blinded identity store on testnet', () => {
     expect(state.pool, 'no live pool is funded for this account').toBeTruthy()
     expect(await fromDisk(), 'the store should start empty').toEqual([])
 
+    // Reserved directly here so the next test can assert the pre-swap status.
+    // A caller who just wants a swap does not do this — `client.swap` reserves
+    // and records on its own when a store is configured.
     state.identity = await client.reserveBlindedIdentity()
     expect(state.identity.status).toBe('reserved')
     // Cold start scans from 0, and the chain decides which counters are free —
@@ -155,11 +159,15 @@ describe.runIf(RUN)('blinded identity store on testnet', () => {
       blindedIdentity: state.identity!,
     })
     expect(state.handle.swapId).toBeTruthy()
-    await client.recordBlindedSwap({
-      blindedAddress: state.identity!.blindedAddress,
-      swapId: state.handle.swapId!,
-    })
-    expect((await fromDisk())[0]!.swapId).toBe(state.handle.swapId)
+    // The identity was passed explicitly, which means the caller owns tracking —
+    // so the swap left the store alone and the label is this call's job.
+    expect((await fromDisk())[0]!.swapId).toBeUndefined()
+    await client.recordBlindedSwap({ handle: state.handle })
+    const labelled = (await fromDisk())[0]!
+    expect(labelled.swapId).toBe(state.handle.swapId)
+    // The whole handle is stored, which is what makes the claim below possible
+    // from the store rather than only from this process.
+    expect(labelled.handle).toMatchObject({ transactionId: state.handle.transactionId })
 
     expect(await waitForOutput(state.handle.swapId!)).toBe(true)
     const settled = await client.syncBlindedIdentities()
@@ -169,7 +177,14 @@ describe.runIf(RUN)('blinded identity store on testnet', () => {
   }, TX)
 
   it('reads claimed once the claim removes the output', async () => {
-    const claim = await client.claimSwapOutput({ handle: state.handle!, imports: state.imports })
+    // Claimed from the *stored* handle rather than the one in memory, which is
+    // the whole reason the handle is persisted: a later process can finish a
+    // swap it did not make. Bigints survived JSON as decimal strings.
+    const stored = (await fromDisk())[0]!.handle!
+    const rebuilt = fromPersistedHandle(stored)
+    expect(rebuilt).toEqual(state.handle)
+
+    const claim = await client.claimSwapOutput({ handle: rebuilt, imports: state.imports })
     expect(claim.amountOut).toBeGreaterThan(0n)
 
     // The claim deletes swap_outputs[swapId], which is exactly what separates

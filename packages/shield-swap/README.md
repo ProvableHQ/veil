@@ -435,16 +435,15 @@ node never had from one it simply had not confirmed yet.
 ### Concurrent swaps
 
 Every swap is bound to a blinded identity — a one-time address derived from your
-view key and a counter — and the program asserts each blinded address is used
-only once. When you don't pass one, the client derives it by scanning the chain
-for the first counter it doesn't see, which is safe in sequence and unsafe in
-parallel: two swaps started together read the same "unused" counter, and the
-second reverts on finalize once the first has consumed it. Nothing surfaces
-locally, because at proving time the address genuinely was unused.
+view key and a counter — and the program asserts each blinded address is used only
+once. Derived on demand, that is safe in sequence and unsafe in parallel: two
+swaps started together scan the chain, both see the same counter unused, and the
+second reverts on finalize after the first consumes it. Nothing surfaces locally,
+because at proving time the address genuinely was unused.
 
-Reserve the identities instead. The store records each one before handing it
-back, so a counter is never issued twice — including while its swap is still
-unconfirmed:
+Configure a store and the swap actions handle it for you. `swap` and
+`swapMultiHop` reserve the identity before submitting and record the resulting
+handle after, and `claimSwapOutput` marks it claimed:
 
 ```ts
 import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
@@ -453,31 +452,89 @@ const client = walletClient.extend(
   shieldSwapActions({ api: {}, blindedIdentities: fileBlindedIdentityStore('.veil/blinded.json') }),
 )
 
-const identity = await client.reserveBlindedIdentity()
-const handle = await client.swap({ poolKey, tokenInId, amountIn, blindedIdentity: identity, imports })
-await client.recordBlindedSwap({ blindedAddress: identity.blindedAddress, swapId: handle.swapId! })
+// Nothing else to do — these two cannot collide on an identity.
+const [a, b] = await Promise.all([
+  client.swap({ poolKey: poolA, tokenInId: usdc, amountIn, imports }),
+  client.swap({ poolKey: poolB, tokenInId: eth, amountIn, imports }),
+])
 ```
 
-Omit `blindedIdentities` and reservations are held in memory: concurrent swaps
-in one process stay safe, but a restart re-scans the chain for its starting
-counter. The on-disk store skips that scan and is what a bot or a test suite
-should use. Two processes sharing one account still need one store between them —
-the chain read alone cannot close that window.
+Reservations serialize, so each swap gets its own counter, and each is written
+before its transaction is submitted — which is what keeps an unconfirmed swap from
+having its counter handed out again.
 
-`recordBlindedSwap` attaches the swap id, which is what lets
-`syncBlindedIdentities` tell an unclaimed swap from a settled one. It promotes
-each reservation once its address appears on chain — `swapped` while the output
-is still in `swap_outputs`, `claimed` after the claim consumes it — so pending
-proceeds are recoverable after a crash:
+Omit `blindedIdentities` and nothing changes from the SDK's older behaviour: the
+identity is derived by scanning the chain, no local state is kept, and concurrency
+is your problem. With an in-memory store, concurrent swaps in one process are safe
+but a restart rescans for its starting counter. Two processes sharing one account
+need one store between them — the chain read alone cannot close that window,
+because the check and the submission are not atomic.
+
+`syncBlindedIdentities` reconciles the store against chain: `swapped` while the
+output is still in `swap_outputs`, `claimed` once a claim consumes it. Recorded
+handles make those states actionable rather than merely informative, since a claim
+consumes a whole handle and not a swap id:
 
 ```ts
 const settled = await client.syncBlindedIdentities()
-const unclaimed = settled.filter((r) => r.status === 'swapped')
+for (const record of settled.filter((r) => r.status === 'swapped')) {
+  await client.claimSwapOutput({ handle: fromPersistedHandle(record.handle!), imports })
+}
 ```
 
-This applies to local accounts only. A connected wallet derives and tracks its
-own blinded identities, and `reserveBlindedIdentity` rejects a wallet client
-rather than desynchronize the two.
+That loop is the crash-recovery path: a process that dies between a swap and its
+claim can finish the job from the store alone.
+
+This applies to local accounts only. A connected wallet derives its identities
+behind resolve-mode input requests, so the client never sees them — a wallet
+client's store is left untouched rather than being wrong, and
+`reserveBlindedIdentity` rejects one outright.
+
+#### One failure worth knowing about
+
+If a swap lands but the store cannot be written, `swap` throws
+`SwapRecordingError` **after** a successful submission. Do not resubmit: the
+transaction is on chain and a second one spends more input. The error carries the
+handle, so persist it and claim with it:
+
+```ts
+try {
+  await client.swap({ poolKey, tokenInId, amountIn, imports })
+} catch (error) {
+  if (error instanceof SwapRecordingError) await myBackup.save(error.handle)
+  throw error
+}
+```
+
+It throws rather than warns because the swap id is knowable at that moment and
+unknowable afterwards — nothing on chain ties an identity to its swap until a
+claim exists, so a lost handle means proceeds that cannot be claimed. The claim
+side does the opposite: if marking a claimed identity fails, it warns and
+continues, because the funds are already in the account and
+`reconcileSwapHistory` can repair the record later.
+
+#### Managing identities yourself
+
+Passing `blindedIdentity` explicitly opts out per call, whether or not a store is
+configured. The store is left untouched and the bookkeeping is yours:
+
+```ts
+import { nextBlindedIdentity, viewKeyToScalar } from '@provablehq/shield-swap-sdk'
+
+const identity = await nextBlindedIdentity(client, {
+  viewKeyScalar: await viewKeyToScalar(account.viewKey),
+  signer: account.address,
+  startCounter: myLastUsedCounter + 1,
+})
+const handle = await client.swap({ poolKey, tokenInId, amountIn, blindedIdentity: identity, imports })
+await myDatabase.save(handle) // persist it — the claim consumes it
+```
+
+There is no flag to disable tracking, because this is the flag: an explicit
+identity means you are managing it. Collision safety still comes from the chain
+check `nextBlindedIdentity` performs on every candidate, but the gap between that
+check and your submission is yours to close — that gap is exactly what a store
+exists to serialize.
 
 #### Initializing the history on first run
 

@@ -45,6 +45,19 @@ beforeAll(async () => {
   local = { type: 'local', address: ADDRESS_A, viewKey: new PrivateKey().to_view_key().to_string() }
 })
 
+/** A single-hop handle as `swap` returns one, for the recording tests. */
+const handleFor = (blindedAddress: string, swapId: string) => ({
+  swapId,
+  blindingFactor: '1field',
+  blindedAddress,
+  tokenInId: '11field',
+  tokenOutId: '22field',
+  poolKey: '1field',
+  amountIn: 1000n,
+  transactionId: 'at1swap',
+  program: 'shield_swap.aleo',
+})
+
 const reserved = (blindedAddress: string, counter: number, swapId?: string): BlindedIdentityRecord => ({
   counter,
   blindingFactor: `${counter}scalar`,
@@ -205,15 +218,24 @@ describe('syncBlindedIdentities', () => {
     expect(reads).toBe(0)
   })
 
-  it('attaches a swap id to the matching reservation only', async () => {
+  it('attaches the swap and its handle to the matching reservation only', async () => {
     const store = memoryBlindedIdentityStore([reserved(ADDRESS_A, 0), reserved(ADDRESS_B, 1)])
-    await recordBlindedSwap(store, { blindedAddress: ADDRESS_B, swapId: 'swap9field' })
+    await recordBlindedSwap(store, { handle: handleFor(ADDRESS_B, 'swap9field') })
     const records = await store.load()
     expect(records.find((r) => r.blindedAddress === ADDRESS_A)!.swapId).toBeUndefined()
-    expect(records.find((r) => r.blindedAddress === ADDRESS_B)!.swapId).toBe('swap9field')
 
-    // An unknown address is ignored rather than an error, so replaying is safe.
-    await expect(recordBlindedSwap(store, { blindedAddress: 'aleo1nope', swapId: 'x' })).resolves.toBeUndefined()
+    const labelled = records.find((r) => r.blindedAddress === ADDRESS_B)!
+    expect(labelled.swapId).toBe('swap9field')
+    // The whole handle is stored, because a claim consumes a handle rather than
+    // a swap id — and its bigints are strings, so the store can serialise it.
+    expect(labelled.handle).toMatchObject({ poolKey: '1field', amountIn: '1000', transactionId: 'at1swap' })
+    expect(JSON.stringify(labelled)).toContain('"amountIn":"1000"')
+
+    // An unknown address is ignored rather than an error, so replaying is safe,
+    // and so is a wallet handle whose identity the store never saw.
+    await expect(
+      recordBlindedSwap(store, { handle: handleFor('aleo1nope', 'x') }),
+    ).resolves.toBeUndefined()
     expect(await store.load()).toHaveLength(2)
   })
 })

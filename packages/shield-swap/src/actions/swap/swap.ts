@@ -5,6 +5,9 @@ import {
   type InputRequest,
   type TransactionInput,
 } from '@provablehq/veil-core'
+import { reserveBlindedIdentity } from '../blinding/reserveBlindedIdentity.js'
+import { recordSwapOrThrow } from '../../utils/blinding/tracking.js'
+import type { BlindedIdentityStore } from '../../utils/blinding/store.js'
 import { nextBlindedIdentity, viewKeyToScalar } from '../../utils/blinding/identity.js'
 import { resolveTokenRecord } from '../../utils/records.js'
 import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
@@ -57,6 +60,14 @@ import { SHIELD_SWAP, SHIELD_SWAP_ROUTER } from '../../constants.js'
  *   (`{ 'token.aleo': source }`). The prover cannot discover dynamic callees
  *   statically — pass the involved token programs' sources when proving
  *   locally or via a service that requires them.
+ * @property blindedIdentities Store that reserves the blinded identity and
+ *   records the resulting handle. Supplied by `shieldSwapActions` when
+ *   configured. With it, concurrent swaps from one account cannot collide on an
+ *   identity and the swap is claimable from the store afterwards; without it the
+ *   identity is derived by scanning the chain, which is safe in sequence only.
+ *   Ignored when `blindedIdentity` is passed explicitly — an explicit identity
+ *   means the caller is tracking it themselves — and on wallet accounts, which
+ *   derive their own.
  * @property program Core AMM program override. Defaults to
  *   `shield_swap.aleo`.
  * @property routerProgram Swap router override for wrapped-input dispatch.
@@ -73,6 +84,7 @@ export type SwapParameters = {
   nonce?: bigint
   tokenRecord?: string | InputRequest
   blindedIdentity?: { blindingFactor: string; blindedAddress: string }
+  blindedIdentities?: BlindedIdentityStore
   route?: TokenRoute
   proofs?: ProofProvider
   imports?: Record<string, string>
@@ -267,13 +279,19 @@ export async function swap(client: Client, params: SwapParameters): Promise<Swap
   if (isLocal) {
     // Local signer: literals only — derive the identity and select a record.
     // The identity scope is the CORE program even for router submissions.
+    // A store both picks the counter and remembers it, which is what makes two
+    // concurrent swaps safe: reservations serialize, so they cannot derive the
+    // same address and have the second revert on the uniqueness assert.
+    const tracked = params.blindedIdentity === undefined ? params.blindedIdentities : undefined
     const identity =
       params.blindedIdentity ??
-      (await nextBlindedIdentity(client, {
-        viewKeyScalar: await viewKeyToScalar(account.viewKey!),
-        signer: account.address,
-        program,
-      }))
+      (tracked
+        ? await reserveBlindedIdentity(client, { store: tracked, program })
+        : await nextBlindedIdentity(client, {
+            viewKeyScalar: await viewKeyToScalar(account.viewKey!),
+            signer: account.address,
+            program,
+          }))
 
     // Wrapped inputs spend the UNDERLYING asset's records; plain inputs
     // spend the token program's own records (the id decodes to the program).
@@ -300,13 +318,18 @@ export async function swap(client: Client, params: SwapParameters): Promise<Swap
 
     const swapId = requireFieldOutput(result.outputs, 'swap')
 
-    return {
+    const handle = {
       ...handleBase,
       swapId,
       blindingFactor: identity.blindingFactor,
       blindedAddress: identity.blindedAddress,
       transactionId: result.transactionId,
     }
+    // After the submission, so the store never claims a swap the chain does not
+    // have. A failure here surfaces rather than being swallowed: the swap id is
+    // knowable now and unknowable later.
+    if (tracked) await recordSwapOrThrow(tracked, handle)
+    return handle
   }
 
   // Wallet signer: the wallet fulfils the blinding slots (and the record —
