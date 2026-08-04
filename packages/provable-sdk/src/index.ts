@@ -619,9 +619,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             })
 
             const dpsClient = new AleoNetworkClient(proverUrl)
-            // A session supplies the token and withholds the credentials, so
-            // one party mints. Without one, the SDK mints from the pair as
-            // before.
+
             const auth = async (forceRefresh: boolean) =>
               options.session
                 ? { jwtData: await options.session.getJwt({ forceRefresh }) }
