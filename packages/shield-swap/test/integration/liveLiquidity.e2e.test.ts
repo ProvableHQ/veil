@@ -4,6 +4,7 @@ import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { resolveDexImports } from '../../src/utils/imports.js'
 import { amountsForLiquidity, getSqrtPriceAtTickX128, liquidityForAmounts } from '../../src/utils/q128.js'
 import { roundTickToSpacing } from '../../src/utils/tick-math.js'
+import type { GetPositionReturnType } from '../../src/actions/reads/getPosition.js'
 
 /**
  * The liquidity lifecycle against the live testnet deployment: mint, increase,
@@ -96,6 +97,31 @@ describe.runIf(RUN)('live liquidity lifecycle on testnet', () => {
       await new Promise((r) => setTimeout(r, 5_000))
     }
     throw new Error(`scanner served no position record newer than ${staleTag} within 200s`)
+  }
+
+  /**
+   * Polls the position read until `predicate` holds.
+   *
+   * Mapping writes propagate to reads asynchronously, so a read taken straight
+   * after its write can still show the previous state — or nothing at all,
+   * before the entry appears. Every step below reads exactly what its own write
+   * just changed, so none of them can trust the first answer: the mint's entry
+   * read back null seconds after the mint confirmed, and the burn's read back
+   * with liquidity 0 after the entry had been removed.
+   *
+   * @param predicate What the entry must show before the step continues.
+   * @param what Completes "position did not … within 200s" on failure.
+   */
+  const waitForPosition = async (
+    predicate: (position: GetPositionReturnType) => boolean,
+    what: string,
+  ): Promise<GetPositionReturnType> => {
+    for (let i = 0; i < 40; i++) {
+      const position = await client.getPosition({ positionTokenId: state.positionTokenId! })
+      if (predicate(position)) return position
+      await new Promise((r) => setTimeout(r, 5_000))
+    }
+    throw new Error(`position did not ${what} within 200s`)
   }
 
   beforeAll(async () => {
@@ -230,8 +256,7 @@ describe.runIf(RUN)('live liquidity lifecycle on testnet', () => {
     state.positionTokenId = minted.positionTokenId
     expect(minted.transactionId).toBeTruthy()
 
-    const position = await client.getPosition({ positionTokenId: state.positionTokenId! })
-    expect(position).not.toBeNull()
+    const position = await waitForPosition((p) => p !== null, 'appear in the positions mapping')
     expect(position!.liquidity).toBeGreaterThan(0n)
     expect(position!.tick_lower).toBe(state.tickLower)
     expect(position!.tick_upper).toBe(state.tickUpper)
@@ -269,8 +294,10 @@ describe.runIf(RUN)('live liquidity lifecycle on testnet', () => {
       amount1Desired: state.amount1!,
       imports: state.imports,
     })
-    const position = await client.getPosition({ positionTokenId: state.positionTokenId! })
-    expect(position!.liquidity).toBeGreaterThan(state.liquidity!)
+    const position = await waitForPosition(
+      (p) => (p?.liquidity ?? 0n) > state.liquidity!,
+      'show the added liquidity',
+    )
     state.liquidity = position!.liquidity
     // The increase respent the record; decrease must not build on the old one.
     state.recordTag = await waitForFreshRecord(state.recordTag)
@@ -282,8 +309,7 @@ describe.runIf(RUN)('live liquidity lifecycle on testnet', () => {
       poolKey: state.pool!.key,
       liquidityToRemove: state.liquidity!,
     })
-    const position = await client.getPosition({ positionTokenId: state.positionTokenId! })
-    expect(position!.liquidity).toBe(0n)
+    const position = await waitForPosition((p) => p?.liquidity === 0n, 'drop to zero liquidity')
     // Withdrawing does not pay out — it books what collect then pays.
     expect(position!.tokens_owed0 + position!.tokens_owed1).toBeGreaterThan(0n)
     state.recordTag = await waitForFreshRecord(state.recordTag)
@@ -300,9 +326,10 @@ describe.runIf(RUN)('live liquidity lifecycle on testnet', () => {
       amount1Requested: owed.tokens_owed1,
       imports: state.imports,
     })
-    const position = await client.getPosition({ positionTokenId: state.positionTokenId! })
-    expect(position!.tokens_owed0).toBe(0n)
-    expect(position!.tokens_owed1).toBe(0n)
+    await waitForPosition(
+      (p) => p?.tokens_owed0 === 0n && p?.tokens_owed1 === 0n,
+      'clear its owed balances',
+    )
     state.recordTag = await waitForFreshRecord(state.recordTag)
   }, TX)
 
@@ -311,20 +338,15 @@ describe.runIf(RUN)('live liquidity lifecycle on testnet', () => {
       positionTokenId: state.positionTokenId!,
       poolKey: state.pool!.key,
     })
-    // Both views lag the confirmation, by different mechanisms: the mapping
-    // delete propagates to reads asynchronously, and the scanner has to notice
-    // the NFT was spent. Asserting on the first read fails against a position
-    // the chain has already removed — it read back with liquidity 0 seconds
-    // after the burn confirmed, and null shortly after.
+    await waitForPosition((p) => p === null, 'disappear from the positions mapping')
+    // The scanner lags separately: it has to notice the NFT was spent before it
+    // stops serving the record.
     let gone = false
     for (let i = 0; i < 40 && !gone; i++) {
-      const [entry, owned] = await Promise.all([
-        client.getPosition({ positionTokenId: state.positionTokenId! }),
-        client.getOwnedPositions(),
-      ])
-      gone = entry === null && !owned.some((o) => o.positionTokenId === state.positionTokenId)
+      const owned = await client.getOwnedPositions()
+      gone = !owned.some((o) => o.positionTokenId === state.positionTokenId)
       if (!gone) await new Promise((r) => setTimeout(r, 5_000))
     }
-    expect(gone, 'the burned position is still visible 200s after the burn confirmed').toBe(true)
+    expect(gone, 'the scanner still serves the burned position record after 200s').toBe(true)
   }, TX)
 })
