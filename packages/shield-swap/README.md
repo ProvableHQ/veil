@@ -244,6 +244,17 @@ const imports = {
 }
 ```
 
+That map is incomplete on its own: the prover also needs `shield_swap`'s own
+static imports, and a swap submitted without them fails with "its import … must
+be added first". `resolveDexImports` collects both halves, and it is available on
+the composed client:
+
+```ts
+const imports = await client.resolveDexImports({
+  tokenPrograms: [token0Program, token1Program],
+})
+```
+
 ## Swapping
 
 A private swap takes two transactions. The first submits the swap request;
@@ -420,6 +431,53 @@ earns a `DuplicateTransactionError`. The window is per client, so a client doing
 both liquidity writes and multi-hop swaps takes the longer value; check
 `error.absentPolls` against `error.polls` on a timeout to tell a transaction the
 node never had from one it simply had not confirmed yet.
+
+### Concurrent swaps
+
+Every swap is bound to a blinded identity — a one-time address derived from your
+view key and a counter — and the program asserts each blinded address is used
+only once. When you don't pass one, the client derives it by scanning the chain
+for the first counter it doesn't see, which is safe in sequence and unsafe in
+parallel: two swaps started together read the same "unused" counter, and the
+second reverts on finalize once the first has consumed it. Nothing surfaces
+locally, because at proving time the address genuinely was unused.
+
+Reserve the identities instead. The store records each one before handing it
+back, so a counter is never issued twice — including while its swap is still
+unconfirmed:
+
+```ts
+import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
+
+const client = walletClient.extend(
+  shieldSwapActions({ api: {}, blindedIdentities: fileBlindedIdentityStore('.veil/blinded.json') }),
+)
+
+const identity = await client.reserveBlindedIdentity()
+const handle = await client.swap({ poolKey, tokenInId, amountIn, blindedIdentity: identity, imports })
+await client.recordBlindedSwap({ blindedAddress: identity.blindedAddress, swapId: handle.swapId! })
+```
+
+Omit `blindedIdentities` and reservations are held in memory: concurrent swaps
+in one process stay safe, but a restart re-scans the chain for its starting
+counter. The on-disk store skips that scan and is what a bot or a test suite
+should use. Two processes sharing one account still need one store between them —
+the chain read alone cannot close that window.
+
+`recordBlindedSwap` attaches the swap id, which is what lets
+`syncBlindedIdentities` tell an unclaimed swap from a settled one. It promotes
+each reservation once its address appears on chain — `swapped` while the output
+is still in `swap_outputs`, `claimed` after the claim consumes it — so pending
+proceeds are recoverable after a crash:
+
+```ts
+const settled = await client.syncBlindedIdentities()
+const unclaimed = settled.filter((r) => r.status === 'swapped')
+```
+
+This applies to local accounts only. A connected wallet derives and tracks its
+own blinded identities, and `reserveBlindedIdentity` rejects a wallet client
+rather than desynchronize the two.
 
 ## Liquidity
 

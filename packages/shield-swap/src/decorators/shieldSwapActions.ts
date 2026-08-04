@@ -69,6 +69,15 @@ import {
 } from '../utils/records.js'
 import { getBalances, type GetBalancesParameters, type GetBalancesReturnType } from '../utils/balances.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hints.js'
+import { resolveDexImports, type ResolveDexImportsParameters } from '../utils/imports.js'
+import {
+  memoryBlindedIdentityStore,
+  recordBlindedSwap,
+  reserveBlindedIdentity,
+  syncBlindedIdentities,
+  type BlindedIdentityRecord,
+  type BlindedIdentityStore,
+} from '../utils/blinding/store.js'
 import { ApiClient, authenticateWithAccount, defaultApiUrl, type ApiClientOptions } from '../api/client.js'
 
 /**
@@ -80,15 +89,37 @@ import { ApiClient, authenticateWithAccount, defaultApiUrl, type ApiClientOption
  * @property program shield_swap program id every action defaults to. Set it
  *   once to point the whole surface at another deployment; per-call
  *   `program` still overrides.
+ * @property blindedIdentities Where {@link ShieldSwapActions.reserveBlindedIdentity}
+ *   records reservations. Defaults to a per-client in-memory store, which keeps
+ *   concurrent swaps in one process off each other but rescans the chain on
+ *   restart; pass `fileBlindedIdentityStore` from
+ *   `@provablehq/shield-swap-sdk/node` to persist them. Ignored by wallet
+ *   accounts, which track their own.
  */
 export type ShieldSwapActionsConfig = {
   api?: ApiClientOptions | ApiClient
   program?: string
+  blindedIdentities?: BlindedIdentityStore
 }
 
 /**
  * The action surface {@link shieldSwapActions} adds to a client.
  *
+ * @property resolveDexImports Builds the `imports` map a write needs — the
+ *   given token programs plus the DEX program's own declared imports. Every
+ *   write action's `imports` parameter takes the result directly. Hits the
+ *   network once per unique program.
+ * @property reserveBlindedIdentity Reserves the next unused blinded identity
+ *   from the configured store and returns it for a swap's `blindedIdentity`.
+ *   Required for concurrent swaps from one local account: deriving per swap
+ *   from a chain read alone hands two swaps the same address and the second
+ *   reverts on finalize. Local accounts only.
+ * @property recordBlindedSwap Attaches a swap id to a reservation, which is
+ *   what lets {@link ShieldSwapActions.syncBlindedIdentities} tell a swapped
+ *   identity from a claimed one. Store write, no network.
+ * @property syncBlindedIdentities Reconciles stored reservations against the
+ *   chain, promoting each to `swapped` or `claimed` once its blinded address
+ *   appears on chain. Hits the network per unsettled record.
  * @property authenticateShieldSwap Authenticates the `.api` client by signing
  *   its challenge with the client's account. Most DEX API endpoints are
  *   bearer-gated; call once per session — the JWT lasts ~24h and renews
@@ -124,6 +155,10 @@ export type ShieldSwapActions = {
   getPrivateBalances: (params: GetPrivateBalancesParameters) => Promise<GetPrivateBalancesReturnType>
   getBalances: (params?: GetBalancesParameters) => Promise<GetBalancesReturnType>
   pickInsertHint: (params: PickInsertHintParameters) => Promise<number>
+  resolveDexImports: (params: ResolveDexImportsParameters) => Promise<Record<string, string>>
+  reserveBlindedIdentity: (params?: { program?: string; maxScan?: number }) => Promise<BlindedIdentityRecord>
+  recordBlindedSwap: (params: { blindedAddress: string; swapId: string }) => Promise<void>
+  syncBlindedIdentities: (params?: { program?: string }) => Promise<BlindedIdentityRecord[]>
   swap: (params: SwapParameters) => Promise<SwapReturnType>
   claimSwapOutput: (params: ClaimSwapOutputParameters) => Promise<ClaimSwapOutputReturnType>
   swapMultiHop: (params: SwapMultiHopParameters) => Promise<SwapMultiHopReturnType>
@@ -188,6 +223,11 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
   // Thread the client-level program default under any per-call override.
   const withProgram = <P extends { program?: string }>(p: P): P => ({ ...p, program: p.program ?? config.program })
 
+  // One store per decorator, shared by every client it extends: reservations
+  // are per account, and a store built per client would let two clients on the
+  // same key hand out the same counter.
+  const blindedIdentities = config.blindedIdentities ?? memoryBlindedIdentityStore()
+
   // `extend()` copies properties with Object.assign, which evaluates getters
   // eagerly — so the "no api" case is a proxy that throws actionably on
   // first USE instead of a lazy getter (which would throw at extend time).
@@ -241,6 +281,12 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       getPrivateBalances: (p) => getPrivateBalances(client, p),
       getBalances: (p) => getBalances(client, api ?? missingApi, p),
       pickInsertHint: (p) => pickInsertHint(client, withTicks(withProgram(p))),
+      resolveDexImports: (p) => resolveDexImports(client, withProgram(p)),
+      reserveBlindedIdentity: (p) =>
+        reserveBlindedIdentity(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
+      recordBlindedSwap: (p) => recordBlindedSwap(blindedIdentities, p),
+      syncBlindedIdentities: (p) =>
+        syncBlindedIdentities(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
       swap: (p) => swap(client, withProgram(p)),
       claimSwapOutput: (p) => claimSwapOutput(client, p),
       swapMultiHop: (p) => swapMultiHop(client, withProgram(p)),

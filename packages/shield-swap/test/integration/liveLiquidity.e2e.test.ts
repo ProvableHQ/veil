@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
-import { resolveDexImports } from '../../src/utils/imports.js'
 import { amountsForLiquidity, getSqrtPriceAtTickX128, liquidityForAmounts } from '../../src/utils/q128.js'
 import { roundTickToSpacing } from '../../src/utils/tick-math.js'
 import type { GetPositionReturnType } from '../../src/actions/reads/getPosition.js'
@@ -183,7 +182,7 @@ describe.runIf(RUN)('live liquidity lifecycle on testnet', () => {
       // drain it.
       state.budget0 = held(state.pool.token0) / 1000n
       state.budget1 = held(state.pool.token1) / 1000n
-      state.imports = await resolveDexImports(client, {
+      state.imports = await client.resolveDexImports({
         tokenPrograms: [state.pool.token0, state.pool.token1].map(
           (id) => tokens.find((t) => t.address === id)!.amm_token_program!,
         ),

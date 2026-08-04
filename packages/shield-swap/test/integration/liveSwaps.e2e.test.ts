@@ -1,7 +1,10 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, it, expect, beforeAll } from 'vitest'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
-import { resolveDexImports } from '../../src/utils/imports.js'
+import { fileBlindedIdentityStore } from '../../src/node.js'
+import type { SwapParameters } from '../../src/actions/swap/swap.js'
 
 /**
  * Swaps against the live testnet deployment: single hop, forced multi-hop, and
@@ -46,6 +49,21 @@ describe.runIf(RUN)('live swaps on testnet', () => {
     }
     return false
   }
+  /**
+   * Swaps against a reserved blinded identity and labels the reservation.
+   *
+   * Every swap goes through this, not just the concurrent ones: reservations
+   * are only safe if nothing else in the process derives identities behind the
+   * store's back.
+   */
+  const swapWith = async (params: SwapParameters) => {
+    const identity = await client.reserveBlindedIdentity()
+    expect(identity.status).toBe('reserved')
+    const handle = await client.swap({ ...params, blindedIdentity: identity })
+    await client.recordBlindedSwap({ blindedAddress: identity.blindedAddress, swapId: handle.swapId! })
+    return handle
+  }
+
   /** The pool for a pair, deepest first so swaps have price support. */
   const poolFor = (a: string, b: string) =>
     pools.find((p) => [p.token0, p.token1].includes(a) && [p.token0, p.token1].includes(b))
@@ -65,7 +83,16 @@ describe.runIf(RUN)('live swaps on testnet', () => {
       // likely dropped than pending, and waiting only delays finding out.
       confirmationTimeout: 400_000,
     })
-    client = walletClient.extend(shieldSwapActions({ api: {} })) as typeof client
+    // On disk, so counters keep advancing across runs instead of rescanning the
+    // chain for the frontier every time.
+    client = walletClient.extend(
+      shieldSwapActions({
+        api: {},
+        blindedIdentities: fileBlindedIdentityStore(
+          process.env.VEIL_BLINDED_STORE ?? join(tmpdir(), 'veil-blinded-testnet.json'),
+        ),
+      }),
+    ) as typeof client
     await client.authenticateShieldSwap()
 
     tokens = (await client.api.getTokens()).data as Token[]
@@ -90,11 +117,11 @@ describe.runIf(RUN)('live swaps on testnet', () => {
     const pool = pools.find((p) => held.get(p.token0)! > 0n || held.get(p.token1)! > 0n)!
     const tokenInId = held.get(pool.token0)! > 0n ? pool.token0 : pool.token1
     const amountIn = held.get(tokenInId)! / 1000n
-    const imports = await resolveDexImports(client, {
+    const imports = await client.resolveDexImports({
       tokenPrograms: [program(pool.token0), program(pool.token1)],
     })
 
-    const handle = await client.swap({ poolKey: pool.key, tokenInId, amountIn, slippageBps: 500, imports })
+    const handle = await swapWith({ poolKey: pool.key, tokenInId, amountIn, slippageBps: 500, imports })
     // Always present on the local-signer path; optional only for wallet signers
     // that did not supply a blinded identity.
     const { swapId } = handle
@@ -121,16 +148,19 @@ describe.runIf(RUN)('live swaps on testnet', () => {
     const to = last.token0 === bridge.address ? last.token1 : last.token0
     const hops = [poolFor(from, bridge.address)!.key, last.key]
 
-    const imports = await resolveDexImports(client, {
+    const imports = await client.resolveDexImports({
       tokenPrograms: [from, bridge.address, to].map(program),
     })
+    const identity = await client.reserveBlindedIdentity()
     const handle = await client.swapMultiHop({
       poolKeys: hops,
       tokenInId: from,
       amountIn: held.get(from)! / 1000n,
       slippageBps: 500,
       imports,
+      blindedIdentity: identity,
     })
+    await client.recordBlindedSwap({ blindedAddress: identity.blindedAddress, swapId: handle.swapId! })
     expect(handle.poolKeys).toEqual(hops)
     expect(await waitForOutput(handle.swapId!)).toBe(true)
 
@@ -139,8 +169,11 @@ describe.runIf(RUN)('live swaps on testnet', () => {
   }, TX)
 
   it('runs two swaps concurrently on pools that spend different tokens', async () => {
-    // Concurrency contends on records: two swaps selecting the same record double
-    // spend and one reverts. Disjoint input tokens keep the record sets apart.
+    // Concurrency contends on two things. Records: disjoint input tokens keep
+    // the record sets apart. Blinded identities: both swaps would otherwise
+    // derive the same one from the same chain read, and the second reverts on
+    // finalize against the uniqueness assert — which `swapWith` prevents by
+    // reserving through the store.
     const funded = [...held].filter(([, v]) => v > 0n).map(([id]) => id)
     const pairs: { id: string; pool: Pool }[] = []
     for (const id of funded) {
@@ -154,10 +187,10 @@ describe.runIf(RUN)('live swaps on testnet', () => {
 
     const results = await Promise.all(
       pairs.map(async ({ id, pool }) => {
-        const imports = await resolveDexImports(client, {
+        const imports = await client.resolveDexImports({
           tokenPrograms: [program(pool.token0), program(pool.token1)],
         })
-        const handle = await client.swap({
+        const handle = await swapWith({
           poolKey: pool.key,
           tokenInId: id,
           amountIn: held.get(id)! / 1000n,
@@ -169,5 +202,12 @@ describe.runIf(RUN)('live swaps on testnet', () => {
       }),
     )
     for (const r of results) expect(r.amountOut).toBeGreaterThan(0n)
+    // The reserved addresses must be distinct — equal ones are the collision.
+    const reserved = await client.syncBlindedIdentities()
+    expect(new Set(reserved.map((r) => r.blindedAddress)).size).toBe(reserved.length)
+    // Both swaps confirmed and were claimed above, so the chain now carries
+    // their addresses with no swap output left against them.
+    const forThisTest = reserved.slice(-2)
+    for (const r of forThisTest) expect(r.status).toBe('claimed')
   }, TX)
 })
