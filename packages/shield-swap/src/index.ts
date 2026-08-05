@@ -88,6 +88,7 @@ export {
   type BlindedIdentityRecord,
   type BlindedIdentityStatus,
   type BlindedIdentityStore,
+  type PersistedClaim,
 } from './utils/blinding/store.js'
 
 // The two-phase private swap: request → (chain computes) → claim.

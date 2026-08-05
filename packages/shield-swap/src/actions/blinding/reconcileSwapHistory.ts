@@ -54,10 +54,11 @@ export type ReconciledClaim = {
  * @property store The store to reconcile and write back.
  * @property program shield_swap program whose call history is walked. Defaults
  *   to `DEFAULT_PROGRAM`.
- * @property maxPages Pages of call history to walk before giving up. Defaults
- *   to 8. Each page costs one request, plus one per claim call it contains, so
- *   raise it deliberately — a full history walk on a busy deployment is
- *   hundreds of requests.
+ * @property maxPages Pages of call history to walk before giving up. Unbounded by
+ *   default: the walk ends when the history does, which is what makes a rebuilt
+ *   store complete rather than partial. Set it to bound the work on a deployment
+ *   whose history has grown large — each page costs one request plus one per
+ *   claim it contains, though those run concurrently.
  * @property pageSize Calls per page, 1–50. Defaults to 50, the largest the
  *   endpoint serves and therefore the fewest requests per call examined.
  * @property concurrency Transaction fetches in flight at once. Defaults to 8.
@@ -82,8 +83,8 @@ export type ReconcileSwapHistoryParameters = {
  * @property callsScanned Calls examined, claims and others alike.
  * @property pagesScanned Pages of history walked.
  * @property complete Whether the walk ended because it ran out of history or
- *   resolved every identity, rather than because it hit `maxPages`. When
- *   `false`, older claims may exist and a higher `maxPages` would find them.
+ *   resolved every identity, rather than because it hit a `maxPages` the caller
+ *   set. When `false`, older claims may exist beyond the bound.
  */
 export type ReconcileSwapHistoryReturnType = {
   claims: ReconciledClaim[]
@@ -188,6 +189,10 @@ function claimFromTransition(
  * {@link syncBlindedIdentities} settles the cheap questions against the
  * mappings, and should be preferred for anything periodic.
  *
+ * Identities it could not find are marked `claimSearched` when the walk reached
+ * the end of the history, because that is an answer — those swaps were never
+ * claimed — and it keeps a later run from searching all of history for them again.
+ *
  * Stops early once every identity is accounted for, so an up-to-date store
  * usually costs one page. Otherwise it walks to `maxPages` and reports
  * `complete: false`.
@@ -219,7 +224,7 @@ export async function reconcileSwapHistory(
   params: ReconcileSwapHistoryParameters,
 ): Promise<ReconcileSwapHistoryReturnType> {
   const program = params.program ?? DEFAULT_PROGRAM
-  const maxPages = params.maxPages ?? 8
+  const maxPages = params.maxPages ?? Number.POSITIVE_INFINITY
   const pageSize = params.pageSize ?? 50
   const concurrency = params.concurrency ?? 8
 
@@ -275,17 +280,53 @@ export async function reconcileSwapHistory(
         claims.push(claim)
         unresolved.delete(claim.blindedAddress)
         const record = known.get(claim.blindedAddress)!
-        const next: BlindedIdentityRecord = { ...record, swapId: claim.swapId, status: 'claimed' }
+        const next: BlindedIdentityRecord = {
+          ...record,
+          swapId: claim.swapId,
+          status: 'claimed',
+          // Persisted because it cannot be re-read: the claim removed the
+          // `swap_outputs` entry, so this transaction is the only remaining
+          // record of what the swap actually moved.
+          claim: {
+            tokenIn: claim.tokenIn,
+            tokenOut: claim.tokenOut,
+            amountOut: claim.amountOut.toString(),
+            amountRemaining: claim.amountRemaining.toString(),
+            transactionId: claim.transactionId,
+            blockNumber: claim.blockNumber,
+          },
+        }
         known.set(claim.blindedAddress, next)
         updated.push(next)
       }
 
       if (unresolved.size === 0) complete = true
       else if (!page.next_cursor) complete = true
-      else cursor = page.next_cursor
+      else if (
+        cursor &&
+        page.next_cursor.block_number === cursor.block_number &&
+        page.next_cursor.transition_id === cursor.transition_id
+      ) {
+        // The endpoint handed back the cursor it was given, so paging is not
+        // advancing. Stopping beats looping forever on one page.
+        complete = true
+      } else cursor = page.next_cursor
     }
 
-    if (updated.length) await params.store.save([...known.values()])
+    // A walk that reached the end of history has answered for everything it did
+    // not find: those swaps were never claimed. Recording that is what stops the
+    // next run from searching the whole history for them again.
+    let marked = 0
+    if (complete) {
+      for (const address of unresolved) {
+        const record = known.get(address)
+        if (!record || record.swapId || record.status === 'reserved' || record.claimSearched) continue
+        known.set(address, { ...record, claimSearched: true })
+        marked++
+      }
+    }
+
+    if (updated.length || marked) await params.store.save([...known.values()])
     return { claims, updated, callsScanned, pagesScanned, complete }
   })
 }

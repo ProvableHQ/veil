@@ -143,8 +143,14 @@ describe('reconcileSwapHistory', () => {
 
   it('reports an incomplete walk when it runs out of pages', async () => {
     const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    // Cursors advance, as a real endpoint's do — a repeated cursor is treated as
+    // paging that has stopped moving and ends the walk instead.
     const { client } = historyClient(
-      [{ calls: [call('at1nomatch', 'swap')], next_cursor: { block_number: 90, transition_id: 'au1x' } }],
+      [
+        { calls: [call('at1nomatch', 'swap')], next_cursor: { block_number: 90, transition_id: 'au1x' } },
+        { calls: [call('at1nomatch2', 'swap')], next_cursor: { block_number: 80, transition_id: 'au1y' } },
+        { calls: [call('at1nomatch3', 'swap')], next_cursor: { block_number: 70, transition_id: 'au1z' } },
+      ],
       {},
     )
 
@@ -236,5 +242,45 @@ describe('reconcileSwapHistory', () => {
     // One at a time would make a long history take minutes it does not need to.
     expect(peak).toBeGreaterThan(1)
     expect(peak).toBeLessThanOrEqual(4)
+  })
+
+  it('stops when the endpoint stops advancing the cursor', async () => {
+    const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    let pages = 0
+    const client = {
+      request: async (req: { method: string }) => {
+        if (req.method !== 'getProgramCallsPaginated') return null
+        pages++
+        // Handing back the cursor it was given would page the same block forever.
+        return { calls: [call('at1x', 'swap')], next_cursor: { block_number: 90, transition_id: 'au1same' } }
+      },
+    } as unknown as Client
+
+    const result = await reconcileSwapHistory(client, { store, program: PROGRAM })
+    expect(result.complete).toBe(true)
+    // Unbounded by default, so without this guard the walk would not return.
+    expect(pages).toBe(2)
+  })
+
+  it('records what the claim moved, since the mapping entry is gone', async () => {
+    const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    const { client } = historyClient(
+      [{ calls: [call('at1claim')], next_cursor: null }],
+      { at1claim: claimTx(ADDR_A, '7field', '175488u128') },
+    )
+
+    await reconcileSwapHistory(client, { store, program: PROGRAM })
+    const [record] = await store.load()
+    // The claim deleted `swap_outputs[swapId]`, so this transaction is the only
+    // remaining evidence of the economics — worth keeping rather than re-walking.
+    expect(record!.claim).toEqual({
+      tokenIn: '11field',
+      tokenOut: '22field',
+      amountOut: '175488',
+      amountRemaining: '0',
+      transactionId: 'at1claim',
+      blockNumber: 100,
+    })
+    expect(JSON.stringify(record)).toContain('"amountOut":"175488"')
   })
 })

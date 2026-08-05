@@ -2,6 +2,34 @@ import type { BlindedIdentity } from './identity.js'
 import type { PersistedHandle } from './handles.js'
 
 /**
+ * What a claim moved, as recorded on chain.
+ *
+ * Amounts are raw base units held as decimal strings, the same treatment
+ * {@link PersistedHandle} gives bigints — `JSON.stringify` throws on a bigint and
+ * a store that cannot be serialised cannot hold this.
+ *
+ * Written by `reconcileSwapHistory` when it finds the claim that settled a swap.
+ * It is the only durable record of the economics: the claim deletes the
+ * `swap_outputs` entry it settles, so nothing on chain can be re-read afterwards
+ * except the claim transaction itself.
+ *
+ * @property tokenIn Token id that was sold.
+ * @property tokenOut Token id that was received.
+ * @property amountOut Base units received.
+ * @property amountRemaining Base units of input refunded unfilled.
+ * @property transactionId The claim transaction.
+ * @property blockNumber Height the claim landed in.
+ */
+export type PersistedClaim = {
+  tokenIn: string
+  tokenOut: string
+  amountOut: string
+  amountRemaining: string
+  transactionId: string
+  blockNumber: number
+}
+
+/**
  * Lifecycle of a reserved blinded identity.
  *
  * `reserved` — derived and handed to a caller, not yet observed in the
@@ -34,6 +62,17 @@ export type BlindedIdentityStatus = 'reserved' | 'swapped' | 'claimed'
 export interface BlindedIdentityRecord extends BlindedIdentity {
   swapId?: string
   handle?: PersistedHandle
+  /** What the settling claim moved, once `reconcileSwapHistory` has found it. */
+  claim?: PersistedClaim
+  /**
+   * A complete history walk searched for this identity's claim and found none.
+   *
+   * Set only when the walk reached the end of the history, so it means "this swap
+   * was never claimed" rather than "not found yet". Without it, an identity that
+   * can never be resolved would make every later run re-walk the whole history
+   * looking for it.
+   */
+  claimSearched?: boolean
   status: BlindedIdentityStatus
 }
 

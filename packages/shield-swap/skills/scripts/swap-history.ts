@@ -35,11 +35,12 @@ const USAGE = `swap-history.ts — unclaimed swap outputs, reconciliation, and c
 
   --network <testnet|mainnet>   default testnet
   --claim [swapId]              claim one or (with no value) everything claimable
-  --reconcile                   rebuild the store: discover the account's used
-                                identities, then recover their swap ids from
-                                chain history
+  --reconcile                   force a full re-search even when the local history
+                                looks complete (discovery runs either way)
+  --no-search                   never walk history, however incomplete it looks
   --window <n>                  identities to probe ahead of the tip, default 16
-  --pages <n>                   history pages for --reconcile, default 8
+  --pages <n>                   bound the history walk; default is the whole
+                                history, which ends when the history does
   --execute                     actually submit claims
   --json                        machine-readable output`
 
@@ -47,6 +48,7 @@ const args = flags(
   {
     claim: { type: 'string' },
     reconcile: { type: 'boolean' },
+    'no-search': { type: 'boolean' },
     pages: { type: 'string' },
     window: { type: 'string' },
   },
@@ -129,9 +131,12 @@ await run(async () => {
   if (!account.viewKey) throw new Error('this script needs a local account — a wallet tracks its own identities')
   done(`session on ${network}`)
 
-  if (args.reconcile) {
-    // Discovery first: history can only be matched against addresses we hold, so
-    // an empty store has to be populated before the walk has anything to find.
+  // Whether the advice below can honestly say "look further back".
+  let walkedEverything = false
+
+  // Discovery is cheap and always worth doing: it is a handful of derivations and
+  // mapping reads, and without it a new or lost store has nothing to reconcile.
+  {
     const window = args.window ? Number(args.window) : 16
     step(`probing for used identities, ${window} past the last hit`)
     const discovered = await discoverIdentities(
@@ -146,17 +151,43 @@ await run(async () => {
         ? `discovered ${discovered.length} identity(ies) this account has used`
         : 'no unrecorded identities found',
     )
+  }
 
-    const pages = args.pages ? Number(args.pages) : 8
-    step(`walking up to ${pages} pages of claim history — this is the expensive path`)
-    const result = await client.reconcileSwapHistory({ maxPages: pages })
+  // The walk is the expensive part, so it runs only when the local history is
+  // actually missing something. A record marked `claimSearched` has already been
+  // looked for across the whole history and was not there — searching again would
+  // cost the same and find the same nothing.
+  const stored = await blindedIdentities.load()
+  const missing = stored.filter(
+    (record) => !record.swapId && record.status !== 'reserved' && !record.claimSearched,
+  )
+  if (args['no-search']) {
+    if (missing.length) warn(`${missing.length} identity(ies) lack a swap id; --no-search skipped the lookup`)
+  } else if (missing.length || args.reconcile) {
+    step(
+      missing.length
+        ? `${missing.length} identity(ies) have no swap id — searching claim history`
+        : 're-searching claim history because --reconcile was passed',
+    )
+    step(
+      args.pages
+        ? `walking up to ${args.pages} pages of claim history`
+        : 'walking the whole claim history — it ends when the history does',
+    )
+    const result = await client.reconcileSwapHistory(args.pages ? { maxPages: Number(args.pages) } : {})
+    walkedEverything = result.complete
     done(
       `scanned ${result.callsScanned} calls over ${result.pagesScanned} page(s); ` +
         `recovered ${result.claims.length} claim(s)`,
     )
     if (!result.complete) {
-      warn(`history was not exhausted — older claims may exist, re-run with --pages ${pages * 4}`)
+      warn('the walk stopped before the history ended — raise or drop --pages to finish it')
     }
+  } else {
+    // Nothing to look for: every consumed identity either has its swap id or has
+    // already been searched for across the whole history.
+    walkedEverything = true
+    done('local history is complete — no need to search chain')
   }
 
   // Counted here rather than at startup: --reconcile populates the store, and a
@@ -253,10 +284,37 @@ await run(async () => {
       blindedAddress: record.blindedAddress,
     }))
 
+  // Collated from the persisted claims rather than a fresh walk: the claim
+  // deleted its `swap_outputs` entry, so what a swap moved is only knowable from
+  // the record reconcile wrote.
+  const settled = records.filter((record) => record.claim)
+  const received: Record<string, bigint> = {}
+  const refunded: Record<string, bigint> = {}
+  const pairs: Record<string, number> = {}
+  for (const record of settled) {
+    const claim = record.claim!
+    received[claim.tokenOut] = (received[claim.tokenOut] ?? 0n) + BigInt(claim.amountOut)
+    if (BigInt(claim.amountRemaining) > 0n) {
+      refunded[claim.tokenIn] = (refunded[claim.tokenIn] ?? 0n) + BigInt(claim.amountRemaining)
+    }
+    const inSymbol = infoOf(claim.tokenIn)?.symbol ?? claim.tokenIn.slice(0, 10)
+    const outSymbol = infoOf(claim.tokenOut)?.symbol ?? claim.tokenOut.slice(0, 10)
+    const pair = `${inSymbol}→${outSymbol}`
+    pairs[pair] = (pairs[pair] ?? 0) + 1
+  }
+
   output(
     {
       network,
       tracked,
+      walkedEverything,
+      summary: {
+        settled: settled.length,
+        unrecorded: records.filter((record) => !record.claim && record.status !== 'reserved').length,
+        pairs,
+        received,
+        refunded,
+      },
       history,
       owed: rows,
       totals: owed.totals,
@@ -316,14 +374,51 @@ await run(async () => {
           'their swap cannot be looked up: it is unknown whether those swaps were already claimed or ' +
           'still hold proceeds.',
       )
-      warn(
-        'Most are usually old swaps already claimed, found by walking further back: ' +
-          '`--reconcile --pages 64`. Any that were never claimed cannot be claimed from here — a claim ' +
-          'needs the whole handle, and chain history names the swap without it.',
-      )
+      if (data.walkedEverything) {
+        // The whole history was searched and no claim names them, so they were
+        // never claimed. Their proceeds may still be sitting in `swap_outputs`,
+        // and a claim needs the whole handle — which chain history does not carry.
+        warn(
+          'The entire claim history was searched and none of them appear in it, so those swaps were ' +
+            'never claimed. Their output may still be waiting on chain, but it cannot be claimed ' +
+            'without the handle, which only the process that made the swap held.',
+        )
+      } else {
+        warn(
+          'Only part of the history was searched. Run `--reconcile` without --pages to walk all of it ' +
+            'before concluding anything about these.',
+        )
+      }
     }
     if (!wantsClaim && data.owed.some((row) => row.claimable)) {
       console.log('\nRun with --claim --execute to collect.')
+    }
+
+    const { summary } = data
+    console.log(`\nswaps settled: ${summary.settled}`)
+    if (summary.settled) {
+      for (const [pair, count] of Object.entries(summary.pairs).sort((a, b) => b[1] - a[1])) {
+        console.log(`  ${String(count).padStart(4)} × ${pair}`)
+      }
+      console.log('\nreceived in total:')
+      for (const [tokenId, amount] of Object.entries(summary.received)) {
+        const info = infoOf(tokenId)
+        console.log(`  ${formatAmount(amount, info?.decimals ?? 0, info?.symbol ?? tokenId.slice(0, 10))}`)
+      }
+      for (const [tokenId, amount] of Object.entries(summary.refunded)) {
+        const info = infoOf(tokenId)
+        console.log(
+          `  ${formatAmount(amount, info?.decimals ?? 0, info?.symbol ?? tokenId.slice(0, 10))} refunded unfilled`,
+        )
+      }
+    }
+    if (summary.unrecorded) {
+      // Totals cover the swaps whose claim was found. Saying so keeps the figures
+      // from reading as a complete account of the account's trading.
+      console.log(
+        `\nThese totals cover ${summary.settled} settled swap(s). ${summary.unrecorded} more were used ` +
+          'on chain without a recorded claim, so their amounts are not included.',
+      )
     }
     },
   )
