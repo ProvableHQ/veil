@@ -463,7 +463,9 @@ export async function reconcileSwapHistory(
       // the store must end up the same whatever order they complete in.
       const fetched = await mapWithLimit(candidates, concurrency, async (call) => {
         const transaction = await withRetry(() => getTransaction(client, { id: call.transaction_id }))
-        const transitions = transaction.execution?.transitions ?? []
+        // A call the listing named but the node cannot return tells us nothing;
+        // the walk continues rather than failing over one absent transaction.
+        const transitions = transaction?.execution?.transitions ?? []
         const claimTransition = transitions.find(
           (candidate) => candidate.program === program && candidate.function === CLAIM_FUNCTION,
         )
