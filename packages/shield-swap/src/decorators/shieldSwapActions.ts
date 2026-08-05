@@ -71,6 +71,7 @@ import { getBalances, type GetBalancesParameters, type GetBalancesReturnType } f
 import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hints.js'
 import { resolveDexImports, type ResolveDexImportsParameters } from '../utils/imports.js'
 import { resolveToken, listTokens, type TokenInfo } from '../utils/tokens.js'
+import { planSwap, type PlanSwapParameters, type SwapPlan } from '../utils/planning.js'
 import { reserveBlindedIdentity } from '../actions/blinding/reserveBlindedIdentity.js'
 import { syncBlindedIdentities } from '../actions/blinding/syncBlindedIdentities.js'
 import { recordBlindedSwap, type RecordBlindedSwapParameters } from '../actions/blinding/recordBlindedSwap.js'
@@ -127,6 +128,9 @@ export type ShieldSwapActionsConfig = {
  *   network, so a caller can take `USDCx` from a person and hand an id to an
  *   action. Cached per client after the first call.
  * @property listTokens The network's token registry, cached per client.
+ * @property planSwap Turns "sell this for that" into an executable plan: the
+ *   route from the API, tradeability checked on chain for every hop, the quote,
+ *   a slippage floor, and the `imports` the write needs. Reads only.
  * @property reserveBlindedIdentity Reserves the next unused blinded identity
  *   from the configured store and returns it for a swap's `blindedIdentity`.
  *   Required for concurrent swaps from one local account: deriving per swap
@@ -187,6 +191,7 @@ export type ShieldSwapActions = {
   resolveDexImports: (params: ResolveDexImportsParameters) => Promise<Record<string, string>>
   resolveToken: (symbolOrId: string) => Promise<TokenInfo>
   listTokens: () => Promise<TokenInfo[]>
+  planSwap: (params: PlanSwapParameters) => Promise<SwapPlan>
   reserveBlindedIdentity: (params?: { program?: string; maxScan?: number }) => Promise<BlindedIdentityRecord>
   recordBlindedSwap: (params: RecordBlindedSwapParameters) => Promise<boolean>
   syncBlindedIdentities: (params?: { program?: string }) => Promise<BlindedIdentityRecord[]>
@@ -329,6 +334,7 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       resolveDexImports: (p) => resolveDexImports(client, withProgram(p)),
       resolveToken: (symbolOrId) => resolveToken(api ?? missingApi, symbolOrId),
       listTokens: () => listTokens(api ?? missingApi),
+      planSwap: (p) => planSwap(client, api ?? missingApi, withProgram(p)),
       reserveBlindedIdentity: (p) =>
         reserveBlindedIdentity(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
       recordBlindedSwap: (p) => recordBlindedSwap(blindedIdentities, p),
