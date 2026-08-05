@@ -17,7 +17,7 @@
  * Usage:
  *   npx tsx swap-history.ts                              # what is owed
  *   npx tsx swap-history.ts --claim --execute            # claim everything claimable
- *   npx tsx swap-history.ts --claim <swapId> --execute   # claim one
+ *   npx tsx swap-history.ts --claim --swap-id <id> --execute   # claim one
  *   npx tsx swap-history.ts --reconcile                  # rebuild from chain history
  *   npx tsx swap-history.ts --json
  */
@@ -34,7 +34,8 @@ import { flags, setJsonMode, step, done, warn, output, confirmed, run } from './
 const USAGE = `swap-history.ts — unclaimed swap outputs, reconciliation, and claiming
 
   --network <testnet|mainnet>   default testnet
-  --claim [swapId]              claim one or (with no value) everything claimable
+  --claim                       claim everything claimable
+  --swap-id <id>                with --claim, claim just this swap
   --reconcile                   force a full re-search even when the local history
                                 looks complete (discovery runs either way)
   --no-search                   never walk history, however incomplete it looks
@@ -46,7 +47,8 @@ const USAGE = `swap-history.ts — unclaimed swap outputs, reconciliation, and c
 
 const args = flags(
   {
-    claim: { type: 'string' },
+    claim: { type: 'boolean' },
+    'swap-id': { type: 'string' },
     reconcile: { type: 'boolean' },
     'no-search': { type: 'boolean' },
     pages: { type: 'string' },
@@ -55,10 +57,10 @@ const args = flags(
   USAGE,
 )
 setJsonMode(!!args.json)
-// `--claim` with no value parses as an empty string, which means "all".
-const claimAll = args.claim === ''
-const claimOne = typeof args.claim === 'string' && args.claim !== '' ? args.claim : undefined
-const wantsClaim = claimAll || !!claimOne
+// Boolean rather than an optional value: `--claim --execute` is ambiguous to
+// parseArgs, which reads the next flag as the value.
+const claimOne = typeof args['swap-id'] === 'string' ? (args['swap-id'] as string) : undefined
+const wantsClaim = !!args.claim || !!claimOne
 
 /**
  * Populates the store with identities this account has already consumed.
@@ -178,8 +180,12 @@ await run(async () => {
     walkedEverything = result.complete
     done(
       `scanned ${result.callsScanned} calls over ${result.pagesScanned} page(s); ` +
-        `recovered ${result.claims.length} claim(s)`,
+        `recovered ${result.claims.length} claim(s) and ${result.requests.length} request(s)`,
     )
+    const claimable = result.requests.filter((request) => request.handle).length
+    if (claimable) {
+      done(`${claimable} abandoned swap(s) rebuilt with a claimable handle — see --claim`)
+    }
     if (!result.complete) {
       warn('the walk stopped before the history ended — raise or drop --pages to finish it')
     }
@@ -292,7 +298,16 @@ await run(async () => {
         status: record.status,
         swapId: record.swapId ?? null,
         pair: tokenIn && tokenOut ? `${symbolOf(tokenIn)}→${symbolOf(tokenOut)}` : null,
-        sold: handle ? { amount: BigInt(handle.amountIn), decimals: decimalsOf(handle.tokenInId), symbol: symbolOf(handle.tokenInId) } : null,
+        // The handle when it survived, else the request's public `amount_in`,
+        // which the history walk recovers for a store that lost its handles.
+        sold:
+          handle || (record.soldAmountIn && tokenIn)
+            ? {
+                amount: BigInt(handle?.amountIn ?? record.soldAmountIn!),
+                decimals: decimalsOf(handle?.tokenInId ?? tokenIn!),
+                symbol: symbolOf(handle?.tokenInId ?? tokenIn!),
+              }
+            : null,
         received: claim ? { amount: BigInt(claim.amountOut), decimals: decimalsOf(claim.tokenOut), symbol: symbolOf(claim.tokenOut) } : null,
         refunded:
           claim && BigInt(claim.amountRemaining) > 0n

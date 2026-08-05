@@ -1,5 +1,6 @@
 import { getProgramCallsPaginated, getTransaction, type Client, type Transition } from '@provablehq/veil-core'
 import { DEFAULT_PROGRAM } from '../../constants.js'
+import type { PersistedMultiHopSwapHandle, PersistedSwapHandle } from '../../utils/blinding/handles.js'
 import {
   withStoreLock,
   type BlindedIdentityRecord,
@@ -8,6 +9,52 @@ import {
 
 /** Function whose calls carry a blinded address and the swap id it settled. */
 const CLAIM_FUNCTION = 'claim_swap_output'
+
+/**
+ * The request functions, whose calls carry everything a claim needs.
+ *
+ * `used_blinded_addresses` is written by `finalize_swap`, not by the claim — so an
+ * identity the chain reports used but no claim names is a swap that landed and was
+ * never collected. Its request transaction is what makes it collectable again:
+ * pool, amounts, nonce, deadline, and token ids are public inputs, and the swap id
+ * is a public output. Only the blinding factor is private, and that is derived
+ * locally from the view key and counter, which the store already holds.
+ */
+const REQUEST_FUNCTIONS = ['swap', 'swap_multi_hop'] as const
+
+/**
+ * Input positions of `swap`, from the program's signature:
+ * `(token_in_record, blinding_factor, blinded_address, pool, zero_for_one,
+ * amount_in, amount_out_min, sqrt_price_limit, nonce, deadline, token0_id,
+ * token1_id)`.
+ */
+const SWAP_INPUT = {
+  blindedAddress: 2,
+  pool: 3,
+  zeroForOne: 4,
+  amountIn: 5,
+  sqrtPriceLimit: 7,
+  nonce: 8,
+  token0Id: 10,
+  token1Id: 11,
+} as const
+
+/**
+ * Input positions of `swap_multi_hop`:
+ * `(blinding_factor, blinded_address, token_in_record, token_in, token_out,
+ * amount_in, amount_out_min, hop0, hop1, hop2, hop_count, nonce, deadline)`.
+ */
+const MULTI_HOP_INPUT = {
+  blindedAddress: 1,
+  tokenIn: 3,
+  tokenOut: 4,
+  amountIn: 5,
+  amountOutMin: 6,
+  hops: [7, 8, 9] as const,
+  hopCount: 10,
+  nonce: 11,
+  deadline: 12,
+} as const
 
 /**
  * Input positions of `claim_swap_output`, from the program's own signature:
@@ -79,6 +126,10 @@ export type ReconcileSwapHistoryParameters = {
  * What the walk found and how far it got.
  *
  * @property claims Claims matched to this store's identities, newest first.
+ * @property requests Swap requests matched to identities whose swap id was
+ *   unknown. Each carries what was sold and, for a single-hop swap, a handle the
+ *   store can claim with — which is what turns an abandoned swap back into
+ *   collectable funds.
  * @property updated Records whose status or swap id changed.
  * @property callsScanned Calls examined, claims and others alike.
  * @property pagesScanned Pages of history walked.
@@ -88,6 +139,7 @@ export type ReconcileSwapHistoryParameters = {
  */
 export type ReconcileSwapHistoryReturnType = {
   claims: ReconciledClaim[]
+  requests: RecoveredRequest[]
   updated: BlindedIdentityRecord[]
   callsScanned: number
   pagesScanned: number
@@ -135,6 +187,143 @@ async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Pr
   })
   await Promise.all(workers)
   return results
+}
+
+/** Strips an Aleo suffix and reads the integer (`175488u128` → `175488n`). */
+function toInt(value: string): bigint {
+  return BigInt(value.replace(/[iu]\d+$/, ''))
+}
+
+/** Reads a `{ lo, hi }` u256 struct value out of a transition input. */
+function toU256(value: string): bigint {
+  const lo = /lo:\s*(\d+)/.exec(value)?.[1]
+  const hi = /hi:\s*(\d+)/.exec(value)?.[1]
+  if (lo === undefined || hi === undefined) return 0n
+  return (BigInt(hi) << 128n) + BigInt(lo)
+}
+
+/**
+ * What a swap request revealed on chain: the swap id and enough to claim it.
+ *
+ * @property blindedAddress The identity the request registered.
+ * @property swapId The request's public output, and the `swap_outputs` key.
+ * @property amountIn Base units sold — the figure no claim reports.
+ * @property handle Everything a claim consumes except the blinding factor, which
+ *   is private and derived locally instead.
+ */
+export type RecoveredRequest = {
+  blindedAddress: string
+  swapId: string
+  amountIn: bigint
+  handle: Omit<PersistedSwapHandle, 'blindingFactor'> | Omit<PersistedMultiHopSwapHandle, 'blindingFactor'> | null
+}
+
+/**
+ * Reads a `SwapHop` struct out of a transition input.
+ *
+ * The struct is public, so a multi-hop route is as recoverable as a single-hop
+ * one — `{ pool, zero_for_one, sqrt_price_limit: { lo, hi } }`. An empty slot
+ * (hop2 on a two-hop route) reads as a zero pool and is skipped by the caller.
+ */
+function toHop(value: string | undefined): { poolKey: string; zeroForOne: boolean; sqrtPriceLimit: string } | null {
+  if (!value) return null
+  const pool = /pool:\s*(\d+field)/.exec(value)?.[1]
+  if (!pool || pool === '0field') return null
+  return {
+    poolKey: pool,
+    zeroForOne: /zero_for_one:\s*true/.test(value),
+    sqrtPriceLimit: toU256(value).toString(),
+  }
+}
+
+/** Reads a single-hop request out of its transition, or `null` if malformed. */
+function requestFromTransition(
+  transition: Transition,
+  transactionId: string,
+  program: string,
+): RecoveredRequest | null {
+  const inputs = transition.inputs ?? []
+  const outputs = transition.outputs ?? []
+  // The swap id is the transition's first public output.
+  const swapId = outputs.find((output) => output.type === 'public')?.value
+  if (!swapId) return null
+
+  // Positions differ between the two functions, and the multi-hop record sits
+  // where the single-hop blinded address does. Reading before branching finds a
+  // record input, which carries no value, and loses the swap entirely.
+  if (transition.function === 'swap_multi_hop') {
+    const mhAddress = inputs[MULTI_HOP_INPUT.blindedAddress]?.value
+    const mhAmount = inputs[MULTI_HOP_INPUT.amountIn]?.value
+    const tokenIn = inputs[MULTI_HOP_INPUT.tokenIn]?.value
+    const tokenOut = inputs[MULTI_HOP_INPUT.tokenOut]?.value
+    if (!mhAddress || !mhAmount) return null
+
+    // Each hop's pool and price bound are public too, so a route is as
+    // recoverable as a single pool. The empty third slot on a two-hop route reads
+    // as a zero pool and drops out here.
+    const hops = MULTI_HOP_INPUT.hops
+      .map((position) => toHop(inputs[position]?.value))
+      .filter((hop): hop is NonNullable<typeof hop> => hop !== null)
+    const amountOutMin = inputs[MULTI_HOP_INPUT.amountOutMin]?.value
+    const nonce = inputs[MULTI_HOP_INPUT.nonce]?.value
+    const deadline = inputs[MULTI_HOP_INPUT.deadline]?.value
+    const recoverable = tokenIn && tokenOut && hops.length >= 2 && amountOutMin && nonce && deadline
+
+    return {
+      blindedAddress: mhAddress,
+      swapId: toFieldLiteral(swapId),
+      amountIn: toInt(mhAmount),
+      handle: recoverable
+        ? {
+            swapId: toFieldLiteral(swapId),
+            blindedAddress: mhAddress,
+            tokenInId: toFieldLiteral(tokenIn),
+            tokenOutId: toFieldLiteral(tokenOut),
+            poolKeys: hops.map((hop) => hop.poolKey),
+            hops,
+            amountIn: toInt(mhAmount).toString(),
+            amountOutMin: toInt(amountOutMin).toString(),
+            nonce: toInt(nonce).toString(),
+            deadline: Number(toInt(deadline)),
+            transactionId,
+            program,
+          }
+        : null,
+    }
+  }
+
+  const address = inputs[SWAP_INPUT.blindedAddress]?.value
+  const amountIn = inputs[SWAP_INPUT.amountIn]?.value
+  if (!address || !amountIn) return null
+
+  const pool = inputs[SWAP_INPUT.pool]?.value
+  const token0 = inputs[SWAP_INPUT.token0Id]?.value
+  const token1 = inputs[SWAP_INPUT.token1Id]?.value
+  const zeroForOne = inputs[SWAP_INPUT.zeroForOne]?.value === 'true'
+  if (!pool || !token0 || !token1) return null
+
+  const sqrtPriceLimit = inputs[SWAP_INPUT.sqrtPriceLimit]?.value
+  const nonce = inputs[SWAP_INPUT.nonce]?.value
+  return {
+    blindedAddress: address,
+    swapId: toFieldLiteral(swapId),
+    amountIn: toInt(amountIn),
+    handle: {
+      swapId: toFieldLiteral(swapId),
+      blindedAddress: address,
+      // zero_for_one says which side was sold, so the pair resolves without the
+      // registry.
+      tokenInId: toFieldLiteral(zeroForOne ? token0 : token1),
+      tokenOutId: toFieldLiteral(zeroForOne ? token1 : token0),
+      poolKey: toFieldLiteral(pool),
+      amountIn: toInt(amountIn).toString(),
+      zeroForOne,
+      ...(sqrtPriceLimit ? { sqrtPriceLimit: toU256(sqrtPriceLimit).toString() } : {}),
+      ...(nonce ? { nonce: toInt(nonce).toString() } : {}),
+      transactionId,
+      program,
+    },
+  }
 }
 
 /** Mapping keys are field literals; the call history reports them bare. */
@@ -237,6 +426,7 @@ export async function reconcileSwapHistory(
     )
     const known = new Map(records.map((record) => [record.blindedAddress, record]))
     const claims: ReconciledClaim[] = []
+    const requests: RecoveredRequest[] = []
     const updated: BlindedIdentityRecord[] = []
     let callsScanned = 0
     let pagesScanned = 0
@@ -260,22 +450,63 @@ export async function reconcileSwapHistory(
         break
       }
 
-      // A rejected claim consumed nothing, so it says nothing about status and is
-      // not worth a fetch.
+      // Claims settle an identity; requests reveal what it swapped and how to
+      // claim it. Both are worth a fetch, and a rejected call is worth neither
+      // since it changed nothing.
       const candidates = page.calls.filter(
-        (call) => call.function_id === CLAIM_FUNCTION && call.status.toLowerCase() === 'accepted',
+        (call) =>
+          call.status.toLowerCase() === 'accepted' &&
+          (call.function_id === CLAIM_FUNCTION ||
+            (REQUEST_FUNCTIONS as readonly string[]).includes(call.function_id)),
       )
       // Fetched in parallel, applied in order: the requests are independent but
       // the store must end up the same whatever order they complete in.
       const fetched = await mapWithLimit(candidates, concurrency, async (call) => {
         const transaction = await withRetry(() => getTransaction(client, { id: call.transaction_id }))
-        const transition = (transaction.execution?.transitions ?? []).find(
+        const transitions = transaction.execution?.transitions ?? []
+        const claimTransition = transitions.find(
           (candidate) => candidate.program === program && candidate.function === CLAIM_FUNCTION,
         )
-        return transition ? claimFromTransition(transition, call.transaction_id, call.block_number) : null
+        if (claimTransition) {
+          return {
+            claim: claimFromTransition(claimTransition, call.transaction_id, call.block_number),
+            request: null,
+          }
+        }
+        const requestTransition = transitions.find(
+          (candidate) =>
+            candidate.program === program &&
+            (REQUEST_FUNCTIONS as readonly string[]).includes(candidate.function),
+        )
+        return {
+          claim: null,
+          request: requestTransition
+            ? requestFromTransition(requestTransition, call.transaction_id, program)
+            : null,
+        }
       })
 
-      for (const claim of fetched) {
+      // Requests first, so an identity that has both keeps the claim's verdict:
+      // a request says a swap happened, a claim says it was settled.
+      for (const { request } of fetched) {
+        if (!request) continue
+        const record = known.get(request.blindedAddress)
+        if (!record || record.swapId) continue
+        requests.push(request)
+        known.set(request.blindedAddress, {
+          ...record,
+          swapId: request.swapId,
+          // The handle is what a claim consumes, and the blinding factor the store
+          // already holds is the one private piece chain cannot supply.
+          ...(request.handle
+            ? { handle: { ...request.handle, blindingFactor: record.blindingFactor } }
+            : {}),
+          soldAmountIn: request.amountIn.toString(),
+        })
+        // Still unresolved: knowing the swap id does not say whether it settled.
+      }
+
+      for (const { claim } of fetched) {
         if (!claim || !unresolved.has(claim.blindedAddress)) continue
         claims.push(claim)
         unresolved.delete(claim.blindedAddress)
@@ -326,7 +557,7 @@ export async function reconcileSwapHistory(
       }
     }
 
-    if (updated.length || marked) await params.store.save([...known.values()])
-    return { claims, updated, callsScanned, pagesScanned, complete }
+    if (updated.length || marked || requests.length) await params.store.save([...known.values()])
+    return { claims, requests, updated, callsScanned, pagesScanned, complete }
   })
 }

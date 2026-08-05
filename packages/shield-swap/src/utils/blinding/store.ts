@@ -73,6 +73,14 @@ export interface BlindedIdentityRecord extends BlindedIdentity {
    * looking for it.
    */
   claimSearched?: boolean
+  /**
+   * Base units this swap sold, as a decimal string.
+   *
+   * Recovered from the swap request's public `amount_in` when the handle itself
+   * was lost. The claim reports only what came back, so without this a recovered
+   * swap can say what it received and not what it cost.
+   */
+  soldAmountIn?: string
   status: BlindedIdentityStatus
 }
 
