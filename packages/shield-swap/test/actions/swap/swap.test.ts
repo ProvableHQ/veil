@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
 
 // Mock ONLY the transaction-submission boundary; reads (getPool/getSlot/
@@ -14,6 +14,8 @@ import { swap } from '../../../src/actions/swap/swap.js'
 import { claimSwapOutput, SwapOutputNotFinalizedError } from '../../../src/actions/swap/claimSwapOutput.js'
 import { deriveSwapId } from '../../../src/utils/keys.js'
 import { programToTokenId, clearRouteCache } from '../../../src/utils/routing.js'
+import { memoryBlindedIdentityStore } from '../../../src/utils/blinding/store.js'
+import { SwapRecordingError } from '../../../src/utils/blinding/tracking.js'
 import { EMPTY_MERKLE_PROOFS, formatMerkleProofPair } from '../../../src/utils/proofs.js'
 import { MIN_SQRT_RATIO_X128, formatU256Literal, Q128 } from '../../../src/utils/q128.js'
 
@@ -353,5 +355,113 @@ describe('claimSwapOutput — unified dispatch', () => {
     await expect(
       claimSwapOutput(fakeClient('local'), { handle: { ...handle, swapId: undefined } }),
     ).rejects.toThrow(/resolve it from the confirmed/)
+  })
+})
+
+describe('swap — identity tracking through a store', () => {
+  /**
+   * A real view key, generated per run. The shared fixture's placeholder is fine
+   * for the other cases because they pass an explicit identity, but reservation
+   * derives — and derivation is the thing under test here.
+   */
+  let tracked: Client
+  beforeAll(async () => {
+    const { PrivateKey } = await import('@provablehq/sdk')
+    const key = new PrivateKey()
+    tracked = {
+      ...(fakeClient('local') as object),
+      account: {
+        type: 'local',
+        address: key.to_address().to_string(),
+        viewKey: key.to_view_key().to_string(),
+      },
+    } as unknown as Client
+  })
+
+  it('reserves before submitting and records the handle after', async () => {
+    executeMock.mockResolvedValue({
+      transactionId: 'at1tracked',
+      transitions: [],
+      outputs: ['777field', 'record1...', 'compliance...'],
+    })
+    const store = memoryBlindedIdentityStore()
+
+    const handle = await swap(tracked, {
+      poolKey: POOL_KEY,
+      tokenInId: TOKEN0,
+      amountIn: 1_000_000n,
+      tokenRecord: RECORD,
+      blindedIdentities: store,
+    })
+
+    // Reserved: the identity the swap used came from the store, not an ad-hoc
+    // chain scan, which is what stops two concurrent swaps colliding.
+    const [record] = await store.load()
+    expect(record!.blindedAddress).toBe(handle.blindedAddress)
+    expect(record!.counter).toBe(0)
+    // Recorded: swap id and the whole handle, so the swap is claimable from the
+    // store by a process that did not make it.
+    expect(record!.swapId).toBe(handle.swapId)
+    expect(record!.handle).toMatchObject({ transactionId: 'at1tracked' })
+    // Still `reserved`, deliberately: status tracks what the chain shows, not
+    // what this process just did. `syncBlindedIdentities` promotes it once the
+    // address appears in the mapping, so a submitted-but-unconfirmed swap never
+    // claims to be settled.
+    expect(record!.status).toBe('reserved')
+  })
+
+  it('leaves the store alone when the caller supplies the identity', async () => {
+    executeMock.mockResolvedValue({
+      transactionId: 'at1explicit',
+      transitions: [],
+      outputs: ['777field', 'record1...', 'compliance...'],
+    })
+    const store = memoryBlindedIdentityStore()
+
+    await swap(tracked, {
+      poolKey: POOL_KEY,
+      tokenInId: TOKEN0,
+      amountIn: 1_000_000n,
+      tokenRecord: RECORD,
+      blindedIdentity: IDENTITY,
+      blindedIdentities: store,
+    })
+
+    // An explicit identity means the caller is tracking it: nothing reserved,
+    // nothing recorded.
+    expect(await store.load()).toEqual([])
+  })
+
+  it('surfaces a landed swap whose record could not be written', async () => {
+    executeMock.mockResolvedValue({
+      transactionId: 'at1unrecorded',
+      transitions: [],
+      outputs: ['777field', 'record1...', 'compliance...'],
+    })
+    // Reserves fine, then fails the second write. The swap is on chain by then,
+    // so the handle has to escape or its proceeds are unreachable.
+    let saves = 0
+    const inner = memoryBlindedIdentityStore()
+    const store = {
+      load: inner.load,
+      save: async (records: Parameters<typeof inner.save>[0]) => {
+        if (++saves > 1) throw new Error('EROFS: read-only file system')
+        return inner.save(records)
+      },
+    }
+
+    const error = await swap(tracked, {
+      poolKey: POOL_KEY,
+      tokenInId: TOKEN0,
+      amountIn: 1_000_000n,
+      tokenRecord: RECORD,
+      blindedIdentities: store,
+    }).catch((e) => e)
+
+    expect(error).toBeInstanceOf(SwapRecordingError)
+    expect((error as SwapRecordingError).handle.transactionId).toBe('at1unrecorded')
+    expect((error as SwapRecordingError).handle.swapId).toBeTruthy()
+    // The transaction really was submitted — the caller must not resubmit.
+    expect(executeMock).toHaveBeenCalledOnce()
   })
 })

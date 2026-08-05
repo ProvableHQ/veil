@@ -5,6 +5,9 @@ import {
   type InputRequest,
   type TransactionInput,
 } from '@provablehq/veil-core'
+import { reserveBlindedIdentity } from '../blinding/reserveBlindedIdentity.js'
+import { recordSwapOrThrow } from '../../utils/blinding/tracking.js'
+import type { BlindedIdentityStore } from '../../utils/blinding/store.js'
 import { nextBlindedIdentity, viewKeyToScalar } from '../../utils/blinding/identity.js'
 import { resolveTokenRecord } from '../../utils/records.js'
 import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
@@ -49,6 +52,10 @@ import { SHIELD_SWAP, SHIELD_SWAP_ROUTER } from '../../constants.js'
  *   (any local signer), or a `record` InputRequest (wallet signers). For a
  *   wrapped input this is the UNDERLYING asset's record. REQUIRED for
  *   wallet accounts.
+ * @property blindedIdentities Store that reserves the identity and records the
+ *   route's handle. Supplied by `shieldSwapActions` when configured; ignored
+ *   when `blindedIdentity` is passed or on wallet accounts. See `swap` for the
+ *   full rationale — multi-hop differs only in the size of the handle stored.
  * @property blindedIdentity Explicit pre-derived identity literals. Defaults
  *   to deriving from the local account's view key, or wallet-side `derived`
  *   requests for wallet accounts.
@@ -76,6 +83,7 @@ export type SwapMultiHopParameters = {
   nonce?: bigint
   tokenRecord?: string | InputRequest
   blindedIdentity?: { blindingFactor: string; blindedAddress: string }
+  blindedIdentities?: BlindedIdentityStore
   route?: TokenRoute
   proofs?: ProofProvider
   imports?: Record<string, string>
@@ -266,13 +274,18 @@ export async function swapMultiHop(client: Client, params: SwapMultiHopParameter
   if (isLocal) {
     // Local signer: literals only — derive the identity and select a record.
     // The identity scope is the CORE program even for router submissions.
+    // Same rule as the single-hop path: a configured store reserves the counter
+    // so concurrent routes cannot collide on one identity.
+    const tracked = params.blindedIdentity === undefined ? params.blindedIdentities : undefined
     const identity =
       params.blindedIdentity ??
-      (await nextBlindedIdentity(client, {
-        viewKeyScalar: await viewKeyToScalar(account.viewKey!),
-        signer: account.address,
-        program,
-      }))
+      (tracked
+        ? await reserveBlindedIdentity(client, { store: tracked, program })
+        : await nextBlindedIdentity(client, {
+            viewKeyScalar: await viewKeyToScalar(account.viewKey!),
+            signer: account.address,
+            program,
+          }))
 
     // Wrapped inputs spend the UNDERLYING asset's records; plain inputs
     // spend the token program's own records (the id decodes to the program).
@@ -298,13 +311,17 @@ export async function swapMultiHop(client: Client, params: SwapMultiHopParameter
         })
 
     const swapId = requireFieldOutput(result.outputs, 'swap_multi_hop')
-    return {
+    const handle = {
       ...handleBase,
       swapId,
       blindingFactor: identity.blindingFactor,
       blindedAddress: identity.blindedAddress,
       transactionId: result.transactionId,
     }
+    // The route's whole handle is stored, deadline and per-hop bounds included,
+    // because a claim needs all of it — a swap id alone cannot be claimed.
+    if (tracked) await recordSwapOrThrow(tracked, handle)
+    return handle
   }
 
   // Wallet signer: the wallet fulfils the blinding slots; the dapp supplies

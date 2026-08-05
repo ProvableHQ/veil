@@ -60,6 +60,36 @@ export {
   type NextBlindedIdentityParameters,
 } from './utils/blinding/identity.js'
 
+// Reservation: what makes concurrent swaps from one local account safe, by
+// never handing out a counter whose swap has not settled.
+export {
+  reserveBlindedIdentity,
+  type ReserveBlindedIdentityParameters,
+} from './actions/blinding/reserveBlindedIdentity.js'
+export {
+  syncBlindedIdentities,
+  type SyncBlindedIdentitiesParameters,
+} from './actions/blinding/syncBlindedIdentities.js'
+export { recordBlindedSwap } from './actions/blinding/recordBlindedSwap.js'
+export {
+  getUnclaimedSwaps,
+  type UnclaimedSwap,
+  type GetUnclaimedSwapsParameters,
+  type GetUnclaimedSwapsReturnType,
+} from './actions/blinding/getUnclaimedSwaps.js'
+export {
+  reconcileSwapHistory,
+  type ReconciledClaim,
+  type ReconcileSwapHistoryParameters,
+  type ReconcileSwapHistoryReturnType,
+} from './actions/blinding/reconcileSwapHistory.js'
+export {
+  memoryBlindedIdentityStore,
+  type BlindedIdentityRecord,
+  type BlindedIdentityStatus,
+  type BlindedIdentityStore,
+} from './utils/blinding/store.js'
+
 // The two-phase private swap: request → (chain computes) → claim.
 export {
   swap,

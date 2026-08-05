@@ -411,11 +411,16 @@ describe('provableApi', () => {
       }
     })
 
-    it('reads a path whose parent is not a directory as absent', async () => {
+    it('reports a path whose parent is not a directory rather than reading it as absent', async () => {
       const file = join(dir, 'not-a-dir')
       await writeFile(file, 'x')
-      // ENOTDIR, like ENOENT, means there is genuinely nothing stored there.
-      expect(await fileCredentialStore(join(file, 'creds.json')).load()).toBeUndefined()
+      // ENOTDIR is a malformed path, not a missing file: no credential can be
+      // stored under it, so treating it as absent would register a consumer and
+      // then fail to persist the key it cannot reissue. Failing at load names
+      // the bad path before any of that happens.
+      await expect(fileCredentialStore(join(file, 'creds.json')).load()).rejects.toThrow(
+        /could not be read \(ENOTDIR\)/,
+      )
     })
 
     it('reports malformed JSON rather than silently re-registering over it', async () => {

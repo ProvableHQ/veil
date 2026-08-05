@@ -69,6 +69,25 @@ import {
 } from '../utils/records.js'
 import { getBalances, type GetBalancesParameters, type GetBalancesReturnType } from '../utils/balances.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hints.js'
+import { resolveDexImports, type ResolveDexImportsParameters } from '../utils/imports.js'
+import { reserveBlindedIdentity } from '../actions/blinding/reserveBlindedIdentity.js'
+import { syncBlindedIdentities } from '../actions/blinding/syncBlindedIdentities.js'
+import { recordBlindedSwap, type RecordBlindedSwapParameters } from '../actions/blinding/recordBlindedSwap.js'
+import {
+  getUnclaimedSwaps,
+  type GetUnclaimedSwapsParameters,
+  type GetUnclaimedSwapsReturnType,
+} from '../actions/blinding/getUnclaimedSwaps.js'
+import {
+  reconcileSwapHistory,
+  type ReconcileSwapHistoryParameters,
+  type ReconcileSwapHistoryReturnType,
+} from '../actions/blinding/reconcileSwapHistory.js'
+import {
+  memoryBlindedIdentityStore,
+  type BlindedIdentityRecord,
+  type BlindedIdentityStore,
+} from '../utils/blinding/store.js'
 import { ApiClient, authenticateWithAccount, defaultApiUrl, type ApiClientOptions } from '../api/client.js'
 
 /**
@@ -80,15 +99,51 @@ import { ApiClient, authenticateWithAccount, defaultApiUrl, type ApiClientOption
  * @property program shield_swap program id every action defaults to. Set it
  *   once to point the whole surface at another deployment; per-call
  *   `program` still overrides.
+ * @property blindedIdentities Where identities are reserved and swaps recorded,
+ *   used by `reserveBlindedIdentity` and by `swap`, `swapMultiHop`, and
+ *   `claimSwapOutput`. Defaults to a per-client in-memory store, so concurrent
+ *   swaps through one client are safe out of the box; that store is lost on
+ *   restart, which costs a chain rescan for the next counter and forgets any
+ *   unclaimed swap, so pass `fileBlindedIdentityStore` from
+ *   `@provablehq/shield-swap-sdk/node` for anything long-running. Ignored by
+ *   wallet accounts, which derive identities the client never sees. A per-call
+ *   `blindedIdentities: undefined` opts that call out of tracking entirely.
  */
 export type ShieldSwapActionsConfig = {
   api?: ApiClientOptions | ApiClient
   program?: string
+  blindedIdentities?: BlindedIdentityStore
 }
 
 /**
  * The action surface {@link shieldSwapActions} adds to a client.
  *
+ * @property resolveDexImports Builds the `imports` map a write needs — the
+ *   given token programs plus the DEX program's own declared imports. Every
+ *   write action's `imports` parameter takes the result directly. Hits the
+ *   network once per unique program.
+ * @property reserveBlindedIdentity Reserves the next unused blinded identity
+ *   from the configured store and returns it for a swap's `blindedIdentity`.
+ *   Required for concurrent swaps from one local account: deriving per swap
+ *   from a chain read alone hands two swaps the same address and the second
+ *   reverts on finalize. Local accounts only.
+ * @property recordBlindedSwap Attaches a swap and its handle to the reservation
+ *   that funded it, which is what lets
+ *   {@link ShieldSwapActions.syncBlindedIdentities} tell a swapped identity from
+ *   a claimed one and what makes the swap claimable from the store later.
+ *   Resolves `false` when the store holds no reservation for the handle's
+ *   address, as a wallet-derived identity does not. Store write, no network.
+ * @property syncBlindedIdentities Reconciles stored reservations against the
+ *   chain, promoting each to `swapped` or `claimed` once its blinded address
+ *   appears on chain. Hits the network per unsettled record.
+ * @property getUnclaimedSwaps Summarizes what this store's identities can still
+ *   claim, reading `swap_outputs` rather than trusting stored statuses, with
+ *   per-token totals and a rebuilt handle per entry so a claim can be made from
+ *   the store alone. One mapping read per unsettled identity; writes nothing.
+ * @property reconcileSwapHistory Walks the program's `claim_swap_output` history
+ *   to recover which stored identities have already been claimed, and the swap
+ *   ids and amounts involved. Expensive — one request per page plus one per
+ *   claim call — so run it on first adopting a store, not periodically.
  * @property authenticateShieldSwap Authenticates the `.api` client by signing
  *   its challenge with the client's account. Most DEX API endpoints are
  *   bearer-gated; call once per session — the JWT lasts ~24h and renews
@@ -124,6 +179,16 @@ export type ShieldSwapActions = {
   getPrivateBalances: (params: GetPrivateBalancesParameters) => Promise<GetPrivateBalancesReturnType>
   getBalances: (params?: GetBalancesParameters) => Promise<GetBalancesReturnType>
   pickInsertHint: (params: PickInsertHintParameters) => Promise<number>
+  resolveDexImports: (params: ResolveDexImportsParameters) => Promise<Record<string, string>>
+  reserveBlindedIdentity: (params?: { program?: string; maxScan?: number }) => Promise<BlindedIdentityRecord>
+  recordBlindedSwap: (params: RecordBlindedSwapParameters) => Promise<boolean>
+  syncBlindedIdentities: (params?: { program?: string }) => Promise<BlindedIdentityRecord[]>
+  reconcileSwapHistory: (
+    params?: Omit<ReconcileSwapHistoryParameters, 'store'>,
+  ) => Promise<ReconcileSwapHistoryReturnType>
+  getUnclaimedSwaps: (
+    params?: Omit<GetUnclaimedSwapsParameters, 'store'>,
+  ) => Promise<GetUnclaimedSwapsReturnType>
   swap: (params: SwapParameters) => Promise<SwapReturnType>
   claimSwapOutput: (params: ClaimSwapOutputParameters) => Promise<ClaimSwapOutputReturnType>
   swapMultiHop: (params: SwapMultiHopParameters) => Promise<SwapMultiHopReturnType>
@@ -188,6 +253,11 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
   // Thread the client-level program default under any per-call override.
   const withProgram = <P extends { program?: string }>(p: P): P => ({ ...p, program: p.program ?? config.program })
 
+  // One store per decorator, shared by every client it extends: reservations
+  // are per account, and a store built per client would let two clients on the
+  // same key hand out the same counter.
+  const blindedIdentities = config.blindedIdentities ?? memoryBlindedIdentityStore()
+
   // `extend()` copies properties with Object.assign, which evaluates getters
   // eagerly — so the "no api" case is a proxy that throws actionably on
   // first USE instead of a lazy getter (which would throw at extend time).
@@ -205,6 +275,14 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     // gets the exact predecessor from the API's tick list rather than a
     // best-effort guess from the slot. Only consulted on that path, so a client
     // with the peer never pays the request.
+    // The configured store, threaded to the actions that track identities.
+    // Presence rather than truthiness: a caller who writes
+    // `blindedIdentities: undefined` is opting out of tracking for that call, and
+    // a truthy test would inject the default over the top of that intent. Absent
+    // key means "not specified", which is what takes the default.
+    const withStore = <P extends { blindedIdentities?: BlindedIdentityStore }>(p: P): P =>
+      'blindedIdentities' in p ? p : { ...p, blindedIdentities }
+
     const withTicks = <P extends { poolKey: string; initializedTicks?: unknown }>(p: P): P => {
       if (p.initializedTicks || !api) return p
       // Shared across the action's hints rather than fetched per hint: `mint`
@@ -241,9 +319,19 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       getPrivateBalances: (p) => getPrivateBalances(client, p),
       getBalances: (p) => getBalances(client, api ?? missingApi, p),
       pickInsertHint: (p) => pickInsertHint(client, withTicks(withProgram(p))),
-      swap: (p) => swap(client, withProgram(p)),
-      claimSwapOutput: (p) => claimSwapOutput(client, p),
-      swapMultiHop: (p) => swapMultiHop(client, withProgram(p)),
+      resolveDexImports: (p) => resolveDexImports(client, withProgram(p)),
+      reserveBlindedIdentity: (p) =>
+        reserveBlindedIdentity(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
+      recordBlindedSwap: (p) => recordBlindedSwap(blindedIdentities, p),
+      syncBlindedIdentities: (p) =>
+        syncBlindedIdentities(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
+      reconcileSwapHistory: (p) =>
+        reconcileSwapHistory(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
+      getUnclaimedSwaps: (p) =>
+        getUnclaimedSwaps(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
+      swap: (p) => swap(client, withStore(withProgram(p))),
+      claimSwapOutput: (p) => claimSwapOutput(client, withStore(p)),
+      swapMultiHop: (p) => swapMultiHop(client, withStore(withProgram(p))),
       createPool: (p) => createPool(client, withProgram(p)),
       mint: (p) => mint(client, withTicks(withProgram(p))),
       increaseLiquidity: (p) => increaseLiquidity(client, withTicks(withProgram(p))),

@@ -3,6 +3,8 @@ import type { SwapHandle } from './swap.js'
 import type { MultiHopSwapHandle } from './swapMultiHop.js'
 import { getSwapOutput } from '../reads/getSwapOutput.js'
 import { requireAccount } from '../../utils/guards.js'
+import { markClaimedQuietly } from '../../utils/blinding/tracking.js'
+import type { BlindedIdentityStore } from '../../utils/blinding/store.js'
 import { blindingFactorResolveRequest, blindedAddressResolveRequest } from '../../utils/blinding/requests.js'
 import { resolveTokenRoute } from '../../utils/routing.js'
 import { resolveProofPair, formatMerkleProofPair, type ProofProvider } from '../../utils/proofs.js'
@@ -27,6 +29,12 @@ export class SwapOutputNotFinalizedError extends Error {
 /**
  * Parameters for {@link claimSwapOutput}.
  *
+ * @property blindedIdentities Store to mark the identity `claimed` in once the
+ *   claim confirms. Supplied by `shieldSwapActions` when configured. A store
+ *   that does not hold the handle's `blindedAddress` is left alone, so a
+ *   wallet-derived identity is a no-op. A write failure here is reported and
+ *   swallowed rather than failing a claim whose proceeds already landed —
+ *   `reconcileSwapHistory` can recover the status from the claim call.
  * @property handle The {@link SwapHandle} from `swap` or the
  *   {@link MultiHopSwapHandle} from `swapMultiHop` — the claim is unified
  *   across both. Local-signer handles are complete; wallet-path handles need
@@ -47,6 +55,7 @@ export class SwapOutputNotFinalizedError extends Error {
  */
 export type ClaimSwapOutputParameters = {
   handle: SwapHandle | MultiHopSwapHandle
+  blindedIdentities?: BlindedIdentityStore
   proofs?: ProofProvider
   imports?: Record<string, string>
   program?: string
@@ -192,6 +201,9 @@ export async function claimSwapOutput(
       imports: params.imports,
       inputs: [handle.blindingFactor, handle.blindedAddress, ...tail],
     })
+    if (params.blindedIdentities) {
+      await markClaimedQuietly(params.blindedIdentities, handle.blindedAddress)
+    }
     return { transactionId: result.transactionId, amountOut: out.amount_out, amountRemaining: out.amount_remaining }
   }
 
@@ -214,5 +226,8 @@ export async function claimSwapOutput(
     imports: params.imports ? Object.keys(params.imports) : undefined,
     inputs,
   })
+  if (params.blindedIdentities) {
+    await markClaimedQuietly(params.blindedIdentities, handle.blindedAddress)
+  }
   return { transactionId, amountOut: out.amount_out, amountRemaining: out.amount_remaining }
 }

@@ -1,7 +1,9 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, it, expect, beforeAll } from 'vitest'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
-import { resolveDexImports } from '../../src/utils/imports.js'
+import { fileBlindedIdentityStore } from '../../src/node.js'
 
 /**
  * Swaps against the live testnet deployment: single hop, forced multi-hop, and
@@ -65,7 +67,16 @@ describe.runIf(RUN)('live swaps on testnet', () => {
       // likely dropped than pending, and waiting only delays finding out.
       confirmationTimeout: 400_000,
     })
-    client = walletClient.extend(shieldSwapActions({ api: {} })) as typeof client
+    // On disk, so counters keep advancing across runs instead of rescanning the
+    // chain for the frontier every time.
+    client = walletClient.extend(
+      shieldSwapActions({
+        api: {},
+        blindedIdentities: fileBlindedIdentityStore(
+          process.env.VEIL_BLINDED_STORE ?? join(tmpdir(), 'veil-blinded-testnet.json'),
+        ),
+      }),
+    ) as typeof client
     await client.authenticateShieldSwap()
 
     tokens = (await client.api.getTokens()).data as Token[]
@@ -90,7 +101,7 @@ describe.runIf(RUN)('live swaps on testnet', () => {
     const pool = pools.find((p) => held.get(p.token0)! > 0n || held.get(p.token1)! > 0n)!
     const tokenInId = held.get(pool.token0)! > 0n ? pool.token0 : pool.token1
     const amountIn = held.get(tokenInId)! / 1000n
-    const imports = await resolveDexImports(client, {
+    const imports = await client.resolveDexImports({
       tokenPrograms: [program(pool.token0), program(pool.token1)],
     })
 
@@ -121,7 +132,7 @@ describe.runIf(RUN)('live swaps on testnet', () => {
     const to = last.token0 === bridge.address ? last.token1 : last.token0
     const hops = [poolFor(from, bridge.address)!.key, last.key]
 
-    const imports = await resolveDexImports(client, {
+    const imports = await client.resolveDexImports({
       tokenPrograms: [from, bridge.address, to].map(program),
     })
     const handle = await client.swapMultiHop({
@@ -139,8 +150,12 @@ describe.runIf(RUN)('live swaps on testnet', () => {
   }, TX)
 
   it('runs two swaps concurrently on pools that spend different tokens', async () => {
-    // Concurrency contends on records: two swaps selecting the same record double
-    // spend and one reverts. Disjoint input tokens keep the record sets apart.
+    // Concurrency contends on two things. Records: disjoint input tokens keep
+    // the record sets apart. Blinded identities: both swaps would otherwise
+    // derive the same one from the same chain read, and the second reverts on
+    // finalize against the uniqueness assert. Nothing here guards against that
+    // — the plain `client.swap` calls below do, because the configured store
+    // reserves each identity, which is the behaviour under test.
     const funded = [...held].filter(([, v]) => v > 0n).map(([id]) => id)
     const pairs: { id: string; pool: Pool }[] = []
     for (const id of funded) {
@@ -154,7 +169,7 @@ describe.runIf(RUN)('live swaps on testnet', () => {
 
     const results = await Promise.all(
       pairs.map(async ({ id, pool }) => {
-        const imports = await resolveDexImports(client, {
+        const imports = await client.resolveDexImports({
           tokenPrograms: [program(pool.token0), program(pool.token1)],
         })
         const handle = await client.swap({
@@ -169,5 +184,12 @@ describe.runIf(RUN)('live swaps on testnet', () => {
       }),
     )
     for (const r of results) expect(r.amountOut).toBeGreaterThan(0n)
+    // The reserved addresses must be distinct — equal ones are the collision.
+    const reserved = await client.syncBlindedIdentities()
+    expect(new Set(reserved.map((r) => r.blindedAddress)).size).toBe(reserved.length)
+    // Both swaps confirmed and were claimed above, so the chain now carries
+    // their addresses with no swap output left against them.
+    const forThisTest = reserved.slice(-2)
+    for (const r of forThisTest) expect(r.status).toBe('claimed')
   }, TX)
 })

@@ -48,7 +48,10 @@ export function fileCredentialStore(path: string): ProvableCredentialStore {
         // consumer and abandon the key sitting in that file, which cannot be
         // reissued. Same reasoning as the malformed-file case below.
         const code = (cause as { code?: string } | undefined)?.code
-        if (code === 'ENOENT' || code === 'ENOTDIR') return undefined
+        // ENOENT only. ENOTDIR means a path component is not a directory — a
+        // malformed path rather than a missing file — and reading that as
+        // "no consumer yet" would register a replacement and abandon the key.
+        if (code === 'ENOENT') return undefined
         throw new Error(
           `Provable API credential file ${path} could not be read (${code ?? 'unknown error'}). ` +
             'Refusing to register a replacement consumer, which would abandon any key stored there.',
