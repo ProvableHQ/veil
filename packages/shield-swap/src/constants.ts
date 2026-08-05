@@ -27,16 +27,57 @@ export const ROUTER_ADDRESSES = {
 } as const
 
 /**
- * The three shield wrapper programs and their underlying assets. Wrapped-ness
- * of arbitrary tokens is decided on-chain via the `from_wrapper_token_id`
- * mapping — this table only names the known deployments (record selection
- * needs the underlying program id before any network round-trip).
+ * The three shield wrapper programs and the assets they wrap, per network.
+ *
+ * The wrapper program ids are identical on both networks; their underlying
+ * assets are not — mainnet drops the `test_` prefix, so
+ * `shield_swap_arc20_wrapped_usdcx.aleo` wraps `test_usdcx_stablecoin.aleo` on
+ * testnet and `usdcx_stablecoin.aleo` on mainnet. Reading the wrong row selects
+ * records from a program that does not exist on the active network.
+ *
+ * This table only names the known deployments. Wrapped-ness of an arbitrary
+ * token is decided on chain through the `from_wrapper_token_id` mapping, which
+ * `resolveTokenRoute` uses — prefer that for anything the table does not list.
+ * The table exists because record selection needs the underlying program id
+ * before any network round-trip.
  */
-export const SHIELD_WRAPPERS = {
-  'shield_swap_arc20_credits.aleo': { underlying: 'credits.aleo', symbol: 'ALEO' },
-  'shield_swap_arc20_wrapped_usdcx.aleo': { underlying: 'test_usdcx_stablecoin.aleo', symbol: 'USDCx' },
-  'shield_swap_arc20_wrapped_usad.aleo': { underlying: 'test_usad_stablecoin.aleo', symbol: 'USAD' },
+export const SHIELD_WRAPPERS_BY_NETWORK = {
+  testnet: {
+    'shield_swap_arc20_credits.aleo': { underlying: 'credits.aleo', symbol: 'ALEO' },
+    'shield_swap_arc20_wrapped_usdcx.aleo': { underlying: 'test_usdcx_stablecoin.aleo', symbol: 'USDCx' },
+    'shield_swap_arc20_wrapped_usad.aleo': { underlying: 'test_usad_stablecoin.aleo', symbol: 'USAD' },
+  },
+  mainnet: {
+    'shield_swap_arc20_credits.aleo': { underlying: 'credits.aleo', symbol: 'ALEO' },
+    'shield_swap_arc20_wrapped_usdcx.aleo': { underlying: 'usdcx_stablecoin.aleo', symbol: 'USDCx' },
+    'shield_swap_arc20_wrapped_usad.aleo': { underlying: 'usad_stablecoin.aleo', symbol: 'USAD' },
+  },
 } as const
+
+/**
+ * The wrapper table for a network.
+ *
+ * @param network Network the client reads, from `client.transport.config.network`.
+ * @returns Wrapper program id to its underlying asset and display symbol.
+ *
+ * @example
+ * const wrappers = shieldWrappersFor(client.transport.config.network)
+ * const underlying = wrappers['shield_swap_arc20_wrapped_usdcx.aleo']?.underlying
+ */
+export function shieldWrappersFor(
+  network: string,
+): Record<string, { underlying: string; symbol: string }> {
+  return network === 'mainnet' ? SHIELD_WRAPPERS_BY_NETWORK.mainnet : SHIELD_WRAPPERS_BY_NETWORK.testnet
+}
+
+/**
+ * The testnet wrapper table.
+ *
+ * @deprecated Network-blind, so it names testnet's `test_`-prefixed underlyings
+ *   on mainnet too. Use {@link shieldWrappersFor} with the client's network, or
+ *   {@link SHIELD_WRAPPERS_BY_NETWORK} directly. Removed in the next major.
+ */
+export const SHIELD_WRAPPERS = SHIELD_WRAPPERS_BY_NETWORK.testnet
 
 /**
  * The program every DEX action targets unless overridden.

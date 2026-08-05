@@ -150,12 +150,14 @@ funded account).
   (remote proving + confirmation). Set timeouts accordingly and never
   re-submit just because a call is slow — check the state file and chain
   first.
-- **Concurrency is opt-in and has sharp edges.** Concurrent swaps from one
-  account MUST partition blinded-identity counters and use disjoint input
-  records — the exact recipe is in [swapping.md](./swapping.md). When in
-  doubt, run swaps sequentially.
-- **One runbook script at a time.** The state file has no lock. Persist
-  through the session helpers (`appendSwapHandle`, `removeSwapHandle`,
-  `appendPosition` — each re-reads before writing) and do not run two
+- **Concurrent swaps need disjoint input records.** Blinded identities are
+  handled for you: every swap reserves one from the store `loadSession`
+  configures, and reservations serialize, so two swaps cannot collide on an
+  identity. Records are still yours to keep apart — two swaps selling the same
+  token can pick the same record and double-spend it.
+- **One runbook script at a time.** The state file has no lock. Swap handles
+  are safe — the identity store serializes its own writes — but persist
+  positions through `appendPosition` (it re-reads before writing) and do not
+  run two
   runbook scripts concurrently; concurrency belongs INSIDE one script, per
   the swapping recipe.

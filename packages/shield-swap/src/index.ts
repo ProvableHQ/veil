@@ -145,6 +145,8 @@ export {
   SHIELD_SWAP_MULTISIG,
   ROUTER_ADDRESSES,
   SHIELD_WRAPPERS,
+  SHIELD_WRAPPERS_BY_NETWORK,
+  shieldWrappersFor,
 } from './constants.js'
 
 // Record selection + record-derived balances (local-signer path; wallet

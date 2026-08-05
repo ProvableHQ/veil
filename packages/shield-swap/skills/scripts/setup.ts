@@ -16,6 +16,7 @@
  *
  * Usage:
  *   npx tsx setup.ts --new                            # brand-new account
+ *   npx tsx setup.ts --network mainnet --private-key-file <path>   # mainnet
  *   npx tsx setup.ts --private-key-file <path>        # returning user (key in a file)
  *   npx tsx setup.ts --invite-code CODE               # when access is locked
  *   npx tsx setup.ts --api-url <origin>               # pin a DEX API deployment
@@ -29,8 +30,14 @@
  * Exit codes: 0 ready · 2 needs input from the user (message says what) ·
  * 3 airdrop still pending · 1 anything else.
  *
- * State lands in ./.shield-swap/state.json (private key + credentials —
- * gitignore it, treat it like a wallet file).
+ * State lands in ./.shield-swap/<network>/state.json (private key +
+ * credentials — gitignore it, treat it like a wallet file). Nothing is shared
+ * between networks, including the blinded identity store, whose reservations
+ * are only meaningful against the chain they were checked on.
+ *
+ * Mainnet moves real value, so it is never the default: pass
+ * `--network mainnet` explicitly. The airdrop step is testnet-only and refuses
+ * to run on mainnet rather than pretending a faucet exists.
  */
 import { readFileSync } from 'node:fs'
 import { ApiError, DEFAULT_API_URL } from '@provablehq/shield-swap-sdk'
@@ -38,7 +45,9 @@ import {
   loadState,
   saveState,
   ensureKeyMaterial,
-  credentialStore,
+  credentialStoreFor,
+  resolveNetwork,
+  stateDir,
   NeedsConfigDecisionError,
   loadSession,
   getHoldings,
@@ -57,7 +66,9 @@ const apiKey = argValue('--api-key') ?? process.env.ALEO_DPS_API_KEY
 // Flag-only on purpose: SHIELD_SWAP_API_URL stays an ephemeral per-run
 // override (see loadSession); only an explicit --api-url pins the
 // deployment and resets deployment-scoped state.
+const network = resolveNetwork(argValue('--network'))
 const apiUrl = argValue('--api-url')?.replace(/\/$/, '')
+const credentialStore = credentialStoreFor(network)
 const allowGenerate = process.argv.includes('--new')
 
 // The key itself never travels through a conversation or the command line:
@@ -76,7 +87,8 @@ const importKey = resolveImportKey()
 
 async function main() {
   // ── 1 + 2: key material and Provable API credentials ────────────────
-  let state = loadState()
+  let state = loadState(network)
+  console.log(`network: ${network}  ·  state: ${stateDir(network)}`)
 
   // Pin the DEX API deployment. The access grant, API token, and airdrop
   // job all live in one deployment's database — switching deployments
@@ -195,6 +207,14 @@ async function main() {
   }
   if (await funded()) {
     console.log('✓ account already funded')
+  } else if (network === 'mainnet') {
+    // There is no mainnet faucet, and quietly skipping would leave the account
+    // configured but unable to trade — a failure a user would only discover
+    // when a swap could not select a record.
+    throw new Error(
+      `account ${account.address} holds no tokens on mainnet, and there is no faucet to draw from. ` +
+        'Fund it from an exchange or another wallet, then re-run this script to verify.',
+    )
   } else {
     // Request the faucet at most once per account: the job id persists in
     // the state file, so a re-run resumes polling instead of double-drawing.

@@ -4,8 +4,13 @@
  * Owns the state file (`./.shield-swap/state.json` by default) and the
  * client wiring, so every runbook snippet starts from `loadSession()` and
  * gets a fully authenticated client plus persistent storage for the things
- * that must survive a crash: the private key, API credentials, open swap
- * handles, and position token ids.
+ * that must survive a crash: the private key, API credentials, and position
+ * token ids. Swap handles are no longer kept here — the SDK's blinded identity
+ * store owns them, which is also what makes concurrent swaps safe.
+ *
+ * Everything is scoped by network. Nothing is shared between testnet and
+ * mainnet: not the key, not the API grant, and above all not the identity
+ * store, whose reservations are only meaningful against one chain.
  *
  * The state file holds a private key and API credentials — keep it out of
  * version control (`.shield-swap/` belongs in .gitignore) and treat it like
@@ -21,9 +26,30 @@ import {
 } from '@provablehq/veil-aleo-sdk'
 import type { ProvableCredentialStore } from '@provablehq/veil-aleo-sdk'
 import { shieldSwapActions, getPrivateBalances, DEFAULT_PROGRAM } from '@provablehq/shield-swap-sdk'
-import type { SwapHandle, MultiHopSwapHandle } from '@provablehq/shield-swap-sdk'
+import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
 
-export const NETWORK = 'testnet' as const
+/** The networks these scripts run against. */
+export type Network = 'testnet' | 'mainnet'
+
+/**
+ * Resolves the network from an explicit choice, the environment, or the default.
+ *
+ * Testnet is the default and mainnet is never reached by omission: a script has
+ * to be told, because everything downstream — the DEX API host, the prover, the
+ * scanner, the token registry, and the identity store — is per-network, and the
+ * mainnet ones move real value.
+ *
+ * @param explicit A `--network` value, when a script parsed one.
+ * @throws When the value is neither network, rather than silently using testnet.
+ */
+export function resolveNetwork(explicit?: string): Network {
+  const value = explicit ?? process.env.SHIELD_SWAP_NETWORK ?? 'testnet'
+  if (value !== 'testnet' && value !== 'mainnet') {
+    throw new Error(`Unknown network "${value}" — use testnet or mainnet.`)
+  }
+  return value
+}
+
 export const NETWORK_URL = 'https://api.provable.com/v2'
 /**
  * Base URL of the prover — the SDK appends the active network.
@@ -61,22 +87,54 @@ export type ShieldSwapState = {
   accessRedeemed?: boolean
   /** Faucet job already requested for this account — prevents double-drawing on re-runs. */
   airdropJobId?: string
-  /** Open swap handles, JSON-safe (bigints as strings). The only path to unclaimed funds. */
-  swapHandles: Record<string, unknown>[]
   positions: TrackedPosition[]
 }
 
-const STATE_DIR = process.env.SHIELD_SWAP_STATE_DIR ?? join(process.cwd(), '.shield-swap')
-const STATE_PATH = join(STATE_DIR, 'state.json')
+const STATE_ROOT = process.env.SHIELD_SWAP_STATE_DIR ?? join(process.cwd(), '.shield-swap')
 
-/** Reads the state file, or returns a fresh empty state. */
-export function loadState(): ShieldSwapState {
-  if (!existsSync(STATE_PATH)) {
-    return { network: NETWORK, swapHandles: [], positions: [] }
-  }
-  const parsed = JSON.parse(readFileSync(STATE_PATH, 'utf8')) as ShieldSwapState
-  parsed.swapHandles ??= []
+/** Per-network state directory. Nothing is shared between networks. */
+export function stateDir(network: Network): string {
+  return join(STATE_ROOT, network)
+}
+
+/**
+ * Where the blinded identity store lives for a network.
+ *
+ * Scoped by network because a reservation is only meaningful against the chain
+ * it was checked on: counters reserved against testnet's
+ * `used_blinded_addresses` say nothing about mainnet's, and one shared file
+ * would hand out identities the other chain has already consumed.
+ */
+export function blindedStorePath(network: Network): string {
+  return join(stateDir(network), 'blinded.json')
+}
+
+function statePath(network: Network): string {
+  return join(stateDir(network), 'state.json')
+}
+
+/** The pre-network layout, still read for testnet so existing keys survive. */
+const LEGACY_STATE_PATH = join(STATE_ROOT, 'state.json')
+
+/**
+ * Reads a network's state file, or returns a fresh empty state.
+ *
+ * Falls back to the pre-network layout for testnet only, so an existing
+ * `.shield-swap/state.json` keeps working; the next save writes it to the
+ * network-scoped path.
+ */
+export function loadState(network: Network): ShieldSwapState {
+  const path = existsSync(statePath(network))
+    ? statePath(network)
+    : network === 'testnet' && existsSync(LEGACY_STATE_PATH)
+      ? LEGACY_STATE_PATH
+      : undefined
+  if (!path) return { network, positions: [] }
+  const parsed = JSON.parse(readFileSync(path, 'utf8')) as ShieldSwapState
   parsed.positions ??= []
+  // A state file that names a different network is a wrong-chain hazard: its
+  // key is fine but its access grant, API token, and airdrop job are not.
+  parsed.network = network
   return parsed
 }
 
@@ -86,36 +144,18 @@ export function loadState(): ShieldSwapState {
  * key and the open swap handles.
  */
 export function saveState(state: ShieldSwapState): void {
-  mkdirSync(STATE_DIR, { recursive: true })
-  const tmp = `${STATE_PATH}.tmp`
+  const network = resolveNetwork(state.network)
+  mkdirSync(stateDir(network), { recursive: true })
+  const target = statePath(network)
+  const tmp = `${target}.tmp`
   writeFileSync(tmp, JSON.stringify(state, jsonSafe, 2))
   chmodSync(tmp, 0o600)
-  renameSync(tmp, STATE_PATH)
-}
-
-/**
- * Appends a swap handle with a fresh read-modify-write, so a long-running
- * script holding a stale state snapshot cannot clobber handles another
- * script persisted meanwhile. Returns the reloaded state.
- */
-export function appendSwapHandle(handle: SwapHandle | MultiHopSwapHandle): ShieldSwapState {
-  const state = loadState()
-  state.swapHandles.push(serializeHandle(handle))
-  saveState(state)
-  return state
-}
-
-/** Removes a claimed handle by its transaction id, with a fresh read-modify-write. */
-export function removeSwapHandle(transactionId: string): ShieldSwapState {
-  const state = loadState()
-  state.swapHandles = state.swapHandles.filter((h) => h.transactionId !== transactionId)
-  saveState(state)
-  return state
+  renameSync(tmp, target)
 }
 
 /** Appends a tracked position with a fresh read-modify-write. */
-export function appendPosition(position: TrackedPosition): ShieldSwapState {
-  const state = loadState()
+export function appendPosition(network: Network, position: TrackedPosition): ShieldSwapState {
+  const state = loadState(network)
   state.positions.push(position)
   saveState(state)
   return state
@@ -123,35 +163,6 @@ export function appendPosition(position: TrackedPosition): ShieldSwapState {
 
 function jsonSafe(_key: string, value: unknown): unknown {
   return typeof value === 'bigint' ? value.toString() : value
-}
-
-/** Serializes a swap handle (single- or multi-hop) for the state file (bigints become strings). */
-export function serializeHandle(handle: SwapHandle | MultiHopSwapHandle): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(handle, jsonSafe)) as Record<string, unknown>
-}
-
-/** True when a stored handle came from `swapMultiHop` — claim it with `claimMultiHopOutput`. */
-export function isMultiHopHandle(stored: Record<string, unknown>): boolean {
-  return Array.isArray(stored.poolKeys)
-}
-
-/**
- * Revives a stored handle's bigint fields so the claim actions accept it.
- * Handles both shapes: single-hop (`SwapHandle`) and multi-hop
- * (`MultiHopSwapHandle`, including each hop's `sqrtPriceLimit`).
- */
-export function deserializeHandle(stored: Record<string, unknown>): SwapHandle | MultiHopSwapHandle {
-  const h = { ...stored } as Record<string, unknown>
-  for (const key of ['amountIn', 'sqrtPriceLimit', 'nonce', 'amountOutMin']) {
-    if (typeof h[key] === 'string') h[key] = BigInt(h[key] as string)
-  }
-  if (Array.isArray(h.hops)) {
-    h.hops = (h.hops as Array<Record<string, unknown>>).map((hop) => ({
-      ...hop,
-      sqrtPriceLimit: typeof hop.sqrtPriceLimit === 'string' ? BigInt(hop.sqrtPriceLimit) : hop.sqrtPriceLimit,
-    }))
-  }
-  return h as unknown as SwapHandle | MultiHopSwapHandle
 }
 
 /**
@@ -185,13 +196,16 @@ export function formatAmount(amount: bigint, decimals: number, symbol?: string):
  * consumer through {@link credentialStore} on first prove or scan when the
  * state file holds none.
  */
-export async function loadSession() {
-  const state = loadState()
+export async function loadSession(options: { network?: string } = {}) {
+  const network = resolveNetwork(options.network)
+  const state = loadState(network)
   if (!state.privateKey) {
-    throw new Error('No shield-swap session found — run setup.ts first (see startup.md).')
+    throw new Error(
+      `No shield-swap session found for ${network} — run setup.ts --network ${network} first (see startup.md).`,
+    )
   }
 
-  const aleo = await loadNetwork(NETWORK)
+  const aleo = await loadNetwork(network)
   // Credentials reach both the prover and the scanner through one session the
   // client builds from the store, so a single JWT serves both.
   const scanner = aleo.createRemoteScanner({ url: SCANNER_URL })
@@ -200,7 +214,7 @@ export async function loadSession() {
     networkUrl: NETWORK_URL,
     provingMode: 'delegated',
     proverUrl: PROVER_URL,
-    credentialStore,
+    credentialStore: credentialStoreFor(network),
     // Faucet-funded accounts hold no public credits; the delegated prover
     // pays fees from its FeeMaster account. Opt out with
     // SHIELD_SWAP_FEE_MASTER=0 when the account funds its own fees.
@@ -210,10 +224,17 @@ export async function loadSession() {
   // SHIELD_SWAP_API_URL overrides for one-off runs; the persistent choice
   // lives in the state file (setup.ts --api-url).
   const apiUrl = process.env.SHIELD_SWAP_API_URL ?? state.apiUrl
-  const client = walletClient.extend(shieldSwapActions({ api: { baseUrl: apiUrl } }))
+  // The identity store is what makes concurrent swaps safe and unclaimed swaps
+  // recoverable, and it is scoped by network because a reservation is only
+  // meaningful against the chain it was checked on. Every swap through this
+  // client reserves and records automatically.
+  const blindedIdentities = fileBlindedIdentityStore(blindedStorePath(network))
+  const client = walletClient.extend(
+    shieldSwapActions({ api: { baseUrl: apiUrl }, blindedIdentities }),
+  )
   await client.authenticateShieldSwap()
 
-  return { client, account, scanner, state, aleo }
+  return { client, account, scanner, state, aleo, network, blindedIdentities }
 }
 
 /**
@@ -298,7 +319,8 @@ export async function ensureKeyMaterial(
   state: ShieldSwapState,
   options: { importKey?: string; allowGenerate?: boolean } = {},
 ): Promise<ShieldSwapState> {
-  await loadNetwork(NETWORK) // initializes the WASM the account helpers use
+  const network = resolveNetwork(state.network)
+  await loadNetwork(network) // initializes the WASM the account helpers use
   if (state.privateKey && options.importKey && options.importKey !== state.privateKey) {
     throw new Error(
       `a DIFFERENT account is already configured here (${state.address ?? 'address unknown'}). ` +
@@ -316,7 +338,7 @@ export async function ensureKeyMaterial(
     }
   }
   // Derive the address from the key so imported/seeded states are complete.
-  const aleo = await loadNetwork(NETWORK)
+  const aleo = await loadNetwork(network)
   state.address = aleo.privateKeyToAccount(state.privateKey).address
   saveState(state)
   return state
@@ -331,19 +353,21 @@ export class NeedsConfigDecisionError extends Error {
 }
 
 /**
- * Backs Provable API credentials with the state file.
+ * Backs Provable API credentials with a network's state file.
  *
  * The SDK reads through this on first use and writes back once, immediately
  * after registering a consumer — the API key is issued once, so the write
  * must not be deferred. State is re-read on save rather than captured, so a
  * concurrent update elsewhere in the run is not clobbered.
  */
-export const credentialStore: ProvableCredentialStore = {
-  load: () => loadState().provableApi,
-  save: (credentials) => {
-    const state = loadState()
-    state.provableApi = credentials
-    saveState(state)
-  },
+export function credentialStoreFor(network: Network): ProvableCredentialStore {
+  return {
+    load: () => loadState(network).provableApi,
+    save: (credentials) => {
+      const state = loadState(network)
+      state.provableApi = credentials
+      saveState(state)
+    },
+  }
 }
 
