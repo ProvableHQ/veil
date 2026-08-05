@@ -74,6 +74,11 @@ import { reserveBlindedIdentity } from '../actions/blinding/reserveBlindedIdenti
 import { syncBlindedIdentities } from '../actions/blinding/syncBlindedIdentities.js'
 import { recordBlindedSwap, type RecordBlindedSwapParameters } from '../actions/blinding/recordBlindedSwap.js'
 import {
+  getUnclaimedSwaps,
+  type GetUnclaimedSwapsParameters,
+  type GetUnclaimedSwapsReturnType,
+} from '../actions/blinding/getUnclaimedSwaps.js'
+import {
   reconcileSwapHistory,
   type ReconcileSwapHistoryParameters,
   type ReconcileSwapHistoryReturnType,
@@ -131,6 +136,10 @@ export type ShieldSwapActionsConfig = {
  * @property syncBlindedIdentities Reconciles stored reservations against the
  *   chain, promoting each to `swapped` or `claimed` once its blinded address
  *   appears on chain. Hits the network per unsettled record.
+ * @property getUnclaimedSwaps Summarizes what this store's identities can still
+ *   claim, reading `swap_outputs` rather than trusting stored statuses, with
+ *   per-token totals and a rebuilt handle per entry so a claim can be made from
+ *   the store alone. One mapping read per unsettled identity; writes nothing.
  * @property reconcileSwapHistory Walks the program's `claim_swap_output` history
  *   to recover which stored identities have already been claimed, and the swap
  *   ids and amounts involved. Expensive — one request per page plus one per
@@ -177,6 +186,9 @@ export type ShieldSwapActions = {
   reconcileSwapHistory: (
     params?: Omit<ReconcileSwapHistoryParameters, 'store'>,
   ) => Promise<ReconcileSwapHistoryReturnType>
+  getUnclaimedSwaps: (
+    params?: Omit<GetUnclaimedSwapsParameters, 'store'>,
+  ) => Promise<GetUnclaimedSwapsReturnType>
   swap: (params: SwapParameters) => Promise<SwapReturnType>
   claimSwapOutput: (params: ClaimSwapOutputParameters) => Promise<ClaimSwapOutputReturnType>
   swapMultiHop: (params: SwapMultiHopParameters) => Promise<SwapMultiHopReturnType>
@@ -315,6 +327,8 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
         syncBlindedIdentities(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
       reconcileSwapHistory: (p) =>
         reconcileSwapHistory(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
+      getUnclaimedSwaps: (p) =>
+        getUnclaimedSwaps(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
       swap: (p) => swap(client, withStore(withProgram(p))),
       claimSwapOutput: (p) => claimSwapOutput(client, withStore(p)),
       swapMultiHop: (p) => swapMultiHop(client, withStore(withProgram(p))),

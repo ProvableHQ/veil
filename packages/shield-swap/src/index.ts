@@ -72,6 +72,12 @@ export {
 } from './actions/blinding/syncBlindedIdentities.js'
 export { recordBlindedSwap } from './actions/blinding/recordBlindedSwap.js'
 export {
+  getUnclaimedSwaps,
+  type UnclaimedSwap,
+  type GetUnclaimedSwapsParameters,
+  type GetUnclaimedSwapsReturnType,
+} from './actions/blinding/getUnclaimedSwaps.js'
+export {
   reconcileSwapHistory,
   type ReconciledClaim,
   type ReconcileSwapHistoryParameters,

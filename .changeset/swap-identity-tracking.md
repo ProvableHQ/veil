@@ -38,3 +38,12 @@ only at that moment — nothing on chain links an identity to its swap until a c
 exists — so a swallowed failure means unclaimable proceeds. A store write that
 fails after a *claim* warns and continues, because the funds have landed and
 `reconcileSwapHistory` can repair the record.
+
+`getUnclaimedSwaps` summarizes what a store is still owed: one entry per output
+still sitting in `swap_outputs`, per-token totals across both sides of every swap
+(the output token plus any unfilled input a claim refunds), and a handle rebuilt
+from the store so each entry can be claimed by a process that did not make the
+swap. It reads the mapping rather than trusting stored statuses, so an entry
+appears exactly when a claim would succeed. Identities the chain has consumed whose
+swap id was never recorded are reported separately as `unresolvable`, since nothing
+on chain locates their proceeds until a claim exists.

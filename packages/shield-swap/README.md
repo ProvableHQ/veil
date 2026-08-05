@@ -479,17 +479,35 @@ behaves as it always has unless you pass one.
 `syncBlindedIdentities` reconciles the store against chain: `swapped` while the
 output is still in `swap_outputs`, `claimed` once a claim consumes it. Recorded
 handles make those states actionable rather than merely informative, since a claim
-consumes a whole handle and not a swap id:
+consumes a whole handle and not a swap id.
+
+`getUnclaimedSwaps` is the summary of what that leaves owed, and the crash-recovery
+path — a process that died between a swap and its claim can finish the job from the
+store alone:
 
 ```ts
-const settled = await client.syncBlindedIdentities()
-for (const record of settled.filter((r) => r.status === 'swapped')) {
-  await client.claimSwapOutput({ handle: fromPersistedHandle(record.handle!), imports })
+const { swaps, totals, claimable, unresolvable } = await client.getUnclaimedSwaps()
+
+for (const [tokenId, amount] of Object.entries(totals)) {
+  console.log(`${tokenId}: ${amount} owed`) // raw base units, both sides of every swap
+}
+
+for (const swap of swaps) {
+  if (swap.claimable) await client.claimSwapOutput({ handle: swap.handle!, imports })
 }
 ```
 
-That loop is the crash-recovery path: a process that dies between a swap and its
-claim can finish the job from the store alone.
+It reads `swap_outputs` rather than trusting stored statuses, so the answer is
+current whether or not sync has run — an entry appears exactly when a claim would
+succeed. `totals` counts both sides, because a claim pays the output token and
+refunds whatever of the input went unfilled. `claimable` is how many entries carry
+a handle; an entry without one is visible but cannot be claimed from here, since
+`claimSwapOutput` needs the whole handle.
+
+`unresolvable` is the honest gap: identities the chain has consumed whose swap id
+the store never recorded. Nothing on chain maps an identity to its swap until a
+claim exists, so there is no lookup to make — those need
+`reconcileSwapHistory`, and only once something has claimed them.
 
 This applies to local accounts only. A connected wallet derives its identities
 behind resolve-mode input requests, so the client never sees them — a wallet
