@@ -81,7 +81,7 @@ match against, because a blinded identity is derived rather than recorded and
 nothing on chain lists an account's own. Use the script instead:
 
 ```sh
-npx tsx scripts/swaps.ts --reconcile --pages 32
+npx tsx scripts/swap-history.ts --reconcile --pages 32
 ```
 
 It re-derives candidate identities from the view key, asks

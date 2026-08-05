@@ -30,7 +30,7 @@ const USAGE = `swap.ts — sell one token for another and claim the output
   --amount <decimal>            human amount, e.g. 1.5   (or --amount-raw)
   --amount-raw <integer>        raw base units
   --slippage <bps>              default 50 (0.5%)
-  --no-claim                    submit the swap, leave the output for swaps.ts
+  --no-claim                    submit the swap, leave the output for swap-history.ts
   --network <testnet|mainnet>   default testnet
   --execute                     actually submit
   --json                        machine-readable output`
@@ -86,7 +86,7 @@ await run(async () => {
     `buy    ${plan.expectedOut > 0n ? formatAmount(plan.expectedOut, plan.to.decimals, plan.to.symbol) : `${plan.to.symbol} (no quote available)`}`,
     `floor  ${plan.minOut > 0n ? formatAmount(plan.minOut, plan.to.decimals, plan.to.symbol) : 'none — an unquoted swap accepts any fill'}`,
     `route  ${plan.poolKeys.join(' → ')}`,
-    `claim  ${args['no-claim'] ? 'no, left for swaps.ts' : 'yes, in this run'}`,
+    `claim  ${args['no-claim'] ? 'no, left for swap-history.ts' : 'yes, in this run'}`,
   ]
   if (!confirmed({ execute: args.execute as boolean | undefined, network, plan: planLines })) {
     output({ network, submitted: false, plan: { ...plan, imports: Object.keys(plan.imports) } }, () => {})
@@ -127,7 +127,7 @@ await run(async () => {
       }
     }
     if (claim) done(`claimed ${formatAmount(claim.amountOut, plan.to.decimals, plan.to.symbol)} (tx ${claim.transactionId})`)
-    else warn('the output has not finalized yet — claim it later with `npx tsx swaps.ts --claim --execute`')
+    else warn('the output has not finalized yet — claim it later with `npx tsx swap-history.ts --claim --execute`')
   }
 
   output(

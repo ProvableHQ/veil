@@ -180,4 +180,61 @@ describe('reconcileSwapHistory', () => {
     await reconcileSwapHistory(client, { store, program: PROGRAM })
     expect(saves).toBe(0)
   })
+
+  it('retries a rate-limited fetch instead of losing the page', async () => {
+    const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    let attempts = 0
+    const client = {
+      request: async (req: { method: string; params?: { id?: string } }) => {
+        if (req.method === 'getProgramCallsPaginated') return { calls: [call('at1claim')], next_cursor: null }
+        attempts++
+        // A rate limit says nothing about the request, and a long walk is exactly
+        // the traffic shape that trips one — giving up would discard the page.
+        if (attempts === 1) throw Object.assign(new Error('HTTP 429'), { status: 429 })
+        return claimTx(ADDR_A, '7field', '5u128')
+      },
+    } as unknown as Client
+
+    const result = await reconcileSwapHistory(client, { store, program: PROGRAM })
+    expect(attempts).toBe(2)
+    expect(result.claims).toHaveLength(1)
+  })
+
+  it('does not retry a fetch the node answered', async () => {
+    const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    let attempts = 0
+    const client = {
+      request: async (req: { method: string }) => {
+        if (req.method === 'getProgramCallsPaginated') return { calls: [call('at1gone')], next_cursor: null }
+        attempts++
+        // A 404 is an answer, not congestion: retrying it just wastes the budget.
+        throw Object.assign(new Error('HTTP 404'), { status: 404 })
+      },
+    } as unknown as Client
+
+    await expect(reconcileSwapHistory(client, { store, program: PROGRAM })).rejects.toThrow(/404/)
+    expect(attempts).toBe(1)
+  })
+
+  it('fetches a page’s claims concurrently', async () => {
+    const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    let inFlight = 0
+    let peak = 0
+    const calls = Array.from({ length: 12 }, (_, i) => call(`at1c${i}`))
+    const client = {
+      request: async (req: { method: string; params?: { id?: string } }) => {
+        if (req.method === 'getProgramCallsPaginated') return { calls, next_cursor: null }
+        inFlight++
+        peak = Math.max(peak, inFlight)
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        inFlight--
+        return claimTx(ADDR_B, '9field', '5u128')
+      },
+    } as unknown as Client
+
+    await reconcileSwapHistory(client, { store, program: PROGRAM, concurrency: 4 })
+    // One at a time would make a long history take minutes it does not need to.
+    expect(peak).toBeGreaterThan(1)
+    expect(peak).toBeLessThanOrEqual(4)
+  })
 })

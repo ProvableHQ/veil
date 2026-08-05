@@ -60,12 +60,18 @@ export type ReconciledClaim = {
  *   hundreds of requests.
  * @property pageSize Calls per page, 1–50. Defaults to 50, the largest the
  *   endpoint serves and therefore the fewest requests per call examined.
+ * @property concurrency Transaction fetches in flight at once. Defaults to 8.
+ *   Pages are sequential because each needs the previous page's cursor, but the
+ *   claims within a page are independent and are the bulk of the work — a page of
+ *   50 can mean 50 fetches. Lower it if the node rate-limits; the walk retries
+ *   those anyway.
  */
 export type ReconcileSwapHistoryParameters = {
   store: BlindedIdentityStore
   program?: string
   maxPages?: number
   pageSize?: number
+  concurrency?: number
 }
 
 /**
@@ -85,6 +91,49 @@ export type ReconcileSwapHistoryReturnType = {
   callsScanned: number
   pagesScanned: number
   complete: boolean
+}
+
+/**
+ * Retries a fetch the node refused for being busy rather than for being wrong.
+ *
+ * A rate limit or a 5xx says nothing about the request, and a long walk is
+ * exactly the shape of traffic that trips one — giving up would discard the whole
+ * page's progress. A 404 or a 400 is not retried: those are answers.
+ */
+async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
+  let last: unknown
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await fn()
+    } catch (error) {
+      const status = (error as { status?: number } | null)?.status
+      const retryable = status === 429 || (status !== undefined && status >= 500)
+      if (!retryable || attempt === attempts - 1) throw error
+      last = error
+      await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt))
+    }
+  }
+  throw last
+}
+
+/**
+ * Runs `fn` over `items` with a bounded number in flight.
+ *
+ * The walk's cost is dominated by one transaction fetch per claim, and those are
+ * independent of each other — running them one at a time makes a long history
+ * take minutes it does not need to.
+ */
+async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let next = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++
+      results[index] = await fn(items[index]!)
+    }
+  })
+  await Promise.all(workers)
+  return results
 }
 
 /** Mapping keys are field literals; the call history reports them bare. */
@@ -143,6 +192,10 @@ function claimFromTransition(
  * usually costs one page. Otherwise it walks to `maxPages` and reports
  * `complete: false`.
  *
+ * Pages are sequential — each needs the previous cursor — but the claims within a
+ * page are fetched concurrently and retried through a rate limit, because those
+ * fetches are the bulk of a long walk.
+ *
  * What it cannot do: find swaps that were never claimed. An unclaimed swap has
  * no claim call by definition, so proceeds still waiting on chain are invisible
  * here — {@link syncBlindedIdentities} and `getSwapOutput` cover those, for
@@ -168,6 +221,7 @@ export async function reconcileSwapHistory(
   const program = params.program ?? DEFAULT_PROGRAM
   const maxPages = params.maxPages ?? 8
   const pageSize = params.pageSize ?? 50
+  const concurrency = params.concurrency ?? 8
 
   return withStoreLock(params.store, async () => {
     const records = await params.store.load()
@@ -185,11 +239,15 @@ export async function reconcileSwapHistory(
     let cursor: { block_number: number; transition_id: string } | null = null
 
     while (!complete && pagesScanned < maxPages) {
-      const page = await getProgramCallsPaginated(client, {
-        programId: program,
-        limit: pageSize,
-        ...(cursor ? { cursorBlockNumber: cursor.block_number, cursorTransitionId: cursor.transition_id } : {}),
-      })
+      const page = await withRetry(() =>
+        getProgramCallsPaginated(client, {
+          programId: program,
+          limit: pageSize,
+          ...(cursor
+            ? { cursorBlockNumber: cursor.block_number, cursorTransitionId: cursor.transition_id }
+            : {}),
+        }),
+      )
       pagesScanned++
       callsScanned += page.calls.length
       if (page.calls.length === 0) {
@@ -197,24 +255,29 @@ export async function reconcileSwapHistory(
         break
       }
 
-      for (const call of page.calls) {
-        // A rejected claim consumed nothing, so it says nothing about status.
-        if (call.function_id !== CLAIM_FUNCTION || call.status.toLowerCase() !== 'accepted') continue
-        const transaction = await getTransaction(client, { id: call.transaction_id })
+      // A rejected claim consumed nothing, so it says nothing about status and is
+      // not worth a fetch.
+      const candidates = page.calls.filter(
+        (call) => call.function_id === CLAIM_FUNCTION && call.status.toLowerCase() === 'accepted',
+      )
+      // Fetched in parallel, applied in order: the requests are independent but
+      // the store must end up the same whatever order they complete in.
+      const fetched = await mapWithLimit(candidates, concurrency, async (call) => {
+        const transaction = await withRetry(() => getTransaction(client, { id: call.transaction_id }))
         const transition = (transaction.execution?.transitions ?? []).find(
           (candidate) => candidate.program === program && candidate.function === CLAIM_FUNCTION,
         )
-        if (!transition) continue
-        const claim = claimFromTransition(transition, call.transaction_id, call.block_number)
-        if (!claim || !unresolved.has(claim.blindedAddress)) continue
+        return transition ? claimFromTransition(transition, call.transaction_id, call.block_number) : null
+      })
 
+      for (const claim of fetched) {
+        if (!claim || !unresolved.has(claim.blindedAddress)) continue
         claims.push(claim)
         unresolved.delete(claim.blindedAddress)
         const record = known.get(claim.blindedAddress)!
         const next: BlindedIdentityRecord = { ...record, swapId: claim.swapId, status: 'claimed' }
         known.set(claim.blindedAddress, next)
         updated.push(next)
-        if (unresolved.size === 0) break
       }
 
       if (unresolved.size === 0) complete = true

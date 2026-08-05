@@ -15,11 +15,11 @@
  *   --claim       claim what is owed (requires --execute).
  *
  * Usage:
- *   npx tsx swaps.ts                              # what is owed
- *   npx tsx swaps.ts --claim --execute            # claim everything claimable
- *   npx tsx swaps.ts --claim <swapId> --execute   # claim one
- *   npx tsx swaps.ts --reconcile                  # rebuild from chain history
- *   npx tsx swaps.ts --json
+ *   npx tsx swap-history.ts                              # what is owed
+ *   npx tsx swap-history.ts --claim --execute            # claim everything claimable
+ *   npx tsx swap-history.ts --claim <swapId> --execute   # claim one
+ *   npx tsx swap-history.ts --reconcile                  # rebuild from chain history
+ *   npx tsx swap-history.ts --json
  */
 import {
   SwapOutputNotFinalizedError,
@@ -31,7 +31,7 @@ import type { BlindedIdentityRecord, BlindedIdentityStore } from '@provablehq/sh
 import { loadSession, formatAmount } from './session.js'
 import { flags, setJsonMode, step, done, warn, output, confirmed, run } from './cli.js'
 
-const USAGE = `swaps.ts — unclaimed swap outputs, reconciliation, and claiming
+const USAGE = `swap-history.ts — unclaimed swap outputs, reconciliation, and claiming
 
   --network <testnet|mainnet>   default testnet
   --claim [swapId]              claim one or (with no value) everything claimable
@@ -128,10 +128,6 @@ await run(async () => {
   })
   if (!account.viewKey) throw new Error('this script needs a local account — a wallet tracks its own identities')
   done(`session on ${network}`)
-  // How many identities the store holds at all, so an empty store can be
-  // reported as "nothing tracked" rather than "nothing owed" — they mean very
-  // different things to someone looking for missing funds.
-  const tracked = (await blindedIdentities.load()).length
 
   if (args.reconcile) {
     // Discovery first: history can only be matched against addresses we hold, so
@@ -163,7 +159,12 @@ await run(async () => {
     }
   }
 
-  step('reading swap_outputs for every identity the store knows')
+  // Counted here rather than at startup: --reconcile populates the store, and a
+  // count taken before that would report "nothing tracked" in the same run that
+  // reports what it found.
+  const records = await blindedIdentities.load()
+  const tracked = records.length
+  step(`reading swap_outputs for ${tracked} tracked identity(ies)`)
   const owed = await client.getUnclaimedSwaps()
   const tokens = await client.listTokens()
   const infoOf = (id: string) => tokens.find((token) => token.id === id)
@@ -239,16 +240,59 @@ await run(async () => {
     }
   }
 
+  // The history is the point of the script, so it prints whatever else happened —
+  // a failed claim or an exhausted page budget still leaves a picture worth
+  // seeing, and a caller hunting for funds needs the whole ledger, not a summary.
+  const history = [...records]
+    .sort((a, b) => a.counter - b.counter)
+    .map((record) => ({
+      counter: record.counter,
+      status: record.status,
+      swapId: record.swapId ?? null,
+      hasHandle: !!record.handle,
+      blindedAddress: record.blindedAddress,
+    }))
+
   output(
-    { network, tracked, owed: rows, totals: owed.totals, unresolvable: owed.unresolvable.length, claimed },
+    {
+      network,
+      tracked,
+      history,
+      owed: rows,
+      totals: owed.totals,
+      unresolvable: owed.unresolvable.length,
+      claimed,
+    },
     (data) => {
+      if (data.history.length) {
+        console.log(`\nidentity history on ${data.network}:\n`)
+        for (const entry of data.history) {
+          const swap = entry.swapId ? `${entry.swapId.slice(0, 18)}…` : '(no swap id)'
+          // The handle is what makes an unclaimed swap claimable, so its absence
+          // is worth showing next to the status rather than buried.
+          const handle = entry.hasHandle ? 'handle' : entry.status === 'swapped' ? 'NO HANDLE' : ''
+          console.log(
+            `  #${String(entry.counter).padStart(4)}  ${entry.status.padEnd(9)} ${swap.padEnd(21)} ${handle}`,
+          )
+        }
+      }
     if (!data.owed.length) {
-      console.log(
-        data.tracked === 0
-          ? '\nThis store tracks no identities yet, so there is nothing to look for. A swap made ' +
-              'through these scripts records itself; a swap made elsewhere is invisible here.'
-          : `\nNothing owed across ${data.tracked} tracked identity(ies) — all settled.`,
-      )
+      if (data.tracked === 0) {
+        console.log(
+          '\nThis store tracks no identities yet, so there is nothing to look for. A swap made ' +
+            'through these scripts records itself; for an account with history, ' +
+            '`--reconcile` rebuilds the store from chain.',
+        )
+      } else if (data.unresolvable) {
+        // Not "all settled": these were used but cannot be looked up, so whether
+        // they hold proceeds is unknown rather than answered.
+        console.log(
+          `\nNothing claimable across ${data.tracked} tracked identity(ies), but ` +
+            `${data.unresolvable} of them cannot be checked — see below.`,
+        )
+      } else {
+        console.log(`\nNothing owed across ${data.tracked} tracked identity(ies) — all settled.`)
+      }
     } else {
       console.log(`\n${data.owed.length} unclaimed swap(s) on ${data.network}:\n`)
       for (const row of data.owed) {
@@ -268,8 +312,14 @@ await run(async () => {
     }
     if (data.unresolvable) {
       warn(
-        `${data.unresolvable} consumed identity(ies) have no swap id — their proceeds cannot be located ` +
-          'until something claims them. --reconcile recovers ids for ones already claimed.',
+        `${data.unresolvable} identity(ies) were used by this account but have no swap id on file, so ` +
+          'their swap cannot be looked up: it is unknown whether those swaps were already claimed or ' +
+          'still hold proceeds.',
+      )
+      warn(
+        'Most are usually old swaps already claimed, found by walking further back: ' +
+          '`--reconcile --pages 64`. Any that were never claimed cannot be claimed from here — a claim ' +
+          'needs the whole handle, and chain history names the swap without it.',
       )
     }
     if (!wantsClaim && data.owed.some((row) => row.claimable)) {

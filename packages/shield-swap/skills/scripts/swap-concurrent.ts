@@ -31,7 +31,7 @@ const USAGE = `swap-concurrent.ts — run several swaps at once
 
   --swap <from:to:amount>       repeatable, e.g. --swap USDCx:ETH:0.5
   --slippage <bps>              default 50 (0.5%)
-  --no-claim                    leave the outputs for swaps.ts
+  --no-claim                    leave the outputs for swap-history.ts
   --network <testnet|mainnet>   default testnet
   --execute                     actually submit
   --json                        machine-readable output
@@ -187,7 +187,7 @@ await run(async () => {
       console.log(`\n${landed}/${data.results.length} swaps landed.`)
       const unclaimed = data.results.filter((result) => 'claimed' in result && result.claimed === null)
       if (unclaimed.length) {
-        console.log(`${unclaimed.length} output(s) still unclaimed — \`npx tsx swaps.ts --claim --execute\`.`)
+        console.log(`${unclaimed.length} output(s) still unclaimed — \`npx tsx swap-history.ts --claim --execute\`.`)
       }
     },
   )
