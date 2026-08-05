@@ -3,10 +3,14 @@
  *
  * Owns the state file (`./.shield-swap/state.json` by default) and the
  * client wiring, so every runbook snippet starts from `loadSession()` and
- * gets a fully authenticated client plus persistent storage for the things
- * that must survive a crash: the private key, API credentials, and position
- * token ids. Swap handles are no longer kept here — the SDK's blinded identity
- * store owns them, which is also what makes concurrent swaps safe.
+ * gets a fully authenticated client plus persistent storage for the one thing
+ * that must survive a crash and cannot be rediscovered: the private key, plus
+ * the DEX grants tied to it.
+ *
+ * Nothing else is stored. Swap handles belong to the SDK's blinded identity
+ * store, and positions are discovered from records with
+ * `client.getOwnedPositions()` — a local list of either could only ever be a
+ * stale copy of what the chain already knows.
  *
  * Everything is scoped by network. Nothing is shared between testnet and
  * mainnet: not the key, not the API grant, and above all not the identity
@@ -50,15 +54,6 @@ export function resolveNetwork(explicit?: string): Network {
 
 export const NETWORK_URL = 'https://api.provable.com/v2'
 
-/** A liquidity position the account opened, tracked for later operations. */
-export type TrackedPosition = {
-  positionTokenId: string
-  poolKey: string
-  token0Program: string
-  token1Program: string
-  openedAt: string
-}
-
 /** Everything that must survive between agent sessions. */
 export type ShieldSwapState = {
   network: string
@@ -75,7 +70,6 @@ export type ShieldSwapState = {
   accessRedeemed?: boolean
   /** Faucet job already requested for this account — prevents double-drawing on re-runs. */
   airdropJobId?: string
-  positions: TrackedPosition[]
 }
 
 const STATE_ROOT = process.env.SHIELD_SWAP_STATE_DIR ?? join(process.cwd(), '.shield-swap')
@@ -128,9 +122,8 @@ export function loadState(network: Network): ShieldSwapState {
     : network === 'testnet' && existsSync(LEGACY_STATE_PATH)
       ? LEGACY_STATE_PATH
       : undefined
-  if (!path) return { network, positions: [] }
+  if (!path) return { network }
   const parsed = JSON.parse(readFileSync(path, 'utf8')) as ShieldSwapState
-  parsed.positions ??= []
   // A state file that names a different network is a wrong-chain hazard: its
   // key is fine but its access grant, API token, and airdrop job are not.
   parsed.network = network
@@ -152,13 +145,6 @@ export function saveState(state: ShieldSwapState): void {
   renameSync(tmp, target)
 }
 
-/** Appends a tracked position with a fresh read-modify-write. */
-export function appendPosition(network: Network, position: TrackedPosition): ShieldSwapState {
-  const state = loadState(network)
-  state.positions.push(position)
-  saveState(state)
-  return state
-}
 
 /**
  * Renders a raw base-unit amount in human units ("0.0534 ETH"), the ONLY

@@ -97,29 +97,32 @@ const tokens = (await client.api.getTokens()).data
 const tokenOf = (program: string) => tokens.find((t) => t.amm_token_program === program)
 const decimalsOf = (program: string) => tokenOf(program)?.decimals ?? 0
 
-// When state.positions is missing or stale, rebuild it on the spot:
-// `client.getOwnedPositions()` re-discovers every owned position from the
-// account's records, including what each one could collect right now.
-for (const tracked of state.positions) {
-  const position = await client.getPosition({ positionTokenId: tracked.positionTokenId })
-  if (!position) continue
+// Positions are discovered from the account's records, not from a local list:
+// `getOwnedPositions` joins each one with chain state, including what it could
+// collect right now, so there is nothing to keep in sync.
+for (const owned of await client.getOwnedPositions()) {
+  // `state` is null only while a fresh mint has not finalized yet.
+  if (!owned.state) continue
 
   // Owed balances accrue in raw base units; collect requests them directly
   // (the dust-flooring rule of the old stack is gone).
-  const amount0 = position.tokens_owed0
-  const amount1 = position.tokens_owed1
+  const amount0 = owned.state.tokensOwed0
+  const amount1 = owned.state.tokensOwed1
   if (amount0 === 0n && amount1 === 0n) continue // nothing collectable yet
 
-  const imports = await client.resolveDexImports({ tokenPrograms: [tracked.token0Program, tracked.token1Program] })
+  const p0 = tokens.find((t) => t.address === owned.token0Id)?.amm_token_program
+  const p1 = tokens.find((t) => t.address === owned.token1Id)?.amm_token_program
+  if (!p0 || !p1) continue
+  const imports = await client.resolveDexImports({ tokenPrograms: [p0, p1] })
   const { transactionId } = await client.collect({
-    poolKey: tracked.poolKey,
-    positionTokenId: tracked.positionTokenId, // REQUIRED with several positions in one pool
+    poolKey: owned.poolKey,
+    positionTokenId: owned.positionTokenId, // REQUIRED with several positions in one pool
     amount0Requested: amount0,
     amount1Requested: amount1,
     imports,
   })
-  const t0 = tokenOf(tracked.token0Program)
-  const t1 = tokenOf(tracked.token1Program)
+  const t0 = tokenOf(p0)
+  const t1 = tokenOf(p1)
   console.log(
     `collected ${formatAmount(amount0, t0?.decimals ?? 0, t0?.symbol)} + ` +
       `${formatAmount(amount1, t1?.decimals ?? 0, t1?.symbol)} (tx ${transactionId})`,

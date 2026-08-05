@@ -155,9 +155,9 @@ funded account).
   configures, and reservations serialize, so two swaps cannot collide on an
   identity. Records are still yours to keep apart — two swaps selling the same
   token can pick the same record and double-spend it.
-- **One runbook script at a time.** The state file has no lock. Swap handles
-  are safe — the identity store serializes its own writes — but persist
-  positions through `appendPosition` (it re-reads before writing) and do not
-  run two
+- **One runbook script at a time.** The state file has no lock, though there is
+  little left in it to race over: swap handles belong to the identity store,
+  which serializes its own writes, and positions are discovered from chain
+  rather than stored. Still, do not run two
   runbook scripts concurrently; concurrency belongs INSIDE one script, per
   the swapping recipe.

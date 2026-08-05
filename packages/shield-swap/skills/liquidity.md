@@ -60,7 +60,6 @@ valid but earns nothing until price enters it.
 ## Mint the position
 
 ```ts
-import { appendPosition } from '$SKILLS/scripts/session.js'
 
 // The AMM-side token programs feed the imports ONLY. Do not pass them as
 // `token0Program`/`token1Program` — those name the programs holding the
@@ -88,14 +87,9 @@ const { positionTokenId, transactionId } = await client.mint({
   imports,
 })
 
-// PERSIST IMMEDIATELY — the id is the key to the position.
-appendPosition({
-  positionTokenId: positionTokenId!,
-  poolKey: pool.key,
-  token0Program: p0,
-  token1Program: p1,
-  openedAt: new Date().toISOString(),
-})
+// Nothing to persist: the position lives in a record the account holds, and
+// `client.getOwnedPositions()` rediscovers it — with its pool, ticks, and what
+// it can collect — on any later run or after a crash.
 console.log('minted position', positionTokenId, 'tx', transactionId)
 ```
 
