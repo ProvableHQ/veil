@@ -21,10 +21,8 @@ import { join } from 'node:path'
 import {
   loadNetwork,
   generateAccount,
-  DEFAULT_PROVER_URL,
-  DEFAULT_SCANNER_URL,
 } from '@provablehq/veil-aleo-sdk'
-import type { ProvableCredentialStore } from '@provablehq/veil-aleo-sdk'
+import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
 import { shieldSwapActions, getPrivateBalances, DEFAULT_PROGRAM } from '@provablehq/shield-swap-sdk'
 import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
 
@@ -51,15 +49,6 @@ export function resolveNetwork(explicit?: string): Network {
 }
 
 export const NETWORK_URL = 'https://api.provable.com/v2'
-/**
- * Base URL of the prover — the SDK appends the active network.
- *
- * Re-exported from the SDK rather than restated so the two cannot drift; the
- * client would default to it anyway under delegated proving.
- */
-export const PROVER_URL = DEFAULT_PROVER_URL
-/** Base URL of the record scanner — re-exported so the two cannot drift. */
-export const SCANNER_URL = DEFAULT_SCANNER_URL
 
 /** A liquidity position the account opened, tracked for later operations. */
 export type TrackedPosition = {
@@ -82,7 +71,6 @@ export type ShieldSwapState = {
   apiUrl?: string
   privateKey?: string
   address?: string
-  provableApi?: { consumerId: string; apiKey: string }
   dexApiToken?: string
   accessRedeemed?: boolean
   /** Faucet job already requested for this account — prevents double-drawing on re-runs. */
@@ -107,6 +95,17 @@ export function stateDir(network: Network): string {
  */
 export function blindedStorePath(network: Network): string {
   return join(stateDir(network), 'blinded.json')
+}
+
+/**
+ * Where Provable API credentials live for a network.
+ *
+ * Separate from the state file because the SDK owns the format: `setup.ts`
+ * hands `fileCredentialStore` this path and the client reads and writes it
+ * directly, including registering a consumer when the file is absent.
+ */
+export function credentialsPath(network: Network): string {
+  return join(stateDir(network), 'provable-credentials.json')
 }
 
 function statePath(network: Network): string {
@@ -148,7 +147,7 @@ export function saveState(state: ShieldSwapState): void {
   mkdirSync(stateDir(network), { recursive: true })
   const target = statePath(network)
   const tmp = `${target}.tmp`
-  writeFileSync(tmp, JSON.stringify(state, jsonSafe, 2))
+  writeFileSync(tmp, JSON.stringify(state, null, 2))
   chmodSync(tmp, 0o600)
   renameSync(tmp, target)
 }
@@ -159,10 +158,6 @@ export function appendPosition(network: Network, position: TrackedPosition): Shi
   state.positions.push(position)
   saveState(state)
   return state
-}
-
-function jsonSafe(_key: string, value: unknown): unknown {
-  return typeof value === 'bigint' ? value.toString() : value
 }
 
 /**
@@ -193,8 +188,9 @@ export function formatAmount(amount: bigint, decimals: number, symbol?: string):
  * everything including access/token management, and auto-renews on expiry.
  *
  * Provable API credentials are not required up front: the client registers a
- * consumer through {@link credentialStore} on first prove or scan when the
- * state file holds none.
+ * consumer through the credential file on first prove or scan when it holds
+ * none — though `setup.ts` registers and verifies eagerly, so a session built
+ * after setup has working credentials rather than untested ones.
  */
 export async function loadSession(options: { network?: string } = {}) {
   const network = resolveNetwork(options.network)
@@ -208,13 +204,14 @@ export async function loadSession(options: { network?: string } = {}) {
   const aleo = await loadNetwork(network)
   // Credentials reach both the prover and the scanner through one session the
   // client builds from the store, so a single JWT serves both.
-  const scanner = aleo.createRemoteScanner({ url: SCANNER_URL })
+  // No prover or scanner URL: both default to the Provable API and take the
+  // network from the client, so naming them here would only risk drift.
+  const scanner = aleo.createRemoteScanner()
   const { walletClient, account } = aleo.createAleoClient({
     privateKey: state.privateKey,
     networkUrl: NETWORK_URL,
     provingMode: 'delegated',
-    proverUrl: PROVER_URL,
-    credentialStore: credentialStoreFor(network),
+    credentialStore: fileCredentialStore(credentialsPath(network)),
     // Faucet-funded accounts hold no public credits; the delegated prover
     // pays fees from its FeeMaster account. Opt out with
     // SHIELD_SWAP_FEE_MASTER=0 when the account funds its own fees.
@@ -237,68 +234,7 @@ export async function loadSession(options: { network?: string } = {}) {
   return { client, account, scanner, state, aleo, network, blindedIdentities }
 }
 
-/**
- * Reads the account's holdings per token, public and private combined.
- *
- * The faucet airdrops PRIVATE records, so public balances alone always read
- * zero for a fresh account — any funding check must include the private
- * side (scanned via the record service, which indexes asynchronously).
- */
-export async function getHoldings(
-  client: Awaited<ReturnType<typeof loadSession>>['client'],
-  address: string,
-): Promise<
-  Array<{
-    tokenId: string
-    symbol: string
-    decimals: number
-    underlyingProgram?: string
-    publicAmount: bigint
-    privateAmount: bigint
-  }>
-> {
-  const tokens = (await client.api.getTokens()).data
-  const pub = new Map(
-    (await client.api.getPublicBalances({ user: address })).data.map((b) => [b.token_id, BigInt(b.balance ?? 0)]),
-  )
-  // Private records live in the underlying program (a plain token's own, or a
-  // wrapped asset's underlying — credits for ALEO).
-  const programs = tokens.map((t) => t.underlying_program).filter((p): p is string => !!p)
-  const priv = await getPrivateBalances(client, { programs })
-  return tokens.map((t) => ({
-    tokenId: t.address,
-    symbol: t.symbol,
-    decimals: t.decimals,
-    underlyingProgram: t.underlying_program ?? undefined,
-    publicAmount: pub.get(t.address) ?? 0n,
-    privateAmount: t.underlying_program ? (priv[t.underlying_program] ?? 0n) : 0n,
-  }))
-}
 
-/**
- * Builds the imports map a DEX write needs: the given token programs PLUS
- * the DEX program's own declared imports. The prover resolves the closure
- * of supplied sources but not the main program's static imports (e.g.
- * `test_shield_swap_multisig_core.aleo`), so a write submitted with only
- * the token programs fails with "its import … must be added first".
- */
-export async function buildDexImports(
-  client: Awaited<ReturnType<typeof loadSession>>['client'],
-  tokenPrograms: string[],
-  program = DEFAULT_PROGRAM,
-): Promise<Record<string, string>> {
-  const { getProgram } = await import('@provablehq/veil-core')
-  const imports: Record<string, string> = {}
-  for (const p of new Set(tokenPrograms)) {
-    imports[p] = await getProgram(client, { programId: p })
-  }
-  const dexSource = await getProgram(client, { programId: program })
-  for (const m of dexSource.matchAll(/^import ([\w.]+);/gm)) {
-    const dep = m[1]!
-    if (!imports[dep]) imports[dep] = await getProgram(client, { programId: dep })
-  }
-  return imports
-}
 
 /** Polls a predicate until it returns true or attempts run out. */
 export async function pollUntil(fn: () => Promise<boolean>, attempts: number, intervalMs: number): Promise<boolean> {
@@ -352,22 +288,4 @@ export class NeedsConfigDecisionError extends Error {
   }
 }
 
-/**
- * Backs Provable API credentials with a network's state file.
- *
- * The SDK reads through this on first use and writes back once, immediately
- * after registering a consumer — the API key is issued once, so the write
- * must not be deferred. State is re-read on save rather than captured, so a
- * concurrent update elsewhere in the run is not clobbered.
- */
-export function credentialStoreFor(network: Network): ProvableCredentialStore {
-  return {
-    load: () => loadState(network).provableApi,
-    save: (credentials) => {
-      const state = loadState(network)
-      state.provableApi = credentials
-      saveState(state)
-    },
-  }
-}
 

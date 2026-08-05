@@ -17,7 +17,7 @@ lets a later process claim a swap it did not make.
 
 ```ts
 import { SwapOutputNotFinalizedError } from '@provablehq/shield-swap-sdk'
-import { loadSession, buildDexImports, formatAmount } from '$SKILLS/scripts/session.js'
+import { loadSession, formatAmount } from '$SKILLS/scripts/session.js'
 
 const { client } = await loadSession()
 const tokens = (await client.api.getTokens()).data
@@ -43,7 +43,7 @@ for (const swap of swaps) {
     console.error(`no wrapper program for swap ${swap.swapId} tokens — skipping`)
     continue
   }
-  const imports = await buildDexImports(client, [pIn, pOut])
+  const imports = await client.resolveDexImports({ tokenPrograms: [pIn, pOut] })
 
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
@@ -110,7 +110,7 @@ for (const tracked of state.positions) {
   const amount1 = position.tokens_owed1
   if (amount0 === 0n && amount1 === 0n) continue // nothing collectable yet
 
-  const imports = await buildDexImports(client, [tracked.token0Program, tracked.token1Program])
+  const imports = await client.resolveDexImports({ tokenPrograms: [tracked.token0Program, tracked.token1Program] })
   const { transactionId } = await client.collect({
     poolKey: tracked.poolKey,
     positionTokenId: tracked.positionTokenId, // REQUIRED with several positions in one pool
@@ -135,9 +135,9 @@ position has in-range liquidity — sweep periodically.
 After a sweep, the claimed and collected amounts appear as private records:
 
 ```ts
-import { getHoldings, formatAmount } from '$SKILLS/scripts/session.js'
-const holdings = await getHoldings(client, account.address)
-for (const h of holdings) console.log(formatAmount(h.privateAmount, h.decimals, h.symbol), 'private')
+import { formatAmount } from '$SKILLS/scripts/session.js'
+const balances = await client.getBalances()
+for (const b of Object.values(balances)) console.log(formatAmount(b.private, b.decimals, b.symbol), 'private')
 ```
 
 The record scanner indexes new records asynchronously — allow a few

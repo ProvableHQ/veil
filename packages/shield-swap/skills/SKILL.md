@@ -141,7 +141,7 @@ funded account).
   magnitude to a human reader.
 - **Tokens arrive and move privately.** The faucet airdrops private
   records, so public balances read zero on a funded account — check
-  holdings with the session helper `getHoldings()` (it reads both sides).
+  holdings with `client.getBalances()` (it reads both sides).
   Record selection picks ONE record large enough for the amount; it does
   not aggregate small records.
 - **Fees are covered.** Delegated proving through the Provable prover pays

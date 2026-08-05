@@ -41,16 +41,16 @@
  */
 import { readFileSync } from 'node:fs'
 import { ApiError, DEFAULT_API_URL } from '@provablehq/shield-swap-sdk'
+import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
 import {
   loadState,
   saveState,
   ensureKeyMaterial,
-  credentialStoreFor,
+  credentialsPath,
   resolveNetwork,
   stateDir,
   NeedsConfigDecisionError,
   loadSession,
-  getHoldings,
   formatAmount,
   pollUntil,
 } from './session.js'
@@ -68,7 +68,7 @@ const apiKey = argValue('--api-key') ?? process.env.ALEO_DPS_API_KEY
 // deployment and resets deployment-scoped state.
 const network = resolveNetwork(argValue('--network'))
 const apiUrl = argValue('--api-url')?.replace(/\/$/, '')
-const credentialStore = credentialStoreFor(network)
+const credentialStore = fileCredentialStore(credentialsPath(network))
 const allowGenerate = process.argv.includes('--new')
 
 // The key itself never travels through a conversation or the command line:
@@ -132,6 +132,17 @@ async function main() {
     await credentialStore.save({ consumerId, apiKey })
   }
 
+  // Credentials used to live in the state file. Move them rather than letting
+  // the client register a replacement: an API key is issued once and cannot be
+  // reissued, so a fresh consumer would abandon the old one.
+  const legacy = (state as { provableApi?: { consumerId: string; apiKey: string } }).provableApi
+  if (legacy && !(await credentialStore.load())) {
+    await credentialStore.save(legacy)
+    delete (state as { provableApi?: unknown }).provableApi
+    saveState(state)
+    console.log(`✓ moved Provable API credentials to ${credentialsPath(network)}`)
+  }
+
   // ── 3: wire the client and authenticate with the DEX API ────────────
   const { client, account } = await loadSession()
   console.log('✓ DEX API session established (challenge/verify)')
@@ -141,7 +152,7 @@ async function main() {
   const provable = await client.authenticateProvableApi()
   console.log(
     `✓ Provable API consumer: ${provable.credentials.consumerId}` +
-      (provable.registered ? ' (registered, saved to the state file)' : ''),
+      (provable.registered ? ` (registered, saved to ${credentialsPath(network)})` : ''),
   )
 
   // ── 4: invite-code access gate ───────────────────────────────────────
@@ -202,8 +213,8 @@ async function main() {
   // The faucet delivers PRIVATE records, so the check must scan the private
   // side; a fresh account's public balances stay zero even after funding.
   const funded = async () => {
-    const holdings = await getHoldings(client, account.address)
-    return holdings.some((h) => h.publicAmount > 0n || h.privateAmount > 0n)
+    const balances = await client.getBalances()
+    return Object.values(balances).some((b) => b.total > 0n)
   }
   if (await funded()) {
     console.log('✓ account already funded')
@@ -270,13 +281,13 @@ async function main() {
   }
 
   // ── report ────────────────────────────────────────────────────────────
-  const holdings = await getHoldings(client, account.address)
-  console.log(`\nAccount ${account.address} is ready:`)
-  for (const h of holdings) {
-    if (h.publicAmount > 0n || h.privateAmount > 0n) {
-      const priv = formatAmount(h.privateAmount, h.decimals, h.symbol)
-      const pub = formatAmount(h.publicAmount, h.decimals, h.symbol)
-      console.log(`  ${h.symbol}: ${priv} private, ${pub} public (${h.underlyingProgram ?? 'plain token'})`)
+  const balances = await client.getBalances()
+  console.log(`\nAccount ${account.address} is ready on ${network}:`)
+  for (const entry of Object.values(balances)) {
+    if (entry.total > 0n) {
+      const priv = formatAmount(entry.private, entry.decimals, entry.symbol)
+      const pub = formatAmount(entry.public, entry.decimals, entry.symbol)
+      console.log(`  ${entry.symbol}: ${priv} private, ${pub} public`)
     }
   }
   console.log(

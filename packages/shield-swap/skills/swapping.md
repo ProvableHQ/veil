@@ -14,19 +14,19 @@ this runbook ends with persisted handles.
 Everything a swap needs comes from three reads:
 
 ```ts
-import { loadSession, getHoldings } from '$SKILLS/scripts/session.js'
+import { loadSession } from '$SKILLS/scripts/session.js'
 
 const { client, account } = await loadSession()
 
 // What the account can sell (private side funds swaps).
-const holdings = await getHoldings(client, account.address)
-const funded = holdings.filter((h) => h.privateAmount > 0n && h.underlyingProgram)
+const balances = await client.getBalances()
+const funded = Object.entries(balances).filter(([, b]) => b.private > 0n)
 
 // Pools whose input token the account holds, with live liquidity.
 const pools = (await client.api.getPools({ limit: 50 })).data
 const candidates = []
 for (const pool of pools) {
-  const holdIn = funded.find((h) => h.tokenId === pool.token0 || h.tokenId === pool.token1)
+  const holdIn = funded.find(([id]) => id === pool.token0 || id === pool.token1)
   if (!holdIn || !pool.token0_info?.amm_token_program || !pool.token1_info?.amm_token_program) continue
   const slot = await client.getSlot({ poolKey: pool.key })
   if (slot && slot.liquidity > 0n) candidates.push({ pool, holdIn, slot })
@@ -52,12 +52,12 @@ name a wrapper.
 
 ```ts
 import { ApiError } from '@provablehq/shield-swap-sdk'
-import { buildDexImports, formatAmount } from '$SKILLS/scripts/session.js'
+import { formatAmount } from '$SKILLS/scripts/session.js'
 
 const { pool, holdIn } = candidates[0]
-const tokenInId = holdIn.tokenId
+const [tokenInId, balance] = holdIn
 const tokenOutInfo = tokenInId === pool.token0 ? pool.token1_info : pool.token0_info
-const amountIn = holdIn.privateAmount / 100n // 1% of the covering record
+const amountIn = balance.private / 100n // 1% of the covering record
 
 // Quote → slippage floor. The quote is informational: a missing estimate
 // or a 404 ("no executable route … for the requested amount") is fine —
@@ -81,11 +81,11 @@ try {
 
 // Every write needs an imports map: both pool tokens' program sources PLUS
 // the DEX program's own declared imports (the prover does not resolve
-// those). buildDexImports assembles all of it.
-const imports = await buildDexImports(client, [
+// those). resolveDexImports assembles all of it.
+const imports = await client.resolveDexImports({ tokenPrograms: [
   pool.token0_info!.amm_token_program!,
   pool.token1_info!.amm_token_program!,
-])
+] })
 
 const handle = await client.swap({
   poolKey: pool.key,
