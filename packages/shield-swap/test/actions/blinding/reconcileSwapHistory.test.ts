@@ -2,10 +2,24 @@ import { describe, it, expect } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
 import { reconcileSwapHistory } from '../../../src/actions/blinding/reconcileSwapHistory.js'
 import { memoryBlindedIdentityStore, type BlindedIdentityRecord } from '../../../src/utils/blinding/store.js'
+import { toPersistedHandle } from '../../../src/utils/blinding/handles.js'
 
 const PROGRAM = 'shield_swap.aleo'
 const ADDR_A = 'aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px'
 const ADDR_B = 'aleo1s3ws5tra87fjycnjrwsjcrnw2qxr8jfqqdugnf0xzqqw29q9m5pqem2u4t'
+
+/** A live handle, for records that already carry one. */
+const liveHandle = (blindedAddress: string, swapId: string) => ({
+  swapId,
+  blindingFactor: '1field',
+  blindedAddress,
+  tokenInId: '11field',
+  tokenOutId: '22field',
+  poolKey: '1field',
+  amountIn: 1000n,
+  transactionId: 'at1swap',
+  program: PROGRAM,
+})
 
 const reserved = (blindedAddress: string, counter: number): BlindedIdentityRecord => ({
   counter,
@@ -125,7 +139,11 @@ describe('reconcileSwapHistory', () => {
   })
 
   it('stops paging once every identity is resolved', async () => {
-    const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    // Already carries a handle, so only its claim is outstanding — otherwise the
+    // walk rightly keeps going to look for the request that would supply one.
+    const store = memoryBlindedIdentityStore([
+      { ...reserved(ADDR_A, 0), handle: toPersistedHandle(liveHandle(ADDR_A, '7field')) },
+    ])
     const { client, requests } = historyClient(
       [
         { calls: [call('at1claim')], next_cursor: { block_number: 90, transition_id: 'au1x' } },
@@ -162,8 +180,25 @@ describe('reconcileSwapHistory', () => {
     expect(result.claims).toEqual([])
   })
 
-  it('costs nothing when every identity is already claimed', async () => {
-    const store = memoryBlindedIdentityStore([{ ...reserved(ADDR_A, 0), status: 'claimed' }])
+  it('costs nothing when nothing is missing', async () => {
+    // Status alone is not the test: a record marked claimed with no economics is
+    // exactly what an earlier version left behind, and that must still be looked
+    // up. Nothing is wanted only when the claim and the handle are both on file.
+    const store = memoryBlindedIdentityStore([
+      {
+        ...reserved(ADDR_A, 0),
+        status: 'claimed',
+        handle: toPersistedHandle(liveHandle(ADDR_A, '7field')),
+        claim: {
+          tokenIn: '11field',
+          tokenOut: '22field',
+          amountOut: '5',
+          amountRemaining: '0',
+          transactionId: 'at1old',
+          blockNumber: 1,
+        },
+      },
+    ])
     const { client, requests } = historyClient([{ calls: [], next_cursor: null }], {})
 
     const result = await reconcileSwapHistory(client, { store, program: PROGRAM })
@@ -171,9 +206,19 @@ describe('reconcileSwapHistory', () => {
     expect(requests()).toEqual([])
   })
 
-  it('does not write to the store when nothing changed', async () => {
+  it('records that a complete walk found nothing, so the next run skips it', async () => {
+    const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    const { client } = historyClient([{ calls: [], next_cursor: null }], {})
+
+    await reconcileSwapHistory(client, { store, program: PROGRAM })
+    // Reaching the end of history without finding it is an answer, and writing it
+    // down is what stops every later run from walking all of history again.
+    expect((await store.load())[0]!.claimSearched).toBe(true)
+  })
+
+  it('does not write to the store when nothing is missing', async () => {
     let saves = 0
-    const inner = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    const inner = memoryBlindedIdentityStore([{ ...reserved(ADDR_A, 0), claimSearched: true }])
     const store = {
       load: inner.load,
       save: async (records: BlindedIdentityRecord[]) => {

@@ -421,8 +421,23 @@ export async function reconcileSwapHistory(
     const records = await params.store.load()
     // Identities already `claimed` need nothing from the history; the rest are
     // what the walk is looking for, and finding all of them ends it early.
-    const unresolved = new Set(
-      records.filter((record) => record.status !== 'claimed').map((record) => record.blindedAddress),
+    // Keyed on what is missing rather than on status. A record marked `claimed`
+    // by a claim this process made, or by an earlier version that recorded only
+    // the status, still has no economics — filtering by status would skip it
+    // forever and leave its row blank.
+    // `claimSearched` excludes both: a complete walk already looked for this
+    // identity and history had nothing, so looking again costs the same and finds
+    // the same nothing. Without it, a reserved-but-never-spent counter would make
+    // every run walk the whole history on its behalf.
+    const wantsClaim = new Set(
+      records
+        .filter((record) => !record.claim && !record.claimSearched)
+        .map((record) => record.blindedAddress),
+    )
+    const wantsRequest = new Set(
+      records
+        .filter((record) => !record.soldAmountIn && !record.handle && !record.claimSearched)
+        .map((record) => record.blindedAddress),
     )
     const known = new Map(records.map((record) => [record.blindedAddress, record]))
     const claims: ReconciledClaim[] = []
@@ -430,7 +445,7 @@ export async function reconcileSwapHistory(
     const updated: BlindedIdentityRecord[] = []
     let callsScanned = 0
     let pagesScanned = 0
-    let complete = unresolved.size === 0
+    let complete = wantsClaim.size === 0 && wantsRequest.size === 0
     let cursor: { block_number: number; transition_id: string } | null = null
 
     while (!complete && pagesScanned < maxPages) {
@@ -493,11 +508,14 @@ export async function reconcileSwapHistory(
       for (const { request } of fetched) {
         if (!request) continue
         const record = known.get(request.blindedAddress)
-        if (!record || record.swapId) continue
+        if (!record || !wantsRequest.has(request.blindedAddress)) continue
+        wantsRequest.delete(request.blindedAddress)
         requests.push(request)
         known.set(request.blindedAddress, {
           ...record,
-          swapId: request.swapId,
+          // A swap id already on file wins: it came from a claim, which is the
+          // authority on which swap settled.
+          swapId: record.swapId ?? request.swapId,
           // The handle is what a claim consumes, and the blinding factor the store
           // already holds is the one private piece chain cannot supply.
           ...(request.handle
@@ -505,13 +523,14 @@ export async function reconcileSwapHistory(
             : {}),
           soldAmountIn: request.amountIn.toString(),
         })
-        // Still unresolved: knowing the swap id does not say whether it settled.
+        // Deliberately not removed from `wantsClaim`: knowing the request says
+        // what a swap cost, not whether it was ever collected.
       }
 
       for (const { claim } of fetched) {
-        if (!claim || !unresolved.has(claim.blindedAddress)) continue
+        if (!claim || !wantsClaim.has(claim.blindedAddress)) continue
         claims.push(claim)
-        unresolved.delete(claim.blindedAddress)
+        wantsClaim.delete(claim.blindedAddress)
         const record = known.get(claim.blindedAddress)!
         const next: BlindedIdentityRecord = {
           ...record,
@@ -533,7 +552,7 @@ export async function reconcileSwapHistory(
         updated.push(next)
       }
 
-      if (unresolved.size === 0) complete = true
+      if (wantsClaim.size === 0 && wantsRequest.size === 0) complete = true
       else if (!page.next_cursor) complete = true
       else if (
         cursor &&
@@ -549,11 +568,15 @@ export async function reconcileSwapHistory(
     // A walk that reached the end of history has answered for everything it did
     // not find: those swaps were never claimed. Recording that is what stops the
     // next run from searching the whole history for them again.
+    // A walk that reached the end of history has answered for everything it did
+    // not find, whatever the identity's status: there is no claim and no request
+    // on chain for it. Recording that is what keeps the next run from searching
+    // all of history again.
     let marked = 0
     if (complete) {
-      for (const address of unresolved) {
+      for (const address of new Set([...wantsClaim, ...wantsRequest])) {
         const record = known.get(address)
-        if (!record || record.swapId || record.status === 'reserved' || record.claimSearched) continue
+        if (!record || record.claimSearched) continue
         known.set(address, { ...record, claimSearched: true })
         marked++
       }

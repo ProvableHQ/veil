@@ -39,7 +39,8 @@ const USAGE = `swap-history.ts — unclaimed swap outputs, reconciliation, and c
   --reconcile                   force a full re-search even when the local history
                                 looks complete (discovery runs either way)
   --no-search                   never walk history, however incomplete it looks
-  --window <n>                  identities to probe ahead of the tip, default 16
+  --window <n>                  identities to probe past the last known swap id,
+                                default 16
   --pages <n>                   bound the history walk; default is the whole
                                 history, which ends when the history does
   --execute                     actually submit claims
@@ -140,7 +141,7 @@ await run(async () => {
   // mapping reads, and without it a new or lost store has nothing to reconcile.
   {
     const window = args.window ? Number(args.window) : 16
-    step(`probing for used identities, ${window} past the last hit`)
+    step(`probing for used identities, ${window} past the last known swap id`)
     const discovered = await discoverIdentities(
       client,
       account.viewKey!,
