@@ -174,6 +174,18 @@ describe.runIf(RUN)('blinded identity store on testnet', () => {
     expect(labelled.handle).toMatchObject({ transactionId: state.handle.transactionId })
 
     expect(await waitForOutput(state.handle.swapId!)).toBe(true)
+
+    // What the account is owed, read from the mapping rather than from the
+    // status we just wrote. The handle came back out of the store, so this entry
+    // is claimable by a process that did not make the swap.
+    const owed = await client.getUnclaimedSwaps()
+    const mine = owed.swaps.find((swap) => swap.swapId === state.handle!.swapId)
+    expect(mine, 'the swap just made is not reported as owed').toBeTruthy()
+    expect(mine!.claimable).toBe(true)
+    expect(mine!.output.amount_out).toBeGreaterThan(0n)
+    expect(owed.totals[mine!.output.token_out]).toBeGreaterThanOrEqual(mine!.output.amount_out)
+    expect(owed.unresolvable).toEqual([])
+
     const settled = await client.syncBlindedIdentities()
     // The address is used and its output is still in the mapping: unclaimed.
     expect(settled[0]!.status).toBe('swapped')
@@ -204,6 +216,12 @@ describe.runIf(RUN)('blinded identity store on testnet', () => {
     // disagree for a few seconds after the finalize removes it.
     expect(status).toBe('claimed')
     expect((await fromDisk())[0]!.status).toBe('claimed')
+
+    // And it stops being reported as owed — the entry the claim removed is the
+    // same one that made it claimable, so a stale "still owed" here would send a
+    // caller to claim twice.
+    const owed = await client.getUnclaimedSwaps()
+    expect(owed.swaps.find((swap) => swap.swapId === state.handle!.swapId)).toBeUndefined()
   }, TX)
 
   it('rebuilds a lost store from chain history', async () => {
