@@ -21,7 +21,13 @@
  *   npx tsx swaps.ts --reconcile                  # rebuild from chain history
  *   npx tsx swaps.ts --json
  */
-import { SwapOutputNotFinalizedError } from '@provablehq/shield-swap-sdk'
+import {
+  SwapOutputNotFinalizedError,
+  deriveBlindedAddress,
+  deriveBlindingFactor,
+  viewKeyToScalar,
+} from '@provablehq/shield-swap-sdk'
+import type { BlindedIdentityRecord, BlindedIdentityStore } from '@provablehq/shield-swap-sdk'
 import { loadSession, formatAmount } from './session.js'
 import { flags, setJsonMode, step, done, warn, output, confirmed, run } from './cli.js'
 
@@ -29,13 +35,21 @@ const USAGE = `swaps.ts — unclaimed swap outputs, reconciliation, and claiming
 
   --network <testnet|mainnet>   default testnet
   --claim [swapId]              claim one or (with no value) everything claimable
-  --reconcile                   recover lost swap ids from chain history
+  --reconcile                   rebuild the store: discover the account's used
+                                identities, then recover their swap ids from
+                                chain history
+  --window <n>                  identities to probe ahead of the tip, default 16
   --pages <n>                   history pages for --reconcile, default 8
   --execute                     actually submit claims
   --json                        machine-readable output`
 
 const args = flags(
-  { claim: { type: 'string' }, reconcile: { type: 'boolean' }, pages: { type: 'string' } },
+  {
+    claim: { type: 'string' },
+    reconcile: { type: 'boolean' },
+    pages: { type: 'string' },
+    window: { type: 'string' },
+  },
   USAGE,
 )
 setJsonMode(!!args.json)
@@ -44,10 +58,75 @@ const claimAll = args.claim === ''
 const claimOne = typeof args.claim === 'string' && args.claim !== '' ? args.claim : undefined
 const wantsClaim = claimAll || !!claimOne
 
+/**
+ * Populates the store with identities this account has already consumed.
+ *
+ * A blinded identity is derived, not recorded: nothing on chain lists an
+ * account's identities, and the account cannot enumerate its own. So a store that
+ * starts empty — a first run, or a lost file — knows nothing, and
+ * `reconcileSwapHistory` has no addresses to match history against.
+ *
+ * The only way back is to re-derive. Counters are sequential from 0, so this
+ * walks forward from the store's tip deriving each address and asking
+ * `used_blinded_addresses` whether this account has spent it. A window of hits
+ * extends the search, because gaps are normal — a reverted or dropped swap burns
+ * a counter without consuming its address.
+ *
+ * Recorded as `swapped` with no swap id, which is what they are: consumed on
+ * chain, with their proceeds unlocatable until `reconcileSwapHistory` finds the
+ * claim that names them.
+ *
+ * @param client A composed client with a local account.
+ * @param viewKey The account's view key, for derivation.
+ * @param signer The account address the identities are scoped to.
+ * @param store The store to populate.
+ * @param window Counters to probe past the last hit. Default 16.
+ * @returns The identities discovered, in counter order.
+ */
+export async function discoverIdentities(
+  client: Awaited<ReturnType<typeof loadSession>>['client'],
+  viewKey: string,
+  signer: string,
+  store: BlindedIdentityStore,
+  window = 16,
+): Promise<BlindedIdentityRecord[]> {
+  const existing = await store.load()
+  const known = new Set(existing.map((record) => record.counter))
+  const viewKeyScalar = await viewKeyToScalar(viewKey)
+  const tip = existing.length ? Math.max(...existing.map((record) => record.counter)) : -1
+
+  const found: BlindedIdentityRecord[] = []
+  let counter = tip + 1
+  let sinceHit = 0
+  // Bounded so a wrong view key or program cannot walk forever.
+  const CEILING = 4096
+
+  while (sinceHit < window && counter < CEILING) {
+    if (known.has(counter)) {
+      counter++
+      continue
+    }
+    const blindingFactor = await deriveBlindingFactor(viewKeyScalar, counter)
+    const blindedAddress = await deriveBlindedAddress(blindingFactor, signer)
+    if (await client.isBlindedAddressUsed({ address: blindedAddress })) {
+      step(`counter ${counter} was used by this account`)
+      found.push({ counter, blindingFactor, blindedAddress, status: 'swapped' })
+      sinceHit = 0
+    } else {
+      sinceHit++
+    }
+    counter++
+  }
+
+  if (found.length) await store.save([...existing, ...found])
+  return found
+}
+
 await run(async () => {
-  const { client, network, blindedIdentities } = await loadSession({
+  const { client, account, network, blindedIdentities } = await loadSession({
     network: args.network as string | undefined,
   })
+  if (!account.viewKey) throw new Error('this script needs a local account — a wallet tracks its own identities')
   done(`session on ${network}`)
   // How many identities the store holds at all, so an empty store can be
   // reported as "nothing tracked" rather than "nothing owed" — they mean very
@@ -55,6 +134,23 @@ await run(async () => {
   const tracked = (await blindedIdentities.load()).length
 
   if (args.reconcile) {
+    // Discovery first: history can only be matched against addresses we hold, so
+    // an empty store has to be populated before the walk has anything to find.
+    const window = args.window ? Number(args.window) : 16
+    step(`probing for used identities, ${window} past the last hit`)
+    const discovered = await discoverIdentities(
+      client,
+      account.viewKey!,
+      account.address,
+      blindedIdentities,
+      window,
+    )
+    done(
+      discovered.length
+        ? `discovered ${discovered.length} identity(ies) this account has used`
+        : 'no unrecorded identities found',
+    )
+
     const pages = args.pages ? Number(args.pages) : 8
     step(`walking up to ${pages} pages of claim history — this is the expensive path`)
     const result = await client.reconcileSwapHistory({ maxPages: pages })

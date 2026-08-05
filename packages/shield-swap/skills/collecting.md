@@ -72,9 +72,28 @@ a warning and continues, because the funds are already in the account.
 
 `unresolvable` is the one case needing attention: identities the chain has
 consumed whose swap id the store never recorded. Nothing on chain locates their
-proceeds until a claim exists, so run `client.reconcileSwapHistory()` — it walks
-`claim_swap_output` history and recovers the ids of any that were already
-claimed.
+proceeds until a claim exists.
+
+For a store that is merely missing some ids, `client.reconcileSwapHistory()` walks
+`claim_swap_output` history and recovers them. For a store that is **empty** — a
+first run against an existing account, or a lost file — that walk has nothing to
+match against, because a blinded identity is derived rather than recorded and
+nothing on chain lists an account's own. Use the script instead:
+
+```sh
+npx tsx scripts/swaps.ts --reconcile --pages 32
+```
+
+It re-derives candidate identities from the view key, asks
+`used_blinded_addresses` which ones this account has already spent, writes those
+to the store, and only then walks history to attach swap ids. Rebuilding one
+testnet account this way recovered 36 identities and 22 swap ids from an empty
+file.
+
+Handles cannot be recovered this way — a claim call names the swap but not the
+whole preimage a claim consumes — so a recovered identity with unclaimed proceeds
+is visible but not claimable. That is the argument for a durable store rather
+than relying on recovery.
 
 One ambiguity to know about: `getSwapOutput` reads `null` both before the
 swap finalizes AND after a successful claim consumed the output. If a sweep
