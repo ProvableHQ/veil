@@ -274,15 +274,36 @@ await run(async () => {
   // The history is the point of the script, so it prints whatever else happened —
   // a failed claim or an exhausted page budget still leaves a picture worth
   // seeing, and a caller hunting for funds needs the whole ledger, not a summary.
+  const symbolOf = (tokenId: string) => infoOf(tokenId)?.symbol ?? `${tokenId.slice(0, 8)}…`
+  const decimalsOf = (tokenId: string) => infoOf(tokenId)?.decimals ?? 0
+
   const history = [...records]
     .sort((a, b) => a.counter - b.counter)
-    .map((record) => ({
-      counter: record.counter,
-      status: record.status,
-      swapId: record.swapId ?? null,
-      hasHandle: !!record.handle,
-      blindedAddress: record.blindedAddress,
-    }))
+    .map((record) => {
+      // The handle knows what was sold; the claim knows what came back. Either can
+      // be absent — a recovered identity has neither — so both are nullable rather
+      // than defaulted to zero, which would read as "sold nothing".
+      const handle = record.handle
+      const claim = record.claim
+      const tokenIn = claim?.tokenIn ?? handle?.tokenInId ?? null
+      const tokenOut = claim?.tokenOut ?? handle?.tokenOutId ?? null
+      return {
+        counter: record.counter,
+        status: record.status,
+        swapId: record.swapId ?? null,
+        pair: tokenIn && tokenOut ? `${symbolOf(tokenIn)}→${symbolOf(tokenOut)}` : null,
+        sold: handle ? { amount: BigInt(handle.amountIn), decimals: decimalsOf(handle.tokenInId), symbol: symbolOf(handle.tokenInId) } : null,
+        received: claim ? { amount: BigInt(claim.amountOut), decimals: decimalsOf(claim.tokenOut), symbol: symbolOf(claim.tokenOut) } : null,
+        refunded:
+          claim && BigInt(claim.amountRemaining) > 0n
+            ? { amount: BigInt(claim.amountRemaining), decimals: decimalsOf(claim.tokenIn), symbol: symbolOf(claim.tokenIn) }
+            : null,
+        block: claim?.blockNumber ?? null,
+        hasHandle: !!handle,
+        claimSearched: !!record.claimSearched,
+        blindedAddress: record.blindedAddress,
+      }
+    })
 
   // Collated from the persisted claims rather than a fresh walk: the claim
   // deleted its `swap_outputs` entry, so what a swap moved is only knowable from
@@ -323,16 +344,45 @@ await run(async () => {
     },
     (data) => {
       if (data.history.length) {
-        console.log(`\nidentity history on ${data.network}:\n`)
-        for (const entry of data.history) {
-          const swap = entry.swapId ? `${entry.swapId.slice(0, 18)}…` : '(no swap id)'
+        console.log(`\nswaps so far on ${data.network}:\n`)
+        const header = ['#', 'pair', 'sold', 'received', 'block', 'status', 'note']
+        const rows = data.history.map((entry) => [
+          String(entry.counter),
+          entry.pair ?? '—',
+          entry.sold ? formatAmount(entry.sold.amount, entry.sold.decimals, entry.sold.symbol) : '—',
+          entry.received
+            ? formatAmount(entry.received.amount, entry.received.decimals, entry.received.symbol) +
+              (entry.refunded
+                ? ` (+${formatAmount(entry.refunded.amount, entry.refunded.decimals, entry.refunded.symbol)} back)`
+                : '')
+            : '—',
+          entry.block === null ? '—' : String(entry.block),
+          entry.status,
           // The handle is what makes an unclaimed swap claimable, so its absence
-          // is worth showing next to the status rather than buried.
-          const handle = entry.hasHandle ? 'handle' : entry.status === 'swapped' ? 'NO HANDLE' : ''
-          console.log(
-            `  #${String(entry.counter).padStart(4)}  ${entry.status.padEnd(9)} ${swap.padEnd(21)} ${handle}`,
-          )
-        }
+          // belongs beside the row rather than in a footnote.
+          entry.status === 'swapped' && !entry.hasHandle
+            ? entry.claimSearched
+              ? 'never claimed'
+              : 'no handle'
+            : '',
+        ])
+        // Sized to the contents so symbols and 18-decimal amounts do not wrap into
+        // each other; numeric columns right-aligned to make magnitudes comparable.
+        const widths = header.map((label, column) =>
+          Math.max(label.length, ...rows.map((row) => row[column]!.length)),
+        )
+        const rightAligned = new Set([0, 2, 3, 4])
+        const line = (cells: string[]) =>
+          '  ' +
+          cells
+            .map((cell, column) =>
+              rightAligned.has(column) ? cell.padStart(widths[column]!) : cell.padEnd(widths[column]!),
+            )
+            .join('  ')
+            .trimEnd()
+        console.log(line(header))
+        console.log('  ' + widths.map((width) => '─'.repeat(width)).join('  '))
+        for (const row of rows) console.log(line(row))
       }
     if (!data.owed.length) {
       if (data.tracked === 0) {
