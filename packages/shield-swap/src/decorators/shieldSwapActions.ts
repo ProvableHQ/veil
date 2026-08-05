@@ -70,6 +70,7 @@ import {
 import { getBalances, type GetBalancesParameters, type GetBalancesReturnType } from '../utils/balances.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hints.js'
 import { resolveDexImports, type ResolveDexImportsParameters } from '../utils/imports.js'
+import { resolveToken, listTokens, type TokenInfo } from '../utils/tokens.js'
 import { reserveBlindedIdentity } from '../actions/blinding/reserveBlindedIdentity.js'
 import { syncBlindedIdentities } from '../actions/blinding/syncBlindedIdentities.js'
 import { recordBlindedSwap, type RecordBlindedSwapParameters } from '../actions/blinding/recordBlindedSwap.js'
@@ -122,6 +123,10 @@ export type ShieldSwapActionsConfig = {
  *   given token programs plus the DEX program's own declared imports. Every
  *   write action's `imports` parameter takes the result directly. Hits the
  *   network once per unique program.
+ * @property resolveToken Resolves a token by symbol or id against the client's
+ *   network, so a caller can take `USDCx` from a person and hand an id to an
+ *   action. Cached per client after the first call.
+ * @property listTokens The network's token registry, cached per client.
  * @property reserveBlindedIdentity Reserves the next unused blinded identity
  *   from the configured store and returns it for a swap's `blindedIdentity`.
  *   Required for concurrent swaps from one local account: deriving per swap
@@ -180,6 +185,8 @@ export type ShieldSwapActions = {
   getBalances: (params?: GetBalancesParameters) => Promise<GetBalancesReturnType>
   pickInsertHint: (params: PickInsertHintParameters) => Promise<number>
   resolveDexImports: (params: ResolveDexImportsParameters) => Promise<Record<string, string>>
+  resolveToken: (symbolOrId: string) => Promise<TokenInfo>
+  listTokens: () => Promise<TokenInfo[]>
   reserveBlindedIdentity: (params?: { program?: string; maxScan?: number }) => Promise<BlindedIdentityRecord>
   recordBlindedSwap: (params: RecordBlindedSwapParameters) => Promise<boolean>
   syncBlindedIdentities: (params?: { program?: string }) => Promise<BlindedIdentityRecord[]>
@@ -320,6 +327,8 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       getBalances: (p) => getBalances(client, api ?? missingApi, p),
       pickInsertHint: (p) => pickInsertHint(client, withTicks(withProgram(p))),
       resolveDexImports: (p) => resolveDexImports(client, withProgram(p)),
+      resolveToken: (symbolOrId) => resolveToken(api ?? missingApi, symbolOrId),
+      listTokens: () => listTokens(api ?? missingApi),
       reserveBlindedIdentity: (p) =>
         reserveBlindedIdentity(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
       recordBlindedSwap: (p) => recordBlindedSwap(blindedIdentities, p),
