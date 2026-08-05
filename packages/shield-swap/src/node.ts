@@ -44,7 +44,11 @@ export function fileBlindedIdentityStore(path: string): BlindedIdentityStore {
         // restart counters at 0 and re-derive identities that are already in
         // flight — the collision this store exists to prevent.
         const code = (cause as { code?: string } | undefined)?.code
-        if (code === 'ENOENT' || code === 'ENOTDIR') return []
+        // ENOENT only. ENOTDIR means a component of the path is not a
+        // directory — a malformed path, not a missing file — and treating that
+        // as empty would restart counters at 0 against a store that may well
+        // exist somewhere else.
+        if (code === 'ENOENT') return []
         throw new Error(
           `Blinded identity store ${path} could not be read (${code ?? 'unknown error'}). ` +
             'Refusing to restart counters, which would collide with reservations recorded there.',

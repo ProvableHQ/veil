@@ -94,12 +94,15 @@ import { ApiClient, authenticateWithAccount, defaultApiUrl, type ApiClientOption
  * @property program shield_swap program id every action defaults to. Set it
  *   once to point the whole surface at another deployment; per-call
  *   `program` still overrides.
- * @property blindedIdentities Where {@link ShieldSwapActions.reserveBlindedIdentity}
- *   records reservations. Defaults to a per-client in-memory store, which keeps
- *   concurrent swaps in one process off each other but rescans the chain on
- *   restart; pass `fileBlindedIdentityStore` from
- *   `@provablehq/shield-swap-sdk/node` to persist them. Ignored by wallet
- *   accounts, which track their own.
+ * @property blindedIdentities Where identities are reserved and swaps recorded,
+ *   used by `reserveBlindedIdentity` and by `swap`, `swapMultiHop`, and
+ *   `claimSwapOutput`. Defaults to a per-client in-memory store, so concurrent
+ *   swaps through one client are safe out of the box; that store is lost on
+ *   restart, which costs a chain rescan for the next counter and forgets any
+ *   unclaimed swap, so pass `fileBlindedIdentityStore` from
+ *   `@provablehq/shield-swap-sdk/node` for anything long-running. Ignored by
+ *   wallet accounts, which derive identities the client never sees. A per-call
+ *   `blindedIdentities: undefined` opts that call out of tracking entirely.
  */
 export type ShieldSwapActionsConfig = {
   api?: ApiClientOptions | ApiClient
@@ -260,11 +263,13 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     // gets the exact predecessor from the API's tick list rather than a
     // best-effort guess from the slot. Only consulted on that path, so a client
     // with the peer never pays the request.
-    // The configured store, threaded to the actions that track identities. A
-    // caller's own value wins, so a per-call store or an explicit opt-out both
-    // work without a flag.
+    // The configured store, threaded to the actions that track identities.
+    // Presence rather than truthiness: a caller who writes
+    // `blindedIdentities: undefined` is opting out of tracking for that call, and
+    // a truthy test would inject the default over the top of that intent. Absent
+    // key means "not specified", which is what takes the default.
     const withStore = <P extends { blindedIdentities?: BlindedIdentityStore }>(p: P): P =>
-      p.blindedIdentities ? p : { ...p, blindedIdentities }
+      'blindedIdentities' in p ? p : { ...p, blindedIdentities }
 
     const withTicks = <P extends { poolKey: string; initializedTicks?: unknown }>(p: P): P => {
       if (p.initializedTicks || !api) return p

@@ -441,9 +441,11 @@ swaps started together scan the chain, both see the same counter unused, and the
 second reverts on finalize after the first consumes it. Nothing surfaces locally,
 because at proving time the address genuinely was unused.
 
-Configure a store and the swap actions handle it for you. `swap` and
-`swapMultiHop` reserve the identity before submitting and record the resulting
-handle after, and `claimSwapOutput` marks it claimed:
+The swap actions handle this for you. `swap` and `swapMultiHop` reserve the
+identity before submitting and record the resulting handle after, and
+`claimSwapOutput` marks it claimed. A composed client gets an in-memory store by
+default, so the two swaps below cannot collide even with no configuration — but
+that store dies with the process, so name a file one for anything long-running:
 
 ```ts
 import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
@@ -463,12 +465,16 @@ Reservations serialize, so each swap gets its own counter, and each is written
 before its transaction is submitted — which is what keeps an unconfirmed swap from
 having its counter handed out again.
 
-Omit `blindedIdentities` and nothing changes from the SDK's older behaviour: the
-identity is derived by scanning the chain, no local state is kept, and concurrency
-is your problem. With an in-memory store, concurrent swaps in one process are safe
-but a restart rescans for its starting counter. Two processes sharing one account
-need one store between them — the chain read alone cannot close that window,
+What the default in-memory store does not give you is persistence: a restart
+rescans the chain for its next counter, and forgets any swap it had not yet
+claimed. The on-disk store keeps both. Two processes sharing one account need one
+store between them either way — the chain read alone cannot close that window,
 because the check and the submission are not atomic.
+
+To opt a single call out of tracking, pass `blindedIdentities: undefined`; the
+identity is then derived by scanning the chain and nothing is written. The
+standalone `swap(client, params)` export tracks only when handed a store, so it
+behaves as it always has unless you pass one.
 
 `syncBlindedIdentities` reconciles the store against chain: `swapped` while the
 output is still in `swap_outputs`, `claimed` once a claim consumes it. Recorded

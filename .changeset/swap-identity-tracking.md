@@ -10,11 +10,17 @@ sequence and reverts in parallel. `swap` and `swapMultiHop` now reserve before
 submitting and record the resulting handle after, and `claimSwapOutput` marks the
 identity claimed. Two concurrent `client.swap()` calls can no longer collide.
 
-Everything is conditional on `blindedIdentities` being configured. Without a store,
-behaviour is exactly as before: chain-scan derivation, no local writes, no new
-error paths. Passing `blindedIdentity` explicitly opts out per call — that is the
-flag, so there is no boolean to contradict the config — and wallet accounts are
-untouched, since they derive identities the client never sees.
+Tracking follows the store. `shieldSwapActions` supplies an in-memory one when
+none is configured, so a composed client is concurrency-safe out of the box —
+without persistence, so a restart rescans the chain for its next counter and
+forgets any unclaimed swap. Configure `fileBlindedIdentityStore` for anything
+long-running. The standalone `swap(client, params)` tracks only when handed a
+store, so its behaviour is unchanged from before.
+
+Two per-call opt-outs, and no boolean flag to contradict the config: pass
+`blindedIdentity` to supply your own identity, or `blindedIdentities: undefined` to
+skip tracking for that call. Wallet accounts are untouched either way, since they
+derive identities the client never sees.
 
 Records now carry the whole handle, not just the swap id, because
 `claimSwapOutput` consumes a handle. That makes crash recovery real: a process can
