@@ -90,6 +90,19 @@ export async function planSwap(
   api: ApiClient,
   params: PlanSwapParameters,
 ): Promise<SwapPlan> {
+  // First, before any network call: the floor arithmetic below fails three ways on
+  // a bad value — `BigInt` throws a RangeError on `NaN` or a fraction, above 10000
+  // the multiplier goes negative, and below 0 the floor rises ABOVE the quote so
+  // every swap reverts for demanding more than the pool offers. All three are
+  // reachable from `Number(someFlag)`, and none is worth a token lookup and a
+  // route fetch to discover.
+  const slippageBps = params.slippageBps ?? 50
+  if (!Number.isInteger(slippageBps) || slippageBps < 0 || slippageBps > 10_000) {
+    throw new Error(
+      `slippageBps must be a whole number of basis points between 0 and 10000, got ${slippageBps}. ` +
+        '50 is 0.5%; 10000 accepts any fill.',
+    )
+  }
   const [from, to] = await Promise.all([
     tokenData(api, params.from),
     tokenData(api, params.to),
@@ -145,7 +158,6 @@ export async function planSwap(
     ...(params.program ? { program: params.program } : {}),
   })
 
-  const slippageBps = params.slippageBps ?? 50
   // The API quotes in decimal units of the output token, not base units — a
   // BigInt of "1.0304…" throws, and rounding it through a double would move the
   // slippage floor. Convert on the string with the token's own decimals.

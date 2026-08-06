@@ -146,6 +146,34 @@ describe('planSwap', () => {
     ).rejects.toThrow(/no route from USDCx to ETH/)
   })
 
+  it('refuses a slippage the floor arithmetic cannot take, before any network call', async () => {
+    // Each of these reaches the caller from `Number(someFlag)`: NaN and a fraction
+    // make `BigInt(10_000 - bps)` throw a RangeError, above 10000 the multiplier
+    // goes negative, and below 0 the floor rises ABOVE the quote so every swap
+    // reverts for demanding more than the pool offers.
+    const scripted = api([{ pool_key: POOL_A, token_in: USDC, token_out: ETH }], '1')
+    for (const slippageBps of [Number.NaN, 0.5, 10_001, -1]) {
+      await expect(
+        planSwap(chain(), scripted.api, { from: 'USDCx', to: 'ETH', amountIn: 1n, slippageBps }),
+      ).rejects.toThrow(/basis points between 0 and 10000/)
+    }
+    // Rejected before the route is fetched, so a bad flag costs no round trips.
+    expect(scripted.sentAmountIn()).toBeUndefined()
+  })
+
+  it('accepts the boundaries', async () => {
+    for (const slippageBps of [0, 10_000]) {
+      const plan = await planSwap(chain(), api([{ pool_key: POOL_A, token_in: USDC, token_out: ETH }], '1000').api, {
+        from: 'USDCx',
+        to: 'ETH',
+        amountIn: 1n,
+        slippageBps,
+      })
+      // 0 bps holds the floor at the quote; 10000 drops it to zero, accepting any fill.
+      expect(plan.minOut).toBe(slippageBps === 0 ? plan.expectedOut : 0n)
+    }
+  })
+
   it('refuses to swap a token for itself', async () => {
     await expect(
       planSwap(chain(), api([]).api, { from: 'USDCx', to: 'usdcx', amountIn: 1n }),

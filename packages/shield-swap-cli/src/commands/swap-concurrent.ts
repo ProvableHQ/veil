@@ -25,7 +25,7 @@
 import { SwapOutputNotFinalizedError, parseUnits } from '@provablehq/shield-swap-sdk'
 import type { SwapPlan } from '@provablehq/shield-swap-sdk'
 import { loadSession, formatAmount } from '../session.js'
-import { flags, step, done, warn, output, confirmed, run, fail } from '../shared.js'
+import { flags, step, done, warn, output, confirmed, run, fail, basisPoints } from '../shared.js'
 
 const USAGE = `shield-swap swap-concurrent — run several swaps at once
 
@@ -58,6 +58,9 @@ export async function main(argv: string[]): Promise<void> {
   const specs = (args.swap as string[] | undefined) ?? []
   if (specs.length < 2) fail(`pass at least two --swap arguments.\n\n${USAGE}`)
 
+  // Validated before the session is built, so a bad flag costs no network calls.
+  const slippageBps = basisPoints(args.slippage as string | undefined, '--slippage')
+
   await run(async () => {
     const { client, network } = await loadSession({ network: args.network as string | undefined })
     done(`session on ${network}`)
@@ -76,7 +79,7 @@ export async function main(argv: string[]): Promise<void> {
         from: token.id,
         to,
         amountIn: parseUnits(amount, token.decimals),
-        ...(args.slippage ? { slippageBps: Number(args.slippage) } : {}),
+        ...(slippageBps === undefined ? {} : { slippageBps }),
       })
       legs.push(plan)
     }

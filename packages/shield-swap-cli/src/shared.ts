@@ -79,6 +79,29 @@ export function flags<T extends Record<string, { type: 'string' | 'boolean'; mul
 }
 
 /**
+ * Reads a basis-points flag, rejecting what the arithmetic downstream cannot take.
+ *
+ * `Number(flag)` yields `NaN` for a typo and a fraction for `0.5`, and neither
+ * survives the floor calculation in `planSwap`: it multiplies by
+ * `BigInt(10_000 - bps)`, which throws on both. Above 10000 the multiplier goes
+ * negative, and below 0 the floor rises above the quote so every swap reverts for
+ * demanding more than the pool offers. Checked here so the failure names the flag
+ * and costs no network calls, rather than surfacing from inside a plan.
+ *
+ * @param value The raw flag, or `undefined` when it was not passed.
+ * @param flag The flag's name, for the error.
+ * @returns The parsed basis points, or `undefined` to leave the default in place.
+ */
+export function basisPoints(value: string | undefined, flag: string): number | undefined {
+  if (value === undefined) return undefined
+  const bps = Number(value)
+  if (!Number.isInteger(bps) || bps < 0 || bps > 10_000) {
+    fail(`${flag} takes a whole number of basis points between 0 and 10000, got "${value}". 50 is 0.5%.`)
+  }
+  return bps
+}
+
+/**
  * Reports a malformed invocation and exits `64` (`EX_USAGE`).
  *
  * Used for failures that happen before {@link setJsonMode} can run — an unknown

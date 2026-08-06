@@ -21,7 +21,7 @@
  */
 import { SwapOutputNotFinalizedError, parseUnits } from '@provablehq/shield-swap-sdk'
 import { loadSession, formatAmount } from '../session.js'
-import { flags, step, done, warn, output, confirmed, run, fail } from '../shared.js'
+import { flags, step, done, warn, output, confirmed, run, fail, basisPoints } from '../shared.js'
 
 const USAGE = `shield-swap swap — sell one token for another and claim the output
 
@@ -57,6 +57,9 @@ export async function main(argv: string[]): Promise<void> {
   if (!args.from || !args.to) fail(`--from and --to are required.\n\n${USAGE}`)
   if (!args.amount && !args['amount-raw']) fail(`--amount or --amount-raw is required.\n\n${USAGE}`)
 
+  // Validated before the session is built, so a bad flag costs no network calls.
+  const slippageBps = basisPoints(args.slippage as string | undefined, '--slippage')
+
   await run(async () => {
     const { client, network } = await loadSession({ network: args.network as string | undefined })
     done(`session on ${network}`)
@@ -83,7 +86,7 @@ export async function main(argv: string[]): Promise<void> {
       from: from.id,
       to: args.to as string,
       amountIn,
-      ...(args.slippage ? { slippageBps: Number(args.slippage) } : {}),
+      ...(slippageBps === undefined ? {} : { slippageBps }),
     })
     done(`${plan.multiHop ? `${plan.poolKeys.length}-hop route` : 'direct pool'} found`)
 

@@ -65,8 +65,13 @@ export async function mint() {
     poolKey: pool.key,
     tickLower: preview.tickLower,
     tickUpper: preview.tickUpper,
-    amount0Desired: preview.amount0Desired,
-    amount1Desired: preview.amount1Desired,
+    // The amounts the preview said the range consumes, not the budget it was
+    // given: those are what the lines above printed, and passing them caps the
+    // mint at what was shown even if the price moves between this read and the
+    // finalize. Passing the budget back would let it consume more than the
+    // preview promised.
+    amount0Desired: preview.amount0,
+    amount1Desired: preview.amount1,
     recipient: account.address,
     // Fixed for the life of the position: every collect pays here, and it cannot
     // be changed afterwards. Usually the same as the owner.
