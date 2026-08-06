@@ -41,7 +41,7 @@
   },
   "files": [
     "dist",
-    "skills"
+    "skills/*.md"
   ],
   "engines": {
     "node": ">=18"

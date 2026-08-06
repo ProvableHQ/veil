@@ -15,11 +15,11 @@
  *                            then poll until the PRIVATE records land
  *
  * Usage:
- *   npx tsx setup.ts --new                            # brand-new account
- *   npx tsx setup.ts --network mainnet --private-key-file <path>   # mainnet
- *   npx tsx setup.ts --private-key-file <path>        # returning user (key in a file)
- *   npx tsx setup.ts --invite-code CODE               # when access is locked
- *   npx tsx setup.ts --api-url <origin>               # pin a DEX API deployment
+ *   shield-swap setup --new                            # brand-new account
+ *   shield-swap setup --network mainnet --private-key-file <path>   # mainnet
+ *   shield-swap setup --private-key-file <path>        # returning user (key in a file)
+ *   shield-swap setup --invite-code CODE               # when access is locked
+ *   shield-swap setup --api-url <origin>               # pin a DEX API deployment
  *
  * A private key is NEVER pasted into a conversation or command history: a
  * returning user either writes it to a file and passes the path, or exports
@@ -53,29 +53,58 @@ import {
   loadSession,
   formatAmount,
   pollUntil,
-} from './session.js'
+} from '../session.js'
 
-function argValue(flag: string): string | undefined {
-  const i = process.argv.indexOf(flag)
-  return i >= 0 ? process.argv[i + 1] : undefined
+const USAGE = `shield-swap setup — bootstrap an account and get it funded
+
+  --new                         generate a brand-new account
+  --private-key-file <path>     import an existing key, read from this file
+  --consumer-id <id>            Provable API consumer id (else self-registers)
+  --api-key <key>               Provable API key
+  --invite-code <code>          redeem an invite code when access is locked
+  --api-url <origin>            pin a DEX API deployment
+  --network <testnet|mainnet>   default testnet
+
+Every step is check-then-act, so re-running resumes where a failed run stopped.
+
+A private key is NEVER pasted into a conversation or command history: write it
+to a file and pass --private-key-file, or export SHIELD_SWAP_PRIVATE_KEY in your
+own shell. Other environment fallbacks: SHIELD_SWAP_PRIVATE_KEY_FILE,
+ALEO_CONSUMER_ID, ALEO_DPS_API_KEY, SHIELD_SWAP_INVITE_CODE, SHIELD_SWAP_API_URL.
+
+Exit codes: 0 ready · 2 needs input from the user · 3 airdrop still pending ·
+1 anything else.`
+
+/**
+ * Reads a `--flag value` pair out of the arguments.
+ *
+ * `setup` keeps its own reader rather than using the shared `flags()`: every
+ * option is an optional string with an environment-variable fallback, and none
+ * of them gate a transaction, so the strict unknown-flag rejection that
+ * protects the spending commands would only get in the way here.
+ *
+ * @param argv Arguments after the subcommand name.
+ * @param flag The flag to look for, leading dashes included.
+ * @returns The argument that follows the flag, or undefined when it is absent.
+ */
+function argValue(argv: string[], flag: string): string | undefined {
+  const i = argv.indexOf(flag)
+  return i >= 0 ? argv[i + 1] : undefined
 }
 
-const inviteCode = argValue('--invite-code') ?? process.env.SHIELD_SWAP_INVITE_CODE
-const consumerId = argValue('--consumer-id') ?? process.env.ALEO_CONSUMER_ID
-const apiKey = argValue('--api-key') ?? process.env.ALEO_DPS_API_KEY
-// Flag-only on purpose: SHIELD_SWAP_API_URL stays an ephemeral per-run
-// override (see loadSession); only an explicit --api-url pins the
-// deployment and resets deployment-scoped state.
-const network = resolveNetwork(argValue('--network'))
-const apiUrl = argValue('--api-url')?.replace(/\/$/, '')
-const credentialStore = fileCredentialStore(credentialsPath(network))
-const allowGenerate = process.argv.includes('--new')
-
-// The key itself never travels through a conversation or the command line:
-// it is read from a file the user wrote, or from an env var the user
-// exported in their own shell.
-function resolveImportKey(): string | undefined {
-  const keyFile = argValue('--private-key-file') ?? process.env.SHIELD_SWAP_PRIVATE_KEY_FILE
+/**
+ * Resolves the private key to import, when the caller is restoring an account.
+ *
+ * The key itself never travels through a conversation or the command line: it
+ * is read from a file the user wrote, or from an env var the user exported in
+ * their own shell.
+ *
+ * @param argv Arguments after the subcommand name.
+ * @returns The key to import, or undefined when this is a fresh account.
+ * @throws If the named key file exists but is empty.
+ */
+function resolveImportKey(argv: string[]): string | undefined {
+  const keyFile = argValue(argv, '--private-key-file') ?? process.env.SHIELD_SWAP_PRIVATE_KEY_FILE
   if (keyFile) {
     const key = readFileSync(keyFile, 'utf8').trim()
     if (!key) throw new Error(`private key file ${keyFile} is empty`)
@@ -83,9 +112,25 @@ function resolveImportKey(): string | undefined {
   }
   return process.env.SHIELD_SWAP_PRIVATE_KEY
 }
-const importKey = resolveImportKey()
 
-async function main() {
+/**
+ * Bootstraps the account, one idempotent step at a time.
+ *
+ * @param argv Arguments after the subcommand name.
+ */
+async function setup(argv: string[]): Promise<void> {
+  const inviteCode = argValue(argv, '--invite-code') ?? process.env.SHIELD_SWAP_INVITE_CODE
+  const consumerId = argValue(argv, '--consumer-id') ?? process.env.ALEO_CONSUMER_ID
+  const apiKey = argValue(argv, '--api-key') ?? process.env.ALEO_DPS_API_KEY
+  // Flag-only on purpose: SHIELD_SWAP_API_URL stays an ephemeral per-run
+  // override (see loadSession); only an explicit --api-url pins the
+  // deployment and resets deployment-scoped state.
+  const network = resolveNetwork(argValue(argv, '--network'))
+  const apiUrl = argValue(argv, '--api-url')?.replace(/\/$/, '')
+  const credentialStore = fileCredentialStore(credentialsPath(network))
+  const allowGenerate = argv.includes('--new')
+  const importKey = resolveImportKey(argv)
+
   // ── 1 + 2: key material and Provable API credentials ────────────────
   let state = loadState(network)
   console.log(`network: ${network}  ·  state: ${stateDir(network)}`)
@@ -144,7 +189,10 @@ async function main() {
   }
 
   // ── 3: wire the client and authenticate with the DEX API ────────────
-  const { client, account } = await loadSession()
+  // The network must be passed explicitly: loadSession defaults to testnet, so
+  // omitting it would authenticate, register, and redeem against testnet while
+  // writing the results into the network-scoped state this script resolved.
+  const { client, account } = await loadSession({ network })
   console.log('✓ DEX API session established (challenge/verify)')
 
   // Front-loaded on purpose: registration would otherwise happen on the first
@@ -162,7 +210,7 @@ async function main() {
       console.error(
         '\nNEEDS_INVITE_CODE: this account has not redeemed an invite code, so ' +
           'the DEX API is locked. Ask the user for their invite code, then re-run:\n' +
-          '  npx tsx setup.ts --invite-code <code>\n',
+          '  shield-swap setup --invite-code <code>\n',
       )
       process.exit(2)
     }
@@ -249,7 +297,7 @@ async function main() {
       console.error(
         `\nAIRDROP_PENDING: faucet job ${state.airdropJobId} has not completed yet ` +
           `(last status: ${job ? (job as { status?: string }).status : 'unknown'}). ` +
-          'Re-run setup.ts in a few minutes — it resumes this job, it does not double-request.\n',
+          'Re-run `shield-swap setup` in a few minutes — it resumes this job, it does not double-request.\n',
       )
       process.exit(3)
     }
@@ -262,7 +310,7 @@ async function main() {
       console.error(
         `\nAIRDROP_FAILED: faucet job finished with rejected transfers: ` +
           `${rejected.map((r: { symbol?: string; status?: string }) => `${r.symbol}:${r.status}`).join(', ')}. ` +
-          'Re-run setup.ts to request a fresh airdrop.\n',
+          'Re-run `shield-swap setup` to request a fresh airdrop.\n',
       )
       process.exit(3)
     }
@@ -272,7 +320,7 @@ async function main() {
     if (!landed) {
       console.error(
         '\nAIRDROP_PENDING: the faucet finished but the records are not scannable ' +
-          'yet (the record service indexes asynchronously). Re-run setup.ts in a ' +
+          'yet (the record service indexes asynchronously). Re-run `shield-swap setup` in a ' +
           'few minutes — it resumes this job, it does not double-request.\n',
       )
       process.exit(3)
@@ -296,9 +344,13 @@ async function main() {
       'list otherwise) offering ALL SEVEN options below, in this order. Free-form ' +
       'input stays available as the escape hatch ("Other"); map whatever the user ' +
       'types onto the runbooks before improvising against the SDK. Do not pick for ' +
-      'them. Frame the setting first: Shield Swap is a private exchange on Aleo\'s ' +
-      'test network — trading uses test tokens, and what is traded, and by whom, ' +
-      'stays hidden on the public chain.\n\n' +
+      'them. Frame the setting first: Shield Swap is a private exchange on Aleo — ' +
+      'what is traded, and by whom, stays hidden on the public chain. ' +
+      (network === 'mainnet'
+        ? 'This account is on MAINNET: every trade below moves real funds, and there ' +
+          'is no faucet to recover from a mistake. Say so before the user picks.'
+        : 'This account is on the test network, so trading uses test tokens.') +
+      '\n\n' +
       '1. Develop on Shield Swap (developing.md). For a user building their own\n' +
       '   dApp, trading bot, or server/agent integration rather than trading\n' +
       '   here. If chosen, FIRST ask what they are building, then follow\n' +
@@ -329,7 +381,29 @@ async function main() {
   )
 }
 
-main().catch((err) => {
-  console.error('\nSETUP_FAILED:', err instanceof Error ? err.message : err)
-  process.exit(1)
-})
+
+/**
+ * Runs the `setup` subcommand.
+ *
+ * Failures are reported as `SETUP_FAILED: <message>` with exit 1, which
+ * startup.md documents as the signal to read the message and retry once
+ * before digging — the step-specific exits (`NEEDS_CONFIG_DECISION`,
+ * `NEEDS_INVITE_CODE`) leave from inside {@link setup} with their own codes.
+ *
+ * @param argv Arguments after the subcommand name, as the dispatcher supplies them.
+ */
+export async function main(argv: string[]): Promise<void> {
+  // Checked before anything else: setup's first act is to read and migrate the
+  // state file, so a --help that fell through would bootstrap the account it
+  // was only asked to describe.
+  if (argv.includes('--help') || argv.includes('-h')) {
+    console.log(USAGE)
+    return
+  }
+  try {
+    await setup(argv)
+  } catch (error) {
+    console.error('\nSETUP_FAILED:', error instanceof Error ? error.message : error)
+    process.exit(1)
+  }
+}

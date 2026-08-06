@@ -39,6 +39,23 @@ If you sign with a local private key (bots, scripts, tests) you also need
 swaps are claimed with. If your app connects to a wallet instead, the wallet
 does that derivation itself and you can skip the dependency.
 
+To drive the DEX from a terminal rather than build against the client, install
+`@provablehq/shield-swap-cli` instead — it ships a `shield-swap` command
+covering setup, pool and balance reads, swaps, and liquidity.
+
+## Examples
+
+Worked examples of everything below live in
+[`examples/shield-swap/`](https://github.com/ProvableHQ/veil/tree/main/examples/shield-swap):
+account bootstrap, pool reads, quoting, balances, swap history, swaps, minting a
+position, and taking liquidity back out. Each one is a single file that reads top
+to bottom.
+
+[Open them in StackBlitz](https://stackblitz.com/github/ProvableHQ/veil/tree/main/examples/shield-swap)
+to browse the set in an editor. The pool and token reads run there as they are;
+anything that signs needs credentials, and a private key does not belong in a
+hosted sandbox — run those locally.
+
 ## Setup
 
 The client signs one of two ways. Pick the one that fits — every DEX method is
@@ -629,6 +646,45 @@ Positions are concentrated-liquidity ranges, held as private records. Both
 mint and increase spend token records, so — like [swapping](#request-the-swap)
 — they differ by signer: a local key auto-selects records, a wallet supplies
 them as `record` InputRequests.
+
+### Preview a mint
+
+A deposit is not the pair of amounts you offer — it is what the range consumes
+out of them, and the two differ at every price except the one your amounts happen
+to balance at. `previewMint` reports the difference before you sign: the bounds
+after alignment to the pool's tick spacing, the liquidity the budget backs there,
+and how much of each side the mint actually takes. It reads three mappings and
+writes nothing.
+
+Give it explicit ticks, or a `rangePercent` half-width in percent of the current
+price (the default is 5, so ±5% around the market):
+
+```ts
+const preview = await client.previewMint({
+  poolKey,
+  amount0Desired: 10n ** 18n,
+  amount1Desired: 2_000_000n,
+  rangePercent: 5,
+})
+
+if (preview.liquidity === 0n) throw new Error('that budget backs nothing over this range')
+if (!preview.inRange) console.log('the price sits outside the range — it will earn nothing yet')
+
+await client.mint({
+  poolKey,
+  tickLower: preview.tickLower,
+  tickUpper: preview.tickUpper,
+  amount0Desired: preview.amount0,   // what the range consumes, not the budget
+  amount1Desired: preview.amount1,
+  recipient: account.address,
+  withdrawal: account.address,
+  imports,
+})
+```
+
+`feeTierSpacing` comes back alongside the pool's own `tickSpacing`. They agree on
+a healthy pool; when they do not, the pool has drifted from the fee tier it was
+created under, and the pool's spacing is the one the contract aligns to.
 
 ### Mint a position
 

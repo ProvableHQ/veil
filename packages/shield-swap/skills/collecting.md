@@ -17,7 +17,7 @@ lets a later process claim a swap it did not make.
 
 ```ts
 import { SwapOutputNotFinalizedError } from '@provablehq/shield-swap-sdk'
-import { loadSession, formatAmount } from '$SKILLS/scripts/session.js'
+import { loadSession, formatAmount } from '@provablehq/shield-swap-cli/session'
 
 const { client } = await loadSession()
 const tokens = (await client.api.getTokens()).data
@@ -81,7 +81,7 @@ match against, because a blinded identity is derived rather than recorded and
 nothing on chain lists an account's own. Use the script instead:
 
 ```sh
-npx tsx scripts/swap-history.ts --reconcile --pages 32
+npx @provablehq/shield-swap-cli history --reconcile --pages 32
 ```
 
 It re-derives candidate identities from the view key, asks
@@ -110,7 +110,7 @@ settles withdrawn principal into the same place. `collect` withdraws owed
 balances to private records.
 
 ```ts
-import { formatAmount } from '$SKILLS/scripts/session.js'
+import { formatAmount } from '@provablehq/shield-swap-cli/session'
 
 const tokens = (await client.api.getTokens()).data
 const tokenOf = (program: string) => tokens.find((t) => t.amm_token_program === program)
@@ -157,7 +157,7 @@ position has in-range liquidity — sweep periodically.
 After a sweep, the claimed and collected amounts appear as private records:
 
 ```ts
-import { formatAmount } from '$SKILLS/scripts/session.js'
+import { formatAmount } from '@provablehq/shield-swap-cli/session'
 const balances = await client.getBalances()
 for (const b of Object.values(balances)) console.log(formatAmount(b.private, b.decimals, b.symbol), 'private')
 ```

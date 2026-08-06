@@ -1,11 +1,14 @@
 /**
- * Shared session plumbing for the shield-swap agent skills.
+ * Shared session plumbing for the `shield-swap` command.
  *
- * Owns the state file (`./.shield-swap/state.json` by default) and the
- * client wiring, so every runbook snippet starts from `loadSession()` and
- * gets a fully authenticated client plus persistent storage for the one thing
- * that must survive a crash and cannot be rediscovered: the private key, plus
- * the DEX grants tied to it.
+ * Owns the state file (`./.shield-swap/<network>/state.json` by default) and
+ * the client wiring, so every command starts from `loadSession()` and gets a
+ * fully authenticated client plus persistent storage for the one thing that
+ * must survive a crash and cannot be rediscovered: the private key, plus the
+ * DEX grants tied to it.
+ *
+ * Exported as `@provablehq/shield-swap-cli/session` so a script driving the SDK
+ * directly can share the same state file the command line writes.
  *
  * Nothing else is stored. Swap handles belong to the SDK's blinded identity
  * store, and positions are discovered from records with
@@ -27,7 +30,7 @@ import {
   generateAccount,
 } from '@provablehq/veil-aleo-sdk'
 import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
-import { shieldSwapActions, getPrivateBalances, DEFAULT_PROGRAM } from '@provablehq/shield-swap-sdk'
+import { shieldSwapActions, getPrivateBalances, parseUnits, DEFAULT_PROGRAM } from '@provablehq/shield-swap-sdk'
 import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
 
 /** The networks these scripts run against. */
@@ -59,7 +62,7 @@ export type ShieldSwapState = {
   network: string
   /**
    * DEX API origin this session targets. Unset means the SDK's default
-   * hosted deployment. Set by setup.ts (`--api-url` / SHIELD_SWAP_API_URL);
+   * hosted deployment. Set by `shield-swap setup` (`--api-url` / SHIELD_SWAP_API_URL);
    * the access grant, API token, and airdrop job are scoped to one
    * deployment, so setup clears them when this changes.
    */
@@ -94,7 +97,7 @@ export function blindedStorePath(network: Network): string {
 /**
  * Where Provable API credentials live for a network.
  *
- * Separate from the state file because the SDK owns the format: `setup.ts`
+ * Separate from the state file because the SDK owns the format: `shield-swap setup`
  * hands `fileCredentialStore` this path and the client reads and writes it
  * directly, including registering a consumer when the file is absent.
  */
@@ -166,16 +169,81 @@ export function formatAmount(amount: bigint, decimals: number, symbol?: string):
   return symbol ? `${s} ${symbol}` : s
 }
 
+/** What {@link namedAmounts} needs of a pool's token to place an amount. */
+export type AmountToken = { id: string; symbol: string; decimals: number }
+
+/**
+ * Places caller-named amounts into a pool's own token order.
+ *
+ * A pool orders its tokens by id, not by anything a caller types, so `--amount0`
+ * is unknowable without reading the pool first: naming a pair `USDCx:ETH` does
+ * not make USDCx side 0. `--amount USDCx:0.5` names the token instead and is
+ * matched here, while `--amount0`/`--amount1` stay available for callers who know
+ * the order. Parsing is the inverse of {@link formatAmount}: human decimals in,
+ * raw base units out. Pure and local.
+ *
+ * @param params.entries `--amount` values, each `<symbol|id>:<decimal>`.
+ * @param params.indexed The raw `--amount0` and `--amount1` strings, in that
+ *   order, `undefined` where the flag was absent.
+ * @param params.tokens The pool's tokens in ITS order — `[token0, token1]`.
+ * @returns Raw base units per side, `undefined` where nothing named that side.
+ * @throws When an entry is malformed, names a token outside the pair, or names a
+ *   side twice — including once by symbol and once by index, where preferring
+ *   either would commit an amount the caller did not ask for.
+ *
+ * @example
+ * const { amount0, amount1 } = namedAmounts({
+ *   entries: ['USDCx:0.5'],
+ *   indexed: [undefined, undefined],
+ *   tokens: [token0, token1],
+ * })
+ */
+export function namedAmounts(params: {
+  entries: string[]
+  indexed: readonly [string | undefined, string | undefined]
+  tokens: readonly [AmountToken, AmountToken]
+}): { amount0: bigint | undefined; amount1: bigint | undefined } {
+  const [token0, token1] = params.tokens
+  const amounts: Array<bigint | undefined> = [
+    params.indexed[0] ? parseUnits(params.indexed[0], token0.decimals) : undefined,
+    params.indexed[1] ? parseUnits(params.indexed[1], token1.decimals) : undefined,
+  ]
+  // Tracked alongside so a collision can name both flags rather than just the token.
+  const namedBy = [params.indexed[0] ? '--amount0' : undefined, params.indexed[1] ? '--amount1' : undefined]
+
+  for (const entry of params.entries) {
+    const parts = entry.split(':')
+    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+      throw new Error(`--amount takes <symbol>:<amount>, e.g. --amount ${token0.symbol}:0.5 — got "${entry}"`)
+    }
+    const [name, value] = parts as [string, string]
+    const wanted = name.trim()
+    const side = [token0, token1].findIndex(
+      (token) => token.symbol.toLowerCase() === wanted.toLowerCase() || token.id === wanted,
+    )
+    if (side === -1) {
+      throw new Error(`"${wanted}" is not in this pool's pair — it holds ${token0.symbol} and ${token1.symbol}.`)
+    }
+    const token = side === 0 ? token0 : token1
+    if (amounts[side] !== undefined) {
+      throw new Error(`${token.symbol} is named twice, by ${namedBy[side]} and --amount ${entry}.`)
+    }
+    amounts[side] = parseUnits(value.trim(), token.decimals)
+    namedBy[side] = `--amount ${entry}`
+  }
+  return { amount0: amounts[0], amount1: amounts[1] }
+}
+
 /**
  * Builds the fully wired, authenticated session from the state file.
  *
- * Requires setup.ts to have run (key material in the state file).
+ * Requires `shield-swap setup` to have run (key material in the state file).
  * Authenticates with the DEX API on every call — the session JWT covers
  * everything including access/token management, and auto-renews on expiry.
  *
  * Provable API credentials are not required up front: the client registers a
  * consumer through the credential file on first prove or scan when it holds
- * none — though `setup.ts` registers and verifies eagerly, so a session built
+ * none — though `shield-swap setup` registers and verifies eagerly, so a session built
  * after setup has working credentials rather than untested ones.
  */
 export async function loadSession(options: { network?: string } = {}) {
@@ -183,7 +251,7 @@ export async function loadSession(options: { network?: string } = {}) {
   const state = loadState(network)
   if (!state.privateKey) {
     throw new Error(
-      `No shield-swap session found for ${network} — run setup.ts --network ${network} first (see startup.md).`,
+      `No shield-swap session found for ${network} — run \`shield-swap setup --network ${network}\` first (see startup.md).`,
     )
   }
 
@@ -205,7 +273,7 @@ export async function loadSession(options: { network?: string } = {}) {
     records: scanner,
   })
   // SHIELD_SWAP_API_URL overrides for one-off runs; the persistent choice
-  // lives in the state file (setup.ts --api-url).
+  // lives in the state file (`shield-swap setup --api-url`).
   const apiUrl = process.env.SHIELD_SWAP_API_URL ?? state.apiUrl
   // The identity store is what makes concurrent swaps safe and unclaimed swaps
   // recoverable, and it is scoped by network because a reservation is only

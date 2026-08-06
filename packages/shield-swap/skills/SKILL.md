@@ -14,36 +14,48 @@ description: >
 
 Shield Swap is a concentrated-liquidity AMM on Aleo testnet
 (`shield_swap.aleo`). This skill drives it end-to-end with
-`@provablehq/shield-swap-sdk`. Everything here works the same for any agent:
-the runbooks are plain markdown, the scripts run with `npx tsx`.
+`@provablehq/shield-swap-sdk` and the `shield-swap` command that ships beside
+it. Everything here works the same for any agent: the runbooks are plain
+markdown, and every step is either a subcommand or a short script.
 
 ## The one rule that prevents lost funds
 
-A private swap pays out to a single-use blinded address, and the
-`SwapHandle` returned by `swap()` is the ONLY key to claiming that money.
-Persist every handle to the state file the moment a swap returns, before
-doing anything else. The same goes for `positionTokenId` after minting
-liquidity. The session helpers do this — use them.
+A private swap pays out to a single-use blinded address, and the blinded
+identity behind it is the ONLY key to claiming that money. `swap()` reserves
+and records that identity in the SDK's blinded identity store before it
+returns, so a crash between the swap and the claim loses nothing — but only
+when the store persists. Keep the configured store (the session helpers wire
+a file-backed one); never swap with an in-memory store you then discard.
+
+If a store is ever lost, `shield-swap history --reconcile` rebuilds it by
+re-deriving identities from the view key and matching them against chain
+history. That is a recovery path, not a substitute for keeping the file.
 
 ## Session model
 
-All long-lived material lives in `./.shield-swap/state.json` (private key,
-Provable API credentials, DEX API token, open swap handles, position ids).
-It is created by the setup script with mode 0600. NEVER commit it — add
-`.shield-swap/` to `.gitignore`. `scripts/session.ts` owns reading and
-writing it; every snippet in these runbooks starts from its `loadSession()`.
+All long-lived material lives in `./.shield-swap/<network>/state.json`
+(private key, Provable API credentials, DEX API token). It is created by
+`shield-swap setup` with mode 0600. NEVER commit it — add `.shield-swap/` to
+`.gitignore`. Swap handles and position ids are NOT stored there: handles
+live in the SDK's blinded identity store, and positions are discovered from
+records with `client.getOwnedPositions()`.
 
-Scripts run from this directory (call it `$SKILLS` below):
+Two ways to run a step, and most runbooks use both:
 
-- in the Veil repo: `$SKILLS = packages/shield-swap/skills` — run
-  `pnpm install && pnpm build` once first
-- from npm: `$SKILLS = node_modules/@provablehq/shield-swap-sdk/skills` —
-  run `npm install @provablehq/shield-swap-sdk @provablehq/veil-aleo-sdk tsx`
-  once first
+- **The command.** `npx @provablehq/shield-swap-cli <command>` covers every
+  standard flow. Add `--json` for one machine-readable object on stdout and
+  nothing else, which is what an agent should parse. Nothing spends without
+  `--execute`, so always run the plan first and show it to the user.
+- **A scratch script**, when a flow needs something the flags do not express.
+  Write it as an `.mts` file (ESM — plain `.ts` may be treated as CommonJS
+  outside the repo and reject top-level `await`), import the session helpers
+  from `@provablehq/shield-swap-cli/session` so it shares the same state file
+  the command writes, and run it with `npx tsx`.
 
-Write scratch scripts as `.mts` files (ESM — plain `.ts` may be treated as
-CommonJS outside the repo and reject top-level `await`), import the session
-helpers from `$SKILLS/scripts/session.js`, and run them with `npx tsx`.
+Install once before either: `npm install @provablehq/shield-swap-sdk
+@provablehq/shield-swap-cli tsx`. In the Veil repo, `pnpm install && pnpm
+build` instead, and call the binary as
+`node packages/shield-swap-cli/dist/index.js <command>`.
 
 ## Before doing anything: two questions for the user
 

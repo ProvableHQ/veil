@@ -14,7 +14,7 @@ this runbook ends with persisted handles.
 Everything a swap needs comes from three reads:
 
 ```ts
-import { loadSession } from '$SKILLS/scripts/session.js'
+import { loadSession } from '@provablehq/shield-swap-cli/session'
 
 const { client, account } = await loadSession()
 
@@ -52,7 +52,7 @@ name a wrapper.
 
 ```ts
 import { ApiError } from '@provablehq/shield-swap-sdk'
-import { formatAmount } from '$SKILLS/scripts/session.js'
+import { formatAmount } from '@provablehq/shield-swap-cli/session'
 
 const { pool, holdIn } = candidates[0]
 const [tokenInId, balance] = holdIn

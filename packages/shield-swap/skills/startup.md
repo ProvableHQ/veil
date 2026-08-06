@@ -16,20 +16,20 @@ left off.
 
 ```sh
 # brand-new account (user confirmed they have none)
-npx tsx $SKILLS/scripts/setup.ts --new
+npx @provablehq/shield-swap-cli setup --new
 
 # returning user: they save their key to a file THEMSELVES, the path is
 # what travels — the key never appears in the conversation or shell history
-npx tsx $SKILLS/scripts/setup.ts --private-key-file <path>
+npx @provablehq/shield-swap-cli setup --private-key-file <path>
 
 # returning user who also has Provable API credentials
-npx tsx $SKILLS/scripts/setup.ts --private-key-file <path> --consumer-id <id> --api-key <key>
+npx @provablehq/shield-swap-cli setup --private-key-file <path> --consumer-id <id> --api-key <key>
 
 # when setup asks for an invite code
-npx tsx $SKILLS/scripts/setup.ts --invite-code <code>
+npx @provablehq/shield-swap-cli setup --invite-code <code>
 
 # target a specific DEX API deployment (e.g. staging) instead of the default
-npx tsx $SKILLS/scripts/setup.ts --api-url <origin>
+npx @provablehq/shield-swap-cli setup --api-url <origin>
 ```
 
 **Private keys never transit the conversation.** When the user has an

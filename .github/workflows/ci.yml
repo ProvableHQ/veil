@@ -34,6 +34,16 @@ jobs:
       # there passes silently — these need their own run to mean anything.
       - name: Type-level tests
         run: pnpm vitest --typecheck.only run
+      # Every package's own sources. `pnpm vitest run` only compiles what a test
+      # imports, so a package with no tests — the CLI — would otherwise ship
+      # unchecked.
+      - name: Typecheck packages
+        run: pnpm --filter './packages/*' exec tsc --noEmit
+      # Scoped to the Shield Swap examples for now. The older examples at the
+      # root of examples/ have pre-existing errors — a field rename drifted past
+      # them unnoticed, which is exactly what this step prevents recurring.
+      - name: Typecheck examples
+        run: npx tsc --noEmit -p examples/shield-swap/tsconfig.json
       - name: Typecheck reference dApp
         run: pnpm --filter @provablehq/veil-loyalty-dapp exec tsc --noEmit
 

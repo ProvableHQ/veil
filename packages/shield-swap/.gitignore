@@ -1,0 +1,6 @@
+# Session state written by skills/scripts when they are run from inside this
+# package: private key, DEX API token, Provable API credentials, and the blinded
+# identity store. The repo root ignores this too, but npm only reads ignore files
+# inside the package it is packing — without this, a `files` entry covering
+# `skills/` would publish key material to the registry.
+.shield-swap/

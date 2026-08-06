@@ -16,7 +16,7 @@ range, live amounts, uncollected fees) from the account's records.
 
 ```ts
 import { roundTickToSpacing } from '@provablehq/shield-swap-sdk'
-import { loadSession, saveState } from '$SKILLS/scripts/session.js'
+import { loadSession, saveState } from '@provablehq/shield-swap-cli/session'
 
 const { client, account, state } = await loadSession()
 const balances = await client.getBalances()
@@ -137,7 +137,7 @@ await client.decreaseLiquidity({
 Full exit = decrease everything, collect everything, then `burn`:
 
 ```ts
-import { loadState, saveState } from '$SKILLS/scripts/session.js'
+import { loadState, saveState } from '@provablehq/shield-swap-cli/session'
 
 await client.decreaseLiquidity({ poolKey: pool.key, positionTokenId, liquidityToRemove: position!.liquidity })
 // … collect per collecting.md until nothing representable remains
