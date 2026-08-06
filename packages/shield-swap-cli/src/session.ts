@@ -283,7 +283,22 @@ export async function loadSession(options: { network?: string } = {}) {
   const client = walletClient.extend(
     shieldSwapActions({ api: { baseUrl: apiUrl }, blindedIdentities }),
   )
-  await client.authenticateShieldSwap()
+  try {
+    await client.authenticateShieldSwap()
+  } catch (error) {
+    // A pinned host is invisible state: it lives in a file nobody re-reads, so
+    // when the deployment behind it is retired every call fails with a bare 404
+    // and nothing points at the pin. Name it, and say how to drop it.
+    if (!apiUrl) throw error
+    const source =
+      process.env.SHIELD_SWAP_API_URL === apiUrl ? 'SHIELD_SWAP_API_URL' : `apiUrl in ${statePath(network)}`
+    throw new Error(
+      `could not authenticate with the DEX API at ${apiUrl}, which is pinned by ${source} rather than ` +
+        `derived from the network. If that deployment is gone, re-pin with \`shield-swap setup --api-url ` +
+        `<origin>\` or clear the field to fall back to the default for ${network}.`,
+      { cause: error },
+    )
+  }
 
   return { client, account, scanner, state, aleo, network, blindedIdentities }
 }
