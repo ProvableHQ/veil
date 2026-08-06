@@ -13,37 +13,105 @@ description: >
 # Trading on Shield Swap
 
 Shield Swap is a concentrated-liquidity AMM on Aleo testnet
-(`shield_swap.aleo`). This skill drives it end-to-end with
-`@provablehq/shield-swap-sdk`. Everything here works the same for any agent:
-the runbooks are plain markdown, the scripts run with `npx tsx`.
+(`shield_swap.aleo`). Two packages reach it, installed separately:
+
+- **`@provablehq/shield-swap-sdk`** — the client library. Every DEX action is a
+  method on a composed client, and this is what an integration builds on.
+- **`@provablehq/shield-swap-cli`** — the `shield-swap` command, built on that
+  SDK. Not part of the SDK's install: a project that only needs the client never
+  pulls the command line in, and a user who only wants to trade never needs the
+  library.
+
+The runbooks are plain markdown and work the same for any agent. Each step is
+given as a subcommand, and the SDK call behind it is named so the same step can
+be written into an application instead.
 
 ## The one rule that prevents lost funds
 
-A private swap pays out to a single-use blinded address, and the
-`SwapHandle` returned by `swap()` is the ONLY key to claiming that money.
-Persist every handle to the state file the moment a swap returns, before
-doing anything else. The same goes for `positionTokenId` after minting
-liquidity. The session helpers do this — use them.
+A private swap pays out to a single-use blinded address, and the blinded
+identity behind it is the ONLY key to claiming that money. `swap()` reserves
+and records that identity in the SDK's blinded identity store before it
+returns, so a crash between the swap and the claim loses nothing — but only
+when the store persists. Keep the configured store (the session helpers wire
+a file-backed one); never swap with an in-memory store you then discard.
+
+If a store is ever lost, `shield-swap history --reconcile` rebuilds it by
+re-deriving identities from the view key and matching them against chain
+history. That is a recovery path, not a substitute for keeping the file.
 
 ## Session model
 
-All long-lived material lives in `./.shield-swap/state.json` (private key,
-Provable API credentials, DEX API token, open swap handles, position ids).
-It is created by the setup script with mode 0600. NEVER commit it — add
-`.shield-swap/` to `.gitignore`. `scripts/session.ts` owns reading and
-writing it; every snippet in these runbooks starts from its `loadSession()`.
+All long-lived material lives in `./.shield-swap/<network>/state.json`
+(private key, Provable API credentials, DEX API token). It is created by
+`shield-swap setup` with mode 0600. NEVER commit it — add `.shield-swap/` to
+`.gitignore`. Swap handles and position ids are NOT stored there: handles
+live in the SDK's blinded identity store, and positions are discovered from
+records with `client.getOwnedPositions()`.
 
-Scripts run from this directory (call it `$SKILLS` below):
+Three ways to run a step. Pick by what the user is doing, not by which is
+shortest to type:
 
-- in the Veil repo: `$SKILLS = packages/shield-swap/skills` — run
-  `pnpm install && pnpm build` once first
-- from npm: `$SKILLS = node_modules/@provablehq/shield-swap-sdk/skills` —
-  run `npm install @provablehq/shield-swap-sdk @provablehq/veil-aleo-sdk tsx`
-  once first
+- **The command**, for operating the account. `shield-swap <command>` covers
+  every standard flow. Add `--json` for one machine-readable object on stdout
+  and nothing else, which is what an agent should parse. Nothing spends without
+  `--execute`, so always run the plan first and show it to the user.
+- **A script sharing the same session**, when a flow needs something the flags
+  do not express — an unusual sequence, a loop, a condition. Write it as an
+  `.mts` file (ESM — plain `.ts` may be treated as CommonJS outside the repo and
+  reject top-level `await`), import `loadSession` from
+  `@provablehq/shield-swap-cli/session` so it reads the same state file the
+  command writes, and run it with `npx tsx`.
+- **An integration**, when the user is building something that outlives the
+  session — a dApp, a bot, a server, an agent. It owns its own client and does
+  NOT depend on the CLI. Follow [developing.md](./developing.md), which picks the
+  packages from where the signing keys live.
 
-Write scratch scripts as `.mts` files (ESM — plain `.ts` may be treated as
-CommonJS outside the repo and reject top-level `await`), import the session
-helpers from `$SKILLS/scripts/session.js`, and run them with `npx tsx`.
+### Implementing against the SDK
+
+Every runbook step is one method on a composed client, so a step read here
+transfers directly into code. A local-key integration builds the client once:
+
+```ts
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
+import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
+import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
+
+// The WASM binaries are per network, so the SDK is loaded for one and the
+// account, prover, and scanner all come off that handle.
+const aleo = await loadNetwork('testnet')
+const { walletClient } = aleo.createAleoClient({
+  privateKey,
+  networkUrl: 'https://api.provable.com/v2',
+  provingMode: 'delegated',
+  // Credentials reach both the prover and the scanner through one session the
+  // client builds from this store, registering a consumer on first use.
+  credentialStore: fileCredentialStore('./provable-credentials.json'),
+  records: aleo.createRemoteScanner(),
+})
+
+const client = walletClient.extend(
+  // The identity store MUST persist — see the rule above. A file-backed store is
+  // what makes a crash between a swap and its claim recoverable.
+  shieldSwapActions({ api: {}, blindedIdentities: fileBlindedIdentityStore('./blinded.json') }),
+)
+await client.authenticateShieldSwap()
+```
+
+In a browser none of that applies: the account and transport come from the
+connected wallet through `fromWalletAdapter`, and neither proving nor a scanner
+is configured, because the wallet holds the keys and proves. `developing.md` has
+the table of which packages go with which key location; the SDK
+[README](../README.md) has the per-action reference.
+
+Reads live on the client (`client.getPool`), writes too (`client.swap`), and the
+off-chain DEX API is namespaced under `client.api` — so a call site always shows
+whether a value came from the chain or from the service.
+
+Install what the path needs: `npm install -g @provablehq/shield-swap-cli` to
+operate, `npm install @provablehq/shield-swap-sdk` to build, and both plus `tsx`
+for the middle path. In the Veil repo, `pnpm install && pnpm shield-swap
+<command>` runs the workspace copy.
 
 ## Before doing anything: two questions for the user
 
@@ -141,7 +209,7 @@ funded account).
   magnitude to a human reader.
 - **Tokens arrive and move privately.** The faucet airdrops private
   records, so public balances read zero on a funded account — check
-  holdings with the session helper `getHoldings()` (it reads both sides).
+  holdings with `client.getBalances()` (it reads both sides).
   Record selection picks ONE record large enough for the amount; it does
   not aggregate small records.
 - **Fees are covered.** Delegated proving through the Provable prover pays
@@ -150,12 +218,14 @@ funded account).
   (remote proving + confirmation). Set timeouts accordingly and never
   re-submit just because a call is slow — check the state file and chain
   first.
-- **Concurrency is opt-in and has sharp edges.** Concurrent swaps from one
-  account MUST partition blinded-identity counters and use disjoint input
-  records — the exact recipe is in [swapping.md](./swapping.md). When in
-  doubt, run swaps sequentially.
-- **One runbook script at a time.** The state file has no lock. Persist
-  through the session helpers (`appendSwapHandle`, `removeSwapHandle`,
-  `appendPosition` — each re-reads before writing) and do not run two
+- **Concurrent swaps need disjoint input records.** Blinded identities are
+  handled for you: every swap reserves one from the store `loadSession`
+  configures, and reservations serialize, so two swaps cannot collide on an
+  identity. Records are still yours to keep apart — two swaps selling the same
+  token can pick the same record and double-spend it.
+- **One runbook script at a time.** The state file has no lock, though there is
+  little left in it to race over: swap handles belong to the identity store,
+  which serializes its own writes, and positions are discovered from chain
+  rather than stored. Still, do not run two
   runbook scripts concurrently; concurrency belongs INSIDE one script, per
   the swapping recipe.

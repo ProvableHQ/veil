@@ -59,9 +59,9 @@ program dummy_exchange.aleo {
         public amount_out: u128,
     ) -> Final {
         // Pull token_in from signer via allowance
-        let pull: Final = IARC20@(token_in)::transfer_from_public(self.signer, self.address, amount_in);
+        let pull: Final = IARC20@(token_in)::transfer_from_public(std::ctx::signer(), std::ctx::addr(), amount_in);
         // Send token_out to signer from this program's balance
-        let push: Final = IARC20@(token_out)::transfer_public(self.signer, amount_out);
+        let push: Final = IARC20@(token_out)::transfer_public(std::ctx::signer(), amount_out);
         return final {
             pull.run();
             push.run();

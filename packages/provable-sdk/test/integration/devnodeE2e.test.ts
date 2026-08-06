@@ -33,7 +33,7 @@ const LEO_SOURCE = `program ${PROGRAM_NAME} {
     mapping values: address => u64;
 
     fn set_value(public v: u64) -> Final {
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return final {
             Mapping::set(values, caller, v);
         };
@@ -87,7 +87,7 @@ describe.runIf(RUN)('e2e: devnode deploy + execute + read + shutdown', () => {
         await testClient.advanceBlock({ count: 1 })
 
         // --- 8. Read the mapping ---
-        // Use the wallet's own address as the key (what self.caller resolves to).
+        // Use the wallet's own address as the key (what std::ctx::caller() resolves to).
         const value = await publicClient.readContract({
           programId: PROGRAM_NAME,
           mapping: 'values',

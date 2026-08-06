@@ -105,7 +105,9 @@ export function createApiHandlers(api: ApiClient): Record<string, AgentToolHandl
       api.getRoute({
         token_in: i.tokenIn as string,
         token_out: i.tokenOut as string,
-        amount_in: i.amountIn !== undefined ? BigInt(i.amountIn as string) : undefined,
+        // Passed through as the decimal string the endpoint expects; BigInt here
+        // would reject '0.5' and mis-quote base units.
+        ...(i.amountIn !== undefined ? { amount_in: String(i.amountIn) } : {}),
       }),
     shield_swap_list_tokens: async () => api.getTokens(),
     shield_swap_get_public_balances: async (i) => api.getPublicBalances({ user: i.user as string }),

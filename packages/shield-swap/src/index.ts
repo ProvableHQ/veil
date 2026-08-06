@@ -88,6 +88,7 @@ export {
   type BlindedIdentityRecord,
   type BlindedIdentityStatus,
   type BlindedIdentityStore,
+  type PersistedClaim,
 } from './utils/blinding/store.js'
 
 // The two-phase private swap: request → (chain computes) → claim.
@@ -144,7 +145,6 @@ export {
   SHIELD_SWAP_FREEZELIST,
   SHIELD_SWAP_MULTISIG,
   ROUTER_ADDRESSES,
-  SHIELD_WRAPPERS,
 } from './constants.js'
 
 // Record selection + record-derived balances (local-signer path; wallet
@@ -178,6 +178,11 @@ export {
 // collect owed tokens, and burn the drained position.
 export { createPool, type CreatePoolParameters, type CreatePoolReturnType } from './actions/liquidity/createPool.js'
 export { mint, type MintParameters, type MintReturnType } from './actions/liquidity/mint.js'
+export {
+  previewMint,
+  type PreviewMintParameters,
+  type PreviewMintReturnType,
+} from './actions/liquidity/previewMint.js'
 export { formatMintPositionRequest, type MintPositionRequestInput } from './utils/params.js'
 export {
   increaseLiquidity,
@@ -193,6 +198,9 @@ export { collect, type CollectParameters, type CollectReturnType } from './actio
 export { burn, type BurnParameters, type BurnReturnType } from './actions/liquidity/burn.js'
 export { pickInsertHint, type PickInsertHintParameters } from './utils/tick-hints.js'
 export { resolveDexImports, type ResolveDexImportsParameters } from './utils/imports.js'
+export { tokenData, listTokens, type TokenInfo } from './utils/tokens.js'
+export { planSwap, type SwapPlan, type PlanSwapParameters } from './actions/swap/planSwap.js'
+export { parseUnits, formatUnits } from './utils/units.js'
 
 // Local key/id derivation (BHP256 struct hash via the optional
 // @provablehq/sdk peer) — address pools, ticks, swaps, and positions without
@@ -271,6 +279,7 @@ export {
   feeOwed,
   amountsForLiquidity,
   liquidityForAmounts,
+  liquidityForAmount,
 } from './utils/q128.js'
 export {
   resolveTokenRoute,

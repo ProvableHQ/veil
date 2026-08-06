@@ -1,0 +1,40 @@
+{
+  "name": "@provablehq/shield-swap-cli",
+  "version": "0.6.0",
+  "description": "Command line trader for the Shield Swap AMM DEX on Aleo.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ProvableHQ/veil.git",
+    "directory": "packages/shield-swap-cli"
+  },
+  "homepage": "https://github.com/ProvableHQ/veil#readme",
+  "type": "module",
+  "exports": {
+    "./session": {
+      "types": "./dist/session.d.ts",
+      "import": "./dist/session.js"
+    }
+  },
+  "bin": {
+    "shield-swap": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@provablehq/shield-swap-sdk": "workspace:^",
+    "@provablehq/veil-aleo-sdk": "workspace:^"
+  }
+}

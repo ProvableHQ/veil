@@ -174,11 +174,18 @@ export interface PositionNFTInfo {
  *   without it, every owned position is returned.
  * @property tokenId Restricts the listing to one position by its `token_id`
  *   field literal. Optional.
+ * @property statusFilter Which records to scan. Defaults to `'unspent'`, the
+ *   positions the account can still operate on. `'spent'` lists consumed
+ *   records, which is how a closed position is identified: every liquidity
+ *   operation consumes a PositionNFT and re-issues one carrying the same
+ *   `token_id`, so a token id present only among spent records is one whose
+ *   last record was burned rather than replaced.
  */
 export type ListPositionNFTsParameters = {
   program: string
   poolKey?: string
   tokenId?: string
+  statusFilter?: 'unspent' | 'spent'
 }
 
 /**
@@ -202,7 +209,7 @@ export type ListPositionNFTsParameters = {
 export async function listPositionNFTs(client: Client, params: ListPositionNFTsParameters): Promise<PositionNFTInfo[]> {
   const records = (await requestRecords(client, {
     program: params.program,
-    statusFilter: 'unspent',
+    statusFilter: params.statusFilter ?? 'unspent',
   })) as OwnedRecord[]
 
   const positions: PositionNFTInfo[] = []

@@ -14,19 +14,19 @@ this runbook ends with persisted handles.
 Everything a swap needs comes from three reads:
 
 ```ts
-import { loadSession, getHoldings } from '$SKILLS/scripts/session.js'
+import { loadSession } from '@provablehq/shield-swap-cli/session'
 
 const { client, account } = await loadSession()
 
 // What the account can sell (private side funds swaps).
-const holdings = await getHoldings(client, account.address)
-const funded = holdings.filter((h) => h.privateAmount > 0n && h.underlyingProgram)
+const balances = await client.getBalances()
+const funded = Object.entries(balances).filter(([, b]) => b.private > 0n)
 
 // Pools whose input token the account holds, with live liquidity.
 const pools = (await client.api.getPools({ limit: 50 })).data
 const candidates = []
 for (const pool of pools) {
-  const holdIn = funded.find((h) => h.tokenId === pool.token0 || h.tokenId === pool.token1)
+  const holdIn = funded.find(([id]) => id === pool.token0 || id === pool.token1)
   if (!holdIn || !pool.token0_info?.amm_token_program || !pool.token1_info?.amm_token_program) continue
   const slot = await client.getSlot({ poolKey: pool.key })
   if (slot && slot.liquidity > 0n) candidates.push({ pool, holdIn, slot })
@@ -52,12 +52,12 @@ name a wrapper.
 
 ```ts
 import { ApiError } from '@provablehq/shield-swap-sdk'
-import { appendSwapHandle, buildDexImports, formatAmount } from '$SKILLS/scripts/session.js'
+import { formatAmount } from '@provablehq/shield-swap-cli/session'
 
 const { pool, holdIn } = candidates[0]
-const tokenInId = holdIn.tokenId
+const [tokenInId, balance] = holdIn
 const tokenOutInfo = tokenInId === pool.token0 ? pool.token1_info : pool.token0_info
-const amountIn = holdIn.privateAmount / 100n // 1% of the covering record
+const amountIn = balance.private / 100n // 1% of the covering record
 
 // Quote → slippage floor. The quote is informational: a missing estimate
 // or a 404 ("no executable route … for the requested amount") is fine —
@@ -81,11 +81,11 @@ try {
 
 // Every write needs an imports map: both pool tokens' program sources PLUS
 // the DEX program's own declared imports (the prover does not resolve
-// those). buildDexImports assembles all of it.
-const imports = await buildDexImports(client, [
+// those). resolveDexImports assembles all of it.
+const imports = await client.resolveDexImports({ tokenPrograms: [
   pool.token0_info!.amm_token_program!,
   pool.token1_info!.amm_token_program!,
-])
+] })
 
 const handle = await client.swap({
   poolKey: pool.key,
@@ -96,10 +96,9 @@ const handle = await client.swap({
   imports,
 })
 
-// PERSIST THE HANDLE IMMEDIATELY — it is the only key to the output.
-// appendSwapHandle re-reads the state file, so it never clobbers handles
-// another script saved meanwhile.
-appendSwapHandle(handle)
+// The handle is already persisted: the client reserved the blinded identity
+// before submitting and recorded the whole handle after, into the store
+// loadSession configured. Nothing to remember, and nothing to forget.
 console.log('swap submitted:', handle.transactionId, 'swapId:', handle.swapId)
 ```
 
@@ -113,14 +112,13 @@ confirmation), so the first attempts may throw
 
 ```ts
 import { SwapOutputNotFinalizedError } from '@provablehq/shield-swap-sdk'
-import { removeSwapHandle } from '$SKILLS/scripts/session.js'
 
 // Same imports map as the swap.
 for (let attempt = 0; attempt < 10; attempt++) {
   try {
     const { amountOut, transactionId } = await client.claimSwapOutput({ handle, imports })
     console.log(`claimed ${formatAmount(amountOut, tokenOutInfo!.decimals, tokenOutInfo!.symbol)} (tx ${transactionId})`)
-    removeSwapHandle(handle.transactionId)
+    // The claim marks the identity `claimed` in the store itself.
     break
   } catch (err) {
     if (!(err instanceof SwapOutputNotFinalizedError)) throw err
@@ -163,41 +161,22 @@ partitioned explicitly:
    prefer different tokens or sequential submission instead.)
 
 ```ts
-import { viewKeyToScalar, nextBlindedIdentity } from '@provablehq/shield-swap-sdk'
-import { appendSwapHandle } from '$SKILLS/scripts/session.js'
-
-// Reserve K distinct UNUSED identities. Scan forward for each one — used
-// counters are not always contiguous (failed swaps leave gaps), so
-// `first.counter + i` is NOT safe.
-const vk = await viewKeyToScalar(account.viewKey)
-const identities = []
-let startCounter = 0
-for (let i = 0; i < swaps.length; i++) {
-  const id = await nextBlindedIdentity(client, {
-    viewKeyScalar: vk,
-    signer: account.address,
-    startCounter,
-  })
-  identities.push({ blindingFactor: id.blindingFactor, blindedAddress: id.blindedAddress })
-  startCounter = id.counter + 1 // next scan starts past this reservation
-}
-
 // swaps[] entries MUST each sell a different token (disjoint records).
-const results = await Promise.allSettled(
-  swaps.map((s, i) =>
-    client.swap({ ...s, blindedIdentity: identities[i] }).then((h) => {
-      // Persist as each one lands, not after the batch — a crash mid-batch
-      // must not orphan the finished swaps.
-      appendSwapHandle(h)
-      return h
-    }),
-  ),
-)
+// Identities need no handling here: each call reserves its own from the store,
+// and reservations serialize, so two swaps cannot derive the same blinded
+// address and have the second revert on the uniqueness assert.
+const results = await Promise.allSettled(swaps.map((s) => client.swap(s)))
 ```
 
+Without a configured store this is the one flow that breaks: both calls would
+scan the chain, find the same free counter, and the second would revert on
+finalize having paid its fee. `loadSession` configures one, so this is safe by
+default — see the SDK README's "Concurrent swaps" section for the mechanism.
+
 `Promise.all` rejects on the first failure but the other swaps keep
-running server-side — always sweep `state.swapHandles` afterwards and claim
-everything that confirmed, regardless of batch errors. Use
+running server-side — always sweep with
+`client.getUnclaimedSwaps()` afterwards and claim everything that confirmed,
+regardless of batch errors. Use
 `Promise.allSettled` to keep the batch alive past one rejection.
 
 **Claim immediately after the batch.** As each swap confirms, its output
@@ -214,7 +193,6 @@ for (const [i, result] of results.entries()) {
       const { amountOut } = await client.claimSwapOutput({ handle, imports: swaps[i]!.imports })
       // Display in human units (swaps[i] should carry the out token's decimals/symbol).
       console.log(`claimed ${formatAmount(amountOut, swaps[i]!.outDecimals, swaps[i]!.outSymbol)}`)
-      removeSwapHandle(handle.transactionId)
       break
     } catch (err) {
       if (!(err instanceof SwapOutputNotFinalizedError)) throw err
@@ -230,10 +208,9 @@ When no direct pool connects two tokens, `client.api.getRoute` returns a
 multi-hop path (≤ 3 hops) and `client.swapMultiHop` executes it — same
 handle-and-claim discipline, with `poolKeys` (plural) and every hop token's
 program source in `imports`. The same record and identity rules apply: one
-multi-hop swap consumes one input record and one blinded identity. Persist
-the handle with `appendSwapHandle` like any other — the collecting sweep
-tells the two shapes apart (multi-hop handles carry `poolKeys`) and claims
-each with the right action.
+multi-hop swap consumes one input record and one blinded identity, reserved and
+recorded for you. The collecting sweep tells the two shapes apart (multi-hop
+handles carry `poolKeys`) and claims each with the right action.
 
 ## Failure modes
 

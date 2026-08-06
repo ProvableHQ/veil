@@ -25,13 +25,15 @@ where the signing keys live:
 - **Documentation site** — guides and per-action API references under
   `site/docs/` (`guides/shield-swap.md` is the end-to-end walkthrough;
   `guides/agents.md` covers the tool surface).
-- **Runnable examples** — `examples/shield-swap-swap.ts` (two-phase
-  private swap), `examples/shield-swap-liquidity.ts` (pool + position
-  lifecycle), `examples/agent-usage.ts` (agent tools).
-- **These skills' scripts** — `scripts/session.ts` and `scripts/setup.ts`
-  are a working reference implementation of user onboarding (registration,
-  code redemption, airdrop, credential storage); an app onboarding its own
-  users walks the same gauntlet.
+- **Runnable examples** — `examples/shield-swap/` covers the lot:
+  `setup-client.ts` (the whole bootstrap — key, Provable credentials, DEX
+  session, invite code, faucet), `pool-state.ts`, `quote.ts`, `balances.ts`,
+  `swap-history.ts`, `swap.ts`, `mint.ts`, `liquidity.ts`. Also
+  `examples/agent-usage.ts` for the agent tools.
+- **The `shield-swap` command** (`@provablehq/shield-swap-cli`) — its
+  `session.ts` and `setup` command are a working reference implementation of
+  user onboarding (registration, code redemption, airdrop, credential
+  storage); an app onboarding its own users walks the same gauntlet.
 
 ## What every integration must handle
 

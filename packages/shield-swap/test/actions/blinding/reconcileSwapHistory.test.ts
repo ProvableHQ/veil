@@ -2,10 +2,24 @@ import { describe, it, expect } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
 import { reconcileSwapHistory } from '../../../src/actions/blinding/reconcileSwapHistory.js'
 import { memoryBlindedIdentityStore, type BlindedIdentityRecord } from '../../../src/utils/blinding/store.js'
+import { toPersistedHandle } from '../../../src/utils/blinding/handles.js'
 
 const PROGRAM = 'shield_swap.aleo'
 const ADDR_A = 'aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px'
 const ADDR_B = 'aleo1s3ws5tra87fjycnjrwsjcrnw2qxr8jfqqdugnf0xzqqw29q9m5pqem2u4t'
+
+/** A live handle, for records that already carry one. */
+const liveHandle = (blindedAddress: string, swapId: string) => ({
+  swapId,
+  blindingFactor: '1field',
+  blindedAddress,
+  tokenInId: '11field',
+  tokenOutId: '22field',
+  poolKey: '1field',
+  amountIn: 1000n,
+  transactionId: 'at1swap',
+  program: PROGRAM,
+})
 
 const reserved = (blindedAddress: string, counter: number): BlindedIdentityRecord => ({
   counter,
@@ -125,7 +139,11 @@ describe('reconcileSwapHistory', () => {
   })
 
   it('stops paging once every identity is resolved', async () => {
-    const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    // Already carries a handle, so only its claim is outstanding — otherwise the
+    // walk rightly keeps going to look for the request that would supply one.
+    const store = memoryBlindedIdentityStore([
+      { ...reserved(ADDR_A, 0), handle: toPersistedHandle(liveHandle(ADDR_A, '7field')) },
+    ])
     const { client, requests } = historyClient(
       [
         { calls: [call('at1claim')], next_cursor: { block_number: 90, transition_id: 'au1x' } },
@@ -143,8 +161,14 @@ describe('reconcileSwapHistory', () => {
 
   it('reports an incomplete walk when it runs out of pages', async () => {
     const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    // Cursors advance, as a real endpoint's do — a repeated cursor is treated as
+    // paging that has stopped moving and ends the walk instead.
     const { client } = historyClient(
-      [{ calls: [call('at1nomatch', 'swap')], next_cursor: { block_number: 90, transition_id: 'au1x' } }],
+      [
+        { calls: [call('at1nomatch', 'swap')], next_cursor: { block_number: 90, transition_id: 'au1x' } },
+        { calls: [call('at1nomatch2', 'swap')], next_cursor: { block_number: 80, transition_id: 'au1y' } },
+        { calls: [call('at1nomatch3', 'swap')], next_cursor: { block_number: 70, transition_id: 'au1z' } },
+      ],
       {},
     )
 
@@ -156,8 +180,25 @@ describe('reconcileSwapHistory', () => {
     expect(result.claims).toEqual([])
   })
 
-  it('costs nothing when every identity is already claimed', async () => {
-    const store = memoryBlindedIdentityStore([{ ...reserved(ADDR_A, 0), status: 'claimed' }])
+  it('costs nothing when nothing is missing', async () => {
+    // Status alone is not the test: a record marked claimed with no economics is
+    // exactly what an earlier version left behind, and that must still be looked
+    // up. Nothing is wanted only when the claim and the handle are both on file.
+    const store = memoryBlindedIdentityStore([
+      {
+        ...reserved(ADDR_A, 0),
+        status: 'claimed',
+        handle: toPersistedHandle(liveHandle(ADDR_A, '7field')),
+        claim: {
+          tokenIn: '11field',
+          tokenOut: '22field',
+          amountOut: '5',
+          amountRemaining: '0',
+          transactionId: 'at1old',
+          blockNumber: 1,
+        },
+      },
+    ])
     const { client, requests } = historyClient([{ calls: [], next_cursor: null }], {})
 
     const result = await reconcileSwapHistory(client, { store, program: PROGRAM })
@@ -165,9 +206,19 @@ describe('reconcileSwapHistory', () => {
     expect(requests()).toEqual([])
   })
 
-  it('does not write to the store when nothing changed', async () => {
+  it('records that a complete walk found nothing, so the next run skips it', async () => {
+    const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    const { client } = historyClient([{ calls: [], next_cursor: null }], {})
+
+    await reconcileSwapHistory(client, { store, program: PROGRAM })
+    // Reaching the end of history without finding it is an answer, and writing it
+    // down is what stops every later run from walking all of history again.
+    expect((await store.load())[0]!.claimSearched).toBe(true)
+  })
+
+  it('does not write to the store when nothing is missing', async () => {
     let saves = 0
-    const inner = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    const inner = memoryBlindedIdentityStore([{ ...reserved(ADDR_A, 0), claimSearched: true }])
     const store = {
       load: inner.load,
       save: async (records: BlindedIdentityRecord[]) => {
@@ -179,5 +230,102 @@ describe('reconcileSwapHistory', () => {
 
     await reconcileSwapHistory(client, { store, program: PROGRAM })
     expect(saves).toBe(0)
+  })
+
+  it('retries a rate-limited fetch instead of losing the page', async () => {
+    const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    let attempts = 0
+    const client = {
+      request: async (req: { method: string; params?: { id?: string } }) => {
+        if (req.method === 'getProgramCallsPaginated') return { calls: [call('at1claim')], next_cursor: null }
+        attempts++
+        // A rate limit says nothing about the request, and a long walk is exactly
+        // the traffic shape that trips one — giving up would discard the page.
+        if (attempts === 1) throw Object.assign(new Error('HTTP 429'), { status: 429 })
+        return claimTx(ADDR_A, '7field', '5u128')
+      },
+    } as unknown as Client
+
+    const result = await reconcileSwapHistory(client, { store, program: PROGRAM })
+    expect(attempts).toBe(2)
+    expect(result.claims).toHaveLength(1)
+  })
+
+  it('does not retry a fetch the node answered', async () => {
+    const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    let attempts = 0
+    const client = {
+      request: async (req: { method: string }) => {
+        if (req.method === 'getProgramCallsPaginated') return { calls: [call('at1gone')], next_cursor: null }
+        attempts++
+        // A 404 is an answer, not congestion: retrying it just wastes the budget.
+        throw Object.assign(new Error('HTTP 404'), { status: 404 })
+      },
+    } as unknown as Client
+
+    await expect(reconcileSwapHistory(client, { store, program: PROGRAM })).rejects.toThrow(/404/)
+    expect(attempts).toBe(1)
+  })
+
+  it('fetches a page’s claims concurrently', async () => {
+    const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    let inFlight = 0
+    let peak = 0
+    const calls = Array.from({ length: 12 }, (_, i) => call(`at1c${i}`))
+    const client = {
+      request: async (req: { method: string; params?: { id?: string } }) => {
+        if (req.method === 'getProgramCallsPaginated') return { calls, next_cursor: null }
+        inFlight++
+        peak = Math.max(peak, inFlight)
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        inFlight--
+        return claimTx(ADDR_B, '9field', '5u128')
+      },
+    } as unknown as Client
+
+    await reconcileSwapHistory(client, { store, program: PROGRAM, concurrency: 4 })
+    // One at a time would make a long history take minutes it does not need to.
+    expect(peak).toBeGreaterThan(1)
+    expect(peak).toBeLessThanOrEqual(4)
+  })
+
+  it('stops when the endpoint stops advancing the cursor', async () => {
+    const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    let pages = 0
+    const client = {
+      request: async (req: { method: string }) => {
+        if (req.method !== 'getProgramCallsPaginated') return null
+        pages++
+        // Handing back the cursor it was given would page the same block forever.
+        return { calls: [call('at1x', 'swap')], next_cursor: { block_number: 90, transition_id: 'au1same' } }
+      },
+    } as unknown as Client
+
+    const result = await reconcileSwapHistory(client, { store, program: PROGRAM })
+    expect(result.complete).toBe(true)
+    // Unbounded by default, so without this guard the walk would not return.
+    expect(pages).toBe(2)
+  })
+
+  it('records what the claim moved, since the mapping entry is gone', async () => {
+    const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    const { client } = historyClient(
+      [{ calls: [call('at1claim')], next_cursor: null }],
+      { at1claim: claimTx(ADDR_A, '7field', '175488u128') },
+    )
+
+    await reconcileSwapHistory(client, { store, program: PROGRAM })
+    const [record] = await store.load()
+    // The claim deleted `swap_outputs[swapId]`, so this transaction is the only
+    // remaining evidence of the economics — worth keeping rather than re-walking.
+    expect(record!.claim).toEqual({
+      tokenIn: '11field',
+      tokenOut: '22field',
+      amountOut: '175488',
+      amountRemaining: '0',
+      transactionId: 'at1claim',
+      blockNumber: 100,
+    })
+    expect(JSON.stringify(record)).toContain('"amountOut":"175488"')
   })
 })

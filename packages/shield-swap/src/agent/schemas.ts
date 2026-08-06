@@ -200,13 +200,20 @@ export const getRouteSchema: AgentToolSchema = {
   name: 'shield_swap_get_route',
   description:
     'Quote the best route between two tokens (≤ 3 hops) from the DEX API. Use the quoted ' +
-    'output as the expected amount for a swap. token ids are field literals.',
+    'output as the expected amount for a swap, converting it to base units first. Token ids are ' +
+    'field literals; amounts here are decimal, not base units.',
   inputSchema: {
     type: 'object',
     properties: {
       tokenIn: { type: 'string', description: 'Input token id (field literal).' },
       tokenOut: { type: 'string', description: 'Output token id (field literal).' },
-      amountIn: { type: 'string', description: 'Optional input amount, raw base units (u128) as a string.' },
+      amountIn: {
+        type: 'string',
+        description:
+          "Optional input amount as a DECIMAL string in the input token's units ('0.5'), not raw " +
+          'base units. The quote comes back in the output token\'s decimal units too. This tool is ' +
+          'the exception — every other amount in this toolset is raw base units.',
+      },
     },
     required: ['tokenIn', 'tokenOut'],
   },

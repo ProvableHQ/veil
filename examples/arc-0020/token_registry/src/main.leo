@@ -52,7 +52,7 @@ program token_registry.aleo {
     mapping roles: field => u8;
 
     fn initialize() -> Final {
-        let program_addr = self.address;
+        let program_addr = std::ctx::addr();
         return final {
             let already_initialized: bool = registered_tokens.contains(CREDITS_RESERVED_TOKEN_ID);
             assert_eq(already_initialized, false);
@@ -88,7 +88,7 @@ program token_registry.aleo {
             decimals: decimals,
             supply: 0u128,
             max_supply: max_supply,
-            admin: self.caller,
+            admin: std::ctx::caller(),
             external_authorization_required: external_authorization_required,
             external_authorization_party: external_authorization_party,
         };
@@ -105,7 +105,7 @@ program token_registry.aleo {
         public external_authorization_party: address,
     ) -> Final {
         assert(token_id != CREDITS_RESERVED_TOKEN_ID);
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return final {
             let token: TokenMetadata = registered_tokens.get(token_id);
             assert_eq(caller, token.admin);
@@ -129,7 +129,7 @@ program token_registry.aleo {
         assert(role == MINTER_ROLE || role == BURNER_ROLE || role == SUPPLY_MANAGER_ROLE);
         let role_owner: TokenOwner = TokenOwner { account: account, token_id: token_id };
         let role_owner_hash: field = BHP256::hash_to_field(role_owner);
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return final {
             let token: TokenMetadata = registered_tokens.get(token_id);
             assert_eq(caller, token.admin);
@@ -141,7 +141,7 @@ program token_registry.aleo {
         assert(token_id != CREDITS_RESERVED_TOKEN_ID);
         let role_owner: TokenOwner = TokenOwner { account: account, token_id: token_id };
         let role_owner_hash: field = BHP256::hash_to_field(role_owner);
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return final {
             let token: TokenMetadata = registered_tokens.get(token_id);
             assert_eq(caller, token.admin);
@@ -155,7 +155,7 @@ program token_registry.aleo {
         public amount: u128,
         public authorized_until: u32,
     ) -> Final {
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         let role_owner: TokenOwner = TokenOwner { account: caller, token_id: token_id };
         let role_owner_hash: field = BHP256::hash_to_field(role_owner);
         let token_owner: TokenOwner = TokenOwner { account: recipient, token_id: token_id };
@@ -219,9 +219,9 @@ program token_registry.aleo {
             external_authorization_required: external_authorization_required,
             authorized_until: authorized_until,
         };
-        let role_owner: TokenOwner = TokenOwner { account: self.caller, token_id: token_id };
+        let role_owner: TokenOwner = TokenOwner { account: std::ctx::caller(), token_id: token_id };
         let role_owner_hash: field = BHP256::hash_to_field(role_owner);
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return (
             token_out,
             final {
@@ -253,7 +253,7 @@ program token_registry.aleo {
     }
 
     fn burn_public(public token_id: field, public owner: address, public amount: u128) -> Final {
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         let token_owner: TokenOwner = TokenOwner { account: owner, token_id: token_id };
         let balance_key: field = BHP256::hash_to_field(token_owner);
         let role_owner: TokenOwner = TokenOwner { account: caller, token_id: token_id };
@@ -333,7 +333,7 @@ program token_registry.aleo {
         public authorized_until: u32,
     ) -> Final {
         let balance_key: field = BHP256::hash_to_field(owner);
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return final {
             let token: TokenMetadata = registered_tokens.get(owner.token_id);
             assert(token.external_authorization_required);
@@ -377,11 +377,11 @@ program token_registry.aleo {
         public recipient: address,
         public amount: u128,
     ) -> Final {
-        let sender_key: TokenOwner = TokenOwner { account: self.caller, token_id: token_id };
+        let sender_key: TokenOwner = TokenOwner { account: std::ctx::caller(), token_id: token_id };
         let sender_key_hash: field = BHP256::hash_to_field(sender_key);
         let recipient_key: TokenOwner = TokenOwner { account: recipient, token_id: token_id };
         let recipient_balance_key: field = BHP256::hash_to_field(recipient_key);
-        let owner = self.caller;
+        let owner = std::ctx::caller();
         return final {
             let balance: Balance = authorized_balances.get(sender_key_hash);
             let token: TokenMetadata = registered_tokens.get(token_id);
@@ -427,11 +427,11 @@ program token_registry.aleo {
         public recipient: address,
         public amount: u128,
     ) -> Final {
-        let sender_key: TokenOwner = TokenOwner { account: self.signer, token_id: token_id };
+        let sender_key: TokenOwner = TokenOwner { account: std::ctx::signer(), token_id: token_id };
         let sender_key_hash: field = BHP256::hash_to_field(sender_key);
         let recipient_key: TokenOwner = TokenOwner { account: recipient, token_id: token_id };
         let recipient_balance_key: field = BHP256::hash_to_field(recipient_key);
-        let owner = self.signer;
+        let owner = std::ctx::signer();
         return final {
             let balance: Balance = authorized_balances.get(sender_key_hash);
             let token: TokenMetadata = registered_tokens.get(token_id);
@@ -478,7 +478,7 @@ program token_registry.aleo {
         public amount: u128,
     ) -> Final {
         let allowance: Allowance = Allowance {
-            account: self.caller,
+            account: std::ctx::caller(),
             spender: spender,
             token_id: token_id,
         };
@@ -495,7 +495,7 @@ program token_registry.aleo {
         public amount: u128,
     ) -> Final {
         let allowance: Allowance = Allowance {
-            account: self.caller,
+            account: std::ctx::caller(),
             spender: spender,
             token_id: token_id,
         };
@@ -520,9 +520,9 @@ program token_registry.aleo {
             external_authorization_required: external_authorization_required,
             authorized_until: authorized_until,
         };
-        let sender_key: TokenOwner = TokenOwner { account: self.caller, token_id: token_id };
+        let sender_key: TokenOwner = TokenOwner { account: std::ctx::caller(), token_id: token_id };
         let sender_key_hash: field = BHP256::hash_to_field(sender_key);
-        let owner = self.caller;
+        let owner = std::ctx::caller();
         return (
             token_out,
             final {
@@ -558,9 +558,9 @@ program token_registry.aleo {
             external_authorization_required: external_authorization_required,
             authorized_until: authorized_until,
         };
-        let sender_key: TokenOwner = TokenOwner { account: self.signer, token_id: token_id };
+        let sender_key: TokenOwner = TokenOwner { account: std::ctx::signer(), token_id: token_id };
         let sender_key_hash: field = BHP256::hash_to_field(sender_key);
-        let owner = self.signer;
+        let owner = std::ctx::signer();
         return (
             token_out,
             final {
@@ -599,7 +599,7 @@ program token_registry.aleo {
         };
         let allowance: Allowance = Allowance {
             account: owner,
-            spender: self.caller,
+            spender: std::ctx::caller(),
             token_id: token_id,
         };
         let allowance_key: field = BHP256::hash_to_field(allowance);
@@ -636,7 +636,7 @@ program token_registry.aleo {
     ) -> Final {
         let allowance: Allowance = Allowance {
             account: owner,
-            spender: self.caller,
+            spender: std::ctx::caller(),
             token_id: token_id,
         };
         let allowance_key: field = BHP256::hash_to_field(allowance);

@@ -32,12 +32,14 @@ report 'leo (binary on PATH)' "$leo_current" "$leo_latest"
 leo_pinned=$(grep -oE 'LEO_RELEASE: leo-lang-v[0-9.]+' "$ROOT/.github/workflows/ci.yml" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo '?')
 report 'leo (CI pin in ci.yml)' "$leo_pinned" "$leo_latest"
 
-# --- 3. aleo-devnode (ProvableHQ/aleo-devnode releases) ---
-devnode_latest=$(gh release list -R ProvableHQ/aleo-devnode --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo '?')
-devnode_current=$(aleo-devnode --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo 'not installed')
-report 'aleo-devnode (binary on PATH)' "$devnode_current" "$devnode_latest"
-devnode_pinned=$(grep -oE "DEVNODE_RELEASE: v[0-9.]+" "$ROOT/.github/workflows/ci.yml" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo '?')
-report 'aleo-devnode (CI pin in ci.yml)' "$devnode_pinned" "$devnode_latest"
+# --- 3. aleo-devnode (@provablehq/aleo-devnode on npm) ---
+# Distributed as a prebuilt-binary npm package, so the version is pinned in the
+# root package.json like any other dependency rather than by a CI release tag.
+devnode_latest=$(npm view @provablehq/aleo-devnode version 2>/dev/null || echo '?')
+devnode_pinned=$(node -e "process.stdout.write(require('$ROOT/package.json').devDependencies['@provablehq/aleo-devnode'] ?? '?')" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo '?')
+report 'aleo-devnode (root package.json)' "$devnode_pinned" "$devnode_latest"
+devnode_installed=$("$ROOT/node_modules/.bin/aleo-devnode" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo 'not installed')
+report 'aleo-devnode (installed)' "$devnode_installed" "$devnode_latest"
 
 # --- 4. aleo-dev-toolkit adaptor packages (npm) ---
 # Exact pins live in packages/react (wallet UIs) and packages/wallet-adapter

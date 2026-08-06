@@ -47,6 +47,33 @@ Run them during development when touching anything they cover.
 VEIL_INTEGRATION=1 pnpm exec vitest run packages/shield-swap/test/integration
 ```
 
+## The CLI is part of the contract
+
+`@provablehq/shield-swap-cli` (`packages/shield-swap-cli/`) is the runnable
+surface agents and traders drive the DEX with, and it consumes this package's
+public API. It is bound by the same rule as `examples/e2e-demo.ts` and
+`apps/loyalty-dapp/`: **when an action's signature or behaviour changes, the CLI
+changes in the same PR.** A stale command is a release blocker, not a follow-up.
+
+That means, in the same change:
+
+- Update every command that calls the action, and the runbook snippets in
+  `skills/*.md` that inline the same call.
+- Index a new command in the CLI's `README.md` and register it in
+  `packages/shield-swap-cli/src/registry.ts`, whose `COMMANDS` map is the only
+  place a subcommand is declared. `src/index.ts` only routes.
+- Typecheck the CLI. It imports `@provablehq/shield-swap-sdk` by name, which the
+  root `tsconfig.json` maps to this package's source, so no build is needed
+  first:
+
+  ```sh
+  pnpm --filter @provablehq/shield-swap-cli exec tsc --noEmit
+  ```
+
+- Dry-run each write command without `--execute` to prove the plan path still
+  works. Never submit a funded transaction to verify a change; that is the
+  human's call.
+
 ## Architecture you must respect
 
 - **Two signer paths.** Every private action supports a **local signer** (SDK /

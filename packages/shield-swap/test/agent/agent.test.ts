@@ -141,12 +141,26 @@ describe('createShieldSwapAgentTools — wiring', () => {
     expect(result.enabled).toBe(true)
   })
 
-  it('get_route handler coerces the string amount to a bigint for the API', async () => {
+  it('get_route handler passes the decimal amount through untouched', async () => {
     const calls: Record<string, unknown> = {}
     const tools = createShieldSwapAgentTools({ client: fakeClient(), api: fakeApi(calls) })
     const getRoute = tools.find((t) => t.schema.name === 'shield_swap_get_route')!
-    await getRoute.handler({ tokenIn: 'aField', tokenOut: 'bField', amountIn: '1000000000000000000' })
-    expect(calls.getRoute).toEqual({ token_in: 'aField', token_out: 'bField', amount_in: 10n ** 18n })
+    // The route endpoint is the one that speaks decimals rather than base units.
+    // Coercing to bigint here throws on '0.5', and an agent that passed base
+    // units instead would be quoted the pool's depth and build a slippage floor
+    // no real fill can meet.
+    await getRoute.handler({ tokenIn: 'aField', tokenOut: 'bField', amountIn: '0.5' })
+    expect(calls.getRoute).toEqual({ token_in: 'aField', token_out: 'bField', amount_in: '0.5' })
+  })
+
+  it('get_route schema tells agents the amount is decimal, not base units', async () => {
+    const tools = createShieldSwapAgentTools({ client: fakeClient(), api: fakeApi({}) })
+    const getRoute = tools.find((t) => t.schema.name === 'shield_swap_get_route')!
+    const amountIn = (getRoute.schema.inputSchema.properties as Record<string, { description: string }>).amountIn
+    // The schema is the instruction an agent follows, so a wrong one costs money
+    // rather than merely misleading.
+    expect(amountIn.description).toMatch(/DECIMAL/)
+    expect(amountIn.description).not.toMatch(/raw base units \(u128\)/)
   })
 
   it('authenticate handler signs the challenge with the client account, never leaks the JWT', async () => {

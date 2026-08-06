@@ -50,8 +50,15 @@ export interface OwnedPositionState {
  *   liquidity write actions.
  * @property frozen Whether the admin froze the position (blocks every
  *   liquidity operation until unfrozen).
+ * @property closed Whether the position was burned — true when the `positions`
+ *   entry is gone AND a record carrying its `token_id` has been consumed. Both
+ *   are needed: the entry is missing for an unfinalized mint too, and consumed
+ *   records are the normal state of a live position, since every liquidity
+ *   operation spends the PositionNFT and re-issues one under the same id. Always
+ *   `false` unless `includeClosed` asked for the scan that can prove it.
  * @property state The joined and derived chain state, or `null` while a
- *   fresh mint has not finalized into the `positions` mapping yet.
+ *   fresh mint has not finalized into the `positions` mapping yet. Always
+ *   `null` for a closed position, whose entry the burn removed.
  */
 export interface OwnedPosition {
   positionTokenId: string
@@ -63,6 +70,7 @@ export interface OwnedPosition {
   withdrawal: string
   record: OwnedRecord
   frozen: boolean
+  closed: boolean
   state: OwnedPositionState | null
 }
 
@@ -72,10 +80,15 @@ export interface OwnedPosition {
  * @property poolKey Restricts the listing to one pool's positions. Optional —
  *   without it, every owned position is returned.
  * @property program Program to read from. Defaults to `shield_swap.aleo`.
+ * @property includeClosed Also return positions the account has burned, marked
+ *   `closed`. Defaults to `false`. Costs a second record scan over spent
+ *   records, so it applies when a caller is reconciling history — a portfolio
+ *   view wants only the operable positions the default returns.
  */
 export type GetOwnedPositionsParameters = {
   poolKey?: string
   program?: string
+  includeClosed?: boolean
 }
 
 /** Every owned position — empty when the account holds none. */
@@ -120,21 +133,24 @@ export async function resolveOwnedPosition(
     withdrawal: nft.withdrawal,
     record: nft.record,
     frozen: frozenAt !== null,
+    // Resolving one position cannot prove a burn — that takes the spent scan in
+    // getOwnedPositions, which sets this on the entries it builds.
+    closed: false,
   }
   // No positions entry yet (finalize lag) — the record side alone.
   if (!position || !slot) return { ...base, state: null }
 
-  const { amount0, amount1 } = amountsForLiquidity(
-    slot.sqrt_price,
-    getSqrtPriceAtTickX128(nft.tickLower),
-    getSqrtPriceAtTickX128(nft.tickUpper),
-    position.liquidity,
-  )
+  const { amount0, amount1 } = amountsForLiquidity({
+    sqrtPriceX128: slot.sqrt_price,
+    sqrtLowerX128: getSqrtPriceAtTickX128(nft.tickLower),
+    sqrtUpperX128: getSqrtPriceAtTickX128(nft.tickUpper),
+    liquidity: position.liquidity,
+  })
   // An uninitialized boundary tick reads as zero outside-growth; that state
   // is only reachable at zero liquidity, where the fee delta multiplies out.
   const owedSince = (outsideLower: bigint, outsideUpper: bigint, global: bigint, last: bigint) =>
-    feeOwed(
-      feeGrowthInside({
+    feeOwed({
+      feeGrowthInsideNowX128: feeGrowthInside({
         tickCurrent: slot.tick,
         tickLower: nft.tickLower,
         tickUpper: nft.tickUpper,
@@ -142,9 +158,9 @@ export async function resolveOwnedPosition(
         feeGrowthOutsideUpperX128: outsideUpper,
         feeGrowthGlobalX128: global,
       }),
-      last,
-      position.liquidity,
-    )
+      feeGrowthInsideLastX128: last,
+      liquidity: position.liquidity,
+    })
 
   return {
     ...base,
@@ -225,10 +241,64 @@ export async function getOwnedPositions(
   const program = params.program ?? SHIELD_SWAP
   const nfts = await listPositionNFTs(client, { program, poolKey: params.poolKey })
 
+  // A burn is proven by two facts together: the `positions` entry is gone AND a
+  // record for that token id has been consumed. Neither alone is enough. The
+  // entry is absent for an unfinalized mint too, and consumed records are the
+  // normal state of a live position, since every liquidity operation spends the
+  // PositionNFT and re-issues one under the same token id.
+  //
+  // Taking both also beats waiting for the record side alone: on a burn the
+  // mapping drops the entry as soon as the transaction finalizes, while the
+  // scanner marks the record spent on its own schedule — minutes later.
+  const spentIds = new Set<string>()
+  const spentOnly = new Map<string, PositionNFTInfo>()
+  if (params.includeClosed) {
+    const held = new Set(nfts.map((nft) => nft.tokenId))
+    const spent = await listPositionNFTs(client, {
+      program,
+      poolKey: params.poolKey,
+      statusFilter: 'spent',
+    })
+    for (const nft of spent) {
+      // Verified rather than trusted: a record provider that ignores
+      // `statusFilter` answers this scan with unspent records, and taking those
+      // as burn evidence would report every unfinalized mint as closed. A
+      // provider that reports no status at all is trusted, since the filter is
+      // then the only signal there is.
+      if (nft.record.spent === false) continue
+      spentIds.add(nft.tokenId)
+      // Keyed by token id, so an operated-on position collapses to one entry.
+      // Which record wins does not matter: a position's range is fixed at mint.
+      if (!held.has(nft.tokenId)) spentOnly.set(nft.tokenId, nft)
+    }
+  }
+  const orphans = [...spentOnly.values()]
+
   // One slot read per pool, shared as an un-awaited promise so it resolves
   // concurrently with every position's own reads.
-  const poolKeys = [...new Set(nfts.map((nft) => nft.poolKey))]
+  const poolKeys = [...new Set([...nfts, ...orphans].map((nft) => nft.poolKey))]
   const slots = new Map(poolKeys.map((key) => [key, getSlot(client, { poolKey: key, program })]))
 
-  return Promise.all(nfts.map((nft) => resolveOwnedPosition(client, { nft, program, slot: slots.get(nft.poolKey)! })))
+  const held = (
+    await Promise.all(
+      nfts.map((nft) => resolveOwnedPosition(client, { nft, program, slot: slots.get(nft.poolKey)! })),
+    )
+  ).map((position) => ({
+    ...position,
+    closed: position.state === null && spentIds.has(position.positionTokenId),
+  }))
+  if (!orphans.length) return held
+
+  // Ids seen only among spent records. A missing entry makes them closed; an
+  // entry that is still there makes them a live position whose current record the
+  // scanner has not served yet, and those are dropped rather than returned —
+  // their `record` is consumed, so handing it back as operable would fail at
+  // proving. They reappear as ordinary open positions once the scan catches up.
+  const resolvedOrphans = await Promise.all(
+    orphans.map((nft) => resolveOwnedPosition(client, { nft, program, slot: slots.get(nft.poolKey)! })),
+  )
+  return [
+    ...held,
+    ...resolvedOrphans.filter((position) => position.state === null).map((position) => ({ ...position, closed: true })),
+  ]
 }

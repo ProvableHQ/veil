@@ -16,10 +16,10 @@ range, live amounts, uncollected fees) from the account's records.
 
 ```ts
 import { roundTickToSpacing } from '@provablehq/shield-swap-sdk'
-import { loadSession, getHoldings, saveState } from '$SKILLS/scripts/session.js'
+import { loadSession, saveState } from '@provablehq/shield-swap-cli/session'
 
 const { client, account, state } = await loadSession()
-const holdings = await getHoldings(client, account.address)
+const balances = await client.getBalances()
 
 // A pool whose BOTH tokens the account holds privately, on a fee tier the
 // CURRENT deployment registers. Two traps here:
@@ -30,7 +30,9 @@ const holdings = await getHoldings(client, account.address)
 //    current registry no longer lists; reading tick spacing for such a fee
 //    can hang the node endpoint. ALWAYS gate on isFeeTierValid first.
 const pools = (await client.api.getPools({ limit: 50 })).data
-const held = (id: string) => holdings.find((h) => h.tokenId === id && h.privateAmount > 0n)
+// Keyed by token id, so no scanning: getBalances already reconciled the
+// registry against records and public balances.
+const held = (id: string) => (balances[id]?.private ?? 0n) > 0n
 
 let pool, slot: Awaited<ReturnType<typeof client.getSlot>>, spacing: number | null = null
 for (const p of pools) {
@@ -58,7 +60,6 @@ valid but earns nothing until price enters it.
 ## Mint the position
 
 ```ts
-import { appendPosition, buildDexImports } from '$SKILLS/scripts/session.js'
 
 // The AMM-side token programs feed the imports ONLY. Do not pass them as
 // `token0Program`/`token1Program` — those name the programs holding the
@@ -66,7 +67,7 @@ import { appendPosition, buildDexImports } from '$SKILLS/scripts/session.js'
 // UNDERLYING program, which the SDK resolves on chain by itself.
 const p0 = pool.token0_info!.amm_token_program!
 const p1 = pool.token1_info!.amm_token_program!
-const imports = await buildDexImports(client, [p0, p1])
+const imports = await client.resolveDexImports({ tokenPrograms: [p0, p1] })
 
 // Deposit a small slice of each holding; the contract balances the two
 // against the range and refunds the excess side as change. Deposits obey
@@ -86,14 +87,9 @@ const { positionTokenId, transactionId } = await client.mint({
   imports,
 })
 
-// PERSIST IMMEDIATELY — the id is the key to the position.
-appendPosition({
-  positionTokenId: positionTokenId!,
-  poolKey: pool.key,
-  token0Program: p0,
-  token1Program: p1,
-  openedAt: new Date().toISOString(),
-})
+// Nothing to persist: the position lives in a record the account holds, and
+// `client.getOwnedPositions()` rediscovers it — with its pool, ticks, and what
+// it can collect — on any later run or after a crash.
 console.log('minted position', positionTokenId, 'tx', transactionId)
 ```
 
@@ -141,7 +137,7 @@ await client.decreaseLiquidity({
 Full exit = decrease everything, collect everything, then `burn`:
 
 ```ts
-import { loadState, saveState } from '$SKILLS/scripts/session.js'
+import { loadState, saveState } from '@provablehq/shield-swap-cli/session'
 
 await client.decreaseLiquidity({ poolKey: pool.key, positionTokenId, liquidityToRemove: position!.liquidity })
 // … collect per collecting.md until nothing representable remains

@@ -33,7 +33,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@provablehq/veil-core": "workspace:^",
+    "@provablehq/veil-core": "workspace:>=0.6.0 <1.0.0",
     "@provablehq/aleo-wallet-adaptor-core": "*"
   },
   "peerDependenciesMeta": {

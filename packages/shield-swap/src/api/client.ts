@@ -117,7 +117,7 @@ function sessionTokenFrom(res: Response, body: unknown): string | undefined {
  * @example
  * const api = new ApiClient()
  * const pools = await api.getPools()
- * const route = await api.getRoute({ tokenIn, tokenOut, amountIn: 10n ** 18n })
+ * const route = await api.getRoute({ token_in, token_out, amount_in: '1.5' })
  */
 export class ApiClient {
   private readonly resolveBaseUrl: () => string
@@ -479,9 +479,27 @@ export class ApiClient {
    * Use the quoted output as `expectedOut` for `swap`'s slippage
    * math — a wrong quote only widens protection, never moves funds.
    */
-  async getRoute(query: { token_in: string; token_out: string; amount_in?: bigint }): Promise<Schemas['RouteResponseDoc']> {
+  /**
+   * Quotes the best route between two tokens.
+   *
+   * `amount_in` is a DECIMAL string in the input token's own units — `'0.5'`, not
+   * `'500000'` — and `estimated_amount_out` comes back the same way, in the
+   * output token's units. This is the one place the API departs from the base
+   * units everything else here takes, and getting it wrong is expensive rather
+   * than merely wrong: quoting `'500000'` for half a token returns the depth of
+   * the pool, and a slippage floor built on that reverts on finalize.
+   * `formatUnits` and `parseUnits` convert either way.
+   *
+   * @param query Token ids as field literals, and the optional decimal amount.
+   * @returns The route's hops and its quote, both in decimal units.
+   */
+  async getRoute(query: {
+    token_in: string
+    token_out: string
+    amount_in?: string
+  }): Promise<Schemas['RouteResponseDoc']> {
     return this.request('GET', '/route', {
-      query: { token_in: query.token_in, token_out: query.token_out, amount_in: query.amount_in?.toString() },
+      query: { token_in: query.token_in, token_out: query.token_out, amount_in: query.amount_in },
       auth: true,
     })
   }

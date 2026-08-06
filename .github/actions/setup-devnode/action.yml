@@ -1,12 +1,13 @@
 name: Set up the Aleo devnode toolchain
-description: Installs pnpm + Node, the repo deps, and the pinned leo + aleo-devnode binaries.
+description: >
+  Installs pnpm + Node, the repo deps, and the pinned leo binary. aleo-devnode
+  is not installed here — it ships as the @provablehq/aleo-devnode npm package,
+  so `pnpm install` puts it in node_modules/.bin and the version is pinned in
+  package.json like any other dependency.
 
 inputs:
   leo-release:
     description: leo release tag (e.g. leo-lang-v4.3.2)
-    required: true
-  devnode-release:
-    description: aleo-devnode release tag (e.g. v0.2.0)
     required: true
 
 runs:
@@ -21,13 +22,13 @@ runs:
         cache: pnpm
     - run: pnpm install --frozen-lockfile
       shell: bash
-    - name: Cache Aleo toolchain
+    - name: Cache leo
       id: toolchain
       uses: actions/cache@v4
       with:
         path: ~/.aleo-tools
-        key: aleo-tools-${{ inputs.leo-release }}-${{ inputs.devnode-release }}
-    - name: Install leo and aleo-devnode
+        key: aleo-tools-${{ inputs.leo-release }}
+    - name: Install leo
       if: steps.toolchain.outputs.cache-hit != 'true'
       shell: bash
       run: |
@@ -35,15 +36,14 @@ runs:
         curl -fsSL -o /tmp/leo.zip \
           "https://github.com/ProvableHQ/leo/releases/download/${{ inputs.leo-release }}/${{ inputs.leo-release }}-x86_64-unknown-linux-gnu.zip"
         unzip -o /tmp/leo.zip -d ~/.aleo-tools
-        curl -fsSL -o /tmp/devnode.zip \
-          "https://github.com/ProvableHQ/aleo-devnode/releases/download/${{ inputs.devnode-release }}/aleo-devnode-${{ inputs.devnode-release }}-x86_64-unknown-linux-gnu.zip"
-        unzip -o /tmp/devnode.zip -d ~/.aleo-tools
-        chmod +x ~/.aleo-tools/leo ~/.aleo-tools/aleo-devnode
-    - name: Add toolchain to PATH
+        chmod +x ~/.aleo-tools/leo
+    - name: Add leo to PATH
       shell: bash
       run: echo "$HOME/.aleo-tools" >> "$GITHUB_PATH"
     - name: Toolchain versions
       shell: bash
       run: |
         leo --version
-        aleo-devnode --version
+        # From node_modules/.bin, which is why it is not on GITHUB_PATH: pnpm
+        # puts it on PATH for the test commands that spawn it.
+        pnpm exec aleo-devnode --version

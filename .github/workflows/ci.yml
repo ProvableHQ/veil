@@ -11,7 +11,6 @@ concurrency:
 
 env:
   LEO_RELEASE: leo-lang-v4.3.4
-  DEVNODE_RELEASE: v0.2.0
 
 jobs:
   unit:
@@ -34,6 +33,21 @@ jobs:
       # there passes silently — these need their own run to mean anything.
       - name: Type-level tests
         run: pnpm vitest --typecheck.only run
+      # codegen and react do not extend the root tsconfig, so they get none of
+      # its `paths` and resolve workspace imports through node_modules to
+      # `dist`. Without a build they fail to resolve at all.
+      - name: Build packages
+        run: pnpm -r build
+      # Every package's own sources. `pnpm vitest run` only compiles what a test
+      # imports, so a package with no tests — the CLI — would otherwise ship
+      # unchecked.
+      - name: Typecheck packages
+        run: pnpm --filter './packages/*' exec tsc --noEmit
+      # Scoped to the Shield Swap examples for now. The older examples at the
+      # root of examples/ have pre-existing errors — a field rename drifted past
+      # them unnoticed, which is exactly what this step prevents recurring.
+      - name: Typecheck examples
+        run: npx tsc --noEmit -p examples/shield-swap/tsconfig.json
       - name: Typecheck reference dApp
         run: pnpm --filter @provablehq/veil-loyalty-dapp exec tsc --noEmit
 
@@ -83,7 +97,6 @@ jobs:
       - uses: ./.github/actions/setup-devnode
         with:
           leo-release: ${{ env.LEO_RELEASE }}
-          devnode-release: ${{ env.DEVNODE_RELEASE }}
       # Every devnode suite binds 127.0.0.1:3030 — run the files strictly
       # sequentially so two devnodes never race for the port.
       - name: Devnode e2e tests
@@ -106,7 +119,6 @@ jobs:
       - uses: ./.github/actions/setup-devnode
         with:
           leo-release: ${{ env.LEO_RELEASE }}
-          devnode-release: ${{ env.DEVNODE_RELEASE }}
       - name: Shield Swap AMM lifecycle e2e
         run: >
           pnpm vitest run --no-file-parallelism

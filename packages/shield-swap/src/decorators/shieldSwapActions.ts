@@ -51,6 +51,11 @@ import {
 import { createPool, type CreatePoolParameters, type CreatePoolReturnType } from '../actions/liquidity/createPool.js'
 import { mint, type MintParameters, type MintReturnType } from '../actions/liquidity/mint.js'
 import {
+  previewMint,
+  type PreviewMintParameters,
+  type PreviewMintReturnType,
+} from '../actions/liquidity/previewMint.js'
+import {
   increaseLiquidity,
   type IncreaseLiquidityParameters,
   type IncreaseLiquidityReturnType,
@@ -70,6 +75,8 @@ import {
 import { getBalances, type GetBalancesParameters, type GetBalancesReturnType } from '../utils/balances.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hints.js'
 import { resolveDexImports, type ResolveDexImportsParameters } from '../utils/imports.js'
+import { tokenData, listTokens, type TokenInfo } from '../utils/tokens.js'
+import { planSwap, type PlanSwapParameters, type SwapPlan } from '../actions/swap/planSwap.js'
 import { reserveBlindedIdentity } from '../actions/blinding/reserveBlindedIdentity.js'
 import { syncBlindedIdentities } from '../actions/blinding/syncBlindedIdentities.js'
 import { recordBlindedSwap, type RecordBlindedSwapParameters } from '../actions/blinding/recordBlindedSwap.js'
@@ -122,6 +129,17 @@ export type ShieldSwapActionsConfig = {
  *   given token programs plus the DEX program's own declared imports. Every
  *   write action's `imports` parameter takes the result directly. Hits the
  *   network once per unique program.
+ * @property tokenData Resolves a token by symbol or id against the client's
+ *   network, so a caller can take `USDCx` from a person and hand an id to an
+ *   action. Cached per client after the first call.
+ * @property listTokens The network's token registry, cached per client.
+ * @property planSwap Turns "sell this for that" into an executable plan: the
+ *   route from the API, tradeability checked on chain for every hop, the quote,
+ *   a slippage floor, and the `imports` the write needs. Reads only.
+ * @property previewMint Turns a deposit budget into the position a mint would
+ *   open: the spacing-aligned bounds (from explicit ticks or a percentage width
+ *   around the active tick), the liquidity that results, and how much of each
+ *   side is actually consumed. Reads only — three mapping reads.
  * @property reserveBlindedIdentity Reserves the next unused blinded identity
  *   from the configured store and returns it for a swap's `blindedIdentity`.
  *   Required for concurrent swaps from one local account: deriving per swap
@@ -180,6 +198,10 @@ export type ShieldSwapActions = {
   getBalances: (params?: GetBalancesParameters) => Promise<GetBalancesReturnType>
   pickInsertHint: (params: PickInsertHintParameters) => Promise<number>
   resolveDexImports: (params: ResolveDexImportsParameters) => Promise<Record<string, string>>
+  tokenData: (symbolOrId: string) => Promise<TokenInfo>
+  listTokens: () => Promise<TokenInfo[]>
+  planSwap: (params: PlanSwapParameters) => Promise<SwapPlan>
+  previewMint: (params: PreviewMintParameters) => Promise<PreviewMintReturnType>
   reserveBlindedIdentity: (params?: { program?: string; maxScan?: number }) => Promise<BlindedIdentityRecord>
   recordBlindedSwap: (params: RecordBlindedSwapParameters) => Promise<boolean>
   syncBlindedIdentities: (params?: { program?: string }) => Promise<BlindedIdentityRecord[]>
@@ -320,6 +342,10 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       getBalances: (p) => getBalances(client, api ?? missingApi, p),
       pickInsertHint: (p) => pickInsertHint(client, withTicks(withProgram(p))),
       resolveDexImports: (p) => resolveDexImports(client, withProgram(p)),
+      tokenData: (symbolOrId) => tokenData(api ?? missingApi, symbolOrId),
+      listTokens: () => listTokens(api ?? missingApi),
+      planSwap: (p) => planSwap(client, api ?? missingApi, withProgram(p)),
+      previewMint: (p) => previewMint(client, withProgram(p)),
       reserveBlindedIdentity: (p) =>
         reserveBlindedIdentity(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
       recordBlindedSwap: (p) => recordBlindedSwap(blindedIdentities, p),

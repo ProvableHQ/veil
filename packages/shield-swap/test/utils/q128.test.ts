@@ -23,6 +23,7 @@ import {
   feeOwed,
   amountsForLiquidity,
   liquidityForAmounts,
+  liquidityForAmount,
 } from '../../src/utils/q128.js'
 
 // Vectors generated once from amm-v3's scripts/q128 Python oracles — the
@@ -248,6 +249,112 @@ describe('amountsForLiquidity', () => {
   })
 })
 
+describe('deprecated positional call shapes', () => {
+  // The object form is the one to write; the positional overloads stay until the
+  // next major, and callers on them must keep getting the same numbers. Much of
+  // this suite still calls positionally, which exercises them throughout — these
+  // assert the two shapes agree rather than merely that each runs.
+  const lower = getSqrtPriceAtTickX128(-64400)
+  const upper = getSqrtPriceAtTickX128(-60200)
+  const inside = getSqrtPriceAtTickX128(-62000)
+  const L = 94217047056n
+
+  it('amountsForLiquidity agrees across shapes', () => {
+    for (const roundUp of [false, true]) {
+      expect(amountsForLiquidity(inside, lower, upper, L, roundUp)).toEqual(
+        amountsForLiquidity({
+          sqrtPriceX128: inside,
+          sqrtLowerX128: lower,
+          sqrtUpperX128: upper,
+          liquidity: L,
+          roundUp,
+        }),
+      )
+    }
+    // The positional form's roundUp default must survive too.
+    expect(amountsForLiquidity(inside, lower, upper, L)).toEqual(
+      amountsForLiquidity({ sqrtPriceX128: inside, sqrtLowerX128: lower, sqrtUpperX128: upper, liquidity: L }),
+    )
+  })
+
+  it('amount deltas agree across shapes', () => {
+    for (const roundUp of [false, true]) {
+      const params = { sqrtLowerX128: lower, sqrtUpperX128: upper, liquidity: L, roundUp }
+      expect(amount0DeltaX128(lower, upper, L, roundUp)).toBe(amount0DeltaX128(params))
+      expect(amount1DeltaX128(lower, upper, L, roundUp)).toBe(amount1DeltaX128(params))
+    }
+  })
+
+  it('feeOwed agrees across shapes', () => {
+    expect(feeOwed(3n * Q128, 0n, 7n)).toBe(
+      feeOwed({ feeGrowthInsideNowX128: 3n * Q128, feeGrowthInsideLastX128: 0n, liquidity: 7n }),
+    )
+    // Including the wrapping path, where transposing the two growth figures is
+    // the mistake the object form exists to prevent.
+    expect(feeOwed(0n, Q128, 1n)).toBe(
+      feeOwed({ feeGrowthInsideNowX128: 0n, feeGrowthInsideLastX128: Q128, liquidity: 1n }),
+    )
+  })
+})
+
+describe('liquidityForAmount', () => {
+  const lower = getSqrtPriceAtTickX128(-64400)
+  const upper = getSqrtPriceAtTickX128(-60200)
+  const inside = getSqrtPriceAtTickX128(-62000)
+
+  const range = { sqrtLowerX128: lower, sqrtUpperX128: upper }
+
+  it('derives the other side as a minimum the named side can pay for', () => {
+    // The point of the single-sided form: name one amount, and the other is
+    // derived rather than capped. Feeding the result back through the pair form
+    // recovers the same liquidity, so the derived amount is sufficient.
+    const named0 = 5_000_000n
+    const liquidity = liquidityForAmount({ sqrtPriceX128: inside, ...range, side: 0, amount: named0 })
+    const { amount0, amount1 } = amountsForLiquidity({
+      sqrtPriceX128: inside,
+      ...range,
+      liquidity,
+      roundUp: true,
+    })
+    expect(amount0).toBeLessThanOrEqual(named0)
+    expect(amount1).toBeGreaterThan(0n)
+    expect(liquidityForAmounts({ sqrtPriceX128: inside, ...range, amount0, amount1 })).toBe(liquidity)
+  })
+
+  it('agrees with the pair form when the named side is the binding one', () => {
+    // A generous ceiling on the other side must not change the answer — that
+    // equivalence is what makes the single-sided form safe to substitute.
+    const named1 = 250_000n
+    const single = liquidityForAmount({ sqrtPriceX128: inside, ...range, side: 1, amount: named1 })
+    expect(
+      liquidityForAmounts({ sqrtPriceX128: inside, ...range, amount0: 10n ** 30n, amount1: named1 }),
+    ).toBe(single)
+  })
+
+  it('reports zero for a side the price puts out of use', () => {
+    // Above the range a position is all token1, so token0 funds nothing; below
+    // it, the reverse. Zero here means "wrong side", not "deposit more".
+    const big = 10n ** 18n
+    expect(liquidityForAmount({ sqrtPriceX128: upper, ...range, side: 0, amount: big })).toBe(0n)
+    expect(liquidityForAmount({ sqrtPriceX128: lower, ...range, side: 1, amount: big })).toBe(0n)
+    // The usable side still prices over the full width there.
+    expect(liquidityForAmount({ sqrtPriceX128: upper, ...range, side: 1, amount: big })).toBeGreaterThan(0n)
+    expect(liquidityForAmount({ sqrtPriceX128: lower, ...range, side: 0, amount: big })).toBeGreaterThan(0n)
+  })
+
+  it('takes bounds in either order', () => {
+    expect(
+      liquidityForAmount({
+        sqrtPriceX128: inside,
+        sqrtLowerX128: upper,
+        sqrtUpperX128: lower,
+        side: 0,
+        amount: 5_000_000n,
+      }),
+    ).toBe(liquidityForAmount({ sqrtPriceX128: inside, ...range, side: 0, amount: 5_000_000n }))
+  })
+})
+
 describe('liquidityForAmounts', () => {
   const lower = getSqrtPriceAtTickX128(-64400)
   const upper = getSqrtPriceAtTickX128(-60200)
@@ -264,7 +371,7 @@ describe('liquidityForAmounts', () => {
         for (const p of [lo, getSqrtPriceAtTickX128(t), hi]) {
           for (const a0 of [1n, 10n ** 7n, 10n ** 20n]) {
             for (const a1 of [1n, 10n ** 7n, 10n ** 20n]) {
-              const liquidity = liquidityForAmounts(p, lo, hi, a0, a1)
+              const liquidity = liquidityForAmounts({ sqrtPriceX128: p, sqrtLowerX128: lo, sqrtUpperX128: hi, amount0: a0, amount1: a1 })
               if (liquidity === 0n) continue
               const back = amountsForLiquidity(p, lo, hi, liquidity, true)
               expect(back.amount0 <= a0 && back.amount1 <= a1).toBe(true)
@@ -279,32 +386,32 @@ describe('liquidityForAmounts', () => {
     for (const liquidity of [1n, 10n ** 7n, 10n ** 15n, 10n ** 25n]) {
       for (const p of [lower, inside, upper]) {
         const { amount0, amount1 } = amountsForLiquidity(p, lower, upper, liquidity, true)
-        expect(liquidityForAmounts(p, lower, upper, amount0, amount1)).toBeGreaterThanOrEqual(liquidity)
+        expect(liquidityForAmounts({ sqrtPriceX128: p, sqrtLowerX128: lower, sqrtUpperX128: upper, amount0: amount0, amount1: amount1 })).toBeGreaterThanOrEqual(liquidity)
       }
     }
   })
 
   it('price below the range: token0 binds and token1 is ignored', () => {
     const price = getSqrtPriceAtTickX128(-70000)
-    const liquidity = liquidityForAmounts(price, lower, upper, 10n ** 9n, 0n)
+    const liquidity = liquidityForAmounts({ sqrtPriceX128: price, sqrtLowerX128: lower, sqrtUpperX128: upper, amount0: 10n ** 9n, amount1: 0n })
     expect(liquidity).toBeGreaterThan(0n)
     // No token1 is consumed there, so its amount cannot change the answer.
-    expect(liquidityForAmounts(price, lower, upper, 10n ** 9n, 10n ** 30n)).toBe(liquidity)
+    expect(liquidityForAmounts({ sqrtPriceX128: price, sqrtLowerX128: lower, sqrtUpperX128: upper, amount0: 10n ** 9n, amount1: 10n ** 30n })).toBe(liquidity)
   })
 
   it('price above the range: token1 binds and token0 is ignored', () => {
     const price = getSqrtPriceAtTickX128(-50000)
-    const liquidity = liquidityForAmounts(price, lower, upper, 0n, 10n ** 9n)
+    const liquidity = liquidityForAmounts({ sqrtPriceX128: price, sqrtLowerX128: lower, sqrtUpperX128: upper, amount0: 0n, amount1: 10n ** 9n })
     expect(liquidity).toBeGreaterThan(0n)
-    expect(liquidityForAmounts(price, lower, upper, 10n ** 30n, 10n ** 9n)).toBe(liquidity)
+    expect(liquidityForAmounts({ sqrtPriceX128: price, sqrtLowerX128: lower, sqrtUpperX128: upper, amount0: 10n ** 30n, amount1: 10n ** 9n })).toBe(liquidity)
   })
 
   it('in range: the shorter side caps the position', () => {
     const plenty = 10n ** 30n
     const short = 10n ** 6n
-    const capped0 = liquidityForAmounts(inside, lower, upper, short, plenty)
-    const capped1 = liquidityForAmounts(inside, lower, upper, plenty, short)
-    const both = liquidityForAmounts(inside, lower, upper, short, short)
+    const capped0 = liquidityForAmounts({ sqrtPriceX128: inside, sqrtLowerX128: lower, sqrtUpperX128: upper, amount0: short, amount1: plenty })
+    const capped1 = liquidityForAmounts({ sqrtPriceX128: inside, sqrtLowerX128: lower, sqrtUpperX128: upper, amount0: plenty, amount1: short })
+    const both = liquidityForAmounts({ sqrtPriceX128: inside, sqrtLowerX128: lower, sqrtUpperX128: upper, amount0: short, amount1: short })
     // Whichever side is short governs, and shorting both cannot exceed either.
     expect(both).toBe(capped0 < capped1 ? capped0 : capped1)
     expect(both).toBeLessThanOrEqual(capped0)
@@ -312,15 +419,15 @@ describe('liquidityForAmounts', () => {
   })
 
   it('orders the bounds itself (sa/sb may arrive swapped)', () => {
-    expect(liquidityForAmounts(inside, upper, lower, 10n ** 9n, 10n ** 9n)).toBe(
-      liquidityForAmounts(inside, lower, upper, 10n ** 9n, 10n ** 9n),
+    expect(liquidityForAmounts({ sqrtPriceX128: inside, sqrtLowerX128: upper, sqrtUpperX128: lower, amount0: 10n ** 9n, amount1: 10n ** 9n })).toBe(
+      liquidityForAmounts({ sqrtPriceX128: inside, sqrtLowerX128: lower, sqrtUpperX128: upper, amount0: 10n ** 9n, amount1: 10n ** 9n }),
     )
   })
 
   it('is zero for dust against a wide range', () => {
     const wide0 = getSqrtPriceAtTickX128(-400000)
     const wide1 = getSqrtPriceAtTickX128(400000)
-    expect(liquidityForAmounts(wide0, wide0, wide1, 1n, 1n)).toBe(0n)
-    expect(liquidityForAmounts(inside, lower, upper, 0n, 0n)).toBe(0n)
+    expect(liquidityForAmounts({ sqrtPriceX128: wide0, sqrtLowerX128: wide0, sqrtUpperX128: wide1, amount0: 1n, amount1: 1n })).toBe(0n)
+    expect(liquidityForAmounts({ sqrtPriceX128: inside, sqrtLowerX128: lower, sqrtUpperX128: upper, amount0: 0n, amount1: 0n })).toBe(0n)
   })
 })

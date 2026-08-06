@@ -24,6 +24,8 @@
       "@provablehq/shield-swap-sdk": ["./packages/shield-swap/src/index.ts"],
       "@provablehq/shield-swap-sdk/agent": ["./packages/shield-swap/src/agent/index.ts"],
       "@provablehq/shield-swap-sdk/mcp": ["./packages/shield-swap/src/mcp/index.ts"],
+      "@provablehq/shield-swap-sdk/node": ["./packages/shield-swap/src/node.ts"],
+      "@provablehq/veil-aleo-sdk/node": ["./packages/provable-sdk/src/node.ts"],
       "@provablehq/veil-aleo-bridges": ["./packages/bridge/src/index.ts"],
       "@provablehq/veil-aleo-bridges/agent": ["./packages/bridge/src/agent/index.ts"],
       "@provablehq/veil-aleo-bridges/mcp": ["./packages/bridge/src/mcp/index.ts"]

@@ -27,18 +27,6 @@ export const ROUTER_ADDRESSES = {
 } as const
 
 /**
- * The three shield wrapper programs and their underlying assets. Wrapped-ness
- * of arbitrary tokens is decided on-chain via the `from_wrapper_token_id`
- * mapping — this table only names the known deployments (record selection
- * needs the underlying program id before any network round-trip).
- */
-export const SHIELD_WRAPPERS = {
-  'shield_swap_arc20_credits.aleo': { underlying: 'credits.aleo', symbol: 'ALEO' },
-  'shield_swap_arc20_wrapped_usdcx.aleo': { underlying: 'test_usdcx_stablecoin.aleo', symbol: 'USDCx' },
-  'shield_swap_arc20_wrapped_usad.aleo': { underlying: 'test_usad_stablecoin.aleo', symbol: 'USAD' },
-} as const
-
-/**
  * The program every DEX action targets unless overridden.
  *
  * Follows the generated bindings' `PROGRAM_ID` — a single source of truth

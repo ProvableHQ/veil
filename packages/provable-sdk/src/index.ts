@@ -359,7 +359,28 @@ export interface AleoSdk {
  */
 export async function loadNetwork(name: SupportedNetwork): Promise<AleoSdk> {
   const sdk = (await loadSdk(name)) as SdkModule
+  silenceSdkLogs(sdk)
   return buildSdk(name, sdk)
+}
+
+/**
+ * Silences `@provablehq/sdk`'s own console output on a freshly loaded module.
+ *
+ * The SDK writes failed requests and retries straight to the console, so a record
+ * scan that recovers after a transient 401 still prints one line per attempt.
+ * Those lines are not errors — Veil reports failure by throwing, and every retry
+ * that mattered is already reflected in what the call returns — but they read as
+ * failure to anyone watching a script run, and they cannot be attributed to a
+ * caller. Called on every load, including a network switch, because the log level
+ * is per-module rather than process-wide.
+ *
+ * @param sdk A module returned by `@provablehq/sdk/dynamic.js`.
+ */
+function silenceSdkLogs(sdk: SdkModule): void {
+  // Feature-detected rather than called directly: the export is absent from
+  // older pins, and a missing logger must not fail the load.
+  const { setLogLevel } = sdk as unknown as { setLogLevel?: (level: 'silent') => void }
+  setLogLevel?.('silent')
 }
 
 function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): AleoSdk {
@@ -745,6 +766,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           )
         }
         currentSdk = (await loadSdk(newNetwork as SupportedNetwork)) as SdkModule
+        silenceSdkLogs(currentSdk)
         keyProvider = new currentSdk.AleoKeyProvider()
         keyProvider.useCache(true)
         // Confirmation polling and the prover endpoint both read this, so it
@@ -1129,7 +1151,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 // and the node agree on which consensus version is active at each height. The
 // entry count must also equal the WASM SDK's consensus-version count exactly —
 // a shorter list panics with an opaque `unreachable` inside the WASM.
-const DEVNODE_CONSENSUS_HEIGHTS = '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16'
+const DEVNODE_CONSENSUS_HEIGHTS = '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17'
 
 function privateKeyToAccount(privateKey: string): LocalAccount<'privateKey'> {
   const sdkAccount = new Account({ privateKey })
