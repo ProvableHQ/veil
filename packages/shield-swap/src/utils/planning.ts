@@ -3,7 +3,7 @@ import type { ApiClient } from '../api/client.js'
 import { getSlot } from '../actions/reads/getSlot.js'
 import { getTradeControls } from '../actions/reads/getTradeControls.js'
 import { resolveDexImports } from './imports.js'
-import { resolveToken, type TokenInfo } from './tokens.js'
+import { tokenData, type TokenInfo } from './tokens.js'
 import { parseUnits, formatUnits } from './units.js'
 
 /**
@@ -91,8 +91,8 @@ export async function planSwap(
   params: PlanSwapParameters,
 ): Promise<SwapPlan> {
   const [from, to] = await Promise.all([
-    resolveToken(api, params.from),
-    resolveToken(api, params.to),
+    tokenData(api, params.from),
+    tokenData(api, params.to),
   ])
   if (from.id === to.id) throw new Error(`cannot swap ${from.symbol} for itself`)
 
@@ -137,7 +137,7 @@ export async function planSwap(
   const touched = new Set<string>([from.id, to.id, ...hops.flatMap((hop) => [hop.token_in, hop.token_out])])
   const programs: string[] = []
   for (const tokenId of touched) {
-    const token = await resolveToken(api, tokenId)
+    const token = await tokenData(api, tokenId)
     if (token.ammTokenProgram) programs.push(token.ammTokenProgram)
   }
   const imports = await resolveDexImports(client, {

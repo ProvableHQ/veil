@@ -145,9 +145,6 @@ export {
   SHIELD_SWAP_FREEZELIST,
   SHIELD_SWAP_MULTISIG,
   ROUTER_ADDRESSES,
-  SHIELD_WRAPPERS,
-  SHIELD_WRAPPERS_BY_NETWORK,
-  shieldWrappersFor,
 } from './constants.js'
 
 // Record selection + record-derived balances (local-signer path; wallet
@@ -181,6 +178,11 @@ export {
 // collect owed tokens, and burn the drained position.
 export { createPool, type CreatePoolParameters, type CreatePoolReturnType } from './actions/liquidity/createPool.js'
 export { mint, type MintParameters, type MintReturnType } from './actions/liquidity/mint.js'
+export {
+  previewMint,
+  type PreviewMintParameters,
+  type PreviewMintReturnType,
+} from './actions/liquidity/previewMint.js'
 export { formatMintPositionRequest, type MintPositionRequestInput } from './utils/params.js'
 export {
   increaseLiquidity,
@@ -196,7 +198,7 @@ export { collect, type CollectParameters, type CollectReturnType } from './actio
 export { burn, type BurnParameters, type BurnReturnType } from './actions/liquidity/burn.js'
 export { pickInsertHint, type PickInsertHintParameters } from './utils/tick-hints.js'
 export { resolveDexImports, type ResolveDexImportsParameters } from './utils/imports.js'
-export { resolveToken, listTokens, type TokenInfo } from './utils/tokens.js'
+export { tokenData, listTokens, type TokenInfo } from './utils/tokens.js'
 export { planSwap, type SwapPlan, type PlanSwapParameters } from './utils/planning.js'
 export { parseUnits, formatUnits } from './utils/units.js'
 
@@ -277,6 +279,7 @@ export {
   feeOwed,
   amountsForLiquidity,
   liquidityForAmounts,
+  liquidityForAmount,
 } from './utils/q128.js'
 export {
   resolveTokenRoute,

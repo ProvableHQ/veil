@@ -132,6 +132,138 @@ describe('getOwnedPositions', () => {
   })
 })
 
+describe('getOwnedPositions closed detection', () => {
+  /** A PositionNFT record for one token id, with a distinct nonce per record. */
+  const nftRecord = (tokenId: string, nonce: number) =>
+    POSITION_RECORD.replace('555field.private', `${tokenId}.private`).replace(
+      '_nonce: 1group',
+      `_nonce: ${nonce}group`,
+    )
+
+  /**
+   * Fake serving the two scans separately, which is the whole point of the
+   * detection: `unspent` decides what is open, `spent` decides what is closed.
+   */
+  async function splitClient(
+    unspent: string[],
+    spent: string[],
+    overrides: Record<string, string | null> = {},
+  ): Promise<Client> {
+    const base = await positionClient(overrides, unspent)
+    return {
+      ...base,
+      request: async (req: {
+        method: string
+        params: { statusFilter?: string; mapping?: string; key?: string; program?: string }
+      }) => {
+        if (req.method === 'requestRecords') {
+          const wanted = req.params.statusFilter === 'spent' ? spent : unspent
+          return wanted.map((recordPlaintext, i) => ({
+            programName: req.params.program,
+            tag: `tag${req.params.statusFilter}${i}`,
+            recordPlaintext,
+            spent: req.params.statusFilter === 'spent',
+          }))
+        }
+        return (base as unknown as { request: (r: unknown) => Promise<unknown> }).request(req)
+      },
+    } as unknown as Client
+  }
+
+  it('does not scan spent records unless asked', async () => {
+    const scans: Array<string | undefined> = []
+    const base = await positionClient()
+    const client = {
+      ...base,
+      request: async (req: { method: string; params: { statusFilter?: string } }) => {
+        if (req.method === 'requestRecords') scans.push(req.params.statusFilter)
+        return (base as unknown as { request: (r: unknown) => Promise<unknown> }).request(req)
+      },
+    } as unknown as Client
+    const positions = await getOwnedPositions(client)
+    expect(scans).toEqual(['unspent'])
+    expect(positions[0]!.closed).toBe(false)
+  })
+
+  it('marks a token id whose records are all spent as closed', async () => {
+    // 555 is open; 777 was burned — its only records are spent, and it has no
+    // positions entry (the fake serves none for it).
+    const client = await splitClient([POSITION_RECORD], [nftRecord('777field', 9)])
+    const positions = await getOwnedPositions(client, { includeClosed: true })
+    expect(positions.map((p) => [p.positionTokenId, p.closed])).toEqual([
+      ['555field', false],
+      ['777field', true],
+    ])
+  })
+
+  it('keeps a position open when a spent record shares its token id', async () => {
+    // Every increase/decrease/collect consumes the record and re-issues one under
+    // the same id, so spent records are the NORMAL state of a live position —
+    // treating their presence as a burn would close every operated-on position.
+    const client = await splitClient([POSITION_RECORD], [nftRecord('555field', 2), nftRecord('555field', 3)])
+    const positions = await getOwnedPositions(client, { includeClosed: true })
+    expect(positions).toHaveLength(1)
+    expect(positions[0]!.closed).toBe(false)
+  })
+
+  it('closes a burn whose record the scanner still reports unspent', async () => {
+    // The case a records-only rule misses: the burn finalized, so the mapping
+    // entry is gone, but the scanner has not marked the record spent — it can lag
+    // minutes. An earlier operation left a spent record under the same id, which
+    // together with the missing entry proves the burn.
+    const client = await splitClient([POSITION_RECORD], [nftRecord('555field', 2)], {
+      'positions:555field': null,
+    })
+    const [position] = await getOwnedPositions(client, { includeClosed: true })
+    expect(position!.closed).toBe(true)
+    expect(position!.state).toBeNull()
+  })
+
+  it('leaves an unfinalized mint pending rather than closed', async () => {
+    // No entry and no consumed record: nothing has been spent, so this is a mint
+    // on its way in, not a position on its way out.
+    const client = await splitClient([POSITION_RECORD], [], { 'positions:555field': null })
+    const [position] = await getOwnedPositions(client, { includeClosed: true })
+    expect(position!.closed).toBe(false)
+    expect(position!.state).toBeNull()
+  })
+
+  it('collapses a burned position’s several spent records into one entry', async () => {
+    const client = await splitClient([], [nftRecord('777field', 1), nftRecord('777field', 2)])
+    const positions = await getOwnedPositions(client, { includeClosed: true })
+    expect(positions).toHaveLength(1)
+    expect(positions[0]!.positionTokenId).toBe('777field')
+  })
+
+  it('ignores a provider that answers the spent scan with unspent records', async () => {
+    // Some record providers ignore statusFilter. Taking what they return as burn
+    // evidence would close every position whose mint has not finalized, so the
+    // records' own spent flag is checked before it counts.
+    const base = await positionClient({ 'positions:555field': null })
+    const client = {
+      ...base,
+      request: async (req: { method: string; params: { statusFilter?: string; program?: string } }) => {
+        if (req.method === 'requestRecords') {
+          // Same unspent record for both scans, honestly flagged as unspent.
+          return [{ programName: req.params.program, tag: 'tag0', recordPlaintext: POSITION_RECORD, spent: false }]
+        }
+        return (base as unknown as { request: (r: unknown) => Promise<unknown> }).request(req)
+      },
+    } as unknown as Client
+    const [position] = await getOwnedPositions(client, { includeClosed: true })
+    expect(position!.closed).toBe(false)
+  })
+
+  it('drops a spent-only id whose positions entry is still there', async () => {
+    // The other direction of scanner lag: the record was consumed by an operation
+    // that re-issued one, and the replacement has not been served yet. The entry
+    // proves the position is alive, so returning the consumed record as operable
+    // would fail at proving — it is withheld until the scan catches up.
+    const client = await splitClient([], [nftRecord('555field', 4)])
+    expect(await getOwnedPositions(client, { includeClosed: true })).toEqual([])
+  })
+})
+
 describe('getOwnedPosition', () => {
   it('resolves one owned position by token id', async () => {
     const p = await getOwnedPosition(await positionClient(), { positionTokenId: '555field' })

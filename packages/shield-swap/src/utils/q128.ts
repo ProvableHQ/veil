@@ -112,12 +112,50 @@ export function mulDiv(a: bigint, b: bigint, d: bigint, roundUp: boolean): bigin
 }
 
 /**
+ * Parameters for {@link amount0DeltaX128} and {@link amount1DeltaX128}.
+ *
+ * @property sqrtLowerX128 One end of the span as a sqrt price, Q128.128. Ends may
+ *   arrive in either order — they are sorted internally.
+ * @property sqrtUpperX128 The other end, Q128.128.
+ * @property liquidity The position's liquidity (u128).
+ * @property roundUp Round the result up. `true` for a deposit, where the caller
+ *   must cover the amount; `false` for a withdrawal, where rounding up would pay
+ *   out a base unit the position does not hold.
+ */
+export type AmountDeltaParameters = {
+  sqrtLowerX128: bigint
+  sqrtUpperX128: bigint
+  liquidity: bigint
+  roundUp: boolean
+}
+
+/**
  * Token0 owed for `liquidity` between two sqrt prices —
  * `L * 2^128 * (SB − SA) / (SA * SB)` as the contract's two chained
  * mul-divs (`amt0_x128_sat` without the saturation flag).
+ *
+ * @param params The span, the liquidity, and the rounding direction.
+ * @returns Raw base units of token0.
+ *
+ * @example
+ * amount0DeltaX128({ sqrtLowerX128: lower, sqrtUpperX128: upper, liquidity, roundUp: true })
  */
-export function amount0DeltaX128(sqrtA: bigint, sqrtB: bigint, liquidity: bigint, roundUp: boolean): bigint {
-  const [lower, upper] = sqrtA < sqrtB ? [sqrtA, sqrtB] : [sqrtB, sqrtA]
+export function amount0DeltaX128(params: AmountDeltaParameters): bigint
+/**
+ * @deprecated Four positional arguments, three of them same-typed, transpose
+ *   without a type error and return a plausible wrong number. Pass
+ *   {@link AmountDeltaParameters} instead. Removed in the next major.
+ */
+export function amount0DeltaX128(sqrtA: bigint, sqrtB: bigint, liquidity: bigint, roundUp: boolean): bigint
+export function amount0DeltaX128(
+  a: AmountDeltaParameters | bigint,
+  b?: bigint,
+  c?: bigint,
+  d?: boolean,
+): bigint {
+  const { sqrtLowerX128, sqrtUpperX128, liquidity, roundUp } = normalizeDelta(a, b, c, d)
+  const [lower, upper] =
+    sqrtLowerX128 < sqrtUpperX128 ? [sqrtLowerX128, sqrtUpperX128] : [sqrtUpperX128, sqrtLowerX128]
   const step = mulDiv(liquidity << 128n, upper - lower, upper, roundUp)
   return mulDiv(step, 1n, lower, roundUp)
 }
@@ -125,13 +163,44 @@ export function amount0DeltaX128(sqrtA: bigint, sqrtB: bigint, liquidity: bigint
 /**
  * Token1 owed for `liquidity` between two sqrt prices —
  * `L * |SB − SA| / 2^128` with a round-up carry (`amt1_x128_sat`).
+ *
+ * @param params The span, the liquidity, and the rounding direction.
+ * @returns Raw base units of token1.
+ *
+ * @example
+ * amount1DeltaX128({ sqrtLowerX128: lower, sqrtUpperX128: upper, liquidity, roundUp: false })
  */
-export function amount1DeltaX128(sqrtA: bigint, sqrtB: bigint, liquidity: bigint, roundUp: boolean): bigint {
-  const diff = sqrtA < sqrtB ? sqrtB - sqrtA : sqrtA - sqrtB
+export function amount1DeltaX128(params: AmountDeltaParameters): bigint
+/**
+ * @deprecated Four positional arguments, three of them same-typed, transpose
+ *   without a type error and return a plausible wrong number. Pass
+ *   {@link AmountDeltaParameters} instead. Removed in the next major.
+ */
+export function amount1DeltaX128(sqrtA: bigint, sqrtB: bigint, liquidity: bigint, roundUp: boolean): bigint
+export function amount1DeltaX128(
+  a: AmountDeltaParameters | bigint,
+  b?: bigint,
+  c?: bigint,
+  d?: boolean,
+): bigint {
+  const { sqrtLowerX128, sqrtUpperX128, liquidity, roundUp } = normalizeDelta(a, b, c, d)
+  const diff = sqrtLowerX128 < sqrtUpperX128 ? sqrtUpperX128 - sqrtLowerX128 : sqrtLowerX128 - sqrtUpperX128
   const product = liquidity * diff
   const quotient = product >> 128n
   if (roundUp && (product & U128_MASK) !== 0n) return quotient + 1n
   return quotient
+}
+
+/** Accepts either call shape for the delta helpers and returns the object one. */
+function normalizeDelta(
+  a: AmountDeltaParameters | bigint,
+  b?: bigint,
+  c?: bigint,
+  d?: boolean,
+): AmountDeltaParameters {
+  return typeof a === 'bigint'
+    ? { sqrtLowerX128: a, sqrtUpperX128: b!, liquidity: c!, roundUp: d! }
+    : a
 }
 
 /**
@@ -275,24 +344,71 @@ export function feeGrowthInside(params: {
 }
 
 /**
+ * Parameters for {@link feeOwed}.
+ *
+ * @property feeGrowthInsideNowX128 Current fee growth inside the range, Q128.128.
+ * @property feeGrowthInsideLastX128 The position's checkpoint
+ *   (`fee_growth_inside*_last_x_128`), Q128.128.
+ * @property liquidity The position's live liquidity (u128).
+ */
+export type FeeOwedParameters = {
+  feeGrowthInsideNowX128: bigint
+  feeGrowthInsideLastX128: bigint
+  liquidity: bigint
+}
+
+/**
  * Settles a fee-growth delta into owed tokens — the contract's `fee_owed`:
  * floor((now − last) · liquidity / 2^128) over the 256-bit modular delta.
  * The contract additionally asserts the result fits u128; this mirror
  * returns the floored value unchecked (a read never rejects chain state).
  * Amounts are raw base units (u128 on chain). Pure and local.
  *
- * @param feeGrowthInsideNowX128 Current fee growth inside the range, Q128.128.
- * @param feeGrowthInsideLastX128 The position's checkpoint
- *   (`fee_growth_inside*_last_x_128`), Q128.128.
- * @param liquidity The position's live liquidity (u128).
+ * @param params The two growth figures and the liquidity they apply to.
  * @returns Raw base units owed since the checkpoint.
  *
  * @example
- * const owed0 = feeOwed(inside0, position.fee_growth_inside0_last_x_128, position.liquidity)
+ * const owed0 = feeOwed({
+ *   feeGrowthInsideNowX128: inside0,
+ *   feeGrowthInsideLastX128: position.fee_growth_inside0_last_x_128,
+ *   liquidity: position.liquidity,
+ * })
  */
-export function feeOwed(feeGrowthInsideNowX128: bigint, feeGrowthInsideLastX128: bigint, liquidity: bigint): bigint {
-  const delta = u256WrappingSub(feeGrowthInsideNowX128, feeGrowthInsideLastX128)
-  return (delta * liquidity) >> 128n
+export function feeOwed(params: FeeOwedParameters): bigint
+/**
+ * @deprecated Three same-typed bigints in a row: transposing the two growth
+ *   figures wraps the subtraction and returns an enormous fee. Pass
+ *   {@link FeeOwedParameters} instead. Removed in the next major.
+ */
+export function feeOwed(feeGrowthInsideNowX128: bigint, feeGrowthInsideLastX128: bigint, liquidity: bigint): bigint
+export function feeOwed(a: FeeOwedParameters | bigint, b?: bigint, c?: bigint): bigint {
+  const p =
+    typeof a === 'bigint'
+      ? { feeGrowthInsideNowX128: a, feeGrowthInsideLastX128: b!, liquidity: c! }
+      : a
+  const delta = u256WrappingSub(p.feeGrowthInsideNowX128, p.feeGrowthInsideLastX128)
+  return (delta * p.liquidity) >> 128n
+}
+
+/**
+ * Parameters for {@link amountsForLiquidity}.
+ *
+ * @property sqrtPriceX128 The pool's current sqrt price (`slot.sqrt_price`),
+ *   Q128.128.
+ * @property sqrtLowerX128 One range bound as a sqrt price, Q128.128. Bounds may
+ *   arrive in either order — they are sorted internally.
+ * @property sqrtUpperX128 The other range bound, Q128.128.
+ * @property liquidity The position's liquidity (u128).
+ * @property roundUp Rounds each amount up instead of down. Defaults to `false`
+ *   (the withdrawal-side convention); pass `true` only to mirror deposit-side
+ *   checks, where the caller must cover what it reports.
+ */
+export type AmountsForLiquidityParameters = {
+  sqrtPriceX128: bigint
+  sqrtLowerX128: bigint
+  sqrtUpperX128: bigint
+  liquidity: bigint
+  roundUp?: boolean
 }
 
 /**
@@ -302,40 +418,76 @@ export function feeOwed(feeGrowthInsideNowX128: bigint, feeGrowthInsideLastX128:
  * Bounds may arrive in either order. Amounts are raw base units. Pure and
  * local.
  *
- * @param sqrtPriceX128 The pool's current sqrt price (`slot.sqrt_price`), Q128.128.
- * @param sqrtAX128 One range bound as a sqrt price, Q128.128.
- * @param sqrtBX128 The other range bound as a sqrt price, Q128.128.
- * @param liquidity The position's liquidity (u128).
- * @param roundUp Rounds each amount up instead of down. Defaults to `false`
- *   (the withdrawal-side convention); pass `true` only to mirror
- *   deposit-side checks.
+ * @param params The price, the range, the liquidity, and the rounding direction.
  * @returns Raw base-unit amounts of each pool token backing the liquidity.
  *
  * @example
- * const { amount0, amount1 } = amountsForLiquidity(
- *   slot.sqrt_price,
- *   getSqrtPriceAtTickX128(tickLower),
- *   getSqrtPriceAtTickX128(tickUpper),
- *   position.liquidity,
- * )
+ * const { amount0, amount1 } = amountsForLiquidity({
+ *   sqrtPriceX128: slot.sqrt_price,
+ *   sqrtLowerX128: getSqrtPriceAtTickX128(tickLower),
+ *   sqrtUpperX128: getSqrtPriceAtTickX128(tickUpper),
+ *   liquidity: position.liquidity,
+ * })
+ */
+export function amountsForLiquidity(params: AmountsForLiquidityParameters): {
+  amount0: bigint
+  amount1: bigint
+}
+/**
+ * @deprecated Five positional arguments, four of them same-typed, transpose
+ *   without a type error — swapping the price for a bound silently reports a
+ *   one-sided position. Pass {@link AmountsForLiquidityParameters} instead.
+ *   Removed in the next major.
  */
 export function amountsForLiquidity(
   sqrtPriceX128: bigint,
   sqrtAX128: bigint,
   sqrtBX128: bigint,
   liquidity: bigint,
-  roundUp = false,
+  roundUp?: boolean,
+): { amount0: bigint; amount1: bigint }
+export function amountsForLiquidity(
+  a: AmountsForLiquidityParameters | bigint,
+  b?: bigint,
+  c?: bigint,
+  d?: bigint,
+  e = false,
 ): { amount0: bigint; amount1: bigint } {
-  const lower = sqrtAX128 < sqrtBX128 ? sqrtAX128 : sqrtBX128
-  const upper = sqrtAX128 < sqrtBX128 ? sqrtBX128 : sqrtAX128
+  const p =
+    typeof a === 'bigint'
+      ? { sqrtPriceX128: a, sqrtLowerX128: b!, sqrtUpperX128: c!, liquidity: d!, roundUp: e }
+      : a
+  const roundUp = p.roundUp ?? false
+  const lower = p.sqrtLowerX128 < p.sqrtUpperX128 ? p.sqrtLowerX128 : p.sqrtUpperX128
+  const upper = p.sqrtLowerX128 < p.sqrtUpperX128 ? p.sqrtUpperX128 : p.sqrtLowerX128
+  const liquidity = p.liquidity
   // Contract: below := !(lower < price), i.e. price <= lower.
-  if (sqrtPriceX128 <= lower) return { amount0: amount0DeltaX128(lower, upper, liquidity, roundUp), amount1: 0n }
-  if (sqrtPriceX128 < upper)
+  if (p.sqrtPriceX128 <= lower) {
     return {
-      amount0: amount0DeltaX128(sqrtPriceX128, upper, liquidity, roundUp),
-      amount1: amount1DeltaX128(lower, sqrtPriceX128, liquidity, roundUp),
+      amount0: amount0DeltaX128({ sqrtLowerX128: lower, sqrtUpperX128: upper, liquidity, roundUp }),
+      amount1: 0n,
     }
-  return { amount0: 0n, amount1: amount1DeltaX128(lower, upper, liquidity, roundUp) }
+  }
+  if (p.sqrtPriceX128 < upper) {
+    return {
+      amount0: amount0DeltaX128({
+        sqrtLowerX128: p.sqrtPriceX128,
+        sqrtUpperX128: upper,
+        liquidity,
+        roundUp,
+      }),
+      amount1: amount1DeltaX128({
+        sqrtLowerX128: lower,
+        sqrtUpperX128: p.sqrtPriceX128,
+        liquidity,
+        roundUp,
+      }),
+    }
+  }
+  return {
+    amount0: 0n,
+    amount1: amount1DeltaX128({ sqrtLowerX128: lower, sqrtUpperX128: upper, liquidity, roundUp }),
+  }
 }
 
 /**
@@ -356,6 +508,96 @@ function liquidityForAmount0(lower: bigint, upper: bigint, amount0: bigint): big
  */
 function liquidityForAmount1(lower: bigint, upper: bigint, amount1: bigint): bigint {
   return mulDiv(amount1, Q128, upper - lower, false)
+}
+
+/**
+ * Parameters for {@link liquidityForAmount}.
+ *
+ * @property sqrtPriceX128 The pool's current sqrt price (`slot.sqrt_price`),
+ *   Q128.128.
+ * @property sqrtLowerX128 One range bound as a sqrt price, Q128.128. Bounds may
+ *   arrive in either order — they are sorted internally.
+ * @property sqrtUpperX128 The other range bound, Q128.128.
+ * @property side Which token the amount is denominated in — `0` or `1`.
+ * @property amount Raw base units of that token.
+ */
+export type LiquidityForAmountParameters = {
+  sqrtPriceX128: bigint
+  sqrtLowerX128: bigint
+  sqrtUpperX128: bigint
+  side: 0 | 1
+  amount: bigint
+}
+
+/**
+ * Derives the liquidity ONE side alone supports over a range.
+ *
+ * Applies when a depositor fixes one token and wants the other's requirement
+ * derived rather than capped by a budget: pair the result with
+ * {@link amountsForLiquidity} to learn the minimum of the other side.
+ * {@link liquidityForAmounts} answers a different question — what a pair of
+ * ceilings supports — and there the shorter side silently governs.
+ *
+ * Which span the amount is priced over depends on where the price sits, and one
+ * side can be unused entirely: above the range a position holds only token1, so
+ * token0 buys nothing, and below it the reverse. Both cases return `0`, which
+ * means "this side cannot fund a position here" rather than "deposit more".
+ *
+ * Floors, so the result never overstates what the amount covers. Pure and local.
+ *
+ * @param params The price, the range, and which side's amount is fixed.
+ * @returns The liquidity that side supports (u128), floored, or `0` when the
+ *   price puts that side out of use.
+ *
+ * @example
+ * // 5 USDCx of token0, and what token1 must come with it:
+ * const range = { sqrtLowerX128: sqrtLower, sqrtUpperX128: sqrtUpper }
+ * const liquidity = liquidityForAmount({
+ *   sqrtPriceX128: slot.sqrt_price,
+ *   ...range,
+ *   side: 0,
+ *   amount: 5_000_000n,
+ * })
+ * const { amount1 } = amountsForLiquidity({
+ *   sqrtPriceX128: slot.sqrt_price,
+ *   ...range,
+ *   liquidity,
+ *   roundUp: true,
+ * })
+ */
+export function liquidityForAmount(params: LiquidityForAmountParameters): bigint {
+  const { sqrtPriceX128, side, amount } = params
+  const lower = params.sqrtLowerX128 < params.sqrtUpperX128 ? params.sqrtLowerX128 : params.sqrtUpperX128
+  const upper = params.sqrtLowerX128 < params.sqrtUpperX128 ? params.sqrtUpperX128 : params.sqrtLowerX128
+  if (side === 0) {
+    // Wholly below the range: the position is all token0, priced over its width.
+    if (sqrtPriceX128 <= lower) return liquidityForAmount0(lower, upper, amount)
+    // In range: token0 backs the upper half only, from the price to the top.
+    if (sqrtPriceX128 < upper) return liquidityForAmount0(sqrtPriceX128, upper, amount)
+    return 0n
+  }
+  if (sqrtPriceX128 >= upper) return liquidityForAmount1(lower, upper, amount)
+  if (sqrtPriceX128 > lower) return liquidityForAmount1(lower, sqrtPriceX128, amount)
+  return 0n
+}
+
+/**
+ * Parameters for {@link liquidityForAmounts}.
+ *
+ * @property sqrtPriceX128 The pool's current sqrt price (`slot.sqrt_price`),
+ *   Q128.128.
+ * @property sqrtLowerX128 One range bound as a sqrt price, Q128.128. Bounds may
+ *   arrive in either order — they are sorted internally.
+ * @property sqrtUpperX128 The other range bound, Q128.128.
+ * @property amount0 Raw base units of token0 available to deposit.
+ * @property amount1 Raw base units of token1 available to deposit.
+ */
+export type LiquidityForAmountsParameters = {
+  sqrtPriceX128: bigint
+  sqrtLowerX128: bigint
+  sqrtUpperX128: bigint
+  amount0: bigint
+  amount1: bigint
 }
 
 /**
@@ -381,40 +623,23 @@ function liquidityForAmount1(lower: bigint, upper: bigint, amount1: bigint): big
  * Pure and local. Does not bound the result against the pool's
  * `max_liquidity_per_tick`; the contract enforces that.
  *
- * @param sqrtPriceX128 The pool's current sqrt price (`slot.sqrt_price`), Q128.128.
- * @param sqrtAX128 One range bound as a sqrt price, Q128.128.
- * @param sqrtBX128 The other range bound as a sqrt price, Q128.128. Bounds may
- *   arrive in either order.
- * @param amount0 Raw base units of token0 available to deposit.
- * @param amount1 Raw base units of token1 available to deposit.
+ * @param params The price, the range, and the amounts available on each side.
  * @returns The liquidity those amounts support (u128), floored.
  *
  * @example
- * const liquidity = liquidityForAmounts(
- *   slot.sqrt_price,
- *   getSqrtPriceAtTickX128(tickLower),
- *   getSqrtPriceAtTickX128(tickUpper),
- *   held0,
- *   held1,
- * )
+ * const range = {
+ *   sqrtPriceX128: slot.sqrt_price,
+ *   sqrtLowerX128: getSqrtPriceAtTickX128(tickLower),
+ *   sqrtUpperX128: getSqrtPriceAtTickX128(tickUpper),
+ * }
+ * const liquidity = liquidityForAmounts({ ...range, amount0: held0, amount1: held1 })
  * // What the mint will actually consume of each side:
- * const { amount0, amount1 } = amountsForLiquidity(
- *   slot.sqrt_price,
- *   getSqrtPriceAtTickX128(tickLower),
- *   getSqrtPriceAtTickX128(tickUpper),
- *   liquidity,
- *   true,
- * )
+ * const { amount0, amount1 } = amountsForLiquidity({ ...range, liquidity, roundUp: true })
  */
-export function liquidityForAmounts(
-  sqrtPriceX128: bigint,
-  sqrtAX128: bigint,
-  sqrtBX128: bigint,
-  amount0: bigint,
-  amount1: bigint,
-): bigint {
-  const lower = sqrtAX128 < sqrtBX128 ? sqrtAX128 : sqrtBX128
-  const upper = sqrtAX128 < sqrtBX128 ? sqrtBX128 : sqrtAX128
+export function liquidityForAmounts(params: LiquidityForAmountsParameters): bigint {
+  const { sqrtPriceX128, amount0, amount1 } = params
+  const lower = params.sqrtLowerX128 < params.sqrtUpperX128 ? params.sqrtLowerX128 : params.sqrtUpperX128
+  const upper = params.sqrtLowerX128 < params.sqrtUpperX128 ? params.sqrtUpperX128 : params.sqrtLowerX128
   if (sqrtPriceX128 <= lower) return liquidityForAmount0(lower, upper, amount0)
   if (sqrtPriceX128 < upper) {
     // In range both sides are consumed, so the shorter side caps the position.

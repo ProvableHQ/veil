@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveToken, listTokens } from '../../src/utils/tokens.js'
+import { tokenData, listTokens } from '../../src/utils/tokens.js'
 import type { ApiClient } from '../../src/api/client.js'
 
 const ROWS = [
@@ -48,7 +48,7 @@ describe('listTokens', () => {
 
   it('reads the registry once per client', async () => {
     const { api, reads } = fakeApi()
-    await Promise.all([listTokens(api), listTokens(api), resolveToken(api, 'ALEO')])
+    await Promise.all([listTokens(api), listTokens(api), tokenData(api, 'ALEO')])
     // Twelve scripts asking the same question should cost one request, and the
     // concurrent case must share the in-flight promise rather than racing.
     expect(reads()).toBe(1)
@@ -63,31 +63,31 @@ describe('listTokens', () => {
   })
 })
 
-describe('resolveToken', () => {
+describe('tokenData', () => {
   it('accepts an id, a symbol, and a symbol in any case', async () => {
     const { api } = fakeApi()
-    expect((await resolveToken(api, '22field')).symbol).toBe('ALEO')
-    expect((await resolveToken(api, 'USDCx')).id).toBe('11field')
-    expect((await resolveToken(api, 'usdcx')).id).toBe('11field')
-    expect((await resolveToken(api, '  ETHx  ')).id).toBe('33field')
+    expect((await tokenData(api, '22field')).symbol).toBe('ALEO')
+    expect((await tokenData(api, 'USDCx')).id).toBe('11field')
+    expect((await tokenData(api, 'usdcx')).id).toBe('11field')
+    expect((await tokenData(api, '  ETHx  ')).id).toBe('33field')
   })
 
   it('names the available symbols when nothing matches', async () => {
     const { api } = fakeApi()
     // A typo is the likeliest cause, so the useful reply is the valid set —
     // and symbols are per network, so "not here" is often "wrong network".
-    await expect(resolveToken(api, 'USDC')).rejects.toThrow(/No token "USDC".*USDCx, ALEO, ETHx/s)
+    await expect(tokenData(api, 'USDC')).rejects.toThrow(/No token "USDC".*USDCx, ALEO, ETHx/s)
   })
 
   it('refuses an ambiguous symbol rather than guessing', async () => {
     const { api } = fakeApi([...ROWS, { address: '44field', symbol: 'ETHx', decimals: 18 }])
-    await expect(resolveToken(api, 'ETHx')).rejects.toThrow(/matches 2 tokens.*33field, 44field/s)
+    await expect(tokenData(api, 'ETHx')).rejects.toThrow(/matches 2 tokens.*33field, 44field/s)
   })
 
   it('prefers an exact id over a symbol collision', async () => {
     // A token whose symbol is another token's id would otherwise be
     // unaddressable; ids are canonical, so they win.
     const { api } = fakeApi([...ROWS, { address: '55field', symbol: '11field', decimals: 0 }])
-    expect((await resolveToken(api, '11field')).symbol).toBe('USDCx')
+    expect((await tokenData(api, '11field')).symbol).toBe('USDCx')
   })
 })

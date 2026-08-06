@@ -213,6 +213,18 @@ importers:
         specifier: ^7.13.0
         version: 7.13.0(typescript@5.9.3)
 
+  packages/shield-swap-cli:
+    dependencies:
+      '@provablehq/sdk':
+        specifier: ^0.11.4
+        version: 0.11.4
+      '@provablehq/shield-swap-sdk':
+        specifier: workspace:^
+        version: link:../shield-swap
+      '@provablehq/veil-aleo-sdk':
+        specifier: workspace:^
+        version: link:../provable-sdk
+
   packages/wallet-adapter:
     dependencies:
       '@provablehq/veil-core':

@@ -86,10 +86,10 @@ export async function listTokens(api: ApiClient): Promise<TokenInfo[]> {
  *   likeliest cause and the available set is the useful reply.
  *
  * @example
- * const usdc = await resolveToken(client.api, 'USDCx')
+ * const usdc = await tokenData(client.api, 'USDCx')
  * await client.swap({ poolKey, tokenInId: usdc.id, amountIn: 5n * 10n ** BigInt(usdc.decimals) })
  */
-export async function resolveToken(api: ApiClient, symbolOrId: string): Promise<TokenInfo> {
+export async function tokenData(api: ApiClient, symbolOrId: string): Promise<TokenInfo> {
   const tokens = await listTokens(api)
   const wanted = symbolOrId.trim()
   const byId = tokens.find((token) => token.id === wanted)
