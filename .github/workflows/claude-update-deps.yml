@@ -14,7 +14,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  LEO_RELEASE: leo-lang-v4.3.2
+  # Keep in step with ci.yml: this workflow verifies dependency bumps against
+  # the devnode suite, so building on an older compiler than CI uses would
+  # green a bump CI then rejects.
+  LEO_RELEASE: leo-lang-v4.3.4
 
 jobs:
   update:
