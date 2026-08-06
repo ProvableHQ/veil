@@ -1,5 +1,14 @@
 # @provablehq/veil-aleo-react-hooks
 
+## 0.7.0
+
+### Patch Changes
+
+- Updated dependencies [e93d7a3]
+- Updated dependencies [4be5291]
+  - @provablehq/veil-core@0.7.0
+  - @provablehq/veil-aleo-wallet-adapter@0.7.0
+
 ## 0.6.0
 
 ### Patch Changes
