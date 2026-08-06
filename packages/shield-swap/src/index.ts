@@ -199,7 +199,7 @@ export { burn, type BurnParameters, type BurnReturnType } from './actions/liquid
 export { pickInsertHint, type PickInsertHintParameters } from './utils/tick-hints.js'
 export { resolveDexImports, type ResolveDexImportsParameters } from './utils/imports.js'
 export { tokenData, listTokens, type TokenInfo } from './utils/tokens.js'
-export { planSwap, type SwapPlan, type PlanSwapParameters } from './utils/planning.js'
+export { planSwap, type SwapPlan, type PlanSwapParameters } from './actions/swap/planSwap.js'
 export { parseUnits, formatUnits } from './utils/units.js'
 
 // Local key/id derivation (BHP256 struct hash via the optional

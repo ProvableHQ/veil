@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
-import { planSwap } from '../../src/utils/planning.js'
-import type { ApiClient } from '../../src/api/client.js'
+import { planSwap } from '../../../src/actions/swap/planSwap.js'
+import type { ApiClient } from '../../../src/api/client.js'
 
 const USDC = '11field'
 const ETH = '22field'

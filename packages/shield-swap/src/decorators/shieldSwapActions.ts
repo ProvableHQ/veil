@@ -76,7 +76,7 @@ import { getBalances, type GetBalancesParameters, type GetBalancesReturnType } f
 import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hints.js'
 import { resolveDexImports, type ResolveDexImportsParameters } from '../utils/imports.js'
 import { tokenData, listTokens, type TokenInfo } from '../utils/tokens.js'
-import { planSwap, type PlanSwapParameters, type SwapPlan } from '../utils/planning.js'
+import { planSwap, type PlanSwapParameters, type SwapPlan } from '../actions/swap/planSwap.js'
 import { reserveBlindedIdentity } from '../actions/blinding/reserveBlindedIdentity.js'
 import { syncBlindedIdentities } from '../actions/blinding/syncBlindedIdentities.js'
 import { recordBlindedSwap, type RecordBlindedSwapParameters } from '../actions/blinding/recordBlindedSwap.js'
