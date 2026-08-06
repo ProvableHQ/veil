@@ -33,7 +33,7 @@ signing keys live and what you are integrating.
 | `@provablehq/shield-swap-cli` | You want to trade on Shield Swap from a terminal, or script it, rather than build against the client. Installs the `shield-swap` command; separate from the SDK so a library consumer never pulls it in. | [README](./packages/shield-swap-cli/README.md) |
 | `@provablehq/veil-leo` | You build, compile, or deploy Leo programs from TypeScript — including compiling programs during testing, where it pairs with `@provablehq/veil-aleo-devnode` to build and deploy against a local node. Requires the `leo` binary on `PATH`. | [README](./packages/leo/README.md) |
 | `@provablehq/veil-codegen` | You want typed TypeScript bindings generated from a program ABI. Ships the `veil-codegen` CLI; use it as a build-time dev dependency. | [README](./packages/codegen/README.md) |
-| `@provablehq/veil-aleo-devnode` | You run a local Aleo node in tests or local development. Requires the `aleo-devnode` binary on `PATH`. | [README](./packages/devnode/README.md) |
+| `@provablehq/veil-aleo-devnode` | You run a local Aleo node in tests or local development. Spawns the `aleo-devnode` binary, which installs from npm as `@provablehq/aleo-devnode` (or point `devnodePath` at your own build). | [README](./packages/devnode/README.md) |
 
 `@provablehq/veil-aleo-bridges` (cross-chain bridge client) is in preview and not yet published.
 

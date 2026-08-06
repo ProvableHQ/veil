@@ -11,7 +11,6 @@ concurrency:
 
 env:
   LEO_RELEASE: leo-lang-v4.3.4
-  DEVNODE_RELEASE: v0.2.0
 
 jobs:
   unit:
@@ -93,7 +92,6 @@ jobs:
       - uses: ./.github/actions/setup-devnode
         with:
           leo-release: ${{ env.LEO_RELEASE }}
-          devnode-release: ${{ env.DEVNODE_RELEASE }}
       # Every devnode suite binds 127.0.0.1:3030 — run the files strictly
       # sequentially so two devnodes never race for the port.
       - name: Devnode e2e tests
@@ -116,7 +114,6 @@ jobs:
       - uses: ./.github/actions/setup-devnode
         with:
           leo-release: ${{ env.LEO_RELEASE }}
-          devnode-release: ${{ env.DEVNODE_RELEASE }}
       - name: Shield Swap AMM lifecycle e2e
         run: >
           pnpm vitest run --no-file-parallelism

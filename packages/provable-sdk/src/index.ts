@@ -1151,7 +1151,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 // and the node agree on which consensus version is active at each height. The
 // entry count must also equal the WASM SDK's consensus-version count exactly —
 // a shorter list panics with an opaque `unreachable` inside the WASM.
-const DEVNODE_CONSENSUS_HEIGHTS = '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16'
+const DEVNODE_CONSENSUS_HEIGHTS = '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17'
 
 function privateKeyToAccount(privateKey: string): LocalAccount<'privateKey'> {
   const sdkAccount = new Account({ privateKey })

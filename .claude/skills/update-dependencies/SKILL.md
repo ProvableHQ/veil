@@ -1,6 +1,6 @@
 ---
 name: update-dependencies
-description: Check the four upstream Aleo dependency streams (@provablehq/sdk on npm, ProvableHQ/leo releases, ProvableHQ/aleo-devnode releases, and the @provablehq/aleo-wallet-adaptor-* packages from aleo-dev-toolkit) for new versions, apply the updates, re-run the affected integration tests, and fix whatever the bumps break. Use when asked to update, bump, or check Aleo/Provable dependencies or toolchain versions.
+description: Check the four upstream Aleo dependency streams (@provablehq/sdk on npm, ProvableHQ/leo releases, @provablehq/aleo-devnode on npm, and the @provablehq/aleo-wallet-adaptor-* packages from aleo-dev-toolkit) for new versions, apply the updates, re-run the affected integration tests, and fix whatever the bumps break. Use when asked to update, bump, or check Aleo/Provable dependencies or toolchain versions.
 ---
 
 # Update Aleo dependency streams
@@ -8,8 +8,8 @@ description: Check the four upstream Aleo dependency streams (@provablehq/sdk on
 Four upstream streams feed this repo. For each: detect a newer version, apply
 it, re-run the affected tests, and fix breakage. Work one stream at a time and
 commit each stream separately (`[Chore] Bump <thing> to <version>` plus any
-`[Fix]` commits the bump forces). Devnode-gated tests require `leo` and
-`aleo-devnode` on PATH.
+`[Fix]` commits the bump forces). Devnode-gated tests require `leo` on PATH;
+`aleo-devnode` comes from `node_modules/.bin` after `pnpm install`.
 
 Start with the detection script — it prints current-vs-latest for every stream
 (including the CI workflow pins) and exits 1 when anything is stale:
@@ -87,12 +87,15 @@ VEIL_INTEGRATION=1 pnpm vitest run --retry=2 \
    - `leo abi` output shape changes break `parseAbi` in
      `packages/core/src/utils/parseAbi.ts` and the codegen round-trip test.
 
-## 3. aleo-devnode (ProvableHQ/aleo-devnode releases)
+## 3. aleo-devnode (@provablehq/aleo-devnode on npm)
 
-1. `gh release list -R ProvableHQ/aleo-devnode --limit 1` vs
-   `aleo-devnode --version`.
-2. Install the new binary locally, update the pinned `DEVNODE_RELEASE` env in
-   `.github/workflows/ci.yml`, and run the devnode verification command.
+Distributed as a prebuilt-binary npm package, so it is pinned in the root
+`package.json` like any other dependency — there is no `DEVNODE_RELEASE` env
+and the toolchain action does not install it. `pnpm install` puts it in
+`node_modules/.bin`, which is on PATH for the test commands that spawn it.
+
+1. `npm view @provablehq/aleo-devnode version` vs the root `package.json` range.
+2. Bump it, `pnpm install`, and run the devnode verification command.
 3. Read the release notes (`gh release view <tag> -R ProvableHQ/aleo-devnode`)
    for new node capabilities — new CLI flags, REST endpoints, or lifecycle
    commands. Anything a test or local-dev workflow would drive belongs in the
@@ -132,6 +135,6 @@ The ProvableHQ/aleo-dev-toolkit monorepo publishes the
 ## Wrap-up
 
 - `pnpm vitest run` green from the repo root.
-- CI workflow pins (`LEO_RELEASE`, `DEVNODE_RELEASE`) match the binaries the
-  tests ran against.
+- The `LEO_RELEASE` pin in ci.yml matches the leo binary the tests ran
+  against; aleo-devnode is pinned in the root `package.json` instead.
 - Note in the PR body which streams moved and which were already current.

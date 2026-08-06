@@ -15,7 +15,6 @@ concurrency:
 
 env:
   LEO_RELEASE: leo-lang-v4.3.2
-  DEVNODE_RELEASE: v0.2.0
 
 jobs:
   update:
@@ -46,19 +45,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.aleo-tools
-          key: aleo-tools-${{ env.LEO_RELEASE }}-${{ env.DEVNODE_RELEASE }}
-      - name: Install leo and aleo-devnode
+          key: aleo-tools-${{ env.LEO_RELEASE }}
+      - name: Install leo
         if: steps.toolchain.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/.aleo-tools
           curl -fsSL -o /tmp/leo.zip \
             "https://github.com/ProvableHQ/leo/releases/download/${LEO_RELEASE}/${LEO_RELEASE}-x86_64-unknown-linux-gnu.zip"
           unzip -o /tmp/leo.zip -d ~/.aleo-tools
-          curl -fsSL -o /tmp/devnode.zip \
-            "https://github.com/ProvableHQ/aleo-devnode/releases/download/${DEVNODE_RELEASE}/aleo-devnode-${DEVNODE_RELEASE}-x86_64-unknown-linux-gnu.zip"
-          unzip -o /tmp/devnode.zip -d ~/.aleo-tools
-          chmod +x ~/.aleo-tools/leo ~/.aleo-tools/aleo-devnode
-      - name: Add toolchain to PATH
+          chmod +x ~/.aleo-tools/leo
+      - name: Add leo to PATH
         run: echo "$HOME/.aleo-tools" >> "$GITHUB_PATH"
       - name: Run the update-dependencies skill
         uses: anthropics/claude-code-action@v1
