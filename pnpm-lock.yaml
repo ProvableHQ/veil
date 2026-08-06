@@ -127,7 +127,7 @@ importers:
   packages/devnode:
     dependencies:
       '@provablehq/veil-core':
-        specifier: workspace:^
+        specifier: workspace:>=0.6.0 <1.0.0
         version: link:../core
 
   packages/leo: {}
@@ -141,10 +141,10 @@ importers:
         specifier: ^0.11.6
         version: 0.11.6
       '@provablehq/veil-aleo-devnode':
-        specifier: workspace:^
+        specifier: workspace:>=0.6.0 <1.0.0
         version: link:../devnode
       '@provablehq/veil-core':
-        specifier: workspace:^
+        specifier: workspace:>=0.6.0 <1.0.0
         version: link:../core
       '@scure/bip39':
         specifier: ^1.4.0
@@ -228,7 +228,7 @@ importers:
   packages/wallet-adapter:
     dependencies:
       '@provablehq/veil-core':
-        specifier: workspace:^
+        specifier: workspace:>=0.6.0 <1.0.0
         version: link:../core
     devDependencies:
       '@provablehq/aleo-types':
