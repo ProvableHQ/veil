@@ -33,6 +33,11 @@ jobs:
       # there passes silently — these need their own run to mean anything.
       - name: Type-level tests
         run: pnpm vitest --typecheck.only run
+      # codegen and react do not extend the root tsconfig, so they get none of
+      # its `paths` and resolve workspace imports through node_modules to
+      # `dist`. Without a build they fail to resolve at all.
+      - name: Build packages
+        run: pnpm -r build
       # Every package's own sources. `pnpm vitest run` only compiles what a test
       # imports, so a package with no tests — the CLI — would otherwise ship
       # unchecked.
