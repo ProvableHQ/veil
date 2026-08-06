@@ -5,15 +5,8 @@ does one job against a live deployment — builds a session, plans the work,
 prints what happened.
 
 This is a separate install from `@provablehq/shield-swap-sdk`, so a project that
-only needs the client never pulls the command line in. Run it without installing
-anything permanently:
-
-```sh
-npx @provablehq/shield-swap-cli setup --new
-npx @provablehq/shield-swap-cli pools
-```
-
-or install it once and call it by name:
+only needs the client never pulls the command line in. Install it, then call it by
+name:
 
 ```sh
 npm install -g @provablehq/shield-swap-cli
@@ -21,6 +14,20 @@ npm install -g @provablehq/shield-swap-cli
 shield-swap pools
 shield-swap swap --from USDCx --to ETH --amount 1.5 --execute
 ```
+
+Or keep it in the project and go through the local bin:
+
+```sh
+npm install --save-dev @provablehq/shield-swap-cli
+
+npx shield-swap setup --new
+npx shield-swap pools
+```
+
+`npx shield-swap` runs the binary that is installed. `npx @provablehq/shield-swap-cli`
+names the package instead, which sends npx to the registry: the version can change
+between two commands in the same session, and it does not work offline. Prefer the
+install.
 
 `shield-swap` on its own lists the subcommands, and every subcommand takes
 `--help` for its own flags.
@@ -99,13 +106,13 @@ FeeMaster account by default, so a faucet-funded account needs no public credits
 
 | Command | What it does | Needs |
 | --- | --- | --- |
-| `setup` | Account bootstrap, idempotent: key material, DEX authentication, Provable API credentials, invite-code redemption, API token, testnet airdrop. | Nothing (an invite code when access is locked; a key file for a returning account) |
+| `setup` | Sets up all credentials Shield Swap requires, idempotently: key material, DEX authentication, Provable API credentials, invite-code redemption, API token, testnet airdrop. | Nothing (an invite code when access is locked; a key file for a returning account) |
 | `pools` | Lists pools from the API and joins each with chain state, so the tradeable flag and the depth come from the mappings rather than the index. | Session |
 | `balances` | Private and public holdings per token, reconciled against the registry. | Session, record access |
-| `positions` | Every liquidity position the account holds, with its range, its backing amounts, and what a collect would pay. | Session, record access |
+| `positions` | Every liquidity position the account holds, with its range, its backing amounts, and the fees earned that a collect would pay. | Session, record access |
 | `swap` | Sells one token for another, single hop or routed, then claims the output. | Funds in the token being sold |
-| `swap-concurrent` | Several swaps in flight at once, one per token sold, planned before any is submitted. | Funds in each token being sold |
-| `history` | What is owed, what settled, and claiming what is still waiting; rebuilds a lost identity store from chain history. | Session (claiming needs the prover) |
+| `swap-concurrent` | Makes multiple swaps concurrently, one per token sold, planned before any is submitted. | Funds in each token being sold |
+| `history` | Swap history and the status of each swap, claiming what is still waiting; rebuilds a lost identity store from chain history. | Session (claiming needs the prover) |
 | `mint` | Opens a position: aligns a percentage range to the pool's tick spacing and deposits what the range consumes. | Funds on **both** sides of the pool |
 | `liquidity` | Adds to an open position, or removes liquidity and books it as owed. | A position; funds on both sides to add |
 | `collect` | Sweeps what a position is owed into records, and with `--close` burns the drained position. | A position with something owed |

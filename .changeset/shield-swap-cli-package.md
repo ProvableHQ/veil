@@ -18,6 +18,10 @@ The CLI is a separate install so a project that only needs the client does not
 pull it in: `@provablehq/shield-swap-sdk` no longer ships `skills/scripts/`, and
 its tarball carries only `dist` and the runbook markdown.
 
-Migrating: replace `npx tsx node_modules/@provablehq/shield-swap-sdk/skills/scripts/<name>.ts`
-with `npx @provablehq/shield-swap-cli <name>`, and import the session helpers from
-`@provablehq/shield-swap-cli/session` rather than by path.
+Migrating: install `@provablehq/shield-swap-cli` and replace
+`npx tsx node_modules/@provablehq/shield-swap-sdk/skills/scripts/<name>.ts` with
+`shield-swap <name>` (`npx shield-swap <name>` for a project-local install), and
+import the session helpers from `@provablehq/shield-swap-cli/session` rather than by
+path. Invoke the binary rather than the package: `npx @provablehq/shield-swap-cli`
+resolves against the registry, so the version can change between two commands and
+it needs a network.

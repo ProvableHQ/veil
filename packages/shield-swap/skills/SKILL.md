@@ -13,10 +13,18 @@ description: >
 # Trading on Shield Swap
 
 Shield Swap is a concentrated-liquidity AMM on Aleo testnet
-(`shield_swap.aleo`). This skill drives it end-to-end with
-`@provablehq/shield-swap-sdk` and the `shield-swap` command that ships beside
-it. Everything here works the same for any agent: the runbooks are plain
-markdown, and every step is either a subcommand or a short script.
+(`shield_swap.aleo`). Two packages reach it, installed separately:
+
+- **`@provablehq/shield-swap-sdk`** — the client library. Every DEX action is a
+  method on a composed client, and this is what an integration builds on.
+- **`@provablehq/shield-swap-cli`** — the `shield-swap` command, built on that
+  SDK. Not part of the SDK's install: a project that only needs the client never
+  pulls the command line in, and a user who only wants to trade never needs the
+  library.
+
+The runbooks are plain markdown and work the same for any agent. Each step is
+given as a subcommand, and the SDK call behind it is named so the same step can
+be written into an application instead.
 
 ## The one rule that prevents lost funds
 
@@ -40,22 +48,70 @@ All long-lived material lives in `./.shield-swap/<network>/state.json`
 live in the SDK's blinded identity store, and positions are discovered from
 records with `client.getOwnedPositions()`.
 
-Two ways to run a step, and most runbooks use both:
+Three ways to run a step. Pick by what the user is doing, not by which is
+shortest to type:
 
-- **The command.** `npx @provablehq/shield-swap-cli <command>` covers every
-  standard flow. Add `--json` for one machine-readable object on stdout and
-  nothing else, which is what an agent should parse. Nothing spends without
+- **The command**, for operating the account. `shield-swap <command>` covers
+  every standard flow. Add `--json` for one machine-readable object on stdout
+  and nothing else, which is what an agent should parse. Nothing spends without
   `--execute`, so always run the plan first and show it to the user.
-- **A scratch script**, when a flow needs something the flags do not express.
-  Write it as an `.mts` file (ESM — plain `.ts` may be treated as CommonJS
-  outside the repo and reject top-level `await`), import the session helpers
-  from `@provablehq/shield-swap-cli/session` so it shares the same state file
-  the command writes, and run it with `npx tsx`.
+- **A script sharing the same session**, when a flow needs something the flags
+  do not express — an unusual sequence, a loop, a condition. Write it as an
+  `.mts` file (ESM — plain `.ts` may be treated as CommonJS outside the repo and
+  reject top-level `await`), import `loadSession` from
+  `@provablehq/shield-swap-cli/session` so it reads the same state file the
+  command writes, and run it with `npx tsx`.
+- **An integration**, when the user is building something that outlives the
+  session — a dApp, a bot, a server, an agent. It owns its own client and does
+  NOT depend on the CLI. Follow [developing.md](./developing.md), which picks the
+  packages from where the signing keys live.
 
-Install once before either: `npm install @provablehq/shield-swap-sdk
-@provablehq/shield-swap-cli tsx`. In the Veil repo, `pnpm install && pnpm
-build` instead, and call the binary as
-`node packages/shield-swap-cli/dist/index.js <command>`.
+### Implementing against the SDK
+
+Every runbook step is one method on a composed client, so a step read here
+transfers directly into code. A local-key integration builds the client once:
+
+```ts
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
+import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
+import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
+
+// The WASM binaries are per network, so the SDK is loaded for one and the
+// account, prover, and scanner all come off that handle.
+const aleo = await loadNetwork('testnet')
+const { walletClient } = aleo.createAleoClient({
+  privateKey,
+  networkUrl: 'https://api.provable.com/v2',
+  provingMode: 'delegated',
+  // Credentials reach both the prover and the scanner through one session the
+  // client builds from this store, registering a consumer on first use.
+  credentialStore: fileCredentialStore('./provable-credentials.json'),
+  records: aleo.createRemoteScanner(),
+})
+
+const client = walletClient.extend(
+  // The identity store MUST persist — see the rule above. A file-backed store is
+  // what makes a crash between a swap and its claim recoverable.
+  shieldSwapActions({ api: {}, blindedIdentities: fileBlindedIdentityStore('./blinded.json') }),
+)
+await client.authenticateShieldSwap()
+```
+
+In a browser none of that applies: the account and transport come from the
+connected wallet through `fromWalletAdapter`, and neither proving nor a scanner
+is configured, because the wallet holds the keys and proves. `developing.md` has
+the table of which packages go with which key location; the SDK
+[README](../README.md) has the per-action reference.
+
+Reads live on the client (`client.getPool`), writes too (`client.swap`), and the
+off-chain DEX API is namespaced under `client.api` — so a call site always shows
+whether a value came from the chain or from the service.
+
+Install what the path needs: `npm install -g @provablehq/shield-swap-cli` to
+operate, `npm install @provablehq/shield-swap-sdk` to build, and both plus `tsx`
+for the middle path. In the Veil repo, `pnpm install && pnpm shield-swap
+<command>` runs the workspace copy.
 
 ## Before doing anything: two questions for the user
 

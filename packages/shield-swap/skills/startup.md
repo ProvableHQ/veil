@@ -10,26 +10,48 @@ left off.
 
 ## Procedure
 
-1. If `./.shield-swap/state.json` does not exist, ask the user whether they
+1. Install the command once, so every later step runs the version you
+   installed rather than whatever the registry serves at the time:
+
+   ```sh
+   # globally — `shield-swap` is then on PATH
+   npm install -g @provablehq/shield-swap-cli
+
+   # or into the project, and call it through the local bin
+   npm install --save-dev @provablehq/shield-swap-cli
+   npx shield-swap --help          # `npx <bin>`, not `npx <package>`
+   ```
+
+   Inside the Veil repo, `pnpm install && pnpm shield-swap --help` uses the
+   workspace copy and needs no install of its own.
+
+   Every example below writes `shield-swap`. Prefix it with `npx ` for a
+   project-local install, or `pnpm ` in the repo. Do NOT run
+   `npx @provablehq/shield-swap-cli <command>`: naming the *package* rather
+   than the binary sends npx to the registry, which means an unpinned
+   version can change under a session that is holding funds, and it fails
+   outright with no network.
+
+2. If `./.shield-swap/state.json` does not exist, ask the user whether they
    already have a shield-swap account (see SKILL.md — this is mandatory).
-2. Run the script for their situation:
+3. Run setup for their situation:
 
 ```sh
 # brand-new account (user confirmed they have none)
-npx @provablehq/shield-swap-cli setup --new
+shield-swap setup --new
 
 # returning user: they save their key to a file THEMSELVES, the path is
 # what travels — the key never appears in the conversation or shell history
-npx @provablehq/shield-swap-cli setup --private-key-file <path>
+shield-swap setup --private-key-file <path>
 
 # returning user who also has Provable API credentials
-npx @provablehq/shield-swap-cli setup --private-key-file <path> --consumer-id <id> --api-key <key>
+shield-swap setup --private-key-file <path> --consumer-id <id> --api-key <key>
 
 # when setup asks for an invite code
-npx @provablehq/shield-swap-cli setup --invite-code <code>
+shield-swap setup --invite-code <code>
 
 # target a specific DEX API deployment (e.g. staging) instead of the default
-npx @provablehq/shield-swap-cli setup --api-url <origin>
+shield-swap setup --api-url <origin>
 ```
 
 **Private keys never transit the conversation.** When the user has an
