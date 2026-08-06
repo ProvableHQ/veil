@@ -15,13 +15,18 @@
  *      so an agent or a pipeline can drive the same script a person uses.
  */
 import { parseArgs } from 'node:util'
+import { alarm, bold, dim, green, help as helpText, red, yellow } from './color.js'
 
 /** Flags every script accepts, whatever else it adds. */
 const COMMON = {
   network: { type: 'string' },
   execute: { type: 'boolean' },
   json: { type: 'boolean' },
-  help: { type: 'boolean' },
+  // `-h` is declared here rather than only on the dispatcher: `parseArgs` rejects
+  // undeclared short options, so `shield-swap pools -h` failed with a usage error
+  // while `shield-swap -h` printed the help. The two must not disagree.
+  help: { type: 'boolean', short: 'h' },
+  'no-color': { type: 'boolean' },
 } as const
 
 export type CommonFlags = {
@@ -29,6 +34,7 @@ export type CommonFlags = {
   execute?: boolean
   json?: boolean
   help?: boolean
+  'no-color'?: boolean
 }
 
 /**
@@ -66,7 +72,7 @@ export function flags<T extends Record<string, { type: 'string' | 'boolean'; mul
   }
 
   if (values.help) {
-    console.log(usage)
+    console.log(helpText(usage))
     process.exit(0)
   }
   return values as CommonFlags & Record<keyof T, string | boolean | string[] | undefined>
@@ -88,7 +94,9 @@ export function reportUsage(message: string, usage: string, argv: string[]): nev
   if (argv.includes('--json')) {
     console.log(JSON.stringify({ error: { message, usage } }, null, 2))
   } else {
-    console.error(`${message}\n\n${usage}`)
+    // The message is the failure; the usage below it is reference material, so
+    // only the latter is styled — and never the JSON branch above.
+    console.error(`${red(message, 'stderr')}\n\n${helpText(usage)}`)
   }
   process.exit(64)
 }
@@ -109,17 +117,32 @@ export function setJsonMode(on: boolean): void {
  * agent has nothing to report back.
  */
 export function step(message: string): void {
-  if (!quiet) console.log(`· ${message}`)
+  // The whole line is dimmed: progress is scaffolding, and it should recede once
+  // the result it was narrating arrives.
+  if (!quiet) console.log(dim(`· ${message}`))
 }
 
 /** Prints a completed step. */
 export function done(message: string): void {
-  if (!quiet) console.log(`✓ ${message}`)
+  // Marker only. Colouring the message too would put half the output in green and
+  // leave nothing for it to stand out against.
+  if (!quiet) console.log(`${green('✓')} ${message}`)
 }
 
 /** Prints a warning that does not stop the script. */
 export function warn(message: string): void {
-  if (!quiet) console.warn(`! ${message}`)
+  if (!quiet) console.warn(yellow(`! ${message}`, 'stderr'))
+}
+
+/**
+ * Counts the columns text occupies, ignoring ANSI styling.
+ *
+ * A style is ESC [ … m and prints nothing, so measuring the raw string would
+ * count bytes that take no space and shift every column right of a coloured cell.
+ */
+function visibleWidth(text: string): number {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/\u001B\[[0-9;]*m/g, '').length
 }
 
 /**
@@ -160,16 +183,20 @@ export function table(
   align?: ReadonlyArray<'left' | 'right'>,
 ): void {
   const cells = rows.map((row) => headers.map((_, i) => row[i] ?? ''))
-  const widths = headers.map((header, i) =>
-    Math.max(header.length, ...cells.map((row) => row[i]!.length)),
-  )
+  // Measured without styling: a coloured cell carries escape codes that occupy no
+  // columns, so `padEnd` on the raw string would indent every later column by the
+  // length of the codes.
+  const widths = headers.map((header, i) => Math.max(header.length, ...cells.map((row) => visibleWidth(row[i]!))))
   const side = (i: number) => align?.[i] ?? (i === 0 ? 'left' : 'right')
-  const line = (row: string[]) =>
-    `  ${row.map((cell, i) => (side(i) === 'left' ? cell.padEnd(widths[i]!) : cell.padStart(widths[i]!))).join('   ')}`.trimEnd()
+  const pad = (cell: string, i: number) => {
+    const fill = ' '.repeat(Math.max(0, widths[i]! - visibleWidth(cell)))
+    return side(i) === 'left' ? cell + fill : fill + cell
+  }
+  const line = (row: string[]) => `  ${row.map(pad).join('   ')}`.trimEnd()
 
   console.log('')
-  console.log(line(headers))
-  console.log(`  ${widths.map((w) => '─'.repeat(w)).join('   ')}`)
+  console.log(bold(line(headers)))
+  console.log(dim(`  ${widths.map((w) => '─'.repeat(w)).join('   ')}`))
   for (const row of cells) console.log(line(row))
 }
 
@@ -195,7 +222,8 @@ export function confirmed(options: {
   // The network heads the value column rather than sitting in a sentence above
   // it, so the one thing worth double-checking before spending is level with the
   // amounts being spent.
-  const banner = options.network === 'mainnet' ? 'MAINNET — real funds' : options.network
+  const banner =
+    options.network === 'mainnet' ? alarm('MAINNET — real funds') : dim(options.network)
   if (!quiet) {
     table(
       ['PLAN', banner],
@@ -204,7 +232,7 @@ export function confirmed(options: {
     )
   }
   if (options.execute) return true
-  if (!quiet) console.log('\nnothing submitted. re-run with --execute to send it.\n')
+  if (!quiet) console.log(dim('\nnothing submitted. re-run with --execute to send it.\n'))
   return false
 }
 
@@ -247,8 +275,8 @@ function reportError(message: string, cause?: unknown): void {
     )
     return
   }
-  console.error(`\n✗ ${message}`)
-  if (cause instanceof Error) console.error(`  caused by: ${cause.message}`)
+  console.error(`\n${red('✗', 'stderr')} ${message}`)
+  if (cause instanceof Error) console.error(dim(`  caused by: ${cause.message}`))
 }
 
 /**

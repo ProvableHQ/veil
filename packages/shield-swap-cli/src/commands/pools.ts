@@ -19,6 +19,7 @@
  */
 import { loadSession } from '../session.js'
 import { flags, step, done, warn, output, run, table } from '../shared.js'
+import { green, yellow } from '../color.js'
 
 /**
  * Renders a pool's fee tier as a percentage.
@@ -278,7 +279,9 @@ export async function main(argv: string[]): Promise<void> {
               // Liquidity stays raw on purpose: it is not denominated in either
               // token, so rendering it with a token's decimals would misstate it.
               pool.liquidity.toString(),
-              pool.reason ?? 'tradeable',
+              // Green reads as "you can trade this now"; a reason is always a
+              // reason it is unavailable, so it takes the warning colour.
+              pool.reason ? yellow(pool.reason) : green('tradeable'),
               pool.poolKey,
             ]
             if (stakes) {

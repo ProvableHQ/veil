@@ -40,6 +40,7 @@
  * to run on mainnet rather than pretending a faucet exists.
  */
 import { readFileSync } from 'node:fs'
+import { help } from '../color.js'
 import { ApiError, DEFAULT_API_URL } from '@provablehq/shield-swap-sdk'
 import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
 import {
@@ -397,7 +398,7 @@ export async function main(argv: string[]): Promise<void> {
   // state file, so a --help that fell through would bootstrap the account it
   // was only asked to describe.
   if (argv.includes('--help') || argv.includes('-h')) {
-    console.log(USAGE)
+    console.log(help(USAGE))
     return
   }
   try {

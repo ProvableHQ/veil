@@ -29,7 +29,8 @@ import {
 } from '@provablehq/shield-swap-sdk'
 import type { BlindedIdentityRecord, BlindedIdentityStore } from '@provablehq/shield-swap-sdk'
 import { loadSession, formatAmount } from '../session.js'
-import { flags, step, done, warn, output, confirmed, run } from '../shared.js'
+import { flags, step, done, warn, output, confirmed, run, table } from '../shared.js'
+import { dim, green, yellow } from '../color.js'
 
 const USAGE = `shield-swap history — unclaimed swap outputs, reconciliation, and claiming
 
@@ -382,32 +383,28 @@ export async function main(argv: string[]): Promise<void> {
                   : '')
               : '—',
             entry.block === null ? '—' : String(entry.block),
-            entry.status,
+            // Named for what the row means to a reader, not for the store's
+            // lifecycle word. `swapped` is the state where money settled and is
+            // sitting unclaimed, which is the only row that wants acting on.
+            // `reserved` is NOT pending a claim: nothing was ever spent on it, so
+            // calling it that would assert funds are waiting when none are.
+            entry.status === 'claimed'
+              ? green('claimed')
+              : entry.status === 'swapped'
+                ? yellow('pending claim')
+                : dim(entry.status),
             // The handle is what makes an unclaimed swap claimable, so its absence
             // belongs beside the row rather than in a footnote.
             entry.status === 'swapped' && !entry.hasHandle
               ? entry.claimSearched
-                ? 'never claimed'
-                : 'no handle'
+                ? yellow('never claimed')
+                : dim('no handle')
               : '',
           ])
-          // Sized to the contents so symbols and 18-decimal amounts do not wrap into
-          // each other; numeric columns right-aligned to make magnitudes comparable.
-          const widths = header.map((label, column) =>
-            Math.max(label.length, ...rows.map((row) => row[column]!.length)),
-          )
-          const rightAligned = new Set([0, 2, 3, 4])
-          const line = (cells: string[]) =>
-            '  ' +
-            cells
-              .map((cell, column) =>
-                rightAligned.has(column) ? cell.padStart(widths[column]!) : cell.padEnd(widths[column]!),
-              )
-              .join('  ')
-              .trimEnd()
-          console.log(line(header))
-          console.log('  ' + widths.map((width) => '─'.repeat(width)).join('  '))
-          for (const row of rows) console.log(line(row))
+          // The shared renderer, which measures columns without their styling —
+          // padding the raw string would indent everything right of a coloured
+          // status cell by the width of its escape codes.
+          table(header, rows, ['right', 'left', 'right', 'right', 'right', 'left', 'left'])
         }
       if (!data.owed.length) {
         if (data.tracked === 0) {

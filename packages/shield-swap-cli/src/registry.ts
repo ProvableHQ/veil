@@ -28,7 +28,7 @@ export type Command = {
  */
 export const COMMANDS: Record<string, Command> = {
   setup: {
-    summary: 'Bootstrap an account: keys, DEX access, API credentials, testnet funds.',
+    summary: 'Set up all credentials required for Shield Swap.',
     load: () => import('./commands/setup.js'),
   },
   pools: {
@@ -40,7 +40,7 @@ export const COMMANDS: Record<string, Command> = {
     load: () => import('./commands/balances.js'),
   },
   positions: {
-    summary: 'Liquidity positions held, with ranges and what a collect would pay.',
+    summary: 'Liquidity positions held + their ranges and fees earned (with option to collect).',
     load: () => import('./commands/positions.js'),
   },
   swap: {
@@ -48,11 +48,11 @@ export const COMMANDS: Record<string, Command> = {
     load: () => import('./commands/swap.js'),
   },
   'swap-concurrent': {
-    summary: 'Several swaps in flight at once, one per token sold.',
+    summary: 'Make multiple swaps concurrently.',
     load: () => import('./commands/swap-concurrent.js'),
   },
   history: {
-    summary: 'What is owed, what settled, and claiming what is still waiting.',
+    summary: 'Swap history and status of swaps.',
     load: () => import('./commands/swap-history.js'),
   },
   mint: {
@@ -93,6 +93,8 @@ Common to every command below setup:
   --network <testnet|mainnet>   default testnet; mainnet is never implicit
   --execute                     actually submit; without it, plans and stops
   --json                        one machine-readable object, nothing else
+  --no-color                    plain output; NO_COLOR and a non-TTY do this too
+  -h, --help                    this text, or a command's own when it follows one
 
 setup takes --network and its own options, but neither --execute nor --json:
 it is check-then-act throughout and reports progress as text.`

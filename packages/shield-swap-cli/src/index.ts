@@ -11,17 +11,25 @@
  */
 import { COMMANDS, usage } from './registry.js'
 import { reportUsage, setJsonMode } from './shared.js'
+import { help, setNoColor } from './color.js'
 
 const [name, ...argv] = process.argv.slice(2)
 
-// Set before dispatch rather than inside each command: `--json` promises one
+// Both set before dispatch rather than inside each command: `--json` promises one
 // object on stdout and nothing else, and a command that reported progress before
-// reaching its own `setJsonMode` would already have broken that.
+// reaching its own `setJsonMode` would already have broken that. `--no-color` has
+// to be in place before the first line for the same reason.
 setJsonMode(argv.includes('--json'))
+setNoColor(argv.includes('--no-color'))
 
 if (!name || name === '--help' || name === '-h' || name === 'help') {
-  console.log(usage())
-  process.exit(name ? 0 : 64) // EX_USAGE when invoked with nothing at all
+  // Exit 0 for a bare invocation too: listing the commands is what someone
+  // running `shield-swap` with nothing wants, and it is the first thing anyone
+  // types. EX_USAGE there makes the wrapper report a failed command — `pnpm
+  // shield-swap` printing the help and then `ELIFECYCLE Command failed` reads as
+  // a broken install. A wrong command still exits 64, below.
+  console.log(help(usage()))
+  process.exit(0)
 }
 
 const command = COMMANDS[name]

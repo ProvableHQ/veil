@@ -22,6 +22,7 @@
  */
 import { loadSession, formatAmount } from '../session.js'
 import { flags, step, done, warn, output, run, table } from '../shared.js'
+import { dim, green, red, yellow } from '../color.js'
 
 const USAGE = `shield-swap positions — owned liquidity positions and what they are owed
 
@@ -117,22 +118,24 @@ export async function main(argv: string[]): Promise<void> {
           // An em dash, not a zero: with no mapping entry there is no figure to
           // report, and printing 0 would be indistinguishable from a drained
           // position that still has one.
-          row.state ? row.state.liquidity.toString() : '—',
+          row.state ? row.state.liquidity.toString() : dim('—'),
           // Both sides in one cell, in the pool's own token order: a position is
           // backed by a pair, and splitting them into four columns of bare numbers
           // loses which token each belongs to.
           row.state
             ? `${formatAmount(row.state.amount0, row.decimals0)} / ${formatAmount(row.state.amount1, row.decimals1)}`
-            : '—',
+            : dim('—'),
           row.state
             ? `${formatAmount(row.state.collectable0, row.decimals0)} / ${formatAmount(row.state.collectable1, row.decimals1)}`
-            : '—',
+            : dim('—'),
           // `closed` is proven, so it wins over the mapping's silence. Only a
           // record that is still unspent AND has no entry is genuinely undecided:
           // a mint mid-finalize, or a burn the scanner has not caught up with.
           row.closed
-            ? 'closed'
-            : [row.frozen ? 'FROZEN' : '', row.noChainEntry ? 'pending' : ''].filter(Boolean).join(', ') || 'open',
+            ? dim('closed')
+            : [row.frozen ? red('FROZEN') : '', row.noChainEntry ? yellow('pending') : '']
+                .filter(Boolean)
+                .join(', ') || green('open'),
           row.positionTokenId,
         ]),
         ['left', 'right', 'right', 'right', 'right', 'left', 'left'],

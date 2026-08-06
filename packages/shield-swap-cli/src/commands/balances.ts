@@ -17,6 +17,7 @@
  */
 import { loadSession, formatAmount } from '../session.js'
 import { flags, step, done, output, run, table } from '../shared.js'
+import { dim, green, greenBright, greenDim } from '../color.js'
 
 const USAGE = `shield-swap balances — private and public holdings per token
 
@@ -24,33 +25,6 @@ const USAGE = `shield-swap balances — private and public holdings per token
   --token <symbol|id>           only this token
   --all                         include tokens with a zero balance
   --json                        machine-readable output`
-
-/**
- * Renders one numeric column with its decimal points aligned.
- *
- * Token decimals run from 6 to 18 in the same table, so a single right-aligned
- * column puts `0.4` and `0.000933727587783733` on different visual scales and
- * neither reads as a magnitude. Aligning on the point makes the integer parts
- * line up and the fractions hang off the same edge, so the eye compares sizes
- * rather than string lengths. Pure and local.
- *
- * @param values Formatted decimal strings, thousands separators included.
- * @returns The same values, each padded to a common width.
- */
-function alignDecimals(values: string[]): string[] {
-  const split = values.map((v) => {
-    const [whole = '0', fraction = ''] = v.split('.')
-    return { whole, fraction }
-  })
-  const wholeWidth = Math.max(...split.map((s) => s.whole.length))
-  const fractionWidth = Math.max(...split.map((s) => s.fraction.length))
-  return split.map(({ whole, fraction }) => {
-    // The point only appears when there is a fraction, so a whole number keeps
-    // its column without a trailing dot.
-    const tail = fraction ? `.${fraction}` : ''
-    return `${whole.padStart(wholeWidth)}${tail.padEnd(fractionWidth ? fractionWidth + 1 : 0)}`
-  })
-}
 
 /**
  * Runs the `balances` subcommand.
@@ -86,14 +60,27 @@ export async function main(argv: string[]): Promise<void> {
         console.log('\nNo balances. Fund the account (testnet: `shield-swap setup`) and try again.')
         return
       }
-      // Aligned before they reach the table, which pads cells without parsing them.
-      const priv = alignDecimals(data.tokens.map((r) => formatAmount(r.private, r.decimals)))
-      const pub = alignDecimals(data.tokens.map((r) => formatAmount(r.public, r.decimals)))
-      const total = alignDecimals(data.tokens.map((r) => formatAmount(r.total, r.decimals)))
+      // Printed as formatted, with no padding of their own. Aligning on the decimal
+      // point instead would pad each integer part out to the widest one, and in a
+      // left-aligned column that pad becomes a visible indent — the points would
+      // line up while the numbers started at three different places.
       table(
         ['TOKEN', 'PRIVATE', 'PUBLIC', 'TOTAL', 'TOKEN ID'],
-        data.tokens.map((row, i) => [row.symbol, priv[i]!, pub[i]!, total[i]!, row.id]),
-        ['left', 'right', 'right', 'right', 'left'],
+        // Green throughout, because every figure here is money the account holds.
+        // The private side is brightest: it is the only one a swap can spend, so a
+        // reader deciding whether a trade is possible wants it to stand out from a
+        // public balance that has to be wrapped or transferred first.
+        data.tokens.map((row) => [
+          row.symbol,
+          greenBright(formatAmount(row.private, row.decimals)),
+          greenDim(formatAmount(row.public, row.decimals)),
+          green(formatAmount(row.total, row.decimals)),
+          dim(row.id),
+        ]),
+        // Left throughout: the amounts already line up on their decimal points, and
+        // ragging them against the right edge of a wide header only pushed them away
+        // from the token they belong to.
+        ['left', 'left', 'left', 'left', 'left'],
       )
     })
   })
