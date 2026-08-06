@@ -133,8 +133,8 @@ program wrapped_credits.aleo: IARC20 {
     // Wrapper-specific deposit / withdraw helpers (not part of ARC20)
     // ----------------------------------------------------------------------
     fn deposit_credits_public_signer(public amount: u64) -> Final {
-        let depositor = self.signer;
-        let credits_finalization = credits.aleo::transfer_public_as_signer(self.address, amount);
+        let depositor = std::ctx::signer();
+        let credits_finalization = credits.aleo::transfer_public_as_signer(std::ctx::addr(), amount);
         return final {
             let previous_balance = balances.get_or_use(depositor, 0u128);
             balances.set(depositor, previous_balance + amount as u128);
@@ -149,10 +149,10 @@ program wrapped_credits.aleo: IARC20 {
     ) -> (credits.aleo::credits, Token, Final) {
         let (change, credits_finalization) = credits.aleo::transfer_private_to_public(
             input_record,
-            self.address,
+            std::ctx::addr(),
             amount,
         );
-        let token_output = Token { owner: self.signer, amount: amount as u128 };
+        let token_output = Token { owner: std::ctx::signer(), amount: amount as u128 };
         return (
             change, token_output,
             final {
@@ -163,8 +163,8 @@ program wrapped_credits.aleo: IARC20 {
     }
 
     fn withdraw_credits_public(public amount: u64) -> Final {
-        let withdrawer = self.caller;
-        let credits_finalization = credits.aleo::transfer_public(self.caller, amount);
+        let withdrawer = std::ctx::caller();
+        let credits_finalization = credits.aleo::transfer_public(std::ctx::caller(), amount);
         return final {
             let previous_balance = balances.get(withdrawer);
             balances.set(withdrawer, previous_balance - amount as u128);
@@ -174,8 +174,8 @@ program wrapped_credits.aleo: IARC20 {
     }
 
     fn withdraw_credits_public_signer(public amount: u64) -> Final {
-        let withdrawer = self.signer;
-        let credits_finalization = credits.aleo::transfer_public(self.signer, amount);
+        let withdrawer = std::ctx::signer();
+        let credits_finalization = credits.aleo::transfer_public(std::ctx::signer(), amount);
         return final {
             let previous_balance = balances.get(withdrawer);
             balances.set(withdrawer, previous_balance - amount as u128);
@@ -188,7 +188,7 @@ program wrapped_credits.aleo: IARC20 {
         input_token: Token,
         public amount: u64,
     ) -> (credits.aleo::credits, Token, Final) {
-        let withdrawer = self.signer;
+        let withdrawer = std::ctx::signer();
         let (output, credits_finalization) = credits.aleo::transfer_public_to_private(
             withdrawer,
             amount,
@@ -210,7 +210,7 @@ program wrapped_credits.aleo: IARC20 {
     // ARC20: transfers
     // ----------------------------------------------------------------------
     fn transfer_public(public recipient: address, public amount: u128) -> Final {
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return final {
             let previous_balance_caller = balances.get(caller);
             balances.set(caller, previous_balance_caller - amount);
@@ -220,7 +220,7 @@ program wrapped_credits.aleo: IARC20 {
     }
 
     fn transfer_public_as_signer(public recipient: address, public amount: u128) -> Final {
-        let signer = self.signer;
+        let signer = std::ctx::signer();
         return final {
             let previous_balance_signer = balances.get(signer);
             balances.set(signer, previous_balance_signer - amount);
@@ -231,7 +231,7 @@ program wrapped_credits.aleo: IARC20 {
 
     fn transfer_public_to_private(recipient: address, public amount: u128) -> (Token, Final) {
         let token = Token { owner: recipient, amount };
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return (
             token,
             final {
@@ -266,7 +266,7 @@ program wrapped_credits.aleo: IARC20 {
     // ARC20: approvals + transfer_from
     // ----------------------------------------------------------------------
     fn approve_public(public spender: address, public amount: u128) -> Final {
-        let key = TokenAllowance { account: self.caller, spender: spender };
+        let key = TokenAllowance { account: std::ctx::caller(), spender: spender };
         return final {
             let current = allowances.get_or_use(key, 0u128);
             allowances.set(key, current + amount);
@@ -274,7 +274,7 @@ program wrapped_credits.aleo: IARC20 {
     }
 
     fn unapprove_public(public spender: address, public amount: u128) -> Final {
-        let key = TokenAllowance { account: self.caller, spender: spender };
+        let key = TokenAllowance { account: std::ctx::caller(), spender: spender };
         return final {
             let current = allowances.get(key);
             allowances.set(key, current - amount);
@@ -286,7 +286,7 @@ program wrapped_credits.aleo: IARC20 {
         public recipient: address,
         public amount: u128,
     ) -> Final {
-        let key = TokenAllowance { account: owner, spender: self.caller };
+        let key = TokenAllowance { account: owner, spender: std::ctx::caller() };
         return final {
             let current = allowances.get(key);
             allowances.set(key, current - amount);
@@ -302,7 +302,7 @@ program wrapped_credits.aleo: IARC20 {
         private recipient: address,
         public amount: u128,
     ) -> (Token, Final) {
-        let spender = self.caller;
+        let spender = std::ctx::caller();
         let key = TokenAllowance { account: owner, spender: spender };
         let token = Token { owner: recipient, amount };
         return (

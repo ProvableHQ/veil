@@ -55,14 +55,14 @@ program ${PROGRAM_A} {
 
     fn make_artifact(public sx: u64, public sy: u64, public scale: u64) -> (Artifact, public Shape) {
         let shape: Shape = Shape { origin: Point { x: sx, y: sy }, scale: scale };
-        let art: Artifact = Artifact { owner: self.caller, shape: shape, tag: 7field };
+        let art: Artifact = Artifact { owner: std::ctx::caller(), shape: shape, tag: 7field };
         return (art, shape);
     }
 
     mapping values: address => u64;
 
     fn set_value(public v: u64) -> Final {
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return final {
             Mapping::set(values, caller, v);
         };

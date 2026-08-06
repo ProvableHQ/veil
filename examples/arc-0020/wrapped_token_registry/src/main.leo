@@ -130,10 +130,10 @@ program wrapped_token_registry.aleo: IARC20 {
     // Wrapper-specific deposit / withdraw helpers (not part of IARC20)
     // ----------------------------------------------------------------------
     fn deposit_token_public_signer(public amount: u128) -> Final {
-        let depositor = self.signer;
+        let depositor = std::ctx::signer();
         let tr_final = token_registry.aleo::transfer_public_as_signer(
             WRAPPED_TOKEN_ID,
-            self.address,
+            std::ctx::addr(),
             amount,
         );
         return final {
@@ -145,7 +145,7 @@ program wrapped_token_registry.aleo: IARC20 {
     }
 
     fn withdraw_token_public(public amount: u128) -> Final {
-        let withdrawer = self.caller;
+        let withdrawer = std::ctx::caller();
         let tr_final = token_registry.aleo::transfer_public(WRAPPED_TOKEN_ID, withdrawer, amount);
         return final {
             let prev = balances.get(withdrawer);
@@ -156,7 +156,7 @@ program wrapped_token_registry.aleo: IARC20 {
     }
 
     fn withdraw_token_public_signer(public amount: u128) -> Final {
-        let withdrawer = self.signer;
+        let withdrawer = std::ctx::signer();
         let tr_final = token_registry.aleo::transfer_public(WRAPPED_TOKEN_ID, withdrawer, amount);
         return final {
             let prev = balances.get(withdrawer);
@@ -167,7 +167,7 @@ program wrapped_token_registry.aleo: IARC20 {
     }
 
     fn withdraw_token_private(public amount: u128) -> (token_registry.aleo::Token, Final) {
-        let withdrawer = self.signer;
+        let withdrawer = std::ctx::signer();
         let (token_out, tr_final) = token_registry.aleo::transfer_public_to_private(
             WRAPPED_TOKEN_ID,
             withdrawer,
@@ -189,7 +189,7 @@ program wrapped_token_registry.aleo: IARC20 {
     // Transfers
     // ----------------------------------------------------------------------
     fn transfer_public(public recipient: address, public amount: u128) -> Final {
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return final {
             let prev_caller = balances.get(caller);
             balances.set(caller, prev_caller - amount);
@@ -199,7 +199,7 @@ program wrapped_token_registry.aleo: IARC20 {
     }
 
     fn transfer_public_as_signer(public recipient: address, public amount: u128) -> Final {
-        let signer = self.signer;
+        let signer = std::ctx::signer();
         return final {
             let prev_signer = balances.get(signer);
             balances.set(signer, prev_signer - amount);
@@ -210,7 +210,7 @@ program wrapped_token_registry.aleo: IARC20 {
 
     fn transfer_public_to_private(recipient: address, public amount: u128) -> (Token, Final) {
         let token = Token { owner: recipient, amount };
-        let caller = self.caller;
+        let caller = std::ctx::caller();
         return (
             token,
             final {
@@ -242,7 +242,7 @@ program wrapped_token_registry.aleo: IARC20 {
     }
 
     fn approve_public(public spender: address, public amount: u128) -> Final {
-        let key = TokenAllowance { account: self.caller, spender: spender };
+        let key = TokenAllowance { account: std::ctx::caller(), spender: spender };
         return final {
             let current = allowances.get_or_use(key, 0u128);
             allowances.set(key, current + amount);
@@ -250,7 +250,7 @@ program wrapped_token_registry.aleo: IARC20 {
     }
 
     fn unapprove_public(public spender: address, public amount: u128) -> Final {
-        let key = TokenAllowance { account: self.caller, spender: spender };
+        let key = TokenAllowance { account: std::ctx::caller(), spender: spender };
         return final {
             let current = allowances.get(key);
             allowances.set(key, current - amount);
@@ -262,7 +262,7 @@ program wrapped_token_registry.aleo: IARC20 {
         public recipient: address,
         public amount: u128,
     ) -> Final {
-        let key = TokenAllowance { account: owner, spender: self.caller };
+        let key = TokenAllowance { account: owner, spender: std::ctx::caller() };
         return final {
             let current = allowances.get(key);
             allowances.set(key, current - amount);
@@ -278,7 +278,7 @@ program wrapped_token_registry.aleo: IARC20 {
         private recipient: address,
         public amount: u128,
     ) -> (Token, Final) {
-        let spender = self.caller;
+        let spender = std::ctx::caller();
         let key = TokenAllowance { account: owner, spender: spender };
         let token = Token { owner: recipient, amount };
         return (
