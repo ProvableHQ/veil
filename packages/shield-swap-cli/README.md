@@ -23,8 +23,44 @@ shield-swap swap --from USDCx --to ETH --amount 1.5 --execute
 ```
 
 `shield-swap` on its own lists the subcommands, and every subcommand takes
-`--help` for its own flags. In the Veil repo, `pnpm install && pnpm build`, then
-run `node packages/shield-swap-cli/dist/index.js <command>`.
+`--help` for its own flags.
+
+## Running it from the Veil repo
+
+No build step. `tsx` honours the root tsconfig's `paths`, so the SDK resolves
+straight to source and every run picks up edits immediately:
+
+```sh
+pnpm install
+pnpm shield-swap pools
+pnpm shield-swap swap --from USDCx --to ETH --amount 1.5
+```
+
+Use `pnpm -s` when parsing the output. `pnpm run` prints a two-line banner on
+stdout, which is harmless for a person and fatal for `--json`:
+
+```sh
+pnpm -s shield-swap balances --json
+```
+
+Or skip the wrapper and call it directly, which has no banner:
+
+```sh
+npx tsx packages/shield-swap-cli/src/index.ts balances --json
+```
+
+To exercise the built binary as a user would get it — the shebang, the lazy
+command loading, the `bin` wiring — build the package and run `dist`:
+
+```sh
+pnpm --filter @provablehq/shield-swap-cli build
+node packages/shield-swap-cli/dist/index.js pools
+```
+
+State lands in `./.shield-swap/<network>/` relative to the working directory, so
+running from the repo root keeps a session there. Set `SHIELD_SWAP_STATE_DIR` to
+point somewhere else — worth doing if you want a scratch account separate from
+the one you normally trade with.
 
 To drive the SDK directly while sharing the same state file the command line
 writes, import the session helpers:
