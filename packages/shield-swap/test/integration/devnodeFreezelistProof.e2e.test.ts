@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { SealanceMerkleTree } from '@provablehq/sdk'
 import { buildExclusionProof, FrozenAddressError, generateAccount } from '@provablehq/veil-aleo-sdk'
 
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import type { ProofProvider } from '../../src/utils/proofs.js'
+import { EMPTY_MERKLE_PROOFS } from '../../src/utils/proofs.js'
 import {
   setupNetworkStack,
   networkStackAvailable,
@@ -87,11 +89,16 @@ describe.runIf(RUN)('e2e: freezelist exclusion proofs against deployed bytecode'
     expect(left.siblings).toHaveLength(16)
     expect(left.siblings.slice(0, 2).every((s) => s === '0field')).toBe(false)
 
-    // Depth 3 means slots 0-3 carry the path and slot 4 terminates it, so the
-    // verifier's climb loop runs twice rather than the single iteration a
-    // four-leaf tree would produce.
-    expect(left.siblings.slice(0, 4).every((s) => s !== '0field')).toBe(true)
-    expect(left.siblings[4]).toBe('0field')
+    // Depth, derived the way the verifier derives it: the first 0field at slot
+    // 2 or beyond ends the path, and depth is that index minus one. Slots 0 and
+    // 1 are excluded because a leaf may legitimately be a 0field pad — five
+    // addresses pad to eight leaves, so three pads precede them and a subject
+    // sorting below every real entry brackets against one.
+    const terminator = left.siblings.findIndex((sibling, slot) => slot >= 2 && sibling === '0field')
+    expect(terminator).toBe(4)
+    // Depth 3 runs the verifier's climb loop twice, rather than the single
+    // iteration a four-leaf tree would produce.
+    expect(terminator - 1).toBe(3)
 
     const realProofs: ProofProvider = async () => proofs
 
@@ -121,6 +128,100 @@ describe.runIf(RUN)('e2e: freezelist exclusion proofs against deployed bytecode'
     expect(result.positionTokenId).toMatch(/field$/)
     const { status } = await user.walletClient.transactionStatus({ transactionId: result.transactionId })
     expect(status).toBe('accepted')
+  }, 900_000)
+
+  it('cannot execute a mint whose recipient is on the freezelist', async () => {
+    const user = ctx.user
+    const listed = frozen[2]!
+
+    // buildExclusionProof refuses outright, so reach past it for the witness
+    // SealanceMerkleTree would hand back — a genuine path whose range check
+    // compares the address against its own leaf.
+    const sealance = new SealanceMerkleTree()
+    const nodes = sealance.convertTreeToBigInt(tree)
+    const [leftIndex, rightIndex] = sealance.getLeafIndices(nodes, listed)
+    const cut = (index: number) => {
+      const path = sealance.getSiblingPath(nodes, index, 16)
+      return { siblings: path.siblings.map((s) => `${s}field`), leaf_index: path.leaf_index }
+    }
+    const unsatisfiable = [cut(leftIndex), cut(rightIndex)] as const
+
+    const honest = buildExclusionProof({ tree, address: user.account.address })
+    // mint proves signer, recipient and withdrawal separately, so the provider
+    // answers per subject: the honest witness for the user, the doomed one for
+    // the listed recipient.
+    const proofs: ProofProvider = async (context) =>
+      context.subject === listed ? unsatisfiable : honest
+
+    const record0 = await ctx.mintTokenTo(user, ctx.token0.program, MINT)
+    const record1 = await ctx.mintTokenTo(user, ctx.token1.program, MINT)
+
+    const dex = user.walletClient.extend(shieldSwapActions({ program: AMM_PROGRAM })) as ReturnType<
+      ReturnType<typeof shieldSwapActions>
+    >
+
+    // Non-inclusion is asserted in the transition body, not finalize, so the
+    // constraint system rejects it locally — a frozen party cannot produce an
+    // execution at all, let alone broadcast one.
+    await expect(
+      dex.mint({
+        poolKey: ctx.poolKey,
+        tickLower: -10 * ctx.tickSpacing,
+        tickUpper: 10 * ctx.tickSpacing,
+        amount0Desired: MINT / 2n,
+        amount1Desired: MINT / 2n,
+        recipient: listed,
+        withdrawal: user.account.address,
+        token0Record: record0,
+        token1Record: record1,
+        proofs,
+        imports: ctx.imports,
+      }),
+    ).rejects.toThrow()
+  }, 900_000)
+
+  it('rejects a mint proved against the stale empty-list root', async () => {
+    const user = ctx.user
+
+    // The all-zero witness is internally consistent — it rebuilds the empty
+    // tree's root and clears the range checks — so the transition proves fine.
+    // It dies in finalize, where the root is neither current nor the previous
+    // one held open by the grace window. This is exactly what stops working
+    // the moment a list is populated.
+    const proofs: ProofProvider = async () => EMPTY_MERKLE_PROOFS
+
+    const record0 = await ctx.mintTokenTo(user, ctx.token0.program, MINT)
+    const record1 = await ctx.mintTokenTo(user, ctx.token1.program, MINT)
+
+    const dex = user.walletClient.extend(shieldSwapActions({ program: AMM_PROGRAM })) as ReturnType<
+      ReturnType<typeof shieldSwapActions>
+    >
+
+    let transactionId: string | undefined
+    try {
+      const result = await dex.mint({
+        poolKey: ctx.poolKey,
+        tickLower: -10 * ctx.tickSpacing,
+        tickUpper: 10 * ctx.tickSpacing,
+        amount0Desired: MINT / 2n,
+        amount1Desired: MINT / 2n,
+        recipient: user.account.address,
+        withdrawal: user.account.address,
+        token0Record: record0,
+        token1Record: record1,
+        proofs,
+        imports: ctx.imports,
+      })
+      transactionId = result.transactionId
+    } catch {
+      // The SDK may surface the rejection as a throw rather than returning an
+      // id; either way the mint must not have been accepted.
+    }
+
+    if (transactionId) {
+      const { status } = await user.walletClient.transactionStatus({ transactionId })
+      expect(status).not.toBe('accepted')
+    }
   }, 900_000)
 
   it('refuses to build a witness for an address on the list', () => {
