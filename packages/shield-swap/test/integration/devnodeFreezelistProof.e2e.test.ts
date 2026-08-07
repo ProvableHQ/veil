@@ -43,9 +43,11 @@ describe.runIf(RUN)('e2e: freezelist exclusion proofs against deployed bytecode'
   beforeAll(async () => {
     ctx = await setupNetworkStack()
 
-    // Three frozen addresses pad to four leaves, giving depth 2 — enough that a
-    // proof carries a real sibling path rather than the empty-tree witness.
-    frozen = [generateAccount().address, generateAccount().address, generateAccount().address]
+    // Five frozen addresses pad to eight leaves, giving depth 3. Depth matters:
+    // at depth 2 the verifier's climb loop runs a single iteration, so the
+    // node-layer hashing and the index-bit ordering above level one go
+    // untested. Depth 3 runs it twice.
+    frozen = Array.from({ length: 5 }, () => generateAccount().address)
     tree = await ctx.freezeAddresses(frozen)
   }, 900_000)
 
@@ -57,8 +59,8 @@ describe.runIf(RUN)('e2e: freezelist exclusion proofs against deployed bytecode'
     const onChain = await ctx.readMapping(FREEZELIST_PROGRAM, 'freeze_list_root', '1u8')
 
     expect(onChain).toBe(`${tree[tree.length - 1]}field`)
-    // Three addresses pad to four leaves, so the flat tree is 2n - 1 = 7.
-    expect(tree).toHaveLength(7)
+    // Five addresses pad to eight leaves, so the flat tree is 2n - 1 = 15.
+    expect(tree).toHaveLength(15)
   })
 
   it('tracks every frozen address in the contract index', async () => {
@@ -84,6 +86,12 @@ describe.runIf(RUN)('e2e: freezelist exclusion proofs against deployed bytecode'
     // rather than the all-zero witness an empty list produces.
     expect(left.siblings).toHaveLength(16)
     expect(left.siblings.slice(0, 2).every((s) => s === '0field')).toBe(false)
+
+    // Depth 3 means slots 0-3 carry the path and slot 4 terminates it, so the
+    // verifier's climb loop runs twice rather than the single iteration a
+    // four-leaf tree would produce.
+    expect(left.siblings.slice(0, 4).every((s) => s !== '0field')).toBe(true)
+    expect(left.siblings[4]).toBe('0field')
 
     const realProofs: ProofProvider = async () => proofs
 
