@@ -102,6 +102,14 @@ export {
   type PreparedFreezeList,
 } from './actions/buildExclusionProof.js'
 
+export {
+  freezelistActions,
+  type FreezelistActions,
+  type FreezelistActionsConfig,
+  type FreezeListParameters,
+  type GetExclusionProofParameters,
+} from './decorators/freezelistActions.js'
+
 /** Networks supported by `@provablehq/sdk/dynamic.js`. */
 export type SupportedNetwork = 'mainnet' | 'testnet'
 
