@@ -8,86 +8,83 @@ import {
 } from '../actions/buildExclusionProof.js'
 
 /**
- * Options for {@link freezelistActions}.
+ * Parameters for {@link FreezelistActions.getFreezeListTree}.
  *
- * @property program Freezelist program the actions read when a call does not
- *   name one, such as `shield_swap_freezelist.aleo`. Defaults to none, in which
- *   case every call must pass a program.
+ * @property program Freezelist-owning program to read, such as
+ *   `shield_swap_freezelist.aleo`. Named per call because compliance-gated
+ *   operations span several lists — a position mint against a wrapped pair
+ *   proves against the AMM's freezelist and each wrapper's — so no single list
+ *   is the client's.
  */
-export type FreezelistActionsConfig = {
-  program?: string
+export type GetFreezeListTreeParameters = {
+  program: string
 }
 
-/** Parameters shared by the actions, naming the list to read. */
-export type FreezeListParameters = {
-  /** Freezelist program. Defaults to the decorator's configured program. */
-  program?: string
-}
-
-/** Parameters for the client-bound exclusion proof action. */
-export type GetExclusionProofParameters = FreezeListParameters & {
-  /** The address whose absence from the list is proved. */
+/**
+ * Parameters for {@link FreezelistActions.getExclusionProof}.
+ *
+ * @property program Freezelist-owning program to prove against.
+ * @property address The address whose absence from that list is proved.
+ */
+export type GetExclusionProofParameters = {
+  program: string
   address: string
 }
 
 /** The actions {@link freezelistActions} adds to a client. */
 export type FreezelistActions = {
-  getFreezeListTree: (params?: FreezeListParameters) => Promise<PreparedFreezeList>
+  getFreezeListTree: (params: GetFreezeListTreeParameters) => Promise<PreparedFreezeList>
   getExclusionProof: (params: GetExclusionProofParameters) => Promise<BuildExclusionProofReturnType>
 }
 
 /**
  * Extends a client with compliance freezelist reads and proof construction.
  *
- * Pairs `getFreezeList` — which returns the list as a flat Merkle tree — with
- * local proof construction, so a caller goes from a program id to the
- * `[MerkleProof; 2]` pair a compliance-gated transition takes in one call.
+ * Pairs `getFreezeList` — which returns a list as a flat Merkle tree — with
+ * local proof construction, so a program id and an address are enough to reach
+ * the `[MerkleProof; 2]` pair a compliance-gated transition takes.
+ *
+ * Every action names its program. Each compliance-gated program keeps its own
+ * list, and a single operation routinely spans more than one: minting a
+ * position against a wrapped pair proves the parties against the AMM's
+ * freezelist and the sender against each wrapper's.
  *
  * The actions hold no cache. A freezelist reshapes whenever its address count
  * crosses a power of two, which changes both the root and the depth and voids
- * every outstanding proof, so a cache has to be keyed on the root and checked
- * rather than held for a client's lifetime. Callers cutting several proofs
- * against one list — a position mint proves a signer, a recipient and a
- * withdrawal address — should call {@link FreezelistActions.getFreezeListTree}
- * once and pass the result to {@link buildExclusionProof}, which skips a decode
- * worth several milliseconds on a large list.
+ * every outstanding proof, so a cache has to be keyed on the root and
+ * revalidated rather than held for a client's lifetime. Callers cutting several
+ * proofs against one list — a mint proves a signer, a recipient and a
+ * withdrawal address — should call
+ * {@link FreezelistActions.getFreezeListTree} once and pass the result to
+ * {@link buildExclusionProof}, which skips a decode worth several milliseconds
+ * on a large list.
  *
- * @param config Optional default program for the actions.
- * @returns A decorator for `client.extend`.
- *
- * @example
- * const client = publicClient.extend(
- *   freezelistActions({ program: 'shield_swap_freezelist.aleo' }),
- * )
- *
- * const proofs = await client.getExclusionProof({ address: account.address })
+ * @param client Client whose transport serves the reads.
+ * @returns The freezelist actions, bound to that client.
  *
  * @example
- * // Several proofs against one list: read and decode once.
- * const list = await client.getFreezeListTree()
- * const parties = [signer, recipient, withdrawal].map((address) =>
+ * const client = publicClient.extend(freezelistActions)
+ *
+ * const proofs = await client.getExclusionProof({
+ *   program: 'shield_swap_freezelist.aleo',
+ *   address: account.address,
+ * })
+ *
+ * @example
+ * // Several parties against one list: read and decode once.
+ * const list = await client.getFreezeListTree({ program: 'shield_swap_freezelist.aleo' })
+ * const [signerProofs, recipientProofs] = [signer, recipient].map((address) =>
  *   buildExclusionProof({ tree: list, address }),
  * )
  */
-export function freezelistActions(config: FreezelistActionsConfig = {}) {
-  /** Resolves the program a call reads, preferring an explicit one. */
-  const resolveProgram = (params?: FreezeListParameters): string => {
-    const program = params?.program ?? config.program
-    if (!program) {
-      throw new Error(
-        'No freezelist program — pass freezelistActions({ program }) or a program on the call.',
-      )
-    }
-    return program
-  }
-
-  return (client: Client): FreezelistActions => ({
+export function freezelistActions(client: Client): FreezelistActions {
+  return {
     getFreezeListTree: async (params) =>
-      prepareFreezeList(await getFreezeList(client, { programId: resolveProgram(params) })),
+      prepareFreezeList(await getFreezeList(client, { programId: params.program })),
 
     getExclusionProof: async (params) => {
-      const tree = await getFreezeList(client, { programId: resolveProgram(params) })
+      const tree = await getFreezeList(client, { programId: params.program })
       return buildExclusionProof({ tree, address: params.address })
     },
-  })
+  }
 }

@@ -105,8 +105,7 @@ export {
 export {
   freezelistActions,
   type FreezelistActions,
-  type FreezelistActionsConfig,
-  type FreezeListParameters,
+  type GetFreezeListTreeParameters,
   type GetExclusionProofParameters,
 } from './decorators/freezelistActions.js'
 

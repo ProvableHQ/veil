@@ -27,63 +27,62 @@ function stubClient(tree: string[] = TREE) {
   return { request: vi.fn().mockResolvedValue(tree) } as never
 }
 
-describe('freezelistActions', () => {
-  it('reads the configured program and builds a proof in one call', async () => {
-    const client = stubClient()
-    const actions = freezelistActions({ program: PROGRAM })(client)
+const requestsOf = (client: unknown) => (client as { request: ReturnType<typeof vi.fn> }).request
 
-    const [left, right] = await actions.getExclusionProof({ address: CLEAR })
+describe('freezelistActions', () => {
+  it('reads the named program and builds a proof in one call', async () => {
+    const client = stubClient()
+    const actions = freezelistActions(client)
+
+    const [left, right] = await actions.getExclusionProof({ program: PROGRAM, address: CLEAR })
 
     expect(left.siblings).toHaveLength(16)
     expect(left.leaf_index + 1).toBe(right.leaf_index)
-    expect((client as unknown as { request: ReturnType<typeof vi.fn> }).request).toHaveBeenCalledWith({
+    expect(requestsOf(client)).toHaveBeenCalledWith({
       method: 'getFreezeList',
       params: { programId: PROGRAM },
     })
   })
 
-  it('lets a call override the configured program', async () => {
+  it('reads a different list per call, as a wrapped operation requires', async () => {
     const client = stubClient()
-    const actions = freezelistActions({ program: PROGRAM })(client)
+    const actions = freezelistActions(client)
 
-    await actions.getExclusionProof({ address: CLEAR, program: 'test_usdcx_freezelist.aleo' })
+    // A mint against a wrapped pair proves the parties against the AMM's list
+    // and the sender against each wrapper's, so the program cannot be fixed to
+    // the client.
+    await actions.getExclusionProof({ program: PROGRAM, address: CLEAR })
+    await actions.getExclusionProof({ program: 'test_usdcx_freezelist.aleo', address: CLEAR })
 
-    expect((client as unknown as { request: ReturnType<typeof vi.fn> }).request).toHaveBeenCalledWith({
-      method: 'getFreezeList',
-      params: { programId: 'test_usdcx_freezelist.aleo' },
-    })
+    expect(requestsOf(client).mock.calls.map(([call]) => call.params.programId)).toEqual([
+      PROGRAM,
+      'test_usdcx_freezelist.aleo',
+    ])
   })
 
-  it('decodes a list once so several proofs share one read', async () => {
+  it('decodes a list once so several parties share one read', async () => {
     const client = stubClient()
-    const actions = freezelistActions({ program: PROGRAM })(client)
+    const actions = freezelistActions(client)
 
-    const list = await actions.getFreezeListTree()
+    const list = await actions.getFreezeListTree({ program: PROGRAM })
 
     expect(list.leafCount).toBe(4)
     expect(list.root).toBe(TREE[TREE.length - 1])
     // One read, not one per party — the point of exposing the decoded form.
-    expect((client as unknown as { request: ReturnType<typeof vi.fn> }).request).toHaveBeenCalledTimes(1)
+    expect(requestsOf(client)).toHaveBeenCalledTimes(1)
   })
 
   it('surfaces a listed address as FrozenAddressError', async () => {
-    const actions = freezelistActions({ program: PROGRAM })(stubClient())
+    const actions = freezelistActions(stubClient())
 
-    await expect(actions.getExclusionProof({ address: LISTED })).rejects.toThrow(FrozenAddressError)
-  })
-
-  it('explains the missing program rather than reading an empty id', async () => {
-    const client = stubClient()
-    const actions = freezelistActions()(client)
-
-    await expect(actions.getExclusionProof({ address: CLEAR })).rejects.toThrow(/No freezelist program/)
-    await expect(actions.getFreezeListTree()).rejects.toThrow(/No freezelist program/)
-    expect((client as unknown as { request: ReturnType<typeof vi.fn> }).request).not.toHaveBeenCalled()
+    await expect(actions.getExclusionProof({ program: PROGRAM, address: LISTED })).rejects.toThrow(
+      FrozenAddressError,
+    )
   })
 
   it('propagates a malformed tree from the node', async () => {
-    const actions = freezelistActions({ program: PROGRAM })(stubClient(['0', '0']))
+    const actions = freezelistActions(stubClient(['0', '0']))
 
-    await expect(actions.getExclusionProof({ address: CLEAR })).rejects.toThrow(RangeError)
+    await expect(actions.getExclusionProof({ program: PROGRAM, address: CLEAR })).rejects.toThrow(RangeError)
   })
 })
