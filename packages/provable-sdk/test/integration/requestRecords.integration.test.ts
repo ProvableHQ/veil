@@ -104,3 +104,135 @@ describe.runIf(RUN)('requestRecords on testnet and mainnet with switchChain', ()
     300_000,
   )
 })
+
+/**
+ * Proves the RecordFilter bounds reach the Record Scanning Service and are
+ * applied there — not locally.
+ *
+ * A local account pushes the filter to the service and Veil applies nothing on
+ * top (only the RPC/wallet path filters client-side), so every assertion here is
+ * a statement about the wire contract. That distinction is what makes these
+ * tests worth running: the unit tests pin the request body Veil *builds*, and
+ * only a live scan shows the service *honors* it. A casing slip such as
+ * `resultsPerPage` for `results_per_page` is silently ignored by the service, so
+ * it passes every unit test and fails only here.
+ *
+ * Read-only on testnet; no funds move.
+ *
+ * Run with:
+ *   VEIL_INTEGRATION=1 npx vitest run packages/provable-sdk/test/integration/requestRecords.integration.test.ts
+ */
+describe.runIf(RUN)('RecordFilter bounds applied by the scanner service', () => {
+  let scan: (params: Record<string, unknown>) => Promise<any[]>
+  let baseline: any[]
+
+  beforeAll(async () => {
+    const { consumerId, apiKey } = await resolveCredentials()
+    const aleo = await loadNetwork('testnet')
+    const scanner = aleo.createRemoteScanner({ url: SCANNER_URL, consumerId, apiKey })
+    const { walletClient } = aleo.createAleoClient({
+      privateKey: PRIVATE_KEY!,
+      networkUrl: NETWORK_URL,
+      provingMode: 'local',
+      records: scanner,
+    })
+    scan = (params) => walletClient.requestRecords(params as any) as Promise<any[]>
+    baseline = await scan({ program: 'credits.aleo', statusFilter: 'unspent' })
+    expect(baseline.length).toBeGreaterThan(0)
+  }, 300_000)
+
+  it('caps a page at results_per_page', async () => {
+    // Decisive for the snake_case wire contract: the local path applies nothing
+    // client-side, so a single record back means the service parsed the field.
+    // Had Veil sent camelCase, the service would ignore it and return them all.
+    const page = await scan({
+      program: 'credits.aleo',
+      statusFilter: 'unspent',
+      filter: { resultsPerPage: 1 },
+    })
+    expect(page).toHaveLength(1)
+  }, 120_000)
+
+  it('walks disjoint pages of one record each', async () => {
+    const [first, second] = await Promise.all([
+      scan({ program: 'credits.aleo', statusFilter: 'unspent', filter: { resultsPerPage: 1, page: 0 } }),
+      scan({ program: 'credits.aleo', statusFilter: 'unspent', filter: { resultsPerPage: 1, page: 1 } }),
+    ])
+    expect(first).toHaveLength(1)
+    // Only meaningful with at least two records to page across.
+    if (baseline.length > 1) {
+      expect(second).toHaveLength(1)
+      expect(second[0].commitment).not.toBe(first[0].commitment)
+    }
+  }, 120_000)
+
+  it('narrows by record name, and an unknown name returns nothing', async () => {
+    const credits = await scan({
+      program: 'credits.aleo',
+      statusFilter: 'unspent',
+      filter: { records: ['credits'] },
+    })
+    expect(credits.length).toBe(baseline.length)
+
+    const none = await scan({
+      program: 'credits.aleo',
+      statusFilter: 'unspent',
+      filter: { records: ['definitely_not_a_record_type'] },
+    })
+    expect(none).toHaveLength(0)
+  }, 120_000)
+
+  it('narrows by commitment', async () => {
+    const target = baseline.find((r) => r.commitment)
+    expect(target, 'scanner returned no commitment to filter on').toBeDefined()
+    const matched = await scan({
+      program: 'credits.aleo',
+      statusFilter: 'unspent',
+      filter: { commitments: [target.commitment] },
+    })
+    expect(matched).toHaveLength(1)
+    expect(matched[0].commitment).toBe(target.commitment)
+  }, 120_000)
+
+  it('narrows by block range and excludes everything below it', async () => {
+    const heights = baseline.map((r) => r.blockHeight).filter((h) => typeof h === 'number')
+    expect(heights.length, 'scanner returned no block heights to bound on').toBeGreaterThan(0)
+    const max = Math.max(...heights)
+
+    const withinRange = await scan({
+      program: 'credits.aleo',
+      statusFilter: 'unspent',
+      filter: { start: 0, end: max },
+    })
+    expect(withinRange.length).toBe(baseline.length)
+
+    // A window past the newest record must come back empty.
+    const empty = await scan({
+      program: 'credits.aleo',
+      statusFilter: 'unspent',
+      filter: { start: max + 1_000_000 },
+    })
+    expect(empty).toHaveLength(0)
+  }, 120_000)
+
+  it("returns at least the unspent set for statusFilter 'all'", async () => {
+    // Regression for the 'all' defect: 'all' used to send unspent: true, which
+    // the service reads as spent = false, so it returned the unspent set only.
+    // Omitting the key must return a superset.
+    const all = await scan({ program: 'credits.aleo', statusFilter: 'all' })
+    expect(all.length).toBeGreaterThanOrEqual(baseline.length)
+
+    const unspentCommitments = new Set(baseline.map((r) => r.commitment))
+    const allCommitments = new Set(all.map((r) => r.commitment))
+    for (const commitment of unspentCommitments) {
+      expect(allCommitments.has(commitment)).toBe(true)
+    }
+  }, 120_000)
+
+  it('scans every program when program is omitted', async () => {
+    const everything = await scan({ statusFilter: 'unspent' })
+    expect(everything.length).toBeGreaterThanOrEqual(baseline.length)
+    // credits.aleo records must still be in there.
+    expect(everything.some((r) => r.programName === 'credits.aleo')).toBe(true)
+  }, 120_000)
+})
