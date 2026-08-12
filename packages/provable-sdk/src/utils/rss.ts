@@ -5,7 +5,19 @@
 // public API. Tests import it by path.
 
 import type { OwnedFilter } from '@provablehq/sdk'
-import { resolveScanPrograms, type RequestRecordsParameters } from '@provablehq/veil-core'
+import {
+  assertValidRecordFilter,
+  resolveScanPrograms,
+  type RequestRecordsParameters,
+} from '@provablehq/veil-core'
+
+// An empty list is no constraint. The service renders a present list as
+// `column = ANY($1)`, so sending `[]` would match nothing — the opposite of what
+// a caller narrowing by a list that came back empty means. Dropping it here
+// keeps the wire body in step with how the local path reads the same filter.
+function presentList(values?: string[]): string[] | undefined {
+  return values && values.length > 0 ? values : undefined
+}
 
 /**
  * Builds the `/records/owned` request body for a record scan.
@@ -40,15 +52,16 @@ import { resolveScanPrograms, type RequestRecordsParameters } from '@provablehq/
  */
 export function buildOwnedFilter(params: RequestRecordsParameters): OwnedFilter {
   const filter = params.filter
+  assertValidRecordFilter(filter)
 
   // One entry per wire field, one omission rule. Naming each field once keeps a
   // copy-paste from silently pairing the wrong source and target.
   const wireFilter = Object.fromEntries(
     Object.entries({
       programs: resolveScanPrograms(params),
-      records: filter?.records,
-      functions: filter?.functions,
-      commitments: filter?.commitments,
+      records: presentList(filter?.records),
+      functions: presentList(filter?.functions),
+      commitments: presentList(filter?.commitments),
       start: filter?.start,
       end: filter?.end,
       results_per_page: filter?.resultsPerPage,

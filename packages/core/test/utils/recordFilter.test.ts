@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   applyRecordFilter,
   resolveScanPrograms,
+  assertValidRecordFilter,
   DEFAULT_RECORD_PAGE_SIZE,
 } from '../../src/utils/recordFilter.js'
 import type { OwnedRecordEncrypted } from '../../src/types/records.js'
@@ -31,6 +32,38 @@ describe('resolveScanPrograms', () => {
     expect(
       resolveScanPrograms({ program: 'a.aleo', filter: { programs: ['a.aleo', 'b.aleo'] } }),
     ).toEqual(['a.aleo', 'b.aleo'])
+  })
+})
+
+describe('assertValidRecordFilter', () => {
+  it('accepts an absent filter and one without pagination', () => {
+    expect(() => assertValidRecordFilter(undefined)).not.toThrow()
+    expect(() => assertValidRecordFilter({})).not.toThrow()
+    expect(() => assertValidRecordFilter({ records: ['A'] })).not.toThrow()
+  })
+
+  it('accepts the boundary values', () => {
+    expect(() => assertValidRecordFilter({ resultsPerPage: 1, page: 0 })).not.toThrow()
+  })
+
+  it('rejects a non-positive or fractional resultsPerPage', () => {
+    for (const resultsPerPage of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => assertValidRecordFilter({ resultsPerPage })).toThrow(
+        /resultsPerPage must be a positive integer/,
+      )
+    }
+  })
+
+  it('rejects a negative or fractional page', () => {
+    for (const page of [-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => assertValidRecordFilter({ page })).toThrow(
+        /page must be a non-negative integer/,
+      )
+    }
+  })
+
+  it('names the offending value in the message', () => {
+    expect(() => assertValidRecordFilter({ page: -7 })).toThrow(/received -7/)
   })
 })
 
@@ -141,6 +174,60 @@ describe('applyRecordFilter', () => {
     expect(result.map((r) => r.commitment)).toEqual(['c1', 'no-height'])
   })
 
+  it('sorts a record with no commitment after one that has it, at the same height', () => {
+    // An absent commitment must not sort first the way an empty string would —
+    // both sort keys treat a missing field the same way, which is what keeps a
+    // page index stable when some records omit the field.
+    const records = [
+      record({ blockHeight: 1, commitment: undefined, tag: 'no-commitment' }),
+      record({ blockHeight: 1, commitment: 'aaa', tag: 'has-commitment' }),
+    ]
+    const result = applyRecordFilter(records, { filter: {} })
+    expect(result.map((r) => r.tag)).toEqual(['has-commitment', 'no-commitment'])
+  })
+
+  describe('empty arrays apply no bound', () => {
+    // A list assembled at runtime that comes back empty must widen the scan, not
+    // silently empty it. programs already behaved this way; the rest now match.
+    const records = [
+      record({ recordName: 'Position', functionName: 'mint', commitment: 'c1' }),
+      record({ recordName: 'Fee', functionName: 'burn', commitment: 'c2' }),
+    ]
+
+    it('ignores an empty commitments array', () => {
+      const result = applyRecordFilter(records, { filter: { commitments: [] } })
+      expect(result.map((r) => r.commitment)).toEqual(['c1', 'c2'])
+    })
+
+    it('ignores an empty records array', () => {
+      const result = applyRecordFilter(records, { filter: { records: [] } })
+      expect(result.map((r) => r.commitment)).toEqual(['c1', 'c2'])
+    })
+
+    it('ignores an empty functions array', () => {
+      const result = applyRecordFilter(records, { filter: { functions: [] } })
+      expect(result.map((r) => r.commitment)).toEqual(['c1', 'c2'])
+    })
+
+    it('ignores an empty programs array, keeping the top-level program bound', () => {
+      const mixed = [
+        record({ programName: 'a.aleo', commitment: 'c1' }),
+        record({ programName: 'b.aleo', commitment: 'c2' }),
+      ]
+      const result = applyRecordFilter(mixed, { program: 'a.aleo', filter: { programs: [] } })
+      expect(result.map((r) => r.commitment)).toEqual(['c1'])
+    })
+
+    it('applies no program bound when both program and programs are empty', () => {
+      const mixed = [
+        record({ programName: 'a.aleo', commitment: 'c1' }),
+        record({ programName: 'b.aleo', commitment: 'c2' }),
+      ]
+      const result = applyRecordFilter(mixed, { filter: { programs: [] } })
+      expect(result.map((r) => r.commitment)).toEqual(['c1', 'c2'])
+    })
+  })
+
   it('pages with resultsPerPage and a zero-based page index', () => {
     const records = Array.from({ length: 10 }, (_, i) =>
       record({ blockHeight: i, commitment: `c${i}` }),
@@ -179,6 +266,18 @@ describe('applyRecordFilter', () => {
       record({ blockHeight: i, commitment: `c${i}` }),
     )
     expect(applyRecordFilter(records, { filter: {} })).toHaveLength(DEFAULT_RECORD_PAGE_SIZE)
+  })
+
+  it('rejects pagination values that cannot mean what they say', () => {
+    // Previously silent and wrong: resultsPerPage -1 dropped the last record and
+    // page -1 sliced from the end, both returning plausible-looking results.
+    const records = [record({ commitment: 'c1' })]
+    expect(() => applyRecordFilter(records, { filter: { resultsPerPage: -1 } })).toThrow(
+      /resultsPerPage must be a positive integer/,
+    )
+    expect(() => applyRecordFilter(records, { filter: { page: -1 } })).toThrow(
+      /page must be a non-negative integer/,
+    )
   })
 
   it('does not mutate the caller array', () => {

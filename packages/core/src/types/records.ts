@@ -111,7 +111,10 @@ export type ResponseFilter = {
  *
  * Every field is an independent AND: setting `records` and `functions` returns
  * only records matching both. Within one field the values are an OR — `records:
- * ['Position', 'Fee']` returns either type. An omitted field applies no bound.
+ * ['Position', 'Fee']` returns either type. An omitted field applies no bound,
+ * and neither does an empty array: `commitments: []` is treated as absent rather
+ * than as a list nothing can match, so a list built at runtime that comes back
+ * empty widens the scan instead of silently emptying it.
  *
  * Where the bounds are applied depends on the account. A local account scanning
  * through a `RecordProvider` pushes them to the record scanning backend, which
@@ -139,8 +142,11 @@ export type ResponseFilter = {
  * @property functions Names of the functions that produced the records.
  * @property resultsPerPage Records per page. Defaults to 1000, which is also the
  *   ceiling: a larger value is clamped down rather than rejected, so a scan
- *   matching more records than one page holds MUST page to read them all.
- * @property page Zero-based page index. Defaults to 0.
+ *   matching more records than one page holds MUST page to read them all. MUST be
+ *   a positive integer; anything else throws rather than returning a surprising
+ *   slice.
+ * @property page Zero-based page index. Defaults to 0. MUST be a non-negative
+ *   integer; anything else throws.
  * @property response Field-selection mask. Applies to no current path and
  *   narrows nothing: the Record Scanning Service selects columns from a separate
  *   top-level field that no client sends, so every column returns regardless.

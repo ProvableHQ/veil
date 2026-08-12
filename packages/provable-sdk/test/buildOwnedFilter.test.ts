@@ -110,6 +110,56 @@ describe('buildOwnedFilter', () => {
     })
   })
 
+  describe('empty lists are not sent', () => {
+    // The service renders a present list as `column = ANY($1)`, so sending `[]`
+    // would match nothing. An empty list means "no constraint" on both paths.
+    it('drops an empty commitments array', () => {
+      expect(buildOwnedFilter({ program: 'a.aleo', filter: { commitments: [] } })).toEqual({
+        filter: { programs: ['a.aleo'] },
+      })
+    })
+
+    it('drops an empty records array', () => {
+      expect(buildOwnedFilter({ program: 'a.aleo', filter: { records: [] } })).toEqual({
+        filter: { programs: ['a.aleo'] },
+      })
+    })
+
+    it('drops an empty functions array', () => {
+      expect(buildOwnedFilter({ program: 'a.aleo', filter: { functions: [] } })).toEqual({
+        filter: { programs: ['a.aleo'] },
+      })
+    })
+
+    it('drops an empty programs array, keeping the top-level program', () => {
+      expect(buildOwnedFilter({ program: 'a.aleo', filter: { programs: [] } })).toEqual({
+        filter: { programs: ['a.aleo'] },
+      })
+    })
+
+    it('sends no filter at all when every list is empty and no program is given', () => {
+      expect(
+        buildOwnedFilter({ filter: { programs: [], records: [], functions: [], commitments: [] } }),
+      ).toEqual({})
+    })
+  })
+
+  describe('pagination validation', () => {
+    it('rejects a non-positive resultsPerPage before reaching the wire', () => {
+      // The service types this as an unsigned integer and would reject it; fail
+      // here with the offending field instead.
+      expect(() => buildOwnedFilter({ filter: { resultsPerPage: 0 } })).toThrow(
+        /resultsPerPage must be a positive integer/,
+      )
+    })
+
+    it('rejects a negative page before reaching the wire', () => {
+      expect(() => buildOwnedFilter({ filter: { page: -1 } })).toThrow(
+        /page must be a non-negative integer/,
+      )
+    })
+  })
+
   describe('omissions', () => {
     it('omits the filter for an empty filter object', () => {
       expect(buildOwnedFilter({ filter: {} })).toEqual({})

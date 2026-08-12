@@ -6,7 +6,7 @@
 // them here instead. Both paths answer to the definitions below, so this module
 // is where they live.
 
-import type { OwnedRecordEncrypted, RequestRecordsParameters } from '../types/records.js'
+import type { OwnedRecordEncrypted, RecordFilter, RequestRecordsParameters } from '../types/records.js'
 
 /**
  * Records one page of a filtered scan returns when `resultsPerPage` is unset.
@@ -49,13 +49,24 @@ export function resolveScanPrograms(params: RequestRecordsParameters): string[] 
 }
 
 // Orders records by block height then commitment, so a page index selects the
-// same records however the filter was applied. Records missing either field sort
-// last rather than scrambling the ones that carry it.
+// same records however the filter was applied. A record missing either field
+// sorts after one that carries it — the same rule for both keys, rather than
+// letting an absent commitment sort first as an empty string would.
 function compareRecords(a: OwnedRecordEncrypted, b: OwnedRecordEncrypted): number {
   const heightA = a.blockHeight ?? Number.MAX_SAFE_INTEGER
   const heightB = b.blockHeight ?? Number.MAX_SAFE_INTEGER
   if (heightA !== heightB) return heightA - heightB
-  return (a.commitment ?? '').localeCompare(b.commitment ?? '')
+  if (a.commitment === b.commitment) return 0
+  if (a.commitment === undefined) return 1
+  if (b.commitment === undefined) return -1
+  return a.commitment.localeCompare(b.commitment)
+}
+
+// Turns a filter field into a membership bound. An empty array is no bound at
+// all, matching how an omitted field behaves — a caller narrowing by a list that
+// happened to come back empty means "no constraint", not "match nothing".
+function toBound(values?: string[]): Set<string> | undefined {
+  return values && values.length > 0 ? new Set(values) : undefined
 }
 
 // A membership bound excludes a record whose field is absent: the bound cannot
@@ -64,6 +75,36 @@ function compareRecords(a: OwnedRecordEncrypted, b: OwnedRecordEncrypted): numbe
 // cannot quietly diverge.
 function outsideBound(bound: Set<string> | undefined, value: string | undefined): boolean {
   return bound !== undefined && (value === undefined || !bound.has(value))
+}
+
+/**
+ * Rejects pagination values that cannot mean what they say.
+ *
+ * Called on both scan paths, so the same input fails the same way whether the
+ * filter is applied locally or pushed to a backend. The record scanning service
+ * types these as unsigned integers and rejects a negative outright; failing here
+ * reports the offending field instead of surfacing a deserialization error from
+ * the far end. Pure and local.
+ *
+ * @param filter Filter to check. A filter without pagination always passes.
+ * @throws When `resultsPerPage` is not a positive integer, or `page` is not a
+ *   non-negative integer.
+ *
+ * @example
+ * assertValidRecordFilter({ page: -1 }) // throws
+ */
+export function assertValidRecordFilter(filter?: RecordFilter): void {
+  const { resultsPerPage, page } = filter ?? {}
+  if (resultsPerPage !== undefined && (!Number.isInteger(resultsPerPage) || resultsPerPage < 1)) {
+    throw new Error(
+      `requestRecords filter.resultsPerPage must be a positive integer (received ${resultsPerPage}).`,
+    )
+  }
+  if (page !== undefined && (!Number.isInteger(page) || page < 0)) {
+    throw new Error(
+      `requestRecords filter.page must be a non-negative integer (received ${page}).`,
+    )
+  }
 }
 
 /**
@@ -80,6 +121,9 @@ function outsideBound(bound: Set<string> | undefined, value: string | undefined)
  * fields withheld under a `recordAccess` grant are absent, so a bound on a
  * withheld field matches nothing and the scan returns empty. Filter on fields the
  * connection actually grants.
+ *
+ * An empty array is not a bound. `commitments: []` applies no constraint, exactly
+ * as omitting the field does, rather than matching nothing.
  *
  * Spent status is not applied here — a wallet adapter receives `statusFilter`
  * directly and has already honored it.
@@ -103,10 +147,10 @@ export function applyRecordFilter<T extends OwnedRecordEncrypted>(
 ): T[] {
   const filter = params.filter
   if (!filter) return records
+  assertValidRecordFilter(filter)
 
   // Built once per scan rather than per record: a filter listing many
   // commitments would otherwise turn every test into a linear scan.
-  const toBound = (values?: string[]) => (values ? new Set(values) : undefined)
   const programs = resolveScanProgramSet(params)
   const recordNames = toBound(filter.records)
   const functions = toBound(filter.functions)
