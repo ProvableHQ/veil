@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildOwnedFilter } from '../src/rss.js'
+import { buildOwnedFilter } from '../src/utils/rss.js'
 
 // These assertions pin the wire contract of POST /records/owned. The service
 // deserializes snake_case field names and ignores keys it does not know, so a

@@ -49,7 +49,7 @@ import {
   extractTransitions,
 } from '@provablehq/veil-core'
 import type { Decryptor } from '@provablehq/veil-core'
-import { buildOwnedFilter } from './rss.js'
+import { buildOwnedFilter } from './utils/rss.js'
 import { generateMnemonic, mnemonicToHDKey, type AleoDerivationId } from './mnemonic.js'
 import {
   createProvableSession,
