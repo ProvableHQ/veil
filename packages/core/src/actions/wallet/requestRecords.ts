@@ -75,7 +75,10 @@ export async function requestRecords(
     })) as OwnedRecordEncrypted[]
     // The adapter honored program, plaintext, and spent status; the remaining
     // bounds have no wire representation, so they are applied to the result.
-    return applyRecordFilter(records, params)
+    // `programScoped` keeps the program bound from being re-tested here — the
+    // request carried it, so re-testing could only drop records, and would drop
+    // every one of them against a wallet that spells the id differently.
+    return applyRecordFilter(records, params, { programScoped: true })
   }
 
   if (account.type === 'local') {

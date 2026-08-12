@@ -128,8 +128,12 @@ export type ResponseFilter = {
  * A privacy-preserving wallet omits fields withheld under a `recordAccess`
  * grant, and a bound on a withheld field therefore matches nothing rather than
  * being ignored — filtering on `records` against a connection that does not
- * grant `recordName` returns an empty result. Filter on granted fields, or scope
- * with `program`, which every path carries.
+ * grant `recordName` returns an empty result. Filter on granted fields.
+ *
+ * `program` is exempt, and is the dependable way to scope a wallet scan: it
+ * travels as a request parameter rather than being matched against a returned
+ * field, so no grant and no difference in how the wallet spells a program id can
+ * turn it into an empty result.
  *
  * @property commitments Commitments to return, each an Aleo `field` literal.
  *   Suited to re-reading known records. A malformed literal fails the request.

@@ -152,6 +152,29 @@ describe('requestRecords', () => {
     })
   })
 
+  it('RPC account does not re-test the program the request already carried', async () => {
+    // The wallet scoped the scan to the requested program, so re-testing it
+    // client-side could only drop records. A wallet that spells the id
+    // differently from the caller would otherwise return an empty result with
+    // no error — the filter must still apply its other bounds.
+    const walletRecords = [
+      { programName: 'token.aleo/v2', tag: 't1', recordName: 'Card', commitment: 'c1' },
+      { programName: 'token.aleo/v2', tag: 't2', recordName: 'Coupon', commitment: 'c2' },
+    ]
+    const client = {
+      account: { type: 'rpc', address: 'aleo1abc' },
+      recordProvider: undefined,
+      request: vi.fn().mockResolvedValue(walletRecords),
+    } as any
+
+    const result = await requestRecords(client, {
+      program: 'token.aleo',
+      filter: { records: ['Card'] },
+    })
+
+    expect(result.map((r: any) => r.commitment)).toEqual(['c1'])
+  })
+
   it('RPC account pages the wallet result set', async () => {
     const walletRecords = Array.from({ length: 5 }, (_, i) => ({
       programName: 'token.aleo',

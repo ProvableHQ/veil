@@ -108,6 +108,21 @@ export function assertValidRecordFilter(filter?: RecordFilter): void {
 }
 
 /**
+ * Options for {@link applyRecordFilter}.
+ *
+ * @property programScoped Whether the provider already restricted the records to
+ *   the requested program. Defaults to false. Set it when the records came from a
+ *   source that scoped them — the wallet-adapter protocol always does, since it
+ *   takes the program as a request parameter. Skipping the redundant re-test
+ *   matters because it can only remove records: a provider that spells a program
+ *   id differently from the caller would otherwise drop every one of them and
+ *   return an empty result with no error.
+ */
+export type ApplyRecordFilterOptions = {
+  programScoped?: boolean
+}
+
+/**
  * Applies a record filter to records already in hand.
  *
  * Covers providers that cannot push the bounds to their backend — the wallet
@@ -133,6 +148,7 @@ export function assertValidRecordFilter(filter?: RecordFilter): void {
  *
  * @param records Records as the provider returned them.
  * @param params Scan parameters whose `filter` and `program` supply the bounds.
+ * @param options Whether the provider already scoped the records to the program.
  * @returns The matching records for the requested page.
  *
  * @example
@@ -144,6 +160,7 @@ export function assertValidRecordFilter(filter?: RecordFilter): void {
 export function applyRecordFilter<T extends OwnedRecordEncrypted>(
   records: T[],
   params: RequestRecordsParameters,
+  options: ApplyRecordFilterOptions = {},
 ): T[] {
   const filter = params.filter
   if (!filter) return records
@@ -151,7 +168,11 @@ export function applyRecordFilter<T extends OwnedRecordEncrypted>(
 
   // Built once per scan rather than per record: a filter listing many
   // commitments would otherwise turn every test into a linear scan.
-  const programs = resolveScanProgramSet(params)
+  //
+  // The program bound is skipped when the provider already scoped the result:
+  // re-testing it could only ever remove records, and would remove all of them
+  // if the provider spells a program id differently from the caller.
+  const programs = options.programScoped ? undefined : resolveScanProgramSet(params)
   const recordNames = toBound(filter.records)
   const functions = toBound(filter.functions)
   const commitments = toBound(filter.commitments)

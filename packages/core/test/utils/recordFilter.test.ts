@@ -268,6 +268,35 @@ describe('applyRecordFilter', () => {
     expect(applyRecordFilter(records, { filter: {} })).toHaveLength(DEFAULT_RECORD_PAGE_SIZE)
   })
 
+  it('skips the program bound when the provider already scoped the records', () => {
+    // programScoped is set by callers whose request carried the program, so the
+    // returned records are already restricted and re-testing could only drop
+    // them — here the ids deliberately do not match.
+    const records = [
+      record({ programName: 'other.aleo', commitment: 'c1' }),
+      record({ programName: 'other.aleo', commitment: 'c2' }),
+    ]
+    const scoped = applyRecordFilter(records, { program: 'token.aleo', filter: {} }, { programScoped: true })
+    expect(scoped.map((r) => r.commitment)).toEqual(['c1', 'c2'])
+
+    // Without the flag the bound applies, and nothing matches.
+    const unscoped = applyRecordFilter(records, { program: 'token.aleo', filter: {} })
+    expect(unscoped).toEqual([])
+  })
+
+  it('still applies the other bounds when the program bound is skipped', () => {
+    const records = [
+      record({ programName: 'other.aleo', recordName: 'Card', commitment: 'c1' }),
+      record({ programName: 'other.aleo', recordName: 'Coupon', commitment: 'c2' }),
+    ]
+    const result = applyRecordFilter(
+      records,
+      { program: 'token.aleo', filter: { records: ['Card'] } },
+      { programScoped: true },
+    )
+    expect(result.map((r) => r.commitment)).toEqual(['c1'])
+  })
+
   it('rejects pagination values that cannot mean what they say', () => {
     // Previously silent and wrong: resultsPerPage -1 dropped the last record and
     // page -1 sliced from the end, both returning plausible-looking results.
