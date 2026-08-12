@@ -49,6 +49,7 @@ import {
   extractTransitions,
 } from '@provablehq/veil-core'
 import type { Decryptor } from '@provablehq/veil-core'
+import { buildOwnedFilter } from './rss.js'
 import { generateMnemonic, mnemonicToHDKey, type AleoDerivationId } from './mnemonic.js'
 import {
   createProvableSession,
@@ -847,11 +848,14 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
   // scanner those are permanent, so retrying just burns backoff.
   async function scanOwned(
     scanner: InstanceType<SdkModule['RecordScanner']>,
-    program: string,
-    statusFilter: string | undefined,
+    params: RequestRecordsParameters,
     hasCredentials: boolean,
     session?: ProvableSession,
   ): Promise<OwnedRecord[]> {
+    // Built once: the body is identical across retries, and rebuilding it per
+    // attempt would let a mutation by owned() (which stamps `uuid` onto the
+    // object it is given) go unnoticed.
+    const ownedFilter = buildOwnedFilter(params)
     const ALWAYS_RETRY = new Set([429, 500, 502, 503, 504])
     const AUTH_RETRY = new Set([401, 403])
     // A JWT can be replaced when the SDK holds a complete pair to re-mint from,
@@ -865,10 +869,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     let lastStatus: number | undefined
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       try {
-        const result = await scanner.owned({
-          unspent: statusFilter !== 'spent',
-          filter: { programs: [program] },
-        })
+        const result = await scanner.owned(ownedFilter)
         if (result.ok) return (result.data ?? []).map((r) => toOwnedRecord(r as Record<string, unknown>))
         last = `HTTP ${result.status}: ${result.error?.message ?? 'unknown error'}`
         lastStatus = result.status
@@ -977,7 +978,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         // registering a view key is itself an authenticated call.
         if (session) activeScanner.setJwtData(await session.getJwt())
         await activeRegistration.ensure(activeScanner, activeViewKey)
-        return scanOwned(activeScanner, params.program, params.statusFilter, !!(options.apiKey && options.consumerId), session)
+        return scanOwned(activeScanner, params, !!(options.apiKey && options.consumerId), session)
       },
 
       switchNetwork: async (newNetwork: string) => {
@@ -1031,7 +1032,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         // Registration is authenticated too, so the token goes in first.
         if (session) scanner.setJwtData(await session.getJwt())
         await registration.ensure(scanner, viewKey)
-        return scanOwned(scanner, params.program, params.statusFilter, !!(options.apiKey && options.consumerId), session)
+        return scanOwned(scanner, params, !!(options.apiKey && options.consumerId), session)
       },
     }
   }

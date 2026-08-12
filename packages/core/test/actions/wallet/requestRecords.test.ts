@@ -4,8 +4,13 @@ import { createWalletClient } from '../../../src/clients/createWalletClient.js'
 import { AccountNotFoundError } from '../../../src/errors/errors.js'
 
 describe('requestRecords', () => {
-  it('RPC account delegates to transport', async () => {
-    const mockRecords = [{ programName: 'token.aleo', tag: '123', spent: false, recordPlaintext: '{}' }]
+  it('RPC account delegates to transport and returns the result untouched', async () => {
+    // Deliberately out of block order: without a filter the wallet's result must
+    // come back verbatim, neither reordered nor trimmed.
+    const mockRecords = [
+      { programName: 'token.aleo', tag: '123', blockHeight: 30, spent: false, recordPlaintext: '{}' },
+      { programName: 'token.aleo', tag: '456', blockHeight: 10, spent: false, recordPlaintext: '{}' },
+    ]
     const request = vi.fn().mockResolvedValue(mockRecords)
     const client = {
       account: { type: 'rpc', address: 'aleo1abc' },
@@ -68,6 +73,103 @@ describe('requestRecords', () => {
   it('throws without account', async () => {
     const client = { account: undefined, request: vi.fn() } as any
     await expect(requestRecords(client, { program: 'token.aleo' })).rejects.toThrow(AccountNotFoundError)
+  })
+
+  it('RPC account throws when program is omitted', async () => {
+    // The wallet-adapter protocol scopes a record request to one program and
+    // has no all-programs form, so this cannot be forwarded.
+    const request = vi.fn()
+    const client = {
+      account: { type: 'rpc', address: 'aleo1abc' },
+      recordProvider: undefined,
+      request,
+    } as any
+
+    await expect(requestRecords(client, {})).rejects.toThrow(
+      'requestRecords requires a program for a wallet (RPC) account',
+    )
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('local account scans every program when program is omitted', async () => {
+    const recordProvider = {
+      requestRecords: vi.fn().mockResolvedValue([]),
+      setAccount: vi.fn(),
+    }
+    const client = {
+      account: { type: 'local', address: 'aleo1abc', viewKey: 'AViewKey1abc' },
+      recordProvider,
+      request: vi.fn(),
+    } as any
+
+    await requestRecords(client, { statusFilter: 'unspent' })
+    expect(recordProvider.requestRecords).toHaveBeenCalledWith({ statusFilter: 'unspent' })
+  })
+
+  it('local account forwards the filter to the provider untouched', async () => {
+    // The provider pushes the bounds to the service; the action must not
+    // pre-apply them or the service would filter an already-filtered set.
+    const recordProvider = {
+      requestRecords: vi.fn().mockResolvedValue([]),
+      setAccount: vi.fn(),
+    }
+    const client = {
+      account: { type: 'local', address: 'aleo1abc', viewKey: 'AViewKey1abc' },
+      recordProvider,
+      request: vi.fn(),
+    } as any
+
+    const params = { program: 'token.aleo', filter: { records: ['Card'], resultsPerPage: 5 } }
+    await requestRecords(client, params)
+    expect(recordProvider.requestRecords).toHaveBeenCalledWith(params)
+  })
+
+  it('RPC account applies the filter to what the wallet returned', async () => {
+    // The wallet cannot forward row filters, so the same bounds are applied
+    // locally — a caller sees identical results on either path.
+    const walletRecords = [
+      { programName: 'token.aleo', tag: 't1', recordName: 'Card', blockHeight: 10, commitment: 'c1' },
+      { programName: 'token.aleo', tag: 't2', recordName: 'Coupon', blockHeight: 20, commitment: 'c2' },
+      { programName: 'token.aleo', tag: 't3', recordName: 'Card', blockHeight: 30, commitment: 'c3' },
+    ]
+    const request = vi.fn().mockResolvedValue(walletRecords)
+    const client = {
+      account: { type: 'rpc', address: 'aleo1abc' },
+      recordProvider: undefined,
+      request,
+    } as any
+
+    const result = await requestRecords(client, {
+      program: 'token.aleo',
+      filter: { records: ['Card'], start: 20 },
+    })
+
+    expect(result.map((r: any) => r.commitment)).toEqual(['c3'])
+    // The filter is not forwarded — the adapter has no parameter for it.
+    expect(request).toHaveBeenCalledWith({
+      method: 'requestRecords',
+      params: { program: 'token.aleo', includePlaintext: true, statusFilter: 'all' },
+    })
+  })
+
+  it('RPC account pages the wallet result set', async () => {
+    const walletRecords = Array.from({ length: 5 }, (_, i) => ({
+      programName: 'token.aleo',
+      tag: `t${i}`,
+      blockHeight: i,
+      commitment: `c${i}`,
+    }))
+    const client = {
+      account: { type: 'rpc', address: 'aleo1abc' },
+      recordProvider: undefined,
+      request: vi.fn().mockResolvedValue(walletRecords),
+    } as any
+
+    const page1 = await requestRecords(client, {
+      program: 'token.aleo',
+      filter: { resultsPerPage: 2, page: 1 },
+    })
+    expect(page1.map((r: any) => r.commitment)).toEqual(['c2', 'c3'])
   })
 
   it('a provider passed to createWalletClient reaches walletClient.requestRecords', async () => {
