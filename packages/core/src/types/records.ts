@@ -109,31 +109,20 @@ export type ResponseFilter = {
  * Narrows a record scan by commitment, block range, program, record type, or
  * function, with pagination.
  *
- * Every field is an independent AND: setting `records` and `functions` returns
- * only records matching both. Within one field the values are an OR — `records:
- * ['Position', 'Fee']` returns either type. An omitted field applies no bound,
- * and neither does an empty array: `commitments: []` is treated as absent rather
- * than as a list nothing can match, so a list built at runtime that comes back
- * empty widens the scan instead of silently emptying it.
+ * Fields combine as AND, values within a field as OR: `{ records: ['Position',
+ * 'Fee'], functions: ['mint'] }` matches either record type when `mint` produced
+ * it. An omitted field applies no bound; neither does an empty array.
  *
- * Where the bounds are applied depends on the account. A local account scanning
- * through a `RecordProvider` pushes them to the record scanning backend, which
- * filters and pages before responding, so less travels the wire. An RPC (wallet)
- * account cannot forward them — the wallet-adapter protocol carries only
- * program, plaintext, and spent status — so Veil applies them to what the wallet
- * returned.
+ * A local account pushes the filter to its record scanning backend, which filters
+ * and pages before responding. A wallet (RPC) account cannot — the wallet-adapter
+ * protocol carries only program, plaintext, and spent status — so Veil applies
+ * the same bounds to the records the wallet returned.
  *
- * The two paths agree on which records match, with one exception a caller MUST
- * account for: a bound can only be evaluated against a field the record carries.
- * A privacy-preserving wallet omits fields withheld under a `recordAccess`
- * grant, and a bound on a withheld field therefore matches nothing rather than
- * being ignored — filtering on `records` against a connection that does not
- * grant `recordName` returns an empty result. Filter on granted fields.
- *
- * `program` is exempt, and is the dependable way to scope a wallet scan: it
- * travels as a request parameter rather than being matched against a returned
- * field, so no grant and no difference in how the wallet spells a program id can
- * turn it into an empty result.
+ * A bound tests a field on each record, and a privacy-preserving wallet omits
+ * fields withheld under a `recordAccess` grant: `records: ['Position']` over a
+ * connection that withholds `recordName` matches nothing. Filter on granted
+ * fields. `program` is exempt — it travels as a request parameter, not as a
+ * comparison against a returned field.
  *
  * @property commitments Commitments to return, each an Aleo `field` literal.
  *   Suited to re-reading known records. A malformed literal fails the request.
@@ -141,20 +130,18 @@ export type ResponseFilter = {
  * @property end Upper bound of the block-height range, inclusive.
  * @property programs Program ids to include, e.g. `['credits.aleo']`. Unioned
  *   with `RequestRecordsParameters.program` when both are set.
- * @property records Record type names to include, e.g. `['Position']`. These
- *   are the record's declared name in the program, not the program id.
+ * @property records Record type names to include, e.g. `['Position']` — the
+ *   record's declared name in the program, not the program id.
  * @property functions Names of the functions that produced the records.
  * @property resultsPerPage Records per page. Defaults to 1000, which is also the
- *   ceiling: a larger value is clamped down rather than rejected, so a scan
- *   matching more records than one page holds MUST page to read them all. MUST be
- *   a positive integer; anything else throws rather than returning a surprising
- *   slice.
+ *   ceiling: a larger value is clamped down, so reading more than one page's
+ *   worth requires paging. MUST be a positive integer; anything else throws.
  * @property page Zero-based page index. Defaults to 0. MUST be a non-negative
  *   integer; anything else throws.
- * @property response Field-selection mask. Applies to no current path and
- *   narrows nothing: the Record Scanning Service selects columns from a separate
- *   top-level field that no client sends, so every column returns regardless.
- *   Retained because it ships in a released type; do not reach for it.
+ * @property response Field-selection mask. Narrows nothing on any current path:
+ *   the Record Scanning Service selects columns from a separate top-level field
+ *   that no client sends, so every column returns. Retained because it ships in
+ *   a released type. Do not use it.
  */
 export type RecordFilter = {
   commitments?: string[]

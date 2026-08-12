@@ -125,26 +125,17 @@ export type ApplyRecordFilterOptions = {
 /**
  * Applies a record filter to records already in hand.
  *
- * Covers providers that cannot push the bounds to their backend — the wallet
- * adapter path, whose protocol has no representation for them. Fields combine as
- * AND across the filter and OR within one field, and matches are ordered by
- * block height then commitment before paging.
+ * Covers providers that cannot push the bounds to a backend — the wallet-adapter
+ * path, whose protocol has no representation for them. {@link RecordFilter}
+ * documents what each bound means; this applies those semantics unchanged, then
+ * orders matches by block height and commitment before paging, so a page index
+ * selects the same records on either path.
  *
- * A membership bound (`records`, `functions`, `commitments`, `programs`) excludes
- * a record that does not carry the field it tests, as does a block-range bound
- * against a record with no height. This matters for a privacy-preserving wallet:
- * fields withheld under a `recordAccess` grant are absent, so a bound on a
- * withheld field matches nothing and the scan returns empty. Filter on fields the
- * connection actually grants.
- *
- * An empty array is not a bound. `commitments: []` applies no constraint, exactly
- * as omitting the field does, rather than matching nothing.
- *
- * Spent status is not applied here — a wallet adapter receives `statusFilter`
+ * Spent status is not applied here: a wallet adapter receives `statusFilter`
  * directly and has already honored it.
  *
- * Returns the input untouched — same order, no copy — when `params.filter` is
- * absent, so an unfiltered call behaves exactly as before. Pure and local.
+ * Returns the input array itself when `params.filter` is absent, leaving order
+ * untouched. Pure and local.
  *
  * @param records Records as the provider returned them.
  * @param params Scan parameters whose `filter` and `program` supply the bounds.
