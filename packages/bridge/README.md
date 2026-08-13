@@ -5,8 +5,8 @@ xReserve. ETH, WBTC, USDT, SOL, ALEO, and USAD transfers use Hyperlane Warp Rout
 
 The package is in preview and is not published to npm. It provides reviewed
 route discovery, non-fund-moving transfer plans, and injected-wallet execution
-for Ethereum-to-Aleo Hyperlane routes carrying ETH, WBTC, and USDT. Other
-protocol execution paths remain under development.
+for Ethereum-to-Aleo xReserve USDC deposits and Hyperlane routes carrying ETH,
+WBTC, and USDT. Aleo-origin and Solana execution paths remain under development.
 
 ## Current API
 
@@ -35,6 +35,47 @@ plan.steps
 and recipient format, then identifies every execution step and the first
 irreversible operation. It does not query live fees, sign, submit, or move
 funds.
+
+## Ethereum xReserve execution
+
+The xReserve action derives the Aleo wire recipient and 65-byte hook from the
+plan. Select `public`, `record`, or `private`; the deprecated
+`privateRecipient: true` option remains an alias for `mintMode: 'private'`.
+
+```ts
+const bridge = createBridgeClient({
+  environment: 'testnet',
+  executors: { evm: injectedProvider },
+  xReserveHttpTransport: (url, init) => fetch(url, init),
+})
+
+const plan = bridge.prepareTransfer({
+  routeId: 'xreserve:sepolia/usdc->aleo-testnet/usdcx',
+  amount: '25',
+  recipient: aleoAddress,
+  sender: connectedEthereumAccount,
+  mintMode: 'record',
+})
+
+const quote = await bridge.quoteEvmXReserveTransfer({ plan })
+const execution = await bridge.executeEvmXReserveTransfer({ plan })
+const attestation = await bridge.getXReserveAttestation({
+  routeId: plan.route.id,
+  messageHash: execution.receipt.id as `0x${string}`,
+})
+```
+
+Execution reads USDC balance and allowance, submits an exact-amount approval
+when needed, waits for confirmation, and calls the nonpayable
+`depositToRemote`. It then validates `DepositedToRemote`, derives Circle's
+deposit nonce, builds the canonical 305-byte payload, and returns
+`ATTESTATION_PENDING` with the message hash and resumable protocol state.
+
+Private mode lazily loads the optional `@provablehq/sdk` peer dependency. It
+commits the intended recipient with BHP256 and directs the xReserve deposit to
+`shielded_usdcx_wrapper.aleo`. Public and record modes do not load Aleo WASM.
+Circle attestation HTTP access is injected so browser, Node, and React Native
+applications can supply their own fetch-compatible transport.
 
 ## Ethereum Hyperlane execution
 
@@ -114,6 +155,8 @@ their execution paths are implemented.
 - `getAssets` and `getRoutes`
 - `prepareTransfer`
 - `quoteEvmHyperlaneTransfer` and `executeEvmHyperlaneTransfer`
+- `quoteEvmXReserveTransfer`, `executeEvmXReserveTransfer`, and `getXReserveAttestation`
+- Aleo address, xReserve hook, nonce, payload, and message-hash utilities
 - `DEFAULT_BRIDGE_REGISTRY` and `validateBridgeRegistry`
 - Protocol-neutral asset, route, plan, fee, step, status, and receipt types
 - `createBridgeAgentTools` from `/agent`
@@ -124,8 +167,7 @@ the fund-moving EVM actions.
 
 ## Next implementation phases
 
-1. Add Aleo recipient-to-`bytes32` encoding and destination delivery tracking.
-2. Add Circle deposit-attestation and Aleo USDCx mint planning/execution.
-3. Add Aleo USDCx burn and Circle withdrawal execution.
-4. Add Aleo-origin Hyperlane dispatch and destination confirmation.
-5. Add injected Aleo and Solana executors and gated protocol testnets.
+1. Add Aleo wallet execution for the attested public, record, and wrapper-private mints.
+2. Add Aleo USDCx burn and Circle withdrawal execution.
+3. Add Aleo-origin Hyperlane dispatch and destination confirmation.
+4. Add injected Solana execution and gated protocol testnets.

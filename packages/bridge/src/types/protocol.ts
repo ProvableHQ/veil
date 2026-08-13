@@ -164,6 +164,9 @@ export type BridgeFee = {
 /** Identifies how much live protocol information a transfer quote contains. */
 export type BridgeQuoteStatus = 'not-queried' | 'estimated' | 'confirmed'
 
+/** Selects the Aleo destination transition used for an xReserve mint. */
+export type AleoMintMode = 'public' | 'record' | 'private'
+
 /**
  * Captures protocol fees and expected delivery for a directional route.
  *
@@ -192,13 +195,16 @@ export type BridgeTransferQuote = {
  * @property amount Decimal source amount in display units.
  * @property recipient Destination-chain recipient.
  * @property sender Optional source-chain sender used by future fee and approval planning.
- * @property privateRecipient Whether delivery should use a private Aleo mint when supported. Defaults to false.
+ * @property mintMode Aleo mint transition selected for xReserve delivery. Defaults to `public`.
+ * @property privateRecipient Deprecated alias for `mintMode: 'private'`. Defaults to false.
  */
 export type PrepareTransferParameters = {
   routeId: string
   amount: string
   recipient: string
   sender?: string | undefined
+  mintMode?: AleoMintMode | undefined
+  /** @deprecated Use `mintMode: 'private'`; retained for compatibility through the next major release. */
   privateRecipient?: boolean | undefined
 }
 
@@ -214,6 +220,7 @@ export type PrepareTransferParameters = {
  * @property amountOut Expected decimal destination amount when determinable without a live fee query.
  * @property recipient Destination-chain recipient.
  * @property sender Optional source-chain sender.
+ * @property mintMode Aleo destination transition selected by the caller.
  * @property privateRecipient Whether the destination requests private Aleo delivery.
  * @property fees Known fee categories; amounts remain absent until protocol quoting is implemented.
  * @property steps Ordered operations required to complete the transfer.
@@ -228,6 +235,7 @@ export type BridgeTransferPlan = {
   amountOut?: string | undefined
   recipient: string
   sender?: string | undefined
+  mintMode: AleoMintMode
   privateRecipient: boolean
   quote: BridgeTransferQuote
   fees: BridgeFee[]

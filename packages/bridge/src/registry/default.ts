@@ -110,26 +110,41 @@ function pair(
   availability: 'active' | 'metadata-required',
   deploymentId: string,
   metadata?: Readonly<Record<string, string | number | boolean>>,
+  reverseAvailability: 'active' | 'metadata-required' = availability,
 ): ProtocolBridgeRoute[] {
   return [
     route(`${protocol}:${left}->${right}`, protocol, environment, left, right, availability, deploymentId, metadata),
-    route(`${protocol}:${right}->${left}`, protocol, environment, right, left, availability, deploymentId, metadata),
+    route(`${protocol}:${right}->${left}`, protocol, environment, right, left, reverseAvailability, deploymentId, metadata),
   ]
 }
 
 const routes: ProtocolBridgeRoute[] = [
   ...pair('xreserve', 'mainnet', 'ethereum/usdc', 'aleo/usdcx', 'active', 'xreserve-usdcx-aleo', {
     xReserveContract: '0x8888888199b2Df864bf678259607d6D5EBb4e3Ce',
+    sourceChainId: 1,
     sourceDomain: 0,
     remoteDomain: 10002,
     remoteToken: 'usdcx_stablecoin.aleo',
-  }),
+    remoteTokenBytes32: '0x11ea7dab1d29d5f61500582c63e98c42e1165f9ba050ea9d0c6af9f871987711',
+    minimumAmountAtomic: '2000000',
+    maxFeeAtomic: '100000',
+    bridgeProgram: 'usdcx_bridge_v2.aleo',
+    wrapperProgram: 'shielded_usdcx_wrapper.aleo',
+    attestationBaseUrl: 'https://xreserve-api.circle.com/v1/attestations',
+  }, 'metadata-required'),
   ...pair('xreserve', 'testnet', 'sepolia/usdc', 'aleo-testnet/usdcx', 'active', 'xreserve-usdcx-aleo-testnet', {
     xReserveContract: '0x008888878f94C0d87defdf0B07f46B93C1934442',
+    sourceChainId: 11155111,
     sourceDomain: 0,
     remoteDomain: 10002,
     remoteToken: 'test_usdcx_stablecoin.aleo',
-  }),
+    remoteTokenBytes32: '0xb143ed52c774cd1d4a519d0e796f15916be5a9e1d45edcd9852dd23f68f53401',
+    minimumAmountAtomic: '2000000',
+    maxFeeAtomic: '100000',
+    bridgeProgram: 'test_usdcx_bridge_v2.aleo',
+    wrapperProgram: 'shielded_usdcx_wrapper.aleo',
+    attestationBaseUrl: 'https://xreserve-api-testnet.circle.com/v1/attestations',
+  }, 'metadata-required'),
   route('hyperlane:ethereum/eth->aleo/eth', 'hyperlane', 'mainnet', 'ethereum/eth', 'aleo/eth', 'active', 'ETH/aleo', ETH_HYPERLANE_METADATA),
   route('hyperlane:aleo/eth->ethereum/eth', 'hyperlane', 'mainnet', 'aleo/eth', 'ethereum/eth', 'metadata-required', 'ETH/aleo', ETH_HYPERLANE_METADATA),
   route('hyperlane:ethereum/wbtc->aleo/wbtc', 'hyperlane', 'mainnet', 'ethereum/wbtc', 'aleo/wbtc', 'active', 'WBTC/aleo', WBTC_HYPERLANE_METADATA),
@@ -156,7 +171,7 @@ const routes: ProtocolBridgeRoute[] = [
  * const bridge = createBridgeClient({ registry: DEFAULT_BRIDGE_REGISTRY })
  */
 export const DEFAULT_BRIDGE_REGISTRY: BridgeRegistry = Object.freeze({
-  version: '2026-08-13.ethereum-hyperlane.1',
+  version: '2026-08-13.xreserve-evm.1',
   chains: Object.freeze(chains),
   assets: Object.freeze(assets),
   routes: Object.freeze(routes),

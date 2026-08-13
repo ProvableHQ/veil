@@ -37,4 +37,16 @@ describe('createBridgeClient', () => {
       recipientBytes32: '0x20e3629764d5338f74bee96675801b1fb29d1fc68b177668f9175708bef84311',
     })).rejects.toThrow(/EVM executor is required/)
   })
+
+  it('binds the injected Circle attestation transport', async () => {
+    const messageHash = `0x${'11'.repeat(32)}` as const
+    const client = createBridgeClient({
+      environment: 'testnet',
+      xReserveHttpTransport: async () => ({ ok: false, status: 404, json: async () => ({}) }),
+    })
+    await expect(client.getXReserveAttestation({
+      routeId: 'xreserve:sepolia/usdc->aleo-testnet/usdcx',
+      messageHash,
+    })).resolves.toEqual({ status: 'pending', messageHash })
+  })
 })

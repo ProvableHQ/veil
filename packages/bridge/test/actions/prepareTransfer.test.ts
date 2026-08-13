@@ -30,6 +30,32 @@ describe('prepareTransfer', () => {
     ])
   })
 
+  it('selects all Aleo mint modes and preserves the private compatibility alias', () => {
+    const record = prepareTransfer(DEFAULT_BRIDGE_REGISTRY, {
+      routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
+      amount: '25',
+      recipient: ALEO_RECIPIENT,
+      mintMode: 'record',
+    })
+    const privatePlan = prepareTransfer(DEFAULT_BRIDGE_REGISTRY, {
+      routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
+      amount: '25',
+      recipient: ALEO_RECIPIENT,
+      privateRecipient: true,
+    })
+    expect(record.mintMode).toBe('record')
+    expect(record.steps.at(-1)?.description).toContain('record')
+    expect(privatePlan.mintMode).toBe('private')
+    expect(privatePlan.privateRecipient).toBe(true)
+    expect(() => prepareTransfer(DEFAULT_BRIDGE_REGISTRY, {
+      routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
+      amount: '25',
+      recipient: ALEO_RECIPIENT,
+      mintMode: 'record',
+      privateRecipient: true,
+    })).toThrow(/conflicts/)
+  })
+
   it('prepares Hyperlane token approval only on non-Aleo token sources', () => {
     const inbound = prepareTransfer(DEFAULT_BRIDGE_REGISTRY, {
       routeId: 'hyperlane:ethereum/wbtc->aleo/wbtc',

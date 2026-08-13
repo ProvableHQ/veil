@@ -22,13 +22,14 @@ function xreserveSteps(
   destination: ProtocolBridgeAsset,
   sourceChain: ProtocolBridgeChain,
   destinationChain: ProtocolBridgeChain,
+  mintMode: BridgeTransferPlan['mintMode'],
 ): BridgeExecutionStep[] {
   if (sourceChain.family === 'evm' && destinationChain.family === 'aleo') {
     return [
       { key: 'source-approval', kind: 'approve', chainId: source.chainId, executor: 'evm-wallet', description: `Approve the Circle xReserve contract to spend ${source.symbol}.`, irreversible: false },
       { key: 'source-deposit', kind: 'deposit', chainId: source.chainId, executor: 'evm-wallet', description: `Deposit ${source.symbol} into Circle xReserve for Aleo.`, irreversible: true },
       { key: 'deposit-attestation', kind: 'wait-attestation', executor: 'protocol', description: 'Wait for Circle to attest the confirmed reserve deposit.', irreversible: false },
-      { key: 'destination-mint', kind: 'mint', chainId: destination.chainId, executor: 'aleo-wallet', description: `Mint attested ${destination.symbol} on Aleo.`, irreversible: false },
+      { key: 'destination-mint', kind: 'mint', chainId: destination.chainId, executor: 'aleo-wallet', description: mintMode === 'private' ? `Mint attested ${destination.symbol} through the shielded wrapper.` : `Mint attested ${destination.symbol} as an Aleo ${mintMode === 'record' ? 'record' : 'public balance'}.`, irreversible: false },
     ]
   }
   if (sourceChain.family === 'aleo' && destinationChain.family === 'evm') {
@@ -101,8 +102,16 @@ export function prepareTransfer(
   const sourceChain = registry.chains.find((chain) => chain.id === sourceAsset.chainId)!
   const destinationChain = registry.chains.find((chain) => chain.id === destinationAsset.chainId)!
 
-  if (params.privateRecipient === true && destinationChain.family !== 'aleo') {
-    throw new BridgeError('privateRecipient is only valid when the destination chain is Aleo')
+  if (params.privateRecipient === true && params.mintMode != null && params.mintMode !== 'private') {
+    throw new BridgeError('privateRecipient conflicts with the selected mintMode')
+  }
+  const mintMode = params.mintMode ?? (params.privateRecipient === true ? 'private' : 'public')
+
+  if ((params.mintMode != null || params.privateRecipient === true) && destinationChain.family !== 'aleo') {
+    throw new BridgeError('Aleo mint mode is only valid when the destination chain is Aleo')
+  }
+  if (route.protocol !== 'xreserve' && mintMode !== 'public') {
+    throw new BridgeError('record and private mint modes are only supported by xReserve routes')
   }
 
   const atomic = parseDecimalAmount(params.amount, sourceAsset.decimals)
@@ -117,7 +126,7 @@ export function prepareTransfer(
   }
 
   const steps = route.protocol === 'xreserve'
-    ? xreserveSteps(route, sourceAsset, destinationAsset, sourceChain, destinationChain)
+    ? xreserveSteps(route, sourceAsset, destinationAsset, sourceChain, destinationChain, mintMode)
     : hyperlaneSteps(sourceAsset, destinationAsset, sourceChain, destinationChain)
   const fees: BridgeTransferPlan['fees'] = []
 
@@ -132,7 +141,8 @@ export function prepareTransfer(
     // Omit a promise about net output until fee quoting is implemented.
     recipient: params.recipient,
     ...(params.sender == null ? {} : { sender: params.sender }),
-    privateRecipient: params.privateRecipient ?? false,
+    mintMode,
+    privateRecipient: mintMode === 'private',
     quote: {
       routeId: route.id,
       protocol: route.protocol,

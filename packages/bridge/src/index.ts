@@ -20,11 +20,17 @@ export {
   executeEvmHyperlaneTransfer,
   quoteEvmHyperlaneTransfer,
 } from './actions/evmHyperlane.js'
+export {
+  executeEvmXReserveTransfer,
+  getXReserveAttestation,
+  quoteEvmXReserveTransfer,
+} from './actions/evmXReserve.js'
 
 export { DEFAULT_BRIDGE_REGISTRY } from './registry/default.js'
 export { validateBridgeRegistry } from './registry/validate.js'
 
 export type {
+  AleoMintMode,
   BridgeAssetKind,
   BridgeAssetLocator,
   BridgeChainFamily,
@@ -56,6 +62,26 @@ export type {
   ExecuteEvmHyperlaneTransferParameters,
   QuoteEvmHyperlaneTransferParameters,
 } from './types/evm.js'
+export type {
+  EvmXReserveRouteMetadata,
+  EvmXReserveTransferExecution,
+  EvmXReserveTransferQuote,
+  ExecuteEvmXReserveTransferParameters,
+  GetXReserveAttestationParameters,
+  QuoteEvmXReserveTransferParameters,
+  XReserveAttestationResult,
+  XReserveHttpResponse,
+  XReserveHttpTransport,
+} from './types/xreserve.js'
+
+export {
+  aleoAddressToBytes32,
+  aleoProgramAddress,
+  buildXReserveDepositPayload,
+  buildXReserveHookData,
+  calculateXReserveDepositNonce,
+  calculateXReserveMessageHash,
+} from './utils/xreserve.js'
 
 export { BridgeError } from './errors/bridgeErrors.js'
 export { parseDecimalAmount } from './utils/units.js'
