@@ -12,7 +12,7 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
   })
 
   it('routes the requested non-USDCx assets through Hyperlane', () => {
-    for (const symbol of ['ETH', 'WBTC', 'SOL', 'ALEO', 'USAD']) {
+    for (const symbol of ['ETH', 'WBTC', 'USDT', 'SOL', 'ALEO', 'USAD']) {
       const assetIds = new Set(DEFAULT_BRIDGE_REGISTRY.assets
         .filter((asset) => asset.symbol === symbol)
         .map((asset) => asset.id))
@@ -27,6 +27,19 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
     expect(validateBridgeRegistry(DEFAULT_BRIDGE_REGISTRY)).toBe(DEFAULT_BRIDGE_REGISTRY)
     expect(DEFAULT_BRIDGE_REGISTRY.routes[0]!.metadata?.xReserveContract)
       .toBe('0x8888888199b2Df864bf678259607d6D5EBb4e3Ce')
+  })
+
+  it('pins executable Ethereum Hyperlane routes to a reviewed registry commit', () => {
+    const inboundAssets = new Set(['ethereum/eth', 'ethereum/wbtc', 'ethereum/usdt'])
+    const inbound = DEFAULT_BRIDGE_REGISTRY.routes.filter((route) =>
+      route.protocol === 'hyperlane' && inboundAssets.has(route.sourceAssetId))
+    expect(inbound.map((route) => route.sourceAssetId)).toEqual(expect.arrayContaining([
+      'ethereum/eth',
+      'ethereum/wbtc',
+      'ethereum/usdt',
+    ]))
+    expect(inbound.every((route) => route.availability === 'active')).toBe(true)
+    expect(inbound.every((route) => route.metadata?.registryCommit === '2621c16f2db1ccb46643265c110dac5ca2c7c51a')).toBe(true)
   })
 })
 

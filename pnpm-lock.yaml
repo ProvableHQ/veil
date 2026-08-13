@@ -91,6 +91,9 @@ importers:
       '@provablehq/veil-core':
         specifier: workspace:*
         version: link:../core
+      viem:
+        specifier: ^2.21.0
+        version: 2.54.6(typescript@5.9.3)
 
   packages/codegen:
     dependencies:

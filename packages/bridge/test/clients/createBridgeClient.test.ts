@@ -24,4 +24,17 @@ describe('createBridgeClient', () => {
     })
     expect(plan.registryVersion).toBe(client.registry.version)
   })
+
+  it('requires an injected EVM executor for live Hyperlane actions', async () => {
+    const client = createBridgeClient()
+    const plan = client.prepareTransfer({
+      routeId: 'hyperlane:ethereum/eth->aleo/eth',
+      amount: '1',
+      recipient: `aleo1${'a'.repeat(58)}`,
+    })
+    await expect(client.quoteEvmHyperlaneTransfer({
+      plan,
+      recipientBytes32: '0x20e3629764d5338f74bee96675801b1fb29d1fc68b177668f9175708bef84311',
+    })).rejects.toThrow(/EVM executor is required/)
+  })
 })

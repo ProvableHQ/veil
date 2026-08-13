@@ -16,6 +16,10 @@ export {
   type GetProtocolRoutesParameters as GetRoutesParameters,
 } from './actions/protocolDiscovery.js'
 export { prepareTransfer } from './actions/prepareTransfer.js'
+export {
+  executeEvmHyperlaneTransfer,
+  quoteEvmHyperlaneTransfer,
+} from './actions/evmHyperlane.js'
 
 export { DEFAULT_BRIDGE_REGISTRY } from './registry/default.js'
 export { validateBridgeRegistry } from './registry/validate.js'
@@ -42,6 +46,16 @@ export type {
   ProtocolBridgeChain,
   ProtocolBridgeRoute,
 } from './types/protocol.js'
+export type {
+  BridgeExecutors,
+  EvmBridgeExecutor,
+  EvmHyperlaneRouteMetadata,
+  EvmHyperlaneRouterType,
+  EvmHyperlaneTransferExecution,
+  EvmHyperlaneTransferQuote,
+  ExecuteEvmHyperlaneTransferParameters,
+  QuoteEvmHyperlaneTransferParameters,
+} from './types/evm.js'
 
 export { BridgeError } from './errors/bridgeErrors.js'
 export { parseDecimalAmount } from './utils/units.js'

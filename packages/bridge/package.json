@@ -43,6 +43,7 @@
     "dist"
   ],
   "dependencies": {
-    "@provablehq/veil-core": "workspace:*"
+    "@provablehq/veil-core": "workspace:*",
+    "viem": "^2.21.0"
   }
 }
