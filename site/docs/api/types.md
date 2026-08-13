@@ -267,9 +267,10 @@ that produces these.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `program` | `string` | Program whose records to scan. |
+| `program` | `string` (optional) | Program whose records to scan. Omit to scan every program the account holds records for. Required for a wallet (RPC) account, whose protocol has no all-programs record request. |
 | `includePlaintext` | `boolean` (optional) | Whether to include plaintext on each record. Defaults to `true`. |
-| `statusFilter` | `RecordStatusFilter` (optional) | Filter by spent status. Defaults to `'all'`. |
+| `statusFilter` | `RecordStatusFilter` (optional) | Filter by spent status. Defaults to `'all'`, which returns both spent and unspent records. |
+| `filter` | `RecordFilter` (optional) | Narrows the scan by record type, function, block range, or commitment, and pages the result. See below. |
 
 ### Record Scanning Service (RSS) types
 
@@ -279,17 +280,40 @@ import type { RecordFilter, ResponseFilter, OwnedRecordsRequest } from '@provabl
 
 These shape requests to a hosted [Record Scanning Service](/guides/working-with-records) scanner.
 
+Pass a `RecordFilter` as `requestRecords({ filter })`. Fields combine as AND
+across the filter and OR within one field, so `{ records: ['A', 'B'], functions:
+['f'] }` returns records of either type that function `f` produced. An omitted
+field applies no bound.
+
+An empty array applies no bound either. `commitments: []` is treated as absent
+rather than as a list nothing can match, so a list assembled at runtime that
+comes back empty widens the scan instead of silently returning zero records.
+
+A local account pushes the filter to the scanner, which filters and pages before
+responding. A wallet (RPC) account cannot forward it, so Veil applies the same
+bounds to what the wallet returned. The two agree on which records match, with
+one exception: a bound can only be evaluated against a field the record carries,
+and a privacy-preserving wallet omits fields withheld under a `recordAccess`
+grant. A bound on a withheld field therefore matches nothing rather than being
+ignored. Filter on granted fields, or scope with `program`, which every path
+carries.
+
 | Type | Field | Type | Description |
 | --- | --- | --- | --- |
-| `RecordFilter` | `commitments` | `string[]` (optional) | Restrict the scan to these commitments. |
-| `RecordFilter` | `start` / `end` | `number` (optional) | Lower/upper bound of the block-height range to scan. |
-| `RecordFilter` | `programs` | `string[]` (optional) | Restrict the scan to these programs. |
-| `RecordFilter` | `records` | `string[]` (optional) | Restrict the scan to these record type names. |
+| `RecordFilter` | `commitments` | `string[]` (optional) | Restrict the scan to these commitments, each an Aleo `field` literal. |
+| `RecordFilter` | `start` / `end` | `number` (optional) | Lower/upper bound of the block-height range to scan, inclusive. |
+| `RecordFilter` | `programs` | `string[]` (optional) | Restrict the scan to these programs. Unioned with `program` when both are set. |
+| `RecordFilter` | `records` | `string[]` (optional) | Restrict the scan to these record type names, e.g. `['Position']`. |
 | `RecordFilter` | `functions` | `string[]` (optional) | Restrict the scan to records produced by these functions. |
-| `RecordFilter` | `resultsPerPage` | `number` (optional) | Number of records per page of results. |
-| `RecordFilter` | `page` | `number` (optional) | Page of results to return. |
-| `RecordFilter` | `response` | `ResponseFilter` (optional) | Field-selection mask applied to each returned record. |
-| `ResponseFilter` | *(any field)* | `boolean` (optional) | Set a field true to include it on each returned record, e.g. `commitment`, `owner`, `blockHeight`. |
+| `RecordFilter` | `resultsPerPage` | `number` (optional) | Records per page. Defaults to 1000, which is also the ceiling — a larger value is clamped down, so a scan matching more records than one page holds must page to read them all. Must be a positive integer; anything else throws. |
+| `RecordFilter` | `page` | `number` (optional) | Zero-based page index. Defaults to 0. Must be a non-negative integer; anything else throws. |
+| `RecordFilter` | `response` | `ResponseFilter` (optional) | Narrows nothing on any current path — the scanner selects columns from a separate top-level field that no client sends, so every column returns regardless. Retained because it ships in a released type; do not use it. |
+| `ResponseFilter` | *(any field)* | `boolean` (optional) | Field-selection mask. Inert, as described for `RecordFilter.response`. |
 | `OwnedRecordsRequest` | `uuid` | `string` | Scan session identifier issued by the service. |
-| `OwnedRecordsRequest` | `unspent` | `boolean` (optional) | When true, return only unspent records. |
+| `OwnedRecordsRequest` | `unspent` | `boolean` (optional) | When true, return only unspent records. Omitted entirely for `statusFilter: 'all'`, since the service reads `unspent: false` as "spent only" rather than "no filter". |
 | `OwnedRecordsRequest` | `filter` | `RecordFilter` (optional) | Narrows the scan as described above. |
+
+`OwnedRecordsRequest` describes the request conceptually and is not the literal
+wire body: the scanner reads `snake_case` names, so `resultsPerPage` is sent as
+`results_per_page`. Veil builds and sends that body internally — a caller passes
+a `RecordFilter` and never assembles the request.
