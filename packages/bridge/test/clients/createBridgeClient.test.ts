@@ -1,116 +1,27 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createBridgeClient } from '../../src/clients/createBridgeClient.js'
-import { httpBridge } from '../../src/transports/httpBridge.js'
-import type { WalletClient } from '@provablehq/veil-core'
 
 describe('createBridgeClient', () => {
-  it('exposes a request function from the transport', () => {
-    const fetchFn = vi.fn()
-    const client = createBridgeClient({
-      transport: httpBridge('https://wsa.example/api', { fetchFn: fetchFn as unknown as typeof fetch }),
-    })
-    expect(typeof client.request).toBe('function')
+  it('defaults discovery to mainnet and remains extendable', () => {
+    const client = createBridgeClient()
+    expect(client.environment).toBe('mainnet')
+    expect(client.getAssets().every((asset) => !asset.chainId.includes('testnet') && asset.chainId !== 'sepolia')).toBe(true)
+    expect(client.extend(() => ({ hello: () => 'world' })).hello()).toBe('world')
   })
 
-  it('has the bridge key by default', () => {
-    const fetchFn = vi.fn()
-    const client = createBridgeClient({
-      transport: httpBridge('https://wsa.example/api', { fetchFn: fetchFn as unknown as typeof fetch }),
-    })
-    expect(client.key).toBe('bridge')
+  it('selects testnet without hiding explicit environment queries', () => {
+    const client = createBridgeClient({ environment: 'testnet' })
+    expect(client.getRoutes().every((route) => route.environment === 'testnet')).toBe(true)
+    expect(client.getRoutes({ environment: 'mainnet' }).length).toBeGreaterThan(0)
   })
 
-  it('has Bridge Client name by default', () => {
-    const fetchFn = vi.fn()
-    const client = createBridgeClient({
-      transport: httpBridge('https://wsa.example/api', { fetchFn: fetchFn as unknown as typeof fetch }),
+  it('binds transfer planning to the configured registry', () => {
+    const client = createBridgeClient()
+    const plan = client.prepareTransfer({
+      routeId: 'xreserve:aleo/usdcx->ethereum/usdc',
+      amount: '1',
+      recipient: '0x0000000000000000000000000000000000000001',
     })
-    expect(client.name).toBe('Bridge Client')
-  })
-
-  it('respects custom key and name', () => {
-    const fetchFn = vi.fn()
-    const client = createBridgeClient({
-      transport: httpBridge('https://wsa.example/api', { fetchFn: fetchFn as unknown as typeof fetch }),
-      key: 'custom-bridge',
-      name: 'My Bridge',
-    })
-    expect(client.key).toBe('custom-bridge')
-    expect(client.name).toBe('My Bridge')
-  })
-
-  it('is extendable like other Veil clients', () => {
-    const fetchFn = vi.fn()
-    const client = createBridgeClient({
-      transport: httpBridge('https://wsa.example/api', { fetchFn: fetchFn as unknown as typeof fetch }),
-    })
-    const extended = client.extend(() => ({ hello: () => 'world' }))
-    expect(extended.hello()).toBe('world')
-  })
-})
-
-describe('createBridgeClient bound actions', () => {
-  it('exposes getFlags, getQuotes, createOrder, getOrder, getOrderAudit, waitForOrder', () => {
-    const fetchFn = vi.fn()
-    const client = createBridgeClient({
-      transport: httpBridge('https://wsa.example/api', { fetchFn: fetchFn as unknown as typeof fetch }),
-    })
-    expect(typeof client.getFlags).toBe('function')
-    expect(typeof client.getQuotes).toBe('function')
-    expect(typeof client.createOrder).toBe('function')
-    expect(typeof client.getOrder).toBe('function')
-    expect(typeof client.getOrderAudit).toBe('function')
-    expect(typeof client.waitForOrder).toBe('function')
-  })
-
-  it('swap uses the construction-time wallet without per-call wiring', async () => {
-    // Full happy-path responses over the transport so bridge.swap runs
-    // quote → order → deposit with only the route in its params.
-    const fetchFn = vi.fn(async (url: string) => {
-      const body = String(url).includes('/quotes')
-        ? {
-            data: [{
-              provider: { id: 'p1', code: 'demo', displayName: 'Demo', capabilities: [] },
-              quoteId: 'q1',
-              srcChain: 'ALEO', destChain: 'SOLANA',
-              srcAsset: 'ALEO_MAINNET', destAsset: 'SOL_SOLANA',
-              amountIn: '1.5', amountOut: '0.05',
-            }],
-            meta: { count: 1, quoteRequestId: 'req-1' },
-          }
-        : { data: { orderId: 'o1', depositAddress: 'aleo1deposit', depositAmount: '1.5', depositChain: 'ALEO' } }
-      return { ok: true, status: 200, text: async () => JSON.stringify(body), json: async () => body }
-    })
-    const wallet = {
-      account: { type: 'rpc', address: 'aleo1sender', sign: vi.fn() },
-      request: vi.fn().mockResolvedValue('at1deadbeef'),
-    } as unknown as WalletClient
-
-    const client = createBridgeClient({
-      transport: httpBridge('https://wsa.example/api', { fetchFn: fetchFn as unknown as typeof fetch }),
-      wallet,
-    })
-
-    const result = await client.swap({
-      from: { asset: 'ALEO_MAINNET', amount: '1.5' },
-      to: { chain: 'SOLANA', asset: 'SOL_SOLANA', address: '8xJ...' },
-      poll: false,
-    })
-
-    expect(result.depositTxId).toBe('at1deadbeef')
-    expect((wallet as unknown as { request: ReturnType<typeof vi.fn> }).request).toHaveBeenCalled()
-  })
-
-  it('swap without a wallet anywhere throws with guidance', async () => {
-    const fetchFn = vi.fn()
-    const client = createBridgeClient({
-      transport: httpBridge('https://wsa.example/api', { fetchFn: fetchFn as unknown as typeof fetch }),
-    })
-    await expect(
-      client.swap({
-        from: { asset: 'ALEO_MAINNET', amount: '1' },
-        to: { chain: 'SOLANA', asset: 'SOL_SOLANA', address: '8xJ...' },
-      }),
-    ).rejects.toThrow(/createBridgeClient\(\{ wallet \}\)/)
+    expect(plan.registryVersion).toBe(client.registry.version)
   })
 })

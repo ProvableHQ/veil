@@ -64,7 +64,6 @@
     "@provablehq/sdk": "^0.11.6",
     "@provablehq/veil-codegen": "workspace:*",
     "@provablehq/veil-aleo-sdk": "workspace:*",
-    "openapi-typescript": "^7.13.0",
-    "@provablehq/veil-aleo-bridges": "workspace:*"
+    "openapi-typescript": "^7.13.0"
   }
 }

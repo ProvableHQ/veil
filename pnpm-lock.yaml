@@ -91,10 +91,6 @@ importers:
       '@provablehq/veil-core':
         specifier: workspace:*
         version: link:../core
-    devDependencies:
-      viem:
-        specifier: ^2.21.0
-        version: 2.54.6(typescript@5.9.3)
 
   packages/codegen:
     dependencies:
@@ -203,9 +199,6 @@ importers:
       '@provablehq/sdk':
         specifier: ^0.11.6
         version: 0.11.6
-      '@provablehq/veil-aleo-bridges':
-        specifier: workspace:*
-        version: link:../bridge
       '@provablehq/veil-aleo-sdk':
         specifier: workspace:*
         version: link:../provable-sdk
