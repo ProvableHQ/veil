@@ -45,8 +45,10 @@ describe('prepareTransfer', () => {
     })
     expect(record.mintMode).toBe('record')
     expect(record.steps.at(-1)?.description).toContain('record')
+    expect(record.steps.at(-1)?.executor).toBe('protocol')
     expect(privatePlan.mintMode).toBe('private')
     expect(privatePlan.privateRecipient).toBe(true)
+    expect(privatePlan.steps.at(-1)?.executor).toBe('aleo-wallet')
     expect(() => prepareTransfer(DEFAULT_BRIDGE_REGISTRY, {
       routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
       amount: '25',
@@ -65,6 +67,7 @@ describe('prepareTransfer', () => {
     expect(inbound.steps.map((step) => step.kind)).toEqual([
       'approve', 'dispatch', 'wait-delivery', 'confirm-delivery',
     ])
+    expect(inbound.steps.at(-1)?.executor).toBe('protocol')
 
     const outbound = prepareTransfer(DEFAULT_BRIDGE_REGISTRY, {
       routeId: 'hyperlane:aleo/wbtc->ethereum/wbtc',

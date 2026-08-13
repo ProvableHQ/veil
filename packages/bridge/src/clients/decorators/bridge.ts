@@ -15,6 +15,7 @@ import {
   getXReserveAttestation,
   quoteEvmXReserveTransfer,
 } from '../../actions/evmXReserve.js'
+import { executeXReservePrivateMint } from '../../actions/xreservePrivateMint.js'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import type {
   BridgeExecutors,
@@ -32,6 +33,10 @@ import type {
   XReserveAttestationResult,
   XReserveHttpTransport,
 } from '../../types/xreserve.js'
+import type {
+  ExecuteXReservePrivateMintParameters,
+  XReservePrivateMintExecution,
+} from '../../types/aleo.js'
 import type {
   BridgeEnvironment,
   BridgeRegistry,
@@ -67,6 +72,7 @@ export type BridgeActionsConfig = {
  * @property quoteEvmXReserveTransfer Reads USDC balance and allowance and derives Circle deposit inputs.
  * @property executeEvmXReserveTransfer Approves USDC when needed and submits the Circle deposit.
  * @property getXReserveAttestation Fetches one Circle attestation by message hash.
+ * @property executeXReservePrivateMint Prompts the Aleo wallet for the wrapper private mint.
  */
 export type BridgeActions = {
   getAssets: (params?: GetProtocolAssetsParameters) => ProtocolBridgeAsset[]
@@ -77,6 +83,7 @@ export type BridgeActions = {
   quoteEvmXReserveTransfer: (params: QuoteEvmXReserveTransferParameters) => Promise<EvmXReserveTransferQuote>
   executeEvmXReserveTransfer: (params: ExecuteEvmXReserveTransferParameters) => Promise<EvmXReserveTransferExecution>
   getXReserveAttestation: (params: GetXReserveAttestationParameters) => Promise<XReserveAttestationResult>
+  executeXReservePrivateMint: (params: ExecuteXReservePrivateMintParameters) => Promise<XReservePrivateMintExecution>
 }
 
 /**
@@ -104,6 +111,10 @@ export function bridgeActions(_client: Client, config: BridgeActionsConfig): Bri
     if (!config.xReserveHttpTransport) throw new BridgeError('An xReserve HTTP transport is required for attestation requests')
     return config.xReserveHttpTransport
   }
+  const aleoExecutor = () => {
+    if (!config.executors?.aleo) throw new BridgeError('An Aleo executor is required for private USDCx minting')
+    return config.executors.aleo
+  }
   return {
     getAssets: (params = {}) => getProtocolAssets(config.registry, {
       ...params,
@@ -119,5 +130,6 @@ export function bridgeActions(_client: Client, config: BridgeActionsConfig): Bri
     quoteEvmXReserveTransfer: async (params) => quoteEvmXReserveTransfer(config.registry, evmExecutor(), params),
     executeEvmXReserveTransfer: async (params) => executeEvmXReserveTransfer(config.registry, evmExecutor(), params),
     getXReserveAttestation: async (params) => getXReserveAttestation(config.registry, xReserveTransport(), params),
+    executeXReservePrivateMint: async (params) => executeXReservePrivateMint(config.registry, aleoExecutor(), params),
   }
 }

@@ -25,6 +25,7 @@ export {
   getXReserveAttestation,
   quoteEvmXReserveTransfer,
 } from './actions/evmXReserve.js'
+export { executeXReservePrivateMint } from './actions/xreservePrivateMint.js'
 
 export { DEFAULT_BRIDGE_REGISTRY } from './registry/default.js'
 export { validateBridgeRegistry } from './registry/validate.js'
@@ -73,6 +74,11 @@ export type {
   XReserveHttpResponse,
   XReserveHttpTransport,
 } from './types/xreserve.js'
+export type {
+  AleoBridgeExecutor,
+  ExecuteXReservePrivateMintParameters,
+  XReservePrivateMintExecution,
+} from './types/aleo.js'
 
 export {
   aleoAddressToBytes32,
@@ -81,6 +87,7 @@ export {
   buildXReserveHookData,
   calculateXReserveDepositNonce,
   calculateXReserveMessageHash,
+  xReserveHexToAleoBytes,
 } from './utils/xreserve.js'
 
 export { BridgeError } from './errors/bridgeErrors.js'

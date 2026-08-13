@@ -29,7 +29,7 @@ function xreserveSteps(
       { key: 'source-approval', kind: 'approve', chainId: source.chainId, executor: 'evm-wallet', description: `Approve the Circle xReserve contract to spend ${source.symbol}.`, irreversible: false },
       { key: 'source-deposit', kind: 'deposit', chainId: source.chainId, executor: 'evm-wallet', description: `Deposit ${source.symbol} into Circle xReserve for Aleo.`, irreversible: true },
       { key: 'deposit-attestation', kind: 'wait-attestation', executor: 'protocol', description: 'Wait for Circle to attest the confirmed reserve deposit.', irreversible: false },
-      { key: 'destination-mint', kind: 'mint', chainId: destination.chainId, executor: 'aleo-wallet', description: mintMode === 'private' ? `Mint attested ${destination.symbol} through the shielded wrapper.` : `Mint attested ${destination.symbol} as an Aleo ${mintMode === 'record' ? 'record' : 'public balance'}.`, irreversible: false },
+      { key: 'destination-mint', kind: 'mint', chainId: destination.chainId, executor: mintMode === 'private' ? 'aleo-wallet' : 'protocol', description: mintMode === 'private' ? `Submit private_mint to mint attested ${destination.symbol} through the shielded wrapper.` : `Wait for attested ${destination.symbol} to mint as an Aleo ${mintMode === 'record' ? 'record' : 'public balance'}.`, irreversible: false },
     ]
   }
   if (sourceChain.family === 'aleo' && destinationChain.family === 'evm') {
@@ -63,7 +63,7 @@ function hyperlaneSteps(
   steps.push(
     { key: 'source-dispatch', kind: 'dispatch', chainId: source.chainId, executor: executor(sourceChain), description: `Dispatch ${source.symbol} through its Hyperlane Warp Route.`, irreversible: true },
     { key: 'message-delivery', kind: 'wait-delivery', executor: 'protocol', description: 'Wait for the Hyperlane message to be relayed and processed.', irreversible: false },
-    { key: 'destination-confirmation', kind: 'confirm-delivery', chainId: destination.chainId, executor: executor(destinationChain), description: `Confirm delivery of ${destination.symbol} on the destination chain.`, irreversible: false },
+    { key: 'destination-confirmation', kind: 'confirm-delivery', chainId: destination.chainId, executor: 'protocol', description: `Confirm relayer delivery of ${destination.symbol} on the destination chain.`, irreversible: false },
   )
   return steps
 }

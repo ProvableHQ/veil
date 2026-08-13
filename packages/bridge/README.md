@@ -77,6 +77,32 @@ commits the intended recipient with BHP256 and directs the xReserve deposit to
 Circle attestation HTTP access is injected so browser, Node, and React Native
 applications can supply their own fetch-compatible transport.
 
+Public and record USDCx destination mints are protocol-driven. Only private
+USDCx minting requires a second user transaction on Aleo. Once Circle returns a
+completed attestation, submit the wrapper call through a Veil wallet client:
+
+```ts
+const bridge = createBridgeClient({
+  environment: 'testnet',
+  executors: {
+    evm: injectedEvmProvider,
+    aleo: aleoWalletClient,
+  },
+  xReserveHttpTransport: (url, init) => fetch(url, init),
+})
+
+const mint = await bridge.executeXReservePrivateMint({
+  plan,
+  deposit: execution.receipt,
+  attestation,
+})
+```
+
+This calls `shielded_usdcx_wrapper.aleo/private_mint` with the 305-byte payload,
+65-byte Circle signature, 32-byte message hash, `0scalar`, and intended Aleo
+recipient. The wrapper reproduces the recipient commitment, mints publicly to
+its own program address, and transfers the amount to the recipient as a record.
+
 ## Ethereum Hyperlane execution
 
 Pass an EIP-1193-compatible provider from MetaMask, Phantom, or another injected
@@ -130,6 +156,10 @@ submitted transaction identifiers. A timeout does not report the transaction as
 failed. A confirmed dispatch returns `DELIVERY_PENDING` and includes the
 Hyperlane message id when the Mailbox `DispatchId` event is present.
 
+Inbound Hyperlane Aleo minting is performed by the Hyperlane relayer. The user
+submits only the source-chain approval and dispatch transactions; no Aleo wallet
+transaction is requested for Hyperlane delivery.
+
 ## Registry
 
 `DEFAULT_BRIDGE_REGISTRY` is a versioned snapshot of chains, chain-specific
@@ -156,6 +186,7 @@ their execution paths are implemented.
 - `prepareTransfer`
 - `quoteEvmHyperlaneTransfer` and `executeEvmHyperlaneTransfer`
 - `quoteEvmXReserveTransfer`, `executeEvmXReserveTransfer`, and `getXReserveAttestation`
+- `executeXReservePrivateMint`
 - Aleo address, xReserve hook, nonce, payload, and message-hash utilities
 - `DEFAULT_BRIDGE_REGISTRY` and `validateBridgeRegistry`
 - Protocol-neutral asset, route, plan, fee, step, status, and receipt types
@@ -167,7 +198,7 @@ the fund-moving EVM actions.
 
 ## Next implementation phases
 
-1. Add Aleo wallet execution for the attested public, record, and wrapper-private mints.
+1. Add protocol delivery tracking for relayer-driven xReserve and Hyperlane mints.
 2. Add Aleo USDCx burn and Circle withdrawal execution.
 3. Add Aleo-origin Hyperlane dispatch and destination confirmation.
 4. Add injected Solana execution and gated protocol testnets.

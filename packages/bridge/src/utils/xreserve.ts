@@ -216,3 +216,23 @@ export function buildXReserveDepositPayload(params: {
 export function calculateXReserveMessageHash(payload: Hex): Hash {
   return keccak256(payload)
 }
+
+/**
+ * Formats fixed-width hexadecimal bytes as an Aleo `[u8; N]` literal.
+ *
+ * Pure and local; validates the exact byte width before formatting inputs for a wallet.
+ *
+ * @param value Prefixed hexadecimal bytes to format.
+ * @param expectedBytes Required array width from the target Aleo function.
+ * @returns An Aleo array literal containing decimal `u8` values.
+ * @throws BridgeError When the input is malformed or has the wrong width.
+ *
+ * @example
+ * const hashInput = xReserveHexToAleoBytes(messageHash, 32)
+ */
+export function xReserveHexToAleoBytes(value: Hex, expectedBytes: number): string {
+  if (!isHex(value, { strict: true })) throw new BridgeError('Aleo byte-array input must be prefixed hexadecimal')
+  const bytes = hexToBytes(value)
+  if (bytes.length !== expectedBytes) throw new BridgeError(`Aleo byte-array input must contain ${expectedBytes} bytes`)
+  return `[${[...bytes].map((byte) => `${byte}u8`).join(',')}]`
+}

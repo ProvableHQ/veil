@@ -6,6 +6,7 @@ import {
   buildXReserveHookData,
   calculateXReserveDepositNonce,
   calculateXReserveMessageHash,
+  xReserveHexToAleoBytes,
 } from '../../src/utils/xreserve.js'
 
 const RECIPIENT = 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n'
@@ -40,5 +41,10 @@ describe('xReserve wire utilities', () => {
     expect(hexToBytes(payload)).toHaveLength(305)
     expect(payload.slice(0, 18)).toBe('0x5a2e0acd00000001')
     expect(calculateXReserveMessageHash(payload)).toMatch(/^0x[0-9a-f]{64}$/)
+  })
+
+  it('formats fixed-width Aleo byte-array inputs', () => {
+    expect(xReserveHexToAleoBytes('0x00ff', 2)).toBe('[0u8,255u8]')
+    expect(() => xReserveHexToAleoBytes('0x00ff', 32)).toThrow(/32 bytes/)
   })
 })
