@@ -160,6 +160,40 @@ Inbound Hyperlane Aleo minting is performed by the Hyperlane relayer. The user
 submits only the source-chain approval and dispatch transactions; no Aleo wallet
 transaction is requested for Hyperlane delivery.
 
+## Aleo USDCx burns
+
+USDCx burns submit one Aleo transaction. The Aleo-operated burn attestation
+service observes accepted burns and forwards them to Circle; the bridge client
+does not submit a second attestation or Ethereum withdrawal transaction.
+
+```ts
+const plan = bridge.prepareTransfer({
+  routeId: 'xreserve:aleo/usdcx->ethereum/usdc',
+  amount: '25',
+  recipient: ethereumRecipient,
+})
+
+const burn = await bridge.executeXReserveBurn({
+  plan,
+  userRecord,
+  merkleProof,
+  // Default: private
+})
+```
+
+Private burning is the default. Three transition modes remain available:
+
+- `private` calls `shielded_usdcx_wrapper.aleo/private_burn` and requires a
+  USDCx `Token` record input plus an encoded `[MerkleProof; 2]` literal.
+- `public` calls `burn_public` for public or program-owned balances.
+- `public-as-signer` calls `burn_public_as_signer` when the public balance must
+  be proven to belong to the EOA signer.
+
+Ethereum's native destination domain is pinned to `0u32`; its address is
+left-padded to `[u8; 32]`. ARC domain `26u32` is recorded in the registry but is
+not selectable through the Ethereum route. Pause, freeze-list, and mutable
+minimum/maximum burn checks execute atomically in the deployed Aleo program.
+
 ## Registry
 
 `DEFAULT_BRIDGE_REGISTRY` is a versioned snapshot of chains, chain-specific
@@ -187,6 +221,7 @@ their execution paths are implemented.
 - `quoteEvmHyperlaneTransfer` and `executeEvmHyperlaneTransfer`
 - `quoteEvmXReserveTransfer`, `executeEvmXReserveTransfer`, and `getXReserveAttestation`
 - `executeXReservePrivateMint`
+- `buildXReserveBurnCall` and `executeXReserveBurn`
 - Aleo address, xReserve hook, nonce, payload, and message-hash utilities
 - `DEFAULT_BRIDGE_REGISTRY` and `validateBridgeRegistry`
 - Protocol-neutral asset, route, plan, fee, step, status, and receipt types
@@ -199,6 +234,5 @@ the fund-moving EVM actions.
 ## Next implementation phases
 
 1. Add protocol delivery tracking for relayer-driven xReserve and Hyperlane mints.
-2. Add Aleo USDCx burn and Circle withdrawal execution.
-3. Add Aleo-origin Hyperlane dispatch and destination confirmation.
-4. Add injected Solana execution and gated protocol testnets.
+2. Add Aleo-origin Hyperlane dispatch and destination confirmation.
+3. Add injected Solana execution and gated protocol testnets.

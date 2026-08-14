@@ -6,6 +6,7 @@ import {
   buildXReserveHookData,
   calculateXReserveDepositNonce,
   calculateXReserveMessageHash,
+  evmAddressToXReserveBytes32,
   xReserveHexToAleoBytes,
 } from '../../src/utils/xreserve.js'
 
@@ -46,5 +47,10 @@ describe('xReserve wire utilities', () => {
   it('formats fixed-width Aleo byte-array inputs', () => {
     expect(xReserveHexToAleoBytes('0x00ff', 2)).toBe('[0u8,255u8]')
     expect(() => xReserveHexToAleoBytes('0x00ff', 32)).toThrow(/32 bytes/)
+  })
+
+  it('left-pads an Ethereum burn recipient to 32 bytes', () => {
+    expect(evmAddressToXReserveBytes32('0x0000000000000000000000000000000000000001'))
+      .toBe(`0x${'00'.repeat(31)}01`)
   })
 })

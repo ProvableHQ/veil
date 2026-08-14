@@ -34,9 +34,9 @@ function xreserveSteps(
   }
   if (sourceChain.family === 'aleo' && destinationChain.family === 'evm') {
     return [
-      { key: 'source-burn', kind: 'burn', chainId: source.chainId, executor: 'aleo-wallet', description: `Burn ${source.symbol} and create the xReserve withdrawal intent.`, irreversible: true },
-      { key: 'withdrawal-attestation', kind: 'wait-attestation', executor: 'protocol', description: 'Wait for the Aleo burn signature and Circle withdrawal attestation.', irreversible: false },
-      { key: 'destination-withdrawal', kind: 'withdraw', chainId: destination.chainId, executor: 'protocol', description: `Release ${destination.symbol} from the Circle reserve.`, irreversible: false },
+      { key: 'source-burn', kind: 'burn', chainId: source.chainId, executor: 'aleo-wallet', description: `Burn ${source.symbol} and create the xReserve withdrawal intent; private burn is the default.`, irreversible: true },
+      { key: 'withdrawal-attestation', kind: 'wait-attestation', executor: 'protocol', description: 'Wait for the Aleo burn attestation service to forward the accepted burn to Circle.', irreversible: false },
+      { key: 'destination-withdrawal', kind: 'withdraw', chainId: destination.chainId, executor: 'protocol', description: `Wait for Circle to release ${destination.symbol} to the native recipient.`, irreversible: false },
       { key: 'destination-confirmation', kind: 'confirm-delivery', chainId: destination.chainId, executor: 'protocol', description: 'Confirm the destination USDC balance change.', irreversible: false },
     ]
   }

@@ -26,6 +26,7 @@ export {
   quoteEvmXReserveTransfer,
 } from './actions/evmXReserve.js'
 export { executeXReservePrivateMint } from './actions/xreservePrivateMint.js'
+export { buildXReserveBurnCall, executeXReserveBurn } from './actions/xreserveBurn.js'
 
 export { DEFAULT_BRIDGE_REGISTRY } from './registry/default.js'
 export { validateBridgeRegistry } from './registry/validate.js'
@@ -76,7 +77,11 @@ export type {
 } from './types/xreserve.js'
 export type {
   AleoBridgeExecutor,
+  ExecuteXReserveBurnParameters,
   ExecuteXReservePrivateMintParameters,
+  XReserveBurnCall,
+  XReserveBurnExecution,
+  XReserveBurnMode,
   XReservePrivateMintExecution,
 } from './types/aleo.js'
 
@@ -87,6 +92,7 @@ export {
   buildXReserveHookData,
   calculateXReserveDepositNonce,
   calculateXReserveMessageHash,
+  evmAddressToXReserveBytes32,
   xReserveHexToAleoBytes,
 } from './utils/xreserve.js'
 

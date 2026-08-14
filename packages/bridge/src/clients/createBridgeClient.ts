@@ -56,7 +56,7 @@ function localBridgeTransport() {
  * Discovery and transfer planning read the configured registry without network
  * access. An injected EVM executor enables Ethereum Hyperlane quote and execution
  * actions without exposing private keys to the client. An injected Aleo wallet
- * client enables only the user-authorized private USDCx wrapper mint.
+ * client enables user-authorized private USDCx mints and USDCx burns.
  *
  * @param config Optional environment, registry, executors, and client identity.
  * @returns A bridge client exposing discovery, planning, and configured protocol actions.

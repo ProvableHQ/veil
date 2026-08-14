@@ -236,3 +236,20 @@ export function xReserveHexToAleoBytes(value: Hex, expectedBytes: number): strin
   if (bytes.length !== expectedBytes) throw new BridgeError(`Aleo byte-array input must contain ${expectedBytes} bytes`)
   return `[${[...bytes].map((byte) => `${byte}u8`).join(',')}]`
 }
+
+/**
+ * Encodes an Ethereum address as the 32-byte recipient required by xReserve burns.
+ *
+ * Pure and local; preserves the 20 address bytes and adds twelve leading zero bytes.
+ *
+ * @param address Checksummed or lowercase Ethereum address selected by the caller.
+ * @returns The address left-padded to exactly 32 bytes.
+ * @throws BridgeError When the address is malformed.
+ *
+ * @example
+ * const recipient = evmAddressToXReserveBytes32('0x0000000000000000000000000000000000000001')
+ */
+export function evmAddressToXReserveBytes32(address: string): Hex {
+  if (!isAddress(address)) throw new BridgeError(`Invalid Ethereum recipient address: ${address}`)
+  return padHex(getAddress(address), { size: 32 })
+}

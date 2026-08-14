@@ -29,12 +29,11 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
       .toBe('0x8888888199b2Df864bf678259607d6D5EBb4e3Ce')
   })
 
-  it('activates xReserve deposits while keeping Aleo withdrawals non-executable', () => {
+  it('activates xReserve deposits and service-forwarded Aleo burns', () => {
     const xreserve = DEFAULT_BRIDGE_REGISTRY.routes.filter((route) => route.protocol === 'xreserve')
-    expect(xreserve.filter((route) => route.sourceAssetId === 'ethereum/usdc' || route.sourceAssetId === 'sepolia/usdc')
-      .every((route) => route.availability === 'active')).toBe(true)
-    expect(xreserve.filter((route) => route.sourceAssetId.includes('usdcx'))
-      .every((route) => route.availability === 'metadata-required')).toBe(true)
+    expect(xreserve.every((route) => route.availability === 'active')).toBe(true)
+    expect(xreserve.every((route) => route.metadata?.ethereumDestinationDomain === 0)).toBe(true)
+    expect(xreserve.every((route) => route.metadata?.arcDestinationDomain === 26)).toBe(true)
   })
 
   it('pins executable Ethereum Hyperlane routes to a reviewed registry commit', () => {

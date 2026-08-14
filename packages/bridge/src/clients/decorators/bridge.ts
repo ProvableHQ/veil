@@ -16,6 +16,7 @@ import {
   quoteEvmXReserveTransfer,
 } from '../../actions/evmXReserve.js'
 import { executeXReservePrivateMint } from '../../actions/xreservePrivateMint.js'
+import { executeXReserveBurn } from '../../actions/xreserveBurn.js'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import type {
   BridgeExecutors,
@@ -35,6 +36,8 @@ import type {
 } from '../../types/xreserve.js'
 import type {
   ExecuteXReservePrivateMintParameters,
+  ExecuteXReserveBurnParameters,
+  XReserveBurnExecution,
   XReservePrivateMintExecution,
 } from '../../types/aleo.js'
 import type {
@@ -73,6 +76,7 @@ export type BridgeActionsConfig = {
  * @property executeEvmXReserveTransfer Approves USDC when needed and submits the Circle deposit.
  * @property getXReserveAttestation Fetches one Circle attestation by message hash.
  * @property executeXReservePrivateMint Prompts the Aleo wallet for the wrapper private mint.
+ * @property executeXReserveBurn Prompts the Aleo wallet for one of the reviewed USDCx burn transitions.
  */
 export type BridgeActions = {
   getAssets: (params?: GetProtocolAssetsParameters) => ProtocolBridgeAsset[]
@@ -84,6 +88,7 @@ export type BridgeActions = {
   executeEvmXReserveTransfer: (params: ExecuteEvmXReserveTransferParameters) => Promise<EvmXReserveTransferExecution>
   getXReserveAttestation: (params: GetXReserveAttestationParameters) => Promise<XReserveAttestationResult>
   executeXReservePrivateMint: (params: ExecuteXReservePrivateMintParameters) => Promise<XReservePrivateMintExecution>
+  executeXReserveBurn: (params: ExecuteXReserveBurnParameters) => Promise<XReserveBurnExecution>
 }
 
 /**
@@ -112,7 +117,7 @@ export function bridgeActions(_client: Client, config: BridgeActionsConfig): Bri
     return config.xReserveHttpTransport
   }
   const aleoExecutor = () => {
-    if (!config.executors?.aleo) throw new BridgeError('An Aleo executor is required for private USDCx minting')
+    if (!config.executors?.aleo) throw new BridgeError('An Aleo executor is required for Aleo bridge transactions')
     return config.executors.aleo
   }
   return {
@@ -131,5 +136,6 @@ export function bridgeActions(_client: Client, config: BridgeActionsConfig): Bri
     executeEvmXReserveTransfer: async (params) => executeEvmXReserveTransfer(config.registry, evmExecutor(), params),
     getXReserveAttestation: async (params) => getXReserveAttestation(config.registry, xReserveTransport(), params),
     executeXReservePrivateMint: async (params) => executeXReservePrivateMint(config.registry, aleoExecutor(), params),
+    executeXReserveBurn: async (params) => executeXReserveBurn(config.registry, aleoExecutor(), params),
   }
 }
