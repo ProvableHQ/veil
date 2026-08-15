@@ -5,8 +5,7 @@ sidebar_position: 10
 # @provablehq/veil-aleo-bridges
 
 :::caution Preview
-The package is private and not yet published to npm. Protocol execution is
-under development.
+The package is private and not yet published to npm. Execution is available for select routes via injected wallet executors; other execution paths remain under development.
 :::
 
 The bridge client assigns each asset family to its canonical protocol:
