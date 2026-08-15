@@ -27,6 +27,10 @@ export {
 } from './actions/evmXReserve.js'
 export { executeXReservePrivateMint } from './actions/xreservePrivateMint.js'
 export { buildXReserveBurnCall, executeXReserveBurn } from './actions/xreserveBurn.js'
+export {
+  buildAleoHyperlaneTransferRemoteCall,
+  executeAleoHyperlaneTransferRemote,
+} from './actions/aleoHyperlane.js'
 
 export { DEFAULT_BRIDGE_REGISTRY } from './registry/default.js'
 export { validateBridgeRegistry } from './registry/validate.js'
@@ -77,6 +81,9 @@ export type {
 } from './types/xreserve.js'
 export type {
   AleoBridgeExecutor,
+  AleoHyperlaneTransferRemoteCall,
+  AleoHyperlaneTransferRemoteExecution,
+  ExecuteAleoHyperlaneTransferRemoteParameters,
   ExecuteXReserveBurnParameters,
   ExecuteXReservePrivateMintParameters,
   XReserveBurnCall,

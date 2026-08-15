@@ -48,6 +48,25 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
     expect(inbound.every((route) => route.availability === 'active')).toBe(true)
     expect(inbound.every((route) => route.metadata?.registryCommit === '2621c16f2db1ccb46643265c110dac5ca2c7c51a')).toBe(true)
   })
+
+  it('marks Aleo-origin Warp Route configuration as non-executable placeholders', () => {
+    const routeIds = new Set([
+      'hyperlane:aleo/eth->ethereum/eth',
+      'hyperlane:aleo/wbtc->ethereum/wbtc',
+      'hyperlane:aleo/sol->solana/sol',
+      'hyperlane:aleo/usad->ethereum/usad',
+    ])
+    const routes = DEFAULT_BRIDGE_REGISTRY.routes.filter((route) => routeIds.has(route.id))
+    expect(routes).toHaveLength(4)
+    expect(routes.every((route) => route.availability === 'metadata-required')).toBe(true)
+    expect(routes.every((route) => route.metadata?.aleoPlaceholderConfiguration === true)).toBe(true)
+    expect(routes.map((route) => route.metadata?.aleoRouterProgram)).toEqual([
+      'hyp_warp_token_eth_v2.aleo',
+      'hyp_warp_token_wbtc_v2.aleo',
+      'hyp_warp_token_sol_v2.aleo',
+      'hyp_warp_token_usad_v2.aleo',
+    ])
+  })
 })
 
 describe('validateBridgeRegistry', () => {

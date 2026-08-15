@@ -17,6 +17,10 @@ import {
 } from '../../actions/evmXReserve.js'
 import { executeXReservePrivateMint } from '../../actions/xreservePrivateMint.js'
 import { executeXReserveBurn } from '../../actions/xreserveBurn.js'
+import {
+  buildAleoHyperlaneTransferRemoteCall,
+  executeAleoHyperlaneTransferRemote,
+} from '../../actions/aleoHyperlane.js'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import type {
   BridgeExecutors,
@@ -35,6 +39,9 @@ import type {
   XReserveHttpTransport,
 } from '../../types/xreserve.js'
 import type {
+  AleoHyperlaneTransferRemoteCall,
+  AleoHyperlaneTransferRemoteExecution,
+  ExecuteAleoHyperlaneTransferRemoteParameters,
   ExecuteXReservePrivateMintParameters,
   ExecuteXReserveBurnParameters,
   XReserveBurnExecution,
@@ -77,6 +84,8 @@ export type BridgeActionsConfig = {
  * @property getXReserveAttestation Fetches one Circle attestation by message hash.
  * @property executeXReservePrivateMint Prompts the Aleo wallet for the wrapper private mint.
  * @property executeXReserveBurn Prompts the Aleo wallet for one of the reviewed USDCx burn transitions.
+ * @property buildAleoHyperlaneTransferRemoteCall Constructs the seven-input Aleo Warp Route call without wallet access.
+ * @property executeAleoHyperlaneTransferRemote Submits only fully reviewed, non-placeholder Aleo Warp Route calls.
  */
 export type BridgeActions = {
   getAssets: (params?: GetProtocolAssetsParameters) => ProtocolBridgeAsset[]
@@ -89,6 +98,8 @@ export type BridgeActions = {
   getXReserveAttestation: (params: GetXReserveAttestationParameters) => Promise<XReserveAttestationResult>
   executeXReservePrivateMint: (params: ExecuteXReservePrivateMintParameters) => Promise<XReservePrivateMintExecution>
   executeXReserveBurn: (params: ExecuteXReserveBurnParameters) => Promise<XReserveBurnExecution>
+  buildAleoHyperlaneTransferRemoteCall: (params: ExecuteAleoHyperlaneTransferRemoteParameters) => AleoHyperlaneTransferRemoteCall
+  executeAleoHyperlaneTransferRemote: (params: ExecuteAleoHyperlaneTransferRemoteParameters) => Promise<AleoHyperlaneTransferRemoteExecution>
 }
 
 /**
@@ -137,5 +148,7 @@ export function bridgeActions(_client: Client, config: BridgeActionsConfig): Bri
     getXReserveAttestation: async (params) => getXReserveAttestation(config.registry, xReserveTransport(), params),
     executeXReservePrivateMint: async (params) => executeXReservePrivateMint(config.registry, aleoExecutor(), params),
     executeXReserveBurn: async (params) => executeXReserveBurn(config.registry, aleoExecutor(), params),
+    buildAleoHyperlaneTransferRemoteCall: (params) => buildAleoHyperlaneTransferRemoteCall(config.registry, params),
+    executeAleoHyperlaneTransferRemote: async (params) => executeAleoHyperlaneTransferRemote(config.registry, aleoExecutor(), params),
   }
 }

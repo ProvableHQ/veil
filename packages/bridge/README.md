@@ -211,7 +211,41 @@ Aleo domain, and USDCx program identifiers. Ethereum-to-Aleo ETH, WBTC, and USDT
 routes pin router, domain, ISM, token, Mailbox, and gas-payment metadata to
 Hyperlane Registry commit `2621c16f2db1ccb46643265c110dac5ca2c7c51a` and are
 active. Reverse and other Hyperlane routes remain `metadata-required` until
-their execution paths are implemented.
+their deployment metadata is complete and reviewed.
+
+### Aleo-origin Hyperlane placeholders
+
+The Aleo-origin ETH, WBTC, SOL, and USAD routes expose the complete
+`transfer_remote` call shape for these programs:
+
+- `hyp_warp_token_eth_v2.aleo`
+- `hyp_warp_token_wbtc_v2.aleo`
+- `hyp_warp_token_sol_v2.aleo`
+- `hyp_warp_token_usad_v2.aleo`
+
+**These routes contain dummy development values and are not executable.** They
+remain `metadata-required`, carry `aleoPlaceholderConfiguration: true`, and
+`executeAleoHyperlaneTransferRemote` throws before calling the wallet. Use
+`buildAleoHyperlaneTransferRemoteCall` only to inspect and integrate the ABI
+until the configuration below has been reviewed and replaced.
+
+The current dummy values are:
+
+- `token_type`: `0u8`; `token_id`: `0field`
+- `token_owner`, `ism`, `hook`, both mailbox hooks, and all four allowance
+  spenders: the same development-only Aleo address
+- remote-router recipient: 32 zero bytes; remote-router gas: `0u128`
+- destination recipient: `[0u128, 0u128]` (it does not encode the user's address)
+- all four credit allowance amounts: `0u64`
+- SOL destination domain: `0u32`; this is also a placeholder
+
+Before enabling submission, replace and verify all `aleoToken*`, `aleoIsm`,
+`aleoHook`, `aleoMailbox*`, `aleoRemoteRouter*`, `aleoRecipient`, and
+`aleoAllowance*` metadata fields. In particular, confirm the four allowance
+spender/amount pairs, route gas, live remote router bytes, the SOL Hyperlane
+domain, and the destination-specific address-to-`[u128; 2]` byte order. Then
+remove `aleoPlaceholderConfiguration` and change the route availability to
+`active` in a reviewed registry snapshot.
 
 ## Exports
 
@@ -222,6 +256,7 @@ their execution paths are implemented.
 - `quoteEvmXReserveTransfer`, `executeEvmXReserveTransfer`, and `getXReserveAttestation`
 - `executeXReservePrivateMint`
 - `buildXReserveBurnCall` and `executeXReserveBurn`
+- `buildAleoHyperlaneTransferRemoteCall` and `executeAleoHyperlaneTransferRemote`
 - Aleo address, xReserve hook, nonce, payload, and message-hash utilities
 - `DEFAULT_BRIDGE_REGISTRY` and `validateBridgeRegistry`
 - Protocol-neutral asset, route, plan, fee, step, status, and receipt types
@@ -229,10 +264,10 @@ their execution paths are implemented.
 - `createBridgeMcpServer` from `/mcp`
 
 The agent and MCP surfaces expose discovery and planning only. They do not expose
-the fund-moving EVM actions.
+fund-moving wallet actions.
 
 ## Next implementation phases
 
 1. Add protocol delivery tracking for relayer-driven xReserve and Hyperlane mints.
-2. Add Aleo-origin Hyperlane dispatch and destination confirmation.
+2. Replace and review the Aleo-origin Hyperlane placeholders, then add destination confirmation.
 3. Add injected Solana execution and gated protocol testnets.
