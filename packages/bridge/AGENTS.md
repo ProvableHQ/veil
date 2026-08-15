@@ -6,7 +6,7 @@ The repo-wide contributor constraints in the root `AGENTS.md` and
 ## Protocol boundary
 
 - USDCx routes MUST use Circle xReserve.
-- ETH, WBTC, SOL, ALEO, and USAD routes MUST use Hyperlane Warp Routes.
+- ETH, WBTC, USDT, SOL, ALEO, and USAD routes MUST use Hyperlane Warp Routes.
 - Do not restore the wallet-services provider, quote, order, or cross-chain
   swap abstraction.
 - Do not add a dependency from Shield Swap to this package.
