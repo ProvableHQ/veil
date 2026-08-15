@@ -12,7 +12,7 @@ under development.
 The bridge client assigns each asset family to its canonical protocol:
 
 - Circle xReserve moves USDC into and out of Aleo as USDCx.
-- Hyperlane Warp Routes move ETH, WBTC, SOL, ALEO, and USAD.
+- Hyperlane Warp Routes move ETH, WBTC, USDT, SOL, ALEO, and USAD.
 
 The current API provides a versioned route registry, discovery, and local
 transfer planning:
