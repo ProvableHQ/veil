@@ -276,7 +276,7 @@ export async function getXReserveAttestation(
   if (!response.ok) throw new BridgeError(`Circle attester request failed with HTTP ${response.status}`)
   const body = await response.json() as { attestation?: { payload?: unknown, messageHash?: unknown, attestation?: unknown } }
   const value = body.attestation
-  if (!value || typeof value.payload !== 'string' || !isHex(value.payload) || typeof value.attestation !== 'string' || !isHex(value.attestation) || value.messageHash !== params.messageHash) throw new BridgeError('Circle attester returned an invalid response')
+  if (!value || typeof value.payload !== 'string' || !isHex(value.payload) || typeof value.attestation !== 'string' || !isHex(value.attestation) || typeof value.messageHash !== 'string' || !isHash(value.messageHash) || value.messageHash.toLowerCase() !== params.messageHash.toLowerCase()) throw new BridgeError('Circle attester returned an invalid response')
   if (calculateXReserveMessageHash(value.payload) !== params.messageHash) throw new BridgeError('Circle attestation payload does not match the requested message hash')
   return { status: 'complete', messageHash: params.messageHash, payload: value.payload, attestation: value.attestation }
 }
