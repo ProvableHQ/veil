@@ -2,4 +2,4 @@
 '@provablehq/veil-aleo-bridges': minor
 ---
 
-Add injected-wallet Ethereum Hyperlane quoting and execution for ETH, WBTC, and USDT routes.
+Add injected-wallet execution for Ethereum Hyperlane (ETH/WBTC/USDT) and Circle xReserve (USDC↔USDCx) routes, including Circle attestation helpers and Aleo-side mint/burn actions.
