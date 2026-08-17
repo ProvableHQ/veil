@@ -6,7 +6,10 @@ import type {
   ExecuteAleoHyperlaneTransferRemoteParameters,
 } from '../types/aleo.js'
 import type { BridgeRegistry, ProtocolBridgeRoute } from '../types/protocol.js'
-import { evmAddressToAleoHyperlaneRecipient } from '../utils/hyperlane.js'
+import {
+  evmAddressToAleoHyperlaneRecipient,
+  solanaAddressToAleoHyperlaneRecipient,
+} from '../utils/hyperlane.js'
 import { parseDecimalAmount } from '../utils/units.js'
 
 const PLACEHOLDER_FIELDS = [
@@ -127,11 +130,13 @@ export function buildAleoHyperlaneTransferRemoteCall(
   const appMetadata = `{ token_type: ${metadataString(route, 'aleoTokenType')}u8, token_owner: ${metadataString(route, 'aleoTokenOwner')}, ism: ${metadataString(route, 'aleoIsm')}, hook: ${metadataString(route, 'aleoHook')}, token_id: ${metadataString(route, 'aleoTokenId')}, local_decimals: ${localDecimals}u8, remote_decimals: ${remoteDecimals}u8 }`
   const mailboxState = `{ default_hook: ${metadataString(route, 'aleoMailboxDefaultHook')}, required_hook: ${metadataString(route, 'aleoMailboxRequiredHook')} }`
   const remoteRouter = `{ domain: ${destination}u32, recipient: ${metadataString(route, 'aleoRemoteRouterRecipient')}, gas: ${metadataString(route, 'aleoRemoteRouterGas')}u128 }`
-  const recipient = destinationChain.family === 'evm'
-    ? (() => {
-        const limbs = evmAddressToAleoHyperlaneRecipient(params.plan.recipient)
-        return `[${limbs[0]}u128, ${limbs[1]}u128]`
-      })()
+  const recipientLimbs = destinationChain.family === 'evm'
+    ? evmAddressToAleoHyperlaneRecipient(params.plan.recipient)
+    : destinationChain.family === 'solana'
+      ? solanaAddressToAleoHyperlaneRecipient(params.plan.recipient)
+      : undefined
+  const recipient = recipientLimbs
+    ? `[${recipientLimbs[0]}u128, ${recipientLimbs[1]}u128]`
     : metadataString(route, 'aleoRecipient')
   const allowances = `[${[0, 1, 2, 3].map((index) => allowance(route, index)).join(', ')}]`
   const usesPlaceholderConfiguration = route.metadata?.aleoPlaceholderConfiguration === true
@@ -150,7 +155,7 @@ export function buildAleoHyperlaneTransferRemoteCall(
   if (route.metadata?.aleoUnusedAllowancesVerified === true) {
     placeholderFields = placeholderFields.filter((field) => !UNUSED_ALLOWANCE_AMOUNT_FIELDS.has(field))
   }
-  if (destinationChain.family === 'evm') {
+  if (recipientLimbs) {
     placeholderFields = placeholderFields.filter((field) => field !== 'aleoRecipient')
   }
   const functionName = params.mode === 'signer' ? 'transfer_remote_as_signer' : 'transfer_remote'

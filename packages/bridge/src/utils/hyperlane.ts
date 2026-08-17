@@ -1,3 +1,4 @@
+import bs58 from 'bs58'
 import { getAddress, hexToBytes, isAddress, padHex } from 'viem'
 import { BridgeError } from '../errors/bridgeErrors.js'
 
@@ -31,3 +32,28 @@ export function evmAddressToAleoHyperlaneRecipient(address: string): readonly [b
   ]
 }
 
+/**
+ * Encodes a Solana account as the two little-endian limbs used by Aleo Warp Routes.
+ *
+ * Pure and local; decodes a base58 account to its 32-byte public key and
+ * interprets each 16-byte half as an Aleo `u128`.
+ *
+ * @param address Destination Solana account supplied by the transfer plan.
+ * @returns Two unsigned 128-bit limbs in Hyperlane message order.
+ * @throws BridgeError When the destination is not a base58-encoded 32-byte account.
+ *
+ * @example
+ * const recipient = solanaAddressToAleoHyperlaneRecipient('11111111111111111111111111111111')
+ */
+export function solanaAddressToAleoHyperlaneRecipient(address: string): readonly [bigint, bigint] {
+  try {
+    const recipient = bs58.decode(address)
+    if (recipient.length !== 32) throw new Error('invalid public key width')
+    return [
+      littleEndianU128(recipient.slice(0, 16)),
+      littleEndianU128(recipient.slice(16, 32)),
+    ]
+  } catch (cause) {
+    throw new BridgeError(`Invalid Solana Hyperlane recipient: ${address}`, { cause })
+  }
+}

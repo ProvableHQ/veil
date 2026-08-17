@@ -44,6 +44,7 @@
   ],
   "dependencies": {
     "@provablehq/veil-core": "workspace:*",
+    "bs58": "^6.0.0",
     "viem": "^2.21.0"
   },
   "peerDependencies": {

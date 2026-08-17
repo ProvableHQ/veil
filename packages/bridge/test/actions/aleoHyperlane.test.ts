@@ -98,7 +98,8 @@ describe('Aleo Hyperlane transfer_remote', () => {
     expect(call.inputs[0]).toBe('{ token_type: 1u8, token_owner: aleo1wr8rfr4ggedjxtg5e23s38zqkgy2j05uc9l8t4akjp5zcw3levpswkwk45, ism: aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc, hook: aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc, token_id: 6148061383892805373029428966764338809222769879628268522058032128225601478383field, local_decimals: 9u8, remote_decimals: 9u8 }')
     expect(call.inputs[2]).toBe('{ domain: 1399811149u32, recipient: [112u8, 4u8, 72u8, 22u8, 219u8, 143u8, 68u8, 202u8, 21u8, 197u8, 236u8, 182u8, 198u8, 142u8, 52u8, 96u8, 142u8, 38u8, 51u8, 113u8, 116u8, 143u8, 96u8, 123u8, 104u8, 126u8, 97u8, 73u8, 7u8, 6u8, 211u8, 122u8], gas: 300000u128 }')
     expect(call.inputs[3]).toBe('1399811149u32')
-    expect(call.placeholderFields).toEqual(['aleoRecipient', 'aleoAllowanceAmount0'])
+    expect(call.inputs[4]).toBe('[0u128, 0u128]')
+    expect(call.placeholderFields).toEqual(['aleoAllowanceAmount0'])
   })
 
   it('rejects unknown transfer modes', () => {

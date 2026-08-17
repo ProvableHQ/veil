@@ -237,8 +237,8 @@ the current dummy values are:
 - `token_owner`, `ism`, `hook`, and all four allowance spenders: the same
   development-only Aleo address
 - remote-router recipient: 32 zero bytes; remote-router gas: `0u128`
-- Solana destination recipient: `[0u128, 0u128]` (Ethereum recipients are
-  derived from the transfer plan)
+- destination recipient limbs are derived from the Ethereum or Solana address
+  in the transfer plan
 - all four credit allowance amounts: `0u64`
 
 The WBTC route is partially populated from mainnet
@@ -294,9 +294,8 @@ are not transaction inputs.
 
 Before enabling submission, replace and verify every field still reported by
 `placeholderFields` for that route. Implement the dynamic hook credit quote for
-ETH, WBTC, USDT, and SOL, plus Solana address-to-`[u128; 2]` encoding. Then
-remove `aleoPlaceholderConfiguration` and change the route availability to
-`active` in a reviewed registry snapshot.
+ETH, WBTC, USDT, and SOL. Then remove `aleoPlaceholderConfiguration` and change
+the route availability to `active` in a reviewed registry snapshot.
 
 ## Exports
 
@@ -309,7 +308,7 @@ remove `aleoPlaceholderConfiguration` and change the route availability to
 - `buildXReserveBurnCall` and `executeXReserveBurn`
 - `buildAleoHyperlaneTransferRemoteCall` and `executeAleoHyperlaneTransferRemote`
 - Aleo address, xReserve hook, nonce, payload, and message-hash utilities
-- Ethereum Hyperlane recipient serialization for Aleo-origin transfers
+- Ethereum and Solana Hyperlane recipient serialization for Aleo-origin transfers
 - `DEFAULT_BRIDGE_REGISTRY` and `validateBridgeRegistry`
 - Protocol-neutral asset, route, plan, fee, step, status, and receipt types
 - `createBridgeAgentTools` from `/agent`
