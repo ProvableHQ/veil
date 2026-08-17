@@ -102,6 +102,7 @@ export {
   evmAddressToXReserveBytes32,
   xReserveHexToAleoBytes,
 } from './utils/xreserve.js'
+export { evmAddressToAleoHyperlaneRecipient } from './utils/hyperlane.js'
 
 export { BridgeError } from './errors/bridgeErrors.js'
 export { parseDecimalAmount } from './utils/units.js'

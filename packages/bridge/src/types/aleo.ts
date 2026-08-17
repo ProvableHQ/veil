@@ -100,12 +100,12 @@ export type XReserveBurnExecution = {
 }
 
 /**
- * Describes one locally constructed Aleo Hyperlane `transfer_remote` call.
+ * Describes one locally constructed Aleo Hyperlane transfer call.
  *
  * @property routeId Directional Hyperlane route used to construct the call.
  * @property program Aleo Warp Route program receiving the transaction.
  * @property function Exact Warp Route transition invoked by the wallet.
- * @property inputs Seven ordered Aleo literals expected by `transfer_remote`.
+ * @property inputs Seven ordered Aleo literals expected by the selected transfer transition.
  * @property amountAtomic Source amount expressed in the Aleo token's base units.
  * @property usesPlaceholderConfiguration Whether unresolved deployment values make the call unsafe to submit.
  * @property placeholderFields Registry fields that must be replaced before submission is enabled.
@@ -113,7 +113,7 @@ export type XReserveBurnExecution = {
 export type AleoHyperlaneTransferRemoteCall = {
   routeId: string
   program: string
-  function: 'transfer_remote'
+  function: 'transfer_remote' | 'transfer_remote_as_signer'
   inputs: TransactionInput[]
   amountAtomic: bigint
   usesPlaceholderConfiguration: boolean
@@ -124,10 +124,12 @@ export type AleoHyperlaneTransferRemoteCall = {
  * Configures construction or submission of an Aleo Hyperlane withdrawal.
  *
  * @property plan Aleo-origin Hyperlane plan returned by `prepareTransfer`.
+ * @property mode Whether the program burns from `self.caller` or the EOA-bound `self.signer`. Defaults to `caller`.
  * @property privateFee Whether the Aleo wallet should pay its fee privately. Defaults to false.
  */
 export type ExecuteAleoHyperlaneTransferRemoteParameters = {
   plan: BridgeTransferPlan
+  mode?: 'caller' | 'signer' | undefined
   privateFee?: boolean | undefined
 }
 

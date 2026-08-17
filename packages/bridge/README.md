@@ -215,11 +215,12 @@ their deployment metadata is complete and reviewed.
 
 ### Aleo-origin Hyperlane placeholders
 
-The Aleo-origin ETH, WBTC, SOL, and USAD routes expose the complete
+The Aleo-origin ETH, WBTC, USDT, SOL, and USAD routes expose the complete
 `transfer_remote` call shape for these programs:
 
 - `hyp_warp_token_eth_v2.aleo`
 - `hyp_warp_token_wbtc_v2.aleo`
+- `hyp_warp_token_usdt_v2.aleo`
 - `hyp_warp_token_sol_v2.aleo`
 - `hyp_warp_token_usad_v2.aleo`
 
@@ -229,21 +230,71 @@ remain `metadata-required`, carry `aleoPlaceholderConfiguration: true`, and
 `buildAleoHyperlaneTransferRemoteCall` only to inspect and integrate the ABI
 until the configuration below has been reviewed and replaced.
 
-The current dummy values are:
+Except for the verified ETH, WBTC, USDT, and SOL route data described below,
+the current dummy values are:
 
 - `token_type`: `0u8`; `token_id`: `0field`
-- `token_owner`, `ism`, `hook`, both mailbox hooks, and all four allowance
-  spenders: the same development-only Aleo address
+- `token_owner`, `ism`, `hook`, and all four allowance spenders: the same
+  development-only Aleo address
 - remote-router recipient: 32 zero bytes; remote-router gas: `0u128`
-- destination recipient: `[0u128, 0u128]` (it does not encode the user's address)
+- Solana destination recipient: `[0u128, 0u128]` (Ethereum recipients are
+  derived from the transfer plan)
 - all four credit allowance amounts: `0u64`
-- SOL destination domain: `0u32`; this is also a placeholder
 
-Before enabling submission, replace and verify all `aleoToken*`, `aleoIsm`,
-`aleoHook`, `aleoMailbox*`, `aleoRemoteRouter*`, `aleoRecipient`, and
-`aleoAllowance*` metadata fields. In particular, confirm the four allowance
-spender/amount pairs, route gas, live remote router bytes, the SOL Hyperlane
-domain, and the destination-specific address-to-`[u128; 2]` byte order. Then
+The WBTC route is partially populated from mainnet
+[`hyp_warp_token_wbtc_v2.aleo`](https://explorer.provable.com/program/hyp_warp_token_wbtc_v2.aleo),
+edition `0`. Its `app_metadata[true]` token type, owner, ISM, hook, token ID,
+and `8u8` local/remote decimals are verified and are not placeholders. Its
+first hook allowance amount remains unresolved, so the route is still
+non-executable.
+
+The WBTC Ethereum remote router is also verified: domain `1u32`, recipient
+`0x20CDC85778b732073F7EecEF3DF25c0d310f8772` left-padded to `[u8; 32]`, and
+gas `68000u128`. `transfer_remote_as_signer` is selectable with
+`mode: 'signer'`. Its allowance spender positions and three unused zero amounts
+match the reviewed call shape. The first hook allowance amount remains dynamic;
+the observed `9138947u64` applies only to the sample transaction and is not
+stored as a route-wide cap.
+
+The ETH route is populated from current mainnet app metadata and the reviewed
+[`transfer_remote_as_signer` transaction](https://explorer.provable.com/transaction/at1vu0yckkms887zkl3qz7plnncd56jtf5zeal4uj2808upsjkusy8q7yp9v8).
+Its Ethereum router is `0x38D447694f5c1f773ae3132cf93bF30B7Ec1Fa5A`,
+left-padded to `[u8; 32]`, with domain `1u32` and gas `44000u128`. The
+transaction's `8174147u64` first allowance is an observed dispatch quote and is
+not stored as a route-wide cap. As with WBTC, only the first hook allowance
+amount remains unresolved. Ethereum recipient limbs are derived from
+`plan.recipient`.
+
+The USDT route uses current edition `1` app metadata and the verified Ethereum
+remote router at domain `1u32`: `0x3C2064D78e4578E8F936E3db42aEF044E33FBF31`
+with gas `68000u128`. The reviewed signer transaction targets BSC domain `56`,
+so it validates the shared allowance layout but is not used as the Ethereum
+router source. Its `1994463u64` first allowance is transaction-specific. The
+official Hyperlane route config records Aleo and Ethereum USDT as 6-decimal
+assets with a `1000000000000` scale; the Aleo program's app metadata must still
+be passed exactly as `local_decimals: 6u8, remote_decimals: 18u8`. The builder
+therefore reads these contract metadata decimals instead of inferring both from
+the endpoint assets.
+
+The SOL route uses verified edition `0` app metadata with 9 local and remote
+decimals. Its Solana destination is Hyperlane domain `1399811149u32`, router
+`8YGT2pZwyZe94qBpGzWfY2TMEVcwaQ1bXAE7YAgpUaM7`, and gas `300000u128`. The
+reviewed signer transition confirms the shared allowance layout; its
+`7661056u64` first allowance is transaction-specific and is not stored as a
+route-wide value. The Aleo SOL asset locator now points to the v2 warp program
+and token identifier from the pinned Hyperlane route configuration.
+
+All Aleo Warp Routes share the verified mainnet
+[`hyp_mailbox.aleo`](https://explorer.provable.com/program/hyp_mailbox.aleo)
+mailbox configuration, edition `0`. The `transfer_remote` input now uses its
+`default_hook` and `required_hook`. The registry also records the local domain,
+default ISM, dispatch proxy, owner, and the nonce/process count observed during
+the 2026-08-17 review. The nonce and process count are mutable observations and
+are not transaction inputs.
+
+Before enabling submission, replace and verify every field still reported by
+`placeholderFields` for that route. Implement the dynamic hook credit quote for
+ETH, WBTC, USDT, and SOL, plus Solana address-to-`[u128; 2]` encoding. Then
 remove `aleoPlaceholderConfiguration` and change the route availability to
 `active` in a reviewed registry snapshot.
 
@@ -258,6 +309,7 @@ remove `aleoPlaceholderConfiguration` and change the route availability to
 - `buildXReserveBurnCall` and `executeXReserveBurn`
 - `buildAleoHyperlaneTransferRemoteCall` and `executeAleoHyperlaneTransferRemote`
 - Aleo address, xReserve hook, nonce, payload, and message-hash utilities
+- Ethereum Hyperlane recipient serialization for Aleo-origin transfers
 - `DEFAULT_BRIDGE_REGISTRY` and `validateBridgeRegistry`
 - Protocol-neutral asset, route, plan, fee, step, status, and receipt types
 - `createBridgeAgentTools` from `/agent`

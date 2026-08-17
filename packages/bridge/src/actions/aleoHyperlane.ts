@@ -6,6 +6,7 @@ import type {
   ExecuteAleoHyperlaneTransferRemoteParameters,
 } from '../types/aleo.js'
 import type { BridgeRegistry, ProtocolBridgeRoute } from '../types/protocol.js'
+import { evmAddressToAleoHyperlaneRecipient } from '../utils/hyperlane.js'
 import { parseDecimalAmount } from '../utils/units.js'
 
 const PLACEHOLDER_FIELDS = [
@@ -29,6 +30,37 @@ const PLACEHOLDER_FIELDS = [
   'aleoAllowanceAmount3',
 ] as const
 
+const APP_METADATA_FIELDS = new Set<string>([
+  'aleoTokenType',
+  'aleoTokenOwner',
+  'aleoIsm',
+  'aleoHook',
+  'aleoTokenId',
+])
+
+const MAILBOX_STATE_FIELDS = new Set<string>([
+  'aleoMailboxDefaultHook',
+  'aleoMailboxRequiredHook',
+])
+
+const REMOTE_ROUTER_FIELDS = new Set<string>([
+  'aleoRemoteRouterRecipient',
+  'aleoRemoteRouterGas',
+])
+
+const ALLOWANCE_SPENDER_FIELDS = new Set<string>([
+  'aleoAllowanceSpender0',
+  'aleoAllowanceSpender1',
+  'aleoAllowanceSpender2',
+  'aleoAllowanceSpender3',
+])
+
+const UNUSED_ALLOWANCE_AMOUNT_FIELDS = new Set<string>([
+  'aleoAllowanceAmount1',
+  'aleoAllowanceAmount2',
+  'aleoAllowanceAmount3',
+])
+
 function metadataString(route: ProtocolBridgeRoute, key: string): string {
   const value = route.metadata?.[key]
   if (typeof value !== 'string' || value.length === 0) throw new BridgeError(`Hyperlane route metadata ${key} is missing: ${route.id}`)
@@ -41,6 +73,10 @@ function metadataNumber(route: ProtocolBridgeRoute, key: string): number {
   return value
 }
 
+function optionalMetadataNumber(route: ProtocolBridgeRoute, key: string, fallback: number): number {
+  return route.metadata?.[key] == null ? fallback : metadataNumber(route, key)
+}
+
 function validatedRoute(registry: BridgeRegistry, params: ExecuteAleoHyperlaneTransferRemoteParameters) {
   const { plan } = params
   if (plan.protocol !== 'hyperlane' || plan.route.protocol !== 'hyperlane') throw new BridgeError('Aleo transfer_remote requires a Hyperlane transfer plan')
@@ -50,9 +86,11 @@ function validatedRoute(registry: BridgeRegistry, params: ExecuteAleoHyperlaneTr
   if (route.sourceAssetId !== plan.sourceAsset.id || route.destinationAssetId !== plan.destinationAsset.id) throw new BridgeError(`Transfer plan assets do not match configured route: ${route.id}`)
   const sourceChain = registry.chains.find((chain) => chain.id === plan.sourceAsset.chainId)
   if (sourceChain?.family !== 'aleo') throw new BridgeError('transfer_remote requires an Aleo source asset')
+  const destinationChain = registry.chains.find((chain) => chain.id === plan.destinationAsset.chainId)
+  if (!destinationChain) throw new BridgeError(`Destination chain is not configured: ${plan.destinationAsset.chainId}`)
   const program = metadataString(route, 'aleoRouterProgram')
   if (!program.endsWith('.aleo')) throw new BridgeError(`Aleo Warp Route program is invalid: ${route.id}`)
-  return { route, program }
+  return { route, program, destinationChain }
 }
 
 function allowance(route: ProtocolBridgeRoute, index: number): string {
@@ -78,31 +116,61 @@ export function buildAleoHyperlaneTransferRemoteCall(
   registry: BridgeRegistry,
   params: ExecuteAleoHyperlaneTransferRemoteParameters,
 ): AleoHyperlaneTransferRemoteCall {
-  const { route, program } = validatedRoute(registry, params)
+  if (params.mode != null && params.mode !== 'caller' && params.mode !== 'signer') {
+    throw new BridgeError(`Unsupported Aleo Hyperlane transfer mode: ${String(params.mode)}`)
+  }
+  const { route, program, destinationChain } = validatedRoute(registry, params)
   const amountAtomic = parseDecimalAmount(params.plan.amountIn, params.plan.sourceAsset.decimals)
   const destination = metadataNumber(route, 'aleoDestinationDomain')
-  const appMetadata = `{ token_type: ${metadataString(route, 'aleoTokenType')}u8, token_owner: ${metadataString(route, 'aleoTokenOwner')}, ism: ${metadataString(route, 'aleoIsm')}, hook: ${metadataString(route, 'aleoHook')}, token_id: ${metadataString(route, 'aleoTokenId')}, local_decimals: ${params.plan.sourceAsset.decimals}u8, remote_decimals: ${params.plan.destinationAsset.decimals}u8 }`
+  const localDecimals = optionalMetadataNumber(route, 'aleoLocalDecimals', params.plan.sourceAsset.decimals)
+  const remoteDecimals = optionalMetadataNumber(route, 'aleoRemoteDecimals', params.plan.destinationAsset.decimals)
+  const appMetadata = `{ token_type: ${metadataString(route, 'aleoTokenType')}u8, token_owner: ${metadataString(route, 'aleoTokenOwner')}, ism: ${metadataString(route, 'aleoIsm')}, hook: ${metadataString(route, 'aleoHook')}, token_id: ${metadataString(route, 'aleoTokenId')}, local_decimals: ${localDecimals}u8, remote_decimals: ${remoteDecimals}u8 }`
   const mailboxState = `{ default_hook: ${metadataString(route, 'aleoMailboxDefaultHook')}, required_hook: ${metadataString(route, 'aleoMailboxRequiredHook')} }`
   const remoteRouter = `{ domain: ${destination}u32, recipient: ${metadataString(route, 'aleoRemoteRouterRecipient')}, gas: ${metadataString(route, 'aleoRemoteRouterGas')}u128 }`
+  const recipient = destinationChain.family === 'evm'
+    ? (() => {
+        const limbs = evmAddressToAleoHyperlaneRecipient(params.plan.recipient)
+        return `[${limbs[0]}u128, ${limbs[1]}u128]`
+      })()
+    : metadataString(route, 'aleoRecipient')
   const allowances = `[${[0, 1, 2, 3].map((index) => allowance(route, index)).join(', ')}]`
   const usesPlaceholderConfiguration = route.metadata?.aleoPlaceholderConfiguration === true
+  let placeholderFields = route.metadata?.aleoAppMetadataVerified === true
+    ? PLACEHOLDER_FIELDS.filter((field) => !APP_METADATA_FIELDS.has(field))
+    : PLACEHOLDER_FIELDS
+  if (route.metadata?.aleoMailboxStateVerified === true) {
+    placeholderFields = placeholderFields.filter((field) => !MAILBOX_STATE_FIELDS.has(field))
+  }
+  if (route.metadata?.aleoRemoteRouterVerified === true) {
+    placeholderFields = placeholderFields.filter((field) => !REMOTE_ROUTER_FIELDS.has(field))
+  }
+  if (route.metadata?.aleoAllowanceSpendersVerified === true) {
+    placeholderFields = placeholderFields.filter((field) => !ALLOWANCE_SPENDER_FIELDS.has(field))
+  }
+  if (route.metadata?.aleoUnusedAllowancesVerified === true) {
+    placeholderFields = placeholderFields.filter((field) => !UNUSED_ALLOWANCE_AMOUNT_FIELDS.has(field))
+  }
+  if (destinationChain.family === 'evm') {
+    placeholderFields = placeholderFields.filter((field) => field !== 'aleoRecipient')
+  }
+  const functionName = params.mode === 'signer' ? 'transfer_remote_as_signer' : 'transfer_remote'
 
   return {
     routeId: route.id,
     program,
-    function: 'transfer_remote',
+    function: functionName,
     inputs: [
       appMetadata,
       mailboxState,
       remoteRouter,
       `${destination}u32`,
-      metadataString(route, 'aleoRecipient'),
+      recipient,
       `${amountAtomic}u128`,
       allowances,
     ],
     amountAtomic,
     usesPlaceholderConfiguration,
-    placeholderFields: usesPlaceholderConfiguration ? PLACEHOLDER_FIELDS : [],
+    placeholderFields: usesPlaceholderConfiguration ? placeholderFields : [],
   }
 }
 
