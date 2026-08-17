@@ -18,8 +18,8 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
   return [
     {
       schema: {
-        name: 'bridge_list_routes',
-        description: 'List directional protocol routes. USDCx routes use Circle xReserve; ETH, WBTC, SOL, ALEO, and USAD routes use Hyperlane. metadata-required means the route is known but its execution deployment is not pinned yet.',
+        name: 'bridge_list_assets',
+        description: 'List chain-specific xReserve and Hyperlane assets from the reviewed bridge registry. Returns stable asset ids, chain ids, decimals, and known onchain locators.',
         inputSchema: {
           type: 'object',
           properties: {
