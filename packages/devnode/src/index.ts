@@ -260,9 +260,11 @@ async function spawnDevnode(
 ): Promise<DevnodeInstance> {
   const proc = spawn(devnodePath, args, {
     stdio: 'pipe',
-    // MUST mirror DEVNODE_CONSENSUS_HEIGHTS in @provablehq/veil-aleo-sdk so the
-    // transaction builder and the node agree on active consensus versions.
-    env: { ...process.env, CONSENSUS_VERSION_HEIGHTS: process.env.CONSENSUS_VERSION_HEIGHTS || '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18' },
+    // MUST agree with DEVNODE_CONSENSUS_HEIGHTS in @provablehq/veil-aleo-sdk at
+    // every reachable height, so the transaction builder and the node apply the
+    // same consensus rules. aleo-devnode 0.2.4 is built on a snarkVM with 18
+    // consensus versions and rejects any other count.
+    env: { ...process.env, CONSENSUS_VERSION_HEIGHTS: process.env.CONSENSUS_VERSION_HEIGHTS || '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17' },
   })
 
   if (verbose) {
