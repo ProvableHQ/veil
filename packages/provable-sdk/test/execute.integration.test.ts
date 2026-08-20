@@ -36,6 +36,31 @@ const DPS_CONSUMER_ID = process.env.ALEO_CONSUMER_ID
 const shouldRun = process.env.RUN_INTEGRATION === 'true'
 const hasDpsCredentials = !!(DPS_API_KEY && DPS_CONSUMER_ID)
 
+const EDGE_BASE = process.env.EDGE_BASE_URL ?? 'https://edge.provable.com/api'
+const EDGE_PROVABLE_API_KEY = process.env.EDGE_PROVABLE_API_KEY
+
+/**
+ * Prover routes the delegated suite runs against, each with its auth model:
+ * the JWT pair on api.provable.com and the provisioned key on
+ * edge.provable.com. Each enabled target runs the same delegated tests.
+ */
+const PROVER_TARGETS = [
+  {
+    name: 'via api.provable.com (jwt)',
+    enabled: hasDpsCredentials,
+    networkUrl: NETWORK_URL,
+    proverUrl: DPS_URL,
+    clientAuth: { apiKey: DPS_API_KEY, consumerId: DPS_CONSUMER_ID },
+  },
+  {
+    name: 'via edge.provable.com (provisioned key)',
+    enabled: !!EDGE_PROVABLE_API_KEY,
+    networkUrl: `${EDGE_BASE}/v2`,
+    proverUrl: `${EDGE_BASE}/prove`,
+    clientAuth: { auth: { mode: 'api-key' as const, value: EDGE_PROVABLE_API_KEY! } },
+  },
+]
+
 // Minimal program for simulate-only tests (doesn't need to be deployed)
 const HELLO_PROGRAM = `program hello_test_veil.aleo;
 
@@ -190,15 +215,15 @@ describe.skipIf(!shouldRun)('execute lifecycle (integration)', () => {
   }, 300_000)
 })
 
-describe.skipIf(!shouldRun || !hasDpsCredentials)('delegated execute (integration)', () => {
+for (const target of PROVER_TARGETS) {
+describe.skipIf(!shouldRun || !target.enabled)(`delegated execute (integration) ${target.name}`, () => {
   it('delegated execute: submit to DPS, confirm, return outputs', async () => {
     const account = aleo.privateKeyToAccount(DEMO_PRIVATE_KEY)
     const config = aleo.createProvingConfig({
       mode: 'delegated',
-      networkUrl: NETWORK_URL,
-      proverUrl: DPS_URL,
-      apiKey: DPS_API_KEY,
-      consumerId: DPS_CONSUMER_ID,
+      networkUrl: target.networkUrl,
+      proverUrl: target.proverUrl,
+      ...target.clientAuth,
       account,
     })
 
@@ -216,11 +241,10 @@ describe.skipIf(!shouldRun || !hasDpsCredentials)('delegated execute (integratio
   it('createAleoClient delegated execute end-to-end', async () => {
     const { walletClient } = aleo.createAleoClient({
       privateKey: DEMO_PRIVATE_KEY,
-      networkUrl: NETWORK_URL,
+      networkUrl: target.networkUrl,
       provingMode: 'delegated',
-      proverUrl: DPS_URL,
-      apiKey: DPS_API_KEY,
-      consumerId: DPS_CONSUMER_ID,
+      proverUrl: target.proverUrl,
+      ...target.clientAuth,
     })
 
     const result = await walletClient.executeContract({
@@ -234,3 +258,4 @@ describe.skipIf(!shouldRun || !hasDpsCredentials)('delegated execute (integratio
     expect(result.outputs).toBeDefined()
   }, 300_000)
 })
+}
