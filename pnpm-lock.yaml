@@ -12,8 +12,8 @@ importers:
         specifier: ^2.31.0
         version: 2.31.0(@types/node@25.5.0)
       '@provablehq/aleo-devnode':
-        specifier: ^0.2.3
-        version: 0.2.3
+        specifier: ^0.2.4
+        version: 0.2.4
       '@types/node':
         specifier: ^25.5.0
         version: 25.5.0
@@ -138,8 +138,8 @@ importers:
         specifier: ^1.7.2
         version: 1.8.0
       '@provablehq/sdk':
-        specifier: ^0.11.6
-        version: 0.11.6
+        specifier: ^0.11.8
+        version: 0.11.8
       '@provablehq/veil-aleo-devnode':
         specifier: workspace:>=0.6.0 <1.0.0
         version: link:../devnode
@@ -201,8 +201,8 @@ importers:
         version: link:../core
     devDependencies:
       '@provablehq/sdk':
-        specifier: ^0.11.6
-        version: 0.11.6
+        specifier: ^0.11.8
+        version: 0.11.8
       '@provablehq/veil-aleo-bridges':
         specifier: workspace:*
         version: link:../bridge
@@ -767,33 +767,33 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
-  '@provablehq/aleo-devnode-darwin-arm64@0.2.3':
-    resolution: {integrity: sha512-JSw5dJv3XUIqeNrYBeV5OOfvaoBg7WxuIQ0clO6mekuvRjkDKICR7G+eRi8IVMI1OevtCbWuBOqxEkTcMYdw8Q==}
+  '@provablehq/aleo-devnode-darwin-arm64@0.2.4':
+    resolution: {integrity: sha512-oEP9ChX3oPlTBIEEVt0fHPi8mzx359DS+8ZPXh1s/c81J542FB2J13rmtkmmhRmYlmfvh+D2p+EhMvquY+B72g==}
     cpu: [arm64]
     os: [darwin]
 
-  '@provablehq/aleo-devnode-darwin-x64@0.2.3':
-    resolution: {integrity: sha512-DTFKgaijLFLbDtncwdJ5udnyBoiipXbitePOmZddQZeMh/luDSTFINp4Qv2R813d1V6V2BM96lNpFkSiRRE9+g==}
+  '@provablehq/aleo-devnode-darwin-x64@0.2.4':
+    resolution: {integrity: sha512-S41MdLuqYyKeIQfUbJ3dTo78T4ErMSy0YQfyAxC+MA818+2PfRA6oiz9mKUqLZQaWgEF5JFiO58SyWyvQTiWCQ==}
     cpu: [x64]
     os: [darwin]
 
-  '@provablehq/aleo-devnode-linux-arm64@0.2.3':
-    resolution: {integrity: sha512-2PtnQPd9UagxVJjDry22iREd18fLk5laaHm93lA27oeGhW77eXOfqI571ud1RXgZauhPHrsFHYdjBS6sg/qVfw==}
+  '@provablehq/aleo-devnode-linux-arm64@0.2.4':
+    resolution: {integrity: sha512-eq4sXcCk+tnFklzxoUSiY43MHGgkgPj25q8lRgSBuaHeOLfMxN80XMZ3qgMtqEJPt8iYnJaUaPoJk7TSct/2QA==}
     cpu: [arm64]
     os: [linux]
 
-  '@provablehq/aleo-devnode-linux-x64@0.2.3':
-    resolution: {integrity: sha512-K1vl1Pr5Yj52s2SWu9gd0DQ7z7Xr9u/VdRgwMZoFjH9BhQAWbP9i7AfknPqsNBz+eVbCFwtSK+56jopv4Dcx2w==}
+  '@provablehq/aleo-devnode-linux-x64@0.2.4':
+    resolution: {integrity: sha512-izQUP4dKgW4RVhodugnEFR/IlnB2C/p5xEVoOaKGF4QocxPwiBUc7tQhC4x2CfkCXrEiy0cO5XBZYnTkWrPIXg==}
     cpu: [x64]
     os: [linux]
 
-  '@provablehq/aleo-devnode-win32-x64@0.2.3':
-    resolution: {integrity: sha512-jbVztR6N1eYC2WTSAlxsu68dJgrso3ja7terAeR3HG8WbYt7ltFcLuMeB3RQaFQNigY4gp2HfP9UsPca+mYR2g==}
+  '@provablehq/aleo-devnode-win32-x64@0.2.4':
+    resolution: {integrity: sha512-SmpLYcTn1wEAWsPrxyhdPfmkJ6zHmgusc01bwf5E2T0/Efzzc34czxPTFWzeO2OlDvyQeEJBA7MobsJ/AvJtJA==}
     cpu: [x64]
     os: [win32]
 
-  '@provablehq/aleo-devnode@0.2.3':
-    resolution: {integrity: sha512-lc//n+OodkqllgDFA+rRarETYHCjDf5ghaLRsq2uAsV5CAV1/H3aMahH7+NtlLWo2AVRwDezEDu2cLC3PVivFg==}
+  '@provablehq/aleo-devnode@0.2.4':
+    resolution: {integrity: sha512-vWvnCBPxG1T3PCIAM6y8+goz0RsHeTMfJtEUWrDloihbQVpz2Zxmv7MBIxo/ZskFqkwU5LZfxizwiLyIVCx6aQ==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -824,11 +824,11 @@ packages:
   '@provablehq/aleo-wallet-standard@1.0.0':
     resolution: {integrity: sha512-3QVgBd9Mq0y769VRj6a5FIzWEI5TPQ2CzwgpMurq8JwHxKLRry9Zze0XF92dWAqE6ILvvPCew3pwapC8gerYQA==}
 
-  '@provablehq/sdk@0.11.6':
-    resolution: {integrity: sha512-QphJTehfcpuEyyWPW1haCNTF58bgv5iRp9WUOnRl+l7jaXN83xMmL001WrYpS8ylKfoqtpUMGXgXulf6GXW+zg==}
+  '@provablehq/sdk@0.11.8':
+    resolution: {integrity: sha512-isk+GM8LShUXcstg7NexhobQrvd1/QREYfx2Qha7lmT8tYnAvAIBC/E7gy8mlkmIcv5zauiY4WhZYD4OvrjsZg==}
 
-  '@provablehq/wasm@0.11.6':
-    resolution: {integrity: sha512-tH+mikobxxi2JsB3M6YzhZBFcFjitFGedJ+vT8CjTKUQw0L2PLZgsZkJJcq8Rvzf8cCo1BqZgV/xK1fBXaO4qg==}
+  '@provablehq/wasm@0.11.8':
+    resolution: {integrity: sha512-rEcZy8O2jUmVpbBvv4/oL/6VEfz26O65GwwpZDVZMXUxps/iqJalkchOutw0ZsrQjMD/Y6NB71Njpns2OBfaMQ==}
 
   '@puzzlehq/sdk-core@1.0.4':
     resolution: {integrity: sha512-tL/RzseDfSRaVLCqMg9UIbgVK0+jDEq5QgBwvvboBixEiL1qseYkEN5udX4nsJF3J5YrNm984MKQIt08JZra7A==}
@@ -2608,28 +2608,28 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@provablehq/aleo-devnode-darwin-arm64@0.2.3':
+  '@provablehq/aleo-devnode-darwin-arm64@0.2.4':
     optional: true
 
-  '@provablehq/aleo-devnode-darwin-x64@0.2.3':
+  '@provablehq/aleo-devnode-darwin-x64@0.2.4':
     optional: true
 
-  '@provablehq/aleo-devnode-linux-arm64@0.2.3':
+  '@provablehq/aleo-devnode-linux-arm64@0.2.4':
     optional: true
 
-  '@provablehq/aleo-devnode-linux-x64@0.2.3':
+  '@provablehq/aleo-devnode-linux-x64@0.2.4':
     optional: true
 
-  '@provablehq/aleo-devnode-win32-x64@0.2.3':
+  '@provablehq/aleo-devnode-win32-x64@0.2.4':
     optional: true
 
-  '@provablehq/aleo-devnode@0.2.3':
+  '@provablehq/aleo-devnode@0.2.4':
     optionalDependencies:
-      '@provablehq/aleo-devnode-darwin-arm64': 0.2.3
-      '@provablehq/aleo-devnode-darwin-x64': 0.2.3
-      '@provablehq/aleo-devnode-linux-arm64': 0.2.3
-      '@provablehq/aleo-devnode-linux-x64': 0.2.3
-      '@provablehq/aleo-devnode-win32-x64': 0.2.3
+      '@provablehq/aleo-devnode-darwin-arm64': 0.2.4
+      '@provablehq/aleo-devnode-darwin-x64': 0.2.4
+      '@provablehq/aleo-devnode-linux-arm64': 0.2.4
+      '@provablehq/aleo-devnode-linux-x64': 0.2.4
+      '@provablehq/aleo-devnode-win32-x64': 0.2.4
 
   '@provablehq/aleo-types@1.0.0': {}
 
@@ -2682,9 +2682,9 @@ snapshots:
       '@provablehq/aleo-types': 1.0.0
       eventemitter3: 5.0.4
 
-  '@provablehq/sdk@0.11.6':
+  '@provablehq/sdk@0.11.8':
     dependencies:
-      '@provablehq/wasm': 0.11.6
+      '@provablehq/wasm': 0.11.8
       '@scure/base': 2.0.0
       '@serenity-kit/noble-sodium': 0.2.3
       comlink: 4.4.2
@@ -2692,7 +2692,7 @@ snapshots:
       mime: 4.1.0
       xmlhttprequest-ssl: 4.0.0
 
-  '@provablehq/wasm@0.11.6': {}
+  '@provablehq/wasm@0.11.8': {}
 
   '@puzzlehq/sdk-core@1.0.4(buffer@6.0.3)':
     dependencies:
