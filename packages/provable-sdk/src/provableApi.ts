@@ -4,6 +4,7 @@ import type {
   RecordProvider,
   WalletActions,
 } from '@provablehq/veil-core'
+import type { ApiAuthConfig } from '@provablehq/sdk'
 
 /** Root of the hosted Provable API. Consumer and JWT endpoints sit here, not under the versioned path. */
 const DEFAULT_PROVABLE_API_URL = 'https://api.provable.com'
@@ -90,6 +91,31 @@ export function memoryCredentialStore(
     },
   }
 }
+
+/**
+ * Provisioned-key authentication for the edge Provable API gateway.
+ *
+ * The keyed variant of the Provable SDK's `ApiAuthConfig`, derived rather
+ * than restated so the two cannot drift — values of this type pass straight
+ * into the SDK's `RecordScanner` and delegated proving as their `auth`
+ * option, where the SDK applies the header default (`DEFAULT_API_KEY_HEADER`).
+ *
+ * The edge gateway (`edge.provable.com`) runs a different auth model from
+ * `api.provable.com`: there is no consumer registration and no JWT minting.
+ * An operator hands out API keys, and every request carries the key verbatim
+ * in a header. Nothing registers, persists, or refreshes, and a rejected
+ * request (401) means the key is invalid or revoked — retrying cannot help,
+ * and only the operator can issue a replacement.
+ *
+ * Mutually exclusive with the session options (`credentials`, `store`,
+ * `username`, `session`): those describe the registered-consumer lifecycle,
+ * which a provisioned key does not have. Combining them throws at
+ * construction.
+ *
+ * @example
+ * const auth: ProvableKeyedAuth = { mode: 'api-key', value: process.env.PROVABLE_API_KEY! }
+ */
+export type ProvableKeyedAuth = Extract<ApiAuthConfig, { mode: 'api-key' }>
 
 /**
  * A minted Provable API JWT and its expiry.
@@ -267,9 +293,13 @@ export type ProvableWalletClient = Client<
  *
  * @property session The session shared with record scanning, or `undefined`
  *   when the client was configured without credentials.
+ * @property keyedAuth The provisioned-key auth the client was configured
+ *   with, or `undefined` under the session model. Mutually exclusive with
+ *   `session`.
  */
 export type ProvingConfigWithSession = ProvingConfig & {
   session?: ProvableSession | undefined
+  keyedAuth?: ProvableKeyedAuth | undefined
 }
 
 /**
@@ -503,6 +533,15 @@ export async function authenticateProvableApi(
   client: Client,
   params: AuthenticateProvableApiParameters = {},
 ): Promise<AuthenticateProvableApiReturnType> {
+  // Keyed auth has no lifecycle to resolve: no consumer to register, no JWT
+  // to mint. Answering with fabricated credentials would hide that, so the
+  // call refuses instead of pretending.
+  if ((client.proving as ProvingConfigWithSession | undefined)?.keyedAuth) {
+    throw new Error(
+      'This client authenticates with a provisioned API key — every request already carries it, and ' +
+        'there is no consumer or JWT to resolve. Remove the authenticateProvableApi call.',
+    )
+  }
   const session = getProvableSession(client)
   if (!session) {
     throw new Error(

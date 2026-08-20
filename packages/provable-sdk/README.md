@@ -217,6 +217,29 @@ For local iteration without a live chain, `createDevnodeClient()` returns the
 same client pair pointed at an Aleo Devnode instance with a pre-funded seeded
 account.
 
+## Provisioned API keys (edge gateway)
+
+The edge gateway (`edge.provable.com`) runs a different auth model: no consumer
+registration and no JWTs. An operator hands out an API key, and every request
+carries it verbatim in an `X-API-Key` header. Configure it with `auth` instead
+of the consumer options:
+
+```ts
+const { walletClient } = aleo.createAleoClient({
+  privateKey,
+  networkUrl: 'https://edge.provable.com/api/v2',
+  proverUrl: 'https://edge.provable.com/api/prove',
+  records: aleo.createRemoteScanner({ url: 'https://edge.provable.com/api/scanner' }),
+  auth: { mode: 'api-key', value: process.env.PROVABLE_API_KEY! },
+})
+```
+
+The two models are mutually exclusive: combining `auth` with `apiKey`,
+`consumerId`, `username`, `credentialStore`, or `session` throws at
+construction. There is no session under keyed auth — nothing registers,
+persists, or refreshes — so `authenticateProvableApi()` throws, and a 401
+means the key is invalid or revoked, which only the operator can fix.
+
 ## WASM dependency
 
 `@provablehq/sdk` ships the Aleo cryptography as WebAssembly, and this package
