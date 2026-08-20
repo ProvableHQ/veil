@@ -100,6 +100,23 @@ describe('keyed auth wiring', () => {
     expect((walletClient.proving as ProvingConfigWithSession).session).toBeUndefined()
   })
 
+  it('createProvableSession mints through a supplied transport instead of global fetch', async () => {
+    const urls: string[] = []
+    const exp = Math.floor(Date.now() / 1000) + 3600
+    const transport: typeof fetch = async (input) => {
+      urls.push(String(input))
+      return new Response(JSON.stringify({ exp }), { status: 201, headers: { authorization: 'Bearer minted' } })
+    }
+    vi.stubGlobal('fetch', vi.fn(() => { throw new Error('global fetch must not be used') }))
+    const session = createProvableSession({
+      credentials: { consumerId: 'cid', apiKey: 'key' },
+      transport,
+    })
+    const jwt = await session.getJwt()
+    expect(jwt.jwt).toBe('Bearer minted')
+    expect(urls).toEqual(['https://api.provable.com/jwts/cid'])
+  })
+
   it('authenticateProvableApi refuses on a keyed client — there is no lifecycle to resolve', async () => {
     const { walletClient } = aleo.createAleoClient({
       privateKey: PRIVATE_KEY,
