@@ -373,6 +373,15 @@ describe('claimSwapOutput — unified dispatch', () => {
     expect(call.inputs).toHaveLength(7)
   })
 
+  it('both wrapped, zero remainder: dispatches claim_to_wrapped_no_refund regardless of refund-side wrapped-ness', async () => {
+    executeMock.mockResolvedValue({ transactionId: 'at1nrWW', transitions: [], outputs: [] })
+    await claimSwapOutput(fakeClient('local', { swap_outputs: swapOutputPlaintext(WRAPPED_IN, WRAPPED_IN) }), { handle })
+    const call = executeMock.mock.calls[0]![1]
+    expect(call.program).toBe('shield_swap_router.aleo')
+    expect(call.function).toBe('claim_to_wrapped_no_refund')
+    expect(call.inputs).toHaveLength(8)
+  })
+
   it('wallet: resolve-mode derived requests target the handle blindedAddress', async () => {
     writeMock.mockResolvedValue('at1walletClaim')
     await claimSwapOutput(fakeClient('rpc'), { handle })
@@ -387,6 +396,30 @@ describe('claimSwapOutput — unified dispatch', () => {
       },
     })
     expect(inputs[2]).toBe('777field')
+  })
+
+  it('wallet, wrapped output zero remainder: targets the router while deriving against the core program', async () => {
+    writeMock.mockResolvedValue('at1walletClaimNr')
+    await claimSwapOutput(fakeClient('rpc', { swap_outputs: swapOutputPlaintext(TOKEN0, WRAPPED_IN) }), { handle })
+
+    const call = writeMock.mock.calls[0]![1]
+    expect(call.program).toBe('shield_swap_router.aleo')
+    expect(call.function).toBe('claim_to_wrapped_no_refund')
+    // The derivation scope stays the CORE program even though the router
+    // submits the transaction — the blinding scheme lives on the AMM.
+    expect(call.inputs[0]).toMatchObject({
+      type: 'derived',
+      algorithm: 'program-scoped-blinding-factor',
+      args: {
+        mode: { type: 'string', value: 'resolve' },
+        membershipProgram: { type: 'string', value: 'shield_swap.aleo' },
+      },
+    })
+    expect(call.inputs[1]).toMatchObject({
+      type: 'derived',
+      algorithm: 'program-scoped-blinded-address',
+      args: { membershipProgram: { type: 'string', value: 'shield_swap.aleo' } },
+    })
   })
 
   it('throws SwapOutputNotFinalizedError when the output is absent', async () => {
