@@ -40,8 +40,8 @@ const poolPlaintext = (token0: string, token1: string) =>
   `{\n  token0: ${token0},\n  token1: ${token1},\n  fee: 10000u16,\n  enabled: true\n}`
 const SLOT_PLAINTEXT =
   `{\n  tick: 0i32,\n  tick_spacing: 200u32,\n  sqrt_price: { hi: 1u128, lo: 0u128 },\n  fee_protocol: 0u8,\n  liquidity: 94217047056u128,\n  fee_growth_global0_x_128: { hi: 0u128, lo: 0u128 },\n  fee_growth_global1_x_128: { hi: 0u128, lo: 0u128 },\n  max_liquidity_per_tick: 9223372036854775808u128,\n  protocol_fees0: 0u128,\n  protocol_fees1: 0u128,\n  next_init_below: -64400i32,\n  next_init_above: -60000i32\n}`
-const swapOutputPlaintext = (tokenIn: string, tokenOut: string) =>
-  `{\n  recipient: ${IDENTITY.blindedAddress},\n  caller: ${IDENTITY.blindedAddress},\n  token_in: ${tokenIn},\n  token_out: ${tokenOut},\n  amount_out: 1980000u128,\n  amount_remaining: 0u128\n}`
+const swapOutputPlaintext = (tokenIn: string, tokenOut: string, amountRemaining = 0n) =>
+  `{\n  recipient: ${IDENTITY.blindedAddress},\n  caller: ${IDENTITY.blindedAddress},\n  token_in: ${tokenIn},\n  token_out: ${tokenOut},\n  amount_out: 1980000u128,\n  amount_remaining: ${amountRemaining}u128\n}`
 
 /**
  * Scripted client: chain reads answered per mapping; height fixed at 1000.
@@ -277,13 +277,17 @@ describe('claimSwapOutput — unified dispatch', () => {
     program: 'shield_swap.aleo',
   }
 
-  it('plain/plain: core claim with the AMM proof pair as the last input', async () => {
+  it('plain/plain with a remainder: core claim with the AMM proof pair last', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1claim', transitions: [], outputs: [] })
-    const res = await claimSwapOutput(fakeClient('local'), { handle })
+    const res = await claimSwapOutput(
+      fakeClient('local', { swap_outputs: swapOutputPlaintext(TOKEN0, TOKEN1, 25n) }),
+      { handle },
+    )
 
     const call = executeMock.mock.calls[0]![1]
-    expect(call.program).toBe('shield_swap.aleo')
     expect(call.function).toBe('claim_swap_output')
+    expect(call.inputs).toContain('25u128')
+    expect(call.program).toBe('shield_swap.aleo')
     expect(call.inputs).toEqual([
       IDENTITY.blindingFactor,
       IDENTITY.blindedAddress,
@@ -291,16 +295,20 @@ describe('claimSwapOutput — unified dispatch', () => {
       TOKEN0,          // token_in — from CHAIN, not handle
       TOKEN1,
       '1980000u128',   // amount_out from chain
-      '0u128',         // amount_remaining from chain
+      '25u128',        // amount_remaining from chain
       EMPTY_PROOFS,    // signer freezelist proofs (empty-tree witness)
     ])
     expect(res.amountOut).toBe(1_980_000n)
+    expect(res.amountRemaining).toBe(25n)
     expect(res.transactionId).toBe('at1claim')
   })
 
-  it('wrapped output, plain refund: dispatches claim_to_wrapped_refund_arc20', async () => {
+  it('wrapped output, plain refund, with a remainder: dispatches claim_to_wrapped_refund_arc20', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1claimW', transitions: [], outputs: [] })
-    await claimSwapOutput(fakeClient('local', { swap_outputs: swapOutputPlaintext(TOKEN0, WRAPPED_IN) }), { handle })
+    await claimSwapOutput(
+      fakeClient('local', { swap_outputs: swapOutputPlaintext(TOKEN0, WRAPPED_IN, 25n) }),
+      { handle },
+    )
 
     const call = executeMock.mock.calls[0]![1]
     expect(call.program).toBe('shield_swap_router.aleo')
@@ -310,9 +318,12 @@ describe('claimSwapOutput — unified dispatch', () => {
     expect(call.inputs).toHaveLength(9)
   })
 
-  it('plain output, wrapped refund: dispatches claim_to_arc20_refund_wrapped', async () => {
+  it('plain output, wrapped refund, with a remainder: dispatches claim_to_arc20_refund_wrapped', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1claimR', transitions: [], outputs: [] })
-    await claimSwapOutput(fakeClient('local', { swap_outputs: swapOutputPlaintext(WRAPPED_IN, TOKEN1) }), { handle })
+    await claimSwapOutput(
+      fakeClient('local', { swap_outputs: swapOutputPlaintext(WRAPPED_IN, TOKEN1, 25n) }),
+      { handle },
+    )
 
     const call = executeMock.mock.calls[0]![1]
     expect(call.program).toBe('shield_swap_router.aleo')
@@ -320,13 +331,46 @@ describe('claimSwapOutput — unified dispatch', () => {
     expect(call.inputs).toHaveLength(9)
   })
 
-  it('both wrapped: dispatches claim_to_wrapped_refund_wrapped with both receiver proofs', async () => {
+  it('both wrapped, with a remainder: dispatches claim_to_wrapped_refund_wrapped with both receiver proofs', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1claimWW', transitions: [], outputs: [] })
-    await claimSwapOutput(fakeClient('local', { swap_outputs: swapOutputPlaintext(WRAPPED_IN, WRAPPED_IN) }), { handle })
+    await claimSwapOutput(
+      fakeClient('local', { swap_outputs: swapOutputPlaintext(WRAPPED_IN, WRAPPED_IN, 25n) }),
+      { handle },
+    )
 
     const call = executeMock.mock.calls[0]![1]
     expect(call.function).toBe('claim_to_wrapped_refund_wrapped')
     expect(call.inputs).toHaveLength(10)
+  })
+
+  it('plain/plain, zero remainder: dispatches core claim_swap_output_no_refund without amount_remaining', async () => {
+    executeMock.mockResolvedValue({ transactionId: 'at1nr', transitions: [], outputs: [] })
+    const res = await claimSwapOutput(fakeClient('local'), { handle })
+    const call = executeMock.mock.calls[0]![1]
+    expect(call.program).toBe('shield_swap.aleo')
+    expect(call.function).toBe('claim_swap_output_no_refund')
+    // factor, address, swap_id, token_in, token_out, amount_out, amm proof — no remainder slot.
+    expect(call.inputs).toHaveLength(7)
+    expect(call.inputs).not.toContain('0u128')
+    expect(res.amountRemaining).toBe(0n)
+  })
+
+  it('wrapped output, zero remainder: dispatches claim_to_wrapped_no_refund with the receiver proof', async () => {
+    executeMock.mockResolvedValue({ transactionId: 'at1nrW', transitions: [], outputs: [] })
+    await claimSwapOutput(fakeClient('local', { swap_outputs: swapOutputPlaintext(TOKEN0, WRAPPED_IN) }), { handle })
+    const call = executeMock.mock.calls[0]![1]
+    expect(call.program).toBe('shield_swap_router.aleo')
+    expect(call.function).toBe('claim_to_wrapped_no_refund')
+    expect(call.inputs).toHaveLength(8) // + receiver proof
+  })
+
+  it('wrapped input, plain output, zero remainder: dispatches claim_to_arc20_no_refund with only the AMM proof', async () => {
+    executeMock.mockResolvedValue({ transactionId: 'at1nrA', transitions: [], outputs: [] })
+    await claimSwapOutput(fakeClient('local', { swap_outputs: swapOutputPlaintext(WRAPPED_IN, TOKEN1) }), { handle })
+    const call = executeMock.mock.calls[0]![1]
+    expect(call.program).toBe('shield_swap_router.aleo')
+    expect(call.function).toBe('claim_to_arc20_no_refund')
+    expect(call.inputs).toHaveLength(7)
   })
 
   it('wallet: resolve-mode derived requests target the handle blindedAddress', async () => {

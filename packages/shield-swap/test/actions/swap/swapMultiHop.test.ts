@@ -257,13 +257,13 @@ describe('claimSwapOutput on a multi-hop handle (unified claim)', () => {
     program: 'shield_swap.aleo',
   }
 
-  it('local: mirrors the SwapOutput entry into the unified 8-slot claim inputs', async () => {
+  it('local: mirrors the SwapOutput entry into the unified 7-slot no-refund claim inputs', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1claimMh', transitions: [], outputs: [] })
     const res = await claimSwapOutput(fakeClient('local'), { handle })
 
     const call = executeMock.mock.calls[0]![1]
     expect(call.program).toBe('shield_swap.aleo')
-    expect(call.function).toBe('claim_swap_output')
+    expect(call.function).toBe('claim_swap_output_no_refund')
     expect(call.inputs).toEqual([
       IDENTITY.blindingFactor,
       IDENTITY.blindedAddress,
@@ -271,7 +271,7 @@ describe('claimSwapOutput on a multi-hop handle (unified claim)', () => {
       TOKEN_A,          // token_in — from CHAIN, not handle
       TOKEN_C,          // token_out
       '990000u128',     // amount_out
-      '0u128',          // amount_remaining
+      // amount_remaining is 0 — the no-refund transition takes no slot for it.
       EMPTY_PROOFS,     // signer freezelist proofs (empty-tree witness)
     ])
     expect(res.amountOut).toBe(990000n)

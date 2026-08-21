@@ -20,6 +20,9 @@ const EXPECTED_POSITIONS: Array<[string, string, number, number]> = [
   ['shield_swap_router.aleo', 'claim_to_wrapped_refund_arc20', 0, 1],
   ['shield_swap_router.aleo', 'claim_to_arc20_refund_wrapped', 0, 1],
   ['shield_swap_router.aleo', 'claim_to_wrapped_refund_wrapped', 0, 1],
+  ['shield_swap.aleo', 'claim_swap_output_no_refund', 0, 1],
+  ['shield_swap_router.aleo', 'claim_to_arc20_no_refund', 0, 1],
+  ['shield_swap_router.aleo', 'claim_to_wrapped_no_refund', 0, 1],
 ]
 
 describe('shieldSwapAlgorithmGrants', () => {
@@ -44,12 +47,25 @@ describe('shieldSwapAlgorithmGrants', () => {
 
   it('applies program overrides to core and router grants separately', () => {
     const grants = shieldSwapAlgorithmGrants({ program: 'core_x.aleo', routerProgram: 'router_x.aleo' })
-    expect(grants.filter((g) => g.program === 'core_x.aleo')).toHaveLength(6)
-    expect(grants.filter((g) => g.program === 'router_x.aleo')).toHaveLength(10)
+    expect(grants.filter((g) => g.program === 'core_x.aleo')).toHaveLength(8)
+    expect(grants.filter((g) => g.program === 'router_x.aleo')).toHaveLength(14)
   })
 
   it('exposes the default set as SHIELD_SWAP_ALGORITHM_GRANTS', () => {
     expect(SHIELD_SWAP_ALGORITHM_GRANTS).toEqual(shieldSwapAlgorithmGrants())
+  })
+
+  it('grants the no-refund claim transitions at blinding positions 0-1', () => {
+    const grants = shieldSwapAlgorithmGrants()
+    for (const [program, fn] of [
+      ['shield_swap.aleo', 'claim_swap_output_no_refund'],
+      ['shield_swap_router.aleo', 'claim_to_arc20_no_refund'],
+      ['shield_swap_router.aleo', 'claim_to_wrapped_no_refund'],
+    ] as const) {
+      for (const inputPosition of [0, 1]) {
+        expect(grants).toContainEqual(expect.objectContaining({ program, function: fn, inputPosition }))
+      }
+    }
   })
 })
 
