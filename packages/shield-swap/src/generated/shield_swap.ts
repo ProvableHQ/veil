@@ -293,6 +293,56 @@ export function toSwapIterState(value: StructValue): SwapIterState {
   }
 }
 
+export interface HopExecution {
+  pool: string
+  zero_for_one: boolean
+  amount_in: bigint
+  amount_out: bigint
+  fee_paid: bigint
+  protocol_fee: bigint
+  sqrt_price_after: U256__8JquwLopp8
+  liquidity_after: bigint
+  tick_after: number
+}
+
+export function toHopExecution(value: StructValue): HopExecution {
+  return {
+    pool: litStr(value.pool, 'field') ?? '',
+    zero_for_one: value.zero_for_one as boolean ?? false,
+    amount_in: value.amount_in as bigint ?? 0n,
+    amount_out: value.amount_out as bigint ?? 0n,
+    fee_paid: value.fee_paid as bigint ?? 0n,
+    protocol_fee: value.protocol_fee as bigint ?? 0n,
+    sqrt_price_after: value.sqrt_price_after as unknown as U256__8JquwLopp8 ?? {} as unknown as U256__8JquwLopp8,
+    liquidity_after: value.liquidity_after as bigint ?? 0n,
+    tick_after: Number((value.tick_after ?? 0n) as bigint) ?? 0,
+  }
+}
+
+export interface SwapExecutionHeader {
+  executed_height: number
+  hop_count: number
+}
+
+export function toSwapExecutionHeader(value: StructValue): SwapExecutionHeader {
+  return {
+    executed_height: Number((value.executed_height ?? 0n) as bigint) ?? 0,
+    hop_count: Number((value.hop_count ?? 0n) as bigint) ?? 0,
+  }
+}
+
+export interface SwapExecutionKey {
+  swap_id: string
+  hop_index: number
+}
+
+export function toSwapExecutionKey(value: StructValue): SwapExecutionKey {
+  return {
+    swap_id: litStr(value.swap_id, 'field') ?? '',
+    hop_index: Number((value.hop_index ?? 0n) as bigint) ?? 0,
+  }
+}
+
 export interface SwapOutput {
   recipient: string
   caller: string
@@ -622,6 +672,18 @@ export type ClaimSwapOutputInputs = {
 
 export type ClaimSwapOutputOutputs = [RecordValue, RecordValue, FutureValue]
 
+export type ClaimSwapOutputNoRefundInputs = {
+  arg0: string | InputRequest
+  arg1: string | InputRequest
+  arg2: string | InputRequest
+  arg3: string | InputRequest
+  arg4: string | InputRequest
+  arg5: bigint | InputRequest
+  arg6: MerkleProof[] | InputRequest
+}
+
+export type ClaimSwapOutputNoRefundOutputs = [RecordValue, FutureValue]
+
 export type SwapMultiHopInputs = {
   arg0: string | InputRequest
   arg1: string | InputRequest
@@ -746,6 +808,30 @@ export function toSwapOutputsMappingValue(raw: string): SwapOutputsMappingValue 
     throw new Error(`swap_outputs stores SwapOutput values, got: ${raw}`)
   }
   return toSwapOutput(value)
+}
+
+export type SwapExecutionHeadersMappingKey = string
+export type SwapExecutionHeadersMappingValue = SwapExecutionHeader
+
+/** Decodes a raw `swap_execution_headers` mapping value into a typed SwapExecutionHeadersMappingValue. */
+export function toSwapExecutionHeadersMappingValue(raw: string): SwapExecutionHeadersMappingValue {
+  const value = parsePlaintextValue(raw)
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`swap_execution_headers stores SwapExecutionHeader values, got: ${raw}`)
+  }
+  return toSwapExecutionHeader(value)
+}
+
+export type SwapExecutionHopsMappingKey = string
+export type SwapExecutionHopsMappingValue = HopExecution
+
+/** Decodes a raw `swap_execution_hops` mapping value into a typed SwapExecutionHopsMappingValue. */
+export function toSwapExecutionHopsMappingValue(raw: string): SwapExecutionHopsMappingValue {
+  const value = parsePlaintextValue(raw)
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`swap_execution_hops stores HopExecution values, got: ${raw}`)
+  }
+  return toHopExecution(value)
 }
 
 export type AdminMappingKey = boolean
@@ -878,6 +964,18 @@ export function toToWrapperTokenIdMappingValue(raw: string): ToWrapperTokenIdMap
     throw new Error(`to_wrapper_token_id stores field values, got: ${raw}`)
   }
   return raw
+}
+
+export type PoolCreatorsMappingKey = string
+export type PoolCreatorsMappingValue = string
+
+/** Decodes a raw `pool_creators` mapping value into a typed PoolCreatorsMappingValue. */
+export function toPoolCreatorsMappingValue(raw: string): PoolCreatorsMappingValue {
+  const parsed = parseValue(raw)
+  if (parsed.type !== 'address') {
+    throw new Error(`pool_creators stores address values, got: ${raw}`)
+  }
+  return parsed.value as string
 }
 
 /** The parsed ABI for shield_swap.aleo. */
@@ -1641,6 +1739,121 @@ export const PROGRAM_ABI: ABI = {
     },
     {
       "path": [
+        "HopExecution"
+      ],
+      "fields": [
+        {
+          "name": "pool",
+          "type": {
+            "kind": "primitive",
+            "primitive": "field"
+          }
+        },
+        {
+          "name": "zero_for_one",
+          "type": {
+            "kind": "primitive",
+            "primitive": "boolean"
+          }
+        },
+        {
+          "name": "amount_in",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u128"
+          }
+        },
+        {
+          "name": "amount_out",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u128"
+          }
+        },
+        {
+          "name": "fee_paid",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u128"
+          }
+        },
+        {
+          "name": "protocol_fee",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u128"
+          }
+        },
+        {
+          "name": "sqrt_price_after",
+          "type": {
+            "kind": "struct",
+            "path": [
+              "U256__8JquwLopp8"
+            ],
+            "program": "shield_swap.aleo"
+          }
+        },
+        {
+          "name": "liquidity_after",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u128"
+          }
+        },
+        {
+          "name": "tick_after",
+          "type": {
+            "kind": "primitive",
+            "primitive": "i32"
+          }
+        }
+      ]
+    },
+    {
+      "path": [
+        "SwapExecutionHeader"
+      ],
+      "fields": [
+        {
+          "name": "executed_height",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u32"
+          }
+        },
+        {
+          "name": "hop_count",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u8"
+          }
+        }
+      ]
+    },
+    {
+      "path": [
+        "SwapExecutionKey"
+      ],
+      "fields": [
+        {
+          "name": "swap_id",
+          "type": {
+            "kind": "primitive",
+            "primitive": "field"
+          }
+        },
+        {
+          "name": "hop_index",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u8"
+          }
+        }
+      ]
+    },
+    {
+      "path": [
         "SwapOutput"
       ],
       "fields": [
@@ -1701,7 +1914,7 @@ export const PROGRAM_ABI: ABI = {
             "kind": "primitive",
             "primitive": "address"
           },
-          "mode": "public"
+          "mode": "private"
         },
         {
           "name": "withdrawal",
@@ -1772,7 +1985,7 @@ export const PROGRAM_ABI: ABI = {
             "kind": "primitive",
             "primitive": "address"
           },
-          "mode": "public"
+          "mode": "private"
         },
         {
           "name": "swap_id",
@@ -1846,7 +2059,7 @@ export const PROGRAM_ABI: ABI = {
             "kind": "primitive",
             "primitive": "address"
           },
-          "mode": "public"
+          "mode": "private"
         },
         {
           "name": "swap_id",
@@ -1904,7 +2117,7 @@ export const PROGRAM_ABI: ABI = {
             "kind": "primitive",
             "primitive": "address"
           },
-          "mode": "public"
+          "mode": "private"
         },
         {
           "name": "token_id",
@@ -2100,6 +2313,37 @@ export const PROGRAM_ABI: ABI = {
       }
     },
     {
+      "name": "swap_execution_headers",
+      "key": {
+        "kind": "primitive",
+        "primitive": "field"
+      },
+      "value": {
+        "kind": "struct",
+        "path": [
+          "SwapExecutionHeader"
+        ],
+        "program": "shield_swap.aleo"
+      }
+    },
+    {
+      "name": "swap_execution_hops",
+      "key": {
+        "kind": "struct",
+        "path": [
+          "SwapExecutionKey"
+        ],
+        "program": "shield_swap.aleo"
+      },
+      "value": {
+        "kind": "struct",
+        "path": [
+          "HopExecution"
+        ],
+        "program": "shield_swap.aleo"
+      }
+    },
+    {
       "name": "admin",
       "key": {
         "kind": "primitive",
@@ -2221,6 +2465,17 @@ export const PROGRAM_ABI: ABI = {
       "value": {
         "kind": "primitive",
         "primitive": "field"
+      }
+    },
+    {
+      "name": "pool_creators",
+      "key": {
+        "kind": "primitive",
+        "primitive": "field"
+      },
+      "value": {
+        "kind": "primitive",
+        "primitive": "address"
       }
     }
   ],
@@ -3623,6 +3878,103 @@ export const PROGRAM_ABI: ABI = {
       ]
     },
     {
+      "name": "claim_swap_output_no_refund",
+      "isFinal": true,
+      "inputs": [
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "field"
+            }
+          },
+          "mode": "private"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "address"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "field"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "field"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "field"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "u128"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "array",
+              "element": {
+                "kind": "struct",
+                "path": [
+                  "MerkleProof"
+                ],
+                "program": "shield_swap.aleo"
+              },
+              "length": 2
+            }
+          },
+          "mode": "private"
+        }
+      ],
+      "outputs": [
+        {
+          "type": {
+            "kind": "dynamicRecord"
+          },
+          "mode": "none"
+        },
+        {
+          "type": {
+            "kind": "future"
+          },
+          "mode": "none"
+        }
+      ]
+    },
+    {
       "name": "swap_multi_hop",
       "isFinal": true,
       "inputs": [
@@ -3813,6 +4165,8 @@ export interface ShieldSwapContract {
     fee_to_tick_spacing: (params: { key: FeeToTickSpacingMappingKey }) => Promise<FeeToTickSpacingMappingValue | null>
     positions: (params: { key: PositionsMappingKey }) => Promise<PositionsMappingValue | null>
     swap_outputs: (params: { key: SwapOutputsMappingKey }) => Promise<SwapOutputsMappingValue | null>
+    swap_execution_headers: (params: { key: SwapExecutionHeadersMappingKey }) => Promise<SwapExecutionHeadersMappingValue | null>
+    swap_execution_hops: (params: { key: SwapExecutionHopsMappingKey }) => Promise<SwapExecutionHopsMappingValue | null>
     admin: (params: { key: AdminMappingKey }) => Promise<AdminMappingValue | null>
     pending_admin: (params: { key: PendingAdminMappingKey }) => Promise<PendingAdminMappingValue | null>
     used_blinded_addresses: (params: { key: UsedBlindedAddressesMappingKey }) => Promise<UsedBlindedAddressesMappingValue | null>
@@ -3824,6 +4178,7 @@ export interface ShieldSwapContract {
     frozen_position: (params: { key: FrozenPositionMappingKey }) => Promise<FrozenPositionMappingValue | null>
     from_wrapper_token_id: (params: { key: FromWrapperTokenIdMappingKey }) => Promise<FromWrapperTokenIdMappingValue | null>
     to_wrapper_token_id: (params: { key: ToWrapperTokenIdMappingKey }) => Promise<ToWrapperTokenIdMappingValue | null>
+    pool_creators: (params: { key: PoolCreatorsMappingKey }) => Promise<PoolCreatorsMappingValue | null>
   }
   write: {
     transfer_admin: (params: { arg0: string | InputRequest }) => Promise<string>
@@ -3849,6 +4204,7 @@ export interface ShieldSwapContract {
     burn: (params: { arg0: PositionNFT | RecordValue | string | InputRequest }) => Promise<string>
     swap: (params: { arg0: RecordValue | string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: boolean | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: U256__8JquwLopp8 | InputRequest, arg8: bigint | InputRequest, arg9: number | InputRequest, arg10: string | InputRequest, arg11: string | InputRequest }) => Promise<string>
     claim_swap_output: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: MerkleProof[] | InputRequest }) => Promise<string>
+    claim_swap_output_no_refund: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: MerkleProof[] | InputRequest }) => Promise<string>
     swap_multi_hop: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: RecordValue | string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: SwapHop | InputRequest, arg8: SwapHop | InputRequest, arg9: SwapHop | InputRequest, arg10: number | InputRequest, arg11: bigint | InputRequest, arg12: number | InputRequest }) => Promise<string>
   }
   simulate: {
@@ -3875,6 +4231,7 @@ export interface ShieldSwapContract {
     burn: (params: { arg0: PositionNFT | RecordValue | string | InputRequest }) => Promise<[string, FutureValue]>
     swap: (params: { arg0: RecordValue | string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: boolean | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: U256__8JquwLopp8 | InputRequest, arg8: bigint | InputRequest, arg9: number | InputRequest, arg10: string | InputRequest, arg11: string | InputRequest }) => Promise<[string, RecordValue, SwapComplianceRecord, FutureValue]>
     claim_swap_output: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: MerkleProof[] | InputRequest }) => Promise<[RecordValue, RecordValue, FutureValue]>
+    claim_swap_output_no_refund: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: MerkleProof[] | InputRequest }) => Promise<[RecordValue, FutureValue]>
     swap_multi_hop: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: RecordValue | string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: SwapHop | InputRequest, arg8: SwapHop | InputRequest, arg9: SwapHop | InputRequest, arg10: number | InputRequest, arg11: bigint | InputRequest, arg12: number | InputRequest }) => Promise<[string, RecordValue, MultiHopSwapComplianceRecord, FutureValue]>
   }
   execute: {
@@ -3901,6 +4258,7 @@ export interface ShieldSwapContract {
     burn: (params: { arg0: PositionNFT | RecordValue | string | InputRequest }) => Promise<{ transactionId: string, result: [string, FutureValue] }>
     swap: (params: { arg0: RecordValue | string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: boolean | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: U256__8JquwLopp8 | InputRequest, arg8: bigint | InputRequest, arg9: number | InputRequest, arg10: string | InputRequest, arg11: string | InputRequest }) => Promise<{ transactionId: string, result: [string, RecordValue, SwapComplianceRecord, FutureValue] }>
     claim_swap_output: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: MerkleProof[] | InputRequest }) => Promise<{ transactionId: string, result: [RecordValue, RecordValue, FutureValue] }>
+    claim_swap_output_no_refund: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: MerkleProof[] | InputRequest }) => Promise<{ transactionId: string, result: [RecordValue, FutureValue] }>
     swap_multi_hop: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: RecordValue | string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: SwapHop | InputRequest, arg8: SwapHop | InputRequest, arg9: SwapHop | InputRequest, arg10: number | InputRequest, arg11: bigint | InputRequest, arg12: number | InputRequest }) => Promise<{ transactionId: string, result: [string, RecordValue, MultiHopSwapComplianceRecord, FutureValue] }>
   }
   fetchAbi: () => Promise<ABI>
@@ -3959,6 +4317,14 @@ export function createShieldSwapContract(options: {
         const raw = await _raw.read.swap_outputs({ key: params.key })
         return raw == null ? null : toSwapOutputsMappingValue(raw)
       },
+      swap_execution_headers: async (params: any) => {
+        const raw = await _raw.read.swap_execution_headers({ key: params.key })
+        return raw == null ? null : toSwapExecutionHeadersMappingValue(raw)
+      },
+      swap_execution_hops: async (params: any) => {
+        const raw = await _raw.read.swap_execution_hops({ key: params.key })
+        return raw == null ? null : toSwapExecutionHopsMappingValue(raw)
+      },
       admin: async (params: any) => {
         const raw = await _raw.read.admin({ key: encodeValue(params.key, 'boolean') })
         return raw == null ? null : toAdminMappingValue(raw)
@@ -4002,6 +4368,10 @@ export function createShieldSwapContract(options: {
       to_wrapper_token_id: async (params: any) => {
         const raw = await _raw.read.to_wrapper_token_id({ key: params.key })
         return raw == null ? null : toToWrapperTokenIdMappingValue(raw)
+      },
+      pool_creators: async (params: any) => {
+        const raw = await _raw.read.pool_creators({ key: params.key })
+        return raw == null ? null : toPoolCreatorsMappingValue(raw)
       },
     },
     write: {
@@ -4104,6 +4474,10 @@ export function createShieldSwapContract(options: {
       claim_swap_output: (params: any) => {
         const { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 } = params
         return _raw.write.claim_swap_output({ inputs: [arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7] })
+      },
+      claim_swap_output_no_refund: (params: any) => {
+        const { arg0, arg1, arg2, arg3, arg4, arg5, arg6 } = params
+        return _raw.write.claim_swap_output_no_refund({ inputs: [arg0, arg1, arg2, arg3, arg4, arg5, arg6] })
       },
       swap_multi_hop: (params: any) => {
         const { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12 } = params
@@ -4235,6 +4609,11 @@ export function createShieldSwapContract(options: {
         const result = await _raw.simulate.claim_swap_output({ inputs: [arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7] })
         return [result.outputs[0], result.outputs[1], result.outputs[2] as unknown as FutureValue] as const
       },
+      claim_swap_output_no_refund: async (params: any) => {
+        const { arg0, arg1, arg2, arg3, arg4, arg5, arg6 } = params
+        const result = await _raw.simulate.claim_swap_output_no_refund({ inputs: [arg0, arg1, arg2, arg3, arg4, arg5, arg6] })
+        return [result.outputs[0], result.outputs[1] as unknown as FutureValue] as const
+      },
       swap_multi_hop: async (params: any) => {
         const { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12 } = params
         const _arg2 = arg2?._record ?? arg2
@@ -4365,6 +4744,11 @@ export function createShieldSwapContract(options: {
         const { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 } = params
         const result = await _raw.execute.claim_swap_output({ inputs: [arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7] })
         return { transactionId: result.transactionId, result: [result.outputs[0], result.outputs[1], result.outputs[2] as unknown as FutureValue] as const }
+      },
+      claim_swap_output_no_refund: async (params: any) => {
+        const { arg0, arg1, arg2, arg3, arg4, arg5, arg6 } = params
+        const result = await _raw.execute.claim_swap_output_no_refund({ inputs: [arg0, arg1, arg2, arg3, arg4, arg5, arg6] })
+        return { transactionId: result.transactionId, result: [result.outputs[0], result.outputs[1] as unknown as FutureValue] as const }
       },
       swap_multi_hop: async (params: any) => {
         const { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12 } = params
