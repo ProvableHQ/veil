@@ -138,8 +138,8 @@ importers:
         specifier: ^1.7.2
         version: 1.8.0
       '@provablehq/sdk':
-        specifier: ^0.11.8
-        version: 0.11.8
+        specifier: ^0.11.9
+        version: 0.11.9
       '@provablehq/veil-aleo-devnode':
         specifier: workspace:>=0.6.0 <1.0.0
         version: link:../devnode
@@ -201,8 +201,8 @@ importers:
         version: link:../core
     devDependencies:
       '@provablehq/sdk':
-        specifier: ^0.11.8
-        version: 0.11.8
+        specifier: ^0.11.9
+        version: 0.11.9
       '@provablehq/veil-aleo-bridges':
         specifier: workspace:*
         version: link:../bridge
@@ -824,11 +824,11 @@ packages:
   '@provablehq/aleo-wallet-standard@1.0.0':
     resolution: {integrity: sha512-3QVgBd9Mq0y769VRj6a5FIzWEI5TPQ2CzwgpMurq8JwHxKLRry9Zze0XF92dWAqE6ILvvPCew3pwapC8gerYQA==}
 
-  '@provablehq/sdk@0.11.8':
-    resolution: {integrity: sha512-isk+GM8LShUXcstg7NexhobQrvd1/QREYfx2Qha7lmT8tYnAvAIBC/E7gy8mlkmIcv5zauiY4WhZYD4OvrjsZg==}
+  '@provablehq/sdk@0.11.9':
+    resolution: {integrity: sha512-YJqbj9eBnLqJuq4FvR2ZUNouSGSdDO8F/Mfy0a6u2mUX8pThk0Bp9gwkzohTGnqKmofsoiQB9y6Sp7u6fj9ZIw==}
 
-  '@provablehq/wasm@0.11.8':
-    resolution: {integrity: sha512-rEcZy8O2jUmVpbBvv4/oL/6VEfz26O65GwwpZDVZMXUxps/iqJalkchOutw0ZsrQjMD/Y6NB71Njpns2OBfaMQ==}
+  '@provablehq/wasm@0.11.9':
+    resolution: {integrity: sha512-ZqSPR6IOljKElyYg8p9eMrTP9VjVSN3zLzZQkf8s4UcctZjoJQIfkk6ksbrSK1phcTRKQcvcLFCuCKLLQ+ODRg==}
 
   '@puzzlehq/sdk-core@1.0.4':
     resolution: {integrity: sha512-tL/RzseDfSRaVLCqMg9UIbgVK0+jDEq5QgBwvvboBixEiL1qseYkEN5udX4nsJF3J5YrNm984MKQIt08JZra7A==}
@@ -2682,9 +2682,9 @@ snapshots:
       '@provablehq/aleo-types': 1.0.0
       eventemitter3: 5.0.4
 
-  '@provablehq/sdk@0.11.8':
+  '@provablehq/sdk@0.11.9':
     dependencies:
-      '@provablehq/wasm': 0.11.8
+      '@provablehq/wasm': 0.11.9
       '@scure/base': 2.0.0
       '@serenity-kit/noble-sodium': 0.2.3
       comlink: 4.4.2
@@ -2692,7 +2692,7 @@ snapshots:
       mime: 4.1.0
       xmlhttprequest-ssl: 4.0.0
 
-  '@provablehq/wasm@0.11.8': {}
+  '@provablehq/wasm@0.11.9': {}
 
   '@puzzlehq/sdk-core@1.0.4(buffer@6.0.3)':
     dependencies:
