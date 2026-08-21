@@ -37,6 +37,12 @@ export {
   getPoolCreator,
   type GetPoolCreatorParameters,
 } from './actions/reads/getPoolCreator.js'
+export {
+  getSwapExecution,
+  type GetSwapExecutionParameters,
+  type GetSwapExecutionReturnType,
+  type SwapExecutionHop,
+} from './actions/reads/getSwapExecution.js'
 
 // Control-state reads: the pause/allowlist/freeze gates the finalize asserts,
 // as cheap pre-flight checks, plus the batched getTradeControls verdict.
