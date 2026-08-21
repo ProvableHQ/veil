@@ -156,7 +156,12 @@ export async function quoteEvmXReserveTransfer(
   const amountAtomic = parseDecimalAmount(params.plan.amountIn, params.plan.sourceAsset.decimals)
   if (amountAtomic < route.minimumAmountAtomic) throw new BridgeError(`xReserve minimum deposit is ${route.minimumAmountAtomic} atomic units`)
   const environment = params.plan.route.environment
-  const hookData = await buildXReserveHookData(params.plan.mintMode, params.plan.recipient, environment)
+  const hookData = await buildXReserveHookData(
+    params.plan.mintMode,
+    params.plan.recipient,
+    environment,
+    params.plan.privateMintSecretNonce ?? '0scalar',
+  )
   const recipient = params.plan.mintMode === 'private'
     ? await aleoProgramAddress(route.wrapperProgram, environment)
     : params.plan.recipient

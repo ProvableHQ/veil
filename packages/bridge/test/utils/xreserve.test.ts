@@ -25,6 +25,17 @@ describe('xReserve wire utilities', () => {
     expect(recordHook).toBe(`0x01${'00'.repeat(64)}`)
   })
 
+  it('uses the selected scalar for private recipient commitments', async () => {
+    const defaultHook = await buildXReserveHookData('private', RECIPIENT, 'testnet')
+    const explicitZeroHook = await buildXReserveHookData('private', RECIPIENT, 'testnet', '0scalar')
+    const customHook = await buildXReserveHookData('private', RECIPIENT, 'testnet', '7scalar')
+    expect(hexToBytes(defaultHook)).toHaveLength(65)
+    expect(defaultHook.startsWith('0x02')).toBe(true)
+    expect(defaultHook).toBe(explicitZeroHook)
+    expect(customHook.startsWith('0x02')).toBe(true)
+    expect(customHook).not.toBe(defaultHook)
+  })
+
   it('builds and hashes the canonical 305-byte payload', async () => {
     const transactionHash = `0x${'12'.repeat(32)}` as const
     const nonce = calculateXReserveDepositNonce(0, transactionHash, 4)

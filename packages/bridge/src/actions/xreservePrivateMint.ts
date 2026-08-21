@@ -6,14 +6,14 @@ import type {
   XReservePrivateMintExecution,
 } from '../types/aleo.js'
 import type { BridgeRegistry } from '../types/protocol.js'
-import { calculateXReserveMessageHash, xReserveHexToAleoBytes } from '../utils/xreserve.js'
+import { buildXReserveHookData, calculateXReserveMessageHash, xReserveHexToAleoBytes } from '../utils/xreserve.js'
 
 /**
  * Submits the sole user-authorized Aleo mint in the inbound bridge flows.
  *
  * Requires a private xReserve plan and a completed Circle attestation. The
  * wallet calls the wrapper's `private_mint` with the canonical 305-byte payload,
- * 65-byte signature, 32-byte hash, `0scalar`, and intended recipient. Hyperlane
+ * 65-byte signature, 32-byte hash, the plan's secret nonce, and intended recipient. Hyperlane
  * and non-private xReserve destination mints remain relayer-driven.
  *
  * @param registry Reviewed deployment snapshot used to resolve the wrapper program.
@@ -55,6 +55,12 @@ export async function executeXReservePrivateMint(
   if (typeof intendedRecipient !== 'string' || intendedRecipient !== plan.recipient || mintMode !== 'private') throw new BridgeError('Deposit receipt does not match the private mint plan')
   if (attestation.payload.toLowerCase() !== depositPayload.toLowerCase() || attestation.messageHash.toLowerCase() !== depositHash.toLowerCase()) throw new BridgeError('Circle attestation does not match the confirmed deposit')
   if (calculateXReserveMessageHash(attestation.payload) !== attestation.messageHash) throw new BridgeError('Circle attestation payload has an invalid message hash')
+  const secretNonce = plan.privateMintSecretNonce ?? '0scalar'
+  const expectedHookData = await buildXReserveHookData('private', plan.recipient, route.environment, secretNonce)
+  const attestedHookData = `0x${attestation.payload.slice(-130)}`
+  if (attestedHookData.toLowerCase() !== expectedHookData.toLowerCase()) {
+    throw new BridgeError('Private mint secret nonce and recipient do not match the attested hook data')
+  }
 
   const result = await executor.executeTransaction({
     program: wrapperProgram,
@@ -63,7 +69,7 @@ export async function executeXReservePrivateMint(
       xReserveHexToAleoBytes(attestation.payload, 305),
       xReserveHexToAleoBytes(attestation.attestation, 65),
       xReserveHexToAleoBytes(attestation.messageHash, 32),
-      '0scalar',
+      secretNonce,
       plan.recipient,
     ],
     privateFee: params.privateFee ?? false,
@@ -81,7 +87,7 @@ export async function executeXReservePrivateMint(
         attestation: attestation.attestation,
         destinationProgram: wrapperProgram,
         destinationFunction: 'private_mint',
-        secretNonce: '0scalar',
+        secretNonce,
       },
     },
   }

@@ -54,7 +54,8 @@ const plan = bridge.prepareTransfer({
   amount: '25',
   recipient: aleoAddress,
   sender: connectedEthereumAccount,
-  mintMode: 'record',
+  mintMode: 'private',
+  privateMintSecretNonce: '7scalar', // Optional; defaults to 0scalar.
 })
 
 const quote = await bridge.quoteEvmXReserveTransfer({ plan })
@@ -99,8 +100,8 @@ const mint = await bridge.executeXReservePrivateMint({
 ```
 
 This calls `shielded_usdcx_wrapper.aleo/private_mint` with the 305-byte payload,
-65-byte Circle signature, 32-byte message hash, `0scalar`, and intended Aleo
-recipient. The wrapper reproduces the recipient commitment, mints publicly to
+65-byte Circle signature, 32-byte message hash, the plan's secret scalar nonce,
+and intended Aleo recipient. The wrapper reproduces the recipient commitment, mints publicly to
 its own program address, and transfers the amount to the recipient as a record.
 
 ## Ethereum Hyperlane execution

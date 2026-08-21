@@ -196,6 +196,7 @@ export type BridgeTransferQuote = {
  * @property recipient Destination-chain recipient.
  * @property sender Optional source-chain sender used by future fee and approval planning.
  * @property mintMode Aleo mint transition selected for xReserve delivery. Defaults to `public`.
+ * @property privateMintSecretNonce Aleo scalar literal committed into a private-mint hook. Defaults to `0scalar`; applies only to `private` mode and must remain available for the destination transaction.
  * @property privateRecipient Deprecated alias for `mintMode: 'private'`. Defaults to false.
  */
 export type PrepareTransferParameters = {
@@ -204,6 +205,7 @@ export type PrepareTransferParameters = {
   recipient: string
   sender?: string | undefined
   mintMode?: AleoMintMode | undefined
+  privateMintSecretNonce?: string | undefined
   /** @deprecated Use `mintMode: 'private'`; retained for compatibility through the next major release. */
   privateRecipient?: boolean | undefined
 }
@@ -221,6 +223,7 @@ export type PrepareTransferParameters = {
  * @property recipient Destination-chain recipient.
  * @property sender Optional source-chain sender.
  * @property mintMode Aleo destination transition selected by the caller.
+ * @property privateMintSecretNonce Aleo scalar literal committed into a private-mint hook. Present only for private xReserve mints and sensitive until submission.
  * @property privateRecipient Whether the destination requests private Aleo delivery.
  * @property fees Known fee categories; amounts remain absent until protocol quoting is implemented.
  * @property steps Ordered operations required to complete the transfer.
@@ -236,6 +239,7 @@ export type BridgeTransferPlan = {
   recipient: string
   sender?: string | undefined
   mintMode: AleoMintMode
+  privateMintSecretNonce?: string | undefined
   privateRecipient: boolean
   quote: BridgeTransferQuote
   fees: BridgeFee[]

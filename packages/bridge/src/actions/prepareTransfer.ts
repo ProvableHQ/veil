@@ -106,6 +106,13 @@ export function prepareTransfer(
     throw new BridgeError('privateRecipient conflicts with the selected mintMode')
   }
   const mintMode = params.mintMode ?? (params.privateRecipient === true ? 'private' : 'public')
+  if (params.privateMintSecretNonce != null && mintMode !== 'private') {
+    throw new BridgeError('privateMintSecretNonce is only valid with private mint mode')
+  }
+  const privateMintSecretNonce = params.privateMintSecretNonce ?? '0scalar'
+  if (mintMode === 'private' && !/^(0|[1-9][0-9]*)scalar$/.test(privateMintSecretNonce)) {
+    throw new BridgeError('privateMintSecretNonce must be a non-negative decimal Aleo scalar literal such as 0scalar')
+  }
 
   if ((params.mintMode != null || params.privateRecipient === true) && destinationChain.family !== 'aleo') {
     throw new BridgeError('Aleo mint mode is only valid when the destination chain is Aleo')
@@ -142,6 +149,7 @@ export function prepareTransfer(
     recipient: params.recipient,
     ...(params.sender == null ? {} : { sender: params.sender }),
     mintMode,
+    ...(mintMode === 'private' ? { privateMintSecretNonce } : {}),
     privateRecipient: mintMode === 'private',
     quote: {
       routeId: route.id,

@@ -108,13 +108,14 @@ export async function aleoProgramAddress(programId: string, environment: BridgeE
  * Builds the fixed 65-byte xReserve hook for public, record, or wrapper-private minting.
  *
  * Public and record hooks are pure and local. Private hooks lazily load Aleo WASM
- * to commit the intended recipient with BHP256 and scalar zero.
+ * to commit the intended recipient with BHP256 and the selected secret nonce.
  *
  * @param mode Destination mint transition selected by the caller.
  * @param recipient Intended Aleo recipient committed by private mode.
  * @param environment Consensus environment used by private commitment derivation.
+ * @param secretNonce Aleo scalar literal used by the private commitment. Defaults to `0scalar`.
  * @returns A 65-byte hook whose first byte is 0, 1, or 2.
- * @throws BridgeError When private derivation lacks the optional SDK.
+ * @throws BridgeError When private derivation lacks the optional SDK or the secret nonce is not a valid Aleo scalar.
  *
  * @example
  * const hook = await buildXReserveHookData('record', recipient, 'testnet')
@@ -123,13 +124,20 @@ export async function buildXReserveHookData(
   mode: AleoMintMode,
   recipient: string,
   environment: BridgeEnvironment,
+  secretNonce = '0scalar',
 ): Promise<Hex> {
   const bytes = new Uint8Array(HOOK_DATA_BYTES)
   bytes[0] = mode === 'public' ? 0 : mode === 'record' ? 1 : 2
   if (mode === 'private') {
     const sdk = await loadAleoSdk(environment)
     const bits = sdk.Plaintext.fromString(recipient).toBitsLe()
-    const commitment = new sdk.BHP256().commit(bits, sdk.Scalar.zero()).toBytesLe()
+    let scalar
+    try {
+      scalar = sdk.Scalar.fromString(secretNonce)
+    } catch (cause) {
+      throw new BridgeError(`Invalid private mint secret nonce: ${secretNonce}`, { cause })
+    }
+    const commitment = new sdk.BHP256().commit(bits, scalar).toBytesLe()
     if (commitment.length !== 32) throw new BridgeError('Private mint commitment must contain 32 bytes')
     bytes.set(commitment, 1)
   }
