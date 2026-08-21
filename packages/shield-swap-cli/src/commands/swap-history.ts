@@ -9,9 +9,9 @@
  * This is the sweep. It reads the chain rather than the store's own statuses, so
  * an entry appears exactly when a claim would succeed.
  *
- *   --reconcile   walk `claim_swap_output` history to recover a store that lost
- *                 track of a swap. Expensive; run it after losing a store, not
- *                 routinely.
+ *   --reconcile   walk `claim_swap_output` / `claim_swap_output_no_refund` history
+ *                 to recover a store that lost track of a swap. Expensive; run it
+ *                 after losing a store, not routinely.
  *   --claim       claim what is owed (requires --execute).
  *
  * Usage:
