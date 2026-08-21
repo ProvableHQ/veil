@@ -1,5 +1,12 @@
 # @provablehq/veil-aleo-bridges
 
+## 0.4.4
+
+### Patch Changes
+
+- Updated dependencies [99defd6]
+  - @provablehq/veil-core@0.7.1
+
 ## 0.4.3
 
 ### Patch Changes
