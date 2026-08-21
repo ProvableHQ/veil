@@ -1,5 +1,12 @@
 # @provablehq/veil-codegen
 
+## 0.7.1
+
+### Patch Changes
+
+- Updated dependencies [99defd6]
+  - @provablehq/veil-core@0.7.1
+
 ## 0.7.0
 
 ### Patch Changes
