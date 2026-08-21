@@ -106,7 +106,7 @@ describe.runIf(RUN)('e2e: shield_swap lifecycle on devnode (SDK write actions)',
     expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'tick_spacings', key: `${ctx.tickSpacing}u32` })).toBe('true')
     expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'fee_to_tick_spacing', key: `${ctx.fee}u16` })).toBe(`${ctx.tickSpacing}u32`)
     // Plain token registered without a wrapper mapping; wrapper bound to its underlying.
-    expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'token_allowed', key: ctx.tokens.plainH.field })).toBe('true')
+    expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'token_allowed', key: ctx.tokens.plainB.field })).toBe('true')
     expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'from_wrapper_token_id', key: ctx.tokens.wcredits.field })).toBeTruthy()
 
     for (const pool of [ctx.pools.pp, ctx.pools.wp, ctx.pools.ww]) {
