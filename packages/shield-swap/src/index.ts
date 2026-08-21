@@ -33,6 +33,10 @@ export {
   type GetOwnedPositionParameters,
   type GetOwnedPositionReturnType,
 } from './actions/reads/getOwnedPosition.js'
+export {
+  getPoolCreator,
+  type GetPoolCreatorParameters,
+} from './actions/reads/getPoolCreator.js'
 
 // Control-state reads: the pause/allowlist/freeze gates the finalize asserts,
 // as cheap pre-flight checks, plus the batched getTradeControls verdict.
