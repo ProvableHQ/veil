@@ -20,6 +20,7 @@ import {
   USDCX_WRAPPER_PROGRAM,
   loadCanonicalProgramForDevnode,
   replaceExactOccurrences,
+  validateProgramSource,
 } from '../fixtures/canonical/canonicalPrograms.js'
 
 /**
@@ -73,19 +74,21 @@ const LOCAL_PROGRAMS: ReadonlyArray<readonly [string, string]> = [
   ['shield_swap_lp_router.aleo', join(AMM_V3_ROOT, 'shield_swap_lp_router')],
 ]
 
-// Deploy order: every program's imports precede it. The canonical set slots
-// between the AMM and the routers — the wrappers import the AMM's multisig
-// core, and both routers dispatch to the wrappers at run time.
-const DEPLOY_ORDER: readonly string[] = [
-  'shield_swap_multisig_core.aleo',
-  'shield_swap_freezelist.aleo',
-  'shield_swap.aleo',
-  ...CANONICAL_PROGRAM_SPECS.map((spec) => spec.id),
-  'test_token_a.aleo',
-  'test_token_b.aleo',
-  'shield_swap_router.aleo',
-  'shield_swap_lp_router.aleo',
-]
+const CANONICAL_PROGRAM_IDS: readonly string[] = CANONICAL_PROGRAM_SPECS.map((spec) => spec.id)
+
+// Deploy order: every program's imports precede it. Derived from LOCAL_PROGRAMS
+// so a program added there cannot be compiled but left undeployed, with the
+// canonical set spliced in right after the AMM — the wrappers import the AMM's
+// multisig core, and both routers dispatch to the wrappers at run time.
+const DEPLOY_ORDER: readonly string[] = LOCAL_PROGRAMS.flatMap(([programId]) =>
+  programId === AMM_PROGRAM ? [programId, ...CANONICAL_PROGRAM_IDS] : [programId],
+)
+
+if (DEPLOY_ORDER.length !== LOCAL_PROGRAMS.length + CANONICAL_PROGRAM_IDS.length) {
+  throw new Error(
+    `LOCAL_PROGRAMS must name ${AMM_PROGRAM} exactly once — it is the splice point for the canonical programs`,
+  )
+}
 
 const FREEZELIST_PROGRAM = 'shield_swap_freezelist.aleo'
 
@@ -210,19 +213,23 @@ function tokenInfo(program: string, underlying?: { program: string; width: 'u64'
  *
  * @param source The compiled `shield_swap.aleo` instructions.
  * @param deployerAddress The devnode operator to install as admin.
- * @returns The rewritten instructions.
- * @throws When neither form of the admin write appears exactly once.
+ * @returns The rewritten instructions, re-parsed to confirm they still declare
+ *   the AMM.
+ * @throws When neither form of the admin write appears exactly once, or when the
+ *   rewrite no longer parses as `shield_swap.aleo`.
  */
 function deriveDevnodeShieldSwapSource(source: string, deployerAddress: string): string {
   const testnetWrite = `set ${AMM_TESTNET_DEPLOYER} into admin[true];`
   const devnodeWrite = `set ${deployerAddress} into admin[true];`
-  return replaceExactOccurrences(
+  const derived = replaceExactOccurrences(
     source,
     source.includes(testnetWrite) ? testnetWrite : devnodeWrite,
     devnodeWrite,
     1,
     `${AMM_PROGRAM} devnode deployer adaptation`,
   )
+  validateProgramSource(AMM_PROGRAM, derived)
+  return derived
 }
 
 async function waitAccepted(actor: DevnodeActor, testClient: TestClient, txId: string, label: string) {

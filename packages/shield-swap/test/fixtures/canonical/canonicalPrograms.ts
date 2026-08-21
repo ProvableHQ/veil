@@ -22,7 +22,11 @@ import { Program } from '@provablehq/sdk'
  *
  * Pins mirror the `deploy/shield-swap-edition-1` tag of amm-v3 —
  * `ts-tests/scripts/canonical-token-programs.ts` there — which is the amm-v3
- * revision the fixture builds the rest of the stack from.
+ * revision the fixture builds the rest of the stack from. amm-v3's
+ * `development` branch instead pins the two `shield_swap_arc20` wrappers at
+ * edition 1 (`5536f492…` and `9811138c…`), whose only delta is allowing
+ * `shield_swap_rebalance_router.aleo` as a bridge caller; re-pin those two specs
+ * to edition 1 when the SDK retargets a deployment that includes that router.
  */
 
 /** Directory holding the vendored `<id>.aleo` bytecode. */
@@ -122,8 +126,11 @@ export const USDCX_STABLECOIN_SPEC: CanonicalProgramSpec = {
 
 /**
  * Native-credits wrapper. Needs no adaptation: its bridge transitions gate on
- * the router program addresses, which the fixture deploys under the same
- * program names, and it has no mint authority to reassign.
+ * the router program addresses, which the fixture deploys under the same program
+ * names, and no fixture flow needs a role on it — wrapper balances arrive only
+ * through router deposits. Its edition-0 constructor does grant the admin role
+ * (`8u16`) to the testnet deployer, so `update_role` stays un-callable on a
+ * devnode; amm-v3 pins it without an adaptation for the same reason.
  */
 export const CREDITS_WRAPPER_SPEC: CanonicalProgramSpec = {
   id: CREDITS_WRAPPER_PROGRAM,
@@ -131,7 +138,12 @@ export const CREDITS_WRAPPER_SPEC: CanonicalProgramSpec = {
   sha256: '661bf4ecea3f17267931f3f5cb8e7ec4571fff5c6aa9fe95cba7e820f1134ff4',
 }
 
-/** Wrapped-USDCx wrapper. Needs no adaptation, for the same reason. */
+/**
+ * Wrapped-USDCx wrapper. Needs no adaptation for the same reasons, including the
+ * un-callable admin role its edition-0 constructor grants the testnet deployer.
+ * Its underlying asset's authority is the one that matters, and
+ * {@link USDCX_STABLECOIN_SPEC} carries that adaptation.
+ */
 export const USDCX_WRAPPER_SPEC: CanonicalProgramSpec = {
   id: USDCX_WRAPPER_PROGRAM,
   edition: 0,
@@ -183,15 +195,15 @@ export function replaceExactOccurrences(
 /**
  * Parses a program and asserts it declares the expected id.
  *
- * Guards every rewrite: a substitution that corrupts the bytecode fails here
- * rather than as an opaque devnode deployment rejection. Pure and local
- * (parsing runs in the wasm, no network).
+ * Guards every rewrite — canonical or locally compiled — so a substitution that
+ * corrupts the bytecode fails here rather than as an opaque devnode deployment
+ * rejection. Pure and local (parsing runs in the wasm, no network).
  *
  * @param programId The id the source must declare.
  * @param source Aleo instructions to parse.
  * @throws When the source does not parse or declares a different id.
  */
-function validateProgramSource(programId: string, source: string): void {
+export function validateProgramSource(programId: string, source: string): void {
   let program: Program
   try {
     program = Program.fromString(source)
