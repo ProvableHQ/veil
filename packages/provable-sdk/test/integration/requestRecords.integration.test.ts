@@ -122,17 +122,43 @@ describe.runIf(RUN)('requestRecords on testnet and mainnet with switchChain', ()
  * Run with:
  *   VEIL_INTEGRATION=1 npx vitest run packages/provable-sdk/test/integration/requestRecords.integration.test.ts
  */
-describe.runIf(RUN)('RecordFilter bounds applied by the scanner service', () => {
+const EDGE_BASE = process.env.EDGE_BASE_URL ?? 'https://edge.provable.com/api'
+const EDGE_KEY = process.env.EDGE_PROVABLE_API_KEY
+
+/**
+ * Scanner routes the bounds suite runs against. The jwt path resolves consumer
+ * credentials lazily (registering a throwaway consumer when the env pair is
+ * absent or rejected); the edge path runs only when a provisioned key is
+ * present, since edge keys are handed out rather than registered.
+ */
+const SCAN_TARGETS = [
+  {
+    name: 'via api.provable.com (jwt)',
+    enabled: true,
+    networkUrl: NETWORK_URL,
+    scannerUrl: SCANNER_URL,
+    scannerAuth: async () => resolveCredentials(),
+  },
+  {
+    name: 'via edge.provable.com (provisioned key)',
+    enabled: !!EDGE_KEY,
+    networkUrl: `${EDGE_BASE}/v2`,
+    scannerUrl: `${EDGE_BASE}/scanner`,
+    scannerAuth: async () => ({ auth: { mode: 'api-key' as const, value: EDGE_KEY! } }),
+  },
+]
+
+for (const target of SCAN_TARGETS) {
+describe.runIf(RUN && target.enabled)(`RecordFilter bounds applied by the scanner service ${target.name}`, () => {
   let scan: (params: Record<string, unknown>) => Promise<any[]>
   let baseline: any[]
 
   beforeAll(async () => {
-    const { consumerId, apiKey } = await resolveCredentials()
     const aleo = await loadNetwork('testnet')
-    const scanner = aleo.createRemoteScanner({ url: SCANNER_URL, consumerId, apiKey })
+    const scanner = aleo.createRemoteScanner({ url: target.scannerUrl, ...(await target.scannerAuth()) })
     const { walletClient } = aleo.createAleoClient({
       privateKey: PRIVATE_KEY!,
-      networkUrl: NETWORK_URL,
+      networkUrl: target.networkUrl,
       provingMode: 'local',
       records: scanner,
     })
@@ -236,3 +262,4 @@ describe.runIf(RUN)('RecordFilter bounds applied by the scanner service', () => 
     expect(everything.some((r) => r.programName === 'credits.aleo')).toBe(true)
   }, 120_000)
 })
+}

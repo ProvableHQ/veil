@@ -4,6 +4,7 @@ import type {
   RecordProvider,
   WalletActions,
 } from '@provablehq/veil-core'
+import type { ApiAuthConfig } from '@provablehq/sdk'
 
 /** Root of the hosted Provable API. Consumer and JWT endpoints sit here, not under the versioned path. */
 const DEFAULT_PROVABLE_API_URL = 'https://api.provable.com'
@@ -92,6 +93,31 @@ export function memoryCredentialStore(
 }
 
 /**
+ * Provisioned-key authentication for the edge Provable API gateway.
+ *
+ * The keyed variant of the Provable SDK's `ApiAuthConfig`, derived rather
+ * than restated so the two cannot drift — values of this type pass straight
+ * into the SDK's `RecordScanner` and delegated proving as their `auth`
+ * option, where the SDK applies the header default (`DEFAULT_API_KEY_HEADER`).
+ *
+ * The edge gateway (`edge.provable.com`) runs a different auth model from
+ * `api.provable.com`: there is no consumer registration and no JWT minting.
+ * An operator hands out API keys, and every request carries the key verbatim
+ * in a header. Nothing registers, persists, or refreshes, and a rejected
+ * request (401) means the key is invalid or revoked — retrying cannot help,
+ * and only the operator can issue a replacement.
+ *
+ * Mutually exclusive with the session options (`credentials`, `store`,
+ * `username`, `session`): those describe the registered-consumer lifecycle,
+ * which a provisioned key does not have. Combining them throws at
+ * construction.
+ *
+ * @example
+ * const auth: ProvableKeyedAuth = { mode: 'api-key', value: process.env.PROVABLE_API_KEY! }
+ */
+export type ProvableKeyedAuth = Extract<ApiAuthConfig, { mode: 'api-key' }>
+
+/**
  * A minted Provable API JWT and its expiry.
  *
  * Structurally identical to the Provable SDK's `JWTData` and
@@ -160,10 +186,14 @@ export type ProvableSession = {
  * @property baseUrl Optional Provable API root. Defaults to
  *   `https://api.provable.com`. Applies when targeting a non-production
  *   deployment.
+ * @property transport Optional fetch-compatible transport for the request.
+ *   Defaults to the global `fetch`. Applies when a caller intercepts or
+ *   instruments HTTP — a proxy, a recorder, a test stub.
  */
 export type RegisterProvableApiParameters = {
   username: string
   baseUrl?: string
+  transport?: typeof fetch
 }
 
 /**
@@ -180,12 +210,17 @@ export type RegisterProvableApiParameters = {
  *   configuration time. Required only if registration may happen.
  * @property baseUrl Optional Provable API root. Defaults to
  *   `https://api.provable.com`.
+ * @property transport Optional fetch-compatible transport used for
+ *   registration and JWT minting. Defaults to the global `fetch`. Applies
+ *   when a caller intercepts or instruments HTTP — a proxy, a recorder, a
+ *   test stub.
  */
 export type CreateProvableSessionOptions = {
   credentials?: ProvableApiCredentials
   store?: ProvableCredentialStore
   username?: string | (() => string)
   baseUrl?: string
+  transport?: typeof fetch
 }
 
 /**
@@ -267,9 +302,13 @@ export type ProvableWalletClient = Client<
  *
  * @property session The session shared with record scanning, or `undefined`
  *   when the client was configured without credentials.
+ * @property keyedAuth The provisioned-key auth the client was configured
+ *   with, or `undefined` under the session model. Mutually exclusive with
+ *   `session`.
  */
 export type ProvingConfigWithSession = ProvingConfig & {
   session?: ProvableSession | undefined
+  keyedAuth?: ProvableKeyedAuth | undefined
 }
 
 /**
@@ -298,7 +337,8 @@ export async function registerProvableApi(
   params: RegisterProvableApiParameters,
 ): Promise<ProvableApiCredentials> {
   const baseUrl = params.baseUrl ?? DEFAULT_PROVABLE_API_URL
-  const response = await fetch(`${baseUrl}/consumers`, {
+  const transport = params.transport ?? fetch
+  const response = await transport(`${baseUrl}/consumers`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ username: params.username }),
@@ -334,12 +374,17 @@ export async function registerProvableApi(
  *
  * @param credentials The consumer id and API key to authenticate the mint with.
  * @param baseUrl Provable API root.
+ * @param transport Fetch-compatible transport for the request.
  * @returns The token and its expiry in milliseconds since the Unix epoch.
  * @throws When the mint returns a non-2xx status, or when the response omits
  *   the authorization header or the expiry claim.
  */
-async function mintJwt(credentials: ProvableApiCredentials, baseUrl: string): Promise<ProvableJwt> {
-  const response = await fetch(`${baseUrl}/jwts/${encodeURIComponent(credentials.consumerId)}`, {
+async function mintJwt(
+  credentials: ProvableApiCredentials,
+  baseUrl: string,
+  transport: typeof fetch,
+): Promise<ProvableJwt> {
+  const response = await transport(`${baseUrl}/jwts/${encodeURIComponent(credentials.consumerId)}`, {
     method: 'POST',
     headers: { 'X-Provable-API-Key': credentials.apiKey },
   })
@@ -379,6 +424,7 @@ async function mintJwt(credentials: ProvableApiCredentials, baseUrl: string): Pr
  */
 export function createProvableSession(options: CreateProvableSessionOptions = {}): ProvableSession {
   const baseUrl = options.baseUrl ?? DEFAULT_PROVABLE_API_URL
+  const transport = options.transport ?? fetch
   const consumers: ProvableSessionConsumers = { proving: false, recordScanning: false }
 
   let credentials = options.credentials
@@ -403,7 +449,7 @@ export function createProvableSession(options: CreateProvableSessionOptions = {}
         'No Provable API credentials available — pass credentials, a store holding them, or a username to register with.',
       )
     }
-    const issued = await registerProvableApi({ username, baseUrl })
+    const issued = await registerProvableApi({ username, baseUrl, transport })
     // Held before persisting, even though persisting is what makes them
     // durable. A username is spent once and the key is issued once, so if the
     // write fails the worst outcome is registering *again* on the next attempt
@@ -439,7 +485,7 @@ export function createProvableSession(options: CreateProvableSessionOptions = {}
     // burst of rejected calls still produces one replacement token.
     jwtInFlight ??= (async () => {
       const resolved = await getCredentials()
-      jwt = await mintJwt(resolved, baseUrl)
+      jwt = await mintJwt(resolved, baseUrl, transport)
       return jwt
     })().finally(() => {
       jwtInFlight = undefined
@@ -503,6 +549,15 @@ export async function authenticateProvableApi(
   client: Client,
   params: AuthenticateProvableApiParameters = {},
 ): Promise<AuthenticateProvableApiReturnType> {
+  // Keyed auth has no lifecycle to resolve: no consumer to register, no JWT
+  // to mint. Answering with fabricated credentials would hide that, so the
+  // call refuses instead of pretending.
+  if ((client.proving as ProvingConfigWithSession | undefined)?.keyedAuth) {
+    throw new Error(
+      'This client authenticates with a provisioned API key — every request already carries it, and ' +
+        'there is no consumer or JWT to resolve. Remove the authenticateProvableApi call.',
+    )
+  }
   const session = getProvableSession(client)
   if (!session) {
     throw new Error(

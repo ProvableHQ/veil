@@ -56,6 +56,7 @@ import {
   memoryCredentialStore,
   provableApiActions,
   type ProvableCredentialStore,
+  type ProvableKeyedAuth,
   type ProvableSession,
   type ProvableWalletClient,
   type ProvingConfigWithSession,
@@ -68,6 +69,7 @@ export {
   authenticateProvableApi,
   provableApiActions,
   type ProvableApiCredentials,
+  type ProvableKeyedAuth,
   type ProvableCredentialStore,
   type ProvableJwt,
   type ProvableSession,
@@ -196,6 +198,10 @@ export interface AleoSdk {
    *   from the prover client, so one party mints JWTs. The session is attached
    *   to the returned configuration, which is what lets
    *   `authenticateProvableApi` find it on a client.
+   * @param options.auth Optional provisioned-key auth for the edge gateway.
+   *   Every proving request carries the key verbatim; nothing registers or
+   *   mints, and a 401 is terminal. Mutually exclusive with `session`,
+   *   `apiKey`, and `consumerId` — combining them throws.
    */
   createProvingConfig(options: {
     mode: 'delegated' | 'local'
@@ -207,6 +213,7 @@ export interface AleoSdk {
     confirmationTimeout?: number
     useFeeMaster?: boolean
     session?: ProvableSession
+    auth?: ProvableKeyedAuth
   }): ProvingConfigWithSession
 
   /**
@@ -234,8 +241,13 @@ export interface AleoSdk {
    *   passes the scanner to that factory does not need this.
    * @param options.startBlock Optional block height to begin scanning from at
    *   registration. Defaults to 0 (full history).
-   * @returns The provider, plus `setSession` for a factory to share one session
-   *   across proving and scanning after construction.
+   * @param options.auth Optional provisioned-key auth for the edge gateway.
+   *   Every scan carries the key verbatim; nothing registers or mints, and a
+   *   401 is terminal. Mutually exclusive with `session`, `apiKey`, and
+   *   `consumerId` — combining them throws.
+   * @returns The provider, plus `setSession` and `setAuth` for a factory to
+   *   share one credential source across proving and scanning after
+   *   construction.
    */
   createRemoteScanner(options?: {
     url?: string
@@ -243,7 +255,11 @@ export interface AleoSdk {
     apiKey?: string
     session?: ProvableSession
     startBlock?: number
-  }): RecordProvider & { setSession: (session: ProvableSession) => void }
+    auth?: ProvableKeyedAuth
+  }): RecordProvider & {
+    setSession: (session: ProvableSession) => void
+    setAuth: (auth: ProvableKeyedAuth) => void
+  }
 
   /**
    * Creates a standalone record scanner with an explicit view key.
@@ -265,6 +281,10 @@ export interface AleoSdk {
    *   into a wallet client, so nothing shares a session with it later.
    * @param options.startBlock Optional block height to begin scanning from at
    *   registration. Defaults to 0 (full history).
+   * @param options.auth Optional provisioned-key auth for the edge gateway.
+   *   Every scan carries the key verbatim; nothing registers or mints, and a
+   *   401 is terminal. Mutually exclusive with `session`, `apiKey`, and
+   *   `consumerId` — combining them throws.
    */
   createStandaloneScanner(options: {
     url?: string
@@ -273,6 +293,7 @@ export interface AleoSdk {
     apiKey?: string
     session?: ProvableSession
     startBlock?: number
+    auth?: ProvableKeyedAuth
   }): StandaloneRecordScanner
 
   /**
@@ -316,6 +337,13 @@ export interface AleoSdk {
    *   aimed at an open service keeps needing no credential.
    * @param options.session Optional pre-built session, for a caller that owns
    *   one already. Takes precedence over the credential options.
+   * @param options.auth Optional provisioned-key auth for the edge gateway.
+   *   Selects the keyed model for the whole client: proving and scanning carry
+   *   the key on every request, no session exists, and
+   *   `authenticateProvableApi` throws since there is nothing to resolve.
+   *   Mutually exclusive with every consumer option (`apiKey`, `consumerId`,
+   *   `username`, `credentialStore`, `session`) — edge keys are handed out by
+   *   an operator, not registered.
    * @returns A public client, a wallet client carrying
    *   `authenticateProvableApi`, and the account.
    *
@@ -339,13 +367,17 @@ export interface AleoSdk {
     username?: string | (() => string)
     credentialStore?: ProvableCredentialStore
     session?: ProvableSession
+    auth?: ProvableKeyedAuth
     /**
      * Record provider for `requestRecords`. Not wired by default — pass
      * `aleo.createRemoteScanner(...)` or any
      * custom `RecordProvider`. `requestRecords` throws with a setup hint
      * when no provider is configured.
      */
-    records?: RecordProvider & { setSession?: (session: ProvableSession) => void }
+    records?: RecordProvider & {
+      setSession?: (session: ProvableSession) => void
+      setAuth?: (auth: ProvableKeyedAuth) => void
+    }
   }): {
     publicClient: PublicClient
     walletClient: ProvableWalletClient
@@ -470,7 +502,13 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
      * are withheld from the prover client so the SDK never mints in parallel.
      */
     session?: ProvableSession
+    auth?: ProvableKeyedAuth
   }): ProvingConfigWithSession {
+    assertKeyedAuthAlone(options.auth, {
+      session: options.session,
+      apiKey: options.apiKey,
+      consumerId: options.consumerId,
+    })
     // Each call reads from currentSdk so switchNetwork can swap the binary set
     // without rebuilding the wallet client.
     let networkUrl = options.networkUrl
@@ -514,6 +552,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       // reads binding-specific fields on a proving config — `url` and `apiKey`
       // already travel the same way.
       session: options.session,
+      keyedAuth: options.auth,
 
       buildTransaction: async (txOptions: BuildTransactionOptions) => {
         const programManager = new currentSdk.ProgramManager(
@@ -674,10 +713,11 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 
             const dpsClient = new AleoNetworkClient(proverUrl)
 
-            const auth = async (forceRefresh: boolean) =>
-              options.session
-                ? { jwtData: await options.session.getJwt({ forceRefresh }) }
-                : { apiKey: options.apiKey, consumerId: options.consumerId }
+            const auth = async (forceRefresh: boolean) => {
+              if (options.auth) return { auth: options.auth }
+              if (options.session) return { jwtData: await options.session.getJwt({ forceRefresh }) }
+              return { apiKey: options.apiKey, consumerId: options.consumerId }
+            }
 
             // The safe variant reports HTTP status instead of throwing, which is
             // what makes a rejected credential distinguishable from a proving
@@ -846,6 +886,31 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
   // 429/5xx are always transient; a 401/403 is only worth retrying when a JWT
   // can actually be re-minted (apiKey configured) — on an unauthenticated
   // scanner those are permanent, so retrying just burns backoff.
+  /**
+   * Rejects provisioned-key auth combined with any consumer-lifecycle option.
+   *
+   * The two models are disjoint: a handed-out key registers nothing, persists
+   * nothing, and mints nothing, so a consumer option beside it means the
+   * caller misunderstands which gateway they target. Names the options
+   * actually passed, and throws before any work is done.
+   *
+   * @param auth The keyed auth option, when given.
+   * @param conflicts Consumer-lifecycle options by name; truthy values conflict.
+   * @throws ConfigurationError when `auth` is combined with any truthy conflict.
+   */
+  function assertKeyedAuthAlone(
+    auth: ProvableKeyedAuth | undefined,
+    conflicts: Record<string, unknown>,
+  ): void {
+    if (!auth) return
+    const named = Object.keys(conflicts).filter((key) => conflicts[key])
+    if (named.length) {
+      throw new ConfigurationError(
+        `Provisioned-key auth is mutually exclusive with ${named.join(', ')} — edge API keys are handed out, not registered.`,
+      )
+    }
+  }
+
   async function scanOwned(
     scanner: InstanceType<SdkModule['RecordScanner']>,
     params: RequestRecordsParameters,
@@ -899,7 +964,16 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     apiKey?: string
     session?: ProvableSession
     startBlock?: number
-  } = {}): RecordProvider & { setSession: (session: ProvableSession) => void } {
+    auth?: ProvableKeyedAuth
+  } = {}): RecordProvider & {
+    setSession: (session: ProvableSession) => void
+    setAuth: (auth: ProvableKeyedAuth) => void
+  } {
+    assertKeyedAuthAlone(options.auth, {
+      session: options.session,
+      apiKey: options.apiKey,
+      consumerId: options.consumerId,
+    })
     // A JWT is minted from the pair, so half of it authenticates nothing: the
     // consumer id is the path segment and the key the header. Without a session
     // to supply tokens instead, an incomplete pair would send unauthenticated
@@ -917,21 +991,32 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     let viewKey: ReturnType<SdkModule['ViewKey']['from_string']> | undefined
     let viewKeyString: string | undefined
     let registration = makeRegisterOnce(options.startBlock ?? 0)
-    let session = options.session
-    session?.attach('recordScanning')
+    // One slot for the credential source: a JWT session or a provisioned key,
+    // never both. The discriminant is the keyed variant's `mode` field.
+    let credential: ProvableSession | ProvableKeyedAuth | undefined = options.auth ?? options.session
+    const sessionOf = (source: typeof credential): ProvableSession | undefined =>
+      source && !('mode' in source) ? source : undefined
+    sessionOf(credential)?.attach('recordScanning')
     const url = options.url ?? DEFAULT_SCANNER_URL
 
     function buildScanner() {
       if (!viewKeyString) return // no active account yet — nothing to rebuild
       viewKey = scannerSdk.ViewKey.from_string(viewKeyString)
+      // Keyed auth rides in the scanner itself — there is no token to supply
+      // per scan. Under a session the credentials stay out of the scanner so
+      // only one party mints.
+      const credentialProps =
+        credential && 'mode' in credential
+          ? { auth: credential }
+          : credential
+            ? {}
+            : {
+                ...(options.consumerId ? { consumerId: options.consumerId } : {}),
+                ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+              }
       scanner = new scannerSdk.RecordScanner({
         url,
-        // A session supplies the token per scan, so the credentials stay out of
-        // the scanner and only one party mints.
-        ...(session ? {} : {
-          ...(options.consumerId ? { consumerId: options.consumerId } : {}),
-          ...(options.apiKey ? { apiKey: options.apiKey } : {}),
-        }),
+        ...credentialProps,
         viewKeys: [viewKey],
         decryptEnabled: true,
         autoReRegister: true,
@@ -956,11 +1041,26 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
        * scan boundary, not at construction.
        */
       setSession: (next: ProvableSession) => {
-        session = next
+        credential = next
         next.attach('recordScanning')
         // Rebuild so the scanner drops any credentials it was constructed with;
         // leaving them in place would let the SDK mint alongside the session.
         buildScanner()
+      },
+
+      /**
+       * Shares provisioned-key auth with this scanner.
+       *
+       * Called by {@link createAleoClient} when the client uses the edge
+       * gateway's keyed model. Replaces any session, since the two models are
+       * mutually exclusive. Takes effect on the next scan.
+       */
+      setAuth: (next: ProvableKeyedAuth) => {
+        credential = next
+        // A live scanner swaps its auth in place, keeping the registration and
+        // the parsed view key; a rebuild would force both to be redone.
+        if (scanner) scanner.setAuth(next)
+        else buildScanner()
       },
 
       requestRecords: async (params: RequestRecordsParameters): Promise<OwnedRecord[]> => {
@@ -974,11 +1074,19 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         const activeScanner = scanner
         const activeViewKey = viewKey!
         const activeRegistration = registration
+        // Pin the credential with the build: a concurrent setAuth or
+        // setSession must not swap models mid-scan.
+        const activeSession = sessionOf(credential)
+
         // Apply the token before registration, not just before the scan:
-        // registering a view key is itself an authenticated call.
-        if (session) activeScanner.setJwtData(await session.getJwt())
+        // registering a view key is itself an authenticated call. Keyed auth
+        // rides in the scanner, so there is no token to apply.
+        if (activeSession) activeScanner.setJwtData(await activeSession.getJwt())
         await activeRegistration.ensure(activeScanner, activeViewKey)
-        return scanOwned(activeScanner, params, !!(options.apiKey && options.consumerId), session)
+        // Re-mint material reflects the live credential: a 401 on a
+        // provisioned key is terminal, and retrying it would only burn backoff.
+        const canReMint = !credential && !!(options.apiKey && options.consumerId)
+        return scanOwned(activeScanner, params, canReMint, activeSession)
       },
 
       switchNetwork: async (newNetwork: string) => {
@@ -1000,7 +1108,13 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     apiKey?: string
     session?: ProvableSession
     startBlock?: number
+    auth?: ProvableKeyedAuth
   }): StandaloneRecordScanner {
+    assertKeyedAuthAlone(options.auth, {
+      session: options.session,
+      apiKey: options.apiKey,
+      consumerId: options.consumerId,
+    })
     // A JWT is minted from the pair, so half of it authenticates nothing: the
     // consumer id is the path segment and the key the header. Without a session
     // to supply tokens instead, an incomplete pair would send unauthenticated
@@ -1014,13 +1128,19 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     // Deliberately not attached: a standalone scanner is not pluggable into a
     // wallet client, so no client's `applied` report covers it.
     const session = options.session
+    // Keyed auth rides in the scanner itself. Credentials only when no
+    // session mints on this scanner's behalf.
+    const credentialProps = options.auth
+      ? { auth: options.auth }
+      : session
+        ? {}
+        : {
+            ...(options.consumerId ? { consumerId: options.consumerId } : {}),
+            ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+          }
     const scanner = new RecordScanner({
       url: options.url ?? DEFAULT_SCANNER_URL,
-      // Credentials only when no session mints on this scanner's behalf.
-      ...(session ? {} : {
-        ...(options.consumerId ? { consumerId: options.consumerId } : {}),
-        ...(options.apiKey ? { apiKey: options.apiKey } : {}),
-      }),
+      ...credentialProps,
       viewKeys: [viewKey],
       decryptEnabled: true,
       autoReRegister: true,
@@ -1050,17 +1170,37 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     username?: string | (() => string)
     credentialStore?: ProvableCredentialStore
     session?: ProvableSession
-    records?: RecordProvider & { setSession?: (session: ProvableSession) => void }
+    auth?: ProvableKeyedAuth
+    records?: RecordProvider & {
+      setSession?: (session: ProvableSession) => void
+      setAuth?: (auth: ProvableKeyedAuth) => void
+    }
   }): {
     publicClient: PublicClient
     walletClient: ProvableWalletClient
     account: LocalAccount<'privateKey'>
   } {
+    assertKeyedAuthAlone(options.auth, {
+      apiKey: options.apiKey,
+      consumerId: options.consumerId,
+      username: options.username,
+      credentialStore: options.credentialStore,
+      session: options.session,
+    })
+    // A keyed client must be able to hand its key to the record provider; a
+    // provider without setAuth would scan unauthenticated and 401 at runtime.
+    if (options.auth && options.records && !options.records.setAuth) {
+      throw new ConfigurationError(
+        'Provisioned-key auth needs a record provider with setAuth — pass a scanner from createRemoteScanner, or construct the provider with the key.',
+      )
+    }
+
     const account = privateKeyToAccount(options.privateKey)
     const transport = http(options.networkUrl, { network: network as Network })
 
     // One session for the whole client, so a single authenticateProvableApi()
-    // covers proving and scanning.
+    // covers proving and scanning. Keyed auth builds none: there is nothing to
+    // register, persist, or mint.
     const credentials =
       options.consumerId && options.apiKey
         ? { consumerId: options.consumerId, apiKey: options.apiKey }
@@ -1071,8 +1211,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     // provider, since a scanner pointed at an open service needs no credential
     // and must not start registering one.
     const configured = !!(credentials || options.credentialStore || options.session)
-    const session =
-      options.session ??
+    const session = options.auth
+      ? undefined
+      : options.session ??
       createProvableSession({
         credentials,
         store: options.credentialStore ?? memoryCredentialStore(),
@@ -1091,6 +1232,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       networkUrl: options.networkUrl,
       proverUrl: options.proverUrl,
       session,
+      auth: options.auth,
       // Ignored by the proving config whenever a session is present, which is
       // where the one-minter rule is enforced.
       apiKey: options.apiKey,
@@ -1105,12 +1247,13 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     const publicClient = createPublicClient({ transport })
 
     if (options.records) {
-      // Session before account: sharing the session rebuilds the scanner to drop
+      // Credentials before account: sharing them rebuilds the scanner to drop
       // any credentials it was constructed with, and setAccount is what triggers
       // the one build that matters. Only shared when the caller named a
       // credential source — an unconfigured client must leave a scanner aimed at
       // an open service exactly as it was.
-      if (configured) options.records.setSession?.(session)
+      if (options.auth) options.records.setAuth?.(options.auth)
+      else if (configured && session) options.records.setSession?.(session)
       options.records.setAccount({ viewKey: account.viewKey })
     }
 
@@ -1151,8 +1294,11 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 // @provablehq/veil-aleo-devnode passes to the aleo-devnode process, so the transaction builder
 // and the node agree on which consensus version is active at each height. The
 // entry count must also equal the WASM SDK's consensus-version count exactly —
-// a shorter list panics with an opaque `unreachable` inside the WASM.
-const DEVNODE_CONSENSUS_HEIGHTS = '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17'
+// a shorter list panics with an opaque `unreachable` inside the WASM. The WASM
+// (snarkVM 4.9.1) carries one more consensus version than aleo-devnode 0.2.4,
+// so the nineteenth entry activates at u32::MAX — a height no devnode reaches —
+// keeping both sides on identical rules everywhere they can actually run.
+const DEVNODE_CONSENSUS_HEIGHTS = '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,4294967295'
 
 function privateKeyToAccount(privateKey: string): LocalAccount<'privateKey'> {
   const sdkAccount = new Account({ privateKey })
