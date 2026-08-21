@@ -38,6 +38,8 @@ export {
   getPrivateBalancesSchema,
   getOwnedPositionsSchema,
   getOwnedPositionSchema,
+  getPoolCreatorSchema,
+  getSwapExecutionSchema,
   derivePoolKeySchema,
   deriveTickKeySchema,
   deriveSwapIdSchema,

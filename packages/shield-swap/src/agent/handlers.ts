@@ -5,6 +5,8 @@ import { resolveDexImports } from '../utils/imports.js'
 import { getPool } from '../actions/reads/getPool.js'
 import { getSlot } from '../actions/reads/getSlot.js'
 import { getSwapOutput } from '../actions/reads/getSwapOutput.js'
+import { getPoolCreator } from '../actions/reads/getPoolCreator.js'
+import { getSwapExecution } from '../actions/reads/getSwapExecution.js'
 import { getPosition } from '../actions/reads/getPosition.js'
 import { getOwnedPositions, type OwnedPosition } from '../actions/reads/getOwnedPositions.js'
 import { getOwnedPosition } from '../actions/reads/getOwnedPosition.js'
@@ -86,6 +88,11 @@ export function createChainHandlers(client: Client, program?: string): Record<st
       const position = await getOwnedPosition(client, { positionTokenId: i.positionTokenId as string, program })
       return jsonSafe(position ? stripRecord(position) : null)
     },
+    shield_swap_get_pool_creator: async (i) => ({
+      creator: await getPoolCreator(client, { poolKey: i.poolKey as string, program }),
+    }),
+    shield_swap_get_swap_execution: async (i) =>
+      jsonSafe(await getSwapExecution(client, { swapId: i.swapId as string, program })),
   }
 }
 

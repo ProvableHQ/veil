@@ -40,6 +40,29 @@ export const getSwapOutputSchema: AgentToolSchema = {
   },
 }
 
+/** Declares the `shield_swap_get_pool_creator` tool — a chain-direct read of a pool's creator (backed by `getPoolCreator`). */
+export const getPoolCreatorSchema: AgentToolSchema = {
+  name: 'shield_swap_get_pool_creator',
+  description:
+    "Read a pool's creator from chain — the immediate create_pool caller, written once " +
+    'at creation. Returns null when the pool does not exist or predates creator tracking.',
+  inputSchema: { type: 'object', properties: poolKeyProp, required: ['poolKey'] },
+}
+
+/** Declares the `shield_swap_get_swap_execution` tool — a chain-direct read of a swap's execution receipt (backed by `getSwapExecution`). */
+export const getSwapExecutionSchema: AgentToolSchema = {
+  name: 'shield_swap_get_swap_execution',
+  description:
+    "Read a swap's execution receipt from chain by swap id — executed height plus per-hop " +
+    'pool, direction, amounts, gross/protocol/LP fees, final price, liquidity, and tick. ' +
+    'Persists after the claim. Returns null for pre-upgrade or unfinalized swaps.',
+  inputSchema: {
+    type: 'object',
+    properties: { swapId: { type: 'string', description: 'Swap id field literal from the swap handle.' } },
+    required: ['swapId'],
+  },
+}
+
 /** Declares the `shield_swap_get_position` tool — a chain-direct read of a position's public state (backed by `getPosition`). */
 export const getPositionSchema: AgentToolSchema = {
   name: 'shield_swap_get_position',
@@ -667,6 +690,8 @@ export const chainToolSchemas: AgentToolSchema[] = [
   getPrivateBalancesSchema,
   getOwnedPositionsSchema,
   getOwnedPositionSchema,
+  getPoolCreatorSchema,
+  getSwapExecutionSchema,
 ]
 
 /** Pure derivation tools — no client or API backing; always available. */
