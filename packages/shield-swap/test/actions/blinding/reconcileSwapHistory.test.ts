@@ -59,6 +59,35 @@ const claimTx = (blindedAddress: string, swapId: string, amountOut: string) => (
 })
 
 /**
+ * A no-refund claim transition: the swap filled completely, so the chain
+ * dispatched `claim_swap_output_no_refund` — same shape minus the
+ * `amount_remaining` slot, one input shorter than {@link claimTx}.
+ */
+const claimTxNoRefund = (blindedAddress: string, swapId: string, amountOut: string) => ({
+  id: 'at1claimNr',
+  type: 'execute',
+  execution: {
+    transitions: [
+      {
+        id: 'au1claimNr',
+        program: PROGRAM,
+        function: 'claim_swap_output_no_refund',
+        inputs: [
+          { type: 'private', id: 'i0', value: 'ciphertext1qgq...' },
+          { type: 'public', id: 'i1', value: blindedAddress },
+          { type: 'public', id: 'i2', value: swapId },
+          { type: 'public', id: 'i3', value: '11field' },
+          { type: 'public', id: 'i4', value: '22field' },
+          { type: 'public', id: 'i5', value: amountOut },
+          // No amount_remaining slot — index 6 here is the merkle proof pair.
+          { type: 'public', id: 'i6', value: '[[false, false], [false, false]]' },
+        ],
+      },
+    ],
+  },
+})
+
+/**
  * Client answering the two public endpoints the action uses.
  *
  * @param pages Pages of call history, served in order.
@@ -111,6 +140,25 @@ describe('reconcileSwapHistory', () => {
     const [record] = await store.load()
     expect(record!.status).toBe('claimed')
     expect(record!.swapId).toBe('6027043763583019120471660372455836698field')
+  })
+
+  it('recovers a no-refund claim, reading amountRemaining as 0n rather than the proof slot', async () => {
+    const store = memoryBlindedIdentityStore([reserved(ADDR_A, 0)])
+    const { client } = historyClient(
+      [{ calls: [call('at1claimNr', 'claim_swap_output_no_refund')], next_cursor: null }],
+      { at1claimNr: claimTxNoRefund(ADDR_A, '6027043763583019120471660372455836698', '175488u128') },
+    )
+
+    const result = await reconcileSwapHistory(client, { store, program: PROGRAM })
+    expect(result.claims).toHaveLength(1)
+    expect(result.claims[0]!.swapId).toBe('6027043763583019120471660372455836698field')
+    expect(result.claims[0]!.amountOut).toBe(175488n)
+    expect(result.claims[0]!.amountRemaining).toBe(0n)
+    expect(result.complete).toBe(true)
+
+    const [record] = await store.load()
+    expect(record!.status).toBe('claimed')
+    expect(record!.claim!.amountRemaining).toBe('0')
   })
 
   it('ignores claims belonging to other accounts', async () => {

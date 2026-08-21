@@ -75,10 +75,11 @@ consumed whose swap id the store never recorded. Nothing on chain locates their
 proceeds until a claim exists.
 
 For a store that is merely missing some ids, `client.reconcileSwapHistory()` walks
-`claim_swap_output` history and recovers them. For a store that is **empty** — a
-first run against an existing account, or a lost file — that walk has nothing to
-match against, because a blinded identity is derived rather than recorded and
-nothing on chain lists an account's own. Use the script instead:
+`claim_swap_output` / `claim_swap_output_no_refund` history and recovers them.
+For a store that is **empty** — a first run against an existing account, or a
+lost file — that walk has nothing to match against, because a blinded identity
+is derived rather than recorded and nothing on chain lists an account's own.
+Use the script instead:
 
 ```sh
 shield-swap history --reconcile --pages 32

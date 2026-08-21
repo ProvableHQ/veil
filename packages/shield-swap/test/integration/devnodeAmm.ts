@@ -10,18 +10,35 @@ import type { PublicClient, WalletClient, TestClient, LocalAccount, ConfirmedTra
 
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { programToTokenId } from '../../src/utils/routing.js'
-import type { MerkleProofInput, ProofProvider } from '../../src/utils/proofs.js'
+import type { ProofProvider } from '../../src/utils/proofs.js'
 import { EMPTY_MERKLE_PROOFS } from '../../src/utils/proofs.js'
+import {
+  CANONICAL_PROGRAM_SPECS,
+  CREDITS_WRAPPER_PROGRAM,
+  USDCX_FREEZELIST_PROGRAM,
+  USDCX_STABLECOIN_PROGRAM,
+  USDCX_WRAPPER_PROGRAM,
+  loadCanonicalProgramForDevnode,
+  replaceExactOccurrences,
+  validateProgramSource,
+} from '../fixtures/canonical/canonicalPrograms.js'
 
 /**
- * Compile-from-source devnode fixture for the `shield_swap.aleo` stack. Builds
- * the AMM, its multisig/freezelist imports, the routers, and the fake token
- * wrappers from the amm-v3 Leo sources (development tree), deploys them with the
- * devnode genesis admin — which equals the `DEPLOYER` the AMM constructor
- * asserts against — then bootstraps fee tiers, tick spacings, token
- * registration, three pools (plain/plain, wrapped/plain, wrapped/wrapped), and
- * router-seeded liquidity. The two lifecycle suites drive SDK actions and the
- * generated contract through this fixture.
+ * Devnode fixture for the `shield_swap.aleo` stack.
+ *
+ * Builds the AMM, its multisig/freezelist imports, both routers, and two plain
+ * ARC-20 test tokens from the amm-v3 Leo sources, deploys the pinned canonical
+ * wrapper and stablecoin bytecode alongside them (see
+ * `test/fixtures/canonical/canonicalPrograms.ts`), then bootstraps the USDCx
+ * stack, fee tiers, tick spacings, token registration, three pools
+ * (plain/plain, wrapped/plain, wrapped/wrapped), and router-seeded liquidity.
+ * The two lifecycle suites drive SDK actions and the generated contract through
+ * this fixture.
+ *
+ * The devnode operator deploys everything and holds every admin role: the AMM's
+ * baked deployer is rewritten to it, the canonical programs' embedded testnet
+ * owners are substituted for it, and the plain test tokens already bake it as
+ * their mint admin.
  *
  * Requires `leo` and `aleo-devnode` on PATH and a checkout of the amm-v3
  * sources — the sibling `~/dev/amm-v3` by default, or `AMM_V3_ROOT`. Use
@@ -43,45 +60,64 @@ export function ammV3SourceAvailable(): boolean {
   return existsSync(join(AMM_V3_ROOT, 'src', 'main.leo'))
 }
 
-// Program id → project directory, in deploy order (underlying before wrapper).
-// test_token_a is a second plain ARC-20 (amm-v3's own reference plain token),
-// added so a plain/plain pool has two distinct plain sides.
-const PROGRAMS: ReadonlyArray<readonly [string, string]> = [
+// Program id → project directory, for the programs built from Leo source.
+// test_token_a and test_token_b are amm-v3's standalone plain ARC-20 test
+// tokens: two distinct plain sides for the plain/plain pool, and the plain side
+// of the wrapped/plain pool.
+const LOCAL_PROGRAMS: ReadonlyArray<readonly [string, string]> = [
   ['shield_swap_multisig_core.aleo', join(AMM_V3_ROOT, 'shield_swap_multisig_core')],
   ['shield_swap_freezelist.aleo', join(AMM_V3_ROOT, 'shield_swap_freezelist')],
   ['shield_swap.aleo', AMM_V3_ROOT],
-  ['fake_credits.aleo', join(AMM_V3_ROOT, 'token-wrappers', 'fake_credits')],
-  ['fake_wcredits.aleo', join(AMM_V3_ROOT, 'token-wrappers', 'fake_wcredits')],
-  ['fake_usdcx_freezelist.aleo', join(AMM_V3_ROOT, 'token-wrappers', 'fake_usdcx_freezelist')],
-  ['fake_usdcx.aleo', join(AMM_V3_ROOT, 'token-wrappers', 'fake_usdcx')],
-  ['fake_wusdcx.aleo', join(AMM_V3_ROOT, 'token-wrappers', 'fake_wusdcx')],
-  ['fake_usad_freezelist.aleo', join(AMM_V3_ROOT, 'token-wrappers', 'fake_usad_freezelist')],
-  ['fake_usad.aleo', join(AMM_V3_ROOT, 'token-wrappers', 'fake_usad')],
-  ['fake_wrapped_usad.aleo', join(AMM_V3_ROOT, 'token-wrappers', 'fake_wrapped_usad')],
-  ['fake_plainhitok.aleo', join(AMM_V3_ROOT, 'token-wrappers', 'fake_plainhitok')],
   ['test_token_a.aleo', join(AMM_V3_ROOT, 'token-wrappers', 'test_token_a')],
+  ['test_token_b.aleo', join(AMM_V3_ROOT, 'token-wrappers', 'test_token_b')],
   ['shield_swap_router.aleo', join(AMM_V3_ROOT, 'shield_swap_router')],
   ['shield_swap_lp_router.aleo', join(AMM_V3_ROOT, 'shield_swap_lp_router')],
 ]
 
+const CANONICAL_PROGRAM_IDS: readonly string[] = CANONICAL_PROGRAM_SPECS.map((spec) => spec.id)
+
+// Deploy order: every program's imports precede it. Derived from LOCAL_PROGRAMS
+// so a program added there cannot be compiled but left undeployed, with the
+// canonical set spliced in right after the AMM — the wrappers import the AMM's
+// multisig core, and both routers dispatch to the wrappers at run time.
+const DEPLOY_ORDER: readonly string[] = LOCAL_PROGRAMS.flatMap(([programId]) =>
+  programId === AMM_PROGRAM ? [programId, ...CANONICAL_PROGRAM_IDS] : [programId],
+)
+
+if (DEPLOY_ORDER.length !== LOCAL_PROGRAMS.length + CANONICAL_PROGRAM_IDS.length) {
+  throw new Error(
+    `LOCAL_PROGRAMS must name ${AMM_PROGRAM} exactly once — it is the splice point for the canonical programs`,
+  )
+}
+
 const FREEZELIST_PROGRAM = 'shield_swap_freezelist.aleo'
 
-// The fake stablecoin wrappers (fake_wusdcx / fake_wrapped_usad) gate their
-// deposit/withdraw on a fixed sentinel non-inclusion witness — distinct from
-// the AMM's empty-tree witness — encoded in fake_usdcx.aleo as
-// WRAPPER_TEST_PROOF_{0,1}_SIBLINGS. The credits wrapper (fake_wcredits)
-// ignores its proof argument. A single provider covers all wrapped sides:
-// sentinel for the wrapper freezelists, empty-tree for the AMM's own.
-const sentinelSiblings = (start: number): string[] =>
-  Array.from({ length: 16 }, (_unused, i) => `${start + i}field`)
-const WRAPPER_SENTINEL_PROOFS: readonly [MerkleProofInput, MerkleProofInput] = [
-  { siblings: sentinelSiblings(1), leaf_index: 0 },
-  { siblings: sentinelSiblings(17), leaf_index: 1 },
-]
+// The AMM bakes its testnet deployer as the address its constructor writes into
+// admin[true]; on a devnode that address controls nothing, so the fixture
+// rewrites it to the devnode operator.
+const AMM_TESTNET_DEPLOYER = 'aleo1z3zwzgpgakk89xpknync5rtklkjkyv33g7cvaqe0gku64zs3lv9qyux0qc'
 
-/** Non-inclusion witnesses for the devnode: sentinel per wrapper, empty-tree for the AMM. */
-export const devnodeProofProvider: ProofProvider = async (context) =>
-  context.list === 'wrapper' ? WRAPPER_SENTINEL_PROOFS : EMPTY_MERKLE_PROOFS
+// USDCx stack bootstrap constants, mirroring amm-v3's devnode setup.
+/** The `name`/`symbol` u128 literal the canonical USDCx deployment initializes with. */
+const USDCX_NAME_AND_SYMBOL = '366469202808u128'
+const MAX_U128 = '340282366920938463463374607431768211455u128'
+/** Role bits 8 (admin) | 1 (minter) on the stablecoin. */
+const USDCX_ADMIN_MINTER_ROLE = '9u16'
+/** Blocks the USDCx freezelist keeps accepting the previous root for. */
+const USDCX_FREEZELIST_BLOCK_WINDOW = '100u32'
+/** Manager role on the AMM's own freezelist. */
+const AMM_FREEZELIST_MANAGER_ROLE = '24u16'
+
+/**
+ * Non-inclusion witnesses for the devnode.
+ *
+ * Every freezelist in the stack — the AMM's own and the canonical USDCx
+ * stablecoin's — is initialized empty and stays empty, and both accept the
+ * canonical empty-tree witness against that root. The credits wrapper takes the
+ * proof argument and ignores it. Passing this provider (rather than omitting
+ * one) keeps the actions suite exercising the SDK's provider plumbing.
+ */
+export const devnodeProofProvider: ProofProvider = async () => EMPTY_MERKLE_PROOFS
 
 export type DevnodeActor = {
   publicClient: PublicClient
@@ -91,7 +127,7 @@ export type DevnodeActor = {
 
 /** A token this fixture deploys, with its AMM-facing id and record particulars. */
 export type TokenInfo = {
-  /** Program id (e.g. `fake_wcredits.aleo`). */
+  /** Program id (e.g. `shield_swap_arc20_credits.aleo`). */
   program: string
   /** AMM token id as a `field` literal. */
   field: string
@@ -99,7 +135,7 @@ export type TokenInfo = {
   wrapped: boolean
   /** Underlying program id whose records the user spends (wrapped tokens only). */
   underlyingProgram?: string
-  /** Bit-width of the underlying record's `amount` (`u64` credits, `u128` others). */
+  /** Bit-width of the underlying record's amount (`u64` credits, `u128` others). */
   underlyingWidth?: 'u64' | 'u128'
 }
 
@@ -119,22 +155,22 @@ export type AmmDevnode = {
   user: DevnodeActor
   /** Program id → source, for the wasm's dynamic-dispatch import resolution. */
   imports: Record<string, string>
-  /** Freezelist non-inclusion provider (sentinel/empty). Pass to every routed call. */
+  /** Freezelist non-inclusion provider (empty-tree). Pass to every routed call. */
   proofs: ProofProvider
   fee: number
   tickSpacing: number
   tokens: {
     plainA: TokenInfo
-    plainH: TokenInfo
+    plainB: TokenInfo
     wcredits: TokenInfo
     wusdcx: TokenInfo
   }
   pools: {
-    /** plain / plain: test_token_a + fake_plainhitok. */
+    /** plain / plain: test_token_a + test_token_b. */
     pp: PoolInfo
-    /** wrapped / plain: fake_wcredits + fake_plainhitok. */
+    /** wrapped / plain: the credits wrapper + test_token_b. */
     wp: PoolInfo
-    /** wrapped / wrapped: fake_wcredits + fake_wusdcx. */
+    /** wrapped / wrapped: the credits wrapper + the wrapped-USDCx wrapper. */
     ww: PoolInfo
   }
   /**
@@ -143,8 +179,8 @@ export type AmmDevnode = {
    */
   mintPlainToUser: (tokenProgram: string, amount: bigint) => Promise<string>
   /**
-   * Admin-mints a wrapped token's underlying asset directly to the user as a
-   * private record, returning the user-owned record plaintext.
+   * Gives the user a private record of a wrapped token's underlying asset,
+   * returning the user-owned record plaintext.
    */
   mintUnderlyingToUser: (underlyingProgram: string, amount: bigint, width: 'u64' | 'u128') => Promise<string>
   /** Decrypts the caller-owned records of a confirmed transaction. */
@@ -165,6 +201,35 @@ function tokenInfo(program: string, underlying?: { program: string; width: 'u64'
     wrapped: underlying !== undefined,
     ...(underlying ? { underlyingProgram: underlying.program, underlyingWidth: underlying.width } : {}),
   }
+}
+
+/**
+ * Rewrites the AMM's baked deployer to the devnode operator.
+ *
+ * The constructor writes that address into `admin[true]` at edition 0, and the
+ * whole bootstrap (fee tiers, token registration, pool creation) is
+ * admin-gated. Accepts a source that already names the devnode operator, so a
+ * development tree whose constant is already local passes through unchanged.
+ *
+ * @param source The compiled `shield_swap.aleo` instructions.
+ * @param deployerAddress The devnode operator to install as admin.
+ * @returns The rewritten instructions, re-parsed to confirm they still declare
+ *   the AMM.
+ * @throws When neither form of the admin write appears exactly once, or when the
+ *   rewrite no longer parses as `shield_swap.aleo`.
+ */
+function deriveDevnodeShieldSwapSource(source: string, deployerAddress: string): string {
+  const testnetWrite = `set ${AMM_TESTNET_DEPLOYER} into admin[true];`
+  const devnodeWrite = `set ${deployerAddress} into admin[true];`
+  const derived = replaceExactOccurrences(
+    source,
+    source.includes(testnetWrite) ? testnetWrite : devnodeWrite,
+    devnodeWrite,
+    1,
+    `${AMM_PROGRAM} devnode deployer adaptation`,
+  )
+  validateProgramSource(AMM_PROGRAM, derived)
+  return derived
 }
 
 async function waitAccepted(actor: DevnodeActor, testClient: TestClient, txId: string, label: string) {
@@ -208,9 +273,9 @@ export async function setupAmmDevnode(): Promise<AmmDevnode> {
     )
   }
 
-  // Compile every program from source up front (one-time, ~15s cold).
+  // Compile every locally sourced program up front (one-time, ~15s cold).
   const sources: Record<string, string> = {}
-  for (const [programId, projectDir] of PROGRAMS) {
+  for (const [programId, projectDir] of LOCAL_PROGRAMS) {
     sources[programId] = buildProgram(programId, projectDir)
   }
 
@@ -220,8 +285,8 @@ export async function setupAmmDevnode(): Promise<AmmDevnode> {
   })
   const aleo = await loadNetwork('testnet')
 
-  // The devnode genesis account equals the AMM's baked DEPLOYER and every fake
-  // token's ADMIN, so it is both the deployer and the mint/admin authority.
+  // The devnode genesis account deploys everything, so it owns every canonical
+  // program and is the mint/admin authority the adaptations install.
   const adminPair = createDevnodeClient({ socketAddr: devnode.socketAddr })
   const admin: DevnodeActor = {
     publicClient: adminPair.publicClient,
@@ -229,9 +294,15 @@ export async function setupAmmDevnode(): Promise<AmmDevnode> {
     account: adminPair.account,
   }
 
+  // Adapt the deployer-dependent sources now that the operator is known.
+  sources[AMM_PROGRAM] = deriveDevnodeShieldSwapSource(sources[AMM_PROGRAM]!, admin.account.address)
+  for (const spec of CANONICAL_PROGRAM_SPECS) {
+    sources[spec.id] = loadCanonicalProgramForDevnode(spec, admin.account.address)
+  }
+
   await testClient.advanceBlock({ count: 1 })
 
-  for (const [programId] of PROGRAMS) {
+  for (const programId of DEPLOY_ORDER) {
     const txId = await admin.walletClient.deployContract({ program: sources[programId]! })
     await waitAccepted(admin, testClient, txId, `deploy ${programId}`)
     await waitQueryable(admin, testClient, programId)
@@ -250,11 +321,13 @@ export async function setupAmmDevnode(): Promise<AmmDevnode> {
     account: userPair.account,
   }
 
-  // Fund the user's public credits balance so it can pay transaction fees.
+  // Fund the user's public credits balance: it pays transaction fees AND backs
+  // the credits wrapper, whose deposits spend private credits records the user
+  // privatizes out of this balance.
   const fundTx = await admin.walletClient.writeContract({
     program: 'credits.aleo',
     function: 'transfer_public',
-    inputs: [user.account.address, '1000000000u64'],
+    inputs: [user.account.address, '100000000000u64'],
   })
   await waitAccepted(admin, testClient, fundTx, 'fund user')
 
@@ -296,10 +369,42 @@ export async function setupAmmDevnode(): Promise<AmmDevnode> {
     return txId
   }
 
-  // ── Freezelist: initialize (sets the empty-tree root) and grant the admin
+  // ── AMM freezelist: initialize (sets the empty-tree root) and grant the admin
   // the manager role, mirroring amm-v3 deploy-router-e2e.
   await write(admin, FREEZELIST_PROGRAM, 'initialize', [admin.account.address, '100u32'], 'freezelist initialize')
-  await write(admin, FREEZELIST_PROGRAM, 'update_role', [admin.account.address, '24u16'], 'freezelist update_role')
+  await write(
+    admin,
+    FREEZELIST_PROGRAM,
+    'update_role',
+    [admin.account.address, AMM_FREEZELIST_MANAGER_ROLE],
+    'freezelist update_role',
+  )
+
+  // ── USDCx stack: its freezelist starts empty (the root the empty-tree witness
+  // proves against), the stablecoin takes its token metadata, and the operator
+  // takes the admin|minter role that lets it mint the wrapper's underlying
+  // asset. Mirrors amm-v3's initializeDevnodeUsdcxStack.
+  await write(
+    admin,
+    USDCX_FREEZELIST_PROGRAM,
+    'initialize',
+    [admin.account.address, USDCX_FREEZELIST_BLOCK_WINDOW],
+    'usdcx freezelist initialize',
+  )
+  await write(
+    admin,
+    USDCX_STABLECOIN_PROGRAM,
+    'initialize',
+    [USDCX_NAME_AND_SYMBOL, USDCX_NAME_AND_SYMBOL, '6u8', MAX_U128, admin.account.address],
+    'usdcx initialize',
+  )
+  await write(
+    admin,
+    USDCX_STABLECOIN_PROGRAM,
+    'update_role',
+    [admin.account.address, USDCX_ADMIN_MINTER_ROLE],
+    'usdcx update_role',
+  )
 
   // ── Fee tier, tick spacing, and their binding.
   await write(admin, AMM_PROGRAM, 'add_fee_tier', [`${FEE}u16`], 'add_fee_tier')
@@ -308,16 +413,16 @@ export async function setupAmmDevnode(): Promise<AmmDevnode> {
 
   // ── Token metadata.
   const plainA = tokenInfo('test_token_a.aleo')
-  const plainH = tokenInfo('fake_plainhitok.aleo')
-  const wcredits = tokenInfo('fake_wcredits.aleo', { program: 'fake_credits.aleo', width: 'u64' })
-  const wusdcx = tokenInfo('fake_wusdcx.aleo', { program: 'fake_usdcx.aleo', width: 'u128' })
+  const plainB = tokenInfo('test_token_b.aleo')
+  const wcredits = tokenInfo(CREDITS_WRAPPER_PROGRAM, { program: 'credits.aleo', width: 'u64' })
+  const wusdcx = tokenInfo(USDCX_WRAPPER_PROGRAM, { program: USDCX_STABLECOIN_PROGRAM, width: 'u128' })
 
   // ── Register tokens: plain tokens as (id, id); wrappers bind wrapper→underlying.
   const allowToken = async (token: TokenInfo) => {
     const underlyingField = token.wrapped ? programToTokenId(token.underlyingProgram!) : token.field
     await write(admin, AMM_PROGRAM, 'allow_token', [token.field, underlyingField], `allow_token ${token.program}`)
   }
-  for (const token of [plainA, plainH, wcredits, wusdcx]) await allowToken(token)
+  for (const token of [plainA, plainB, wcredits, wusdcx]) await allowToken(token)
 
   // ── Build the three pools, sorting each pair by field id.
   const makePool = async (name: string, a: TokenInfo, b: TokenInfo): Promise<PoolInfo> => {
@@ -332,8 +437,8 @@ export async function setupAmmDevnode(): Promise<AmmDevnode> {
     if (!poolKey) throw new Error(`${name}: createPool returned no poolKey`)
     return { name, poolKey, token0, token1 }
   }
-  const pp = await makePool('pp', plainA, plainH)
-  const wp = await makePool('wp', wcredits, plainH)
+  const pp = await makePool('pp', plainA, plainB)
+  const wp = await makePool('wp', wcredits, plainB)
   const ww = await makePool('ww', wcredits, wusdcx)
 
   // ── Record acquisition helpers.
@@ -352,13 +457,28 @@ export async function setupAmmDevnode(): Promise<AmmDevnode> {
   }
   const mintPlainToUser = (tokenProgram: string, amount: bigint): Promise<string> => mintPlainTo(user, tokenProgram, amount)
 
+  // A wrapped side spends records of its UNDERLYING asset. Native credits come
+  // from the user's own public balance; the canonical stablecoin is minted
+  // straight to the user as a private record by the admin|minter operator.
   const mintUnderlyingToUser = async (
     underlyingProgram: string,
     amount: bigint,
     width: 'u64' | 'u128',
   ): Promise<string> => {
-    // The fakes gate mint_private on the admin signer; the output record is
-    // owned by the user, so recover it with the user's view key.
+    if (underlyingProgram === 'credits.aleo') {
+      const result = await user.walletClient.executeContract({
+        program: 'credits.aleo',
+        function: 'transfer_public_to_private',
+        inputs: [user.account.address, `${amount}${width}`],
+      })
+      const record = result.outputs.find((o) => o.includes('microcredits'))
+      if (!record) throw new Error(`No credits record from transfer_public_to_private of ${amount}${width}`)
+      return record
+    }
+
+    // mint_private is minter-gated, so the admin signs it; the Token record it
+    // outputs is owned by the user, and the co-output compliance record is
+    // encrypted to the stablecoin's investigator key (so it never decrypts here).
     const txId = await write(
       admin,
       underlyingProgram,
@@ -368,7 +488,7 @@ export async function setupAmmDevnode(): Promise<AmmDevnode> {
     )
     const records = await recordsOf(user.account.viewKey, txId)
     const record = records.find((r) => new RegExp(`amount:\\s*${amount}${width}`).test(r))
-    if (!record) throw new Error(`No ${underlyingProgram} record of ${amount}${width} for the user`)
+    if (!record) throw new Error(`No ${underlyingProgram} record of ${amount}${width} for ${user.account.address}`)
     return record
   }
 
@@ -406,7 +526,7 @@ export async function setupAmmDevnode(): Promise<AmmDevnode> {
     proofs: devnodeProofProvider,
     fee: FEE,
     tickSpacing: TICK_SPACING,
-    tokens: { plainA, plainH, wcredits, wusdcx },
+    tokens: { plainA, plainB, wcredits, wusdcx },
     pools: { pp, wp, ww },
     mintPlainToUser,
     mintUnderlyingToUser,

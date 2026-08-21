@@ -70,7 +70,8 @@ export type ClaimSwapOutputParameters = {
  *   chain. Paid in the UNDERLYING asset when the output token is wrapped.
  * @property amountRemaining Raw atomic input refund (u128) — non-zero when
  *   the swap partially filled at a price limit. Paid in the underlying asset
- *   when the input token is wrapped.
+ *   when the input token is wrapped. `0n` when the swap filled completely and
+ *   the claim used a no-refund transition (no refund record is produced).
  */
 export type ClaimSwapOutputReturnType = {
   transactionId: string
@@ -85,12 +86,16 @@ export type ClaimSwapOutputReturnType = {
  * Reads the chain-computed result from `swap_outputs` (never an off-chain
  * service — these amounts gate money movement), resolves the wrapped-ness of
  * the output and refund tokens, proves ownership of the blinded identity,
- * and dispatches to the matching claim transition: `claim_swap_output` on
- * the core AMM when both tokens are plain, or the router's
- * `claim_to_wrapped_refund_arc20` / `claim_to_arc20_refund_wrapped` /
- * `claim_to_wrapped_refund_wrapped` when either side is wrapped — the router
- * unwraps in the same transaction, so the caller always receives UNDERLYING
- * records (wrappers stay invisible). The mapping entry is consumed.
+ * and dispatches to the matching claim transition. A zero stored remainder
+ * selects a no-refund transition — `claim_swap_output_no_refund` on the core
+ * AMM when both tokens are plain, or the router's `claim_to_arc20_no_refund` /
+ * `claim_to_wrapped_no_refund` when either side is wrapped — which takes no
+ * `amount_remaining` input and produces no refund record. A nonzero remainder
+ * selects `claim_swap_output` on the core AMM when both tokens are plain, or
+ * the router's `claim_to_wrapped_refund_arc20` / `claim_to_arc20_refund_wrapped`
+ * / `claim_to_wrapped_refund_wrapped` when either side is wrapped. Either way
+ * the router unwraps in the same transaction, so the caller always receives
+ * UNDERLYING records (wrappers stay invisible). The mapping entry is consumed.
  *
  * Signer paths mirror `swap`: a local account passes the handle's literal
  * `blindingFactor`; a wallet account gets resolve-mode derived requests
@@ -155,13 +160,29 @@ export async function claimSwapOutput(
       }),
     )
 
-  // Dispatch: (output, refund) wrapped-ness → transition + trailing proof
-  // slots, per the deployed router ABI. Proof order on the both-wrapped
-  // variant is (amm, receiver_out, receiver_refund).
+  // Dispatch on two axes: whether the swap left an input remainder, then the
+  // (output, refund) wrapped-ness. A zero remainder selects the no-refund
+  // transitions — no amount_remaining input, no refund record in the result.
+  // The chain re-checks the stored remainder and rejects a nonzero one.
+  const noRefund = out.amount_remaining === 0n
   let targetProgram: string
   let fn: string
   const proofTail: string[] = [ammProof]
-  if (outRoute.wrapped && refundRoute.wrapped) {
+  if (noRefund) {
+    if (outRoute.wrapped) {
+      // Output unwraps via the router regardless of the input's wrapped-ness.
+      targetProgram = routerProgram
+      fn = 'claim_to_wrapped_no_refund'
+      proofTail.push(await receiverProof(outRoute.wrapperProgram))
+    } else if (refundRoute.wrapped) {
+      // Plain output but wrapped input: the router variant asserts the pairing.
+      targetProgram = routerProgram
+      fn = 'claim_to_arc20_no_refund'
+    } else {
+      targetProgram = program
+      fn = 'claim_swap_output_no_refund'
+    }
+  } else if (outRoute.wrapped && refundRoute.wrapped) {
     targetProgram = routerProgram
     fn = 'claim_to_wrapped_refund_wrapped'
     proofTail.push(await receiverProof(outRoute.wrapperProgram), await receiverProof(refundRoute.wrapperProgram))
@@ -178,14 +199,14 @@ export async function claimSwapOutput(
     fn = 'claim_swap_output'
   }
 
-  // Everything after the two blinding slots, verbatim from chain state,
-  // then the proof arrays (the core claim takes the AMM pair last).
+  // Everything after the two blinding slots, verbatim from chain state, then
+  // the proof arrays. The no-refund transitions take no amount_remaining slot.
   const tail: string[] = [
     handle.swapId,
     out.token_in,
     out.token_out,
     `${out.amount_out}u128`,
-    `${out.amount_remaining}u128`,
+    ...(noRefund ? [] : [`${out.amount_remaining}u128`]),
     ...proofTail,
   ]
 

@@ -11,6 +11,16 @@ import {
 const CLAIM_FUNCTION = 'claim_swap_output'
 
 /**
+ * The no-refund counterpart of {@link CLAIM_FUNCTION} — dispatched instead of
+ * it when the swap left nothing to refund. Carries the same blinded address
+ * and swap id, but takes no `amount_remaining` input.
+ */
+const CLAIM_FUNCTION_NO_REFUND = 'claim_swap_output_no_refund'
+
+/** Both claim transitions the walk recognizes on the core program. */
+const CLAIM_FUNCTIONS = [CLAIM_FUNCTION, CLAIM_FUNCTION_NO_REFUND] as const
+
+/**
  * The request functions, whose calls carry everything a claim needs.
  *
  * `used_blinded_addresses` is written by `finalize_swap`, not by the claim — so an
@@ -69,6 +79,21 @@ const INPUT = {
   tokenOut: 4,
   amountOut: 5,
   amountRemaining: 6,
+} as const
+
+/**
+ * Input positions of `claim_swap_output_no_refund`, from the program's own
+ * signature: `(blinding_factor, blinded_address, swap_id, token_in, token_out,
+ * amount_out, merkle_proofs)`. No `amount_remaining` slot — the chain only
+ * dispatches here when the swap left nothing to refund, so index 6 in this
+ * shape is the proof array, not an amount, and must never be read as one.
+ */
+const NO_REFUND_INPUT = {
+  blindedAddress: 1,
+  swapId: 2,
+  tokenIn: 3,
+  tokenOut: 4,
+  amountOut: 5,
 } as const
 
 /**
@@ -343,12 +368,19 @@ function claimFromTransition(
   blockNumber: number,
 ): ReconciledClaim | null {
   const inputs = transition.inputs ?? []
-  const address = inputs[INPUT.blindedAddress]?.value
-  const swapId = inputs[INPUT.swapId]?.value
-  const tokenIn = inputs[INPUT.tokenIn]?.value
-  const tokenOut = inputs[INPUT.tokenOut]?.value
-  const amountOut = inputs[INPUT.amountOut]?.value
-  const amountRemaining = inputs[INPUT.amountRemaining]?.value
+  // The no-refund shape drops the amount_remaining input entirely, shifting
+  // nothing else — read by function name rather than assuming the refund-
+  // bearing layout, or index 6 is misread as an amount when it is a proof.
+  const noRefund = transition.function === CLAIM_FUNCTION_NO_REFUND
+  const positions = noRefund ? NO_REFUND_INPUT : INPUT
+  const address = inputs[positions.blindedAddress]?.value
+  const swapId = inputs[positions.swapId]?.value
+  const tokenIn = inputs[positions.tokenIn]?.value
+  const tokenOut = inputs[positions.tokenOut]?.value
+  const amountOut = inputs[positions.amountOut]?.value
+  // The chain only dispatches the no-refund transition when the remainder is
+  // zero, so that is the answer here — there is no input slot to read it from.
+  const amountRemaining = noRefund ? '0u128' : inputs[INPUT.amountRemaining]?.value
   if (!address || !swapId || !tokenIn || !tokenOut || !amountOut || !amountRemaining) return null
   return {
     blindedAddress: address,
@@ -364,7 +396,9 @@ function claimFromTransition(
 
 /**
  * Reconstructs which of the store's identities have had their swaps claimed,
- * by walking the program's `claim_swap_output` history.
+ * by walking the program's `claim_swap_output` / `claim_swap_output_no_refund`
+ * history — the no-refund transition settles the common case of a swap that
+ * filled completely, and carries the same blinded address and swap id.
  *
  * A claim is the only public record tying a blinded address to the swap it
  * settled: its inputs carry both, plus the token pair and amounts. Nothing else
@@ -471,7 +505,7 @@ export async function reconcileSwapHistory(
       const candidates = page.calls.filter(
         (call) =>
           call.status.toLowerCase() === 'accepted' &&
-          (call.function_id === CLAIM_FUNCTION ||
+          ((CLAIM_FUNCTIONS as readonly string[]).includes(call.function_id) ||
             (REQUEST_FUNCTIONS as readonly string[]).includes(call.function_id)),
       )
       // Fetched in parallel, applied in order: the requests are independent but
@@ -482,7 +516,8 @@ export async function reconcileSwapHistory(
         // the walk continues rather than failing over one absent transaction.
         const transitions = transaction?.execution?.transitions ?? []
         const claimTransition = transitions.find(
-          (candidate) => candidate.program === program && candidate.function === CLAIM_FUNCTION,
+          (candidate) =>
+            candidate.program === program && (CLAIM_FUNCTIONS as readonly string[]).includes(candidate.function),
         )
         if (claimTransition) {
           return {
