@@ -49,7 +49,7 @@ export type GetSwapExecutionReturnType = {
  * Swaps executed before the edition-1 upgrade have no receipt; a caller
  * needing those falls back to transaction history.
  *
- * Hits the network: one header read plus one read per hop.
+ * Hits the network: one header read plus one concurrent read per hop.
  *
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param params The swap id to look up, and optionally the program to read from.
@@ -75,24 +75,23 @@ export async function getSwapExecution(
   )
   if (!header) return null
 
-  const hops: SwapExecutionHop[] = []
-  for (let hopIndex = 0; hopIndex < header.hop_count; hopIndex++) {
-    // The hop key is the SwapExecutionKey struct, queried as a plaintext literal.
-    const key = `{ swap_id: ${params.swapId}, hop_index: ${hopIndex}u8 }`
-    const hop = await readDecodedMapping(
-      client,
-      params.program,
-      'swap_execution_hops',
-      key,
-      toSwapExecutionHopsMappingValue,
-    )
+  // Every hop key is known upfront from hop_count, so the reads run concurrently.
+  const rawHops = await Promise.all(
+    Array.from({ length: header.hop_count }, (_unused, hopIndex) => {
+      // The hop key is the SwapExecutionKey struct, queried as a plaintext literal.
+      const key = `{ swap_id: ${params.swapId}, hop_index: ${hopIndex}u8 }`
+      return readDecodedMapping(client, params.program, 'swap_execution_hops', key, toSwapExecutionHopsMappingValue)
+    }),
+  )
+
+  const hops: SwapExecutionHop[] = rawHops.map((hop, hopIndex) => {
     if (!hop) {
       throw new Error(
         `swap_execution_hops is missing hop ${hopIndex} of ${header.hop_count} for ${params.swapId} — ` +
           'the header names a hop the node did not return.',
       )
     }
-    hops.push({ ...hop, lp_fee: hop.fee_paid - hop.protocol_fee })
-  }
+    return { ...hop, lp_fee: hop.fee_paid - hop.protocol_fee }
+  })
   return { header, hops }
 }

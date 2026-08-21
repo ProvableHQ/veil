@@ -349,9 +349,15 @@ describe('claimSwapOutput — unified dispatch', () => {
     const call = executeMock.mock.calls[0]![1]
     expect(call.program).toBe('shield_swap.aleo')
     expect(call.function).toBe('claim_swap_output_no_refund')
-    // factor, address, swap_id, token_in, token_out, amount_out, amm proof — no remainder slot.
-    expect(call.inputs).toHaveLength(7)
-    expect(call.inputs).not.toContain('0u128')
+    expect(call.inputs).toEqual([
+      IDENTITY.blindingFactor,
+      IDENTITY.blindedAddress,
+      '777field',
+      TOKEN0,
+      TOKEN1,
+      '1980000u128',
+      EMPTY_PROOFS, // amm proof — no amount_remaining slot
+    ])
     expect(res.amountRemaining).toBe(0n)
   })
 
@@ -361,7 +367,16 @@ describe('claimSwapOutput — unified dispatch', () => {
     const call = executeMock.mock.calls[0]![1]
     expect(call.program).toBe('shield_swap_router.aleo')
     expect(call.function).toBe('claim_to_wrapped_no_refund')
-    expect(call.inputs).toHaveLength(8) // + receiver proof
+    expect(call.inputs).toEqual([
+      IDENTITY.blindingFactor,
+      IDENTITY.blindedAddress,
+      '777field',
+      TOKEN0,
+      WRAPPED_IN,
+      '1980000u128',
+      EMPTY_PROOFS, // amm proof
+      EMPTY_PROOFS, // receiver proof — no amount_remaining slot
+    ])
   })
 
   it('wrapped input, plain output, zero remainder: dispatches claim_to_arc20_no_refund with only the AMM proof', async () => {
@@ -370,7 +385,15 @@ describe('claimSwapOutput — unified dispatch', () => {
     const call = executeMock.mock.calls[0]![1]
     expect(call.program).toBe('shield_swap_router.aleo')
     expect(call.function).toBe('claim_to_arc20_no_refund')
-    expect(call.inputs).toHaveLength(7)
+    expect(call.inputs).toEqual([
+      IDENTITY.blindingFactor,
+      IDENTITY.blindedAddress,
+      '777field',
+      WRAPPED_IN,
+      TOKEN1,
+      '1980000u128',
+      EMPTY_PROOFS, // amm proof only — no receiver proof, no amount_remaining slot
+    ])
   })
 
   it('both wrapped, zero remainder: dispatches claim_to_wrapped_no_refund regardless of refund-side wrapped-ness', async () => {
@@ -379,7 +402,16 @@ describe('claimSwapOutput — unified dispatch', () => {
     const call = executeMock.mock.calls[0]![1]
     expect(call.program).toBe('shield_swap_router.aleo')
     expect(call.function).toBe('claim_to_wrapped_no_refund')
-    expect(call.inputs).toHaveLength(8)
+    expect(call.inputs).toEqual([
+      IDENTITY.blindingFactor,
+      IDENTITY.blindedAddress,
+      '777field',
+      WRAPPED_IN,
+      WRAPPED_IN,
+      '1980000u128',
+      EMPTY_PROOFS, // amm proof
+      EMPTY_PROOFS, // receiver proof for the OUTPUT wrapper — no amount_remaining slot
+    ])
   })
 
   it('wallet: resolve-mode derived requests target the handle blindedAddress', async () => {
