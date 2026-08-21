@@ -13,8 +13,8 @@ viem-style actions for the following:
 Actions for executing the functions of the `shield_swap.aleo` contract.
 - **Private swaps** — Runs the `swap` --> `claim_swap_output` flows (a
 completely filled swap claims through `claim_swap_output_no_refund` instead,
-chosen automatically), and the multi-hop variants (`swap_multi_hop` -->
-`claim_multi_hop_output`) for 2–3 pool routes.
+chosen automatically), and the multi-hop variant (`swap_multi_hop`, claimed
+through the same unified `claimSwapOutput` action) for 2–3 pool routes.
 - **Liquidity** — create pools (via `create_pool`), 
 mint concentrated-liquidity positions (`mint`) and add to them (`increase_liquidity`).
 
@@ -457,12 +457,13 @@ const handle = await client.swapMultiHop({
 ```
 
 The handle is the same idea as the single-hop one — serializable, carries the
-whole id preimage, consumed by the claim. Partial fills on later hops refund
-the intermediate token; the claim reports those as `hopRefunds` alongside the
-main output and input refund:
+whole id preimage, consumed by the claim. `claimSwapOutput` handles both
+handle types identically; `swap_outputs` carries only the route's final output
+token and one remaining amount, so a multi-hop claim reads the same way a
+single-hop one does:
 
 ```ts
-const { amountOut, amountRemaining, hopRefunds } = await client.claimMultiHopOutput({
+const { amountOut, amountRemaining } = await client.claimSwapOutput({
   handle,
   imports,   // include every token program the route touches
 })
