@@ -1,6 +1,6 @@
 {
   "name": "@provablehq/shield-swap-cli",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "Command line trader for the Shield Swap AMM DEX on Aleo.",
   "license": "MIT",
   "repository": {

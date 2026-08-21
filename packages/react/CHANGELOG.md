@@ -1,5 +1,12 @@
 # @provablehq/veil-aleo-react-hooks
 
+## 0.8.0
+
+### Patch Changes
+
+- @provablehq/veil-core@0.8.0
+- @provablehq/veil-aleo-wallet-adapter@0.8.0
+
 ## 0.7.1
 
 ### Patch Changes
