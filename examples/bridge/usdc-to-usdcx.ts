@@ -22,6 +22,7 @@ import {
 import { privateKeyToAccount } from 'viem/accounts'
 import { mainnet } from 'viem/chains'
 import {
+  buildXReserveHookData,
   createBridgeClient,
   type AleoBridgeExecutor,
   type AleoMintMode,
@@ -36,6 +37,7 @@ const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
 const PRIVATE_MINT_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_SUBMITS_AN_ALEO_PRIVATE_MINT'
 const DEFAULT_ATTESTATION_POLL_INTERVAL_MS = 10_000
 const DEFAULT_ATTESTATION_TIMEOUT_MS = 30 * 60_000
+const DEFAULT_EVM_CONFIRMATION_TIMEOUT_MS = 5 * 60_000
 const DEFAULT_ALEO_TRANSACTION_POLL_INTERVAL_MS = 5_000
 const DEFAULT_ALEO_TRANSACTION_TIMEOUT_MS = 5 * 60_000
 const DEFAULT_ALEO_EXECUTION_CONFIRMATION_TIMEOUT_MS = 5 * 60_000
@@ -345,6 +347,12 @@ async function resumePrivateMint(
   if (attestation.status !== 'complete') {
     throw new Error(`Circle attestation is still pending: https://xreserve-api.circle.com/v1/attestations/${messageHash}`)
   }
+  const secretNonce = privateMintSecretNonce ?? '0scalar'
+  const expectedHookData = await buildXReserveHookData('private', recipient, 'mainnet', secretNonce)
+  const attestedHookData = `0x${attestation.payload.slice(-130)}`
+  if (attestedHookData.toLowerCase() !== expectedHookData.toLowerCase()) {
+    throw new Error('ALEO_RECIPIENT and USDCX_SECRET_NONCE do not reproduce the attested private-mint hook')
+  }
   const plan = bridge.prepareTransfer({
     routeId: ROUTE_ID,
     amount: amountFromXReservePayload(attestation.payload),
@@ -358,7 +366,7 @@ async function resumePrivateMint(
     recipient,
     amount: `${plan.amountIn} USDC`,
     circleMessageHash: messageHash,
-    privateMintSecretNonce: privateMintSecretNonce ? 'custom' : '0scalar (default)',
+    privateMintSecretNonce: privateMintSecretNonce ? 'custom (verified)' : '0scalar (verified default)',
     ethereumDeposit: 'skipped; using the existing Circle-attested deposit',
   })
   if (process.env.EXECUTE_XRESERVE_PRIVATE_MINT !== PRIVATE_MINT_ACKNOWLEDGEMENT) {
@@ -437,7 +445,9 @@ async function main(): Promise<void> {
 
   if (process.env.EXECUTE_XRESERVE_DEPOSIT !== EXECUTION_ACKNOWLEDGEMENT) {
     console.log('\nQuote complete; no transaction was submitted.')
-    console.log(`Set EXECUTE_XRESERVE_DEPOSIT=${EXECUTION_ACKNOWLEDGEMENT} to approve and deposit.`)
+    console.log(quote.approvalRequired
+      ? `Set EXECUTE_XRESERVE_DEPOSIT=${EXECUTION_ACKNOWLEDGEMENT} to approve and deposit.`
+      : `Set EXECUTE_XRESERVE_DEPOSIT=${EXECUTION_ACKNOWLEDGEMENT} to submit only the xReserve deposit; the existing allowance is sufficient.`)
     return
   }
 
@@ -449,10 +459,35 @@ async function main(): Promise<void> {
   console.log(quote.approvalRequired
     ? 'Submitting an exact USDC approval, then the xReserve deposit.'
     : 'Existing allowance is sufficient; submitting only the xReserve deposit.')
-  const execution = await bridge.executeEvmXReserveTransfer({ plan })
+  const execution = await bridge.executeEvmXReserveTransfer({
+    plan,
+    confirmationTimeoutMs: millisecondsFromEnvironment(
+      'EVM_CONFIRMATION_TIMEOUT_MS',
+      DEFAULT_EVM_CONFIRMATION_TIMEOUT_MS,
+      1_000,
+    ),
+  })
   console.log('Approval transaction(s):', execution.approvalTxIds)
-  console.log('Deposit transaction:', execution.receipt.sourceTxId ?? 'pending')
   console.log('Transfer status:', execution.receipt.status)
+
+  if (execution.receipt.status === 'SOURCE_APPROVAL_PENDING') {
+    console.log('USDC approval status: pending confirmation')
+    console.log('xReserve deposit status: not submitted')
+    console.log('Circle message hash: not created')
+    console.log('After the approval confirms, rerun with the same recipient and secret scalar; the client will skip approval and submit the deposit.')
+    return
+  }
+  if (execution.receipt.status === 'SOURCE_CONFIRMING') {
+    console.log('USDC approval status: confirmed or previously sufficient')
+    console.log('Deposit transaction:', execution.receipt.sourceTxId)
+    console.log('xReserve deposit status: pending confirmation')
+    console.log('Circle message hash: unavailable until the confirmed deposit event is validated')
+    return
+  }
+
+  console.log('USDC approval status:', execution.approvalTxIds.length ? 'confirmed' : 'previously sufficient')
+  console.log('Deposit transaction:', execution.receipt.sourceTxId)
+  console.log('xReserve deposit status: confirmed')
   console.log('Circle message hash:', execution.receipt.id)
 
   if (execution.receipt.status === 'ATTESTATION_PENDING') {

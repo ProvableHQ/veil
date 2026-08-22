@@ -89,10 +89,13 @@ export XRESERVE_RESUME_MESSAGE_HASH='0x...'
 read -s USDCX_SECRET_NONCE
 export USDCX_SECRET_NONCE
 
+# Read-only: verifies Circle's payload and the recipient/scalar commitment.
+pnpm tsx examples/bridge/usdc-to-usdcx.ts
+
 read -s ALEO_PRIVATE_KEY
 export ALEO_PRIVATE_KEY
 
-# First run the resume preflight without this acknowledgement. After review:
+# After reviewing the resume preflight:
 EXECUTE_XRESERVE_PRIVATE_MINT=I_UNDERSTAND_THIS_SUBMITS_AN_ALEO_PRIVATE_MINT \
   pnpm tsx examples/bridge/usdc-to-usdcx.ts
 ```
@@ -129,9 +132,16 @@ After the Ethereum deposit confirms, the script polls Circle every 10 seconds
 for up to 30 minutes. These defaults can be changed before execution:
 
 ```sh
+export EVM_CONFIRMATION_TIMEOUT_MS='300000'
 export ATTESTATION_POLL_INTERVAL_MS='10000'
 export ATTESTATION_TIMEOUT_MS='1800000'
 ```
+
+The EVM confirmation timeout applies independently to each submitted approval
+or deposit. If an approval remains pending when that timeout expires, the script
+states that no deposit or Circle message exists and exits safely. Once the
+approval confirms, rerun with the same recipient and secret scalar; the next
+quote observes the allowance and skips the approval.
 
 For public and record modes, the monitor is observational: closing it does not
 cancel or pause the confirmed deposit, Circle attestation, or automatic Aleo
