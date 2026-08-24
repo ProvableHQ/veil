@@ -150,3 +150,132 @@ deposit attested but unminted until an Aleo signer resumes that step. If Circle
 monitoring times out, the script prints the direct URL that can be queried later.
 An attestation proves that Circle signed the deposit payload; public and record
 mint confirmation still requires Aleo-side discovery.
+
+# Aleo USDCx to Ethereum USDC
+
+`usdcx-to-usdc.ts` prepares a mainnet xReserve withdrawal and submits it only
+after an explicit acknowledgement. Private burn is the default; set
+`USDCX_BURN_MODE='public'` to burn the Aleo signer's public USDCx balance
+instead.
+
+```sh
+export USDCX_AMOUNT='3'
+export ETHEREUM_RECIPIENT='0x...'
+
+# Optional; private is the default.
+export USDCX_BURN_MODE='private'
+
+pnpm tsx examples/bridge/usdcx-to-usdc.ts
+```
+
+Private burn does not require the caller to paste a record. During execution,
+the example attaches Provable's record scanner to the local wallet client,
+requests the account's unspent `usdcx_stablecoin.aleo/Token` records, and passes
+the smallest record covering the burn amount to the bridge. The private key and
+decrypted record stay in the local process. If no single record covers the
+amount, join records before retrying.
+
+The wrapper also requires the current `[MerkleProof; 2]` non-inclusion witness
+for its compliance list. The example fetches the live tree from
+`usdcx_freezelist.aleo/compliance/freeze-list` and uses the Provable SDK's
+`SealanceMerkleTree` to derive the witness for the Aleo signer immediately
+before submission. Supply the Aleo and Provable API credentials used for
+proving and record scanning:
+
+```sh
+read -s ALEO_PRIVATE_KEY
+export ALEO_PRIVATE_KEY
+
+export ALEO_CONSUMER_ID='...'
+read -s ALEO_DPS_API_KEY
+export ALEO_DPS_API_KEY
+
+EXECUTE_XRESERVE_BURN=I_UNDERSTAND_THIS_BURNS_USDCX \
+  pnpm tsx examples/bridge/usdcx-to-usdc.ts
+```
+
+For a public withdrawal, the script calls `burn_public_as_signer`; neither a
+record scanner nor an exclusion proof is used:
+
+```sh
+export USDCX_BURN_MODE='public'
+read -s ALEO_PRIVATE_KEY
+export ALEO_PRIVATE_KEY
+
+EXECUTE_XRESERVE_BURN=I_UNDERSTAND_THIS_BURNS_USDCX \
+  pnpm tsx examples/bridge/usdcx-to-usdc.ts
+```
+
+Delegated proving is the default. `ALEO_RPC_URL`, `ALEO_PROVER_URL`,
+`ALEO_USE_FEE_MASTER`, `ALEO_PRIVATE_FEE`, and
+`ALEO_EXECUTION_CONFIRMATION_TIMEOUT_MS` use the same meanings as the deposit
+example. Once Aleo accepts the burn, the operated burn-attestation service
+forwards it to Circle; no Ethereum transaction is submitted by this script.
+
+# Ethereum Hyperlane to Aleo
+
+`eth-to-aleo.ts` and `wbtc-to-aleo.ts` exercise the reviewed mainnet Ethereum
+Hyperlane Warp Routes. Both scripts quote without submitting by default and use
+a local viem account when execution is explicitly enabled. ETH dispatches in a
+single transaction. WBTC checks its Warp Route allowance and submits an exact
+approval only when the existing allowance is insufficient.
+
+Set the shared inputs and enter the Ethereum private key without placing it in
+shell history:
+
+```sh
+export ETHEREUM_RPC_URL='https://eth-mainnet.g.alchemy.com/public'
+export ALEO_RECIPIENT='aleo1...'
+read -s EVM_PRIVATE_KEY
+echo
+export EVM_PRIVATE_KEY
+```
+
+For the native ETH read-only preflight:
+
+```sh
+export ETH_AMOUNT='0.001'
+pnpm tsx examples/bridge/eth-to-aleo.ts
+```
+
+After reviewing the recipient encoding, live Hyperlane fee, total transaction
+value, balance, and Warp Route contract, explicitly enable the ETH transfer:
+
+```sh
+EXECUTE_HYPERLANE_ETH=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
+  pnpm tsx examples/bridge/eth-to-aleo.ts
+```
+
+For the WBTC read-only preflight:
+
+```sh
+export WBTC_AMOUNT='0.0001'
+pnpm tsx examples/bridge/wbtc-to-aleo.ts
+```
+
+After reviewing the WBTC balance, allowance, approval requirement, native ETH
+fee, recipient encoding, and contracts, explicitly enable the WBTC transfer:
+
+```sh
+EXECUTE_HYPERLANE_WBTC=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
+  pnpm tsx examples/bridge/wbtc-to-aleo.ts
+```
+
+`EVM_PRIVATE_KEY` accepts exactly 64 hexadecimal characters with or without a
+`0x` prefix. It signs locally and is not sent to Veil or the RPC service. Both
+routes require ETH for Ethereum gas and the quoted Hyperlane interchain fee.
+The ETH route's transaction value includes the bridged ETH amount plus that
+fee; the WBTC route's transaction value contains only the native fee.
+
+Each submitted Ethereum transaction is allowed five minutes to confirm by
+default. Override that interval when needed:
+
+```sh
+export EVM_CONFIRMATION_TIMEOUT_MS='600000'
+```
+
+If a WBTC approval times out, the transfer is not submitted. After the approval
+confirms, rerun the same live command; the client sees the sufficient allowance
+and proceeds without approving again. If the transfer itself times out, use the
+printed Ethereum hash to check its state before rerunning, since the dispatch
+may already have been broadcast.

@@ -14,6 +14,9 @@ importers:
       '@provablehq/aleo-devnode':
         specifier: ^0.2.3
         version: 0.2.3
+      '@provablehq/sdk':
+        specifier: ^0.11.6
+        version: 0.11.6
       '@types/node':
         specifier: ^25.5.0
         version: 25.5.0
