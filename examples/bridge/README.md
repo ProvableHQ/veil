@@ -279,3 +279,79 @@ confirms, rerun the same live command; the client sees the sufficient allowance
 and proceeds without approving again. If the transfer itself times out, use the
 printed Ethereum hash to check its state before rerunning, since the dispatch
 may already have been broadcast.
+
+# Aleo WBTC to Ethereum WBTC
+
+`wbtc-to-ethereum.ts` exercises the return journey through
+`hyp_warp_token_wbtc_v2.aleo/transfer_remote_as_signer`. The Aleo Warp Route
+burns public `arc20_wbtc.aleo`; private WBTC records must be unshielded before
+using this example. No record scanner is configured.
+
+Set the amount, Ethereum recipient, and Aleo signer:
+
+```sh
+export WBTC_AMOUNT='0.0001'
+export ETHEREUM_RECIPIENT='0x...'
+
+read -s ALEO_PRIVATE_KEY
+export ALEO_PRIVATE_KEY
+```
+
+Run the read-only preflight:
+
+```sh
+pnpm tsx examples/bridge/wbtc-to-ethereum.ts
+```
+
+The preflight reads the signer's public Aleo WBTC and credits balances. It also
+reads the current `hyp_hook_manager.aleo/destination_gas_configs` entry and
+calculates the exact public-credits allowance consumed by the Interchain Gas
+Paymaster. The bridge's default registry remains non-executable; the example
+asserts that this live allowance is WBTC's only unresolved field and enables an
+execution-scoped registry copy after filling it.
+
+After reviewing the amount, Ethereum recipient, balances, and hook payment:
+
+```sh
+EXECUTE_HYPERLANE_WBTC_RETURN=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
+  pnpm tsx examples/bridge/wbtc-to-ethereum.ts
+```
+
+The hook payment is requoted immediately before proving. Delegated proving is
+the default; `ALEO_CONSUMER_ID`, `ALEO_DPS_API_KEY`, `ALEO_RPC_URL`,
+`ALEO_PROVER_URL`, `ALEO_USE_FEE_MASTER`, `ALEO_PRIVATE_FEE`, and
+`ALEO_EXECUTION_CONFIRMATION_TIMEOUT_MS` are optional overrides. The hook
+payment always comes from public credits even when FeeMaster pays the Aleo
+transaction fee. Hyperlane relayers deliver the accepted message and release
+WBTC on Ethereum independently of this process.
+
+# Aleo ETH to Ethereum ETH
+
+`eth-to-ethereum.ts` uses the same return runner for public
+`arc20_eth.aleo`. It fetches the live IGP configuration for the ETH route's
+`44000u128` gas limit, checks the public Aleo ETH and credits balances, and
+calls `hyp_warp_token_eth_v2.aleo/transfer_remote_as_signer`. Private ETH
+records must be unshielded first; no record scanner is used.
+
+```sh
+export ETH_AMOUNT='0.001'
+export ETHEREUM_RECIPIENT='0x...'
+
+read -s ALEO_PRIVATE_KEY
+export ALEO_PRIVATE_KEY
+
+# Read-only preflight
+pnpm tsx examples/bridge/eth-to-ethereum.ts
+```
+
+After reviewing the Ethereum recipient, public ETH balance, public credits
+balance, and live hook payment:
+
+```sh
+EXECUTE_HYPERLANE_ETH_RETURN=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
+  pnpm tsx examples/bridge/eth-to-ethereum.ts
+```
+
+The hook payment is requoted immediately before proving. The accepted Aleo
+transaction burns the specified public ETH; Hyperlane relayers release native
+ETH to the Ethereum recipient asynchronously.
