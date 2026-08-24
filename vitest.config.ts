@@ -35,9 +35,9 @@ export default defineConfig({
       '@provablehq/shield-swap-sdk/mcp': path.resolve(__dirname, 'packages/shield-swap/src/mcp/index.ts'),
       '@provablehq/shield-swap-sdk/node': path.resolve(__dirname, 'packages/shield-swap/src/node.ts'),
       '@provablehq/shield-swap-sdk': path.resolve(__dirname, 'packages/shield-swap/src/index.ts'),
-      '@provablehq/veil-aleo-bridges/agent': path.resolve(__dirname, 'packages/bridge/src/agent/index.ts'),
-      '@provablehq/veil-aleo-bridges/mcp': path.resolve(__dirname, 'packages/bridge/src/mcp/index.ts'),
-      '@provablehq/veil-aleo-bridges': path.resolve(__dirname, 'packages/bridge/src/index.ts'),
+      '@provablehq/aleo-bridge-sdk/agent': path.resolve(__dirname, 'packages/bridge/src/agent/index.ts'),
+      '@provablehq/aleo-bridge-sdk/mcp': path.resolve(__dirname, 'packages/bridge/src/mcp/index.ts'),
+      '@provablehq/aleo-bridge-sdk': path.resolve(__dirname, 'packages/bridge/src/index.ts'),
       '@provablehq/veil-aleo-wallet-adapter': path.resolve(__dirname, 'packages/wallet-adapter/src/index.ts'),
       // Subpaths first: these aliases are prefix-matched in order, so the bare
       // package name would otherwise swallow `/node` and resolve it to the root.

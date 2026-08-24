@@ -1,4 +1,4 @@
-# @provablehq/veil-aleo-bridges
+# @provablehq/aleo-bridge-sdk
 
 ## 0.4.3
 

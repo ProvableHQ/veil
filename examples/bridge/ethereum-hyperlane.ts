@@ -19,7 +19,7 @@ import {
   aleoAddressToBytes32,
   createBridgeClient,
   type EvmBridgeExecutor,
-} from '@provablehq/veil-aleo-bridges'
+} from '@provablehq/aleo-bridge-sdk'
 
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
 const DEFAULT_EVM_CONFIRMATION_TIMEOUT_MS = 5 * 60_000

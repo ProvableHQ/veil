@@ -2,7 +2,7 @@
 sidebar_position: 10
 ---
 
-# @provablehq/veil-aleo-bridges
+# @provablehq/aleo-bridge-sdk
 
 :::caution Preview
 The package is private and not yet published to npm. Execution is available for select routes via injected wallet executors; other execution paths remain under development.
@@ -17,7 +17,7 @@ The current API provides a versioned route registry, discovery, and local
 transfer planning:
 
 ```ts
-import { createBridgeClient } from '@provablehq/veil-aleo-bridges'
+import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'
 
 const bridge = createBridgeClient({ environment: 'mainnet' })
 const [route] = bridge.getRoutes({

@@ -13,7 +13,7 @@ import {
   createBridgeClient,
   type AleoBridgeExecutor,
   type XReserveBurnMode,
-} from '@provablehq/veil-aleo-bridges'
+} from '@provablehq/aleo-bridge-sdk'
 
 const ROUTE_ID = 'xreserve:aleo/usdcx->ethereum/usdc'
 const USDCX_PROGRAM = 'usdcx_stablecoin.aleo'

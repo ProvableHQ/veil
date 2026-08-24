@@ -1,4 +1,4 @@
-# @provablehq/veil-aleo-bridges
+# @provablehq/aleo-bridge-sdk
 
 A protocol-oriented bridge client for Aleo. USDCx transfers use Circle
 xReserve. ETH, WBTC, USDT, SOL, ALEO, and USAD transfers use Hyperlane Warp Routes.
@@ -11,7 +11,7 @@ WBTC, and USDT. Aleo-origin and Solana execution paths remain under development.
 ## Current API
 
 ```ts
-import { createBridgeClient } from '@provablehq/veil-aleo-bridges'
+import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'
 
 const bridge = createBridgeClient({ environment: 'mainnet' })
 
@@ -110,7 +110,7 @@ Pass an EIP-1193-compatible provider from MetaMask, Phantom, or another injected
 wallet. The bridge never receives the wallet's private key.
 
 ```ts
-import { createBridgeClient, type EvmBridgeExecutor } from '@provablehq/veil-aleo-bridges'
+import { createBridgeClient, type EvmBridgeExecutor } from '@provablehq/aleo-bridge-sdk'
 
 const bridge = createBridgeClient({
   environment: 'mainnet',

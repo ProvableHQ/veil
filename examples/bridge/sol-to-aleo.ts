@@ -35,7 +35,7 @@ import {
 import {
   aleoAddressToBytes32,
   createBridgeClient,
-} from '@provablehq/veil-aleo-bridges'
+} from '@provablehq/aleo-bridge-sdk'
 
 const ROUTE_ID = 'hyperlane:solana/sol->aleo/sol'
 const WARP_ROUTE_PROGRAM = address('8YGT2pZwyZe94qBpGzWfY2TMEVcwaQ1bXAE7YAgpUaM7')

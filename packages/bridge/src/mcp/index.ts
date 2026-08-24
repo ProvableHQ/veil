@@ -10,7 +10,7 @@ export type { McpServer, McpToolDefinition } from '@provablehq/veil-core/mcp'
  * Binds core's `toMcpServer` to the protocol bridge discovery and planning
  * tools. The current server cannot sign transactions or move funds.
  *
- * Exposed via subpath export: `import { createBridgeMcpServer } from '@provablehq/veil-aleo-bridges/mcp'`.
+ * Exposed via subpath export: `import { createBridgeMcpServer } from '@provablehq/aleo-bridge-sdk/mcp'`.
  *
  * @param client A bridge client from `createBridgeClient`.
  * @returns An {@link McpServer} whose `handleToolCall` dispatches by tool name.

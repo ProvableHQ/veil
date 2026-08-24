@@ -1,4 +1,4 @@
-# @provablehq/veil-aleo-bridges — agent guide
+# @provablehq/aleo-bridge-sdk — agent guide
 
 The repo-wide contributor constraints in the root `AGENTS.md` and
 `.agents/contributors.md` bind every change in this package.
@@ -38,9 +38,9 @@ The repo-wide contributor constraints in the root `AGENTS.md` and
 ## Commands
 
 ```sh
-pnpm --filter @provablehq/veil-aleo-bridges exec tsc --noEmit
+pnpm --filter @provablehq/aleo-bridge-sdk exec tsc --noEmit
 pnpm vitest run packages/bridge
-pnpm --filter @provablehq/veil-aleo-bridges build
+pnpm --filter @provablehq/aleo-bridge-sdk build
 ```
 
 Protocol integration tests use explicit environment gates. Mainnet tests that

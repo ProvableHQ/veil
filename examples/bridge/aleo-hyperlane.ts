@@ -4,7 +4,7 @@ import {
   type AleoBridgeExecutor,
   type BridgeRegistry,
   type ProtocolBridgeRoute,
-} from '@provablehq/veil-aleo-bridges'
+} from '@provablehq/aleo-bridge-sdk'
 
 const HOOK_MANAGER_PROGRAM = 'hyp_hook_manager.aleo'
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'

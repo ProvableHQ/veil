@@ -30,7 +30,7 @@ import {
   type BridgeTransferReceipt,
   type EvmBridgeExecutor,
   type XReserveAttestationResult,
-} from '@provablehq/veil-aleo-bridges'
+} from '@provablehq/aleo-bridge-sdk'
 
 const ROUTE_ID = 'xreserve:ethereum/usdc->aleo/usdcx'
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'

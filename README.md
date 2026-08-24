@@ -92,7 +92,7 @@ and transport interfaces.
 | `@provablehq/veil-codegen` | Generate typed bindings from an Aleo program ABI (library + `veil-codegen` CLI). | You want typed reads and writes for a specific program's ABI. |
 | `@provablehq/veil-aleo-devnode` | Run and drive a local Aleo devnode for tests. | You need a local Aleo node in tests or local development. |
 | `@provablehq/veil-leo` | Typed wrapper around the `leo` CLI (build, deploy, …). | You compile or deploy Leo programs — including during testing, where it pairs with `@provablehq/veil-aleo-devnode`. |
-| `@provablehq/veil-aleo-bridges` | Cross-chain bridge client (preview). | Not yet — in preview, not published. |
+| `@provablehq/aleo-bridge-sdk` | Cross-chain bridge client (preview). | Not yet — in preview, not published. |
 
 ## Quick Start
 
@@ -199,14 +199,14 @@ const account = viewOnlyAccount({
 
 ## Bridging in and out
 
-`@provablehq/veil-aleo-bridges` assigns each supported asset family to a
+`@provablehq/aleo-bridge-sdk` assigns each supported asset family to a
 protocol: Circle xReserve for USDCx, and Hyperlane Warp Routes for ETH, WBTC,
 SOL, ALEO, and USAD. The package is in preview. Its current foundation exposes
 a versioned route registry and non-fund-moving transfer plans; transaction
 execution is under development.
 
 ```ts
-import { createBridgeClient } from '@provablehq/veil-aleo-bridges'
+import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'
 
 const bridge = createBridgeClient({ environment: 'mainnet' })
 const [route] = bridge.getRoutes({
@@ -427,7 +427,7 @@ veil/
 │   ├── codegen/             # @provablehq/veil-codegen (ABI → typed bindings + CLI)
 │   ├── devnode/             # @provablehq/veil-aleo-devnode (local Aleo devnode for tests)
 │   ├── leo/                 # @provablehq/veil-leo (typed leo CLI wrapper)
-│   └── bridge/              # @provablehq/veil-aleo-bridges (cross-chain bridge client, preview)
+│   └── bridge/              # @provablehq/aleo-bridge-sdk (cross-chain bridge client, preview)
 ├── skills/                  # Skill definitions for code-writing agents
 ├── site/                    # Docusaurus documentation site
 └── package.json

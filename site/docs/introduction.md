@@ -72,7 +72,7 @@ action, and transport interfaces are what the rest of Veil extends.
 | [`@provablehq/veil-codegen`](./packages/codegen) | Generates typed bindings from an Aleo program ABI (library + `veil-codegen` CLI). |
 | [`@provablehq/veil-aleo-devnode`](./packages/devnode) | Runs and drives a local Aleo devnode for tests. |
 | [`@provablehq/veil-leo`](./packages/leo) | Typed wrapper around the `leo` CLI (build, deploy, and more). |
-| [`@provablehq/veil-aleo-bridges`](./packages/bridge) | Cross-chain bridge client. In preview, not yet published. |
+| [`@provablehq/aleo-bridge-sdk`](./packages/bridge) | Cross-chain bridge client. In preview, not yet published. |
 
 Every package composes through viem's `extend()` pattern: a client built from
 `@provablehq/veil-core` gains DEX, devnode, or Leo actions by extending it with the
