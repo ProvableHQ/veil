@@ -14,7 +14,7 @@
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
     "@hyperlane-xyz/sealevel-sdk": "41.3.1",
-    "@provablehq/aleo-devnode": "^0.2.3",
+    "@provablehq/aleo-devnode": "^0.2.4",
     "@provablehq/sdk": "^0.11.6",
     "@solana/kit": "^6.10.0",
     "@types/node": "^25.5.0",

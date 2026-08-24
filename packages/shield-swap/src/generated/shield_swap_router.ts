@@ -76,6 +76,31 @@ export type SwapMhFromWrappedInputs = {
 
 export type SwapMhFromWrappedOutputs = [RecordValue, string, StructValue, FutureValue]
 
+export type ClaimToArc20NoRefundInputs = {
+  arg0: string | InputRequest
+  arg1: string | InputRequest
+  arg2: string | InputRequest
+  arg3: string | InputRequest
+  arg4: string | InputRequest
+  arg5: bigint | InputRequest
+  arg6: StructValue[] | InputRequest
+}
+
+export type ClaimToArc20NoRefundOutputs = [RecordValue, FutureValue]
+
+export type ClaimToWrappedNoRefundInputs = {
+  arg0: string | InputRequest
+  arg1: string | InputRequest
+  arg2: string | InputRequest
+  arg3: string | InputRequest
+  arg4: string | InputRequest
+  arg5: bigint | InputRequest
+  arg6: StructValue[] | InputRequest
+  arg7: MerkleProof[] | InputRequest
+}
+
+export type ClaimToWrappedNoRefundOutputs = [RecordValue, FutureValue]
+
 export type ClaimToWrappedRefundArc20Inputs = {
   arg0: string | InputRequest
   arg1: string | InputRequest
@@ -549,6 +574,217 @@ export const PROGRAM_ABI: ABI = {
       ]
     },
     {
+      "name": "claim_to_arc20_no_refund",
+      "isFinal": true,
+      "inputs": [
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "field"
+            }
+          },
+          "mode": "private"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "address"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "field"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "field"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "field"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "u128"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "array",
+              "element": {
+                "kind": "struct",
+                "path": [
+                  "MerkleProof"
+                ],
+                "program": "shield_swap.aleo"
+              },
+              "length": 2
+            }
+          },
+          "mode": "private"
+        }
+      ],
+      "outputs": [
+        {
+          "type": {
+            "kind": "dynamicRecord"
+          },
+          "mode": "none"
+        },
+        {
+          "type": {
+            "kind": "future"
+          },
+          "mode": "none"
+        }
+      ]
+    },
+    {
+      "name": "claim_to_wrapped_no_refund",
+      "isFinal": true,
+      "inputs": [
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "field"
+            }
+          },
+          "mode": "private"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "address"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "field"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "field"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "field"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "u128"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "array",
+              "element": {
+                "kind": "struct",
+                "path": [
+                  "MerkleProof"
+                ],
+                "program": "shield_swap.aleo"
+              },
+              "length": 2
+            }
+          },
+          "mode": "private"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "array",
+              "element": {
+                "kind": "struct",
+                "path": [
+                  "MerkleProof"
+                ],
+                "program": "shield_swap_router.aleo"
+              },
+              "length": 2
+            }
+          },
+          "mode": "private"
+        }
+      ],
+      "outputs": [
+        {
+          "type": {
+            "kind": "dynamicRecord"
+          },
+          "mode": "none"
+        },
+        {
+          "type": {
+            "kind": "future"
+          },
+          "mode": "none"
+        }
+      ]
+    },
+    {
       "name": "claim_to_wrapped_refund_arc20",
       "isFinal": true,
       "inputs": [
@@ -965,6 +1201,8 @@ export interface ShieldSwapRouterContract {
   write: {
     swap_from_wrapped: (params: { arg0: RecordValue | string | InputRequest, arg1: MerkleProof[] | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: boolean | InputRequest, arg6: bigint | InputRequest, arg7: bigint | InputRequest, arg8: U256__8JquwLopp8 | InputRequest, arg9: bigint | InputRequest, arg10: number | InputRequest, arg11: string | InputRequest, arg12: string | InputRequest }) => Promise<string>
     swap_mh_from_wrapped: (params: { arg0: RecordValue | string | InputRequest, arg1: MerkleProof[] | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: string | InputRequest, arg6: bigint | InputRequest, arg7: bigint | InputRequest, arg8: StructValue | InputRequest, arg9: StructValue | InputRequest, arg10: StructValue | InputRequest, arg11: number | InputRequest, arg12: bigint | InputRequest, arg13: number | InputRequest }) => Promise<string>
+    claim_to_arc20_no_refund: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: StructValue[] | InputRequest }) => Promise<string>
+    claim_to_wrapped_no_refund: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: StructValue[] | InputRequest, arg7: MerkleProof[] | InputRequest }) => Promise<string>
     claim_to_wrapped_refund_arc20: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: StructValue[] | InputRequest, arg8: MerkleProof[] | InputRequest }) => Promise<string>
     claim_to_arc20_refund_wrapped: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: StructValue[] | InputRequest, arg8: MerkleProof[] | InputRequest }) => Promise<string>
     claim_to_wrapped_refund_wrapped: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: StructValue[] | InputRequest, arg8: MerkleProof[] | InputRequest, arg9: MerkleProof[] | InputRequest }) => Promise<string>
@@ -972,6 +1210,8 @@ export interface ShieldSwapRouterContract {
   simulate: {
     swap_from_wrapped: (params: { arg0: RecordValue | string | InputRequest, arg1: MerkleProof[] | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: boolean | InputRequest, arg6: bigint | InputRequest, arg7: bigint | InputRequest, arg8: U256__8JquwLopp8 | InputRequest, arg9: bigint | InputRequest, arg10: number | InputRequest, arg11: string | InputRequest, arg12: string | InputRequest }) => Promise<[RecordValue, string, StructValue, FutureValue]>
     swap_mh_from_wrapped: (params: { arg0: RecordValue | string | InputRequest, arg1: MerkleProof[] | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: string | InputRequest, arg6: bigint | InputRequest, arg7: bigint | InputRequest, arg8: StructValue | InputRequest, arg9: StructValue | InputRequest, arg10: StructValue | InputRequest, arg11: number | InputRequest, arg12: bigint | InputRequest, arg13: number | InputRequest }) => Promise<[RecordValue, string, StructValue, FutureValue]>
+    claim_to_arc20_no_refund: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: StructValue[] | InputRequest }) => Promise<[RecordValue, FutureValue]>
+    claim_to_wrapped_no_refund: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: StructValue[] | InputRequest, arg7: MerkleProof[] | InputRequest }) => Promise<[RecordValue, FutureValue]>
     claim_to_wrapped_refund_arc20: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: StructValue[] | InputRequest, arg8: MerkleProof[] | InputRequest }) => Promise<[RecordValue, RecordValue, FutureValue]>
     claim_to_arc20_refund_wrapped: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: StructValue[] | InputRequest, arg8: MerkleProof[] | InputRequest }) => Promise<[RecordValue, RecordValue, FutureValue]>
     claim_to_wrapped_refund_wrapped: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: StructValue[] | InputRequest, arg8: MerkleProof[] | InputRequest, arg9: MerkleProof[] | InputRequest }) => Promise<[RecordValue, RecordValue, FutureValue]>
@@ -979,6 +1219,8 @@ export interface ShieldSwapRouterContract {
   execute: {
     swap_from_wrapped: (params: { arg0: RecordValue | string | InputRequest, arg1: MerkleProof[] | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: boolean | InputRequest, arg6: bigint | InputRequest, arg7: bigint | InputRequest, arg8: U256__8JquwLopp8 | InputRequest, arg9: bigint | InputRequest, arg10: number | InputRequest, arg11: string | InputRequest, arg12: string | InputRequest }) => Promise<{ transactionId: string, result: [RecordValue, string, StructValue, FutureValue] }>
     swap_mh_from_wrapped: (params: { arg0: RecordValue | string | InputRequest, arg1: MerkleProof[] | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: string | InputRequest, arg6: bigint | InputRequest, arg7: bigint | InputRequest, arg8: StructValue | InputRequest, arg9: StructValue | InputRequest, arg10: StructValue | InputRequest, arg11: number | InputRequest, arg12: bigint | InputRequest, arg13: number | InputRequest }) => Promise<{ transactionId: string, result: [RecordValue, string, StructValue, FutureValue] }>
+    claim_to_arc20_no_refund: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: StructValue[] | InputRequest }) => Promise<{ transactionId: string, result: [RecordValue, FutureValue] }>
+    claim_to_wrapped_no_refund: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: StructValue[] | InputRequest, arg7: MerkleProof[] | InputRequest }) => Promise<{ transactionId: string, result: [RecordValue, FutureValue] }>
     claim_to_wrapped_refund_arc20: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: StructValue[] | InputRequest, arg8: MerkleProof[] | InputRequest }) => Promise<{ transactionId: string, result: [RecordValue, RecordValue, FutureValue] }>
     claim_to_arc20_refund_wrapped: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: StructValue[] | InputRequest, arg8: MerkleProof[] | InputRequest }) => Promise<{ transactionId: string, result: [RecordValue, RecordValue, FutureValue] }>
     claim_to_wrapped_refund_wrapped: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: StructValue[] | InputRequest, arg8: MerkleProof[] | InputRequest, arg9: MerkleProof[] | InputRequest }) => Promise<{ transactionId: string, result: [RecordValue, RecordValue, FutureValue] }>
@@ -1014,6 +1256,14 @@ export function createShieldSwapRouterContract(options: {
         const _arg0 = arg0?._record ?? arg0
         return _raw.write.swap_mh_from_wrapped({ inputs: [_arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13] })
       },
+      claim_to_arc20_no_refund: (params: any) => {
+        const { arg0, arg1, arg2, arg3, arg4, arg5, arg6 } = params
+        return _raw.write.claim_to_arc20_no_refund({ inputs: [arg0, arg1, arg2, arg3, arg4, arg5, arg6] })
+      },
+      claim_to_wrapped_no_refund: (params: any) => {
+        const { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 } = params
+        return _raw.write.claim_to_wrapped_no_refund({ inputs: [arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7] })
+      },
       claim_to_wrapped_refund_arc20: (params: any) => {
         const { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 } = params
         return _raw.write.claim_to_wrapped_refund_arc20({ inputs: [arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8] })
@@ -1039,6 +1289,16 @@ export function createShieldSwapRouterContract(options: {
         const _arg0 = arg0?._record ?? arg0
         const result = await _raw.simulate.swap_mh_from_wrapped({ inputs: [_arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13] })
         return [result.outputs[0], result.outputs[1] as unknown as string, result.outputs[2] as unknown as StructValue, result.outputs[3] as unknown as FutureValue] as const
+      },
+      claim_to_arc20_no_refund: async (params: any) => {
+        const { arg0, arg1, arg2, arg3, arg4, arg5, arg6 } = params
+        const result = await _raw.simulate.claim_to_arc20_no_refund({ inputs: [arg0, arg1, arg2, arg3, arg4, arg5, arg6] })
+        return [result.outputs[0], result.outputs[1] as unknown as FutureValue] as const
+      },
+      claim_to_wrapped_no_refund: async (params: any) => {
+        const { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 } = params
+        const result = await _raw.simulate.claim_to_wrapped_no_refund({ inputs: [arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7] })
+        return [result.outputs[0], result.outputs[1] as unknown as FutureValue] as const
       },
       claim_to_wrapped_refund_arc20: async (params: any) => {
         const { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 } = params
@@ -1068,6 +1328,16 @@ export function createShieldSwapRouterContract(options: {
         const _arg0 = arg0?._record ?? arg0
         const result = await _raw.execute.swap_mh_from_wrapped({ inputs: [_arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13] })
         return { transactionId: result.transactionId, result: [result.outputs[0], result.outputs[1] as unknown as string, result.outputs[2] as unknown as StructValue, result.outputs[3] as unknown as FutureValue] as const }
+      },
+      claim_to_arc20_no_refund: async (params: any) => {
+        const { arg0, arg1, arg2, arg3, arg4, arg5, arg6 } = params
+        const result = await _raw.execute.claim_to_arc20_no_refund({ inputs: [arg0, arg1, arg2, arg3, arg4, arg5, arg6] })
+        return { transactionId: result.transactionId, result: [result.outputs[0], result.outputs[1] as unknown as FutureValue] as const }
+      },
+      claim_to_wrapped_no_refund: async (params: any) => {
+        const { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 } = params
+        const result = await _raw.execute.claim_to_wrapped_no_refund({ inputs: [arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7] })
+        return { transactionId: result.transactionId, result: [result.outputs[0], result.outputs[1] as unknown as FutureValue] as const }
       },
       claim_to_wrapped_refund_arc20: async (params: any) => {
         const { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 } = params

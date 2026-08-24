@@ -1,5 +1,45 @@
 # @provablehq/shield-swap-sdk
 
+## 0.8.0
+
+### Minor Changes
+
+- cbb80ef: Target the edition-1 shield_swap deployment: claims with a zero remainder now
+  dispatch to the no-refund transitions (claim_swap_output_no_refund on the core,
+  claim_to_arc20_no_refund / claim_to_wrapped_no_refund on the router), the wallet
+  grant list covers the new transitions, and two chain reads are added —
+  getPoolCreator (pool_creators) and getSwapExecution (per-hop execution receipts
+  with derived LP fees).
+
+### Patch Changes
+
+- @provablehq/veil-core@0.8.0
+
+## 0.7.1
+
+### Patch Changes
+
+- Add provisioned-key auth for the edge Provable API gateway.
+
+  The edge gateway (edge.provable.com) has no consumer registration or JWT
+  minting: operators hand out API keys and every request carries the key
+  verbatim in an `X-API-Key` header. A `ProvableKeyedAuth` option — the api-key
+  variant of the Provable SDK's `ApiAuthConfig` — is now accepted by
+  `createProvingConfig`, `createRemoteScanner`, `createStandaloneScanner`, and
+  `createAleoClient`.
+
+  The keyed model is mutually exclusive with the consumer lifecycle: combining
+  `auth` with `apiKey`, `consumerId`, `username`, `credentialStore`, or
+  `session` throws at construction, a keyed client builds no session,
+  `authenticateProvableApi` refuses, and a 401 is terminal rather than retried.
+
+  `registerProvableApi` and `mintJwt` also gained a fetch-compatible
+  `transport` option instead of calling the global fetch directly. Requires
+  `@provablehq/sdk` 0.11.8.
+
+- Updated dependencies [99defd6]
+  - @provablehq/veil-core@0.7.1
+
 ## 0.7.0
 
 ### Minor Changes

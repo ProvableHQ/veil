@@ -55,13 +55,32 @@ export interface OwnedRecord extends OwnedRecordEncrypted {
 /** Spent-status filter for a record request. */
 export type RecordStatusFilter = 'all' | 'spent' | 'unspent'
 
-/** Parameters for requestRecords — scopes the scan to one program's records. */
+/**
+ * Parameters for requestRecords — scopes and narrows a record scan.
+ *
+ * `program` is the common case and covers most calls on its own. `filter`
+ * narrows further, and a scan served by the Record Scanning Service pushes
+ * those bounds to the service so a slimmer result set travels the wire.
+ *
+ * @property program Program whose records to scan, e.g. `'credits.aleo'`.
+ *   Optional: omitting it scans every program the account holds records for,
+ *   which suits a wallet-wide sweep. REQUIRED for an RPC (wallet) account —
+ *   the wallet-adapter protocol scopes a record request to one program and has
+ *   no all-programs form, so omitting it there throws. Unioned with
+ *   `filter.programs` when both are set.
+ * @property includePlaintext Whether to include decrypted plaintext on each
+ *   record. Defaults to true. Set false for a ciphertext-only scan, which skips
+ *   local decryption.
+ * @property statusFilter Whether to return spent records, unspent records, or
+ *   both. Defaults to `'all'`.
+ * @property filter Row-level narrowing and pagination. Omit to return every
+ *   record in scope.
+ */
 export type RequestRecordsParameters = {
-  program: string
-  /** Whether to include plaintext on each record. Defaults to true. */
+  program?: string
   includePlaintext?: boolean
-  /** Filter records by spent status. Defaults to 'all'. */
   statusFilter?: RecordStatusFilter
+  filter?: RecordFilter
 }
 
 // ---------------------------------------------------------------------------
@@ -87,14 +106,42 @@ export type ResponseFilter = {
 }
 
 /**
- * Narrows an RSS scan by commitments, block range, programs, record types,
- * or functions, with pagination.
+ * Narrows a record scan by commitment, block range, program, record type, or
+ * function, with pagination.
  *
- * @property start Lower bound of the block-height range to scan.
- * @property end Upper bound of the block-height range to scan.
- * @property records Record type names to include.
+ * Fields combine as AND, values within a field as OR: `{ records: ['Position',
+ * 'Fee'], functions: ['mint'] }` matches either record type when `mint` produced
+ * it. An omitted field applies no bound; neither does an empty array.
+ *
+ * A local account pushes the filter to its record scanning backend, which filters
+ * and pages before responding. A wallet (RPC) account cannot — the wallet-adapter
+ * protocol carries only program, plaintext, and spent status — so Veil applies
+ * the same bounds to the records the wallet returned.
+ *
+ * A bound tests a field on each record, and a privacy-preserving wallet omits
+ * fields withheld under a `recordAccess` grant: `records: ['Position']` over a
+ * connection that withholds `recordName` matches nothing. Filter on granted
+ * fields. `program` is exempt — it travels as a request parameter, not as a
+ * comparison against a returned field.
+ *
+ * @property commitments Commitments to return, each an Aleo `field` literal.
+ *   Suited to re-reading known records. A malformed literal fails the request.
+ * @property start Lower bound of the block-height range, inclusive.
+ * @property end Upper bound of the block-height range, inclusive.
+ * @property programs Program ids to include, e.g. `['credits.aleo']`. Unioned
+ *   with `RequestRecordsParameters.program` when both are set.
+ * @property records Record type names to include, e.g. `['Position']` — the
+ *   record's declared name in the program, not the program id.
  * @property functions Names of the functions that produced the records.
- * @property response Field-selection mask applied to each returned record.
+ * @property resultsPerPage Records per page. Defaults to 1000, which is also the
+ *   ceiling: a larger value is clamped down, so reading more than one page's
+ *   worth requires paging. MUST be a positive integer; anything else throws.
+ * @property page Zero-based page index. Defaults to 0. MUST be a non-negative
+ *   integer; anything else throws.
+ * @property response Field-selection mask. Narrows nothing on any current path:
+ *   the Record Scanning Service selects columns from a separate top-level field
+ *   that no client sends, so every column returns. Retained because it ships in
+ *   a released type. Do not use it.
  */
 export type RecordFilter = {
   commitments?: string[]

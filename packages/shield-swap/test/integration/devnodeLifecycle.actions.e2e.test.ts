@@ -65,6 +65,9 @@ describe.runIf(RUN)('e2e: shield_swap lifecycle on devnode (SDK write actions)',
   // Plain/plain lifecycle handles.
   let nft: string
   let positionTokenId: string
+  // Swap id from the plain/plain swap-and-claim test, kept for the
+  // execution-receipt assertions that follow it.
+  let lastSwapId: string
 
   beforeAll(async () => {
     ctx = await setupAmmDevnode()
@@ -103,7 +106,7 @@ describe.runIf(RUN)('e2e: shield_swap lifecycle on devnode (SDK write actions)',
     expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'tick_spacings', key: `${ctx.tickSpacing}u32` })).toBe('true')
     expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'fee_to_tick_spacing', key: `${ctx.fee}u16` })).toBe(`${ctx.tickSpacing}u32`)
     // Plain token registered without a wrapper mapping; wrapper bound to its underlying.
-    expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'token_allowed', key: ctx.tokens.plainH.field })).toBe('true')
+    expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'token_allowed', key: ctx.tokens.plainB.field })).toBe('true')
     expect(await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'from_wrapper_token_id', key: ctx.tokens.wcredits.field })).toBeTruthy()
 
     for (const pool of [ctx.pools.pp, ctx.pools.wp, ctx.pools.ww]) {
@@ -179,6 +182,7 @@ describe.runIf(RUN)('e2e: shield_swap lifecycle on devnode (SDK write actions)',
       })
       expect(handle.swapId).toMatch(/field$/)
       expect(handle.tokenInWrapped).toBe(false)
+      lastSwapId = handle.swapId!
 
       const output = String(
         await ctx.admin.publicClient.readContract({ programId: AMM_PROGRAM, mapping: 'swap_outputs', key: handle.swapId! }),
@@ -199,6 +203,23 @@ describe.runIf(RUN)('e2e: shield_swap lifecycle on devnode (SDK write actions)',
       else expect(slotAfter!.sqrt_price).toBeGreaterThan(slotBefore!.sqrt_price)
     }
   }, 480_000)
+
+  it('the swap execution receipt and the pool creator round-trip against the devnode', async () => {
+    // swap_execution receipts persist after the claim, so this reads the last
+    // swap from the prior test at any point after it finalized — proving the
+    // composite `{ swap_id, hop_index }` struct-key literal decodes against a
+    // real node, which a unit test cannot exercise.
+    const receipt = await dex.getSwapExecution({ swapId: lastSwapId })
+    expect(receipt, 'swap execution receipt exists').toBeTruthy()
+    expect(receipt!.header.hop_count).toBe(receipt!.hops.length)
+
+    const hop = receipt!.hops[0]!
+    expect(hop.amount_in).toBeGreaterThan(0n)
+    expect(hop.lp_fee).toBe(hop.fee_paid - hop.protocol_fee)
+
+    const creator = await dex.getPoolCreator({ poolKey: ctx.pools.pp.poolKey })
+    expect(creator).toBe(ctx.admin.account.address)
+  }, 120_000)
 
   it('decrease_liquidity settles owed and collect pays it out (plain/plain)', async () => {
     const pool = ctx.pools.pp

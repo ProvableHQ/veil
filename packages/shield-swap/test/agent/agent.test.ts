@@ -93,6 +93,12 @@ describe('shieldSwapAgentToolSchemas — gating', () => {
     )
   })
 
+  it('exposes the pool-creator and swap-execution reads', () => {
+    const chain = names({ client: {} as Client })
+    expect(chain).toContain('shield_swap_get_pool_creator')
+    expect(chain).toContain('shield_swap_get_swap_execution')
+  })
+
   it('gates the auth tools on both client (signer) and api', () => {
     const authNames = [
       'shield_swap_authenticate',

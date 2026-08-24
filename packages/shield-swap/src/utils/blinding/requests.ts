@@ -46,9 +46,10 @@ export interface ShieldSwapAlgorithmGrantsParameters {
  * `ConnectOptions.algorithmsAllowed` so private swaps and claims work on both
  * the core AMM and the swap router. Positions follow the deployed transition
  * declarations: core `swap` takes the blinding pair at inputs 1–2,
- * `swap_multi_hop` and `claim_swap_output` at 0–1; the router's
- * `swap_from_wrapped`/`swap_mh_from_wrapped` at 2–3 (after the underlying
- * record and sender proof), and every `claim_to_*` variant at 0–1.
+ * `swap_multi_hop`, `claim_swap_output`, and `claim_swap_output_no_refund` at
+ * 0–1; the router's `swap_from_wrapped`/`swap_mh_from_wrapped` at 2–3 (after
+ * the underlying record and sender proof), and every `claim_to_*` variant —
+ * refund-bearing and no-refund alike — at 0–1.
  *
  * @param params Optional program overrides for non-default deployments.
  * @returns The grant tuples for every blinding slot in the stack.
@@ -72,6 +73,9 @@ export function shieldSwapAlgorithmGrants(params: ShieldSwapAlgorithmGrantsParam
     ...pair(router, 'claim_to_wrapped_refund_arc20', 0),
     ...pair(router, 'claim_to_arc20_refund_wrapped', 0),
     ...pair(router, 'claim_to_wrapped_refund_wrapped', 0),
+    ...pair(program, 'claim_swap_output_no_refund', 0),
+    ...pair(router, 'claim_to_arc20_no_refund', 0),
+    ...pair(router, 'claim_to_wrapped_no_refund', 0),
   ]
 }
 

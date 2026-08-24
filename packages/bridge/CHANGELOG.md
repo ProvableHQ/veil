@@ -1,5 +1,18 @@
 # @provablehq/aleo-bridge-sdk
 
+## 0.4.5
+
+### Patch Changes
+
+- @provablehq/veil-core@0.8.0
+
+## 0.4.4
+
+### Patch Changes
+
+- Updated dependencies [99defd6]
+  - @provablehq/veil-core@0.7.1
+
 ## 0.4.3
 
 ### Patch Changes

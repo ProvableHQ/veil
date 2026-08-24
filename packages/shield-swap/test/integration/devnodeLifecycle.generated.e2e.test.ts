@@ -112,7 +112,7 @@ describe.runIf(RUN)('e2e: shield_swap lifecycle on devnode (generated contract)'
       imports: ctx.imports,
     })
     // Sort the two plain tokens for canonical pool order.
-    const [a, b] = [ctx.tokens.plainA, ctx.tokens.plainH]
+    const [a, b] = [ctx.tokens.plainA, ctx.tokens.plainB]
     ;[token0, token1] = BigInt(a.field.replace('field', '')) < BigInt(b.field.replace('field', '')) ? [a, b] : [b, a]
 
     // Register a fresh fee tier + spacing for this suite's own pool.

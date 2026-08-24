@@ -86,6 +86,54 @@ finalize swap_mh_from_wrapped:
     await r1;
     await r2;
 
+function claim_to_arc20_no_refund:
+    input r0 as field.private;
+    input r1 as address.public;
+    input r2 as field.public;
+    input r3 as field.public;
+    input r4 as field.public;
+    input r5 as u128.public;
+    input r6 as [shield_swap.aleo/MerkleProof; 2u32].private;
+    call shield_swap.aleo/claim_swap_output_no_refund r0 r1 r2 r3 r4 r5 r6 into r7 r8;
+    async claim_to_arc20_no_refund r3 r4 r8 into r9;
+    output r7 as dynamic.record;
+    output r9 as shield_swap_router.aleo/claim_to_arc20_no_refund.future;
+
+finalize claim_to_arc20_no_refund:
+    input r0 as field.public;
+    input r1 as field.public;
+    input r2 as shield_swap.aleo/claim_swap_output_no_refund.future;
+    contains shield_swap.aleo/from_wrapper_token_id[r0] into r3;
+    assert.eq r3 true;
+    contains shield_swap.aleo/from_wrapper_token_id[r1] into r4;
+    not r4 into r5;
+    assert.eq r5 true;
+    await r2;
+
+function claim_to_wrapped_no_refund:
+    input r0 as field.private;
+    input r1 as address.public;
+    input r2 as field.public;
+    input r3 as field.public;
+    input r4 as field.public;
+    input r5 as u128.public;
+    input r6 as [shield_swap.aleo/MerkleProof; 2u32].private;
+    input r7 as [MerkleProof; 2u32].private;
+    call shield_swap.aleo/claim_swap_output_no_refund r0 r1 r2 r3 r4 r5 r6 into r8 r9;
+    call.dynamic r4 'aleo' 'withdraw_private' with r8 r5 self.signer r7 (as dynamic.record u128.public address.private [MerkleProof; 2u32].private) into r10 r11 (as dynamic.record dynamic.future);
+    async claim_to_wrapped_no_refund r4 r9 r11 into r12;
+    output r10 as dynamic.record;
+    output r12 as shield_swap_router.aleo/claim_to_wrapped_no_refund.future;
+
+finalize claim_to_wrapped_no_refund:
+    input r0 as field.public;
+    input r1 as shield_swap.aleo/claim_swap_output_no_refund.future;
+    input r2 as dynamic.future;
+    contains shield_swap.aleo/from_wrapper_token_id[r0] into r3;
+    assert.eq r3 true;
+    await r1;
+    await r2;
+
 function claim_to_wrapped_refund_arc20:
     input r0 as field.private;
     input r1 as address.public;

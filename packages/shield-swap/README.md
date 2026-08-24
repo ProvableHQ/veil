@@ -11,16 +11,18 @@ viem-style actions for the following:
 
 ### Executing DEX smart-contract functions
 Actions for executing the functions of the `shield_swap.aleo` contract.
-- **Private swaps** — Runs the `swap` --> `claim_swap_output` flows, and the
-multi-hop variants (`swap_multi_hop` --> `claim_multi_hop_output`) for 2–3
-pool routes.
+- **Private swaps** — Runs the `swap` --> `claim_swap_output` flows (a
+completely filled swap claims through `claim_swap_output_no_refund` instead,
+chosen automatically), and the multi-hop variant (`swap_multi_hop`, claimed
+through the same unified `claimSwapOutput` action) for 2–3 pool routes.
 - **Liquidity** — create pools (via `create_pool`), 
 mint concentrated-liquidity positions (`mint`) and add to them (`increase_liquidity`).
 
 ### Reading the DEX contract + DEX API
 Actions for:
 - Reading Shield Swap smart-contract mappings directly — pools, slots,
-positions, ticks, swap outputs, and the pause/freeze control gates.
+positions, ticks, swap outputs, swap execution receipts, pool creators, and
+the pause/freeze control gates.
 - Reading Shield Swap api endpoints via typed client REST API service namespaced under `client.api`.
 
 ### Helpers for Traders
@@ -227,6 +229,15 @@ const config = await client.getPool({ poolKey: pool.key })
 const slot = await client.getSlot({ poolKey: pool.key })
 ```
 
+`getPoolCreator` reads the `pool_creators` mapping — the address that called
+`create_pool`, written once at creation and never changed by later admin or
+liquidity activity. Pools created before the edition-1 upgrade have no entry,
+so a `null` result there means "predates creator tracking," not "no creator":
+
+```ts
+const creator = await client.getPoolCreator({ poolKey: pool.key })
+```
+
 The pool key can also be derived locally from the token pair and fee tier,
 without a `getPools` round trip. `derivePoolKey` computes the same
 `BHP256::hash_to_field(PoolKey { token0, token1, fee })` the contract does
@@ -353,6 +364,16 @@ it throws `SwapOutputNotFinalizedError`, the request transaction hasn't
 finalized yet; retry after a few blocks. The same error after a successful claim
 means the output was already collected — claiming consumes the on-chain entry.
 
+`claimSwapOutput` picks the transition automatically from the chain-read
+remainder: a swap that filled completely (`amountRemaining` is `0n`) claims
+through `claim_swap_output_no_refund` — or the router's
+`claim_to_arc20_no_refund` / `claim_to_wrapped_no_refund` when either token is
+wrapped — which produces no refund record. A nonzero remainder claims through
+`claim_swap_output` or its wrapped-aware router counterparts instead, and pays
+back the unfilled input alongside the output. Either way the call and its
+return shape are the same; `amountRemaining` in the result says which path was
+taken.
+
 #### Local
 
 The handle already carries `swapId` and `blindedAddress`, so the claim just
@@ -395,6 +416,24 @@ const { amountOut, amountRemaining } = await client.claimSwapOutput({
 })
 ```
 
+### Auditing a settled swap
+
+`getSwapExecution` reads the execution receipt the chain writes when a swap
+request finalizes — the pool, direction, input and output amounts, fee paid,
+protocol fee, and the resulting price and tick for each hop. Unlike
+`swap_outputs`, the claim does not consume this entry, so it stays readable
+after the swap is fully settled:
+
+```ts
+const receipt = await client.getSwapExecution({ swapId: handle.swapId! })
+const totalLpFee = receipt?.hops.reduce((sum, hop) => sum + hop.lp_fee, 0n)
+```
+
+Each hop's `lp_fee` is derived client-side as `fee_paid - protocol_fee` — the
+liquidity providers' share once the protocol's cut is set aside. Swaps
+executed before the edition-1 upgrade have no receipt; `getSwapExecution`
+returns `null` for those, same as for a request that has not finalized yet.
+
 ### Multi-hop routes
 
 When the best route crosses more than one pool, `swapMultiHop` submits the
@@ -418,12 +457,13 @@ const handle = await client.swapMultiHop({
 ```
 
 The handle is the same idea as the single-hop one — serializable, carries the
-whole id preimage, consumed by the claim. Partial fills on later hops refund
-the intermediate token; the claim reports those as `hopRefunds` alongside the
-main output and input refund:
+whole id preimage, consumed by the claim. `claimSwapOutput` handles both
+handle types identically; `swap_outputs` carries only the route's final output
+token and one remaining amount, so a multi-hop claim reads the same way a
+single-hop one does:
 
 ```ts
-const { amountOut, amountRemaining, hopRefunds } = await client.claimMultiHopOutput({
+const { amountOut, amountRemaining } = await client.claimSwapOutput({
   handle,
   imports,   // include every token program the route touches
 })
@@ -583,7 +623,8 @@ A new store knows nothing, and an account that has swapped before has a past the
 store cannot see. Blinded identities are derived rather than recorded anywhere the
 account can read, and the `swap_outputs` entry for a claimed swap is deleted by
 the very claim that settles it — so the only public trace linking an identity to
-its swap is the `claim_swap_output` call itself. Its inputs carry the blinded
+its swap is the `claim_swap_output` (or `claim_swap_output_no_refund`, for a
+swap that filled completely) call itself. Its inputs carry the blinded
 address, the swap id, both token ids, and the amounts.
 
 `reconcileSwapHistory` walks those calls and writes back what it finds. Run it

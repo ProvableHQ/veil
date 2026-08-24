@@ -1,5 +1,57 @@
 # @provablehq/veil-aleo-sdk
 
+## 0.8.0
+
+## 0.7.1
+
+### Patch Changes
+
+- Add provisioned-key auth for the edge Provable API gateway.
+
+  The edge gateway (edge.provable.com) has no consumer registration or JWT
+  minting: operators hand out API keys and every request carries the key
+  verbatim in an `X-API-Key` header. A `ProvableKeyedAuth` option — the api-key
+  variant of the Provable SDK's `ApiAuthConfig` — is now accepted by
+  `createProvingConfig`, `createRemoteScanner`, `createStandaloneScanner`, and
+  `createAleoClient`.
+
+  The keyed model is mutually exclusive with the consumer lifecycle: combining
+  `auth` with `apiKey`, `consumerId`, `username`, `credentialStore`, or
+  `session` throws at construction, a keyed client builds no session,
+  `authenticateProvableApi` refuses, and a 401 is terminal rather than retried.
+
+  `registerProvableApi` and `mintJwt` also gained a fetch-compatible
+  `transport` option instead of calling the global fetch directly. Requires
+  `@provablehq/sdk` 0.11.8.
+
+- 99defd6: Parameterize record scans with Record Scanning Service filters.
+
+  `requestRecords` now accepts a nested `filter` carrying the service's row
+  bounds — record type, producing function, commitment, and block range — plus
+  pagination, so a scan returns only the records a caller asked for. A local
+  account pushes the bounds to the service; a wallet (RPC) account cannot
+  forward them, so Veil applies the same bounds to what the wallet returned.
+
+  `program` is now optional. Omitting it scans every program the account holds
+  records for. A wallet (RPC) account still requires it and throws when it is
+  absent, since the wallet-adapter protocol has no all-programs record request.
+
+  **Behavior change:** `statusFilter: 'all'` — the default — previously returned
+  unspent records only. It sent `unspent: true`, which the service reads as
+  `spent = false`, making `'all'` behave identically to `'unspent'`. The key is
+  now omitted for `'all'`, so it returns both spent and unspent records as
+  documented. Code that relied on the default to get spendable records should
+  pass `statusFilter: 'unspent'` explicitly.
+
+  Pagination was previously unreachable while the service clamps results to 1000
+  per page, so an account holding more matching records lost the remainder with
+  no signal. `resultsPerPage` and `page` now reach the service.
+
+  A filter bound can only be evaluated against a field a record carries. A
+  privacy-preserving wallet omits fields withheld under a `recordAccess` grant,
+  so a bound on a withheld field matches nothing rather than being ignored —
+  filter on granted fields, or scope with `program`, which every path carries.
+
 ## 0.7.0
 
 ### Minor Changes

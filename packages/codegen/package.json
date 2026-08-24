@@ -1,6 +1,6 @@
 {
   "name": "@provablehq/veil-codegen",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Generates executable TypeScript contracts from Aleo program ABIs.",
   "license": "MIT",
   "repository": {

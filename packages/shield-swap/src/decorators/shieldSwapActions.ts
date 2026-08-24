@@ -27,6 +27,12 @@ import {
   type GetOwnedPositionParameters,
   type GetOwnedPositionReturnType,
 } from '../actions/reads/getOwnedPosition.js'
+import { getPoolCreator, type GetPoolCreatorParameters } from '../actions/reads/getPoolCreator.js'
+import {
+  getSwapExecution,
+  type GetSwapExecutionParameters,
+  type GetSwapExecutionReturnType,
+} from '../actions/reads/getSwapExecution.js'
 import { isGlobalPaused } from '../actions/reads/isGlobalPaused.js'
 import { isPoolCreationOpen } from '../actions/reads/isPoolCreationOpen.js'
 import { isTokenAllowed } from '../actions/reads/isTokenAllowed.js'
@@ -181,6 +187,8 @@ export type ShieldSwapActions = {
   getPosition: (params: GetPositionParameters) => Promise<GetPositionReturnType>
   getOwnedPositions: (params?: GetOwnedPositionsParameters) => Promise<GetOwnedPositionsReturnType>
   getOwnedPosition: (params: GetOwnedPositionParameters) => Promise<GetOwnedPositionReturnType>
+  getPoolCreator: (params: GetPoolCreatorParameters) => Promise<string | null>
+  getSwapExecution: (params: GetSwapExecutionParameters) => Promise<GetSwapExecutionReturnType>
   getTick: (params: GetTickParameters) => Promise<GetTickReturnType>
   isBlindedAddressUsed: (params: { address: string; program?: string }) => Promise<boolean>
   isPoolInitialized: (params: { poolKey: string; program?: string }) => Promise<boolean>
@@ -325,6 +333,8 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       getPosition: (p) => getPosition(client, withProgram(p)),
       getOwnedPositions: (p) => getOwnedPositions(client, withProgram(p ?? {})),
       getOwnedPosition: (p) => getOwnedPosition(client, withProgram(p)),
+      getPoolCreator: (p) => getPoolCreator(client, withProgram(p)),
+      getSwapExecution: (p) => getSwapExecution(client, withProgram(p)),
       getTick: (p) => getTick(client, withProgram(p) as GetTickParameters),
       isBlindedAddressUsed: (p) => isBlindedAddressUsed(client, withProgram(p)),
       isPoolInitialized: (p) => isPoolInitialized(client, withProgram(p)),
