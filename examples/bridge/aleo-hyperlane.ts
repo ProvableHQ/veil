@@ -11,12 +11,14 @@ const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
 const ALEO_PROVING_PROGRESS_INTERVAL_MS = 15_000
 const MAX_U64 = (1n << 64n) - 1n
 
-type AleoHyperlaneAsset = 'ETH' | 'WBTC'
+type AleoHyperlaneAsset = 'ETH' | 'SOL' | 'WBTC'
 type AssetConfiguration = {
   symbol: AleoHyperlaneAsset
   routeId: string
   balanceProgram: string
   decimals: number
+  destination: string
+  recipientEnvironmentVariable: string
   amountEnvironmentVariable: string
   executionEnvironmentVariable: string
 }
@@ -27,14 +29,28 @@ const ASSETS: Record<AleoHyperlaneAsset, AssetConfiguration> = {
     routeId: 'hyperlane:aleo/eth->ethereum/eth',
     balanceProgram: 'arc20_eth.aleo',
     decimals: 18,
+    destination: 'Ethereum',
+    recipientEnvironmentVariable: 'ETHEREUM_RECIPIENT',
     amountEnvironmentVariable: 'ETH_AMOUNT',
     executionEnvironmentVariable: 'EXECUTE_HYPERLANE_ETH_RETURN',
+  },
+  SOL: {
+    symbol: 'SOL',
+    routeId: 'hyperlane:aleo/sol->solana/sol',
+    balanceProgram: 'arc20_sol.aleo',
+    decimals: 9,
+    destination: 'Solana',
+    recipientEnvironmentVariable: 'SOLANA_RECIPIENT',
+    amountEnvironmentVariable: 'SOL_AMOUNT',
+    executionEnvironmentVariable: 'EXECUTE_HYPERLANE_SOL_RETURN',
   },
   WBTC: {
     symbol: 'WBTC',
     routeId: 'hyperlane:aleo/wbtc->ethereum/wbtc',
     balanceProgram: 'arc20_wbtc.aleo',
     decimals: 8,
+    destination: 'Ethereum',
+    recipientEnvironmentVariable: 'ETHEREUM_RECIPIENT',
     amountEnvironmentVariable: 'WBTC_AMOUNT',
     executionEnvironmentVariable: 'EXECUTE_HYPERLANE_WBTC_RETURN',
   },
@@ -158,13 +174,13 @@ function executionRegistry(routeId: string, hookCredits: bigint): BridgeRegistry
 }
 
 /**
- * Quotes or submits one reviewed Aleo-to-Ethereum Hyperlane route.
+ * Quotes or submits one reviewed Aleo-origin Hyperlane route.
  *
  * Reads a public ARC-20 balance and the live IGP gas configuration without a
  * record scanner. Execution requotes the hook payment and burns through the
  * signer-bound Warp Route transition.
  *
- * @param asset Aleo-origin asset whose Ethereum return journey runs.
+ * @param asset Aleo-origin asset whose return journey runs.
  * @returns A promise that resolves after preflight or accepted Aleo submission.
  * @throws Error When route metadata, balances, the live gas quote, or execution fails.
  *
@@ -174,7 +190,7 @@ function executionRegistry(routeId: string, hookCredits: bigint): BridgeRegistry
 export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promise<void> {
   const config = ASSETS[asset]
   const amount = requiredEnvironmentVariable(config.amountEnvironmentVariable)
-  const recipient = requiredEnvironmentVariable('ETHEREUM_RECIPIENT')
+  const recipient = requiredEnvironmentVariable(config.recipientEnvironmentVariable)
   const privateKey = requiredEnvironmentVariable('ALEO_PRIVATE_KEY')
   const networkUrl = process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2'
   const provingMode = process.env.ALEO_PROVING_MODE?.trim() || 'delegated'
@@ -212,7 +228,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   ])
   const assetBalance = parseUnsignedLiteral(assetLiteral, 'u128')
 
-  console.log(`Read-only Aleo ${asset} to Ethereum ${asset} preflight`)
+  console.log(`Read-only Aleo ${asset} to ${config.destination} ${asset} preflight`)
   console.table({
     route: config.routeId,
     sender: account.address,
@@ -266,5 +282,5 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     privateFee: booleanFromEnvironment('ALEO_PRIVATE_FEE', false),
   })
   console.log(`\nAleo ${asset} burn accepted:`, result.transactionId)
-  console.log(`A Hyperlane relayer will deliver the message and release ${asset} to the Ethereum recipient.`)
+  console.log(`A Hyperlane relayer will deliver the message and release ${asset} to the ${config.destination} recipient.`)
 }

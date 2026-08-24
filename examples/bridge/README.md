@@ -370,3 +370,80 @@ EXECUTE_HYPERLANE_ETH_RETURN=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
 The hook payment is requoted immediately before proving. The accepted Aleo
 transaction burns the specified public ETH; Hyperlane relayers release native
 ETH to the Ethereum recipient asynchronously.
+
+# Solana SOL to Aleo SOL
+
+`sol-to-aleo.ts` plans `hyperlane:solana/sol->aleo/sol` with Veil, reads the
+deployed native SOL Warp Route and IGP accounts, and constructs the transfer
+with Hyperlane's Solana Kit-native codecs. The read-only path needs only the
+sender's public address; it quotes the hook and network fees and runs an
+unsigned Solana simulation. It does not create a replayable signature.
+
+```sh
+export SOLANA_RPC_URL='https://api.mainnet-beta.solana.com'
+export SOLANA_SENDER='...'
+export ALEO_RECIPIENT='aleo1...'
+export SOL_AMOUNT='0.01'
+
+pnpm tsx examples/bridge/sol-to-aleo.ts
+```
+
+The output includes the native SOL balance, Hyperlane hook payment, Solana
+transaction fee, total required balance, Warp Route program, and Aleo
+destination domain. A production RPC endpoint is recommended because Solana's
+public endpoint is rate-limited.
+
+To submit, enter either a base58-encoded 64-byte Solana keypair or the JSON byte
+array stored by the Solana CLI. The derived address must match `SOLANA_SENDER`
+when both are set.
+
+```sh
+printf 'Solana Private Key: '
+read -rs SOLANA_PRIVATE_KEY
+echo
+export SOLANA_PRIVATE_KEY
+
+EXECUTE_HYPERLANE_SOL=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
+  pnpm tsx examples/bridge/sol-to-aleo.ts
+```
+
+Execution signs locally with `@solana/kit`, simulates the signed transaction,
+submits it, and waits for confirmed or finalized status. The accepted source
+transaction locks native SOL in the Warp Route; Hyperlane relayers mint SOL to
+the Aleo recipient asynchronously. `SOLANA_CONFIRMATION_TIMEOUT_MS` optionally
+overrides the two-minute confirmation timeout.
+
+# Aleo SOL to Solana SOL
+
+`sol-to-solana.ts` exercises the return route through
+`hyp_warp_token_sol_v2.aleo/transfer_remote_as_signer`. It burns public
+`arc20_sol.aleo`; private SOL records must be unshielded before using this
+example. No record scanner or Solana private key is required because the source
+transaction is signed on Aleo.
+
+```sh
+export SOL_AMOUNT='0.01'
+export SOLANA_RECIPIENT='...'
+
+printf 'Aleo Private Key: '
+read -rs ALEO_PRIVATE_KEY
+echo
+export ALEO_PRIVATE_KEY
+
+# Read-only preflight
+pnpm tsx examples/bridge/sol-to-solana.ts
+```
+
+The preflight validates the Solana recipient, reads the signer's public SOL and
+credits balances, and calculates the live Hyperlane hook payment from
+`hyp_hook_manager.aleo/destination_gas_configs`. No SOL is burned unless the
+execution acknowledgement is set:
+
+```sh
+EXECUTE_HYPERLANE_SOL_RETURN=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
+  pnpm tsx examples/bridge/sol-to-solana.ts
+```
+
+The hook payment is requoted immediately before proving. The accepted Aleo
+transaction burns the specified public SOL; Hyperlane relayers release native
+SOL to the Solana recipient asynchronously.
