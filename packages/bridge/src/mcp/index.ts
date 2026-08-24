@@ -7,22 +7,18 @@ export type { McpServer, McpToolDefinition } from '@provablehq/veil-core/mcp'
 /**
  * Creates an MCP server exposing the bridge tools.
  *
- * A thin binding of core's `toMcpServer` to {@link createBridgeAgentTools} —
- * the same tool set (flags, quotes, orders, the end-to-end swap), served over
- * MCP. To serve bridge tools alongside the base Aleo tools (or the DEX tools),
- * call core's `toMcpServer` with the arrays concatenated.
+ * Binds core's `toMcpServer` to the protocol bridge discovery and planning
+ * tools. The current server cannot sign transactions or move funds.
  *
- * Exposed via subpath export: `import { createBridgeMcpServer } from '@provablehq/veil-aleo-bridges/mcp'`.
+ * Exposed via subpath export: `import { createBridgeMcpServer } from '@provablehq/aleo-bridge-sdk/mcp'`.
  *
  * @param client A bridge client from `createBridgeClient`.
  * @returns An {@link McpServer} whose `handleToolCall` dispatches by tool name.
  *
  * @example
  * const server = createBridgeMcpServer(client)
- * const { quotes } = await server.handleToolCall('bridge_get_quotes', {
- *   srcChain: 'ALEO', srcAsset: 'ALEO_MAINNET',
- *   destChain: 'SOLANA', destAsset: 'SOL_SOLANA',
- *   amountIn: '100', recipientAddress: sol, refundAddress: aleo,
+ * const routes = await server.handleToolCall('bridge_list_routes', {
+ *   protocol: 'xreserve',
  * })
  */
 export function createBridgeMcpServer(client: BridgeClient): McpServer {

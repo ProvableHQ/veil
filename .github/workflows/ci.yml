@@ -48,6 +48,8 @@ jobs:
       # them unnoticed, which is exactly what this step prevents recurring.
       - name: Typecheck examples
         run: npx tsc --noEmit -p examples/shield-swap/tsconfig.json
+      - name: Typecheck bridge example
+        run: npx tsc --noEmit -p examples/bridge/tsconfig.json
       - name: Typecheck reference dApp
         run: pnpm --filter @provablehq/veil-loyalty-dapp exec tsc --noEmit
 

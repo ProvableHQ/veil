@@ -1,522 +1,325 @@
-# @provablehq/veil-aleo-bridges
+# @provablehq/aleo-bridge-sdk
 
-A viem-shaped client for Provable's cross-chain bridge service. The bridge
-moves value between Aleo and other chains through third-party swap providers;
-this package wraps its REST API (`/bridge/*` on the wallet-services API) as
-typed actions on a client, plus an end-to-end `swap` action that also signs
-the Aleo deposit. Aleo is always one side of the pair — the service does not
-route, say, Ethereum to Solana.
+A protocol-oriented bridge client for Aleo. USDCx transfers use Circle
+xReserve. ETH, WBTC, USDT, SOL, ALEO, and USAD transfers use Hyperlane Warp Routes.
 
-```ts
-import { createBridgeClient, httpBridge } from '@provablehq/veil-aleo-bridges'
+The package is in preview and is not published to npm. It provides reviewed
+route discovery, non-fund-moving transfer plans, and injected-wallet execution
+for Ethereum-to-Aleo xReserve USDC deposits and Hyperlane routes carrying ETH,
+WBTC, and USDT. Aleo-origin and Solana execution paths remain under development.
 
-const client = createBridgeClient({
-  transport: httpBridge('https://wallet.api.provable.com'),
-})
-
-const { quotes } = await client.getQuotes({
-  srcChain: 'ALEO',
-  srcAsset: 'ALEO_MAINNET',
-  destChain: 'SOLANA',
-  destAsset: 'SOL_SOLANA',
-  amountIn: '100',
-  recipientAddress: solAddress,   // where the SOL lands
-  refundAddress: aleoAddress,     // where a failed swap refunds
-})
-```
-
-## Installation
-
-```sh
-pnpm add @provablehq/veil-aleo-bridges @provablehq/veil-core
-```
-
-The read/track actions need only the bridge client. The `swap` action
-additionally takes a `@provablehq/veil-core` `WalletClient` (any signer path — local key
-via `@provablehq/veil-aleo-sdk`, or a wallet adapter) to sign the Aleo deposit.
-
-## Providers
-
-Quotes fan out to the providers the service has enabled. Each quote names its
-provider, and the order you create is bound to that provider for its whole
-lifecycle. Three providers implement bridging today:
-
-| Provider | Code | What it handles |
-|---|---|---|
-| NEAR Intents | `NEAR_INTENTS` | Native ALEO to majors on other chains (SOL, ETH, USDT, USDC), and inbound to native ALEO. Skips quoting unless `recipientAddress` and `refundAddress` (or `fromAddress`) are present. |
-| Halliday | `HALLIDAY` | Inbound routes into Aleo's wrapped assets (ETH → `ETH_ALEO`, USDC → `USDC_ALEO`, BTC → `WBTC_ALEO`), and inbound to native ALEO. Also a fiat on-ramp. |
-| Houdini Swap | `HOUDINI` | CEX-routed swaps. Enabled per environment; returning no quotes in production at the time of writing. |
-
-Which providers actually answer depends on two server-side switches — a
-registry entry and the provider adapter's own enablement (API keys,
-config) — so the set varies by environment and over time. Do not hardcode
-provider assumptions; read them from the quotes you get back.
-
-Provider capabilities can also be gated by feature flags. `getFlags()` returns
-the current values (for example `near_supports_pub_priv_swaps`); check them
-before offering routes the flag gates.
-
-## Routes
-
-A route is a (source asset, destination asset) pair some provider will quote.
-Routes appear and disappear — with provider enablement, liquidity, and flags —
-so treat any static description as a snapshot. The following patterns exist
-within the Aleo bridge as of July 2026.
-
-| Pattern                              | Example pairs | Quoted by |
-|--------------------------------------|---|---|
-| Native ALEO → External Pairs         | `ALEO_MAINNET` → `SOL_SOLANA`, `ETH_MAINNET`, `USDT_TRON`, `USDC_SOLANA`, … | NEAR Intents |
-| External Pairs → Native ALEO         | `SOL_SOLANA` → `ALEO_MAINNET`, `ETH_MAINNET` → `ALEO_MAINNET`, … | NEAR Intents, Halliday |
-| External Pairs → Aleo Wrapped Assets | `ETH_MAINNET` → `ETH_ALEO`, `USDC_ETH` → `USDC_ALEO`, `BTC_MAINNET` → `WBTC_ALEO` | Halliday |
-
-Note the asymmetry: value can enter Aleo as wrapped assets or native ALEO,
-but leaves only as native ALEO — the wrapped assets have no outbound routes
-at this snapshot.
-
-### Getting the supported pairs
-
-#### Step 1: Discovering Possible Routes
-`getRoutes()` finds the routes from the asset catalog. This function returns 
-an array of asset pairs (src asset, destination asset) that share a supporting 
-provider and provide the metadata needed to get quotes.
-
-```typescript
-// Data returned from getRoutes().
-{
-  aleoAsset:  { code: 'ALEO_MAINNET', chain: 'ALEO', chainName: 'Aleo', symbol: 'ALEO', … },
-  externalAsset: { code: 'USDC_BASE', chain: 'EVM:8453', chainName: 'Base', symbol: 'USDC', … },
-  providers: ['NEAR_INTENTS', 'HALLIDAY'],
-}
-```
-
-#### Step 2: Determining if a Quote Exists
-
-The routes returned by `getRoutes()` are candidate routes. 
-
-Call `getQuotes()` to confirm that a particular pair and direction
-(Aleo → External or External → Aleo) is available to bridge, with
-`recipientAddress` and `refundAddress` set. An empty array means no enabled
-provider supports the route at the time of the quote.
+## Current API
 
 ```ts
-// Everywhere USDC can move relative to Aleo:
-const routes = await bridge.getRoutes({ symbol: 'USDC' })
-const r = routes[0]
-r.externalAsset.code       // 'USDC_ETH'
-r.externalAsset.chainName  // 'Ethereum' (human-readable; chain id is 'EVM:1')
-r.providers                // ['HALLIDAY']
+import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'
 
-// Get a quote to see if the route exists.
-const { quotes, meta } = await bridge.getQuotes({
-  srcChain: 'Ethereum',
-  srcAsset: 'USDC',
-  destChain: 'Aleo',
-  destAsset: 'USDC',
-  amountIn: '250',
-  recipientAddress: aleoAddress,
-  refundAddress: ethAddress,
+const bridge = createBridgeClient({ environment: 'mainnet' })
+
+const routes = bridge.getRoutes({
+  protocol: 'xreserve',
+  sourceChainId: 'ethereum',
+  destinationChainId: 'aleo',
+})
+
+const plan = bridge.prepareTransfer({
+  routeId: routes[0]!.id,
+  amount: '25',
+  recipient: aleoAddress,
+})
+
+plan.steps
+// approve → deposit → wait-attestation → mint
+```
+
+`prepareTransfer` is pure and local. It validates the route, amount precision,
+and recipient format, then identifies every execution step and the first
+irreversible operation. It does not query live fees, sign, submit, or move
+funds.
+
+## Ethereum xReserve execution
+
+The xReserve action derives the Aleo wire recipient and 65-byte hook from the
+plan. Select `public`, `record`, or `private`; the deprecated
+`privateRecipient: true` option remains an alias for `mintMode: 'private'`.
+
+```ts
+const bridge = createBridgeClient({
+  environment: 'testnet',
+  executors: { evm: injectedProvider },
+  xReserveHttpTransport: (url, init) => fetch(url, init),
+})
+
+const plan = bridge.prepareTransfer({
+  routeId: 'xreserve:sepolia/usdc->aleo-testnet/usdcx',
+  amount: '25',
+  recipient: aleoAddress,
+  sender: connectedEthereumAccount,
+  mintMode: 'private',
+  privateMintSecretNonce: '7scalar', // Optional; defaults to 0scalar.
+})
+
+const quote = await bridge.quoteEvmXReserveTransfer({ plan })
+const execution = await bridge.executeEvmXReserveTransfer({ plan })
+const attestation = await bridge.getXReserveAttestation({
+  routeId: plan.route.id,
+  messageHash: execution.receipt.id as `0x${string}`,
 })
 ```
 
-`getQuotes` returns one entry per provider willing to take the route, plus a
-`meta` block. A live capture from the ALEO → SOL route, trimmed:
+Execution reads USDC balance and allowance, submits an exact-amount approval
+when needed, waits for confirmation, and calls the nonpayable
+`depositToRemote`. It then validates `DepositedToRemote`, derives Circle's
+deposit nonce, builds the canonical 305-byte payload, and returns
+`ATTESTATION_PENDING` with the message hash and resumable protocol state.
 
-```typescript
-// Data returned from getQuotes().
-{
-  quotes: [
-    {
-      provider: { id: 'ab26…', code: 'NEAR_INTENTS', displayName: 'NEAR Intents', … },
-      srcChain: 'ALEO',                // resolved identifiers echoed back,
-      destChain: 'SOLANA',             // even when you passed names/symbols
-      srcAsset: 'ALEO_MAINNET',
-      destAsset: 'SOL_SOLANA',
-      amountIn: '100',                 // decimal display units throughout
-      amountOut: '0.023951296',        // estimated receive amount
-      minAmountOut: '0.023711783',     // slippage floor
-      estimatedTimeSeconds: 900,
-      quoteId: '1089843a-…',           // → createOrder's quoteId (some routes use quoteOptionId)
-      integrationType: 'CEX',
-      feeEstimate: { provider: { feeUsd: '0.020501', … }, appFeeBps: 5, … },
-      …
-    },
-  ],
-  meta: {
-    count: 1,
-    quoteRequestId: '98b21e5f-…',      // support handle — log it
-    // warnings / providerErrors appear here when providers skip or fail
+Private mode lazily loads the optional `@provablehq/sdk` peer dependency. It
+commits the intended recipient with BHP256 and directs the xReserve deposit to
+`shielded_usdcx_wrapper.aleo`. Public and record modes do not load Aleo WASM.
+Circle attestation HTTP access is injected so browser, Node, and React Native
+applications can supply their own fetch-compatible transport.
+
+Public and record USDCx destination mints are protocol-driven. Only private
+USDCx minting requires a second user transaction on Aleo. Once Circle returns a
+completed attestation, submit the wrapper call through a Veil wallet client:
+
+```ts
+const bridge = createBridgeClient({
+  environment: 'testnet',
+  executors: {
+    evm: injectedEvmProvider,
+    aleo: aleoWalletClient,
   },
-}
+  xReserveHttpTransport: (url, init) => fetch(url, init),
+})
+
+const mint = await bridge.executeXReservePrivateMint({
+  plan,
+  deposit: execution.receipt,
+  attestation,
+})
 ```
 
-The fields that matter downstream: `quoteId` (or `quoteOptionId`) and
-`provider.id` are what `createOrder` takes; the echoed `srcAsset`/`destAsset`
-are the resolved codes; and `destChainWalletValidationRegex` validates the
-recipient before committing.
+This calls `shielded_usdcx_wrapper.aleo/private_mint` with the 305-byte payload,
+65-byte Circle signature, 32-byte message hash, the plan's secret scalar nonce,
+and intended Aleo recipient. The wrapper reproduces the recipient commitment, mints publicly to
+its own program address, and transfers the amount to the recipient as a record.
 
-## Identifiers and units
+## Ethereum Hyperlane execution
 
-Three conventions run through every call. Get these wrong and the API rejects
-the request with a 400. Do not hardcode or guess the values — they all come
-from `getAssets()`:
-
-- **Chains** are the API's identifiers, case-sensitive: `ALEO`, `SOLANA`,
-  `BITCOIN`, `TRON`, and `EVM:<chainId>` for EVM networks (`EVM:1` mainnet,
-  `EVM:8453` Base, `EVM:42161` Arbitrum). Read them from the catalog's
-  `chain` field. For display, `chainDisplayName('EVM:8453')` → `'Base'` — a
-  client-side map for now, until the API exposes its chain registry.
-- **Assets** are chain-qualified codes, never bare symbols: `ALEO_MAINNET`,
-  `USDC_ALEO`, `ETH_BASE`. `ALEO` alone is rejected. Read them from the
-  catalog's `code` field.
-- **Amounts** are decimal strings in display units (`"1.5"` ALEO, not
-  microcredits), with at most the asset's `decimals` of precision. Quotes and
-  deposit instructions come back the same way. The `swap` action converts to
-  atomic units internally when it builds the Aleo transfer; if you build a
-  deposit yourself, `parseDecimalAmount(amount, decimals)` does the exact
-  string-based conversion.
-
-`getQuotes` and `swap` soften both rules for you: chains resolve from display
-names locally, and asset symbols resolve against the catalog within their
-chain (one extra `getAssets` fetch, only when a symbol is passed — exact
-codes keep the single request). `createOrder` stays strict: echo the chosen
-quote, which carries the resolved codes.
-
-The literal codes in this README's examples are real, but they are snapshots —
-resolve them at runtime the way the example above does.
-
-## Usage
-
-### Swapping FROM Aleo in one-call using `swap`
-
-For swaps FROM Aleo, `swap` runs the following flow
-1. Gets quotes from the providers
-2. Picks a quote
-3. Creates the bridge order (a real server-side order — unfunded orders expire)
-4. Makes an Aleo unshield deposit through the source asset's Aleo program
-5. Optionally polls the order to completion. 
-
-The signing wallet for the swap is set during the bridge client's creation. 
-This can be optionally overridden by providing another wallet to the swap action's
-`wallet` parameter.
+Pass an EIP-1193-compatible provider from MetaMask, Phantom, or another injected
+wallet. The bridge never receives the wallet's private key.
 
 ```ts
-import { createBridgeClient, httpBridge } from '@provablehq/veil-aleo-bridges'
+import { createBridgeClient, type EvmBridgeExecutor } from '@provablehq/aleo-bridge-sdk'
 
 const bridge = createBridgeClient({
-  transport: httpBridge('https://wallet.api.provable.com'),
-  wallet: walletClient,                 // @provablehq/veil-core WalletClient — signs deposits
+  environment: 'mainnet',
+  executors: {
+    evm: injectedProvider as EvmBridgeExecutor,
+  },
 })
 
-const result = await bridge.swap({
-  from: { asset: 'ALEO_MAINNET', amount: '100' },   // from.chain optional; must be Aleo
-  to: { chain: 'Solana', asset: 'SOL_SOLANA', address: solAddress }, // chain by id or name
-  selectQuote: 'best',                  // or 'fastest', or a callback
-  poll: true,                           // wait for COMPLETED
-  onStage: (s) => console.log(s.status),
+const plan = bridge.prepareTransfer({
+  routeId: 'hyperlane:ethereum/wbtc->aleo/wbtc',
+  amount: '0.001',
+  recipient: aleoAddress,
+  sender: connectedEthereumAccount,
 })
 
-result.depositTxId   // at1... — the Aleo deposit transition
-result.orderId       // track or audit later
-result.finalStatus   // present because poll was truthy
+const quote = await bridge.quoteEvmHyperlaneTransfer({
+  plan,
+  recipientBytes32: encodedAleoRecipient,
+})
+
+const execution = await bridge.executeEvmHyperlaneTransfer({
+  plan,
+  recipientBytes32: encodedAleoRecipient,
+})
 ```
 
-Chain slots accept the API identifier or the display name (`'Solana'`,
-`'Ethereum'`), case-insensitively. 
+`quoteEvmHyperlaneTransfer` calls the route's `quoteTransferRemote` function and
+returns atomic native payment and token-allowance requirements. It does not sign
+or submit a transaction.
 
-Three more optional parameters include: 
-- `provider` pins quote selection to one provider by code (`'NEAR_INTENTS'`). 
-- `refundAddress` redirects refunds away from the default (the signing wallet's address).
-- `from.chain` exists for shape-stability — it defaults to `'ALEO'` and must
-resolve to Aleo, since this action signs the deposit with the Aleo wallet.
+`executeEvmHyperlaneTransfer` requotes immediately before submission. For WBTC
+and USDT it reads the current ERC-20 allowance, submits `approve` only when the
+allowance is insufficient, waits for confirmation, and then submits
+`transferRemote`. USDT's non-zero allowance is reset to zero before setting a
+new value. Native ETH routes skip approval and send the quoted total as
+`msg.value`.
 
-Every action also exists in viem's standalone, tree-shakable form
-(`import { swap } from '@provablehq/veil-aleo-bridges'` then `swap(client, params)`) for
-bundle-sensitive consumers; the client form above is the primary API.
+The wire recipient is currently explicit. `recipientBytes32` MUST be the exact
+32-byte Aleo recipient encoding accepted by the enrolled Hyperlane router; it is
+validated for width but is not derived from `plan.recipient` yet.
 
-Compliance-bearing source assets (`USDCX_ALEO`, `USAD_ALEO`) require a
-`merkleProof` input for their unshield transition — pass it via
-`SwapParameters.merkleProof`; `swap` throws before moving anything if it is
-missing. If the API lists an Aleo asset this SDK does not know yet, extend the
-program map: pass `aleoAssetMap: { ...DEFAULT_ALEO_ASSET_MAP, NEW_CODE:
-{ program: '...', decimals: n } }`.
+Receipt timeouts return `SOURCE_APPROVAL_PENDING` or `SOURCE_CONFIRMING` with the
+submitted transaction identifiers. A timeout does not report the transaction as
+failed. A confirmed dispatch returns `DELIVERY_PENDING` and includes the
+Hyperlane message id when the Mailbox `DispatchId` event is present.
 
-### Swapping INTO Aleo
+Inbound Hyperlane Aleo minting is performed by the Hyperlane relayer. The user
+submits only the source-chain approval and dispatch transactions; no Aleo wallet
+transaction is requested for Hyperlane delivery.
 
-An inbound swap starts on the other chain, so its deposit is signed there —
-Veil's Aleo keys handle everything except that one transfer. For an EVM
-source the deposit is plain viem, which means the whole flow stays in
-territory an EVM developer already knows:
+## Aleo USDCx burns
+
+USDCx burns submit one Aleo transaction. The Aleo-operated burn attestation
+service observes accepted burns and forwards them to Circle; the bridge client
+does not submit a second attestation or Ethereum withdrawal transaction.
 
 ```ts
-import { createBridgeClient, httpBridge } from '@provablehq/veil-aleo-bridges'
-import { createWalletClient, http, erc20Abi, parseUnits } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
-import { mainnet } from 'viem/chains'
-
-const bridge = createBridgeClient({ transport: httpBridge('https://wallet.api.provable.com') })
-const evm = createWalletClient({
-  account: privateKeyToAccount(ethPrivateKey),
-  chain: mainnet,
-  transport: http(),
+const plan = bridge.prepareTransfer({
+  routeId: 'xreserve:aleo/usdcx->ethereum/usdc',
+  amount: '25',
+  recipient: ethereumRecipient,
 })
 
-// 1. Route + quote. Refunds happen on the source chain, so refundAddress is
-// the Ethereum account; recipientAddress is where the ALEO lands.
-const routes = await bridge.getRoutes({ symbol: 'USDC', externalChain: 'Ethereum' })
-const route = routes.find((r) => r.aleoAsset.native && r.externalAsset.symbol === 'USDC')!
-const { quotes } = await bridge.getQuotes({
-  srcChain: route.externalAsset.chain, srcAsset: route.externalAsset.code,
-  destChain: route.aleoAsset.chain, destAsset: route.aleoAsset.code,
-  amountIn: '25',
-  recipientAddress: aleoAddress,
-  refundAddress: evm.account.address,
+const burn = await bridge.executeXReserveBurn({
+  plan,
+  userRecord,
+  merkleProof,
+  // Default: private
 })
-const quote = quotes[0]
-
-// 2. Create the order — walletAddress is the payout recipient on Aleo.
-const order = await bridge.createOrder({
-  providerId: quote.provider.id,
-  srcChain: quote.srcChain, destChain: quote.destChain,
-  srcAsset: quote.srcAsset, destAsset: quote.destAsset,
-  amountIn: quote.amountIn,
-  walletAddress: aleoAddress,
-  quoteId: (quote.quoteId ?? quote.quoteOptionId)!,
-  refundAddress: evm.account.address,
-})
-
-// 3. Pay the deposit from the Ethereum wallet — the one non-Veil step.
-// Check order.depositMemo is empty first (an ERC-20 transfer can't carry
-// one) and order.expiration hasn't passed.
-await evm.writeContract({
-  address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC on Ethereum
-  abi: erc20Abi,
-  functionName: 'transfer',
-  args: [order.depositAddress as `0x${string}`, parseUnits(order.depositAmount!, 6)],
-})
-
-// 4. Track to completion — the ALEO arrives as public balance, ready to
-// shield (transfer with visibility: 'shield') for private use.
-await bridge.waitForOrder({ id: order.orderId })
 ```
 
-One irreversibility note: once the ERC-20 transfer is sent, funds are
-committed to the provider flow — recovery is the provider's refund to your
-Ethereum address, not a revert. The runnable version of this flow, gated
-like the fund-moving tier, lives at
-[`examples/bridge-into-aleo.ts`](../../examples/bridge-into-aleo.ts), and
-[`test/integration/inbound.e2e.test.ts`](./test/integration/inbound.e2e.test.ts)
-runs it with assertions (including the on-chain balance-delta check — the
-reason the example targets native ALEO: arrival is one `getBalance` read).
+Private burning is the default. Three transition modes remain available:
 
-### Step by step
+- `private` calls `shielded_usdcx_wrapper.aleo/private_burn` and requires a
+  USDCx `Token` record input plus an encoded `[MerkleProof; 2]` literal.
+- `public` calls `burn_public` for public or program-owned balances.
+- `public-as-signer` calls `burn_public_as_signer` when the public balance must
+  be proven to belong to the EOA signer.
 
-Use the individual actions when the wallet is not in the same process (a
-browser flow where the user's wallet signs), when the source is not Aleo, or
-when you want control between steps.
+Ethereum's native destination domain is pinned to `0u32`; its address is
+left-padded to `[u8; 32]`. ARC domain `26u32` is recorded in the registry but is
+not selectable through the Ethereum route. Pause, freeze-list, and mutable
+minimum/maximum burn checks execute atomically in the deployed Aleo program.
+
+## Registry
+
+`DEFAULT_BRIDGE_REGISTRY` is a versioned snapshot of chains, chain-specific
+assets, and directional routes. Applications can pass a reviewed replacement:
 
 ```ts
-import { createBridgeClient, httpBridge } from '@provablehq/veil-aleo-bridges'
-
 const bridge = createBridgeClient({
-  transport: httpBridge('https://wallet.api.provable.com'),
-  wallet: walletClient,                 // @provablehq/veil-core WalletClient — signs deposits
-})
-
-// 1. Quote. One entry per provider willing to take the route. Chains accept
-// ids or display names, assets accept codes or symbols (resolved per chain).
-const { quotes, meta } = await client.getQuotes({
-  srcChain: 'Ethereum',
-  srcAsset: 'USDC',
-  destChain: 'Aleo',
-  destAsset: 'USDC',
-  amountIn: '250',
-  recipientAddress: aleoAddress,
-  refundAddress: ethAddress,
-})
-// meta.quoteRequestId identifies this request in support escalations.
-
-// 2. Create an order from the quote you picked.
-const q = quotes[0]
-const order = await client.createOrder({
-  providerId: q.provider.id,
-  srcChain: q.srcChain, destChain: q.destChain,
-  srcAsset: q.srcAsset, destAsset: q.destAsset,
-  amountIn: q.amountIn,
-  walletAddress: aleoAddress,           // where the bridged funds land
-  quoteId: (q.quoteId ?? q.quoteOptionId)!,
-})
-
-// 3. Satisfy the deposit instructions. The order does nothing until the
-// deposit arrives; unfunded orders expire.
-order.depositAddress   // send exactly order.depositAmount here
-order.depositMemo      // include when present — omitting it strands funds
-order.expiration       // deposit before this
-
-// 4. Track it.
-const done = await bridge.waitForOrder({ id: order.orderId })  // → COMPLETED or throws
-const status = await bridge.getOrder({ id: order.orderId })     // one snapshot
-const audit = await bridge.getOrderAudit({ id: order.orderId }) // + step/provider event log
-```
-
-An order moves through stages (`NEW`, `WAITING`, `CONFIRMING`, `EXCHANGING`,
-`COMPLETED`, …). `waitForOrder` polls until the target stage and throws
-`BridgeOrderFailedError` on a terminal failure (`FAILED`, `EXPIRED`,
-`REFUNDED`) or `BridgeTimeoutError` when time runs out. The status DTO's
-`steps` array gives the finer-grained deposit_v1 workflow (order created →
-awaiting deposit → deposit detected → … → completed).
-
-### Errors
-
-All transport-level failures (4xx/5xx) throw `TransportError` from
-`@provablehq/veil-core` with the response body in the message. Bridge-specific failures
-throw `BridgeError` subclasses: `BridgeEnvelopeError` (malformed response
-envelope), `BridgeOrderFailedError` (terminal order failure — carries the
-order status), `BridgeTimeoutError` (polling deadline hit).
-
-## Swapping bridged assets on Shield Swap
-
-Bridged-in value lands as an Aleo asset (USDC on Ethereum arrives as
-`USDC_ALEO`, ETH as `ETH_ALEO`), and from there it is ordinary Aleo money —
-including tradeable on the Shield Swap DEX via `@provablehq/shield-swap-sdk`. Both
-packages hang off the same `@provablehq/veil-core` wallet client, so one signer runs the
-whole chain: bridge in, trade privately, bridge back out.
-
-```ts
-import { createBridgeClient, httpBridge } from '@provablehq/veil-aleo-bridges'
-import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
-import { createWalletClient, custom, erc20Abi, parseUnits } from 'viem'
-import { mainnet } from 'viem/chains'
-
-// One Aleo wallet client, two Veil surfaces.
-const bridge = createBridgeClient({
-  transport: httpBridge('https://wallet.api.provable.com'),
-  wallet: walletClient,
-})
-const dex = walletClient.extend(shieldSwapActions({ api: {} }))
-
-// 1. Bridge in: pick the route from the graph, quote it, create the order.
-// The symbol filter matches either side, so pin BOTH sides to USDC — routes[0]
-// could otherwise be a native-ALEO pair.
-const routes = await bridge.getRoutes({ symbol: 'USDC', externalChain: 'Ethereum' })
-const route = routes.find((r) => r.aleoAsset.symbol === 'USDC' && r.externalAsset.symbol === 'USDC')!
-const { quotes } = await bridge.getQuotes({
-  srcChain: route.externalAsset.chain, srcAsset: route.externalAsset.code,
-  destChain: route.aleoAsset.chain, destAsset: route.aleoAsset.code,
-  amountIn: '250',
-  recipientAddress: aleoAddress, refundAddress: ethAddress,
-})
-const q = quotes[0]
-const order = await bridge.createOrder({
-  providerId: q.provider.id,
-  srcChain: q.srcChain, destChain: q.destChain,
-  srcAsset: q.srcAsset, destAsset: q.destAsset,
-  amountIn: q.amountIn,
-  walletAddress: aleoAddress,           // where the bridged USDC lands
-  quoteId: (q.quoteId ?? q.quoteOptionId)!,
-})
-
-// 2. Pay the deposit from the user's EVM wallet — this side is plain viem.
-const evm = createWalletClient({ chain: mainnet, transport: custom(window.ethereum) })
-const [ethAccount] = await evm.getAddresses()
-await evm.writeContract({
-  account: ethAccount,
-  address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC on Ethereum
-  abi: erc20Abi,
-  functionName: 'transfer',
-  args: [order.depositAddress as `0x${string}`, parseUnits(order.depositAmount!, 6)],
-})
-await bridge.waitForOrder({ id: order.orderId }) // USDC_ALEO arrives
-
-// 3. Trade on the DEX: privatize, swap, claim.
-const handle = await dex.swap({ poolKey, tokenInId, amountIn, slippageBps: 50, tokenInProgram, imports })
-await dex.claimSwapOutput({ handle, imports })
-
-// 4. Bridge back out — one call, deposit signed by the same Aleo wallet.
-await bridge.swap({
-  from: { asset: 'ALEO_MAINNET', amount: '100' },
-  to: { chain: 'Solana', asset: 'SOL_SOLANA', address: solAddress },
-  poll: true,
+  environment: 'testnet',
+  registry: companyReviewedRegistry,
 })
 ```
 
-The whole chain is exercised by
-[`packages/shield-swap/test/integration/bridgeRoundTrip.e2e.test.ts`](../shield-swap/test/integration/bridgeRoundTrip.e2e.test.ts),
-which also documents the two seams to know about: the inbound deposit needs a
-source-chain signer, and the DEX currently runs on testnet while the bridge is
-mainnet.
+xReserve entries include Circle's published Ethereum/Sepolia USDC contracts,
+Aleo domain, and USDCx program identifiers. Ethereum-to-Aleo ETH, WBTC, and USDT
+routes pin router, domain, ISM, token, Mailbox, and gas-payment metadata to
+Hyperlane Registry commit `2621c16f2db1ccb46643265c110dac5ca2c7c51a` and are
+active. Reverse and other Hyperlane routes remain `metadata-required` until
+their deployment metadata is complete and reviewed.
 
-## Agent and MCP tools
+### Aleo-origin Hyperlane placeholders
 
-Every action ships as an agent tool. `createBridgeAgentTools(client)` (from
-`@provablehq/veil-aleo-bridges/agent`) returns core-shaped `AgentTool`s for any agent
-framework; `createBridgeMcpServer(client)` (from `@provablehq/veil-aleo-bridges/mcp`) serves
-them over MCP. The tools compose with other Veil packages' tools through
-core's `toMcpServer`:
+The Aleo-origin ETH, WBTC, USDT, SOL, and USAD routes expose the complete
+`transfer_remote` call shape for these programs:
 
-```ts
-import { createAgentTools } from '@provablehq/veil-core/agent'
-import { toMcpServer } from '@provablehq/veil-core/mcp'
-import { createBridgeAgentTools } from '@provablehq/veil-aleo-bridges/agent'
+- `hyp_warp_token_eth_v2.aleo`
+- `hyp_warp_token_wbtc_v2.aleo`
+- `hyp_warp_token_usdt_v2.aleo`
+- `hyp_warp_token_sol_v2.aleo`
+- `hyp_warp_token_usad_v2.aleo`
 
-const server = toMcpServer([
-  ...createAgentTools({ client: publicClient }),
-  ...createBridgeAgentTools(bridgeClient),
-])
-```
+**These routes contain dummy development values and are not executable.** They
+remain `metadata-required`, carry `aleoPlaceholderConfiguration: true`, and
+`executeAleoHyperlaneTransferRemote` throws before calling the wallet. Use
+`buildAleoHyperlaneTransferRemoteCall` only to inspect and integrate the ABI
+until the configuration below has been reviewed and replaced.
 
-`bridge_swap` signs and broadcasts with the wallet the host wired into the
-client — expose it only to agents you intend to let move funds. The rest
-(discovery, flags, quotes, order tracking) are read-only against the API,
-though `bridge_create_order` does create a real order server-side. The
-discovery tools matter for agents especially: `bridge_list_assets`,
-`bridge_list_routes`, and `bridge_list_providers` give the model the chain
-ids, asset codes, chain names, decimals, and provider support it must not
-guess — the descriptions steer it to discover before quoting, and
-`bridge_list_routes` answers "what can move where" directly.
+Except for the verified ETH, WBTC, USDT, and SOL route data described below,
+the current dummy values are:
 
-## Integration tests
+- `token_type`: `0u8`; `token_id`: `0field`
+- `token_owner`, `ism`, `hook`, and all four allowance spenders: the same
+  development-only Aleo address
+- remote-router recipient: 32 zero bytes; remote-router gas: `0u128`
+- destination recipient limbs are derived from the Ethereum or Solana address
+  in the transfer plan
+- all four credit allowance amounts: `0u64`
 
-`test/integration/` runs against the **live** API and its real providers —
-never mocked — in two tiers, gated so the default suite stays offline.
-`VEIL_BRIDGE_API_URL` overrides the target deployment for both.
+The WBTC route is partially populated from mainnet
+[`hyp_warp_token_wbtc_v2.aleo`](https://explorer.provable.com/program/hyp_warp_token_wbtc_v2.aleo),
+edition `0`. Its `app_metadata[true]` token type, owner, ISM, hook, token ID,
+and `8u8` local/remote decimals are verified and are not placeholders. Its
+first hook allowance amount remains unresolved, so the route is still
+non-executable.
 
-**Read-only tier** (`api.integration.test.ts`) needs only
-`VEIL_INTEGRATION=1`. Quotes and error paths; no orders, no funds — though
-every quote request does fan out to real provider systems.
+The WBTC Ethereum remote router is also verified: domain `1u32`, recipient
+`0x20CDC85778b732073F7EecEF3DF25c0d310f8772` left-padded to `[u8; 32]`, and
+gas `68000u128`. `transfer_remote_as_signer` is selectable with
+`mode: 'signer'`. Its allowance spender positions and three unused zero amounts
+match the reviewed call shape. The first hook allowance amount remains dynamic;
+the observed `9138947u64` applies only to the sample transaction and is not
+stored as a route-wide cap.
 
-```sh
-VEIL_INTEGRATION=1 pnpm exec vitest run packages/bridge/test/integration/api.integration.test.ts
-```
+The ETH route is populated from current mainnet app metadata and the reviewed
+[`transfer_remote_as_signer` transaction](https://explorer.provable.com/transaction/at1vu0yckkms887zkl3qz7plnncd56jtf5zeal4uj2808upsjkusy8q7yp9v8).
+Its Ethereum router is `0x38D447694f5c1f773ae3132cf93bF30B7Ec1Fa5A`,
+left-padded to `[u8; 32]`, with domain `1u32` and gas `44000u128`. The
+transaction's `8174147u64` first allowance is an observed dispatch quote and is
+not stored as a route-wide cap. As with WBTC, only the first hook allowance
+amount remains unresolved. Ethereum recipient limbs are derived from
+`plan.recipient`.
 
-Route assertions are deliberately loose — everything asserts invariants of
-whatever comes back, because route availability is a moving target. One
-reference route (native ALEO → native SOL) is required to quote: it is the
-pair that consistently quotes in production today, so its silence signals a
-regression rather than shifting liquidity.
+The USDT route uses current edition `1` app metadata and the verified Ethereum
+remote router at domain `1u32`: `0x3C2064D78e4578E8F936E3db42aEF044E33FBF31`
+with gas `68000u128`. The reviewed signer transaction targets BSC domain `56`,
+so it validates the shared allowance layout but is not used as the Ethereum
+router source. Its `1994463u64` first allowance is transaction-specific. The
+official Hyperlane route config records Aleo and Ethereum USDT as 6-decimal
+assets with a `1000000000000` scale; the Aleo program's app metadata must still
+be passed exactly as `local_decimals: 6u8, remote_decimals: 18u8`. The builder
+therefore reads these contract metadata decimals instead of inferring both from
+the endpoint assets.
 
-**Swap e2e tier** (`e2e.test.ts`) runs the whole chain on **mainnet**: quote,
-create the order, sign and broadcast the Aleo unshield deposit, poll the
-order to `COMPLETED`, and audit it. This spends real ALEO and delivers real
-SOL, so it takes an explicit second gate on top of the integration flag plus
-a mainnet-funded account and proving credentials:
+The SOL route uses verified edition `0` app metadata with 9 local and remote
+decimals. Its Solana destination is Hyperlane domain `1399811149u32`, router
+`8YGT2pZwyZe94qBpGzWfY2TMEVcwaQ1bXAE7YAgpUaM7`, and gas `300000u128`. The
+reviewed signer transition confirms the shared allowance layout; its
+`7661056u64` first allowance is transaction-specific and is not stored as a
+route-wide value. The Aleo SOL asset locator now points to the v2 warp program
+and token identifier from the pinned Hyperlane route configuration.
 
-```sh
-VEIL_INTEGRATION=1 VEIL_BRIDGE_E2E=1 \
-  pnpm exec vitest run packages/bridge/test/integration/e2e.test.ts
-```
+All Aleo Warp Routes share the verified mainnet
+[`hyp_mailbox.aleo`](https://explorer.provable.com/program/hyp_mailbox.aleo)
+mailbox configuration, edition `0`. The `transfer_remote` input now uses its
+`default_hook` and `required_hook`. The registry also records the local domain,
+default ISM, dispatch proxy, owner, and the nonce/process count observed during
+the 2026-08-17 review. The nonce and process count are mutable observations and
+are not transaction inputs.
 
-Requires `VEIL_E2E_PRIVATE_KEY` (funded on mainnet), `ALEO_DPS_API_KEY`, and
-`ALEO_CONSUMER_ID`. `VEIL_BRIDGE_SWAP_AMOUNT` sets the decimal ALEO to swap
-(default `5` — providers reject amounts below their minimums) and
-`VEIL_BRIDGE_DEST_ADDRESS` the Solana recipient. The test shields a private
-record first when none covers the deposit, and fails before moving funds if
-no provider quotes the route.
+Before enabling submission, replace and verify every field still reported by
+`placeholderFields` for that route. Implement the dynamic hook credit quote for
+ETH, WBTC, USDT, and SOL. Then remove `aleoPlaceholderConfiguration` and change
+the route availability to `active` in a reviewed registry snapshot.
 
-**Inbound e2e** (`inbound.e2e.test.ts`) runs the other direction — USDC on
-Ethereum → native ALEO — with viem signing the Ethereum deposit. Same gates,
-plus `ETH_PRIVATE_KEY` (an Ethereum account holding USDC and gas);
-`VEIL_BRIDGE_INBOUND_AMOUNT` sets the USDC amount (default `25`), and
-`ETH_RPC_URL`/`ETH_USDC_CONTRACT` override the Ethereum endpoint and token
-contract. It spends real USDC and gas — and once the deposit is sent, funds
-are committed to the provider flow (recovery is the refund path). The
-narrative version is [`examples/bridge-into-aleo.ts`](../../examples/bridge-into-aleo.ts).
+## Exports
+
+- `createBridgeClient`
+- `getAssets` and `getRoutes`
+- `prepareTransfer`
+- `quoteEvmHyperlaneTransfer` and `executeEvmHyperlaneTransfer`
+- `quoteEvmXReserveTransfer`, `executeEvmXReserveTransfer`, and `getXReserveAttestation`
+- `executeXReservePrivateMint`
+- `buildXReserveBurnCall` and `executeXReserveBurn`
+- `buildAleoHyperlaneTransferRemoteCall` and `executeAleoHyperlaneTransferRemote`
+- Aleo address, xReserve hook, nonce, payload, and message-hash utilities
+- Ethereum and Solana Hyperlane recipient serialization for Aleo-origin transfers
+- `DEFAULT_BRIDGE_REGISTRY` and `validateBridgeRegistry`
+- Protocol-neutral asset, route, plan, fee, step, status, and receipt types
+- `createBridgeAgentTools` from `/agent`
+- `createBridgeMcpServer` from `/mcp`
+
+The agent and MCP surfaces expose discovery and planning only. They do not expose
+fund-moving wallet actions.
+
+## Next implementation phases
+
+1. Add protocol delivery tracking for relayer-driven xReserve and Hyperlane mints.
+2. Replace and review the Aleo-origin Hyperlane placeholders, then add destination confirmation.
+3. Add injected Solana execution and gated protocol testnets.

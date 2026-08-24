@@ -1,43 +1,85 @@
-import { createClient, type ClientConfig, type Client, type WalletClient } from '@provablehq/veil-core'
+import { createClient, createTransport, type Client } from '@provablehq/veil-core'
 import { bridgeActions, type BridgeActions } from './decorators/bridge.js'
+import { DEFAULT_BRIDGE_REGISTRY } from '../registry/default.js'
+import { validateBridgeRegistry } from '../registry/validate.js'
+import type { BridgeExecutors } from '../types/evm.js'
+import type { BridgeEnvironment, BridgeRegistry } from '../types/protocol.js'
+import type { XReserveHttpTransport } from '../types/xreserve.js'
 
 /**
- * Configuration for {@link createBridgeClient}.
+ * Configures a protocol bridge client.
  *
- * @property transport The bridge transport, from `httpBridge(baseUrl)`.
- * @property wallet Optional `@provablehq/veil-core` WalletClient used by the `swap`
- *   action to sign the Aleo deposit. Set it here (viem-style account
- *   configuration) so `bridge.swap()` needs only the route; omit it for a
- *   quote/track-only client, or when supplying `wallet` per swap call.
- * @property key Client key. Defaults to `'bridge'`.
- * @property name Client name. Defaults to `'Bridge Client'`.
+ * @property environment Routes and assets exposed by default. Defaults to `mainnet`.
+ * @property registry Reviewed protocol deployment snapshot. Defaults to {@link DEFAULT_BRIDGE_REGISTRY}.
+ * @property executors Optional wallet capabilities used by fund-moving protocol actions.
+ * @property xReserveHttpTransport Optional fetch-compatible transport used for Circle attestation requests.
+ * @property key Client identifier. Defaults to `bridge`.
+ * @property name Human-readable client name. Defaults to `Bridge Client`.
  */
-export type BridgeClientConfig = Omit<ClientConfig, 'account' | 'key' | 'name' | 'proving'> & {
+export type BridgeClientConfig = {
+  environment?: BridgeEnvironment | undefined
+  registry?: BridgeRegistry | undefined
+  executors?: BridgeExecutors | undefined
+  xReserveHttpTransport?: XReserveHttpTransport | undefined
   key?: string | undefined
   name?: string | undefined
-  wallet?: WalletClient | undefined
 }
 
-export type BridgeClient = Client<BridgeActions>
+type BridgeClientState = {
+  environment: BridgeEnvironment
+  registry: BridgeRegistry
+}
 
 /**
- * Creates a client for Provable's cross-chain bridge service, with every
- * bridge action bound (`getFlags`, `getQuotes`, `createOrder`, `getOrder`,
- * `getOrderAudit`, `waitForOrder`, `swap`).
+ * Exposes protocol bridge discovery, planning, and configured execution actions.
  *
- * @param config Transport (required), optional signing wallet for `swap`,
- *   and client identity overrides.
- * @returns A {@link BridgeClient} — a `@provablehq/veil-core` client extended with
- *   {@link BridgeActions}.
+ * The client retains Veil's `extend()` composition model. Its base transport
+ * is reserved for protocol executors. Discovery and planning remain pure and
+ * local; execution actions require the corresponding injected capability.
+ */
+export type BridgeClient = Client<BridgeActions & BridgeClientState>
+
+function localBridgeTransport() {
+  return createTransport({
+    key: 'protocolBridge',
+    name: 'Protocol Bridge Transport',
+    type: 'protocolBridge',
+    request: async ({ method }) => {
+      throw new Error(`Protocol bridge method is not implemented: ${method}`)
+    },
+  })
+}
+
+/**
+ * Creates a protocol-oriented bridge client for xReserve and Hyperlane.
+ *
+ * Discovery and transfer planning read the configured registry without network
+ * access. An injected EVM executor enables Ethereum Hyperlane quote and execution
+ * actions without exposing private keys to the client. An injected Aleo wallet
+ * client enables user-authorized private USDCx mints and USDCx burns.
+ *
+ * @param config Optional environment, registry, executors, and client identity.
+ * @returns A bridge client exposing discovery, planning, and configured protocol actions.
+ * @throws BridgeError When the supplied registry has invalid references.
  *
  * @example
- * const bridge = createBridgeClient({
- *   transport: httpBridge('https://wallet.api.provable.com'),
- *   wallet: walletClient, // enables bridge.swap() without per-call wiring
- * })
+ * const bridge = createBridgeClient({ environment: 'testnet' })
+ * const routes = bridge.getRoutes({ protocol: 'xreserve' })
  */
-export function createBridgeClient(config: BridgeClientConfig): BridgeClient {
-  const { key = 'bridge', name = 'Bridge Client', wallet, ...rest } = config
-  const client = createClient({ ...rest, key, name })
-  return client.extend((c) => bridgeActions(c, { wallet })) as BridgeClient
+export function createBridgeClient(config: BridgeClientConfig = {}): BridgeClient {
+  const {
+    environment = 'mainnet',
+    registry = DEFAULT_BRIDGE_REGISTRY,
+    executors = {},
+    xReserveHttpTransport,
+    key = 'bridge',
+    name = 'Bridge Client',
+  } = config
+  const validated = validateBridgeRegistry(registry)
+  const client = createClient({ transport: localBridgeTransport(), key, name })
+  return client.extend((inner) => ({
+    environment,
+    registry: validated,
+    ...bridgeActions(inner, { environment, registry: validated, executors, xReserveHttpTransport }),
+  })) as BridgeClient
 }

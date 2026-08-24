@@ -1,59 +1,154 @@
-import type { Client, WalletClient } from '@provablehq/veil-core'
-import { getAssets, type GetAssetsReturnType } from '../../actions/getAssets.js'
-import { getProviders, type GetProvidersReturnType } from '../../actions/getProviders.js'
-import { getRoutes, type GetRoutesParameters, type GetRoutesReturnType } from '../../actions/getRoutes.js'
-import { getFlags, type GetFlagsReturnType } from '../../actions/getFlags.js'
-import { getQuotes, type GetQuotesParameters, type GetQuotesReturnType } from '../../actions/getQuotes.js'
-import { createOrder, type CreateOrderParameters, type CreateOrderReturnType } from '../../actions/createOrder.js'
-import { getOrder, type GetOrderParameters, type GetOrderReturnType } from '../../actions/getOrder.js'
-import { getOrderAudit, type GetOrderAuditParameters, type GetOrderAuditReturnType } from '../../actions/getOrderAudit.js'
-import { waitForOrder, type WaitForOrderParameters, type WaitForOrderReturnType } from '../../actions/waitForOrder.js'
-import { swap, type SwapParameters, type SwapReturnType } from '../../actions/swap.js'
+import type { Client } from '@provablehq/veil-core'
+import {
+  getProtocolAssets,
+  getProtocolRoutes,
+  type GetProtocolAssetsParameters,
+  type GetProtocolRoutesParameters,
+} from '../../actions/protocolDiscovery.js'
+import { prepareTransfer } from '../../actions/prepareTransfer.js'
+import {
+  executeEvmHyperlaneTransfer,
+  quoteEvmHyperlaneTransfer,
+} from '../../actions/evmHyperlane.js'
+import {
+  executeEvmXReserveTransfer,
+  getXReserveAttestation,
+  quoteEvmXReserveTransfer,
+} from '../../actions/evmXReserve.js'
+import { executeXReservePrivateMint } from '../../actions/xreservePrivateMint.js'
+import { executeXReserveBurn } from '../../actions/xreserveBurn.js'
+import {
+  buildAleoHyperlaneTransferRemoteCall,
+  executeAleoHyperlaneTransferRemote,
+} from '../../actions/aleoHyperlane.js'
+import { BridgeError } from '../../errors/bridgeErrors.js'
+import type {
+  BridgeExecutors,
+  EvmHyperlaneTransferExecution,
+  EvmHyperlaneTransferQuote,
+  ExecuteEvmHyperlaneTransferParameters,
+  QuoteEvmHyperlaneTransferParameters,
+} from '../../types/evm.js'
+import type {
+  EvmXReserveTransferExecution,
+  EvmXReserveTransferQuote,
+  ExecuteEvmXReserveTransferParameters,
+  GetXReserveAttestationParameters,
+  QuoteEvmXReserveTransferParameters,
+  XReserveAttestationResult,
+  XReserveHttpTransport,
+} from '../../types/xreserve.js'
+import type {
+  AleoHyperlaneTransferRemoteCall,
+  AleoHyperlaneTransferRemoteExecution,
+  ExecuteAleoHyperlaneTransferRemoteParameters,
+  ExecuteXReservePrivateMintParameters,
+  ExecuteXReserveBurnParameters,
+  XReserveBurnExecution,
+  XReservePrivateMintExecution,
+} from '../../types/aleo.js'
+import type {
+  BridgeEnvironment,
+  BridgeRegistry,
+  BridgeTransferPlan,
+  PrepareTransferParameters,
+  ProtocolBridgeAsset,
+  ProtocolBridgeRoute,
+} from '../../types/protocol.js'
 
 /**
- * Options carried from client construction into the bound actions.
+ * Carries registry defaults from client construction into bound actions.
  *
- * @property wallet Default WalletClient for `swap`'s Aleo deposit; a per-call
- *   `wallet` on SwapParameters overrides it.
+ * @property environment Environment applied when an action omits its filter.
+ * @property registry Reviewed snapshot supplying chains, assets, and routes.
+ * @property executors Optional wallet capabilities injected at construction.
+ * @property xReserveHttpTransport Optional HTTP capability for Circle attestation lookups.
  */
 export type BridgeActionsConfig = {
-  wallet?: WalletClient | undefined
-}
-
-export type BridgeActions = {
-  getAssets: () => Promise<GetAssetsReturnType>
-  getProviders: () => Promise<GetProvidersReturnType>
-  getRoutes: (params?: GetRoutesParameters) => Promise<GetRoutesReturnType>
-  getFlags: () => Promise<GetFlagsReturnType>
-  getQuotes: (params: GetQuotesParameters) => Promise<GetQuotesReturnType>
-  createOrder: (params: CreateOrderParameters) => Promise<CreateOrderReturnType>
-  getOrder: (params: GetOrderParameters) => Promise<GetOrderReturnType>
-  getOrderAudit: (params: GetOrderAuditParameters) => Promise<GetOrderAuditReturnType>
-  waitForOrder: (params: WaitForOrderParameters) => Promise<WaitForOrderReturnType>
-  swap: (params: SwapParameters) => Promise<SwapReturnType>
+  environment: BridgeEnvironment
+  registry: BridgeRegistry
+  executors?: BridgeExecutors | undefined
+  xReserveHttpTransport?: XReserveHttpTransport | undefined
 }
 
 /**
- * Binds every bridge action to a client, viem-decorator style.
+ * Lists the protocol-oriented actions bound to a bridge client.
  *
- * @param client The client whose transport reaches the bridge API.
- * @param config Construction-time defaults — currently the signing wallet
- *   `swap` falls back to when the call does not carry one.
- * @returns The bound {@link BridgeActions}.
+ * @property getAssets Lists chain-specific registry assets without network access.
+ * @property getRoutes Lists directional registry routes without network access.
+ * @property prepareTransfer Validates inputs and returns a non-fund-moving execution plan.
+ * @property quoteEvmHyperlaneTransfer Reads live Ethereum Warp Route fees without signing.
+ * @property executeEvmHyperlaneTransfer Approves collateral when needed, then signs and dispatches through the Ethereum wallet.
+ * @property quoteEvmXReserveTransfer Reads USDC balance and allowance and derives Circle deposit inputs.
+ * @property executeEvmXReserveTransfer Approves USDC when needed and submits the Circle deposit.
+ * @property getXReserveAttestation Fetches one Circle attestation by message hash.
+ * @property executeXReservePrivateMint Prompts the Aleo wallet for the wrapper private mint.
+ * @property executeXReserveBurn Prompts the Aleo wallet for one of the reviewed USDCx burn transitions.
+ * @property buildAleoHyperlaneTransferRemoteCall Constructs the seven-input Aleo Warp Route call without wallet access.
+ * @property executeAleoHyperlaneTransferRemote Submits only fully reviewed, non-placeholder Aleo Warp Route calls.
  */
-export function bridgeActions(client: Client, config: BridgeActionsConfig = {}): BridgeActions {
+export type BridgeActions = {
+  getAssets: (params?: GetProtocolAssetsParameters) => ProtocolBridgeAsset[]
+  getRoutes: (params?: GetProtocolRoutesParameters) => ProtocolBridgeRoute[]
+  prepareTransfer: (params: PrepareTransferParameters) => BridgeTransferPlan
+  quoteEvmHyperlaneTransfer: (params: QuoteEvmHyperlaneTransferParameters) => Promise<EvmHyperlaneTransferQuote>
+  executeEvmHyperlaneTransfer: (params: ExecuteEvmHyperlaneTransferParameters) => Promise<EvmHyperlaneTransferExecution>
+  quoteEvmXReserveTransfer: (params: QuoteEvmXReserveTransferParameters) => Promise<EvmXReserveTransferQuote>
+  executeEvmXReserveTransfer: (params: ExecuteEvmXReserveTransferParameters) => Promise<EvmXReserveTransferExecution>
+  getXReserveAttestation: (params: GetXReserveAttestationParameters) => Promise<XReserveAttestationResult>
+  executeXReservePrivateMint: (params: ExecuteXReservePrivateMintParameters) => Promise<XReservePrivateMintExecution>
+  executeXReserveBurn: (params: ExecuteXReserveBurnParameters) => Promise<XReserveBurnExecution>
+  buildAleoHyperlaneTransferRemoteCall: (params: ExecuteAleoHyperlaneTransferRemoteParameters) => AleoHyperlaneTransferRemoteCall
+  executeAleoHyperlaneTransferRemote: (params: ExecuteAleoHyperlaneTransferRemoteParameters) => Promise<AleoHyperlaneTransferRemoteExecution>
+}
+
+/**
+ * Binds registry discovery and transfer planning to a client.
+ *
+ * Discovery and planning are pure and local. EVM actions use the optional
+ * executor injected through the configuration and fail before network access
+ * when it is absent.
+ *
+ * @param client Client receiving the action layer.
+ * @param config Registry and default environment selected at construction.
+ * @returns Bound protocol bridge actions.
+ *
+ * @example
+ * const actions = bridgeActions(client, { environment: 'mainnet', registry })
+ */
+export function bridgeActions(_client: Client, config: BridgeActionsConfig): BridgeActions {
+  const evmExecutor = () => {
+    if (!config.executors?.evm) {
+      throw new BridgeError('An EVM executor is required for Ethereum bridge actions')
+    }
+    return config.executors.evm
+  }
+  const xReserveTransport = () => {
+    if (!config.xReserveHttpTransport) throw new BridgeError('An xReserve HTTP transport is required for attestation requests')
+    return config.xReserveHttpTransport
+  }
+  const aleoExecutor = () => {
+    if (!config.executors?.aleo) throw new BridgeError('An Aleo executor is required for Aleo bridge transactions')
+    return config.executors.aleo
+  }
   return {
-    getAssets: () => getAssets(client),
-    getProviders: () => getProviders(client),
-    getRoutes: (params) => getRoutes(client, params),
-    getFlags: () => getFlags(client),
-    getQuotes: (params) => getQuotes(client, params),
-    createOrder: (params) => createOrder(client, params),
-    getOrder: (params) => getOrder(client, params),
-    getOrderAudit: (params) => getOrderAudit(client, params),
-    waitForOrder: (params) => waitForOrder(client, params),
-    // ?? (not spread order) so an explicitly-undefined params.wallet cannot
-    // clobber the client's configured wallet.
-    swap: (params) => swap(client, { ...params, wallet: params.wallet ?? config.wallet }),
+    getAssets: (params = {}) => getProtocolAssets(config.registry, {
+      ...params,
+      environment: params.environment ?? config.environment,
+    }),
+    getRoutes: (params = {}) => getProtocolRoutes(config.registry, {
+      ...params,
+      environment: params.environment ?? config.environment,
+    }),
+    prepareTransfer: (params) => prepareTransfer(config.registry, params),
+    quoteEvmHyperlaneTransfer: async (params) => quoteEvmHyperlaneTransfer(config.registry, evmExecutor(), params),
+    executeEvmHyperlaneTransfer: async (params) => executeEvmHyperlaneTransfer(config.registry, evmExecutor(), params),
+    quoteEvmXReserveTransfer: async (params) => quoteEvmXReserveTransfer(config.registry, evmExecutor(), params),
+    executeEvmXReserveTransfer: async (params) => executeEvmXReserveTransfer(config.registry, evmExecutor(), params),
+    getXReserveAttestation: async (params) => getXReserveAttestation(config.registry, xReserveTransport(), params),
+    executeXReservePrivateMint: async (params) => executeXReservePrivateMint(config.registry, aleoExecutor(), params),
+    executeXReserveBurn: async (params) => executeXReserveBurn(config.registry, aleoExecutor(), params),
+    buildAleoHyperlaneTransferRemoteCall: (params) => buildAleoHyperlaneTransferRemoteCall(config.registry, params),
+    executeAleoHyperlaneTransferRemote: async (params) => executeAleoHyperlaneTransferRemote(config.registry, aleoExecutor(), params),
   }
 }

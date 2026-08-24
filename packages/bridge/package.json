@@ -1,8 +1,8 @@
 {
-  "name": "@provablehq/veil-aleo-bridges",
-  "version": "0.4.5",
+  "name": "@provablehq/aleo-bridge-sdk",
+  "version": "0.8.0-rc.0",
   "private": true,
-  "description": "Veil client for swaps between Aleo and other chains (SOL, ETH, BTC, etc.).",
+  "description": "Protocol bridge client for Circle xReserve and Hyperlane routes connected to Aleo.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -43,9 +43,19 @@
     "dist"
   ],
   "dependencies": {
-    "@provablehq/veil-core": "workspace:*"
+    "@provablehq/veil-core": "workspace:*",
+    "bs58": "^6.0.0",
+    "viem": "^2.21.0"
+  },
+  "peerDependencies": {
+    "@provablehq/sdk": "^0.11.6"
+  },
+  "peerDependenciesMeta": {
+    "@provablehq/sdk": {
+      "optional": true
+    }
   },
   "devDependencies": {
-    "viem": "^2.21.0"
+    "@provablehq/sdk": "^0.11.6"
   }
 }

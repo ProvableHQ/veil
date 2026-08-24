@@ -92,7 +92,7 @@ and transport interfaces.
 | `@provablehq/veil-codegen` | Generate typed bindings from an Aleo program ABI (library + `veil-codegen` CLI). | You want typed reads and writes for a specific program's ABI. |
 | `@provablehq/veil-aleo-devnode` | Run and drive a local Aleo devnode for tests. | You need a local Aleo node in tests or local development. |
 | `@provablehq/veil-leo` | Typed wrapper around the `leo` CLI (build, deploy, …). | You compile or deploy Leo programs — including during testing, where it pairs with `@provablehq/veil-aleo-devnode`. |
-| `@provablehq/veil-aleo-bridges` | Cross-chain bridge client (preview). | Not yet — in preview, not published. |
+| `@provablehq/aleo-bridge-sdk` | Cross-chain bridge client (preview). | Not yet — in preview, not published. |
 
 ## Quick Start
 
@@ -199,76 +199,34 @@ const account = viewOnlyAccount({
 
 ## Bridging in and out
 
-`@provablehq/veil-aleo-bridges` moves value between Aleo and other chains (Solana, Ethereum and
-other EVM networks, Bitcoin, Tron) through third-party swap providers. Aleo is
-always one side of the pair. Amounts are decimal strings in display units, and
-assets use the API's chain-qualified codes (`ALEO_MAINNET`, `USDC_ETH`),
-though `getQuotes` and `swap` also accept plain symbols (`'USDC'`) and chain
-display names (`'Ethereum'`) and resolve them for you. Don't hardcode
-identifiers: `bridge.getRoutes()`
-derives the candidate pairs ("what can move where"), filterable by symbol or
-chain name, each side carrying its code, chain, human-readable `chainName`,
-decimals, and address-validation regex; `bridge.getAssets()` is the raw
-catalog underneath and `bridge.getProviders()` lists the providers. Chain
-slots on `swap` accept ids or display names (`'Solana'`), and a `provider`
-option pins the quote to one provider.
-
-Bridging **out** is one call. The client carries the signing wallet, and
-`swap` runs the whole chain: quote the route, create the order, sign and
-broadcast the Aleo deposit, and (with `poll`) wait until the funds arrive:
+`@provablehq/aleo-bridge-sdk` assigns each supported asset family to a
+protocol: Circle xReserve for USDCx, and Hyperlane Warp Routes for ETH, WBTC,
+SOL, ALEO, and USAD. The package is in preview. Its current foundation exposes
+a versioned route registry and non-fund-moving transfer plans; transaction
+execution is under development.
 
 ```ts
-import { createBridgeClient, httpBridge } from '@provablehq/veil-aleo-bridges'
+import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'
 
-const bridge = createBridgeClient({
-  transport: httpBridge('https://wallet.api.provable.com'),
-  wallet: walletClient, // @provablehq/veil-core WalletClient — signs the Aleo deposit
+const bridge = createBridgeClient({ environment: 'mainnet' })
+const [route] = bridge.getRoutes({
+  protocol: 'xreserve',
+  sourceChainId: 'ethereum',
+  destinationChainId: 'aleo',
 })
 
-const result = await bridge.swap({
-  from: { asset: 'ALEO_MAINNET', amount: '100' },
-  to: { chain: 'SOLANA', asset: 'SOL_SOLANA', address: solAddress },
-  poll: true, // wait for COMPLETED
+const plan = bridge.prepareTransfer({
+  routeId: route.id,
+  amount: '25',
+  recipient: aleoAddress,
 })
-result.depositTxId // at1... — the Aleo deposit
+plan.steps // approve → deposit → wait-attestation → mint
 ```
 
-Bridging **in** starts on the other chain, so the deposit is signed there —
-from this SDK you quote the route and create the order, then pay the returned
-deposit instructions from the source-chain wallet:
-
-```ts
-const { quotes } = await bridge.getQuotes({
-  srcChain: 'EVM:1', srcAsset: 'USDC_ETH',
-  destChain: 'ALEO', destAsset: 'USDC_ALEO',
-  amountIn: '250',
-  recipientAddress: aleoAddress, // where the USDC lands on Aleo
-  refundAddress: ethAddress,
-})
-const q = quotes[0]
-const order = await bridge.createOrder({
-  providerId: q.provider.id,
-  srcChain: q.srcChain, destChain: q.destChain,
-  srcAsset: q.srcAsset, destAsset: q.destAsset,
-  amountIn: q.amountIn,
-  walletAddress: aleoAddress,
-  quoteId: (q.quoteId ?? q.quoteOptionId)!,
-})
-// → pay order.depositAmount to order.depositAddress from the user's EVM
-//   wallet — that side is plain viem (an erc20 transfer via writeContract;
-//   see packages/bridge/README.md for the full snippet) — then
-await bridge.waitForOrder({ id: order.orderId })
-```
-
-Bridged-in assets are ordinary Aleo tokens — tradeable on the Shield Swap DEX
-via `@provablehq/shield-swap-sdk` with the same wallet client. The live examples are the
-e2e tests:
-[`packages/bridge/test/integration/e2e.test.ts`](./packages/bridge/test/integration/e2e.test.ts)
-runs the full outbound swap chain, and
-[`packages/shield-swap/test/integration/bridgeRoundTrip.e2e.test.ts`](./packages/shield-swap/test/integration/bridgeRoundTrip.e2e.test.ts)
-chains bridge in → DEX swap → bridge out. See
-[`packages/bridge/README.md`](./packages/bridge/README.md) for providers,
-routes, and route discovery.
+`prepareTransfer` validates the route, amount precision, and recipient without
+querying fees, signing, submitting, or moving funds. See
+[`packages/bridge/README.md`](./packages/bridge/README.md) for registry status
+and the remaining execution phases.
 
 ## Agent Usage
 
@@ -469,7 +427,7 @@ veil/
 │   ├── codegen/             # @provablehq/veil-codegen (ABI → typed bindings + CLI)
 │   ├── devnode/             # @provablehq/veil-aleo-devnode (local Aleo devnode for tests)
 │   ├── leo/                 # @provablehq/veil-leo (typed leo CLI wrapper)
-│   └── bridge/              # @provablehq/veil-aleo-bridges (cross-chain bridge client, preview)
+│   └── bridge/              # @provablehq/aleo-bridge-sdk (cross-chain bridge client, preview)
 ├── skills/                  # Skill definitions for code-writing agents
 ├── site/                    # Docusaurus documentation site
 └── package.json

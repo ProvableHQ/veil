@@ -1,117 +1,111 @@
-// Clients
 export {
   createBridgeClient,
   type BridgeClient,
   type BridgeClientConfig,
 } from './clients/createBridgeClient.js'
-export { bridgeActions, type BridgeActions } from './clients/decorators/bridge.js'
+export {
+  bridgeActions,
+  type BridgeActions,
+  type BridgeActionsConfig,
+} from './clients/decorators/bridge.js'
 
-// Transport
-export { httpBridge } from './transports/httpBridge.js'
+export {
+  getProtocolAssets as getAssets,
+  getProtocolRoutes as getRoutes,
+  type GetProtocolAssetsParameters as GetAssetsParameters,
+  type GetProtocolRoutesParameters as GetRoutesParameters,
+} from './actions/protocolDiscovery.js'
+export { prepareTransfer } from './actions/prepareTransfer.js'
+export {
+  executeEvmHyperlaneTransfer,
+  quoteEvmHyperlaneTransfer,
+} from './actions/evmHyperlane.js'
+export {
+  executeEvmXReserveTransfer,
+  getXReserveAttestation,
+  quoteEvmXReserveTransfer,
+} from './actions/evmXReserve.js'
+export { executeXReservePrivateMint } from './actions/xreservePrivateMint.js'
+export { buildXReserveBurnCall, executeXReserveBurn } from './actions/xreserveBurn.js'
+export {
+  buildAleoHyperlaneTransferRemoteCall,
+  executeAleoHyperlaneTransferRemote,
+} from './actions/aleoHyperlane.js'
 
-// Actions (standalone forms)
-export {
-  getAssets,
-  type GetAssetsReturnType,
-} from './actions/getAssets.js'
-export {
-  getProviders,
-  type GetProvidersReturnType,
-} from './actions/getProviders.js'
-export {
-  getRoutes,
-  type BridgeRouteCandidate,
-  type GetRoutesParameters,
-  type GetRoutesReturnType,
-  type RouteAsset,
-} from './actions/getRoutes.js'
-export {
-  getFlags,
-  type GetFlagsReturnType,
-} from './actions/getFlags.js'
-export {
-  getQuotes,
-  type GetQuotesParameters,
-  type GetQuotesReturnType,
-} from './actions/getQuotes.js'
-export {
-  createOrder,
-  type CreateOrderParameters,
-  type CreateOrderReturnType,
-} from './actions/createOrder.js'
-export {
-  getOrder,
-  type GetOrderParameters,
-  type GetOrderReturnType,
-} from './actions/getOrder.js'
-export {
-  getOrderAudit,
-  type GetOrderAuditParameters,
-  type GetOrderAuditReturnType,
-} from './actions/getOrderAudit.js'
-export {
-  waitForOrder,
-  type WaitForOrderParameters,
-  type WaitForOrderReturnType,
-} from './actions/waitForOrder.js'
-export {
-  swap,
-  type SwapParameters,
-  type SwapReturnType,
-} from './actions/swap.js'
+export { DEFAULT_BRIDGE_REGISTRY } from './registry/default.js'
+export { validateBridgeRegistry } from './registry/validate.js'
 
-// Types
 export type {
-  ApiEnvelope,
-} from './types/envelope.js'
+  AleoMintMode,
+  BridgeAssetKind,
+  BridgeAssetLocator,
+  BridgeChainFamily,
+  BridgeEnvironment,
+  BridgeExecutionStep,
+  BridgeExecutionStepKind,
+  BridgeFee,
+  BridgeProtocol,
+  BridgeQuoteStatus,
+  BridgeRegistry,
+  BridgeRouteAvailability,
+  BridgeStepExecutor,
+  BridgeTransferPlan,
+  BridgeTransferQuote,
+  BridgeTransferReceipt,
+  BridgeTransferStatus,
+  PrepareTransferParameters,
+  ProtocolBridgeAsset,
+  ProtocolBridgeChain,
+  ProtocolBridgeRoute,
+} from './types/protocol.js'
 export type {
-  AssetProviderSupport,
-  BridgeAssetSummary,
-  BridgeFlagsDto,
-  BridgeIntegrationType,
-  BridgeOrderAuditDto,
-  BridgeOrderFinalStatus,
-  BridgeOrderFinalStatusReason,
-  BridgeOrderInstructions,
-  BridgeOrderProviderEventDto,
-  BridgeOrderStage,
-  BridgeOrderStatusDto,
-  BridgeOrderStepKey,
-  BridgeOrderStepStatus,
-  BridgeOrderStepStatusDto,
-  BridgeOrderTimelineEvent,
-  BridgeOrderTimelineEventStage,
-  BridgeQuote,
-  BridgeQuoteFeeEstimate,
-  BridgeQuoteFeeEstimateLeg,
-  BridgeQuoteMetadata,
-  DepositInstruction,
-  DepositInstructionType,
-  GetQuotesMeta,
-  ProviderStatusSnapshot,
-  ProviderSummary,
-  TerminalStage,
-} from './types/bridge.js'
-export { TERMINAL_STAGES, isTerminalStage } from './types/bridge.js'
+  BridgeExecutors,
+  EvmBridgeExecutor,
+  EvmHyperlaneRouteMetadata,
+  EvmHyperlaneRouterType,
+  EvmHyperlaneTransferExecution,
+  EvmHyperlaneTransferQuote,
+  ExecuteEvmHyperlaneTransferParameters,
+  QuoteEvmHyperlaneTransferParameters,
+} from './types/evm.js'
+export type {
+  EvmXReserveRouteMetadata,
+  EvmXReserveTransferExecution,
+  EvmXReserveTransferQuote,
+  ExecuteEvmXReserveTransferParameters,
+  GetXReserveAttestationParameters,
+  QuoteEvmXReserveTransferParameters,
+  XReserveAttestationResult,
+  XReserveHttpResponse,
+  XReserveHttpTransport,
+} from './types/xreserve.js'
+export type {
+  AleoBridgeExecutor,
+  AleoHyperlaneTransferRemoteCall,
+  AleoHyperlaneTransferRemoteExecution,
+  ExecuteAleoHyperlaneTransferRemoteParameters,
+  ExecuteXReserveBurnParameters,
+  ExecuteXReservePrivateMintParameters,
+  XReserveBurnCall,
+  XReserveBurnExecution,
+  XReserveBurnMode,
+  XReservePrivateMintExecution,
+} from './types/aleo.js'
 
-// Errors
 export {
-  BridgeError,
-  BridgeEnvelopeError,
-  BridgeOrderFailedError,
-  BridgeTimeoutError,
-} from './errors/bridgeErrors.js'
+  aleoAddressToBytes32,
+  aleoProgramAddress,
+  buildXReserveDepositPayload,
+  buildXReserveHookData,
+  calculateXReserveDepositNonce,
+  calculateXReserveMessageHash,
+  evmAddressToXReserveBytes32,
+  xReserveHexToAleoBytes,
+} from './utils/xreserve.js'
+export {
+  evmAddressToAleoHyperlaneRecipient,
+  solanaAddressToAleoHyperlaneRecipient,
+} from './utils/hyperlane.js'
 
-// Utilities
-export { unwrapEnvelope } from './utils/unwrapEnvelope.js'
+export { BridgeError } from './errors/bridgeErrors.js'
 export { parseDecimalAmount } from './utils/units.js'
-
-// Asset routing
-export {
-  aleoAssetProgram,
-  DEFAULT_ALEO_ASSET_MAP,
-  type AleoAssetConfig,
-} from './lib/aleo-asset.js'
-
-// Chain display names (stopgap until the API exposes its chain registry)
-export { chainDisplayName, KNOWN_CHAIN_NAMES, resolveChainId } from './lib/chain-names.js'
