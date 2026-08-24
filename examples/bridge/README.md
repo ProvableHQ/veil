@@ -12,7 +12,9 @@ export ALEO_RECIPIENT='aleo1...'
 export USDC_AMOUNT='3'
 export USDCX_MINT_MODE='record'
 
-read -s EVM_PRIVATE_KEY
+printf 'Ethereum Private Key: '
+read -rs EVM_PRIVATE_KEY
+echo
 export EVM_PRIVATE_KEY
 ```
 
@@ -28,7 +30,9 @@ the account named by `ALEO_RECIPIENT`. Enter it without placing it in shell
 history:
 
 ```sh
-read -s ALEO_PRIVATE_KEY
+printf 'Aleo Private Key: '
+read -rs ALEO_PRIVATE_KEY
+echo
 export ALEO_PRIVATE_KEY
 ```
 
@@ -92,7 +96,9 @@ export USDCX_SECRET_NONCE
 # Read-only: verifies Circle's payload and the recipient/scalar commitment.
 pnpm tsx examples/bridge/usdc-to-usdcx.ts
 
-read -s ALEO_PRIVATE_KEY
+printf 'Aleo Private Key: '
+read -rs ALEO_PRIVATE_KEY
+echo
 export ALEO_PRIVATE_KEY
 
 # After reviewing the resume preflight:
@@ -183,7 +189,9 @@ before submission. Supply the Aleo and Provable API credentials used for
 proving and record scanning:
 
 ```sh
-read -s ALEO_PRIVATE_KEY
+printf 'Aleo Private Key: '
+read -rs ALEO_PRIVATE_KEY
+echo
 export ALEO_PRIVATE_KEY
 
 export ALEO_CONSUMER_ID='...'
@@ -199,7 +207,9 @@ record scanner nor an exclusion proof is used:
 
 ```sh
 export USDCX_BURN_MODE='public'
-read -s ALEO_PRIVATE_KEY
+printf 'Aleo Private Key: '
+read -rs ALEO_PRIVATE_KEY
+echo
 export ALEO_PRIVATE_KEY
 
 EXECUTE_XRESERVE_BURN=I_UNDERSTAND_THIS_BURNS_USDCX \
@@ -226,7 +236,8 @@ shell history:
 ```sh
 export ETHEREUM_RPC_URL='https://eth-mainnet.g.alchemy.com/public'
 export ALEO_RECIPIENT='aleo1...'
-read -s EVM_PRIVATE_KEY
+printf 'Ethereum Private Key: '
+read -rs EVM_PRIVATE_KEY
 echo
 export EVM_PRIVATE_KEY
 ```
@@ -293,7 +304,9 @@ Set the amount, Ethereum recipient, and Aleo signer:
 export WBTC_AMOUNT='0.0001'
 export ETHEREUM_RECIPIENT='0x...'
 
-read -s ALEO_PRIVATE_KEY
+printf 'Aleo Private Key: '
+read -rs ALEO_PRIVATE_KEY
+echo
 export ALEO_PRIVATE_KEY
 ```
 
@@ -337,7 +350,9 @@ records must be unshielded first; no record scanner is used.
 export ETH_AMOUNT='0.001'
 export ETHEREUM_RECIPIENT='0x...'
 
-read -s ALEO_PRIVATE_KEY
+printf 'Aleo Private Key: '
+read -rs ALEO_PRIVATE_KEY
+echo
 export ALEO_PRIVATE_KEY
 
 # Read-only preflight
