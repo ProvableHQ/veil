@@ -1,26 +1,34 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { Client } from '@provablehq/veil-core'
 import {
   buildAleoHyperlaneTransferRemoteCall,
   executeAleoHyperlaneTransferRemote,
+  quoteAleoHyperlaneGasPayment,
 } from '../../src/actions/aleoHyperlane.js'
 import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import type { AleoBridgeExecutor } from '../../src/types/aleo.js'
 
 const ROUTES = [
-  ['hyperlane:aleo/eth->ethereum/eth', 'hyp_warp_token_eth_v2.aleo', '0x0000000000000000000000000000000000000001'],
-  ['hyperlane:aleo/wbtc->ethereum/wbtc', 'hyp_warp_token_wbtc_v2.aleo', '0x0000000000000000000000000000000000000001'],
-  ['hyperlane:aleo/usdt->ethereum/usdt', 'hyp_warp_token_usdt_v2.aleo', '0x0000000000000000000000000000000000000001'],
-  ['hyperlane:aleo/sol->solana/sol', 'hyp_warp_token_sol_v2.aleo', '11111111111111111111111111111111'],
-  ['hyperlane:aleo/usad->ethereum/usad', 'hyp_warp_token_usad_v2.aleo', '0x0000000000000000000000000000000000000001'],
+  ['hyperlane:aleo/eth->ethereum/eth', 'hyp_warp_token_eth_v2.aleo', '0x0000000000000000000000000000000000000001', false],
+  ['hyperlane:aleo/wbtc->ethereum/wbtc', 'hyp_warp_token_wbtc_v2.aleo', '0x0000000000000000000000000000000000000001', false],
+  ['hyperlane:aleo/usdt->ethereum/usdt', 'hyp_warp_token_usdt_v2.aleo', '0x0000000000000000000000000000000000000001', false],
+  ['hyperlane:aleo/sol->solana/sol', 'hyp_warp_token_sol_v2.aleo', '11111111111111111111111111111111', false],
+  ['hyperlane:aleo/usad->ethereum/usad', 'hyp_warp_token_usad_v2.aleo', '0x0000000000000000000000000000000000000001', true],
 ] as const
+
+const ETH_GAS_CONFIG_LITERAL = '{\n  gas_overhead: 159337u128,\n  exchange_rate: 402u128,\n  gas_price: 1000000000u128\n}'
+
+function mappingClient(value: string | null): Client {
+  return { request: vi.fn(async () => value) } as unknown as Client
+}
 
 function plan(routeId = ROUTES[0][0], recipient = ROUTES[0][2]) {
   return prepareTransfer(DEFAULT_BRIDGE_REGISTRY, { routeId, amount: '1', recipient })
 }
 
 describe('Aleo Hyperlane transfer_remote', () => {
-  it.each(ROUTES)('constructs all seven inputs for %s', (routeId, program, recipient) => {
+  it.each(ROUTES)('constructs all seven inputs for %s', (routeId, program, recipient, placeholder) => {
     const call = buildAleoHyperlaneTransferRemoteCall(DEFAULT_BRIDGE_REGISTRY, {
       plan: plan(routeId, recipient),
     })
@@ -28,7 +36,7 @@ describe('Aleo Hyperlane transfer_remote', () => {
       routeId,
       program,
       function: 'transfer_remote',
-      usesPlaceholderConfiguration: true,
+      usesPlaceholderConfiguration: placeholder,
     })
     expect(call.inputs).toHaveLength(7)
     expect(call.inputs[1]).toBe('{ default_hook: aleo194tz0jmyq8rd9htvnqppqw4jqerk2p2zd8plzn3sxl06wcgsm5pq9fka74, required_hook: aleo1yxevh9qgxehej46j7vueplwjcpfdfml2dje3ey4ukzknx7wzasgqnxgq82 }')
@@ -75,7 +83,7 @@ describe('Aleo Hyperlane transfer_remote', () => {
     expect(call.placeholderFields).not.toContain('aleoHook')
     expect(call.placeholderFields).not.toContain('aleoTokenId')
     expect(call.placeholderFields).toEqual(['aleoAllowanceAmount0'])
-    expect(call.usesPlaceholderConfiguration).toBe(true)
+    expect(call.usesPlaceholderConfiguration).toBe(false)
   })
 
   it('uses verified USDT metadata, scaling, and the Ethereum remote router', () => {
@@ -109,12 +117,33 @@ describe('Aleo Hyperlane transfer_remote', () => {
     })).toThrow(/Unsupported Aleo Hyperlane transfer mode/)
   })
 
+  it('embeds the live gas payment and clears the allowance placeholder', () => {
+    const call = buildAleoHyperlaneTransferRemoteCall(DEFAULT_BRIDGE_REGISTRY, {
+      plan: plan(),
+      mode: 'signer',
+      gasPaymentMicrocredits: 8174147n,
+    })
+    expect(call.inputs[6]).toContain('amount: 8174147u64')
+    expect(call.placeholderFields).toEqual([])
+  })
+
+  it('rejects a gas payment outside the positive u64 range', () => {
+    expect(() => buildAleoHyperlaneTransferRemoteCall(DEFAULT_BRIDGE_REGISTRY, {
+      plan: plan(),
+      gasPaymentMicrocredits: 0n,
+    })).toThrow(/positive u64/)
+    expect(() => buildAleoHyperlaneTransferRemoteCall(DEFAULT_BRIDGE_REGISTRY, {
+      plan: plan(),
+      gasPaymentMicrocredits: 1n << 64n,
+    })).toThrow(/positive u64/)
+  })
+
   it('refuses placeholder submission before invoking the Aleo wallet', async () => {
     const executeTransaction = vi.fn<AleoBridgeExecutor['executeTransaction']>()
     await expect(executeAleoHyperlaneTransferRemote(
       DEFAULT_BRIDGE_REGISTRY,
       { executeTransaction },
-      { plan: plan() },
+      { plan: plan(ROUTES[4][0], ROUTES[4][2]), gasPaymentMicrocredits: 1n },
     )).rejects.toThrow(/non-executable placeholder configuration/)
     expect(executeTransaction).not.toHaveBeenCalled()
   })
@@ -123,20 +152,87 @@ describe('Aleo Hyperlane transfer_remote', () => {
     const executeTransaction = vi.fn<AleoBridgeExecutor['executeTransaction']>()
     const registry = {
       ...DEFAULT_BRIDGE_REGISTRY,
-      routes: DEFAULT_BRIDGE_REGISTRY.routes.map((route) => route.id === ROUTES[0][0]
+      routes: DEFAULT_BRIDGE_REGISTRY.routes.map((route) => route.id === ROUTES[4][0]
         ? { ...route, metadata: { ...route.metadata, aleoPlaceholderConfiguration: false } }
         : route),
     }
     const replacementPlan = prepareTransfer(registry, {
-      routeId: ROUTES[0][0],
+      routeId: ROUTES[4][0],
       amount: '1',
-      recipient: ROUTES[0][2],
+      recipient: ROUTES[4][2],
     })
     await expect(executeAleoHyperlaneTransferRemote(
       registry,
       { executeTransaction },
-      { plan: replacementPlan },
+      { plan: replacementPlan, gasPaymentMicrocredits: 1n },
     )).rejects.toThrow(/route is not active/)
     expect(executeTransaction).not.toHaveBeenCalled()
+  })
+
+  it('refuses active-route submission without a live gas payment', async () => {
+    const executeTransaction = vi.fn<AleoBridgeExecutor['executeTransaction']>()
+    await expect(executeAleoHyperlaneTransferRemote(
+      DEFAULT_BRIDGE_REGISTRY,
+      { executeTransaction },
+      { plan: plan() },
+    )).rejects.toThrow(/requires a live hook gas payment/)
+    expect(executeTransaction).not.toHaveBeenCalled()
+  })
+
+  it('submits an active route with the quoted gas payment', async () => {
+    const executeTransaction = vi.fn<AleoBridgeExecutor['executeTransaction']>()
+      .mockResolvedValue('at1transaction')
+    const result = await executeAleoHyperlaneTransferRemote(
+      DEFAULT_BRIDGE_REGISTRY,
+      { executeTransaction },
+      { plan: plan(), mode: 'signer', gasPaymentMicrocredits: 8174147n },
+    )
+    expect(result.transactionId).toBe('at1transaction')
+    expect(result.receipt.status).toBe('SOURCE_CONFIRMING')
+    const submitted = executeTransaction.mock.calls[0]![0]
+    expect(submitted.function).toBe('transfer_remote_as_signer')
+    expect(submitted.inputs[6]).toContain('amount: 8174147u64')
+  })
+})
+
+describe('quoteAleoHyperlaneGasPayment', () => {
+  it('reproduces the pinned sample transfer payment from the oracle values', async () => {
+    const quote = await quoteAleoHyperlaneGasPayment(
+      DEFAULT_BRIDGE_REGISTRY,
+      mappingClient(ETH_GAS_CONFIG_LITERAL),
+      { routeId: ROUTES[0][0] },
+    )
+    expect(quote).toEqual({
+      routeId: ROUTES[0][0],
+      gasLimit: 44000n,
+      gasOverhead: 159337n,
+      gasPrice: 1000000000n,
+      exchangeRate: 402n,
+      paymentMicrocredits: 8174147n,
+    })
+  })
+
+  it('fails closed when the gas configuration is absent', async () => {
+    await expect(quoteAleoHyperlaneGasPayment(
+      DEFAULT_BRIDGE_REGISTRY,
+      mappingClient(null),
+      { routeId: ROUTES[0][0] },
+    )).rejects.toThrow(/gas configuration is missing/)
+  })
+
+  it('fails closed when the oracle is unpriced', async () => {
+    await expect(quoteAleoHyperlaneGasPayment(
+      DEFAULT_BRIDGE_REGISTRY,
+      mappingClient('{ gas_overhead: 0u128, exchange_rate: 0u128, gas_price: 0u128 }'),
+      { routeId: ROUTES[0][0] },
+    )).rejects.toThrow(/unpriced/)
+  })
+
+  it('rejects EVM-origin routes', async () => {
+    await expect(quoteAleoHyperlaneGasPayment(
+      DEFAULT_BRIDGE_REGISTRY,
+      mappingClient(ETH_GAS_CONFIG_LITERAL),
+      { routeId: 'hyperlane:ethereum/eth->aleo/eth' },
+    )).rejects.toThrow(/require an Aleo source asset/)
   })
 })

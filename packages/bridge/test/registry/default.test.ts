@@ -49,31 +49,41 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
     expect(inbound.every((route) => route.metadata?.registryCommit === '2621c16f2db1ccb46643265c110dac5ca2c7c51a')).toBe(true)
   })
 
-  it('marks Aleo-origin Warp Route configuration as non-executable placeholders', () => {
+  it('activates the fully reviewed Aleo-origin withdrawal routes', () => {
     const routeIds = new Set([
       'hyperlane:aleo/eth->ethereum/eth',
       'hyperlane:aleo/wbtc->ethereum/wbtc',
       'hyperlane:aleo/usdt->ethereum/usdt',
       'hyperlane:aleo/sol->solana/sol',
-      'hyperlane:aleo/usad->ethereum/usad',
     ])
     const routes = DEFAULT_BRIDGE_REGISTRY.routes.filter((route) => routeIds.has(route.id))
-    expect(routes).toHaveLength(5)
-    expect(routes.every((route) => route.availability === 'metadata-required')).toBe(true)
-    expect(routes.every((route) => route.metadata?.aleoPlaceholderConfiguration === true)).toBe(true)
+    expect(routes).toHaveLength(4)
+    expect(routes.every((route) => route.availability === 'active')).toBe(true)
+    expect(routes.every((route) => route.metadata?.aleoPlaceholderConfiguration === false)).toBe(true)
+    expect(routes.every((route) => route.metadata?.aleoWithdrawalReviewedAt === '2026-08-26')).toBe(true)
+    expect(routes.every((route) => route.metadata?.aleoHookManagerProgram === 'hyp_hook_manager.aleo')).toBe(true)
     expect(routes.map((route) => route.metadata?.aleoRouterProgram)).toEqual([
       'hyp_warp_token_eth_v2.aleo',
       'hyp_warp_token_wbtc_v2.aleo',
       'hyp_warp_token_usdt_v2.aleo',
       'hyp_warp_token_sol_v2.aleo',
-      'hyp_warp_token_usad_v2.aleo',
     ])
   })
 
-  it('pins verified Aleo WBTC app metadata without activating the route', () => {
+  it('keeps the unreviewed USAD withdrawal as a non-executable placeholder', () => {
+    const route = DEFAULT_BRIDGE_REGISTRY.routes.find((entry) =>
+      entry.id === 'hyperlane:aleo/usad->ethereum/usad')!
+    expect(route).toMatchObject({ availability: 'metadata-required' })
+    expect(route.metadata).toMatchObject({
+      aleoPlaceholderConfiguration: true,
+      aleoRouterProgram: 'hyp_warp_token_usad_v2.aleo',
+    })
+  })
+
+  it('pins verified Aleo WBTC app metadata on the active withdrawal route', () => {
     const route = DEFAULT_BRIDGE_REGISTRY.routes.find((entry) =>
       entry.id === 'hyperlane:aleo/wbtc->ethereum/wbtc')!
-    expect(route).toMatchObject({ availability: 'metadata-required' })
+    expect(route).toMatchObject({ availability: 'active' })
     expect(route.metadata).toMatchObject({
       aleoAppMetadataVerified: true,
       aleoProgramSource: 'https://explorer.provable.com/program/hyp_warp_token_wbtc_v2.aleo',
@@ -99,10 +109,10 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
     })
   })
 
-  it('pins verified Aleo ETH metadata and sample transaction without activating the route', () => {
+  it('pins verified Aleo ETH metadata and sample transaction on the active withdrawal route', () => {
     const route = DEFAULT_BRIDGE_REGISTRY.routes.find((entry) =>
       entry.id === 'hyperlane:aleo/eth->ethereum/eth')!
-    expect(route).toMatchObject({ availability: 'metadata-required' })
+    expect(route).toMatchObject({ availability: 'active' })
     expect(route.metadata).toMatchObject({
       aleoAppMetadataVerified: true,
       aleoProgramSource: 'https://explorer.provable.com/program/hyp_warp_token_eth_v2.aleo',
@@ -124,7 +134,7 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
   it('pins current USDT app metadata and the Ethereum router independently of the BSC sample', () => {
     const route = DEFAULT_BRIDGE_REGISTRY.routes.find((entry) =>
       entry.id === 'hyperlane:aleo/usdt->ethereum/usdt')!
-    expect(route).toMatchObject({ availability: 'metadata-required' })
+    expect(route).toMatchObject({ availability: 'active' })
     expect(route.metadata).toMatchObject({
       aleoAppMetadataVerified: true,
       aleoProgramSource: 'https://explorer.provable.com/program/hyp_warp_token_usdt_v2.aleo',
@@ -145,10 +155,10 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
     })
   })
 
-  it('pins current SOL metadata and the Solana router without activating withdrawals', () => {
+  it('pins current SOL metadata and the Solana router on the active withdrawal route', () => {
     const route = DEFAULT_BRIDGE_REGISTRY.routes.find((entry) =>
       entry.id === 'hyperlane:aleo/sol->solana/sol')!
-    expect(route).toMatchObject({ availability: 'metadata-required' })
+    expect(route).toMatchObject({ availability: 'active' })
     expect(route.metadata).toMatchObject({
       aleoAppMetadataVerified: true,
       aleoProgramSource: 'https://explorer.provable.com/program/hyp_warp_token_sol_v2.aleo',

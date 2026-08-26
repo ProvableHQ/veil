@@ -100,6 +100,37 @@ export type XReserveBurnExecution = {
 }
 
 /**
+ * Configures one live Hyperlane hook gas payment quote.
+ *
+ * @property routeId Aleo-origin Hyperlane route whose destination gas is quoted.
+ */
+export type QuoteAleoHyperlaneGasPaymentParameters = {
+  routeId: string
+}
+
+/**
+ * Captures one live destination gas quote for an Aleo-origin Hyperlane transfer.
+ *
+ * The on-chain hook asserts that the paid amount exactly equals the quote it
+ * recomputes at finalization, so the caller should quote shortly before submission.
+ *
+ * @property routeId Route the quote applies to.
+ * @property gasLimit Destination gas limit charged by the route, after the on-chain 50000 zero-limit fallback.
+ * @property gasOverhead Destination gas overhead added by the interchain gas paymaster.
+ * @property gasPrice Destination gas price reported by the on-chain oracle.
+ * @property exchangeRate Destination-to-Aleo exchange rate reported by the on-chain oracle.
+ * @property paymentMicrocredits Exact hook payment in microcredits (u64) the transfer must allow.
+ */
+export type AleoHyperlaneGasQuote = {
+  routeId: string
+  gasLimit: bigint
+  gasOverhead: bigint
+  gasPrice: bigint
+  exchangeRate: bigint
+  paymentMicrocredits: bigint
+}
+
+/**
  * Describes one locally constructed Aleo Hyperlane transfer call.
  *
  * @property routeId Directional Hyperlane route used to construct the call.
@@ -126,11 +157,13 @@ export type AleoHyperlaneTransferRemoteCall = {
  * @property plan Aleo-origin Hyperlane plan returned by `prepareTransfer`.
  * @property mode Whether the program burns from `self.caller` or the EOA-bound `self.signer`. Defaults to `caller`.
  * @property privateFee Whether the Aleo wallet should pay its fee privately. Defaults to false.
+ * @property gasPaymentMicrocredits Live hook payment in microcredits (u64) from `quoteAleoHyperlaneGasPayment`. Optional for inspection-only call construction; required for execution.
  */
 export type ExecuteAleoHyperlaneTransferRemoteParameters = {
   plan: BridgeTransferPlan
   mode?: 'caller' | 'signer' | undefined
   privateFee?: boolean | undefined
+  gasPaymentMicrocredits?: bigint | undefined
 }
 
 /**

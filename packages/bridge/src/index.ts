@@ -30,6 +30,7 @@ export { buildXReserveBurnCall, executeXReserveBurn } from './actions/xreserveBu
 export {
   buildAleoHyperlaneTransferRemoteCall,
   executeAleoHyperlaneTransferRemote,
+  quoteAleoHyperlaneGasPayment,
 } from './actions/aleoHyperlane.js'
 
 export { DEFAULT_BRIDGE_REGISTRY } from './registry/default.js'
@@ -81,11 +82,13 @@ export type {
 } from './types/xreserve.js'
 export type {
   AleoBridgeExecutor,
+  AleoHyperlaneGasQuote,
   AleoHyperlaneTransferRemoteCall,
   AleoHyperlaneTransferRemoteExecution,
   ExecuteAleoHyperlaneTransferRemoteParameters,
   ExecuteXReserveBurnParameters,
   ExecuteXReservePrivateMintParameters,
+  QuoteAleoHyperlaneGasPaymentParameters,
   XReserveBurnCall,
   XReserveBurnExecution,
   XReserveBurnMode,

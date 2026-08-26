@@ -13,6 +13,7 @@ import type { XReserveHttpTransport } from '../types/xreserve.js'
  * @property registry Reviewed protocol deployment snapshot. Defaults to {@link DEFAULT_BRIDGE_REGISTRY}.
  * @property executors Optional wallet capabilities used by fund-moving protocol actions.
  * @property xReserveHttpTransport Optional fetch-compatible transport used for Circle attestation requests.
+ * @property aleoPublicClient Optional Aleo public client used for on-chain reads such as Hyperlane gas quotes.
  * @property key Client identifier. Defaults to `bridge`.
  * @property name Human-readable client name. Defaults to `Bridge Client`.
  */
@@ -21,6 +22,7 @@ export type BridgeClientConfig = {
   registry?: BridgeRegistry | undefined
   executors?: BridgeExecutors | undefined
   xReserveHttpTransport?: XReserveHttpTransport | undefined
+  aleoPublicClient?: Client | undefined
   key?: string | undefined
   name?: string | undefined
 }
@@ -72,6 +74,7 @@ export function createBridgeClient(config: BridgeClientConfig = {}): BridgeClien
     registry = DEFAULT_BRIDGE_REGISTRY,
     executors = {},
     xReserveHttpTransport,
+    aleoPublicClient,
     key = 'bridge',
     name = 'Bridge Client',
   } = config
@@ -80,6 +83,6 @@ export function createBridgeClient(config: BridgeClientConfig = {}): BridgeClien
   return client.extend((inner) => ({
     environment,
     registry: validated,
-    ...bridgeActions(inner, { environment, registry: validated, executors, xReserveHttpTransport }),
+    ...bridgeActions(inner, { environment, registry: validated, executors, xReserveHttpTransport, aleoPublicClient }),
   })) as BridgeClient
 }
