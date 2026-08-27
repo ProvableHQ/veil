@@ -342,7 +342,7 @@ export type RebalanceRequestInput = {
 /**
  * Formats a RebalanceRequest struct literal in the contract's exact field
  * order. Order is load-bearing: the finalize asserts the request against the
- * pool state positionally. Pure and local.
+ * pool state positionally. Builds a string; does not touch the network.
  *
  * @param req The resolved rebalance accounting.
  * @returns The Aleo struct literal.
@@ -377,7 +377,7 @@ export type RebalanceAssetsInput = {
 
 /**
  * Formats the RebalanceAssets struct literal in the contract's exact field
- * order. Pure and local.
+ * order. Builds a string; does not touch the network.
  *
  * @param assets Both sides' pool and settlement token ids.
  * @returns The Aleo struct literal.

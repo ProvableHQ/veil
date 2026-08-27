@@ -33,15 +33,15 @@ import {
 /**
  * Picks which of the router's 14 rebalance transitions to call.
  *
- * Leo transitions cannot take optional inputs, so the router deploys a
- * separate transition per input layout and names it after the layout: the
- * shape of token0 and token1 (`plain`, or `wrapped` — a pool token backed by
- * an underlying asset, which adds proof inputs), then the funded sides
- * (`none`, `fund0`, `fund1`, `both`). When both tokens have the same shape,
- * funding either side is the same layout, so a single `one` transition
- * replaces `fund0`/`fund1`. Pure and local.
+ * The two tokens in a pool can each be a plain Arc20 or a wrapped Arc20 (a
+ * wrapper token backed by an underlying asset), and each side either takes a
+ * funding record or does not. The router deploys one transition per
+ * combination, named for it: `rebalance_wrapped_plain_fund0` serves a
+ * wrapped token0 and a plain token1 where only token0 is funded. When both
+ * tokens are plain or both are wrapped, one transition named `one` serves a
+ * single funded side, whichever it is. Does not touch the network.
  *
- * @param params Each side's wrapped-ness and whether it takes a funding record.
+ * @param params Each side's wrapper status and whether it takes a funding record.
  * @returns The `rebalance_*` transition name.
  *
  * @example
@@ -300,29 +300,30 @@ export type RebalancePositionReturnType = {
 }
 
 /**
- * Moves a position to a new range atomically: close, refund, remint.
+ * Rebalances token positions in a pool in a single transaction.
  *
- * Consumes the PositionNFT, recovers the old range's principal and owed
- * balances, opens the successor range at exactly `liquidityTarget`, pays any
- * surplus to the position's `withdrawal` address as private records, and
- * takes any shortfall from the caller's funding records. The successor NFT
- * keeps the position's owner and withdrawal address. Every call goes through
- * `shield_swap_rebalance_router.aleo`; the entrypoint follows the pair's
- * wrapped-ness and the funded sides ({@link selectRebalanceEntry}).
+ * If a transaction is successful, this function burns the old position,
+ * collects the principal and accrued fees, optionally adds funds from the
+ * caller's private balance, and mints the new position with the same owner
+ * and withdrawal address; any surplus arrives as private records for the
+ * withdrawal address. The operation is atomic, so failed transactions abort
+ * all operations, leaving the pool in the same state before the call.
+ * Callers should specify independently either the `liquidityTarget` and
+ * compute the required token balances to satisfy that target
+ * ({@link previewRebalance} reports them), or the max amount of token0 and
+ * token1 and solve for the liquidity with `liquidityForAmounts`.
  *
- * The quote is computed here, against live state, in the same call — the
- * contract asserts it exactly at finalize time, so a price move or fee
- * accrual between quote and finalize aborts the transaction without moving
- * funds. Use {@link previewRebalance} first to learn which sides need
- * funding records.
+ * Note every derived amount is a function of the pool price at the block
+ * where a transaction executes. If any trade moves the pool price between
+ * building and execution, the on-chain assertions fail and the whole
+ * transaction reverts — no funds move, but the caller pays the transaction
+ * fee. Expect rebalances on active pools to occasionally revert and in those
+ * cases, simply rebuild and resubmit. Ensure to set `deadlineOffsetBlocks`
+ * low to minimize this risk.
  *
- * Signer paths mirror {@link collect}: a local account auto-selects the
- * position and funding records; a wallet account must supply
- * `positionTokenId`, `positionRecord`, and a record for each funded side.
- *
- * Hits the network: pool/slot/position reads, route reads (cached), hint and
- * deadline reads, record scans (local), and the transaction. Signs, and on
- * the local path proves locally.
+ * A local account auto-selects the position and funding records; a wallet
+ * account must supply `positionTokenId`, `positionRecord`, and a record for
+ * each funded side ({@link previewRebalance} says which sides those are).
  *
  * @param client A Veil wallet client (local or wallet account).
  * @param params The position, the successor range, the liquidity target, and

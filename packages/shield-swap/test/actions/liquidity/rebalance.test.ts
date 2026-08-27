@@ -111,7 +111,7 @@ beforeEach(() => {
 })
 
 describe('selectRebalanceEntry', () => {
-  it('maps every shape and funding mode to its router entrypoint', () => {
+  it('maps every wrapper and funding combination to its router entrypoint', () => {
     const cases: Array<[boolean, boolean, boolean, boolean, string]> = [
       [false, false, false, false, 'rebalance_plain_plain_none'],
       [false, false, true, false, 'rebalance_plain_plain_one'],
