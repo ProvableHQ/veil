@@ -1,5 +1,16 @@
 # @provablehq/aleo-bridge-sdk
 
+## 0.9.0-rc.1
+
+### Minor Changes
+
+- 2f473ac: Add injected-wallet execution for Ethereum Hyperlane (ETH/WBTC/USDT) and Circle xReserve (USDC↔USDCx) routes, including Circle attestation helpers and Aleo-side mint/burn actions.
+- 734f108: Enable Aleo-origin Hyperlane withdrawals (ETH/WBTC/USDT/SOL): add `quoteAleoHyperlaneGasPayment` for the live interchain gas paymaster quote, accept `gasPaymentMicrocredits` in `transfer_remote` construction and execution, and activate the four reviewed return routes in the default registry.
+
+### Patch Changes
+
+- @provablehq/veil-core@0.9.0
+
 ## 0.4.5
 
 ### Patch Changes
