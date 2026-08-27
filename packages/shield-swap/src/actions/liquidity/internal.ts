@@ -35,7 +35,11 @@ const ZERO_ADDRESS = 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3
 export function assertPayoutAddress(name: string, value: string | undefined): asserts value is string {
   if (!value) throw new Error(`${name} is required — pass the address explicitly`)
   if (value === ZERO_ADDRESS) throw new Error(`${name} must not be the zero address`)
-  if (value === ROUTER_ADDRESSES.router || value === ROUTER_ADDRESSES.lpRouter) {
+  if (
+    value === ROUTER_ADDRESSES.router ||
+    value === ROUTER_ADDRESSES.lpRouter ||
+    value === ROUTER_ADDRESSES.rebalanceRouter
+  ) {
     throw new Error(`${name} must not be a program account of the shield_swap stack`)
   }
 }

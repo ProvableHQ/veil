@@ -308,6 +308,91 @@ export function formatMintPositionRequest(req: MintPositionRequestInput): string
 }
 
 /**
+ * The rebalance router's `RebalanceRequest` fields in TypeScript form.
+ *
+ * All amounts are raw atomic units (u128). The contract asserts the
+ * accounting exactly at finalize time, so every field must match the pool
+ * state the transaction lands against.
+ *
+ * @property oldLiquidity The old position's full liquidity (u128).
+ * @property recovered0 Exact token0 recovered by closing the old range:
+ *   principal plus `tokens_owed0` (u128).
+ * @property recovered1 Exact token1 recovered, principal plus owed (u128).
+ * @property funded0 Additional token0 supplied by the caller (u128).
+ * @property funded1 Additional token1 supplied by the caller (u128).
+ * @property refund0 Token0 surplus paid back to the withdrawal address (u128).
+ * @property refund1 Token1 surplus paid back (u128).
+ * @property liquidityTarget Exact liquidity of the successor position (u128).
+ * @property mint The successor position's mint request.
+ * @property deadline Block height the request expires at (u32).
+ */
+export type RebalanceRequestInput = {
+  oldLiquidity: bigint
+  recovered0: bigint
+  recovered1: bigint
+  funded0: bigint
+  funded1: bigint
+  refund0: bigint
+  refund1: bigint
+  liquidityTarget: bigint
+  mint: MintPositionRequestInput
+  deadline: number
+}
+
+/**
+ * Formats a RebalanceRequest struct literal in the contract's exact field
+ * order. Order is load-bearing: the finalize asserts the request against the
+ * pool state positionally. Builds a string; does not touch the network.
+ *
+ * @param req The resolved rebalance accounting.
+ * @returns The Aleo struct literal.
+ *
+ * @example
+ * const request = formatRebalanceRequest({ ...quote, mint, deadline })
+ */
+export function formatRebalanceRequest(req: RebalanceRequestInput): string {
+  return (
+    `{ old_liquidity: ${req.oldLiquidity}u128, recovered0: ${req.recovered0}u128, recovered1: ${req.recovered1}u128, ` +
+    `funded0: ${req.funded0}u128, funded1: ${req.funded1}u128, refund0: ${req.refund0}u128, refund1: ${req.refund1}u128, ` +
+    `liquidity_target: ${req.liquidityTarget}u128, mint: ${formatMintPositionRequest(req.mint)}, ` +
+    `deadline: ${req.deadline}u32 }`
+  )
+}
+
+/**
+ * The `RebalanceAssets` pool-token bindings in TypeScript form.
+ *
+ * @property token0Id The pair's first AMM token id field literal.
+ * @property underlying0Id Token0's settlement token id — equal to `token0Id`
+ *   for a plain side, the underlying asset's token id for a wrapped side.
+ * @property token1Id The pair's second AMM token id field literal.
+ * @property underlying1Id Token1's settlement token id, same rule.
+ */
+export type RebalanceAssetsInput = {
+  token0Id: string
+  underlying0Id: string
+  token1Id: string
+  underlying1Id: string
+}
+
+/**
+ * Formats the RebalanceAssets struct literal in the contract's exact field
+ * order. Builds a string; does not touch the network.
+ *
+ * @param assets Both sides' pool and settlement token ids.
+ * @returns The Aleo struct literal.
+ *
+ * @example
+ * const assets = formatRebalanceAssets({ token0Id, underlying0Id, token1Id, underlying1Id })
+ */
+export function formatRebalanceAssets(assets: RebalanceAssetsInput): string {
+  return (
+    `{ token0: { token_id: ${assets.token0Id}, underlying_id: ${assets.underlying0Id} }, ` +
+    `token1: { token_id: ${assets.token1Id}, underlying_id: ${assets.underlying1Id} } }`
+  )
+}
+
+/**
  * One hop of a multi-hop swap in TypeScript form.
  *
  * @property poolKey Pool key field literal the hop trades against.

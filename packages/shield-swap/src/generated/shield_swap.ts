@@ -245,6 +245,58 @@ export function toPairKey(value: StructValue): PairKey {
   }
 }
 
+export interface RebalanceAsset {
+  token_id: string
+  underlying_id: string
+}
+
+export function toRebalanceAsset(value: StructValue): RebalanceAsset {
+  return {
+    token_id: litStr(value.token_id, 'field') ?? '',
+    underlying_id: litStr(value.underlying_id, 'field') ?? '',
+  }
+}
+
+export interface RebalanceAssets {
+  token0: RebalanceAsset
+  token1: RebalanceAsset
+}
+
+export function toRebalanceAssets(value: StructValue): RebalanceAssets {
+  return {
+    token0: value.token0 as unknown as RebalanceAsset ?? {} as unknown as RebalanceAsset,
+    token1: value.token1 as unknown as RebalanceAsset ?? {} as unknown as RebalanceAsset,
+  }
+}
+
+export interface CoreRebalanceRequest {
+  old_liquidity: bigint
+  recovered0: bigint
+  recovered1: bigint
+  funded0: bigint
+  funded1: bigint
+  refund0: bigint
+  refund1: bigint
+  liquidity_target: bigint
+  mint: MintPositionRequest
+  deadline: number
+}
+
+export function toCoreRebalanceRequest(value: StructValue): CoreRebalanceRequest {
+  return {
+    old_liquidity: value.old_liquidity as bigint ?? 0n,
+    recovered0: value.recovered0 as bigint ?? 0n,
+    recovered1: value.recovered1 as bigint ?? 0n,
+    funded0: value.funded0 as bigint ?? 0n,
+    funded1: value.funded1 as bigint ?? 0n,
+    refund0: value.refund0 as bigint ?? 0n,
+    refund1: value.refund1 as bigint ?? 0n,
+    liquidity_target: value.liquidity_target as bigint ?? 0n,
+    mint: value.mint as unknown as MintPositionRequest ?? {} as unknown as MintPositionRequest,
+    deadline: Number((value.deadline ?? 0n) as bigint) ?? 0,
+  }
+}
+
 export interface SwapIterCfg {
   z: boolean
   lim: U256__8JquwLopp8
@@ -598,6 +650,17 @@ export type MintInputs = {
 }
 
 export type MintOutputs = [string, PositionNFT, RecordValue, RecordValue, MintComplianceRecord, FutureValue]
+
+export type RebalancePositionInputs = {
+  arg0: PositionNFT | RecordValue | string | InputRequest
+  arg1: string | InputRequest
+  arg2: CoreRebalanceRequest | InputRequest
+  arg3: RebalanceAssets | InputRequest
+  arg4: MerkleProof[] | InputRequest
+  arg5: MerkleProof[] | InputRequest
+}
+
+export type RebalancePositionOutputs = [string, PositionNFT, RecordValue, RecordValue, MintComplianceRecord, FutureValue]
 
 export type DecreaseLiquidityInputs = {
   arg0: PositionNFT | RecordValue | string | InputRequest
@@ -1592,6 +1655,134 @@ export const PROGRAM_ABI: ABI = {
           "type": {
             "kind": "primitive",
             "primitive": "field"
+          }
+        }
+      ]
+    },
+    {
+      "path": [
+        "RebalanceAsset"
+      ],
+      "fields": [
+        {
+          "name": "token_id",
+          "type": {
+            "kind": "primitive",
+            "primitive": "field"
+          }
+        },
+        {
+          "name": "underlying_id",
+          "type": {
+            "kind": "primitive",
+            "primitive": "field"
+          }
+        }
+      ]
+    },
+    {
+      "path": [
+        "RebalanceAssets"
+      ],
+      "fields": [
+        {
+          "name": "token0",
+          "type": {
+            "kind": "struct",
+            "path": [
+              "RebalanceAsset"
+            ],
+            "program": "shield_swap.aleo"
+          }
+        },
+        {
+          "name": "token1",
+          "type": {
+            "kind": "struct",
+            "path": [
+              "RebalanceAsset"
+            ],
+            "program": "shield_swap.aleo"
+          }
+        }
+      ]
+    },
+    {
+      "path": [
+        "CoreRebalanceRequest"
+      ],
+      "fields": [
+        {
+          "name": "old_liquidity",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u128"
+          }
+        },
+        {
+          "name": "recovered0",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u128"
+          }
+        },
+        {
+          "name": "recovered1",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u128"
+          }
+        },
+        {
+          "name": "funded0",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u128"
+          }
+        },
+        {
+          "name": "funded1",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u128"
+          }
+        },
+        {
+          "name": "refund0",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u128"
+          }
+        },
+        {
+          "name": "refund1",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u128"
+          }
+        },
+        {
+          "name": "liquidity_target",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u128"
+          }
+        },
+        {
+          "name": "mint",
+          "type": {
+            "kind": "struct",
+            "path": [
+              "MintPositionRequest"
+            ],
+            "program": "shield_swap.aleo"
+          }
+        },
+        {
+          "name": "deadline",
+          "type": {
+            "kind": "primitive",
+            "primitive": "u32"
           }
         }
       ]
@@ -3230,6 +3421,142 @@ export const PROGRAM_ABI: ABI = {
       ]
     },
     {
+      "name": "rebalance_position",
+      "isFinal": true,
+      "inputs": [
+        {
+          "type": {
+            "kind": "record",
+            "path": [
+              "PositionNFT"
+            ],
+            "program": "shield_swap.aleo"
+          },
+          "mode": "none"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "field"
+            }
+          },
+          "mode": "private"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "struct",
+              "path": [
+                "CoreRebalanceRequest"
+              ],
+              "program": "shield_swap.aleo"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "struct",
+              "path": [
+                "RebalanceAssets"
+              ],
+              "program": "shield_swap.aleo"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "array",
+              "element": {
+                "kind": "struct",
+                "path": [
+                  "MerkleProof"
+                ],
+                "program": "shield_swap.aleo"
+              },
+              "length": 2
+            }
+          },
+          "mode": "private"
+        },
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "array",
+              "element": {
+                "kind": "struct",
+                "path": [
+                  "MerkleProof"
+                ],
+                "program": "shield_swap.aleo"
+              },
+              "length": 2
+            }
+          },
+          "mode": "private"
+        }
+      ],
+      "outputs": [
+        {
+          "type": {
+            "kind": "plaintext",
+            "type": {
+              "kind": "primitive",
+              "primitive": "field"
+            }
+          },
+          "mode": "public"
+        },
+        {
+          "type": {
+            "kind": "record",
+            "path": [
+              "PositionNFT"
+            ],
+            "program": "shield_swap.aleo"
+          },
+          "mode": "none"
+        },
+        {
+          "type": {
+            "kind": "dynamicRecord"
+          },
+          "mode": "none"
+        },
+        {
+          "type": {
+            "kind": "dynamicRecord"
+          },
+          "mode": "none"
+        },
+        {
+          "type": {
+            "kind": "record",
+            "path": [
+              "MintComplianceRecord"
+            ],
+            "program": "shield_swap.aleo"
+          },
+          "mode": "none"
+        },
+        {
+          "type": {
+            "kind": "future"
+          },
+          "mode": "none"
+        }
+      ]
+    },
+    {
       "name": "decrease_liquidity",
       "isFinal": true,
       "inputs": [
@@ -4198,6 +4525,7 @@ export interface ShieldSwapContract {
     collect_protocol: (params: { arg0: string | InputRequest, arg1: bigint | InputRequest, arg2: bigint | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: string | InputRequest }) => Promise<string>
     create_pool: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: number | InputRequest, arg3: U256__8JquwLopp8 | InputRequest, arg4: number | InputRequest, arg5: number | InputRequest }) => Promise<string>
     mint: (params: { arg0: string | InputRequest, arg1: RecordValue | string | InputRequest, arg2: RecordValue | string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: MintPositionRequest | InputRequest, arg6: string | InputRequest, arg7: string | InputRequest, arg8: MerkleProof[] | InputRequest, arg9: MerkleProof[] | InputRequest, arg10: MerkleProof[] | InputRequest }) => Promise<string>
+    rebalance_position: (params: { arg0: PositionNFT | RecordValue | string | InputRequest, arg1: string | InputRequest, arg2: CoreRebalanceRequest | InputRequest, arg3: RebalanceAssets | InputRequest, arg4: MerkleProof[] | InputRequest, arg5: MerkleProof[] | InputRequest }) => Promise<string>
     decrease_liquidity: (params: { arg0: PositionNFT | RecordValue | string | InputRequest, arg1: bigint | InputRequest, arg2: bigint | InputRequest, arg3: bigint | InputRequest }) => Promise<string>
     increase_liquidity: (params: { arg0: PositionNFT | RecordValue | string | InputRequest, arg1: RecordValue | string | InputRequest, arg2: RecordValue | string | InputRequest, arg3: bigint | InputRequest, arg4: bigint | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: string | InputRequest, arg8: string | InputRequest, arg9: number | InputRequest, arg10: number | InputRequest }) => Promise<string>
     collect: (params: { arg0: PositionNFT | RecordValue | string | InputRequest, arg1: bigint | InputRequest, arg2: bigint | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: MerkleProof[] | InputRequest, arg6: MerkleProof[] | InputRequest }) => Promise<string>
@@ -4225,6 +4553,7 @@ export interface ShieldSwapContract {
     collect_protocol: (params: { arg0: string | InputRequest, arg1: bigint | InputRequest, arg2: bigint | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: string | InputRequest }) => Promise<FutureValue>
     create_pool: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: number | InputRequest, arg3: U256__8JquwLopp8 | InputRequest, arg4: number | InputRequest, arg5: number | InputRequest }) => Promise<[string, string, FutureValue]>
     mint: (params: { arg0: string | InputRequest, arg1: RecordValue | string | InputRequest, arg2: RecordValue | string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: MintPositionRequest | InputRequest, arg6: string | InputRequest, arg7: string | InputRequest, arg8: MerkleProof[] | InputRequest, arg9: MerkleProof[] | InputRequest, arg10: MerkleProof[] | InputRequest }) => Promise<[string, PositionNFT, RecordValue, RecordValue, MintComplianceRecord, FutureValue]>
+    rebalance_position: (params: { arg0: PositionNFT | RecordValue | string | InputRequest, arg1: string | InputRequest, arg2: CoreRebalanceRequest | InputRequest, arg3: RebalanceAssets | InputRequest, arg4: MerkleProof[] | InputRequest, arg5: MerkleProof[] | InputRequest }) => Promise<[string, PositionNFT, RecordValue, RecordValue, MintComplianceRecord, FutureValue]>
     decrease_liquidity: (params: { arg0: PositionNFT | RecordValue | string | InputRequest, arg1: bigint | InputRequest, arg2: bigint | InputRequest, arg3: bigint | InputRequest }) => Promise<[string, PositionNFT, FutureValue]>
     increase_liquidity: (params: { arg0: PositionNFT | RecordValue | string | InputRequest, arg1: RecordValue | string | InputRequest, arg2: RecordValue | string | InputRequest, arg3: bigint | InputRequest, arg4: bigint | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: string | InputRequest, arg8: string | InputRequest, arg9: number | InputRequest, arg10: number | InputRequest }) => Promise<[string, PositionNFT, RecordValue, RecordValue, FutureValue]>
     collect: (params: { arg0: PositionNFT | RecordValue | string | InputRequest, arg1: bigint | InputRequest, arg2: bigint | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: MerkleProof[] | InputRequest, arg6: MerkleProof[] | InputRequest }) => Promise<[PositionNFT, RecordValue, RecordValue, FutureValue]>
@@ -4252,6 +4581,7 @@ export interface ShieldSwapContract {
     collect_protocol: (params: { arg0: string | InputRequest, arg1: bigint | InputRequest, arg2: bigint | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: string | InputRequest }) => Promise<{ transactionId: string, result: FutureValue }>
     create_pool: (params: { arg0: string | InputRequest, arg1: string | InputRequest, arg2: number | InputRequest, arg3: U256__8JquwLopp8 | InputRequest, arg4: number | InputRequest, arg5: number | InputRequest }) => Promise<{ transactionId: string, result: [string, string, FutureValue] }>
     mint: (params: { arg0: string | InputRequest, arg1: RecordValue | string | InputRequest, arg2: RecordValue | string | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: MintPositionRequest | InputRequest, arg6: string | InputRequest, arg7: string | InputRequest, arg8: MerkleProof[] | InputRequest, arg9: MerkleProof[] | InputRequest, arg10: MerkleProof[] | InputRequest }) => Promise<{ transactionId: string, result: [string, PositionNFT, RecordValue, RecordValue, MintComplianceRecord, FutureValue] }>
+    rebalance_position: (params: { arg0: PositionNFT | RecordValue | string | InputRequest, arg1: string | InputRequest, arg2: CoreRebalanceRequest | InputRequest, arg3: RebalanceAssets | InputRequest, arg4: MerkleProof[] | InputRequest, arg5: MerkleProof[] | InputRequest }) => Promise<{ transactionId: string, result: [string, PositionNFT, RecordValue, RecordValue, MintComplianceRecord, FutureValue] }>
     decrease_liquidity: (params: { arg0: PositionNFT | RecordValue | string | InputRequest, arg1: bigint | InputRequest, arg2: bigint | InputRequest, arg3: bigint | InputRequest }) => Promise<{ transactionId: string, result: [string, PositionNFT, FutureValue] }>
     increase_liquidity: (params: { arg0: PositionNFT | RecordValue | string | InputRequest, arg1: RecordValue | string | InputRequest, arg2: RecordValue | string | InputRequest, arg3: bigint | InputRequest, arg4: bigint | InputRequest, arg5: bigint | InputRequest, arg6: bigint | InputRequest, arg7: string | InputRequest, arg8: string | InputRequest, arg9: number | InputRequest, arg10: number | InputRequest }) => Promise<{ transactionId: string, result: [string, PositionNFT, RecordValue, RecordValue, FutureValue] }>
     collect: (params: { arg0: PositionNFT | RecordValue | string | InputRequest, arg1: bigint | InputRequest, arg2: bigint | InputRequest, arg3: string | InputRequest, arg4: string | InputRequest, arg5: MerkleProof[] | InputRequest, arg6: MerkleProof[] | InputRequest }) => Promise<{ transactionId: string, result: [PositionNFT, RecordValue, RecordValue, FutureValue] }>
@@ -4444,6 +4774,11 @@ export function createShieldSwapContract(options: {
         const _arg2 = arg2?._record ?? arg2
         return _raw.write.mint({ inputs: [arg0, _arg1, _arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10] })
       },
+      rebalance_position: (params: any) => {
+        const { arg0, arg1, arg2, arg3, arg4, arg5 } = params
+        const _arg0 = arg0?._record ?? arg0
+        return _raw.write.rebalance_position({ inputs: [_arg0, arg1, arg2, arg3, arg4, arg5] })
+      },
       decrease_liquidity: (params: any) => {
         const { arg0, arg1, arg2, arg3 } = params
         const _arg0 = arg0?._record ?? arg0
@@ -4570,6 +4905,12 @@ export function createShieldSwapContract(options: {
         const _arg1 = arg1?._record ?? arg1
         const _arg2 = arg2?._record ?? arg2
         const result = await _raw.simulate.mint({ inputs: [arg0, _arg1, _arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10] })
+        return [result.outputs[0] as unknown as string, toPositionNFT(result.outputs[1] as unknown as RecordValue), result.outputs[2], result.outputs[3], toMintComplianceRecord(result.outputs[4] as unknown as RecordValue), result.outputs[5] as unknown as FutureValue] as const
+      },
+      rebalance_position: async (params: any) => {
+        const { arg0, arg1, arg2, arg3, arg4, arg5 } = params
+        const _arg0 = arg0?._record ?? arg0
+        const result = await _raw.simulate.rebalance_position({ inputs: [_arg0, arg1, arg2, arg3, arg4, arg5] })
         return [result.outputs[0] as unknown as string, toPositionNFT(result.outputs[1] as unknown as RecordValue), result.outputs[2], result.outputs[3], toMintComplianceRecord(result.outputs[4] as unknown as RecordValue), result.outputs[5] as unknown as FutureValue] as const
       },
       decrease_liquidity: async (params: any) => {
@@ -4706,6 +5047,12 @@ export function createShieldSwapContract(options: {
         const _arg1 = arg1?._record ?? arg1
         const _arg2 = arg2?._record ?? arg2
         const result = await _raw.execute.mint({ inputs: [arg0, _arg1, _arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10] })
+        return { transactionId: result.transactionId, result: [result.outputs[0] as unknown as string, toPositionNFT(result.outputs[1] as unknown as RecordValue), result.outputs[2], result.outputs[3], toMintComplianceRecord(result.outputs[4] as unknown as RecordValue), result.outputs[5] as unknown as FutureValue] as const }
+      },
+      rebalance_position: async (params: any) => {
+        const { arg0, arg1, arg2, arg3, arg4, arg5 } = params
+        const _arg0 = arg0?._record ?? arg0
+        const result = await _raw.execute.rebalance_position({ inputs: [_arg0, arg1, arg2, arg3, arg4, arg5] })
         return { transactionId: result.transactionId, result: [result.outputs[0] as unknown as string, toPositionNFT(result.outputs[1] as unknown as RecordValue), result.outputs[2], result.outputs[3], toMintComplianceRecord(result.outputs[4] as unknown as RecordValue), result.outputs[5] as unknown as FutureValue] as const }
       },
       decrease_liquidity: async (params: any) => {

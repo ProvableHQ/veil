@@ -50,8 +50,8 @@ covering setup, pool and balance reads, swaps, and liquidity.
 Worked examples of everything below live in
 [`examples/shield-swap/`](https://github.com/ProvableHQ/veil/tree/main/examples/shield-swap):
 account bootstrap, pool reads, quoting, balances, swap history, swaps, minting a
-position, and taking liquidity back out. Each one is a single file that reads top
-to bottom.
+position, rebalancing it to a new range, and taking liquidity back out. Each one
+is a single file that reads top to bottom.
 
 [Open them in StackBlitz](https://stackblitz.com/github/ProvableHQ/veil/tree/main/examples/shield-swap)
 to browse the set in an editor. The pool and token reads run there as they are;
@@ -810,6 +810,77 @@ await client.increaseLiquidity({
   token1Record: { type: 'record', program: token1Program, recordname: 'Token', filters: { amount: { gte: `${amount1Desired}u128` } } },
 })
 ```
+
+### Rebalance a position
+
+`rebalancePosition` moves a position to a new tick range atomically through
+`shield_swap_rebalance_router.aleo`: close the old range, collect its
+principal and all accrued fees, optionally add funds from private records,
+and remint at the successor range — in one transaction that lands whole or
+not at all. The successor NFT keeps the position's owner and withdrawal
+address; any surplus returns to the withdrawal address as private records.
+
+Sizing takes exactly one of two modes: an exact `liquidityTarget`, or a
+`maxFunding0`/`maxFunding1` budget of additional funds — the planner solves
+for the largest liquidity the budget supports. `{ maxFunding0: 0n,
+maxFunding1: 0n }` rebalances using only what the old position returns.
+
+The contract re-derives and asserts every amount at execution, so a price
+move between building and execution reverts the transaction — no funds move,
+but the fee is paid. Expect occasional reverts on active pools; rebuild and
+resubmit. Keep `deadlineOffsetBlocks` short (default 20) and do not cache
+plans.
+
+#### One call
+
+```ts
+const { positionTokenId: successorId } = await client.rebalancePosition({
+  poolKey,
+  positionTokenId,
+  tickLower: -1200,
+  tickUpper: -600,
+  maxFunding0: 0n,
+  maxFunding1: 0n,
+  imports,
+})
+```
+
+Wallet accounts also supply the position record and, when the plan funds a
+side, that side's record (a wrapped side funds with the UNDERLYING asset's
+record):
+
+```ts
+const plan = await client.planRebalance({ poolKey, positionTokenId, tickLower, tickUpper, liquidityTarget })
+await client.rebalancePosition({
+  poolKey,
+  positionTokenId,
+  tickLower,
+  tickUpper,
+  liquidityTarget,
+  imports,
+  positionRecord: { type: 'record', program: 'shield_swap.aleo', recordname: 'PositionNFT', filters: { pool: { eq: poolKey } } },
+  token0Record: { type: 'record', program: token0Program, recordname: 'Token', filters: { amount: { gte: `${plan.funded0}u128` } } },
+})
+```
+
+#### Bring your own state, math, or plan
+
+`planRebalance` is a convenience, never a requirement. Both it and the
+one-call form accept pre-read chain state (`pool`, `slot`, `position`,
+`lowerTick`, `upperTick`, the token routes) from a caller's own indexer,
+skipping the corresponding node reads. A caller that computes the accounting
+itself builds the same fields directly — the exported `feeGrowthInside`,
+`feeOwed`, `amountsForLiquidity`, `liquidityForAmounts`, and
+`selectRebalanceEntry` are the same building blocks the planner uses — and
+spreads them into the call, where they are submitted verbatim:
+
+```ts
+await client.rebalancePosition({ ...plan, imports })
+```
+
+Only chain *state* is accepted piecemeal; the derived assertion set
+(`recovered`, `funded`, `refund`, the deposit) travels together as a plan,
+which succeeds or reverts as a unit.
 
 ### Create a pool
 

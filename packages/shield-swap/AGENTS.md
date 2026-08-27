@@ -144,3 +144,13 @@ src/mcp/       MCP server wrapper (@provablehq/shield-swap-sdk/mcp)
 src/generated/ codegen output
 codegen/       pinned ABI + OpenAPI inputs, config, regen scripts
 ```
+
+One action per file, always. Every exported `(client, params)` action lives in
+its own file under `src/actions/`, named after the action (`mint.ts`,
+`planRebalance.ts`, `rebalancePosition.ts`), together with its parameter and
+return types. A planner and the executor that consumes its output are two
+actions and therefore two files. Logic shared between sibling actions goes in
+the directory's `internal.ts`, never in one action's file for another to
+import — except that an action MAY import another action it genuinely calls
+(`rebalancePosition` calls `planRebalance`) and the types of that action's
+output.

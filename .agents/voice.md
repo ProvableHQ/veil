@@ -146,6 +146,71 @@ symbol applies, or state the discriminating fact and let it choose:
 /** Reach for this when you need only the header. */
 ```
 
+### Never "shape" — name the actual structure
+
+"Shape" (and "shape of") is a vagueness word: it gestures at a structure
+instead of stating it. Name the concrete variants, standards, or fields.
+
+```ts
+// Bad — "shape" avoids exactness.
+/** The shape of token0 and token1 (`plain` or `wrapped`). */
+// Good — plain language that describes the structure.
+/**
+ * Two token inputs in a pool can be Arc20, wrapped Arc20 tokens implementing
+ * the Arc22 standard and have differing funding statuses.
+ */
+```
+
+### Top-level action descriptions serve the caller, not the implementation
+
+The description on an exported action documents what matters to the caller:
+what the call does to their assets, why and when to call it, how to use it,
+and the failure modes to plan for. It does not narrate internal dispatch,
+compiler or language constraints, or logical flow — those belong on the
+internal helper that implements them, with every term of art defined or
+avoided. A side-effect note states the concrete effect ("reads the pool and
+submits one transaction"); a stamped tagline like "Pure and local" on an
+action description reads as marketing and says nothing.
+
+```ts
+// Bad — internal flow, undefined jargon, and a tagline. The caller does not
+// care about Leo input rules, and learns nothing about their own funds.
+/**
+ * Picks which of the router's 14 rebalance transitions to call.
+ *
+ * Leo transitions cannot take optional inputs, so the router deploys a
+ * separate transition per input layout and names it after the layout: the
+ * shape of token0 and token1 (`plain`, or `wrapped` — a pool token backed by
+ * an underlying asset, which adds proof inputs), then the funded sides
+ * (`none`, `fund0`, `fund1`, `both`). When both tokens have the same shape,
+ * funding either side is the same layout, so a single `one` transition
+ * replaces `fund0`/`fund1`. Pure and local.
+ */
+
+// Good — relevance to the caller, usage instructions, and the key
+// considerations: atomicity, what a revert costs, and how to reduce reverts.
+/**
+ * Rebalances token positions in a pool in a single transaction.
+ *
+ * If a transaction is successful, this function burns the old position,
+ * collects the principal and accrued fees, optionally adds funds from the
+ * caller's private balance, and mints the new position. The operation is
+ * atomic, so failed transactions abort all operations, leaving the pool in
+ * the same state before the call. Callers should specify independently
+ * either the liquidityTarget and compute the required token balances to
+ * satisfy that target, or the max amount of token0 and token1 and solve for
+ * the liquidity.
+ *
+ * Note every derived amount is a function of the pool price at the block
+ * where a transaction executes. If any trade moves the pool price between
+ * building and execution, the on-chain assertions fail and the whole
+ * transaction reverts — no funds move, but the caller pays the transaction
+ * fee. Expect rebalances on active pools to occasionally revert and in those
+ * cases, simply rebuild and resubmit. Ensure to set deadlineBlocks low to
+ * minimize this risk.
+ */
+```
+
 ### `@deprecated` carries a migration path
 
 ```ts
@@ -193,3 +258,5 @@ record actually is.
 | Bare optional | `@param fee Optional fee.` | `@param fee Optional fee in microcredits. Defaults to 0.` |
 | First/second person | "you", "your", "we", "our", "I" | "the caller", "a developer", or imperative mood |
 | "Reach for" | "Reach for this when…" | "Applies when…", "Use for…", "Suited to…", or state the discriminating fact |
+| "Shape" | "the shape of token0 (`plain` or `wrapped`)" | name the structure: the standards, variants, or fields |
+| Implementation narration | Leo/compiler constraints, dispatch tables, "Pure and local" taglines on actions | what the call does to the caller's assets, usage, and failure modes |

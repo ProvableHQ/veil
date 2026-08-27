@@ -72,6 +72,7 @@ const LOCAL_PROGRAMS: ReadonlyArray<readonly [string, string]> = [
   ['test_token_b.aleo', join(AMM_V3_ROOT, 'token-wrappers', 'test_token_b')],
   ['shield_swap_router.aleo', join(AMM_V3_ROOT, 'shield_swap_router')],
   ['shield_swap_lp_router.aleo', join(AMM_V3_ROOT, 'shield_swap_lp_router')],
+  ['shield_swap_rebalance_router.aleo', join(AMM_V3_ROOT, 'shield_swap_rebalance_router')],
 ]
 
 const CANONICAL_PROGRAM_IDS: readonly string[] = CANONICAL_PROGRAM_SPECS.map((spec) => spec.id)

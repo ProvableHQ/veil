@@ -11,6 +11,10 @@
     {
       "abi": "./abi/shield_swap_lp_router.json",
       "out": "../src/generated/shield_swap_lp_router.ts"
+    },
+    {
+      "abi": "./abi/shield_swap_rebalance_router.json",
+      "out": "../src/generated/shield_swap_rebalance_router.ts"
     }
   ],
   "coreImport": "@provablehq/veil-core"

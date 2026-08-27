@@ -152,6 +152,7 @@ export {
   SHIELD_SWAP,
   SHIELD_SWAP_ROUTER,
   SHIELD_SWAP_LP_ROUTER,
+  SHIELD_SWAP_REBALANCE_ROUTER,
   SHIELD_SWAP_FREEZELIST,
   SHIELD_SWAP_MULTISIG,
   ROUTER_ADDRESSES,
@@ -193,7 +194,31 @@ export {
   type PreviewMintParameters,
   type PreviewMintReturnType,
 } from './actions/liquidity/previewMint.js'
-export { formatMintPositionRequest, type MintPositionRequestInput } from './utils/params.js'
+export {
+  formatMintPositionRequest,
+  formatRebalanceAssets,
+  formatRebalanceRequest,
+  type MintPositionRequestInput,
+  type RebalanceAssetsInput,
+  type RebalanceRequestInput,
+} from './utils/params.js'
+export {
+  planRebalance,
+  selectRebalanceEntry,
+  type PlanRebalanceParameters,
+  type RebalancePlan,
+  type RebalancePoolState,
+  type RebalancePositionState,
+  type RebalanceSizing,
+  type RebalanceSlotState,
+  type RebalanceStateOverrides,
+  type RebalanceTickState,
+} from './actions/liquidity/planRebalance.js'
+export {
+  rebalancePosition,
+  type RebalancePositionParameters,
+  type RebalancePositionReturnType,
+} from './actions/liquidity/rebalancePosition.js'
 export {
   increaseLiquidity,
   type IncreaseLiquidityParameters,
