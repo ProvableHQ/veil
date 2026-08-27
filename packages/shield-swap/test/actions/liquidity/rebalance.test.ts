@@ -8,9 +8,10 @@ vi.mock('@provablehq/veil-core', async (importOriginal) => {
 
 import { executeContract, writeContract } from '@provablehq/veil-core'
 import {
-  previewRebalance,
+  planRebalance,
   rebalancePosition,
   selectRebalanceEntry,
+  type RebalancePlan,
 } from '../../../src/actions/liquidity/rebalance.js'
 import { formatRebalanceAssets, formatRebalanceRequest } from '../../../src/utils/params.js'
 import { amountsForLiquidity, getSqrtPriceAtTickX128, formatU256Literal } from '../../../src/utils/q128.js'
@@ -38,12 +39,15 @@ const OLD_UPPER = 400
 const OWED0 = 111n
 const OWED1 = 222n
 
+const zeroU256 = '{ hi: 0u128, lo: 0u128 }'
 const poolPlaintext = (token0: string, token1: string) =>
   `{\n  token0: ${token0},\n  token1: ${token1},\n  fee: 10000u16,\n  enabled: true\n}`
 const slotPlaintext = () =>
-  `{\n  tick: 0i32,\n  tick_spacing: 200u32,\n  sqrt_price: ${formatU256Literal(SQRT_PRICE)},\n  fee_protocol: 0u8,\n  liquidity: ${OLD_LIQUIDITY}u128,\n  fee_growth_global0_x_128: { hi: 0u128, lo: 0u128 },\n  fee_growth_global1_x_128: { hi: 0u128, lo: 0u128 },\n  max_liquidity_per_tick: 9223372036854775808u128,\n  protocol_fees0: 0u128,\n  protocol_fees1: 0u128,\n  next_init_below: ${OLD_LOWER}i32,\n  next_init_above: ${OLD_UPPER}i32\n}`
+  `{\n  tick: 0i32,\n  tick_spacing: 200u32,\n  sqrt_price: ${formatU256Literal(SQRT_PRICE)},\n  fee_protocol: 0u8,\n  liquidity: ${OLD_LIQUIDITY}u128,\n  fee_growth_global0_x_128: ${zeroU256},\n  fee_growth_global1_x_128: ${zeroU256},\n  max_liquidity_per_tick: 9223372036854775808u128,\n  protocol_fees0: 0u128,\n  protocol_fees1: 0u128,\n  next_init_below: ${OLD_LOWER}i32,\n  next_init_above: ${OLD_UPPER}i32\n}`
+const tickPlaintext = () =>
+  `{\n  pool: ${POOL_KEY},\n  liquidity_net: 0i128,\n  liquidity_gross: ${OLD_LIQUIDITY}u128,\n  tick: ${OLD_LOWER}i32,\n  fee_growth_outside0_x_128: ${zeroU256},\n  fee_growth_outside1_x_128: ${zeroU256},\n  prev: -400001i32,\n  next: 400001i32\n}`
 const positionMappingPlaintext = () =>
-  `{\n  token_id: ${POSITION_ID},\n  pool: ${POOL_KEY},\n  tick_lower: ${OLD_LOWER}i32,\n  tick_upper: ${OLD_UPPER}i32,\n  liquidity: ${OLD_LIQUIDITY}u128,\n  fee_growth_inside0_last_x_128: { hi: 0u128, lo: 0u128 },\n  fee_growth_inside1_last_x_128: { hi: 0u128, lo: 0u128 },\n  tokens_owed0: ${OWED0}u128,\n  tokens_owed1: ${OWED1}u128\n}`
+  `{\n  token_id: ${POSITION_ID},\n  pool: ${POOL_KEY},\n  tick_lower: ${OLD_LOWER}i32,\n  tick_upper: ${OLD_UPPER}i32,\n  liquidity: ${OLD_LIQUIDITY}u128,\n  fee_growth_inside0_last_x_128: ${zeroU256},\n  fee_growth_inside1_last_x_128: ${zeroU256},\n  tokens_owed0: ${OWED0}u128,\n  tokens_owed1: ${OWED1}u128\n}`
 const positionRecord = (token0: string, token1: string) =>
   `{\n  owner: aleo1me.private,\n  withdrawal: aleo1payout.private,\n  token_id: ${POSITION_ID}.private,\n  token0_id: ${token0}.private,\n  token1_id: ${token1}.private,\n  pool: ${POOL_KEY}.private,\n  tick_lower: ${OLD_LOWER}i32.private,\n  tick_upper: ${OLD_UPPER}i32.private,\n  _nonce: 3group.public\n}`
 const UNDER0_RECORD = '{ owner: aleo1me.private, amount: 7000000000000000000u128.private, _nonce: 4group.public }'
@@ -68,23 +72,35 @@ function fakeClient(
     account: { type: accountType, address: 'aleo1me' },
     recordProvider: { requestRecords: async (p: { program: string }) => recordsFor(p.program) },
     request: async (req: { method: string; params?: { mapping?: string; program?: string; key?: string } }) => {
+      if (req.method === 'getLatestHeight' || req.method === 'getBlockNumber') return 1000n
       if (req.method === 'getMappingValue') {
         switch (req.params?.mapping) {
           case 'pools': return poolPlaintext(token0, token1)
           case 'slots': return slotPlaintext()
+          case 'ticks': return tickPlaintext()
           case 'positions': return req.params.key === POSITION_ID ? positionMappingPlaintext() : null
           case 'from_wrapper_token_id': return opts.wrapped?.[req.params.key ?? ''] ?? null
           default: return null
         }
       }
       if (req.method === 'requestRecords') return recordsFor(req.params?.program)
-      if (req.method === 'latest' || req.method === 'getLatestHeight') return 1000
       throw new Error(`unexpected method ${req.method}`)
     },
   } as unknown as Client
 }
 
-// The quote the fixtures produce, recomputed the way the action does.
+// A client whose transport rejects everything — proves state overrides and
+// route overrides skip every read.
+function offlineClient(): Client {
+  return {
+    account: { type: 'local', address: 'aleo1me' },
+    request: async (req: { method: string }) => {
+      throw new Error(`unexpected read: ${req.method}`)
+    },
+  } as unknown as Client
+}
+
+// The quote the fixtures produce, recomputed the way the planner does.
 function expectedQuote(tickLower: number, tickUpper: number, liquidityTarget: bigint) {
   const principal = amountsForLiquidity({
     sqrtPriceX128: SQRT_PRICE,
@@ -102,6 +118,30 @@ function expectedQuote(tickLower: number, tickUpper: number, liquidityTarget: bi
     roundUp: true,
   })
   return { recovered0, recovered1, required0: required.amount0, required1: required.amount1 }
+}
+
+const OVERRIDE_STATE = {
+  pool: { token0: TOKEN0, token1: TOKEN1 },
+  slot: {
+    tick: 0,
+    tick_spacing: 200,
+    sqrt_price: SQRT_PRICE,
+    fee_growth_global0_x_128: 0n,
+    fee_growth_global1_x_128: 0n,
+  },
+  position: {
+    tick_lower: OLD_LOWER,
+    tick_upper: OLD_UPPER,
+    liquidity: OLD_LIQUIDITY,
+    fee_growth_inside0_last_x_128: 0n,
+    fee_growth_inside1_last_x_128: 0n,
+    tokens_owed0: OWED0,
+    tokens_owed1: OWED1,
+  },
+  lowerTick: { tick: OLD_LOWER, fee_growth_outside0_x_128: 0n, fee_growth_outside1_x_128: 0n },
+  upperTick: { tick: OLD_UPPER, fee_growth_outside0_x_128: 0n, fee_growth_outside1_x_128: 0n },
+  token0Route: { tokenId: TOKEN0, wrapped: false as const },
+  token1Route: { tokenId: TOKEN1, wrapped: false as const },
 }
 
 beforeEach(() => {
@@ -168,15 +208,15 @@ describe('rebalance formatters', () => {
   })
 })
 
-describe('previewRebalance', () => {
+describe('planRebalance', () => {
   it('quotes recovered, funded, and refund amounts against live state', async () => {
     const client = fakeClient('local')
-    // A smaller successor position refunds both sides.
-    const shrink = await previewRebalance(client, {
+    const shrink = await planRebalance(client, {
       poolKey: POOL_KEY, positionTokenId: POSITION_ID,
       tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: OLD_LIQUIDITY / 2n,
     })
     const shrinkExpected = expectedQuote(OLD_LOWER, OLD_UPPER, OLD_LIQUIDITY / 2n)
+    expect(shrink.feesAccrued0).toBe(0n)
     expect(shrink.recovered0).toBe(shrinkExpected.recovered0)
     expect(shrink.recovered1).toBe(shrinkExpected.recovered1)
     expect(shrink.funded0).toBe(0n)
@@ -185,8 +225,7 @@ describe('previewRebalance', () => {
     expect(shrink.refund1).toBe(shrinkExpected.recovered1 - shrinkExpected.required1)
     expect(shrink.functionName).toBe('rebalance_plain_plain_none')
 
-    // A larger successor position needs funding on both sides.
-    const grow = await previewRebalance(client, {
+    const grow = await planRebalance(client, {
       poolKey: POOL_KEY, positionTokenId: POSITION_ID,
       tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: OLD_LIQUIDITY * 2n,
     })
@@ -198,15 +237,72 @@ describe('previewRebalance', () => {
     expect(grow.functionName).toBe('rebalance_plain_plain_both')
   })
 
-  it('rejects a range that is empty after spacing alignment', async () => {
-    await expect(previewRebalance(fakeClient('local'), {
+  it('includes fees accrued past the checkpoint in the recovered amounts', async () => {
+    // Growth advanced by 3 (token0) and 5 (token1) raw units per unit of
+    // liquidity since the checkpoints; the contract settles these at close,
+    // so the plan must recover them or the exactness assert reverts.
+    const plan = await planRebalance(offlineClient(), {
       poolKey: POOL_KEY, positionTokenId: POSITION_ID,
-      tickLower: 0, tickUpper: 100, liquidityTarget: 1n,
-    })).rejects.toThrow(/Empty tick range/)
+      tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: OLD_LIQUIDITY / 2n,
+      ...OVERRIDE_STATE,
+      slot: {
+        ...OVERRIDE_STATE.slot,
+        fee_growth_global0_x_128: 3n << 128n,
+        fee_growth_global1_x_128: 5n << 128n,
+      },
+    })
+    const base = expectedQuote(OLD_LOWER, OLD_UPPER, OLD_LIQUIDITY / 2n)
+    expect(plan.feesAccrued0).toBe(3n * OLD_LIQUIDITY)
+    expect(plan.feesAccrued1).toBe(5n * OLD_LIQUIDITY)
+    expect(plan.recovered0).toBe(base.recovered0 + 3n * OLD_LIQUIDITY)
+    expect(plan.recovered1).toBe(base.recovered1 + 5n * OLD_LIQUIDITY)
+  })
+
+  it('solves the largest liquidity a funding budget supports', async () => {
+    const zeroBudget = await planRebalance(offlineClient(), {
+      poolKey: POOL_KEY, positionTokenId: POSITION_ID,
+      tickLower: OLD_LOWER, tickUpper: OLD_UPPER,
+      maxFunding0: 0n, maxFunding1: 0n,
+      ...OVERRIDE_STATE,
+    })
+    expect(zeroBudget.liquidityTarget).toBeGreaterThan(0n)
+    expect(zeroBudget.funded0).toBe(0n)
+    expect(zeroBudget.funded1).toBe(0n)
+    expect(zeroBudget.required0).toBeLessThanOrEqual(zeroBudget.recovered0)
+    expect(zeroBudget.required1).toBeLessThanOrEqual(zeroBudget.recovered1)
+
+    const funded = await planRebalance(offlineClient(), {
+      poolKey: POOL_KEY, positionTokenId: POSITION_ID,
+      tickLower: OLD_LOWER, tickUpper: OLD_UPPER,
+      maxFunding0: 10_000n, maxFunding1: 10_000n,
+      ...OVERRIDE_STATE,
+    })
+    expect(funded.liquidityTarget).toBeGreaterThan(zeroBudget.liquidityTarget)
+    expect(funded.funded0).toBeLessThanOrEqual(10_000n)
+    expect(funded.funded1).toBeLessThanOrEqual(10_000n)
+  })
+
+  it('rejects a budget that supports no liquidity', async () => {
+    await expect(planRebalance(offlineClient(), {
+      poolKey: POOL_KEY, positionTokenId: POSITION_ID,
+      tickLower: OLD_LOWER, tickUpper: OLD_UPPER,
+      maxFunding0: 0n, maxFunding1: 0n,
+      ...OVERRIDE_STATE,
+      position: { ...OVERRIDE_STATE.position, liquidity: 1n, tokens_owed0: 0n, tokens_owed1: 0n },
+    })).rejects.toThrow(/supports no liquidity/)
+  })
+
+  it('rejects ambiguous sizing', async () => {
+    await expect(planRebalance(offlineClient(), {
+      poolKey: POOL_KEY, positionTokenId: POSITION_ID,
+      tickLower: OLD_LOWER, tickUpper: OLD_UPPER,
+      liquidityTarget: 1n, maxFunding0: 0n, maxFunding1: 0n,
+      ...OVERRIDE_STATE,
+    } as never)).rejects.toThrow(/exactly one sizing mode/)
   })
 
   it('rejects a missing position', async () => {
-    await expect(previewRebalance(fakeClient('local'), {
+    await expect(planRebalance(fakeClient('local'), {
       poolKey: POOL_KEY, positionTokenId: '999field',
       tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: 1n,
     })).rejects.toThrow(/Position does not exist/)
@@ -215,10 +311,7 @@ describe('previewRebalance', () => {
 
 describe('rebalancePosition', () => {
   it('submits a no-funding plain pair through the router with the exact slots', async () => {
-    executeMock.mockResolvedValue({
-      transactionId: 'at1tx',
-      outputs: ['777field'],
-    } as never)
+    executeMock.mockResolvedValue({ transactionId: 'at1tx', outputs: ['777field'] } as never)
     const client = fakeClient('local')
     const result = await rebalancePosition(client, {
       poolKey: POOL_KEY, positionTokenId: POSITION_ID,
@@ -226,7 +319,7 @@ describe('rebalancePosition', () => {
       nonce: '9field',
     })
     expect(result.positionTokenId).toBe('777field')
-    expect(result.quote.functionName).toBe('rebalance_plain_plain_none')
+    expect(result.plan.functionName).toBe('rebalance_plain_plain_none')
 
     const call = executeMock.mock.calls[0]![1]
     expect(call.program).toBe(SHIELD_SWAP_REBALANCE_ROUTER)
@@ -236,7 +329,8 @@ describe('rebalancePosition', () => {
     expect(call.inputs![0]).toContain('withdrawal: aleo1payout')
     expect(call.inputs![1]).toBe('9field')
     expect(call.inputs![2]).toContain('old_liquidity: 1000000u128')
-    expect(call.inputs![2]).toContain('amount0_min: ')
+    // Height 1000 plus the rebalance-specific short default of 20 blocks.
+    expect(call.inputs![2]).toContain('deadline: 1020u32')
     expect(call.inputs![3]).toBe(formatRebalanceAssets({
       token0Id: TOKEN0, underlying0Id: TOKEN0, token1Id: TOKEN1, underlying1Id: TOKEN1,
     }))
@@ -253,7 +347,7 @@ describe('rebalancePosition', () => {
       token1Record: TOKEN0_RECORD,
       nonce: '9field',
     })
-    expect(result.quote.functionName).toBe('rebalance_wrapped_plain_both')
+    expect(result.plan.functionName).toBe('rebalance_wrapped_plain_both')
 
     const call = executeMock.mock.calls[0]![1]
     expect(call.function).toBe('rebalance_wrapped_plain_both')
@@ -266,12 +360,42 @@ describe('rebalancePosition', () => {
     expect(call.inputs![7]).toContain(`underlying_id: ${U0}`)
   })
 
+  it('submits a hand-built plan verbatim and derives the entrypoint', async () => {
+    executeMock.mockResolvedValue({ transactionId: 'at1tx', outputs: ['999field'] } as never)
+    const q = expectedQuote(OLD_LOWER, OLD_UPPER, OLD_LIQUIDITY / 2n)
+    // Built without planRebalance, without functionName, without the
+    // advisory fields — only what execution asserts on chain.
+    const plan: RebalancePlan = {
+      poolKey: POOL_KEY,
+      positionTokenId: POSITION_ID,
+      tickLower: OLD_LOWER,
+      tickUpper: OLD_UPPER,
+      oldLiquidity: OLD_LIQUIDITY,
+      recovered0: q.recovered0,
+      recovered1: q.recovered1,
+      required0: q.required0,
+      required1: q.required1,
+      funded0: 0n,
+      funded1: 0n,
+      refund0: q.recovered0 - q.required0,
+      refund1: q.recovered1 - q.required1,
+      liquidityTarget: OLD_LIQUIDITY / 2n,
+    }
+    const result = await rebalancePosition(fakeClient('local'), { plan, nonce: '9field' })
+    expect(result.plan.functionName).toBe('rebalance_plain_plain_none')
+
+    const call = executeMock.mock.calls[0]![1]
+    expect(call.function).toBe('rebalance_plain_plain_none')
+    expect(call.inputs![2]).toContain(`recovered0: ${q.recovered0}u128`)
+    expect(call.inputs![2]).toContain(`liquidity_target: ${OLD_LIQUIDITY / 2n}u128`)
+  })
+
   it('requires the position identity and funding records on the wallet path', async () => {
     const client = fakeClient('rpc')
     await expect(rebalancePosition(client, {
       poolKey: POOL_KEY,
       tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: 1n,
-    })).rejects.toThrow(/must provide positionTokenId and positionRecord/)
+    })).rejects.toThrow(/must provide positionRecord and a position token id/)
 
     await expect(rebalancePosition(client, {
       poolKey: POOL_KEY, positionTokenId: POSITION_ID,

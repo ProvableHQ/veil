@@ -73,10 +73,10 @@ import {
 } from '../actions/liquidity/decreaseLiquidity.js'
 import { collect, type CollectParameters, type CollectReturnType } from '../actions/liquidity/collect.js'
 import {
-  previewRebalance,
+  planRebalance,
   rebalancePosition,
-  type PreviewRebalanceParameters,
-  type PreviewRebalanceReturnType,
+  type PlanRebalanceParameters,
+  type RebalancePlan,
   type RebalancePositionParameters,
   type RebalancePositionReturnType,
 } from '../actions/liquidity/rebalance.js'
@@ -235,7 +235,7 @@ export type ShieldSwapActions = {
   increaseLiquidity: (params: IncreaseLiquidityParameters) => Promise<IncreaseLiquidityReturnType>
   decreaseLiquidity: (params: DecreaseLiquidityParameters) => Promise<DecreaseLiquidityReturnType>
   collect: (params: CollectParameters) => Promise<CollectReturnType>
-  previewRebalance: (params: PreviewRebalanceParameters) => Promise<PreviewRebalanceReturnType>
+  planRebalance: (params: PlanRebalanceParameters) => Promise<RebalancePlan>
   rebalancePosition: (params: RebalancePositionParameters) => Promise<RebalancePositionReturnType>
   burn: (params: BurnParameters) => Promise<BurnReturnType>
   authenticateShieldSwap: () => Promise<string>
@@ -383,8 +383,16 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       increaseLiquidity: (p) => increaseLiquidity(client, withTicks(withProgram(p))),
       decreaseLiquidity: (p) => decreaseLiquidity(client, withProgram(p)),
       collect: (p) => collect(client, withProgram(p)),
-      previewRebalance: (p) => previewRebalance(client, withProgram(p)),
-      rebalancePosition: (p) => rebalancePosition(client, withTicks(withProgram(p))),
+      planRebalance: (p) => planRebalance(client, withProgram(p)),
+      // Both call forms hint against the pool; the plan form carries its pool
+      // key inside the plan, which withTicks cannot see.
+      rebalancePosition: (p) =>
+        rebalancePosition(
+          client,
+          p.plan === undefined
+            ? withTicks(withProgram(p))
+            : withProgram({ ...p, ...(p.initializedTicks || !api ? {} : { initializedTicks: () => api.getInitializedTicks(p.plan!.poolKey).then((r) => r.data ?? []) }) }),
+        ),
       burn: (p) => burn(client, withProgram(p)),
       authenticateShieldSwap: () => authenticateWithAccount(api ?? missingApi, client.account),
       // Same function, not a wrapper: the two names must not drift while the

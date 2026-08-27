@@ -814,27 +814,24 @@ await client.increaseLiquidity({
 ### Rebalance a position
 
 `rebalancePosition` moves a position to a new tick range atomically through
-`shield_swap_rebalance_router.aleo`: close the old range, refund any surplus
-to the position's `withdrawal` address, and remint at exactly
-`liquidityTarget`. The successor NFT keeps the position's owner and
-withdrawal address. Quote first with `previewRebalance` — its `funded0` and
-`funded1` say which sides need a funding record — then submit. The contract
-asserts the quote exactly at finalize time, so a price move between quote and
-finalize aborts the transaction without moving funds.
+`shield_swap_rebalance_router.aleo`: close the old range, collect its
+principal and all accrued fees, optionally add funds from private records,
+and remint at the successor range — in one transaction that lands whole or
+not at all. The successor NFT keeps the position's owner and withdrawal
+address; any surplus returns to the withdrawal address as private records.
 
-```ts
-const quote = await client.previewRebalance({
-  poolKey,
-  positionTokenId,
-  tickLower: -1200,
-  tickUpper: -600,
-  liquidityTarget,
-})
-```
+Sizing takes exactly one of two modes: an exact `liquidityTarget`, or a
+`maxFunding0`/`maxFunding1` budget of additional funds — the planner solves
+for the largest liquidity the budget supports. `{ maxFunding0: 0n,
+maxFunding1: 0n }` rebalances using only what the old position returns.
 
-#### Local key
+The contract re-derives and asserts every amount at execution, so a price
+move between building and execution reverts the transaction — no funds move,
+but the fee is paid. Expect occasional reverts on active pools; rebuild and
+resubmit. Keep `deadlineOffsetBlocks` short (default 20) and do not cache
+plans.
 
-Auto-selects the position NFT and any funding records the quote requires.
+#### One call
 
 ```ts
 const { positionTokenId: successorId } = await client.rebalancePosition({
@@ -842,28 +839,48 @@ const { positionTokenId: successorId } = await client.rebalancePosition({
   positionTokenId,
   tickLower: -1200,
   tickUpper: -600,
-  liquidityTarget,
+  maxFunding0: 0n,
+  maxFunding1: 0n,
   imports,
 })
 ```
 
-#### Wallet
-
-Supply the position record, and a funding record for each side the quote
-funds (a wrapped side's record is the UNDERLYING asset's record):
+Wallet accounts also supply the position record and, when the plan funds a
+side, that side's record (a wrapped side funds with the UNDERLYING asset's
+record):
 
 ```ts
+const plan = await client.planRebalance({ poolKey, positionTokenId, tickLower, tickUpper, liquidityTarget })
 await client.rebalancePosition({
   poolKey,
   positionTokenId,
-  tickLower: -1200,
-  tickUpper: -600,
+  tickLower,
+  tickUpper,
   liquidityTarget,
   imports,
   positionRecord: { type: 'record', program: 'shield_swap.aleo', recordname: 'PositionNFT', filters: { pool: { eq: poolKey } } },
-  token0Record: { type: 'record', program: token0Program, recordname: 'Token', filters: { amount: { gte: `${quote.funded0}u128` } } },
+  token0Record: { type: 'record', program: token0Program, recordname: 'Token', filters: { amount: { gte: `${plan.funded0}u128` } } },
 })
 ```
+
+#### Bring your own state, math, or plan
+
+`planRebalance` is a convenience, never a requirement. Both it and the
+one-call form accept pre-read chain state (`pool`, `slot`, `position`,
+`lowerTick`, `upperTick`, the token routes) from a caller's own indexer,
+skipping the corresponding node reads. A caller that computes the accounting
+itself builds the plain `RebalancePlan` object directly — the exported
+`feeGrowthInside`, `feeOwed`, `amountsForLiquidity`, `liquidityForAmounts`,
+and `selectRebalanceEntry` are the same building blocks the planner uses —
+and submits it verbatim:
+
+```ts
+await client.rebalancePosition({ plan, imports })
+```
+
+Only chain *state* is accepted piecemeal; the derived assertion set
+(`recovered`, `funded`, `refund`, the deposit) travels together as a plan,
+which succeeds or reverts as a unit.
 
 ### Create a pool
 

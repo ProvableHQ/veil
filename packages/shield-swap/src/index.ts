@@ -203,13 +203,20 @@ export {
   type RebalanceRequestInput,
 } from './utils/params.js'
 export {
-  previewRebalance,
+  planRebalance,
   rebalancePosition,
   selectRebalanceEntry,
-  type PreviewRebalanceParameters,
-  type PreviewRebalanceReturnType,
+  type PlanRebalanceParameters,
+  type RebalanceExecutionOptions,
+  type RebalancePlan,
+  type RebalancePoolState,
   type RebalancePositionParameters,
   type RebalancePositionReturnType,
+  type RebalancePositionState,
+  type RebalanceSizing,
+  type RebalanceSlotState,
+  type RebalanceStateOverrides,
+  type RebalanceTickState,
 } from './actions/liquidity/rebalance.js'
 export {
   increaseLiquidity,

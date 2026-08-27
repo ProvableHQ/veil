@@ -18,10 +18,17 @@ import {
 import { requireFieldOutput } from '../../utils/outputs.js'
 import { roundTickToSpacing } from '../../utils/tick-math.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../../utils/tick-hints.js'
-import { amountsForLiquidity, getSqrtPriceAtTickX128 } from '../../utils/q128.js'
+import {
+  amountsForLiquidity,
+  feeGrowthInside,
+  feeOwed,
+  getSqrtPriceAtTickX128,
+  liquidityForAmounts,
+} from '../../utils/q128.js'
 import type { TokenRoute } from '../../utils/routing.js'
 import type { ProofProvider } from '../../utils/proofs.js'
 import { getPosition } from '../reads/getPosition.js'
+import { getTick } from '../reads/getTick.js'
 import { SHIELD_SWAP, SHIELD_SWAP_REBALANCE_ROUTER } from '../../constants.js'
 import {
   ammProofPair,
@@ -29,6 +36,14 @@ import {
   resolveSideRoutes,
   wrapperSenderProof,
 } from './internal.js'
+
+// The plan is only valid at the pool price it was built against, so a stale
+// transaction almost certainly reverts anyway — a short deadline fails it
+// cheaply instead.
+const REBALANCE_DEADLINE_OFFSET_BLOCKS = 20
+// The budget round-trip (floor the liquidity, ceil the amounts) can overshoot
+// a budget by a rounding unit; each retry lowers the target by one.
+const BUDGET_CLAMP_RETRIES = 8
 
 /**
  * Picks which of the router's 14 rebalance transitions to call.
@@ -65,57 +80,186 @@ export function selectRebalanceEntry(params: {
 }
 
 /**
- * Parameters for {@link previewRebalance}.
+ * How large the successor position should be — exactly one of two modes.
+ *
+ * `liquidityTarget` mints exactly this liquidity; the planner computes the
+ * token amounts it requires, and any shortfall beyond what the old position
+ * returns must arrive as funding. `maxFunding0`/`maxFunding1` are instead a
+ * per-token budget of additional funds on top of what the old position
+ * returns; the planner solves for the largest liquidity that budget
+ * supports. Pass `{ maxFunding0: 0n, maxFunding1: 0n }` to rebalance using
+ * only recovered funds.
+ */
+export type RebalanceSizing =
+  | { liquidityTarget: bigint; maxFunding0?: undefined; maxFunding1?: undefined }
+  | { liquidityTarget?: undefined; maxFunding0: bigint; maxFunding1: bigint }
+
+/**
+ * The pool fields the planner consumes — a structural subset of `getPool`'s
+ * result, so a caller's own indexer response satisfies it.
+ *
+ * @property token0 The pool's lower-sorted token id as a `field` literal.
+ * @property token1 The pool's higher-sorted token id as a `field` literal.
+ */
+export type RebalancePoolState = { token0: string; token1: string }
+
+/**
+ * The slot fields the planner consumes — a structural subset of `getSlot`'s
+ * result.
+ *
+ * @property tick The pool's active tick (i32).
+ * @property tick_spacing The pool's tick grid (u32).
+ * @property sqrt_price Current sqrt price, Q128.128 (u256).
+ * @property fee_growth_global0_x_128 Global token0 fee accumulator, Q128.128 (u256).
+ * @property fee_growth_global1_x_128 Global token1 fee accumulator, Q128.128 (u256).
+ */
+export type RebalanceSlotState = {
+  tick: number
+  tick_spacing: number
+  sqrt_price: bigint
+  fee_growth_global0_x_128: bigint
+  fee_growth_global1_x_128: bigint
+}
+
+/**
+ * The position fields the planner consumes — a structural subset of
+ * `getPosition`'s result.
+ *
+ * @property tick_lower The position's current lower bound (i32).
+ * @property tick_upper The position's current upper bound (i32).
+ * @property liquidity Live liquidity (u128).
+ * @property fee_growth_inside0_last_x_128 Token0 fee checkpoint, Q128.128 (u256).
+ * @property fee_growth_inside1_last_x_128 Token1 fee checkpoint, Q128.128 (u256).
+ * @property tokens_owed0 Token0 already settled to the position (u128).
+ * @property tokens_owed1 Token1 already settled (u128).
+ */
+export type RebalancePositionState = {
+  tick_lower: number
+  tick_upper: number
+  liquidity: bigint
+  fee_growth_inside0_last_x_128: bigint
+  fee_growth_inside1_last_x_128: bigint
+  tokens_owed0: bigint
+  tokens_owed1: bigint
+}
+
+/**
+ * The boundary-tick fields the planner consumes — a structural subset of
+ * `getTick`'s result.
+ *
+ * @property tick The tick index (i32).
+ * @property fee_growth_outside0_x_128 Token0 growth on the far side, Q128.128 (u256).
+ * @property fee_growth_outside1_x_128 Token1 growth on the far side, Q128.128 (u256).
+ */
+export type RebalanceTickState = {
+  tick: number
+  fee_growth_outside0_x_128: bigint
+  fee_growth_outside1_x_128: bigint
+}
+
+/**
+ * Optional pre-read chain state for the planner.
+ *
+ * Each supplied field replaces the corresponding chain read, so a caller
+ * with its own indexer or REST endpoint can feed the planner a consistent
+ * snapshot and skip the node round-trips. Only state is accepted — the
+ * derived amounts (`recovered`, `funded`, `refund`, the deposit) are always
+ * computed from it, never passed in.
+ *
+ * @property pool The pool's token pair.
+ * @property slot The pool's live price, tick, spacing, and fee accumulators.
+ * @property position The position's range, liquidity, checkpoints, and owed balances.
+ * @property lowerTick The position's current lower boundary tick state.
+ * @property upperTick The position's current upper boundary tick state.
+ */
+export type RebalanceStateOverrides = {
+  pool?: RebalancePoolState
+  slot?: RebalanceSlotState
+  position?: RebalancePositionState
+  lowerTick?: RebalanceTickState
+  upperTick?: RebalanceTickState
+}
+
+/**
+ * Parameters for {@link planRebalance}.
  *
  * @property poolKey Pool the position belongs to.
  * @property positionTokenId The position to rebalance, by `token_id`.
  * @property tickLower Lower bound of the successor range, before spacing
  *   alignment.
  * @property tickUpper Upper bound of the successor range.
- * @property liquidityTarget Exact liquidity of the successor position (u128).
+ * @property liquidityTarget Exact successor liquidity (u128) — see
+ *   {@link RebalanceSizing}.
+ * @property maxFunding0 Token0 funding budget (u128) — see {@link RebalanceSizing}.
+ * @property maxFunding1 Token1 funding budget (u128).
+ * @property pool Pre-read pool state — see {@link RebalanceStateOverrides}.
+ * @property slot Pre-read slot state.
+ * @property position Pre-read position state.
+ * @property lowerTick Pre-read lower boundary tick state.
+ * @property upperTick Pre-read upper boundary tick state.
  * @property token0Route Pre-resolved route override for token0 — skips the
  *   on-chain wrapped-ness read (offline/advanced use).
  * @property token1Route Pre-resolved route override for token1.
  * @property program shield_swap core program override. Defaults to
  *   `shield_swap.aleo`.
  */
-export type PreviewRebalanceParameters = {
+export type PlanRebalanceParameters = {
   poolKey: string
   positionTokenId: string
   tickLower: number
   tickUpper: number
-  liquidityTarget: bigint
   token0Route?: TokenRoute
   token1Route?: TokenRoute
   program?: string
-}
+} & RebalanceSizing &
+  RebalanceStateOverrides
 
 /**
- * The exact close-and-remint accounting a rebalance would submit.
+ * The exact rebalance a position can submit against the planned pool state.
  *
  * All amounts are raw base units (u128 on chain, `bigint` here). The
- * contract asserts these values exactly at finalize time, so a quote is
- * only submittable while the pool price and the position's owed balances
- * are unchanged — requote after any delay.
+ * contract re-derives and asserts every one of them at execution, so the
+ * plan is only submittable while the pool price and the position's fee state
+ * are unchanged — do not cache plans; rebuild after any delay.
  *
+ * This is a plain data contract, and {@link planRebalance} is one producer
+ * of it, not the only one: a caller whose own service computes the same
+ * accounting can build this object directly and pass it to
+ * {@link rebalancePosition}. The exported building blocks (`feeGrowthInside`,
+ * `feeOwed`, `amountsForLiquidity`, `liquidityForAmounts`,
+ * {@link selectRebalanceEntry}) are the same ones the planner uses.
+ *
+ * @property poolKey Pool the plan was built against.
+ * @property positionTokenId The position it closes.
  * @property tickLower The successor range's lower bound after spacing alignment.
  * @property tickUpper The successor range's upper bound after alignment.
  * @property oldLiquidity The position's live liquidity.
- * @property recovered0 Token0 recovered by closing the range: principal plus owed.
- * @property recovered1 Token1 recovered, principal plus owed.
- * @property required0 Token0 the successor range needs at the current price.
+ * @property feesAccrued0 Token0 fees earned since the position's checkpoint,
+ *   settled by the close on top of `tokens_owed`. Advisory — execution never
+ *   reads it, so hand-built plans can omit it.
+ * @property feesAccrued1 Token1 fees earned since the checkpoint. Advisory.
+ * @property recovered0 Everything token0 the close returns: principal at the
+ *   live price, plus the owed balance, plus `feesAccrued0`.
+ * @property recovered1 Everything token1 the close returns.
+ * @property required0 Token0 the successor range needs at the live price.
  * @property required1 Token1 the successor range needs.
  * @property funded0 Token0 the caller must supply (`max(required - recovered, 0)`).
  * @property funded1 Token1 the caller must supply.
  * @property refund0 Token0 surplus paid to the withdrawal address.
  * @property refund1 Token1 surplus paid back.
  * @property liquidityTarget The successor position's exact liquidity.
- * @property functionName The rebalance router entrypoint the quote selects.
+ * @property functionName The rebalance router transition the plan selects.
+ *   Optional on hand-built plans — {@link rebalancePosition} derives it from
+ *   the token routes and the funded sides when absent.
  */
-export type PreviewRebalanceReturnType = {
+export type RebalancePlan = {
+  poolKey: string
+  positionTokenId: string
   tickLower: number
   tickUpper: number
   oldLiquidity: bigint
+  feesAccrued0?: bigint
+  feesAccrued1?: bigint
   recovered0: bigint
   recovered1: bigint
   required0: bigint
@@ -125,38 +269,64 @@ export type PreviewRebalanceReturnType = {
   refund0: bigint
   refund1: bigint
   liquidityTarget: bigint
-  functionName: string
+  functionName?: string
+}
+
+function sizingOf(params: RebalanceSizing): { target: bigint } | { max0: bigint; max1: bigint } {
+  const hasTarget = params.liquidityTarget !== undefined
+  const hasBudget = params.maxFunding0 !== undefined || params.maxFunding1 !== undefined
+  if (hasTarget === hasBudget) {
+    throw new Error('Pass exactly one sizing mode: liquidityTarget, or maxFunding0 and maxFunding1 together')
+  }
+  if (hasTarget) {
+    if (params.liquidityTarget! <= 0n) throw new Error('liquidityTarget must be greater than zero')
+    return { target: params.liquidityTarget! }
+  }
+  if (params.maxFunding0 === undefined || params.maxFunding1 === undefined) {
+    throw new Error('Budget sizing needs both maxFunding0 and maxFunding1 (0n is a valid budget)')
+  }
+  if (params.maxFunding0 < 0n || params.maxFunding1 < 0n) throw new Error('Funding budgets must not be negative')
+  return { max0: params.maxFunding0, max1: params.maxFunding1 }
 }
 
 /**
- * Quotes a position rebalance against the pool's live state.
+ * Builds the exact rebalance a position can submit, priced against pool state.
  *
- * Prices closing the position's current range (principal at the live sqrt
- * price plus the owed balances) against opening the successor range at
- * `liquidityTarget`, and derives the funding each side needs and the surplus
- * each side refunds. Hits the network: pool, slot, position, and route reads.
+ * Computes everything the transaction asserts on chain: the full recovery of
+ * the old range (principal at the live price, the settled `tokens_owed`
+ * balances, and the fees accrued since the position's checkpoints), the
+ * successor range's exact deposit, and per token either the funding the
+ * caller must add or the surplus refunded to the withdrawal address. Sizing
+ * takes either an exact `liquidityTarget` or a `maxFunding` budget per token
+ * ({@link RebalanceSizing}); in budget mode the planner solves for the
+ * largest liquidity the budget supports.
+ *
+ * Reads the pool, slot, position, both boundary ticks, and the token routes
+ * from the chain; any of them can be supplied pre-read through
+ * {@link RebalanceStateOverrides} to skip the corresponding round-trip.
  * Reads only — no signing.
  *
  * @param client A Veil client whose transport can reach an Aleo node.
- * @param params The position, the successor range, and the liquidity target.
- * @returns The exact accounting {@link rebalancePosition} submits.
- * @throws When the pool or position does not exist, or the aligned range is
- *   empty.
+ * @param params The position, the successor range, and one sizing mode.
+ * @returns The plan {@link rebalancePosition} submits.
+ * @throws When the pool, position, or a boundary tick does not exist; when
+ *   the aligned range is empty; when both or neither sizing modes are given;
+ *   or when a funding budget supports no liquidity at all.
  *
  * @example
- * const quote = await previewRebalance(client, {
+ * const plan = await planRebalance(client, {
  *   poolKey, positionTokenId, tickLower: -1200, tickUpper: -600,
- *   liquidityTarget: 500_000n,
+ *   maxFunding0: 0n, maxFunding1: 0n,
  * })
  */
-export async function previewRebalance(
-  client: Client,
-  params: PreviewRebalanceParameters,
-): Promise<PreviewRebalanceReturnType> {
+export async function planRebalance(client: Client, params: PlanRebalanceParameters): Promise<RebalancePlan> {
   const program = params.program ?? SHIELD_SWAP
-  const pool = await requirePool(client, params.poolKey, program)
-  const slot = await requireSlot(client, params.poolKey, program)
-  const position = await getPosition(client, { positionTokenId: params.positionTokenId, program })
+  const sizing = sizingOf(params)
+
+  const pool = params.pool ?? (await requirePool(client, params.poolKey, program))
+  const slot = params.slot ?? (await requireSlot(client, params.poolKey, program))
+  const position =
+    params.position ?? (await getPosition(client, { positionTokenId: params.positionTokenId, program }))
   if (!position) throw new Error(`Position does not exist: ${params.positionTokenId}`)
 
   const tickLower = roundTickToSpacing(params.tickLower, slot.tick_spacing)
@@ -165,28 +335,97 @@ export async function previewRebalance(
     throw new Error(`Empty tick range after spacing alignment: [${tickLower}, ${tickUpper})`)
   }
 
+  const [lowerTick, upperTick] = await Promise.all([
+    params.lowerTick ?? getTick(client, { poolKey: params.poolKey, tick: position.tick_lower, program }),
+    params.upperTick ?? getTick(client, { poolKey: params.poolKey, tick: position.tick_upper, program }),
+  ])
+  if (!lowerTick || !upperTick) {
+    throw new Error(`The position's boundary ticks are not initialized: ${params.positionTokenId}`)
+  }
+
+  // The close settles principal, the owed balances, AND the fees accrued
+  // since the checkpoints — the contract asserts the position ends at
+  // exactly zero owed, so all three components must be in `recovered`.
+  const inside0 = feeGrowthInside({
+    tickCurrent: slot.tick,
+    tickLower: position.tick_lower,
+    tickUpper: position.tick_upper,
+    feeGrowthOutsideLowerX128: lowerTick.fee_growth_outside0_x_128,
+    feeGrowthOutsideUpperX128: upperTick.fee_growth_outside0_x_128,
+    feeGrowthGlobalX128: slot.fee_growth_global0_x_128,
+  })
+  const inside1 = feeGrowthInside({
+    tickCurrent: slot.tick,
+    tickLower: position.tick_lower,
+    tickUpper: position.tick_upper,
+    feeGrowthOutsideLowerX128: lowerTick.fee_growth_outside1_x_128,
+    feeGrowthOutsideUpperX128: upperTick.fee_growth_outside1_x_128,
+    feeGrowthGlobalX128: slot.fee_growth_global1_x_128,
+  })
+  const feesAccrued0 = feeOwed({
+    feeGrowthInsideNowX128: inside0,
+    feeGrowthInsideLastX128: position.fee_growth_inside0_last_x_128,
+    liquidity: position.liquidity,
+  })
+  const feesAccrued1 = feeOwed({
+    feeGrowthInsideNowX128: inside1,
+    feeGrowthInsideLastX128: position.fee_growth_inside1_last_x_128,
+    liquidity: position.liquidity,
+  })
   const principal = amountsForLiquidity({
     sqrtPriceX128: slot.sqrt_price,
     sqrtLowerX128: getSqrtPriceAtTickX128(position.tick_lower),
     sqrtUpperX128: getSqrtPriceAtTickX128(position.tick_upper),
     liquidity: position.liquidity,
   })
-  const recovered0 = principal.amount0 + position.tokens_owed0
-  const recovered1 = principal.amount1 + position.tokens_owed1
+  const recovered0 = principal.amount0 + position.tokens_owed0 + feesAccrued0
+  const recovered1 = principal.amount1 + position.tokens_owed1 + feesAccrued1
 
-  // The successor range rounds up: the contract takes at most these amounts,
-  // and anything the recovered balances do not cover must arrive as funding.
-  const required = amountsForLiquidity({
-    sqrtPriceX128: slot.sqrt_price,
-    sqrtLowerX128: getSqrtPriceAtTickX128(tickLower),
-    sqrtUpperX128: getSqrtPriceAtTickX128(tickUpper),
-    liquidity: params.liquidityTarget,
-    roundUp: true,
-  })
-  const funded0 = required.amount0 > recovered0 ? required.amount0 - recovered0 : 0n
-  const funded1 = required.amount1 > recovered1 ? required.amount1 - recovered1 : 0n
-  const refund0 = recovered0 > required.amount0 ? recovered0 - required.amount0 : 0n
-  const refund1 = recovered1 > required.amount1 ? recovered1 - required.amount1 : 0n
+  const sqrtLowerX128 = getSqrtPriceAtTickX128(tickLower)
+  const sqrtUpperX128 = getSqrtPriceAtTickX128(tickUpper)
+  // The successor deposit rounds up: the contract takes at most these
+  // amounts, and anything the recovered balances do not cover is funding.
+  const requiredFor = (liquidity: bigint) =>
+    amountsForLiquidity({ sqrtPriceX128: slot.sqrt_price, sqrtLowerX128, sqrtUpperX128, liquidity, roundUp: true })
+
+  let liquidityTarget: bigint
+  let required: { amount0: bigint; amount1: bigint }
+  if ('target' in sizing) {
+    liquidityTarget = sizing.target
+    required = requiredFor(liquidityTarget)
+  } else {
+    liquidityTarget = liquidityForAmounts({
+      sqrtPriceX128: slot.sqrt_price,
+      sqrtLowerX128,
+      sqrtUpperX128,
+      amount0: recovered0 + sizing.max0,
+      amount1: recovered1 + sizing.max1,
+    })
+    // The solve floors and the deposit ceils, so the first target can exceed
+    // the budget by a rounding unit; step down until it fits.
+    let clamped = false
+    for (let retry = 0; retry <= BUDGET_CLAMP_RETRIES; retry++) {
+      if (liquidityTarget <= 0n) {
+        throw new Error('The funding budget supports no liquidity in this range — raise it or narrow the range')
+      }
+      required = requiredFor(liquidityTarget)
+      const over0 = required.amount0 > recovered0 + sizing.max0
+      const over1 = required.amount1 > recovered1 + sizing.max1
+      if (!over0 && !over1) {
+        clamped = true
+        break
+      }
+      liquidityTarget -= 1n
+    }
+    if (!clamped) {
+      throw new Error('Budget sizing did not converge — pass an explicit liquidityTarget')
+    }
+  }
+
+  const funded0 = required!.amount0 > recovered0 ? required!.amount0 - recovered0 : 0n
+  const funded1 = required!.amount1 > recovered1 ? required!.amount1 - recovered1 : 0n
+  const refund0 = recovered0 > required!.amount0 ? recovered0 - required!.amount0 : 0n
+  const refund1 = recovered1 > required!.amount1 ? recovered1 - required!.amount1 : 0n
 
   const [route0, route1] = await resolveSideRoutes(client, {
     token0Id: pool.token0,
@@ -203,39 +442,34 @@ export async function previewRebalance(
   })
 
   return {
+    poolKey: params.poolKey,
+    positionTokenId: params.positionTokenId,
     tickLower,
     tickUpper,
     oldLiquidity: position.liquidity,
+    feesAccrued0,
+    feesAccrued1,
     recovered0,
     recovered1,
-    required0: required.amount0,
-    required1: required.amount1,
+    required0: required!.amount0,
+    required1: required!.amount1,
     funded0,
     funded1,
     refund0,
     refund1,
-    liquidityTarget: params.liquidityTarget,
+    liquidityTarget,
     functionName,
   }
 }
 
 /**
- * Parameters for {@link rebalancePosition}.
+ * Execution options shared by both {@link rebalancePosition} call forms.
  *
- * @property poolKey Pool the position belongs to.
- * @property tickLower Lower bound of the successor range, before spacing
- *   alignment.
- * @property tickUpper Upper bound of the successor range.
- * @property liquidityTarget Exact liquidity of the successor position (u128).
- * @property positionTokenId Which position to rebalance, by `token_id`.
- *   Optional on the local path when `positionRecord` (or the pool's first
- *   unspent position) identifies it; REQUIRED for wallet accounts, whose
- *   record inputs are opaque.
  * @property positionRecord Explicit PositionNFT record input (plaintext
  *   literal, or a `record` InputRequest for wallet signers — REQUIRED for
  *   wallets).
  * @property token0Record Funding record for token0, needed only when the
- *   quote funds that side (plaintext literal, or a `record` InputRequest for
+ *   plan funds that side (plaintext literal, or a `record` InputRequest for
  *   wallet signers — REQUIRED for wallets then). A wrapped side's record is
  *   the UNDERLYING asset's record, never a wrapper record.
  * @property token1Record Funding record for token1, same rule.
@@ -253,7 +487,8 @@ export async function previewRebalance(
  * @property initializedTicks The pool's initialized ticks, or a supplier for
  *   them, forwarded to `pickInsertHint` like {@link mint}.
  * @property deadlineOffsetBlocks Blocks until the request expires. Defaults
- *   to `getDeadline`'s offset (100).
+ *   to 20 — keep it short: a stale transaction almost certainly reverts on
+ *   price mismatch anyway, and the deadline fails it cheaply.
  * @property nonce Explicit field nonce. Defaults to crypto-random.
  * @property imports Program sources for dynamic-dispatch dependencies, as in
  *   {@link mint}.
@@ -261,12 +496,7 @@ export async function previewRebalance(
  *   Defaults to `shield_swap.aleo`. The call always targets
  *   `shield_swap_rebalance_router.aleo`.
  */
-export type RebalancePositionParameters = {
-  poolKey: string
-  tickLower: number
-  tickUpper: number
-  liquidityTarget: bigint
-  positionTokenId?: string
+export type RebalanceExecutionOptions = {
   positionRecord?: string | InputRequest
   token0Record?: string | InputRequest
   token1Record?: string | InputRequest
@@ -285,18 +515,53 @@ export type RebalancePositionParameters = {
 }
 
 /**
+ * Parameters for {@link rebalancePosition} — one of two call forms.
+ *
+ * The quote form names the pool, position, successor range, and one sizing
+ * mode ({@link RebalanceSizing}); the plan is built in the same call against
+ * live state. `positionTokenId` is optional on the local path when
+ * `positionRecord` (or the pool's first unspent position) identifies it, and
+ * REQUIRED for wallet accounts, whose record inputs are opaque.
+ *
+ * The plan form submits a {@link planRebalance} result verbatim and skips
+ * the derivation — for callers that build plans against their own state
+ * source. A plan reverts as a unit when its state went stale.
+ */
+export type RebalancePositionParameters = RebalanceExecutionOptions &
+  (
+    | ({
+        plan?: undefined
+        poolKey: string
+        positionTokenId?: string
+        tickLower: number
+        tickUpper: number
+      } & RebalanceSizing &
+        RebalanceStateOverrides)
+    | {
+        plan: RebalancePlan
+        poolKey?: undefined
+        positionTokenId?: undefined
+        tickLower?: undefined
+        tickUpper?: undefined
+        liquidityTarget?: undefined
+        maxFunding0?: undefined
+        maxFunding1?: undefined
+      }
+  )
+
+/**
  * The rebalance's essentials.
  *
  * @property positionTokenId The successor position's `token_id` (a public
  *   output). Known immediately on the local path; `undefined` on the wallet
  *   path — recover it from the confirmed transaction or `getOwnedPositions`.
  * @property transactionId The rebalance transaction's id.
- * @property quote The exact accounting the transaction submitted.
+ * @property plan The exact accounting the transaction submitted.
  */
 export type RebalancePositionReturnType = {
   positionTokenId?: string
   transactionId: string
-  quote: PreviewRebalanceReturnType
+  plan: RebalancePlan
 }
 
 /**
@@ -308,10 +573,10 @@ export type RebalancePositionReturnType = {
  * and withdrawal address; any surplus arrives as private records for the
  * withdrawal address. The operation is atomic, so failed transactions abort
  * all operations, leaving the pool in the same state before the call.
- * Callers should specify independently either the `liquidityTarget` and
- * compute the required token balances to satisfy that target
- * ({@link previewRebalance} reports them), or the max amount of token0 and
- * token1 and solve for the liquidity with `liquidityForAmounts`.
+ * Callers specify one sizing mode ({@link RebalanceSizing}): an exact
+ * `liquidityTarget`, or a `maxFunding` budget per token that the planner
+ * solves for the largest liquidity it supports — or pass a prebuilt
+ * {@link planRebalance} result to skip the derivation entirely.
  *
  * Note every derived amount is a function of the pool price at the block
  * where a transaction executes. If any trade moves the pool price between
@@ -319,25 +584,26 @@ export type RebalancePositionReturnType = {
  * transaction reverts — no funds move, but the caller pays the transaction
  * fee. Expect rebalances on active pools to occasionally revert and in those
  * cases, simply rebuild and resubmit. Ensure to set `deadlineOffsetBlocks`
- * low to minimize this risk.
+ * low to minimize this risk (the default is 20 blocks).
  *
  * A local account auto-selects the position and funding records; a wallet
  * account must supply `positionTokenId`, `positionRecord`, and a record for
- * each funded side ({@link previewRebalance} says which sides those are).
+ * each funded side (the plan's `funded0`/`funded1` say which and how much).
  *
  * @param client A Veil wallet client (local or wallet account).
- * @param params The position, the successor range, the liquidity target, and
- *   optional overrides.
+ * @param params The position, range, and sizing — or a prebuilt plan — plus
+ *   optional execution overrides.
  * @returns The successor position's token id (local path), the transaction
- *   id, and the submitted quote.
- * @throws When the pool or position does not exist; when the aligned range
- *   is empty; when a funded side's record is missing (wallet) or no unspent
- *   record covers it (local); and on transport/proving errors.
+ *   id, and the submitted plan.
+ * @throws When the pool, position, or a boundary tick does not exist; when
+ *   the aligned range is empty; when a funded side's record is missing
+ *   (wallet) or no unspent record covers it (local); and on
+ *   transport/proving errors.
  *
  * @example
  * const { positionTokenId } = await rebalancePosition(client, {
  *   poolKey, positionTokenId: oldId,
- *   tickLower: -1200, tickUpper: -600, liquidityTarget: 500_000n,
+ *   tickLower: -1200, tickUpper: -600, maxFunding0: 0n, maxFunding1: 0n,
  * })
  */
 export async function rebalancePosition(
@@ -345,27 +611,28 @@ export async function rebalancePosition(
   params: RebalancePositionParameters,
 ): Promise<RebalancePositionReturnType> {
   const program = params.program ?? SHIELD_SWAP
+  const poolKey = params.plan ? params.plan.poolKey : params.poolKey
 
-  const pool = await requirePool(client, params.poolKey, program)
+  const pool = await requirePool(client, poolKey, program)
   const account = requireAccount(client, 'rebalancePosition')
   const isLocal = account.type === 'local'
 
   // Resolve the position input first: the token id keys the state reads and
   // the withdrawal address inside the record is a proof subject below.
   let positionInput: TransactionInput
-  let positionTokenId = params.positionTokenId
+  let positionTokenId = params.plan ? params.plan.positionTokenId : params.positionTokenId
   if (isLocal) {
     const { plaintext } = await resolvePositionRecord(client, {
       positionRecord: params.positionRecord,
       program,
-      poolKey: params.poolKey,
-      tokenId: params.positionTokenId,
+      poolKey,
+      tokenId: positionTokenId,
     })
     positionInput = plaintext
     positionTokenId ??= fieldFromPlaintext(plaintext, 'token_id')
   } else {
-    if (params.positionRecord === undefined || params.positionTokenId === undefined) {
-      throw new Error('Wallet accounts must provide positionTokenId and positionRecord')
+    if (params.positionRecord === undefined || positionTokenId === undefined) {
+      throw new Error('Wallet accounts must provide positionRecord and a position token id (positionTokenId or plan)')
     }
     positionInput = params.positionRecord
   }
@@ -373,16 +640,25 @@ export async function rebalancePosition(
     throw new Error('positionTokenId is required when the position record does not carry a parseable token_id')
   }
 
-  const quote = await previewRebalance(client, {
-    poolKey: params.poolKey,
-    positionTokenId,
-    tickLower: params.tickLower,
-    tickUpper: params.tickUpper,
-    liquidityTarget: params.liquidityTarget,
-    ...(params.token0Route ? { token0Route: params.token0Route } : {}),
-    ...(params.token1Route ? { token1Route: params.token1Route } : {}),
-    program,
-  })
+  const plan =
+    params.plan ??
+    (await planRebalance(client, {
+      poolKey: params.poolKey!,
+      positionTokenId,
+      tickLower: params.tickLower!,
+      tickUpper: params.tickUpper!,
+      ...(params.liquidityTarget !== undefined
+        ? { liquidityTarget: params.liquidityTarget }
+        : { maxFunding0: params.maxFunding0!, maxFunding1: params.maxFunding1! }),
+      ...(params.pool ? { pool: params.pool } : {}),
+      ...(params.slot ? { slot: params.slot } : {}),
+      ...(params.position ? { position: params.position } : {}),
+      ...(params.lowerTick ? { lowerTick: params.lowerTick } : {}),
+      ...(params.upperTick ? { upperTick: params.upperTick } : {}),
+      ...(params.token0Route ? { token0Route: params.token0Route } : {}),
+      ...(params.token1Route ? { token1Route: params.token1Route } : {}),
+      program,
+    }))
 
   const [route0, route1] = await resolveSideRoutes(client, {
     token0Id: pool.token0,
@@ -395,39 +671,38 @@ export async function rebalancePosition(
   const ticks = params.initializedTicks ? { initializedTicks: params.initializedTicks } : {}
   const tickLowerHint =
     params.tickLowerHint ??
-    (await pickInsertHint(client, { poolKey: params.poolKey, targetTick: quote.tickLower, program, ...ticks }))
+    (await pickInsertHint(client, { poolKey, targetTick: plan.tickLower, program, ...ticks }))
   const upperPredecessor =
     params.tickUpperHint ??
-    (await pickInsertHint(client, { poolKey: params.poolKey, targetTick: quote.tickUpper, program, ...ticks }))
+    (await pickInsertHint(client, { poolKey, targetTick: plan.tickUpper, program, ...ticks }))
   // Same correction as mint: the finalize inserts tick_lower first, so with no
   // initialized tick between the bounds the upper hint is the fresh lower tick.
   const tickUpperHint =
-    params.tickUpperHint === undefined && quote.tickLower > upperPredecessor ? quote.tickLower : upperPredecessor
+    params.tickUpperHint === undefined && plan.tickLower > upperPredecessor ? plan.tickLower : upperPredecessor
 
   const deadline = await getDeadline(client, {
-    ...(params.deadlineOffsetBlocks === undefined ? {} : { offsetBlocks: params.deadlineOffsetBlocks }),
+    offsetBlocks: params.deadlineOffsetBlocks ?? REBALANCE_DEADLINE_OFFSET_BLOCKS,
   })
-  const mint = {
-    pool: params.poolKey,
-    tickLower: quote.tickLower,
-    tickUpper: quote.tickUpper,
-    amount0Desired: quote.required0,
-    amount1Desired: quote.required1,
-    amount0Min: quote.required0,
-    amount1Min: quote.required1,
-    tickLowerHint,
-    tickUpperHint,
-  }
   const request = formatRebalanceRequest({
-    oldLiquidity: quote.oldLiquidity,
-    recovered0: quote.recovered0,
-    recovered1: quote.recovered1,
-    funded0: quote.funded0,
-    funded1: quote.funded1,
-    refund0: quote.refund0,
-    refund1: quote.refund1,
-    liquidityTarget: quote.liquidityTarget,
-    mint,
+    oldLiquidity: plan.oldLiquidity,
+    recovered0: plan.recovered0,
+    recovered1: plan.recovered1,
+    funded0: plan.funded0,
+    funded1: plan.funded1,
+    refund0: plan.refund0,
+    refund1: plan.refund1,
+    liquidityTarget: plan.liquidityTarget,
+    mint: {
+      pool: poolKey,
+      tickLower: plan.tickLower,
+      tickUpper: plan.tickUpper,
+      amount0Desired: plan.required0,
+      amount1Desired: plan.required1,
+      amount0Min: plan.required0,
+      amount1Min: plan.required1,
+      tickLowerHint,
+      tickUpperHint,
+    },
     deadline,
   })
   const assets = formatRebalanceAssets({
@@ -454,8 +729,8 @@ export async function rebalancePosition(
     ])
 
   const sides = [
-    { route: route0, funded: quote.funded0, record: params.token0Record, override: params.token0Program, senderProof: senderProof0, receiverProof: receiverProof0 },
-    { route: route1, funded: quote.funded1, record: params.token1Record, override: params.token1Program, senderProof: senderProof1, receiverProof: receiverProof1 },
+    { route: route0, funded: plan.funded0, record: params.token0Record, override: params.token0Program, senderProof: senderProof0, receiverProof: receiverProof0 },
+    { route: route1, funded: plan.funded1, record: params.token1Record, override: params.token1Program, senderProof: senderProof1, receiverProof: receiverProof1 },
   ]
 
   // Slot rule shared by all 14 entries: each funded side's record (with the
@@ -467,7 +742,7 @@ export async function rebalancePosition(
     let record = side.record
     if (record === undefined) {
       if (!isLocal) {
-        throw new Error(`Wallet accounts must provide token${index}Record — the quote funds token${index} with ${side.funded}`)
+        throw new Error(`Wallet accounts must provide token${index}Record — the plan funds token${index} with ${side.funded}`)
       }
       record = await autoSelectSideRecord(client, side.route, side.funded, side.override)
     } else if (isLocal && typeof record === 'object') {
@@ -479,6 +754,15 @@ export async function rebalancePosition(
   const receiverProofInputs: string[] = sides
     .filter((side) => side.route.wrapped)
     .map((side) => side.receiverProof!)
+
+  const functionName =
+    plan.functionName ??
+    selectRebalanceEntry({
+      wrapped0: route0.wrapped,
+      wrapped1: route1.wrapped,
+      funds0: plan.funded0 > 0n,
+      funds1: plan.funded1 > 0n,
+    })
 
   const nonce = params.nonce ?? generateFieldNonce()
   const inputs: TransactionInput[] = [
@@ -495,21 +779,21 @@ export async function rebalancePosition(
   if (isLocal) {
     const result = await executeContract(client, {
       program: SHIELD_SWAP_REBALANCE_ROUTER,
-      function: quote.functionName,
+      function: functionName,
       imports: params.imports,
       inputs,
     })
-    const newPositionTokenId = requireFieldOutput(result.outputs, quote.functionName)
-    return { positionTokenId: newPositionTokenId, transactionId: result.transactionId, quote }
+    const newPositionTokenId = requireFieldOutput(result.outputs, functionName)
+    return { positionTokenId: newPositionTokenId, transactionId: result.transactionId, plan: { ...plan, functionName } }
   }
 
   const transactionId = await writeContract(client, {
     program: SHIELD_SWAP_REBALANCE_ROUTER,
-    function: quote.functionName,
+    function: functionName,
     imports: params.imports ? Object.keys(params.imports) : undefined,
     inputs,
   })
-  return { transactionId, quote }
+  return { transactionId, plan: { ...plan, functionName } }
 }
 
 /** Extracts a named field from a PositionNFT plaintext, if parseable. */
