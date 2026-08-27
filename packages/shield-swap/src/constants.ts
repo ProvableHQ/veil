@@ -8,6 +8,8 @@ export const SHIELD_SWAP = 'shield_swap.aleo'
 export const SHIELD_SWAP_ROUTER = 'shield_swap_router.aleo'
 /** LP router — required entry for mint/increase/collect touching a wrapped pool side. */
 export const SHIELD_SWAP_LP_ROUTER = 'shield_swap_lp_router.aleo'
+/** Rebalance router — the entry every position rebalance goes through. */
+export const SHIELD_SWAP_REBALANCE_ROUTER = 'shield_swap_rebalance_router.aleo'
 /** AMM compliance freezelist. */
 export const SHIELD_SWAP_FREEZELIST = 'shield_swap_freezelist.aleo'
 /** Admin multisig gating program upgrades. */
@@ -20,10 +22,12 @@ export const SHIELD_SWAP_MULTISIG = 'shield_swap_multisig_core.aleo'
  *
  * @property router `shield_swap_router.aleo`'s program account.
  * @property lpRouter `shield_swap_lp_router.aleo`'s program account.
+ * @property rebalanceRouter `shield_swap_rebalance_router.aleo`'s program account.
  */
 export const ROUTER_ADDRESSES = {
   router: 'aleo1waeghjttfvzrmk68ckpp4ftnfh7aq6wcm73qxzy0m754x4cu6yxqf38zsq',
   lpRouter: 'aleo18sekmsl46y6skh3kvkekmw4kqqm7d6rz79akpsg58r7wpp5klyyq0qtzqf',
+  rebalanceRouter: 'aleo1epmqawx42jtnxclqzsdva4pxgzvn2jevjk424sj6gwuq08m3yyqsmrdsda',
 } as const
 
 /**

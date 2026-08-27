@@ -811,6 +811,60 @@ await client.increaseLiquidity({
 })
 ```
 
+### Rebalance a position
+
+`rebalancePosition` moves a position to a new tick range atomically through
+`shield_swap_rebalance_router.aleo`: close the old range, refund any surplus
+to the position's `withdrawal` address, and remint at exactly
+`liquidityTarget`. The successor NFT keeps the position's owner and
+withdrawal address. Quote first with `previewRebalance` — its `funded0` and
+`funded1` say which sides need a funding record — then submit. The contract
+asserts the quote exactly at finalize time, so a price move between quote and
+finalize aborts the transaction without moving funds.
+
+```ts
+const quote = await client.previewRebalance({
+  poolKey,
+  positionTokenId,
+  tickLower: -1200,
+  tickUpper: -600,
+  liquidityTarget,
+})
+```
+
+#### Local key
+
+Auto-selects the position NFT and any funding records the quote requires.
+
+```ts
+const { positionTokenId: successorId } = await client.rebalancePosition({
+  poolKey,
+  positionTokenId,
+  tickLower: -1200,
+  tickUpper: -600,
+  liquidityTarget,
+  imports,
+})
+```
+
+#### Wallet
+
+Supply the position record, and a funding record for each side the quote
+funds (a wrapped side's record is the UNDERLYING asset's record):
+
+```ts
+await client.rebalancePosition({
+  poolKey,
+  positionTokenId,
+  tickLower: -1200,
+  tickUpper: -600,
+  liquidityTarget,
+  imports,
+  positionRecord: { type: 'record', program: 'shield_swap.aleo', recordname: 'PositionNFT', filters: { pool: { eq: poolKey } } },
+  token0Record: { type: 'record', program: token0Program, recordname: 'Token', filters: { amount: { gte: `${quote.funded0}u128` } } },
+})
+```
+
 ### Create a pool
 
 A single public transaction — identical on both signer paths (no records

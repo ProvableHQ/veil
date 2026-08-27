@@ -72,6 +72,14 @@ import {
   type DecreaseLiquidityReturnType,
 } from '../actions/liquidity/decreaseLiquidity.js'
 import { collect, type CollectParameters, type CollectReturnType } from '../actions/liquidity/collect.js'
+import {
+  previewRebalance,
+  rebalancePosition,
+  type PreviewRebalanceParameters,
+  type PreviewRebalanceReturnType,
+  type RebalancePositionParameters,
+  type RebalancePositionReturnType,
+} from '../actions/liquidity/rebalance.js'
 import { burn, type BurnParameters, type BurnReturnType } from '../actions/liquidity/burn.js'
 import {
   getPrivateBalances,
@@ -227,6 +235,8 @@ export type ShieldSwapActions = {
   increaseLiquidity: (params: IncreaseLiquidityParameters) => Promise<IncreaseLiquidityReturnType>
   decreaseLiquidity: (params: DecreaseLiquidityParameters) => Promise<DecreaseLiquidityReturnType>
   collect: (params: CollectParameters) => Promise<CollectReturnType>
+  previewRebalance: (params: PreviewRebalanceParameters) => Promise<PreviewRebalanceReturnType>
+  rebalancePosition: (params: RebalancePositionParameters) => Promise<RebalancePositionReturnType>
   burn: (params: BurnParameters) => Promise<BurnReturnType>
   authenticateShieldSwap: () => Promise<string>
   /**
@@ -373,6 +383,8 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       increaseLiquidity: (p) => increaseLiquidity(client, withTicks(withProgram(p))),
       decreaseLiquidity: (p) => decreaseLiquidity(client, withProgram(p)),
       collect: (p) => collect(client, withProgram(p)),
+      previewRebalance: (p) => previewRebalance(client, withProgram(p)),
+      rebalancePosition: (p) => rebalancePosition(client, withTicks(withProgram(p))),
       burn: (p) => burn(client, withProgram(p)),
       authenticateShieldSwap: () => authenticateWithAccount(api ?? missingApi, client.account),
       // Same function, not a wrapper: the two names must not drift while the

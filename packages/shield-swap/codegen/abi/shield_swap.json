@@ -651,6 +651,144 @@
     },
     {
       "path": [
+        "RebalanceAsset"
+      ],
+      "fields": [
+        {
+          "name": "token_id",
+          "ty": {
+            "Primitive": "Field"
+          }
+        },
+        {
+          "name": "underlying_id",
+          "ty": {
+            "Primitive": "Field"
+          }
+        }
+      ]
+    },
+    {
+      "path": [
+        "RebalanceAssets"
+      ],
+      "fields": [
+        {
+          "name": "token0",
+          "ty": {
+            "Struct": {
+              "path": [
+                "RebalanceAsset"
+              ],
+              "program": "shield_swap.aleo"
+            }
+          }
+        },
+        {
+          "name": "token1",
+          "ty": {
+            "Struct": {
+              "path": [
+                "RebalanceAsset"
+              ],
+              "program": "shield_swap.aleo"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "path": [
+        "CoreRebalanceRequest"
+      ],
+      "fields": [
+        {
+          "name": "old_liquidity",
+          "ty": {
+            "Primitive": {
+              "UInt": "U128"
+            }
+          }
+        },
+        {
+          "name": "recovered0",
+          "ty": {
+            "Primitive": {
+              "UInt": "U128"
+            }
+          }
+        },
+        {
+          "name": "recovered1",
+          "ty": {
+            "Primitive": {
+              "UInt": "U128"
+            }
+          }
+        },
+        {
+          "name": "funded0",
+          "ty": {
+            "Primitive": {
+              "UInt": "U128"
+            }
+          }
+        },
+        {
+          "name": "funded1",
+          "ty": {
+            "Primitive": {
+              "UInt": "U128"
+            }
+          }
+        },
+        {
+          "name": "refund0",
+          "ty": {
+            "Primitive": {
+              "UInt": "U128"
+            }
+          }
+        },
+        {
+          "name": "refund1",
+          "ty": {
+            "Primitive": {
+              "UInt": "U128"
+            }
+          }
+        },
+        {
+          "name": "liquidity_target",
+          "ty": {
+            "Primitive": {
+              "UInt": "U128"
+            }
+          }
+        },
+        {
+          "name": "mint",
+          "ty": {
+            "Struct": {
+              "path": [
+                "MintPositionRequest"
+              ],
+              "program": "shield_swap.aleo"
+            }
+          }
+        },
+        {
+          "name": "deadline",
+          "ty": {
+            "Primitive": {
+              "UInt": "U32"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "path": [
         "SwapIterCfg"
       ],
       "fields": [
@@ -2009,6 +2147,118 @@
               }
             },
             "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Struct": {
+                    "path": [
+                      "MerkleProof"
+                    ],
+                    "program": "shield_swap.aleo"
+                  }
+                },
+                "length": 2
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Struct": {
+                    "path": [
+                      "MerkleProof"
+                    ],
+                    "program": "shield_swap.aleo"
+                  }
+                },
+                "length": 2
+              }
+            },
+            "mode": "Private"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Field"
+            },
+            "mode": "Public"
+          }
+        },
+        {
+          "Record": {
+            "path": [
+              "PositionNFT"
+            ],
+            "program": "shield_swap.aleo"
+          }
+        },
+        "DynamicRecord",
+        "DynamicRecord",
+        {
+          "Record": {
+            "path": [
+              "MintComplianceRecord"
+            ],
+            "program": "shield_swap.aleo"
+          }
+        },
+        "Final"
+      ]
+    },
+    {
+      "name": "rebalance_position",
+      "inputs": [
+        {
+          "Record": {
+            "path": [
+              "PositionNFT"
+            ],
+            "program": "shield_swap.aleo"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Field"
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Struct": {
+                "path": [
+                  "CoreRebalanceRequest"
+                ],
+                "program": "shield_swap.aleo"
+              }
+            },
+            "mode": "Public"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Struct": {
+                "path": [
+                  "RebalanceAssets"
+                ],
+                "program": "shield_swap.aleo"
+              }
+            },
+            "mode": "Public"
           }
         },
         {
