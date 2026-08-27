@@ -17,6 +17,8 @@ import {
 } from '../../utils/params.js'
 import { requireFieldOutput } from '../../utils/outputs.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../../utils/tick-hints.js'
+import { getPosition } from '../reads/getPosition.js'
+import { getTick } from '../reads/getTick.js'
 import type { TokenRoute } from '../../utils/routing.js'
 import type { ProofProvider } from '../../utils/proofs.js'
 import { SHIELD_SWAP, SHIELD_SWAP_REBALANCE_ROUTER } from '../../constants.js'
@@ -321,12 +323,38 @@ export async function rebalancePosition(
   })
 
   const ticks = params.initializedTicks ? { initializedTicks: params.initializedTicks } : {}
+  // The close runs in the same finalize and unlinks an old boundary tick
+  // whose whole liquidity_gross belongs to this position, and the insert
+  // rejects a hint at an unlinked tick — so step any computed hint past the
+  // ticks the close removes, onto their surviving predecessors.
+  const dying = new Map<number, number>()
+  if (params.tickLowerHint === undefined || params.tickUpperHint === undefined) {
+    const oldRange =
+      (typeof positionInput === 'string' ? rangeFromPlaintext(positionInput) : undefined) ??
+      (await getPosition(client, { positionTokenId, program }).then((pos) =>
+        pos ? { lower: pos.tick_lower, upper: pos.tick_upper } : undefined,
+      ))
+    if (oldRange) {
+      const [oldLower, oldUpper] = await Promise.all([
+        getTick(client, { poolKey, tick: oldRange.lower, program }),
+        getTick(client, { poolKey, tick: oldRange.upper, program }),
+      ])
+      for (const tick of [oldLower, oldUpper]) {
+        if (tick && tick.liquidity_gross === plan.oldLiquidity) dying.set(tick.tick, tick.prev)
+      }
+    }
+  }
+  const survivor = (hint: number): number => {
+    let out = hint
+    for (let hops = 0; hops < 2 && dying.has(out); hops++) out = dying.get(out)!
+    return out
+  }
   const tickLowerHint =
     params.tickLowerHint ??
-    (await pickInsertHint(client, { poolKey, targetTick: plan.tickLower, program, ...ticks }))
+    survivor(await pickInsertHint(client, { poolKey, targetTick: plan.tickLower, program, ...ticks }))
   const upperPredecessor =
     params.tickUpperHint ??
-    (await pickInsertHint(client, { poolKey, targetTick: plan.tickUpper, program, ...ticks }))
+    survivor(await pickInsertHint(client, { poolKey, targetTick: plan.tickUpper, program, ...ticks }))
   // Same correction as mint: the finalize inserts tick_lower first, so with no
   // initialized tick between the bounds the upper hint is the fresh lower tick.
   const tickUpperHint =
@@ -446,6 +474,21 @@ export async function rebalancePosition(
     inputs,
   })
   return { transactionId, plan: { ...plan, functionName } }
+}
+
+/** Extracts the old tick range from a PositionNFT plaintext, if parseable. */
+function rangeFromPlaintext(plaintext: string): { lower: number; upper: number } | undefined {
+  try {
+    const fields = parseRecord(plaintext).fields
+    const lower = fields.tick_lower?.value
+    const upper = fields.tick_upper?.value
+    if (typeof lower === 'bigint' && typeof upper === 'bigint') {
+      return { lower: Number(lower), upper: Number(upper) }
+    }
+    return undefined
+  } catch {
+    return undefined
+  }
 }
 
 /** Extracts a named field from a PositionNFT plaintext, if parseable. */
