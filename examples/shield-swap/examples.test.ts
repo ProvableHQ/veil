@@ -6,6 +6,7 @@ import { swapHistory } from './swap-history.js'
 import { swap } from './swap.js'
 import { mint } from './mint.js'
 import { liquidity } from './liquidity.js'
+import { rebalance } from './rebalance.js'
 
 /**
  * Runs every example against live testnet, so a rename in the SDK or the API
@@ -45,4 +46,5 @@ describe.runIf(SPENDS)('examples: these move funds', () => {
   it('swap', () => swap(), MINUTES)
   it('mint', () => mint(), MINUTES)
   it('liquidity', () => liquidity(), MINUTES)
+  it('rebalance', () => rebalance(), MINUTES)
 })

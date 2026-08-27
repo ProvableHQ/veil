@@ -9,10 +9,10 @@ vi.mock('@provablehq/veil-core', async (importOriginal) => {
 import { executeContract, writeContract } from '@provablehq/veil-core'
 import {
   planRebalance,
-  rebalancePosition,
   selectRebalanceEntry,
   type RebalancePlan,
-} from '../../../src/actions/liquidity/rebalance.js'
+} from '../../../src/actions/liquidity/planRebalance.js'
+import { rebalancePosition } from '../../../src/actions/liquidity/rebalancePosition.js'
 import { formatRebalanceAssets, formatRebalanceRequest } from '../../../src/utils/params.js'
 import { amountsForLiquidity, getSqrtPriceAtTickX128, formatU256Literal } from '../../../src/utils/q128.js'
 import { EMPTY_MERKLE_PROOFS, formatMerkleProofPair } from '../../../src/utils/proofs.js'

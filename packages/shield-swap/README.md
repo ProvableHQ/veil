@@ -50,8 +50,8 @@ covering setup, pool and balance reads, swaps, and liquidity.
 Worked examples of everything below live in
 [`examples/shield-swap/`](https://github.com/ProvableHQ/veil/tree/main/examples/shield-swap):
 account bootstrap, pool reads, quoting, balances, swap history, swaps, minting a
-position, and taking liquidity back out. Each one is a single file that reads top
-to bottom.
+position, rebalancing it to a new range, and taking liquidity back out. Each one
+is a single file that reads top to bottom.
 
 [Open them in StackBlitz](https://stackblitz.com/github/ProvableHQ/veil/tree/main/examples/shield-swap)
 to browse the set in an editor. The pool and token reads run there as they are;

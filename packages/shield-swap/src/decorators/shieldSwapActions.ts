@@ -74,12 +74,14 @@ import {
 import { collect, type CollectParameters, type CollectReturnType } from '../actions/liquidity/collect.js'
 import {
   planRebalance,
-  rebalancePosition,
   type PlanRebalanceParameters,
   type RebalancePlan,
+} from '../actions/liquidity/planRebalance.js'
+import {
+  rebalancePosition,
   type RebalancePositionParameters,
   type RebalancePositionReturnType,
-} from '../actions/liquidity/rebalance.js'
+} from '../actions/liquidity/rebalancePosition.js'
 import { burn, type BurnParameters, type BurnReturnType } from '../actions/liquidity/burn.js'
 import {
   getPrivateBalances,
