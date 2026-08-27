@@ -1,5 +1,13 @@
 # @provablehq/shield-swap-cli
 
+## 0.9.0
+
+### Patch Changes
+
+- Updated dependencies [7ae571a]
+  - @provablehq/shield-swap-sdk@0.9.0
+  - @provablehq/veil-aleo-sdk@0.9.0
+
 ## 0.8.0
 
 ### Patch Changes

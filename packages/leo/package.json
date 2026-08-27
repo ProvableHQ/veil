@@ -1,6 +1,6 @@
 {
   "name": "@provablehq/veil-leo",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "TypeScript interface for using the Leo CLI from TS/JS.",
   "license": "MIT",
   "repository": {
