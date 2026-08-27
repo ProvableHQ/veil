@@ -207,7 +207,6 @@ export {
   rebalancePosition,
   selectRebalanceEntry,
   type PlanRebalanceParameters,
-  type RebalanceExecutionOptions,
   type RebalancePlan,
   type RebalancePoolState,
   type RebalancePositionParameters,

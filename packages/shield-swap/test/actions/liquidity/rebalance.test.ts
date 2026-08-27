@@ -360,7 +360,16 @@ describe('rebalancePosition', () => {
     expect(call.inputs![7]).toContain(`underlying_id: ${U0}`)
   })
 
-  it('submits a hand-built plan verbatim and derives the entrypoint', async () => {
+  it('rejects a partial derived set instead of half-recomputing', async () => {
+    await expect(rebalancePosition(fakeClient('local'), {
+      poolKey: POOL_KEY, positionTokenId: POSITION_ID,
+      tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: OLD_LIQUIDITY / 2n,
+      oldLiquidity: OLD_LIQUIDITY, recovered0: 1n,
+    })).rejects.toThrow(/travel together/)
+    expect(executeMock).not.toHaveBeenCalled()
+  })
+
+  it('submits a spread hand-built plan verbatim and derives the entrypoint', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1tx', outputs: ['999field'] } as never)
     const q = expectedQuote(OLD_LOWER, OLD_UPPER, OLD_LIQUIDITY / 2n)
     // Built without planRebalance, without functionName, without the
@@ -381,7 +390,7 @@ describe('rebalancePosition', () => {
       refund1: q.recovered1 - q.required1,
       liquidityTarget: OLD_LIQUIDITY / 2n,
     }
-    const result = await rebalancePosition(fakeClient('local'), { plan, nonce: '9field' })
+    const result = await rebalancePosition(fakeClient('local'), { ...plan, nonce: '9field' })
     expect(result.plan.functionName).toBe('rebalance_plain_plain_none')
 
     const call = executeMock.mock.calls[0]![1]
@@ -395,7 +404,7 @@ describe('rebalancePosition', () => {
     await expect(rebalancePosition(client, {
       poolKey: POOL_KEY,
       tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: 1n,
-    })).rejects.toThrow(/must provide positionRecord and a position token id/)
+    })).rejects.toThrow(/must provide positionRecord and positionTokenId/)
 
     await expect(rebalancePosition(client, {
       poolKey: POOL_KEY, positionTokenId: POSITION_ID,

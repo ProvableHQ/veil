@@ -869,13 +869,13 @@ await client.rebalancePosition({
 one-call form accept pre-read chain state (`pool`, `slot`, `position`,
 `lowerTick`, `upperTick`, the token routes) from a caller's own indexer,
 skipping the corresponding node reads. A caller that computes the accounting
-itself builds the plain `RebalancePlan` object directly — the exported
-`feeGrowthInside`, `feeOwed`, `amountsForLiquidity`, `liquidityForAmounts`,
-and `selectRebalanceEntry` are the same building blocks the planner uses —
-and submits it verbatim:
+itself builds the same fields directly — the exported `feeGrowthInside`,
+`feeOwed`, `amountsForLiquidity`, `liquidityForAmounts`, and
+`selectRebalanceEntry` are the same building blocks the planner uses — and
+spreads them into the call, where they are submitted verbatim:
 
 ```ts
-await client.rebalancePosition({ plan, imports })
+await client.rebalancePosition({ ...plan, imports })
 ```
 
 Only chain *state* is accepted piecemeal; the derived assertion set

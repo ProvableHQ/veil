@@ -224,8 +224,9 @@ export type PlanRebalanceParameters = {
  *
  * This is a plain data contract, and {@link planRebalance} is one producer
  * of it, not the only one: a caller whose own service computes the same
- * accounting can build this object directly and pass it to
- * {@link rebalancePosition}. The exported building blocks (`feeGrowthInside`,
+ * accounting builds the same fields directly. Either way it is spread into
+ * {@link rebalancePosition}'s flat parameters (`{ ...plan, imports }`).
+ * The exported building blocks (`feeGrowthInside`,
  * `feeOwed`, `amountsForLiquidity`, `liquidityForAmounts`,
  * {@link selectRebalanceEntry}) are the same ones the planner uses.
  *
@@ -463,8 +464,52 @@ export async function planRebalance(client: Client, params: PlanRebalanceParamet
 }
 
 /**
- * Execution options shared by both {@link rebalancePosition} call forms.
+ * Parameters for {@link rebalancePosition} — one flat object, three ways to
+ * fill it.
  *
+ * The simplest call names the pool, position, successor range, and one
+ * sizing mode: an exact `liquidityTarget`, or a `maxFunding0`/`maxFunding1`
+ * budget ({@link RebalanceSizing} explains both). The plan is then built in
+ * the same call. Callers with their own state source add any of the
+ * pre-read state fields. Callers with their own accounting spread a
+ * {@link RebalancePlan} into the call (`{ ...plan, imports }`) — when the
+ * derived amounts are present, they are submitted verbatim and nothing is
+ * recomputed. The derived amounts travel all-or-nothing: supplying some but
+ * not all of them is an error, never a partial recompute.
+ *
+ * @property poolKey Pool the position belongs to.
+ * @property tickLower Lower bound of the successor range. Aligned to the
+ *   pool's spacing when the plan is built here; used verbatim when the
+ *   derived amounts are supplied.
+ * @property tickUpper Upper bound of the successor range, same rule.
+ * @property positionTokenId Which position to rebalance, by `token_id`.
+ *   Optional on the local path when `positionRecord` (or the pool's first
+ *   unspent position) identifies it; REQUIRED for wallet accounts, whose
+ *   record inputs are opaque.
+ * @property liquidityTarget Exact successor liquidity (u128). One of the two
+ *   sizing modes; also carried by a spread plan.
+ * @property maxFunding0 Token0 funding budget (u128) — the other sizing mode.
+ * @property maxFunding1 Token1 funding budget (u128).
+ * @property oldLiquidity Derived: the position's full liquidity. Spread from
+ *   a plan, or computed here.
+ * @property recovered0 Derived: exact token0 the close returns.
+ * @property recovered1 Derived: exact token1 the close returns.
+ * @property required0 Derived: exact token0 the successor range needs.
+ * @property required1 Derived: exact token1 the successor range needs.
+ * @property funded0 Derived: token0 the caller supplies.
+ * @property funded1 Derived: token1 the caller supplies.
+ * @property refund0 Derived: token0 surplus paid to the withdrawal address.
+ * @property refund1 Derived: token1 surplus paid back.
+ * @property functionName Derived: the router transition to call. Optional
+ *   even with the other derived amounts — computed from the token routes and
+ *   funded sides when absent.
+ * @property feesAccrued0 Advisory plan field; accepted from a spread and ignored.
+ * @property feesAccrued1 Advisory plan field; accepted and ignored.
+ * @property pool Pre-read pool state — see {@link RebalanceStateOverrides}.
+ * @property slot Pre-read slot state.
+ * @property position Pre-read position state.
+ * @property lowerTick Pre-read lower boundary tick state.
+ * @property upperTick Pre-read upper boundary tick state.
  * @property positionRecord Explicit PositionNFT record input (plaintext
  *   literal, or a `record` InputRequest for wallet signers — REQUIRED for
  *   wallets).
@@ -496,7 +541,31 @@ export async function planRebalance(client: Client, params: PlanRebalanceParamet
  *   Defaults to `shield_swap.aleo`. The call always targets
  *   `shield_swap_rebalance_router.aleo`.
  */
-export type RebalanceExecutionOptions = {
+export type RebalancePositionParameters = {
+  poolKey: string
+  tickLower: number
+  tickUpper: number
+  positionTokenId?: string
+  liquidityTarget?: bigint
+  maxFunding0?: bigint
+  maxFunding1?: bigint
+  oldLiquidity?: bigint
+  recovered0?: bigint
+  recovered1?: bigint
+  required0?: bigint
+  required1?: bigint
+  funded0?: bigint
+  funded1?: bigint
+  refund0?: bigint
+  refund1?: bigint
+  functionName?: string
+  feesAccrued0?: bigint
+  feesAccrued1?: bigint
+  pool?: RebalancePoolState
+  slot?: RebalanceSlotState
+  position?: RebalancePositionState
+  lowerTick?: RebalanceTickState
+  upperTick?: RebalanceTickState
   positionRecord?: string | InputRequest
   token0Record?: string | InputRequest
   token1Record?: string | InputRequest
@@ -514,40 +583,19 @@ export type RebalanceExecutionOptions = {
   program?: string
 }
 
-/**
- * Parameters for {@link rebalancePosition} — one of two call forms.
- *
- * The quote form names the pool, position, successor range, and one sizing
- * mode ({@link RebalanceSizing}); the plan is built in the same call against
- * live state. `positionTokenId` is optional on the local path when
- * `positionRecord` (or the pool's first unspent position) identifies it, and
- * REQUIRED for wallet accounts, whose record inputs are opaque.
- *
- * The plan form submits a {@link planRebalance} result verbatim and skips
- * the derivation — for callers that build plans against their own state
- * source. A plan reverts as a unit when its state went stale.
- */
-export type RebalancePositionParameters = RebalanceExecutionOptions &
-  (
-    | ({
-        plan?: undefined
-        poolKey: string
-        positionTokenId?: string
-        tickLower: number
-        tickUpper: number
-      } & RebalanceSizing &
-        RebalanceStateOverrides)
-    | {
-        plan: RebalancePlan
-        poolKey?: undefined
-        positionTokenId?: undefined
-        tickLower?: undefined
-        tickUpper?: undefined
-        liquidityTarget?: undefined
-        maxFunding0?: undefined
-        maxFunding1?: undefined
-      }
-  )
+// The plan's derived amounts travel together: a spread RebalancePlan supplies
+// every one of these, and a partial set means a construction mistake.
+const DERIVED_PLAN_FIELDS = [
+  'oldLiquidity',
+  'recovered0',
+  'recovered1',
+  'required0',
+  'required1',
+  'funded0',
+  'funded1',
+  'refund0',
+  'refund1',
+] as const
 
 /**
  * The rebalance's essentials.
@@ -575,8 +623,8 @@ export type RebalancePositionReturnType = {
  * all operations, leaving the pool in the same state before the call.
  * Callers specify one sizing mode ({@link RebalanceSizing}): an exact
  * `liquidityTarget`, or a `maxFunding` budget per token that the planner
- * solves for the largest liquidity it supports — or pass a prebuilt
- * {@link planRebalance} result to skip the derivation entirely.
+ * solves for the largest liquidity it supports — or spread a prebuilt
+ * {@link RebalancePlan} into the call to skip the derivation entirely.
  *
  * Note every derived amount is a function of the pool price at the block
  * where a transaction executes. If any trade moves the pool price between
@@ -591,7 +639,7 @@ export type RebalancePositionReturnType = {
  * each funded side (the plan's `funded0`/`funded1` say which and how much).
  *
  * @param client A Veil wallet client (local or wallet account).
- * @param params The position, range, and sizing — or a prebuilt plan — plus
+ * @param params The position, range, and sizing — or a spread plan — plus
  *   optional execution overrides.
  * @returns The successor position's token id (local path), the transaction
  *   id, and the submitted plan.
@@ -611,7 +659,17 @@ export async function rebalancePosition(
   params: RebalancePositionParameters,
 ): Promise<RebalancePositionReturnType> {
   const program = params.program ?? SHIELD_SWAP
-  const poolKey = params.plan ? params.plan.poolKey : params.poolKey
+  const poolKey = params.poolKey
+
+  const suppliedDerived = DERIVED_PLAN_FIELDS.filter((field) => params[field] !== undefined)
+  if (suppliedDerived.length > 0 && suppliedDerived.length < DERIVED_PLAN_FIELDS.length) {
+    const missing = DERIVED_PLAN_FIELDS.filter((field) => params[field] === undefined)
+    throw new Error(`The derived plan amounts travel together — missing ${missing.join(', ')}`)
+  }
+  const hasDerived = suppliedDerived.length === DERIVED_PLAN_FIELDS.length
+  if (hasDerived && params.liquidityTarget === undefined) {
+    throw new Error('A spread plan carries liquidityTarget — it is missing alongside the derived amounts')
+  }
 
   const pool = await requirePool(client, poolKey, program)
   const account = requireAccount(client, 'rebalancePosition')
@@ -620,7 +678,7 @@ export async function rebalancePosition(
   // Resolve the position input first: the token id keys the state reads and
   // the withdrawal address inside the record is a proof subject below.
   let positionInput: TransactionInput
-  let positionTokenId = params.plan ? params.plan.positionTokenId : params.positionTokenId
+  let positionTokenId = params.positionTokenId
   if (isLocal) {
     const { plaintext } = await resolvePositionRecord(client, {
       positionRecord: params.positionRecord,
@@ -632,7 +690,7 @@ export async function rebalancePosition(
     positionTokenId ??= fieldFromPlaintext(plaintext, 'token_id')
   } else {
     if (params.positionRecord === undefined || positionTokenId === undefined) {
-      throw new Error('Wallet accounts must provide positionRecord and a position token id (positionTokenId or plan)')
+      throw new Error('Wallet accounts must provide positionRecord and positionTokenId')
     }
     positionInput = params.positionRecord
   }
@@ -640,25 +698,41 @@ export async function rebalancePosition(
     throw new Error('positionTokenId is required when the position record does not carry a parseable token_id')
   }
 
-  const plan =
-    params.plan ??
-    (await planRebalance(client, {
-      poolKey: params.poolKey!,
-      positionTokenId,
-      tickLower: params.tickLower!,
-      tickUpper: params.tickUpper!,
-      ...(params.liquidityTarget !== undefined
-        ? { liquidityTarget: params.liquidityTarget }
-        : { maxFunding0: params.maxFunding0!, maxFunding1: params.maxFunding1! }),
-      ...(params.pool ? { pool: params.pool } : {}),
-      ...(params.slot ? { slot: params.slot } : {}),
-      ...(params.position ? { position: params.position } : {}),
-      ...(params.lowerTick ? { lowerTick: params.lowerTick } : {}),
-      ...(params.upperTick ? { upperTick: params.upperTick } : {}),
-      ...(params.token0Route ? { token0Route: params.token0Route } : {}),
-      ...(params.token1Route ? { token1Route: params.token1Route } : {}),
-      program,
-    }))
+  const plan: RebalancePlan = hasDerived
+    ? {
+        poolKey,
+        positionTokenId,
+        tickLower: params.tickLower,
+        tickUpper: params.tickUpper,
+        oldLiquidity: params.oldLiquidity!,
+        recovered0: params.recovered0!,
+        recovered1: params.recovered1!,
+        required0: params.required0!,
+        required1: params.required1!,
+        funded0: params.funded0!,
+        funded1: params.funded1!,
+        refund0: params.refund0!,
+        refund1: params.refund1!,
+        liquidityTarget: params.liquidityTarget!,
+        ...(params.functionName === undefined ? {} : { functionName: params.functionName }),
+      }
+    : await planRebalance(client, {
+        poolKey,
+        positionTokenId,
+        tickLower: params.tickLower,
+        tickUpper: params.tickUpper,
+        ...(params.liquidityTarget !== undefined
+          ? { liquidityTarget: params.liquidityTarget }
+          : { maxFunding0: params.maxFunding0!, maxFunding1: params.maxFunding1! }),
+        ...(params.pool ? { pool: params.pool } : {}),
+        ...(params.slot ? { slot: params.slot } : {}),
+        ...(params.position ? { position: params.position } : {}),
+        ...(params.lowerTick ? { lowerTick: params.lowerTick } : {}),
+        ...(params.upperTick ? { upperTick: params.upperTick } : {}),
+        ...(params.token0Route ? { token0Route: params.token0Route } : {}),
+        ...(params.token1Route ? { token1Route: params.token1Route } : {}),
+        program,
+      })
 
   const [route0, route1] = await resolveSideRoutes(client, {
     token0Id: pool.token0,
