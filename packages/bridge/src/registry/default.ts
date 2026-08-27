@@ -104,6 +104,8 @@ const ALEO_PLACEHOLDER_BYTES32 = `[${Array.from({ length: 32 }, () => '0u8').joi
 
 const ALEO_MAILBOX_METADATA = {
   aleoMailboxStateVerified: true,
+  aleoHookManagerProgram: 'hyp_hook_manager.aleo',
+  aleoHookManagerProgramSource: 'https://explorer.provable.com/program/hyp_hook_manager.aleo',
   aleoMailboxProgram: 'hyp_mailbox.aleo',
   aleoMailboxProgramEdition: 0,
   aleoMailboxProgramSource: ALEO_MAILBOX_PROGRAM_SOURCE,
@@ -287,6 +289,11 @@ const ALEO_SOL_REMOTE_ROUTER = {
   aleoAllowanceAmount3: '0',
 } as const
 
+const ALEO_WITHDRAWAL_ACTIVATION = {
+  aleoPlaceholderConfiguration: false,
+  aleoWithdrawalReviewedAt: '2026-08-26',
+} as const
+
 function route(
   id: string,
   protocol: 'xreserve' | 'hyperlane',
@@ -358,13 +365,13 @@ const routes: ProtocolBridgeRoute[] = [
     attestationBaseUrl: 'https://xreserve-api-testnet.circle.com/v1/attestations',
   }, 'active'),
   route('hyperlane:ethereum/eth->aleo/eth', 'hyperlane', 'mainnet', 'ethereum/eth', 'aleo/eth', 'active', 'ETH/aleo', { ...ETH_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }),
-  route('hyperlane:aleo/eth->ethereum/eth', 'hyperlane', 'mainnet', 'aleo/eth', 'ethereum/eth', 'metadata-required', 'ETH/aleo', { ...ETH_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_eth_v2.aleo', 1), ...ALEO_ETH_APP_METADATA, ...ALEO_ETH_REMOTE_ROUTER }),
+  route('hyperlane:aleo/eth->ethereum/eth', 'hyperlane', 'mainnet', 'aleo/eth', 'ethereum/eth', 'active', 'ETH/aleo', { ...ETH_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_eth_v2.aleo', 1), ...ALEO_ETH_APP_METADATA, ...ALEO_ETH_REMOTE_ROUTER, ...ALEO_WITHDRAWAL_ACTIVATION }),
   route('hyperlane:ethereum/wbtc->aleo/wbtc', 'hyperlane', 'mainnet', 'ethereum/wbtc', 'aleo/wbtc', 'active', 'WBTC/aleo', { ...WBTC_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }),
-  route('hyperlane:aleo/wbtc->ethereum/wbtc', 'hyperlane', 'mainnet', 'aleo/wbtc', 'ethereum/wbtc', 'metadata-required', 'WBTC/aleo', { ...WBTC_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_wbtc_v2.aleo', 1), ...ALEO_WBTC_APP_METADATA, ...ALEO_WBTC_REMOTE_ROUTER }),
+  route('hyperlane:aleo/wbtc->ethereum/wbtc', 'hyperlane', 'mainnet', 'aleo/wbtc', 'ethereum/wbtc', 'active', 'WBTC/aleo', { ...WBTC_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_wbtc_v2.aleo', 1), ...ALEO_WBTC_APP_METADATA, ...ALEO_WBTC_REMOTE_ROUTER, ...ALEO_WITHDRAWAL_ACTIVATION }),
   route('hyperlane:ethereum/usdt->aleo/usdt', 'hyperlane', 'mainnet', 'ethereum/usdt', 'aleo/usdt', 'active', 'USDT/aleo', { ...USDT_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }),
-  route('hyperlane:aleo/usdt->ethereum/usdt', 'hyperlane', 'mainnet', 'aleo/usdt', 'ethereum/usdt', 'metadata-required', 'USDT/aleo', { ...USDT_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_usdt_v2.aleo', 1), ...ALEO_USDT_APP_METADATA, ...ALEO_USDT_ETHEREUM_REMOTE_ROUTER }),
+  route('hyperlane:aleo/usdt->ethereum/usdt', 'hyperlane', 'mainnet', 'aleo/usdt', 'ethereum/usdt', 'active', 'USDT/aleo', { ...USDT_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_usdt_v2.aleo', 1), ...ALEO_USDT_APP_METADATA, ...ALEO_USDT_ETHEREUM_REMOTE_ROUTER, ...ALEO_WITHDRAWAL_ACTIVATION }),
   route('hyperlane:solana/sol->aleo/sol', 'hyperlane', 'mainnet', 'solana/sol', 'aleo/sol', 'metadata-required', 'SOL/aleo', ALEO_MAILBOX_METADATA),
-  route('hyperlane:aleo/sol->solana/sol', 'hyperlane', 'mainnet', 'aleo/sol', 'solana/sol', 'metadata-required', 'SOL/aleo', { ...aleoHyperlanePlaceholders('hyp_warp_token_sol_v2.aleo', 1399811149), ...ALEO_SOL_APP_METADATA, ...ALEO_SOL_REMOTE_ROUTER }),
+  route('hyperlane:aleo/sol->solana/sol', 'hyperlane', 'mainnet', 'aleo/sol', 'solana/sol', 'active', 'SOL/aleo', { ...aleoHyperlanePlaceholders('hyp_warp_token_sol_v2.aleo', 1399811149), ...ALEO_SOL_APP_METADATA, ...ALEO_SOL_REMOTE_ROUTER, ...ALEO_WITHDRAWAL_ACTIVATION }),
   ...pair('hyperlane', 'mainnet', 'aleo/aleo', 'ethereum/aleo', 'metadata-required', 'ALEO/aleo', ALEO_MAILBOX_METADATA),
   ...pair('hyperlane', 'mainnet', 'aleo/aleo', 'solana/aleo', 'metadata-required', 'ALEO/aleo', ALEO_MAILBOX_METADATA),
   ...pair('hyperlane', 'mainnet', 'aleo/aleo', 'base/aleo', 'metadata-required', 'ALEO/aleo', ALEO_MAILBOX_METADATA),
@@ -385,7 +392,7 @@ const routes: ProtocolBridgeRoute[] = [
  * const bridge = createBridgeClient({ registry: DEFAULT_BRIDGE_REGISTRY })
  */
 export const DEFAULT_BRIDGE_REGISTRY: BridgeRegistry = Object.freeze({
-  version: '2026-08-17.aleo-sol-router.1',
+  version: '2026-08-26.aleo-withdrawals.1',
   chains: Object.freeze(chains),
   assets: Object.freeze(assets),
   routes: Object.freeze(routes),

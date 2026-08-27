@@ -317,11 +317,11 @@ pnpm tsx examples/bridge/wbtc-to-ethereum.ts
 ```
 
 The preflight reads the signer's public Aleo WBTC and credits balances. It also
-reads the current `hyp_hook_manager.aleo/destination_gas_configs` entry and
-calculates the exact public-credits allowance consumed by the Interchain Gas
-Paymaster. The bridge's default registry remains non-executable; the example
-asserts that this live allowance is WBTC's only unresolved field and enables an
-execution-scoped registry copy after filling it.
+quotes the current `hyp_hook_manager.aleo/destination_gas_configs` entry with
+`quoteAleoHyperlaneGasPayment`, which returns the exact public-credits
+allowance consumed by the Interchain Gas Paymaster. The example asserts that
+this live allowance is WBTC's only unresolved field and passes the quote to
+execution as `gasPaymentMicrocredits`.
 
 After reviewing the amount, Ethereum recipient, balances, and hook payment:
 

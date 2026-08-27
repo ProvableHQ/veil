@@ -211,10 +211,11 @@ xReserve entries include Circle's published Ethereum/Sepolia USDC contracts,
 Aleo domain, and USDCx program identifiers. Ethereum-to-Aleo ETH, WBTC, and USDT
 routes pin router, domain, ISM, token, Mailbox, and gas-payment metadata to
 Hyperlane Registry commit `2621c16f2db1ccb46643265c110dac5ca2c7c51a` and are
-active. Reverse and other Hyperlane routes remain `metadata-required` until
-their deployment metadata is complete and reviewed.
+active. The reviewed Aleo-origin ETH, WBTC, USDT, and SOL withdrawal routes are
+also active (reviewed 2026-08-26); other Hyperlane routes remain
+`metadata-required` until their deployment metadata is complete and reviewed.
 
-### Aleo-origin Hyperlane placeholders
+### Aleo-origin Hyperlane withdrawals
 
 The Aleo-origin ETH, WBTC, USDT, SOL, and USAD routes expose the complete
 `transfer_remote` call shape for these programs:
@@ -225,14 +226,22 @@ The Aleo-origin ETH, WBTC, USDT, SOL, and USAD routes expose the complete
 - `hyp_warp_token_sol_v2.aleo`
 - `hyp_warp_token_usad_v2.aleo`
 
-**These routes contain dummy development values and are not executable.** They
-remain `metadata-required`, carry `aleoPlaceholderConfiguration: true`, and
-`executeAleoHyperlaneTransferRemote` throws before calling the wallet. Use
-`buildAleoHyperlaneTransferRemoteCall` only to inspect and integrate the ABI
-until the configuration below has been reviewed and replaced.
+The ETH, WBTC, USDT, and SOL routes are active. Every static field is reviewed;
+the one dynamic value — the interchain gas paymaster's hook payment — is read
+live from `hyp_hook_manager.aleo/destination_gas_configs` by
+`quoteAleoHyperlaneGasPayment` and passed to execution as
+`gasPaymentMicrocredits`. The on-chain hook asserts the payment exactly equals
+its own recomputed quote, so a stale quote aborts at finalization without
+moving funds, and `executeAleoHyperlaneTransferRemote` throws before wallet
+access when no quote is supplied.
 
-Except for the verified ETH, WBTC, USDT, and SOL route data described below,
-the current dummy values are:
+**The USAD route contains dummy development values and is not executable.** It
+remains `metadata-required`, carries `aleoPlaceholderConfiguration: true`, and
+`executeAleoHyperlaneTransferRemote` throws before calling the wallet. Use
+`buildAleoHyperlaneTransferRemoteCall` only to inspect and integrate its ABI
+until the configuration has been reviewed and replaced.
+
+For USAD, the current dummy values are:
 
 - `token_type`: `0u8`; `token_id`: `0field`
 - `token_owner`, `ism`, `hook`, and all four allowance spenders: the same
@@ -246,8 +255,7 @@ The WBTC route is partially populated from mainnet
 [`hyp_warp_token_wbtc_v2.aleo`](https://explorer.provable.com/program/hyp_warp_token_wbtc_v2.aleo),
 edition `0`. Its `app_metadata[true]` token type, owner, ISM, hook, token ID,
 and `8u8` local/remote decimals are verified and are not placeholders. Its
-first hook allowance amount remains unresolved, so the route is still
-non-executable.
+first hook allowance amount is the live gas quote supplied at execution time.
 
 The WBTC Ethereum remote router is also verified: domain `1u32`, recipient
 `0x20CDC85778b732073F7EecEF3DF25c0d310f8772` left-padded to `[u8; 32]`, and
@@ -262,8 +270,8 @@ The ETH route is populated from current mainnet app metadata and the reviewed
 Its Ethereum router is `0x38D447694f5c1f773ae3132cf93bF30B7Ec1Fa5A`,
 left-padded to `[u8; 32]`, with domain `1u32` and gas `44000u128`. The
 transaction's `8174147u64` first allowance is an observed dispatch quote and is
-not stored as a route-wide cap. As with WBTC, only the first hook allowance
-amount remains unresolved. Ethereum recipient limbs are derived from
+not stored as a route-wide cap. As with WBTC, the first hook allowance amount
+is quoted live at execution time. Ethereum recipient limbs are derived from
 `plan.recipient`.
 
 The USDT route uses current edition `1` app metadata and the verified Ethereum
@@ -293,10 +301,11 @@ default ISM, dispatch proxy, owner, and the nonce/process count observed during
 the 2026-08-17 review. The nonce and process count are mutable observations and
 are not transaction inputs.
 
-Before enabling submission, replace and verify every field still reported by
-`placeholderFields` for that route. Implement the dynamic hook credit quote for
-ETH, WBTC, USDT, and SOL. Then remove `aleoPlaceholderConfiguration` and change
-the route availability to `active` in a reviewed registry snapshot.
+Before enabling USAD submission, replace and verify every field still reported
+by `placeholderFields` for that route. Then remove
+`aleoPlaceholderConfiguration` and change the route availability to `active` in
+a reviewed registry snapshot, as the 2026-08-26 review did for ETH, WBTC, USDT,
+and SOL.
 
 ## Exports
 
@@ -321,5 +330,5 @@ fund-moving wallet actions.
 ## Next implementation phases
 
 1. Add protocol delivery tracking for relayer-driven xReserve and Hyperlane mints.
-2. Replace and review the Aleo-origin Hyperlane placeholders, then add destination confirmation.
+2. Replace and review the Aleo-origin USAD placeholders, then add destination confirmation for withdrawals.
 3. Add injected Solana execution and gated protocol testnets.

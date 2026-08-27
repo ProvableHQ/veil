@@ -20,6 +20,7 @@ import { executeXReserveBurn } from '../../actions/xreserveBurn.js'
 import {
   buildAleoHyperlaneTransferRemoteCall,
   executeAleoHyperlaneTransferRemote,
+  quoteAleoHyperlaneGasPayment,
 } from '../../actions/aleoHyperlane.js'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import type {
@@ -39,11 +40,13 @@ import type {
   XReserveHttpTransport,
 } from '../../types/xreserve.js'
 import type {
+  AleoHyperlaneGasQuote,
   AleoHyperlaneTransferRemoteCall,
   AleoHyperlaneTransferRemoteExecution,
   ExecuteAleoHyperlaneTransferRemoteParameters,
   ExecuteXReservePrivateMintParameters,
   ExecuteXReserveBurnParameters,
+  QuoteAleoHyperlaneGasPaymentParameters,
   XReserveBurnExecution,
   XReservePrivateMintExecution,
 } from '../../types/aleo.js'
@@ -63,12 +66,14 @@ import type {
  * @property registry Reviewed snapshot supplying chains, assets, and routes.
  * @property executors Optional wallet capabilities injected at construction.
  * @property xReserveHttpTransport Optional HTTP capability for Circle attestation lookups.
+ * @property aleoPublicClient Optional Aleo public client for on-chain reads such as Hyperlane gas quotes.
  */
 export type BridgeActionsConfig = {
   environment: BridgeEnvironment
   registry: BridgeRegistry
   executors?: BridgeExecutors | undefined
   xReserveHttpTransport?: XReserveHttpTransport | undefined
+  aleoPublicClient?: Client | undefined
 }
 
 /**
@@ -85,6 +90,7 @@ export type BridgeActionsConfig = {
  * @property executeXReservePrivateMint Prompts the Aleo wallet for the wrapper private mint.
  * @property executeXReserveBurn Prompts the Aleo wallet for one of the reviewed USDCx burn transitions.
  * @property buildAleoHyperlaneTransferRemoteCall Constructs the seven-input Aleo Warp Route call without wallet access.
+ * @property quoteAleoHyperlaneGasPayment Reads the live interchain gas paymaster quote through the injected Aleo public client.
  * @property executeAleoHyperlaneTransferRemote Submits only fully reviewed, non-placeholder Aleo Warp Route calls.
  */
 export type BridgeActions = {
@@ -99,6 +105,7 @@ export type BridgeActions = {
   executeXReservePrivateMint: (params: ExecuteXReservePrivateMintParameters) => Promise<XReservePrivateMintExecution>
   executeXReserveBurn: (params: ExecuteXReserveBurnParameters) => Promise<XReserveBurnExecution>
   buildAleoHyperlaneTransferRemoteCall: (params: ExecuteAleoHyperlaneTransferRemoteParameters) => AleoHyperlaneTransferRemoteCall
+  quoteAleoHyperlaneGasPayment: (params: QuoteAleoHyperlaneGasPaymentParameters) => Promise<AleoHyperlaneGasQuote>
   executeAleoHyperlaneTransferRemote: (params: ExecuteAleoHyperlaneTransferRemoteParameters) => Promise<AleoHyperlaneTransferRemoteExecution>
 }
 
@@ -131,6 +138,10 @@ export function bridgeActions(_client: Client, config: BridgeActionsConfig): Bri
     if (!config.executors?.aleo) throw new BridgeError('An Aleo executor is required for Aleo bridge transactions')
     return config.executors.aleo
   }
+  const aleoPublicClient = () => {
+    if (!config.aleoPublicClient) throw new BridgeError('An Aleo public client is required for Hyperlane gas quotes')
+    return config.aleoPublicClient
+  }
   return {
     getAssets: (params = {}) => getProtocolAssets(config.registry, {
       ...params,
@@ -149,6 +160,7 @@ export function bridgeActions(_client: Client, config: BridgeActionsConfig): Bri
     executeXReservePrivateMint: async (params) => executeXReservePrivateMint(config.registry, aleoExecutor(), params),
     executeXReserveBurn: async (params) => executeXReserveBurn(config.registry, aleoExecutor(), params),
     buildAleoHyperlaneTransferRemoteCall: (params) => buildAleoHyperlaneTransferRemoteCall(config.registry, params),
+    quoteAleoHyperlaneGasPayment: async (params) => quoteAleoHyperlaneGasPayment(config.registry, aleoPublicClient(), params),
     executeAleoHyperlaneTransferRemote: async (params) => executeAleoHyperlaneTransferRemote(config.registry, aleoExecutor(), params),
   }
 }
