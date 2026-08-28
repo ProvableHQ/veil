@@ -25,6 +25,7 @@ acknowledgement shown below.
 | `sol-to-aleo.ts` | Solana SOL → Aleo SOL | Hyperlane | 1 lamport |
 | `sol-to-solana.ts` | Aleo SOL → Solana SOL | Hyperlane | 1 lamport |
 | `usdc-to-usdcx.ts` | Ethereum USDC → Aleo USDCx | Circle xReserve | 2 USDC |
+| `arc-to-aleo.ts` | Arc USDC → Aleo USDCx | Circle xReserve | 5 USDC |
 | `usdcx-to-usdc.ts` | Aleo USDCx → Ethereum USDC | Circle xReserve | 2.000001 USDCx |
 
 Network fees and Hyperlane hook payments are separate from the transferred
@@ -311,6 +312,19 @@ if (progress.next === 'complete') {
 
 A custom `USDCX_SECRET_NONCE` must be stored separately. Checkpoints exclude
 that secret.
+
+### Arc USDC to Aleo USDCx
+
+`arc-to-aleo.ts` prepares the Arc mainnet public-mint route. Set `ARC_RPC_URL`,
+`ARC_SENDER`, and `ALEO_RECIPIENT`, then run its read-only preflight:
+
+```sh
+pnpm tsx examples/bridge/arc-to-aleo.ts
+```
+
+The script validates Arc chain id `5042`, Circle source domain `26`, balances,
+allowance, and deposit arguments before any signing. Live execution requires a
+permission-restricted private-key file and the script's explicit acknowledgement.
 
 ### Aleo USDCx to Ethereum USDC
 

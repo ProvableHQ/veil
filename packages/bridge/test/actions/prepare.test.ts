@@ -51,6 +51,22 @@ describe('prepare', () => {
     expect(plan.steps.find((step) => step.irreversible)?.kind).toBe('deposit')
   })
 
+  it('prepares an Arc public xReserve mint', () => {
+    const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'arc', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
+      amount: '5',
+      recipient: ALEO_RECIPIENT,
+      mintMode: 'public',
+    })
+    expect(plan.sourceAsset).toMatchObject({ id: 'arc/usdc', decimals: 6 })
+    expect(plan.destinationAsset.id).toBe('aleo/usdcx')
+    expect(plan.mintMode).toBe('public')
+    expect(plan.steps.map((step) => step.kind)).toEqual([
+      'approve', 'deposit', 'wait-attestation', 'mint',
+    ])
+  })
+
   it('prepares the xReserve burn and withdrawal sequence', () => {
     const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
       source: { chain: 'aleo', asset: 'usdcx' },

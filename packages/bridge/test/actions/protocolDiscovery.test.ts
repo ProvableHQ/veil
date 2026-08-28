@@ -38,6 +38,7 @@ describe('getRoutes', () => {
     expect(routes.map((route) => route.id)).toEqual([
       'xreserve:ethereum/usdc->aleo/usdcx',
       'xreserve:aleo/usdcx->ethereum/usdc',
+      'xreserve:arc/usdc->aleo/usdcx',
     ])
   })
 
