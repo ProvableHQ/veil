@@ -19,6 +19,21 @@ describe('prepareTransfer', () => {
     expect(plan.steps.find((step) => step.irreversible)?.kind).toBe('deposit')
   })
 
+  it('prepares an Arc public xReserve mint', () => {
+    const plan = prepareTransfer(DEFAULT_BRIDGE_REGISTRY, {
+      routeId: 'xreserve:arc/usdc->aleo/usdcx',
+      amount: '5',
+      recipient: ALEO_RECIPIENT,
+      mintMode: 'public',
+    })
+    expect(plan.sourceAsset).toMatchObject({ id: 'arc/usdc', decimals: 6 })
+    expect(plan.destinationAsset.id).toBe('aleo/usdcx')
+    expect(plan.mintMode).toBe('public')
+    expect(plan.steps.map((step) => step.kind)).toEqual([
+      'approve', 'deposit', 'wait-attestation', 'mint',
+    ])
+  })
+
   it('prepares the xReserve burn and withdrawal sequence', () => {
     const plan = prepareTransfer(DEFAULT_BRIDGE_REGISTRY, {
       routeId: 'xreserve:aleo/usdcx->ethereum/usdc',

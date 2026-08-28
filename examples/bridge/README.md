@@ -1,3 +1,72 @@
+# Arc USDC to Aleo public USDCx
+
+`arc-to-aleo.ts` performs a guarded Arc mainnet public mint through Circle
+xReserve. It verifies Arc chain id `5042`, xReserve source domain `26`, Aleo
+remote domain `10002`, deployed bytecode, the sender's USDC balance and
+allowance, and the exact `depositToRemote` arguments. The default run is
+read-only and does not read a private key.
+
+In zsh, enter the secret RPC URL without saving it in shell history, then set
+the public inputs:
+
+```zsh
+IFS= read -rs 'arc_rpc_url?Arc mainnet RPC URL: '
+printf '\n'
+export ARC_RPC_URL="$arc_rpc_url"
+unset arc_rpc_url
+
+export ARC_SENDER='0x1E196D0A7d8189054C4dB744AB3340C3f1c68b19'
+IFS= read 'aleo_recipient?Aleo recipient: '
+export ALEO_RECIPIENT="$aleo_recipient"
+unset aleo_recipient
+export USDC_AMOUNT='5'
+```
+
+Run the read-only preflight:
+
+```sh
+pnpm --filter @provablehq/aleo-bridge-sdk build
+pnpm tsx examples/bridge/arc-to-aleo.ts
+```
+
+Review the printed sender, balances, allowance, fee ceiling, recipient bytes,
+hook data, function signature, selector, and all six arguments. For execution,
+write the private key to a temporary permission-restricted file without echoing
+it:
+
+```zsh
+(
+  umask 077
+  IFS= read -rs 'veil_arc_key?Ethereum private key for the Arc address: '
+  printf '\n'
+  printf '%s' "$veil_arc_key" > /tmp/veil-arc-evm-key
+  unset veil_arc_key
+)
+export ARC_PRIVATE_KEY_FILE='/tmp/veil-arc-evm-key'
+```
+
+The script verifies that the key derives `ARC_SENDER`, simulates every required
+transaction, and locally signs only after a successful simulation. Enable the
+irreversible deposit with the explicit acknowledgement:
+
+```sh
+EXECUTE_XRESERVE_DEPOSIT=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
+  pnpm tsx examples/bridge/arc-to-aleo.ts
+```
+
+Remove the temporary key file immediately after the command returns:
+
+```sh
+rm -f -- /tmp/veil-arc-evm-key
+unset ARC_PRIVATE_KEY_FILE ARC_RPC_URL
+```
+
+The public hook is byte `0` followed by 64 zero bytes. After the Arc deposit,
+the script validates the `DepositedToRemote` event, reconstructs the Circle
+message hash, waits for the mainnet Circle attestation, and monitors Aleo's
+Arc-scoped courtesy service until `mint_public` is accepted or monitoring times
+out. Protocol processing continues if the local monitor exits.
+
 # Ethereum USDC to Aleo USDCx
 
 `usdc-to-usdcx.ts` exercises the mainnet bridge client against Circle xReserve.

@@ -13,6 +13,7 @@ const ALEO_ADDRESS = '^aleo1[0-9a-z]{58}$'
 const chains: ProtocolBridgeChain[] = [
   { id: 'aleo', displayName: 'Aleo', family: 'aleo', environment: 'mainnet', nativeCurrencySymbol: 'ALEO', protocolDomains: { xreserve: 10002, hyperlane: 1634493807 } },
   { id: 'ethereum', displayName: 'Ethereum', family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'ETH', protocolDomains: { xreserve: 0, hyperlane: 1 } },
+  { id: 'arc', displayName: 'Arc', family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'USDC', protocolDomains: { xreserve: 26 } },
   { id: 'solana', displayName: 'Solana', family: 'solana', environment: 'mainnet', nativeCurrencySymbol: 'SOL', protocolDomains: { hyperlane: 1399811149 } },
   { id: 'base', displayName: 'Base', family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'ETH' },
   { id: 'hyperevm', displayName: 'HyperEVM', family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'HYPE' },
@@ -29,6 +30,7 @@ const assets: ProtocolBridgeAsset[] = [
   { id: 'aleo/sol', chainId: 'aleo', symbol: 'SOL', name: 'Hyperlane SOL', decimals: 9, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_sol_v2.aleo', tokenId: 'aleo1aa0zt0vg9uwknekpqeefkvad55swp7833wc5crp2prv0lm4djuxs5r7k6v' }, addressValidationRegex: ALEO_ADDRESS },
   { id: 'aleo/usad', chainId: 'aleo', symbol: 'USAD', name: 'USAD', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'usad_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS },
   { id: 'ethereum/usdc', chainId: 'ethereum', symbol: 'USDC', name: 'USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' }, addressValidationRegex: EVM_ADDRESS },
+  { id: 'arc/usdc', chainId: 'arc', symbol: 'USDC', name: 'USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0x3600000000000000000000000000000000000000' }, addressValidationRegex: EVM_ADDRESS },
   { id: 'ethereum/eth', chainId: 'ethereum', symbol: 'ETH', name: 'Ether', decimals: 18, kind: 'native', locator: { kind: 'native', value: 'ETH' }, addressValidationRegex: EVM_ADDRESS },
   { id: 'ethereum/wbtc', chainId: 'ethereum', symbol: 'WBTC', name: 'Wrapped Bitcoin', decimals: 8, kind: 'token', locator: { kind: 'evm-contract', value: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599' }, addressValidationRegex: EVM_ADDRESS },
   { id: 'ethereum/usdt', chainId: 'ethereum', symbol: 'USDT', name: 'Tether USD', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0xdAC17F958D2ee523a2206206994597C13D831ec7' }, addressValidationRegex: EVM_ADDRESS },
@@ -43,6 +45,7 @@ const assets: ProtocolBridgeAsset[] = [
 ]
 
 const XRESERVE_SOURCE = 'https://developers.circle.com/xreserve/references/supported-blockchains-and-domains'
+const ALEO_XRESERVE_SOURCE = 'https://docs.aleo.org/build/common-uses/usdcx_bridge'
 const HYPERLANE_REGISTRY_COMMIT = '2621c16f2db1ccb46643265c110dac5ca2c7c51a'
 const HYPERLANE_SOURCE = `https://github.com/hyperlane-xyz/hyperlane-registry/tree/${HYPERLANE_REGISTRY_COMMIT}/deployments/warp_routes`
 const ALEO_ETH_PROGRAM_SOURCE = 'https://explorer.provable.com/program/hyp_warp_token_eth_v2.aleo'
@@ -349,6 +352,23 @@ const routes: ProtocolBridgeRoute[] = [
     wrapperProgram: 'shielded_usdcx_wrapper.aleo',
     attestationBaseUrl: 'https://xreserve-api.circle.com/v1/attestations',
   }, 'active'),
+  route('xreserve:arc/usdc->aleo/usdcx', 'xreserve', 'mainnet', 'arc/usdc', 'aleo/usdcx', 'active', 'xreserve-usdcx-aleo-arc', {
+    xReserveContract: '0x8888888199b2Df864bf678259607d6D5EBb4e3Ce',
+    sourceChainId: 5042,
+    sourceDomain: 26,
+    ethereumDestinationDomain: 0,
+    arcDestinationDomain: 26,
+    remoteDomain: 10002,
+    remoteToken: 'usdcx_stablecoin.aleo',
+    remoteTokenBytes32: '0x11ea7dab1d29d5f61500582c63e98c42e1165f9ba050ea9d0c6af9f871987711',
+    minimumAmountAtomic: '2000000',
+    maxFeeAtomic: '100000',
+    bridgeProgram: 'usdcx_bridge_v2.aleo',
+    wrapperProgram: 'shielded_usdcx_wrapper.aleo',
+    attestationBaseUrl: 'https://xreserve-api.circle.com/v1/attestations',
+    deploymentSource: ALEO_XRESERVE_SOURCE,
+    onchainReviewedAt: '2026-08-28',
+  }),
   ...pair('xreserve', 'testnet', 'sepolia/usdc', 'aleo-testnet/usdcx', 'active', 'xreserve-usdcx-aleo-testnet', {
     xReserveContract: '0x008888878f94C0d87defdf0B07f46B93C1934442',
     sourceChainId: 11155111,
@@ -392,9 +412,9 @@ const routes: ProtocolBridgeRoute[] = [
  * const bridge = createBridgeClient({ registry: DEFAULT_BRIDGE_REGISTRY })
  */
 export const DEFAULT_BRIDGE_REGISTRY: BridgeRegistry = Object.freeze({
-  version: '2026-08-26.aleo-withdrawals.1',
+  version: '2026-08-28.arc-xreserve.1',
   chains: Object.freeze(chains),
   assets: Object.freeze(assets),
   routes: Object.freeze(routes),
-  sources: Object.freeze([XRESERVE_SOURCE, HYPERLANE_SOURCE]),
+  sources: Object.freeze([XRESERVE_SOURCE, ALEO_XRESERVE_SOURCE, HYPERLANE_SOURCE]),
 })
