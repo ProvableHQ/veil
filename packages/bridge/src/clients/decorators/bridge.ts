@@ -30,6 +30,7 @@ import type {
   ExecuteEvmHyperlaneTransferParameters,
   QuoteEvmHyperlaneTransferParameters,
 } from '../../types/evm.js'
+import type { SolanaRpcConfig } from '../../types/solana.js'
 import type {
   EvmXReserveTransferExecution,
   EvmXReserveTransferQuote,
@@ -67,6 +68,7 @@ import type {
  * @property executors Optional wallet capabilities injected at construction.
  * @property xReserveHttpTransport Optional HTTP capability for Circle attestation lookups.
  * @property aleoPublicClient Optional Aleo public client for on-chain reads such as Hyperlane gas quotes.
+ * @property solanaRpc Optional Solana JSON-RPC endpoint for on-chain reads such as blockhash and confirmation lookups.
  */
 export type BridgeActionsConfig = {
   environment: BridgeEnvironment
@@ -74,6 +76,7 @@ export type BridgeActionsConfig = {
   executors?: BridgeExecutors | undefined
   xReserveHttpTransport?: XReserveHttpTransport | undefined
   aleoPublicClient?: Client | undefined
+  solanaRpc?: SolanaRpcConfig | undefined
 }
 
 /**

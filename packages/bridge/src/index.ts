@@ -94,6 +94,16 @@ export type {
   XReserveBurnMode,
   XReservePrivateMintExecution,
 } from './types/aleo.js'
+export type {
+  ExecuteSolanaHyperlaneTransferParameters,
+  QuoteSolanaHyperlaneTransferParameters,
+  SolanaBridgeExecutor,
+  SolanaHyperlaneRouteMetadata,
+  SolanaHyperlaneTransferExecution,
+  SolanaHyperlaneTransferQuote,
+  SolanaRpcConfig,
+  SolanaRpcHttpTransport,
+} from './types/solana.js'
 
 export {
   aleoAddressToBytes32,

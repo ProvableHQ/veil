@@ -49,4 +49,18 @@ describe('createBridgeClient', () => {
       messageHash,
     })).resolves.toEqual({ status: 'pending', messageHash })
   })
+
+  it('accepts a Solana executor and RPC config', () => {
+    const bridge = createBridgeClient({
+      environment: 'mainnet',
+      executors: {
+        solana: {
+          getAddress: async () => '11111111111111111111111111111111',
+          signAndSendTransaction: async () => ({ signature: 'sig' }),
+        },
+      },
+      solanaRpc: { url: 'https://api.mainnet-beta.solana.com' },
+    })
+    expect(bridge.environment).toBe('mainnet')
+  })
 })
