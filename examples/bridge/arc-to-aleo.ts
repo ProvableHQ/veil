@@ -2,11 +2,10 @@
  * Quotes or submits a mainnet Arc USDC to Aleo public USDCx xReserve mint.
  *
  * Run without EXECUTE_XRESERVE_DEPOSIT for a read-only preflight. Live
- * execution reads the Arc private key from a permission-restricted file,
- * simulates every transaction, and requires an explicit acknowledgement.
+ * execution simulates every transaction and requires an explicit
+ * acknowledgement before the local signer broadcasts it.
  */
 
-import { readFileSync, statSync } from 'node:fs'
 import {
   TransactionReceiptNotFoundError,
   createPublicClient,
@@ -40,7 +39,6 @@ const USDC_CONTRACT = getAddress('0x3600000000000000000000000000000000000000')
 const DEPOSIT_SIGNATURE = 'depositToRemote(uint256,uint32,bytes32,address,uint256,bytes)'
 const DEPOSIT_SELECTOR = toFunctionSelector(DEPOSIT_SIGNATURE)
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
-const DEFAULT_KEY_FILE = '/tmp/veil-arc-evm-key'
 const DEFAULT_ATTESTATION_POLL_INTERVAL_MS = 10_000
 const DEFAULT_ATTESTATION_TIMEOUT_MS = 30 * 60_000
 const DEFAULT_MINT_POLL_INTERVAL_MS = 10_000
@@ -74,28 +72,13 @@ function integerEnvironmentVariable(name: string, fallback: number, minimum: num
   return value
 }
 
-function senderFromEnvironment(): Address {
-  const value = requiredEnvironmentVariable('ARC_SENDER')
-  if (!isAddress(value)) throw new Error('ARC_SENDER must be an EVM address')
-  return getAddress(value)
-}
-
-function privateKeyFromFile(expectedSender: Address): Hex {
-  const path = process.env.ARC_PRIVATE_KEY_FILE?.trim() || DEFAULT_KEY_FILE
-  const file = statSync(path)
-  if (!file.isFile()) throw new Error(`ARC_PRIVATE_KEY_FILE is not a regular file: ${path}`)
-  if ((file.mode & 0o077) !== 0) throw new Error(`ARC_PRIVATE_KEY_FILE must not be accessible by group or other users: ${path}`)
-  const value = readFileSync(path, 'utf8').trim()
+function privateKeyFromEnvironment(): Hex {
+  const value = requiredEnvironmentVariable('EVM_PRIVATE_KEY')
   const unprefixed = value.startsWith('0x') || value.startsWith('0X') ? value.slice(2) : value
   if (!/^[0-9a-f]{64}$/i.test(unprefixed)) {
-    throw new Error('ARC_PRIVATE_KEY_FILE must contain exactly 32 bytes (64 hexadecimal characters), with or without a 0x prefix')
+    throw new Error('EVM_PRIVATE_KEY must contain exactly 32 bytes (64 hexadecimal characters), with or without a 0x prefix')
   }
-  const privateKey = `0x${unprefixed}` as Hex
-  const actualSender = privateKeyToAccount(privateKey).address
-  if (getAddress(actualSender) !== expectedSender) {
-    throw new Error(`Arc private key resolves to ${actualSender}, but ARC_SENDER is ${expectedSender}`)
-  }
-  return privateKey
+  return `0x${unprefixed}` as Hex
 }
 
 function positionalParameters(params: readonly unknown[] | Record<string, unknown> | undefined, method: string): readonly unknown[] {
@@ -118,7 +101,7 @@ function transactionParameter(value: unknown): { from: Address, to: Address, dat
   return { from: getAddress(transaction.from), ...call }
 }
 
-function createArcExecutor(rpcUrl: string, sender: Address, privateKey?: Hex): {
+function createArcExecutor(rpcUrl: string, privateKey: Hex): {
   executor: EvmBridgeExecutor
   publicClient: ReturnType<typeof createPublicClient>
 } {
@@ -130,8 +113,13 @@ function createArcExecutor(rpcUrl: string, sender: Address, privateKey?: Hex): {
   })
   const transport = http(rpcUrl)
   const publicClient = createPublicClient({ chain: arc, transport })
-  const account = privateKey ? privateKeyToAccount(privateKey) : undefined
-  const walletClient = account ? createWalletClient({ account, chain: arc, transport }) : undefined
+  const account = privateKeyToAccount(privateKey)
+  const sender = getAddress(account.address)
+  const expectedSender = process.env.ARC_SENDER?.trim()
+  if (expectedSender && (!isAddress(expectedSender) || getAddress(expectedSender) !== sender)) {
+    throw new Error(`EVM_PRIVATE_KEY resolves to ${sender}, but ARC_SENDER is ${expectedSender}`)
+  }
+  const walletClient = createWalletClient({ account, chain: arc, transport })
 
   const executor: EvmBridgeExecutor = {
     account: sender,
@@ -145,7 +133,6 @@ function createArcExecutor(rpcUrl: string, sender: Address, privateKey?: Hex): {
         return result.data ?? '0x'
       }
       if (method === 'eth_sendTransaction') {
-        if (!account || !walletClient) throw new Error('Live execution requires ARC_PRIVATE_KEY_FILE')
         const values = positionalParameters(params, method)
         const transaction = transactionParameter(values[0])
         if (transaction.from !== getAddress(account.address)) {
@@ -242,12 +229,13 @@ async function waitForPublicMint(sender: Address, recipient: string, messageHash
 
 async function main(): Promise<void> {
   const rpcUrl = requiredEnvironmentVariable('ARC_RPC_URL')
-  const sender = senderFromEnvironment()
   const recipient = requiredEnvironmentVariable('ALEO_RECIPIENT')
   const amount = process.env.USDC_AMOUNT?.trim() || '5'
   const execute = process.env.EXECUTE_XRESERVE_DEPOSIT === EXECUTION_ACKNOWLEDGEMENT
-  const privateKey = execute ? privateKeyFromFile(sender) : undefined
-  const { executor, publicClient } = createArcExecutor(rpcUrl, sender, privateKey)
+  const privateKey = privateKeyFromEnvironment()
+  const { executor, publicClient } = createArcExecutor(rpcUrl, privateKey)
+  const sender = executor.account
+  if (!sender) throw new Error('The local signer did not expose an Arc account')
 
   const [chainId, reserveCode, tokenCode, nativeBalance, sourceDomain, remoteDepositor] = await Promise.all([
     publicClient.getChainId(),
@@ -302,7 +290,7 @@ async function main(): Promise<void> {
   })
 
   if (!execute) {
-    console.log('\nPreflight complete; no transaction was submitted and the private key was not read.')
+    console.log('\nPreflight complete; no USDC was deposited.')
     console.log(`Set EXECUTE_XRESERVE_DEPOSIT=${EXECUTION_ACKNOWLEDGEMENT} to execute.`)
     return
   }
