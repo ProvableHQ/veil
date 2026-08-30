@@ -25,6 +25,24 @@ describe('http transport', () => {
     )
   })
 
+  it('routes getFreezeList to the program compliance endpoint', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(['0', '0', '3642222252059314292809609689035560016959342421640560347114299934615987159853']),
+    })
+
+    const transport = http('https://api.provable.com/v2', { fetchFn: mockFetch, network: 'testnet' })
+    await transport.request({
+      method: 'getFreezeList',
+      params: { programId: 'shield_swap_freezelist.aleo' },
+    })
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://api.provable.com/v2/testnet/programs/shield_swap_freezelist.aleo/compliance/freeze-list',
+      expect.objectContaining({ method: 'GET' }),
+    )
+  })
+
   it('makes GET requests with params encoded in URL', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
