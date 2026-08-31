@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { getTransactionDecoder } from '@solana/kit'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  executeSolanaHyperlaneTransfer,
   quoteSolanaHyperlaneTransfer,
   solanaRouteMetadata,
 } from '../../src/actions/solanaHyperlane.js'
@@ -8,7 +10,7 @@ import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 import type { SolanaRpcReader } from '../../src/solana/rpc.js'
-import type { SolanaHyperlaneRouteMetadata } from '../../src/types/solana.js'
+import type { SolanaBridgeExecutor, SolanaHyperlaneRouteMetadata } from '../../src/types/solana.js'
 import type { BridgeRegistry } from '../../src/types/protocol.js'
 
 const ROUTE_ID = 'hyperlane:solana/sol->aleo/sol'
@@ -20,6 +22,7 @@ const transferFixture = JSON.parse(
   recipientAleoAddress: string
   amountLamports: number
   accounts: { address: string; signer: boolean; writable: boolean }[]
+  logMessages: string[]
 }
 
 const igpFixture = JSON.parse(
@@ -170,5 +173,121 @@ describe('quoteSolanaHyperlaneTransfer', () => {
     const rpc = rpcReturning(igpAccountData())
 
     await expect(quoteSolanaHyperlaneTransfer(registry, rpc, { plan })).rejects.toThrow(BridgeError)
+  })
+})
+
+describe('executeSolanaHyperlaneTransfer', () => {
+  const STUB_SIGNATURE = 'stub-signature'
+
+  function stubExecutor(onSend?: (wireTransaction: Uint8Array) => void): SolanaBridgeExecutor {
+    return {
+      getAddress: async () => transferFixture.senderAddress,
+      signAndSendTransaction: async (wireTransaction) => {
+        onSend?.(wireTransaction)
+        return { signature: STUB_SIGNATURE }
+      },
+    }
+  }
+
+  function executeRpc(overrides: Partial<SolanaRpcReader> = {}): SolanaRpcReader {
+    return {
+      getLatestBlockhash: async () => ({ blockhash: WARP_PROGRAM_ADDRESS, lastValidBlockHeight: 100n }),
+      getBalance: async () => 800_000_000_000n,
+      getAccountData: async () => igpAccountData(),
+      getSignatureStatus: async () => 'confirmed',
+      getTransactionLogs: async () => transferFixture.logMessages,
+      ...overrides,
+    }
+  }
+
+  it('signs, submits, confirms, and extracts the Hyperlane message id', async () => {
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    let capturedWire: Uint8Array | undefined
+    const executor = stubExecutor((wire) => { capturedWire = wire })
+    const rpc = executeRpc()
+
+    const execution = await executeSolanaHyperlaneTransfer(registry, executor, rpc, { plan })
+
+    expect(execution.receipt.status).toBe('DELIVERY_PENDING')
+    expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
+    expect(execution.receipt.messageId).toBe(
+      '0xffe0409d00c184769b4dfa2a1eaac5a0a79bfe52458a38e1d9a71a9e5c677805',
+    )
+    expect(execution.receipt.id).toBe(execution.receipt.messageId)
+
+    // Stage 5: the wire bytes handed to the executor already carry exactly
+    // one signature — the unique message account's — proving the action
+    // partially signs with the ephemeral keypair before dispatch.
+    expect(capturedWire).toBeInstanceOf(Uint8Array)
+    const decoded = getTransactionDecoder().decode(capturedWire!)
+    const signedEntries = Object.entries(decoded.signatures).filter(([, signature]) => signature !== null)
+    expect(signedEntries).toHaveLength(1)
+    expect(signedEntries[0]?.[0]).toBe(execution.receipt.protocolState.uniqueMessageAddress)
+  })
+
+  it('throws a BridgeError describing the amount, gas, and rent split when balance is insufficient', async () => {
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    const executor = stubExecutor()
+    const rpc = executeRpc({ getBalance: async () => 0n })
+
+    try {
+      await executeSolanaHyperlaneTransfer(registry, executor, rpc, { plan })
+      expect.unreachable('expected an insufficient-balance BridgeError')
+    } catch (error) {
+      expect(error).toBeInstanceOf(BridgeError)
+      const message = (error as BridgeError).message
+      expect(message).toContain('balance 0 lamports')
+      expect(message).toContain('amount 676200000000')
+      expect(message).toContain('gas 2910000')
+      expect(message).toContain('rent 4113360')
+    }
+  })
+
+  it('throws a BridgeError naming the signature when the network reports failure', async () => {
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    const executor = stubExecutor()
+    const rpc = executeRpc({ getSignatureStatus: async () => 'failed' })
+
+    await expect(executeSolanaHyperlaneTransfer(registry, executor, rpc, { plan })).rejects.toThrow(
+      new RegExp(STUB_SIGNATURE),
+    )
+  })
+
+  it('returns a resumable SOURCE_CONFIRMING receipt on confirmation timeout, without throwing', async () => {
+    vi.useFakeTimers()
+    try {
+      const registry = registryWithRoute()
+      const plan = transferPlan(registry)
+      const executor = stubExecutor()
+      const rpc = executeRpc({ getSignatureStatus: async () => null })
+
+      const executionPromise = executeSolanaHyperlaneTransfer(registry, executor, rpc, {
+        plan,
+        pollingIntervalMs: 1_000,
+        confirmationTimeoutMs: 3_000,
+      })
+
+      // Advance in small increments until the action settles. A single large
+      // advance can race ahead of the real (non-timer) async work the action
+      // does before it starts polling — key generation, PDA derivation, and
+      // transaction signing — since advancing past a moment with no pending
+      // timer resolves near-instantly and does not wait for that work.
+      let settled = false
+      void executionPromise.then(() => { settled = true })
+      for (let iteration = 0; iteration < 200 && !settled; iteration++) {
+        await vi.advanceTimersByTimeAsync(100)
+      }
+      const execution = await executionPromise
+
+      expect(execution.receipt.status).toBe('SOURCE_CONFIRMING')
+      expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
+      expect(execution.receipt.messageId).toBeUndefined()
+      expect(execution.receipt.id).toBe(STUB_SIGNATURE)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

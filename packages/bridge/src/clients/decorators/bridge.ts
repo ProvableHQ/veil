@@ -22,7 +22,10 @@ import {
   executeAleoHyperlaneTransferRemote,
   quoteAleoHyperlaneGasPayment,
 } from '../../actions/aleoHyperlane.js'
-import { quoteSolanaHyperlaneTransfer } from '../../actions/solanaHyperlane.js'
+import {
+  executeSolanaHyperlaneTransfer,
+  quoteSolanaHyperlaneTransfer,
+} from '../../actions/solanaHyperlane.js'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import { createSolanaRpcReader } from '../../solana/rpc.js'
 import type {
@@ -33,7 +36,10 @@ import type {
   QuoteEvmHyperlaneTransferParameters,
 } from '../../types/evm.js'
 import type {
+  ExecuteSolanaHyperlaneTransferParameters,
   QuoteSolanaHyperlaneTransferParameters,
+  SolanaBridgeExecutor,
+  SolanaHyperlaneTransferExecution,
   SolanaHyperlaneTransferQuote,
   SolanaRpcConfig,
 } from '../../types/solana.js'
@@ -102,6 +108,7 @@ export type BridgeActionsConfig = {
  * @property quoteAleoHyperlaneGasPayment Reads the live interchain gas paymaster quote through the injected Aleo public client.
  * @property executeAleoHyperlaneTransferRemote Submits only fully reviewed, non-placeholder Aleo Warp Route calls.
  * @property quoteSolanaHyperlaneTransfer Reads the live Solana interchain gas paymaster quote through the injected Solana RPC reader.
+ * @property executeSolanaHyperlaneTransfer Signs and submits a Solana Hyperlane transfer through the injected Solana executor.
  */
 export type BridgeActions = {
   getAssets: (params?: GetProtocolAssetsParameters) => ProtocolBridgeAsset[]
@@ -118,6 +125,7 @@ export type BridgeActions = {
   quoteAleoHyperlaneGasPayment: (params: QuoteAleoHyperlaneGasPaymentParameters) => Promise<AleoHyperlaneGasQuote>
   executeAleoHyperlaneTransferRemote: (params: ExecuteAleoHyperlaneTransferRemoteParameters) => Promise<AleoHyperlaneTransferRemoteExecution>
   quoteSolanaHyperlaneTransfer: (params: QuoteSolanaHyperlaneTransferParameters) => Promise<SolanaHyperlaneTransferQuote>
+  executeSolanaHyperlaneTransfer: (params: ExecuteSolanaHyperlaneTransferParameters) => Promise<SolanaHyperlaneTransferExecution>
 }
 
 /**
@@ -157,6 +165,10 @@ export function bridgeActions(_client: Client, config: BridgeActionsConfig): Bri
     if (!config.solanaRpc) throw new BridgeError('Solana actions require solanaRpc configuration on the bridge client')
     return createSolanaRpcReader(config.solanaRpc)
   }
+  const solanaExecutor = (): SolanaBridgeExecutor => {
+    if (!config.executors?.solana) throw new BridgeError('A Solana executor is required for Solana bridge transactions')
+    return config.executors.solana
+  }
   return {
     getAssets: (params = {}) => getProtocolAssets(config.registry, {
       ...params,
@@ -178,5 +190,7 @@ export function bridgeActions(_client: Client, config: BridgeActionsConfig): Bri
     quoteAleoHyperlaneGasPayment: async (params) => quoteAleoHyperlaneGasPayment(config.registry, aleoPublicClient(), params),
     executeAleoHyperlaneTransferRemote: async (params) => executeAleoHyperlaneTransferRemote(config.registry, aleoExecutor(), params),
     quoteSolanaHyperlaneTransfer: async (params) => quoteSolanaHyperlaneTransfer(config.registry, solanaRpcReader(), params),
+    executeSolanaHyperlaneTransfer: async (params) =>
+      executeSolanaHyperlaneTransfer(config.registry, solanaExecutor(), solanaRpcReader(), params),
   }
 }

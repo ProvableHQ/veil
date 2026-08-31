@@ -32,7 +32,10 @@ export {
   executeAleoHyperlaneTransferRemote,
   quoteAleoHyperlaneGasPayment,
 } from './actions/aleoHyperlane.js'
-export { quoteSolanaHyperlaneTransfer } from './actions/solanaHyperlane.js'
+export {
+  executeSolanaHyperlaneTransfer,
+  quoteSolanaHyperlaneTransfer,
+} from './actions/solanaHyperlane.js'
 
 export { DEFAULT_BRIDGE_REGISTRY } from './registry/default.js'
 export { validateBridgeRegistry } from './registry/validate.js'

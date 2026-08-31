@@ -63,4 +63,14 @@ describe('createBridgeClient', () => {
     })
     expect(bridge.environment).toBe('mainnet')
   })
+
+  it('requires an injected Solana executor for live Solana Hyperlane actions', async () => {
+    const client = createBridgeClient({ solanaRpc: { url: 'https://api.mainnet-beta.solana.com' } })
+    const plan = client.prepareTransfer({
+      routeId: 'hyperlane:solana/sol->aleo/sol',
+      amount: '1',
+      recipient: `aleo1${'a'.repeat(58)}`,
+    })
+    await expect(client.executeSolanaHyperlaneTransfer({ plan })).rejects.toThrow(/Solana executor is required/)
+  })
 })
