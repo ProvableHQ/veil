@@ -123,9 +123,13 @@ export function createSolanaRpcReader(config: SolanaRpcConfig): SolanaRpcReader 
     },
 
     async getTransactionLogs(signature) {
+      // Solana's JSON-RPC `getTransaction` defaults to `finalized` commitment
+      // when none is given; a transaction that has only reached `confirmed`
+      // then returns null even though it already landed, missing the
+      // Hyperlane dispatch log. Request `confirmed` explicitly.
       const result = await call<{ meta: { logMessages: string[] | null } | null } | null>('getTransaction', [
         signature,
-        { maxSupportedTransactionVersion: 0 },
+        { maxSupportedTransactionVersion: 0, commitment: 'confirmed' },
       ])
       return result?.meta?.logMessages ?? null
     },

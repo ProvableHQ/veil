@@ -424,7 +424,7 @@ const routes: ProtocolBridgeRoute[] = [
  * const bridge = createBridgeClient({ registry: DEFAULT_BRIDGE_REGISTRY })
  */
 export const DEFAULT_BRIDGE_REGISTRY: BridgeRegistry = Object.freeze({
-  version: '2026-08-26.aleo-withdrawals.1',
+  version: '2026-08-31.solana-deposits.1',
   chains: Object.freeze(chains),
   assets: Object.freeze(assets),
   routes: Object.freeze(routes),

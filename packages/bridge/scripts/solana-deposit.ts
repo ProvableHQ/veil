@@ -39,13 +39,13 @@ import { fileURLToPath } from 'node:url'
 import bs58 from 'bs58'
 import {
   createBridgeClient,
-  BridgeError,
   type SolanaRpcConfig,
 } from '../src/index.js'
 import {
   createSolanaRpcReader,
   solanaExecutorFromKeyPair,
 } from '../src/solana/index.js'
+import type { SolanaBridgeExecutor } from '../src/types/solana.js'
 import { createPublicClient, http, type PublicClient } from '@provablehq/veil-core'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
@@ -65,7 +65,7 @@ const DELIVERY_POLL_INTERVAL_MS = 20_000
 type State = {
   senderAddress?: string
   aleoBalanceBeforeAtomic?: string
-  dispatch?: { signature: string; status: 'SOURCE_CONFIRMING' | 'DELIVERY_PENDING'; messageId?: string }
+  dispatch?: { signature: string; status: 'SOURCE_CONFIRMING' | 'DELIVERY_PENDING'; messageId?: string; dispatchedAt?: string }
   delivered?: boolean
 }
 
@@ -182,6 +182,40 @@ async function arc20SolBalance(aleoReader: PublicClient, recipient: string): Pro
   return atomic(await aleoReader.readMapping({ programId: ARC20_SOL_PROGRAM_ID, mapping: 'balances', key: recipient }))
 }
 
+/**
+ * Wraps a Solana executor so the signature it returns is checkpointed to the
+ * state file the instant it comes back — before the calling action even
+ * starts polling for confirmation.
+ *
+ * Without this, a crash or a thrown error between broadcast and the action
+ * returning its receipt would leave `state.dispatch` unset, and a re-run
+ * would have no record that a transaction was already sent — risking a
+ * second, fund-duplicating submission. `invoked` flips to `true` as soon as
+ * this wrapper is called, letting the caller tell a preflight failure
+ * (nothing signed or sent yet) apart from a failure after signing was
+ * attempted.
+ */
+function withDispatchCheckpoint(
+  executor: SolanaBridgeExecutor,
+  state: State,
+  invoked: { value: boolean },
+): SolanaBridgeExecutor {
+  return {
+    getAddress: () => executor.getAddress(),
+    signAndSendTransaction: async (wireTransaction) => {
+      invoked.value = true
+      const result = await executor.signAndSendTransaction(wireTransaction)
+      state.dispatch = {
+        signature: result.signature,
+        status: 'SOURCE_CONFIRMING',
+        dispatchedAt: new Date().toISOString(),
+      }
+      saveState(state)
+      return result
+    },
+  }
+}
+
 async function main(): Promise<void> {
   if (process.argv.includes('--reset')) {
     rmSync(STATE_FILE, { force: true })
@@ -199,10 +233,18 @@ async function main(): Promise<void> {
   const amount = process.env.DEPOSIT_SOL ?? '0.002'
   const rpc: SolanaRpcConfig = { url: process.env.SOLANA_RPC_URL?.trim() || 'https://api.mainnet-beta.solana.com' }
 
-  const executor = await solanaExecutorFromKeyPair({ secretKeyBytes: secretKeyBytes(secretKeyRaw), rpc })
-  const senderAddress = await executor.getAddress()
+  const rawExecutor = await solanaExecutorFromKeyPair({ secretKeyBytes: secretKeyBytes(secretKeyRaw), rpc })
+  const senderAddress = await rawExecutor.getAddress()
   const solanaReader = createSolanaRpcReader(rpc)
   const aleoReader = createPublicClient({ transport: http(ALEO_API, { network: 'mainnet' }) })
+
+  // Loaded before the executor is wrapped so the checkpointing wrapper below
+  // can persist straight into this same object the instant a signature comes
+  // back — see `withDispatchCheckpoint`.
+  const state = loadState()
+  state.senderAddress = senderAddress
+  const executorInvoked = { value: false }
+  const executor = withDispatchCheckpoint(rawExecutor, state, executorInvoked)
 
   const bridge = createBridgeClient({
     environment: 'mainnet',
@@ -240,16 +282,23 @@ async function main(): Promise<void> {
     destinationDomain: plan.route.metadata?.destinationDomain ?? 'unknown',
   })
 
-  const state = loadState()
-  state.senderAddress = senderAddress
-
   // ---- Dispatch on Solana --------------------------------------------------
   // Nothing above this point touches the Aleo network — the quote and balance
   // reads are Solana-only, so a preflight failure (insufficient balance) never
   // depends on an Aleo read succeeding.
-  if (!state.dispatch) {
+  // Captured as a boolean rather than narrowing on `state.dispatch` directly:
+  // the wrapped executor mutates `state.dispatch` as a side effect partway
+  // through the call below, which TypeScript's control-flow analysis cannot
+  // see through, so a direct `if (!state.dispatch)` narrowing would go stale.
+  const hadExistingDispatch = state.dispatch !== undefined
+  if (!hadExistingDispatch) {
     log('Submitting the transfer through the local keypair executor.')
     // Never auto-retried: a post-broadcast error would risk a second dispatch.
+    // `executor` checkpoints `state.dispatch` (via withDispatchCheckpoint) the
+    // instant signAndSendTransaction returns a signature — before this call
+    // even starts polling for confirmation — so state.dispatch may already be
+    // populated by the time control reaches either branch below, or by the
+    // time the catch block runs.
     let execution
     try {
       execution = await bridge.executeSolanaHyperlaneTransfer({
@@ -257,43 +306,78 @@ async function main(): Promise<void> {
         confirmationTimeoutMs: CONFIRMATION_TIMEOUT_MS,
       })
     } catch (error) {
-      if (error instanceof BridgeError) {
-        log(`Preflight failed: ${error.message}`)
+      const message = error instanceof Error ? error.message : String(error)
+      if (!executorInvoked.value) {
+        // Nothing was signed or sent yet — a route-validation, quoting, or
+        // balance-preflight failure. Safe to report and let the operator
+        // simply re-run.
+        log(`Preflight failed: ${message}`)
         process.exitCode = 1
         return
       }
-      throw error
+      // The executor was invoked, so a transaction may have been broadcast
+      // (state.dispatch is already checkpointed if signAndSendTransaction
+      // returned). Leave the checkpoint exactly as-is — do not clear it —
+      // and tell the operator to resume rather than re-run from scratch.
+      log(`Transfer submission or confirmation failed after signing was invoked: ${message}`)
+      if (state.dispatch) {
+        log(`Signature ${state.dispatch.signature} was already checkpointed before this failure.`)
+      }
+      log('Do not re-submit. Re-run this script to resume from the checkpoint; it will not resubmit a landed transaction.')
+      process.exitCode = 1
+      return
     }
     const receipt = execution.receipt
     log(`Transfer status: ${receipt.status}`)
     log(`Submitted Solana transaction: ${receipt.sourceTxId}`)
     if (receipt.status === 'SOURCE_CONFIRMING') {
-      state.dispatch = { signature: receipt.sourceTxId!, status: 'SOURCE_CONFIRMING' }
+      state.dispatch = { ...(state.dispatch ?? {}), signature: receipt.sourceTxId!, status: 'SOURCE_CONFIRMING' }
       saveState(state)
       log('Confirmation timed out before this run finished; the transaction was already broadcast.')
       log('Re-run this script to resume polling for confirmation — it will not resubmit.')
       process.exitCode = 1
       return
     }
-    state.dispatch = { signature: receipt.sourceTxId!, status: 'DELIVERY_PENDING', ...(receipt.messageId ? { messageId: receipt.messageId } : {}) }
+    state.dispatch = {
+      ...(state.dispatch ?? {}),
+      signature: receipt.sourceTxId!,
+      status: 'DELIVERY_PENDING',
+      ...(receipt.messageId ? { messageId: receipt.messageId } : {}),
+    }
     saveState(state)
     log('Solana dispatch confirmed.')
     log(`Hyperlane message id: ${receipt.messageId ?? 'not found in the confirmed transaction logs'}`)
   } else {
-    log(`Resuming with existing dispatch ${state.dispatch.signature} (${state.dispatch.status})`)
+    log(`Resuming with existing dispatch ${state.dispatch!.signature} (${state.dispatch!.status})`)
+  }
+
+  if (!state.dispatch) {
+    // Unreachable: every path above either returns or leaves state.dispatch
+    // set. Guards the read below and gives TypeScript a fresh narrowing point.
+    throw new Error('Internal error: no dispatch was recorded after submission.')
   }
 
   // ---- Resume: finish confirming a dispatch that timed out last run. -----
   if (state.dispatch.status === 'SOURCE_CONFIRMING') {
     const signature = state.dispatch.signature
+    let logs: string[] | null = null
     const outcome = await poll('Solana confirmation', { timeoutMs: CONFIRMATION_TIMEOUT_MS, intervalMs: 2_000 }, async () => {
       const status = await solanaReader.getSignatureStatus(signature)
-      return status === 'confirmed' || status === 'finalized' ? status : undefined
+      if (status === 'confirmed' || status === 'finalized') return status
+      if (status === null) {
+        // getSignatureStatuses only reports recent activity and can forget an
+        // older signature (e.g. across a long gap between runs) even though
+        // it landed. Fall back to the full-history lookup (getTransaction,
+        // commitment 'confirmed') before concluding it never landed.
+        logs = await solanaReader.getTransactionLogs(signature)
+        if (logs) return 'confirmed'
+      }
+      return undefined
     })
     log(`Solana transaction ${outcome}.`)
-    const logs = await solanaReader.getTransactionLogs(signature)
+    logs ??= await solanaReader.getTransactionLogs(signature)
     const messageIdMatch = logs?.map((line) => /Dispatched message to \d+, ID (0x[0-9a-fA-F]{64})/.exec(line)?.[1]).find(Boolean)
-    state.dispatch = { signature, status: 'DELIVERY_PENDING', ...(messageIdMatch ? { messageId: messageIdMatch } : {}) }
+    state.dispatch = { ...state.dispatch, signature, status: 'DELIVERY_PENDING', ...(messageIdMatch ? { messageId: messageIdMatch } : {}) }
     saveState(state)
     log(`Hyperlane message id: ${messageIdMatch ?? 'not found in the confirmed transaction logs'}`)
   }

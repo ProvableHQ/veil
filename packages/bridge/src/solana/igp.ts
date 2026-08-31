@@ -82,7 +82,19 @@ export function quoteIgpGasPayment(params: {
     const entryStart = offset
     const domain = view.getUint32(entryStart, true)
     if (domain === params.destinationDomain) {
-      const exchangeRateOffset = entryStart + DOMAIN_BYTES + GAS_ORACLE_TAG_BYTES
+      // SEALEVEL_NOTES.md §4: `RemoteGasData` (tag 0) is the only `GasOracle`
+      // variant defined today. Assert it rather than silently decoding a
+      // future variant's bytes as if they were `RemoteGasData`'s.
+      const tagOffset = entryStart + DOMAIN_BYTES
+      const gasOracleTag = view.getUint8(tagOffset)
+      if (gasOracleTag !== 0) {
+        throw new BridgeError(
+          `Sealevel IGP account has an unexpected GasOracle variant tag ${gasOracleTag} for domain `
+          + `${params.destinationDomain}; only variant 0 (RemoteGasData) is decoded`,
+        )
+      }
+
+      const exchangeRateOffset = tagOffset + GAS_ORACLE_TAG_BYTES
       const gasPriceOffset = exchangeRateOffset + EXCHANGE_RATE_BYTES
       const decimalsOffset = gasPriceOffset + GAS_PRICE_BYTES
 

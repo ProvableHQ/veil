@@ -41,4 +41,29 @@ describe('quoteIgpGasPayment', () => {
       }),
     ).toThrowError(BridgeError)
   })
+
+  it('throws a BridgeError when the gas-oracle entry carries an unrecognized variant tag', () => {
+    // Minimal synthetic account matching the header + single-entry layout
+    // documented in SEALEVEL_NOTES.md §4:
+    // [1B initialized][8B discriminator][1B bump_seed][32B salt]
+    // [1B owner Option tag (None)][32B beneficiary][4B oracle count = 1]
+    // [4B domain][1B GasOracle tag][16B exchange rate][16B gas price][1B decimals]
+    const domain = 42
+    const headerBytes = 1 + 8 + 1 + 32 + 1 + 32 + 4
+    const entryBytes = 4 + 1 + 16 + 16 + 1
+    const data = new Uint8Array(headerBytes + entryBytes)
+    const view = new DataView(data.buffer)
+    view.setUint32(1 + 8 + 1 + 32 + 1 + 32, 1, true) // oracle count = 1
+    const entryStart = headerBytes
+    view.setUint32(entryStart, domain, true)
+    view.setUint8(entryStart + 4, 7) // unrecognized GasOracle variant tag
+
+    expect(() =>
+      quoteIgpGasPayment({
+        igpAccountData: data,
+        destinationDomain: domain,
+        gasAmount: 1n,
+      }),
+    ).toThrowError(/unexpected GasOracle variant tag 7/)
+  })
 })

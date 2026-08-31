@@ -61,4 +61,22 @@ describe('buildTransferRemoteInstruction', () => {
     expect(Buffer.from(built.data).toString('base64')).toBe(fixture.instructionDataBase64)
     expect(built.accounts).toEqual(fixture.accounts)
   })
+
+  it('omits the optional overhead-IGP slot and preserves the other slots\' order when metadata has no igpOverheadAccount', async () => {
+    const { igpOverheadAccount, ...metadataWithoutOverhead } = metadataFromFixture(fixture)
+    const built = await buildTransferRemoteInstruction({
+      metadata: metadataWithoutOverhead,
+      senderAddress: fixture.senderAddress,
+      uniqueMessageAddress: fixture.uniqueMessageAddress,
+      recipientAleoAddress: fixture.recipientAleoAddress,
+      amountLamports: BigInt(fixture.amountLamports),
+    })
+
+    expect(built.accounts).toHaveLength(15)
+    expect(built.accounts.map((account) => account.address)).not.toContain(igpOverheadAccount)
+    // Every other slot's relative order is unchanged — the 16-account fixture
+    // list with row 12 (the overhead account) removed.
+    const expectedWithoutOverhead = fixture.accounts.filter((account) => account.address !== igpOverheadAccount)
+    expect(built.accounts).toEqual(expectedWithoutOverhead)
+  })
 })

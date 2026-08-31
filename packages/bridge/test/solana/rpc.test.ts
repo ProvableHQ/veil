@@ -121,7 +121,7 @@ describe('createSolanaRpcReader', () => {
       const [, init] = (transport as ReturnType<typeof vi.fn>).mock.calls[0] as [string, { body: string }]
       const { method, params } = parseBody(init)
       expect(method).toBe('getTransaction')
-      expect(params).toEqual(['sig', { maxSupportedTransactionVersion: 0 }])
+      expect(params).toEqual(['sig', { maxSupportedTransactionVersion: 0, commitment: 'confirmed' }])
     })
 
     it('returns null when the transaction is not found', async () => {

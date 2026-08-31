@@ -115,7 +115,7 @@ export type SolanaHyperlaneTransferQuote = {
  * executor, then polls the configured RPC endpoint for confirmation.
  *
  * @property plan Pure transfer plan returned by `prepareTransfer`.
- * @property pollingIntervalMs Delay between confirmation checks. Defaults to 1,000 milliseconds.
+ * @property pollingIntervalMs Delay between confirmation checks. Defaults to 1,000 milliseconds; floored at 100 milliseconds so a small or zero value cannot busy-poll the RPC endpoint.
  * @property confirmationTimeoutMs Maximum time to wait for confirmation. Defaults to 120,000 milliseconds; a timeout returns resumable pending state.
  */
 export type ExecuteSolanaHyperlaneTransferParameters = {
