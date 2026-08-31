@@ -373,11 +373,11 @@ ETH to the Ethereum recipient asynchronously.
 
 # Solana SOL to Aleo SOL
 
-`sol-to-aleo.ts` plans `hyperlane:solana/sol->aleo/sol` with Veil, reads the
-deployed native SOL Warp Route and IGP accounts, and constructs the transfer
-with Hyperlane's Solana Kit-native codecs. The read-only path needs only the
-sender's public address; it quotes the hook and network fees and runs an
-unsigned Solana simulation. It does not create a replayable signature.
+`sol-to-aleo.ts` builds a bridge client with an injected Solana RPC endpoint
+and plans `hyperlane:solana/sol->aleo/sol` with Veil. The read-only path needs
+only the sender's public address; it quotes the Hyperlane hook payment and
+Solana network fee through `quoteSolanaHyperlaneTransfer` and reads the
+sender's native SOL balance.
 
 ```sh
 export SOLANA_RPC_URL='https://api.mainnet-beta.solana.com'
@@ -389,9 +389,9 @@ pnpm tsx examples/bridge/sol-to-aleo.ts
 ```
 
 The output includes the native SOL balance, Hyperlane hook payment, Solana
-transaction fee, total required balance, Warp Route program, and Aleo
-destination domain. A production RPC endpoint is recommended because Solana's
-public endpoint is rate-limited.
+network fee, total required balance, Warp Route program, and Aleo destination
+domain. A production RPC endpoint is recommended because Solana's public
+endpoint is rate-limited.
 
 To submit, enter either a base58-encoded 64-byte Solana keypair or the JSON byte
 array stored by the Solana CLI. The derived address must match `SOLANA_SENDER`
@@ -407,11 +407,15 @@ EXECUTE_HYPERLANE_SOL=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
   pnpm tsx examples/bridge/sol-to-aleo.ts
 ```
 
-Execution signs locally with `@solana/kit`, simulates the signed transaction,
-submits it, and waits for confirmed or finalized status. The accepted source
-transaction locks native SOL in the Warp Route; Hyperlane relayers mint SOL to
-the Aleo recipient asynchronously. `SOLANA_CONFIRMATION_TIMEOUT_MS` optionally
-overrides the two-minute confirmation timeout.
+Execution builds a `solanaExecutorFromKeyPair` executor from
+`@provablehq/aleo-bridge-sdk/solana`, which signs locally with `@solana/kit`,
+then calls `executeSolanaHyperlaneTransfer`. That action assembles the
+transaction, requotes the live hook payment, checks the sender's balance,
+submits the signed transaction, and polls until confirmed or finalized. The
+accepted source transaction locks native SOL in the Warp Route; Hyperlane
+relayers mint SOL to the Aleo recipient asynchronously.
+`SOLANA_CONFIRMATION_TIMEOUT_MS` optionally overrides the two-minute
+confirmation timeout.
 
 # Aleo SOL to Solana SOL
 
