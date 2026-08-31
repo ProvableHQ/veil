@@ -40,7 +40,8 @@
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "solana-deposit": "tsx scripts/solana-deposit.ts"
   },
   "files": [
     "dist"
@@ -64,6 +65,7 @@
   },
   "devDependencies": {
     "@provablehq/sdk": "^0.11.6",
-    "@solana/kit": "^8.0.0"
+    "@solana/kit": "^8.0.0",
+    "tsx": "^4.21.0"
   }
 }
