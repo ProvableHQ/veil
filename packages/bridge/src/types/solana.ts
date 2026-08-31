@@ -48,7 +48,12 @@ export type SolanaRpcConfig = {
  * @property mailboxOutboxPda Program-derived address holding the Mailbox's outbox state.
  * @property igpProgramAddress Solana interchain gas paymaster program used by the reviewed deployment.
  * @property igpProgramDataPda Program-derived address holding the gas paymaster's program data.
- * @property igpAccount Gas paymaster account charged for destination delivery.
+ * @property igpAccount Terminal gas-oracle account actually debited for destination delivery; read
+ * directly off the token's configuration when the route points at a plain IGP, or off the configured
+ * `igpOverheadAccount`'s own `inner` field when the route wraps its IGP in an `OverheadIgp`.
+ * @property igpOverheadAccount Optional `OverheadIgp` wrapper account configured as the token's gas
+ * paymaster. Present only when the reviewed deployment wraps its IGP in an `OverheadIgp` layer;
+ * `buildTransferRemoteInstruction` appends it ahead of `igpAccount` when set, and omits it otherwise.
  * @property splNoopProgramAddress SPL no-op program used to emit Hyperlane message logs.
  * @property destinationDomain Hyperlane domain passed to the transfer instruction.
  * @property destinationGasAmount Destination gas amount quoted for delivery, as a base-10 string.
@@ -66,6 +71,7 @@ export type SolanaHyperlaneRouteMetadata = {
   igpProgramAddress: string
   igpProgramDataPda: string
   igpAccount: string
+  igpOverheadAccount?: string | undefined
   splNoopProgramAddress: string
   destinationDomain: number
   destinationGasAmount: string
