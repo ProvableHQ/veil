@@ -185,8 +185,10 @@ The wrapper also requires the current `[MerkleProof; 2]` non-inclusion witness
 for its compliance list. The example fetches the live tree from
 `usdcx_freezelist.aleo/compliance/freeze-list` and uses the Provable SDK's
 `SealanceMerkleTree` to derive the witness for the Aleo signer immediately
-before submission. Supply the Aleo and Provable API credentials used for
-proving and record scanning:
+before submission. The depth-15 tree is encoded as the wrapper contract's
+required 16-field path because the SDK includes the selected leaf as the first
+path element. Supply the Aleo and Provable API credentials used for proving and
+record scanning:
 
 ```sh
 printf 'Aleo Private Key: '
