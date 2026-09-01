@@ -288,6 +288,38 @@ action description reads as marketing and says nothing.
 State facts plainly. Anchor unfamiliar concepts to known ones. Explain why and
 when. Address "a developer" or "the caller". Give hard rules emphasis.
 
+### Lead with the tutorial's utility
+
+Open an introductory tutorial comment by stating what the tutorial helps the
+reader accomplish. Introduce further context in the order required to understand
+the example. Do not begin with an architectural limitation that needs concepts
+the reader has not encountered, then explain why the tutorial exists.
+
+```ts
+// Bad — opens with an unfamiliar architectural limitation before stating the
+// tutorial's purpose.
+/**
+ * Shield Swap trade history describes pool-wide swaps, not per-position fills.
+ * This example defines a position fill as the change in token0 and token1 that
+ * backs the position's fixed liquidity between two consecutive pool prices.
+ */
+
+// Good — states the utility first, then defines the first required concept.
+/**
+ * This example demonstrates how a liquidity provider can construct swap fill
+ * history for a liquidity position within an individual pool.
+ *
+ * This example defines a position fill as the change in token0 and token1 that
+ * backs the position's fixed liquidity between two consecutive pool prices.
+ */
+```
+
+The bad opening asks the reader to understand a problem in the current
+architecture without explaining how, where, or why it occurs. That context is
+too specific for a developer or agent beginning with Shield Swap. State the
+tutorial's focus first, then introduce each implementation detail when it
+becomes relevant.
+
 ### Good
 
 > All value transfers on the Aleo Network are done by calling functions in the
@@ -324,4 +356,5 @@ record actually is.
 | "Shape" | "the shape of token0 (`plain` or `wrapped`)" | name the structure: the standards, variants, or fields |
 | Invented Aleo terms | "transaction coordinates" | name the block height, transaction index, transition id, or other exact value and state why it is needed |
 | Repository history | "the checked-in snapshot predates this field" | describe the current API contract and why it matters to the caller |
+| Tutorial problem-first opening | an unfamiliar architectural limitation before the tutorial's purpose | state what the tutorial helps the reader accomplish, then introduce context when needed |
 | Implementation narration | Leo/compiler constraints, dispatch tables, "Pure and local" taglines on actions | what the call does to the caller's assets, usage, and failure modes |

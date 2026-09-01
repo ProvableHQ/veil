@@ -1,8 +1,7 @@
 /**
- * Tracks a Shield Swap LP position by reconstructing its inventory change for
- * each pool swap.
+ * This example demonstrates how a liquidity provider can construct swap fill
+ * history for a liquidity position within an individual pool.
  *
- * Shield Swap trade history describes pool-wide swaps, not per-position fills.
  * This example defines a position fill as the change in token0 and token1 that
  * backs the position's fixed liquidity between two consecutive pool prices.
  * The calculation combines four data sources:
