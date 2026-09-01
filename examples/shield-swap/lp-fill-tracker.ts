@@ -19,8 +19,7 @@
  * export ALEO_CONSUMER_ID='...'
  * export ALEO_DPS_API_KEY='...'
  * export VEIL_POSITION_TOKEN_ID='...field'
- * pnpm exec tsx -e \
- *   "import('./examples/shield-swap/lp-fill-tracker.ts').then(({ default: m }) => m.trackLiquidityPosition())"
+ * pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts
  * ```
  *
  * `SHIELD_SWAP_WS_URL` is optional; the client selects the testnet or mainnet
@@ -416,4 +415,11 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
 
   setInterval(queueBackfill, 10_000)
   await new Promise<void>(() => {})
+}
+
+if (process.argv[1]?.endsWith('lp-fill-tracker.ts')) {
+  void trackLiquidityPosition().catch((error: unknown) => {
+    console.error(error)
+    process.exitCode = 1
+  })
 }

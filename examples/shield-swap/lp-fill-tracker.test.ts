@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { calculatePositionFill } from './lp-fill-tracker.js'
 
@@ -26,5 +28,18 @@ describe('calculatePositionFill', () => {
         sqrtPriceAfterX128: Q128,
       }),
     ).toEqual({ amount0: 50n, amount1: -100n })
+  })
+})
+
+describe('lp-fill-tracker script', () => {
+  it('starts tracking when invoked directly', () => {
+    const script = fileURLToPath(new URL('./lp-fill-tracker.ts', import.meta.url))
+    const result = spawnSync('pnpm', ['exec', 'tsx', script], {
+      encoding: 'utf8',
+      env: { ...process.env, VEIL_POSITION_TOKEN_ID: '' },
+    })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('Set VEIL_POSITION_TOKEN_ID')
   })
 })
