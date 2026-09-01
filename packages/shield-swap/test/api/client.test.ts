@@ -91,6 +91,18 @@ describe('ApiClient', () => {
     expect((calls[0]!.init.headers as Record<string, string>).authorization).toBe('Bearer ss_live_abc')
   })
 
+  it('mints a short-lived WebSocket ticket with the active API credential', async () => {
+    const { impl, calls } = fetchMock([{ json: { data: { token: 'ws-ticket', expires_at: 1_753_500_060 } } }])
+    const client = new ApiClient({ fetch: impl, apiToken: 'ss_live_abc' })
+
+    await expect(client.getWebSocketTicket()).resolves.toEqual({
+      token: 'ws-ticket',
+      expires_at: 1_753_500_060,
+    })
+    expect(calls[0]!.url).toBe(`${DEFAULT_API_URL}/auth/ws-ticket`)
+    expect((calls[0]!.init.headers as Record<string, string>).authorization).toBe('Bearer ss_live_abc')
+  })
+
   it('gated read endpoints without any credential fail fast with the remedy', async () => {
     const client = new ApiClient({ fetch: fetchMock([{ json: {} }]).impl })
     await expect(client.getRoute({ token_in: '1field', token_out: '2field' })).rejects.toThrow(
