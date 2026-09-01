@@ -202,6 +202,28 @@ type CanonicalTrade = IndexedPoolTrade & {
 }
 ```
 
+### Describe the current contract, not the repository history
+
+Do not describe how code changed over time in the repository. Commit history,
+generation drift, and implementation decisions may inform development, but they
+are irrelevant to a caller using the external API. When documenting a method,
+type, interface, or object, describe only its current behavior and relevance to
+the caller. Keep the context used to create it in the commit, pull request, or
+an internal development note.
+
+```ts
+// Bad — explains repository history instead of the API contract.
+/**
+ * Represents one pool trade returned by the deployed Shield Swap API.
+ *
+ * The checked-in OpenAPI snapshot predates the execution fields used by this
+ * tutorial, so the example documents the current response locally.
+ */
+
+// Good — identifies the payload and the endpoint that returns it.
+/** Pool trade payload returned by the `/pools/{key}/trades` endpoint from the Shield Swap API. */
+```
+
 ### Top-level action descriptions serve the caller, not the implementation
 
 The description on an exported action documents what matters to the caller:
@@ -301,4 +323,5 @@ record actually is.
 | "Reach for" | "Reach for this when…" | "Applies when…", "Use for…", "Suited to…", or state the discriminating fact |
 | "Shape" | "the shape of token0 (`plain` or `wrapped`)" | name the structure: the standards, variants, or fields |
 | Invented Aleo terms | "transaction coordinates" | name the block height, transaction index, transition id, or other exact value and state why it is needed |
+| Repository history | "the checked-in snapshot predates this field" | describe the current API contract and why it matters to the caller |
 | Implementation narration | Leo/compiler constraints, dispatch tables, "Pure and local" taglines on actions | what the call does to the caller's assets, usage, and failure modes |

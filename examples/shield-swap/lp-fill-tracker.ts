@@ -37,10 +37,8 @@ import { findBlockHash, getBlock } from '../../packages/core/src/index.js'
 import { setupClient } from './setup-client.js'
 
 /**
- * Represents one pool trade returned by the deployed Shield Swap API.
- *
- * The checked-in OpenAPI snapshot predates the execution fields used by this
- * tutorial, so the example documents the current response locally.
+ * Pool trade payload returned by the `/pools/{key}/trades` endpoint from the
+ * Shield Swap API.
  *
  * @property id Unique indexer identifier for the trade row.
  * @property amount0 Pool-wide token0 amount in the token's smallest unit.
@@ -77,8 +75,8 @@ type IndexedPoolTrade = {
 }
 
 /**
- * Adds the block height and transaction index to the API trade type so the
- * trade event can be ordered precisely.
+ * Adds the block height and transaction index to the `IndexedPoolTrade` type
+ * returned by the API so the trade event can be ordered precisely.
  *
  * @property blockHeight Block height containing the transaction.
  * @property transactionIndex Transaction order within the block.
