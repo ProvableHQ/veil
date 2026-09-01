@@ -66,18 +66,29 @@ export type TrackLiquidityPositionOptions = {
 }
 
 /**
- * Tracks inventory fills for `VEIL_POSITION_TOKEN_ID` from process start.
+ * Tracks a liquidity position's token inventory changes from process start.
  *
- * Pool history comes from `client.api`; the position and canonical transaction
- * order come directly from chain reads on the same client. REST is the source
- * of truth. WebSocket messages only trigger a faster REST backfill, while a
- * periodic poll covers missed messages and disconnected sockets.
+ * Reads `VEIL_POSITION_TOKEN_ID` from the environment, backfills pool trades
+ * from the Shield Swap REST API, and verifies their canonical order against the
+ * Aleo chain. When watching, WebSocket messages prompt faster backfills and
+ * periodic polling covers missed messages or disconnected sockets. Logged net
+ * and gross amounts cover the current run rather than the position's lifetime.
  *
- * The tracker refuses to advance if the position's range or liquidity changes.
- * Pool-trade rows do not identify a position, so silently continuing could
- * place that mutation on the wrong side of a swap. Net and gross totals in each
- * log line are therefore totals for this run, not the position's lifetime
- * history.
+ * @param options Controls whether tracking continues after the initial backfill.
+ * `watch` defaults to `true`.
+ * @returns When `watch` is `false`, resolves after the initial backfill;
+ * otherwise remains pending while the tracker runs.
+ * @throws If the position or pool cannot be read, transaction order cannot be
+ * resolved, an indexed swap lacks an execution price, REST history no longer
+ * overlaps the local cursor, or the position's range or liquidity changes.
+ *
+ * @example
+ * ```ts
+ * await trackLiquidityPosition()
+ *
+ * // Stop after the initial REST backfill.
+ * await trackLiquidityPosition({ watch: false })
+ * ```
  */
 export async function trackLiquidityPosition(options: TrackLiquidityPositionOptions = {}): Promise<void> {
   const positionTokenId = process.env.VEIL_POSITION_TOKEN_ID
