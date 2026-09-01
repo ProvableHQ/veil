@@ -161,6 +161,47 @@ instead of stating it. Name the concrete variants, standards, or fields.
  */
 ```
 
+### Use canonical Aleo terms for ledger indexes
+
+Keep the language plain when referring to variables used to index information
+on the Aleo ledger, including any combination of transaction id, transition id,
+transition index, and transaction index. Do not invent collective terms such as
+"coordinates" for these values.
+
+Invented collective terms fail for three reasons:
+
+1. They erase the immediate context: what the values identify or order in the
+   code being documented.
+2. They introduce terminology that is not canonical to the Aleo blockchain.
+3. They read like forced concision built from too many prepended adjectives.
+
+```ts
+// Bad — "coordinates" replaces the reason these fields are added.
+/**
+ * Adds chain-confirmed transaction coordinates to an indexed pool trade.
+ *
+ * @property blockHeight Aleo block height containing the transaction.
+ * @property transactionIndex Transaction order within the Aleo block.
+ */
+type CanonicalTrade = IndexedPoolTrade & {
+  blockHeight: number
+  transactionIndex: number
+}
+
+// Good — states exactly what is added and why the caller needs it.
+/**
+ * Adds the block height and transaction index to the API trade type so the
+ * trade event can be ordered precisely.
+ *
+ * @property blockHeight Block height containing the transaction.
+ * @property transactionIndex Transaction order within the block.
+ */
+type CanonicalTrade = IndexedPoolTrade & {
+  blockHeight: number
+  transactionIndex: number
+}
+```
+
 ### Top-level action descriptions serve the caller, not the implementation
 
 The description on an exported action documents what matters to the caller:
@@ -259,4 +300,5 @@ record actually is.
 | First/second person | "you", "your", "we", "our", "I" | "the caller", "a developer", or imperative mood |
 | "Reach for" | "Reach for this when…" | "Applies when…", "Use for…", "Suited to…", or state the discriminating fact |
 | "Shape" | "the shape of token0 (`plain` or `wrapped`)" | name the structure: the standards, variants, or fields |
+| Invented Aleo terms | "transaction coordinates" | name the block height, transaction index, transition id, or other exact value and state why it is needed |
 | Implementation narration | Leo/compiler constraints, dispatch tables, "Pure and local" taglines on actions | what the call does to the caller's assets, usage, and failure modes |

@@ -50,7 +50,7 @@ import { setupClient } from './setup-client.js'
  * @property fee1 Gross token1 swap fee in the token's smallest unit.
  * @property legIndex Execution order of a swap leg within its transaction.
  * @property liquidityAfter Active pool liquidity after the trade.
- * @property pool Pool key affected by the trade.
+ * @property pool ID of the pool affected by the trade.
  * @property protocolFee0 Protocol share of `fee0` in token0's smallest unit.
  * @property protocolFee1 Protocol share of `fee1` in token1's smallest unit.
  * @property sqrtPriceAfter Pool square-root price after the trade in Q128.
@@ -77,10 +77,11 @@ type IndexedPoolTrade = {
 }
 
 /**
- * Adds chain-confirmed transaction coordinates to an indexed pool trade.
+ * Adds the block height and transaction index to the API trade type so the
+ * trade event can be ordered precisely.
  *
- * @property blockHeight Aleo block height containing the transaction.
- * @property transactionIndex Transaction order within the Aleo block.
+ * @property blockHeight Block height containing the transaction.
+ * @property transactionIndex Transaction order within the block.
  */
 type CanonicalTrade = IndexedPoolTrade & {
   blockHeight: number
