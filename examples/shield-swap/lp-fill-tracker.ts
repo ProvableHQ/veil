@@ -28,10 +28,11 @@
  * represent the position's accrued fees.
  */
 import {
+  PROGRAM_ID,
   amountsForLiquidity,
   getSqrtPriceAtTickX128,
 } from '../../packages/shield-swap/src/index.js'
-import { findBlockHash, getBlock } from '../../packages/core/src/index.js'
+import type { Transaction } from '../../packages/core/src/index.js'
 import { setupClient } from './setup-client.js'
 
 /**
@@ -73,82 +74,126 @@ type IndexedPoolTrade = {
 }
 
 /**
- * Adds the block height and transaction index to the `IndexedPoolTrade` type
- * returned by the API so the trade event can be ordered precisely.
+ * Adds the block height, transaction index, transition id, and transition index
+ * to the type returned by the API so the trade event can be ordered precisely.
  *
  * @property blockHeight Block height containing the transaction.
  * @property transactionIndex Transaction order within the block.
+ * @property transitionId ID of the transition that executed the swap.
+ * @property transitionIndex Transition order within the transaction.
  */
 type CanonicalTrade = IndexedPoolTrade & {
   blockHeight: number
   transactionIndex: number
+  transitionId: string
+  transitionIndex: number
 }
 
 /**
- * Describes a fixed-liquidity position before and after one pool price move.
+ * Records a liquidity position's inventory before and after one ordered pool
+ * swap.
  *
- * All square-root prices use Shield Swap's Q128 fixed-point encoding. The
- * calculation is local and does not read the network.
+ * The position liquidity and tick range remain fixed during the swap. All
+ * square-root prices use Shield Swap's Q128 encoding, and all token amounts use
+ * the corresponding token's smallest unit.
  *
- * @property liquidity Position liquidity in the contract's unsigned integer units.
- * @property sqrtLowerX128 Square-root price at the position's lower tick in Q128.
- * @property sqrtUpperX128 Square-root price at the position's upper tick in Q128.
+ * @property tradeId Unique indexer identifier for the pool trade.
+ * @property positionTokenId Token id of the position NFT.
+ * @property poolKey ID of the pool containing the position.
+ * @property transactionId Aleo transaction id containing the swap.
+ * @property transitionId Aleo transition id that executed the swap.
+ * @property blockHeight Block height containing the transaction.
+ * @property transactionIndex Transaction order within the block.
+ * @property transitionIndex Transition order within the transaction.
+ * @property legIndex Pool-leg order within the swap transition.
+ * @property positionLiquidity Position liquidity effective during the swap.
+ * @property tickLower Lower tick of the position's price range.
+ * @property tickUpper Upper tick of the position's price range.
  * @property sqrtPriceBeforeX128 Pool square-root price before the swap in Q128.
  * @property sqrtPriceAfterX128 Pool square-root price after the swap in Q128.
+ * @property tickBefore Active pool tick before the swap.
+ * @property tickAfter Active pool tick after the swap.
+ * @property zeroForOne True when the swap sells token0 for token1.
+ * @property amount0Before Token0 amount backing the position before the swap.
+ * @property amount1Before Token1 amount backing the position before the swap.
+ * @property amount0After Token0 amount backing the position after the swap.
+ * @property amount1After Token1 amount backing the position after the swap.
  */
-export type PositionFillParameters = {
-  liquidity: bigint
-  sqrtLowerX128: bigint
-  sqrtUpperX128: bigint
+export type PositionFill = {
+  tradeId: string
+  positionTokenId: string
+  poolKey: string
+  transactionId: string
+  transitionId: string
+  blockHeight: number
+  transactionIndex: number
+  transitionIndex: number
+  legIndex: number
+  positionLiquidity: bigint
+  tickLower: number
+  tickUpper: number
   sqrtPriceBeforeX128: bigint
   sqrtPriceAfterX128: bigint
+  tickBefore: number
+  tickAfter: number
+  zeroForOne: boolean
+  amount0Before: bigint
+  amount1Before: bigint
+  amount0After: bigint
+  amount1After: bigint
 }
 
 /**
- * Reports the position's signed token inventory change for one price move.
- *
- * Positive values add token inventory and negative values remove it. Amounts
- * use each token's smallest unit.
- *
- * @property amount0 Signed change in the token0 amount backing the position.
- * @property amount1 Signed change in the token1 amount backing the position.
- */
-export type PositionFill = { amount0: bigint; amount1: bigint }
-
-/**
- * Calculates a position's token inventory change across one pool price move.
+ * Calculates a position's token inventory before and after one pool swap.
  *
  * Concentrated liquidity represents different token amounts at different
- * prices. This function values the same liquidity and tick range at both
- * prices, then applies `delta = amountAfter - amountBefore` independently to
- * token0 and token1. It runs locally and does not read the network.
+ * prices. This function values the supplied position liquidity and tick range
+ * at both pool prices. It runs locally and does not read the network.
  *
- * @param params Fixed liquidity, range boundaries, and consecutive pool prices.
- * @returns Signed token0 and token1 changes in each token's smallest unit.
+ * @param params Trade identity, chain order, fixed position state, and
+ * consecutive pool prices.
+ * @returns The supplied fill context with before/after position inventory.
  *
  * @example
  * ```ts
  * const fill = calculatePositionFill({
- *   liquidity: 1_000_000n,
- *   sqrtLowerX128: getSqrtPriceAtTickX128(-100),
- *   sqrtUpperX128: getSqrtPriceAtTickX128(100),
+ *   tradeId: 'trade-1',
+ *   positionTokenId: '11field',
+ *   poolKey: '22field',
+ *   transactionId: 'at1...',
+ *   transitionId: 'au1...',
+ *   blockHeight: 123,
+ *   transactionIndex: 4,
+ *   transitionIndex: 2,
+ *   legIndex: 0,
+ *   positionLiquidity: 1_000_000n,
+ *   tickLower: -100,
+ *   tickUpper: 100,
  *   sqrtPriceBeforeX128: getSqrtPriceAtTickX128(0),
  *   sqrtPriceAfterX128: getSqrtPriceAtTickX128(10),
+ *   tickBefore: 0,
+ *   tickAfter: 10,
+ *   zeroForOne: false,
  * })
  * ```
  */
-export function calculatePositionFill(params: PositionFillParameters): PositionFill {
+export function calculatePositionFill(
+  params: Omit<PositionFill, 'amount0Before' | 'amount1Before' | 'amount0After' | 'amount1After'>,
+): PositionFill {
   const range = {
-    liquidity: params.liquidity,
-    sqrtLowerX128: params.sqrtLowerX128,
-    sqrtUpperX128: params.sqrtUpperX128,
+    liquidity: params.positionLiquidity,
+    sqrtLowerX128: getSqrtPriceAtTickX128(params.tickLower),
+    sqrtUpperX128: getSqrtPriceAtTickX128(params.tickUpper),
   }
   const before = amountsForLiquidity({ ...range, sqrtPriceX128: params.sqrtPriceBeforeX128 })
   const after = amountsForLiquidity({ ...range, sqrtPriceX128: params.sqrtPriceAfterX128 })
 
   return {
-    amount0: after.amount0 - before.amount0,
-    amount1: after.amount1 - before.amount1,
+    ...params,
+    amount0Before: before.amount0,
+    amount1Before: before.amount1,
+    amount0After: after.amount0,
+    amount1After: after.amount1,
   }
 }
 
@@ -166,19 +211,19 @@ export type TrackLiquidityPositionOptions = {
 /**
  * Tracks a liquidity position's token inventory changes from process start.
  *
- * Reads the position and pool from the Aleo network, then reports a signed fill
- * for each newly indexed swap. The function performs network reads and opens a
- * WebSocket when `watch` is enabled; it does not sign or submit transactions.
- * Logged net and gross amounts cover the current run rather than the position's
- * lifetime.
+ * Reads the position and pool from the Aleo network, then reports the
+ * position's token inventory before and after each newly indexed swap. The
+ * function performs network reads and opens a WebSocket when `watch` is
+ * enabled; it does not sign or submit transactions.
  *
  * @param options Controls whether tracking continues after the initial backfill.
  * `watch` defaults to `true`.
  * @returns When `watch` is `false`, resolves after the initial backfill;
  * otherwise remains pending while the tracker runs.
  * @throws If the position or pool cannot be read, transaction order cannot be
- * resolved, an indexed swap lacks an execution price, REST history no longer
- * overlaps the local cursor, or the position's range or liquidity changes.
+ * resolved, an indexed swap lacks an ending price or tick, the swap direction
+ * cannot be determined, REST history no longer overlaps the local cursor, or
+ * the position's range or liquidity changes.
  *
  * @example
  * ```ts
@@ -198,34 +243,21 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
   const position = await client.getPosition({ positionTokenId })
   if (!position) throw new Error(`Position ${positionTokenId} does not exist on chain.`)
 
-  // Step 2: Hold the position constant and prepare the fill accumulator. A
-  // position's token inventory can change as price moves even when its liquidity
-  // remains unchanged.
-  const range = {
-    liquidity: position.liquidity,
-    sqrtLowerX128: getSqrtPriceAtTickX128(position.tick_lower),
-    sqrtUpperX128: getSqrtPriceAtTickX128(position.tick_upper),
-  }
+  // Step 2: Hold the position constant. A position's token inventory can change
+  // as price moves even when its liquidity remains unchanged.
   const seen = new Set<string>()
-  const blocks = new Map<string, Awaited<ReturnType<typeof getBlock>>>()
-
-  // Net totals preserve direction; gross totals sum absolute changes. Together
-  // they distinguish final inventory movement from total inventory turnover.
-  let net0 = 0n
-  let net1 = 0n
-  let gross0 = 0n
-  let gross1 = 0n
+  const blocks = new Map<string, Awaited<ReturnType<typeof client.getBlock>>>()
 
   // REST timestamps do not establish execution order. Resolve each transaction
-  // against its Aleo block, then sort by block, transaction, and multi-hop leg.
-  // Consecutive prices are meaningful only in this canonical order.
+  // against its Aleo block, then sort by block, transaction, transition, and
+  // multi-hop leg. Consecutive prices are meaningful only in this order.
   const canonicalize = async (trades: IndexedPoolTrade[]): Promise<CanonicalTrade[]> => {
     const ordered = await Promise.all(
       trades.map(async (trade) => {
-        const blockHash = await findBlockHash(client, { transactionId: trade.transactionHash })
+        const blockHash = await client.findBlockHash({ transactionId: trade.transactionHash })
         let block = blocks.get(blockHash)
         if (!block) {
-          block = await getBlock(client, { hash: blockHash })
+          block = await client.getBlock({ hash: blockHash })
           blocks.set(blockHash, block)
         }
         const confirmed = block.transactions?.find(
@@ -234,10 +266,23 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
         if (!confirmed) {
           throw new Error(`Transaction ${trade.transactionHash} was not found in block ${blockHash}.`)
         }
+        const transaction = confirmed.transaction as Transaction
+        const transitionIndex =
+          transaction.execution?.transitions.findIndex(
+            (transition) => transition.program === PROGRAM_ID && transition.function === trade.tradeType,
+          ) ?? -1
+        const transition = transaction.execution?.transitions[transitionIndex]
+        if (!transition) {
+          throw new Error(
+            `Transaction ${trade.transactionHash} has no ${PROGRAM_ID}/${trade.tradeType} transition.`,
+          )
+        }
         return {
           ...trade,
           blockHeight: block.header.metadata.height,
           transactionIndex: confirmed.index,
+          transitionId: transition.id,
+          transitionIndex,
         }
       }),
     )
@@ -245,6 +290,7 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
       (a, b) =>
         a.blockHeight - b.blockHeight ||
         a.transactionIndex - b.transactionIndex ||
+        a.transitionIndex - b.transitionIndex ||
         a.legIndex - b.legIndex,
     )
   }
@@ -260,8 +306,10 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
   const newestSwap = baseline.find(
     (trade) => trade.tradeType === 'swap' || trade.tradeType === 'swap_multi_hop',
   )
-  if (newestSwap && newestSwap.sqrtPriceAfter === null) {
-    throw new Error(`Latest indexed swap ${newestSwap.id} has no sqrtPriceAfter; cannot establish a price cursor.`)
+  if (newestSwap && (newestSwap.sqrtPriceAfter === null || newestSwap.tickAfter === null)) {
+    throw new Error(
+      `Latest indexed swap ${newestSwap.id} has no sqrtPriceAfter or tickAfter; cannot establish a price cursor.`,
+    )
   }
   const newestSwapTime = newestSwap?.executedAt
   const latestCandidates = baseline.filter(
@@ -269,15 +317,23 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
       (trade.tradeType === 'swap' || trade.tradeType === 'swap_multi_hop') &&
       trade.executedAt === newestSwapTime,
   )
-  const incompleteBaseline = latestCandidates.find((trade) => trade.sqrtPriceAfter === null)
+  const incompleteBaseline = latestCandidates.find(
+    (trade) => trade.sqrtPriceAfter === null || trade.tickAfter === null,
+  )
   if (incompleteBaseline) {
-    throw new Error(`Indexed swap ${incompleteBaseline.id} has no sqrtPriceAfter; cannot establish a price cursor.`)
+    throw new Error(
+      `Indexed swap ${incompleteBaseline.id} has no sqrtPriceAfter or tickAfter; cannot establish a price cursor.`,
+    )
   }
   const latest = (await canonicalize(latestCandidates)).at(-1)
   const slot = latest ? null : await client.getSlot({ poolKey: position.pool })
   const initialSqrtPrice = latest?.sqrtPriceAfter ? BigInt(latest.sqrtPriceAfter) : slot?.sqrt_price
-  if (initialSqrtPrice === undefined) throw new Error(`Pool ${position.pool} has neither a slot nor indexed swaps.`)
+  const initialTick = latest?.tickAfter ?? slot?.tick
+  if (initialSqrtPrice === undefined || initialTick === undefined) {
+    throw new Error(`Pool ${position.pool} has neither a slot nor indexed swaps.`)
+  }
   let previousSqrtPrice: bigint = initialSqrtPrice
+  let previousTick: number = initialTick
 
   console.log(
     `tracking position ${positionTokenId}`,
@@ -322,46 +378,46 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
     }
 
     // Step 5: Mint, collect, and liquidity-management rows are not fills. For
-    // each swap, value the fixed position at the previous and ending prices;
-    // their difference is the position's inventory fill for that swap.
+    // each swap, record the fixed position's inventory at the previous and
+    // ending prices.
     const swaps = unseen.filter(
       (trade) => trade.tradeType === 'swap' || trade.tradeType === 'swap_multi_hop',
     )
-    const incompleteSwap = swaps.find((trade) => trade.sqrtPriceAfter === null)
+    const incompleteSwap = swaps.find(
+      (trade) => trade.sqrtPriceAfter === null || trade.tickAfter === null,
+    )
     if (incompleteSwap) {
-      throw new Error(`Indexed swap ${incompleteSwap.id} has no sqrtPriceAfter; refusing to advance the cursor.`)
+      throw new Error(
+        `Indexed swap ${incompleteSwap.id} has no sqrtPriceAfter or tickAfter; refusing to advance the cursor.`,
+      )
     }
     for (const trade of await canonicalize(swaps)) {
       const sqrtPriceAfter = BigInt(trade.sqrtPriceAfter!)
+      if (sqrtPriceAfter === previousSqrtPrice) {
+        throw new Error(`Indexed swap ${trade.id} did not move the pool price; cannot determine its direction.`)
+      }
       const fill = calculatePositionFill({
-        ...range,
-        sqrtPriceBeforeX128: previousSqrtPrice,
-        sqrtPriceAfterX128: sqrtPriceAfter,
-      })
-      previousSqrtPrice = sqrtPriceAfter
-      net0 += fill.amount0
-      net1 += fill.amount1
-      gross0 += fill.amount0 < 0n ? -fill.amount0 : fill.amount0
-      gross1 += fill.amount1 < 0n ? -fill.amount1 : fill.amount1
-
-      // Trade fees are pool-wide totals. Exact position fees come from the
-      // contract's fee-growth accumulators and cannot be derived from one row.
-      const lpFee0 = BigInt(trade.fee0 ?? '0') - BigInt(trade.protocolFee0 ?? '0')
-      const lpFee1 = BigInt(trade.fee1 ?? '0') - BigInt(trade.protocolFee1 ?? '0')
-      console.log({
+        tradeId: trade.id,
+        positionTokenId,
+        poolKey: position.pool,
+        transactionId: trade.transactionHash,
+        transitionId: trade.transitionId,
         blockHeight: trade.blockHeight,
         transactionIndex: trade.transactionIndex,
-        transactionHash: trade.transactionHash,
+        transitionIndex: trade.transitionIndex,
         legIndex: trade.legIndex,
-        positionDelta0: fill.amount0.toString(),
-        positionDelta1: fill.amount1.toString(),
-        net0: net0.toString(),
-        net1: net1.toString(),
-        gross0: gross0.toString(),
-        gross1: gross1.toString(),
-        poolLpFee0: lpFee0.toString(),
-        poolLpFee1: lpFee1.toString(),
+        positionLiquidity: position.liquidity,
+        tickLower: position.tick_lower,
+        tickUpper: position.tick_upper,
+        sqrtPriceBeforeX128: previousSqrtPrice,
+        sqrtPriceAfterX128: sqrtPriceAfter,
+        tickBefore: previousTick,
+        tickAfter: trade.tickAfter!,
+        zeroForOne: sqrtPriceAfter < previousSqrtPrice,
       })
+      previousSqrtPrice = sqrtPriceAfter
+      previousTick = trade.tickAfter!
+      console.log(fill)
     }
     for (const trade of unseen) seen.add(trade.id)
   }
