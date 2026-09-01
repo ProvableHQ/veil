@@ -1,3 +1,34 @@
+/**
+ * Tracks a Shield Swap LP position by reconstructing its inventory change for
+ * each pool swap.
+ *
+ * Shield Swap trade history describes pool-wide swaps, not per-position fills.
+ * This example defines a position fill as the change in token0 and token1 that
+ * backs the position's fixed liquidity between two consecutive pool prices.
+ * The calculation combines four data sources:
+ *
+ * 1. The on-chain position supplies its pool, tick range, and liquidity.
+ * 2. REST trade history supplies each swap's ending square-root price.
+ * 3. Aleo blocks establish block, transaction, and multi-hop leg order.
+ * 4. WebSocket messages announce when REST may have new trades to backfill.
+ *
+ * Set the account, Provable API, and position environment variables used by
+ * `setupClient`, then start the live tracker from the repository root:
+ *
+ * ```sh
+ * export VEIL_E2E_PRIVATE_KEY='APrivateKey1...'
+ * export ALEO_CONSUMER_ID='...'
+ * export ALEO_DPS_API_KEY='...'
+ * export VEIL_POSITION_TOKEN_ID='...field'
+ * pnpm exec tsx -e \
+ *   "import('./examples/shield-swap/lp-fill-tracker.ts').then(({ default: m }) => m.trackLiquidityPosition())"
+ * ```
+ *
+ * `SHIELD_SWAP_WS_URL` is optional; the client selects the testnet or mainnet
+ * endpoint from its API base URL. The first REST page is the starting snapshot,
+ * so reported totals cover swaps observed after startup. Inventory fills do not
+ * represent the position's accrued fees.
+ */
 import {
   amountsForLiquidity,
   getSqrtPriceAtTickX128,
@@ -5,9 +36,8 @@ import {
 import { findBlockHash, getBlock } from '../../packages/core/src/index.js'
 import { setupClient } from './setup-client.js'
 
-// The deployed endpoint already includes execution fields that the repository's
-// checked-in generated OpenAPI snapshot predates. Keep that narrow schema drift
-// local to this example instead of regenerating hundreds of unrelated API types.
+// The deployed endpoint returns these execution fields, but the checked-in
+// OpenAPI snapshot predates them. This local type documents the current response.
 type IndexedPoolTrade = {
   id: string
   amount0: string
@@ -31,7 +61,18 @@ type CanonicalTrade = IndexedPoolTrade & {
   transactionIndex: number
 }
 
-/** Inputs required to derive one position's inventory change across a price move. */
+/**
+ * Describes a fixed-liquidity position before and after one pool price move.
+ *
+ * All square-root prices use Shield Swap's Q128 fixed-point encoding. The
+ * calculation is local and does not read the network.
+ *
+ * @property liquidity Position liquidity in the contract's unsigned integer units.
+ * @property sqrtLowerX128 Square-root price at the position's lower tick in Q128.
+ * @property sqrtUpperX128 Square-root price at the position's upper tick in Q128.
+ * @property sqrtPriceBeforeX128 Pool square-root price before the swap in Q128.
+ * @property sqrtPriceAfterX128 Pool square-root price after the swap in Q128.
+ */
 export type PositionFillParameters = {
   liquidity: bigint
   sqrtLowerX128: bigint
@@ -40,10 +81,39 @@ export type PositionFillParameters = {
   sqrtPriceAfterX128: bigint
 }
 
-/** Token inventory gained or lost by a position during a price move. */
+/**
+ * Reports the position's signed token inventory change for one price move.
+ *
+ * Positive values add token inventory and negative values remove it. Amounts
+ * use each token's smallest unit.
+ *
+ * @property amount0 Signed change in the token0 amount backing the position.
+ * @property amount1 Signed change in the token1 amount backing the position.
+ */
 export type PositionFill = { amount0: bigint; amount1: bigint }
 
-/** Calculates the position's token deltas across one pool price transition. */
+/**
+ * Calculates a position's token inventory change across one pool price move.
+ *
+ * Concentrated liquidity represents different token amounts at different
+ * prices. This function values the same liquidity and tick range at both
+ * prices, then applies `delta = amountAfter - amountBefore` independently to
+ * token0 and token1. It runs locally and does not read the network.
+ *
+ * @param params Fixed liquidity, range boundaries, and consecutive pool prices.
+ * @returns Signed token0 and token1 changes in each token's smallest unit.
+ *
+ * @example
+ * ```ts
+ * const fill = calculatePositionFill({
+ *   liquidity: 1_000_000n,
+ *   sqrtLowerX128: getSqrtPriceAtTickX128(-100),
+ *   sqrtUpperX128: getSqrtPriceAtTickX128(100),
+ *   sqrtPriceBeforeX128: getSqrtPriceAtTickX128(0),
+ *   sqrtPriceAfterX128: getSqrtPriceAtTickX128(10),
+ * })
+ * ```
+ */
 export function calculatePositionFill(params: PositionFillParameters): PositionFill {
   const range = {
     liquidity: params.liquidity,
@@ -59,20 +129,25 @@ export function calculatePositionFill(params: PositionFillParameters): PositionF
   }
 }
 
-/** Options for {@link trackLiquidityPosition}. */
+/**
+ * Configures liquidity-position tracking.
+ *
+ * @property watch Continue polling REST and listening for WebSocket messages
+ * after the initial backfill. Defaults to `true`; set to `false` for a one-shot
+ * check.
+ */
 export type TrackLiquidityPositionOptions = {
-  /** Keep following REST/WebSocket updates. Defaults to true. */
   watch?: boolean
 }
 
 /**
  * Tracks a liquidity position's token inventory changes from process start.
  *
- * Reads `VEIL_POSITION_TOKEN_ID` from the environment, backfills pool trades
- * from the Shield Swap REST API, and verifies their canonical order against the
- * Aleo chain. When watching, WebSocket messages prompt faster backfills and
- * periodic polling covers missed messages or disconnected sockets. Logged net
- * and gross amounts cover the current run rather than the position's lifetime.
+ * Reads the position and pool from the Aleo network, then reports a signed fill
+ * for each newly indexed swap. The function performs network reads and opens a
+ * WebSocket when `watch` is enabled; it does not sign or submit transactions.
+ * Logged net and gross amounts cover the current run rather than the position's
+ * lifetime.
  *
  * @param options Controls whether tracking continues after the initial backfill.
  * `watch` defaults to `true`.
@@ -91,6 +166,8 @@ export type TrackLiquidityPositionOptions = {
  * ```
  */
 export async function trackLiquidityPosition(options: TrackLiquidityPositionOptions = {}): Promise<void> {
+  // Step 1: Load the position identified by its NFT token id. The position
+  // mapping is the source of truth for its pool, tick range, and liquidity.
   const positionTokenId = process.env.VEIL_POSITION_TOKEN_ID
   if (!positionTokenId) throw new Error('Set VEIL_POSITION_TOKEN_ID to the position NFT token_id.')
 
@@ -98,6 +175,9 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
   const position = await client.getPosition({ positionTokenId })
   if (!position) throw new Error(`Position ${positionTokenId} does not exist on chain.`)
 
+  // Step 2: Hold the position constant and prepare the fill accumulator. A
+  // position's token inventory can change as price moves even when its liquidity
+  // remains unchanged.
   const range = {
     liquidity: position.liquidity,
     sqrtLowerX128: getSqrtPriceAtTickX128(position.tick_lower),
@@ -105,11 +185,17 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
   }
   const seen = new Set<string>()
   const blocks = new Map<string, Awaited<ReturnType<typeof getBlock>>>()
+
+  // Net totals preserve direction; gross totals sum absolute changes. Together
+  // they distinguish final inventory movement from total inventory turnover.
   let net0 = 0n
   let net1 = 0n
   let gross0 = 0n
   let gross1 = 0n
 
+  // REST timestamps do not establish execution order. Resolve each transaction
+  // against its Aleo block, then sort by block, transaction, and multi-hop leg.
+  // Consecutive prices are meaningful only in this canonical order.
   const canonicalize = async (trades: IndexedPoolTrade[]): Promise<CanonicalTrade[]> => {
     const ordered = await Promise.all(
       trades.map(async (trade) => {
@@ -140,10 +226,14 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
     )
   }
 
+  // Step 3: Treat the current REST page as the starting snapshot. Existing rows
+  // establish the price cursor but do not count toward this run's fill totals.
   const firstPage = await client.api.getPoolTrades(position.pool, { limit: 100, offset: 0 })
   const baseline = firstPage.data as IndexedPoolTrade[]
   for (const trade of baseline) seen.add(trade.id)
 
+  // The latest indexed swap supplies the starting price. The on-chain slot is
+  // needed only when the pool has no indexed swap history.
   const newestSwap = baseline.find(
     (trade) => trade.tradeType === 'swap' || trade.tradeType === 'swap_multi_hop',
   )
@@ -173,6 +263,9 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
     `liquidity ${position.liquidity}`,
   )
 
+  // Step 4: Read backward through REST pages until a previously seen trade
+  // appears. This overlap prevents missed trades when more than one page arrives
+  // between updates.
   const backfill = async (): Promise<void> => {
     const unseen: IndexedPoolTrade[] = []
     let offset = 0
@@ -191,6 +284,9 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
     }
     if (!unseen.length) return
 
+    // Pool rows cannot identify which position changed liquidity. Stop when the
+    // tracked position changes because swaps cannot then be assigned to the old
+    // and new liquidity values without a canonical position-event stream.
     const current = await client.getPosition({ positionTokenId })
     if (
       !current ||
@@ -202,6 +298,9 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
       throw new Error('The tracked position changed; restart from a fresh position and pool snapshot.')
     }
 
+    // Step 5: Mint, collect, and liquidity-management rows are not fills. For
+    // each swap, value the fixed position at the previous and ending prices;
+    // their difference is the position's inventory fill for that swap.
     const swaps = unseen.filter(
       (trade) => trade.tradeType === 'swap' || trade.tradeType === 'swap_multi_hop',
     )
@@ -222,8 +321,8 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
       gross0 += fill.amount0 < 0n ? -fill.amount0 : fill.amount0
       gross1 += fill.amount1 < 0n ? -fill.amount1 : fill.amount1
 
-      // These are pool-wide LP fees. Exact per-position fees are settled from
-      // fee-growth accumulators and cannot be allocated from this row alone.
+      // Trade fees are pool-wide totals. Exact position fees come from the
+      // contract's fee-growth accumulators and cannot be derived from one row.
       const lpFee0 = BigInt(trade.fee0 ?? '0') - BigInt(trade.protocolFee0 ?? '0')
       const lpFee1 = BigInt(trade.fee1 ?? '0') - BigInt(trade.protocolFee1 ?? '0')
       console.log({
@@ -247,6 +346,9 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
   await backfill()
   if (options.watch === false) return
 
+  // Step 6: Use WebSocket messages as invalidation signals, not ordered trade
+  // data. Every signal queues the same REST backfill, and a periodic poll covers
+  // dropped messages and disconnected sockets.
   let queued = Promise.resolve()
   const queueBackfill = () => {
     queued = queued.then(backfill).catch((error: unknown) => console.error('fill backfill failed', error))
@@ -279,7 +381,7 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
         queueBackfill()
       }
     } catch {
-      // Unknown frames cannot advance state; the periodic REST read remains authoritative.
+      // Unknown frames do not change the cursor; the periodic REST read remains authoritative.
     }
   })
   socket.addEventListener('close', () => {
