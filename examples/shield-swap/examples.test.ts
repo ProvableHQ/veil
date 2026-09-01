@@ -45,7 +45,11 @@ describe.runIf(KEYED)('examples: reads that need an account', () => {
 })
 
 describe.runIf(POSITION)('examples: reads that need a position', () => {
-  it('lp-fill-tracker', () => trackLiquidityPosition({ watch: false }), MINUTES)
+  it('lp-fill-tracker', () =>
+    trackLiquidityPosition({
+      positionTokenId: process.env.VEIL_POSITION_TOKEN_ID!,
+      watch: false,
+    }), MINUTES)
 })
 
 describe.runIf(SPENDS)('examples: these move funds', () => {

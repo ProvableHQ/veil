@@ -11,15 +11,14 @@
  * 3. Aleo blocks establish block, transaction, and multi-hop leg order.
  * 4. WebSocket messages announce when REST may have new trades to backfill.
  *
- * Set the account, Provable API, and position environment variables used by
- * `setupClient`, then start the live tracker from the repository root:
+ * Set the account and Provable API environment variables used by `setupClient`,
+ * then pass the position token id when starting the tracker:
  *
  * ```sh
  * export VEIL_E2E_PRIVATE_KEY='APrivateKey1...'
  * export ALEO_CONSUMER_ID='...'
  * export ALEO_DPS_API_KEY='...'
- * export VEIL_POSITION_TOKEN_ID='...field'
- * pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts
+ * pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id>
  * ```
  *
  * `SHIELD_SWAP_WS_URL` is optional; the client selects the testnet or mainnet
@@ -200,11 +199,13 @@ export function calculatePositionFill(
 /**
  * Configures liquidity-position tracking.
  *
+ * @property positionTokenId Token id of the position NFT to track.
  * @property watch Continue polling REST and listening for WebSocket messages
  * after the initial backfill. Defaults to `true`; set to `false` for a one-shot
  * check.
  */
 export type TrackLiquidityPositionOptions = {
+  positionTokenId: string
   watch?: boolean
 }
 
@@ -227,26 +228,25 @@ export type TrackLiquidityPositionOptions = {
  *
  * @example
  * ```ts
- * await trackLiquidityPosition()
+ * await trackLiquidityPosition({ positionTokenId: '11field' })
  *
  * // Stop after the initial REST backfill.
- * await trackLiquidityPosition({ watch: false })
+ * await trackLiquidityPosition({ positionTokenId: '11field', watch: false })
  * ```
  */
-export async function trackLiquidityPosition(options: TrackLiquidityPositionOptions = {}): Promise<void> {
+export async function trackLiquidityPosition(options: TrackLiquidityPositionOptions): Promise<void> {
   // Step 1: Load the position identified by its NFT token id. The position
   // mapping is the source of truth for its pool, tick range, and liquidity.
-  const positionTokenId = process.env.VEIL_POSITION_TOKEN_ID
-  if (!positionTokenId) throw new Error('Set VEIL_POSITION_TOKEN_ID to the position NFT token_id.')
+  const { positionTokenId } = options
 
-  const { client } = await setupClient({ privateKey: process.env.VEIL_E2E_PRIVATE_KEY })
-  const position = await client.getPosition({ positionTokenId })
+  const { client: swapClient } = await setupClient({ privateKey: process.env.VEIL_E2E_PRIVATE_KEY })
+  const position = await swapClient.getPosition({ positionTokenId })
   if (!position) throw new Error(`Position ${positionTokenId} does not exist on chain.`)
 
   // Step 2: Hold the position constant. A position's token inventory can change
   // as price moves even when its liquidity remains unchanged.
   const seen = new Set<string>()
-  const blocks = new Map<string, Awaited<ReturnType<typeof client.getBlock>>>()
+  const blocks = new Map<string, Awaited<ReturnType<typeof swapClient.getBlock>>>()
 
   // REST timestamps do not establish execution order. Resolve each transaction
   // against its Aleo block, then sort by block, transaction, transition, and
@@ -254,10 +254,10 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
   const canonicalize = async (trades: IndexedPoolTrade[]): Promise<CanonicalTrade[]> => {
     const ordered = await Promise.all(
       trades.map(async (trade) => {
-        const blockHash = await client.findBlockHash({ transactionId: trade.transactionHash })
+        const blockHash = await swapClient.findBlockHash({ transactionId: trade.transactionHash })
         let block = blocks.get(blockHash)
         if (!block) {
-          block = await client.getBlock({ hash: blockHash })
+          block = await swapClient.getBlock({ hash: blockHash })
           blocks.set(blockHash, block)
         }
         const confirmed = block.transactions?.find(
@@ -297,7 +297,7 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
 
   // Step 3: Treat the current REST page as the starting snapshot. Existing rows
   // establish the price cursor but do not count toward this run's fill totals.
-  const firstPage = await client.api.getPoolTrades(position.pool, { limit: 100, offset: 0 })
+  const firstPage = await swapClient.api.getPoolTrades(position.pool, { limit: 100, offset: 0 })
   const baseline = firstPage.data as IndexedPoolTrade[]
   for (const trade of baseline) seen.add(trade.id)
 
@@ -326,7 +326,7 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
     )
   }
   const latest = (await canonicalize(latestCandidates)).at(-1)
-  const slot = latest ? null : await client.getSlot({ poolKey: position.pool })
+  const slot = latest ? null : await swapClient.getSlot({ poolKey: position.pool })
   const initialSqrtPrice = latest?.sqrtPriceAfter ? BigInt(latest.sqrtPriceAfter) : slot?.sqrt_price
   const initialTick = latest?.tickAfter ?? slot?.tick
   if (initialSqrtPrice === undefined || initialTick === undefined) {
@@ -351,7 +351,7 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
     let reachedKnownTrade = false
 
     while (!reachedKnownTrade) {
-      const page = await client.api.getPoolTrades(position.pool, { limit: 100, offset })
+      const page = await swapClient.api.getPoolTrades(position.pool, { limit: 100, offset })
       const rows = page.data as IndexedPoolTrade[]
       reachedKnownTrade = rows.some((trade) => seen.has(trade.id))
       unseen.push(...rows.filter((trade) => !seen.has(trade.id)))
@@ -366,7 +366,7 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
     // Pool rows cannot identify which position changed liquidity. Stop when the
     // tracked position changes because swaps cannot then be assigned to the old
     // and new liquidity values without a canonical position-event stream.
-    const current = await client.getPosition({ positionTokenId })
+    const current = await swapClient.getPosition({ positionTokenId })
     if (
       !current ||
       current.pool !== position.pool ||
@@ -435,10 +435,10 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
 
   const wsUrl =
     process.env.SHIELD_SWAP_WS_URL ??
-    (client.api.baseUrl.includes('testnet')
+    (swapClient.api.baseUrl.includes('testnet')
       ? 'wss://ws.testnet.swap.shield.fi/ws'
       : 'wss://ws.swap.shield.fi/ws')
-  const ticket = await client.api.getWebSocketTicket()
+  const ticket = await swapClient.api.getWebSocketTicket()
   const socket = new WebSocket(wsUrl)
   let renewal: ReturnType<typeof setInterval> | undefined
 
@@ -447,7 +447,7 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
     socket.send(JSON.stringify({ action: 'subscribe', room: `trades:${position.pool}` }))
     socket.send(JSON.stringify({ action: 'synchronize' }))
     renewal = setInterval(() => {
-      void client.api
+      void swapClient.api
         .getWebSocketTicket()
         .then(({ token }) => socket.send(JSON.stringify({ action: 'authenticate', token })))
         .catch((error: unknown) => console.error('WebSocket ticket renewal failed', error))
@@ -474,8 +474,14 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
 }
 
 if (process.argv[1]?.endsWith('lp-fill-tracker.ts')) {
-  void trackLiquidityPosition().catch((error: unknown) => {
-    console.error(error)
+  const positionTokenId = process.argv[2]
+  if (!positionTokenId) {
+    console.error('Usage: pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id>')
     process.exitCode = 1
-  })
+  } else {
+    void trackLiquidityPosition({ positionTokenId }).catch((error: unknown) => {
+      console.error(error)
+      process.exitCode = 1
+    })
+  }
 }

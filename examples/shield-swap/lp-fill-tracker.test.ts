@@ -72,14 +72,31 @@ describe('calculatePositionFill', () => {
 })
 
 describe('lp-fill-tracker script', () => {
-  it('starts tracking when invoked directly', () => {
+  it('explains how to supply the required position token id', () => {
     const script = fileURLToPath(new URL('./lp-fill-tracker.ts', import.meta.url))
     const result = spawnSync('pnpm', ['exec', 'tsx', script], {
       encoding: 'utf8',
-      env: { ...process.env, VEIL_POSITION_TOKEN_ID: '' },
     })
 
     expect(result.status).toBe(1)
-    expect(result.stderr).toContain('Set VEIL_POSITION_TOKEN_ID')
+    expect(result.stderr).toContain(
+      'Usage: pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id>',
+    )
+  })
+
+  it('passes the positional position token id to the tracker', () => {
+    const script = fileURLToPath(new URL('./lp-fill-tracker.ts', import.meta.url))
+    const result = spawnSync('pnpm', ['exec', 'tsx', script, '11field'], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        ALEO_CONSUMER_ID: '',
+        ALEO_DPS_API_KEY: '',
+        VEIL_POSITION_TOKEN_ID: '',
+      },
+    })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('No Provable API credentials')
   })
 })
