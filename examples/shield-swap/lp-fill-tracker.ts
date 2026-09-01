@@ -36,8 +36,28 @@ import {
 import { findBlockHash, getBlock } from '../../packages/core/src/index.js'
 import { setupClient } from './setup-client.js'
 
-// The deployed endpoint returns these execution fields, but the checked-in
-// OpenAPI snapshot predates them. This local type documents the current response.
+/**
+ * Represents one pool trade returned by the deployed Shield Swap API.
+ *
+ * The checked-in OpenAPI snapshot predates the execution fields used by this
+ * tutorial, so the example documents the current response locally.
+ *
+ * @property id Unique indexer identifier for the trade row.
+ * @property amount0 Pool-wide token0 amount in the token's smallest unit.
+ * @property amount1 Pool-wide token1 amount in the token's smallest unit.
+ * @property executedAt Indexer timestamp for the trade.
+ * @property fee0 Gross token0 swap fee in the token's smallest unit.
+ * @property fee1 Gross token1 swap fee in the token's smallest unit.
+ * @property legIndex Execution order of a swap leg within its transaction.
+ * @property liquidityAfter Active pool liquidity after the trade.
+ * @property pool Pool key affected by the trade.
+ * @property protocolFee0 Protocol share of `fee0` in token0's smallest unit.
+ * @property protocolFee1 Protocol share of `fee1` in token1's smallest unit.
+ * @property sqrtPriceAfter Pool square-root price after the trade in Q128.
+ * @property tickAfter Active pool tick after the trade.
+ * @property tradeType Contract operation represented by the row.
+ * @property transactionHash Aleo transaction id containing the trade.
+ */
 type IndexedPoolTrade = {
   id: string
   amount0: string
@@ -56,6 +76,12 @@ type IndexedPoolTrade = {
   transactionHash: string
 }
 
+/**
+ * Adds chain-confirmed transaction coordinates to an indexed pool trade.
+ *
+ * @property blockHeight Aleo block height containing the transaction.
+ * @property transactionIndex Transaction order within the Aleo block.
+ */
 type CanonicalTrade = IndexedPoolTrade & {
   blockHeight: number
   transactionIndex: number
