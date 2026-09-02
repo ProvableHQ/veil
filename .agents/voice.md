@@ -161,6 +161,69 @@ instead of stating it. Name the concrete variants, standards, or fields.
  */
 ```
 
+### Use canonical Aleo terms for ledger indexes
+
+Keep the language plain when referring to variables used to index information
+on the Aleo ledger, including any combination of transaction id, transition id,
+transition index, and transaction index. Do not invent collective terms such as
+"coordinates" for these values.
+
+Invented collective terms fail for three reasons:
+
+1. They erase the immediate context: what the values identify or order in the
+   code being documented.
+2. They introduce terminology that is not canonical to the Aleo blockchain.
+3. They read like forced concision built from too many prepended adjectives.
+
+```ts
+// Bad — "coordinates" replaces the reason these fields are added.
+/**
+ * Adds chain-confirmed transaction coordinates to an indexed pool trade.
+ *
+ * @property blockHeight Aleo block height containing the transaction.
+ * @property transactionIndex Transaction order within the Aleo block.
+ */
+type CanonicalTrade = IndexedPoolTrade & {
+  blockHeight: number
+  transactionIndex: number
+}
+
+// Good — states exactly what is added and why the caller needs it.
+/**
+ * Adds the block height and transaction index to the API trade type so the
+ * trade event can be ordered precisely.
+ *
+ * @property blockHeight Block height containing the transaction.
+ * @property transactionIndex Transaction order within the block.
+ */
+type CanonicalTrade = IndexedPoolTrade & {
+  blockHeight: number
+  transactionIndex: number
+}
+```
+
+### Describe the current contract, not the repository history
+
+Do not describe how code changed over time in the repository. Commit history,
+generation drift, and implementation decisions may inform development, but they
+are irrelevant to a caller using the external API. When documenting a method,
+type, interface, or object, describe only its current behavior and relevance to
+the caller. Keep the context used to create it in the commit, pull request, or
+an internal development note.
+
+```ts
+// Bad — explains repository history instead of the API contract.
+/**
+ * Represents one pool trade returned by the deployed Shield Swap API.
+ *
+ * The checked-in OpenAPI snapshot predates the execution fields used by this
+ * tutorial, so the example documents the current response locally.
+ */
+
+// Good — identifies the payload and the endpoint that returns it.
+/** Pool trade payload returned by the `/pools/{key}/trades` endpoint from the Shield Swap API. */
+```
+
 ### Top-level action descriptions serve the caller, not the implementation
 
 The description on an exported action documents what matters to the caller:
@@ -225,6 +288,38 @@ action description reads as marketing and says nothing.
 State facts plainly. Anchor unfamiliar concepts to known ones. Explain why and
 when. Address "a developer" or "the caller". Give hard rules emphasis.
 
+### Lead with the tutorial's utility
+
+Open an introductory tutorial comment by stating what the tutorial helps the
+reader accomplish. Introduce further context in the order required to understand
+the example. Do not begin with an architectural limitation that needs concepts
+the reader has not encountered, then explain why the tutorial exists.
+
+```ts
+// Bad — opens with an unfamiliar architectural limitation before stating the
+// tutorial's purpose.
+/**
+ * Shield Swap trade history describes pool-wide swaps, not per-position fills.
+ * This example defines a position fill as the change in token0 and token1 that
+ * backs the position's fixed liquidity between two consecutive pool prices.
+ */
+
+// Good — states the utility first, then defines the first required concept.
+/**
+ * This example demonstrates how a liquidity provider can construct swap fill
+ * history for a liquidity position within an individual pool.
+ *
+ * This example defines a position fill as the change in token0 and token1 that
+ * backs the position's fixed liquidity between two consecutive pool prices.
+ */
+```
+
+The bad opening asks the reader to understand a problem in the current
+architecture without explaining how, where, or why it occurs. That context is
+too specific for a developer or agent beginning with Shield Swap. State the
+tutorial's focus first, then introduce each implementation detail when it
+becomes relevant.
+
 ### Good
 
 > All value transfers on the Aleo Network are done by calling functions in the
@@ -259,4 +354,7 @@ record actually is.
 | First/second person | "you", "your", "we", "our", "I" | "the caller", "a developer", or imperative mood |
 | "Reach for" | "Reach for this when…" | "Applies when…", "Use for…", "Suited to…", or state the discriminating fact |
 | "Shape" | "the shape of token0 (`plain` or `wrapped`)" | name the structure: the standards, variants, or fields |
+| Invented Aleo terms | "transaction coordinates" | name the block height, transaction index, transition id, or other exact value and state why it is needed |
+| Repository history | "the checked-in snapshot predates this field" | describe the current API contract and why it matters to the caller |
+| Tutorial problem-first opening | an unfamiliar architectural limitation before the tutorial's purpose | state what the tutorial helps the reader accomplish, then introduce context when needed |
 | Implementation narration | Leo/compiler constraints, dispatch tables, "Pure and local" taglines on actions | what the call does to the caller's assets, usage, and failure modes |

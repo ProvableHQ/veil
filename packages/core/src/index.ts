@@ -152,7 +152,7 @@ export {
   type LocalWalletClientConfig,
 } from './clients/createWalletClient.js'
 export { createTestClient, type TestClient, type TestClientConfig } from './clients/createTestClient.js'
-export type { PublicActions } from './clients/decorators/public.js'
+export { publicActions, type PublicActions } from './clients/decorators/public.js'
 export type { WalletActions } from './clients/decorators/wallet.js'
 export type { TestActions } from './clients/decorators/test.js'
 

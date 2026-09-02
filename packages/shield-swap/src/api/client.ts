@@ -284,6 +284,18 @@ export class ApiClient {
   }
 
   /**
+   * Mints the short-lived credential accepted by the Shield Swap WebSocket.
+   *
+   * The gateway does not accept a session JWT or `ss_…` API token directly.
+   * Call this immediately before opening or re-authenticating a socket, then
+   * send the returned `token` in its `authenticate` frame.
+   */
+  async getWebSocketTicket(): Promise<Schemas['AuthTokenPayload']> {
+    const res = await this.request<Schemas['AuthTokenResponseDoc']>('GET', '/auth/ws-ticket', { auth: true })
+    return res.data
+  }
+
+  /**
    * Mints a long-lived API token (`ss_…`) under the current session JWT.
    *
    * The returned `token` is the full secret and is shown only once — the
