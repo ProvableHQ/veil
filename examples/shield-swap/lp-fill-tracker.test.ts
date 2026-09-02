@@ -80,7 +80,7 @@ describe('lp-fill-tracker script', () => {
 
     expect(result.status).toBe(1)
     expect(result.stderr).toContain(
-      'Usage: pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id> [--network mainnet|testnet]',
+      'Usage: pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id> [--network mainnet|testnet] [--history-size N]',
     )
   })
 
@@ -114,6 +114,21 @@ describe('lp-fill-tracker script', () => {
 
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('Network must be mainnet or testnet')
+    expect(result.stderr).not.toContain('VEIL_E2E_PRIVATE_KEY is required')
+  })
+
+  it('rejects a history size that is not a positive integer', () => {
+    const script = fileURLToPath(new URL('./lp-fill-tracker.ts', import.meta.url))
+    const result = spawnSync('pnpm', ['exec', 'tsx', script, '11field', '--history-size', '0'], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        VEIL_E2E_PRIVATE_KEY: '',
+      },
+    })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('History size must be a positive integer')
     expect(result.stderr).not.toContain('VEIL_E2E_PRIVATE_KEY is required')
   })
 })

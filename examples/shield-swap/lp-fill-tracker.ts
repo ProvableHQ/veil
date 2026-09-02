@@ -18,15 +18,17 @@
  * export VEIL_E2E_PRIVATE_KEY='APrivateKey1...'
  * pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id>
  * pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id> --network testnet
+ * pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id> --history-size 50
  * ```
  *
  * Mainnet is the default. Pass `--network testnet` to track a testnet
  * position.
  *
  * `SHIELD_SWAP_WS_URL` is optional; the client selects the testnet or mainnet
- * endpoint from its API base URL. The first REST page is the starting snapshot,
- * so reported totals cover swaps observed after startup. Inventory fills do not
- * represent the position's accrued fees.
+ * endpoint from its API base URL. The tracker replays up to 20 swaps by default;
+ * the earliest swap establishes the starting price, so up to 19 historical
+ * fills are reported. Inventory fills do not represent the position's accrued
+ * fees.
  */
 import {
   PROGRAM_ID,
@@ -210,47 +212,53 @@ export function calculatePositionFill(
  * @property positionTokenId Token id of the position NFT to track.
  * @property network Aleo network containing the position. Defaults to
  * `mainnet`.
+ * @property historySize Number of recent pool swaps to use for the historical
+ * replay. Defaults to `20`; the earliest swap establishes the starting price.
  * @property watch Continue polling REST and listening for WebSocket messages
- * after the initial backfill. Defaults to `true`; set to `false` for a one-shot
- * check.
+ * after the historical replay. Defaults to `true`; set to `false` for a
+ * one-shot check.
  */
 export type TrackLiquidityPositionOptions = {
   positionTokenId: string
   network?: 'mainnet' | 'testnet'
+  historySize?: number
   watch?: boolean
 }
 
 /**
- * Tracks a liquidity position's token inventory changes from process start.
+ * Tracks a liquidity position's recent and live token inventory changes.
  *
- * Reads the position and pool from the Aleo network, then reports the
- * position's token inventory before and after each newly indexed swap. The
- * function performs network reads and opens a WebSocket when `watch` is
- * enabled. It signs the Shield Swap authentication challenge but does not
- * prove or submit transactions.
+ * Reads the position and pool from the Aleo network, reconstructs recent fills
+ * from ordered pool swaps, then reports each newly indexed swap. The function
+ * performs network reads and opens a WebSocket when `watch` is enabled. It
+ * signs the Shield Swap authentication challenge but does not prove or submit
+ * transactions.
  *
- * @param options Selects the position, network, and whether tracking continues
- * after the initial backfill. `network` defaults to `mainnet`; `watch` defaults
- * to `true`.
- * @returns When `watch` is `false`, resolves after the initial backfill;
+ * @param options Selects the position, network, history size, and whether
+ * tracking continues after the historical replay. `network` defaults to
+ * `mainnet`, `historySize` defaults to `20`, and `watch` defaults to `true`.
+ * @returns When `watch` is `false`, resolves after the historical replay;
  * otherwise remains pending while the tracker runs.
- * @throws If the position or pool cannot be read, transaction order cannot be
- * resolved, an indexed swap lacks an ending price or tick, the swap direction
- * cannot be determined, REST history no longer overlaps the local cursor, or
- * the position's range or liquidity changes.
+ * @throws If the history size is invalid, the position or pool cannot be read,
+ * transaction order cannot be resolved, an indexed swap lacks an ending price
+ * or tick, the swap direction cannot be determined, REST history no longer
+ * overlaps the local cursor, or the position's range or liquidity changes.
  *
  * @example
  * ```ts
  * await trackLiquidityPosition({ positionTokenId: '11field' })
  *
- * // Stop after the initial REST backfill.
- * await trackLiquidityPosition({ positionTokenId: '11field', watch: false })
+ * // Replay the latest 50 swaps, then stop.
+ * await trackLiquidityPosition({ positionTokenId: '11field', historySize: 50, watch: false })
  * ```
  */
 export async function trackLiquidityPosition(options: TrackLiquidityPositionOptions): Promise<void> {
   // Step 1: Load the position identified by its NFT token id. The position
   // mapping is the source of truth for its pool, tick range, and liquidity.
-  const { positionTokenId, network = 'mainnet' } = options
+  const { positionTokenId, network = 'mainnet', historySize = 20 } = options
+  if (!Number.isInteger(historySize) || historySize < 1) {
+    throw new Error('History size must be a positive integer.')
+  }
 
   const privateKey = process.env.VEIL_E2E_PRIVATE_KEY
   if (!privateKey) throw new Error('VEIL_E2E_PRIVATE_KEY is required to authenticate with Shield Swap.')
@@ -275,7 +283,7 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
   // REST timestamps do not establish execution order. Resolve each transaction
   // against its Aleo block, then sort by block, transaction, transition, and
   // multi-hop leg. Consecutive prices are meaningful only in this order.
-  const canonicalize = async (trades: IndexedPoolTrade[]): Promise<CanonicalTrade[]> => {
+  const addOrdering = async (trades: IndexedPoolTrade[]): Promise<CanonicalTrade[]> => {
     const ordered = await Promise.all(
       trades.map(async (trade) => {
         const blockHash = await swapClient.findBlockHash({ transactionId: trade.transactionHash })
@@ -319,40 +327,46 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
     )
   }
 
-  // Step 3: Treat the current REST page as the starting snapshot. Existing rows
-  // establish the price cursor but do not count toward this run's fill totals.
-  const firstPage = await swapClient.api.getPoolTrades(position.pool, { limit: 100, offset: 0 })
-  const baseline = firstPage.data as IndexedPoolTrade[]
+  // Step 3: Read backward until the requested number of swaps has been found.
+  // The endpoint also returns liquidity operations, so the number of REST rows
+  // read may be greater than the requested swap history.
+  const baseline: IndexedPoolTrade[] = []
+  const historicalSwapRows: IndexedPoolTrade[] = []
+  let historyOffset = 0
+
+  while (true) {
+    const page = await swapClient.api.getPoolTrades(position.pool, { limit: 100, offset: historyOffset })
+    const rows = page.data as IndexedPoolTrade[]
+    baseline.push(...rows)
+    historicalSwapRows.push(
+      ...rows.filter((trade) => trade.tradeType === 'swap' || trade.tradeType === 'swap_multi_hop'),
+    )
+    if (rows.length < 100) break
+    const cutoffTime = historicalSwapRows[historySize - 1]?.executedAt
+    if (cutoffTime !== undefined && rows.at(-1)?.executedAt !== cutoffTime) break
+    historyOffset += rows.length
+  }
   for (const trade of baseline) seen.add(trade.id)
 
-  // The latest indexed swap supplies the starting price. The on-chain slot is
-  // needed only when the pool has no indexed swap history.
-  const newestSwap = baseline.find(
-    (trade) => trade.tradeType === 'swap' || trade.tradeType === 'swap_multi_hop',
+  const cutoffTime = historicalSwapRows[historySize - 1]?.executedAt
+  const selectionCandidates = historicalSwapRows.filter(
+    (trade, index) => index < historySize || trade.executedAt === cutoffTime,
   )
-  if (newestSwap && (newestSwap.sqrtPriceAfter === null || newestSwap.tickAfter === null)) {
-    throw new Error(
-      `Latest indexed swap ${newestSwap.id} has no sqrtPriceAfter or tickAfter; cannot establish a price cursor.`,
-    )
-  }
-  const newestSwapTime = newestSwap?.executedAt
-  const latestCandidates = baseline.filter(
-    (trade) =>
-      (trade.tradeType === 'swap' || trade.tradeType === 'swap_multi_hop') &&
-      trade.executedAt === newestSwapTime,
-  )
-  const incompleteBaseline = latestCandidates.find(
+  const orderedHistory = (await addOrdering(selectionCandidates)).slice(-historySize)
+  const incompleteBaseline = orderedHistory.find(
     (trade) => trade.sqrtPriceAfter === null || trade.tickAfter === null,
   )
   if (incompleteBaseline) {
     throw new Error(
-      `Indexed swap ${incompleteBaseline.id} has no sqrtPriceAfter or tickAfter; cannot establish a price cursor.`,
+      `Indexed swap ${incompleteBaseline.id} has no sqrtPriceAfter or tickAfter; cannot replay history.`,
     )
   }
-  const latest = (await canonicalize(latestCandidates)).at(-1)
-  const slot = latest ? null : await swapClient.getSlot({ poolKey: position.pool })
-  const initialSqrtPrice = latest?.sqrtPriceAfter ? BigInt(latest.sqrtPriceAfter) : slot?.sqrt_price
-  const initialTick = latest?.tickAfter ?? slot?.tick
+  const startingSwap = orderedHistory[0]
+  const slot = startingSwap ? null : await swapClient.getSlot({ poolKey: position.pool })
+  const initialSqrtPrice = startingSwap?.sqrtPriceAfter
+    ? BigInt(startingSwap.sqrtPriceAfter)
+    : slot?.sqrt_price
+  const initialTick = startingSwap?.tickAfter ?? slot?.tick
   if (initialSqrtPrice === undefined || initialTick === undefined) {
     throw new Error(`Pool ${position.pool} has neither a slot nor indexed swaps.`)
   }
@@ -365,6 +379,51 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
     `range [${position.tick_lower}, ${position.tick_upper})`,
     `liquidity ${position.liquidity}`,
   )
+
+  // Record swaps whose before-price has already been established by the
+  // historical starting point or the preceding live swap.
+  const recordOrderedSwaps = (trades: CanonicalTrade[]): void => {
+    for (const trade of trades) {
+      const sqrtPriceAfter = BigInt(trade.sqrtPriceAfter!)
+      if (sqrtPriceAfter === previousSqrtPrice) {
+        throw new Error(`Indexed swap ${trade.id} did not move the pool price; cannot determine its direction.`)
+      }
+      const fill = calculatePositionFill({
+        tradeId: trade.id,
+        positionTokenId,
+        poolKey: position.pool,
+        transactionId: trade.transactionHash,
+        transitionId: trade.transitionId,
+        blockHeight: trade.blockHeight,
+        transactionIndex: trade.transactionIndex,
+        transitionIndex: trade.transitionIndex,
+        legIndex: trade.legIndex,
+        positionLiquidity: position.liquidity,
+        tickLower: position.tick_lower,
+        tickUpper: position.tick_upper,
+        sqrtPriceBeforeX128: previousSqrtPrice,
+        sqrtPriceAfterX128: sqrtPriceAfter,
+        tickBefore: previousTick,
+        tickAfter: trade.tickAfter!,
+        zeroForOne: sqrtPriceAfter < previousSqrtPrice,
+      })
+      previousSqrtPrice = sqrtPriceAfter
+      previousTick = trade.tickAfter!
+      console.log(fill)
+    }
+  }
+
+  if (startingSwap) {
+    console.log(
+      `history starting point is swap ${startingSwap.id}`,
+      `block height ${startingSwap.blockHeight}`,
+      `transaction index ${startingSwap.transactionIndex}`,
+      `replaying ${orderedHistory.length - 1} fills from ${orderedHistory.length} swaps`,
+    )
+    recordOrderedSwaps(orderedHistory.slice(1))
+  } else {
+    console.log('No indexed swaps found; live tracking starts from the current pool price.')
+  }
 
   // Step 4: Read backward through REST pages until a previously seen trade
   // appears. This overlap prevents missed trades when more than one page arrives
@@ -381,6 +440,7 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
       unseen.push(...rows.filter((trade) => !seen.has(trade.id)))
       if (reachedKnownTrade) break
       if (rows.length < 100) {
+        if (seen.size === 0) break
         throw new Error('REST history no longer overlaps the local cursor; restart from a fresh snapshot.')
       }
       offset += rows.length
@@ -415,34 +475,7 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
         `Indexed swap ${incompleteSwap.id} has no sqrtPriceAfter or tickAfter; refusing to advance the cursor.`,
       )
     }
-    for (const trade of await canonicalize(swaps)) {
-      const sqrtPriceAfter = BigInt(trade.sqrtPriceAfter!)
-      if (sqrtPriceAfter === previousSqrtPrice) {
-        throw new Error(`Indexed swap ${trade.id} did not move the pool price; cannot determine its direction.`)
-      }
-      const fill = calculatePositionFill({
-        tradeId: trade.id,
-        positionTokenId,
-        poolKey: position.pool,
-        transactionId: trade.transactionHash,
-        transitionId: trade.transitionId,
-        blockHeight: trade.blockHeight,
-        transactionIndex: trade.transactionIndex,
-        transitionIndex: trade.transitionIndex,
-        legIndex: trade.legIndex,
-        positionLiquidity: position.liquidity,
-        tickLower: position.tick_lower,
-        tickUpper: position.tick_upper,
-        sqrtPriceBeforeX128: previousSqrtPrice,
-        sqrtPriceAfterX128: sqrtPriceAfter,
-        tickBefore: previousTick,
-        tickAfter: trade.tickAfter!,
-        zeroForOne: sqrtPriceAfter < previousSqrtPrice,
-      })
-      previousSqrtPrice = sqrtPriceAfter
-      previousTick = trade.tickAfter!
-      console.log(fill)
-    }
+    recordOrderedSwaps(await addOrdering(swaps))
     for (const trade of unseen) seen.add(trade.id)
   }
 
@@ -501,17 +534,23 @@ if (process.argv[1]?.endsWith('lp-fill-tracker.ts')) {
   const positionTokenId = process.argv[2]
   const networkFlagIndex = process.argv.indexOf('--network')
   const network = networkFlagIndex === -1 ? 'mainnet' : process.argv[networkFlagIndex + 1]
+  const historySizeFlagIndex = process.argv.indexOf('--history-size')
+  const historySize =
+    historySizeFlagIndex === -1 ? 20 : Number(process.argv[historySizeFlagIndex + 1])
 
   if (network !== 'mainnet' && network !== 'testnet') {
     console.error('Network must be mainnet or testnet.')
     process.exitCode = 1
+  } else if (!Number.isInteger(historySize) || historySize < 1) {
+    console.error('History size must be a positive integer.')
+    process.exitCode = 1
   } else if (!positionTokenId) {
     console.error(
-      'Usage: pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id> [--network mainnet|testnet]',
+      'Usage: pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id> [--network mainnet|testnet] [--history-size N]',
     )
     process.exitCode = 1
   } else {
-    void trackLiquidityPosition({ positionTokenId, network }).catch((error: unknown) => {
+    void trackLiquidityPosition({ positionTokenId, network, historySize }).catch((error: unknown) => {
       console.error(error)
       process.exitCode = 1
     })
