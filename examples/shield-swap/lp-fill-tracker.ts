@@ -17,7 +17,11 @@
  * ```sh
  * export VEIL_E2E_PRIVATE_KEY='APrivateKey1...'
  * pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id>
+ * pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id> --network testnet
  * ```
+ *
+ * Mainnet is the default. Pass `--network testnet` to track a testnet
+ * position.
  *
  * `SHIELD_SWAP_WS_URL` is optional; the client selects the testnet or mainnet
  * endpoint from its API base URL. The first REST page is the starting snapshot,
@@ -204,12 +208,15 @@ export function calculatePositionFill(
  * Configures liquidity-position tracking.
  *
  * @property positionTokenId Token id of the position NFT to track.
+ * @property network Aleo network containing the position. Defaults to
+ * `mainnet`.
  * @property watch Continue polling REST and listening for WebSocket messages
  * after the initial backfill. Defaults to `true`; set to `false` for a one-shot
  * check.
  */
 export type TrackLiquidityPositionOptions = {
   positionTokenId: string
+  network?: 'mainnet' | 'testnet'
   watch?: boolean
 }
 
@@ -222,8 +229,9 @@ export type TrackLiquidityPositionOptions = {
  * enabled. It signs the Shield Swap authentication challenge but does not
  * prove or submit transactions.
  *
- * @param options Controls whether tracking continues after the initial backfill.
- * `watch` defaults to `true`.
+ * @param options Selects the position, network, and whether tracking continues
+ * after the initial backfill. `network` defaults to `mainnet`; `watch` defaults
+ * to `true`.
  * @returns When `watch` is `false`, resolves after the initial backfill;
  * otherwise remains pending while the tracker runs.
  * @throws If the position or pool cannot be read, transaction order cannot be
@@ -242,15 +250,15 @@ export type TrackLiquidityPositionOptions = {
 export async function trackLiquidityPosition(options: TrackLiquidityPositionOptions): Promise<void> {
   // Step 1: Load the position identified by its NFT token id. The position
   // mapping is the source of truth for its pool, tick range, and liquidity.
-  const { positionTokenId } = options
+  const { positionTokenId, network = 'mainnet' } = options
 
   const privateKey = process.env.VEIL_E2E_PRIVATE_KEY
   if (!privateKey) throw new Error('VEIL_E2E_PRIVATE_KEY is required to authenticate with Shield Swap.')
 
-  const aleo = await loadNetwork('testnet')
+  const aleo = await loadNetwork(network)
   const swapClient = createClient({
     account: aleo.privateKeyToAccount(privateKey),
-    transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+    transport: http('https://api.provable.com/v2', { network }),
   })
     .extend(publicActions)
     .extend(shieldSwapActions({ api: {} }))
@@ -491,11 +499,19 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
 
 if (process.argv[1]?.endsWith('lp-fill-tracker.ts')) {
   const positionTokenId = process.argv[2]
-  if (!positionTokenId) {
-    console.error('Usage: pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id>')
+  const networkFlagIndex = process.argv.indexOf('--network')
+  const network = networkFlagIndex === -1 ? 'mainnet' : process.argv[networkFlagIndex + 1]
+
+  if (network !== 'mainnet' && network !== 'testnet') {
+    console.error('Network must be mainnet or testnet.')
+    process.exitCode = 1
+  } else if (!positionTokenId) {
+    console.error(
+      'Usage: pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id> [--network mainnet|testnet]',
+    )
     process.exitCode = 1
   } else {
-    void trackLiquidityPosition({ positionTokenId }).catch((error: unknown) => {
+    void trackLiquidityPosition({ positionTokenId, network }).catch((error: unknown) => {
       console.error(error)
       process.exitCode = 1
     })

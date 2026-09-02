@@ -80,7 +80,7 @@ describe('lp-fill-tracker script', () => {
 
     expect(result.status).toBe(1)
     expect(result.stderr).toContain(
-      'Usage: pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id>',
+      'Usage: pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id> [--network mainnet|testnet]',
     )
   })
 
@@ -100,5 +100,20 @@ describe('lp-fill-tracker script', () => {
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('VEIL_E2E_PRIVATE_KEY is required')
     expect(result.stderr).not.toContain('Provable API credentials')
+  })
+
+  it('rejects an unsupported network before starting the tracker', () => {
+    const script = fileURLToPath(new URL('./lp-fill-tracker.ts', import.meta.url))
+    const result = spawnSync('pnpm', ['exec', 'tsx', script, '11field', '--network', 'devnet'], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        VEIL_E2E_PRIVATE_KEY: '',
+      },
+    })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('Network must be mainnet or testnet')
+    expect(result.stderr).not.toContain('VEIL_E2E_PRIVATE_KEY is required')
   })
 })
