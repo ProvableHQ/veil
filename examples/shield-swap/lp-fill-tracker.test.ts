@@ -84,12 +84,13 @@ describe('lp-fill-tracker script', () => {
     )
   })
 
-  it('passes the positional position token id to the tracker', () => {
+  it('requires a wallet key without asking for Provable API credentials', () => {
     const script = fileURLToPath(new URL('./lp-fill-tracker.ts', import.meta.url))
     const result = spawnSync('pnpm', ['exec', 'tsx', script, '11field'], {
       encoding: 'utf8',
       env: {
         ...process.env,
+        VEIL_E2E_PRIVATE_KEY: '',
         ALEO_CONSUMER_ID: '',
         ALEO_DPS_API_KEY: '',
         VEIL_POSITION_TOKEN_ID: '',
@@ -97,6 +98,7 @@ describe('lp-fill-tracker script', () => {
     })
 
     expect(result.status).toBe(1)
-    expect(result.stderr).toContain('No Provable API credentials')
+    expect(result.stderr).toContain('VEIL_E2E_PRIVATE_KEY is required')
+    expect(result.stderr).not.toContain('Provable API credentials')
   })
 })

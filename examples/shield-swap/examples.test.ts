@@ -30,7 +30,7 @@ const KEYED =
 // Opt in separately: the credentials above are enough to read, and a run that
 // spends should be asked for rather than inferred from them being present.
 const SPENDS = KEYED && process.env.VEIL_EXAMPLES_SPEND === '1'
-const POSITION = KEYED && !!process.env.VEIL_POSITION_TOKEN_ID
+const POSITION = READS && !!process.env.VEIL_E2E_PRIVATE_KEY && !!process.env.VEIL_POSITION_TOKEN_ID
 
 const MINUTES = 600_000
 

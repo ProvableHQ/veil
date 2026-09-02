@@ -11,13 +11,11 @@
  * 3. Aleo blocks establish block, transaction, and multi-hop leg order.
  * 4. WebSocket messages announce when REST may have new trades to backfill.
  *
- * Set the account and Provable API environment variables used by `setupClient`,
- * then pass the position token id when starting the tracker:
+ * Set the account private key, then pass the position token id when starting
+ * the tracker:
  *
  * ```sh
  * export VEIL_E2E_PRIVATE_KEY='APrivateKey1...'
- * export ALEO_CONSUMER_ID='...'
- * export ALEO_DPS_API_KEY='...'
  * pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id>
  * ```
  *
@@ -30,9 +28,15 @@ import {
   PROGRAM_ID,
   amountsForLiquidity,
   getSqrtPriceAtTickX128,
+  shieldSwapActions,
 } from '../../packages/shield-swap/src/index.js'
-import type { Transaction } from '../../packages/core/src/index.js'
-import { setupClient } from './setup-client.js'
+import {
+  createClient,
+  http,
+  publicActions,
+  type Transaction,
+} from '../../packages/core/src/index.js'
+import { loadNetwork } from '../../packages/provable-sdk/src/index.js'
 
 /**
  * Pool trade payload returned by the `/pools/{key}/trades` endpoint from the
@@ -215,7 +219,8 @@ export type TrackLiquidityPositionOptions = {
  * Reads the position and pool from the Aleo network, then reports the
  * position's token inventory before and after each newly indexed swap. The
  * function performs network reads and opens a WebSocket when `watch` is
- * enabled; it does not sign or submit transactions.
+ * enabled. It signs the Shield Swap authentication challenge but does not
+ * prove or submit transactions.
  *
  * @param options Controls whether tracking continues after the initial backfill.
  * `watch` defaults to `true`.
@@ -239,7 +244,18 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
   // mapping is the source of truth for its pool, tick range, and liquidity.
   const { positionTokenId } = options
 
-  const { client: swapClient } = await setupClient({ privateKey: process.env.VEIL_E2E_PRIVATE_KEY })
+  const privateKey = process.env.VEIL_E2E_PRIVATE_KEY
+  if (!privateKey) throw new Error('VEIL_E2E_PRIVATE_KEY is required to authenticate with Shield Swap.')
+
+  const aleo = await loadNetwork('testnet')
+  const swapClient = createClient({
+    account: aleo.privateKeyToAccount(privateKey),
+    transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  })
+    .extend(publicActions)
+    .extend(shieldSwapActions({ api: {} }))
+  await swapClient.authenticateShieldSwap()
+
   const position = await swapClient.getPosition({ positionTokenId })
   if (!position) throw new Error(`Position ${positionTokenId} does not exist on chain.`)
 
