@@ -98,6 +98,21 @@ type CanonicalTrade = IndexedPoolTrade & {
   transitionIndex: number
 }
 
+/** Indicates that retrying cannot safely advance the fill cursor. */
+class TerminalBackfillError extends Error {}
+
+/** Retries temporary backfill failures every ten seconds without logging them. */
+export async function retryBackfill(backfill: () => Promise<void>): Promise<void> {
+  while (true) {
+    try {
+      return await backfill()
+    } catch (error) {
+      if (error instanceof TerminalBackfillError) throw error
+      await new Promise((resolve) => setTimeout(resolve, 10_000))
+    }
+  }
+}
+
 /**
  * Records a liquidity position's inventory before and after one ordered pool
  * swap.
@@ -386,7 +401,9 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
     for (const trade of trades) {
       const sqrtPriceAfter = BigInt(trade.sqrtPriceAfter!)
       if (sqrtPriceAfter === previousSqrtPrice) {
-        throw new Error(`Indexed swap ${trade.id} did not move the pool price; cannot determine its direction.`)
+        throw new TerminalBackfillError(
+          `Indexed swap ${trade.id} did not move the pool price; cannot determine its direction.`,
+        )
       }
       const fill = calculatePositionFill({
         tradeId: trade.id,
@@ -441,7 +458,9 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
       if (reachedKnownTrade) break
       if (rows.length < 100) {
         if (seen.size === 0) break
-        throw new Error('REST history no longer overlaps the local cursor; restart from a fresh snapshot.')
+        throw new TerminalBackfillError(
+          'REST history no longer overlaps the local cursor; restart from a fresh snapshot.',
+        )
       }
       offset += rows.length
     }
@@ -458,7 +477,9 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
       current.tick_upper !== position.tick_upper ||
       current.liquidity !== position.liquidity
     ) {
-      throw new Error('The tracked position changed; restart from a fresh position and pool snapshot.')
+      throw new TerminalBackfillError(
+        'The tracked position changed; restart from a fresh position and pool snapshot.',
+      )
     }
 
     // Step 5: Mint, collect, and liquidity-management rows are not fills. For
@@ -479,7 +500,7 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
     for (const trade of unseen) seen.add(trade.id)
   }
 
-  await backfill()
+  await retryBackfill(backfill)
   if (options.watch === false) return
 
   // Step 6: Use WebSocket messages as invalidation signals, not ordered trade
@@ -487,7 +508,9 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
   // dropped messages and disconnected sockets.
   let queued = Promise.resolve()
   const queueBackfill = () => {
-    queued = queued.then(backfill).catch((error: unknown) => console.error('fill backfill failed', error))
+    queued = queued
+      .then(() => retryBackfill(backfill))
+      .catch((error: unknown) => console.error('fill tracking stopped', error))
   }
 
   const wsUrl =

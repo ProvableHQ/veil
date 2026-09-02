@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
-import { calculatePositionFill } from './lp-fill-tracker.js'
+import { describe, expect, it, vi } from 'vitest'
+import { calculatePositionFill, retryBackfill } from './lp-fill-tracker.js'
 
 const Q128 = 1n << 128n
 const SQRT_TICK_100_X128 = 341987953891916247014855103371247308527n
@@ -68,6 +68,29 @@ describe('calculatePositionFill', () => {
       amount0After: 4987n,
       amount1After: 0n,
     })
+  })
+})
+
+describe('retryBackfill', () => {
+  it('silently retries a temporary backfill failure', async () => {
+    vi.useFakeTimers()
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    let attempts = 0
+
+    try {
+      const completed = retryBackfill(async () => {
+        attempts += 1
+        if (attempts === 1) throw new Error('temporary failure')
+      })
+      await vi.advanceTimersByTimeAsync(10_000)
+      await completed
+
+      expect(attempts).toBe(2)
+      expect(consoleError).not.toHaveBeenCalled()
+    } finally {
+      consoleError.mockRestore()
+      vi.useRealTimers()
+    }
   })
 })
 
