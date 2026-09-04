@@ -22,10 +22,8 @@ import {
   executeAleoHyperlaneTransferRemote,
   quoteAleoHyperlaneGasPayment,
 } from '../../actions/aleoHyperlane.js'
-import {
-  executeSolanaHyperlaneTransfer,
-  quoteSolanaHyperlaneTransfer,
-} from '../../actions/solanaHyperlane.js'
+import { executeSolanaHyperlaneTransfer } from '../../actions/executeSolanaHyperlaneTransfer.js'
+import { quoteSolanaHyperlaneTransfer } from '../../actions/quoteSolanaHyperlaneTransfer.js'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import { createSolanaRpcReader } from '../../solana/rpc.js'
 import type {

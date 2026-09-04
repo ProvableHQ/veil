@@ -33,7 +33,7 @@ const REQUIRED_SOLANA_HYPERLANE_METADATA_FIELDS: readonly Exclude<
  *
  * Pure and local. Checks field presence and shape only; format-level
  * validation (address charset, digit strings, commit hash shape) is the
- * job of `solanaRouteMetadata` in `actions/solanaHyperlane.ts` at plan time.
+ * job of `solanaRouteMetadata` in `actions/solanaRouteMetadata.ts` at plan time.
  */
 function hasCompleteSolanaHyperlaneMetadata(
   metadata: Readonly<Record<string, string | number | boolean>> | undefined,

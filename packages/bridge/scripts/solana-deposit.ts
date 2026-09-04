@@ -41,6 +41,7 @@ import {
   createBridgeClient,
   type SolanaRpcConfig,
 } from '../src/index.js'
+import { extractSolanaHyperlaneMessageId } from '../src/actions/executeSolanaHyperlaneTransfer.js'
 import {
   createSolanaRpcReader,
   solanaExecutorFromKeyPair,
@@ -363,7 +364,7 @@ async function main(): Promise<void> {
     let logs: string[] | null = null
     const outcome = await poll('Solana confirmation', { timeoutMs: CONFIRMATION_TIMEOUT_MS, intervalMs: 2_000 }, async () => {
       const status = await solanaReader.getSignatureStatus(signature)
-      if (status === 'confirmed' || status === 'finalized') return status
+      if (status === 'confirmed' || status === 'finalized' || status === 'failed') return status
       if (status === null) {
         // getSignatureStatuses only reports recent activity and can forget an
         // older signature (e.g. across a long gap between runs) even though
@@ -374,9 +375,21 @@ async function main(): Promise<void> {
       }
       return undefined
     })
+    if (outcome === 'failed') {
+      // The node reports a non-null `err` for the signature: the transaction
+      // landed and was rejected, so nothing was dispatched and only the fee
+      // was spent. Drop the checkpoint so the next run resubmits instead of
+      // repeating this dead wait.
+      delete state.dispatch
+      saveState(state)
+      log(`Solana transaction ${signature} failed on-chain; no Hyperlane message was dispatched.`)
+      log('The dispatch checkpoint was cleared. Re-run this script to submit a fresh transfer.')
+      process.exitCode = 1
+      return
+    }
     log(`Solana transaction ${outcome}.`)
     logs ??= await solanaReader.getTransactionLogs(signature)
-    const messageIdMatch = logs?.map((line) => /Dispatched message to \d+, ID (0x[0-9a-fA-F]{64})/.exec(line)?.[1]).find(Boolean)
+    const messageIdMatch = extractSolanaHyperlaneMessageId(logs)
     state.dispatch = { ...state.dispatch, signature, status: 'DELIVERY_PENDING', ...(messageIdMatch ? { messageId: messageIdMatch } : {}) }
     saveState(state)
     log(`Hyperlane message id: ${messageIdMatch ?? 'not found in the confirmed transaction logs'}`)
