@@ -31,12 +31,17 @@
     "./mcp": {
       "import": "./dist/mcp/index.js",
       "types": "./dist/mcp/index.d.ts"
+    },
+    "./solana": {
+      "import": "./dist/solana/index.js",
+      "types": "./dist/solana/index.d.ts"
     }
   },
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "solana-deposit": "tsx scripts/solana-deposit.ts"
   },
   "files": [
     "dist"
@@ -47,14 +52,20 @@
     "viem": "^2.21.0"
   },
   "peerDependencies": {
-    "@provablehq/sdk": "^0.11.6"
+    "@provablehq/sdk": "^0.11.6",
+    "@solana/kit": "^8.0.0"
   },
   "peerDependenciesMeta": {
     "@provablehq/sdk": {
       "optional": true
+    },
+    "@solana/kit": {
+      "optional": true
     }
   },
   "devDependencies": {
-    "@provablehq/sdk": "^0.11.6"
+    "@provablehq/sdk": "^0.11.6",
+    "@solana/kit": "^8.0.0",
+    "tsx": "^4.21.0"
   }
 }

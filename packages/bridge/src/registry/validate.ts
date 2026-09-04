@@ -1,15 +1,64 @@
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type { BridgeRegistry } from '../types/protocol.js'
+import type { SolanaHyperlaneRouteMetadata } from '../types/solana.js'
+
+// Required `SolanaHyperlaneRouteMetadata` fields an active Solana-source
+// Hyperlane route must carry. `igpOverheadAccount` is intentionally excluded:
+// it is optional on the type, present only when the reviewed deployment
+// wraps its IGP in an `OverheadIgp` layer (see the type's docblock).
+const REQUIRED_SOLANA_HYPERLANE_METADATA_FIELDS: readonly Exclude<
+  keyof SolanaHyperlaneRouteMetadata,
+  'igpOverheadAccount'
+>[] = [
+  'warpProgramAddress',
+  'tokenPda',
+  'nativeCollateralPda',
+  'dispatchAuthorityPda',
+  'mailboxProgramAddress',
+  'mailboxOutboxPda',
+  'igpProgramAddress',
+  'igpProgramDataPda',
+  'igpAccount',
+  'splNoopProgramAddress',
+  'destinationDomain',
+  'destinationGasAmount',
+  'registryCommit',
+  'solanaReviewedAt',
+  'solanaConfigSource',
+]
+
+/**
+ * Reports whether route metadata carries every required
+ * `SolanaHyperlaneRouteMetadata` field with the expected primitive type.
+ *
+ * Pure and local. Checks field presence and shape only; format-level
+ * validation (address charset, digit strings, commit hash shape) is the
+ * job of `solanaRouteMetadata` in `actions/solanaRouteMetadata.ts` at plan time.
+ */
+function hasCompleteSolanaHyperlaneMetadata(
+  metadata: Readonly<Record<string, string | number | boolean>> | undefined,
+): boolean {
+  if (!metadata) return false
+  return REQUIRED_SOLANA_HYPERLANE_METADATA_FIELDS.every((field) => {
+    const value = metadata[field]
+    return field === 'destinationDomain' ? typeof value === 'number' : typeof value === 'string' && value.length > 0
+  })
+}
 
 /**
  * Validates the referential integrity of a protocol bridge registry.
  *
  * Pure and local. Duplicate identifiers and dangling asset/chain references
- * throw before a client can prepare a misleading transfer plan.
+ * throw before a client can prepare a misleading transfer plan. An active
+ * Hyperlane route sourced from a Solana-family chain additionally must carry
+ * a complete `SolanaHyperlaneRouteMetadata` object, so a route cannot be
+ * flipped to `active` ahead of its metadata being reviewed and filled in.
  *
  * @param registry Registry supplied to `createBridgeClient`.
  * @returns The validated registry unchanged.
- * @throws BridgeError When identifiers are duplicated or references are missing.
+ * @throws BridgeError When identifiers are duplicated, references are
+ *   missing, or an active Solana-source Hyperlane route is missing required
+ *   Sealevel deployment metadata.
  *
  * @example
  * const registry = validateBridgeRegistry(DEFAULT_BRIDGE_REGISTRY)
@@ -59,6 +108,14 @@ export function validateBridgeRegistry(registry: BridgeRegistry): BridgeRegistry
     const destinationChain = registry.chains.find((chain) => chain.id === destination.chainId)!
     if (sourceChain.environment !== route.environment || destinationChain.environment !== route.environment) {
       throw new BridgeError(`Bridge route ${route.id} crosses registry environments`)
+    }
+    if (
+      route.protocol === 'hyperlane'
+      && route.availability === 'active'
+      && sourceChain.family === 'solana'
+      && !hasCompleteSolanaHyperlaneMetadata(route.metadata)
+    ) {
+      throw new BridgeError(`Bridge route ${route.id} is active but missing required Solana Hyperlane metadata`)
     }
     routeIds.add(route.id)
   }

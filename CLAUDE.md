@@ -11,8 +11,13 @@ Repo-wide contributor constraints live in `AGENTS.md` and apply here:
 
 ## Before committing code
 
-Before any commit that touches code (skip for docs-only commits), run `/code-review`
-and `/simplify` on the diff and address their findings, then commit.
+Before any commit that touches code (skip for docs-only commits), run
+`/code-review low` on the diff and address its findings, then commit.
+
+Keep reviews cheap. Always pass `low` to `/code-review`; never run it at
+`medium` or above, and never fan out parallel review agents (`/simplify`'s
+four-agent pass included) unless the user explicitly asks for that scale.
+One low-effort review is the bar.
 
 ## Keep examples and apps in sync with package APIs
 

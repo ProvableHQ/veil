@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { validateBridgeRegistry } from '../../src/registry/validate.js'
+import { getProtocolRoutes } from '../../src/actions/protocolDiscovery.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 
 describe('DEFAULT_BRIDGE_REGISTRY', () => {
@@ -184,6 +185,31 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
       })
   })
 
+  it('activates the reviewed Solana-origin SOL deposit route with its Sealevel metadata', () => {
+    const routes = getProtocolRoutes(DEFAULT_BRIDGE_REGISTRY, { includeUnavailable: true })
+    const route = routes.find((entry) => entry.id === 'hyperlane:solana/sol->aleo/sol')!
+    expect(route.availability).toBe('active')
+    expect(route.metadata).toMatchObject({
+      warpProgramAddress: '8YGT2pZwyZe94qBpGzWfY2TMEVcwaQ1bXAE7YAgpUaM7',
+      tokenPda: 'JDkpV5CsSbhyGhHhirC5DjGPTcuKWUVHtBZ5MFsgu3ZW',
+      nativeCollateralPda: '8HY3hxmnrWwqEmcdwkSnfN9wEQFUkyiwZvU1vMbnXgbC',
+      dispatchAuthorityPda: 'ATDttjggAZKyS19kcV6Rn56oMi49gDprZGckRou9vkkY',
+      mailboxProgramAddress: 'E588QtVUvresuXq2KoNEwAmoifCzYGpRBdHByN9KQMbi',
+      mailboxOutboxPda: 'BvZpTuYLAR77mPhH4GtvwEWUTs53GQqkgBNuXpCePVNk',
+      igpProgramAddress: 'BhNcatUDC2D5JTyeaqrdSukiVFsEHK7e3hVmKMztwefv',
+      igpProgramDataPda: '8Cv4PHJ6Cf3xY7dse7wYeZKtuQv9SAN6ujt5w22a2uho',
+      igpAccount: 'JAvHW21tYXE9dtdG83DReqU2b4LUexFuCbtJT5tF8X6M',
+      igpOverheadAccount: 'AkeHBbE5JkwVppujCQQ6WuxsVsJtruBAjUo6fDCFp6fF',
+      splNoopProgramAddress: 'noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV',
+      destinationDomain: 1634493807,
+      destinationGasAmount: '464000',
+      registryCommit: '418056e21734d26a7d14692e0ec5e902cc9e86bf',
+      solanaConfigSource: 'https://github.com/hyperlane-xyz/hyperlane-registry/blob/418056e21734d26a7d14692e0ec5e902cc9e86bf/deployments/warp_routes/SOL/aleo-config.yaml',
+    })
+    expect(typeof route.metadata?.solanaReviewedAt).toBe('string')
+    expect(Number.isNaN(Date.parse(route.metadata?.solanaReviewedAt as string))).toBe(false)
+  })
+
   it('shares verified Aleo mailbox metadata across every Hyperlane route', () => {
     const routes = DEFAULT_BRIDGE_REGISTRY.routes.filter((route) => route.protocol === 'hyperlane')
     expect(routes.length).toBeGreaterThan(0)
@@ -230,5 +256,17 @@ describe('validateBridgeRegistry', () => {
       assets: [{ ...DEFAULT_BRIDGE_REGISTRY.assets[0]!, addressValidationRegex: '[' }],
       routes: [],
     })).toThrow(/invalid address validation regex/)
+  })
+
+  it('rejects an active Solana-source Hyperlane route missing required Sealevel metadata', () => {
+    const route = DEFAULT_BRIDGE_REGISTRY.routes.find(
+      (entry) => entry.id === 'hyperlane:solana/sol->aleo/sol',
+    )!
+    const { igpAccount: _igpAccount, ...incompleteMetadata } = route.metadata!
+    expect(() => validateBridgeRegistry({
+      ...DEFAULT_BRIDGE_REGISTRY,
+      routes: DEFAULT_BRIDGE_REGISTRY.routes.map((entry) =>
+        entry.id === route.id ? { ...entry, metadata: incompleteMetadata } : entry),
+    })).toThrow(/missing required Solana Hyperlane metadata/)
   })
 })
