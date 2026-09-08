@@ -48,6 +48,19 @@ export {
   type GetSwapExecutionReturnType,
   type SwapExecutionHop,
 } from './actions/reads/getSwapExecution.js'
+export {
+  getPositionFills,
+  watchPositionFills,
+  calculatePositionFill,
+  PositionTrackingError,
+  type GetPositionFillsParameters,
+  type GetPositionFillsReturnType,
+  type PositionFill,
+  type PositionFillsStart,
+  type CalculatePositionFillParameters,
+  type WatchPositionFillsParameters,
+  type WatchPositionFillsReturnType,
+} from './actions/reads/positionFills.js'
 
 // Control-state reads: the pause/allowlist/freeze gates the finalize asserts,
 // as cheap pre-flight checks, plus the batched getTradeControls verdict.

@@ -957,6 +957,62 @@ for (const p of positions) {
 }
 ```
 
+## Position fills
+
+A position's liquidity is fixed between liquidity operations, but the tokens
+that back it are not: every swap that moves the pool price re-expresses the
+same liquidity as a different mix of token0 and token1. `getPositionFills`
+reconstructs those changes swap by swap. It reads the position's pool, range,
+and liquidity from the `positions` mapping, takes each swap's ending price
+from the API's pool trade history, and orders the swaps against their Aleo
+blocks — the indexer's timestamps do not establish execution order, and two
+swaps in one block, or two legs of one multi-hop swap, only make sense in
+chain order. Each fill carries the position's inventory before and after,
+the prices and ticks on either side, and the block, transaction, and
+transition that placed it.
+
+Fills describe inventory, not earnings. The fees a position has accrued come
+from `getOwnedPosition`; a fill's deltas are what a market maker would call
+being filled, and they are what an LP compares against fees to judge a range.
+
+```ts
+const { start, fills } = await client.getPositionFills({ positionTokenId, history: 50 })
+for (const fill of fills) {
+  console.log(fill.blockHeight, fill.zeroForOne ? 'sold token0' : 'sold token1', {
+    delta0: fill.amount0After - fill.amount0Before,
+    delta1: fill.amount1After - fill.amount1Before,
+  })
+}
+```
+
+`watchPositionFills` runs the same replay and then keeps going: it polls the
+trade history on an interval, and where a global `WebSocket` exists it also
+joins the pool's trade room so a new swap brings the next poll forward. The
+socket is only a wake-up; the poll is what finds fills, so a dropped socket
+degrades to polling rather than losing anything. Each fill reaches `onFill`
+in order, replayed ones first. The position's range and liquidity are held
+fixed for the life of the watch; when a poll finds them changed, `onError`
+receives a `PositionTrackingError` and the watch stops itself, because pool
+rows cannot say which swaps happened at the old liquidity. Any other error is
+transient and the next poll retries.
+
+```ts
+const stop = client.watchPositionFills({
+  positionTokenId,
+  onFill: (fill, { replayed }) => console.log(replayed ? 'replayed' : 'live', fill.tradeId),
+  onError: (error) => {
+    if (error instanceof PositionTrackingError) console.error('stopped:', error.message)
+  },
+})
+// later
+stop()
+```
+
+Both need the DEX API client authenticated (`authenticateShieldSwap`, or an
+`apiToken`) — pool trade history is bearer-gated — and a transport that can
+read blocks. Neither needs record access: the position is addressed by its
+public token id, so a bot can follow a position it does not own.
+
 ## Deriving keys and ids locally
 
 Every id the contract computes by hashing a struct is computable client-side,

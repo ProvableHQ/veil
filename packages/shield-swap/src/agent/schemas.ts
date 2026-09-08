@@ -720,8 +720,29 @@ export const apiToolSchemas: AgentToolSchema[] = [
   listTokensSchema,
 ]
 
+/** Declares the `shield_swap_get_position_fills` tool — reconstructs a position's recent swap fills from chain state, indexed pool trades, and block order (backed by `getPositionFills`). */
+export const getPositionFillsSchema: AgentToolSchema = {
+  name: 'shield_swap_get_position_fills',
+  description:
+    "Reconstruct a liquidity position's recent swap fills: for each pool swap, in chain order, " +
+    'the token0/token1 backing the position before and after (raw base-unit strings) plus the ' +
+    'pool prices and ticks on either side. Inventory only — not accrued fees. Needs the DEX API session.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      positionTokenId: { type: 'string', description: "The position's token_id field literal." },
+      history: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Recent fills to reconstruct. Defaults to 20; fewer are returned when the pool has fewer swaps.',
+      },
+    },
+    required: ['positionTokenId'],
+  },
+}
+
 /** Composed tools — require both a client and an ApiClient. */
-export const composedToolSchemas: AgentToolSchema[] = [getBalancesSchema]
+export const composedToolSchemas: AgentToolSchema[] = [getBalancesSchema, getPositionFillsSchema]
 
 /** Auth-flow tools — require a client (the signing account) and the API. */
 export const authToolSchemas: AgentToolSchema[] = [
