@@ -37,9 +37,9 @@ function fakeApi(calls: Record<string, unknown>): ApiClient {
     ),
     listApiTokens: async () => [{ id: 'u1', name: 'bot', token_prefix: 'ss_live_n', created_at: 'now' }],
     revokeApiToken: async (id: unknown) => ((calls.revokeApiToken = id), { id, revoked: true }),
-    getAccessStatus: async () => ({ has_access: false }),
-    redeemAccessCode: async (code: unknown) => (
-      (calls.redeemAccessCode = code), { code, status: 'redeemed', token: 'jwt-with-access' }
+    getReferralStatus: async () => ({ has_access: false, code: null }),
+    redeemReferralCode: async (code: unknown) => (
+      (calls.redeemReferralCode = code), { code, status: 'redeemed', token: 'jwt-with-access' }
     ),
   } as unknown as ApiClient
 }
@@ -205,37 +205,18 @@ describe('createShieldSwapAgentTools — wiring', () => {
     expect(calls.revokeApiToken).toBe('u1')
   })
 
-  it('access handlers report the invite gate and redeem without leaking the upgraded token', async () => {
+  it('access handlers report the referral gate and redeem without leaking any credential', async () => {
     const calls: Record<string, unknown> = {}
     const tools = createShieldSwapAgentTools({ client: fakeClient(), api: fakeApi(calls) })
 
     const status = tools.find((t) => t.schema.name === 'shield_swap_get_access_status')!
-    expect(await status.handler({})).toEqual({ has_access: false })
+    expect(await status.handler({})).toEqual({ has_access: false, code: null })
 
-    const redeem = tools.find((t) => t.schema.name === 'shield_swap_redeem_access_code')!
-    const result = (await redeem.handler({ code: 'INVITE1' })) as Record<string, unknown>
-    expect(calls.redeemAccessCode).toBe('INVITE1')
-    // The upgraded session token stays inside the ApiClient; the agent only
-    // needs the outcome.
-    expect(result).toEqual({ code: 'INVITE1', status: 'redeemed' })
-  })
-
-  it('redeem tool falls back to the referral endpoint when the access endpoint rejects', async () => {
-    const { ApiError } = await import('../../src/api/client.js')
-    const calls: Record<string, unknown> = {}
-    const api = {
-      ...fakeApi(calls),
-      redeemAccessCode: async () => {
-        throw new ApiError(400, '/access/redeem', 'invalid access code')
-      },
-      redeemReferralCode: async (code: unknown) => (
-        (calls.redeemReferralCode = code), { code, status: 'redeemed', token: 'jwt-with-access' }
-      ),
-    } as unknown as ApiClient
-    const tools = createShieldSwapAgentTools({ client: fakeClient(), api })
     const redeem = tools.find((t) => t.schema.name === 'shield_swap_redeem_access_code')!
     const result = (await redeem.handler({ code: 'REF1' })) as Record<string, unknown>
     expect(calls.redeemReferralCode).toBe('REF1')
+    // Any token the API returns stays inside the ApiClient; the agent only
+    // needs the outcome.
     expect(result).toEqual({ code: 'REF1', status: 'redeemed' })
   })
 

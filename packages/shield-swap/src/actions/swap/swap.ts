@@ -111,8 +111,8 @@ export type SwapParameters = {
  * @property blindedAddress The public single-use address the swap recorded.
  *   Present immediately on the local-signer path; on the wallet path the
  *   wallet fills the slot, so recover it post-confirmation from the
- *   transition's public inputs (or the API's `swap.recipient`) before
- *   claiming.
+ *   transition's public inputs (or the `recipient` of the chain's
+ *   `swap_outputs` entry via `getSwapOutput`) before claiming.
  * @property tokenInId Token id (field literal) that was sold.
  * @property tokenOutId Token id (field literal) that was bought.
  * @property tokenInWrapped True when the input token routed through the

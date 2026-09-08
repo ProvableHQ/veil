@@ -304,26 +304,26 @@ export const authenticateSchema: AgentToolSchema = {
   inputSchema: { type: 'object', properties: {}, required: [] },
 }
 
-/** Declares the `shield_swap_get_access_status` tool — whether the account has redeemed an invite code (backed by `ApiClient.getAccessStatus`). */
+/** Declares the `shield_swap_get_access_status` tool — whether the account has redeemed a referral code (backed by `ApiClient.getReferralStatus`). */
 export const getAccessStatusSchema: AgentToolSchema = {
   name: 'shield_swap_get_access_status',
   description:
-    'Check whether the authenticated account has redeemed an invite code. Gated DEX API ' +
-    'endpoints return 403 until it has — when has_access is false, redeem a code with ' +
+    'Check whether the authenticated account has redeemed a referral (invite) code. Gated DEX ' +
+    'API endpoints return 403 until it has — when has_access is false, redeem a code with ' +
     'shield_swap_redeem_access_code. Requires shield_swap_authenticate first.',
   inputSchema: { type: 'object', properties: {}, required: [] },
 }
 
-/** Declares the `shield_swap_redeem_access_code` tool — redeems an invite code, unlocking the gated DEX API endpoints (backed by `ApiClient.redeemAccessCode`). */
+/** Declares the `shield_swap_redeem_access_code` tool — redeems a referral code, unlocking the gated DEX API endpoints (backed by `ApiClient.redeemReferralCode`). */
 export const redeemAccessCodeSchema: AgentToolSchema = {
   name: 'shield_swap_redeem_access_code',
   description:
-    'Redeem an invite code to unlock the gated DEX API endpoints for the account. One-time: ' +
-    'an already-used code is rejected. The upgraded session applies immediately. Requires ' +
+    'Redeem a referral (invite) code to unlock the gated DEX API endpoints for the account. ' +
+    'One-time: an already-used code is rejected. Access applies immediately. Requires ' +
     'shield_swap_authenticate first.',
   inputSchema: {
     type: 'object',
-    properties: { code: { type: 'string', description: 'The invite code to redeem.' } },
+    properties: { code: { type: 'string', description: 'The referral code to redeem.' } },
     required: ['code'],
   },
 }

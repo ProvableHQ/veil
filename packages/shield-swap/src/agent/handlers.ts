@@ -1,6 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
 import type { AgentToolHandler } from '@provablehq/veil-core/agent'
-import { authenticateWithAccount, ApiError, type ApiClient } from '../api/client.js'
+import { authenticateWithAccount, type ApiClient } from '../api/client.js'
 import { resolveDexImports } from '../utils/imports.js'
 import { getPool } from '../actions/reads/getPool.js'
 import { getSlot } from '../actions/reads/getSlot.js'
@@ -147,20 +147,12 @@ export function createAuthHandlers(client: Client, api: ApiClient): Record<strin
       await authenticateWithAccount(api, client.account)
       return { authenticated: true, address: client.account!.address }
     },
-    shield_swap_get_access_status: async () => api.getAccessStatus(),
+    shield_swap_get_access_status: async () => api.getReferralStatus(),
     shield_swap_redeem_access_code: async (i) => {
-      // Distributed codes come as access codes or referral codes; both
-      // unlock the account, so try both endpoints before failing. The
-      // upgraded session token stays inside the ApiClient — the agent
-      // needs the outcome, not the credential.
-      try {
-        const { code, status } = await api.redeemAccessCode(i.code as string)
-        return { code, status }
-      } catch (err) {
-        if (!(err instanceof ApiError) || err.status !== 400) throw err
-        const { code, status } = await api.redeemReferralCode(i.code as string)
-        return { code, status }
-      }
+      // The access grant stays server-side against the ApiClient's session —
+      // the agent needs the outcome, not a credential.
+      const { code, status } = await api.redeemReferralCode(i.code as string)
+      return { code, status }
     },
     shield_swap_create_api_token: async (i) =>
       api.createApiToken({

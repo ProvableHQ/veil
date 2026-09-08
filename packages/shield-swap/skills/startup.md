@@ -94,8 +94,8 @@ the flag to switch deployments, the env var to peek at one.
    These credentials authenticate delegated proving and the record scanner.
 3. **DEX session** — challenge/verify handshake; the account signs, the
    session lasts ~24h and auto-renews on expiry.
-4. **Invite code** — checks `getAccessStatus()`; redeems when a code is
-   provided. One-time per account. Without access every gated endpoint
+4. **Invite code** — checks `getReferralStatus()`; redeems the code through
+   `redeemReferralCode()` when one is provided. One-time per account. Without access every gated endpoint
    returns 403.
 5. **API token** — mints a long-lived `ss_…` token, stored in the state
    file, so later sessions could skip the handshake if needed.

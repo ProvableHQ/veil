@@ -114,18 +114,18 @@ requires a fresh session JWT; the tokens themselves cover data and trading
 endpoints only.
 
 Authentication is the first of two gates. The account must also have
-redeemed an invite code, or gated endpoints return 403
-`redeem an invite code to unlock access`:
+redeemed a referral code (the invite codes Shield Swap distributes), or gated
+endpoints return 403 `redeem an invite code to unlock access`:
 
 ```ts
 await client.authenticateShieldSwap()
-if (!(await client.api.getAccessStatus()).has_access) {
-  await client.api.redeemAccessCode(inviteCode) // one-time per account
+if (!(await client.api.getReferralStatus()).has_access) {
+  await client.api.redeemReferralCode(inviteCode) // one-time per account
 }
 ```
 
-Redemption unlocks the session immediately — the client adopts the upgraded
-token the server returns, no second handshake needed.
+Redemption unlocks the session immediately — the grant is recorded
+server-side, no second handshake needed.
 
 ## Pools and tokens
 
@@ -256,8 +256,9 @@ chain-computed result without claiming, read it directly with
 
 On the wallet path the handle needs `swapId` and `blindedAddress` set before
 claiming — recover them from the confirmed request transaction (the swap id
-is the transition's first public output; the blinded address is also
-readable from `api.getSwap(...).recipient`). The wallet re-derives the
+is the transition's first public output; the blinded address is the
+`recipient` of the chain's `swap_outputs` entry, read with
+[`getSwapOutput`](/api/shield-swap/getSwapOutput)). The wallet re-derives the
 blinding factor from the blinded address, so the dApp never holds it. See
 [`claimSwapOutput`](/api/shield-swap/claimSwapOutput) for the full recovery
 flow.
