@@ -51,20 +51,31 @@ describe('prepare', () => {
     expect(plan.steps.find((step) => step.irreversible)?.kind).toBe('deposit')
   })
 
-  it('prepares an Arc public xReserve mint', () => {
-    const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+  it('prepares Arc public and wrapper-private xReserve mints', () => {
+    const publicPlan = prepare(DEFAULT_BRIDGE_REGISTRY, {
       source: { chain: 'arc', asset: 'usdc' },
       destination: { chain: 'aleo', asset: 'usdcx' },
       amount: '5',
       recipient: ALEO_RECIPIENT,
       mintMode: 'public',
     })
-    expect(plan.sourceAsset).toMatchObject({ id: 'arc/usdc', decimals: 6 })
-    expect(plan.destinationAsset.id).toBe('aleo/usdcx')
-    expect(plan.mintMode).toBe('public')
-    expect(plan.steps.map((step) => step.kind)).toEqual([
+    const privatePlan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'arc', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
+      amount: '5',
+      recipient: ALEO_RECIPIENT,
+      mintMode: 'private',
+    })
+    expect(publicPlan.sourceAsset).toMatchObject({ id: 'arc/usdc', decimals: 6 })
+    expect(publicPlan.destinationAsset.id).toBe('aleo/usdcx')
+    expect(publicPlan.mintMode).toBe('public')
+    expect(publicPlan.steps.map((step) => step.kind)).toEqual([
       'approve', 'deposit', 'wait-attestation', 'mint',
     ])
+    expect(privatePlan.mintMode).toBe('private')
+    expect('privateMintSecretNonce' in privatePlan).toBe(false)
+    expect(privatePlan.steps.at(-1)).toMatchObject({ kind: 'mint', executor: 'aleo-wallet' })
+    expect(privatePlan.steps.at(-1)?.description).toContain('private_mint')
   })
 
   it('prepares the xReserve burn and withdrawal sequence', () => {

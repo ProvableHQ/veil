@@ -315,16 +315,25 @@ that secret.
 
 ### Arc USDC to Aleo USDCx
 
-`arc-to-aleo.ts` prepares the Arc mainnet public-mint route. Set `ARC_RPC_URL`,
-`ALEO_RECIPIENT`, and `EVM_PRIVATE_KEY`, then run its read-only preflight:
+`arc-to-aleo.ts` prepares the Arc mainnet public- or private-mint route. Set
+`ARC_RPC_URL`, `ALEO_RECIPIENT`, `EVM_PRIVATE_KEY`, and optionally
+`USDCX_MINT_MODE`, then run its read-only preflight:
 
 ```sh
 pnpm tsx examples/bridge/arc-to-aleo.ts
 ```
 
-The script derives the sender locally, validates Arc chain id `5042`, Circle
-source domain `26`, balances, allowance, and deposit arguments before signing.
-Live execution requires the script's explicit acknowledgement.
+Standard output shows the sender, recipient, amount, and lifecycle milestones.
+Pass `--verbose` to inspect balances, allowance, fee ceiling, encoded recipient,
+hook data, verified contract calls, simulation results, and polling diagnostics.
+The script derives the sender locally and validates Arc chain id `5042` and
+Circle source domain `26` before signing.
+
+Private mode commits to `ALEO_RECIPIENT` and an optional
+`USDCX_SECRET_NONCE`. Live private execution also requires `ALEO_PRIVATE_KEY`;
+if the process exits after the Arc deposit, set `XRESERVE_RESUME_MESSAGE_HASH`
+to resume only the Aleo private mint. Every live operation requires the script's
+explicit acknowledgement.
 
 ### Aleo USDCx to Ethereum USDC
 
