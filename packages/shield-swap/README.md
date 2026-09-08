@@ -957,6 +957,82 @@ for (const p of positions) {
 }
 ```
 
+## Position fills
+
+A position's liquidity is fixed between liquidity operations, but the tokens
+that back it are not: every swap that moves the pool price re-expresses the
+same liquidity as a different mix of token0 and token1. `getPositionFills`
+reconstructs those changes swap by swap for one or more positions. It reads
+each position's pool, range, and liquidity from the `positions` mapping, takes
+each swap's ending price from the API's pool trade history, and orders the
+swaps against their Aleo blocks — the indexer's timestamps do not establish
+execution order, and two swaps in one block, or two legs of one multi-hop
+swap, only make sense in chain order. Positions in the same pool are valued
+against a single read of that pool's history, so tracking a portfolio costs
+little more than tracking one position. Each fill names its position and pool
+and carries the inventory before and after, the prices and ticks on either
+side, and the block, transaction, and transition that placed it; the list is
+in chain order across every pool.
+
+Fills describe inventory, not earnings. The fees a position has accrued come
+from `getOwnedPosition`; a fill's deltas are what a market maker would call
+being filled, and they are what an LP compares against fees to judge a range.
+
+The window is chosen one of two ways. `history` asks for the last N fills per
+pool (default 20). `fromBlock` asks for every fill from a block height onward,
+with the swap just before the window supplying the starting price. The indexer
+pages by timestamp, so a `fromBlock` window costs one block lookup per distinct
+block it covers; a deep window on a busy pool is many requests. Either way,
+fills are valued at each position's liquidity as it stands now — a window that
+reaches back past an increase or decrease reports what the current liquidity
+would have done, not what the position held then.
+
+```ts
+const { positions, fills } = await client.getPositionFills({
+  positionTokenIds: [positionA, positionB],
+  history: 50,
+})
+for (const fill of fills) {
+  console.log(fill.positionTokenId, fill.blockHeight, fill.zeroForOne ? 'sold token0' : 'sold token1', {
+    delta0: fill.amount0After - fill.amount0Before,
+    delta1: fill.amount1After - fill.amount1Before,
+  })
+}
+
+// Everything since a block height instead of a count.
+await client.getPositionFills({ positionTokenIds: [positionA], fromBlock: 19_400_000 })
+```
+
+`watchPositionFills` runs the same replay and then keeps going: it polls each
+pool's trade history on an interval, and where a global `WebSocket` exists it
+also joins each pool's trade room so a new swap brings the next poll forward.
+The socket is only a wake-up; the poll is what finds fills, so a dropped
+socket degrades to polling rather than losing anything. Each fill reaches
+`onFill` in order, replayed ones first. Every position's range and liquidity
+are held fixed for the life of the watch; when a poll finds one changed,
+`onError` receives a `PositionTrackingError` naming it and the watch drops
+that position, because pool rows cannot say which swaps happened at the old
+liquidity. The others continue, and the watch stops itself once none remain.
+Any other error is transient and the next poll retries.
+
+```ts
+const stop = client.watchPositionFills({
+  positionTokenIds: [positionA, positionB],
+  onFill: (fill, { replayed }) => console.log(replayed ? 'replayed' : 'live', fill.positionTokenId, fill.tradeId),
+  onError: (error) => {
+    if (error instanceof PositionTrackingError) console.error('dropped', error.positionTokenIds, error.message)
+  },
+})
+// later
+stop()
+```
+
+Both need the DEX API client authenticated (`authenticateShieldSwap`, or an
+`apiToken`) — pool trade history is bearer-gated — and a transport that can
+read blocks. Neither needs record access: positions are addressed by their
+public token ids, so a bot can follow positions it does not own. To follow
+everything the account owns, feed `getOwnedPositions` into `positionTokenIds`.
+
 ## Deriving keys and ids locally
 
 Every id the contract computes by hashing a struct is computable client-side,

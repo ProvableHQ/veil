@@ -50,6 +50,7 @@ export {
   listTokensSchema,
   getPublicBalancesSchema,
   getBalancesSchema,
+  getPositionFillsSchema,
   authenticateSchema,
   getAccessStatusSchema,
   redeemAccessCodeSchema,
@@ -117,7 +118,7 @@ export function createShieldSwapAgentTools(config: ShieldSwapAgentToolsConfig): 
   if (config.client) add(chainToolSchemas, createChainHandlers(config.client, config.program))
   if (config.api) add(apiToolSchemas, createApiHandlers(config.api))
   if (config.client && config.api) {
-    add(composedToolSchemas, createComposedHandlers(config.client, config.api))
+    add(composedToolSchemas, createComposedHandlers(config.client, config.api, config.program))
     add(authToolSchemas, createAuthHandlers(config.client, config.api))
   }
   if (config.includeWrites && config.client) add(writeToolSchemas, createWriteHandlers(config.client, config.program))

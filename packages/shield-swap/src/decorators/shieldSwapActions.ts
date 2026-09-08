@@ -27,6 +27,14 @@ import {
   type GetOwnedPositionParameters,
   type GetOwnedPositionReturnType,
 } from '../actions/reads/getOwnedPosition.js'
+import {
+  getPositionFills,
+  watchPositionFills,
+  type GetPositionFillsParameters,
+  type GetPositionFillsReturnType,
+  type WatchPositionFillsParameters,
+  type WatchPositionFillsReturnType,
+} from '../actions/reads/positionFills.js'
 import { getPoolCreator, type GetPoolCreatorParameters } from '../actions/reads/getPoolCreator.js'
 import {
   getSwapExecution,
@@ -154,6 +162,13 @@ export type ShieldSwapActionsConfig = {
  *   network, so a caller can take `USDCx` from a person and hand an id to an
  *   action. Cached per client after the first call.
  * @property listTokens The network's token registry, cached per client.
+ * @property getPositionFills Reconstructs a position's recent swap fills — the
+ *   change in token0 and token1 backing its fixed liquidity across each pool
+ *   swap — from the `positions` mapping, the API's pool trade history, and the
+ *   blocks that order it. Reads only; needs an authenticated `.api`.
+ * @property watchPositionFills Streams a position's fills as swaps land:
+ *   replays recent ones, then polls the API (with WebSocket wake-ups when
+ *   available) and emits each new fill to `onFill`. Returns a stop function.
  * @property planSwap Turns "sell this for that" into an executable plan: the
  *   route from the API, tradeability checked on chain for every hop, the quote,
  *   a slippage floor, and the `imports` the write needs. Reads only.
@@ -204,6 +219,8 @@ export type ShieldSwapActions = {
   getOwnedPosition: (params: GetOwnedPositionParameters) => Promise<GetOwnedPositionReturnType>
   getPoolCreator: (params: GetPoolCreatorParameters) => Promise<string | null>
   getSwapExecution: (params: GetSwapExecutionParameters) => Promise<GetSwapExecutionReturnType>
+  getPositionFills: (params: GetPositionFillsParameters) => Promise<GetPositionFillsReturnType>
+  watchPositionFills: (params: WatchPositionFillsParameters) => WatchPositionFillsReturnType
   getTick: (params: GetTickParameters) => Promise<GetTickReturnType>
   isBlindedAddressUsed: (params: { address: string; program?: string }) => Promise<boolean>
   isPoolInitialized: (params: { poolKey: string; program?: string }) => Promise<boolean>
@@ -353,6 +370,8 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       getOwnedPosition: (p) => getOwnedPosition(client, withProgram(p)),
       getPoolCreator: (p) => getPoolCreator(client, withProgram(p)),
       getSwapExecution: (p) => getSwapExecution(client, withProgram(p)),
+      getPositionFills: (p) => getPositionFills(client, api ?? missingApi, withProgram(p)),
+      watchPositionFills: (p) => watchPositionFills(client, api ?? missingApi, withProgram(p)),
       getTick: (p) => getTick(client, withProgram(p) as GetTickParameters),
       isBlindedAddressUsed: (p) => isBlindedAddressUsed(client, withProgram(p)),
       isPoolInitialized: (p) => isPoolInitialized(client, withProgram(p)),

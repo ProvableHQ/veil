@@ -7,6 +7,7 @@ import { getSlot } from '../actions/reads/getSlot.js'
 import { getSwapOutput } from '../actions/reads/getSwapOutput.js'
 import { getPoolCreator } from '../actions/reads/getPoolCreator.js'
 import { getSwapExecution } from '../actions/reads/getSwapExecution.js'
+import { getPositionFills } from '../actions/reads/positionFills.js'
 import { getPosition } from '../actions/reads/getPosition.js'
 import { getOwnedPositions, type OwnedPosition } from '../actions/reads/getOwnedPositions.js'
 import { getOwnedPosition } from '../actions/reads/getOwnedPosition.js'
@@ -126,13 +127,22 @@ export function createApiHandlers(api: ApiClient): Record<string, AgentToolHandl
 }
 
 /** Composed (client + API) handlers, keyed by tool name. */
-export function createComposedHandlers(client: Client, api: ApiClient): Record<string, AgentToolHandler> {
+export function createComposedHandlers(client: Client, api: ApiClient, program?: string): Record<string, AgentToolHandler> {
   return {
     shield_swap_get_balances: async (i) =>
       jsonSafe(
         await getBalances(client, api, {
           user: i.user as string | undefined,
           tokens: i.tokens as string[] | undefined,
+        }),
+      ),
+    shield_swap_get_position_fills: async (i) =>
+      jsonSafe(
+        await getPositionFills(client, api, {
+          positionTokenIds: i.positionTokenIds as string[],
+          history: i.history as number | undefined,
+          fromBlock: i.fromBlock as number | undefined,
+          program,
         }),
       ),
   }
