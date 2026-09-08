@@ -32,6 +32,8 @@ export {
   executeAleoHyperlaneTransferRemote,
   quoteAleoHyperlaneGasPayment,
 } from './actions/aleoHyperlane.js'
+export { quoteSolanaHyperlaneTransfer } from './actions/quoteSolanaHyperlaneTransfer.js'
+export { executeSolanaHyperlaneTransfer } from './actions/executeSolanaHyperlaneTransfer.js'
 
 export { DEFAULT_BRIDGE_REGISTRY } from './registry/default.js'
 export { validateBridgeRegistry } from './registry/validate.js'
@@ -94,6 +96,16 @@ export type {
   XReserveBurnMode,
   XReservePrivateMintExecution,
 } from './types/aleo.js'
+export type {
+  ExecuteSolanaHyperlaneTransferParameters,
+  QuoteSolanaHyperlaneTransferParameters,
+  SolanaBridgeExecutor,
+  SolanaHyperlaneRouteMetadata,
+  SolanaHyperlaneTransferExecution,
+  SolanaHyperlaneTransferQuote,
+  SolanaRpcConfig,
+  SolanaRpcHttpTransport,
+} from './types/solana.js'
 
 export {
   aleoAddressToBytes32,

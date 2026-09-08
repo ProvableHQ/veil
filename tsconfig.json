@@ -28,7 +28,8 @@
       "@provablehq/veil-aleo-sdk/node": ["./packages/provable-sdk/src/node.ts"],
       "@provablehq/aleo-bridge-sdk": ["./packages/bridge/src/index.ts"],
       "@provablehq/aleo-bridge-sdk/agent": ["./packages/bridge/src/agent/index.ts"],
-      "@provablehq/aleo-bridge-sdk/mcp": ["./packages/bridge/src/mcp/index.ts"]
+      "@provablehq/aleo-bridge-sdk/mcp": ["./packages/bridge/src/mcp/index.ts"],
+      "@provablehq/aleo-bridge-sdk/solana": ["./packages/bridge/src/solana/index.ts"]
     },
     "types": ["node"]
   },

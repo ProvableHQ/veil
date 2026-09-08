@@ -1,6 +1,7 @@
 import type { Address, Hash, Hex } from 'viem'
 import type { BridgeTransferPlan, BridgeTransferReceipt } from './protocol.js'
 import type { AleoBridgeExecutor } from './aleo.js'
+import type { SolanaBridgeExecutor } from './solana.js'
 
 /**
  * Sends JSON-RPC requests through an injected or application-provided EVM wallet.
@@ -24,10 +25,12 @@ export type EvmBridgeExecutor = {
  *
  * @property evm EIP-1193 executor used by Ethereum bridge actions when present.
  * @property aleo Wallet client used only for user-authorized Aleo transactions such as private USDCx minting.
+ * @property solana Wallet executor used by Solana Hyperlane bridge actions when present.
  */
 export type BridgeExecutors = {
   evm?: EvmBridgeExecutor | undefined
   aleo?: AleoBridgeExecutor | undefined
+  solana?: SolanaBridgeExecutor | undefined
 }
 
 /** Identifies the Ethereum Hyperlane router's collateral model. */

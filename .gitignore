@@ -21,3 +21,7 @@ packages/codegen/test/integration/generated/
 
 # shield-swap agent-skill session state (private key + credentials)
 .shield-swap/
+
+# Bridge Solana deposit verification script state (private key + checkpoints)
+packages/bridge/scripts/.env.solana-deposit
+packages/bridge/scripts/.solana-deposit.state.json

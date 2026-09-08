@@ -5,8 +5,11 @@ xReserve. ETH, WBTC, USDT, SOL, ALEO, and USAD transfers use Hyperlane Warp Rout
 
 The package is in preview and is not published to npm. It provides reviewed
 route discovery, non-fund-moving transfer plans, and injected-wallet execution
-for Ethereum-to-Aleo xReserve USDC deposits and Hyperlane routes carrying ETH,
-WBTC, and USDT. Aleo-origin and Solana execution paths remain under development.
+for Ethereum-to-Aleo xReserve USDC deposits, Hyperlane routes carrying ETH,
+WBTC, and USDT, and Aleo-origin Hyperlane withdrawals for ETH, WBTC, USDT, and
+SOL. Solana-to-Aleo SOL deposits and Aleo-to-Solana SOL withdrawals are both
+live as well. The Aleo-origin USAD route and Solana-origin ALEO token routes
+remain under development.
 
 ## Current API
 
@@ -160,6 +163,97 @@ Hyperlane message id when the Mailbox `DispatchId` event is present.
 Inbound Hyperlane Aleo minting is performed by the Hyperlane relayer. The user
 submits only the source-chain approval and dispatch transactions; no Aleo wallet
 transaction is requested for Hyperlane delivery.
+
+## Solana Hyperlane execution
+
+Native SOL deposits use the same reviewed `hyperlane:solana/sol->aleo/sol` Warp
+Route that the Aleo-origin withdrawal path serves in the opposite direction
+(see Aleo-origin Hyperlane withdrawals below). The action needs a `solanaRpc`
+endpoint on the client and a `SolanaBridgeExecutor` under `executors.solana`;
+the bridge client never handles a Solana private key directly.
+
+For bots, scripts, and servers that hold the key locally, `solanaExecutorFromKeyPair`
+derives the signer from a raw 64-byte Ed25519 secret key and submits the signed
+transaction over the configured RPC endpoint:
+
+```ts
+import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'
+import { solanaExecutorFromKeyPair } from '@provablehq/aleo-bridge-sdk/solana'
+
+const rpc = { url: 'https://api.mainnet-beta.solana.com' }
+const bridge = createBridgeClient({
+  environment: 'mainnet',
+  solanaRpc: rpc,
+  executors: { solana: await solanaExecutorFromKeyPair({ secretKeyBytes, rpc }) },
+})
+
+const plan = bridge.prepareTransfer({
+  routeId: 'hyperlane:solana/sol->aleo/sol',
+  amount: '0.01',
+  recipient: aleoAddress,
+  sender: solanaSenderAddress,
+})
+
+const quote = await bridge.quoteSolanaHyperlaneTransfer({ plan })
+const execution = await bridge.executeSolanaHyperlaneTransfer({ plan })
+```
+
+`quoteSolanaHyperlaneTransfer` reads the route's interchain gas paymaster
+account through the injected RPC and returns the atomic lamport transfer
+amount, the gas payment, the Solana network fee, and their total.
+`executeSolanaHyperlaneTransfer` requotes the gas payment immediately before
+submission, confirms the sender's balance covers the amount plus gas plus the
+rent for the two accounts the instruction creates, then hands the assembled
+transaction to the executor to sign and broadcast. A confirmation timeout
+returns a resumable `SOURCE_CONFIRMING` receipt carrying the already-submitted
+signature rather than throwing.
+
+Browser applications connected through a Wallet Standard wallet use
+`solanaExecutorFromWalletAccount` instead. It delegates signing and submission
+to the wallet's `solana:signAndSendTransaction` feature, so the private key
+never leaves the wallet:
+
+```ts
+import { solanaExecutorFromWalletAccount } from '@provablehq/aleo-bridge-sdk/solana'
+
+const bridge = createBridgeClient({
+  environment: 'mainnet',
+  solanaRpc: { url: 'https://api.mainnet-beta.solana.com' },
+  executors: {
+    solana: solanaExecutorFromWalletAccount({
+      wallet: connectedWallet,
+      account: connectedWallet.accounts[0],
+      chain: 'solana:mainnet',
+    }),
+  },
+})
+```
+
+The same `prepareTransfer`, `quoteSolanaHyperlaneTransfer`, and
+`executeSolanaHyperlaneTransfer` calls apply once the client is constructed
+this way; the wallet prompts the connected account instead of signing locally.
+
+`@solana/kit` is an optional peer dependency needed only for Solana routes;
+install it with `pnpm add @solana/kit`. Quoting does not touch it, but
+executing a transfer always loads it to assemble and encode the transaction,
+regardless of which executor supplies the final signature. React Native
+applications additionally need the `@solana/webcrypto-ed25519-polyfill`
+package for `@solana/kit`'s Ed25519 operations.
+
+Applications still on `@solana/wallet-adapter` rather than Wallet Standard can
+satisfy `SolanaBridgeExecutor` directly over the adapter's `sendTransaction`:
+
+```ts
+import type { SolanaBridgeExecutor } from '@provablehq/aleo-bridge-sdk'
+import { VersionedTransaction } from '@solana/web3.js'
+
+const executor: SolanaBridgeExecutor = {
+  getAddress: async () => adapter.publicKey!.toBase58(),
+  signAndSendTransaction: async (wireTransaction) => ({
+    signature: await adapter.sendTransaction(VersionedTransaction.deserialize(wireTransaction), connection),
+  }),
+}
+```
 
 ## Aleo USDCx burns
 
@@ -317,12 +411,14 @@ and SOL.
 - `executeXReservePrivateMint`
 - `buildXReserveBurnCall` and `executeXReserveBurn`
 - `buildAleoHyperlaneTransferRemoteCall` and `executeAleoHyperlaneTransferRemote`
+- `quoteSolanaHyperlaneTransfer` and `executeSolanaHyperlaneTransfer`
 - Aleo address, xReserve hook, nonce, payload, and message-hash utilities
 - Ethereum and Solana Hyperlane recipient serialization for Aleo-origin transfers
 - `DEFAULT_BRIDGE_REGISTRY` and `validateBridgeRegistry`
 - Protocol-neutral asset, route, plan, fee, step, status, and receipt types
 - `createBridgeAgentTools` from `/agent`
 - `createBridgeMcpServer` from `/mcp`
+- `solanaExecutorFromKeyPair`, `solanaExecutorFromWalletAccount`, and other Solana signing and RPC helpers from `/solana`
 
 The agent and MCP surfaces expose discovery and planning only. They do not expose
 fund-moving wallet actions.
@@ -331,4 +427,4 @@ fund-moving wallet actions.
 
 1. Add protocol delivery tracking for relayer-driven xReserve and Hyperlane mints.
 2. Replace and review the Aleo-origin USAD placeholders, then add destination confirmation for withdrawals.
-3. Add injected Solana execution and gated protocol testnets.
+3. Add gated protocol testnets.

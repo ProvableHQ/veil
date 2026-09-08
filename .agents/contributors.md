@@ -87,6 +87,14 @@ positional parameter where a viem-style config object belongs?
 - Avoid breaking backwards compatibility unless necessary. When it is necessary,
   declare the intent and the migration as part of the sign-off above.
 
+## Code review effort
+
+- Pre-commit review runs at low effort only: `/code-review low`. Do not run
+  `medium` or higher, and do not fan out parallel review agents (including the
+  multi-agent `/simplify` pass) unless the user explicitly asks for that scale.
+- Address the findings, then commit. One cheap review is the bar; expensive
+  review sweeps are not.
+
 ## Commits
 
 - Prefix every commit subject with a bracketed, capitalized type: `[Fix]`,

@@ -4,6 +4,7 @@ import { DEFAULT_BRIDGE_REGISTRY } from '../registry/default.js'
 import { validateBridgeRegistry } from '../registry/validate.js'
 import type { BridgeExecutors } from '../types/evm.js'
 import type { BridgeEnvironment, BridgeRegistry } from '../types/protocol.js'
+import type { SolanaRpcConfig } from '../types/solana.js'
 import type { XReserveHttpTransport } from '../types/xreserve.js'
 
 /**
@@ -14,6 +15,7 @@ import type { XReserveHttpTransport } from '../types/xreserve.js'
  * @property executors Optional wallet capabilities used by fund-moving protocol actions.
  * @property xReserveHttpTransport Optional fetch-compatible transport used for Circle attestation requests.
  * @property aleoPublicClient Optional Aleo public client used for on-chain reads such as Hyperlane gas quotes.
+ * @property solanaRpc Optional Solana JSON-RPC endpoint used for on-chain reads such as blockhash and confirmation lookups.
  * @property key Client identifier. Defaults to `bridge`.
  * @property name Human-readable client name. Defaults to `Bridge Client`.
  */
@@ -23,6 +25,7 @@ export type BridgeClientConfig = {
   executors?: BridgeExecutors | undefined
   xReserveHttpTransport?: XReserveHttpTransport | undefined
   aleoPublicClient?: Client | undefined
+  solanaRpc?: SolanaRpcConfig | undefined
   key?: string | undefined
   name?: string | undefined
 }
@@ -75,6 +78,7 @@ export function createBridgeClient(config: BridgeClientConfig = {}): BridgeClien
     executors = {},
     xReserveHttpTransport,
     aleoPublicClient,
+    solanaRpc,
     key = 'bridge',
     name = 'Bridge Client',
   } = config
@@ -83,6 +87,6 @@ export function createBridgeClient(config: BridgeClientConfig = {}): BridgeClien
   return client.extend((inner) => ({
     environment,
     registry: validated,
-    ...bridgeActions(inner, { environment, registry: validated, executors, xReserveHttpTransport, aleoPublicClient }),
+    ...bridgeActions(inner, { environment, registry: validated, executors, xReserveHttpTransport, aleoPublicClient, solanaRpc }),
   })) as BridgeClient
 }
