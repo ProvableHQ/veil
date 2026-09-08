@@ -28,7 +28,6 @@ function fakeApi(calls: Record<string, unknown>): ApiClient {
     getPools: async (q: unknown) => ((calls.getPools = q), { data: [] }),
     getRoute: async (q: unknown) => ((calls.getRoute = q), { data: { amount_out: '0' } }),
     getTokens: async () => ({ data: [] }),
-    getPublicBalances: async (q: unknown) => ((calls.getPublicBalances = q), { data: [] }),
     authenticate: async (address: string, sign: (m: string) => Promise<string>) => (
       (calls.authenticate = { address, signature: await sign('challenge-msg') }), 'jwt123'
     ),
@@ -91,6 +90,11 @@ describe('shieldSwapAgentToolSchemas — gating', () => {
     expect(chain).toEqual(
       expect.arrayContaining(['shield_swap_get_position', 'shield_swap_get_tick', 'shield_swap_get_trade_controls']),
     )
+  })
+
+  it('exposes public balances as a chain read, not an API tool', () => {
+    expect(names({ client: {} as Client })).toContain('shield_swap_get_public_balances')
+    expect(names({ api: {} as ApiClient })).not.toContain('shield_swap_get_public_balances')
   })
 
   it('exposes the pool-creator and swap-execution reads', () => {

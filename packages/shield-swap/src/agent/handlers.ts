@@ -16,6 +16,7 @@ import { getFrozenPosition } from '../actions/reads/getFrozenPosition.js'
 import { isPoolCreationOpen } from '../actions/reads/isPoolCreationOpen.js'
 import { isPoolInitialized } from '../actions/reads/isPoolInitialized.js'
 import { getFeeToTickSpacing } from '../actions/reads/getFeeToTickSpacing.js'
+import { getPublicBalances } from '../actions/reads/getPublicBalances.js'
 import { getPrivateBalances } from '../utils/records.js'
 import { getBalances } from '../utils/balances.js'
 import {
@@ -80,6 +81,10 @@ export function createChainHandlers(client: Client, program?: string): Record<st
     }),
     shield_swap_get_private_balances: async (i) =>
       jsonSafe(await getPrivateBalances(client, { programs: i.programs as string[] })),
+    shield_swap_get_public_balances: async (i) =>
+      jsonSafe(
+        await getPublicBalances(client, { user: i.user as string | undefined, programs: i.programs as string[] }),
+      ),
     shield_swap_get_owned_positions: async (i) =>
       jsonSafe(
         (await getOwnedPositions(client, { poolKey: i.poolKey as string | undefined, program })).map(stripRecord),
@@ -117,7 +122,6 @@ export function createApiHandlers(api: ApiClient): Record<string, AgentToolHandl
         ...(i.amountIn !== undefined ? { amount_in: String(i.amountIn) } : {}),
       }),
     shield_swap_list_tokens: async () => api.getTokens(),
-    shield_swap_get_public_balances: async (i) => api.getPublicBalances({ user: i.user as string }),
   }
 }
 

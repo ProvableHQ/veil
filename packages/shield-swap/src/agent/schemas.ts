@@ -168,6 +168,28 @@ export const getPrivateBalancesSchema: AgentToolSchema = {
   },
 }
 
+/** Declares the `shield_swap_get_public_balances` tool — an address's public balances from each AMM token program's on-chain `balances` mapping (backed by `getPublicBalances`). */
+export const getPublicBalancesSchema: AgentToolSchema = {
+  name: 'shield_swap_get_public_balances',
+  description:
+    "Read an address's public token balances from chain — each AMM token program's `balances` " +
+    'mapping, keyed by program. Raw base-unit strings; absent entries read as "0". The public ' +
+    'counterpart to shield_swap_get_private_balances. Defaults to the client account when user ' +
+    'is omitted.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      user: { type: 'string', description: 'Address to read balances for (aleo1…). Defaults to the client account.' },
+      programs: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'AMM token programs to read (the token registry\'s amm_token_program), e.g. ["test_arc20_eth.aleo"].',
+      },
+    },
+    required: ['programs'],
+  },
+}
+
 /** Declares the `shield_swap_get_owned_positions` tool — lists the caller's liquidity positions from their PositionNFT records with on-chain state and derived values (backed by `getOwnedPositions`). */
 export const getOwnedPositionsSchema: AgentToolSchema = {
   name: 'shield_swap_get_owned_positions',
@@ -247,19 +269,6 @@ export const listTokensSchema: AgentToolSchema = {
   name: 'shield_swap_list_tokens',
   description: 'List all tokens the DEX API knows, with symbol, decimals, and wrapper program.',
   inputSchema: { type: 'object', properties: {}, required: [] },
-}
-
-/** Declares the `shield_swap_get_public_balances` tool — an address's public/authorized balances from the DEX API (backed by `ApiClient.getPublicBalances`). */
-export const getPublicBalancesSchema: AgentToolSchema = {
-  name: 'shield_swap_get_public_balances',
-  description:
-    "Read an address's public/authorized token balances from the DEX API. Raw base-unit " +
-    'strings. This is the public counterpart to shield_swap_get_private_balances.',
-  inputSchema: {
-    type: 'object',
-    properties: { user: { type: 'string', description: 'Address to read balances for (aleo1…).' } },
-    required: ['user'],
-  },
 }
 
 // ---------------------------------------------------------------------------
@@ -688,6 +697,7 @@ export const chainToolSchemas: AgentToolSchema[] = [
   isPoolInitializedSchema,
   getFeeToTickSpacingSchema,
   getPrivateBalancesSchema,
+  getPublicBalancesSchema,
   getOwnedPositionsSchema,
   getOwnedPositionSchema,
   getPoolCreatorSchema,
@@ -708,7 +718,6 @@ export const apiToolSchemas: AgentToolSchema[] = [
   listPoolsSchema,
   getRouteSchema,
   listTokensSchema,
-  getPublicBalancesSchema,
 ]
 
 /** Composed tools — require both a client and an ApiClient. */

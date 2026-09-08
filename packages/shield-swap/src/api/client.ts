@@ -484,11 +484,6 @@ export class ApiClient {
     return this.request('GET', '/tokens')
   }
 
-  /** Reads a user's public/authorized balances (base units, as the API sees them). */
-  async getPublicBalances(query: { user: string }): Promise<Schemas['BalanceListResponseDoc']> {
-    return this.request('GET', '/balances', { query, auth: true })
-  }
-
   // ── protocol config ──────────────────────────────────────────────────
 
   /**

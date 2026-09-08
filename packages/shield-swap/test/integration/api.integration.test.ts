@@ -110,12 +110,9 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     expect(route.data.hops.length).toBeGreaterThan(0)
   }, 30_000)
 
-  it('user-scoped reads: positions, balances', async () => {
+  it('user-scoped reads: positions', async () => {
     const positions = await api.getPositions({ user: address, limit: 3 })
     expect(Array.isArray(positions.data)).toBe(true)
-
-    const balances = await api.getPublicBalances({ user: address })
-    expect(Array.isArray(balances.data)).toBe(true)
   }, 60_000)
 
   it('debug pool introspection responds under auth', async () => {
@@ -143,8 +140,8 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
       const tokenClient = new ApiClient({ ...API_OPTS, apiToken: created.token })
       const tiers = await tokenClient.getFeeTiers()
       expect(tiers.data.length).toBeGreaterThan(0)
-      const balances = await tokenClient.getPublicBalances({ user: address })
-      expect(Array.isArray(balances.data)).toBe(true)
+      const positions = await tokenClient.getPositions({ user: address, limit: 1 })
+      expect(Array.isArray(positions.data)).toBe(true)
 
       // …but not token management, client-side or server-side.
       await expect(tokenClient.listApiTokens()).rejects.toThrow(/session JWT/)

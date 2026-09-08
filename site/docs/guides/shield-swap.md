@@ -326,10 +326,12 @@ SDK offers three views:
 await client.getPrivateBalances({ programs: ['ethx_5a095e.aleo'] })
 // { 'ethx_5a095e.aleo': 3000000000000000000n }
 
-// Public — the API's public/authorized balances for any address.
-await client.api.getPublicBalances({ user: address })
+// Public — each AMM token program's on-chain `balances` mapping, for any address.
+await client.getPublicBalances({ user: address, programs: ['test_arc20_eth.aleo'] })
+// { 'test_arc20_eth.aleo': 5000000000000000000n }
 
-// Combined — public + private + total per token, keyed by token id.
+// Combined — public + private + total per token, keyed by token id. The API's
+// token registry supplies the program list; both balance sides come from chain.
 await client.getBalances()
 // { '1223…045field': { symbol: 'ETHx', decimals: 18, public: 5n, private: 3n, total: 8n }, … }
 ```

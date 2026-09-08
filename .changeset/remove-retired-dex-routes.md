@@ -7,8 +7,16 @@ Remove `ApiClient` methods for DEX API routes the server retired: the invite-cod
 access routes (`getAccessStatus`, `redeemAccessCode`, `listAccessCodes`,
 `generateAccessCodes`), swap history (`getSwaps`, `getSwap`), the position, token,
 and tick-spacing detail routes (`getPosition`, `getToken`, `getTickSpacings`),
-token registration (`registerToken`), and the trading schema routes
-(`getTradingSchemas`, `getTradingSchema`).
+token registration (`registerToken`), the trading schema routes
+(`getTradingSchemas`, `getTradingSchema`), and public balances
+(`getPublicBalances`, whose `/balances` route was removed earlier).
+
+Public balances are now read from chain. The new `getPublicBalances` action (also
+`client.getPublicBalances` and the `shield_swap_get_public_balances` agent tool,
+which moves from the API tool set to the chain tool set) reads each AMM token
+program's `balances` mapping for an address and returns raw base units keyed by
+program. `getBalances` composes it with record-derived private balances and no
+longer needs a DEX API credential — only the public token registry.
 
 Access now goes through the referral endpoints: `getReferralStatus()` reports the
 gate and `redeemReferralCode()` unlocks it. The `shield_swap_get_access_status`
