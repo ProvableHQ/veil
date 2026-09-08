@@ -139,8 +139,9 @@ export function createComposedHandlers(client: Client, api: ApiClient, program?:
     shield_swap_get_position_fills: async (i) =>
       jsonSafe(
         await getPositionFills(client, api, {
-          positionTokenId: i.positionTokenId as string,
+          positionTokenIds: i.positionTokenIds as string[],
           history: i.history as number | undefined,
+          fromBlock: i.fromBlock as number | undefined,
           program,
         }),
       ),

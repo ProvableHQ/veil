@@ -7,17 +7,17 @@ const runScript = (args: string[], env: Record<string, string> = {}) =>
   spawnSync('pnpm', ['exec', 'tsx', script, ...args], { encoding: 'utf8', env: { ...process.env, ...env } })
 
 describe('lp-fill-tracker script', () => {
-  it('explains how to supply the required position token id', () => {
+  it('explains how to supply at least one position token id', () => {
     const result = runScript([])
 
     expect(result.status).toBe(1)
     expect(result.stderr).toContain(
-      'Usage: pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id> [--network mainnet|testnet] [--history N]',
+      'Usage: pnpm exec tsx examples/shield-swap/lp-fill-tracker.ts <position-token-id>... [--network mainnet|testnet] [--history N | --from-block H]',
     )
   })
 
   it('requires a wallet key without asking for Provable API credentials', () => {
-    const result = runScript(['11field'], {
+    const result = runScript(['11field', '12field'], {
       VEIL_E2E_PRIVATE_KEY: '',
       ALEO_CONSUMER_ID: '',
       ALEO_DPS_API_KEY: '',
@@ -43,5 +43,20 @@ describe('lp-fill-tracker script', () => {
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('History must be a non-negative integer')
     expect(result.stderr).not.toContain('VEIL_E2E_PRIVATE_KEY is required')
+  })
+
+  it('rejects a flag given without a value rather than falling back to a default', () => {
+    const result = runScript(['11field', '--history'], { VEIL_E2E_PRIVATE_KEY: '' })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('--history requires a value')
+    expect(result.stderr).not.toContain('VEIL_E2E_PRIVATE_KEY is required')
+  })
+
+  it('rejects combining --history with --from-block', () => {
+    const result = runScript(['11field', '--history', '5', '--from-block', '100'], { VEIL_E2E_PRIVATE_KEY: '' })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('Pass either --history or --from-block, not both')
   })
 })

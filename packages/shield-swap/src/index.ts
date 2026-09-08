@@ -57,6 +57,7 @@ export {
   type GetPositionFillsReturnType,
   type PositionFill,
   type PositionFillsStart,
+  type PositionFillsSnapshot,
   type CalculatePositionFillParameters,
   type WatchPositionFillsParameters,
   type WatchPositionFillsReturnType,

@@ -724,20 +724,33 @@ export const apiToolSchemas: AgentToolSchema[] = [
 export const getPositionFillsSchema: AgentToolSchema = {
   name: 'shield_swap_get_position_fills',
   description:
-    "Reconstruct a liquidity position's recent swap fills: for each pool swap, in chain order, " +
-    'the token0/token1 backing the position before and after (raw base-unit strings) plus the ' +
-    'pool prices and ticks on either side. Inventory only — not accrued fees. Needs the DEX API session.',
+    "Reconstruct liquidity positions' recent swap fills: for each pool swap, in chain order, " +
+    'the token0/token1 backing each position before and after (raw base-unit strings) plus the ' +
+    'pool prices and ticks on either side. Inventory only — not accrued fees. Fills are valued at ' +
+    "each position's current liquidity. Needs the DEX API session.",
   inputSchema: {
     type: 'object',
     properties: {
-      positionTokenId: { type: 'string', description: "The position's token_id field literal." },
+      positionTokenIds: {
+        type: 'array',
+        items: { type: 'string' },
+        minItems: 1,
+        description: "The positions' token_id field literals. Positions in one pool share its history read.",
+      },
       history: {
         type: 'integer',
         minimum: 0,
-        description: 'Recent fills to reconstruct. Defaults to 20; fewer are returned when the pool has fewer swaps.',
+        description:
+          'Recent fills to reconstruct per pool. Defaults to 20 when fromBlock is absent; fewer are returned ' +
+          'when the pool has fewer swaps. Not with fromBlock.',
+      },
+      fromBlock: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Reconstruct every fill from this block height onward instead of a count. Not with history.',
       },
     },
-    required: ['positionTokenId'],
+    required: ['positionTokenIds'],
   },
 }
 
