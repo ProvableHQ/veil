@@ -56,8 +56,9 @@ const { amountOut, amountRemaining } = await client.claimSwapOutput({ handle })
 The wallet filled the blinding slots at request time, so the handle came
 back without `swapId`/`blindedAddress`. Recover them from the confirmed
 request transaction first — `swapId` is the transition's first public
-output, and the blinded address is also readable from
-`api.getSwap(...).recipient` — set them on the handle, then claim. The
+output, and the blinded address is the `recipient` of the chain's
+`swap_outputs` entry, read with [`getSwapOutput`](/api/shield-swap/getSwapOutput)
+once the request finalizes — set them on the handle, then claim. The
 wallet re-derives the blinding factor from the blinded address, so the dapp
 never holds it.
 

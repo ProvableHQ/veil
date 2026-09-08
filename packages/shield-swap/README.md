@@ -183,20 +183,20 @@ balances, fee tiers, candles — are bearer-gated. Two credentials work:
   (`createApiToken`, `listApiTokens`, `revokeApiToken`) always requires a
   session JWT. Revoking a token stops it authenticating immediately.
 
-Authentication alone is not enough: the account must also have redeemed an
-**invite code**, or the gated endpoints return 403
-`redeem an invite code to unlock access`. Check and redeem once per account:
+Authentication alone is not enough: the account must also have redeemed a
+**referral code** (the invite codes Shield Swap distributes), or the gated
+endpoints return 403 `redeem an invite code to unlock access`. Check and
+redeem once per account:
 
 ```ts
 await client.authenticateShieldSwap()
-if (!(await client.api.getAccessStatus()).has_access) {
-  await client.api.redeemAccessCode(inviteCode) // one-time; unlocks immediately
+if (!(await client.api.getReferralStatus()).has_access) {
+  await client.api.redeemReferralCode(inviteCode) // one-time; unlocks immediately
 }
 ```
 
-Redemption upgrades the session in place — the client adopts the returned
-token, so no second handshake is needed. `listAccessCodes` and
-`generateAccessCodes` manage the invite inventory (administrators only).
+The access grant is recorded server-side against the session, so no second
+handshake is needed.
 
 Calling a gated method with no credential fails fast client-side with the
 remedy in the message, rather than surfacing a bare 401.
@@ -391,8 +391,9 @@ const { amountOut, amountRemaining } = await client.claimSwapOutput({
 The wallet filled the blinding slots at request time, so the handle came back
 without `swapId`/`blindedAddress`. Recover them from the confirmed request
 transaction first — `swapId` is the transition's first public output, and the
-blinded address is also readable from `api.getSwap(...).recipient` — set them on
-the handle, then claim. The wallet re-derives the blinding factor from the
+blinded address is the `recipient` of the chain's `swap_outputs` entry, read
+with `getSwapOutput` once the request finalizes — set them on the handle, then
+claim. The wallet re-derives the blinding factor from the
 blinded address itself, so you never hold it.
 
 The handle carries the full swap-id preimage (`zeroForOne`, `sqrtPriceLimit`,
@@ -979,10 +980,12 @@ Three views, depending on what you want:
 await client.getPrivateBalances({ programs: [token0Program, token1Program] })
 // { 'ethx_5a095e.aleo': 3000000000000000000n }
 
-// Public — the API's public/authorized balances for any address.
-await client.api.getPublicBalances({ user: address })
+// Public — each AMM token program's on-chain `balances` mapping, for any address.
+await client.getPublicBalances({ user: address, programs: ['test_arc20_eth.aleo'] })
+// { 'test_arc20_eth.aleo': 5000000000000000000n }
 
-// Combined — public + private + total per token, keyed by token id.
+// Combined — public + private + total per token, keyed by token id. The API's
+// token registry supplies the program list; both balance sides come from chain.
 await client.getBalances()
 // { '1223…045field': { symbol: 'ETHx', decimals: 18, public: 5n, private: 3n, total: 8n }, … }
 ```

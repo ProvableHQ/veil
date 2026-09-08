@@ -5,10 +5,11 @@ import { getPrivateBalances } from '../../src/utils/records.js'
 import { getBalances } from '../../src/utils/balances.js'
 
 /**
- * Real-API integration for the balance surface: getPublicBalances (API),
- * getPrivateBalances (records), and the composed getBalances. Read-only — no
- * transactions — but private balances need the account's own records, so this
- * shares the e2e tier's gating.
+ * Real-chain integration for the balance surface: getPublicBalances (wrapper
+ * `balances` mappings), getPrivateBalances (records), and the composed
+ * getBalances. Read-only — no transactions — but private balances need the
+ * account's own records, so this shares the e2e tier's gating. The DEX API
+ * is used only for the public token registry.
  *
  * Requirements (skipped when absent):
  *   VEIL_INTEGRATION=1
@@ -24,7 +25,7 @@ const NETWORK_URL = 'https://api.provable.com/v2'
 const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://api.provable.com/scanner'
 const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap.aleo'
 
-describe.runIf(RUN)('balances against the real API + records', () => {
+describe.runIf(RUN)('balances against the real chain + records', () => {
   let client: ReturnType<ReturnType<typeof shieldSwapActions>>
   let address: string
 
@@ -41,23 +42,28 @@ describe.runIf(RUN)('balances against the real API + records', () => {
     })
     address = account.address
     client = walletClient.extend(shieldSwapActions({ api: {}, program: DEX_PROGRAM }))
-    // The public-balance read is bearer-gated.
-    await client.authenticateShieldSwap()
   }, 60_000)
 
-  it('getPublicBalances returns parseable base-unit balances', async () => {
-    const res = await client.api.getPublicBalances({ user: address })
-    expect(Array.isArray(res.data)).toBe(true)
-    for (const b of res.data) {
-      expect(b.token_id).toMatch(/field$/)
-      expect(() => BigInt(b.balance)).not.toThrow()
-      expect(BigInt(b.balance) >= 0n).toBe(true)
+  /** AMM token programs from the registry — where public balances live. */
+  async function ammTokenPrograms(): Promise<string[]> {
+    const tokens = (await client.api.getTokens()).data
+    return tokens.map((t) => t.amm_token_program).filter((p): p is string => !!p)
+  }
+
+  it('getPublicBalances reads a non-negative u128 per AMM token program', async () => {
+    const programs = await ammTokenPrograms()
+    expect(programs.length).toBeGreaterThan(0)
+    const pub = await client.getPublicBalances({ user: address, programs })
+    expect(Object.keys(pub).sort()).toEqual([...new Set(programs)].sort())
+    for (const amount of Object.values(pub)) {
+      expect(typeof amount).toBe('bigint')
+      expect(amount >= 0n).toBe(true)
     }
   }, 60_000)
 
   it('getPrivateBalances sums records into non-negative bigints per program', async () => {
     const tokens = (await client.api.getTokens()).data
-    const programs = tokens.map((t) => t.wrapper_program).filter((p): p is string => !!p)
+    const programs = tokens.map((t) => t.underlying_program).filter((p): p is string => !!p)
     const priv = await getPrivateBalances(client, { programs })
     for (const [key, amount] of Object.entries(priv)) {
       expect(typeof amount).toBe('bigint')
@@ -67,15 +73,17 @@ describe.runIf(RUN)('balances against the real API + records', () => {
   }, 120_000)
 
   it('getBalances joins public + private with total === public + private per token', async () => {
+    const tokens = (await client.api.getTokens()).data
     const balances = await getBalances(client, client.api, {})
+    const pub = await client.getPublicBalances({ user: address, programs: await ammTokenPrograms() })
     const publicByToken = new Map(
-      (await client.api.getPublicBalances({ user: address })).data.map((b) => [b.token_id, BigInt(b.balance)]),
+      tokens.filter((t) => !!t.amm_token_program).map((t) => [t.address, pub[t.amm_token_program!] ?? 0n]),
     )
 
     for (const [tokenId, entry] of Object.entries(balances)) {
       expect(tokenId).toMatch(/field$/)
       expect(entry.total).toBe(entry.public + entry.private)
-      expect(entry.public).toBe(publicByToken.get(tokenId) ?? 0n) // matches the API view
+      expect(entry.public).toBe(publicByToken.get(tokenId) ?? 0n) // matches the direct chain read
       expect(entry.public >= 0n && entry.private >= 0n).toBe(true)
       expect(entry.symbol.length).toBeGreaterThan(0)
       // default (no token filter) omits tokens held in neither

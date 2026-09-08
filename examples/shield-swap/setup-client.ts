@@ -129,12 +129,12 @@ export async function setupClient(config: {
   // Separate from authentication: the session proves who the account is, access
   // decides whether it may trade at all. Check before redeeming, because a code
   // is spent on use and there is no way to get it back.
-  const access = await client.api.getAccessStatus()
+  const access = await client.api.getReferralStatus()
   if (!access.has_access) {
     if (!config.inviteCode) {
       throw new Error(`${account.address} has no DEX access yet — pass an invite code to redeem one.`)
     }
-    await client.api.redeemAccessCode(config.inviteCode)
+    await client.api.redeemReferralCode(config.inviteCode)
   }
 
   return { client, account, privateKey, provable }

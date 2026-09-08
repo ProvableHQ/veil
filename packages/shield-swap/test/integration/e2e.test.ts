@@ -68,9 +68,19 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     await client.authenticateShieldSwap()
   }, 60_000)
 
+  /** Public wrapper-program balances keyed by token id, read from chain. */
+  async function publicBalancesByToken(): Promise<Map<string, bigint>> {
+    const tokens = (await client.api.getTokens()).data.filter((t) => !!t.amm_token_program)
+    const byProgram = await client.getPublicBalances({
+      user: account.address,
+      programs: tokens.map((t) => t.amm_token_program!),
+    })
+    return new Map(tokens.map((t) => [t.address, byProgram[t.amm_token_program!] ?? 0n]))
+  }
+
   it('funds the account via the async airdrop when balances are empty', async () => {
-    const balances = await client.api.getPublicBalances({ user: account.address })
-    const empty = balances.data.length === 0 || balances.data.every((b) => BigInt(b.balance ?? 0) === 0n)
+    const balances = await publicBalancesByToken()
+    const empty = [...balances.values()].every((balance) => balance === 0n)
     if (empty) {
       const started = await client.api.airdrop(account.address)
       expect(started.job_id).toBeTruthy()
@@ -81,8 +91,8 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
         await sleep(5000)
       }
     }
-    const after = await client.api.getPublicBalances({ user: account.address })
-    expect(after.data.length).toBeGreaterThan(0)
+    const after = await publicBalancesByToken()
+    expect(after.size).toBeGreaterThan(0)
   }, TX_TIMEOUT)
 
   it('picks a token pair and fetches wrapper program sources (dyn-dispatch imports)', async () => {
@@ -95,8 +105,8 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     //      finalize reverts.
     // Fall back to the first two wrapper tokens on a fresh deployment.
     const pools = await client.api.getPools({ limit: 50 })
-    const balances = await client.api.getPublicBalances({ user: account.address })
-    const funded = new Set(balances.data.filter((b) => BigInt(b.balance ?? 0) > 0n).map((b) => b.token_id))
+    const balances = await publicBalancesByToken()
+    const funded = new Set([...balances].filter(([, balance]) => balance > 0n).map(([tokenId]) => tokenId))
     const candidates = pools.data.filter(
       (p) =>
         p.token0_info?.wrapper_program &&

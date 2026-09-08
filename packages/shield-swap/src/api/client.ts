@@ -110,9 +110,9 @@ function sessionTokenFrom(res: Response, body: unknown): string | undefined {
  * `apiToken` at construction and minted once via `createApiToken()`. Gated
  * calls attach whichever is available (session JWT first); API-token
  * management accepts session JWTs only. Access is a second gate on top of
- * auth: an account that has not redeemed an invite code gets 403 from the
- * gated endpoints — see `getAccessStatus()` and `redeemAccessCode()`. Every
- * method hits the network.
+ * auth: an account that has not redeemed a referral code gets 403 from the
+ * gated endpoints — see `getReferralStatus()` and `redeemReferralCode()`.
+ * Every method hits the network.
  *
  * @example
  * const api = new ApiClient()
@@ -349,92 +349,51 @@ export class ApiClient {
     return res.data
   }
 
-  // ── invite-code access ───────────────────────────────────────────────
+  // ── referral-code access ─────────────────────────────────────────────
   // Authentication alone does not unlock the gated endpoints: an account
-  // must also have redeemed an invite code, or they return
-  // 403 "redeem an invite code to unlock access".
+  // must also have redeemed a referral code, or they return
+  // 403 "redeem an invite code to unlock access". The retired `/access/*`
+  // invite-code routes were removed server-side; referral codes are the
+  // single access mechanism.
 
   /**
-   * Reads whether the authenticated account has redeemed an invite code.
+   * Reads whether the authenticated account has redeemed a referral code.
    *
    * Gated data and trading endpoints return 403 until access is granted —
    * check this after {@link authenticate} and prompt for a code when
    * `has_access` is false. Requires a session JWT.
+   *
+   * @returns `has_access`, plus the account's own referral `code` when one
+   *   has been issued.
+   * @throws When no session JWT is held.
    */
-  async getAccessStatus(): Promise<Schemas['AccessStatusResponse']> {
-    const res = await this.request<Schemas['AccessStatusResponseDoc']>('GET', '/access/status', { auth: 'session' })
+  async getReferralStatus(): Promise<Schemas['ReferralStatusResponse']> {
+    const res = await this.request<Schemas['ReferralStatusResponseDoc']>('GET', '/referral/status', { auth: 'session' })
     return res.data
   }
 
   /**
-   * Redeems an invite code, unlocking the gated endpoints for the account.
+   * Redeems a referral code, unlocking the gated endpoints for the account.
    *
    * The access grant is recorded server-side against the session — no new
    * credential is issued, and subsequent calls are unlocked without a new
    * handshake. One-time: the server rejects an already-used code with a
    * 400. Requires a session JWT.
    *
-   * @param code The invite code to redeem.
-   * @returns The redemption result (code and status). The access grant is
-   *   recorded server-side against the session — no new credential is issued.
+   * @param code The referral code to redeem.
+   * @returns The redemption result (code and status).
    * @throws When no session JWT is held, or the code is invalid or already
    *   used (400).
    *
    * @example
    * await authenticateWithAccount(api, account)
-   * if (!(await api.getAccessStatus()).has_access) {
-   *   await api.redeemAccessCode(process.env.SHIELD_SWAP_INVITE_CODE!)
+   * if (!(await api.getReferralStatus()).has_access) {
+   *   await api.redeemReferralCode(process.env.SHIELD_SWAP_INVITE_CODE!)
    * }
-   */
-  async redeemAccessCode(code: string): Promise<Schemas['AccessRedeemResponse']> {
-    const res = await this.request<Schemas['AccessRedeemResponseDoc']>('POST', '/access/redeem', {
-      body: { code },
-      auth: 'session',
-    })
-    return res.data
-  }
-
-  /**
-   * Redeems a referral code, which also unlocks the gated endpoints for the
-   * account — operationally interchangeable with {@link redeemAccessCode}
-   * for first-time access (distributed codes are commonly referral codes).
-   *
-   * The access grant is recorded server-side against the session. One-time:
-   * the server rejects an already-used code with a 400. Requires a session
-   * JWT.
-   *
-   * @param code The referral code to redeem.
-   * @returns The redemption result (code and status).
-   * @throws When no session JWT is held, or the code is invalid or already
-   *   used (400).
    */
   async redeemReferralCode(code: string): Promise<Schemas['ReferralRedeemResponse']> {
     const res = await this.request<Schemas['ReferralRedeemResponseDoc']>('POST', '/referral/redeem', {
       body: { code },
-      auth: 'session',
-    })
-    return res.data
-  }
-
-  /**
-   * Lists the invite-code inventory with redemption state (administrators
-   * only — other accounts receive a 403). Requires a session JWT.
-   */
-  async listAccessCodes(): Promise<Schemas['AccessListResponse']> {
-    const res = await this.request<Schemas['AccessListResponseDoc']>('GET', '/access/codes', { auth: 'session' })
-    return res.data
-  }
-
-  /**
-   * Generates new invite codes (administrators only — other accounts
-   * receive a 403). Requires a session JWT.
-   *
-   * @param body.count Number of codes to mint.
-   * @returns The newly minted codes.
-   */
-  async generateAccessCodes(body: Schemas['AccessGenerateRequest']): Promise<Schemas['AccessGenerateResponse']> {
-    const res = await this.request<Schemas['AccessGenerateResponseDoc']>('POST', '/access/generate', {
-      body,
       auth: 'session',
     })
     return res.data
@@ -473,26 +432,13 @@ export class ApiClient {
     return this.request('GET', `/pools/${encodeURIComponent(key)}/ohlcv`, { query, auth: true })
   }
 
-  // ── swaps & routing ──────────────────────────────────────────────────
-
-  /** Lists a user's swap history (paginated; the API requires `user`). */
-  async getSwaps(query: { user: string; pool?: string; limit?: number; offset?: number }): Promise<Schemas['SwapListResponseDoc']> {
-    return this.request('GET', '/swaps', { query, auth: true })
-  }
-
-  /** Reads one swap by id, with its hops and amounts. */
-  async getSwap(swapId: string): Promise<Schemas['SwapResponseDoc']> {
-    return this.request('GET', `/swaps/${encodeURIComponent(swapId)}`, { auth: true })
-  }
+  // ── routing ──────────────────────────────────────────────────────────
 
   /**
-   * Finds the best route between two tokens (BFS, ≤ 3 hops).
+   * Quotes the best route between two tokens (BFS, ≤ 3 hops).
    *
-   * Use the quoted output as `expectedOut` for `swap`'s slippage
-   * math — a wrong quote only widens protection, never moves funds.
-   */
-  /**
-   * Quotes the best route between two tokens.
+   * Use the quoted output as `expectedOut` for `swap`'s slippage math — a
+   * wrong quote only widens protection, never moves funds.
    *
    * `amount_in` is a DECIMAL string in the input token's own units — `'0.5'`, not
    * `'500000'` — and `estimated_amount_out` comes back the same way, in the
@@ -518,46 +464,37 @@ export class ApiClient {
 
   // ── positions & tokens ───────────────────────────────────────────────
 
-  /** Lists a user's liquidity positions (paginated). */
+  /**
+   * Lists a user's liquidity positions (paginated).
+   *
+   * The API has no per-position detail route; read one position's live
+   * state from chain with the `getPosition` action instead.
+   */
   async getPositions(query: { user: string; limit?: number; offset?: number }): Promise<Schemas['PositionListResponseDoc']> {
     return this.request('GET', '/positions', { query, auth: true })
   }
 
-  /** Reads one position by its token id. */
-  async getPosition(tokenId: string): Promise<Schemas['PositionResponseDoc']> {
-    return this.request('GET', `/positions/${encodeURIComponent(tokenId)}`, { auth: true })
-  }
-
-  /** Lists all registered tokens with metadata. */
+  /**
+   * Lists all registered tokens with metadata.
+   *
+   * The API has no per-token detail route; resolve one token by filtering
+   * this list on its field address.
+   */
   async getTokens(): Promise<Schemas['TokenListResponseDoc']> {
     return this.request('GET', '/tokens')
   }
 
-  /** Reads one token's metadata by its field address. */
-  async getToken(address: string): Promise<Schemas['TokenResponseDoc']> {
-    return this.request('GET', `/tokens/${encodeURIComponent(address)}`)
-  }
-
-  /** Registers a token with the DEX API (auth-gated). */
-  async registerToken(body: Schemas['CreateTokenRequestDoc']): Promise<Schemas['TokenResponseDoc']> {
-    return this.request('POST', '/tokens', { body, auth: true })
-  }
-
-  /** Reads a user's public/authorized balances (base units, as the API sees them). */
-  async getPublicBalances(query: { user: string }): Promise<Schemas['BalanceListResponseDoc']> {
-    return this.request('GET', '/balances', { query, auth: true })
-  }
-
   // ── protocol config ──────────────────────────────────────────────────
 
-  /** Lists registered fee tiers with their tick spacings. */
+  /**
+   * Lists registered fee tiers with their tick spacings.
+   *
+   * Each tier carries its tick spacing, so this also serves as the list of
+   * registered spacings; the chain's `getFeeToTickSpacing` action reads one
+   * tier's spacing directly.
+   */
   async getFeeTiers(): Promise<Schemas['FeeTierListResponseDoc']> {
     return this.request('GET', '/fee-tiers', { auth: true })
-  }
-
-  /** Lists registered tick spacings. */
-  async getTickSpacings(): Promise<Schemas['TickSpacingListResponseDoc']> {
-    return this.request('GET', '/tick-spacings', { auth: true })
   }
 
   /**
@@ -577,16 +514,6 @@ export class ApiClient {
    */
   async getInitializedTicks(poolKey: string): Promise<Schemas['InitializedTicksResponseDoc']> {
     return this.request('GET', `/pools/${encodeURIComponent(poolKey)}/initialized-ticks`, { auth: true })
-  }
-
-  /** Lists the on-chain operation schemas the API publishes. */
-  async getTradingSchemas(): Promise<Schemas['TradingSchemaListResponse']> {
-    return this.request('GET', '/schema/trading', { auth: true })
-  }
-
-  /** Reads one operation schema by id (e.g. `"swap"`). */
-  async getTradingSchema(id: string): Promise<Schemas['TradingSchemaResponse']> {
-    return this.request('GET', `/schema/trading/${encodeURIComponent(id)}`, { auth: true })
   }
 
   // ── utilities ────────────────────────────────────────────────────────

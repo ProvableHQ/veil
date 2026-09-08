@@ -10,6 +10,11 @@ export {
   type GetSwapOutputParameters,
   type GetSwapOutputReturnType,
 } from './actions/reads/getSwapOutput.js'
+export {
+  getPublicBalances,
+  type GetPublicBalancesParameters,
+  type GetPublicBalancesReturnType,
+} from './actions/reads/getPublicBalances.js'
 export { isBlindedAddressUsed } from './actions/reads/isBlindedAddressUsed.js'
 export { isPoolInitialized } from './actions/reads/isPoolInitialized.js'
 export { isFeeTierValid } from './actions/reads/isFeeTierValid.js'

@@ -88,6 +88,11 @@ import {
   type GetPrivateBalancesParameters,
   type GetPrivateBalancesReturnType,
 } from '../utils/records.js'
+import {
+  getPublicBalances,
+  type GetPublicBalancesParameters,
+  type GetPublicBalancesReturnType,
+} from '../actions/reads/getPublicBalances.js'
 import { getBalances, type GetBalancesParameters, type GetBalancesReturnType } from '../utils/balances.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hints.js'
 import { resolveDexImports, type ResolveDexImportsParameters } from '../utils/imports.js'
@@ -213,6 +218,7 @@ export type ShieldSwapActions = {
   getFrozenPosition: (params: { positionTokenId: string; program?: string }) => Promise<number | null>
   getTradeControls: (params: { poolKey: string; program?: string }) => Promise<GetTradeControlsReturnType>
   getPrivateBalances: (params: GetPrivateBalancesParameters) => Promise<GetPrivateBalancesReturnType>
+  getPublicBalances: (params: GetPublicBalancesParameters) => Promise<GetPublicBalancesReturnType>
   getBalances: (params?: GetBalancesParameters) => Promise<GetBalancesReturnType>
   pickInsertHint: (params: PickInsertHintParameters) => Promise<number>
   resolveDexImports: (params: ResolveDexImportsParameters) => Promise<Record<string, string>>
@@ -361,6 +367,7 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       getFrozenPosition: (p) => getFrozenPosition(client, withProgram(p)),
       getTradeControls: (p) => getTradeControls(client, withProgram(p)),
       getPrivateBalances: (p) => getPrivateBalances(client, p),
+      getPublicBalances: (p) => getPublicBalances(client, p),
       getBalances: (p) => getBalances(client, api ?? missingApi, p),
       pickInsertHint: (p) => pickInsertHint(client, withTicks(withProgram(p))),
       resolveDexImports: (p) => resolveDexImports(client, withProgram(p)),

@@ -53,7 +53,7 @@ describe('ApiClient', () => {
       challenge_id: 'ch1',
     })
 
-    await client.registerToken({ address: '1field', name: 'T', symbol: 'T', decimals: 6 })
+    await client.getFeeTiers()
     expect((calls[2]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt123')
   })
 
@@ -79,9 +79,7 @@ describe('ApiClient', () => {
 
   it('auth-gated calls without a token fail fast with the remedy', async () => {
     const client = new ApiClient({ fetch: fetchMock([{ json: {} }]).impl })
-    await expect(client.registerToken({ address: '1field', name: 'T', symbol: 'T', decimals: 6 })).rejects.toThrow(
-      /requires auth — call authenticate/,
-    )
+    await expect(client.getPositions({ user: 'aleo1me' })).rejects.toThrow(/requires auth — call authenticate/)
   })
 
   it('apiToken from construction is attached to gated data endpoints', async () => {
@@ -230,35 +228,20 @@ describe('ApiClient', () => {
     expect(calls).toHaveLength(1)
   })
 
-  it('getAccessStatus reads the invite gate under the session JWT', async () => {
-    const { impl, calls } = fetchMock([{ json: { data: { has_access: false } } }])
+  it('getReferralStatus reads the access gate under the session JWT', async () => {
+    const { impl, calls } = fetchMock([{ json: { data: { has_access: false, code: null } } }])
     const client = new ApiClient({ fetch: impl })
     client.setToken('jwt123')
-    const status = await client.getAccessStatus()
+    const status = await client.getReferralStatus()
     expect(status.has_access).toBe(false)
-    expect(calls[0]!.url).toBe(`${DEFAULT_API_URL}/access/status`)
+    expect(calls[0]!.url).toBe(`${DEFAULT_API_URL}/referral/status`)
     expect((calls[0]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt123')
-  })
-
-  it('redeemAccessCode posts the code; the session keeps its credential', async () => {
-    const { impl, calls } = fetchMock([
-      { json: { data: { code: 'INVITE1', status: 'redeemed' } } },
-      { json: { data: [] } }, // subsequent gated call
-    ])
-    const client = new ApiClient({ fetch: impl })
-    client.setToken('jwt-session')
-    const redeemed = await client.redeemAccessCode('INVITE1')
-    expect(redeemed.status).toBe('redeemed')
-    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ code: 'INVITE1' })
-
-    // The access grant is server-side; later calls keep the same session JWT.
-    await client.getFeeTiers()
-    expect((calls[1]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt-session')
   })
 
   it('access endpoints refuse to run on an API token alone', async () => {
     const client = new ApiClient({ fetch: fetchMock([{ json: {} }]).impl, apiToken: 'ss_live_abc' })
-    await expect(client.getAccessStatus()).rejects.toThrow(/session JWT/)
+    await expect(client.getReferralStatus()).rejects.toThrow(/session JWT/)
+    await expect(client.redeemReferralCode('REF1')).rejects.toThrow(/session JWT/)
   })
 
   it('redeemReferralCode posts the code; the session keeps its credential', async () => {
@@ -275,21 +258,6 @@ describe('ApiClient', () => {
 
     await client.getFeeTiers()
     expect((calls[1]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt-session')
-  })
-
-  it('admin access-code inventory and generation round-trip under the session JWT', async () => {
-    const { impl, calls } = fetchMock([
-      { json: { data: { total: 1, redeemed: 0, available: 1, codes: [{ code: 'INVITE1', created_at: 'now' }] } } },
-      { json: { data: { codes: ['INVITE2', 'INVITE3'] } } },
-    ])
-    const client = new ApiClient({ fetch: impl })
-    client.setToken('jwt123')
-    const inventory = await client.listAccessCodes()
-    expect(inventory.available).toBe(1)
-    const generated = await client.generateAccessCodes({ count: 2 })
-    expect(generated.codes).toEqual(['INVITE2', 'INVITE3'])
-    expect(calls[1]!.url).toBe(`${DEFAULT_API_URL}/access/generate`)
-    expect(JSON.parse(String(calls[1]!.init.body))).toEqual({ count: 2 })
   })
 
   it('non-2xx surfaces as ApiError with status and body', async () => {
