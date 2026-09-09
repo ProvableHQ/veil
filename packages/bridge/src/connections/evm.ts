@@ -34,7 +34,7 @@ export type EvmRequest = (args: {
 export type EvmHttpOptions = { fetch?: typeof globalThis.fetch | undefined }
 
 /** Describes either an HTTP endpoint or custom EIP-1193 request transport. */
-export type EvmTransportDefinition =
+export type EvmTransport =
   | { type: 'http'; url: string; fetch?: typeof globalThis.fetch | undefined }
   | { type: 'custom'; request: EvmRequest }
 
@@ -52,7 +52,7 @@ export type EvmAccount =
  * @property walletClient Existing viem wallet client used directly.
  */
 export type EvmClientConfig = {
-  transport?: EvmTransportDefinition | undefined
+  transport?: EvmTransport | undefined
   publicClient?: PublicClient | undefined
   account?: EvmAccount | undefined
   walletClient?: WalletClient | undefined
@@ -125,14 +125,14 @@ export type EvmClient = {
 }
 
 /**
- * Creates a lazy EVM HTTP transport definition.
+ * Creates a lazy EVM HTTP transport.
  *
  * @param url EVM JSON-RPC endpoint.
  * @param options Optional Fetch API override.
- * @returns An inert transport definition.
+ * @returns An inert EVM transport.
  * @example const transport = evmHttp('https://rpc.example')
  */
-export function evmHttp(url: string, options: EvmHttpOptions = {}): EvmTransportDefinition {
+export function evmHttp(url: string, options: EvmHttpOptions = {}): EvmTransport {
   return { type: 'http', url, fetch: options.fetch }
 }
 
@@ -140,10 +140,10 @@ export function evmHttp(url: string, options: EvmHttpOptions = {}): EvmTransport
  * Creates a lazy EVM transport from an EIP-1193-compatible request function.
  *
  * @param request EIP-1193 request function.
- * @returns An inert custom transport definition.
+ * @returns An inert custom transport.
  * @example const transport = evmCustom(window.ethereum.request.bind(window.ethereum))
  */
-export function evmCustom(request: EvmRequest): EvmTransportDefinition {
+export function evmCustom(request: EvmRequest): EvmTransport {
   return { type: 'custom', request }
 }
 
@@ -212,7 +212,7 @@ export function createEvmClient(
   return materializeEvmClient(config, globalThis.fetch)
 }
 
-function transportFor(transport: EvmTransportDefinition, defaultFetch: typeof globalThis.fetch) {
+function transportFor(transport: EvmTransport, defaultFetch: typeof globalThis.fetch) {
   if (transport.type === 'custom') return custom({ request: transport.request })
   return http(transport.url, { fetchFn: transport.fetch ?? defaultFetch })
 }

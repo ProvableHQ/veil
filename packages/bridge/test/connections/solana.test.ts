@@ -17,6 +17,7 @@ import {
   solanaCustom,
   solanaKeyPair,
   solanaWallet,
+  type SolanaTransport,
 } from '../../src/connections/solana.js'
 
 async function secretKeyBytes(): Promise<Uint8Array> {
@@ -29,7 +30,8 @@ async function secretKeyBytes(): Promise<Uint8Array> {
 describe('Solana bridge clients', () => {
   it('constructs a tagged client without network access and requires a transport', () => {
     const request = vi.fn()
-    expect(createSolanaClient({ transport: solanaCustom(request) }).family).toBe('solana')
+    const transport: SolanaTransport = solanaCustom(request)
+    expect(createSolanaClient({ transport }).family).toBe('solana')
     expect(request).not.toHaveBeenCalled()
     expect(() => createSolanaClient({} as never)).toThrow('Solana client requires a transport')
   })

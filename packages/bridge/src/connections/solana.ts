@@ -29,7 +29,7 @@ export type SolanaRequest = (method: string, params: unknown[]) => Promise<unkno
 export type SolanaHttpOptions = { fetch?: SolanaRpcHttpTransport | undefined }
 
 /** Describes a lazy Solana network transport. */
-export type SolanaTransportDefinition =
+export type SolanaTransport =
   | { type: 'http'; url: string; fetch?: SolanaRpcHttpTransport | undefined }
   | { type: 'custom'; request: SolanaRequest }
 
@@ -49,7 +49,7 @@ export type SolanaAccount =
  * @property account Optional Wallet Standard or local-key signing authority.
  */
 export type SolanaClientConfig = {
-  transport: SolanaTransportDefinition
+  transport: SolanaTransport
   account?: SolanaAccount | undefined
 }
 
@@ -84,23 +84,23 @@ export type SolanaClient = {
 }
 
 /**
- * Creates a lazy Solana HTTP transport definition.
+ * Creates a lazy Solana HTTP transport.
  * @param url Solana JSON-RPC endpoint.
  * @param options Optional fetch-compatible override.
- * @returns An inert transport definition.
+ * @returns An inert Solana transport.
  * @example const transport = solanaHttp('https://api.mainnet-beta.solana.com')
  */
-export function solanaHttp(url: string, options: SolanaHttpOptions = {}): SolanaTransportDefinition {
+export function solanaHttp(url: string, options: SolanaHttpOptions = {}): SolanaTransport {
   return { type: 'http', url, fetch: options.fetch }
 }
 
 /**
  * Creates a lazy Solana transport from a JSON-RPC request function.
  * @param request Application JSON-RPC request function.
- * @returns An inert custom transport definition.
+ * @returns An inert custom transport.
  * @example const transport = solanaCustom((method, params) => rpc.request(method, params))
  */
-export function solanaCustom(request: SolanaRequest): SolanaTransportDefinition {
+export function solanaCustom(request: SolanaRequest): SolanaTransport {
   return { type: 'custom', request }
 }
 

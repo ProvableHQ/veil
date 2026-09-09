@@ -6,13 +6,15 @@ import {
   evmLocalAccount,
   evmPrivateKey,
   evmProvider,
+  type EvmTransport,
 } from '../../src/connections/evm.js'
 
 describe('EVM bridge clients', () => {
   it('constructs a tagged client without making an RPC request', () => {
     const request = vi.fn()
+    const transport: EvmTransport = evmCustom(request)
 
-    const client = createEvmClient({ transport: evmCustom(request) })
+    const client = createEvmClient({ transport })
 
     expect(client.family).toBe('evm')
     expect(request).not.toHaveBeenCalled()

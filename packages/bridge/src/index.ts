@@ -24,7 +24,7 @@ export {
   type EvmReceipt,
   type EvmRequest,
   type EvmTransactionParameters,
-  type EvmTransportDefinition,
+  type EvmTransport,
   type EvmWalletClient,
 } from './connections/evm.js'
 export {
@@ -39,7 +39,7 @@ export {
   type SolanaHttpOptions,
   type SolanaPublicClient,
   type SolanaRequest,
-  type SolanaTransportDefinition,
+  type SolanaTransport,
   type SolanaWalletClient,
 } from './connections/solana.js'
 export {
