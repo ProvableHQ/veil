@@ -111,6 +111,30 @@ importers:
         specifier: ^0.11.6
         version: 0.11.9
 
+  packages/bridge-cli:
+    dependencies:
+      '@hyperlane-xyz/sealevel-sdk':
+        specifier: 41.3.1
+        version: 41.3.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@provablehq/aleo-bridge-sdk':
+        specifier: workspace:^
+        version: link:../bridge
+      '@provablehq/sdk':
+        specifier: ^0.11.9
+        version: 0.11.9
+      '@provablehq/veil-aleo-sdk':
+        specifier: workspace:^
+        version: link:../provable-sdk
+      '@provablehq/veil-core':
+        specifier: workspace:^
+        version: link:../core
+      '@solana/kit':
+        specifier: ^6.10.0
+        version: 6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      viem:
+        specifier: ^2.21.0
+        version: 2.54.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76)
+
   packages/codegen:
     dependencies:
       '@provablehq/veil-core':

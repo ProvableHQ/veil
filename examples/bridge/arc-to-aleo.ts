@@ -25,6 +25,7 @@ import {
   type Hex,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
+import { pathToFileURL } from 'node:url'
 import {
   buildXReserveHookData,
   createBridgeClient,
@@ -505,7 +506,8 @@ async function waitForPublicMint(sender: Address, recipient: string, messageHash
   }
 }
 
-async function main(): Promise<void> {
+/** Runs the Arc USDC to Aleo USDCx example. */
+export async function runArcToAleoExample(): Promise<void> {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
     console.log('Usage: pnpm tsx examples/bridge/arc-to-aleo.ts [--verbose]')
     return
@@ -641,7 +643,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error)
-  process.exitCode = 1
-})
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runArcToAleoExample().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error)
+    process.exitCode = 1
+  })
+}
