@@ -133,7 +133,7 @@ function gasConfigBigint(config: Record<string, unknown>, field: string, routeId
  *   on-chain configuration is missing or unpriced, or the payment overflows u64.
  *
  * @example
- * const quote = await quoteAleoHyperlaneGasPayment(registry, publicClient, {
+ * const quote = await quoteAleoHyperlaneGasPayment(registry, client, {
  *   routeId: 'hyperlane:aleo/eth->ethereum/eth',
  * })
  */
@@ -270,7 +270,7 @@ export function buildAleoHyperlaneTransferRemoteCall(
  * quote aborts at finalization without moving funds.
  *
  * @param registry Reviewed route snapshot supplying the Aleo Warp Route configuration.
- * @param walletClient Connected Aleo wallet client that proves, signs, and broadcasts.
+ * @param client Connected Aleo wallet client that proves, signs, and broadcasts.
  * @param params Prepared Aleo-origin Hyperlane plan, fee preference, and live gas payment.
  * @returns The Aleo transaction id and resumable Hyperlane receipt.
  * @throws BridgeError When configuration is placeholder or inactive, the gas
@@ -278,7 +278,7 @@ export function buildAleoHyperlaneTransferRemoteCall(
  */
 export async function executeAleoHyperlaneTransferRemote(
   registry: BridgeRegistry,
-  walletClient: AleoWalletClient,
+  client: AleoWalletClient,
   params: ExecuteAleoHyperlaneTransferRemoteParameters,
 ): Promise<AleoHyperlaneTransferRemoteExecution> {
   const call = buildAleoHyperlaneTransferRemoteCall(registry, params)
@@ -292,7 +292,7 @@ export async function executeAleoHyperlaneTransferRemote(
   if (params.gasPaymentMicrocredits == null) {
     throw new BridgeError(`Aleo Hyperlane execution requires a live hook gas payment; call quoteAleoHyperlaneGasPayment first: ${call.routeId}`)
   }
-  const result = await walletClient.executeTransaction({
+  const result = await client.executeTransaction({
     program: call.program,
     function: call.function,
     inputs: call.inputs,

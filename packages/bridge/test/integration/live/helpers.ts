@@ -69,10 +69,10 @@ export async function waitForHyperlaneDelivery(originTxHash: string): Promise<{ 
   })
 }
 
-export async function waitForAleoTransaction(publicClient: { getTransaction(params: { id: string }): Promise<unknown> }, id: string): Promise<void> {
+export async function waitForAleoTransaction(client: { getTransaction(params: { id: string }): Promise<unknown> }, id: string): Promise<void> {
   await waitFor(async () => {
     try {
-      return await publicClient.getTransaction({ id }) ? true : undefined
+      return await client.getTransaction({ id }) ? true : undefined
     } catch {
       return undefined
     }

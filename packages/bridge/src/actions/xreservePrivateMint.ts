@@ -17,13 +17,13 @@ import { buildXReserveHookData, calculateXReserveMessageHash, xReserveHexToAleoB
  * and non-private xReserve destination mints remain relayer-driven.
  *
  * @param registry Reviewed deployment snapshot used to resolve the wrapper program.
- * @param walletClient Connected Aleo wallet client that proves, signs, and broadcasts.
+ * @param client Connected Aleo wallet client that proves, signs, and broadcasts.
  * @param params Original plan, confirmed deposit, Circle attestation, and fee privacy choice.
  * @returns The Aleo transaction id and destination-confirming transfer receipt.
  * @throws BridgeError When the plan is not private, identifiers disagree, inputs have invalid widths, or the wallet returns no transaction id.
  *
  * @example
- * const mint = await executeXReservePrivateMint(registry, aleoWalletClient, {
+ * const mint = await executeXReservePrivateMint(registry, client, {
  *   plan,
  *   deposit: depositExecution.receipt,
  *   attestation,
@@ -31,7 +31,7 @@ import { buildXReserveHookData, calculateXReserveMessageHash, xReserveHexToAleoB
  */
 export async function executeXReservePrivateMint(
   registry: BridgeRegistry,
-  walletClient: AleoWalletClient,
+  client: AleoWalletClient,
   params: ExecuteXReservePrivateMintParameters,
 ): Promise<XReservePrivateMintExecution> {
   const { plan, deposit, attestation } = params
@@ -62,7 +62,7 @@ export async function executeXReservePrivateMint(
     throw new BridgeError('Private mint secret nonce and recipient do not match the attested hook data')
   }
 
-  const result = await walletClient.executeTransaction({
+  const result = await client.executeTransaction({
     program: wrapperProgram,
     function: 'private_mint',
     inputs: [

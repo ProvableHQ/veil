@@ -107,13 +107,13 @@ export function buildXReserveBurnCall(
  * observes accepted burns and forwards them to Circle without another client call.
  *
  * @param registry Reviewed route snapshot used to validate program and domain identifiers.
- * @param walletClient Connected Aleo wallet client that proves, signs, and broadcasts.
+ * @param client Connected Aleo wallet client that proves, signs, and broadcasts.
  * @param params Prepared reverse route, selected mode, optional record/proof, and fee privacy.
  * @returns The Aleo transaction id and resumable source-confirming receipt.
  * @throws BridgeError When call construction fails or the wallet returns no transaction id.
  *
  * @example
- * const burn = await executeXReserveBurn(registry, aleoWalletClient, {
+ * const burn = await executeXReserveBurn(registry, client, {
  *   plan,
  *   userRecord,
  *   merkleProof,
@@ -121,11 +121,11 @@ export function buildXReserveBurnCall(
  */
 export async function executeXReserveBurn(
   registry: BridgeRegistry,
-  walletClient: AleoWalletClient,
+  client: AleoWalletClient,
   params: ExecuteXReserveBurnParameters,
 ): Promise<XReserveBurnExecution> {
   const call = buildXReserveBurnCall(registry, params)
-  const result = await walletClient.executeTransaction({
+  const result = await client.executeTransaction({
     program: call.program,
     function: call.function,
     inputs: call.inputs,

@@ -26,12 +26,12 @@ export type AleoClient = {
 
 /**
  * Adapts an Aleo wallet client for bridge authorization.
- * @param walletClient Veil wallet client or compatible adapter.
+ * @param client Veil wallet client or compatible adapter.
  * @returns The same client, typed as bridge execution authority.
  * @example const account = aleoWallet(aleoWalletClient)
  */
-export function aleoWallet(walletClient: AleoWalletClient): AleoWalletClient {
-  return walletClient
+export function aleoWallet(client: AleoWalletClient): AleoWalletClient {
+  return client
 }
 
 /**
