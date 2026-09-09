@@ -11,6 +11,29 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
     expect(usdcxRoutes.every((route) => route.protocol === 'xreserve')).toBe(true)
   })
 
+  it('pins the Arc mainnet public-mint route', () => {
+    const chain = DEFAULT_BRIDGE_REGISTRY.chains.find((entry) => entry.id === 'arc')
+    const asset = DEFAULT_BRIDGE_REGISTRY.assets.find((entry) => entry.id === 'arc/usdc')
+    const route = DEFAULT_BRIDGE_REGISTRY.routes.find((entry) =>
+      entry.id === 'xreserve:arc/usdc->aleo/usdcx')
+
+    expect(chain).toMatchObject({ family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'USDC', protocolDomains: { xreserve: 26 } })
+    expect(asset).toMatchObject({ decimals: 6, locator: { kind: 'evm-contract', value: '0x3600000000000000000000000000000000000000' } })
+    expect(route).toMatchObject({
+      availability: 'active',
+      sourceAssetId: 'arc/usdc',
+      destinationAssetId: 'aleo/usdcx',
+      metadata: {
+        xReserveContract: '0x8888888199b2Df864bf678259607d6D5EBb4e3Ce',
+        sourceChainId: 5042,
+        sourceDomain: 26,
+        remoteDomain: 10002,
+        maxFeeAtomic: '100000',
+        onchainReviewedAt: '2026-08-28',
+      },
+    })
+  })
+
   it('routes the requested non-USDCx assets through Hyperlane', () => {
     for (const symbol of ['ETH', 'WBTC', 'USDT', 'SOL', 'ALEO', 'USAD']) {
       const assetIds = new Set(DEFAULT_BRIDGE_REGISTRY.assets

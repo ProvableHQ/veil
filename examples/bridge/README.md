@@ -1,3 +1,144 @@
+# Arc USDC to Aleo USDCx
+
+`arc-to-aleo.ts` performs a guarded Arc mainnet public or private mint through
+Circle xReserve. It verifies Arc chain id `5042`, xReserve source domain `26`,
+Aleo remote domain `10002`, deployed bytecode, the sender's USDC balance and
+allowance, and the exact `depositToRemote` arguments. Public mint is the
+default. Every preflight is read-only; the EVM private key derives the sender
+and signs locally only when live execution is explicitly enabled.
+
+In zsh, enter the secret RPC URL without saving it in shell history, then set
+the public inputs:
+
+```zsh
+IFS= read -rs 'arc_rpc_url?Arc mainnet RPC URL: '
+printf '\n'
+export ARC_RPC_URL="$arc_rpc_url"
+unset arc_rpc_url
+
+IFS= read 'aleo_recipient?Aleo recipient: '
+export ALEO_RECIPIENT="$aleo_recipient"
+unset aleo_recipient
+export USDC_AMOUNT='5'
+export USDCX_MINT_MODE='public'
+
+printf 'Ethereum Private Key: '
+read -rs EVM_PRIVATE_KEY
+echo
+export EVM_PRIVATE_KEY
+```
+
+Run the read-only preflight:
+
+```sh
+unset EXECUTE_XRESERVE_DEPOSIT
+pnpm tsx examples/bridge/arc-to-aleo.ts
+```
+
+The standard output shows the sender, recipient, and amount. Pass `--verbose`
+to inspect balances, allowance, fee ceiling, recipient bytes, hook data, the
+verified contract call, simulation results, and polling diagnostics:
+
+```sh
+pnpm tsx examples/bridge/arc-to-aleo.ts --verbose
+```
+
+The script simulates every required transaction and locally signs only after a
+successful simulation. Enable the irreversible deposit with the explicit
+acknowledgement:
+
+```sh
+EXECUTE_XRESERVE_DEPOSIT=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
+  pnpm tsx examples/bridge/arc-to-aleo.ts
+```
+
+During execution, standard output reports when the transfer is in progress,
+prints Arcscan and Provable Explorer transaction URLs as transaction ids become
+available, and reports when the destination mint completes. Add `--verbose` to
+the execution command to retain the full preflight and lifecycle diagnostics.
+
+Remove the private key and RPC credential from the shell after the command
+returns:
+
+```sh
+unset EVM_PRIVATE_KEY ARC_RPC_URL
+```
+
+The public hook is byte `0` followed by 64 zero bytes. After the Arc deposit,
+the script validates the `DepositedToRemote` event, reconstructs the Circle
+message hash, waits for the mainnet Circle attestation, and monitors Aleo's
+Arc-scoped courtesy service until `mint_public` is accepted or monitoring times
+out. Protocol processing continues if the local monitor exits.
+
+## Arc private mint
+
+Set private mode before running the same read-only preflight:
+
+```sh
+export USDCX_MINT_MODE='private'
+
+# Optional; omit for the default 0scalar commitment.
+read -s USDCX_SECRET_NONCE
+export USDCX_SECRET_NONCE
+
+unset EXECUTE_XRESERVE_DEPOSIT
+pnpm tsx examples/bridge/arc-to-aleo.ts
+```
+
+The private preflight sends no transaction and does not require an Aleo private
+key. It prints the wrapper's encoded remote recipient and the private hook data.
+The hook commits to `ALEO_RECIPIENT` and `USDCX_SECRET_NONCE`; retain a custom
+secret nonce until `private_mint` has been submitted.
+
+Before enabling the Arc deposit, supply the private key belonging to
+`ALEO_RECIPIENT`:
+
+```sh
+printf 'Aleo Private Key: '
+read -rs ALEO_PRIVATE_KEY
+echo
+export ALEO_PRIVATE_KEY
+
+EXECUTE_XRESERVE_DEPOSIT=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
+  pnpm tsx examples/bridge/arc-to-aleo.ts
+```
+
+The script validates the Aleo signer before moving USDC. After Circle attests
+the Arc deposit, it submits `shielded_usdcx_wrapper.aleo/private_mint` through
+delegated proving and monitors the Aleo transaction. The delegated proving and
+fee options documented under the Ethereum private-mint example below apply to
+this flow as well.
+
+If the process exits after the Arc deposit, resume only the private mint using
+the printed Circle message hash. The Arc RPC, EVM key, and amount are not used:
+
+```sh
+export USDCX_MINT_MODE='private'
+export XRESERVE_RESUME_MESSAGE_HASH='0x...'
+
+# Supply the same custom nonce used for the deposit, or omit it for 0scalar.
+read -s USDCX_SECRET_NONCE
+export USDCX_SECRET_NONCE
+
+# Read-only verification of the Circle payload and private hook.
+unset EXECUTE_XRESERVE_PRIVATE_MINT
+pnpm tsx examples/bridge/arc-to-aleo.ts
+
+printf 'Aleo Private Key: '
+read -rs ALEO_PRIVATE_KEY
+echo
+export ALEO_PRIVATE_KEY
+
+EXECUTE_XRESERVE_PRIVATE_MINT=I_UNDERSTAND_THIS_SUBMITS_AN_ALEO_PRIVATE_MINT \
+  pnpm tsx examples/bridge/arc-to-aleo.ts
+```
+
+Remove the private material after either flow completes:
+
+```sh
+unset EVM_PRIVATE_KEY ALEO_PRIVATE_KEY ARC_RPC_URL USDCX_SECRET_NONCE XRESERVE_RESUME_MESSAGE_HASH
+```
+
 # Ethereum USDC to Aleo USDCx
 
 `usdc-to-usdcx.ts` exercises the mainnet bridge client against Circle xReserve.

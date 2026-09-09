@@ -12,13 +12,17 @@
  * proceeds sitting on chain. So this does both, and treats the claim as part of
  * the trade rather than a follow-up.
  *
- * SPENDS REAL FUNDS. Needs a funded account holding the input token.
+ * SPENDS REAL FUNDS. Needs a funded account holding the input token. Runs
+ * against testnet by default; set SHIELD_SWAP_NETWORK=mainnet to trade on
+ * mainnet instead — the program id is the same on both, but the account, its
+ * Provable credentials, and its DEX access must all belong to that network.
  */
 import { parseUnits, formatUnits, SwapOutputNotFinalizedError } from '../../packages/shield-swap/src/index.js'
-import { setupClient } from './setup-client.js'
+import { setupClient, resolveNetwork } from './setup-client.js'
 
 export async function swap() {
-  const { client } = await setupClient({ privateKey: process.env.VEIL_E2E_PRIVATE_KEY })
+  const network = resolveNetwork()
+  const { client } = await setupClient({ privateKey: process.env.VEIL_E2E_PRIVATE_KEY, network })
 
   // Plan first. Everything the two calls below need — the route, the floor, the
   // program sources — comes out of this one read, and none of it is submitted.

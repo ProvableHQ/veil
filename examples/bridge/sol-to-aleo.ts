@@ -22,6 +22,7 @@ import {
   type TransactionMessageBytesBase64,
   type TransactionSigner,
 } from '@solana/kit'
+import { pathToFileURL } from 'node:url'
 import {
   decodeHyperlaneTokenAccount,
   decodeIgpAccount,
@@ -322,7 +323,9 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
   throw new Error(`Timed out waiting for ${signature}; check its status before retrying because it was already broadcast`)
 }
 
-runSolanaHyperlaneExample().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error)
-  process.exitCode = 1
-})
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runSolanaHyperlaneExample().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error)
+    process.exitCode = 1
+  })
+}

@@ -58,7 +58,7 @@ function metadata(registry: BridgeRegistry, plan: BridgeTransferPlan): EvmXReser
   if (route.sourceAssetId !== plan.sourceAsset.id || route.destinationAssetId !== plan.destinationAsset.id) throw new BridgeError(`Transfer plan assets do not match configured route: ${route.id}`)
   const sourceChain = registry.chains.find((chain) => chain.id === plan.sourceAsset.chainId)
   if (sourceChain?.family !== 'evm' || plan.destinationAsset.chainId !== (route.environment === 'mainnet' ? 'aleo' : 'aleo-testnet')) {
-    throw new BridgeError('This action supports Ethereum-to-Aleo xReserve deposits only')
+    throw new BridgeError('This action supports EVM-to-Aleo xReserve deposits only')
   }
   const raw = route.metadata ?? {}
   const xReserveContract = raw.xReserveContract
@@ -136,7 +136,7 @@ function successful(receipt: RpcReceipt, hash: Hash): void {
  *
  * @param registry Reviewed deployment snapshot used to validate the plan.
  * @param executor Connected EIP-1193 provider used for contract reads.
- * @param params Prepared Ethereum-to-Aleo xReserve plan.
+ * @param params Prepared EVM-to-Aleo xReserve plan.
  * @returns Atomic deposit values, account balance, allowance, and approval requirement.
  * @throws BridgeError When metadata, wallet state, amount, balance, or recipient is invalid.
  *

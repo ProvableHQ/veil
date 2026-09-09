@@ -24,6 +24,29 @@ import { createPublicClient, http, publicActions } from '../../packages/core/src
 import { generateAccount, loadNetwork, registerProvableApi } from '../../packages/provable-sdk/src/index.js'
 import { shieldSwapActions } from '../../packages/shield-swap/src/index.js'
 
+/** The networks Shield Swap is deployed to. Same program id on both. */
+export type Network = 'testnet' | 'mainnet'
+
+/**
+ * Resolves the network from an explicit choice, the environment, or the default.
+ *
+ * Testnet is the default and mainnet is never reached by omission: a script has
+ * to be told, because the DEX API host, the prover, the scanner, and the token
+ * registry are all per-network, and the mainnet ones move real value.
+ *
+ * @param explicit A network passed by the caller. Falls back to
+ *   SHIELD_SWAP_NETWORK, then to `'testnet'`.
+ * @throws When the resolved value is neither network, rather than silently
+ *   using testnet.
+ */
+export function resolveNetwork(explicit?: string): Network {
+  const value = explicit ?? process.env.SHIELD_SWAP_NETWORK ?? 'testnet'
+  if (value !== 'testnet' && value !== 'mainnet') {
+    throw new Error(`Unknown network "${value}" — use testnet or mainnet.`)
+  }
+  return value
+}
+
 const NODE_URL = 'https://api.provable.com/v2'
 
 /**
@@ -32,11 +55,13 @@ const NODE_URL = 'https://api.provable.com/v2'
  * No key, no proving, no scanner — a transport is the whole requirement. Pool
  * and token discovery are the two DEX endpoints served without a bearer token,
  * and every chain read goes straight to the node.
+ *
+ * @param config.network Defaults to `resolveNetwork()` (testnet unless
+ *   SHIELD_SWAP_NETWORK says otherwise).
  */
-export function readClient() {
-  return createPublicClient({ transport: http(NODE_URL, { network: 'testnet' }) }).extend(
-    shieldSwapActions({ api: {} }),
-  )
+export function readClient(config: { network?: Network } = {}) {
+  const network = resolveNetwork(config.network)
+  return createPublicClient({ transport: http(NODE_URL, { network }) }).extend(shieldSwapActions({ api: {} }))
 }
 
 /**
@@ -52,13 +77,20 @@ export function readClient() {
  *   back for the credentials it belongs to.
  * @param config.inviteCode Redeemed when the account does not yet have DEX
  *   access. Codes are one-time.
+ * @param config.network Defaults to `resolveNetwork()` (testnet unless
+ *   SHIELD_SWAP_NETWORK says otherwise). Testnet and mainnet keys, credentials,
+ *   and DEX access are entirely separate — a key funded on one is unfunded and
+ *   ungranted on the other.
  */
 export async function setupClient(config: {
   privateKey?: string
   provable?: { consumerId: string; apiKey: string }
   username?: string
   inviteCode?: string
+  network?: Network
 } = {}) {
+  const network = resolveNetwork(config.network)
+
   // ── 1. The account ──────────────────────────────────────────────────
   // A key is generated locally and is immediately valid on chain — there is no
   // registration step and nothing to wait for. A fresh one holds nothing, so a
@@ -97,7 +129,7 @@ export async function setupClient(config: {
   // running it locally, which is what keeps this usable without a heavy WASM
   // build. The prover also pays transaction fees from its FeeMaster account, so
   // a faucet-funded account needs no public credits of its own.
-  const aleo = await loadNetwork('testnet')
+  const aleo = await loadNetwork(network)
   const { walletClient, account } = aleo.createAleoClient({
     privateKey,
     networkUrl: NODE_URL,
@@ -145,15 +177,20 @@ export async function setupClient(config: {
  *
  * The faucet delivers private records, so the public balance stays at zero and a
  * balance read shows nothing until the scanner has indexed them. Testnet only —
- * there is no faucet on mainnet.
+ * there is no faucet on mainnet, so a mainnet account must already hold funds.
  *
  * @param client A client from {@link setupClient}.
  * @param address The account to fund.
+ * @throws When the client's network is mainnet.
  */
 export async function fundFromFaucet(
   client: Awaited<ReturnType<typeof setupClient>>['client'],
   address: string,
 ) {
+  if (client.transport.config.network === 'mainnet') {
+    throw new Error('No faucet on mainnet — fund the account directly.')
+  }
+
   const job = await client.api.airdrop(address)
 
   // The faucet transfers each token separately and reports progress per token,

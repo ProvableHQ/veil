@@ -9,6 +9,7 @@ import {
   parseRecord,
   type OwnedRecord,
 } from '@provablehq/veil-core'
+import { pathToFileURL } from 'node:url'
 import {
   createBridgeClient,
   type AleoBridgeExecutor,
@@ -131,7 +132,8 @@ async function createExclusionProof(address: string): Promise<string> {
   return sealance.formatMerkleProof([leftProof, rightProof])
 }
 
-async function main(): Promise<void> {
+/** Runs the Aleo USDCx to Ethereum USDC example. */
+export async function runUsdcxToUsdcExample(): Promise<void> {
   const amount = requiredEnvironmentVariable('USDCX_AMOUNT')
   const recipient = requiredEnvironmentVariable('ETHEREUM_RECIPIENT')
   const mode = burnModeFromEnvironment()
@@ -239,7 +241,9 @@ async function main(): Promise<void> {
   console.log('The Aleo burn-attestation service will forward the withdrawal to Circle for Ethereum delivery.')
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error)
-  process.exitCode = 1
-})
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runUsdcxToUsdcExample().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error)
+    process.exitCode = 1
+  })
+}

@@ -20,6 +20,7 @@ import {
   type Hex,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
+import { pathToFileURL } from 'node:url'
 import { mainnet } from 'viem/chains'
 import {
   buildXReserveHookData,
@@ -390,7 +391,8 @@ async function resumePrivateMint(
   await executePrivateMint(context, plan, deposit, attestation)
 }
 
-async function main(): Promise<void> {
+/** Runs the Ethereum USDC to Aleo USDCx example. */
+export async function runUsdcToUsdcxExample(): Promise<void> {
   const recipient = requiredEnvironmentVariable('ALEO_RECIPIENT')
   const mintMode = mintModeFromEnvironment()
   const privateMintSecretNonce = privateMintSecretNonceFromEnvironment(mintMode)
@@ -553,7 +555,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error)
-  process.exitCode = 1
-})
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runUsdcToUsdcxExample().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error)
+    process.exitCode = 1
+  })
+}
