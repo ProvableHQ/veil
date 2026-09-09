@@ -59,22 +59,6 @@ function connection(executor: SolanaWalletClient, publicClient: SolanaRpcReader)
   }
 }
 
-/**
- * Advances fake timers in small increments until the action settles. A single
- * large advance can race ahead of the real (non-timer) async work the action
- * does before it starts polling — key generation, PDA derivation, and
- * transaction signing — since advancing past a moment with no pending timer
- * resolves near-instantly and does not wait for that work.
- */
-async function settleWithFakeTimers<T>(promise: Promise<T>): Promise<T> {
-  let settled = false
-  void promise.then(() => { settled = true }, () => { settled = true })
-  for (let iteration = 0; iteration < 200 && !settled; iteration++) {
-    await vi.advanceTimersByTimeAsync(100)
-  }
-  return promise
-}
-
 describe('executeSolanaHyperlaneTransfer', () => {
   it('signs, submits, confirms, and extracts the Hyperlane message id', async () => {
     const registry = registryWithRoute()
@@ -158,28 +142,22 @@ describe('executeSolanaHyperlaneTransfer', () => {
   })
 
   it('returns a resumable SOURCE_CONFIRMING receipt on confirmation timeout, without throwing', async () => {
-    vi.useFakeTimers()
-    try {
-      const registry = registryWithRoute()
-      const plan = transferPlan(registry)
-      const executor = stubExecutor()
-      const rpc = executeRpc({ getSignatureStatus: async () => null })
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    const executor = stubExecutor()
+    const rpc = executeRpc({ getSignatureStatus: async () => null })
 
-      const execution = await settleWithFakeTimers(executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), {
-        plan,
-        pollingIntervalMs: 1_000,
-        confirmationTimeoutMs: 3_000,
-      }))
+    const execution = await executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), {
+      plan,
+      confirmationTimeoutMs: 0,
+    })
 
-      expect(execution.receipt.status).toBe('SOURCE_CONFIRMING')
-      expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
-      expect(execution.receipt.messageId).toBeUndefined()
-      expect(execution.receipt.id).toBe(STUB_SIGNATURE)
-      expect(execution.receipt.protocolState.blockhash).toBe(WARP_PROGRAM_ADDRESS)
-      expect(execution.receipt.protocolState.lastValidBlockHeight).toBe('100')
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(execution.receipt.status).toBe('SOURCE_CONFIRMING')
+    expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
+    expect(execution.receipt.messageId).toBeUndefined()
+    expect(execution.receipt.id).toBe(STUB_SIGNATURE)
+    expect(execution.receipt.protocolState.blockhash).toBe(WARP_PROGRAM_ADDRESS)
+    expect(execution.receipt.protocolState.lastValidBlockHeight).toBe('100')
   })
 
   it('returns resumable expired state without resubmitting after blockhash expiry', async () => {
@@ -216,54 +194,43 @@ describe('executeSolanaHyperlaneTransfer', () => {
   })
 
   it('tolerates transient getSignatureStatus errors and succeeds once the status resolves', async () => {
-    vi.useFakeTimers()
-    try {
-      const registry = registryWithRoute()
-      const plan = transferPlan(registry)
-      const executor = stubExecutor()
-      let calls = 0
-      const rpc = executeRpc({
-        getSignatureStatus: async () => {
-          calls += 1
-          if (calls <= 2) throw new Error('transient RPC error')
-          return 'confirmed'
-        },
-      })
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    const executor = stubExecutor()
+    let calls = 0
+    const rpc = executeRpc({
+      getSignatureStatus: async () => {
+        calls += 1
+        if (calls <= 2) throw new Error('transient RPC error')
+        return 'confirmed'
+      },
+    })
 
-      const execution = await settleWithFakeTimers(executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), {
-        plan,
-        pollingIntervalMs: 1_000,
-        confirmationTimeoutMs: 30_000,
-      }))
+    const execution = await executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), {
+      plan,
+      pollingIntervalMs: 0,
+      confirmationTimeoutMs: 2_000,
+    })
 
-      expect(execution.receipt.status).toBe('DELIVERY_PENDING')
-      expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
-      expect(calls).toBeGreaterThanOrEqual(3)
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(execution.receipt.status).toBe('DELIVERY_PENDING')
+    expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
+    expect(calls).toBeGreaterThanOrEqual(3)
   })
 
   it('returns a resumable SOURCE_CONFIRMING receipt, without throwing, when status-read errors persist until the timeout', async () => {
-    vi.useFakeTimers()
-    try {
-      const registry = registryWithRoute()
-      const plan = transferPlan(registry)
-      const executor = stubExecutor()
-      const rpc = executeRpc({
-        getSignatureStatus: async () => { throw new Error('persistent RPC error') },
-      })
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    const executor = stubExecutor()
+    const rpc = executeRpc({
+      getSignatureStatus: async () => { throw new Error('persistent RPC error') },
+    })
 
-      const execution = await settleWithFakeTimers(executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), {
-        plan,
-        pollingIntervalMs: 1_000,
-        confirmationTimeoutMs: 3_000,
-      }))
+    const execution = await executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), {
+      plan,
+      confirmationTimeoutMs: 0,
+    })
 
-      expect(execution.receipt.status).toBe('SOURCE_CONFIRMING')
-      expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(execution.receipt.status).toBe('SOURCE_CONFIRMING')
+    expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
   })
 })
