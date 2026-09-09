@@ -10,10 +10,8 @@ import {
   type Hex,
 } from 'viem'
 import { describe, expect, it } from 'vitest'
-import {
-  executeEvmHyperlaneTransfer,
-  quoteEvmHyperlaneTransfer,
-} from '../../src/actions/evmHyperlane.js'
+import { executeEvmHyperlaneTransfer } from '../../src/actions/executeEvmHyperlaneTransfer.js'
+import { quoteEvmHyperlaneTransfer } from '../../src/actions/quoteEvmHyperlaneTransfer.js'
 import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'

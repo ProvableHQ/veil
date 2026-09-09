@@ -44,7 +44,7 @@ import {
   solanaHttp,
   solanaKeyPair,
 } from '../src/index.js'
-import { extractSolanaHyperlaneMessageId } from '../src/actions/executeSolanaHyperlaneTransfer.js'
+import { extractSolanaHyperlaneMessageId } from '../src/solana/extractHyperlaneMessageId.js'
 import { createSolanaRpcClient } from '../src/solana/index.js'
 import type { SolanaRpcConfig } from '../src/types/solana.js'
 import { createPublicClient, http, type PublicClient } from '@provablehq/veil-core'

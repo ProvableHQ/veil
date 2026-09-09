@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { getProtocolAssets, getProtocolRoutes } from '../../src/actions/protocolDiscovery.js'
+import { getProtocolAssets } from '../../src/actions/getProtocolAssets.js'
+import { getProtocolRoutes } from '../../src/actions/getProtocolRoutes.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 
 describe('getProtocolAssets', () => {

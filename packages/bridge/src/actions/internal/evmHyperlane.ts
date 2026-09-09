@@ -11,17 +11,17 @@ import {
   type Hash,
   type Hex,
 } from 'viem'
-import { BridgeError } from '../errors/bridgeErrors.js'
-import type { EvmClient, EvmWalletClient } from '../connections/evm.js'
+import { BridgeError } from '../../errors/bridgeErrors.js'
+import type { EvmClient, EvmWalletClient } from '../../connections/evm.js'
 import type {
   EvmHyperlaneRouteMetadata,
   EvmHyperlaneTransferExecution,
   EvmHyperlaneTransferQuote,
   ExecuteEvmHyperlaneTransferParameters,
   QuoteEvmHyperlaneTransferParameters,
-} from '../types/evm.js'
-import type { BridgeRegistry, BridgeTransferPlan, BridgeTransferReceipt } from '../types/protocol.js'
-import { parseDecimalAmount } from '../utils/units.js'
+} from '../../types/evm.js'
+import type { BridgeRegistry, BridgeTransferPlan, BridgeTransferReceipt } from '../../types/protocol.js'
+import { parseDecimalAmount } from '../../utils/units.js'
 
 const WARP_ROUTE_ABI = parseAbi([
   'function quoteTransferRemote(uint32 destination, bytes32 recipient, uint256 amount) view returns ((address token, uint256 amount)[] quotes)',
@@ -220,12 +220,12 @@ function messageIdFromReceipt(receipt: RpcTransactionReceipt): Hash | undefined 
  * @throws BridgeError When the route is not an active Ethereum source route, metadata is incomplete, the client is on the wrong chain, or the router returns an unusable quote.
  *
  * @example
- * const quote = await quoteEvmHyperlaneTransfer(registry, client, {
+ * const quote = await runQuoteEvmHyperlaneTransfer(registry, client, {
  *   plan,
  *   recipientBytes32: '0x20e3629764d5338f74bee96675801b1fb29d1fc68b177668f9175708bef84311',
  * })
  */
-export async function quoteEvmHyperlaneTransfer(
+export async function runQuoteEvmHyperlaneTransfer(
   registry: BridgeRegistry,
   client: EvmClient,
   params: QuoteEvmHyperlaneTransferParameters,
@@ -327,12 +327,12 @@ function executionReceipt(
  * @throws BridgeError When validation, quoting, wallet submission, or a confirmed transaction fails.
  *
  * @example
- * const execution = await executeEvmHyperlaneTransfer(registry, client, {
+ * const execution = await runExecuteEvmHyperlaneTransfer(registry, client, {
  *   plan,
  *   recipientBytes32: '0x20e3629764d5338f74bee96675801b1fb29d1fc68b177668f9175708bef84311',
  * })
  */
-export async function executeEvmHyperlaneTransfer(
+export async function runExecuteEvmHyperlaneTransfer(
   registry: BridgeRegistry,
   client: EvmClient & { walletClient: EvmWalletClient },
   params: ExecuteEvmHyperlaneTransferParameters,
@@ -347,7 +347,7 @@ export async function executeEvmHyperlaneTransfer(
   }
 
   const metadata = routeMetadata(registry, params.plan)
-  const quote = await quoteEvmHyperlaneTransfer(registry, client, params)
+  const quote = await runQuoteEvmHyperlaneTransfer(registry, client, params)
   const account = await resolveAccount(client, params.plan)
   const approvalTxIds: Hash[] = []
 

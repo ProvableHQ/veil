@@ -1,14 +1,14 @@
 import type { TransactionInput } from '@provablehq/veil-core'
-import { BridgeError } from '../errors/bridgeErrors.js'
+import { BridgeError } from '../../errors/bridgeErrors.js'
 import type {
   AleoWalletClient,
   ExecuteXReserveBurnParameters,
   XReserveBurnCall,
   XReserveBurnExecution,
-} from '../types/aleo.js'
-import type { BridgeRegistry } from '../types/protocol.js'
-import { parseDecimalAmount } from '../utils/units.js'
-import { evmAddressToXReserveBytes32, xReserveHexToAleoBytes } from '../utils/xreserve.js'
+} from '../../types/aleo.js'
+import type { BridgeRegistry } from '../../types/protocol.js'
+import { parseDecimalAmount } from '../../utils/units.js'
+import { evmAddressToXReserveBytes32, xReserveHexToAleoBytes } from '../../utils/xreserve.js'
 
 const ETHEREUM_DESTINATION_DOMAIN = 0
 
@@ -58,9 +58,9 @@ function assertPrivateInputs(userRecord: TransactionInput | undefined, merklePro
  * @throws BridgeError When the route, amount, recipient, mode-specific inputs, or metadata is invalid.
  *
  * @example
- * const call = buildXReserveBurnCall(registry, { plan, mode: 'public-as-signer' })
+ * const call = runBuildXReserveBurnCall(registry, { plan, mode: 'public-as-signer' })
  */
-export function buildXReserveBurnCall(
+export function runBuildXReserveBurnCall(
   registry: BridgeRegistry,
   params: ExecuteXReserveBurnParameters,
 ): XReserveBurnCall {
@@ -113,18 +113,18 @@ export function buildXReserveBurnCall(
  * @throws BridgeError When call construction fails or the wallet returns no transaction id.
  *
  * @example
- * const burn = await executeXReserveBurn(registry, client, {
+ * const burn = await runExecuteXReserveBurn(registry, client, {
  *   plan,
  *   userRecord,
  *   merkleProof,
  * })
  */
-export async function executeXReserveBurn(
+export async function runExecuteXReserveBurn(
   registry: BridgeRegistry,
   client: AleoWalletClient,
   params: ExecuteXReserveBurnParameters,
 ): Promise<XReserveBurnExecution> {
-  const call = buildXReserveBurnCall(registry, params)
+  const call = runBuildXReserveBurnCall(registry, params)
   const result = await client.executeTransaction({
     program: call.program,
     function: call.function,

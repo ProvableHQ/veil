@@ -51,27 +51,24 @@ export {
 
 export {
   getProtocolAssets as getAssets,
-  getProtocolRoutes as getRoutes,
   type GetProtocolAssetsParameters as GetAssetsParameters,
+} from './actions/getProtocolAssets.js'
+export {
+  getProtocolRoutes as getRoutes,
   type GetProtocolRoutesParameters as GetRoutesParameters,
-} from './actions/protocolDiscovery.js'
+} from './actions/getProtocolRoutes.js'
 export { prepareTransfer } from './actions/prepareTransfer.js'
-export {
-  executeEvmHyperlaneTransfer,
-  quoteEvmHyperlaneTransfer,
-} from './actions/evmHyperlane.js'
-export {
-  executeEvmXReserveTransfer,
-  getXReserveAttestation,
-  quoteEvmXReserveTransfer,
-} from './actions/evmXReserve.js'
-export { executeXReservePrivateMint } from './actions/xreservePrivateMint.js'
-export { buildXReserveBurnCall, executeXReserveBurn } from './actions/xreserveBurn.js'
-export {
-  buildAleoHyperlaneTransferRemoteCall,
-  executeAleoHyperlaneTransferRemote,
-  quoteAleoHyperlaneGasPayment,
-} from './actions/aleoHyperlane.js'
+export { executeEvmHyperlaneTransfer } from './actions/executeEvmHyperlaneTransfer.js'
+export { quoteEvmHyperlaneTransfer } from './actions/quoteEvmHyperlaneTransfer.js'
+export { executeEvmXReserveTransfer } from './actions/executeEvmXReserveTransfer.js'
+export { getXReserveAttestation } from './actions/getXReserveAttestation.js'
+export { quoteEvmXReserveTransfer } from './actions/quoteEvmXReserveTransfer.js'
+export { executeXReservePrivateMint } from './actions/executeXReservePrivateMint.js'
+export { buildXReserveBurnCall } from './actions/buildXReserveBurnCall.js'
+export { executeXReserveBurn } from './actions/executeXReserveBurn.js'
+export { buildAleoHyperlaneTransferRemoteCall } from './actions/buildAleoHyperlaneTransferRemoteCall.js'
+export { executeAleoHyperlaneTransferRemote } from './actions/executeAleoHyperlaneTransferRemote.js'
+export { quoteAleoHyperlaneGasPayment } from './actions/quoteAleoHyperlaneGasPayment.js'
 export { quoteSolanaHyperlaneTransfer } from './actions/quoteSolanaHyperlaneTransfer.js'
 export { executeSolanaHyperlaneTransfer } from './actions/executeSolanaHyperlaneTransfer.js'
 

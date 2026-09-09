@@ -3,6 +3,7 @@ import type { SolanaClient, SolanaWalletClient } from '../connections/solana.js'
 import { loadKit } from '../solana/kit.js'
 import type { SolanaRpcClient } from '../solana/rpc.js'
 import { buildTransferRemoteInstruction, type SolanaAccountMeta } from '../solana/transferRemote.js'
+import { extractSolanaHyperlaneMessageId } from '../solana/extractHyperlaneMessageId.js'
 import type { BridgeRegistry, BridgeTransferReceipt } from '../types/protocol.js'
 import type {
   ExecuteSolanaHyperlaneTransferParameters,
@@ -21,36 +22,6 @@ import { solanaRouteMetadata } from './solanaRouteMetadata.js'
 // which the quote already accounts for.
 const GAS_PAYMENT_ACCOUNT_DATA_LENGTH = 141
 const DISPATCHED_MESSAGE_ACCOUNT_DATA_LENGTH = 194
-
-// SEALEVEL_NOTES.md §5: the Mailbox's full-hex dispatch log line is the only
-// one that carries the untruncated message id; the IGP-payment and
-// warp-completion log lines format it abbreviated and must not be parsed.
-const DISPATCHED_MESSAGE_LOG_PATTERN = /Dispatched message to \d+, ID (0x[0-9a-fA-F]{64})/
-
-/**
- * Extracts the Hyperlane message id from a confirmed Solana transaction's
- * program logs.
- *
- * Pure and local. Scans for the Mailbox's full-hex dispatch line, the only
- * log line that carries the untruncated 32-byte id; the abbreviated ids in
- * the IGP-payment and warp-completion lines are ignored. Applies to any
- * consumer that confirms a dispatch outside `executeSolanaHyperlaneTransfer`,
- * such as a resume path polling a previously broadcast signature.
- *
- * @param logs Program log lines of the confirmed transaction, or `null` when the transaction was not found.
- * @returns The `0x`-prefixed 64-hex-character message id, or `undefined` when no dispatch line is present.
- *
- * @example
- * const messageId = extractSolanaHyperlaneMessageId(await rpc.getTransactionLogs(signature))
- */
-export function extractSolanaHyperlaneMessageId(logs: string[] | null): string | undefined {
-  if (!logs) return undefined
-  for (const line of logs) {
-    const match = DISPATCHED_MESSAGE_LOG_PATTERN.exec(line)
-    if (match) return match[1]
-  }
-  return undefined
-}
 
 function accountRole(kit: Awaited<ReturnType<typeof loadKit>>, account: SolanaAccountMeta) {
   if (account.signer && account.writable) return kit.AccountRole.WRITABLE_SIGNER

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { validateBridgeRegistry } from '../../src/registry/validate.js'
-import { getProtocolRoutes } from '../../src/actions/protocolDiscovery.js'
+import { getProtocolRoutes } from '../../src/actions/getProtocolRoutes.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 
 describe('DEFAULT_BRIDGE_REGISTRY', () => {

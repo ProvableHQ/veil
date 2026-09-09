@@ -4,7 +4,7 @@ import type {
   BridgeRegistry,
   ProtocolBridgeAsset,
   ProtocolBridgeRoute,
-} from '../types/protocol.js'
+} from '../../types/protocol.js'
 
 /** Filters the protocol asset catalog. */
 export type GetProtocolAssetsParameters = {
@@ -33,9 +33,9 @@ export type GetProtocolRoutesParameters = {
  * @returns Matching assets in registry order.
  *
  * @example
- * const usdcx = getProtocolAssets(registry, { symbol: 'USDCx' })
+ * const usdcx = filterProtocolAssets(registry, { symbol: 'USDCx' })
  */
-export function getProtocolAssets(
+export function filterProtocolAssets(
   registry: BridgeRegistry,
   params: GetProtocolAssetsParameters = {},
 ): ProtocolBridgeAsset[] {
@@ -64,9 +64,9 @@ export function getProtocolAssets(
  * @returns Matching directional routes in registry order.
  *
  * @example
- * const outbound = getProtocolRoutes(registry, { sourceChainId: 'aleo' })
+ * const outbound = filterProtocolRoutes(registry, { sourceChainId: 'aleo' })
  */
-export function getProtocolRoutes(
+export function filterProtocolRoutes(
   registry: BridgeRegistry,
   params: GetProtocolRoutesParameters = {},
 ): ProtocolBridgeRoute[] {

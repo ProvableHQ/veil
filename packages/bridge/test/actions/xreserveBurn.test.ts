@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildXReserveBurnCall, executeXReserveBurn } from '../../src/actions/xreserveBurn.js'
+import { buildXReserveBurnCall } from '../../src/actions/buildXReserveBurnCall.js'
+import { executeXReserveBurn } from '../../src/actions/executeXReserveBurn.js'
 import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import type { AleoWalletClient } from '../../src/types/aleo.js'

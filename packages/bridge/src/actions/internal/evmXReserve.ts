@@ -11,9 +11,9 @@ import {
   type Hash,
   type Hex,
 } from 'viem'
-import { BridgeError } from '../errors/bridgeErrors.js'
-import type { EvmClient, EvmWalletClient } from '../connections/evm.js'
-import type { BridgeRegistry, BridgeTransferPlan, BridgeTransferReceipt } from '../types/protocol.js'
+import { BridgeError } from '../../errors/bridgeErrors.js'
+import type { EvmClient, EvmWalletClient } from '../../connections/evm.js'
+import type { BridgeRegistry, BridgeTransferPlan, BridgeTransferReceipt } from '../../types/protocol.js'
 import type {
   EvmXReserveRouteMetadata,
   EvmXReserveTransferExecution,
@@ -23,8 +23,8 @@ import type {
   QuoteEvmXReserveTransferParameters,
   XReserveAttestationResult,
   XReserveHttpTransport,
-} from '../types/xreserve.js'
-import { parseDecimalAmount } from '../utils/units.js'
+} from '../../types/xreserve.js'
+import { parseDecimalAmount } from '../../utils/units.js'
 import {
   aleoAddressToBytes32,
   aleoProgramAddress,
@@ -32,7 +32,7 @@ import {
   buildXReserveHookData,
   calculateXReserveDepositNonce,
   calculateXReserveMessageHash,
-} from '../utils/xreserve.js'
+} from '../../utils/xreserve.js'
 
 const ERC20_ABI = parseAbi([
   'function balanceOf(address owner) view returns (uint256)',
@@ -136,9 +136,9 @@ function successful(receipt: RpcReceipt, hash: Hash): void {
  * @throws BridgeError When metadata, wallet state, amount, balance, or recipient is invalid.
  *
  * @example
- * const quote = await quoteEvmXReserveTransfer(registry, client, { plan })
+ * const quote = await runQuoteEvmXReserveTransfer(registry, client, { plan })
  */
-export async function quoteEvmXReserveTransfer(
+export async function runQuoteEvmXReserveTransfer(
   registry: BridgeRegistry,
   client: EvmClient & { walletClient: EvmWalletClient },
   params: QuoteEvmXReserveTransferParameters,
@@ -270,9 +270,9 @@ function confirmedDepositReceipt(
  * @throws BridgeError When validation, submission, confirmation, or event verification fails.
  *
  * @example
- * const execution = await executeEvmXReserveTransfer(registry, client, { plan })
+ * const execution = await runExecuteEvmXReserveTransfer(registry, client, { plan })
  */
-export async function executeEvmXReserveTransfer(
+export async function runExecuteEvmXReserveTransfer(
   registry: BridgeRegistry,
   client: EvmClient & { walletClient: EvmWalletClient },
   params: ExecuteEvmXReserveTransferParameters,
@@ -308,11 +308,11 @@ export async function executeEvmXReserveTransfer(
     const receipt = await wait(client, approvalTxId, confirmationTimeoutMs, pollingIntervalMs)
     if (!receipt) return { approvalTxIds, receipt: params.resume }
     successful(receipt, approvalTxId)
-    quote = await quoteEvmXReserveTransfer(registry, client, params)
+    quote = await runQuoteEvmXReserveTransfer(registry, client, params)
   } else if (params.resume) {
     throw new BridgeError(`Unsupported xReserve resume status: ${params.resume.status}`)
   } else {
-    quote = await quoteEvmXReserveTransfer(registry, client, params)
+    quote = await runQuoteEvmXReserveTransfer(registry, client, params)
   }
 
   if (quote.approvalRequired) {
@@ -347,9 +347,9 @@ export async function executeEvmXReserveTransfer(
  * @throws BridgeError For invalid routes, HTTP failures other than 404, or malformed responses.
  *
  * @example
- * const result = await getXReserveAttestation(registry, fetchTransport, { routeId, messageHash })
+ * const result = await runGetXReserveAttestation(registry, fetchTransport, { routeId, messageHash })
  */
-export async function getXReserveAttestation(
+export async function runGetXReserveAttestation(
   registry: BridgeRegistry,
   transport: XReserveHttpTransport,
   params: GetXReserveAttestationParameters,

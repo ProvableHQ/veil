@@ -10,7 +10,8 @@ import {
   type Hex,
 } from 'viem'
 import { describe, expect, it } from 'vitest'
-import { executeEvmXReserveTransfer, getXReserveAttestation } from '../../src/actions/evmXReserve.js'
+import { executeEvmXReserveTransfer } from '../../src/actions/executeEvmXReserveTransfer.js'
+import { getXReserveAttestation } from '../../src/actions/getXReserveAttestation.js'
 import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'

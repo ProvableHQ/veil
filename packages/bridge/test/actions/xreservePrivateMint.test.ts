@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { executeXReservePrivateMint } from '../../src/actions/xreservePrivateMint.js'
+import { executeXReservePrivateMint } from '../../src/actions/executeXReservePrivateMint.js'
 import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import type { AleoWalletClient } from '../../src/types/aleo.js'
