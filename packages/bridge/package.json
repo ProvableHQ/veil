@@ -66,7 +66,6 @@
   },
   "devDependencies": {
     "@provablehq/sdk": "^0.11.6",
-    "@provablehq/veil-aleo-sdk": "workspace:*",
     "@solana/kit": "^8.0.0",
     "tsx": "^4.21.0"
   }

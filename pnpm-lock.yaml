@@ -107,9 +107,6 @@ importers:
       '@provablehq/sdk':
         specifier: ^0.11.6
         version: 0.11.9
-      '@provablehq/veil-aleo-sdk':
-        specifier: workspace:*
-        version: link:../provable-sdk
       '@solana/kit':
         specifier: ^8.0.0
         version: 8.1.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)

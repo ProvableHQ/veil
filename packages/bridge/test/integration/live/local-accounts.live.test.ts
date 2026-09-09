@@ -25,7 +25,7 @@ function required(name: string): string {
 }
 
 async function localAleo(network: 'mainnet' | 'testnet', privateKey: string) {
-  const { loadNetwork } = await import('@provablehq/veil-aleo-sdk')
+  const { loadNetwork } = await import('../../../../provable-sdk/src/index.js')
   const aleo = await loadNetwork(network)
   return aleo.createAleoClient({
     privateKey,
