@@ -2,8 +2,8 @@ import { BridgeError } from '../errors/bridgeErrors.js'
 import type {
   BridgeExecutionStep,
   BridgeRegistry,
-  BridgeTransferPlan,
-  PrepareTransferParameters,
+  BridgePlan,
+  PrepareParameters,
   ProtocolBridgeAsset,
   ProtocolBridgeChain,
   ProtocolBridgeRoute,
@@ -22,7 +22,7 @@ function xreserveSteps(
   destination: ProtocolBridgeAsset,
   sourceChain: ProtocolBridgeChain,
   destinationChain: ProtocolBridgeChain,
-  mintMode: BridgeTransferPlan['mintMode'],
+  mintMode: BridgePlan['mintMode'],
 ): BridgeExecutionStep[] {
   if (sourceChain.family === 'evm' && destinationChain.family === 'aleo') {
     return [
@@ -83,16 +83,16 @@ function hyperlaneSteps(
  *   or malformed, its precision exceeds either asset, or the recipient fails validation.
  *
  * @example
- * const plan = prepareTransfer(registry, {
+ * const plan = prepare(registry, {
  *   routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
  *   amount: '25',
  *   recipient: 'aleo1...',
  * })
  */
-export function prepareTransfer(
+export function prepare(
   registry: BridgeRegistry,
-  params: PrepareTransferParameters,
-): BridgeTransferPlan {
+  params: PrepareParameters,
+): BridgePlan {
   const route = registry.routes.find((entry) => entry.id === params.routeId)
   if (!route) throw new BridgeError(`Unknown bridge route: ${params.routeId}`)
   if (route.availability === 'disabled') throw new BridgeError(`Bridge route is disabled: ${params.routeId}`)
@@ -135,7 +135,7 @@ export function prepareTransfer(
   const steps = route.protocol === 'xreserve'
     ? xreserveSteps(route, sourceAsset, destinationAsset, sourceChain, destinationChain, mintMode)
     : hyperlaneSteps(sourceAsset, destinationAsset, sourceChain, destinationChain)
-  const fees: BridgeTransferPlan['fees'] = []
+  const fees: BridgePlan['fees'] = []
 
   return {
     registryVersion: registry.version,
@@ -151,13 +151,6 @@ export function prepareTransfer(
     mintMode,
     ...(mintMode === 'private' ? { privateMintSecretNonce } : {}),
     privateRecipient: mintMode === 'private',
-    quote: {
-      routeId: route.id,
-      protocol: route.protocol,
-      amountIn: params.amount,
-      fees,
-      status: 'not-queried',
-    },
     fees,
     steps,
   }

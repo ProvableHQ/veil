@@ -12,10 +12,10 @@ import {
 import { describe, expect, it } from 'vitest'
 import { executeEvmXReserveTransfer } from '../../src/actions/executeEvmXReserveTransfer.js'
 import { getXReserveAttestation } from '../../src/actions/getXReserveAttestation.js'
-import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
+import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'
-import type { BridgeTransferReceipt } from '../../src/types/protocol.js'
+import type { BridgeReceipt } from '../../src/types/protocol.js'
 
 const ACCOUNT = getAddress('0x0000000000000000000000000000000000000001')
 const TOKEN = getAddress('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238')
@@ -33,7 +33,7 @@ const ABI = parseAbi([
 type Sent = { from: Address, to: Address, data: Hex, value?: Hex }
 
 function transferPlan() {
-  return prepareTransfer(DEFAULT_BRIDGE_REGISTRY, { routeId: 'xreserve:sepolia/usdc->aleo-testnet/usdcx', amount: '2', recipient: RECIPIENT, sender: ACCOUNT, mintMode: 'record' })
+  return prepare(DEFAULT_BRIDGE_REGISTRY, { routeId: 'xreserve:sepolia/usdc->aleo-testnet/usdcx', amount: '2', recipient: RECIPIENT, sender: ACCOUNT, mintMode: 'record' })
 }
 
 function mockExecutor(confirmDeposit = { value: true }) {
@@ -97,7 +97,7 @@ describe('Ethereum xReserve actions', () => {
   it('checkpoints at broadcast and resumes confirmation without resubmitting', async () => {
     const confirmDeposit = { value: false }
     const { executor, sent } = mockExecutor(confirmDeposit)
-    const checkpoints: BridgeTransferReceipt[] = []
+    const checkpoints: BridgeReceipt[] = []
     const pending = await executeEvmXReserveTransfer(DEFAULT_BRIDGE_REGISTRY, executor, {
       plan: transferPlan(),
       confirmationTimeoutMs: 0,

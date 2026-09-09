@@ -8,7 +8,7 @@ import {
 } from '../connections/resolve.js'
 import type { XReserveBurnMode } from '../types/aleo.js'
 import type { BridgeRegistry } from '../types/protocol.js'
-import type { ExecuteTransferParameters, TransferExecution } from '../types/transfer.js'
+import type { ExecuteParameters, BridgeExecution } from '../types/actions.js'
 import { aleoAddressToBytes32 } from '../utils/xreserve.js'
 import { executeAleoHyperlaneTransferRemote } from './executeAleoHyperlaneTransferRemote.js'
 import { executeEvmHyperlaneTransfer } from './executeEvmHyperlaneTransfer.js'
@@ -18,13 +18,13 @@ import { executeXReserveBurn } from './executeXReserveBurn.js'
 import { quoteAleoHyperlaneGasPayment } from './quoteAleoHyperlaneGasPayment.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 
-function aleoHyperlaneMode(mode: ExecuteTransferParameters['mode']): 'caller' | 'signer' | undefined {
+function aleoHyperlaneMode(mode: ExecuteParameters['mode']): 'caller' | 'signer' | undefined {
   if (mode == null) return undefined
   if (mode === 'caller' || mode === 'signer') return mode
   throw new BridgeError(`Aleo Hyperlane does not support execution mode "${mode}"`)
 }
 
-function xReserveBurnMode(mode: ExecuteTransferParameters['mode']): XReserveBurnMode | undefined {
+function xReserveBurnMode(mode: ExecuteParameters['mode']): XReserveBurnMode | undefined {
   if (mode == null) return undefined
   if (mode === 'private' || mode === 'public' || mode === 'public-as-signer') return mode
   throw new BridgeError(`Aleo xReserve does not support execution mode "${mode}"`)
@@ -42,13 +42,13 @@ function xReserveBurnMode(mode: ExecuteTransferParameters['mode']): XReserveBurn
  * @param params Prepared transfer, source execution settings, and optional checkpoint.
  * @returns A discriminated execution result containing normalized resumable state.
  * @throws BridgeError When the route shape, execution mode, client, or submission is invalid.
- * @example const execution = await executeTransfer(registry, clients, { plan, onSubmitted: saveCheckpoint })
+ * @example const execution = await execute(registry, clients, { plan, onSubmitted: saveCheckpoint })
  */
-export async function executeTransfer(
+export async function execute(
   registry: BridgeRegistry,
   clients: BridgeChainClients,
-  params: ExecuteTransferParameters,
-): Promise<TransferExecution> {
+  params: ExecuteParameters,
+): Promise<BridgeExecution> {
   const chain = resolveTransferRoute(registry, params.plan).sourceChain
   const chainId = chain.id
 

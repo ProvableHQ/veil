@@ -1,5 +1,5 @@
 import type { Address, Hash, Hex } from 'viem'
-import type { BridgeTransferPlan, BridgeTransferReceipt } from './protocol.js'
+import type { BridgePlan, BridgeReceipt } from './protocol.js'
 
 /** Identifies the Ethereum Hyperlane router's collateral model. */
 export type EvmHyperlaneRouterType = 'native' | 'collateral'
@@ -36,11 +36,11 @@ export type EvmHyperlaneRouteMetadata = {
 /**
  * Selects a prepared Ethereum Hyperlane transfer for live fee quoting.
  *
- * @property plan Pure transfer plan returned by `prepareTransfer`.
+ * @property plan Pure transfer plan returned by `prepare`.
  * @property recipientBytes32 Aleo recipient in the exact 32-byte encoding expected by the enrolled Warp Route.
  */
 export type QuoteEvmHyperlaneTransferParameters = {
-  plan: BridgeTransferPlan
+  plan: BridgePlan
   recipientBytes32: Hex
 }
 
@@ -77,7 +77,7 @@ export type EvmHyperlaneTransferQuote = {
  * The action requotes immediately before submission. ERC-20 allowance is
  * checked first and only insufficient allowances generate approval calls.
  *
- * @property plan Pure transfer plan returned by `prepareTransfer`.
+ * @property plan Pure transfer plan returned by `prepare`.
  * @property recipientBytes32 Aleo recipient in the exact 32-byte encoding expected by the enrolled Warp Route.
  * @property pollingIntervalMs Delay between transaction-receipt checks. Defaults to 1,000 milliseconds.
  * @property confirmationTimeoutMs Maximum time to wait for each approval or dispatch receipt. Defaults to 120,000 milliseconds; a timeout returns resumable pending state.
@@ -85,12 +85,12 @@ export type EvmHyperlaneTransferQuote = {
  * @property onSubmitted Durable checkpoint hook called after each approval or dispatch broadcast and before receipt polling begins.
  */
 export type ExecuteEvmHyperlaneTransferParameters = {
-  plan: BridgeTransferPlan
+  plan: BridgePlan
   recipientBytes32: Hex
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined
-  resume?: BridgeTransferReceipt | undefined
-  onSubmitted?: ((receipt: BridgeTransferReceipt) => void | Promise<void>) | undefined
+  resume?: BridgeReceipt | undefined
+  onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
 }
 
 /**
@@ -100,6 +100,6 @@ export type ExecuteEvmHyperlaneTransferParameters = {
  * @property approvalTxIds ERC-20 approval transactions submitted before dispatch.
  */
 export type EvmHyperlaneTransferExecution = {
-  receipt: BridgeTransferReceipt
+  receipt: BridgeReceipt
   approvalTxIds: Hash[]
 }

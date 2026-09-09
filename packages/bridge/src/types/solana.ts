@@ -1,4 +1,4 @@
-import type { BridgeTransferPlan, BridgeTransferReceipt } from './protocol.js'
+import type { BridgePlan, BridgeReceipt } from './protocol.js'
 
 /**
  * Sends a Solana JSON-RPC POST request without coupling the bridge client to a runtime global.
@@ -69,10 +69,10 @@ export type SolanaHyperlaneRouteMetadata = {
 /**
  * Selects a prepared Solana Hyperlane transfer for live fee quoting.
  *
- * @property plan Pure transfer plan returned by `prepareTransfer`.
+ * @property plan Pure transfer plan returned by `prepare`.
  */
 export type QuoteSolanaHyperlaneTransferParameters = {
-  plan: BridgeTransferPlan
+  plan: BridgePlan
 }
 
 /**
@@ -100,7 +100,7 @@ export type SolanaHyperlaneTransferQuote = {
  * The action signs and sends the transaction through the Solana client's
  * wallet client, then polls its public client for confirmation.
  *
- * @property plan Pure transfer plan returned by `prepareTransfer`.
+ * @property plan Pure transfer plan returned by `prepare`.
  * @property pollingIntervalMs Delay between confirmation checks. Defaults to 1,000 milliseconds; floored at 100 milliseconds so a small or zero value cannot busy-poll the RPC endpoint.
  * @property confirmationTimeoutMs Maximum time to wait for confirmation. Defaults to 120,000 milliseconds; a timeout returns resumable pending state.
  * @property resume Previously checkpointed receipt. When supplied, the action
@@ -109,11 +109,11 @@ export type SolanaHyperlaneTransferQuote = {
  *   and before confirmation polling begins.
  */
 export type ExecuteSolanaHyperlaneTransferParameters = {
-  plan: BridgeTransferPlan
+  plan: BridgePlan
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined
-  resume?: BridgeTransferReceipt | undefined
-  onSubmitted?: ((receipt: BridgeTransferReceipt) => void | Promise<void>) | undefined
+  resume?: BridgeReceipt | undefined
+  onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
 }
 
 /**
@@ -122,5 +122,5 @@ export type ExecuteSolanaHyperlaneTransferParameters = {
  * @property receipt Protocol-neutral transfer state, including the source signature and message id when confirmed.
  */
 export type SolanaHyperlaneTransferExecution = {
-  receipt: BridgeTransferReceipt
+  receipt: BridgeReceipt
 }

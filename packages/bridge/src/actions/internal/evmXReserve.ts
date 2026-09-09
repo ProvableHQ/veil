@@ -13,7 +13,7 @@ import {
 } from 'viem'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import type { EvmClient, EvmWalletClient } from '../../connections/evm.js'
-import type { BridgeRegistry, BridgeTransferPlan, BridgeTransferReceipt } from '../../types/protocol.js'
+import type { BridgeRegistry, BridgePlan, BridgeReceipt } from '../../types/protocol.js'
 import type {
   EvmXReserveRouteMetadata,
   EvmXReserveTransferExecution,
@@ -50,7 +50,7 @@ type RpcReceipt = {
   logs?: readonly { address?: Address, data: Hex, topics: readonly Hex[], logIndex?: Hex | number }[]
 }
 
-function metadata(registry: BridgeRegistry, plan: BridgeTransferPlan): EvmXReserveRouteMetadata {
+function metadata(registry: BridgeRegistry, plan: BridgePlan): EvmXReserveRouteMetadata {
   if (plan.protocol !== 'xreserve' || plan.route.protocol !== 'xreserve') throw new BridgeError('xReserve actions require an xReserve transfer plan')
   if (plan.registryVersion !== registry.version) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
   const route = registry.routes.find((entry) => entry.id === plan.route.id)
@@ -89,7 +89,7 @@ async function assertChain(client: EvmClient & { walletClient: EvmWalletClient }
   if (chain !== expected) throw new BridgeError(`EVM wallet is connected to chain ${chain}; expected ${expected}`)
 }
 
-async function account(client: EvmClient & { walletClient: EvmWalletClient }, plan: BridgeTransferPlan): Promise<Address> {
+async function account(client: EvmClient & { walletClient: EvmWalletClient }, plan: BridgePlan): Promise<Address> {
   const value = await client.walletClient.getAddress()
   if (typeof value !== 'string' || !isAddress(value)) throw new BridgeError('EVM wallet client has no connected account')
   const resolved = getAddress(value)
@@ -171,11 +171,11 @@ export async function runQuoteEvmXReserveTransfer(
   return { routeId: params.plan.route.id, xReserveContract: route.xReserveContract, tokenAddress: getAddress(token), sourceChainId: route.sourceChainId, remoteDomain: route.remoteDomain, remoteRecipientBytes32, amountAtomic, maxFeeAtomic: route.maxFeeAtomic, hookData, balanceAtomic, allowanceAtomic, approvalRequired: allowanceAtomic < amountAtomic }
 }
 
-function pendingReceipt(plan: BridgeTransferPlan, status: BridgeTransferReceipt['status'], id: string, approvalTxIds: Hash[], quote: EvmXReserveTransferQuote, sourceTxId?: Hash): BridgeTransferReceipt {
+function pendingReceipt(plan: BridgePlan, status: BridgeReceipt['status'], id: string, approvalTxIds: Hash[], quote: EvmXReserveTransferQuote, sourceTxId?: Hash): BridgeReceipt {
   return { id, protocol: 'xreserve', status, ...(sourceTxId ? { sourceTxId } : {}), protocolState: { routeId: plan.route.id, approvalTxIds, mintMode: plan.mintMode, intendedRecipient: plan.recipient, xReserveContract: quote.xReserveContract, tokenAddress: quote.tokenAddress, sourceChainId: quote.sourceChainId, remoteDomain: quote.remoteDomain, remoteRecipientBytes32: quote.remoteRecipientBytes32, hookData: quote.hookData, amountAtomic: quote.amountAtomic.toString(), maxFeeAtomic: quote.maxFeeAtomic.toString() } }
 }
 
-function resumeQuote(plan: BridgeTransferPlan, receipt: BridgeTransferReceipt): EvmXReserveTransferQuote {
+function resumeQuote(plan: BridgePlan, receipt: BridgeReceipt): EvmXReserveTransferQuote {
   const state = receipt.protocolState
   if (receipt.protocol !== 'xreserve' || state.routeId !== plan.route.id) {
     throw new BridgeError('Checkpoint does not match the prepared xReserve route')
@@ -208,7 +208,7 @@ function resumeQuote(plan: BridgeTransferPlan, receipt: BridgeTransferReceipt): 
   }
 }
 
-function approvalIds(receipt: BridgeTransferReceipt): Hash[] {
+function approvalIds(receipt: BridgeReceipt): Hash[] {
   const ids = receipt.protocolState.approvalTxIds
   if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string' || !isHash(id))) {
     throw new BridgeError('Checkpoint contains invalid xReserve approval transaction ids')
@@ -217,14 +217,14 @@ function approvalIds(receipt: BridgeTransferReceipt): Hash[] {
 }
 
 function confirmedDepositReceipt(
-  plan: BridgeTransferPlan,
+  plan: BridgePlan,
   route: EvmXReserveRouteMetadata,
   quote: EvmXReserveTransferQuote,
   owner: Address,
   approvalTxIds: Hash[],
   sourceTxId: Hash,
   receipt: RpcReceipt,
-): BridgeTransferReceipt {
+): BridgeReceipt {
   successful(receipt, sourceTxId)
   let matched: { log: NonNullable<RpcReceipt['logs']>[number], args: {
     localToken: Address

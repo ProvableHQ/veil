@@ -4,7 +4,7 @@ import { loadKit } from '../solana/kit.js'
 import type { SolanaRpcClient } from '../solana/rpc.js'
 import { buildTransferRemoteInstruction, type SolanaAccountMeta } from '../solana/transferRemote.js'
 import { extractSolanaHyperlaneMessageId } from '../solana/extractHyperlaneMessageId.js'
-import type { BridgeRegistry, BridgeTransferReceipt } from '../types/protocol.js'
+import type { BridgeRegistry, BridgeReceipt } from '../types/protocol.js'
 import type {
   ExecuteSolanaHyperlaneTransferParameters,
   SolanaHyperlaneRouteMetadata,
@@ -84,7 +84,7 @@ async function pollForConfirmation(
 }
 
 function buildReceipt(
-  status: Extract<BridgeTransferReceipt['status'], 'SOURCE_CONFIRMING' | 'DELIVERY_PENDING'>,
+  status: Extract<BridgeReceipt['status'], 'SOURCE_CONFIRMING' | 'DELIVERY_PENDING'>,
   signature: string,
   routeId: string,
   metadata: SolanaHyperlaneRouteMetadata,
@@ -94,7 +94,7 @@ function buildReceipt(
   lastValidBlockHeight: bigint,
   messageId?: string,
   blockhashExpired = false,
-): BridgeTransferReceipt {
+): BridgeReceipt {
   return {
     id: messageId ?? signature,
     protocol: 'hyperlane',

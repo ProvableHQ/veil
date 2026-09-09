@@ -25,7 +25,7 @@ The repo-wide contributor constraints in the root `AGENTS.md` and
 
 ## Execution safety
 
-- `prepareTransfer` remains pure and local.
+- `prepare` remains pure and local.
 - Validate route availability, amount precision, recipient encoding, signer
   capability, protocol fees, and required compliance data before the first
   irreversible step.

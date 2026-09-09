@@ -1,5 +1,5 @@
 import type { TransactionInput } from '@provablehq/veil-core'
-import type { BridgeTransferPlan, BridgeTransferReceipt } from './protocol.js'
+import type { BridgePlan, BridgeReceipt } from './protocol.js'
 import type { XReserveAttestationResult } from './xreserve.js'
 
 /**
@@ -28,8 +28,8 @@ export type AleoWalletClient = {
  * @property privateFee Whether the Aleo wallet should pay its fee privately. Defaults to false.
  */
 export type ExecuteXReservePrivateMintParameters = {
-  plan: BridgeTransferPlan
-  deposit: BridgeTransferReceipt
+  plan: BridgePlan
+  deposit: BridgeReceipt
   attestation: XReserveAttestationResult
   privateFee?: boolean | undefined
 }
@@ -42,7 +42,7 @@ export type ExecuteXReservePrivateMintParameters = {
  */
 export type XReservePrivateMintExecution = {
   transactionId: string
-  receipt: BridgeTransferReceipt
+  receipt: BridgeReceipt
 }
 
 /** Selects which deployed USDCx burn transition the Aleo wallet calls. */
@@ -74,7 +74,7 @@ export type XReserveBurnCall = {
 /**
  * Configures an Aleo USDCx burn destined for Ethereum USDC.
  *
- * @property plan Aleo-to-Ethereum plan returned by `prepareTransfer`.
+ * @property plan Aleo-to-Ethereum plan returned by `prepare`.
  * @property mode Burn transition to submit. Defaults to `private`.
  * @property userRecord Wallet record request or encoded USDCx token record. Required only for `private`.
  * @property merkleProof Encoded `[MerkleProof; 2]` Aleo literal. Required only for `private`.
@@ -82,12 +82,12 @@ export type XReserveBurnCall = {
  * @property onSubmitted Durable checkpoint hook called immediately after the wallet returns a transaction id.
  */
 export type ExecuteXReserveBurnParameters = {
-  plan: BridgeTransferPlan
+  plan: BridgePlan
   mode?: XReserveBurnMode | undefined
   userRecord?: TransactionInput | undefined
   merkleProof?: string | undefined
   privateFee?: boolean | undefined
-  onSubmitted?: ((receipt: BridgeTransferReceipt) => void | Promise<void>) | undefined
+  onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
 }
 
 /**
@@ -98,7 +98,7 @@ export type ExecuteXReserveBurnParameters = {
  */
 export type XReserveBurnExecution = {
   transactionId: string
-  receipt: BridgeTransferReceipt
+  receipt: BridgeReceipt
 }
 
 /**
@@ -156,19 +156,19 @@ export type AleoHyperlaneTransferRemoteCall = {
 /**
  * Configures construction or submission of an Aleo Hyperlane withdrawal.
  *
- * @property plan Aleo-origin Hyperlane plan returned by `prepareTransfer`.
+ * @property plan Aleo-origin Hyperlane plan returned by `prepare`.
  * @property mode Whether the program burns from `self.caller` or the EOA-bound `self.signer`. Defaults to `caller`.
  * @property privateFee Whether the Aleo wallet should pay its fee privately. Defaults to false.
- * @property gasPaymentMicrocredits Live hook payment in microcredits (u64) from `quoteTransfer`. Optional for inspection-only call construction; required by the route-specific execution implementation.
+ * @property gasPaymentMicrocredits Live hook payment in microcredits (u64) from `quote`. Optional for inspection-only call construction; required by the route-specific execution implementation.
  * @property onSubmitted Durable checkpoint hook called immediately after the wallet
  *   returns a transaction id.
  */
 export type ExecuteAleoHyperlaneTransferRemoteParameters = {
-  plan: BridgeTransferPlan
+  plan: BridgePlan
   mode?: 'caller' | 'signer' | undefined
   privateFee?: boolean | undefined
   gasPaymentMicrocredits?: bigint | undefined
-  onSubmitted?: ((receipt: BridgeTransferReceipt) => void | Promise<void>) | undefined
+  onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
 }
 
 /**
@@ -179,5 +179,5 @@ export type ExecuteAleoHyperlaneTransferRemoteParameters = {
  */
 export type AleoHyperlaneTransferRemoteExecution = {
   transactionId: string
-  receipt: BridgeTransferReceipt
+  receipt: BridgeReceipt
 }

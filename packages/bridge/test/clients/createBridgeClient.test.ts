@@ -19,7 +19,7 @@ describe('createBridgeClient', () => {
 
   it('binds transfer planning to the configured registry', () => {
     const client = createBridgeClient()
-    const plan = client.prepareTransfer({
+    const plan = client.prepare({
       routeId: 'xreserve:aleo/usdcx->ethereum/usdc',
       amount: '1',
       recipient: '0x0000000000000000000000000000000000000001',
@@ -37,8 +37,12 @@ describe('createBridgeClient', () => {
   it('exposes protocol-neutral transfer quote and execution actions', () => {
     const client = createBridgeClient()
 
-    expect(client.quoteTransfer).toBeTypeOf('function')
-    expect(client.executeTransfer).toBeTypeOf('function')
+    expect(client.prepare).toBeTypeOf('function')
+    expect(client.quote).toBeTypeOf('function')
+    expect(client.execute).toBeTypeOf('function')
+    expect('prepareTransfer' in client).toBe(false)
+    expect('quoteTransfer' in client).toBe(false)
+    expect('executeTransfer' in client).toBe(false)
     expect('quoteEvmHyperlaneTransfer' in client).toBe(false)
     expect('executeEvmHyperlaneTransfer' in client).toBe(false)
     expect('quoteEvmXReserveTransfer' in client).toBe(false)
@@ -52,50 +56,54 @@ describe('createBridgeClient', () => {
 
   it('requires a chain-specific EVM client for live Hyperlane actions', async () => {
     const client = createBridgeClient()
-    const plan = client.prepareTransfer({
+    const plan = client.prepare({
       routeId: 'hyperlane:ethereum/eth->aleo/eth',
       amount: '1',
       recipient: `aleo1${'a'.repeat(58)}`,
     })
-    await expect(client.quoteTransfer({ plan })).rejects.toThrow(/No client is configured for chain "ethereum"/)
+    await expect(client.quote({ plan })).rejects.toThrow(/No client is configured for chain "ethereum"/)
   })
 
   it('dispatches xReserve quotes to the wallet-capable EVM implementation', async () => {
     const client = createBridgeClient({
       clients: { ethereum: createEvmClient({ transport: evmCustom(async () => '0x1') }) },
     })
-    const plan = client.prepareTransfer({
+    const plan = client.prepare({
       routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
       amount: '1',
       recipient: 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n',
     })
 
-    await expect(client.quoteTransfer({ plan })).rejects.toThrow(/EVM wallet client is required to quote xReserve transfer/)
+    await expect(client.quote({ plan })).rejects.toThrow(/EVM wallet client is required to quote xReserve transfer/)
   })
 
   it('returns the prepared estimate when an Aleo xReserve burn has no live quote', async () => {
     const client = createBridgeClient()
-    const plan = client.prepareTransfer({
+    const plan = client.prepare({
       routeId: 'xreserve:aleo/usdcx->ethereum/usdc',
       amount: '1',
       recipient: '0x0000000000000000000000000000000000000001',
     })
 
-    await expect(client.quoteTransfer({ plan })).resolves.toEqual({
+    await expect(client.quote({ plan })).resolves.toEqual({
       kind: 'aleo-xreserve',
-      ...plan.quote,
+      routeId: plan.route.id,
+      protocol: 'xreserve',
+      amountIn: '1',
+      fees: [],
+      status: 'not-queried',
     })
   })
 
   it('rejects a stale prepared plan before protocol dispatch', async () => {
     const client = createBridgeClient()
-    const plan = client.prepareTransfer({
+    const plan = client.prepare({
       routeId: 'xreserve:aleo/usdcx->ethereum/usdc',
       amount: '1',
       recipient: '0x0000000000000000000000000000000000000001',
     })
 
-    await expect(client.quoteTransfer({
+    await expect(client.quote({
       plan: { ...plan, registryVersion: 'stale-registry' },
     })).rejects.toThrow(/uses registry stale-registry/)
   })
@@ -106,9 +114,9 @@ describe('createBridgeClient', () => {
     ['xreserve:aleo/usdcx->ethereum/usdc', '0x0000000000000000000000000000000000000001', 'aleo', 'Aleo'],
   ])('selects the %s source client for generic execution', async (routeId, recipient, chainId, family) => {
     const client = createBridgeClient()
-    const plan = client.prepareTransfer({ routeId, amount: '1', recipient })
+    const plan = client.prepare({ routeId, amount: '1', recipient })
 
-    await expect(client.executeTransfer({ plan })).rejects.toThrow(
+    await expect(client.execute({ plan })).rejects.toThrow(
       new RegExp(`No client is configured for chain "${chainId}"|${family} wallet client is required`),
     )
   })
@@ -144,23 +152,23 @@ describe('createBridgeClient', () => {
 
   it('requires a Solana wallet capability for live execution', async () => {
     const client = createBridgeClient({ clients: { solana: createSolanaClient({ transport: solanaCustom(async () => undefined) }) } })
-    const plan = client.prepareTransfer({
+    const plan = client.prepare({
       routeId: 'hyperlane:solana/sol->aleo/sol',
       amount: '1',
       recipient: `aleo1${'a'.repeat(58)}`,
     })
-    await expect(client.executeTransfer({ plan })).rejects.toThrow(/Solana wallet client is required/)
+    await expect(client.execute({ plan })).rejects.toThrow(/Solana wallet client is required/)
   })
 
   it('selects clients from the source chain rather than a family default', async () => {
     const client = createBridgeClient({
       clients: { sepolia: createEvmClient({ transport: evmCustom(async () => '0x1') }) },
     })
-    const plan = client.prepareTransfer({
+    const plan = client.prepare({
       routeId: 'hyperlane:ethereum/eth->aleo/eth',
       amount: '1',
       recipient: `aleo1${'a'.repeat(58)}`,
     })
-    await expect(client.quoteTransfer({ plan })).rejects.toThrow(/No client is configured for chain "ethereum"/)
+    await expect(client.quote({ plan })).rejects.toThrow(/No client is configured for chain "ethereum"/)
   })
 })

@@ -12,11 +12,11 @@ import {
 import { describe, expect, it } from 'vitest'
 import { executeEvmHyperlaneTransfer } from '../../src/actions/executeEvmHyperlaneTransfer.js'
 import { quoteEvmHyperlaneTransfer } from '../../src/actions/quoteEvmHyperlaneTransfer.js'
-import { quoteTransfer } from '../../src/actions/quoteTransfer.js'
-import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
+import { quote } from '../../src/actions/quote.js'
+import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'
-import type { BridgeTransferReceipt } from '../../src/types/protocol.js'
+import type { BridgeReceipt } from '../../src/types/protocol.js'
 
 const ACCOUNT = getAddress('0x0000000000000000000000000000000000000001')
 const RECIPIENT = '0x20e3629764d5338f74bee96675801b1fb29d1fc68b177668f9175708bef84311'
@@ -39,7 +39,7 @@ type SentTransaction = {
 }
 
 function plan(routeId: string, amount: string) {
-  return prepareTransfer(DEFAULT_BRIDGE_REGISTRY, {
+  return prepare(DEFAULT_BRIDGE_REGISTRY, {
     routeId,
     amount,
     recipient: `aleo1${'a'.repeat(58)}`,
@@ -111,7 +111,7 @@ function executor(options: {
 
 describe('Ethereum Hyperlane actions', () => {
   it('derives the Hyperlane recipient bytes from the prepared Aleo address', async () => {
-    const transferPlan = prepareTransfer(DEFAULT_BRIDGE_REGISTRY, {
+    const transferPlan = prepare(DEFAULT_BRIDGE_REGISTRY, {
       routeId: 'hyperlane:ethereum/eth->aleo/eth',
       amount: '0.0000000000000001',
       recipient: 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n',
@@ -119,11 +119,11 @@ describe('Ethereum Hyperlane actions', () => {
     })
     const { bridgeExecutor } = executor({ amount: 100n, nativeValue: 69_000_000_000_101n })
 
-    const quote = await quoteTransfer(DEFAULT_BRIDGE_REGISTRY, { ethereum: bridgeExecutor }, { plan: transferPlan })
+    const result = await quote(DEFAULT_BRIDGE_REGISTRY, { ethereum: bridgeExecutor }, { plan: transferPlan })
 
-    expect(quote.kind).toBe('evm-hyperlane')
-    if (quote.kind !== 'evm-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
-    expect(quote.recipientBytes32).toBe('0xb102e0d37e02ec5dbba2460287ac07ef7ea8ee636392ce235402308299901811')
+    expect(result.kind).toBe('evm-hyperlane')
+    if (result.kind !== 'evm-hyperlane') throw new Error(`Unexpected quote kind: ${result.kind}`)
+    expect(result.recipientBytes32).toBe('0xb102e0d37e02ec5dbba2460287ac07ef7ea8ee636392ce235402308299901811')
   })
 
   it('quotes and dispatches native ETH without an approval', async () => {
@@ -241,7 +241,7 @@ describe('Ethereum Hyperlane actions', () => {
   it('checkpoints dispatch before confirmation and resumes without resubmitting', async () => {
     const transferPlan = plan('hyperlane:ethereum/eth->aleo/eth', '0.0000000000000001')
     const pendingExecutor = executor({ amount: 100n, nativeValue: 69_000_000_000_101n, receipt: 'pending' })
-    const checkpoints: BridgeTransferReceipt[] = []
+    const checkpoints: BridgeReceipt[] = []
 
     const pending = await executeEvmHyperlaneTransfer(DEFAULT_BRIDGE_REGISTRY, pendingExecutor.bridgeExecutor, {
       plan: transferPlan,

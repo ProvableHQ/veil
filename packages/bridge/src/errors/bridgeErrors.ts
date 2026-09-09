@@ -3,7 +3,7 @@
  *
  * @example
  * try {
- *   bridge.prepareTransfer(params)
+ *   bridge.prepare(params)
  * } catch (error) {
  *   if (error instanceof BridgeError) console.error(error.message)
  * }

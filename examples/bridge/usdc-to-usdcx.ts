@@ -20,8 +20,8 @@ import {
   evmPrivateKey,
   type AleoWalletClient,
   type AleoMintMode,
-  type BridgeTransferPlan,
-  type BridgeTransferReceipt,
+  type BridgePlan,
+  type BridgeReceipt,
   type XReserveAttestationResult,
 } from '@provablehq/aleo-bridge-sdk'
 
@@ -204,8 +204,8 @@ async function waitForAleoTransaction(
 
 async function executePrivateMint(
   context: PrivateMintContext,
-  plan: BridgeTransferPlan,
-  deposit: BridgeTransferReceipt,
+  plan: BridgePlan,
+  deposit: BridgeReceipt,
   attestation: CompletedXReserveAttestation,
 ): Promise<void> {
   const aleoBridge = createBridgeClient({
@@ -261,7 +261,7 @@ async function resumePrivateMint(
   if (attestedHookData.toLowerCase() !== expectedHookData.toLowerCase()) {
     throw new Error('ALEO_RECIPIENT and USDCX_SECRET_NONCE do not reproduce the attested private-mint hook')
   }
-  const plan = bridge.prepareTransfer({
+  const plan = bridge.prepare({
     routeId: ROUTE_ID,
     amount: amountFromXReservePayload(attestation.payload),
     recipient,
@@ -283,7 +283,7 @@ async function resumePrivateMint(
     return
   }
   const context = await createPrivateMintContext(recipient)
-  const deposit: BridgeTransferReceipt = {
+  const deposit: BridgeReceipt = {
     id: messageHash,
     protocol: 'xreserve',
     status: 'ATTESTATION_PENDING',
@@ -321,7 +321,7 @@ async function main(): Promise<void> {
     clients: { ethereum: createEvmClient({ transport: evmHttp(rpcUrl), account }) },
     fetch,
   })
-  const plan = bridge.prepareTransfer({
+  const plan = bridge.prepare({
     routeId: ROUTE_ID,
     amount,
     recipient,
@@ -329,7 +329,7 @@ async function main(): Promise<void> {
     mintMode,
     ...(privateMintSecretNonce ? { privateMintSecretNonce } : {}),
   })
-  const quote = await bridge.quoteTransfer({ plan })
+  const quote = await bridge.quote({ plan })
   if (quote.kind !== 'evm-xreserve') throw new Error(`Unexpected quote kind: ${quote.kind}`)
 
   console.log('Read-only xReserve preflight')
@@ -368,7 +368,7 @@ async function main(): Promise<void> {
   console.log(quote.approvalRequired
     ? 'Submitting an exact USDC approval, then the xReserve deposit.'
     : 'Existing allowance is sufficient; submitting only the xReserve deposit.')
-  const execution = await bridge.executeTransfer({
+  const execution = await bridge.execute({
     plan,
     confirmationTimeoutMs: millisecondsFromEnvironment(
       'EVM_CONFIRMATION_TIMEOUT_MS',

@@ -1,5 +1,5 @@
 import type { Address, Hash, Hex } from 'viem'
-import type { BridgeTransferPlan, BridgeTransferReceipt } from './protocol.js'
+import type { BridgePlan, BridgeReceipt } from './protocol.js'
 
 /**
  * Supplies a fetch-compatible HTTP response for Circle attestation requests.
@@ -47,10 +47,10 @@ export type EvmXReserveRouteMetadata = {
 /**
  * Selects a prepared xReserve transfer for live balance and allowance checks.
  *
- * @property plan Pure plan returned by `prepareTransfer`.
+ * @property plan Pure plan returned by `prepare`.
  */
 export type QuoteEvmXReserveTransferParameters = {
-  plan: BridgeTransferPlan
+  plan: BridgePlan
 }
 
 /**
@@ -87,7 +87,7 @@ export type EvmXReserveTransferQuote = {
 /**
  * Configures an Ethereum-to-Aleo xReserve deposit submission.
  *
- * @property plan Pure plan returned by `prepareTransfer`.
+ * @property plan Pure plan returned by `prepare`.
  * @property pollingIntervalMs Delay between receipt checks. Defaults to 1,000 milliseconds.
  * @property confirmationTimeoutMs Maximum receipt wait per transaction. Defaults to 120,000 milliseconds.
  * @property resume Previously checkpointed source receipt. When supplied, execution
@@ -96,11 +96,11 @@ export type EvmXReserveTransferQuote = {
  *   or deposit is broadcast and before receipt polling begins.
  */
 export type ExecuteEvmXReserveTransferParameters = {
-  plan: BridgeTransferPlan
+  plan: BridgePlan
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined
-  resume?: BridgeTransferReceipt | undefined
-  onSubmitted?: ((receipt: BridgeTransferReceipt) => void | Promise<void>) | undefined
+  resume?: BridgeReceipt | undefined
+  onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
 }
 
 /**
@@ -110,7 +110,7 @@ export type ExecuteEvmXReserveTransferParameters = {
  * @property approvalTxIds ERC-20 approvals submitted before the deposit.
  */
 export type EvmXReserveTransferExecution = {
-  receipt: BridgeTransferReceipt
+  receipt: BridgeReceipt
   approvalTxIds: Hash[]
 }
 

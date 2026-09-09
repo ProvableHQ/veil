@@ -217,7 +217,7 @@ async function main(): Promise<void> {
       }),
     },
   })
-  const plan = bridge.prepareTransfer({
+  const plan = bridge.prepare({
     routeId: ROUTE_ID,
     amount,
     recipient,
@@ -231,7 +231,7 @@ async function main(): Promise<void> {
   log(`Aleo recipient: ${recipient}`)
 
   // ---- Quote: live reads only, no funds move. ----------------------------
-  const quote = await withRetry('Solana quote', 3, 5_000, () => bridge.quoteTransfer({ plan }))
+  const quote = await withRetry('Solana quote', 3, 5_000, () => bridge.quote({ plan }))
   if (quote.kind !== 'solana-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
   const senderBalance = await withRetry('Solana balance', 3, 5_000, () => solanaClient.getBalance(senderAddress))
 
@@ -263,7 +263,7 @@ async function main(): Promise<void> {
     // state.dispatch may already be populated when either branch below runs.
     let execution
     try {
-      execution = await bridge.executeTransfer({
+      execution = await bridge.execute({
         plan,
         confirmationTimeoutMs: CONFIRMATION_TIMEOUT_MS,
         onSubmitted(receipt) {

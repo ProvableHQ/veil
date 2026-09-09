@@ -5,7 +5,7 @@ import { BridgeError } from '../../src/errors/bridgeErrors.js'
 import type { SolanaRpcClient } from '../../src/solana/rpc.js'
 import type { SolanaWalletClient } from '../../src/connections/solana.js'
 import type { SolanaClient } from '../../src/connections/solana.js'
-import type { BridgeTransferReceipt } from '../../src/types/protocol.js'
+import type { BridgeReceipt } from '../../src/types/protocol.js'
 import {
   WARP_PROGRAM_ADDRESS,
   igpAccountData,
@@ -178,7 +178,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const registry = registryWithRoute()
     const plan = transferPlan(registry)
     let submissions = 0
-    const receipt: BridgeTransferReceipt = {
+    const receipt: BridgeReceipt = {
       id: STUB_SIGNATURE,
       protocol: 'hyperlane',
       status: 'SOURCE_CONFIRMING',
@@ -212,7 +212,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
   it('rejects a resume receipt checkpointed for another route', async () => {
     const registry = registryWithRoute()
     const plan = transferPlan(registry)
-    const receipt: BridgeTransferReceipt = {
+    const receipt: BridgeReceipt = {
       id: STUB_SIGNATURE,
       protocol: 'hyperlane',
       status: 'SOURCE_CONFIRMING',
@@ -235,7 +235,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
   it('checkpoints the signature and lifetime before confirmation polling', async () => {
     const registry = registryWithRoute()
     const plan = transferPlan(registry)
-    const checkpoints: BridgeTransferReceipt[] = []
+    const checkpoints: BridgeReceipt[] = []
     const rpc = executeRpc()
 
     await executeSolanaHyperlaneTransfer(registry, client(stubExecutor(), rpc), {

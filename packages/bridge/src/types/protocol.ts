@@ -161,32 +161,8 @@ export type BridgeFee = {
   estimated: boolean
 }
 
-/** Identifies how much live protocol information a transfer quote contains. */
-export type BridgeQuoteStatus = 'not-queried' | 'estimated' | 'confirmed'
-
 /** Selects the Aleo destination transition used for an xReserve mint. */
 export type AleoMintMode = 'public' | 'record' | 'private'
-
-/**
- * Captures protocol fees and expected delivery for a directional route.
- *
- * @property routeId Directional route the quote prices.
- * @property protocol Protocol responsible for delivery.
- * @property amountIn Decimal source amount.
- * @property amountOut Expected decimal destination amount after known fees.
- * @property fees Network, protocol, and relayer fee components.
- * @property status Whether protocol endpoints have supplied live values.
- * @property expiresAt Expiration time for protocol-bound fee data when present.
- */
-export type BridgeTransferQuote = {
-  routeId: string
-  protocol: BridgeProtocol
-  amountIn: string
-  amountOut?: string | undefined
-  fees: BridgeFee[]
-  status: BridgeQuoteStatus
-  expiresAt?: string | undefined
-}
 
 /**
  * Parameters for preparing a protocol bridge transfer.
@@ -199,7 +175,7 @@ export type BridgeTransferQuote = {
  * @property privateMintSecretNonce Aleo scalar literal committed into a private-mint hook. Defaults to `0scalar`; applies only to `private` mode and must remain available for the destination transaction.
  * @property privateRecipient Deprecated alias for `mintMode: 'private'`. Defaults to false.
  */
-export type PrepareTransferParameters = {
+export type PrepareParameters = {
   routeId: string
   amount: string
   recipient: string
@@ -228,7 +204,7 @@ export type PrepareTransferParameters = {
  * @property fees Known fee categories; amounts remain absent until protocol quoting is implemented.
  * @property steps Ordered operations required to complete the transfer.
  */
-export type BridgeTransferPlan = {
+export type BridgePlan = {
   registryVersion: string
   protocol: BridgeProtocol
   route: ProtocolBridgeRoute
@@ -241,13 +217,12 @@ export type BridgeTransferPlan = {
   mintMode: AleoMintMode
   privateMintSecretNonce?: string | undefined
   privateRecipient: boolean
-  quote: BridgeTransferQuote
   fees: BridgeFee[]
   steps: BridgeExecutionStep[]
 }
 
 /** Identifies the normalized lifecycle state of a protocol transfer. */
-export type BridgeTransferStatus =
+export type BridgeStatus =
   | 'PREPARED'
   | 'SOURCE_APPROVAL_PENDING'
   | 'SOURCE_SUBMISSION_PENDING'
@@ -270,10 +245,10 @@ export type BridgeTransferStatus =
  * @property messageId Hyperlane message identifier when applicable.
  * @property protocolState Protocol-native progress fields retained for diagnostics and resumption.
  */
-export type BridgeTransferReceipt = {
+export type BridgeReceipt = {
   id: string
   protocol: BridgeProtocol
-  status: BridgeTransferStatus
+  status: BridgeStatus
   sourceTxId?: string | undefined
   destinationTxId?: string | undefined
   messageId?: string | undefined

@@ -8,7 +8,7 @@ import type {
   ExecuteAleoHyperlaneTransferRemoteParameters,
   QuoteAleoHyperlaneGasPaymentParameters,
 } from '../../types/aleo.js'
-import type { BridgeRegistry, BridgeTransferReceipt, ProtocolBridgeRoute } from '../../types/protocol.js'
+import type { BridgeRegistry, BridgeReceipt, ProtocolBridgeRoute } from '../../types/protocol.js'
 import {
   evmAddressToAleoHyperlaneRecipient,
   solanaAddressToAleoHyperlaneRecipient,
@@ -290,7 +290,7 @@ export async function runExecuteAleoHyperlaneTransferRemote(
     throw new BridgeError(`Aleo Hyperlane route is not active: ${call.routeId}`)
   }
   if (params.gasPaymentMicrocredits == null) {
-    throw new BridgeError(`Aleo Hyperlane execution requires a live hook gas payment; call quoteTransfer first: ${call.routeId}`)
+    throw new BridgeError(`Aleo Hyperlane execution requires a live hook gas payment; call quote first: ${call.routeId}`)
   }
   const result = await client.executeTransaction({
     program: call.program,
@@ -300,7 +300,7 @@ export async function runExecuteAleoHyperlaneTransferRemote(
   })
   const transactionId = typeof result === 'string' ? result : result.transactionId
   if (!transactionId) throw new BridgeError('Aleo wallet returned an empty Hyperlane transaction id')
-  const receipt: BridgeTransferReceipt = {
+  const receipt: BridgeReceipt = {
       id: transactionId,
       protocol: 'hyperlane',
       status: 'SOURCE_CONFIRMING',

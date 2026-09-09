@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildXReserveBurnCall } from '../../src/builders/buildXReserveBurnCall.js'
 import { executeXReserveBurn } from '../../src/actions/executeXReserveBurn.js'
-import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
+import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import type { AleoWalletClient } from '../../src/types/aleo.js'
 
@@ -15,7 +15,7 @@ const MAINNET_RECORD = {
 const MERKLE_PROOF = '[{path:0field},{path:1field}]'
 
 function plan(environment: 'mainnet' | 'testnet' = 'mainnet') {
-  return prepareTransfer(DEFAULT_BRIDGE_REGISTRY, {
+  return prepare(DEFAULT_BRIDGE_REGISTRY, {
     routeId: environment === 'mainnet'
       ? 'xreserve:aleo/usdcx->ethereum/usdc'
       : 'xreserve:aleo-testnet/usdcx->sepolia/usdc',

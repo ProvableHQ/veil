@@ -10,7 +10,7 @@ import {
   createSolanaClient,
   solanaHttp,
   solanaKeyPair,
-  type BridgeTransferReceipt,
+  type BridgeReceipt,
 } from '../../../src/index.js'
 import { loadLiveState, saveLiveState, waitFor, waitForAleoTransaction, waitForHyperlaneDelivery } from './helpers.js'
 
@@ -52,15 +52,15 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
         'aleo-testnet': createAleoClient({ publicClient: aleo.publicClient, account: aleo.walletClient }),
       },
     })
-    const plan = bridge.prepareTransfer({
+    const plan = bridge.prepare({
       routeId,
       amount: process.env.BRIDGE_LIVE_XRESERVE_AMOUNT ?? '1',
       recipient,
       sender: required('BRIDGE_LIVE_EVM_TESTNET_ADDRESS'),
       mintMode: 'private',
     })
-    const resumed = state.sourceReceipt as BridgeTransferReceipt | undefined
-    const depositExecution = await bridge.executeTransfer({
+    const resumed = state.sourceReceipt as BridgeReceipt | undefined
+    const depositExecution = await bridge.execute({
       plan,
       ...(resumed ? { resume: resumed } : {}),
       onSubmitted(receipt) {
@@ -105,16 +105,16 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
         }),
       },
     })
-    const plan = bridge.prepareTransfer({
+    const plan = bridge.prepare({
       routeId,
       amount: process.env.BRIDGE_LIVE_SOL_AMOUNT ?? '0.002',
       recipient: required('BRIDGE_LIVE_ALEO_MAINNET_RECIPIENT'),
       sender: required('BRIDGE_LIVE_SOLANA_ADDRESS'),
     })
     if (!state.sourceTxId || state.sourceReceipt) {
-      const execution = await bridge.executeTransfer({
+      const execution = await bridge.execute({
         plan,
-        ...(state.sourceReceipt ? { resume: state.sourceReceipt as BridgeTransferReceipt } : {}),
+        ...(state.sourceReceipt ? { resume: state.sourceReceipt as BridgeReceipt } : {}),
         onSubmitted(receipt) {
           state.sourceTxId = receipt.sourceTxId
           state.sourceReceipt = receipt
@@ -145,15 +145,15 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
     const aleo = await localAleo('mainnet', required('BRIDGE_LIVE_ALEO_MAINNET_PRIVATE_KEY'))
     const bridge = createBridgeClient({ clients: { aleo: createAleoClient({ publicClient: aleo.publicClient, account: aleo.walletClient }) } })
     if (!state.sourceTxId) {
-      const plan = bridge.prepareTransfer({
+      const plan = bridge.prepare({
         routeId,
         amount: required('BRIDGE_LIVE_ALEO_HYPERLANE_AMOUNT'),
         recipient: required('BRIDGE_LIVE_HYPERLANE_DESTINATION_RECIPIENT'),
         sender: String(aleo.account.address),
       })
-      const quote = await bridge.quoteTransfer({ plan })
+      const quote = await bridge.quote({ plan })
       if (quote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
-      const execution = await bridge.executeTransfer({
+      const execution = await bridge.execute({
         plan,
         mode: 'signer',
         gasPaymentMicrocredits: quote.paymentMicrocredits,

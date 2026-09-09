@@ -3,7 +3,7 @@ import type { Client } from '@provablehq/veil-core'
 import { buildAleoHyperlaneTransferRemoteCall } from '../../src/builders/buildAleoHyperlaneTransferRemoteCall.js'
 import { executeAleoHyperlaneTransferRemote } from '../../src/actions/executeAleoHyperlaneTransferRemote.js'
 import { quoteAleoHyperlaneGasPayment } from '../../src/actions/quoteAleoHyperlaneGasPayment.js'
-import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
+import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import type { AleoWalletClient } from '../../src/types/aleo.js'
 
@@ -22,7 +22,7 @@ function mappingClient(value: string | null): Client {
 }
 
 function plan(routeId: string = ROUTES[0][0], recipient: string = ROUTES[0][2]) {
-  return prepareTransfer(DEFAULT_BRIDGE_REGISTRY, { routeId, amount: '1', recipient })
+  return prepare(DEFAULT_BRIDGE_REGISTRY, { routeId, amount: '1', recipient })
 }
 
 describe('Aleo Hyperlane transfer_remote', () => {
@@ -154,7 +154,7 @@ describe('Aleo Hyperlane transfer_remote', () => {
         ? { ...route, metadata: { ...route.metadata, aleoPlaceholderConfiguration: false } }
         : route),
     }
-    const replacementPlan = prepareTransfer(registry, {
+    const replacementPlan = prepare(registry, {
       routeId: ROUTES[4][0],
       amount: '1',
       recipient: ROUTES[4][2],

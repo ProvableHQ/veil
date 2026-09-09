@@ -65,7 +65,7 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
           required: ['routeId', 'amount', 'recipient'],
         },
       },
-      handler: async (params) => client.prepareTransfer(params as Parameters<BridgeClient['prepareTransfer']>[0]),
+      handler: async (params) => client.prepare(params as Parameters<BridgeClient['prepare']>[0]),
     },
   ]
 }

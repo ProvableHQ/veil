@@ -7,7 +7,7 @@ import {
   type BridgeChainClients,
 } from '../connections/resolve.js'
 import type { BridgeRegistry } from '../types/protocol.js'
-import type { QuoteTransferParameters, TransferQuote } from '../types/transfer.js'
+import type { QuoteParameters, BridgeQuote } from '../types/actions.js'
 import { aleoAddressToBytes32 } from '../utils/xreserve.js'
 import { quoteAleoHyperlaneGasPayment } from './quoteAleoHyperlaneGasPayment.js'
 import { quoteEvmHyperlaneTransfer } from './quoteEvmHyperlaneTransfer.js'
@@ -19,20 +19,20 @@ import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
  * Quotes a prepared transfer through its configured protocol and source chain.
  *
  * Reads live chain state where the route requires it. Aleo xReserve burns have
- * no separate live quote and return the estimate embedded in the prepared plan.
+ * no separate live quote and return the plan's known amount and fee fields.
  *
  * @param registry Reviewed deployment snapshot.
  * @param clients Materialized chain clients keyed by registry chain id.
  * @param params Prepared transfer to quote.
  * @returns A discriminated quote containing route-specific atomic values.
  * @throws BridgeError When the route shape is unsupported or its source client is unavailable.
- * @example const quote = await quoteTransfer(registry, clients, { plan })
+ * @example const quote = await quote(registry, clients, { plan })
  */
-export async function quoteTransfer(
+export async function quote(
   registry: BridgeRegistry,
   clients: BridgeChainClients,
-  params: QuoteTransferParameters,
-): Promise<TransferQuote> {
+  params: QuoteParameters,
+): Promise<BridgeQuote> {
   const chain = resolveTransferRoute(registry, params.plan).sourceChain
   const chainId = chain.id
 
@@ -69,7 +69,15 @@ export async function quoteTransfer(
     return { kind: 'evm-xreserve', ...quote }
   }
   if (params.plan.protocol === 'xreserve' && chain.family === 'aleo') {
-    return { kind: 'aleo-xreserve', ...params.plan.quote }
+    return {
+      kind: 'aleo-xreserve',
+      routeId: params.plan.route.id,
+      protocol: 'xreserve',
+      amountIn: params.plan.amountIn,
+      ...(params.plan.amountOut == null ? {} : { amountOut: params.plan.amountOut }),
+      fees: [...params.plan.fees],
+      status: 'not-queried',
+    }
   }
 
   throw new BridgeError(`Unsupported ${params.plan.protocol} source chain family: ${chain.family}`)

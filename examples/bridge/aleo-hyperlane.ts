@@ -153,7 +153,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     clients: { aleo: createAleoClient({ publicClient, account: walletClient }) },
   })
 
-  const plan = bridge.prepareTransfer({ routeId: config.routeId, amount, recipient })
+  const plan = bridge.prepare({ routeId: config.routeId, amount, recipient })
   const previewCall = buildAleoHyperlaneTransferRemoteCall(bridge.registry, { plan, mode: 'signer' })
   if (previewCall.placeholderFields.length !== 1 || previewCall.placeholderFields[0] !== 'aleoAllowanceAmount0') {
     throw new Error(`${asset} return route has unresolved fields: ${previewCall.placeholderFields.join(', ') || 'unknown'}`)
@@ -162,7 +162,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   const [assetLiteral, publicCredits, gasQuote] = await Promise.all([
     publicClient.readContract({ programId: config.balanceProgram, mapping: 'balances', key: account.address }),
     publicClient.getBalance({ address: account.address }),
-    bridge.quoteTransfer({ plan }),
+    bridge.quote({ plan }),
   ])
   if (gasQuote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${gasQuote.kind}`)
   const assetBalance = parseUnsignedLiteral(assetLiteral, 'u128')
@@ -188,7 +188,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   }
   if (assetBalance < previewCall.amountAtomic) throw new Error(`Insufficient public Aleo ${asset} balance`)
 
-  const latestQuote = await bridge.quoteTransfer({ plan })
+  const latestQuote = await bridge.quote({ plan })
   if (latestQuote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${latestQuote.kind}`)
   if (publicCredits < latestQuote.paymentMicrocredits) {
     throw new Error(`Insufficient public credits for the Hyperlane hook payment of ${latestQuote.paymentMicrocredits} microcredits`)
@@ -198,7 +198,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   }
   if (consumerId && apiKey) await nativeWalletClient.authenticateProvableApi()
 
-  const result = await bridge.executeTransfer({
+  const result = await bridge.execute({
     plan,
     mode: 'signer',
     privateFee: booleanFromEnvironment('ALEO_PRIVATE_FEE', false),

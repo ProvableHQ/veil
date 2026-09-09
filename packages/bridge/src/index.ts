@@ -58,9 +58,9 @@ export {
   getProtocolRoutes as getRoutes,
   type GetProtocolRoutesParameters as GetRoutesParameters,
 } from './actions/getProtocolRoutes.js'
-export { prepareTransfer } from './actions/prepareTransfer.js'
-export { executeTransfer } from './actions/executeTransfer.js'
-export { quoteTransfer } from './actions/quoteTransfer.js'
+export { prepare } from './actions/prepare.js'
+export { execute } from './actions/execute.js'
+export { quote } from './actions/quote.js'
 export { getXReserveAttestation } from './actions/getXReserveAttestation.js'
 export { executeXReservePrivateMint } from './actions/executeXReservePrivateMint.js'
 export { buildXReserveBurnCall } from './builders/buildXReserveBurnCall.js'
@@ -79,27 +79,25 @@ export type {
   BridgeExecutionStepKind,
   BridgeFee,
   BridgeProtocol,
-  BridgeQuoteStatus,
   BridgeRegistry,
   BridgeRouteAvailability,
   BridgeStepExecutor,
-  BridgeTransferPlan,
-  BridgeTransferQuote,
-  BridgeTransferReceipt,
-  BridgeTransferStatus,
-  PrepareTransferParameters,
+  BridgePlan,
+  BridgeReceipt,
+  BridgeStatus,
+  PrepareParameters,
   ProtocolBridgeAsset,
   ProtocolBridgeChain,
   ProtocolBridgeRoute,
 } from './types/protocol.js'
 export type {
-  ExecuteTransferParameters,
-  QuoteTransferParameters,
-  TransferExecution,
-  TransferExecutionKind,
-  TransferQuote,
-  TransferQuoteKind,
-} from './types/transfer.js'
+  ExecuteParameters,
+  QuoteParameters,
+  BridgeExecution,
+  BridgeExecutionKind,
+  BridgeQuote,
+  BridgeQuoteKind,
+} from './types/actions.js'
 export type {
   EvmHyperlaneRouteMetadata,
   EvmHyperlaneRouterType,

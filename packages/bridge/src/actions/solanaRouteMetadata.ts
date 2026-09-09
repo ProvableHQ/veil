@@ -1,5 +1,5 @@
 import { BridgeError } from '../errors/bridgeErrors.js'
-import type { BridgeRegistry, BridgeTransferPlan } from '../types/protocol.js'
+import type { BridgeRegistry, BridgePlan } from '../types/protocol.js'
 import type { SolanaHyperlaneRouteMetadata } from '../types/solana.js'
 
 // Base58, excluding the visually ambiguous 0/O/I/l — matches how Solana
@@ -35,7 +35,7 @@ function requirePubkey(value: unknown, field: string, routeId: string): string {
  */
 export function solanaRouteMetadata(
   registry: BridgeRegistry,
-  plan: BridgeTransferPlan,
+  plan: BridgePlan,
 ): SolanaHyperlaneRouteMetadata {
   if (plan.protocol !== 'hyperlane' || plan.route.protocol !== 'hyperlane') {
     throw new BridgeError('Solana Hyperlane actions require a Hyperlane transfer plan')

@@ -13,14 +13,14 @@ import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'
 
 const bridge = createBridgeClient({ environment: 'mainnet' })
 const routes = bridge.getRoutes({ sourceChainId: 'ethereum', destinationChainId: 'aleo' })
-const plan = bridge.prepareTransfer({
+const plan = bridge.prepare({
   routeId: routes[0]!.id,
   amount: '1',
   recipient: aleoAddress,
 })
 ```
 
-`prepareTransfer` is pure and local. It validates the reviewed route, amount,
+`prepare` is pure and local. It validates the reviewed route, amount,
 recipient, required signers, and first irreversible step without reading a
 network or prompting a wallet.
 
@@ -126,18 +126,18 @@ All actions resolve the exact source or destination client implied by the
 validated route. They do not fall back to another chain of the same family.
 
 ```ts
-const plan = bridge.prepareTransfer({
+const plan = bridge.prepare({
   routeId: 'hyperlane:ethereum/wbtc->aleo/wbtc',
   amount: '0.001',
   recipient: aleoAddress,
   sender: ethereumAddress,
 })
 
-const quote = await bridge.quoteTransfer({ plan })
-const execution = await bridge.executeTransfer({ plan })
+const quote = await bridge.quote({ plan })
+const execution = await bridge.execute({ plan })
 ```
 
-`quoteTransfer` derives protocol wire values, including the Aleo recipient's
+`quote` derives protocol wire values, including the Aleo recipient's
 32-byte Hyperlane encoding, from the validated plan. Its `kind` field narrows
 route-specific quote fields when an application needs them.
 
@@ -152,7 +152,7 @@ accept the persisted receipt as `resume`; approval or deposit confirmation then
 continues without repeating the submitted transaction:
 
 ```ts
-const execution = await bridge.executeTransfer({
+const execution = await bridge.execute({
   plan,
   ...(checkpoint ? { resume: checkpoint } : {}),
   onSubmitted: saveCheckpoint,
@@ -162,15 +162,15 @@ const execution = await bridge.executeTransfer({
 For Solana, the active inbound route is native SOL:
 
 ```ts
-const plan = bridge.prepareTransfer({
+const plan = bridge.prepare({
   routeId: 'hyperlane:solana/sol->aleo/sol',
   amount: '0.01',
   recipient: aleoAddress,
   sender: solanaAddress,
 })
 
-const quote = await bridge.quoteTransfer({ plan })
-const execution = await bridge.executeTransfer({
+const quote = await bridge.quote({ plan })
+const execution = await bridge.execute({
   plan,
   ...(checkpoint ? { resume: checkpoint } : {}),
   onSubmitted: saveCheckpoint,
@@ -208,9 +208,12 @@ This package is pre-release, so the obsolete fields have no runtime aliases.
 | `xReserveHttpTransport` | top-level `fetch` |
 | `solanaExecutorFromKeyPair` | `solanaKeyPair(secretKeyBytes)` |
 | `solanaExecutorFromWalletAccount` | `solanaWallet({ wallet, account, chain })` |
-| chain-specific `quote*Transfer` methods | `quoteTransfer({ plan })` |
-| chain-specific source `execute*Transfer` methods | `executeTransfer({ plan })` |
-| `executeXReserveBurn` | `executeTransfer({ plan, mode, userRecord, merkleProof })` |
+| `prepareTransfer` | `prepare` |
+| `quoteTransfer` | `quote` |
+| `executeTransfer` | `execute` |
+| chain-specific `quote*Transfer` methods | `quote({ plan })` |
+| chain-specific source `execute*Transfer` methods | `execute({ plan })` |
+| `executeXReserveBurn` | `execute({ plan, mode, userRecord, merkleProof })` |
 
 ## Optional dependencies
 

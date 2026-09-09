@@ -20,7 +20,7 @@ import type {
   ExecuteEvmHyperlaneTransferParameters,
   QuoteEvmHyperlaneTransferParameters,
 } from '../../types/evm.js'
-import type { BridgeRegistry, BridgeTransferPlan, BridgeTransferReceipt } from '../../types/protocol.js'
+import type { BridgeRegistry, BridgePlan, BridgeReceipt } from '../../types/protocol.js'
 import { parseDecimalAmount } from '../../utils/units.js'
 
 const WARP_ROUTE_ABI = parseAbi([
@@ -42,7 +42,7 @@ function isHexOfBytes(value: string, bytes: number): value is Hex {
   return new RegExp(`^0x[0-9a-fA-F]{${bytes * 2}}$`).test(value)
 }
 
-function routeMetadata(registry: BridgeRegistry, plan: BridgeTransferPlan): EvmHyperlaneRouteMetadata {
+function routeMetadata(registry: BridgeRegistry, plan: BridgePlan): EvmHyperlaneRouteMetadata {
   if (plan.protocol !== 'hyperlane' || plan.route.protocol !== 'hyperlane') {
     throw new BridgeError('Ethereum Hyperlane actions require a Hyperlane transfer plan')
   }
@@ -140,7 +140,7 @@ async function assertChain(client: EvmClient, expectedChainId: number): Promise<
   }
 }
 
-async function resolveAccount(client: EvmClient & { walletClient: EvmWalletClient }, plan: BridgeTransferPlan): Promise<Address> {
+async function resolveAccount(client: EvmClient & { walletClient: EvmWalletClient }, plan: BridgePlan): Promise<Address> {
   const account = await client.walletClient.getAddress()
   if (!isAddress(account)) throw new BridgeError('EVM wallet client account is invalid')
   const normalized = getAddress(account)
@@ -288,14 +288,14 @@ export async function runQuoteEvmHyperlaneTransfer(
 }
 
 function executionReceipt(
-  plan: BridgeTransferPlan,
-  status: BridgeTransferReceipt['status'],
+  plan: BridgePlan,
+  status: BridgeReceipt['status'],
   id: string,
   quote: EvmHyperlaneTransferQuote,
   approvalTxIds: Hash[],
   sourceTxId?: Hash,
   messageId?: Hash,
-): BridgeTransferReceipt {
+): BridgeReceipt {
   return {
     id,
     protocol: 'hyperlane',
@@ -313,7 +313,7 @@ function executionReceipt(
   }
 }
 
-function checkpointApprovalIds(receipt: BridgeTransferReceipt): Hash[] {
+function checkpointApprovalIds(receipt: BridgeReceipt): Hash[] {
   const ids = receipt.protocolState.approvalTxIds
   if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string' || !isHash(id))) {
     throw new BridgeError('Hyperlane checkpoint contains invalid approval transaction ids')
@@ -323,10 +323,10 @@ function checkpointApprovalIds(receipt: BridgeTransferReceipt): Hash[] {
 
 function validateCheckpoint(
   registry: BridgeRegistry,
-  plan: BridgeTransferPlan,
+  plan: BridgePlan,
   metadata: EvmHyperlaneRouteMetadata,
   recipientBytes32: Hex,
-  receipt: BridgeTransferReceipt,
+  receipt: BridgeReceipt,
 ): void {
   const state = receipt.protocolState
   const sourceAsset = registry.assets.find((asset) => asset.id === plan.sourceAsset.id)

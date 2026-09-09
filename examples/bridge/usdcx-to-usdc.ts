@@ -125,7 +125,7 @@ async function main(): Promise<void> {
   const recipient = requiredEnvironmentVariable('ETHEREUM_RECIPIENT')
   const mode = burnModeFromEnvironment()
   const bridge = createBridgeClient({ environment: 'mainnet' })
-  const plan = bridge.prepareTransfer({ routeId: ROUTE_ID, amount, recipient })
+  const plan = bridge.prepare({ routeId: ROUTE_ID, amount, recipient })
   const amountAtomic = atomicAmount(plan.amountIn, plan.sourceAsset.decimals)
   if (amountAtomic <= MINIMUM_BURN_AMOUNT_ATOMIC) {
     throw new Error('USDCx burn amount must be greater than 2 USDCx')
@@ -220,7 +220,7 @@ async function main(): Promise<void> {
     environment: 'mainnet',
     clients: { aleo: createAleoClient({ publicClient, account: walletClient }) },
   })
-  const result = await executingBridge.executeTransfer({
+  const result = await executingBridge.execute({
     plan,
     mode: burnMode,
     ...(userRecord ? { userRecord } : {}),

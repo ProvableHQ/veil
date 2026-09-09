@@ -107,13 +107,13 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
     environment: 'mainnet',
     clients: { ethereum: createEvmClient({ publicClient, walletClient }) },
   })
-  const plan = bridge.prepareTransfer({
+  const plan = bridge.prepare({
     routeId: config.routeId,
     amount,
     recipient,
     sender: account.address,
   })
-  const quote = await bridge.quoteTransfer({ plan })
+  const quote = await bridge.quote({ plan })
   if (quote.kind !== 'evm-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
   const nativeBalance = await publicClient.getBalance({ address: account.address })
 
@@ -180,7 +180,7 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
   console.log(asset === 'WBTC' && approvalRequired
     ? 'Submitting an exact WBTC approval, waiting for confirmation, then dispatching through Hyperlane.'
     : `Submitting the ${asset} transfer directly through Hyperlane; no approval transaction is needed.`)
-  const execution = await bridge.executeTransfer({
+  const execution = await bridge.execute({
     plan,
     confirmationTimeoutMs: millisecondsFromEnvironment(
       'EVM_CONFIRMATION_TIMEOUT_MS',

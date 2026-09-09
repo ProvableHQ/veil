@@ -1,7 +1,7 @@
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import type {
   BridgeRegistry,
-  BridgeTransferPlan,
+  BridgePlan,
   ProtocolBridgeAsset,
   ProtocolBridgeChain,
   ProtocolBridgeRoute,
@@ -30,7 +30,7 @@ export type ResolvedTransferRoute = {
  */
 export function resolveTransferRoute(
   registry: BridgeRegistry,
-  plan: BridgeTransferPlan,
+  plan: BridgePlan,
 ): ResolvedTransferRoute {
   if (plan.registryVersion !== registry.version) {
     throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)

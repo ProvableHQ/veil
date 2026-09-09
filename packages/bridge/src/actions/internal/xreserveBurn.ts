@@ -6,7 +6,7 @@ import type {
   XReserveBurnCall,
   XReserveBurnExecution,
 } from '../../types/aleo.js'
-import type { BridgeRegistry, BridgeTransferReceipt } from '../../types/protocol.js'
+import type { BridgeRegistry, BridgeReceipt } from '../../types/protocol.js'
 import { parseDecimalAmount } from '../../utils/units.js'
 import { evmAddressToXReserveBytes32, xReserveHexToAleoBytes } from '../../utils/xreserve.js'
 
@@ -133,7 +133,7 @@ export async function runExecuteXReserveBurn(
   })
   const transactionId = typeof result === 'string' ? result : result.transactionId
   if (!transactionId) throw new BridgeError('Aleo wallet returned an empty burn transaction id')
-  const receipt: BridgeTransferReceipt = {
+  const receipt: BridgeReceipt = {
     id: transactionId,
     protocol: 'xreserve',
     status: 'SOURCE_CONFIRMING',

@@ -91,13 +91,13 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
       }),
     },
   })
-  const plan = bridge.prepareTransfer({
+  const plan = bridge.prepare({
     routeId: ROUTE_ID,
     amount,
     recipient,
     sender: senderAddress,
   })
-  const quote = await bridge.quoteTransfer({ plan })
+  const quote = await bridge.quote({ plan })
   if (quote.kind !== 'solana-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
   const balance = await createSolanaRpcClient({ url: rpcUrl }).getBalance(senderAddress)
   const decimals = plan.sourceAsset.decimals
@@ -124,7 +124,7 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
   if (!signer) throw new Error('SOLANA_PRIVATE_KEY is required for execution')
 
   console.log('\nExecution enabled. Submitting the transfer through the local keypair account.')
-  const execution = await bridge.executeTransfer({
+  const execution = await bridge.execute({
     plan,
     confirmationTimeoutMs: millisecondsFromEnvironment('SOLANA_CONFIRMATION_TIMEOUT_MS', DEFAULT_CONFIRMATION_TIMEOUT_MS),
   })
