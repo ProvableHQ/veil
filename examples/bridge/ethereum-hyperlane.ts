@@ -10,7 +10,6 @@ import {
 import { privateKeyToAccount } from 'viem/accounts'
 import { mainnet } from 'viem/chains'
 import {
-  aleoAddressToBytes32,
   createBridgeClient,
   createEvmClient,
 } from '@provablehq/aleo-bridge-sdk'
@@ -104,7 +103,6 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
   const recipient = requiredEnvironmentVariable('ALEO_RECIPIENT')
   const amount = requiredEnvironmentVariable(config.amountEnvironmentVariable)
   const { account, walletClient, publicClient } = createLocalSigner(rpcUrl, privateKeyFromEnvironment())
-  const recipientBytes32 = aleoAddressToBytes32(recipient)
   const bridge = createBridgeClient({
     environment: 'mainnet',
     clients: { ethereum: createEvmClient({ publicClient, walletClient }) },
@@ -115,7 +113,8 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
     recipient,
     sender: account.address,
   })
-  const quote = await bridge.quoteEvmHyperlaneTransfer({ plan, recipientBytes32 })
+  const quote = await bridge.quoteTransfer({ plan })
+  if (quote.kind !== 'evm-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
   const nativeBalance = await publicClient.getBalance({ address: account.address })
 
   let assetBalance = nativeBalance
@@ -157,7 +156,7 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
     tokenContract: quote.tokenAddress ?? 'native ETH',
     warpRouteContract: quote.routerAddress,
     destinationDomain: quote.destinationDomain,
-    recipientBytes32,
+    recipientBytes32: quote.recipientBytes32,
   })
 
   if (process.env[config.executionEnvironmentVariable] !== EXECUTION_ACKNOWLEDGEMENT) {
@@ -181,14 +180,14 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
   console.log(asset === 'WBTC' && approvalRequired
     ? 'Submitting an exact WBTC approval, waiting for confirmation, then dispatching through Hyperlane.'
     : `Submitting the ${asset} transfer directly through Hyperlane; no approval transaction is needed.`)
-  const execution = await bridge.executeEvmHyperlaneTransfer({
+  const execution = await bridge.executeTransfer({
     plan,
-    recipientBytes32,
     confirmationTimeoutMs: millisecondsFromEnvironment(
       'EVM_CONFIRMATION_TIMEOUT_MS',
       DEFAULT_EVM_CONFIRMATION_TIMEOUT_MS,
     ),
   })
+  if (execution.kind !== 'evm-hyperlane') throw new Error(`Unexpected execution kind: ${execution.kind}`)
 
   console.log('Approval transaction(s):', execution.approvalTxIds)
   console.log('Transfer status:', execution.receipt.status)

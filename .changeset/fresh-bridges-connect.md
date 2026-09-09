@@ -11,3 +11,5 @@ submission checkpoint hooks, and xReserve and Solana confirmation resume from ch
 without resubmitting funds. Each bridge decorator action now has its own module,
 with protocol mechanics isolated behind internal helpers. Pure call builders are
 standalone utilities rather than bridge client methods.
+Protocol-neutral `quoteTransfer` and `executeTransfer` actions now dispatch
+from the prepared route, replacing chain- and protocol-specific client methods.

@@ -133,9 +133,13 @@ const plan = bridge.prepareTransfer({
   sender: ethereumAddress,
 })
 
-const quote = await bridge.quoteEvmHyperlaneTransfer({ plan, recipientBytes32 })
-const execution = await bridge.executeEvmHyperlaneTransfer({ plan, recipientBytes32 })
+const quote = await bridge.quoteTransfer({ plan })
+const execution = await bridge.executeTransfer({ plan })
 ```
+
+`quoteTransfer` derives protocol wire values, including the Aleo recipient's
+32-byte Hyperlane encoding, from the validated plan. Its `kind` field narrows
+route-specific quote fields when an application needs them.
 
 EVM collateral routes approve only when needed. USDT resets a non-zero
 allowance before setting the required value. Timeouts preserve transaction IDs
@@ -148,7 +152,7 @@ accept the persisted receipt as `resume`; approval or deposit confirmation then
 continues without repeating the submitted transaction:
 
 ```ts
-const execution = await bridge.executeEvmXReserveTransfer({
+const execution = await bridge.executeTransfer({
   plan,
   ...(checkpoint ? { resume: checkpoint } : {}),
   onSubmitted: saveCheckpoint,
@@ -165,8 +169,8 @@ const plan = bridge.prepareTransfer({
   sender: solanaAddress,
 })
 
-const quote = await bridge.quoteSolanaHyperlaneTransfer({ plan })
-const execution = await bridge.executeSolanaHyperlaneTransfer({
+const quote = await bridge.quoteTransfer({ plan })
+const execution = await bridge.executeTransfer({
   plan,
   ...(checkpoint ? { resume: checkpoint } : {}),
   onSubmitted: saveCheckpoint,
@@ -204,6 +208,9 @@ This package is pre-release, so the obsolete fields have no runtime aliases.
 | `xReserveHttpTransport` | top-level `fetch` |
 | `solanaExecutorFromKeyPair` | `solanaKeyPair(secretKeyBytes)` |
 | `solanaExecutorFromWalletAccount` | `solanaWallet({ wallet, account, chain })` |
+| chain-specific `quote*Transfer` methods | `quoteTransfer({ plan })` |
+| chain-specific source `execute*Transfer` methods | `executeTransfer({ plan })` |
+| `executeXReserveBurn` | `executeTransfer({ plan, mode, userRecord, merkleProof })` |
 
 ## Optional dependencies
 

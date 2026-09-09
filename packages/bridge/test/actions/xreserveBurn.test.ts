@@ -101,10 +101,12 @@ describe('xReserve USDCx burns', () => {
   it('submits the burn and returns service-forwarded resumable state', async () => {
     const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
       .mockResolvedValue({ transactionId: 'at1burn' })
+    const checkpoints: unknown[] = []
     const result = await executeXReserveBurn(DEFAULT_BRIDGE_REGISTRY, { executeTransaction }, {
       plan: plan(),
       userRecord: MAINNET_RECORD,
       merkleProof: MERKLE_PROOF,
+      onSubmitted(receipt) { checkpoints.push(receipt) },
     })
     expect(executeTransaction).toHaveBeenCalledWith(expect.objectContaining({
       program: 'shielded_usdcx_wrapper.aleo',
@@ -115,5 +117,6 @@ describe('xReserve USDCx burns', () => {
       sourceTxId: 'at1burn',
       protocolState: { forwardingService: 'aleo-burn-attestation', nativeDomain: 0 },
     })
+    expect(checkpoints).toEqual([result.receipt])
   })
 })

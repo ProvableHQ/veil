@@ -290,7 +290,7 @@ export async function runExecuteAleoHyperlaneTransferRemote(
     throw new BridgeError(`Aleo Hyperlane route is not active: ${call.routeId}`)
   }
   if (params.gasPaymentMicrocredits == null) {
-    throw new BridgeError(`Aleo Hyperlane execution requires a live hook gas payment; call quoteAleoHyperlaneGasPayment first: ${call.routeId}`)
+    throw new BridgeError(`Aleo Hyperlane execution requires a live hook gas payment; call quoteTransfer first: ${call.routeId}`)
   }
   const result = await client.executeTransaction({
     program: call.program,

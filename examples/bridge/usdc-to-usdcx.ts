@@ -329,7 +329,8 @@ async function main(): Promise<void> {
     mintMode,
     ...(privateMintSecretNonce ? { privateMintSecretNonce } : {}),
   })
-  const quote = await bridge.quoteEvmXReserveTransfer({ plan })
+  const quote = await bridge.quoteTransfer({ plan })
+  if (quote.kind !== 'evm-xreserve') throw new Error(`Unexpected quote kind: ${quote.kind}`)
 
   console.log('Read-only xReserve preflight')
   console.table({
@@ -367,7 +368,7 @@ async function main(): Promise<void> {
   console.log(quote.approvalRequired
     ? 'Submitting an exact USDC approval, then the xReserve deposit.'
     : 'Existing allowance is sufficient; submitting only the xReserve deposit.')
-  const execution = await bridge.executeEvmXReserveTransfer({
+  const execution = await bridge.executeTransfer({
     plan,
     confirmationTimeoutMs: millisecondsFromEnvironment(
       'EVM_CONFIRMATION_TIMEOUT_MS',
@@ -375,6 +376,7 @@ async function main(): Promise<void> {
       1_000,
     ),
   })
+  if (execution.kind !== 'evm-xreserve') throw new Error(`Unexpected execution kind: ${execution.kind}`)
   console.log('Approval transaction(s):', execution.approvalTxIds)
   console.log('Transfer status:', execution.receipt.status)
 

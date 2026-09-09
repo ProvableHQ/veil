@@ -60,7 +60,7 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
       mintMode: 'private',
     })
     const resumed = state.sourceReceipt as BridgeTransferReceipt | undefined
-    const deposit = (await bridge.executeEvmXReserveTransfer({
+    const depositExecution = await bridge.executeTransfer({
       plan,
       ...(resumed ? { resume: resumed } : {}),
       onSubmitted(receipt) {
@@ -68,7 +68,9 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
         state.sourceReceipt = receipt
         saveLiveState(path, state)
       },
-    })).receipt
+    })
+    if (depositExecution.kind !== 'evm-xreserve') throw new Error(`Unexpected execution kind: ${depositExecution.kind}`)
+    const deposit = depositExecution.receipt
     state.sourceTxId = deposit.sourceTxId ?? state.sourceTxId
     state.sourceReceipt = deposit
     if (deposit.status === 'ATTESTATION_PENDING') state.messageId = deposit.id
@@ -110,7 +112,7 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
       sender: required('BRIDGE_LIVE_SOLANA_ADDRESS'),
     })
     if (!state.sourceTxId || state.sourceReceipt) {
-      const execution = await bridge.executeSolanaHyperlaneTransfer({
+      const execution = await bridge.executeTransfer({
         plan,
         ...(state.sourceReceipt ? { resume: state.sourceReceipt as BridgeTransferReceipt } : {}),
         onSubmitted(receipt) {
@@ -119,6 +121,7 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
           saveLiveState(path, state)
         },
       })
+      if (execution.kind !== 'solana-hyperlane') throw new Error(`Unexpected execution kind: ${execution.kind}`)
       state.sourceTxId = execution.receipt.sourceTxId
       state.messageId = execution.receipt.messageId
       state.sourceReceipt = execution.receipt
@@ -148,8 +151,9 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
         recipient: required('BRIDGE_LIVE_HYPERLANE_DESTINATION_RECIPIENT'),
         sender: String(aleo.account.address),
       })
-      const quote = await bridge.quoteAleoHyperlaneGasPayment({ routeId })
-      const execution = await bridge.executeAleoHyperlaneTransferRemote({
+      const quote = await bridge.quoteTransfer({ plan })
+      if (quote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
+      const execution = await bridge.executeTransfer({
         plan,
         mode: 'signer',
         gasPaymentMicrocredits: quote.paymentMicrocredits,
@@ -159,6 +163,7 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
           saveLiveState(path, state)
         },
       })
+      if (execution.kind !== 'aleo-hyperlane') throw new Error(`Unexpected execution kind: ${execution.kind}`)
       state.sourceTxId = execution.transactionId
       saveLiveState(path, state)
     }

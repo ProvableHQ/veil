@@ -162,8 +162,9 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   const [assetLiteral, publicCredits, gasQuote] = await Promise.all([
     publicClient.readContract({ programId: config.balanceProgram, mapping: 'balances', key: account.address }),
     publicClient.getBalance({ address: account.address }),
-    bridge.quoteAleoHyperlaneGasPayment({ routeId: config.routeId }),
+    bridge.quoteTransfer({ plan }),
   ])
+  if (gasQuote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${gasQuote.kind}`)
   const assetBalance = parseUnsignedLiteral(assetLiteral, 'u128')
 
   console.log(`Read-only Aleo ${asset} to ${config.destination} ${asset} preflight`)
@@ -187,7 +188,8 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   }
   if (assetBalance < previewCall.amountAtomic) throw new Error(`Insufficient public Aleo ${asset} balance`)
 
-  const latestQuote = await bridge.quoteAleoHyperlaneGasPayment({ routeId: config.routeId })
+  const latestQuote = await bridge.quoteTransfer({ plan })
+  if (latestQuote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${latestQuote.kind}`)
   if (publicCredits < latestQuote.paymentMicrocredits) {
     throw new Error(`Insufficient public credits for the Hyperlane hook payment of ${latestQuote.paymentMicrocredits} microcredits`)
   }
@@ -196,12 +198,13 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   }
   if (consumerId && apiKey) await nativeWalletClient.authenticateProvableApi()
 
-  const result = await bridge.executeAleoHyperlaneTransferRemote({
+  const result = await bridge.executeTransfer({
     plan,
     mode: 'signer',
     privateFee: booleanFromEnvironment('ALEO_PRIVATE_FEE', false),
     gasPaymentMicrocredits: latestQuote.paymentMicrocredits,
   })
+  if (result.kind !== 'aleo-hyperlane') throw new Error(`Unexpected execution kind: ${result.kind}`)
   console.log(`\nAleo ${asset} burn accepted:`, result.transactionId)
   console.log(`A Hyperlane relayer will deliver the message and release ${asset} to the ${config.destination} recipient.`)
 }

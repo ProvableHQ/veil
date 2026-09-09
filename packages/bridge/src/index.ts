@@ -48,6 +48,7 @@ export {
   type AleoClient,
   type AleoClientConfig,
 } from './connections/aleo.js'
+export type { BridgeChainClient, BridgeChainClients } from './connections/resolve.js'
 
 export {
   getProtocolAssets as getAssets,
@@ -58,19 +59,12 @@ export {
   type GetProtocolRoutesParameters as GetRoutesParameters,
 } from './actions/getProtocolRoutes.js'
 export { prepareTransfer } from './actions/prepareTransfer.js'
-export { executeEvmHyperlaneTransfer } from './actions/executeEvmHyperlaneTransfer.js'
-export { quoteEvmHyperlaneTransfer } from './actions/quoteEvmHyperlaneTransfer.js'
-export { executeEvmXReserveTransfer } from './actions/executeEvmXReserveTransfer.js'
+export { executeTransfer } from './actions/executeTransfer.js'
+export { quoteTransfer } from './actions/quoteTransfer.js'
 export { getXReserveAttestation } from './actions/getXReserveAttestation.js'
-export { quoteEvmXReserveTransfer } from './actions/quoteEvmXReserveTransfer.js'
 export { executeXReservePrivateMint } from './actions/executeXReservePrivateMint.js'
 export { buildXReserveBurnCall } from './builders/buildXReserveBurnCall.js'
-export { executeXReserveBurn } from './actions/executeXReserveBurn.js'
 export { buildAleoHyperlaneTransferRemoteCall } from './builders/buildAleoHyperlaneTransferRemoteCall.js'
-export { executeAleoHyperlaneTransferRemote } from './actions/executeAleoHyperlaneTransferRemote.js'
-export { quoteAleoHyperlaneGasPayment } from './actions/quoteAleoHyperlaneGasPayment.js'
-export { quoteSolanaHyperlaneTransfer } from './actions/quoteSolanaHyperlaneTransfer.js'
-export { executeSolanaHyperlaneTransfer } from './actions/executeSolanaHyperlaneTransfer.js'
 
 export { DEFAULT_BRIDGE_REGISTRY } from './registry/default.js'
 export { validateBridgeRegistry } from './registry/validate.js'
@@ -99,20 +93,24 @@ export type {
   ProtocolBridgeRoute,
 } from './types/protocol.js'
 export type {
+  ExecuteTransferParameters,
+  QuoteTransferParameters,
+  TransferExecution,
+  TransferExecutionKind,
+  TransferQuote,
+  TransferQuoteKind,
+} from './types/transfer.js'
+export type {
   EvmHyperlaneRouteMetadata,
   EvmHyperlaneRouterType,
   EvmHyperlaneTransferExecution,
   EvmHyperlaneTransferQuote,
-  ExecuteEvmHyperlaneTransferParameters,
-  QuoteEvmHyperlaneTransferParameters,
 } from './types/evm.js'
 export type {
   EvmXReserveRouteMetadata,
   EvmXReserveTransferExecution,
   EvmXReserveTransferQuote,
-  ExecuteEvmXReserveTransferParameters,
   GetXReserveAttestationParameters,
-  QuoteEvmXReserveTransferParameters,
   XReserveAttestationResult,
   XReserveHttpResponse,
   XReserveHttpTransport,
@@ -125,15 +123,12 @@ export type {
   ExecuteAleoHyperlaneTransferRemoteParameters,
   ExecuteXReserveBurnParameters,
   ExecuteXReservePrivateMintParameters,
-  QuoteAleoHyperlaneGasPaymentParameters,
   XReserveBurnCall,
   XReserveBurnExecution,
   XReserveBurnMode,
   XReservePrivateMintExecution,
 } from './types/aleo.js'
 export type {
-  ExecuteSolanaHyperlaneTransferParameters,
-  QuoteSolanaHyperlaneTransferParameters,
   SolanaHyperlaneRouteMetadata,
   SolanaHyperlaneTransferExecution,
   SolanaHyperlaneTransferQuote,

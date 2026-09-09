@@ -81,12 +81,16 @@ export type EvmHyperlaneTransferQuote = {
  * @property recipientBytes32 Aleo recipient in the exact 32-byte encoding expected by the enrolled Warp Route.
  * @property pollingIntervalMs Delay between transaction-receipt checks. Defaults to 1,000 milliseconds.
  * @property confirmationTimeoutMs Maximum time to wait for each approval or dispatch receipt. Defaults to 120,000 milliseconds; a timeout returns resumable pending state.
+ * @property resume Previously checkpointed approval or source receipt. Verification resumes without repeating its transaction.
+ * @property onSubmitted Durable checkpoint hook called after each approval or dispatch broadcast and before receipt polling begins.
  */
 export type ExecuteEvmHyperlaneTransferParameters = {
   plan: BridgeTransferPlan
   recipientBytes32: Hex
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined
+  resume?: BridgeTransferReceipt | undefined
+  onSubmitted?: ((receipt: BridgeTransferReceipt) => void | Promise<void>) | undefined
 }
 
 /**

@@ -79,6 +79,7 @@ export type XReserveBurnCall = {
  * @property userRecord Wallet record request or encoded USDCx token record. Required only for `private`.
  * @property merkleProof Encoded `[MerkleProof; 2]` Aleo literal. Required only for `private`.
  * @property privateFee Whether the Aleo wallet should pay its fee privately. Defaults to false.
+ * @property onSubmitted Durable checkpoint hook called immediately after the wallet returns a transaction id.
  */
 export type ExecuteXReserveBurnParameters = {
   plan: BridgeTransferPlan
@@ -86,6 +87,7 @@ export type ExecuteXReserveBurnParameters = {
   userRecord?: TransactionInput | undefined
   merkleProof?: string | undefined
   privateFee?: boolean | undefined
+  onSubmitted?: ((receipt: BridgeTransferReceipt) => void | Promise<void>) | undefined
 }
 
 /**
@@ -157,7 +159,7 @@ export type AleoHyperlaneTransferRemoteCall = {
  * @property plan Aleo-origin Hyperlane plan returned by `prepareTransfer`.
  * @property mode Whether the program burns from `self.caller` or the EOA-bound `self.signer`. Defaults to `caller`.
  * @property privateFee Whether the Aleo wallet should pay its fee privately. Defaults to false.
- * @property gasPaymentMicrocredits Live hook payment in microcredits (u64) from `quoteAleoHyperlaneGasPayment`. Optional for inspection-only call construction; required for execution.
+ * @property gasPaymentMicrocredits Live hook payment in microcredits (u64) from `quoteTransfer`. Optional for inspection-only call construction; required by the route-specific execution implementation.
  * @property onSubmitted Durable checkpoint hook called immediately after the wallet
  *   returns a transaction id.
  */

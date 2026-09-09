@@ -98,7 +98,7 @@ const USDT_HYPERLANE_METADATA = {
 } as const
 
 // Intentionally non-live values used only to expose the Aleo transfer_remote ABI.
-// executeAleoHyperlaneTransferRemote refuses these routes while the flag is true.
+// executeTransfer refuses these routes while the flag is true.
 const ALEO_PLACEHOLDER_ADDRESS = 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n'
 const ALEO_PLACEHOLDER_BYTES32 = `[${Array.from({ length: 32 }, () => '0u8').join(', ')}]`
 

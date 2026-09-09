@@ -220,13 +220,14 @@ async function main(): Promise<void> {
     environment: 'mainnet',
     clients: { aleo: createAleoClient({ publicClient, account: walletClient }) },
   })
-  const result = await executingBridge.executeXReserveBurn({
+  const result = await executingBridge.executeTransfer({
     plan,
     mode: burnMode,
     ...(userRecord ? { userRecord } : {}),
     ...(merkleProof ? { merkleProof } : {}),
     privateFee: booleanFromEnvironment('ALEO_PRIVATE_FEE', false),
   })
+  if (result.kind !== 'aleo-xreserve') throw new Error(`Unexpected execution kind: ${result.kind}`)
   console.log('\nUSDCx burn accepted:', result.transactionId)
   console.log('The Aleo burn-attestation service will forward the withdrawal to Circle for Ethereum delivery.')
 }

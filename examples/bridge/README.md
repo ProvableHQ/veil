@@ -318,7 +318,7 @@ pnpm tsx examples/bridge/wbtc-to-ethereum.ts
 
 The preflight reads the signer's public Aleo WBTC and credits balances. It also
 quotes the current `hyp_hook_manager.aleo/destination_gas_configs` entry with
-`quoteAleoHyperlaneGasPayment`, which returns the exact public-credits
+`quoteTransfer`, which returns the exact public-credits
 allowance consumed by the Interchain Gas Paymaster. The example asserts that
 this live allowance is WBTC's only unresolved field and passes the quote to
 execution as `gasPaymentMicrocredits`.
@@ -376,7 +376,7 @@ ETH to the Ethereum recipient asynchronously.
 `sol-to-aleo.ts` builds a bridge client with an injected Solana RPC endpoint
 and plans `hyperlane:solana/sol->aleo/sol` with Veil. The read-only path needs
 only the sender's public address; it quotes the Hyperlane hook payment and
-Solana network fee through `quoteSolanaHyperlaneTransfer` and reads the
+Solana network fee through `quoteTransfer` and reads the
 sender's native SOL balance.
 
 ```sh
@@ -408,7 +408,7 @@ EXECUTE_HYPERLANE_SOL=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
 ```
 
 Execution supplies the key bytes through `solanaKeyPair`, which signs locally
-with `@solana/kit`, then calls `executeSolanaHyperlaneTransfer`. That action assembles the
+with `@solana/kit`, then calls `executeTransfer`. That action assembles the
 transaction, requotes the live hook payment, checks the sender's balance,
 submits the signed transaction, and polls until confirmed or finalized. The
 accepted source transaction locks native SOL in the Warp Route; Hyperlane

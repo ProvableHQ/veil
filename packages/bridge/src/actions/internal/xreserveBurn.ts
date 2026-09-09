@@ -6,7 +6,7 @@ import type {
   XReserveBurnCall,
   XReserveBurnExecution,
 } from '../../types/aleo.js'
-import type { BridgeRegistry } from '../../types/protocol.js'
+import type { BridgeRegistry, BridgeTransferReceipt } from '../../types/protocol.js'
 import { parseDecimalAmount } from '../../utils/units.js'
 import { evmAddressToXReserveBytes32, xReserveHexToAleoBytes } from '../../utils/xreserve.js'
 
@@ -133,23 +133,22 @@ export async function runExecuteXReserveBurn(
   })
   const transactionId = typeof result === 'string' ? result : result.transactionId
   if (!transactionId) throw new BridgeError('Aleo wallet returned an empty burn transaction id')
-  return {
-    transactionId,
-    receipt: {
-      id: transactionId,
-      protocol: 'xreserve',
-      status: 'SOURCE_CONFIRMING',
-      sourceTxId: transactionId,
-      protocolState: {
-        routeId: call.routeId,
-        burnMode: call.mode,
-        amountAtomic: call.amountAtomic.toString(),
-        nativeDomain: call.nativeDomain,
-        nativeRecipientBytes32: call.nativeRecipientBytes32,
-        sourceProgram: call.program,
-        sourceFunction: call.function,
-        forwardingService: 'aleo-burn-attestation',
-      },
+  const receipt: BridgeTransferReceipt = {
+    id: transactionId,
+    protocol: 'xreserve',
+    status: 'SOURCE_CONFIRMING',
+    sourceTxId: transactionId,
+    protocolState: {
+      routeId: call.routeId,
+      burnMode: call.mode,
+      amountAtomic: call.amountAtomic.toString(),
+      nativeDomain: call.nativeDomain,
+      nativeRecipientBytes32: call.nativeRecipientBytes32,
+      sourceProgram: call.program,
+      sourceFunction: call.function,
+      forwardingService: 'aleo-burn-attestation',
     },
   }
+  await params.onSubmitted?.(receipt)
+  return { transactionId, receipt }
 }

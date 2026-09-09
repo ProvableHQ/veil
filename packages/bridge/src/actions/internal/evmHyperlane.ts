@@ -304,12 +304,41 @@ function executionReceipt(
     ...(messageId ? { messageId } : {}),
     protocolState: {
       routeId: plan.route.id,
-      approvalTxIds,
+      approvalTxIds: [...approvalTxIds],
       recipientBytes32: quote.recipientBytes32,
       destinationDomain: quote.destinationDomain,
       nativeValueAtomic: quote.nativeValueAtomic.toString(),
       amountAtomic: quote.amountAtomic.toString(),
     },
+  }
+}
+
+function checkpointApprovalIds(receipt: BridgeTransferReceipt): Hash[] {
+  const ids = receipt.protocolState.approvalTxIds
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string' || !isHash(id))) {
+    throw new BridgeError('Hyperlane checkpoint contains invalid approval transaction ids')
+  }
+  return [...ids] as Hash[]
+}
+
+function validateCheckpoint(
+  registry: BridgeRegistry,
+  plan: BridgeTransferPlan,
+  metadata: EvmHyperlaneRouteMetadata,
+  recipientBytes32: Hex,
+  receipt: BridgeTransferReceipt,
+): void {
+  const state = receipt.protocolState
+  const sourceAsset = registry.assets.find((asset) => asset.id === plan.sourceAsset.id)
+  if (!sourceAsset) throw new BridgeError(`Hyperlane source asset is not present in the configured registry: ${plan.sourceAsset.id}`)
+  const amountAtomic = parseDecimalAmount(plan.amountIn, sourceAsset.decimals).toString()
+  if (receipt.protocol !== 'hyperlane'
+    || state.routeId !== plan.route.id
+    || state.destinationDomain !== metadata.destinationDomain
+    || state.amountAtomic !== amountAtomic
+    || typeof state.recipientBytes32 !== 'string'
+    || state.recipientBytes32.toLowerCase() !== recipientBytes32.toLowerCase()) {
+    throw new BridgeError('Hyperlane checkpoint does not match the prepared transfer')
   }
 }
 
@@ -347,9 +376,45 @@ export async function runExecuteEvmHyperlaneTransfer(
   }
 
   const metadata = routeMetadata(registry, params.plan)
+  await assertChain(client, metadata.sourceChainId)
+  let approvalTxIds: Hash[] = []
+
+  if (params.resume) {
+    validateCheckpoint(registry, params.plan, metadata, params.recipientBytes32, params.resume)
+    approvalTxIds = checkpointApprovalIds(params.resume)
+    if (params.resume.status === 'DELIVERY_PENDING') {
+      return { approvalTxIds, receipt: params.resume }
+    }
+    if (params.resume.status === 'SOURCE_CONFIRMING') {
+      const sourceTxId = params.resume.sourceTxId
+      if (!sourceTxId || !isHash(sourceTxId)) throw new BridgeError('Hyperlane checkpoint is missing the source transaction id')
+      const sourceReceipt = await waitForReceipt(client, sourceTxId, confirmationTimeoutMs, pollingIntervalMs)
+      if (!sourceReceipt) return { approvalTxIds, receipt: params.resume }
+      assertSuccessfulReceipt(sourceReceipt, sourceTxId)
+      const messageId = messageIdFromReceipt(sourceReceipt)
+      return {
+        approvalTxIds,
+        receipt: {
+          ...params.resume,
+          id: messageId ?? sourceTxId,
+          status: 'DELIVERY_PENDING',
+          ...(messageId ? { messageId } : {}),
+        },
+      }
+    }
+    if (params.resume.status === 'SOURCE_APPROVAL_PENDING') {
+      const approvalTxId = approvalTxIds.at(-1)
+      if (!approvalTxId) throw new BridgeError('Hyperlane checkpoint is missing the approval transaction id')
+      const approvalReceipt = await waitForReceipt(client, approvalTxId, confirmationTimeoutMs, pollingIntervalMs)
+      if (!approvalReceipt) return { approvalTxIds, receipt: params.resume }
+      assertSuccessfulReceipt(approvalReceipt, approvalTxId)
+    } else {
+      throw new BridgeError(`Unsupported Hyperlane resume status: ${params.resume.status}`)
+    }
+  }
+
   const quote = await runQuoteEvmHyperlaneTransfer(registry, client, params)
   const account = await resolveAccount(client, params.plan)
-  const approvalTxIds: Hash[] = []
 
   if (metadata.routerType === 'collateral') {
     const allowanceData = encodeFunctionData({
@@ -373,6 +438,8 @@ export async function runExecuteEvmHyperlaneTransfer(
       })
       const hash = await sendTransaction(client, metadata.sourceChainId, { from: account, to: metadata.tokenAddress!, data })
       approvalTxIds.push(hash)
+      const checkpoint = executionReceipt(params.plan, 'SOURCE_APPROVAL_PENDING', hash, quote, approvalTxIds)
+      await params.onSubmitted?.(checkpoint)
       const receipt = await waitForReceipt(client, hash, confirmationTimeoutMs, pollingIntervalMs)
       if (!receipt) return false
       assertSuccessfulReceipt(receipt, hash)
@@ -408,6 +475,8 @@ export async function runExecuteEvmHyperlaneTransfer(
     data: transferData,
     value: `0x${quote.nativeValueAtomic.toString(16)}`,
   })
+  const checkpoint = executionReceipt(params.plan, 'SOURCE_CONFIRMING', sourceTxId, quote, approvalTxIds, sourceTxId)
+  await params.onSubmitted?.(checkpoint)
   const sourceReceipt = await waitForReceipt(
     client,
     sourceTxId,
@@ -417,7 +486,7 @@ export async function runExecuteEvmHyperlaneTransfer(
   if (!sourceReceipt) {
     return {
       approvalTxIds,
-      receipt: executionReceipt(params.plan, 'SOURCE_CONFIRMING', sourceTxId, quote, approvalTxIds, sourceTxId),
+      receipt: checkpoint,
     }
   }
   assertSuccessfulReceipt(sourceReceipt, sourceTxId)

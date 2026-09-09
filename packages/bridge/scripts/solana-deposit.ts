@@ -231,7 +231,8 @@ async function main(): Promise<void> {
   log(`Aleo recipient: ${recipient}`)
 
   // ---- Quote: live reads only, no funds move. ----------------------------
-  const quote = await withRetry('Solana quote', 3, 5_000, () => bridge.quoteSolanaHyperlaneTransfer({ plan }))
+  const quote = await withRetry('Solana quote', 3, 5_000, () => bridge.quoteTransfer({ plan }))
+  if (quote.kind !== 'solana-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
   const senderBalance = await withRetry('Solana balance', 3, 5_000, () => solanaClient.getBalance(senderAddress))
 
   console.log('Read-only Solana SOL to Aleo SOL preflight')
@@ -262,7 +263,7 @@ async function main(): Promise<void> {
     // state.dispatch may already be populated when either branch below runs.
     let execution
     try {
-      execution = await bridge.executeSolanaHyperlaneTransfer({
+      execution = await bridge.executeTransfer({
         plan,
         confirmationTimeoutMs: CONFIRMATION_TIMEOUT_MS,
         onSubmitted(receipt) {
