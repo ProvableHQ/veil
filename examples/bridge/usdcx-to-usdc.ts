@@ -11,6 +11,7 @@ import {
   parseRecord,
   type OwnedRecord,
 } from '@provablehq/veil-core'
+import { pathToFileURL } from 'node:url'
 import {
   createAleoClient,
   createBridgeClient,
@@ -120,9 +121,16 @@ async function createExclusionProof(address: string): Promise<string> {
   return sealance.formatMerkleProof([leftProof, rightProof])
 }
 
-async function main(): Promise<void> {
+/**
+ * Runs the Aleo USDCx to Ethereum USDC example.
+ *
+ * @param options Optional CLI overrides for the visible default amount and execution gate.
+ * @returns After read-only inspection or source burn submission.
+ */
+export async function runUsdcxToUsdcExample(options: { amount?: string, execute?: boolean } = {}): Promise<void> {
   const recipient = requiredEnvironmentVariable('ETHEREUM_RECIPIENT')
   const mode = burnModeFromEnvironment()
+  const amount = options.amount ?? AMOUNT
 
   // ── Describe the intended transfer ──────────────────────────────────
   // The caller supplies familiar chain and asset names, the amount, and the
@@ -135,7 +143,7 @@ async function main(): Promise<void> {
     source: { chain: 'aleo', asset: 'usdcx' },
     destination: { chain: 'ethereum', asset: 'usdc' },
     bridgeProtocol: 'xreserve',
-    amount: AMOUNT,
+    amount,
     recipient,
   })
 
@@ -170,7 +178,7 @@ async function main(): Promise<void> {
   // The exact acknowledgement separates inspection from an irreversible Aleo
   // burn. A copied tutorial therefore cannot load private records, request a
   // proof, spend a fee, or destroy USDCx without an explicit operator decision.
-  if (process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
+  if (options.execute !== true && process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
     console.log('\nPreflight complete; no USDCx was burned.')
     console.log(`Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to submit the withdrawal.`)
     return
@@ -263,7 +271,9 @@ async function main(): Promise<void> {
   console.log('The Aleo burn-attestation service will forward the withdrawal to Circle for Ethereum delivery.')
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error)
-  process.exitCode = 1
-})
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runUsdcxToUsdcExample().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error)
+    process.exitCode = 1
+  })
+}

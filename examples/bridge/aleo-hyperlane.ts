@@ -75,6 +75,7 @@ function formatAmount(value: bigint, decimals: number): string {
  * message; Hyperlane then releases the corresponding asset on the destination.
  *
  * @param asset ETH, SOL, or WBTC representation to burn on Aleo and release on its origin chain.
+ * @param options Optional CLI overrides for the visible default amount and execution gate.
  * @returns After read-only inspection or verified destination delivery,
  * depending on the execution acknowledgement.
  * @throws Error When configuration is missing, the source balance or fee
@@ -83,8 +84,9 @@ function formatAmount(value: bigint, decimals: number): string {
  * @example
  * await runAleoHyperlaneExample('ETH')
  */
-export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promise<void> {
+export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset, options: { amount?: string, execute?: boolean } = {}): Promise<void> {
   const config = ASSETS[asset]
+  const amount = options.amount ?? config.amount
   const recipient = requiredEnvironmentVariable(config.recipientEnvironmentVariable)
   const privateKey = requiredEnvironmentVariable('ALEO_PRIVATE_KEY')
   const networkUrl = process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2'
@@ -113,7 +115,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   // A destination client is unnecessary for the read-only source inspection.
   // Execution adds one so settlement can compare the recipient's destination
   // balance with the value recorded immediately before source submission.
-  const executionEnabled = process.env[EXECUTION_ENVIRONMENT_VARIABLE] === EXECUTION_ACKNOWLEDGEMENT
+  const executionEnabled = options.execute === true || process.env[EXECUTION_ENVIRONMENT_VARIABLE] === EXECUTION_ACKNOWLEDGEMENT
   const destinationClient = executionEnabled
     ? config.destination.chain === 'ethereum'
       ? createEvmClient({ transport: evmHttp(requiredEnvironmentVariable('ETHEREUM_RPC_URL')) })
@@ -140,7 +142,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     source: config.source,
     destination: config.destination,
     bridgeProtocol: 'hyperlane',
-    amount: config.amount,
+    amount,
     recipient,
     sender: String(account.address),
   })

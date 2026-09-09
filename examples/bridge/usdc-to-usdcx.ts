@@ -8,6 +8,7 @@
  */
 
 import { formatUnits, type Hex } from 'viem'
+import { pathToFileURL } from 'node:url'
 import {
   createAleoClient,
   createBridgeClient,
@@ -54,8 +55,15 @@ function checkpoint(label: string, value: BridgeCheckpoint): void {
   console.log(`${label}:`, JSON.stringify(value))
 }
 
-async function main(): Promise<void> {
+/**
+ * Runs the Ethereum USDC to Aleo USDCx example.
+ *
+ * @param options Optional CLI overrides for the visible default amount and execution gate.
+ * @returns After read-only inspection or destination delivery.
+ */
+export async function runUsdcToUsdcxExample(options: { amount?: string, execute?: boolean } = {}): Promise<void> {
   const mode = mintMode()
+  const amount = options.amount ?? AMOUNT
   // The protocol defaults to 0scalar. A custom value adds caller-managed
   // entropy to the private commitment and must be stored separately because
   // recovery checkpoints intentionally omit it.
@@ -110,7 +118,7 @@ async function main(): Promise<void> {
     source: { chain: 'ethereum', asset: 'usdc' },
     destination: { chain: 'aleo', asset: 'usdcx' },
     bridgeProtocol: 'xreserve',
-    amount: AMOUNT,
+    amount,
     recipient,
     sender: evmAccount.account.address,
     mintMode: mode,
@@ -134,7 +142,7 @@ async function main(): Promise<void> {
   // A normal run ends after displaying the amount, balance, allowance, and
   // privacy mode. The exact acknowledgement makes the irreversible mainnet
   // deposit an explicit operator decision.
-  if (process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
+  if (options.execute !== true && process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
     console.log(`Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to approve and deposit USDC.`)
     return
   }
@@ -224,7 +232,9 @@ async function main(): Promise<void> {
   console.log('Private USDCx mint completed:', progress.receipt.destinationTxId)
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error)
-  process.exitCode = 1
-})
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runUsdcToUsdcxExample().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error)
+    process.exitCode = 1
+  })
+}

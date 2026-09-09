@@ -1,4 +1,5 @@
 import { getBase58Encoder } from '@solana/kit'
+import { pathToFileURL } from 'node:url'
 import { createPublicClient as createAleoPublicClient, http as aleoHttp } from '@provablehq/veil-core'
 import {
   createAleoClient,
@@ -55,6 +56,7 @@ function formatAmount(value: bigint, decimals: number): string {
  * keypair held by this process signs one source transaction. Hyperlane relays
  * its message and mints wrapped SOL to the Aleo recipient.
  *
+ * @param options Optional CLI overrides for the visible default amount and execution gate.
  * @returns After read-only inspection or verified Aleo delivery, depending on
  * the execution acknowledgement.
  * @throws Error When configuration is missing, SOL is insufficient, the source
@@ -63,7 +65,8 @@ function formatAmount(value: bigint, decimals: number): string {
  * @example
  * await runSolanaHyperlaneExample()
  */
-export async function runSolanaHyperlaneExample(): Promise<void> {
+export async function runSolanaHyperlaneExample(options: { amount?: string, execute?: boolean } = {}): Promise<void> {
+  const amount = options.amount ?? AMOUNT
   const rpcUrl = process.env.SOLANA_RPC_URL?.trim() || DEFAULT_SOLANA_RPC_URL
   const recipient = requiredEnvironmentVariable('ALEO_RECIPIENT')
 
@@ -109,7 +112,7 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
     source: { chain: 'solana', asset: 'sol' },
     destination: { chain: 'aleo', asset: 'sol' },
     bridgeProtocol: 'hyperlane',
-    amount: AMOUNT,
+    amount,
     recipient,
     sender: senderAddress,
   })
@@ -142,7 +145,7 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
   // The read-only run can inspect any configured sender. Mainnet submission
   // additionally requires the matching private key and the exact acknowledgement.
   // This keeps copying the tutorial from creating an unexpected transfer.
-  if (process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
+  if (options.execute !== true && process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
     console.log('\nPreflight complete; no SOL was transferred.')
     console.log(`Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to submit the transfer.`)
     return
@@ -176,7 +179,9 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
   console.log('Bridge completed:', progress.receipt)
 }
 
-runSolanaHyperlaneExample().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error)
-  process.exitCode = 1
-})
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runSolanaHyperlaneExample().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error)
+    process.exitCode = 1
+  })
+}

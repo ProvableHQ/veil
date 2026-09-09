@@ -330,10 +330,9 @@ The script derives the sender locally and validates Arc chain id `5042` and
 Circle source domain `26` before signing.
 
 Private mode commits to `ALEO_RECIPIENT` and an optional
-`USDCX_SECRET_NONCE`. Live private execution also requires `ALEO_PRIVATE_KEY`;
-if the process exits after the Arc deposit, set `XRESERVE_RESUME_MESSAGE_HASH`
-to resume only the Aleo private mint. Every live operation requires the script's
-explicit acknowledgement.
+`USDCX_SECRET_NONCE`. Live private execution also requires `ALEO_PRIVATE_KEY`.
+Persist the emitted checkpoint to recover without repeating the Arc deposit.
+Every live operation requires the script's explicit acknowledgement.
 
 ### Aleo USDCx to Ethereum USDC
 
