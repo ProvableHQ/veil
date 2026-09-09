@@ -3,13 +3,11 @@ import { BridgeError } from '../errors/bridgeErrors.js'
 import type { AleoWalletClient } from '../types/aleo.js'
 
 /**
- * Configures one registry-keyed Aleo connection.
- * @property family Discriminator added by {@link aleoConnection}.
+ * Configures one registry-keyed Aleo client.
  * @property publicClient Required Veil public client used for chain reads.
  * @property account Optional Veil-compatible wallet client used for execution.
  */
-export type AleoConnectionDefinition = {
-  family: 'aleo'
+export type AleoClientConfig = {
   publicClient: Client
   account?: AleoWalletClient | undefined
 }
@@ -20,18 +18,11 @@ export type AleoConnectionDefinition = {
  * @property publicClient Required Veil public client.
  * @property walletClient Optional Veil-compatible execution client.
  */
-export type AleoConnection = {
+export type AleoClient = {
   family: 'aleo'
   publicClient: Client
   walletClient?: AleoWalletClient | undefined
 }
-
-/**
- * Requires the wallet side of an otherwise readable Aleo connection.
- *
- * @property walletClient Account-authorized client used to prove, sign, and broadcast.
- */
-export type AleoWalletConnection = AleoConnection & { walletClient: AleoWalletClient }
 
 /**
  * Adapts an Aleo wallet client for bridge authorization.
@@ -44,20 +35,15 @@ export function aleoWallet(walletClient: AleoWalletClient): AleoWalletClient {
 }
 
 /**
- * Creates and statically validates an inert Aleo connection definition.
+ * Creates an Aleo bridge client with public access and optional wallet authorization.
  * @param config Required public client and optional wallet account.
- * @returns A registry-ready Aleo connection definition.
+ * @returns A registry-ready Aleo client.
  * @throws BridgeError When the public client is absent.
- * @example const connection = aleoConnection({ publicClient, account: walletClient })
+ * @example const client = createAleoClient({ publicClient, account: walletClient })
  */
-export function aleoConnection(
-  config: Omit<AleoConnectionDefinition, 'family'>,
-): AleoConnectionDefinition {
-  if (!config.publicClient) throw new BridgeError('Aleo connection requires a public client')
-  return { family: 'aleo', ...config }
-}
-
-/** Materializes an Aleo definition while preserving native core clients. */
-export function materializeAleoConnection(definition: AleoConnectionDefinition): AleoConnection {
-  return { family: 'aleo', publicClient: definition.publicClient, walletClient: definition.account }
+export function createAleoClient(
+  config: AleoClientConfig,
+): AleoClient {
+  if (!config.publicClient) throw new BridgeError('Aleo client requires a public client')
+  return { family: 'aleo', publicClient: config.publicClient, walletClient: config.account }
 }

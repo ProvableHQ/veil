@@ -40,7 +40,7 @@ import bs58 from 'bs58'
 import { createKeyPairSignerFromBytes } from '@solana/kit'
 import {
   createBridgeClient,
-  solanaConnection,
+  createSolanaClient,
   solanaHttp,
   solanaKeyPair,
 } from '../src/index.js'
@@ -210,8 +210,8 @@ async function main(): Promise<void> {
 
   const bridge = createBridgeClient({
     environment: 'mainnet',
-    connections: {
-      solana: solanaConnection({
+    clients: {
+      solana: createSolanaClient({
         transport: solanaHttp(rpc.url, { fetch: rpc.transport }),
         account: solanaKeyPair(keypairBytes),
       }),

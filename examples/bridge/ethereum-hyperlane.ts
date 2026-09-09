@@ -12,7 +12,7 @@ import { mainnet } from 'viem/chains'
 import {
   aleoAddressToBytes32,
   createBridgeClient,
-  evmConnection,
+  createEvmClient,
 } from '@provablehq/aleo-bridge-sdk'
 
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
@@ -107,7 +107,7 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
   const recipientBytes32 = aleoAddressToBytes32(recipient)
   const bridge = createBridgeClient({
     environment: 'mainnet',
-    connections: { ethereum: evmConnection({ publicClient, walletClient }) },
+    clients: { ethereum: createEvmClient({ publicClient, walletClient }) },
   })
   const plan = bridge.prepareTransfer({
     routeId: config.routeId,

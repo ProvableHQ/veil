@@ -5,8 +5,8 @@ ETH, WBTC, USDT, SOL, ALEO, and USAD use Hyperlane Warp Routes.
 
 ## Create a client
 
-Connections are keyed by the chain IDs in the registry. Discovery and transfer
-planning do not need connections.
+Clients are keyed by the chain IDs in the registry. Discovery and transfer
+planning do not need clients.
 
 ```ts
 import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'
@@ -28,24 +28,24 @@ network or prompting a wallet.
 
 ```ts
 import {
-  aleoConnection,
+  createAleoClient,
   createBridgeClient,
-  evmConnection,
+  createEvmClient,
   evmHttp,
   evmProvider,
-  solanaConnection,
+  createSolanaClient,
   solanaHttp,
   solanaWallet,
 } from '@provablehq/aleo-bridge-sdk'
 
 const bridge = createBridgeClient({
   environment: 'mainnet',
-  connections: {
-    ethereum: evmConnection({
+  clients: {
+    ethereum: createEvmClient({
       transport: evmHttp(ethereumRpcUrl),
       account: evmProvider(window.ethereum),
     }),
-    solana: solanaConnection({
+    solana: createSolanaClient({
       transport: solanaHttp(solanaRpcUrl),
       account: solanaWallet({
         wallet,
@@ -53,7 +53,7 @@ const bridge = createBridgeClient({
         chain: 'solana:mainnet',
       }),
     }),
-    aleo: aleoConnection({
+    aleo: createAleoClient({
       publicClient: aleoPublicClient,
       account: aleoWalletClient,
     }),
@@ -70,28 +70,28 @@ Wallet Standard accounts retain their atomic `signAndSendTransaction` flow.
 
 ```ts
 import {
-  aleoConnection,
+  createAleoClient,
   createBridgeClient,
-  evmConnection,
+  createEvmClient,
   evmHttp,
   evmPrivateKey,
-  solanaConnection,
+  createSolanaClient,
   solanaHttp,
   solanaKeyPair,
 } from '@provablehq/aleo-bridge-sdk'
 
 const bridge = createBridgeClient({
   environment: 'mainnet',
-  connections: {
-    ethereum: evmConnection({
+  clients: {
+    ethereum: createEvmClient({
       transport: evmHttp(ethereumRpcUrl),
       account: evmPrivateKey(evmPrivateKey),
     }),
-    solana: solanaConnection({
+    solana: createSolanaClient({
       transport: solanaHttp(solanaRpcUrl),
       account: solanaKeyPair(solanaSecretKeyBytes),
     }),
-    aleo: aleoConnection({
+    aleo: createAleoClient({
       publicClient: aleoPublicClient,
       account: localAleoWalletClient,
     }),
@@ -101,28 +101,28 @@ const bridge = createBridgeClient({
 
 Local EVM accounts sign through viem and broadcast through the configured
 public source. Local Solana accounts sign locally and broadcast through their
-connection's public client; the account never receives a duplicate RPC URL.
+client's public client; the account never receives a duplicate RPC URL.
 
 ## Existing viem clients
 
 ```ts
 const bridge = createBridgeClient({
-  connections: {
-    ethereum: evmConnection({ walletClient }),
+  clients: {
+    ethereum: createEvmClient({ walletClient }),
   },
 })
 ```
 
-An existing viem `walletClient` also supplies the connection's public RPC
+An existing viem `walletClient` also supplies the client's public RPC
 access. Pass a separate `publicClient` when reads and receipt polling should use
 a different transport. It may be paired with `evmProvider(window.ethereum)` or
-`evmLocalAccount(privateKeyToAccount(key))`. A definition rejects duplicate
+`evmLocalAccount(privateKeyToAccount(key))`. A client rejects duplicate
 public sources (`transport` plus `publicClient`) and duplicate wallet sources
 (`account` plus `walletClient`). A local account requires a public source.
 
 ## Executing routes
 
-All actions resolve the exact source or destination connection implied by the
+All actions resolve the exact source or destination client implied by the
 validated route. They do not fall back to another chain of the same family.
 
 ```ts
@@ -178,7 +178,7 @@ the execution preflight reads current rent exemptions. Confirmation searches
 transaction history and records blockhash expiry. Passing the checkpoint back as
 `resume` confirms the existing signature without signing or resubmitting.
 
-Current Solana token support is native SOL only. The connection API is ready
+Current Solana token support is native SOL only. The client API is ready
 for future SPL-token routes, but it does not support Solana USDC today. SPL or
 Token-2022 support requires reviewed route metadata, token-account handling,
 instruction builders, and golden vectors.
@@ -196,11 +196,11 @@ This package is pre-release, so the obsolete fields have no runtime aliases.
 
 | Removed API | Replacement |
 | --- | --- |
-| `executors.evm` | `connections[chainId]: evmConnection({ account, transport/publicClient })` |
-| `executors.solana` | `connections[chainId]: solanaConnection({ account, transport })` |
-| `executors.aleo` | `connections[chainId]: aleoConnection({ account, publicClient })` |
-| `solanaRpc` | `solanaConnection({ transport: solanaHttp(url) })` |
-| `aleoPublicClient` | `aleoConnection({ publicClient })` |
+| `executors.evm` | `clients[chainId]: createEvmClient({ account, transport/publicClient })` |
+| `executors.solana` | `clients[chainId]: createSolanaClient({ account, transport })` |
+| `executors.aleo` | `clients[chainId]: createAleoClient({ account, publicClient })` |
+| `solanaRpc` | `createSolanaClient({ transport: solanaHttp(url) })` |
+| `aleoPublicClient` | `createAleoClient({ publicClient })` |
 | `xReserveHttpTransport` | top-level `fetch` |
 | `solanaExecutorFromKeyPair` | `solanaKeyPair(secretKeyBytes)` |
 | `solanaExecutorFromWalletAccount` | `solanaWallet({ wallet, account, chain })` |

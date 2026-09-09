@@ -1,5 +1,5 @@
 import { BridgeError } from '../errors/bridgeErrors.js'
-import type { SolanaWalletConnection } from '../connections/solana.js'
+import type { SolanaClient, SolanaWalletClient } from '../connections/solana.js'
 import { loadKit } from '../solana/kit.js'
 import type { SolanaRpcClient } from '../solana/rpc.js'
 import { buildTransferRemoteInstruction, type SolanaAccountMeta } from '../solana/transferRemote.js'
@@ -154,7 +154,7 @@ function buildReceipt(
  * instruction creates, and the sender's own rent-exempt floor once every one
  * of those lamports has left it. Generates the ephemeral unique-message
  * signer, then assembles, partially signs, and hands the transaction to the
- * configured connection to sign and broadcast. Hits the network throughout,
+ * configured client to sign and broadcast. Hits the network throughout,
  * prompts a wallet or signs locally, and moves funds; never local-only.
  *
  * When the plan names a `sender`, the wallet client's address MUST match it: a
@@ -168,7 +168,7 @@ function buildReceipt(
  * returned receipt carries the signature with `messageId` left `undefined`.
  *
  * @param registry Reviewed deployment snapshot used to validate the prepared plan.
- * @param connection Registry-selected Solana public and wallet capabilities.
+ * @param client Registry-selected Solana public and wallet capabilities.
  * @param params Prepared plan and optional confirmation polling controls.
  * @returns The resumable Hyperlane transfer receipt.
  * @throws BridgeError When route validation or quoting fails, the plan's sender does
@@ -176,15 +176,15 @@ function buildReceipt(
  *   submitted transaction is reported failed.
  *
  * @example
- * const execution = await executeSolanaHyperlaneTransfer(registry, connection, { plan })
+ * const execution = await executeSolanaHyperlaneTransfer(registry, client, { plan })
  */
 export async function executeSolanaHyperlaneTransfer(
   registry: BridgeRegistry,
-  connection: SolanaWalletConnection,
+  client: SolanaClient & { walletClient: SolanaWalletClient },
   params: ExecuteSolanaHyperlaneTransferParameters,
 ): Promise<SolanaHyperlaneTransferExecution> {
-  const rpc = connection.publicClient
-  const walletClient = connection.walletClient
+  const rpc = client.publicClient
+  const walletClient = client.walletClient
   const requestedPollingIntervalMs = params.pollingIntervalMs ?? 1_000
   const confirmationTimeoutMs = params.confirmationTimeoutMs ?? 120_000
   if (!Number.isFinite(requestedPollingIntervalMs) || requestedPollingIntervalMs < 0) {
@@ -223,7 +223,7 @@ export async function executeSolanaHyperlaneTransfer(
     const signature = receipt.sourceTxId
     try {
       const confirmation = await pollForConfirmation(
-        connection.publicClient,
+        client.publicClient,
         signature,
         pollingIntervalMs,
         confirmationTimeoutMs,
@@ -233,7 +233,7 @@ export async function executeSolanaHyperlaneTransfer(
       if (confirmation === 'expired') {
         return { receipt: { ...receipt, protocolState: { ...state, blockhashExpired: true } } }
       }
-      const messageId = extractSolanaHyperlaneMessageId(await connection.publicClient.getTransactionLogs(signature))
+      const messageId = extractSolanaHyperlaneMessageId(await client.publicClient.getTransactionLogs(signature))
       return {
         receipt: {
           ...receipt,
@@ -262,7 +262,7 @@ export async function executeSolanaHyperlaneTransfer(
   }
 
   // 3. Quote the live IGP payment through the shared oracle-reading action.
-  const quote = await quoteSolanaHyperlaneTransfer(registry, connection, { plan: { ...params.plan, sender: senderAddress } })
+  const quote = await quoteSolanaHyperlaneTransfer(registry, client, { plan: { ...params.plan, sender: senderAddress } })
 
   // 4. Preflight: the sender must cover the amount, gas, and the rent for
   // the two accounts (gas-payment PDA, dispatched-message PDA) the

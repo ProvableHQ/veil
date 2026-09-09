@@ -1,5 +1,5 @@
 import { bridgeActions, type BridgeActions } from './decorators/bridge.js'
-import { materializeBridgeConnections, type BridgeConnectionDefinition } from '../connections/index.js'
+import type { BridgeChainClients } from '../connections/resolve.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../registry/default.js'
 import { validateBridgeRegistry } from '../registry/validate.js'
 import type { BridgeEnvironment, BridgeRegistry } from '../types/protocol.js'
@@ -9,15 +9,15 @@ import type { BridgeEnvironment, BridgeRegistry } from '../types/protocol.js'
  *
  * @property environment Default route environment. Defaults to `mainnet`.
  * @property registry Optional reviewed registry override.
- * @property connections Chain capabilities keyed by registry chain id.
- * @property fetch Fetch implementation used for protocol HTTP requests and as the transport default.
+ * @property clients Chain capabilities keyed by registry chain id.
+ * @property fetch Fetch implementation used for protocol HTTP requests.
  * @property key Stable client key. Defaults to `bridge`.
  * @property name Display name. Defaults to `Bridge Client`.
  */
 export type BridgeClientConfig = {
   environment?: BridgeEnvironment | undefined
   registry?: BridgeRegistry | undefined
-  connections?: Readonly<Record<string, BridgeConnectionDefinition>> | undefined
+  clients?: BridgeChainClients | undefined
   fetch?: typeof globalThis.fetch | undefined
   key?: string | undefined
   name?: string | undefined
@@ -41,9 +41,9 @@ export type BridgeClient = BridgeActions & {
 /**
  * Creates a registry-keyed multi-chain bridge coordinator.
  *
- * @param config Registry, transport, and per-chain capability definitions.
+ * @param config Registry, protocol transport, and per-chain clients.
  * @returns A plain bridge client with bound discovery, quote, and execution actions.
- * @throws BridgeError When the registry or a connection definition is invalid.
+ * @throws BridgeError When the registry is invalid.
  * @example
  * const bridge = createBridgeClient({ environment: 'mainnet' })
  */
@@ -51,12 +51,12 @@ export function createBridgeClient(config: BridgeClientConfig = {}): BridgeClien
   const environment = config.environment ?? 'mainnet'
   const registry = validateBridgeRegistry(config.registry ?? DEFAULT_BRIDGE_REGISTRY)
   const fetch = config.fetch ?? globalThis.fetch
-  const connections = materializeBridgeConnections(config.connections ?? {}, fetch)
+  const clients = config.clients ?? {}
   return {
     key: config.key ?? 'bridge',
     name: config.name ?? 'Bridge Client',
     environment,
     registry,
-    ...bridgeActions({ environment, registry, connections, fetch }),
+    ...bridgeActions({ environment, registry, clients, fetch }),
   }
 }

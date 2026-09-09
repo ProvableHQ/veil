@@ -1,21 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  evmConnection,
+  createEvmClient,
   evmCustom,
   evmHttp,
   evmLocalAccount,
   evmPrivateKey,
   evmProvider,
-  materializeEvmConnection,
 } from '../../src/connections/evm.js'
 
-describe('EVM bridge connections', () => {
-  it('constructs an inert tagged definition', () => {
+describe('EVM bridge clients', () => {
+  it('constructs a tagged client without making an RPC request', () => {
     const request = vi.fn()
 
-    const definition = evmConnection({ transport: evmCustom(request) })
+    const client = createEvmClient({ transport: evmCustom(request) })
 
-    expect(definition.family).toBe('evm')
+    expect(client.family).toBe('evm')
     expect(request).not.toHaveBeenCalled()
   })
 
@@ -24,18 +23,18 @@ describe('EVM bridge connections', () => {
     const publicClient = {} as never
     const walletClient = {} as never
 
-    expect(() => evmConnection({ transport: evmCustom(request), publicClient })).toThrow(
-      'EVM connection accepts either transport or publicClient, not both',
+    expect(() => createEvmClient({ transport: evmCustom(request), publicClient })).toThrow(
+      'EVM client accepts either transport or publicClient, not both',
     )
-    expect(() => evmConnection({ account: evmProvider({ request }), walletClient })).toThrow(
-      'EVM connection accepts either account or walletClient, not both',
+    expect(() => createEvmClient({ account: evmProvider({ request }), walletClient })).toThrow(
+      'EVM client accepts either account or walletClient, not both',
     )
   })
 
-  it('rejects an empty definition and a local account without public access', () => {
-    expect(() => evmConnection({})).toThrow('EVM connection requires a public or wallet capability')
+  it('rejects an empty config and a local account without public access', () => {
+    expect(() => createEvmClient({})).toThrow('EVM client requires a public or wallet capability')
     expect(() =>
-      evmConnection({
+      createEvmClient({
         account: evmLocalAccount({ address: '0x0000000000000000000000000000000000000001' } as never),
       }),
     ).toThrow('Local EVM accounts require an EVM transport or public client')
@@ -53,15 +52,14 @@ describe('EVM bridge connections', () => {
       if (method === 'eth_sendTransaction') return `0x${'ab'.repeat(32)}`
       throw new Error(`unexpected ${method}`)
     })
-    const definition = evmConnection({
+    const client = createEvmClient({
       transport: evmCustom(publicRequest),
       account: evmProvider({ request: providerRequest }),
     })
 
-    const connection = materializeEvmConnection(definition, fetch)
-    expect(await connection.publicClient?.getChainId()).toBe(1)
-    expect(await connection.walletClient?.getAddress()).toBe('0x0000000000000000000000000000000000000001')
-    await connection.walletClient?.sendTransaction({
+    expect(await client.publicClient.getChainId()).toBe(1)
+    expect(await client.walletClient?.getAddress()).toBe('0x0000000000000000000000000000000000000001')
+    await client.walletClient?.sendTransaction({
       chainId: 1,
       to: '0x0000000000000000000000000000000000000002',
       data: '0x',
@@ -91,12 +89,12 @@ describe('EVM bridge connections', () => {
       if (method === 'eth_sendRawTransaction') return hash
       throw new Error(`unexpected ${method}`)
     })
-    const connection = materializeEvmConnection(evmConnection({
+    const client = createEvmClient({
       transport: evmCustom(request),
       account: evmPrivateKey(`0x${'11'.repeat(32)}`),
-    }), fetch)
+    })
 
-    await expect(connection.walletClient?.sendTransaction({
+    await expect(client.walletClient?.sendTransaction({
       chainId: 1,
       to: '0x0000000000000000000000000000000000000002',
       data: '0x',
@@ -114,12 +112,12 @@ describe('EVM bridge connections', () => {
       getChainId: async () => 1,
       sendTransaction,
     } as never
-    const connection = materializeEvmConnection(evmConnection({
+    const client = createEvmClient({
       transport: evmCustom(async () => '0x1'),
       walletClient,
-    }), fetch)
+    })
 
-    await connection.walletClient?.sendTransaction({
+    await client.walletClient?.sendTransaction({
       chainId: 1,
       to: '0x0000000000000000000000000000000000000002',
       data: '0x',
@@ -127,7 +125,7 @@ describe('EVM bridge connections', () => {
     expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({
       account: '0x0000000000000000000000000000000000000001',
     }))
-    await expect(connection.walletClient?.sendTransaction({
+    await expect(client.walletClient?.sendTransaction({
       chainId: 2,
       to: '0x0000000000000000000000000000000000000002',
       data: '0x',
@@ -142,12 +140,12 @@ describe('EVM bridge connections', () => {
       getChainId: async () => 1,
       sendTransaction,
     } as never
-    const connection = materializeEvmConnection(evmConnection({
+    const client = createEvmClient({
       transport: evmCustom(async () => '0x1'),
       walletClient,
-    }), fetch)
+    })
 
-    await connection.walletClient?.sendTransaction({
+    await client.walletClient?.sendTransaction({
       chainId: 1,
       to: '0x0000000000000000000000000000000000000002',
       data: '0x',
@@ -155,29 +153,27 @@ describe('EVM bridge connections', () => {
     expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ account: localAccount }))
   })
 
-  it('uses the transport fetch override ahead of the client default', async () => {
+  it('uses the transport fetch override', async () => {
     const transportFetch = vi.fn(async () => new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x1' })))
-    const defaultFetch = vi.fn()
-    const connection = materializeEvmConnection(evmConnection({
+    const client = createEvmClient({
       transport: evmHttp('https://rpc.example', { fetch: transportFetch }),
-    }), defaultFetch as never)
+    })
 
-    await expect(connection.publicClient?.getChainId()).resolves.toBe(1)
+    await expect(client.publicClient.getChainId()).resolves.toBe(1)
     expect(transportFetch).toHaveBeenCalledOnce()
-    expect(defaultFetch).not.toHaveBeenCalled()
   })
 
-  it('derives public access from a provider-only connection', async () => {
+  it('derives public access from a provider-only client', async () => {
     const request = vi.fn(async ({ method }: { method: string }) => {
       if (method === 'eth_chainId') return '0x1'
       throw new Error(`unexpected ${method}`)
     })
-    const connection = materializeEvmConnection(evmConnection({ account: evmProvider({ request }) }), fetch)
+    const client = createEvmClient({ account: evmProvider({ request }) })
 
-    await expect(connection.publicClient?.getChainId()).resolves.toBe(1)
+    await expect(client.publicClient.getChainId()).resolves.toBe(1)
   })
 
-  it('derives public access from a direct wallet-client connection', async () => {
+  it('derives public access from a direct wallet client', async () => {
     const walletClient = {
       account: undefined,
       request: async ({ method }: { method: string }) => {
@@ -189,9 +185,9 @@ describe('EVM bridge connections', () => {
       sendTransaction: async () => `0x${'ab'.repeat(32)}`,
     } as never
 
-    const connection = materializeEvmConnection(evmConnection({ walletClient }), fetch)
+    const client = createEvmClient({ walletClient })
 
-    await expect(connection.publicClient.getChainId()).resolves.toBe(1)
+    await expect(client.publicClient.getChainId()).resolves.toBe(1)
   })
 
   it('keeps receipt reads on a dedicated public client', async () => {
@@ -201,12 +197,12 @@ describe('EVM bridge connections', () => {
       if (method === 'eth_accounts') return ['0x0000000000000000000000000000000000000001']
       throw new Error(`unexpected ${method}`)
     })
-    const connection = materializeEvmConnection(evmConnection({
+    const client = createEvmClient({
       publicClient: { getTransactionReceipt } as never,
       account: evmProvider({ request: providerRequest }),
-    }), fetch)
+    })
 
-    await expect(connection.publicClient?.getTransactionReceipt(hash)).resolves.toMatchObject({ transactionHash: hash })
+    await expect(client.publicClient.getTransactionReceipt(hash)).resolves.toMatchObject({ transactionHash: hash })
     expect(getTransactionReceipt).toHaveBeenCalledWith({ hash })
     expect(providerRequest).not.toHaveBeenCalled()
   })

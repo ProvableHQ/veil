@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest'
 import { executeEvmXReserveTransfer, getXReserveAttestation } from '../../src/actions/evmXReserve.js'
 import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
-import { evmConnection, evmCustom, evmProvider, materializeEvmConnection } from '../../src/connections/evm.js'
+import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'
 import type { BridgeTransferReceipt } from '../../src/types/protocol.js'
 
 const ACCOUNT = getAddress('0x0000000000000000000000000000000000000001')
@@ -72,10 +72,10 @@ function mockExecutor(confirmDeposit = { value: true }) {
       }
       throw new Error(`Unexpected RPC method ${method}`)
   }
-  const executor = materializeEvmConnection(evmConnection({
+  const executor = createEvmClient({
     transport: evmCustom(request),
     account: evmProvider({ request }, { account: ACCOUNT }),
-  }), fetch) as Required<ReturnType<typeof materializeEvmConnection>>
+  }) as Required<ReturnType<typeof createEvmClient>>
   return { executor, sent }
 }
 

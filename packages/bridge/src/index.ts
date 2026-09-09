@@ -9,7 +9,7 @@ export {
   type BridgeActionsConfig,
 } from './clients/decorators/bridge.js'
 export {
-  evmConnection,
+  createEvmClient,
   evmCustom,
   evmHttp,
   evmLocalAccount,
@@ -17,8 +17,8 @@ export {
   evmProvider,
   type EvmAccount,
   type EvmCallParameters,
-  type EvmConnection,
-  type EvmConnectionDefinition,
+  type EvmClient,
+  type EvmClientConfig,
   type EvmHttpOptions,
   type EvmPublicClient,
   type EvmReceipt,
@@ -26,32 +26,28 @@ export {
   type EvmTransactionParameters,
   type EvmTransportDefinition,
   type EvmWalletClient,
-  type EvmWalletConnection,
 } from './connections/evm.js'
 export {
-  solanaConnection,
+  createSolanaClient,
   solanaCustom,
   solanaHttp,
   solanaKeyPair,
   solanaWallet,
   type SolanaAccount,
-  type SolanaConnection,
-  type SolanaConnectionDefinition,
+  type SolanaClient,
+  type SolanaClientConfig,
   type SolanaHttpOptions,
   type SolanaPublicClient,
   type SolanaRequest,
   type SolanaTransportDefinition,
   type SolanaWalletClient,
-  type SolanaWalletConnection,
 } from './connections/solana.js'
 export {
-  aleoConnection,
+  createAleoClient,
   aleoWallet,
-  type AleoConnection,
-  type AleoConnectionDefinition,
-  type AleoWalletConnection,
+  type AleoClient,
+  type AleoClientConfig,
 } from './connections/aleo.js'
-export type { BridgeConnectionDefinition } from './connections/index.js'
 
 export {
   getProtocolAssets as getAssets,

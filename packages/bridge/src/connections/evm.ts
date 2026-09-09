@@ -44,16 +44,14 @@ export type EvmAccount =
   | { type: 'local'; account: LocalAccount }
 
 /**
- * Configures one registry-keyed EVM connection.
+ * Configures one registry-keyed EVM client.
  *
- * @property family Discriminator added by {@link evmConnection}.
  * @property transport Lazy public JSON-RPC transport.
  * @property publicClient Existing viem public client used directly.
  * @property account Injected-provider or local signing authority.
  * @property walletClient Existing viem wallet client used directly.
  */
-export type EvmConnectionDefinition = {
-  family: 'evm'
+export type EvmClientConfig = {
   transport?: EvmTransportDefinition | undefined
   publicClient?: PublicClient | undefined
   account?: EvmAccount | undefined
@@ -120,18 +118,11 @@ export type EvmWalletClient = {
  * @property publicClient Required read capability.
  * @property walletClient Optional signing capability.
  */
-export type EvmConnection = {
+export type EvmClient = {
   family: 'evm'
   publicClient: EvmPublicClient
   walletClient?: EvmWalletClient | undefined
 }
-
-/**
- * Requires the wallet side of an otherwise readable EVM connection.
- *
- * @property walletClient Account-authorized client used to sign and broadcast.
- */
-export type EvmWalletConnection = EvmConnection & { walletClient: EvmWalletClient }
 
 /**
  * Creates a lazy EVM HTTP transport definition.
@@ -194,34 +185,36 @@ export function evmLocalAccount(account: LocalAccount): EvmAccount {
 }
 
 /**
- * Creates and statically validates an inert EVM connection definition.
+ * Creates an EVM bridge client with public access and optional wallet authorization.
+ *
+ * Construction is local and performs no RPC requests.
  *
  * @param config Public transport/client and optional account/wallet client.
- * @returns A registry-ready EVM connection definition.
+ * @returns A registry-ready EVM client.
  * @throws BridgeError When capabilities conflict or local signing has no public client.
- * @example const connection = evmConnection({ transport: evmHttp(rpcUrl), account: evmPrivateKey(key) })
+ * @example const client = createEvmClient({ transport: evmHttp(rpcUrl), account: evmPrivateKey(key) })
  */
-export function evmConnection(
-  config: Omit<EvmConnectionDefinition, 'family'>,
-): EvmConnectionDefinition {
+export function createEvmClient(
+  config: EvmClientConfig,
+): EvmClient {
   if (config.transport && config.publicClient) {
-    throw new BridgeError('EVM connection accepts either transport or publicClient, not both')
+    throw new BridgeError('EVM client accepts either transport or publicClient, not both')
   }
   if (config.account && config.walletClient) {
-    throw new BridgeError('EVM connection accepts either account or walletClient, not both')
+    throw new BridgeError('EVM client accepts either account or walletClient, not both')
   }
   if (!config.transport && !config.publicClient && !config.account && !config.walletClient) {
-    throw new BridgeError('EVM connection requires a public or wallet capability')
+    throw new BridgeError('EVM client requires a public or wallet capability')
   }
   if (config.account?.type === 'local' && !config.transport && !config.publicClient) {
     throw new BridgeError('Local EVM accounts require an EVM transport or public client')
   }
-  return { family: 'evm', ...config }
+  return materializeEvmClient(config, globalThis.fetch)
 }
 
-function transportFor(definition: EvmTransportDefinition, defaultFetch: typeof globalThis.fetch) {
-  if (definition.type === 'custom') return custom({ request: definition.request })
-  return http(definition.url, { fetchFn: definition.fetch ?? defaultFetch })
+function transportFor(transport: EvmTransportDefinition, defaultFetch: typeof globalThis.fetch) {
+  if (transport.type === 'custom') return custom({ request: transport.request })
+  return http(transport.url, { fetchFn: transport.fetch ?? defaultFetch })
 }
 
 function normalizePublicClient(client: PublicClient): EvmPublicClient {
@@ -262,25 +255,25 @@ function normalizeWalletClient(client: WalletClient): EvmWalletClient {
   }
 }
 
-/** Materializes an EVM definition into bridge public and wallet clients. */
-export function materializeEvmConnection(
-  definition: EvmConnectionDefinition,
+/** Builds the EVM public and optional wallet capabilities. */
+function materializeEvmClient(
+  config: EvmClientConfig,
   defaultFetch: typeof globalThis.fetch,
-): EvmConnection {
-  const transport = definition.transport ? transportFor(definition.transport, defaultFetch) : undefined
-  const viemPublic = definition.publicClient ?? (transport ? createPublicClient({ transport }) : undefined)
+): EvmClient {
+  const transport = config.transport ? transportFor(config.transport, defaultFetch) : undefined
+  const viemPublic = config.publicClient ?? (transport ? createPublicClient({ transport }) : undefined)
   let publicClient = viemPublic ? normalizePublicClient(viemPublic) : undefined
-  let walletClient = definition.walletClient ? normalizeWalletClient(definition.walletClient) : undefined
+  let walletClient = config.walletClient ? normalizeWalletClient(config.walletClient) : undefined
 
-  if (!publicClient && definition.walletClient) {
-    const request = definition.walletClient.request as EvmRequest
+  if (!publicClient && config.walletClient) {
+    const request = config.walletClient.request as EvmRequest
     publicClient = normalizePublicClient(createPublicClient({ transport: custom({ request }) }))
   }
 
-  if (definition.account?.type === 'provider') {
-    const provider = definition.account.provider
+  if (config.account?.type === 'provider') {
+    const provider = config.account.provider
     if (!publicClient) publicClient = normalizePublicClient(createPublicClient({ transport: custom(provider) }))
-    const account = definition.account.account
+    const account = config.account.account
     walletClient = {
       getAddress: async () => {
         if (account) return account
@@ -303,9 +296,9 @@ export function materializeEvmConnection(
         return hash as Hash
       },
     }
-  } else if (definition.account?.type === 'local') {
+  } else if (config.account?.type === 'local') {
     if (!viemPublic) throw new BridgeError('Local EVM accounts require an EVM transport or public client')
-    const localAccount = definition.account.account
+    const localAccount = config.account.account
     walletClient = {
       getAddress: async () => localAccount.address,
       sendTransaction: async ({ chainId, from, ...transaction }) => {
@@ -332,6 +325,6 @@ export function materializeEvmConnection(
     }
   }
 
-  if (!publicClient) throw new BridgeError('EVM connection could not materialize a public client')
+  if (!publicClient) throw new BridgeError('EVM client could not materialize a public client')
   return { family: 'evm', publicClient, walletClient }
 }

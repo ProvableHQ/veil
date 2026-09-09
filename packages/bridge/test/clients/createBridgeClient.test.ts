@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createBridgeClient } from '../../src/clients/createBridgeClient.js'
-import { evmConnection, evmCustom } from '../../src/connections/evm.js'
-import { solanaConnection, solanaCustom, solanaWallet } from '../../src/connections/solana.js'
+import { createEvmClient, evmCustom } from '../../src/connections/evm.js'
+import { createSolanaClient, solanaCustom, solanaWallet } from '../../src/connections/solana.js'
 
 describe('createBridgeClient', () => {
   it('defaults discovery to mainnet without exposing a fake base client', () => {
@@ -27,7 +27,7 @@ describe('createBridgeClient', () => {
     expect(plan.registryVersion).toBe(client.registry.version)
   })
 
-  it('requires a chain-specific EVM connection for live Hyperlane actions', async () => {
+  it('requires a chain-specific EVM client for live Hyperlane actions', async () => {
     const client = createBridgeClient()
     const plan = client.prepareTransfer({
       routeId: 'hyperlane:ethereum/eth->aleo/eth',
@@ -37,7 +37,7 @@ describe('createBridgeClient', () => {
     await expect(client.quoteEvmHyperlaneTransfer({
       plan,
       recipientBytes32: '0x20e3629764d5338f74bee96675801b1fb29d1fc68b177668f9175708bef84311',
-    })).rejects.toThrow(/No connection is configured for chain "ethereum"/)
+    })).rejects.toThrow(/No client is configured for chain "ethereum"/)
   })
 
   it('binds the injected Circle attestation transport', async () => {
@@ -52,11 +52,11 @@ describe('createBridgeClient', () => {
     })).resolves.toEqual({ status: 'pending', messageHash })
   })
 
-  it('accepts a registry-keyed Solana connection', () => {
+  it('accepts a registry-keyed Solana client', () => {
     const bridge = createBridgeClient({
       environment: 'mainnet',
-      connections: {
-        solana: solanaConnection({
+      clients: {
+        solana: createSolanaClient({
           transport: solanaCustom(async () => undefined),
           account: solanaWallet({
             wallet: { features: { 'solana:signAndSendTransaction': { signAndSendTransaction: async () => [] } } },
@@ -70,7 +70,7 @@ describe('createBridgeClient', () => {
   })
 
   it('requires a Solana wallet capability for live execution', async () => {
-    const client = createBridgeClient({ connections: { solana: solanaConnection({ transport: solanaCustom(async () => undefined) }) } })
+    const client = createBridgeClient({ clients: { solana: createSolanaClient({ transport: solanaCustom(async () => undefined) }) } })
     const plan = client.prepareTransfer({
       routeId: 'hyperlane:solana/sol->aleo/sol',
       amount: '1',
@@ -79,9 +79,9 @@ describe('createBridgeClient', () => {
     await expect(client.executeSolanaHyperlaneTransfer({ plan })).rejects.toThrow(/Solana wallet client is required/)
   })
 
-  it('selects connections from the source chain rather than a family default', async () => {
+  it('selects clients from the source chain rather than a family default', async () => {
     const client = createBridgeClient({
-      connections: { sepolia: evmConnection({ transport: evmCustom(async () => '0x1') }) },
+      clients: { sepolia: createEvmClient({ transport: evmCustom(async () => '0x1') }) },
     })
     const plan = client.prepareTransfer({
       routeId: 'hyperlane:ethereum/eth->aleo/eth',
@@ -91,6 +91,6 @@ describe('createBridgeClient', () => {
     await expect(client.quoteEvmHyperlaneTransfer({
       plan,
       recipientBytes32: `0x${'11'.repeat(32)}`,
-    })).rejects.toThrow(/No connection is configured for chain "ethereum"/)
+    })).rejects.toThrow(/No client is configured for chain "ethereum"/)
   })
 })

@@ -16,7 +16,7 @@ import {
 } from '../../src/actions/evmHyperlane.js'
 import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
-import { evmConnection, evmCustom, evmProvider, materializeEvmConnection } from '../../src/connections/evm.js'
+import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'
 
 const ACCOUNT = getAddress('0x0000000000000000000000000000000000000001')
 const RECIPIENT = '0x20e3629764d5338f74bee96675801b1fb29d1fc68b177668f9175708bef84311'
@@ -102,10 +102,10 @@ function executor(options: {
       }
       throw new Error(`Unexpected RPC method ${method}`)
   }
-  const bridgeExecutor = materializeEvmConnection(evmConnection({
+  const bridgeExecutor = createEvmClient({
     transport: evmCustom(request),
     account: evmProvider({ request }, { account: ACCOUNT }),
-  }), fetch) as Required<ReturnType<typeof materializeEvmConnection>>
+  }) as Required<ReturnType<typeof createEvmClient>>
   return { bridgeExecutor, sent }
 }
 

@@ -44,13 +44,11 @@ export type SolanaAccount =
   | { type: 'local'; secretKeyBytes: Uint8Array }
 
 /**
- * Configures one registry-keyed Solana connection.
- * @property family Discriminator added by {@link solanaConnection}.
+ * Configures one registry-keyed Solana client.
  * @property transport Required public JSON-RPC transport.
  * @property account Optional Wallet Standard or local-key signing authority.
  */
-export type SolanaConnectionDefinition = {
-  family: 'solana'
+export type SolanaClientConfig = {
   transport: SolanaTransportDefinition
   account?: SolanaAccount | undefined
 }
@@ -79,18 +77,11 @@ export type SolanaWalletClient = {
  * @property publicClient Read and broadcast capability.
  * @property walletClient Optional signing capability.
  */
-export type SolanaConnection = {
+export type SolanaClient = {
   family: 'solana'
   publicClient: SolanaPublicClient
   walletClient?: SolanaWalletClient | undefined
 }
-
-/**
- * Requires the wallet side of an otherwise readable Solana connection.
- *
- * @property walletClient Account-authorized client used to sign and submit.
- */
-export type SolanaWalletConnection = SolanaConnection & { walletClient: SolanaWalletClient }
 
 /**
  * Creates a lazy Solana HTTP transport definition.
@@ -136,25 +127,28 @@ export function solanaKeyPair(secretKeyBytes: Uint8Array): SolanaAccount {
 }
 
 /**
- * Creates and statically validates an inert Solana connection definition.
+ * Creates a Solana bridge client with public access and optional wallet authorization.
+ *
+ * Construction is local and performs no RPC requests.
+ *
  * @param config Required transport and optional account.
- * @returns A registry-ready Solana connection definition.
+ * @returns A registry-ready Solana client.
  * @throws BridgeError When the transport is absent.
- * @example const connection = solanaConnection({ transport: solanaHttp(rpcUrl), account: solanaKeyPair(key) })
+ * @example const client = createSolanaClient({ transport: solanaHttp(rpcUrl), account: solanaKeyPair(key) })
  */
-export function solanaConnection(
-  config: Omit<SolanaConnectionDefinition, 'family'>,
-): SolanaConnectionDefinition {
-  if (!config.transport) throw new BridgeError('Solana connection requires a transport')
-  return { family: 'solana', ...config }
+export function createSolanaClient(
+  config: SolanaClientConfig,
+): SolanaClient {
+  if (!config.transport) throw new BridgeError('Solana client requires a transport')
+  return materializeSolanaClient(config, globalThis.fetch)
 }
 
-/** Materializes a Solana definition into bridge public and wallet clients. */
-export function materializeSolanaConnection(
-  definition: SolanaConnectionDefinition,
+/** Builds the Solana public and optional wallet capabilities. */
+function materializeSolanaClient(
+  config: SolanaClientConfig,
   defaultFetch: SolanaRpcHttpTransport,
-): SolanaConnection {
-  const transportDefinition = definition.transport
+): SolanaClient {
+  const transportDefinition = config.transport
   const httpTransport: SolanaRpcHttpTransport = transportDefinition.type === 'http'
     ? transportDefinition.fetch ?? defaultFetch
     : async (_url, init) => {
@@ -186,8 +180,8 @@ export function materializeSolanaConnection(
   }
 
   let walletClient: SolanaWalletClient | undefined
-  if (definition.account?.type === 'wallet') {
-    const walletAccount = definition.account
+  if (config.account?.type === 'wallet') {
+    const walletAccount = config.account
     const feature = walletAccount.wallet.features[SOLANA_SIGN_AND_SEND_TRANSACTION_FEATURE] as
       | SolanaSignAndSendTransactionFeature
       | undefined
@@ -204,10 +198,10 @@ export function materializeSolanaConnection(
         return { signature: bs58.encode(output.signature) }
       },
     }
-  } else if (definition.account?.type === 'local') {
+  } else if (config.account?.type === 'local') {
     let signerPromise: ReturnType<typeof createSigner> | undefined
-    const create = () => signerPromise ??= createSigner(definition.account!.type === 'local'
-      ? definition.account!.secretKeyBytes
+    const create = () => signerPromise ??= createSigner(config.account!.type === 'local'
+      ? config.account!.secretKeyBytes
       : new Uint8Array())
     walletClient = {
       getAddress: async () => (await create()).address,

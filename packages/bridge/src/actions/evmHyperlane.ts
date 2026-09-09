@@ -12,7 +12,7 @@ import {
   type Hex,
 } from 'viem'
 import { BridgeError } from '../errors/bridgeErrors.js'
-import type { EvmConnection, EvmWalletConnection } from '../connections/evm.js'
+import type { EvmClient, EvmWalletClient } from '../connections/evm.js'
 import type {
   EvmHyperlaneRouteMetadata,
   EvmHyperlaneTransferExecution,
@@ -125,23 +125,23 @@ function validateRecipient(recipientBytes32: Hex): void {
   }
 }
 
-async function rpcCall(connection: EvmConnection, to: Address, data: Hex): Promise<Hex> {
-  const result = await connection.publicClient.call({ to, data })
+async function rpcCall(client: EvmClient, to: Address, data: Hex): Promise<Hex> {
+  const result = await client.publicClient.call({ to, data })
   if (typeof result !== 'string' || !result.startsWith('0x')) {
     throw new BridgeError('EVM public client returned an invalid eth_call result')
   }
   return result as Hex
 }
 
-async function assertChain(connection: EvmConnection, expectedChainId: number): Promise<void> {
-  const actual = await connection.publicClient.getChainId()
+async function assertChain(client: EvmClient, expectedChainId: number): Promise<void> {
+  const actual = await client.publicClient.getChainId()
   if (actual !== expectedChainId) {
     throw new BridgeError(`EVM wallet is connected to chain ${actual}; expected ${expectedChainId}`)
   }
 }
 
-async function resolveAccount(connection: EvmWalletConnection, plan: BridgeTransferPlan): Promise<Address> {
-  const account = await connection.walletClient.getAddress()
+async function resolveAccount(client: EvmClient & { walletClient: EvmWalletClient }, plan: BridgeTransferPlan): Promise<Address> {
+  const account = await client.walletClient.getAddress()
   if (!isAddress(account)) throw new BridgeError('EVM wallet client account is invalid')
   const normalized = getAddress(account)
   if (plan.sender && (!isAddress(plan.sender) || getAddress(plan.sender) !== normalized)) {
@@ -151,11 +151,11 @@ async function resolveAccount(connection: EvmWalletConnection, plan: BridgeTrans
 }
 
 async function sendTransaction(
-  connection: EvmWalletConnection,
+  client: EvmClient & { walletClient: EvmWalletClient },
   chainId: number,
   transaction: { from: Address, to: Address, data: Hex, value?: Hex | undefined },
 ): Promise<Hash> {
-  const result = await connection.walletClient.sendTransaction({
+  const result = await client.walletClient.sendTransaction({
     chainId,
     from: transaction.from,
     to: transaction.to,
@@ -169,14 +169,14 @@ async function sendTransaction(
 }
 
 async function waitForReceipt(
-  connection: EvmConnection,
+  client: EvmClient,
   hash: Hash,
   timeoutMs: number,
   pollingIntervalMs: number,
 ): Promise<RpcTransactionReceipt | undefined> {
   const deadline = Date.now() + timeoutMs
   do {
-    const result = await connection.publicClient.getTransactionReceipt(hash)
+    const result = await client.publicClient.getTransactionReceipt(hash)
     if (result != null && typeof result === 'object') return result as RpcTransactionReceipt
     if (Date.now() >= deadline) return undefined
     await new Promise<void>((resolve) => setTimeout(resolve, pollingIntervalMs))
@@ -211,28 +211,28 @@ function messageIdFromReceipt(receipt: RpcTransactionReceipt): Hash | undefined 
  * Quotes an Ethereum-to-Aleo Hyperlane Warp Route transfer.
  *
  * Calls the reviewed router's `quoteTransferRemote` through the supplied EVM
- * connection. The call reads live state but does not request a signature or move funds.
+ * client. The call reads live state but does not request a signature or move funds.
  *
  * @param registry Reviewed deployment snapshot used to validate the prepared plan.
- * @param connection Registry-selected EVM public capability.
+ * @param client Registry-selected EVM public capability.
  * @param params Prepared plan and exact 32-byte Aleo recipient encoding.
  * @returns Atomic native payment and ERC-20 allowance requirements.
- * @throws BridgeError When the route is not an active Ethereum source route, metadata is incomplete, the wallet is on the wrong chain, or the router returns an unusable quote.
+ * @throws BridgeError When the route is not an active Ethereum source route, metadata is incomplete, the client is on the wrong chain, or the router returns an unusable quote.
  *
  * @example
- * const quote = await quoteEvmHyperlaneTransfer(registry, connection, {
+ * const quote = await quoteEvmHyperlaneTransfer(registry, client, {
  *   plan,
  *   recipientBytes32: '0x20e3629764d5338f74bee96675801b1fb29d1fc68b177668f9175708bef84311',
  * })
  */
 export async function quoteEvmHyperlaneTransfer(
   registry: BridgeRegistry,
-  connection: EvmConnection,
+  client: EvmClient,
   params: QuoteEvmHyperlaneTransferParameters,
 ): Promise<EvmHyperlaneTransferQuote> {
   validateRecipient(params.recipientBytes32)
   const metadata = routeMetadata(registry, params.plan)
-  await assertChain(connection, metadata.sourceChainId)
+  await assertChain(client, metadata.sourceChainId)
   const sourceAsset = registry.assets.find((asset) => asset.id === params.plan.sourceAsset.id)!
   const amountAtomic = parseDecimalAmount(params.plan.amountIn, sourceAsset.decimals)
   const data = encodeFunctionData({
@@ -240,7 +240,7 @@ export async function quoteEvmHyperlaneTransfer(
     functionName: 'quoteTransferRemote',
     args: [metadata.destinationDomain, params.recipientBytes32, amountAtomic],
   })
-  const encoded = await rpcCall(connection, metadata.routerAddress, data)
+  const encoded = await rpcCall(client, metadata.routerAddress, data)
   const quotes = decodeFunctionResult({
     abi: WARP_ROUTE_ABI,
     functionName: 'quoteTransferRemote',
@@ -321,20 +321,20 @@ function executionReceipt(
  * non-zero allowance before setting a new one. Calls can prompt the wallet and move funds.
  *
  * @param registry Reviewed deployment snapshot used to validate the prepared plan.
- * @param connection Registry-selected EVM public and wallet capabilities.
+ * @param client Registry-selected EVM public and wallet capabilities.
  * @param params Prepared plan, wire recipient, and optional receipt polling controls.
  * @returns Submitted transaction ids plus resumable transfer state. Receipt timeouts return a pending state and do not report failure.
  * @throws BridgeError When validation, quoting, wallet submission, or a confirmed transaction fails.
  *
  * @example
- * const execution = await executeEvmHyperlaneTransfer(registry, connection, {
+ * const execution = await executeEvmHyperlaneTransfer(registry, client, {
  *   plan,
  *   recipientBytes32: '0x20e3629764d5338f74bee96675801b1fb29d1fc68b177668f9175708bef84311',
  * })
  */
 export async function executeEvmHyperlaneTransfer(
   registry: BridgeRegistry,
-  connection: EvmWalletConnection,
+  client: EvmClient & { walletClient: EvmWalletClient },
   params: ExecuteEvmHyperlaneTransferParameters,
 ): Promise<EvmHyperlaneTransferExecution> {
   const pollingIntervalMs = params.pollingIntervalMs ?? 1_000
@@ -347,8 +347,8 @@ export async function executeEvmHyperlaneTransfer(
   }
 
   const metadata = routeMetadata(registry, params.plan)
-  const quote = await quoteEvmHyperlaneTransfer(registry, connection, params)
-  const account = await resolveAccount(connection, params.plan)
+  const quote = await quoteEvmHyperlaneTransfer(registry, client, params)
+  const account = await resolveAccount(client, params.plan)
   const approvalTxIds: Hash[] = []
 
   if (metadata.routerType === 'collateral') {
@@ -357,7 +357,7 @@ export async function executeEvmHyperlaneTransfer(
       functionName: 'allowance',
       args: [account, metadata.routerAddress],
     })
-    const allowanceResult = await rpcCall(connection, metadata.tokenAddress!, allowanceData)
+    const allowanceResult = await rpcCall(client, metadata.tokenAddress!, allowanceData)
     const allowance = decodeFunctionResult({
       abi: ERC20_ABI,
       functionName: 'allowance',
@@ -371,9 +371,9 @@ export async function executeEvmHyperlaneTransfer(
         functionName: 'approve',
         args: [metadata.routerAddress, amount],
       })
-      const hash = await sendTransaction(connection, metadata.sourceChainId, { from: account, to: metadata.tokenAddress!, data })
+      const hash = await sendTransaction(client, metadata.sourceChainId, { from: account, to: metadata.tokenAddress!, data })
       approvalTxIds.push(hash)
-      const receipt = await waitForReceipt(connection, hash, confirmationTimeoutMs, pollingIntervalMs)
+      const receipt = await waitForReceipt(client, hash, confirmationTimeoutMs, pollingIntervalMs)
       if (!receipt) return false
       assertSuccessfulReceipt(receipt, hash)
       return true
@@ -402,14 +402,14 @@ export async function executeEvmHyperlaneTransfer(
     functionName: 'transferRemote',
     args: [quote.destinationDomain, quote.recipientBytes32, quote.amountAtomic],
   })
-  const sourceTxId = await sendTransaction(connection, metadata.sourceChainId, {
+  const sourceTxId = await sendTransaction(client, metadata.sourceChainId, {
     from: account,
     to: quote.routerAddress,
     data: transferData,
     value: `0x${quote.nativeValueAtomic.toString(16)}`,
   })
   const sourceReceipt = await waitForReceipt(
-    connection,
+    client,
     sourceTxId,
     confirmationTimeoutMs,
     pollingIntervalMs,

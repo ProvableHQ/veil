@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { quoteSolanaHyperlaneTransfer } from '../../src/actions/quoteSolanaHyperlaneTransfer.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 import type { SolanaRpcClient } from '../../src/solana/rpc.js'
-import type { SolanaConnection } from '../../src/connections/solana.js'
+import type { SolanaClient } from '../../src/connections/solana.js'
 import {
   EXPECTED_IGP_PAYMENT_LAMPORTS,
   NETWORK_FEE_LAMPORTS,
@@ -26,7 +26,7 @@ function rpcReturning(accountData: Uint8Array | null): SolanaRpcClient {
   }
 }
 
-function connection(publicClient: SolanaRpcClient): SolanaConnection {
+function client(publicClient: SolanaRpcClient): SolanaClient {
   return { family: 'solana', publicClient: { ...publicClient, sendTransaction: async () => ({ signature: 'unused' }) } }
 }
 
@@ -36,7 +36,7 @@ describe('quoteSolanaHyperlaneTransfer', () => {
     const plan = transferPlan(registry)
     const rpc = rpcReturning(igpAccountData())
 
-    const quote = await quoteSolanaHyperlaneTransfer(registry, connection(rpc), { plan })
+    const quote = await quoteSolanaHyperlaneTransfer(registry, client(rpc), { plan })
 
     expect(quote.routeId).toBe(SOLANA_ROUTE_ID)
     expect(quote.amountLamports).toBe(BigInt(transferFixture.amountLamports))
@@ -52,7 +52,7 @@ describe('quoteSolanaHyperlaneTransfer', () => {
     const plan = transferPlan(registry)
     const rpc = rpcReturning(null)
 
-    await expect(quoteSolanaHyperlaneTransfer(registry, connection(rpc), { plan })).rejects.toThrow(BridgeError)
+    await expect(quoteSolanaHyperlaneTransfer(registry, client(rpc), { plan })).rejects.toThrow(BridgeError)
   })
 
   it('propagates route validation failures without touching the network', async () => {
@@ -60,6 +60,6 @@ describe('quoteSolanaHyperlaneTransfer', () => {
     const plan = { ...transferPlan(registry), protocol: 'xreserve' as const }
     const rpc = rpcReturning(igpAccountData())
 
-    await expect(quoteSolanaHyperlaneTransfer(registry, connection(rpc), { plan })).rejects.toThrow(BridgeError)
+    await expect(quoteSolanaHyperlaneTransfer(registry, client(rpc), { plan })).rejects.toThrow(BridgeError)
   })
 })

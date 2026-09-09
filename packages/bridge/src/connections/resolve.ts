@@ -1,63 +1,64 @@
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type { BridgeRegistry } from '../types/protocol.js'
-import type { AleoConnection, AleoWalletConnection } from './aleo.js'
-import type { EvmConnection, EvmWalletConnection } from './evm.js'
-import type { SolanaConnection, SolanaWalletConnection } from './solana.js'
+import type { AleoClient } from './aleo.js'
+import type { AleoWalletClient } from '../types/aleo.js'
+import type { EvmClient, EvmWalletClient } from './evm.js'
+import type { SolanaClient, SolanaWalletClient } from './solana.js'
 
-/** Represents every materialized bridge connection family. */
-export type BridgeConnection = EvmConnection | SolanaConnection | AleoConnection
+/** Represents every materialized bridge client family. */
+export type BridgeChainClient = EvmClient | SolanaClient | AleoClient
 
-/** Stores materialized connections by registry chain identifier. */
-export type BridgeConnections = Readonly<Record<string, BridgeConnection>>
+/** Stores materialized clients by registry chain identifier. */
+export type BridgeChainClients = Readonly<Record<string, BridgeChainClient>>
 
 function resolve(
   registry: BridgeRegistry,
-  connections: BridgeConnections,
+  clients: BridgeChainClients,
   chainId: string,
-  family: BridgeConnection['family'],
-): BridgeConnection {
+  family: BridgeChainClient['family'],
+): BridgeChainClient {
   const chain = registry.chains.find((entry) => entry.id === chainId)
   if (!chain) throw new BridgeError(`Unknown bridge chain: "${chainId}"`)
-  const connection = connections[chainId]
-  if (!connection) throw new BridgeError(`No connection is configured for chain "${chainId}"`)
-  if (connection.family !== chain.family || connection.family !== family) {
-    throw new BridgeError(`Connection "${chainId}" has family "${connection.family}"; the registry declares "${chain.family}"`)
+  const client = clients[chainId]
+  if (!client) throw new BridgeError(`No client is configured for chain "${chainId}"`)
+  if (client.family !== chain.family || client.family !== family) {
+    throw new BridgeError(`Client "${chainId}" has family "${client.family}"; the registry declares "${chain.family}"`)
   }
-  return connection
+  return client
 }
 
-/** Resolves the readable EVM connection configured for one action. */
-export function requireEvmConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string): EvmConnection {
-  return resolve(registry, connections, chainId, 'evm') as EvmConnection
+/** Resolves the readable EVM client configured for one action. */
+export function requireEvmClient(registry: BridgeRegistry, clients: BridgeChainClients, chainId: string): EvmClient {
+  return resolve(registry, clients, chainId, 'evm') as EvmClient
 }
 
-/** Resolves an EVM connection with wallet access for one action. */
-export function requireEvmWalletConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string, action: string): EvmWalletConnection {
-  const connection = requireEvmConnection(registry, connections, chainId)
-  if (!connection.walletClient) throw new BridgeError(`EVM wallet client is required to ${action} on chain "${chainId}"`)
-  return connection as EvmWalletConnection
+/** Resolves an EVM client with wallet access for one action. */
+export function requireEvmClientWithWallet(registry: BridgeRegistry, clients: BridgeChainClients, chainId: string, action: string): EvmClient & { walletClient: EvmWalletClient } {
+  const client = requireEvmClient(registry, clients, chainId)
+  if (!client.walletClient) throw new BridgeError(`EVM wallet client is required to ${action} on chain "${chainId}"`)
+  return client as EvmClient & { walletClient: EvmWalletClient }
 }
 
-/** Resolves the readable Solana connection configured for one action. */
-export function requireSolanaConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string): SolanaConnection {
-  return resolve(registry, connections, chainId, 'solana') as SolanaConnection
+/** Resolves the readable Solana client configured for one action. */
+export function requireSolanaClient(registry: BridgeRegistry, clients: BridgeChainClients, chainId: string): SolanaClient {
+  return resolve(registry, clients, chainId, 'solana') as SolanaClient
 }
 
-/** Resolves a Solana connection with wallet access for one action. */
-export function requireSolanaWalletConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string, action: string): SolanaWalletConnection {
-  const connection = requireSolanaConnection(registry, connections, chainId)
-  if (!connection.walletClient) throw new BridgeError(`Solana wallet client is required to ${action} on chain "${chainId}"`)
-  return connection as SolanaWalletConnection
+/** Resolves a Solana client with wallet access for one action. */
+export function requireSolanaClientWithWallet(registry: BridgeRegistry, clients: BridgeChainClients, chainId: string, action: string): SolanaClient & { walletClient: SolanaWalletClient } {
+  const client = requireSolanaClient(registry, clients, chainId)
+  if (!client.walletClient) throw new BridgeError(`Solana wallet client is required to ${action} on chain "${chainId}"`)
+  return client as SolanaClient & { walletClient: SolanaWalletClient }
 }
 
-/** Resolves the readable Aleo connection configured for one action. */
-export function requireAleoConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string): AleoConnection {
-  return resolve(registry, connections, chainId, 'aleo') as AleoConnection
+/** Resolves the readable Aleo client configured for one action. */
+export function requireAleoClient(registry: BridgeRegistry, clients: BridgeChainClients, chainId: string): AleoClient {
+  return resolve(registry, clients, chainId, 'aleo') as AleoClient
 }
 
-/** Resolves an Aleo connection with wallet access for one action. */
-export function requireAleoWalletConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string, action: string): AleoWalletConnection {
-  const connection = requireAleoConnection(registry, connections, chainId)
-  if (!connection.walletClient) throw new BridgeError(`Aleo wallet client is required to ${action} on chain "${chainId}"`)
-  return connection as AleoWalletConnection
+/** Resolves an Aleo client with wallet access for one action. */
+export function requireAleoClientWithWallet(registry: BridgeRegistry, clients: BridgeChainClients, chainId: string, action: string): AleoClient & { walletClient: AleoWalletClient } {
+  const client = requireAleoClient(registry, clients, chainId)
+  if (!client.walletClient) throw new BridgeError(`Aleo wallet client is required to ${action} on chain "${chainId}"`)
+  return client as AleoClient & { walletClient: AleoWalletClient }
 }

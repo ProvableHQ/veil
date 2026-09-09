@@ -12,7 +12,7 @@ import {
   type Hex,
 } from 'viem'
 import { BridgeError } from '../errors/bridgeErrors.js'
-import type { EvmWalletConnection } from '../connections/evm.js'
+import type { EvmClient, EvmWalletClient } from '../connections/evm.js'
 import type { BridgeRegistry, BridgeTransferPlan, BridgeTransferReceipt } from '../types/protocol.js'
 import type {
   EvmXReserveRouteMetadata,
@@ -84,35 +84,35 @@ function metadata(registry: BridgeRegistry, plan: BridgeTransferPlan): EvmXReser
   return { xReserveContract: getAddress(xReserveContract), sourceChainId, sourceDomain, remoteDomain, remoteTokenBytes32: remoteTokenBytes32 as Hex, minimumAmountAtomic: BigInt(minimumAmountAtomic), maxFeeAtomic: BigInt(maxFeeAtomic), bridgeProgram, wrapperProgram, attestationBaseUrl }
 }
 
-async function assertChain(connection: EvmWalletConnection, expected: number): Promise<void> {
-  const chain = await connection.publicClient.getChainId()
+async function assertChain(client: EvmClient & { walletClient: EvmWalletClient }, expected: number): Promise<void> {
+  const chain = await client.publicClient.getChainId()
   if (chain !== expected) throw new BridgeError(`EVM wallet is connected to chain ${chain}; expected ${expected}`)
 }
 
-async function account(connection: EvmWalletConnection, plan: BridgeTransferPlan): Promise<Address> {
-  const value = await connection.walletClient.getAddress()
+async function account(client: EvmClient & { walletClient: EvmWalletClient }, plan: BridgeTransferPlan): Promise<Address> {
+  const value = await client.walletClient.getAddress()
   if (typeof value !== 'string' || !isAddress(value)) throw new BridgeError('EVM wallet client has no connected account')
   const resolved = getAddress(value)
   if (plan.sender && (!isAddress(plan.sender) || getAddress(plan.sender) !== resolved)) throw new BridgeError(`Prepared sender ${plan.sender} does not match connected account ${resolved}`)
   return resolved
 }
 
-async function callUint(connection: EvmWalletConnection, to: Address, data: Hex, functionName: 'balanceOf' | 'allowance'): Promise<bigint> {
-  const result = await connection.publicClient.call({ to, data })
+async function callUint(client: EvmClient & { walletClient: EvmWalletClient }, to: Address, data: Hex, functionName: 'balanceOf' | 'allowance'): Promise<bigint> {
+  const result = await client.publicClient.call({ to, data })
   if (typeof result !== 'string' || !isHex(result)) throw new BridgeError('EVM public client returned an invalid contract result')
   return decodeFunctionResult({ abi: ERC20_ABI, functionName, data: result })
 }
 
-async function send(connection: EvmWalletConnection, chainId: number, transaction: { from: Address, to: Address, data: Hex }): Promise<Hash> {
-  const hash = await connection.walletClient.sendTransaction({ chainId, ...transaction })
+async function send(client: EvmClient & { walletClient: EvmWalletClient }, chainId: number, transaction: { from: Address, to: Address, data: Hex }): Promise<Hash> {
+  const hash = await client.walletClient.sendTransaction({ chainId, ...transaction })
   if (typeof hash !== 'string' || !isHash(hash)) throw new BridgeError('EVM wallet client returned an invalid transaction hash')
   return hash
 }
 
-async function wait(connection: EvmWalletConnection, hash: Hash, timeout: number, interval: number): Promise<RpcReceipt | undefined> {
+async function wait(client: EvmClient & { walletClient: EvmWalletClient }, hash: Hash, timeout: number, interval: number): Promise<RpcReceipt | undefined> {
   const deadline = Date.now() + timeout
   do {
-    const result = await connection.publicClient.getTransactionReceipt(hash)
+    const result = await client.publicClient.getTransactionReceipt(hash)
     if (result && typeof result === 'object') return result as RpcReceipt
     if (Date.now() >= deadline) return undefined
     await new Promise<void>((resolve) => setTimeout(resolve, interval))
@@ -130,22 +130,22 @@ function successful(receipt: RpcReceipt, hash: Hash): void {
  * does not request a signature or move funds.
  *
  * @param registry Reviewed deployment snapshot used to validate the plan.
- * @param connection Registry-selected EVM public and wallet capabilities.
+ * @param client Registry-selected EVM public and wallet capabilities.
  * @param params Prepared Ethereum-to-Aleo xReserve plan.
  * @returns Atomic deposit values, account balance, allowance, and approval requirement.
  * @throws BridgeError When metadata, wallet state, amount, balance, or recipient is invalid.
  *
  * @example
- * const quote = await quoteEvmXReserveTransfer(registry, connection, { plan })
+ * const quote = await quoteEvmXReserveTransfer(registry, client, { plan })
  */
 export async function quoteEvmXReserveTransfer(
   registry: BridgeRegistry,
-  connection: EvmWalletConnection,
+  client: EvmClient & { walletClient: EvmWalletClient },
   params: QuoteEvmXReserveTransferParameters,
 ): Promise<EvmXReserveTransferQuote> {
   const route = metadata(registry, params.plan)
-  await assertChain(connection, route.sourceChainId)
-  const owner = await account(connection, params.plan)
+  await assertChain(client, route.sourceChainId)
+  const owner = await account(client, params.plan)
   const token = params.plan.sourceAsset.locator?.value
   if (params.plan.sourceAsset.locator?.kind !== 'evm-contract' || !token || !isAddress(token)) throw new BridgeError('xReserve source token contract is missing')
   const amountAtomic = parseDecimalAmount(params.plan.amountIn, params.plan.sourceAsset.decimals)
@@ -164,8 +164,8 @@ export async function quoteEvmXReserveTransfer(
   const balanceData = encodeFunctionData({ abi: ERC20_ABI, functionName: 'balanceOf', args: [owner] })
   const allowanceData = encodeFunctionData({ abi: ERC20_ABI, functionName: 'allowance', args: [owner, route.xReserveContract] })
   const [balanceAtomic, allowanceAtomic] = await Promise.all([
-    callUint(connection, getAddress(token), balanceData, 'balanceOf'),
-    callUint(connection, getAddress(token), allowanceData, 'allowance'),
+    callUint(client, getAddress(token), balanceData, 'balanceOf'),
+    callUint(client, getAddress(token), allowanceData, 'allowance'),
   ])
   if (balanceAtomic < amountAtomic) throw new BridgeError(`Insufficient ${params.plan.sourceAsset.symbol} balance`)
   return { routeId: params.plan.route.id, xReserveContract: route.xReserveContract, tokenAddress: getAddress(token), sourceChainId: route.sourceChainId, remoteDomain: route.remoteDomain, remoteRecipientBytes32, amountAtomic, maxFeeAtomic: route.maxFeeAtomic, hookData, balanceAtomic, allowanceAtomic, approvalRequired: allowanceAtomic < amountAtomic }
@@ -264,24 +264,24 @@ function confirmedDepositReceipt(
  * depositing, and derives the Circle message hash from the confirmed event.
  *
  * @param registry Reviewed deployment snapshot used to validate the plan.
- * @param connection Registry-selected EVM public and wallet capabilities.
+ * @param client Registry-selected EVM public and wallet capabilities.
  * @param params Prepared plan and optional receipt polling controls.
  * @returns Submitted approval ids and resumable xReserve transfer state.
  * @throws BridgeError When validation, submission, confirmation, or event verification fails.
  *
  * @example
- * const execution = await executeEvmXReserveTransfer(registry, connection, { plan })
+ * const execution = await executeEvmXReserveTransfer(registry, client, { plan })
  */
 export async function executeEvmXReserveTransfer(
   registry: BridgeRegistry,
-  connection: EvmWalletConnection,
+  client: EvmClient & { walletClient: EvmWalletClient },
   params: ExecuteEvmXReserveTransferParameters,
 ): Promise<EvmXReserveTransferExecution> {
   const pollingIntervalMs = params.pollingIntervalMs ?? 1_000
   const confirmationTimeoutMs = params.confirmationTimeoutMs ?? 120_000
   if (!Number.isFinite(pollingIntervalMs) || pollingIntervalMs < 0 || !Number.isFinite(confirmationTimeoutMs) || confirmationTimeoutMs < 0) throw new BridgeError('Receipt polling controls must be non-negative finite numbers')
   const route = metadata(registry, params.plan)
-  const owner = await account(connection, params.plan)
+  const owner = await account(client, params.plan)
   let quote: EvmXReserveTransferQuote
   let approvalTxIds: Hash[] = []
 
@@ -295,7 +295,7 @@ export async function executeEvmXReserveTransfer(
     approvalTxIds = approvalIds(params.resume)
     const sourceTxId = params.resume.sourceTxId
     if (!sourceTxId || !isHash(sourceTxId)) throw new BridgeError('Checkpoint is missing the xReserve source transaction id')
-    const receipt = await wait(connection, sourceTxId, confirmationTimeoutMs, pollingIntervalMs)
+    const receipt = await wait(client, sourceTxId, confirmationTimeoutMs, pollingIntervalMs)
     if (!receipt) return { approvalTxIds, receipt: params.resume }
     return { approvalTxIds, receipt: confirmedDepositReceipt(params.plan, route, quote, owner, approvalTxIds, sourceTxId, receipt) }
   }
@@ -305,31 +305,31 @@ export async function executeEvmXReserveTransfer(
     approvalTxIds = approvalIds(params.resume)
     const approvalTxId = params.resume.id
     if (!isHash(approvalTxId)) throw new BridgeError('Checkpoint is missing the xReserve approval transaction id')
-    const receipt = await wait(connection, approvalTxId, confirmationTimeoutMs, pollingIntervalMs)
+    const receipt = await wait(client, approvalTxId, confirmationTimeoutMs, pollingIntervalMs)
     if (!receipt) return { approvalTxIds, receipt: params.resume }
     successful(receipt, approvalTxId)
-    quote = await quoteEvmXReserveTransfer(registry, connection, params)
+    quote = await quoteEvmXReserveTransfer(registry, client, params)
   } else if (params.resume) {
     throw new BridgeError(`Unsupported xReserve resume status: ${params.resume.status}`)
   } else {
-    quote = await quoteEvmXReserveTransfer(registry, connection, params)
+    quote = await quoteEvmXReserveTransfer(registry, client, params)
   }
 
   if (quote.approvalRequired) {
     const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [route.xReserveContract, quote.amountAtomic] })
-    const hash = await send(connection, route.sourceChainId, { from: owner, to: quote.tokenAddress, data })
+    const hash = await send(client, route.sourceChainId, { from: owner, to: quote.tokenAddress, data })
     approvalTxIds.push(hash)
     const submitted = pendingReceipt(params.plan, 'SOURCE_APPROVAL_PENDING', hash, approvalTxIds, quote)
     await params.onSubmitted?.(submitted)
-    const receipt = await wait(connection, hash, confirmationTimeoutMs, pollingIntervalMs)
+    const receipt = await wait(client, hash, confirmationTimeoutMs, pollingIntervalMs)
     if (!receipt) return { approvalTxIds, receipt: submitted }
     successful(receipt, hash)
   }
   const data = encodeFunctionData({ abi: XRESERVE_ABI, functionName: 'depositToRemote', args: [quote.amountAtomic, route.remoteDomain, quote.remoteRecipientBytes32, quote.tokenAddress, route.maxFeeAtomic, quote.hookData] })
-  const sourceTxId = await send(connection, route.sourceChainId, { from: owner, to: route.xReserveContract, data })
+  const sourceTxId = await send(client, route.sourceChainId, { from: owner, to: route.xReserveContract, data })
   const submitted = pendingReceipt(params.plan, 'SOURCE_CONFIRMING', sourceTxId, approvalTxIds, quote, sourceTxId)
   await params.onSubmitted?.(submitted)
-  const receipt = await wait(connection, sourceTxId, confirmationTimeoutMs, pollingIntervalMs)
+  const receipt = await wait(client, sourceTxId, confirmationTimeoutMs, pollingIntervalMs)
   if (!receipt) return { approvalTxIds, receipt: submitted }
   return { approvalTxIds, receipt: confirmedDepositReceipt(params.plan, route, quote, owner, approvalTxIds, sourceTxId, receipt) }
 }

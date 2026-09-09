@@ -2,12 +2,12 @@ import { join } from 'node:path'
 import bs58 from 'bs58'
 import { describe, expect, it } from 'vitest'
 import {
-  aleoConnection,
+  createAleoClient,
   createBridgeClient,
-  evmConnection,
+  createEvmClient,
   evmHttp,
   evmPrivateKey,
-  solanaConnection,
+  createSolanaClient,
   solanaHttp,
   solanaKeyPair,
   type BridgeTransferReceipt,
@@ -44,12 +44,12 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
     const recipient = String(aleo.account.address)
     const bridge = createBridgeClient({
       environment: 'testnet',
-      connections: {
-        sepolia: evmConnection({
+      clients: {
+        sepolia: createEvmClient({
           transport: evmHttp(required('BRIDGE_LIVE_SEPOLIA_RPC_URL')),
           account: evmPrivateKey(required('BRIDGE_LIVE_EVM_TESTNET_PRIVATE_KEY') as `0x${string}`),
         }),
-        'aleo-testnet': aleoConnection({ publicClient: aleo.publicClient, account: aleo.walletClient }),
+        'aleo-testnet': createAleoClient({ publicClient: aleo.publicClient, account: aleo.walletClient }),
       },
     })
     const plan = bridge.prepareTransfer({
@@ -96,8 +96,8 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
     const secret = required('BRIDGE_LIVE_SOLANA_SECRET_KEY')
     const secretKeyBytes = secret.startsWith('[') ? Uint8Array.from(JSON.parse(secret) as number[]) : bs58.decode(secret)
     const bridge = createBridgeClient({
-      connections: {
-        solana: solanaConnection({
+      clients: {
+        solana: createSolanaClient({
           transport: solanaHttp(required('BRIDGE_LIVE_SOLANA_RPC_URL')),
           account: solanaKeyPair(secretKeyBytes),
         }),
@@ -140,7 +140,7 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
     const path = join(stateDirectory!, 'aleo-hyperlane.json')
     const state = loadLiveState(path, routeId)
     const aleo = await localAleo('mainnet', required('BRIDGE_LIVE_ALEO_MAINNET_PRIVATE_KEY'))
-    const bridge = createBridgeClient({ connections: { aleo: aleoConnection({ publicClient: aleo.publicClient, account: aleo.walletClient }) } })
+    const bridge = createBridgeClient({ clients: { aleo: createAleoClient({ publicClient: aleo.publicClient, account: aleo.walletClient }) } })
     if (!state.sourceTxId) {
       const plan = bridge.prepareTransfer({
         routeId,

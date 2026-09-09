@@ -1,7 +1,7 @@
 import { createKeyPairSignerFromBytes, getBase58Encoder } from '@solana/kit'
 import {
   createBridgeClient,
-  solanaConnection,
+  createSolanaClient,
   solanaHttp,
   solanaKeyPair,
 } from '@provablehq/aleo-bridge-sdk'
@@ -84,8 +84,8 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
 
   const bridge = createBridgeClient({
     environment: 'mainnet',
-    connections: {
-      solana: solanaConnection({
+    clients: {
+      solana: createSolanaClient({
         transport: solanaHttp(rpcUrl),
         ...(keypairBytes ? { account: solanaKeyPair(keypairBytes) } : {}),
       }),

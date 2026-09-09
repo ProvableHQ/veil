@@ -10,7 +10,7 @@ import {
   type OwnedRecord,
 } from '@provablehq/veil-core'
 import {
-  aleoConnection,
+  createAleoClient,
   createBridgeClient,
   type AleoWalletClient,
   type XReserveBurnMode,
@@ -218,7 +218,7 @@ async function main(): Promise<void> {
   const burnMode: XReserveBurnMode = mode === 'private' ? 'private' : 'public-as-signer'
   const executingBridge = createBridgeClient({
     environment: 'mainnet',
-    connections: { aleo: aleoConnection({ publicClient, account: walletClient }) },
+    clients: { aleo: createAleoClient({ publicClient, account: walletClient }) },
   })
   const result = await executingBridge.executeXReserveBurn({
     plan,

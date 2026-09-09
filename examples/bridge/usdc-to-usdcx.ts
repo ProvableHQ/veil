@@ -12,10 +12,10 @@ import {
   type Hex,
 } from 'viem'
 import {
-  aleoConnection,
+  createAleoClient,
   buildXReserveHookData,
   createBridgeClient,
-  evmConnection,
+  createEvmClient,
   evmHttp,
   evmPrivateKey,
   type AleoWalletClient,
@@ -39,7 +39,7 @@ const ALEO_PROVING_PROGRESS_INTERVAL_MS = 15_000
 type CompletedXReserveAttestation = Extract<XReserveAttestationResult, { status: 'complete' }>
 type AleoTransactionStatus = 'accepted' | 'rejected' | 'pending' | 'not_found'
 type PrivateMintContext = {
-  publicClient: Parameters<typeof aleoConnection>[0]['publicClient']
+  publicClient: Parameters<typeof createAleoClient>[0]['publicClient']
   walletClient: AleoWalletClient
   transactionStatus: (params: { transactionId: string }) => Promise<{
     status: AleoTransactionStatus
@@ -210,7 +210,7 @@ async function executePrivateMint(
 ): Promise<void> {
   const aleoBridge = createBridgeClient({
     environment: 'mainnet',
-    connections: { aleo: aleoConnection({ publicClient: context.publicClient, account: context.walletClient }) },
+    clients: { aleo: createAleoClient({ publicClient: context.publicClient, account: context.walletClient }) },
   })
   console.log('Circle attestation status: complete')
   console.log('Submitting shielded_usdcx_wrapper.aleo/private_mint with the configured Aleo signer.')
@@ -318,7 +318,7 @@ async function main(): Promise<void> {
 
   const bridge = createBridgeClient({
     environment: 'mainnet',
-    connections: { ethereum: evmConnection({ transport: evmHttp(rpcUrl), account }) },
+    clients: { ethereum: createEvmClient({ transport: evmHttp(rpcUrl), account }) },
     fetch,
   })
   const plan = bridge.prepareTransfer({

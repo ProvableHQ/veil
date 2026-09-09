@@ -1,22 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { aleoConnection, materializeAleoConnection } from '../../src/connections/aleo.js'
-import { evmConnection, evmCustom, materializeEvmConnection } from '../../src/connections/evm.js'
-import { requireEvmConnection } from '../../src/connections/resolve.js'
+import { createAleoClient } from '../../src/connections/aleo.js'
+import { createEvmClient, evmCustom } from '../../src/connections/evm.js'
+import { requireEvmClient } from '../../src/connections/resolve.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 
-describe('bridge connection resolution', () => {
+describe('bridge client resolution', () => {
   it('resolves the exact registry chain and required capability', () => {
-    const connection = materializeEvmConnection(evmConnection({ transport: evmCustom(async () => '0x1') }), fetch)
-    expect(requireEvmConnection(DEFAULT_BRIDGE_REGISTRY, { ethereum: connection }, 'ethereum')).toBe(connection)
+    const client = createEvmClient({ transport: evmCustom(async () => '0x1') })
+    expect(requireEvmClient(DEFAULT_BRIDGE_REGISTRY, { ethereum: client }, 'ethereum')).toBe(client)
   })
 
-  it('rejects missing, mismatched, and incomplete connections before network access', () => {
-    expect(() => requireEvmConnection(DEFAULT_BRIDGE_REGISTRY, {}, 'ethereum')).toThrow(
-      'No connection is configured for chain "ethereum"',
+  it('rejects missing, mismatched, and incomplete clients before network access', () => {
+    expect(() => requireEvmClient(DEFAULT_BRIDGE_REGISTRY, {}, 'ethereum')).toThrow(
+      'No client is configured for chain "ethereum"',
     )
-    const wrong = materializeAleoConnection(aleoConnection({ publicClient: {} as never }))
-    expect(() => requireEvmConnection(DEFAULT_BRIDGE_REGISTRY, { ethereum: wrong }, 'ethereum')).toThrow(
-      'Connection "ethereum" has family "aleo"; the registry declares "evm"',
+    const wrong = createAleoClient({ publicClient: {} as never })
+    expect(() => requireEvmClient(DEFAULT_BRIDGE_REGISTRY, { ethereum: wrong }, 'ethereum')).toThrow(
+      'Client "ethereum" has family "aleo"; the registry declares "evm"',
     )
   })
 })

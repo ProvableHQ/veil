@@ -4,7 +4,7 @@ import { executeSolanaHyperlaneTransfer } from '../../src/actions/executeSolanaH
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 import type { SolanaRpcClient } from '../../src/solana/rpc.js'
 import type { SolanaWalletClient } from '../../src/connections/solana.js'
-import type { SolanaWalletConnection } from '../../src/connections/solana.js'
+import type { SolanaClient } from '../../src/connections/solana.js'
 import type { BridgeTransferReceipt } from '../../src/types/protocol.js'
 import {
   WARP_PROGRAM_ADDRESS,
@@ -51,7 +51,7 @@ function executeRpc(overrides: Partial<SolanaRpcClient> = {}): SolanaRpcClient {
   }
 }
 
-function connection(executor: SolanaWalletClient, publicClient: SolanaRpcClient): SolanaWalletConnection {
+function client(executor: SolanaWalletClient, publicClient: SolanaRpcClient): SolanaClient & { walletClient: SolanaWalletClient } {
   return {
     family: 'solana',
     publicClient: { ...publicClient, sendTransaction: async () => ({ signature: 'unused' }) },
@@ -67,7 +67,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const executor = stubExecutor({ onSend: (wire) => { capturedWire = wire } })
     const rpc = executeRpc()
 
-    const execution = await executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), { plan })
+    const execution = await executeSolanaHyperlaneTransfer(registry, client(executor, rpc), { plan })
 
     expect(execution.receipt.status).toBe('DELIVERY_PENDING')
     expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
@@ -93,7 +93,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const getBalance = vi.fn(async () => 800_000_000_000n)
     const rpc = executeRpc({ getBalance })
 
-    await expect(executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), { plan })).rejects.toThrow(
+    await expect(executeSolanaHyperlaneTransfer(registry, client(executor, rpc), { plan })).rejects.toThrow(
       new RegExp(`Prepared sender ${transferFixture.senderAddress} does not match connected account ${OTHER_SENDER}`),
     )
     // The mismatch is caught before any balance read or transaction assembly.
@@ -106,7 +106,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const executor = stubExecutor({ address: OTHER_SENDER })
     const rpc = executeRpc()
 
-    const execution = await executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), { plan })
+    const execution = await executeSolanaHyperlaneTransfer(registry, client(executor, rpc), { plan })
 
     expect(execution.receipt.status).toBe('DELIVERY_PENDING')
   })
@@ -118,7 +118,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const rpc = executeRpc({ getBalance: async () => 0n })
 
     try {
-      await executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), { plan })
+      await executeSolanaHyperlaneTransfer(registry, client(executor, rpc), { plan })
       expect.unreachable('expected an insufficient-balance BridgeError')
     } catch (error) {
       expect(error).toBeInstanceOf(BridgeError)
@@ -136,7 +136,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const executor = stubExecutor()
     const rpc = executeRpc({ getSignatureStatus: async () => 'failed' })
 
-    await expect(executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), { plan })).rejects.toThrow(
+    await expect(executeSolanaHyperlaneTransfer(registry, client(executor, rpc), { plan })).rejects.toThrow(
       new RegExp(STUB_SIGNATURE),
     )
   })
@@ -147,7 +147,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const executor = stubExecutor()
     const rpc = executeRpc({ getSignatureStatus: async () => null })
 
-    const execution = await executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), {
+    const execution = await executeSolanaHyperlaneTransfer(registry, client(executor, rpc), {
       plan,
       confirmationTimeoutMs: 0,
     })
@@ -167,7 +167,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const executor = stubExecutor({ onSend: () => { submissions += 1 } })
     const rpc = executeRpc({ getSignatureStatus: async () => null, getBlockHeight: async () => 101n })
 
-    const execution = await executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), { plan })
+    const execution = await executeSolanaHyperlaneTransfer(registry, client(executor, rpc), { plan })
 
     expect(execution.receipt.status).toBe('SOURCE_CONFIRMING')
     expect(execution.receipt.protocolState.blockhashExpired).toBe(true)
@@ -195,7 +195,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
 
     const execution = await executeSolanaHyperlaneTransfer(
       registry,
-      connection(stubExecutor({ onSend: () => { submissions += 1 } }), executeRpc()),
+      client(stubExecutor({ onSend: () => { submissions += 1 } }), executeRpc()),
       { plan, resume: receipt },
     )
 
@@ -227,7 +227,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
 
     await expect(executeSolanaHyperlaneTransfer(
       registry,
-      connection(stubExecutor(), executeRpc()),
+      client(stubExecutor(), executeRpc()),
       { plan, resume: receipt },
     )).rejects.toThrow(/does not match the prepared route/)
   })
@@ -238,7 +238,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const checkpoints: BridgeTransferReceipt[] = []
     const rpc = executeRpc()
 
-    await executeSolanaHyperlaneTransfer(registry, connection(stubExecutor(), rpc), {
+    await executeSolanaHyperlaneTransfer(registry, client(stubExecutor(), rpc), {
       plan,
       onSubmitted(receipt) { checkpoints.push(receipt) },
     })
@@ -264,7 +264,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
       },
     })
 
-    const execution = await executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), {
+    const execution = await executeSolanaHyperlaneTransfer(registry, client(executor, rpc), {
       plan,
       pollingIntervalMs: 0,
       confirmationTimeoutMs: 2_000,
@@ -283,7 +283,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
       getSignatureStatus: async () => { throw new Error('persistent RPC error') },
     })
 
-    const execution = await executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), {
+    const execution = await executeSolanaHyperlaneTransfer(registry, client(executor, rpc), {
       plan,
       confirmationTimeoutMs: 0,
     })

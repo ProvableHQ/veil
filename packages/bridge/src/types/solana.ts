@@ -97,7 +97,7 @@ export type SolanaHyperlaneTransferQuote = {
 /**
  * Configures submission of a Solana Hyperlane transfer.
  *
- * The action signs and sends the transaction through the connection's Solana
+ * The action signs and sends the transaction through the Solana client's
  * wallet client, then polls its public client for confirmation.
  *
  * @property plan Pure transfer plan returned by `prepareTransfer`.
