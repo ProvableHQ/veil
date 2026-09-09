@@ -1,4 +1,5 @@
 import {
+  buildAleoHyperlaneTransferRemoteCall,
   createAleoClient,
   createBridgeClient,
   type AleoWalletClient,
@@ -153,7 +154,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   })
 
   const plan = bridge.prepareTransfer({ routeId: config.routeId, amount, recipient })
-  const previewCall = bridge.buildAleoHyperlaneTransferRemoteCall({ plan, mode: 'signer' })
+  const previewCall = buildAleoHyperlaneTransferRemoteCall(bridge.registry, { plan, mode: 'signer' })
   if (previewCall.placeholderFields.length !== 1 || previewCall.placeholderFields[0] !== 'aleoAllowanceAmount0') {
     throw new Error(`${asset} return route has unresolved fields: ${previewCall.placeholderFields.join(', ') || 'unknown'}`)
   }

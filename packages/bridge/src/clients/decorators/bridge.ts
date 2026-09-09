@@ -8,7 +8,6 @@ import { getXReserveAttestation } from '../../actions/getXReserveAttestation.js'
 import { quoteEvmXReserveTransfer } from '../../actions/quoteEvmXReserveTransfer.js'
 import { executeXReservePrivateMint } from '../../actions/executeXReservePrivateMint.js'
 import { executeXReserveBurn } from '../../actions/executeXReserveBurn.js'
-import { buildAleoHyperlaneTransferRemoteCall } from '../../actions/buildAleoHyperlaneTransferRemoteCall.js'
 import { executeAleoHyperlaneTransferRemote } from '../../actions/executeAleoHyperlaneTransferRemote.js'
 import { quoteAleoHyperlaneGasPayment } from '../../actions/quoteAleoHyperlaneGasPayment.js'
 import { executeSolanaHyperlaneTransfer } from '../../actions/executeSolanaHyperlaneTransfer.js'
@@ -25,7 +24,7 @@ import {
 import type { EvmHyperlaneTransferExecution, EvmHyperlaneTransferQuote, ExecuteEvmHyperlaneTransferParameters, QuoteEvmHyperlaneTransferParameters } from '../../types/evm.js'
 import type { ExecuteSolanaHyperlaneTransferParameters, QuoteSolanaHyperlaneTransferParameters, SolanaHyperlaneTransferExecution, SolanaHyperlaneTransferQuote } from '../../types/solana.js'
 import type { EvmXReserveTransferExecution, EvmXReserveTransferQuote, ExecuteEvmXReserveTransferParameters, GetXReserveAttestationParameters, QuoteEvmXReserveTransferParameters, XReserveAttestationResult, XReserveHttpTransport } from '../../types/xreserve.js'
-import type { AleoHyperlaneGasQuote, AleoHyperlaneTransferRemoteCall, AleoHyperlaneTransferRemoteExecution, ExecuteAleoHyperlaneTransferRemoteParameters, ExecuteXReservePrivateMintParameters, ExecuteXReserveBurnParameters, QuoteAleoHyperlaneGasPaymentParameters, XReserveBurnExecution, XReservePrivateMintExecution } from '../../types/aleo.js'
+import type { AleoHyperlaneGasQuote, AleoHyperlaneTransferRemoteExecution, ExecuteAleoHyperlaneTransferRemoteParameters, ExecuteXReservePrivateMintParameters, ExecuteXReserveBurnParameters, QuoteAleoHyperlaneGasPaymentParameters, XReserveBurnExecution, XReservePrivateMintExecution } from '../../types/aleo.js'
 import type { BridgeEnvironment, BridgeRegistry, BridgeTransferPlan, PrepareTransferParameters, ProtocolBridgeAsset, ProtocolBridgeRoute } from '../../types/protocol.js'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 
@@ -55,7 +54,6 @@ export type BridgeActions = {
   getXReserveAttestation: (params: GetXReserveAttestationParameters) => Promise<XReserveAttestationResult>
   executeXReservePrivateMint: (params: ExecuteXReservePrivateMintParameters) => Promise<XReservePrivateMintExecution>
   executeXReserveBurn: (params: ExecuteXReserveBurnParameters) => Promise<XReserveBurnExecution>
-  buildAleoHyperlaneTransferRemoteCall: (params: ExecuteAleoHyperlaneTransferRemoteParameters) => AleoHyperlaneTransferRemoteCall
   quoteAleoHyperlaneGasPayment: (params: QuoteAleoHyperlaneGasPaymentParameters) => Promise<AleoHyperlaneGasQuote>
   executeAleoHyperlaneTransferRemote: (params: ExecuteAleoHyperlaneTransferRemoteParameters) => Promise<AleoHyperlaneTransferRemoteExecution>
   quoteSolanaHyperlaneTransfer: (params: QuoteSolanaHyperlaneTransferParameters) => Promise<SolanaHyperlaneTransferQuote>
@@ -90,7 +88,6 @@ export function bridgeActions(config: BridgeActionsConfig): BridgeActions {
     getXReserveAttestation: async (params) => getXReserveAttestation(config.registry, config.fetch as XReserveHttpTransport, params),
     executeXReservePrivateMint: async (params) => executeXReservePrivateMint(config.registry, requireAleoClientWithWallet(config.registry, config.clients, destinationChain(params.plan), 'execute xReserve private mint').walletClient, params),
     executeXReserveBurn: async (params) => executeXReserveBurn(config.registry, requireAleoClientWithWallet(config.registry, config.clients, sourceChain(params.plan), 'execute xReserve burn').walletClient, params),
-    buildAleoHyperlaneTransferRemoteCall: (params) => buildAleoHyperlaneTransferRemoteCall(config.registry, params),
     quoteAleoHyperlaneGasPayment: async (params) => quoteAleoHyperlaneGasPayment(config.registry, requireAleoClient(config.registry, config.clients, routeSourceChain(config.registry, params.routeId)).publicClient, params),
     executeAleoHyperlaneTransferRemote: async (params) => executeAleoHyperlaneTransferRemote(config.registry, requireAleoClientWithWallet(config.registry, config.clients, sourceChain(params.plan), 'execute Hyperlane transfer').walletClient, params),
     quoteSolanaHyperlaneTransfer: async (params) => quoteSolanaHyperlaneTransfer(config.registry, requireSolanaClient(config.registry, config.clients, sourceChain(params.plan)), params),

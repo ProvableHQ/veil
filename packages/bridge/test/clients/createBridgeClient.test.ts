@@ -27,6 +27,13 @@ describe('createBridgeClient', () => {
     expect(plan.registryVersion).toBe(client.registry.version)
   })
 
+  it('does not expose pure call builders as client actions', () => {
+    const client = createBridgeClient()
+
+    expect('buildAleoHyperlaneTransferRemoteCall' in client).toBe(false)
+    expect('buildXReserveBurnCall' in client).toBe(false)
+  })
+
   it('requires a chain-specific EVM client for live Hyperlane actions', async () => {
     const client = createBridgeClient()
     const plan = client.prepareTransfer({

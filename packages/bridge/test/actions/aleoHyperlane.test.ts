@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
-import { buildAleoHyperlaneTransferRemoteCall } from '../../src/actions/buildAleoHyperlaneTransferRemoteCall.js'
+import { buildAleoHyperlaneTransferRemoteCall } from '../../src/builders/buildAleoHyperlaneTransferRemoteCall.js'
 import { executeAleoHyperlaneTransferRemote } from '../../src/actions/executeAleoHyperlaneTransferRemote.js'
 import { quoteAleoHyperlaneGasPayment } from '../../src/actions/quoteAleoHyperlaneGasPayment.js'
 import { prepareTransfer } from '../../src/actions/prepareTransfer.js'

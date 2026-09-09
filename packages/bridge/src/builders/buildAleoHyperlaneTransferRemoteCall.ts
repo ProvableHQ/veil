@@ -1,6 +1,6 @@
 import type { BridgeRegistry } from '../types/protocol.js'
 import type { AleoHyperlaneTransferRemoteCall, ExecuteAleoHyperlaneTransferRemoteParameters } from '../types/aleo.js'
-import { runBuildAleoHyperlaneTransferRemoteCall as buildTransferCall } from './internal/aleoHyperlane.js'
+import { runBuildAleoHyperlaneTransferRemoteCall as buildTransferCall } from '../actions/internal/aleoHyperlane.js'
 
 /**
  * Builds an Aleo Hyperlane `transfer_remote` call without prompting a wallet.
