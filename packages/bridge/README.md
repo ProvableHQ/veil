@@ -139,6 +139,20 @@ EVM collateral routes approve only when needed. USDT resets a non-zero
 allowance before setting the required value. Timeouts preserve transaction IDs
 in resumable receipts.
 
+Fund-moving actions accept `onSubmitted`, which runs immediately after the
+wallet or local signer returns the source transaction ID and before confirmation
+polling. Persist that receipt durably inside the hook. xReserve deposits also
+accept the persisted receipt as `resume`; approval or deposit confirmation then
+continues without repeating the submitted transaction:
+
+```ts
+const execution = await bridge.executeEvmXReserveTransfer({
+  plan,
+  ...(checkpoint ? { resume: checkpoint } : {}),
+  onSubmitted: saveCheckpoint,
+})
+```
+
 For Solana, the active inbound route is native SOL:
 
 ```ts

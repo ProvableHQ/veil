@@ -5,3 +5,5 @@
 Replace flat executor and RPC configuration with registry-keyed EVM, Solana,
 and Aleo connections. Add browser-wallet, viem-client, and local-key adapters,
 live Solana fee and rent reads, and expiry-aware confirmation.
+Source execution now exposes durable submission checkpoint hooks, and xReserve
+confirmation resumes from a checkpoint without resubmitting funds.

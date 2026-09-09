@@ -134,6 +134,27 @@ describe('EVM bridge connections', () => {
     })).rejects.toThrow(/expected 2/)
   })
 
+  it('preserves a direct viem wallet local account so viem signs locally', async () => {
+    const localAccount = { address: '0x0000000000000000000000000000000000000001' }
+    const sendTransaction = vi.fn(async () => `0x${'ab'.repeat(32)}`)
+    const walletClient = {
+      account: localAccount,
+      getChainId: async () => 1,
+      sendTransaction,
+    } as never
+    const connection = materializeEvmConnection(evmConnection({
+      transport: evmCustom(async () => '0x1'),
+      walletClient,
+    }), fetch)
+
+    await connection.walletClient?.sendTransaction({
+      chainId: 1,
+      to: '0x0000000000000000000000000000000000000002',
+      data: '0x',
+    })
+    expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ account: localAccount }))
+  })
+
   it('uses the transport fetch override ahead of the client default', async () => {
     const transportFetch = vi.fn(async () => new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x1' })))
     const defaultFetch = vi.fn()

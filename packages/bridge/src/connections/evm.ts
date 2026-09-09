@@ -256,7 +256,7 @@ function normalizeWalletClient(client: WalletClient): EvmWalletClient {
       if (from && getAddress(from) !== getAddress(account)) {
         throw new BridgeError(`EVM transaction sender ${from} does not match connected account ${account}`)
       }
-      return client.sendTransaction({ ...transaction, account } as never)
+      return client.sendTransaction({ ...transaction, account: client.account ?? account } as never)
     },
   }
 }
