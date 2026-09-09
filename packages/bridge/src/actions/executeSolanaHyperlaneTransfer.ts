@@ -1,11 +1,11 @@
 import { BridgeError } from '../errors/bridgeErrors.js'
+import type { SolanaExecutionConnection } from '../connections/solana.js'
 import { loadKit } from '../solana/kit.js'
 import type { SolanaRpcReader } from '../solana/rpc.js'
 import { buildTransferRemoteInstruction, type SolanaAccountMeta } from '../solana/transferRemote.js'
 import type { BridgeRegistry, BridgeTransferReceipt } from '../types/protocol.js'
 import type {
   ExecuteSolanaHyperlaneTransferParameters,
-  SolanaBridgeExecutor,
   SolanaHyperlaneRouteMetadata,
   SolanaHyperlaneTransferExecution,
   SolanaHyperlaneTransferQuote,
@@ -19,19 +19,8 @@ import { solanaRouteMetadata } from './solanaRouteMetadata.js'
 // lamports) — derived as the observed lamportDelta (7,023,360) minus the
 // IGP gas payment (2,900,000) and the Solana network fee (10,000), both of
 // which the quote already accounts for.
-const RENT_OVERHEAD_LAMPORTS = 1_872_240n + 2_241_120n
-
-// The rent-exempt minimum for a standard system-owned account (currently
-// ~890,880 lamports; Solana's runtime derives it from account size and a
-// network-wide rent rate that can in principle change). The sender's own
-// account must stay above this floor after every lamport above leaves it,
-// or the runtime rejects the transaction outright rather than leave a
-// sub-rent-exempt account. Folding it into the preflight check fails safe
-// either way it drifts from the live value: too high merely asks for a
-// larger buffer than strictly required; too low would have the preflight
-// pass while the broadcast still fails on-chain — same outcome as omitting
-// it, not worse.
-const SENDER_RENT_EXEMPT_MINIMUM_LAMPORTS = 890_880n
+const GAS_PAYMENT_ACCOUNT_DATA_LENGTH = 141
+const DISPATCHED_MESSAGE_ACCOUNT_DATA_LENGTH = 194
 
 // SEALEVEL_NOTES.md §5: the Mailbox's full-hex dispatch log line is the only
 // one that carries the untruncated message id; the IGP-payment and
@@ -97,7 +86,8 @@ async function pollForConfirmation(
   signature: string,
   pollingIntervalMs: number,
   confirmationTimeoutMs: number,
-): Promise<'confirmed' | 'finalized' | undefined> {
+  lastValidBlockHeight: bigint,
+): Promise<'confirmed' | 'finalized' | 'expired' | undefined> {
   const deadline = Date.now() + confirmationTimeoutMs
   do {
     let status: Awaited<ReturnType<SolanaRpcReader['getSignatureStatus']>>
@@ -112,6 +102,11 @@ async function pollForConfirmation(
       throw new BridgeError(`Solana Hyperlane transfer failed on-chain: ${signature}`)
     }
     if (status === 'confirmed' || status === 'finalized') return status
+    try {
+      if (await rpc.getBlockHeight() > lastValidBlockHeight) return 'expired'
+    } catch {
+      // A block-height read is advisory while the signature may still land.
+    }
     if (Date.now() >= deadline) return undefined
     await new Promise<void>((resolve) => setTimeout(resolve, pollingIntervalMs))
   } while (true)
@@ -123,7 +118,10 @@ function buildReceipt(
   metadata: SolanaHyperlaneRouteMetadata,
   uniqueMessageAddress: string,
   quote: SolanaHyperlaneTransferQuote,
+  blockhash: string,
+  lastValidBlockHeight: bigint,
   messageId?: string,
+  blockhashExpired = false,
 ): BridgeTransferReceipt {
   return {
     id: messageId ?? signature,
@@ -136,6 +134,9 @@ function buildReceipt(
       uniqueMessageAddress,
       destinationDomain: metadata.destinationDomain,
       quotedLamports: quote.totalLamports.toString(),
+      blockhash,
+      lastValidBlockHeight: lastValidBlockHeight.toString(),
+      ...(blockhashExpired ? { blockhashExpired: true } : {}),
       // The transaction confirmed but the Mailbox dispatch log line was
       // absent or unparsable — note it rather than throwing.
       ...(status === 'DELIVERY_PENDING' && !messageId ? { messageIdUnavailable: true } : {}),
@@ -151,8 +152,8 @@ function buildReceipt(
  * instruction creates, and the sender's own rent-exempt floor once every one
  * of those lamports has left it. Generates the ephemeral unique-message
  * signer, then assembles, partially signs, and hands the transaction to the
- * injected executor to sign and broadcast. Hits the network throughout,
- * prompts the executor for a signature, and moves funds; never local-only.
+ * configured connection to sign and broadcast. Hits the network throughout,
+ * prompts a wallet or signs locally, and moves funds; never local-only.
  *
  * When the plan names a `sender`, the executor's address MUST match it: a
  * plan prepared for one account is never executed by another connected
@@ -165,8 +166,7 @@ function buildReceipt(
  * returned receipt carries the signature with `messageId` left `undefined`.
  *
  * @param registry Reviewed deployment snapshot used to validate the prepared plan.
- * @param executor Connected Solana wallet or keypair executor that signs and submits the transaction.
- * @param rpc Solana JSON-RPC reader used for the blockhash, balance, and confirmation reads.
+ * @param connection Registry-selected Solana public and wallet capabilities.
  * @param params Prepared plan and optional confirmation polling controls.
  * @returns The resumable Hyperlane transfer receipt.
  * @throws BridgeError When route validation or quoting fails, the plan's sender does
@@ -174,14 +174,15 @@ function buildReceipt(
  *   submitted transaction is reported failed.
  *
  * @example
- * const execution = await executeSolanaHyperlaneTransfer(registry, executor, rpc, { plan })
+ * const execution = await executeSolanaHyperlaneTransfer(registry, connection, { plan })
  */
 export async function executeSolanaHyperlaneTransfer(
   registry: BridgeRegistry,
-  executor: SolanaBridgeExecutor,
-  rpc: SolanaRpcReader,
+  connection: SolanaExecutionConnection,
   params: ExecuteSolanaHyperlaneTransferParameters,
 ): Promise<SolanaHyperlaneTransferExecution> {
+  const rpc = connection.publicClient
+  const executor = connection.walletClient
   const requestedPollingIntervalMs = params.pollingIntervalMs ?? 1_000
   const confirmationTimeoutMs = params.confirmationTimeoutMs ?? 120_000
   if (!Number.isFinite(requestedPollingIntervalMs) || requestedPollingIntervalMs < 0) {
@@ -206,13 +207,18 @@ export async function executeSolanaHyperlaneTransfer(
   }
 
   // 3. Quote the live IGP payment through the shared oracle-reading action.
-  const quote = await quoteSolanaHyperlaneTransfer(registry, rpc, { plan: params.plan })
+  const quote = await quoteSolanaHyperlaneTransfer(registry, connection, { plan: { ...params.plan, sender: senderAddress } })
 
   // 4. Preflight: the sender must cover the amount, gas, and the rent for
   // the two accounts (gas-payment PDA, dispatched-message PDA) the
   // instruction creates fresh, and must still clear its own rent-exempt
   // floor once every one of those lamports has left it.
-  const rentLamports = RENT_OVERHEAD_LAMPORTS + SENDER_RENT_EXEMPT_MINIMUM_LAMPORTS
+  const [gasPaymentRent, dispatchedMessageRent, senderRent] = await Promise.all([
+    rpc.getMinimumBalanceForRentExemption(GAS_PAYMENT_ACCOUNT_DATA_LENGTH),
+    rpc.getMinimumBalanceForRentExemption(DISPATCHED_MESSAGE_ACCOUNT_DATA_LENGTH),
+    rpc.getMinimumBalanceForRentExemption(0),
+  ])
+  const rentLamports = gasPaymentRent + dispatchedMessageRent + senderRent
   const requiredLamports = quote.totalLamports + rentLamports
   const balance = await rpc.getBalance(senderAddress)
   if (balance < requiredLamports) {
@@ -264,7 +270,17 @@ export async function executeSolanaHyperlaneTransfer(
 
   // 7. Hand the partially signed transaction to the executor, which adds the
   // fee payer's signature and submits it.
-  const { signature } = await executor.signAndSendTransaction(wireTransaction)
+  const { signature } = await executor.sendTransaction(wireTransaction)
+  const submittedReceipt = buildReceipt(
+    'SOURCE_CONFIRMING',
+    signature,
+    metadata,
+    uniqueMessageSigner.address,
+    quote,
+    blockhash,
+    lastValidBlockHeight,
+  )
+  await params.onSubmitted?.(submittedReceipt)
 
   // Once broadcast, the transaction is out of this action's hands — any
   // error surfaced from here on must still name the signature, so a caller
@@ -273,10 +289,15 @@ export async function executeSolanaHyperlaneTransfer(
   try {
     // 8. Poll for confirmation; a timeout returns a resumable pending receipt
     // rather than throwing, since the transaction may still land.
-    const confirmation = await pollForConfirmation(rpc, signature, pollingIntervalMs, confirmationTimeoutMs)
+    const confirmation = await pollForConfirmation(rpc, signature, pollingIntervalMs, confirmationTimeoutMs, lastValidBlockHeight)
     if (!confirmation) {
       return {
-        receipt: buildReceipt('SOURCE_CONFIRMING', signature, metadata, uniqueMessageSigner.address, quote),
+        receipt: submittedReceipt,
+      }
+    }
+    if (confirmation === 'expired') {
+      return {
+        receipt: buildReceipt('SOURCE_CONFIRMING', signature, metadata, uniqueMessageSigner.address, quote, blockhash, lastValidBlockHeight, undefined, true),
       }
     }
 
@@ -288,7 +309,7 @@ export async function executeSolanaHyperlaneTransfer(
 
     // 10. Return the resumable, protocol-neutral receipt.
     return {
-      receipt: buildReceipt('DELIVERY_PENDING', signature, metadata, uniqueMessageSigner.address, quote, messageId),
+      receipt: buildReceipt('DELIVERY_PENDING', signature, metadata, uniqueMessageSigner.address, quote, blockhash, lastValidBlockHeight, messageId),
     }
   } catch (error) {
     if (error instanceof BridgeError && error.message.includes(signature)) throw error

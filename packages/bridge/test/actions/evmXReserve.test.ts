@@ -13,7 +13,8 @@ import { describe, expect, it } from 'vitest'
 import { executeEvmXReserveTransfer, getXReserveAttestation } from '../../src/actions/evmXReserve.js'
 import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
-import type { EvmBridgeExecutor } from '../../src/types/evm.js'
+import { evmConnection, evmCustom, evmProvider, materializeEvmConnection } from '../../src/connections/evm.js'
+import type { BridgeTransferReceipt } from '../../src/types/protocol.js'
 
 const ACCOUNT = getAddress('0x0000000000000000000000000000000000000001')
 const TOKEN = getAddress('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238')
@@ -34,11 +35,9 @@ function transferPlan() {
   return prepareTransfer(DEFAULT_BRIDGE_REGISTRY, { routeId: 'xreserve:sepolia/usdc->aleo-testnet/usdcx', amount: '2', recipient: RECIPIENT, sender: ACCOUNT, mintMode: 'record' })
 }
 
-function mockExecutor() {
+function mockExecutor(confirmDeposit = { value: true }) {
   const sent: Sent[] = []
-  const executor: EvmBridgeExecutor = {
-    account: ACCOUNT,
-    request: async ({ method, params }) => {
+  const request = async ({ method, params }: { method: string, params?: readonly unknown[] | Record<string, unknown> }) => {
       if (method === 'eth_chainId') return '0xaa36a7'
       if (method === 'eth_call') {
         const transaction = (params as readonly [{ data: Hex }])[0]
@@ -53,6 +52,7 @@ function mockExecutor() {
       if (method === 'eth_getTransactionReceipt') {
         const hash = (params as readonly [Hash])[0]
         if (hash !== TX_HASH) return { status: '0x1', logs: [] }
+        if (!confirmDeposit.value) return null
         const deposit = decodeFunctionData({ abi: ABI, data: sent.at(-1)!.data })
         if (deposit.functionName !== 'depositToRemote') throw new Error('Expected deposit')
         const [value, remoteDomain, remoteRecipient, localToken, maxFee, hookData] = deposit.args
@@ -71,8 +71,11 @@ function mockExecutor() {
         }
       }
       throw new Error(`Unexpected RPC method ${method}`)
-    },
   }
+  const executor = materializeEvmConnection(evmConnection({
+    transport: evmCustom(request),
+    account: evmProvider({ request }, { account: ACCOUNT }),
+  }), fetch) as Required<ReturnType<typeof materializeEvmConnection>>
   return { executor, sent }
 }
 
@@ -88,6 +91,29 @@ describe('Ethereum xReserve actions', () => {
     expect(execution.receipt.id).toMatch(/^0x[0-9a-f]{64}$/)
     expect(execution.receipt.protocolState.payload).toMatch(/^0x[0-9a-f]{610}$/)
     expect(execution.receipt.protocolState.mintMode).toBe('record')
+  })
+
+  it('checkpoints at broadcast and resumes confirmation without resubmitting', async () => {
+    const confirmDeposit = { value: false }
+    const { executor, sent } = mockExecutor(confirmDeposit)
+    const checkpoints: BridgeTransferReceipt[] = []
+    const pending = await executeEvmXReserveTransfer(DEFAULT_BRIDGE_REGISTRY, executor, {
+      plan: transferPlan(),
+      confirmationTimeoutMs: 0,
+      onSubmitted(receipt) { checkpoints.push(receipt) },
+    })
+
+    expect(checkpoints.map((receipt) => receipt.status)).toEqual(['SOURCE_APPROVAL_PENDING', 'SOURCE_CONFIRMING'])
+    expect(pending.receipt).toEqual(checkpoints[1])
+    expect(sent).toHaveLength(2)
+
+    confirmDeposit.value = true
+    const resumed = await executeEvmXReserveTransfer(DEFAULT_BRIDGE_REGISTRY, executor, {
+      plan: transferPlan(),
+      resume: pending.receipt,
+    })
+    expect(resumed.receipt.status).toBe('ATTESTATION_PENDING')
+    expect(sent).toHaveLength(2)
   })
 
   it('maps an absent Circle attestation to pending', async () => {

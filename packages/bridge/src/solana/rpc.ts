@@ -25,8 +25,11 @@ type SolanaSignatureConfirmationStatus = 'processed' | 'confirmed' | 'finalized'
  */
 export type SolanaRpcReader = {
   getLatestBlockhash: () => Promise<{ blockhash: string; lastValidBlockHeight: bigint }>
+  getBlockHeight: () => Promise<bigint>
   getBalance: (address: string) => Promise<bigint>
   getAccountData: (address: string) => Promise<Uint8Array | null>
+  getFeeForMessage: (message: Uint8Array) => Promise<bigint>
+  getMinimumBalanceForRentExemption: (dataLength: number) => Promise<bigint>
   getSignatureStatus: (signature: string) => Promise<SolanaSignatureConfirmationStatus | null>
   getTransactionLogs: (signature: string) => Promise<string[] | null>
 }
@@ -53,10 +56,8 @@ function decodeBase64(value: string): Uint8Array {
  * Builds a Solana JSON-RPC reader over a plain HTTP transport.
  *
  * Speaks JSON-RPC directly rather than depending on `@solana/kit`, so reads
- * are usable without the optional `@solana/kit` peer dependency the signing
- * path (`solanaExecutorFromKeyPair`) requires. Every method sends one POST
- * request through `config.transport` (defaulting to `globalThis.fetch`) and
- * hits the network; none of them are pure.
+ * Every method sends one POST request through `config.transport` (defaulting
+ * to `globalThis.fetch`) and hits the network; none of them are pure.
  *
  * @param config Solana JSON-RPC endpoint and optional transport override.
  * @returns A {@link SolanaRpcReader} bound to `config.url`.
@@ -78,48 +79,113 @@ export function createSolanaRpcReader(config: SolanaRpcConfig): SolanaRpcReader 
         cause: { status: response.status },
       })
     }
-    const body = (await response.json()) as JsonRpcResponse<T>
+    let rawBody: unknown
+    try {
+      rawBody = await response.json()
+    } catch (error) {
+      throw new BridgeError(`Solana RPC ${method} returned invalid JSON`, { cause: error })
+    }
+    if (!rawBody || typeof rawBody !== 'object') {
+      throw new BridgeError(`Solana RPC ${method} returned an invalid JSON-RPC response`)
+    }
+    const body = rawBody as JsonRpcResponse<T>
     if (body.error) {
       throw new BridgeError(`Solana RPC ${method} returned a JSON-RPC error: ${body.error.message ?? 'unknown error'}`, {
         cause: body.error,
       })
     }
+    if (!Object.prototype.hasOwnProperty.call(body, 'result') || body.result === undefined) {
+      throw new BridgeError(`Solana RPC ${method} returned an invalid result envelope`)
+    }
     return body.result as T
+  }
+
+  function integer(method: string, value: unknown): bigint {
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+      throw new BridgeError(`Solana RPC ${method} returned an invalid result`)
+    }
+    return BigInt(value)
+  }
+
+  function contextualValue<T>(method: string, result: unknown): T {
+    if (!result || typeof result !== 'object' || !Object.prototype.hasOwnProperty.call(result, 'value')) {
+      throw new BridgeError(`Solana RPC ${method} returned an invalid contextual result`)
+    }
+    return (result as ContextualResult<T>).value
   }
 
   return {
     async getLatestBlockhash() {
-      const { value } = await call<ContextualResult<{ blockhash: string; lastValidBlockHeight: number }>>(
+      const result = await call<unknown>(
         'getLatestBlockhash',
         [],
       )
-      return { blockhash: value.blockhash, lastValidBlockHeight: BigInt(value.lastValidBlockHeight) }
+      const value = contextualValue<{ blockhash: string; lastValidBlockHeight: number }>('getLatestBlockhash', result)
+      if (!value || typeof value.blockhash !== 'string' || !value.blockhash) {
+        throw new BridgeError('Solana RPC getLatestBlockhash returned an invalid result')
+      }
+      return { blockhash: value.blockhash, lastValidBlockHeight: integer('getLatestBlockhash', value.lastValidBlockHeight) }
+    },
+
+    async getBlockHeight() {
+      return integer('getBlockHeight', await call<unknown>('getBlockHeight', []))
     },
 
     async getBalance(address) {
-      const { value } = await call<ContextualResult<number>>('getBalance', [address])
-      return BigInt(value)
+      const value = contextualValue<unknown>('getBalance', await call<unknown>('getBalance', [address]))
+      return integer('getBalance', value)
+    },
+
+    async getFeeForMessage(message) {
+      const base64 = btoa(String.fromCharCode(...message))
+      const result = await call<unknown>('getFeeForMessage', [base64, { commitment: 'confirmed' }])
+      return integer('getFeeForMessage', contextualValue('getFeeForMessage', result))
+    },
+
+    async getMinimumBalanceForRentExemption(dataLength) {
+      if (!Number.isSafeInteger(dataLength) || dataLength < 0) {
+        throw new BridgeError('Solana rent data length must be a non-negative integer')
+      }
+      return integer('getMinimumBalanceForRentExemption', await call<unknown>('getMinimumBalanceForRentExemption', [dataLength]))
     },
 
     async getAccountData(address) {
-      const { value } = await call<ContextualResult<{ data: [string, string] } | null>>('getAccountInfo', [
+      const result = await call<unknown>('getAccountInfo', [
         address,
         { encoding: 'base64' },
       ])
+      const value = contextualValue<{ data: [string, string] } | null>('getAccountInfo', result)
       if (!value) return null
-      const [base64] = value.data
-      return decodeBase64(base64)
+      if (!Array.isArray(value.data) || typeof value.data[0] !== 'string' || value.data[1] !== 'base64') {
+        throw new BridgeError('Solana RPC getAccountInfo returned invalid base64 account data')
+      }
+      try {
+        return decodeBase64(value.data[0])
+      } catch (error) {
+        throw new BridgeError('Solana RPC getAccountInfo returned invalid base64 account data', { cause: error })
+      }
     },
 
     async getSignatureStatus(signature) {
-      const { value } = await call<ContextualResult<({ err: unknown; confirmationStatus?: string } | null)[]>>(
+      const result = await call<unknown>(
         'getSignatureStatuses',
-        [[signature]],
+        [[signature], { searchTransactionHistory: true }],
       )
+      const value = contextualValue<({ err: unknown; confirmationStatus?: string } | null)[]>('getSignatureStatuses', result)
+      if (!Array.isArray(value) || value.length !== 1) {
+        throw new BridgeError('Solana RPC getSignatureStatuses returned an invalid result')
+      }
       const status = value[0]
       if (!status) return null
+      if (typeof status !== 'object' || !Object.prototype.hasOwnProperty.call(status, 'err')) {
+        throw new BridgeError('Solana RPC getSignatureStatuses returned an invalid status')
+      }
       if (status.err) return 'failed'
-      return (status.confirmationStatus as SolanaSignatureConfirmationStatus | undefined) ?? null
+      if (status.confirmationStatus === undefined) return null
+      if (!['processed', 'confirmed', 'finalized'].includes(status.confirmationStatus)) {
+        throw new BridgeError(`Solana RPC getSignatureStatuses returned unsupported confirmation status: ${status.confirmationStatus}`)
+      }
+      return status.confirmationStatus as SolanaSignatureConfirmationStatus
     },
 
     async getTransactionLogs(signature) {
@@ -131,7 +197,19 @@ export function createSolanaRpcReader(config: SolanaRpcConfig): SolanaRpcReader 
         signature,
         { maxSupportedTransactionVersion: 0, commitment: 'confirmed' },
       ])
-      return result?.meta?.logMessages ?? null
+      if (result === null) return null
+      if (!result || typeof result !== 'object' || !Object.prototype.hasOwnProperty.call(result, 'meta')) {
+        throw new BridgeError('Solana RPC getTransaction returned an invalid result')
+      }
+      const meta = result.meta
+      if (!meta || typeof meta !== 'object' || !Object.prototype.hasOwnProperty.call(meta, 'logMessages')) {
+        throw new BridgeError('Solana RPC getTransaction returned invalid metadata')
+      }
+      const logs = meta.logMessages
+      if (logs !== null && (!Array.isArray(logs) || logs.some((line) => typeof line !== 'string'))) {
+        throw new BridgeError('Solana RPC getTransaction returned invalid logs')
+      }
+      return logs ?? null
     },
   }
 }

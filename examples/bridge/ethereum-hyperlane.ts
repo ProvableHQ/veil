@@ -1,16 +1,10 @@
 import {
-  TransactionReceiptNotFoundError,
   createPublicClient,
   createWalletClient,
   formatEther,
   formatUnits,
-  getAddress,
   http,
-  isAddress,
-  isHash,
-  isHex,
   parseAbi,
-  type Address,
   type Hex,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
@@ -18,7 +12,7 @@ import { mainnet } from 'viem/chains'
 import {
   aleoAddressToBytes32,
   createBridgeClient,
-  type EvmBridgeExecutor,
+  evmConnection,
 } from '@provablehq/aleo-bridge-sdk'
 
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
@@ -81,101 +75,12 @@ function millisecondsFromEnvironment(name: string, defaultValue: number): number
   return value
 }
 
-function positionalParameters(
-  params: readonly unknown[] | Record<string, unknown> | undefined,
-  method: string,
-): readonly unknown[] {
-  if (!Array.isArray(params)) throw new Error(`${method} requires positional parameters`)
-  return params
-}
-
-function callParameter(value: unknown): { to: Address, data: Hex } {
-  if (!value || typeof value !== 'object') throw new Error('The RPC method requires a transaction object')
-  const transaction = value as Record<string, unknown>
-  if (typeof transaction.to !== 'string' || !isAddress(transaction.to)) throw new Error('Transaction destination is invalid')
-  if (typeof transaction.data !== 'string' || !isHex(transaction.data)) throw new Error('Transaction calldata is invalid')
-  return { to: getAddress(transaction.to), data: transaction.data }
-}
-
-function transactionParameter(value: unknown): {
-  from: Address
-  to: Address
-  data: Hex
-  value?: bigint | undefined
-} {
-  const call = callParameter(value)
-  const transaction = value as Record<string, unknown>
-  if (typeof transaction.from !== 'string' || !isAddress(transaction.from)) throw new Error('Transaction sender is invalid')
-  if (transaction.value != null && (typeof transaction.value !== 'string' || !/^0x[0-9a-f]+$/i.test(transaction.value))) {
-    throw new Error('Transaction value is invalid')
-  }
-  return {
-    from: getAddress(transaction.from),
-    ...call,
-    ...(typeof transaction.value === 'string' ? { value: BigInt(transaction.value) } : {}),
-  }
-}
-
 function createLocalSigner(rpcUrl: string, privateKey: Hex) {
   const account = privateKeyToAccount(privateKey)
   const transport = http(rpcUrl)
   const publicClient = createPublicClient({ chain: mainnet, transport })
   const walletClient = createWalletClient({ account, chain: mainnet, transport })
-  const executor: EvmBridgeExecutor = {
-    account: account.address,
-    request: async ({ method, params }) => {
-      if (method === 'eth_accounts') return [account.address]
-      if (method === 'eth_chainId') {
-        const chainId = await publicClient.getChainId()
-        return `0x${chainId.toString(16)}`
-      }
-      if (method === 'eth_call') {
-        const values = positionalParameters(params, method)
-        const transaction = callParameter(values[0])
-        const result = await publicClient.call({ to: transaction.to, data: transaction.data })
-        return result.data ?? '0x'
-      }
-      if (method === 'eth_sendTransaction') {
-        const values = positionalParameters(params, method)
-        const transaction = transactionParameter(values[0])
-        if (transaction.from !== getAddress(account.address)) {
-          throw new Error(`Transaction sender ${transaction.from} does not match ${account.address}`)
-        }
-        const hash = await walletClient.sendTransaction({
-          account,
-          chain: mainnet,
-          to: transaction.to,
-          data: transaction.data,
-          ...(transaction.value == null ? {} : { value: transaction.value }),
-        })
-        console.log('Broadcast Ethereum transaction:', hash)
-        return hash
-      }
-      if (method === 'eth_getTransactionReceipt') {
-        const values = positionalParameters(params, method)
-        const hash = values[0]
-        if (typeof hash !== 'string' || !isHash(hash)) throw new Error('Transaction hash is invalid')
-        try {
-          const receipt = await publicClient.getTransactionReceipt({ hash })
-          return {
-            status: receipt.status === 'success' ? '0x1' : '0x0',
-            transactionHash: receipt.transactionHash,
-            logs: receipt.logs.map((log) => ({
-              address: log.address,
-              data: log.data,
-              topics: log.topics,
-              logIndex: log.logIndex,
-            })),
-          }
-        } catch (error) {
-          if (error instanceof TransactionReceiptNotFoundError) return null
-          throw error
-        }
-      }
-      throw new Error(`Unsupported EVM executor method: ${method}`)
-    },
-  }
-  return { account, executor, publicClient }
+  return { account, walletClient, publicClient }
 }
 
 /**
@@ -198,9 +103,12 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
   const rpcUrl = requiredEnvironmentVariable('ETHEREUM_RPC_URL')
   const recipient = requiredEnvironmentVariable('ALEO_RECIPIENT')
   const amount = requiredEnvironmentVariable(config.amountEnvironmentVariable)
-  const { account, executor, publicClient } = createLocalSigner(rpcUrl, privateKeyFromEnvironment())
+  const { account, walletClient, publicClient } = createLocalSigner(rpcUrl, privateKeyFromEnvironment())
   const recipientBytes32 = aleoAddressToBytes32(recipient)
-  const bridge = createBridgeClient({ environment: 'mainnet', executors: { evm: executor } })
+  const bridge = createBridgeClient({
+    environment: 'mainnet',
+    connections: { ethereum: evmConnection({ publicClient, walletClient }) },
+  })
   const plan = bridge.prepareTransfer({
     routeId: config.routeId,
     amount,

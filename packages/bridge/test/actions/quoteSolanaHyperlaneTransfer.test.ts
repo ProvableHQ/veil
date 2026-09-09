@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { quoteSolanaHyperlaneTransfer } from '../../src/actions/quoteSolanaHyperlaneTransfer.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 import type { SolanaRpcReader } from '../../src/solana/rpc.js'
+import type { SolanaPublicConnection } from '../../src/connections/solana.js'
 import {
   EXPECTED_IGP_PAYMENT_LAMPORTS,
   NETWORK_FEE_LAMPORTS,
@@ -14,12 +15,19 @@ import {
 
 function rpcReturning(accountData: Uint8Array | null): SolanaRpcReader {
   return {
-    getLatestBlockhash: () => { throw new Error('not used by quoteSolanaHyperlaneTransfer') },
+    getLatestBlockhash: async () => ({ blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 1n }),
+    getBlockHeight: () => { throw new Error('not used by quoteSolanaHyperlaneTransfer') },
     getBalance: () => { throw new Error('not used by quoteSolanaHyperlaneTransfer') },
     getAccountData: async () => accountData,
+    getFeeForMessage: async () => NETWORK_FEE_LAMPORTS,
+    getMinimumBalanceForRentExemption: () => { throw new Error('not used by quoteSolanaHyperlaneTransfer') },
     getSignatureStatus: () => { throw new Error('not used by quoteSolanaHyperlaneTransfer') },
     getTransactionLogs: () => { throw new Error('not used by quoteSolanaHyperlaneTransfer') },
   }
+}
+
+function connection(publicClient: SolanaRpcReader): SolanaPublicConnection {
+  return { family: 'solana', publicClient: { ...publicClient, sendTransaction: async () => ({ signature: 'unused' }) } }
 }
 
 describe('quoteSolanaHyperlaneTransfer', () => {
@@ -28,7 +36,7 @@ describe('quoteSolanaHyperlaneTransfer', () => {
     const plan = transferPlan(registry)
     const rpc = rpcReturning(igpAccountData())
 
-    const quote = await quoteSolanaHyperlaneTransfer(registry, rpc, { plan })
+    const quote = await quoteSolanaHyperlaneTransfer(registry, connection(rpc), { plan })
 
     expect(quote.routeId).toBe(SOLANA_ROUTE_ID)
     expect(quote.amountLamports).toBe(BigInt(transferFixture.amountLamports))
@@ -44,7 +52,7 @@ describe('quoteSolanaHyperlaneTransfer', () => {
     const plan = transferPlan(registry)
     const rpc = rpcReturning(null)
 
-    await expect(quoteSolanaHyperlaneTransfer(registry, rpc, { plan })).rejects.toThrow(BridgeError)
+    await expect(quoteSolanaHyperlaneTransfer(registry, connection(rpc), { plan })).rejects.toThrow(BridgeError)
   })
 
   it('propagates route validation failures without touching the network', async () => {
@@ -52,6 +60,6 @@ describe('quoteSolanaHyperlaneTransfer', () => {
     const plan = { ...transferPlan(registry), protocol: 'xreserve' as const }
     const rpc = rpcReturning(igpAccountData())
 
-    await expect(quoteSolanaHyperlaneTransfer(registry, rpc, { plan })).rejects.toThrow(BridgeError)
+    await expect(quoteSolanaHyperlaneTransfer(registry, connection(rpc), { plan })).rejects.toThrow(BridgeError)
   })
 })

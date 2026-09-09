@@ -6,29 +6,22 @@
  */
 
 import {
-  TransactionReceiptNotFoundError,
-  createPublicClient,
-  createWalletClient,
   formatUnits,
-  getAddress,
-  http,
-  isAddress,
   isHash,
-  isHex,
-  type Address,
   type Hash,
   type Hex,
 } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
-import { mainnet } from 'viem/chains'
 import {
+  aleoConnection,
   buildXReserveHookData,
   createBridgeClient,
+  evmConnection,
+  evmHttp,
+  evmPrivateKey,
   type AleoBridgeExecutor,
   type AleoMintMode,
   type BridgeTransferPlan,
   type BridgeTransferReceipt,
-  type EvmBridgeExecutor,
   type XReserveAttestationResult,
 } from '@provablehq/aleo-bridge-sdk'
 
@@ -109,93 +102,6 @@ function booleanFromEnvironment(name: string, defaultValue: boolean): boolean {
 
 async function delay(milliseconds: number): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, milliseconds))
-}
-
-function positionalParameters(
-  params: readonly unknown[] | Record<string, unknown> | undefined,
-  method: string,
-): readonly unknown[] {
-  if (!Array.isArray(params)) throw new Error(`${method} requires positional parameters`)
-  return params
-}
-
-function callParameter(value: unknown): { to: Address, data: Hex } {
-  if (!value || typeof value !== 'object') throw new Error('The RPC method requires a transaction object')
-  const transaction = value as Record<string, unknown>
-  if (typeof transaction.to !== 'string' || !isAddress(transaction.to)) throw new Error('Transaction destination is invalid')
-  if (typeof transaction.data !== 'string' || !isHex(transaction.data)) throw new Error('Transaction calldata is invalid')
-  return {
-    to: getAddress(transaction.to),
-    data: transaction.data,
-  }
-}
-
-function transactionParameter(value: unknown): { from: Address, to: Address, data: Hex } {
-  const call = callParameter(value)
-  const transaction = value as Record<string, unknown>
-  if (typeof transaction.from !== 'string' || !isAddress(transaction.from)) throw new Error('Transaction sender is invalid')
-  return { from: getAddress(transaction.from), ...call }
-}
-
-function createLocalSignerExecutor(rpcUrl: string, privateKey: Hex): EvmBridgeExecutor {
-  const account = privateKeyToAccount(privateKey)
-  const transport = http(rpcUrl)
-  const publicClient = createPublicClient({ chain: mainnet, transport })
-  const walletClient = createWalletClient({ account, chain: mainnet, transport })
-
-  return {
-    account: account.address,
-    request: async ({ method, params }) => {
-      if (method === 'eth_accounts') return [account.address]
-      if (method === 'eth_chainId') {
-        const chainId = await publicClient.getChainId()
-        return `0x${chainId.toString(16)}`
-      }
-      if (method === 'eth_call') {
-        const values = positionalParameters(params, method)
-        const transaction = callParameter(values[0])
-        const result = await publicClient.call({ to: transaction.to, data: transaction.data })
-        return result.data ?? '0x'
-      }
-      if (method === 'eth_sendTransaction') {
-        const values = positionalParameters(params, method)
-        const transaction = transactionParameter(values[0])
-        if (transaction.from !== getAddress(account.address)) {
-          throw new Error(`Transaction sender ${transaction.from} does not match ${account.address}`)
-        }
-        const hash = await walletClient.sendTransaction({
-          account,
-          chain: mainnet,
-          to: transaction.to,
-          data: transaction.data,
-        })
-        console.log('Broadcast Ethereum transaction:', hash)
-        return hash
-      }
-      if (method === 'eth_getTransactionReceipt') {
-        const values = positionalParameters(params, method)
-        const hash = values[0]
-        if (typeof hash !== 'string' || !isHash(hash)) throw new Error('Transaction hash is invalid')
-        try {
-          const receipt = await publicClient.getTransactionReceipt({ hash })
-          return {
-            status: receipt.status === 'success' ? '0x1' : '0x0',
-            transactionHash: receipt.transactionHash,
-            logs: receipt.logs.map((log) => ({
-              address: log.address,
-              data: log.data,
-              topics: log.topics,
-              logIndex: log.logIndex,
-            })),
-          }
-        } catch (error) {
-          if (error instanceof TransactionReceiptNotFoundError) return null
-          throw error
-        }
-      }
-      throw new Error(`Unsupported EVM executor method: ${method}`)
-    },
-  }
 }
 
 async function createPrivateMintContext(recipient: string): Promise<PrivateMintContext> {
@@ -302,7 +208,7 @@ async function executePrivateMint(
 ): Promise<void> {
   const aleoBridge = createBridgeClient({
     environment: 'mainnet',
-    executors: { aleo: context.executor },
+    connections: { aleo: aleoConnection({ account: context.executor }) },
   })
   console.log('Circle attestation status: complete')
   console.log('Submitting shielded_usdcx_wrapper.aleo/private_mint with the configured Aleo signer.')
@@ -338,7 +244,7 @@ async function resumePrivateMint(
 ): Promise<void> {
   const bridge = createBridgeClient({
     environment: 'mainnet',
-    xReserveHttpTransport: (url, init) => fetch(url, init),
+    fetch,
   })
   const attestation = await bridge.getXReserveAttestation({
     routeId: ROUTE_ID,
@@ -404,14 +310,14 @@ async function main(): Promise<void> {
 
   const rpcUrl = requiredEnvironmentVariable('ETHEREUM_RPC_URL')
   const amount = requiredEnvironmentVariable('USDC_AMOUNT')
-  const executor = createLocalSignerExecutor(rpcUrl, privateKeyFromEnvironment())
-  const sender = executor.account
-  if (!sender) throw new Error('The local signer did not expose an Ethereum account')
+  const account = evmPrivateKey(privateKeyFromEnvironment())
+  if (account.type !== 'local') throw new Error('Expected a local Ethereum account')
+  const sender = account.account.address
 
   const bridge = createBridgeClient({
     environment: 'mainnet',
-    executors: { evm: executor },
-    xReserveHttpTransport: (url, init) => fetch(url, init),
+    connections: { ethereum: evmConnection({ transport: evmHttp(rpcUrl), account }) },
+    fetch,
   })
   const plan = bridge.prepareTransfer({
     routeId: ROUTE_ID,

@@ -8,6 +8,53 @@ export {
   type BridgeActions,
   type BridgeActionsConfig,
 } from './clients/decorators/bridge.js'
+export {
+  evmConnection,
+  evmCustom,
+  evmHttp,
+  evmLocalAccount,
+  evmPrivateKey,
+  evmProvider,
+  type EvmAccount,
+  type EvmCallParameters,
+  type EvmConnection,
+  type EvmConnectionDefinition,
+  type EvmExecutionConnection,
+  type EvmHttpOptions,
+  type EvmPublicClient,
+  type EvmPublicConnection,
+  type EvmReceipt,
+  type EvmRequest,
+  type EvmTransactionParameters,
+  type EvmTransportDefinition,
+  type EvmWalletClient,
+} from './connections/evm.js'
+export {
+  solanaConnection,
+  solanaCustom,
+  solanaHttp,
+  solanaKeyPair,
+  solanaWallet,
+  type SolanaAccount,
+  type SolanaConnection,
+  type SolanaConnectionDefinition,
+  type SolanaExecutionConnection,
+  type SolanaHttpOptions,
+  type SolanaPublicClient,
+  type SolanaPublicConnection,
+  type SolanaRequest,
+  type SolanaTransportDefinition,
+  type SolanaWalletClient,
+} from './connections/solana.js'
+export {
+  aleoConnection,
+  aleoWallet,
+  type AleoConnection,
+  type AleoConnectionDefinition,
+  type AleoPublicConnection,
+  type AleoWalletConnection,
+} from './connections/aleo.js'
+export type { BridgeConnectionDefinition } from './connections/index.js'
 
 export {
   getProtocolAssets as getAssets,
@@ -62,8 +109,6 @@ export type {
   ProtocolBridgeRoute,
 } from './types/protocol.js'
 export type {
-  BridgeExecutors,
-  EvmBridgeExecutor,
   EvmHyperlaneRouteMetadata,
   EvmHyperlaneRouterType,
   EvmHyperlaneTransferExecution,
@@ -99,12 +144,9 @@ export type {
 export type {
   ExecuteSolanaHyperlaneTransferParameters,
   QuoteSolanaHyperlaneTransferParameters,
-  SolanaBridgeExecutor,
   SolanaHyperlaneRouteMetadata,
   SolanaHyperlaneTransferExecution,
   SolanaHyperlaneTransferQuote,
-  SolanaRpcConfig,
-  SolanaRpcHttpTransport,
 } from './types/solana.js'
 
 export {

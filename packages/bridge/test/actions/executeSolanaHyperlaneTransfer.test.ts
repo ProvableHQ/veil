@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { executeSolanaHyperlaneTransfer } from '../../src/actions/executeSolanaHyperlaneTransfer.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 import type { SolanaRpcReader } from '../../src/solana/rpc.js'
-import type { SolanaBridgeExecutor } from '../../src/types/solana.js'
+import type { SolanaWalletClient } from '../../src/connections/solana.js'
+import type { SolanaExecutionConnection } from '../../src/connections/solana.js'
+import type { BridgeTransferReceipt } from '../../src/types/protocol.js'
 import {
   WARP_PROGRAM_ADDRESS,
   igpAccountData,
@@ -21,10 +23,10 @@ const OTHER_SENDER = '11111111111111111111111111111112'
 
 function stubExecutor(
   options: { onSend?: (wireTransaction: Uint8Array) => void; address?: string } = {},
-): SolanaBridgeExecutor {
+): SolanaWalletClient {
   return {
     getAddress: async () => options.address ?? transferFixture.senderAddress,
-    signAndSendTransaction: async (wireTransaction) => {
+    sendTransaction: async (wireTransaction) => {
       options.onSend?.(wireTransaction)
       return { signature: STUB_SIGNATURE }
     },
@@ -34,11 +36,26 @@ function stubExecutor(
 function executeRpc(overrides: Partial<SolanaRpcReader> = {}): SolanaRpcReader {
   return {
     getLatestBlockhash: async () => ({ blockhash: WARP_PROGRAM_ADDRESS, lastValidBlockHeight: 100n }),
+    getBlockHeight: async () => 1n,
     getBalance: async () => 800_000_000_000n,
     getAccountData: async () => igpAccountData(),
+    getFeeForMessage: async () => 10_000n,
+    getMinimumBalanceForRentExemption: async (dataLength) => {
+      if (dataLength === 141) return 1_872_240n
+      if (dataLength === 194) return 2_241_120n
+      return 890_880n
+    },
     getSignatureStatus: async () => 'confirmed',
     getTransactionLogs: async () => transferFixture.logMessages,
     ...overrides,
+  }
+}
+
+function connection(executor: SolanaWalletClient, publicClient: SolanaRpcReader): SolanaExecutionConnection {
+  return {
+    family: 'solana',
+    publicClient: { ...publicClient, sendTransaction: async () => ({ signature: 'unused' }) },
+    walletClient: executor,
   }
 }
 
@@ -66,7 +83,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const executor = stubExecutor({ onSend: (wire) => { capturedWire = wire } })
     const rpc = executeRpc()
 
-    const execution = await executeSolanaHyperlaneTransfer(registry, executor, rpc, { plan })
+    const execution = await executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), { plan })
 
     expect(execution.receipt.status).toBe('DELIVERY_PENDING')
     expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
@@ -92,7 +109,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const getBalance = vi.fn(async () => 800_000_000_000n)
     const rpc = executeRpc({ getBalance })
 
-    await expect(executeSolanaHyperlaneTransfer(registry, executor, rpc, { plan })).rejects.toThrow(
+    await expect(executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), { plan })).rejects.toThrow(
       new RegExp(`Prepared sender ${transferFixture.senderAddress} does not match connected account ${OTHER_SENDER}`),
     )
     // The mismatch is caught before any balance read or transaction assembly.
@@ -105,7 +122,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const executor = stubExecutor({ address: OTHER_SENDER })
     const rpc = executeRpc()
 
-    const execution = await executeSolanaHyperlaneTransfer(registry, executor, rpc, { plan })
+    const execution = await executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), { plan })
 
     expect(execution.receipt.status).toBe('DELIVERY_PENDING')
   })
@@ -117,7 +134,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const rpc = executeRpc({ getBalance: async () => 0n })
 
     try {
-      await executeSolanaHyperlaneTransfer(registry, executor, rpc, { plan })
+      await executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), { plan })
       expect.unreachable('expected an insufficient-balance BridgeError')
     } catch (error) {
       expect(error).toBeInstanceOf(BridgeError)
@@ -135,7 +152,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const executor = stubExecutor()
     const rpc = executeRpc({ getSignatureStatus: async () => 'failed' })
 
-    await expect(executeSolanaHyperlaneTransfer(registry, executor, rpc, { plan })).rejects.toThrow(
+    await expect(executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), { plan })).rejects.toThrow(
       new RegExp(STUB_SIGNATURE),
     )
   })
@@ -148,7 +165,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
       const executor = stubExecutor()
       const rpc = executeRpc({ getSignatureStatus: async () => null })
 
-      const execution = await settleWithFakeTimers(executeSolanaHyperlaneTransfer(registry, executor, rpc, {
+      const execution = await settleWithFakeTimers(executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), {
         plan,
         pollingIntervalMs: 1_000,
         confirmationTimeoutMs: 3_000,
@@ -158,9 +175,44 @@ describe('executeSolanaHyperlaneTransfer', () => {
       expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
       expect(execution.receipt.messageId).toBeUndefined()
       expect(execution.receipt.id).toBe(STUB_SIGNATURE)
+      expect(execution.receipt.protocolState.blockhash).toBe(WARP_PROGRAM_ADDRESS)
+      expect(execution.receipt.protocolState.lastValidBlockHeight).toBe('100')
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('returns resumable expired state without resubmitting after blockhash expiry', async () => {
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    let submissions = 0
+    const executor = stubExecutor({ onSend: () => { submissions += 1 } })
+    const rpc = executeRpc({ getSignatureStatus: async () => null, getBlockHeight: async () => 101n })
+
+    const execution = await executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), { plan })
+
+    expect(execution.receipt.status).toBe('SOURCE_CONFIRMING')
+    expect(execution.receipt.protocolState.blockhashExpired).toBe(true)
+    expect(submissions).toBe(1)
+  })
+
+  it('checkpoints the signature and lifetime before confirmation polling', async () => {
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    const checkpoints: BridgeTransferReceipt[] = []
+    const rpc = executeRpc()
+
+    await executeSolanaHyperlaneTransfer(registry, connection(stubExecutor(), rpc), {
+      plan,
+      onSubmitted(receipt) { checkpoints.push(receipt) },
+    })
+
+    expect(checkpoints).toHaveLength(1)
+    expect(checkpoints[0]).toMatchObject({
+      status: 'SOURCE_CONFIRMING',
+      sourceTxId: STUB_SIGNATURE,
+      protocolState: { blockhash: WARP_PROGRAM_ADDRESS, lastValidBlockHeight: '100' },
+    })
   })
 
   it('tolerates transient getSignatureStatus errors and succeeds once the status resolves', async () => {
@@ -178,7 +230,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
         },
       })
 
-      const execution = await settleWithFakeTimers(executeSolanaHyperlaneTransfer(registry, executor, rpc, {
+      const execution = await settleWithFakeTimers(executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), {
         plan,
         pollingIntervalMs: 1_000,
         confirmationTimeoutMs: 30_000,
@@ -202,7 +254,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
         getSignatureStatus: async () => { throw new Error('persistent RPC error') },
       })
 
-      const execution = await settleWithFakeTimers(executeSolanaHyperlaneTransfer(registry, executor, rpc, {
+      const execution = await settleWithFakeTimers(executeSolanaHyperlaneTransfer(registry, connection(executor, rpc), {
         plan,
         pollingIntervalMs: 1_000,
         confirmationTimeoutMs: 3_000,

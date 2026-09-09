@@ -16,7 +16,7 @@ import {
 } from '../../src/actions/evmHyperlane.js'
 import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
-import type { EvmBridgeExecutor } from '../../src/types/evm.js'
+import { evmConnection, evmCustom, evmProvider, materializeEvmConnection } from '../../src/connections/evm.js'
 
 const ACCOUNT = getAddress('0x0000000000000000000000000000000000000001')
 const RECIPIENT = '0x20e3629764d5338f74bee96675801b1fb29d1fc68b177668f9175708bef84311'
@@ -57,9 +57,7 @@ function executor(options: {
 }) {
   const sent: SentTransaction[] = []
   const hashes: Hash[] = []
-  const bridgeExecutor: EvmBridgeExecutor = {
-    account: ACCOUNT,
-    request: async ({ method, params }) => {
+  const request = async ({ method, params }: { method: string, params?: readonly unknown[] | Record<string, unknown> }) => {
       if (method === 'eth_chainId') return `0x${(options.chainId ?? 1).toString(16)}`
       if (method === 'eth_call') {
         const call = (params as readonly [{ to: Address, data: Hex }])[0]
@@ -103,8 +101,11 @@ function executor(options: {
         }
       }
       throw new Error(`Unexpected RPC method ${method}`)
-    },
   }
+  const bridgeExecutor = materializeEvmConnection(evmConnection({
+    transport: evmCustom(request),
+    account: evmProvider({ request }, { account: ACCOUNT }),
+  }), fetch) as Required<ReturnType<typeof materializeEvmConnection>>
   return { bridgeExecutor, sent }
 }
 

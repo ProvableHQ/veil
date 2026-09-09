@@ -1,0 +1,93 @@
+import {
+  address,
+  blockhash,
+  compileTransaction,
+  createKeyPairFromPrivateKeyBytes,
+  createKeyPairSignerFromBytes,
+  createTransactionMessage,
+  getTransactionDecoder,
+  getTransactionEncoder,
+  pipe,
+  setTransactionMessageFeePayer,
+  setTransactionMessageLifetimeUsingBlockhash,
+} from '@solana/kit'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  materializeSolanaConnection,
+  solanaConnection,
+  solanaCustom,
+  solanaKeyPair,
+  solanaWallet,
+} from '../../src/connections/solana.js'
+
+async function secretKeyBytes(): Promise<Uint8Array> {
+  const seed = new Uint8Array(32).fill(1)
+  const { publicKey } = await createKeyPairFromPrivateKeyBytes(seed)
+  const publicBytes = new Uint8Array(await crypto.subtle.exportKey('raw', publicKey))
+  return new Uint8Array([...seed, ...publicBytes])
+}
+
+describe('Solana bridge connections', () => {
+  it('constructs an inert tagged definition and requires a transport', () => {
+    const request = vi.fn()
+    expect(solanaConnection({ transport: solanaCustom(request) }).family).toBe('solana')
+    expect(request).not.toHaveBeenCalled()
+    expect(() => solanaConnection({} as never)).toThrow('Solana connection requires a transport')
+  })
+
+  it('delegates Wallet Standard submission without public broadcasting', async () => {
+    const signAndSendTransaction = vi.fn(async () => [{ signature: new Uint8Array([1, 2, 3]) }])
+    const request = vi.fn(async () => 'unused')
+    const connection = materializeSolanaConnection(solanaConnection({
+      transport: solanaCustom(request),
+      account: solanaWallet({
+        wallet: { features: { 'solana:signAndSendTransaction': { signAndSendTransaction } } },
+        account: { address: 'Sender11111111111111111111111111111111111', publicKey: new Uint8Array(32) },
+        chain: 'solana:mainnet',
+      }),
+    }), fetch)
+
+    expect(await connection.walletClient?.sendTransaction(new Uint8Array([9]))).toEqual({ signature: 'Ldp' })
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('creates a local keypair without network access', async () => {
+    const request = vi.fn()
+    const connection = materializeSolanaConnection(solanaConnection({
+      transport: solanaCustom(request),
+      account: solanaKeyPair(await secretKeyBytes()),
+    }), fetch)
+
+    expect(await connection.walletClient?.getAddress()).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('adds the local fee-payer signature and broadcasts through the public transport', async () => {
+    const secret = await secretKeyBytes()
+    const signer = await createKeyPairSignerFromBytes(secret)
+    let submitted: Uint8Array | undefined
+    const request = vi.fn(async (method: string, params: unknown[]) => {
+      if (method !== 'sendTransaction') throw new Error(`unexpected ${method}`)
+      submitted = Uint8Array.from(atob((params[0] as string)), (character) => character.charCodeAt(0))
+      return 'submitted-signature'
+    })
+    const connection = materializeSolanaConnection(solanaConnection({
+      transport: solanaCustom(request),
+      account: solanaKeyPair(secret),
+    }), fetch)
+    const message = pipe(
+      createTransactionMessage({ version: 0 }),
+      (transaction) => setTransactionMessageFeePayer(address(signer.address), transaction),
+      (transaction) => setTransactionMessageLifetimeUsingBlockhash({
+        blockhash: blockhash(signer.address),
+        lastValidBlockHeight: 100n,
+      }, transaction),
+    )
+    const wire = new Uint8Array(getTransactionEncoder().encode(compileTransaction(message)))
+
+    await expect(connection.walletClient?.sendTransaction(wire)).resolves.toEqual({ signature: 'submitted-signature' })
+    expect(request).toHaveBeenCalledWith('sendTransaction', expect.any(Array))
+    const signed = getTransactionDecoder().decode(submitted!)
+    expect(signed.signatures[signer.address]).toBeInstanceOf(Uint8Array)
+  })
+})

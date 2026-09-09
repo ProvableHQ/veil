@@ -37,16 +37,16 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import bs58 from 'bs58'
+import { createKeyPairSignerFromBytes } from '@solana/kit'
 import {
   createBridgeClient,
-  type SolanaRpcConfig,
+  solanaConnection,
+  solanaHttp,
+  solanaKeyPair,
 } from '../src/index.js'
 import { extractSolanaHyperlaneMessageId } from '../src/actions/executeSolanaHyperlaneTransfer.js'
-import {
-  createSolanaRpcReader,
-  solanaExecutorFromKeyPair,
-} from '../src/solana/index.js'
-import type { SolanaBridgeExecutor } from '../src/types/solana.js'
+import { createSolanaRpcReader } from '../src/solana/index.js'
+import type { SolanaRpcConfig } from '../src/types/solana.js'
 import { createPublicClient, http, type PublicClient } from '@provablehq/veil-core'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
@@ -196,27 +196,6 @@ async function arc20SolBalance(aleoReader: PublicClient, recipient: string): Pro
  * (nothing signed or sent yet) apart from a failure after signing was
  * attempted.
  */
-function withDispatchCheckpoint(
-  executor: SolanaBridgeExecutor,
-  state: State,
-  invoked: { value: boolean },
-): SolanaBridgeExecutor {
-  return {
-    getAddress: () => executor.getAddress(),
-    signAndSendTransaction: async (wireTransaction) => {
-      invoked.value = true
-      const result = await executor.signAndSendTransaction(wireTransaction)
-      state.dispatch = {
-        signature: result.signature,
-        status: 'SOURCE_CONFIRMING',
-        dispatchedAt: new Date().toISOString(),
-      }
-      saveState(state)
-      return result
-    },
-  }
-}
-
 async function main(): Promise<void> {
   if (process.argv.includes('--reset')) {
     rmSync(STATE_FILE, { force: true })
@@ -234,23 +213,22 @@ async function main(): Promise<void> {
   const amount = process.env.DEPOSIT_SOL ?? '0.002'
   const rpc: SolanaRpcConfig = { url: process.env.SOLANA_RPC_URL?.trim() || 'https://api.mainnet-beta.solana.com' }
 
-  const rawExecutor = await solanaExecutorFromKeyPair({ secretKeyBytes: secretKeyBytes(secretKeyRaw), rpc })
-  const senderAddress = await rawExecutor.getAddress()
+  const keypairBytes = secretKeyBytes(secretKeyRaw)
+  const senderAddress = String((await createKeyPairSignerFromBytes(keypairBytes)).address)
   const solanaReader = createSolanaRpcReader(rpc)
   const aleoReader = createPublicClient({ transport: http(ALEO_API, { network: 'mainnet' }) })
 
-  // Loaded before the executor is wrapped so the checkpointing wrapper below
-  // can persist straight into this same object the instant a signature comes
-  // back — see `withDispatchCheckpoint`.
   const state = loadState()
   state.senderAddress = senderAddress
-  const executorInvoked = { value: false }
-  const executor = withDispatchCheckpoint(rawExecutor, state, executorInvoked)
 
   const bridge = createBridgeClient({
     environment: 'mainnet',
-    solanaRpc: rpc,
-    executors: { solana: executor },
+    connections: {
+      solana: solanaConnection({
+        transport: solanaHttp(rpc.url, { fetch: rpc.transport }),
+        account: solanaKeyPair(keypairBytes),
+      }),
+    },
   })
   const plan = bridge.prepareTransfer({
     routeId: ROUTE_ID,
@@ -305,10 +283,18 @@ async function main(): Promise<void> {
       execution = await bridge.executeSolanaHyperlaneTransfer({
         plan,
         confirmationTimeoutMs: CONFIRMATION_TIMEOUT_MS,
+        onSubmitted(receipt) {
+          state.dispatch = {
+            signature: receipt.sourceTxId!,
+            status: 'SOURCE_CONFIRMING',
+            dispatchedAt: new Date().toISOString(),
+          }
+          saveState(state)
+        },
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      if (!executorInvoked.value) {
+      if (!state.dispatch) {
         // Nothing was signed or sent yet — a route-validation, quoting, or
         // balance-preflight failure. Safe to report and let the operator
         // simply re-run.
@@ -316,10 +302,8 @@ async function main(): Promise<void> {
         process.exitCode = 1
         return
       }
-      // The executor was invoked, so a transaction may have been broadcast
-      // (state.dispatch is already checkpointed if signAndSendTransaction
-      // returned). Leave the checkpoint exactly as-is — do not clear it —
-      // and tell the operator to resume rather than re-run from scratch.
+      // The submission hook persisted the signature before confirmation
+      // polling. Leave that checkpoint intact and resume on the next run.
       log(`Transfer submission or confirmation failed after signing was invoked: ${message}`)
       if (state.dispatch) {
         log(`Signature ${state.dispatch.signature} was already checkpointed before this failure.`)

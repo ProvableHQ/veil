@@ -1,92 +1,62 @@
-import { createClient, createTransport, type Client } from '@provablehq/veil-core'
 import { bridgeActions, type BridgeActions } from './decorators/bridge.js'
+import { materializeBridgeConnections, type BridgeConnectionDefinition } from '../connections/index.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../registry/default.js'
 import { validateBridgeRegistry } from '../registry/validate.js'
-import type { BridgeExecutors } from '../types/evm.js'
 import type { BridgeEnvironment, BridgeRegistry } from '../types/protocol.js'
-import type { SolanaRpcConfig } from '../types/solana.js'
-import type { XReserveHttpTransport } from '../types/xreserve.js'
 
 /**
  * Configures a protocol bridge client.
  *
- * @property environment Routes and assets exposed by default. Defaults to `mainnet`.
- * @property registry Reviewed protocol deployment snapshot. Defaults to {@link DEFAULT_BRIDGE_REGISTRY}.
- * @property executors Optional wallet capabilities used by fund-moving protocol actions.
- * @property xReserveHttpTransport Optional fetch-compatible transport used for Circle attestation requests.
- * @property aleoPublicClient Optional Aleo public client used for on-chain reads such as Hyperlane gas quotes.
- * @property solanaRpc Optional Solana JSON-RPC endpoint used for on-chain reads such as blockhash and confirmation lookups.
- * @property key Client identifier. Defaults to `bridge`.
- * @property name Human-readable client name. Defaults to `Bridge Client`.
+ * @property environment Default route environment. Defaults to `mainnet`.
+ * @property registry Optional reviewed registry override.
+ * @property connections Chain capabilities keyed by registry chain id.
+ * @property fetch Fetch implementation used for protocol HTTP requests and as the transport default.
+ * @property key Stable client key. Defaults to `bridge`.
+ * @property name Display name. Defaults to `Bridge Client`.
  */
 export type BridgeClientConfig = {
   environment?: BridgeEnvironment | undefined
   registry?: BridgeRegistry | undefined
-  executors?: BridgeExecutors | undefined
-  xReserveHttpTransport?: XReserveHttpTransport | undefined
-  aleoPublicClient?: Client | undefined
-  solanaRpc?: SolanaRpcConfig | undefined
+  connections?: Readonly<Record<string, BridgeConnectionDefinition>> | undefined
+  fetch?: typeof globalThis.fetch | undefined
   key?: string | undefined
   name?: string | undefined
 }
 
-type BridgeClientState = {
+/**
+ * Exposes registry-bound bridge actions without account handles or a fake base transport.
+ *
+ * @property key Stable client key.
+ * @property name Client display name.
+ * @property environment Default route environment.
+ * @property registry Validated registry snapshot.
+ */
+export type BridgeClient = BridgeActions & {
+  key: string
+  name: string
   environment: BridgeEnvironment
   registry: BridgeRegistry
 }
 
 /**
- * Exposes protocol bridge discovery, planning, and configured execution actions.
+ * Creates a registry-keyed multi-chain bridge coordinator.
  *
- * The client retains Veil's `extend()` composition model. Its base transport
- * is reserved for protocol executors. Discovery and planning remain pure and
- * local; execution actions require the corresponding injected capability.
- */
-export type BridgeClient = Client<BridgeActions & BridgeClientState>
-
-function localBridgeTransport() {
-  return createTransport({
-    key: 'protocolBridge',
-    name: 'Protocol Bridge Transport',
-    type: 'protocolBridge',
-    request: async ({ method }) => {
-      throw new Error(`Protocol bridge method is not implemented: ${method}`)
-    },
-  })
-}
-
-/**
- * Creates a protocol-oriented bridge client for xReserve and Hyperlane.
- *
- * Discovery and transfer planning read the configured registry without network
- * access. An injected EVM executor enables Ethereum Hyperlane quote and execution
- * actions without exposing private keys to the client. An injected Aleo wallet
- * client enables user-authorized private USDCx mints and USDCx burns.
- *
- * @param config Optional environment, registry, executors, and client identity.
- * @returns A bridge client exposing discovery, planning, and configured protocol actions.
- * @throws BridgeError When the supplied registry has invalid references.
- *
+ * @param config Registry, transport, and per-chain capability definitions.
+ * @returns A plain bridge client with bound discovery, quote, and execution actions.
+ * @throws BridgeError When the registry or a connection definition is invalid.
  * @example
- * const bridge = createBridgeClient({ environment: 'testnet' })
- * const routes = bridge.getRoutes({ protocol: 'xreserve' })
+ * const bridge = createBridgeClient({ environment: 'mainnet' })
  */
 export function createBridgeClient(config: BridgeClientConfig = {}): BridgeClient {
-  const {
-    environment = 'mainnet',
-    registry = DEFAULT_BRIDGE_REGISTRY,
-    executors = {},
-    xReserveHttpTransport,
-    aleoPublicClient,
-    solanaRpc,
-    key = 'bridge',
-    name = 'Bridge Client',
-  } = config
-  const validated = validateBridgeRegistry(registry)
-  const client = createClient({ transport: localBridgeTransport(), key, name })
-  return client.extend((inner) => ({
+  const environment = config.environment ?? 'mainnet'
+  const registry = validateBridgeRegistry(config.registry ?? DEFAULT_BRIDGE_REGISTRY)
+  const fetch = config.fetch ?? globalThis.fetch
+  const connections = materializeBridgeConnections(config.connections ?? {}, fetch)
+  return {
+    key: config.key ?? 'bridge',
+    name: config.name ?? 'Bridge Client',
     environment,
-    registry: validated,
-    ...bridgeActions(inner, { environment, registry: validated, executors, xReserveHttpTransport, aleoPublicClient, solanaRpc }),
-  })) as BridgeClient
+    registry,
+    ...bridgeActions({ environment, registry, connections, fetch }),
+  }
 }

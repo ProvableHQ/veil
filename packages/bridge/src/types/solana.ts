@@ -1,20 +1,6 @@
 import type { BridgeTransferPlan, BridgeTransferReceipt } from './protocol.js'
 
 /**
- * Signs and submits a Solana transaction through an application-provided wallet.
- *
- * The shape is compatible with connected Solana wallet adapters. The bridge
- * package never reads a runtime global and never handles a private key directly.
- *
- * @property getAddress Reads the connected wallet's base58 public key. Hits the wallet, not the network.
- * @property signAndSendTransaction Prompts the wallet to sign a serialized transaction and broadcast it to the configured RPC endpoint.
- */
-export type SolanaBridgeExecutor = {
-  getAddress: () => Promise<string>
-  signAndSendTransaction: (wireTransaction: Uint8Array) => Promise<{ signature: string }>
-}
-
-/**
  * Sends a Solana JSON-RPC POST request without coupling the bridge client to a runtime global.
  *
  * Matches the subset of the Fetch API needed for JSON-RPC calls, so
@@ -117,11 +103,14 @@ export type SolanaHyperlaneTransferQuote = {
  * @property plan Pure transfer plan returned by `prepareTransfer`.
  * @property pollingIntervalMs Delay between confirmation checks. Defaults to 1,000 milliseconds; floored at 100 milliseconds so a small or zero value cannot busy-poll the RPC endpoint.
  * @property confirmationTimeoutMs Maximum time to wait for confirmation. Defaults to 120,000 milliseconds; a timeout returns resumable pending state.
+ * @property onSubmitted Durable checkpoint hook called immediately after broadcast
+ *   and before confirmation polling begins.
  */
 export type ExecuteSolanaHyperlaneTransferParameters = {
   plan: BridgeTransferPlan
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined
+  onSubmitted?: ((receipt: BridgeTransferReceipt) => void | Promise<void>) | undefined
 }
 
 /**

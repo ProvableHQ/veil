@@ -90,11 +90,17 @@ export type EvmXReserveTransferQuote = {
  * @property plan Pure plan returned by `prepareTransfer`.
  * @property pollingIntervalMs Delay between receipt checks. Defaults to 1,000 milliseconds.
  * @property confirmationTimeoutMs Maximum receipt wait per transaction. Defaults to 120,000 milliseconds.
+ * @property resume Previously checkpointed source receipt. When supplied, execution
+ *   verifies that transaction and never repeats its submission.
+ * @property onSubmitted Durable checkpoint hook called immediately after an approval
+ *   or deposit is broadcast and before receipt polling begins.
  */
 export type ExecuteEvmXReserveTransferParameters = {
   plan: BridgeTransferPlan
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined
+  resume?: BridgeTransferReceipt | undefined
+  onSubmitted?: ((receipt: BridgeTransferReceipt) => void | Promise<void>) | undefined
 }
 
 /**

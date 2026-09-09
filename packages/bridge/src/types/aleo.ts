@@ -158,12 +158,15 @@ export type AleoHyperlaneTransferRemoteCall = {
  * @property mode Whether the program burns from `self.caller` or the EOA-bound `self.signer`. Defaults to `caller`.
  * @property privateFee Whether the Aleo wallet should pay its fee privately. Defaults to false.
  * @property gasPaymentMicrocredits Live hook payment in microcredits (u64) from `quoteAleoHyperlaneGasPayment`. Optional for inspection-only call construction; required for execution.
+ * @property onSubmitted Durable checkpoint hook called immediately after the wallet
+ *   returns a transaction id.
  */
 export type ExecuteAleoHyperlaneTransferRemoteParameters = {
   plan: BridgeTransferPlan
   mode?: 'caller' | 'signer' | undefined
   privateFee?: boolean | undefined
   gasPaymentMicrocredits?: bigint | undefined
+  onSubmitted?: ((receipt: BridgeTransferReceipt) => void | Promise<void>) | undefined
 }
 
 /**

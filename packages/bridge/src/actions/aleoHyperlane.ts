@@ -8,7 +8,7 @@ import type {
   ExecuteAleoHyperlaneTransferRemoteParameters,
   QuoteAleoHyperlaneGasPaymentParameters,
 } from '../types/aleo.js'
-import type { BridgeRegistry, ProtocolBridgeRoute } from '../types/protocol.js'
+import type { BridgeRegistry, BridgeTransferReceipt, ProtocolBridgeRoute } from '../types/protocol.js'
 import {
   evmAddressToAleoHyperlaneRecipient,
   solanaAddressToAleoHyperlaneRecipient,
@@ -300,14 +300,16 @@ export async function executeAleoHyperlaneTransferRemote(
   })
   const transactionId = typeof result === 'string' ? result : result.transactionId
   if (!transactionId) throw new BridgeError('Aleo wallet returned an empty Hyperlane transaction id')
-  return {
-    transactionId,
-    receipt: {
+  const receipt: BridgeTransferReceipt = {
       id: transactionId,
       protocol: 'hyperlane',
       status: 'SOURCE_CONFIRMING',
       sourceTxId: transactionId,
       protocolState: { routeId: call.routeId, sourceProgram: call.program, sourceFunction: call.function },
-    },
+  }
+  await params.onSubmitted?.(receipt)
+  return {
+    transactionId,
+    receipt,
   }
 }

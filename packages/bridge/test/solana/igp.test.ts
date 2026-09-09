@@ -23,6 +23,18 @@ function igpAccountData(): Uint8Array {
 }
 
 describe('quoteIgpGasPayment', () => {
+  it('reports truncated account data as a contextual BridgeError', () => {
+    expect(() => quoteIgpGasPayment({ igpAccountData: new Uint8Array(12), destinationDomain: 1, gasAmount: 1n }))
+      .toThrowError(/malformed Sealevel IGP account data/)
+  })
+
+  it('rejects unsupported owner option tags', () => {
+    const data = new Uint8Array(80)
+    data[42] = 2
+    expect(() => quoteIgpGasPayment({ igpAccountData: data, destinationDomain: 1, gasAmount: 1n }))
+      .toThrowError(/owner option tag 2/)
+  })
+
   it('reproduces the SEALEVEL_NOTES.md §4 quote for the Aleo mainnet domain', () => {
     const lamports = quoteIgpGasPayment({
       igpAccountData: igpAccountData(),

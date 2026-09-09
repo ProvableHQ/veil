@@ -1,12 +1,11 @@
-import { getBase58Encoder } from '@solana/kit'
+import { createKeyPairSignerFromBytes, getBase58Encoder } from '@solana/kit'
 import {
   createBridgeClient,
-  type SolanaRpcConfig,
+  solanaConnection,
+  solanaHttp,
+  solanaKeyPair,
 } from '@provablehq/aleo-bridge-sdk'
-import {
-  createSolanaRpcReader,
-  solanaExecutorFromKeyPair,
-} from '@provablehq/aleo-bridge-sdk/solana'
+import { createSolanaRpcReader } from '@provablehq/aleo-bridge-sdk/solana'
 
 const ROUTE_ID = 'hyperlane:solana/sol->aleo/sol'
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
@@ -70,24 +69,27 @@ function formatAmount(value: bigint, decimals: number): string {
  * await runSolanaHyperlaneExample()
  */
 export async function runSolanaHyperlaneExample(): Promise<void> {
-  const rpc: SolanaRpcConfig = { url: process.env.SOLANA_RPC_URL?.trim() || 'https://api.mainnet-beta.solana.com' }
+  const rpcUrl = process.env.SOLANA_RPC_URL?.trim() || 'https://api.mainnet-beta.solana.com'
   const recipient = requiredEnvironmentVariable('ALEO_RECIPIENT')
   const amount = requiredEnvironmentVariable('SOL_AMOUNT')
 
   const privateKey = process.env.SOLANA_PRIVATE_KEY?.trim()
-  const executor = privateKey
-    ? await solanaExecutorFromKeyPair({ secretKeyBytes: privateKeyBytes(privateKey), rpc })
-    : undefined
-  const senderAddress = executor ? await executor.getAddress() : requiredEnvironmentVariable('SOLANA_SENDER')
+  const keypairBytes = privateKey ? privateKeyBytes(privateKey) : undefined
+  const signer = keypairBytes ? await createKeyPairSignerFromBytes(keypairBytes) : undefined
+  const senderAddress = signer ? String(signer.address) : requiredEnvironmentVariable('SOLANA_SENDER')
   const configuredSender = process.env.SOLANA_SENDER?.trim()
-  if (executor && configuredSender && configuredSender !== senderAddress) {
+  if (signer && configuredSender && configuredSender !== senderAddress) {
     throw new Error(`SOLANA_SENDER does not match the private-key account ${senderAddress}`)
   }
 
   const bridge = createBridgeClient({
     environment: 'mainnet',
-    solanaRpc: rpc,
-    ...(executor ? { executors: { solana: executor } } : {}),
+    connections: {
+      solana: solanaConnection({
+        transport: solanaHttp(rpcUrl),
+        ...(keypairBytes ? { account: solanaKeyPair(keypairBytes) } : {}),
+      }),
+    },
   })
   const plan = bridge.prepareTransfer({
     routeId: ROUTE_ID,
@@ -96,7 +98,7 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
     sender: senderAddress,
   })
   const quote = await bridge.quoteSolanaHyperlaneTransfer({ plan })
-  const balance = await createSolanaRpcReader(rpc).getBalance(senderAddress)
+  const balance = await createSolanaRpcReader({ url: rpcUrl }).getBalance(senderAddress)
   const decimals = plan.sourceAsset.decimals
 
   console.log('Read-only Solana SOL to Aleo SOL preflight')
@@ -118,7 +120,7 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
     console.log(`Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to submit the transfer.`)
     return
   }
-  if (!executor) throw new Error('SOLANA_PRIVATE_KEY is required for execution')
+  if (!signer) throw new Error('SOLANA_PRIVATE_KEY is required for execution')
 
   console.log('\nExecution enabled. Submitting the transfer through the local keypair executor.')
   const execution = await bridge.executeSolanaHyperlaneTransfer({

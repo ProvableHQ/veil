@@ -407,9 +407,8 @@ EXECUTE_HYPERLANE_SOL=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
   pnpm tsx examples/bridge/sol-to-aleo.ts
 ```
 
-Execution builds a `solanaExecutorFromKeyPair` executor from
-`@provablehq/aleo-bridge-sdk/solana`, which signs locally with `@solana/kit`,
-then calls `executeSolanaHyperlaneTransfer`. That action assembles the
+Execution supplies the key bytes through `solanaKeyPair`, which signs locally
+with `@solana/kit`, then calls `executeSolanaHyperlaneTransfer`. That action assembles the
 transaction, requotes the live hook payment, checks the sender's balance,
 submits the signed transaction, and polls until confirmed or finalized. The
 accepted source transaction locks native SOL in the Warp Route; Hyperlane

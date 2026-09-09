@@ -1,4 +1,5 @@
 import {
+  aleoConnection,
   createBridgeClient,
   type AleoBridgeExecutor,
 } from '@provablehq/aleo-bridge-sdk'
@@ -148,8 +149,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   }
   const bridge = createBridgeClient({
     environment: 'mainnet',
-    executors: { aleo: executor },
-    aleoPublicClient: publicClient,
+    connections: { aleo: aleoConnection({ publicClient, account: executor }) },
   })
 
   const plan = bridge.prepareTransfer({ routeId: config.routeId, amount, recipient })
