@@ -1,8 +1,8 @@
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type { BridgeRegistry } from '../types/protocol.js'
-import type { AleoConnection, AleoPublicConnection, AleoWalletConnection } from './aleo.js'
-import type { EvmConnection, EvmExecutionConnection, EvmPublicConnection } from './evm.js'
-import type { SolanaConnection, SolanaExecutionConnection, SolanaPublicConnection } from './solana.js'
+import type { AleoConnection, AleoWalletConnection } from './aleo.js'
+import type { EvmConnection, EvmWalletConnection } from './evm.js'
+import type { SolanaConnection, SolanaWalletConnection } from './solana.js'
 
 /** Represents every materialized bridge connection family. */
 export type BridgeConnection = EvmConnection | SolanaConnection | AleoConnection
@@ -26,42 +26,38 @@ function resolve(
   return connection
 }
 
-/** Resolves an EVM connection with public access for one action. */
-export function requireEvmPublicConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string, action: string): EvmPublicConnection {
-  const connection = resolve(registry, connections, chainId, 'evm') as EvmConnection
-  if (!connection.publicClient) throw new BridgeError(`EVM public client is required to ${action} on chain "${chainId}"`)
-  return connection as EvmPublicConnection
+/** Resolves the readable EVM connection configured for one action. */
+export function requireEvmConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string): EvmConnection {
+  return resolve(registry, connections, chainId, 'evm') as EvmConnection
 }
 
-/** Resolves an EVM connection with public and wallet access for one action. */
-export function requireEvmExecutionConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string, action: string): EvmExecutionConnection {
-  const connection = requireEvmPublicConnection(registry, connections, chainId, action)
+/** Resolves an EVM connection with wallet access for one action. */
+export function requireEvmWalletConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string, action: string): EvmWalletConnection {
+  const connection = requireEvmConnection(registry, connections, chainId)
   if (!connection.walletClient) throw new BridgeError(`EVM wallet client is required to ${action} on chain "${chainId}"`)
-  return connection as EvmExecutionConnection
+  return connection as EvmWalletConnection
 }
 
-/** Resolves a Solana connection with public access for one action. */
-export function requireSolanaPublicConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string, action: string): SolanaPublicConnection {
-  return resolve(registry, connections, chainId, 'solana') as SolanaPublicConnection
+/** Resolves the readable Solana connection configured for one action. */
+export function requireSolanaConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string): SolanaConnection {
+  return resolve(registry, connections, chainId, 'solana') as SolanaConnection
 }
 
-/** Resolves a Solana connection with public and wallet access for one action. */
-export function requireSolanaExecutionConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string, action: string): SolanaExecutionConnection {
-  const connection = requireSolanaPublicConnection(registry, connections, chainId, action)
+/** Resolves a Solana connection with wallet access for one action. */
+export function requireSolanaWalletConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string, action: string): SolanaWalletConnection {
+  const connection = requireSolanaConnection(registry, connections, chainId)
   if (!connection.walletClient) throw new BridgeError(`Solana wallet client is required to ${action} on chain "${chainId}"`)
-  return connection as SolanaExecutionConnection
+  return connection as SolanaWalletConnection
 }
 
-/** Resolves an Aleo connection with public access for one action. */
-export function requireAleoPublicConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string, action: string): AleoPublicConnection {
-  const connection = resolve(registry, connections, chainId, 'aleo') as AleoConnection
-  if (!connection.publicClient) throw new BridgeError(`Aleo public client is required to ${action} on chain "${chainId}"`)
-  return connection as AleoPublicConnection
+/** Resolves the readable Aleo connection configured for one action. */
+export function requireAleoConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string): AleoConnection {
+  return resolve(registry, connections, chainId, 'aleo') as AleoConnection
 }
 
 /** Resolves an Aleo connection with wallet access for one action. */
 export function requireAleoWalletConnection(registry: BridgeRegistry, connections: BridgeConnections, chainId: string, action: string): AleoWalletConnection {
-  const connection = resolve(registry, connections, chainId, 'aleo') as AleoConnection
+  const connection = requireAleoConnection(registry, connections, chainId)
   if (!connection.walletClient) throw new BridgeError(`Aleo wallet client is required to ${action} on chain "${chainId}"`)
   return connection as AleoWalletConnection
 }

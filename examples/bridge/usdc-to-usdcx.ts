@@ -18,7 +18,7 @@ import {
   evmConnection,
   evmHttp,
   evmPrivateKey,
-  type AleoBridgeExecutor,
+  type AleoWalletClient,
   type AleoMintMode,
   type BridgeTransferPlan,
   type BridgeTransferReceipt,
@@ -39,7 +39,8 @@ const ALEO_PROVING_PROGRESS_INTERVAL_MS = 15_000
 type CompletedXReserveAttestation = Extract<XReserveAttestationResult, { status: 'complete' }>
 type AleoTransactionStatus = 'accepted' | 'rejected' | 'pending' | 'not_found'
 type PrivateMintContext = {
-  executor: AleoBridgeExecutor
+  publicClient: Parameters<typeof aleoConnection>[0]['publicClient']
+  walletClient: AleoWalletClient
   transactionStatus: (params: { transactionId: string }) => Promise<{
     status: AleoTransactionStatus
     transactionId: string
@@ -120,7 +121,7 @@ async function createPrivateMintContext(recipient: string): Promise<PrivateMintC
   console.log('\nPrivate mint selected; validating the Aleo signer before submitting private_mint.')
   const { loadNetwork } = await import('@provablehq/veil-aleo-sdk')
   const aleo = await loadNetwork('mainnet')
-  const { walletClient, account } = aleo.createAleoClient({
+  const { publicClient, walletClient, account } = aleo.createAleoClient({
     privateKey,
     networkUrl,
     provingMode: provingModeValue,
@@ -141,10 +142,11 @@ async function createPrivateMintContext(recipient: string): Promise<PrivateMintC
   await walletClient.authenticateProvableApi()
   console.log(`Aleo signer ready: ${account.address} (${provingModeValue} proving)`)
   return {
-    executor: {
+    publicClient,
+    walletClient: {
       executeTransaction: async ({ program, function: functionName, inputs, privateFee, imports }) => {
         if (imports?.length) {
-          throw new Error('The delegated private-mint executor does not accept dynamic import names')
+          throw new Error('The delegated private-mint wallet client does not accept dynamic import names')
         }
         const startedAt = Date.now()
         const progress = setInterval(() => {
@@ -208,7 +210,7 @@ async function executePrivateMint(
 ): Promise<void> {
   const aleoBridge = createBridgeClient({
     environment: 'mainnet',
-    connections: { aleo: aleoConnection({ account: context.executor }) },
+    connections: { aleo: aleoConnection({ publicClient: context.publicClient, account: context.walletClient }) },
   })
   console.log('Circle attestation status: complete')
   console.log('Submitting shielded_usdcx_wrapper.aleo/private_mint with the configured Aleo signer.')

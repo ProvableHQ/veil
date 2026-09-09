@@ -8,12 +8,12 @@ import { buildAleoHyperlaneTransferRemoteCall, executeAleoHyperlaneTransferRemot
 import { executeSolanaHyperlaneTransfer } from '../../actions/executeSolanaHyperlaneTransfer.js'
 import { quoteSolanaHyperlaneTransfer } from '../../actions/quoteSolanaHyperlaneTransfer.js'
 import {
-  requireAleoPublicConnection,
+  requireAleoConnection,
   requireAleoWalletConnection,
-  requireEvmExecutionConnection,
-  requireEvmPublicConnection,
-  requireSolanaExecutionConnection,
-  requireSolanaPublicConnection,
+  requireEvmConnection,
+  requireEvmWalletConnection,
+  requireSolanaConnection,
+  requireSolanaWalletConnection,
   type BridgeConnections,
 } from '../../connections/resolve.js'
 import type { EvmHyperlaneTransferExecution, EvmHyperlaneTransferQuote, ExecuteEvmHyperlaneTransferParameters, QuoteEvmHyperlaneTransferParameters } from '../../types/evm.js'
@@ -77,19 +77,19 @@ export function bridgeActions(config: BridgeActionsConfig): BridgeActions {
     getAssets: (params = {}) => getProtocolAssets(config.registry, { ...params, environment: params.environment ?? config.environment }),
     getRoutes: (params = {}) => getProtocolRoutes(config.registry, { ...params, environment: params.environment ?? config.environment }),
     prepareTransfer: (params) => prepareTransfer(config.registry, params),
-    quoteEvmHyperlaneTransfer: async (params) => quoteEvmHyperlaneTransfer(config.registry, requireEvmPublicConnection(config.registry, config.connections, sourceChain(params.plan), 'quote Hyperlane transfer'), params),
-    executeEvmHyperlaneTransfer: async (params) => executeEvmHyperlaneTransfer(config.registry, requireEvmExecutionConnection(config.registry, config.connections, sourceChain(params.plan), 'execute Hyperlane transfer'), params),
-    quoteEvmXReserveTransfer: async (params) => quoteEvmXReserveTransfer(config.registry, requireEvmExecutionConnection(config.registry, config.connections, sourceChain(params.plan), 'quote xReserve transfer'), params),
-    executeEvmXReserveTransfer: async (params) => executeEvmXReserveTransfer(config.registry, requireEvmExecutionConnection(config.registry, config.connections, sourceChain(params.plan), 'execute xReserve transfer'), params),
+    quoteEvmHyperlaneTransfer: async (params) => quoteEvmHyperlaneTransfer(config.registry, requireEvmConnection(config.registry, config.connections, sourceChain(params.plan)), params),
+    executeEvmHyperlaneTransfer: async (params) => executeEvmHyperlaneTransfer(config.registry, requireEvmWalletConnection(config.registry, config.connections, sourceChain(params.plan), 'execute Hyperlane transfer'), params),
+    quoteEvmXReserveTransfer: async (params) => quoteEvmXReserveTransfer(config.registry, requireEvmWalletConnection(config.registry, config.connections, sourceChain(params.plan), 'quote xReserve transfer'), params),
+    executeEvmXReserveTransfer: async (params) => executeEvmXReserveTransfer(config.registry, requireEvmWalletConnection(config.registry, config.connections, sourceChain(params.plan), 'execute xReserve transfer'), params),
     getXReserveAttestation: async (params) => getXReserveAttestation(config.registry, config.fetch as XReserveHttpTransport, params),
     executeXReservePrivateMint: async (params) => executeXReservePrivateMint(config.registry, requireAleoWalletConnection(config.registry, config.connections, destinationChain(params.plan), 'execute xReserve private mint').walletClient, params),
     executeXReserveBurn: async (params) => executeXReserveBurn(config.registry, requireAleoWalletConnection(config.registry, config.connections, sourceChain(params.plan), 'execute xReserve burn').walletClient, params),
     buildAleoHyperlaneTransferRemoteCall: (params) => buildAleoHyperlaneTransferRemoteCall(config.registry, params),
-    quoteAleoHyperlaneGasPayment: async (params) => quoteAleoHyperlaneGasPayment(config.registry, requireAleoPublicConnection(config.registry, config.connections, routeSourceChain(config.registry, params.routeId), 'quote Hyperlane gas payment').publicClient, params),
+    quoteAleoHyperlaneGasPayment: async (params) => quoteAleoHyperlaneGasPayment(config.registry, requireAleoConnection(config.registry, config.connections, routeSourceChain(config.registry, params.routeId)).publicClient, params),
     executeAleoHyperlaneTransferRemote: async (params) => executeAleoHyperlaneTransferRemote(config.registry, requireAleoWalletConnection(config.registry, config.connections, sourceChain(params.plan), 'execute Hyperlane transfer').walletClient, params),
-    quoteSolanaHyperlaneTransfer: async (params) => quoteSolanaHyperlaneTransfer(config.registry, requireSolanaPublicConnection(config.registry, config.connections, sourceChain(params.plan), 'quote Hyperlane transfer'), params),
+    quoteSolanaHyperlaneTransfer: async (params) => quoteSolanaHyperlaneTransfer(config.registry, requireSolanaConnection(config.registry, config.connections, sourceChain(params.plan)), params),
     executeSolanaHyperlaneTransfer: async (params) => {
-      const connection = requireSolanaExecutionConnection(config.registry, config.connections, sourceChain(params.plan), 'execute Hyperlane transfer')
+      const connection = requireSolanaWalletConnection(config.registry, config.connections, sourceChain(params.plan), 'execute Hyperlane transfer')
       return executeSolanaHyperlaneTransfer(config.registry, connection, params)
     },
   }

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { quoteSolanaHyperlaneTransfer } from '../../src/actions/quoteSolanaHyperlaneTransfer.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
-import type { SolanaRpcReader } from '../../src/solana/rpc.js'
-import type { SolanaPublicConnection } from '../../src/connections/solana.js'
+import type { SolanaRpcClient } from '../../src/solana/rpc.js'
+import type { SolanaConnection } from '../../src/connections/solana.js'
 import {
   EXPECTED_IGP_PAYMENT_LAMPORTS,
   NETWORK_FEE_LAMPORTS,
@@ -13,7 +13,7 @@ import {
   transferPlan,
 } from '../fixtures/solanaHyperlane.js'
 
-function rpcReturning(accountData: Uint8Array | null): SolanaRpcReader {
+function rpcReturning(accountData: Uint8Array | null): SolanaRpcClient {
   return {
     getLatestBlockhash: async () => ({ blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 1n }),
     getBlockHeight: () => { throw new Error('not used by quoteSolanaHyperlaneTransfer') },
@@ -26,7 +26,7 @@ function rpcReturning(accountData: Uint8Array | null): SolanaRpcReader {
   }
 }
 
-function connection(publicClient: SolanaRpcReader): SolanaPublicConnection {
+function connection(publicClient: SolanaRpcClient): SolanaConnection {
   return { family: 'solana', publicClient: { ...publicClient, sendTransaction: async () => ({ signature: 'unused' }) } }
 }
 

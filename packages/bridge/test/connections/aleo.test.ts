@@ -12,7 +12,10 @@ describe('Aleo bridge connections', () => {
     expect(executeTransaction).not.toHaveBeenCalled()
   })
 
-  it('rejects an empty definition', () => {
-    expect(() => aleoConnection({})).toThrow('Aleo connection requires a public or wallet capability')
+  it('requires public access even when a wallet account is supplied', () => {
+    expect(() => aleoConnection({} as never)).toThrow('Aleo connection requires a public client')
+    expect(() => aleoConnection({ account: { executeTransaction: async () => 'tx' } } as never)).toThrow(
+      'Aleo connection requires a public client',
+    )
   })
 })

@@ -5,7 +5,7 @@ import {
   solanaHttp,
   solanaKeyPair,
 } from '@provablehq/aleo-bridge-sdk'
-import { createSolanaRpcReader } from '@provablehq/aleo-bridge-sdk/solana'
+import { createSolanaRpcClient } from '@provablehq/aleo-bridge-sdk/solana'
 
 const ROUTE_ID = 'hyperlane:solana/sol->aleo/sol'
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
@@ -55,8 +55,8 @@ function formatAmount(value: bigint, decimals: number): string {
  * Quotes or submits the reviewed mainnet Solana SOL-to-Aleo SOL Warp Route.
  *
  * The example builds a bridge client with an injected Solana JSON-RPC
- * endpoint and, when a private key is supplied, a local keypair executor from
- * `@provablehq/aleo-bridge-sdk/solana`. Route validation, fee quoting, and
+ * endpoint and, when a private key is supplied, a local keypair account.
+ * Route validation, fee quoting, and
  * transaction assembly all run inside the bridge client; the script only
  * reads environment input and prints the result. It remains read-only unless
  * the execution acknowledgement is set.
@@ -98,7 +98,7 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
     sender: senderAddress,
   })
   const quote = await bridge.quoteSolanaHyperlaneTransfer({ plan })
-  const balance = await createSolanaRpcReader({ url: rpcUrl }).getBalance(senderAddress)
+  const balance = await createSolanaRpcClient({ url: rpcUrl }).getBalance(senderAddress)
   const decimals = plan.sourceAsset.decimals
 
   console.log('Read-only Solana SOL to Aleo SOL preflight')
@@ -122,7 +122,7 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
   }
   if (!signer) throw new Error('SOLANA_PRIVATE_KEY is required for execution')
 
-  console.log('\nExecution enabled. Submitting the transfer through the local keypair executor.')
+  console.log('\nExecution enabled. Submitting the transfer through the local keypair account.')
   const execution = await bridge.executeSolanaHyperlaneTransfer({
     plan,
     confirmationTimeoutMs: millisecondsFromEnvironment('SOLANA_CONFIRMATION_TIMEOUT_MS', DEFAULT_CONFIRMATION_TIMEOUT_MS),

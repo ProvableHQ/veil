@@ -2,9 +2,9 @@ import { getTransactionDecoder } from '@solana/kit'
 import { describe, expect, it, vi } from 'vitest'
 import { executeSolanaHyperlaneTransfer } from '../../src/actions/executeSolanaHyperlaneTransfer.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
-import type { SolanaRpcReader } from '../../src/solana/rpc.js'
+import type { SolanaRpcClient } from '../../src/solana/rpc.js'
 import type { SolanaWalletClient } from '../../src/connections/solana.js'
-import type { SolanaExecutionConnection } from '../../src/connections/solana.js'
+import type { SolanaWalletConnection } from '../../src/connections/solana.js'
 import type { BridgeTransferReceipt } from '../../src/types/protocol.js'
 import {
   WARP_PROGRAM_ADDRESS,
@@ -33,7 +33,7 @@ function stubExecutor(
   }
 }
 
-function executeRpc(overrides: Partial<SolanaRpcReader> = {}): SolanaRpcReader {
+function executeRpc(overrides: Partial<SolanaRpcClient> = {}): SolanaRpcClient {
   return {
     getLatestBlockhash: async () => ({ blockhash: WARP_PROGRAM_ADDRESS, lastValidBlockHeight: 100n }),
     getBlockHeight: async () => 1n,
@@ -51,7 +51,7 @@ function executeRpc(overrides: Partial<SolanaRpcReader> = {}): SolanaRpcReader {
   }
 }
 
-function connection(executor: SolanaWalletClient, publicClient: SolanaRpcReader): SolanaExecutionConnection {
+function connection(executor: SolanaWalletClient, publicClient: SolanaRpcClient): SolanaWalletConnection {
   return {
     family: 'solana',
     publicClient: { ...publicClient, sendTransaction: async () => ({ signature: 'unused' }) },
@@ -172,6 +172,64 @@ describe('executeSolanaHyperlaneTransfer', () => {
     expect(execution.receipt.status).toBe('SOURCE_CONFIRMING')
     expect(execution.receipt.protocolState.blockhashExpired).toBe(true)
     expect(submissions).toBe(1)
+  })
+
+  it('resumes a checkpointed signature without signing or submitting again', async () => {
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    let submissions = 0
+    const receipt: BridgeTransferReceipt = {
+      id: STUB_SIGNATURE,
+      protocol: 'hyperlane',
+      status: 'SOURCE_CONFIRMING',
+      sourceTxId: STUB_SIGNATURE,
+      protocolState: {
+        routeId: plan.route.id,
+        destinationDomain: 1634493807,
+        blockhash: WARP_PROGRAM_ADDRESS,
+        lastValidBlockHeight: '100',
+        uniqueMessageAddress: OTHER_SENDER,
+        quotedLamports: '676207023360',
+      },
+    }
+
+    const execution = await executeSolanaHyperlaneTransfer(
+      registry,
+      connection(stubExecutor({ onSend: () => { submissions += 1 } }), executeRpc()),
+      { plan, resume: receipt },
+    )
+
+    expect(submissions).toBe(0)
+    expect(execution.receipt).toMatchObject({
+      id: '0xffe0409d00c184769b4dfa2a1eaac5a0a79bfe52458a38e1d9a71a9e5c677805',
+      protocol: 'hyperlane',
+      status: 'DELIVERY_PENDING',
+      sourceTxId: STUB_SIGNATURE,
+      messageId: '0xffe0409d00c184769b4dfa2a1eaac5a0a79bfe52458a38e1d9a71a9e5c677805',
+    })
+  })
+
+  it('rejects a resume receipt checkpointed for another route', async () => {
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    const receipt: BridgeTransferReceipt = {
+      id: STUB_SIGNATURE,
+      protocol: 'hyperlane',
+      status: 'SOURCE_CONFIRMING',
+      sourceTxId: STUB_SIGNATURE,
+      protocolState: {
+        routeId: 'hyperlane:other/sol->aleo/sol',
+        destinationDomain: 1634493807,
+        blockhash: WARP_PROGRAM_ADDRESS,
+        lastValidBlockHeight: '100',
+      },
+    }
+
+    await expect(executeSolanaHyperlaneTransfer(
+      registry,
+      connection(stubExecutor(), executeRpc()),
+      { plan, resume: receipt },
+    )).rejects.toThrow(/does not match the prepared route/)
   })
 
   it('checkpoints the signature and lifetime before confirmation polling', async () => {

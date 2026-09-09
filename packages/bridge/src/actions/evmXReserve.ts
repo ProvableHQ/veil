@@ -12,7 +12,7 @@ import {
   type Hex,
 } from 'viem'
 import { BridgeError } from '../errors/bridgeErrors.js'
-import type { EvmExecutionConnection } from '../connections/evm.js'
+import type { EvmWalletConnection } from '../connections/evm.js'
 import type { BridgeRegistry, BridgeTransferPlan, BridgeTransferReceipt } from '../types/protocol.js'
 import type {
   EvmXReserveRouteMetadata,
@@ -84,32 +84,32 @@ function metadata(registry: BridgeRegistry, plan: BridgeTransferPlan): EvmXReser
   return { xReserveContract: getAddress(xReserveContract), sourceChainId, sourceDomain, remoteDomain, remoteTokenBytes32: remoteTokenBytes32 as Hex, minimumAmountAtomic: BigInt(minimumAmountAtomic), maxFeeAtomic: BigInt(maxFeeAtomic), bridgeProgram, wrapperProgram, attestationBaseUrl }
 }
 
-async function assertChain(connection: EvmExecutionConnection, expected: number): Promise<void> {
+async function assertChain(connection: EvmWalletConnection, expected: number): Promise<void> {
   const chain = await connection.publicClient.getChainId()
   if (chain !== expected) throw new BridgeError(`EVM wallet is connected to chain ${chain}; expected ${expected}`)
 }
 
-async function account(connection: EvmExecutionConnection, plan: BridgeTransferPlan): Promise<Address> {
+async function account(connection: EvmWalletConnection, plan: BridgeTransferPlan): Promise<Address> {
   const value = await connection.walletClient.getAddress()
-  if (typeof value !== 'string' || !isAddress(value)) throw new BridgeError('EVM executor has no connected account')
+  if (typeof value !== 'string' || !isAddress(value)) throw new BridgeError('EVM wallet client has no connected account')
   const resolved = getAddress(value)
   if (plan.sender && (!isAddress(plan.sender) || getAddress(plan.sender) !== resolved)) throw new BridgeError(`Prepared sender ${plan.sender} does not match connected account ${resolved}`)
   return resolved
 }
 
-async function callUint(connection: EvmExecutionConnection, to: Address, data: Hex, functionName: 'balanceOf' | 'allowance'): Promise<bigint> {
+async function callUint(connection: EvmWalletConnection, to: Address, data: Hex, functionName: 'balanceOf' | 'allowance'): Promise<bigint> {
   const result = await connection.publicClient.call({ to, data })
-  if (typeof result !== 'string' || !isHex(result)) throw new BridgeError('EVM executor returned an invalid contract result')
+  if (typeof result !== 'string' || !isHex(result)) throw new BridgeError('EVM public client returned an invalid contract result')
   return decodeFunctionResult({ abi: ERC20_ABI, functionName, data: result })
 }
 
-async function send(connection: EvmExecutionConnection, chainId: number, transaction: { from: Address, to: Address, data: Hex }): Promise<Hash> {
+async function send(connection: EvmWalletConnection, chainId: number, transaction: { from: Address, to: Address, data: Hex }): Promise<Hash> {
   const hash = await connection.walletClient.sendTransaction({ chainId, ...transaction })
-  if (typeof hash !== 'string' || !isHash(hash)) throw new BridgeError('EVM executor returned an invalid transaction hash')
+  if (typeof hash !== 'string' || !isHash(hash)) throw new BridgeError('EVM wallet client returned an invalid transaction hash')
   return hash
 }
 
-async function wait(connection: EvmExecutionConnection, hash: Hash, timeout: number, interval: number): Promise<RpcReceipt | undefined> {
+async function wait(connection: EvmWalletConnection, hash: Hash, timeout: number, interval: number): Promise<RpcReceipt | undefined> {
   const deadline = Date.now() + timeout
   do {
     const result = await connection.publicClient.getTransactionReceipt(hash)
@@ -140,7 +140,7 @@ function successful(receipt: RpcReceipt, hash: Hash): void {
  */
 export async function quoteEvmXReserveTransfer(
   registry: BridgeRegistry,
-  connection: EvmExecutionConnection,
+  connection: EvmWalletConnection,
   params: QuoteEvmXReserveTransferParameters,
 ): Promise<EvmXReserveTransferQuote> {
   const route = metadata(registry, params.plan)
@@ -274,7 +274,7 @@ function confirmedDepositReceipt(
  */
 export async function executeEvmXReserveTransfer(
   registry: BridgeRegistry,
-  connection: EvmExecutionConnection,
+  connection: EvmWalletConnection,
   params: ExecuteEvmXReserveTransferParameters,
 ): Promise<EvmXReserveTransferExecution> {
   const pollingIntervalMs = params.pollingIntervalMs ?? 1_000

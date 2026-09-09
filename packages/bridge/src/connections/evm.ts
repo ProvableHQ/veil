@@ -117,20 +117,21 @@ export type EvmWalletClient = {
  * Holds materialized EVM public and wallet capabilities.
  *
  * @property family EVM family discriminator.
- * @property publicClient Optional read capability.
+ * @property publicClient Required read capability.
  * @property walletClient Optional signing capability.
  */
 export type EvmConnection = {
   family: 'evm'
-  publicClient?: EvmPublicClient | undefined
+  publicClient: EvmPublicClient
   walletClient?: EvmWalletClient | undefined
 }
 
-/** Requires the public side of an EVM connection. */
-export type EvmPublicConnection = EvmConnection & { publicClient: EvmPublicClient }
-
-/** Requires both public and wallet sides of an EVM connection. */
-export type EvmExecutionConnection = EvmPublicConnection & { walletClient: EvmWalletClient }
+/**
+ * Requires the wallet side of an otherwise readable EVM connection.
+ *
+ * @property walletClient Account-authorized client used to sign and broadcast.
+ */
+export type EvmWalletConnection = EvmConnection & { walletClient: EvmWalletClient }
 
 /**
  * Creates a lazy EVM HTTP transport definition.
@@ -271,6 +272,11 @@ export function materializeEvmConnection(
   let publicClient = viemPublic ? normalizePublicClient(viemPublic) : undefined
   let walletClient = definition.walletClient ? normalizeWalletClient(definition.walletClient) : undefined
 
+  if (!publicClient && definition.walletClient) {
+    const request = definition.walletClient.request as EvmRequest
+    publicClient = normalizePublicClient(createPublicClient({ transport: custom({ request }) }))
+  }
+
   if (definition.account?.type === 'provider') {
     const provider = definition.account.provider
     if (!publicClient) publicClient = normalizePublicClient(createPublicClient({ transport: custom(provider) }))
@@ -326,5 +332,6 @@ export function materializeEvmConnection(
     }
   }
 
+  if (!publicClient) throw new BridgeError('EVM connection could not materialize a public client')
   return { family: 'evm', publicClient, walletClient }
 }

@@ -1,7 +1,7 @@
 import { BridgeError } from '../errors/bridgeErrors.js'
 import bs58 from 'bs58'
 import { loadKit } from '../solana/kit.js'
-import { createSolanaRpcReader, type SolanaRpcReader } from '../solana/rpc.js'
+import { createSolanaRpcClient, type SolanaRpcClient } from '../solana/rpc.js'
 import type { SolanaRpcHttpTransport } from '../types/solana.js'
 
 const SOLANA_SIGN_AND_SEND_TRANSACTION_FEATURE = 'solana:signAndSendTransaction'
@@ -59,7 +59,7 @@ export type SolanaConnectionDefinition = {
  * Exposes account-free Solana operations used by bridge actions.
  * @property sendTransaction Broadcasts a fully signed wire transaction.
  */
-export type SolanaPublicClient = SolanaRpcReader & {
+export type SolanaPublicClient = SolanaRpcClient & {
   sendTransaction: (signedTransaction: Uint8Array) => Promise<{ signature: string }>
 }
 
@@ -85,11 +85,12 @@ export type SolanaConnection = {
   walletClient?: SolanaWalletClient | undefined
 }
 
-/** Requires the public side of a Solana connection. */
-export type SolanaPublicConnection = SolanaConnection
-
-/** Requires both public and wallet sides of a Solana connection. */
-export type SolanaExecutionConnection = SolanaConnection & { walletClient: SolanaWalletClient }
+/**
+ * Requires the wallet side of an otherwise readable Solana connection.
+ *
+ * @property walletClient Account-authorized client used to sign and submit.
+ */
+export type SolanaWalletConnection = SolanaConnection & { walletClient: SolanaWalletClient }
 
 /**
  * Creates a lazy Solana HTTP transport definition.
@@ -161,9 +162,9 @@ export function materializeSolanaConnection(
         return { ok: true, status: 200, json: async () => ({ result: await transportDefinition.request(body.method, body.params) }) }
       }
   const url = transportDefinition.type === 'http' ? transportDefinition.url : 'solana:custom'
-  const reader = createSolanaRpcReader({ url, transport: httpTransport })
+  const rpcClient = createSolanaRpcClient({ url, transport: httpTransport })
   const publicClient: SolanaPublicClient = {
-    ...reader,
+    ...rpcClient,
     async sendTransaction(signedTransaction) {
       const base64 = btoa(String.fromCharCode(...signedTransaction))
       if (transportDefinition.type === 'custom') {

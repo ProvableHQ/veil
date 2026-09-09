@@ -1,7 +1,7 @@
 import { isHash, isHex, type Hash, type Hex } from 'viem'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type {
-  AleoBridgeExecutor,
+  AleoWalletClient,
   ExecuteXReservePrivateMintParameters,
   XReservePrivateMintExecution,
 } from '../types/aleo.js'
@@ -17,7 +17,7 @@ import { buildXReserveHookData, calculateXReserveMessageHash, xReserveHexToAleoB
  * and non-private xReserve destination mints remain relayer-driven.
  *
  * @param registry Reviewed deployment snapshot used to resolve the wrapper program.
- * @param executor Connected Aleo wallet client that proves, signs, and broadcasts.
+ * @param walletClient Connected Aleo wallet client that proves, signs, and broadcasts.
  * @param params Original plan, confirmed deposit, Circle attestation, and fee privacy choice.
  * @returns The Aleo transaction id and destination-confirming transfer receipt.
  * @throws BridgeError When the plan is not private, identifiers disagree, inputs have invalid widths, or the wallet returns no transaction id.
@@ -31,7 +31,7 @@ import { buildXReserveHookData, calculateXReserveMessageHash, xReserveHexToAleoB
  */
 export async function executeXReservePrivateMint(
   registry: BridgeRegistry,
-  executor: AleoBridgeExecutor,
+  walletClient: AleoWalletClient,
   params: ExecuteXReservePrivateMintParameters,
 ): Promise<XReservePrivateMintExecution> {
   const { plan, deposit, attestation } = params
@@ -62,7 +62,7 @@ export async function executeXReservePrivateMint(
     throw new BridgeError('Private mint secret nonce and recipient do not match the attested hook data')
   }
 
-  const result = await executor.executeTransaction({
+  const result = await walletClient.executeTransaction({
     program: wrapperProgram,
     function: 'private_mint',
     inputs: [

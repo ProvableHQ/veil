@@ -95,7 +95,7 @@ function writeU256LE(bytes: Uint8Array, offset: number, value: bigint): void {
  * @example
  * const instruction = await buildTransferRemoteInstruction({
  *   metadata: route.solana,
- *   senderAddress: await executor.getAddress(),
+ *   senderAddress: await walletClient.getAddress(),
  *   uniqueMessageAddress: uniqueSigner.address,
  *   recipientAleoAddress: 'aleo1…',
  *   amountLamports: 1_000_000_000n,

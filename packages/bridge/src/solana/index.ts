@@ -1,6 +1,6 @@
 export { loadKit } from './kit.js'
 export { buildTransferRemoteInstruction } from './transferRemote.js'
 export type { BuildTransferRemoteParameters, SolanaAccountMeta } from './transferRemote.js'
-export { createSolanaRpcReader } from './rpc.js'
-export type { SolanaRpcReader } from './rpc.js'
+export { createSolanaRpcClient } from './rpc.js'
+export type { SolanaRpcClient } from './rpc.js'
 export { quoteIgpGasPayment } from './igp.js'

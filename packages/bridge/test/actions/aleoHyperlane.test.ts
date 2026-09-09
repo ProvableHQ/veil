@@ -7,7 +7,7 @@ import {
 } from '../../src/actions/aleoHyperlane.js'
 import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
-import type { AleoBridgeExecutor } from '../../src/types/aleo.js'
+import type { AleoWalletClient } from '../../src/types/aleo.js'
 
 const ROUTES = [
   ['hyperlane:aleo/eth->ethereum/eth', 'hyp_warp_token_eth_v2.aleo', '0x0000000000000000000000000000000000000001', false],
@@ -23,7 +23,7 @@ function mappingClient(value: string | null): Client {
   return { request: vi.fn(async () => value) } as unknown as Client
 }
 
-function plan(routeId = ROUTES[0][0], recipient = ROUTES[0][2]) {
+function plan(routeId: string = ROUTES[0][0], recipient: string = ROUTES[0][2]) {
   return prepareTransfer(DEFAULT_BRIDGE_REGISTRY, { routeId, amount: '1', recipient })
 }
 
@@ -139,7 +139,7 @@ describe('Aleo Hyperlane transfer_remote', () => {
   })
 
   it('refuses placeholder submission before invoking the Aleo wallet', async () => {
-    const executeTransaction = vi.fn<AleoBridgeExecutor['executeTransaction']>()
+    const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
     await expect(executeAleoHyperlaneTransferRemote(
       DEFAULT_BRIDGE_REGISTRY,
       { executeTransaction },
@@ -149,7 +149,7 @@ describe('Aleo Hyperlane transfer_remote', () => {
   })
 
   it('also requires an active route after placeholder replacement', async () => {
-    const executeTransaction = vi.fn<AleoBridgeExecutor['executeTransaction']>()
+    const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
     const registry = {
       ...DEFAULT_BRIDGE_REGISTRY,
       routes: DEFAULT_BRIDGE_REGISTRY.routes.map((route) => route.id === ROUTES[4][0]
@@ -170,7 +170,7 @@ describe('Aleo Hyperlane transfer_remote', () => {
   })
 
   it('refuses active-route submission without a live gas payment', async () => {
-    const executeTransaction = vi.fn<AleoBridgeExecutor['executeTransaction']>()
+    const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
     await expect(executeAleoHyperlaneTransferRemote(
       DEFAULT_BRIDGE_REGISTRY,
       { executeTransaction },
@@ -180,7 +180,7 @@ describe('Aleo Hyperlane transfer_remote', () => {
   })
 
   it('submits an active route with the quoted gas payment', async () => {
-    const executeTransaction = vi.fn<AleoBridgeExecutor['executeTransaction']>()
+    const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
       .mockResolvedValue('at1transaction')
     const result = await executeAleoHyperlaneTransferRemote(
       DEFAULT_BRIDGE_REGISTRY,

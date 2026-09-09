@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { buildXReserveBurnCall, executeXReserveBurn } from '../../src/actions/xreserveBurn.js'
 import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
-import type { AleoBridgeExecutor } from '../../src/types/aleo.js'
+import type { AleoWalletClient } from '../../src/types/aleo.js'
 
 const EVM_RECIPIENT = '0x0000000000000000000000000000000000000001'
 const MAINNET_RECORD = {
@@ -82,7 +82,7 @@ describe('xReserve USDCx burns', () => {
   })
 
   it('rejects incomplete private inputs before prompting the wallet', async () => {
-    const executeTransaction = vi.fn<AleoBridgeExecutor['executeTransaction']>()
+    const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
     await expect(executeXReserveBurn(DEFAULT_BRIDGE_REGISTRY, { executeTransaction }, {
       plan: plan(),
       mode: 'private',
@@ -98,7 +98,7 @@ describe('xReserve USDCx burns', () => {
   })
 
   it('submits the burn and returns service-forwarded resumable state', async () => {
-    const executeTransaction = vi.fn<AleoBridgeExecutor['executeTransaction']>()
+    const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
       .mockResolvedValue({ transactionId: 'at1burn' })
     const result = await executeXReserveBurn(DEFAULT_BRIDGE_REGISTRY, { executeTransaction }, {
       plan: plan(),

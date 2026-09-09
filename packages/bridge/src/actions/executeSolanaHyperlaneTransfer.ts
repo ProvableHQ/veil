@@ -1,7 +1,7 @@
 import { BridgeError } from '../errors/bridgeErrors.js'
-import type { SolanaExecutionConnection } from '../connections/solana.js'
+import type { SolanaWalletConnection } from '../connections/solana.js'
 import { loadKit } from '../solana/kit.js'
-import type { SolanaRpcReader } from '../solana/rpc.js'
+import type { SolanaRpcClient } from '../solana/rpc.js'
 import { buildTransferRemoteInstruction, type SolanaAccountMeta } from '../solana/transferRemote.js'
 import type { BridgeRegistry, BridgeTransferReceipt } from '../types/protocol.js'
 import type {
@@ -74,7 +74,7 @@ function accountRole(kit: Awaited<ReturnType<typeof loadKit>>, account: SolanaAc
  * timeout, at which point the caller gets the same `undefined` timeout
  * outcome it would from a run of plain unresolved statuses.
  *
- * @param rpc Solana JSON-RPC reader used for the status lookup.
+ * @param rpc Solana JSON-RPC client used for the status lookup.
  * @param signature Submitted transaction signature to track.
  * @param pollingIntervalMs Delay between confirmation checks.
  * @param confirmationTimeoutMs Maximum time to wait before giving up.
@@ -82,7 +82,7 @@ function accountRole(kit: Awaited<ReturnType<typeof loadKit>>, account: SolanaAc
  * @throws BridgeError When the network reports the transaction failed.
  */
 async function pollForConfirmation(
-  rpc: SolanaRpcReader,
+  rpc: SolanaRpcClient,
   signature: string,
   pollingIntervalMs: number,
   confirmationTimeoutMs: number,
@@ -90,7 +90,7 @@ async function pollForConfirmation(
 ): Promise<'confirmed' | 'finalized' | 'expired' | undefined> {
   const deadline = Date.now() + confirmationTimeoutMs
   do {
-    let status: Awaited<ReturnType<SolanaRpcReader['getSignatureStatus']>>
+    let status: Awaited<ReturnType<SolanaRpcClient['getSignatureStatus']>>
     try {
       status = await rpc.getSignatureStatus(signature)
     } catch {
@@ -115,6 +115,7 @@ async function pollForConfirmation(
 function buildReceipt(
   status: Extract<BridgeTransferReceipt['status'], 'SOURCE_CONFIRMING' | 'DELIVERY_PENDING'>,
   signature: string,
+  routeId: string,
   metadata: SolanaHyperlaneRouteMetadata,
   uniqueMessageAddress: string,
   quote: SolanaHyperlaneTransferQuote,
@@ -130,6 +131,7 @@ function buildReceipt(
     sourceTxId: signature,
     ...(messageId ? { messageId } : {}),
     protocolState: {
+      routeId,
       signature,
       uniqueMessageAddress,
       destinationDomain: metadata.destinationDomain,
@@ -155,7 +157,7 @@ function buildReceipt(
  * configured connection to sign and broadcast. Hits the network throughout,
  * prompts a wallet or signs locally, and moves funds; never local-only.
  *
- * When the plan names a `sender`, the executor's address MUST match it: a
+ * When the plan names a `sender`, the wallet client's address MUST match it: a
  * plan prepared for one account is never executed by another connected
  * wallet or keypair. Mirrors the connected-account check in
  * `executeEvmHyperlaneTransfer`.
@@ -170,7 +172,7 @@ function buildReceipt(
  * @param params Prepared plan and optional confirmation polling controls.
  * @returns The resumable Hyperlane transfer receipt.
  * @throws BridgeError When route validation or quoting fails, the plan's sender does
- *   not match the executor's address, the sender's balance is insufficient, or the
+ *   not match the wallet client's address, the sender's balance is insufficient, or the
  *   submitted transaction is reported failed.
  *
  * @example
@@ -178,11 +180,11 @@ function buildReceipt(
  */
 export async function executeSolanaHyperlaneTransfer(
   registry: BridgeRegistry,
-  connection: SolanaExecutionConnection,
+  connection: SolanaWalletConnection,
   params: ExecuteSolanaHyperlaneTransferParameters,
 ): Promise<SolanaHyperlaneTransferExecution> {
   const rpc = connection.publicClient
-  const executor = connection.walletClient
+  const walletClient = connection.walletClient
   const requestedPollingIntervalMs = params.pollingIntervalMs ?? 1_000
   const confirmationTimeoutMs = params.confirmationTimeoutMs ?? 120_000
   if (!Number.isFinite(requestedPollingIntervalMs) || requestedPollingIntervalMs < 0) {
@@ -198,10 +200,63 @@ export async function executeSolanaHyperlaneTransfer(
   // 1. Validate the route.
   const metadata = solanaRouteMetadata(registry, params.plan)
 
+  // A persisted source receipt represents an already-broadcast transaction.
+  // Resume by observing that signature only; never quote, sign, or submit it again.
+  if (params.resume) {
+    const receipt = params.resume
+    const state = receipt.protocolState
+    if (receipt.protocol !== 'hyperlane'
+      || (receipt.status !== 'SOURCE_CONFIRMING' && receipt.status !== 'DELIVERY_PENDING')
+      || typeof receipt.sourceTxId !== 'string'
+      || state.routeId !== params.plan.route.id
+      || state.destinationDomain !== metadata.destinationDomain) {
+      throw new BridgeError('Solana Hyperlane resume receipt does not match the prepared route')
+    }
+    if (receipt.status === 'DELIVERY_PENDING' || state.blockhashExpired === true) {
+      return { receipt }
+    }
+    if (typeof state.blockhash !== 'string'
+      || typeof state.lastValidBlockHeight !== 'string'
+      || !/^\d+$/.test(state.lastValidBlockHeight)) {
+      throw new BridgeError('Solana Hyperlane resume receipt is missing its blockhash lifetime')
+    }
+    const signature = receipt.sourceTxId
+    try {
+      const confirmation = await pollForConfirmation(
+        connection.publicClient,
+        signature,
+        pollingIntervalMs,
+        confirmationTimeoutMs,
+        BigInt(state.lastValidBlockHeight),
+      )
+      if (!confirmation) return { receipt }
+      if (confirmation === 'expired') {
+        return { receipt: { ...receipt, protocolState: { ...state, blockhashExpired: true } } }
+      }
+      const messageId = extractSolanaHyperlaneMessageId(await connection.publicClient.getTransactionLogs(signature))
+      return {
+        receipt: {
+          ...receipt,
+          id: messageId ?? signature,
+          status: 'DELIVERY_PENDING',
+          ...(messageId ? { messageId } : {}),
+          protocolState: {
+            ...state,
+            ...(!messageId ? { messageIdUnavailable: true } : {}),
+          },
+        },
+      }
+    } catch (error) {
+      if (error instanceof BridgeError && error.message.includes(signature)) throw error
+      const message = error instanceof Error ? error.message : String(error)
+      throw new BridgeError(`Solana Hyperlane transfer ${signature} was submitted, but confirmation failed: ${message}`)
+    }
+  }
+
   // 2. Resolve the fee payer and refuse to execute a plan prepared for a
   // different account, before any network read. Solana addresses are
   // case-sensitive base58, so an exact string comparison is the equality check.
-  const senderAddress = await executor.getAddress()
+  const senderAddress = await walletClient.getAddress()
   if (params.plan.sender && params.plan.sender !== senderAddress) {
     throw new BridgeError(`Prepared sender ${params.plan.sender} does not match connected account ${senderAddress}`)
   }
@@ -235,7 +290,7 @@ export async function executeSolanaHyperlaneTransfer(
   const uniqueMessageSigner = await kit.generateKeyPairSigner()
 
   // 6. Build the instruction and assemble, compile, and partially sign the
-  // v0 transaction; the fee payer's signature is added later by the executor.
+  // v0 transaction; the fee payer's signature is added later by the wallet client.
   const built = await buildTransferRemoteInstruction({
     metadata,
     senderAddress,
@@ -268,12 +323,13 @@ export async function executeSolanaHyperlaneTransfer(
   )
   const wireTransaction = new Uint8Array(kit.getTransactionEncoder().encode(signedTransaction))
 
-  // 7. Hand the partially signed transaction to the executor, which adds the
+  // 7. Hand the partially signed transaction to the wallet client, which adds the
   // fee payer's signature and submits it.
-  const { signature } = await executor.sendTransaction(wireTransaction)
+  const { signature } = await walletClient.sendTransaction(wireTransaction)
   const submittedReceipt = buildReceipt(
     'SOURCE_CONFIRMING',
     signature,
+    params.plan.route.id,
     metadata,
     uniqueMessageSigner.address,
     quote,
@@ -297,7 +353,7 @@ export async function executeSolanaHyperlaneTransfer(
     }
     if (confirmation === 'expired') {
       return {
-        receipt: buildReceipt('SOURCE_CONFIRMING', signature, metadata, uniqueMessageSigner.address, quote, blockhash, lastValidBlockHeight, undefined, true),
+        receipt: buildReceipt('SOURCE_CONFIRMING', signature, params.plan.route.id, metadata, uniqueMessageSigner.address, quote, blockhash, lastValidBlockHeight, undefined, true),
       }
     }
 
@@ -309,7 +365,7 @@ export async function executeSolanaHyperlaneTransfer(
 
     // 10. Return the resumable, protocol-neutral receipt.
     return {
-      receipt: buildReceipt('DELIVERY_PENDING', signature, metadata, uniqueMessageSigner.address, quote, blockhash, lastValidBlockHeight, messageId),
+      receipt: buildReceipt('DELIVERY_PENDING', signature, params.plan.route.id, metadata, uniqueMessageSigner.address, quote, blockhash, lastValidBlockHeight, messageId),
     }
   } catch (error) {
     if (error instanceof BridgeError && error.message.includes(signature)) throw error

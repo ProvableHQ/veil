@@ -9,7 +9,7 @@ import type { XReserveAttestationResult } from './xreserve.js'
  *
  * @property executeTransaction Prompts the wallet to prove, sign, and broadcast a program call.
  */
-export type AleoBridgeExecutor = {
+export type AleoWalletClient = {
   executeTransaction: (params: {
     program: string
     function: string

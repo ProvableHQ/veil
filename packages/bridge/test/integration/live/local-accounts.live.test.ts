@@ -103,15 +103,16 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
         }),
       },
     })
-    if (!state.sourceTxId) {
-      const plan = bridge.prepareTransfer({
-        routeId,
-        amount: process.env.BRIDGE_LIVE_SOL_AMOUNT ?? '0.002',
-        recipient: required('BRIDGE_LIVE_ALEO_MAINNET_RECIPIENT'),
-        sender: required('BRIDGE_LIVE_SOLANA_ADDRESS'),
-      })
+    const plan = bridge.prepareTransfer({
+      routeId,
+      amount: process.env.BRIDGE_LIVE_SOL_AMOUNT ?? '0.002',
+      recipient: required('BRIDGE_LIVE_ALEO_MAINNET_RECIPIENT'),
+      sender: required('BRIDGE_LIVE_SOLANA_ADDRESS'),
+    })
+    if (!state.sourceTxId || state.sourceReceipt) {
       const execution = await bridge.executeSolanaHyperlaneTransfer({
         plan,
+        ...(state.sourceReceipt ? { resume: state.sourceReceipt as BridgeTransferReceipt } : {}),
         onSubmitted(receipt) {
           state.sourceTxId = receipt.sourceTxId
           state.sourceReceipt = receipt
@@ -120,7 +121,11 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
       })
       state.sourceTxId = execution.receipt.sourceTxId
       state.messageId = execution.receipt.messageId
+      state.sourceReceipt = execution.receipt
       saveLiveState(path, state)
+      if (execution.receipt.protocolState.blockhashExpired === true) {
+        throw new Error(`Solana source transaction ${state.sourceTxId} expired; inspect it before explicitly clearing the checkpoint`)
+      }
     }
     const delivery = await waitForHyperlaneDelivery(state.sourceTxId!)
     state.messageId = delivery.messageId

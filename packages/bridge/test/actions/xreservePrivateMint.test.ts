@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { executeXReservePrivateMint } from '../../src/actions/xreservePrivateMint.js'
 import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
-import type { AleoBridgeExecutor } from '../../src/types/aleo.js'
+import type { AleoWalletClient } from '../../src/types/aleo.js'
 import type { BridgeTransferReceipt } from '../../src/types/protocol.js'
 import { buildXReserveHookData, calculateXReserveMessageHash } from '../../src/utils/xreserve.js'
 
@@ -36,7 +36,7 @@ describe('xReserve private mint', () => {
         messageHash,
       },
     }
-    const executeTransaction = vi.fn<AleoBridgeExecutor['executeTransaction']>()
+    const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
       .mockResolvedValue({ transactionId: 'at1private' })
 
     const result = await executeXReservePrivateMint(DEFAULT_BRIDGE_REGISTRY, { executeTransaction }, {
@@ -64,7 +64,7 @@ describe('xReserve private mint', () => {
       recipient: RECIPIENT,
       mintMode: 'record',
     })
-    const executeTransaction = vi.fn<AleoBridgeExecutor['executeTransaction']>()
+    const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
     await expect(executeXReservePrivateMint(DEFAULT_BRIDGE_REGISTRY, { executeTransaction }, {
       plan,
       deposit: { id: MESSAGE_HASH, protocol: 'xreserve', status: 'ATTESTATION_PENDING', protocolState: {} },
@@ -84,7 +84,7 @@ describe('xReserve private mint', () => {
     const hookData = await buildXReserveHookData('private', RECIPIENT, 'testnet', '7scalar')
     const payload = `0x${'00'.repeat(240)}${hookData.slice(2)}` as const
     const messageHash = calculateXReserveMessageHash(payload)
-    const executeTransaction = vi.fn<AleoBridgeExecutor['executeTransaction']>()
+    const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
 
     await expect(executeXReservePrivateMint(DEFAULT_BRIDGE_REGISTRY, { executeTransaction }, {
       plan,

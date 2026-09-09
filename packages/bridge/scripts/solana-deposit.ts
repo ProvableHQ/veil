@@ -3,7 +3,7 @@
  *
  * Prepares the reviewed `hyperlane:solana/sol->aleo/sol` route, prints a live
  * quote read from mainnet, then submits the transfer through a local keypair
- * executor and polls both legs of delivery: Solana confirmation of the
+ * account and polls both legs of delivery: Solana confirmation of the
  * dispatch, and the destination balance increasing on Aleo once a Hyperlane
  * relayer processes the message. There is no per-message "delivered" read
  * anywhere in this SDK, so — the same way `testnet-round-trip.ts` polls a
@@ -45,7 +45,7 @@ import {
   solanaKeyPair,
 } from '../src/index.js'
 import { extractSolanaHyperlaneMessageId } from '../src/actions/executeSolanaHyperlaneTransfer.js'
-import { createSolanaRpcReader } from '../src/solana/index.js'
+import { createSolanaRpcClient } from '../src/solana/index.js'
 import type { SolanaRpcConfig } from '../src/types/solana.js'
 import { createPublicClient, http, type PublicClient } from '@provablehq/veil-core'
 
@@ -183,19 +183,6 @@ async function arc20SolBalance(aleoReader: PublicClient, recipient: string): Pro
   return atomic(await aleoReader.readMapping({ programId: ARC20_SOL_PROGRAM_ID, mapping: 'balances', key: recipient }))
 }
 
-/**
- * Wraps a Solana executor so the signature it returns is checkpointed to the
- * state file the instant it comes back — before the calling action even
- * starts polling for confirmation.
- *
- * Without this, a crash or a thrown error between broadcast and the action
- * returning its receipt would leave `state.dispatch` unset, and a re-run
- * would have no record that a transaction was already sent — risking a
- * second, fund-duplicating submission. `invoked` flips to `true` as soon as
- * this wrapper is called, letting the caller tell a preflight failure
- * (nothing signed or sent yet) apart from a failure after signing was
- * attempted.
- */
 async function main(): Promise<void> {
   if (process.argv.includes('--reset')) {
     rmSync(STATE_FILE, { force: true })
@@ -215,7 +202,7 @@ async function main(): Promise<void> {
 
   const keypairBytes = secretKeyBytes(secretKeyRaw)
   const senderAddress = String((await createKeyPairSignerFromBytes(keypairBytes)).address)
-  const solanaReader = createSolanaRpcReader(rpc)
+  const solanaClient = createSolanaRpcClient(rpc)
   const aleoReader = createPublicClient({ transport: http(ALEO_API, { network: 'mainnet' }) })
 
   const state = loadState()
@@ -245,7 +232,7 @@ async function main(): Promise<void> {
 
   // ---- Quote: live reads only, no funds move. ----------------------------
   const quote = await withRetry('Solana quote', 3, 5_000, () => bridge.quoteSolanaHyperlaneTransfer({ plan }))
-  const senderBalance = await withRetry('Solana balance', 3, 5_000, () => solanaReader.getBalance(senderAddress))
+  const senderBalance = await withRetry('Solana balance', 3, 5_000, () => solanaClient.getBalance(senderAddress))
 
   console.log('Read-only Solana SOL to Aleo SOL preflight')
   console.table({
@@ -265,19 +252,14 @@ async function main(): Promise<void> {
   // Nothing above this point touches the Aleo network — the quote and balance
   // reads are Solana-only, so a preflight failure (insufficient balance) never
   // depends on an Aleo read succeeding.
-  // Captured as a boolean rather than narrowing on `state.dispatch` directly:
-  // the wrapped executor mutates `state.dispatch` as a side effect partway
-  // through the call below, which TypeScript's control-flow analysis cannot
-  // see through, so a direct `if (!state.dispatch)` narrowing would go stale.
+  // Capture this before submission because `onSubmitted` mutates the
+  // checkpoint while the action is still running.
   const hadExistingDispatch = state.dispatch !== undefined
   if (!hadExistingDispatch) {
-    log('Submitting the transfer through the local keypair executor.')
+    log('Submitting the transfer through the local keypair account.')
     // Never auto-retried: a post-broadcast error would risk a second dispatch.
-    // `executor` checkpoints `state.dispatch` (via withDispatchCheckpoint) the
-    // instant signAndSendTransaction returns a signature — before this call
-    // even starts polling for confirmation — so state.dispatch may already be
-    // populated by the time control reaches either branch below, or by the
-    // time the catch block runs.
+    // `onSubmitted` checkpoints the signature before confirmation polling, so
+    // state.dispatch may already be populated when either branch below runs.
     let execution
     try {
       execution = await bridge.executeSolanaHyperlaneTransfer({
@@ -347,14 +329,14 @@ async function main(): Promise<void> {
     const signature = state.dispatch.signature
     let logs: string[] | null = null
     const outcome = await poll('Solana confirmation', { timeoutMs: CONFIRMATION_TIMEOUT_MS, intervalMs: 2_000 }, async () => {
-      const status = await solanaReader.getSignatureStatus(signature)
+      const status = await solanaClient.getSignatureStatus(signature)
       if (status === 'confirmed' || status === 'finalized' || status === 'failed') return status
       if (status === null) {
         // getSignatureStatuses only reports recent activity and can forget an
         // older signature (e.g. across a long gap between runs) even though
         // it landed. Fall back to the full-history lookup (getTransaction,
         // commitment 'confirmed') before concluding it never landed.
-        logs = await solanaReader.getTransactionLogs(signature)
+        logs = await solanaClient.getTransactionLogs(signature)
         if (logs) return 'confirmed'
       }
       return undefined
@@ -372,7 +354,7 @@ async function main(): Promise<void> {
       return
     }
     log(`Solana transaction ${outcome}.`)
-    logs ??= await solanaReader.getTransactionLogs(signature)
+    logs ??= await solanaClient.getTransactionLogs(signature)
     const messageIdMatch = extractSolanaHyperlaneMessageId(logs)
     state.dispatch = { ...state.dispatch, signature, status: 'DELIVERY_PENDING', ...(messageIdMatch ? { messageId: messageIdMatch } : {}) }
     saveState(state)

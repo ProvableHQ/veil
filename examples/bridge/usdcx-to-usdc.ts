@@ -12,7 +12,7 @@ import {
 import {
   aleoConnection,
   createBridgeClient,
-  type AleoBridgeExecutor,
+  type AleoWalletClient,
   type XReserveBurnMode,
 } from '@provablehq/aleo-bridge-sdk'
 
@@ -174,7 +174,7 @@ async function main(): Promise<void> {
   const records = mode === 'private'
     ? aleo.createRemoteScanner({ consumerId: consumerId!, apiKey: apiKey! })
     : undefined
-  const { walletClient, account } = aleo.createAleoClient({
+  const { publicClient, walletClient: nativeWalletClient, account } = aleo.createAleoClient({
     privateKey,
     networkUrl: process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2',
     provingMode,
@@ -184,26 +184,26 @@ async function main(): Promise<void> {
     useFeeMaster: booleanFromEnvironment('ALEO_USE_FEE_MASTER', true),
     confirmationTimeout: millisecondsFromEnvironment('ALEO_EXECUTION_CONFIRMATION_TIMEOUT_MS', 5 * 60_000),
   })
-  if (consumerId && apiKey) await walletClient.authenticateProvableApi()
+  if (consumerId && apiKey) await nativeWalletClient.authenticateProvableApi()
   console.log(`Aleo signer ready: ${account.address} (${provingMode} proving)`)
 
   const userRecord = mode === 'private'
-    ? (await selectPrivateRecord(walletClient, amountAtomic)).recordPlaintext
+    ? (await selectPrivateRecord(nativeWalletClient, amountAtomic)).recordPlaintext
     : undefined
   const merkleProof = mode === 'private'
     ? await createExclusionProof(account.address)
     : undefined
   if (merkleProof) console.log(`Derived the USDCx freeze-list exclusion proof for ${account.address}.`)
 
-  const executor: AleoBridgeExecutor = {
+  const walletClient: AleoWalletClient = {
     executeTransaction: async ({ program, function: functionName, inputs, privateFee, imports }) => {
-      if (imports?.length) throw new Error('The local bridge executor does not accept dynamic import names')
+      if (imports?.length) throw new Error('The local wallet client does not accept dynamic import names')
       const startedAt = Date.now()
       const progress = setInterval(() => {
         console.log(`Aleo proving is still in progress (${Math.round((Date.now() - startedAt) / 1_000)}s elapsed).`)
       }, ALEO_PROVING_PROGRESS_INTERVAL_MS)
       try {
-        const result = await walletClient.executeContract({
+        const result = await nativeWalletClient.executeContract({
           program,
           function: functionName,
           inputs,
@@ -218,7 +218,7 @@ async function main(): Promise<void> {
   const burnMode: XReserveBurnMode = mode === 'private' ? 'private' : 'public-as-signer'
   const executingBridge = createBridgeClient({
     environment: 'mainnet',
-    connections: { aleo: aleoConnection({ account: executor }) },
+    connections: { aleo: aleoConnection({ publicClient, account: walletClient }) },
   })
   const result = await executingBridge.executeXReserveBurn({
     plan,

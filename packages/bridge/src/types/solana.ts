@@ -97,12 +97,14 @@ export type SolanaHyperlaneTransferQuote = {
 /**
  * Configures submission of a Solana Hyperlane transfer.
  *
- * The action signs and sends the transaction through the injected Solana
- * executor, then polls the configured RPC endpoint for confirmation.
+ * The action signs and sends the transaction through the connection's Solana
+ * wallet client, then polls its public client for confirmation.
  *
  * @property plan Pure transfer plan returned by `prepareTransfer`.
  * @property pollingIntervalMs Delay between confirmation checks. Defaults to 1,000 milliseconds; floored at 100 milliseconds so a small or zero value cannot busy-poll the RPC endpoint.
  * @property confirmationTimeoutMs Maximum time to wait for confirmation. Defaults to 120,000 milliseconds; a timeout returns resumable pending state.
+ * @property resume Previously checkpointed receipt. When supplied, the action
+ *   verifies the existing signature without signing or broadcasting again.
  * @property onSubmitted Durable checkpoint hook called immediately after broadcast
  *   and before confirmation polling begins.
  */
@@ -110,6 +112,7 @@ export type ExecuteSolanaHyperlaneTransferParameters = {
   plan: BridgeTransferPlan
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined
+  resume?: BridgeTransferReceipt | undefined
   onSubmitted?: ((receipt: BridgeTransferReceipt) => void | Promise<void>) | undefined
 }
 

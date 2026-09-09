@@ -177,6 +177,23 @@ describe('EVM bridge connections', () => {
     await expect(connection.publicClient?.getChainId()).resolves.toBe(1)
   })
 
+  it('derives public access from a direct wallet-client connection', async () => {
+    const walletClient = {
+      account: undefined,
+      request: async ({ method }: { method: string }) => {
+        if (method === 'eth_chainId') return '0x1'
+        throw new Error(`unexpected ${method}`)
+      },
+      getAddresses: async () => ['0x0000000000000000000000000000000000000001'],
+      getChainId: async () => 1,
+      sendTransaction: async () => `0x${'ab'.repeat(32)}`,
+    } as never
+
+    const connection = materializeEvmConnection(evmConnection({ walletClient }), fetch)
+
+    await expect(connection.publicClient.getChainId()).resolves.toBe(1)
+  })
+
   it('keeps receipt reads on a dedicated public client', async () => {
     const hash = `0x${'ab'.repeat(32)}` as const
     const getTransactionReceipt = vi.fn(async () => ({ status: 'success', transactionHash: hash }))

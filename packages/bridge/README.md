@@ -108,12 +108,14 @@ connection's public client; the account never receives a duplicate RPC URL.
 ```ts
 const bridge = createBridgeClient({
   connections: {
-    ethereum: evmConnection({ publicClient, walletClient }),
+    ethereum: evmConnection({ walletClient }),
   },
 })
 ```
 
-`publicClient` may be paired with `evmProvider(window.ethereum)` or
+An existing viem `walletClient` also supplies the connection's public RPC
+access. Pass a separate `publicClient` when reads and receipt polling should use
+a different transport. It may be paired with `evmProvider(window.ethereum)` or
 `evmLocalAccount(privateKeyToAccount(key))`. A definition rejects duplicate
 public sources (`transport` plus `publicClient`) and duplicate wallet sources
 (`account` plus `walletClient`). A local account requires a public source.
@@ -164,12 +166,17 @@ const plan = bridge.prepareTransfer({
 })
 
 const quote = await bridge.quoteSolanaHyperlaneTransfer({ plan })
-const execution = await bridge.executeSolanaHyperlaneTransfer({ plan })
+const execution = await bridge.executeSolanaHyperlaneTransfer({
+  plan,
+  ...(checkpoint ? { resume: checkpoint } : {}),
+  onSubmitted: saveCheckpoint,
+})
 ```
 
 The quote reads the deployed IGP, the live fee for the compiled message, and
 the execution preflight reads current rent exemptions. Confirmation searches
-transaction history and records blockhash expiry without resubmitting.
+transaction history and records blockhash expiry. Passing the checkpoint back as
+`resume` confirms the existing signature without signing or resubmitting.
 
 Current Solana token support is native SOL only. The connection API is ready
 for future SPL-token routes, but it does not support Solana USDC today. SPL or

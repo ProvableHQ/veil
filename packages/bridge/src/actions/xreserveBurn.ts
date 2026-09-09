@@ -1,7 +1,7 @@
 import type { TransactionInput } from '@provablehq/veil-core'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type {
-  AleoBridgeExecutor,
+  AleoWalletClient,
   ExecuteXReserveBurnParameters,
   XReserveBurnCall,
   XReserveBurnExecution,
@@ -107,7 +107,7 @@ export function buildXReserveBurnCall(
  * observes accepted burns and forwards them to Circle without another client call.
  *
  * @param registry Reviewed route snapshot used to validate program and domain identifiers.
- * @param executor Connected Aleo wallet client that proves, signs, and broadcasts.
+ * @param walletClient Connected Aleo wallet client that proves, signs, and broadcasts.
  * @param params Prepared reverse route, selected mode, optional record/proof, and fee privacy.
  * @returns The Aleo transaction id and resumable source-confirming receipt.
  * @throws BridgeError When call construction fails or the wallet returns no transaction id.
@@ -121,11 +121,11 @@ export function buildXReserveBurnCall(
  */
 export async function executeXReserveBurn(
   registry: BridgeRegistry,
-  executor: AleoBridgeExecutor,
+  walletClient: AleoWalletClient,
   params: ExecuteXReserveBurnParameters,
 ): Promise<XReserveBurnExecution> {
   const call = buildXReserveBurnCall(registry, params)
-  const result = await executor.executeTransaction({
+  const result = await walletClient.executeTransaction({
     program: call.program,
     function: call.function,
     inputs: call.inputs,

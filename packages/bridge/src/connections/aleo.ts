@@ -1,36 +1,37 @@
 import type { Client } from '@provablehq/veil-core'
 import { BridgeError } from '../errors/bridgeErrors.js'
-import type { AleoBridgeExecutor } from '../types/aleo.js'
+import type { AleoWalletClient } from '../types/aleo.js'
 
 /**
  * Configures one registry-keyed Aleo connection.
  * @property family Discriminator added by {@link aleoConnection}.
- * @property publicClient Optional Veil public client used for chain reads.
+ * @property publicClient Required Veil public client used for chain reads.
  * @property account Optional Veil-compatible wallet client used for execution.
  */
 export type AleoConnectionDefinition = {
   family: 'aleo'
-  publicClient?: Client | undefined
-  account?: AleoBridgeExecutor | undefined
+  publicClient: Client
+  account?: AleoWalletClient | undefined
 }
 
 /**
  * Holds materialized Aleo public and wallet capabilities.
  * @property family Aleo family discriminator.
- * @property publicClient Optional Veil public client.
+ * @property publicClient Required Veil public client.
  * @property walletClient Optional Veil-compatible execution client.
  */
 export type AleoConnection = {
   family: 'aleo'
-  publicClient?: Client | undefined
-  walletClient?: AleoBridgeExecutor | undefined
+  publicClient: Client
+  walletClient?: AleoWalletClient | undefined
 }
 
-/** Requires the public side of an Aleo connection. */
-export type AleoPublicConnection = AleoConnection & { publicClient: Client }
-
-/** Requires the wallet side of an Aleo connection. */
-export type AleoWalletConnection = AleoConnection & { walletClient: AleoBridgeExecutor }
+/**
+ * Requires the wallet side of an otherwise readable Aleo connection.
+ *
+ * @property walletClient Account-authorized client used to prove, sign, and broadcast.
+ */
+export type AleoWalletConnection = AleoConnection & { walletClient: AleoWalletClient }
 
 /**
  * Adapts an Aleo wallet client for bridge authorization.
@@ -38,23 +39,21 @@ export type AleoWalletConnection = AleoConnection & { walletClient: AleoBridgeEx
  * @returns The same client, typed as bridge execution authority.
  * @example const account = aleoWallet(aleoWalletClient)
  */
-export function aleoWallet(walletClient: AleoBridgeExecutor): AleoBridgeExecutor {
+export function aleoWallet(walletClient: AleoWalletClient): AleoWalletClient {
   return walletClient
 }
 
 /**
  * Creates and statically validates an inert Aleo connection definition.
- * @param config Optional public client and wallet account; at least one is required.
+ * @param config Required public client and optional wallet account.
  * @returns A registry-ready Aleo connection definition.
- * @throws BridgeError When neither capability is supplied.
+ * @throws BridgeError When the public client is absent.
  * @example const connection = aleoConnection({ publicClient, account: walletClient })
  */
 export function aleoConnection(
   config: Omit<AleoConnectionDefinition, 'family'>,
 ): AleoConnectionDefinition {
-  if (!config.publicClient && !config.account) {
-    throw new BridgeError('Aleo connection requires a public or wallet capability')
-  }
+  if (!config.publicClient) throw new BridgeError('Aleo connection requires a public client')
   return { family: 'aleo', ...config }
 }
 

@@ -1,7 +1,7 @@
 import {
   aleoConnection,
   createBridgeClient,
-  type AleoBridgeExecutor,
+  type AleoWalletClient,
 } from '@provablehq/aleo-bridge-sdk'
 
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
@@ -122,7 +122,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
 
   const { loadNetwork } = await import('@provablehq/veil-aleo-sdk')
   const aleo = await loadNetwork('mainnet')
-  const { publicClient, walletClient, account } = aleo.createAleoClient({
+  const { publicClient, walletClient: nativeWalletClient, account } = aleo.createAleoClient({
     privateKey,
     networkUrl,
     provingMode,
@@ -132,15 +132,15 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     confirmationTimeout: millisecondsFromEnvironment('ALEO_EXECUTION_CONFIRMATION_TIMEOUT_MS', 5 * 60_000),
   })
 
-  const executor: AleoBridgeExecutor = {
+  const walletClient: AleoWalletClient = {
     executeTransaction: async ({ program, function: functionName, inputs, privateFee, imports }) => {
-      if (imports?.length) throw new Error('The local bridge executor does not accept dynamic import names')
+      if (imports?.length) throw new Error('The local wallet client does not accept dynamic import names')
       const startedAt = Date.now()
       const progress = setInterval(() => {
         console.log(`Aleo proving is still in progress (${Math.round((Date.now() - startedAt) / 1_000)}s elapsed).`)
       }, ALEO_PROVING_PROGRESS_INTERVAL_MS)
       try {
-        const result = await walletClient.executeContract({ program, function: functionName, inputs, privateFee })
+        const result = await nativeWalletClient.executeContract({ program, function: functionName, inputs, privateFee })
         return result.transactionId
       } finally {
         clearInterval(progress)
@@ -149,7 +149,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   }
   const bridge = createBridgeClient({
     environment: 'mainnet',
-    connections: { aleo: aleoConnection({ publicClient, account: executor }) },
+    connections: { aleo: aleoConnection({ publicClient, account: walletClient }) },
   })
 
   const plan = bridge.prepareTransfer({ routeId: config.routeId, amount, recipient })
@@ -193,7 +193,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   if (latestQuote.paymentMicrocredits !== gasQuote.paymentMicrocredits) {
     console.log(`Hyperlane hook quote changed from ${gasQuote.paymentMicrocredits} to ${latestQuote.paymentMicrocredits} microcredits; using the latest quote.`)
   }
-  if (consumerId && apiKey) await walletClient.authenticateProvableApi()
+  if (consumerId && apiKey) await nativeWalletClient.authenticateProvableApi()
 
   const result = await bridge.executeAleoHyperlaneTransferRemote({
     plan,

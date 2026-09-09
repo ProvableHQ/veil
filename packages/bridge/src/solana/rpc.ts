@@ -18,12 +18,15 @@ type SolanaSignatureConfirmationStatus = 'processed' | 'confirmed' | 'finalized'
  * none of them sign or submit a transaction.
  *
  * @property getLatestBlockhash Reads the current blockhash and the block height it remains valid through.
+ * @property getBlockHeight Reads the current block height used to detect transaction expiry.
  * @property getBalance Reads an account's lamport balance.
  * @property getAccountData Reads an account's raw data, or `null` when the account does not exist.
+ * @property getFeeForMessage Reads the network fee for a compiled transaction message, in lamports.
+ * @property getMinimumBalanceForRentExemption Reads the rent-exempt minimum for an account data length, in lamports.
  * @property getSignatureStatus Reads a submitted transaction's confirmation state, or `null` when the signature is unknown to the node.
  * @property getTransactionLogs Reads a confirmed transaction's program logs, or `null` when the transaction is not found.
  */
-export type SolanaRpcReader = {
+export type SolanaRpcClient = {
   getLatestBlockhash: () => Promise<{ blockhash: string; lastValidBlockHeight: bigint }>
   getBlockHeight: () => Promise<bigint>
   getBalance: (address: string) => Promise<bigint>
@@ -53,20 +56,20 @@ function decodeBase64(value: string): Uint8Array {
 }
 
 /**
- * Builds a Solana JSON-RPC reader over a plain HTTP transport.
+ * Builds a Solana JSON-RPC client over a plain HTTP transport.
  *
- * Speaks JSON-RPC directly rather than depending on `@solana/kit`, so reads
+ * Speaks JSON-RPC directly rather than depending on `@solana/kit`.
  * Every method sends one POST request through `config.transport` (defaulting
  * to `globalThis.fetch`) and hits the network; none of them are pure.
  *
  * @param config Solana JSON-RPC endpoint and optional transport override.
- * @returns A {@link SolanaRpcReader} bound to `config.url`.
+ * @returns A {@link SolanaRpcClient} bound to `config.url`.
  *
  * @example
- * const rpc = createSolanaRpcReader({ url: 'https://api.mainnet-beta.solana.com' })
+ * const rpc = createSolanaRpcClient({ url: 'https://api.mainnet-beta.solana.com' })
  * const { blockhash } = await rpc.getLatestBlockhash()
  */
-export function createSolanaRpcReader(config: SolanaRpcConfig): SolanaRpcReader {
+export function createSolanaRpcClient(config: SolanaRpcConfig): SolanaRpcClient {
   async function call<T>(method: string, params: unknown[]): Promise<T> {
     const transport = config.transport ?? globalThis.fetch
     const response = await transport(config.url, {

@@ -19,15 +19,14 @@ export {
   type EvmCallParameters,
   type EvmConnection,
   type EvmConnectionDefinition,
-  type EvmExecutionConnection,
   type EvmHttpOptions,
   type EvmPublicClient,
-  type EvmPublicConnection,
   type EvmReceipt,
   type EvmRequest,
   type EvmTransactionParameters,
   type EvmTransportDefinition,
   type EvmWalletClient,
+  type EvmWalletConnection,
 } from './connections/evm.js'
 export {
   solanaConnection,
@@ -38,20 +37,18 @@ export {
   type SolanaAccount,
   type SolanaConnection,
   type SolanaConnectionDefinition,
-  type SolanaExecutionConnection,
   type SolanaHttpOptions,
   type SolanaPublicClient,
-  type SolanaPublicConnection,
   type SolanaRequest,
   type SolanaTransportDefinition,
   type SolanaWalletClient,
+  type SolanaWalletConnection,
 } from './connections/solana.js'
 export {
   aleoConnection,
   aleoWallet,
   type AleoConnection,
   type AleoConnectionDefinition,
-  type AleoPublicConnection,
   type AleoWalletConnection,
 } from './connections/aleo.js'
 export type { BridgeConnectionDefinition } from './connections/index.js'
@@ -128,7 +125,7 @@ export type {
   XReserveHttpTransport,
 } from './types/xreserve.js'
 export type {
-  AleoBridgeExecutor,
+  AleoWalletClient,
   AleoHyperlaneGasQuote,
   AleoHyperlaneTransferRemoteCall,
   AleoHyperlaneTransferRemoteExecution,

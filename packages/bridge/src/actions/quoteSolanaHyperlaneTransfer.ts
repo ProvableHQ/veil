@@ -2,7 +2,7 @@ import { BridgeError } from '../errors/bridgeErrors.js'
 import { quoteIgpGasPayment } from '../solana/igp.js'
 import { loadKit } from '../solana/kit.js'
 import { buildTransferRemoteInstruction, type SolanaAccountMeta } from '../solana/transferRemote.js'
-import type { SolanaPublicConnection } from '../connections/solana.js'
+import type { SolanaConnection } from '../connections/solana.js'
 import type { BridgeRegistry } from '../types/protocol.js'
 import type { QuoteSolanaHyperlaneTransferParameters, SolanaHyperlaneTransferQuote } from '../types/solana.js'
 import { parseDecimalAmount } from '../utils/units.js'
@@ -36,7 +36,7 @@ function accountRole(kit: Awaited<ReturnType<typeof loadKit>>, account: SolanaAc
  */
 export async function quoteSolanaHyperlaneTransfer(
   registry: BridgeRegistry,
-  connection: SolanaPublicConnection,
+  connection: SolanaConnection,
   params: QuoteSolanaHyperlaneTransferParameters,
 ): Promise<SolanaHyperlaneTransferQuote> {
   const metadata = solanaRouteMetadata(registry, params.plan)

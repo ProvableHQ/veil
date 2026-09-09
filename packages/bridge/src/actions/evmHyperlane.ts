@@ -12,7 +12,7 @@ import {
   type Hex,
 } from 'viem'
 import { BridgeError } from '../errors/bridgeErrors.js'
-import type { EvmExecutionConnection, EvmPublicConnection } from '../connections/evm.js'
+import type { EvmConnection, EvmWalletConnection } from '../connections/evm.js'
 import type {
   EvmHyperlaneRouteMetadata,
   EvmHyperlaneTransferExecution,
@@ -125,24 +125,24 @@ function validateRecipient(recipientBytes32: Hex): void {
   }
 }
 
-async function rpcCall(connection: EvmPublicConnection, to: Address, data: Hex): Promise<Hex> {
+async function rpcCall(connection: EvmConnection, to: Address, data: Hex): Promise<Hex> {
   const result = await connection.publicClient.call({ to, data })
   if (typeof result !== 'string' || !result.startsWith('0x')) {
-    throw new BridgeError('EVM executor returned an invalid eth_call result')
+    throw new BridgeError('EVM public client returned an invalid eth_call result')
   }
   return result as Hex
 }
 
-async function assertChain(connection: EvmPublicConnection, expectedChainId: number): Promise<void> {
+async function assertChain(connection: EvmConnection, expectedChainId: number): Promise<void> {
   const actual = await connection.publicClient.getChainId()
   if (actual !== expectedChainId) {
     throw new BridgeError(`EVM wallet is connected to chain ${actual}; expected ${expectedChainId}`)
   }
 }
 
-async function resolveAccount(connection: EvmExecutionConnection, plan: BridgeTransferPlan): Promise<Address> {
+async function resolveAccount(connection: EvmWalletConnection, plan: BridgeTransferPlan): Promise<Address> {
   const account = await connection.walletClient.getAddress()
-  if (!isAddress(account)) throw new BridgeError('EVM executor account is invalid')
+  if (!isAddress(account)) throw new BridgeError('EVM wallet client account is invalid')
   const normalized = getAddress(account)
   if (plan.sender && (!isAddress(plan.sender) || getAddress(plan.sender) !== normalized)) {
     throw new BridgeError(`Prepared sender ${plan.sender} does not match connected account ${normalized}`)
@@ -151,7 +151,7 @@ async function resolveAccount(connection: EvmExecutionConnection, plan: BridgeTr
 }
 
 async function sendTransaction(
-  connection: EvmExecutionConnection,
+  connection: EvmWalletConnection,
   chainId: number,
   transaction: { from: Address, to: Address, data: Hex, value?: Hex | undefined },
 ): Promise<Hash> {
@@ -163,13 +163,13 @@ async function sendTransaction(
     ...(transaction.value ? { value: BigInt(transaction.value) } : {}),
   })
   if (!isHash(result)) {
-    throw new BridgeError('EVM executor returned an invalid transaction hash')
+    throw new BridgeError('EVM wallet client returned an invalid transaction hash')
   }
   return result
 }
 
 async function waitForReceipt(
-  connection: EvmPublicConnection,
+  connection: EvmConnection,
   hash: Hash,
   timeoutMs: number,
   pollingIntervalMs: number,
@@ -227,7 +227,7 @@ function messageIdFromReceipt(receipt: RpcTransactionReceipt): Hash | undefined 
  */
 export async function quoteEvmHyperlaneTransfer(
   registry: BridgeRegistry,
-  connection: EvmPublicConnection,
+  connection: EvmConnection,
   params: QuoteEvmHyperlaneTransferParameters,
 ): Promise<EvmHyperlaneTransferQuote> {
   validateRecipient(params.recipientBytes32)
@@ -334,7 +334,7 @@ function executionReceipt(
  */
 export async function executeEvmHyperlaneTransfer(
   registry: BridgeRegistry,
-  connection: EvmExecutionConnection,
+  connection: EvmWalletConnection,
   params: ExecuteEvmHyperlaneTransferParameters,
 ): Promise<EvmHyperlaneTransferExecution> {
   const pollingIntervalMs = params.pollingIntervalMs ?? 1_000

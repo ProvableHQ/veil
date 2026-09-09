@@ -1,7 +1,7 @@
 import { parsePlaintextValue, readContract, type Client } from '@provablehq/veil-core'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type {
-  AleoBridgeExecutor,
+  AleoWalletClient,
   AleoHyperlaneGasQuote,
   AleoHyperlaneTransferRemoteCall,
   AleoHyperlaneTransferRemoteExecution,
@@ -270,7 +270,7 @@ export function buildAleoHyperlaneTransferRemoteCall(
  * quote aborts at finalization without moving funds.
  *
  * @param registry Reviewed route snapshot supplying the Aleo Warp Route configuration.
- * @param executor Connected Aleo wallet client that proves, signs, and broadcasts.
+ * @param walletClient Connected Aleo wallet client that proves, signs, and broadcasts.
  * @param params Prepared Aleo-origin Hyperlane plan, fee preference, and live gas payment.
  * @returns The Aleo transaction id and resumable Hyperlane receipt.
  * @throws BridgeError When configuration is placeholder or inactive, the gas
@@ -278,7 +278,7 @@ export function buildAleoHyperlaneTransferRemoteCall(
  */
 export async function executeAleoHyperlaneTransferRemote(
   registry: BridgeRegistry,
-  executor: AleoBridgeExecutor,
+  walletClient: AleoWalletClient,
   params: ExecuteAleoHyperlaneTransferRemoteParameters,
 ): Promise<AleoHyperlaneTransferRemoteExecution> {
   const call = buildAleoHyperlaneTransferRemoteCall(registry, params)
@@ -292,7 +292,7 @@ export async function executeAleoHyperlaneTransferRemote(
   if (params.gasPaymentMicrocredits == null) {
     throw new BridgeError(`Aleo Hyperlane execution requires a live hook gas payment; call quoteAleoHyperlaneGasPayment first: ${call.routeId}`)
   }
-  const result = await executor.executeTransaction({
+  const result = await walletClient.executeTransaction({
     program: call.program,
     function: call.function,
     inputs: call.inputs,
