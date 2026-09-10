@@ -10,12 +10,11 @@ import type { XReserveBurnMode } from '../types/aleo.js'
 import type { BridgeRegistry } from '../types/protocol.js'
 import type { ExecuteParameters, BridgeExecution } from '../types/actions.js'
 import { aleoAddressToBytes32 } from '../utils/xreserve.js'
-import { executeAleoHyperlaneTransferRemote } from './executeAleoHyperlaneTransferRemote.js'
-import { executeEvmHyperlaneTransfer } from './executeEvmHyperlaneTransfer.js'
-import { executeEvmXReserveTransfer } from './executeEvmXReserveTransfer.js'
-import { executeSolanaHyperlaneTransfer } from './executeSolanaHyperlaneTransfer.js'
-import { executeXReserveBurn } from './executeXReserveBurn.js'
-import { quoteAleoHyperlaneGasPayment } from './quoteAleoHyperlaneGasPayment.js'
+import * as aleoHyperlane from '../protocols/hyperlane/aleo.js'
+import * as evmHyperlane from '../protocols/hyperlane/evm.js'
+import * as solanaHyperlane from '../protocols/hyperlane/solana.js'
+import * as aleoToEvmXReserve from '../protocols/xreserve/aleoToEvm.js'
+import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 
 function aleoHyperlaneMode(mode: ExecuteParameters['mode']): 'caller' | 'signer' | undefined {
@@ -53,7 +52,7 @@ export async function execute(
   const chainId = chain.id
 
   if (params.plan.protocol === 'hyperlane' && chain.family === 'evm') {
-    const execution = await executeEvmHyperlaneTransfer(
+    const execution = await evmHyperlane.execute(
       registry,
       requireEvmClientWithWallet(registry, clients, chainId, 'execute Hyperlane transfer'),
       {
@@ -68,7 +67,7 @@ export async function execute(
     return { kind: 'evm-hyperlane', ...execution }
   }
   if (params.plan.protocol === 'hyperlane' && chain.family === 'solana') {
-    const execution = await executeSolanaHyperlaneTransfer(
+    const execution = await solanaHyperlane.execute(
       registry,
       requireSolanaClientWithWallet(registry, clients, chainId, 'execute Hyperlane transfer'),
       {
@@ -84,12 +83,12 @@ export async function execute(
   if (params.plan.protocol === 'hyperlane' && chain.family === 'aleo') {
     if (params.resume) throw new BridgeError('Aleo Hyperlane execution does not support source receipt resumption')
     const client = requireAleoClientWithWallet(registry, clients, chainId, 'execute Hyperlane transfer')
-    const gasPaymentMicrocredits = params.gasPaymentMicrocredits ?? (await quoteAleoHyperlaneGasPayment(
+    const gasPaymentMicrocredits = params.gasPaymentMicrocredits ?? (await aleoHyperlane.quote(
       registry,
       requireAleoClient(registry, clients, chainId).publicClient,
       { routeId: params.plan.route.id },
     )).paymentMicrocredits
-    const execution = await executeAleoHyperlaneTransferRemote(registry, client.walletClient, {
+    const execution = await aleoHyperlane.execute(registry, client.walletClient, {
       plan: params.plan,
       mode: aleoHyperlaneMode(params.mode),
       privateFee: params.privateFee,
@@ -99,7 +98,7 @@ export async function execute(
     return { kind: 'aleo-hyperlane', ...execution }
   }
   if (params.plan.protocol === 'xreserve' && chain.family === 'evm') {
-    const execution = await executeEvmXReserveTransfer(
+    const execution = await evmToAleoXReserve.execute(
       registry,
       requireEvmClientWithWallet(registry, clients, chainId, 'execute xReserve transfer'),
       {
@@ -114,7 +113,7 @@ export async function execute(
   }
   if (params.plan.protocol === 'xreserve' && chain.family === 'aleo') {
     if (params.resume) throw new BridgeError('Aleo xReserve burn execution does not support source receipt resumption')
-    const execution = await executeXReserveBurn(
+    const execution = await aleoToEvmXReserve.execute(
       registry,
       requireAleoClientWithWallet(registry, clients, chainId, 'execute xReserve burn').walletClient,
       {

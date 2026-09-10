@@ -46,6 +46,7 @@ export type BridgeAssetLocator = {
  * Describes one chain-specific representation of a bridgeable asset.
  *
  * @property id Stable registry identifier, scoped to one chain.
+ * @property key Stable caller-facing asset identifier within the chain.
  * @property chainId Chain carrying this representation.
  * @property symbol Display symbol.
  * @property name Human-readable asset name.
@@ -56,6 +57,7 @@ export type BridgeAssetLocator = {
  */
 export type ProtocolBridgeAsset = {
   id: string
+  key: string
   chainId: string
   symbol: string
   name: string
@@ -165,9 +167,22 @@ export type BridgeFee = {
 export type AleoMintMode = 'public' | 'record' | 'private'
 
 /**
+ * Selects one chain-specific bridge asset without exposing registry route ids.
+ *
+ * @property chain Stable registry chain identifier.
+ * @property asset Stable asset key within the selected chain.
+ */
+export type BridgeEndpoint = {
+  chain: string
+  asset: string
+}
+
+/**
  * Parameters for preparing a protocol bridge transfer.
  *
- * @property routeId Directional route selected from `getRoutes`.
+ * @property source Chain and asset debited by the transfer.
+ * @property destination Chain and asset delivered by the transfer.
+ * @property bridgeProtocol Optional protocol constraint. Omit when exactly one route matches the endpoints.
  * @property amount Decimal source amount in display units.
  * @property recipient Destination-chain recipient.
  * @property sender Optional source-chain sender used by future fee and approval planning.
@@ -176,7 +191,9 @@ export type AleoMintMode = 'public' | 'record' | 'private'
  * @property privateRecipient Deprecated alias for `mintMode: 'private'`. Defaults to false.
  */
 export type PrepareParameters = {
-  routeId: string
+  source: BridgeEndpoint
+  destination: BridgeEndpoint
+  bridgeProtocol?: BridgeProtocol | undefined
   amount: string
   recipient: string
   sender?: string | undefined
@@ -228,11 +245,23 @@ export type BridgeStatus =
   | 'SOURCE_SUBMISSION_PENDING'
   | 'SOURCE_CONFIRMING'
   | 'ATTESTATION_PENDING'
+  | 'DESTINATION_ACTION_REQUIRED'
   | 'DELIVERY_PENDING'
   | 'DESTINATION_CONFIRMING'
   | 'COMPLETED'
   | 'FAILED'
   | 'EXPIRED'
+
+/**
+ * Describes the next caller-authorized bridge operation.
+ *
+ * @property kind Protocol operation ready for wallet submission.
+ * @property chainId Registry chain on which the wallet will submit it.
+ */
+export type BridgeNextAction = {
+  kind: 'xreserve-private-mint'
+  chainId: string
+}
 
 /**
  * Captures protocol-neutral transfer progress and protocol-native state.
@@ -243,6 +272,7 @@ export type BridgeStatus =
  * @property sourceTxId Source-chain transaction identifier when submitted.
  * @property destinationTxId Destination-chain transaction identifier when submitted.
  * @property messageId Hyperlane message identifier when applicable.
+ * @property nextAction Caller-authorized operation available at the current status.
  * @property protocolState Protocol-native progress fields retained for diagnostics and resumption.
  */
 export type BridgeReceipt = {
@@ -252,5 +282,6 @@ export type BridgeReceipt = {
   sourceTxId?: string | undefined
   destinationTxId?: string | undefined
   messageId?: string | undefined
+  nextAction?: BridgeNextAction | undefined
   protocolState: Readonly<Record<string, unknown>>
 }

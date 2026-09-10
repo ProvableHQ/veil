@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { solanaRouteMetadata } from '../../src/actions/solanaRouteMetadata.js'
+import { solanaRouteMetadata } from '../../src/protocols/hyperlane/solanaMetadata.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 import type { BridgeRegistry } from '../../src/types/protocol.js'
 import { SOLANA_ROUTE_ID, igpFixture, registryWithRoute, transferPlan } from '../fixtures/solanaHyperlane.js'

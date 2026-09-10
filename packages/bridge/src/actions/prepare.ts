@@ -84,7 +84,8 @@ function hyperlaneSteps(
  *
  * @example
  * const plan = prepare(registry, {
- *   routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
+ *   source: { chain: 'ethereum', asset: 'usdc' },
+ *   destination: { chain: 'aleo', asset: 'usdcx' },
  *   amount: '25',
  *   recipient: 'aleo1...',
  * })
@@ -93,12 +94,22 @@ export function prepare(
   registry: BridgeRegistry,
   params: PrepareParameters,
 ): BridgePlan {
-  const route = registry.routes.find((entry) => entry.id === params.routeId)
-  if (!route) throw new BridgeError(`Unknown bridge route: ${params.routeId}`)
-  if (route.availability === 'disabled') throw new BridgeError(`Bridge route is disabled: ${params.routeId}`)
+  const sourceAsset = registry.assets.find((asset) => asset.chainId === params.source.chain && asset.key === params.source.asset)
+  if (!sourceAsset) throw new BridgeError(`Unknown source asset ${params.source.asset} on ${params.source.chain}`)
+  const destinationAsset = registry.assets.find((asset) => asset.chainId === params.destination.chain && asset.key === params.destination.asset)
+  if (!destinationAsset) throw new BridgeError(`Unknown destination asset ${params.destination.asset} on ${params.destination.chain}`)
+  const routes = registry.routes.filter((entry) => entry.sourceAssetId === sourceAsset.id
+    && entry.destinationAssetId === destinationAsset.id
+    && entry.availability !== 'disabled'
+    && (params.bridgeProtocol == null || entry.protocol === params.bridgeProtocol))
+  if (routes.length === 0) {
+    throw new BridgeError(`No bridge route from ${params.source.chain}/${params.source.asset} to ${params.destination.chain}/${params.destination.asset}`)
+  }
+  if (routes.length > 1) {
+    throw new BridgeError(`Multiple bridge routes match ${params.source.chain}/${params.source.asset} to ${params.destination.chain}/${params.destination.asset}; specify bridgeProtocol`)
+  }
+  const route = routes[0]!
 
-  const sourceAsset = registry.assets.find((asset) => asset.id === route.sourceAssetId)!
-  const destinationAsset = registry.assets.find((asset) => asset.id === route.destinationAssetId)!
   const sourceChain = registry.chains.find((chain) => chain.id === sourceAsset.chainId)!
   const destinationChain = registry.chains.find((chain) => chain.id === destinationAsset.chainId)!
 

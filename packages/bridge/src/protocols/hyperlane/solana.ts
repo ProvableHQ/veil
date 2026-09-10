@@ -1,18 +1,20 @@
-import { BridgeError } from '../errors/bridgeErrors.js'
-import type { SolanaClient, SolanaWalletClient } from '../connections/solana.js'
-import { loadKit } from '../solana/kit.js'
-import type { SolanaRpcClient } from '../solana/rpc.js'
-import { buildTransferRemoteInstruction, type SolanaAccountMeta } from '../solana/transferRemote.js'
-import { extractSolanaHyperlaneMessageId } from '../solana/extractHyperlaneMessageId.js'
-import type { BridgeRegistry, BridgeReceipt } from '../types/protocol.js'
+import { BridgeError } from '../../errors/bridgeErrors.js'
+import type { SolanaClient, SolanaWalletClient } from '../../connections/solana.js'
+import { quoteIgpGasPayment } from '../../solana/igp.js'
+import { loadKit } from '../../solana/kit.js'
+import type { SolanaRpcClient } from '../../solana/rpc.js'
+import { buildTransferRemoteInstruction, type SolanaAccountMeta } from '../../solana/transferRemote.js'
+import { extractSolanaHyperlaneMessageId } from '../../solana/extractHyperlaneMessageId.js'
+import type { BridgeRegistry, BridgeReceipt } from '../../types/protocol.js'
 import type {
   ExecuteSolanaHyperlaneTransferParameters,
   SolanaHyperlaneRouteMetadata,
   SolanaHyperlaneTransferExecution,
   SolanaHyperlaneTransferQuote,
-} from '../types/solana.js'
-import { quoteSolanaHyperlaneTransfer } from './quoteSolanaHyperlaneTransfer.js'
-import { solanaRouteMetadata } from './solanaRouteMetadata.js'
+  QuoteSolanaHyperlaneTransferParameters,
+} from '../../types/solana.js'
+import { parseDecimalAmount } from '../../utils/units.js'
+import { solanaRouteMetadata } from './solanaMetadata.js'
 
 // SEALEVEL_NOTES.md "Observed total lamport overhead": rent for the two
 // program-derived accounts a transfer creates fresh — the gas-payment PDA
@@ -28,6 +30,65 @@ function accountRole(kit: Awaited<ReturnType<typeof loadKit>>, account: SolanaAc
   if (account.signer) return kit.AccountRole.READONLY_SIGNER
   if (account.writable) return kit.AccountRole.WRITABLE
   return kit.AccountRole.READONLY
+}
+
+/**
+ * Quotes a Solana-to-Aleo Hyperlane Warp Route transfer.
+ *
+ * Reads live gas-oracle and transaction-fee state without signing or submitting.
+ *
+ * @param registry Reviewed deployment snapshot used to validate the prepared plan.
+ * @param client Registry-selected Solana public capability.
+ * @param params Prepared Solana Hyperlane plan.
+ * @returns Atomic transfer amount, gas payment, network fee, and total.
+ * @throws BridgeError When route metadata or live chain state is invalid.
+ * @example const result = await quote(registry, client, { plan })
+ */
+export async function quote(
+  registry: BridgeRegistry,
+  client: SolanaClient,
+  params: QuoteSolanaHyperlaneTransferParameters,
+): Promise<SolanaHyperlaneTransferQuote> {
+  const metadata = solanaRouteMetadata(registry, params.plan)
+  const rpc = client.publicClient
+  const amountLamports = parseDecimalAmount(params.plan.amountIn, params.plan.sourceAsset.decimals)
+  const igpAccountData = await rpc.getAccountData(metadata.igpAccount)
+  if (!igpAccountData) throw new BridgeError(`Solana IGP account does not exist: ${metadata.igpAccount}`)
+  const igpPaymentLamports = quoteIgpGasPayment({
+    igpAccountData,
+    destinationDomain: metadata.destinationDomain,
+    gasAmount: BigInt(metadata.destinationGasAmount),
+  })
+  if (!params.plan.sender) throw new BridgeError('Solana sender is required to quote the transaction fee')
+  const kit = await loadKit()
+  const uniqueMessageSigner = await kit.generateKeyPairSigner()
+  const built = await buildTransferRemoteInstruction({
+    metadata,
+    senderAddress: params.plan.sender,
+    uniqueMessageAddress: uniqueMessageSigner.address,
+    recipientAleoAddress: params.plan.recipient,
+    amountLamports,
+  })
+  const { blockhash, lastValidBlockHeight } = await rpc.getLatestBlockhash()
+  const message = kit.pipe(
+    kit.createTransactionMessage({ version: 0 }),
+    (transaction) => kit.setTransactionMessageFeePayer(kit.address(params.plan.sender!), transaction),
+    (transaction) => kit.setTransactionMessageLifetimeUsingBlockhash({ blockhash: kit.blockhash(blockhash), lastValidBlockHeight }, transaction),
+    (transaction) => kit.appendTransactionMessageInstruction({
+      programAddress: kit.address(built.programAddress),
+      accounts: built.accounts.map((account) => ({ address: kit.address(account.address), role: accountRole(kit, account) })),
+      data: built.data,
+    }, transaction),
+  )
+  const compiled = kit.compileTransaction(message)
+  const networkFeeLamports = await rpc.getFeeForMessage(new Uint8Array(compiled.messageBytes))
+  return {
+    routeId: params.plan.route.id,
+    amountLamports,
+    igpPaymentLamports,
+    networkFeeLamports,
+    totalLamports: amountLamports + igpPaymentLamports + networkFeeLamports,
+  }
 }
 
 /**
@@ -130,8 +191,8 @@ function buildReceipt(
  *
  * When the plan names a `sender`, the wallet client's address MUST match it: a
  * plan prepared for one account is never executed by another connected
- * wallet or keypair. Mirrors the connected-account check in
- * `executeEvmHyperlaneTransfer`.
+ * wallet or keypair. Mirrors the connected-account check in the EVM
+ * Hyperlane executor.
  *
  * A confirmation timeout returns a resumable `SOURCE_CONFIRMING` receipt
  * rather than throwing — the signature is already submitted and may still
@@ -147,9 +208,9 @@ function buildReceipt(
  *   submitted transaction is reported failed.
  *
  * @example
- * const execution = await executeSolanaHyperlaneTransfer(registry, client, { plan })
+ * const execution = await execute(registry, client, { plan })
  */
-export async function executeSolanaHyperlaneTransfer(
+export async function execute(
   registry: BridgeRegistry,
   client: SolanaClient & { walletClient: SolanaWalletClient },
   params: ExecuteSolanaHyperlaneTransferParameters,
@@ -233,7 +294,7 @@ export async function executeSolanaHyperlaneTransfer(
   }
 
   // 3. Quote the live IGP payment through the shared oracle-reading action.
-  const quote = await quoteSolanaHyperlaneTransfer(registry, client, { plan: { ...params.plan, sender: senderAddress } })
+  const transferQuote = await quote(registry, client, { plan: { ...params.plan, sender: senderAddress } })
 
   // 4. Preflight: the sender must cover the amount, gas, and the rent for
   // the two accounts (gas-payment PDA, dispatched-message PDA) the
@@ -245,13 +306,13 @@ export async function executeSolanaHyperlaneTransfer(
     rpc.getMinimumBalanceForRentExemption(0),
   ])
   const rentLamports = gasPaymentRent + dispatchedMessageRent + senderRent
-  const requiredLamports = quote.totalLamports + rentLamports
+  const requiredLamports = transferQuote.totalLamports + rentLamports
   const balance = await rpc.getBalance(senderAddress)
   if (balance < requiredLamports) {
     throw new BridgeError(
       `Insufficient Solana balance for this Hyperlane transfer: balance ${balance} lamports, `
-      + `required ${requiredLamports} lamports (amount ${quote.amountLamports} `
-      + `+ gas ${quote.igpPaymentLamports + quote.networkFeeLamports} + rent ${rentLamports})`,
+      + `required ${requiredLamports} lamports (amount ${transferQuote.amountLamports} `
+      + `+ gas ${transferQuote.igpPaymentLamports + transferQuote.networkFeeLamports} + rent ${rentLamports})`,
     )
   }
 
@@ -267,7 +328,7 @@ export async function executeSolanaHyperlaneTransfer(
     senderAddress,
     uniqueMessageAddress: uniqueMessageSigner.address,
     recipientAleoAddress: params.plan.recipient,
-    amountLamports: quote.amountLamports,
+    amountLamports: transferQuote.amountLamports,
   })
   const instruction = {
     programAddress: kit.address(built.programAddress),
@@ -303,7 +364,7 @@ export async function executeSolanaHyperlaneTransfer(
     params.plan.route.id,
     metadata,
     uniqueMessageSigner.address,
-    quote,
+    transferQuote,
     blockhash,
     lastValidBlockHeight,
   )
@@ -324,7 +385,7 @@ export async function executeSolanaHyperlaneTransfer(
     }
     if (confirmation === 'expired') {
       return {
-        receipt: buildReceipt('SOURCE_CONFIRMING', signature, params.plan.route.id, metadata, uniqueMessageSigner.address, quote, blockhash, lastValidBlockHeight, undefined, true),
+        receipt: buildReceipt('SOURCE_CONFIRMING', signature, params.plan.route.id, metadata, uniqueMessageSigner.address, transferQuote, blockhash, lastValidBlockHeight, undefined, true),
       }
     }
 
@@ -336,7 +397,7 @@ export async function executeSolanaHyperlaneTransfer(
 
     // 10. Return the resumable, protocol-neutral receipt.
     return {
-      receipt: buildReceipt('DELIVERY_PENDING', signature, params.plan.route.id, metadata, uniqueMessageSigner.address, quote, blockhash, lastValidBlockHeight, messageId),
+      receipt: buildReceipt('DELIVERY_PENDING', signature, params.plan.route.id, metadata, uniqueMessageSigner.address, transferQuote, blockhash, lastValidBlockHeight, messageId),
     }
   } catch (error) {
     if (error instanceof BridgeError && error.message.includes(signature)) throw error

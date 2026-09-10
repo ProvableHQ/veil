@@ -10,8 +10,10 @@ import {
   type Hex,
 } from 'viem'
 import { describe, expect, it } from 'vitest'
-import { executeEvmXReserveTransfer } from '../../src/actions/executeEvmXReserveTransfer.js'
-import { getXReserveAttestation } from '../../src/actions/getXReserveAttestation.js'
+import {
+  execute as executeEvmXReserveTransfer,
+  getAttestation as getXReserveAttestation,
+} from '../../src/protocols/xreserve/evmToAleo.js'
 import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'
@@ -33,7 +35,8 @@ const ABI = parseAbi([
 type Sent = { from: Address, to: Address, data: Hex, value?: Hex }
 
 function transferPlan() {
-  return prepare(DEFAULT_BRIDGE_REGISTRY, { routeId: 'xreserve:sepolia/usdc->aleo-testnet/usdcx', amount: '2', recipient: RECIPIENT, sender: ACCOUNT, mintMode: 'record' })
+  return prepare(DEFAULT_BRIDGE_REGISTRY, { source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' }, amount: '2', recipient: RECIPIENT, sender: ACCOUNT, mintMode: 'record' })
 }
 
 function mockExecutor(confirmDeposit = { value: true }) {

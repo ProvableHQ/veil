@@ -1,6 +1,6 @@
 import { getTransactionDecoder } from '@solana/kit'
 import { describe, expect, it, vi } from 'vitest'
-import { executeSolanaHyperlaneTransfer } from '../../src/actions/executeSolanaHyperlaneTransfer.js'
+import { execute as executeSolanaHyperlaneTransfer } from '../../src/protocols/hyperlane/solana.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 import type { SolanaRpcClient } from '../../src/solana/rpc.js'
 import type { SolanaWalletClient } from '../../src/connections/solana.js'
@@ -218,7 +218,8 @@ describe('executeSolanaHyperlaneTransfer', () => {
       status: 'SOURCE_CONFIRMING',
       sourceTxId: STUB_SIGNATURE,
       protocolState: {
-        routeId: 'hyperlane:other/sol->aleo/sol',
+        source: { chain: 'other', asset: 'sol' },
+      destination: { chain: 'aleo', asset: 'sol' },
         destinationDomain: 1634493807,
         blockhash: WARP_PROGRAM_ADDRESS,
         lastValidBlockHeight: '100',

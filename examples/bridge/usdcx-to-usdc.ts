@@ -12,17 +12,14 @@ import {
 import {
   createAleoClient,
   createBridgeClient,
-  type AleoWalletClient,
   type XReserveBurnMode,
 } from '@provablehq/aleo-bridge-sdk'
 
-const ROUTE_ID = 'xreserve:aleo/usdcx->ethereum/usdc'
 const USDCX_PROGRAM = 'usdcx_stablecoin.aleo'
 const FREEZE_LIST_URL = 'https://api.provable.com/v2/mainnet/programs/usdcx_freezelist.aleo/compliance/freeze-list'
 const FREEZE_LIST_DEPTH = 15
 const MINIMUM_BURN_AMOUNT_ATOMIC = 2_000_000n
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_BURNS_USDCX'
-const ALEO_PROVING_PROGRESS_INTERVAL_MS = 15_000
 
 type ExampleBurnMode = 'private' | 'public'
 
@@ -125,7 +122,13 @@ async function main(): Promise<void> {
   const recipient = requiredEnvironmentVariable('ETHEREUM_RECIPIENT')
   const mode = burnModeFromEnvironment()
   const bridge = createBridgeClient({ environment: 'mainnet' })
-  const plan = bridge.prepare({ routeId: ROUTE_ID, amount, recipient })
+  const plan = bridge.prepare({
+    source: { chain: 'aleo', asset: 'usdcx' },
+    destination: { chain: 'ethereum', asset: 'usdc' },
+    bridgeProtocol: 'xreserve',
+    amount,
+    recipient,
+  })
   const amountAtomic = atomicAmount(plan.amountIn, plan.sourceAsset.decimals)
   if (amountAtomic <= MINIMUM_BURN_AMOUNT_ATOMIC) {
     throw new Error('USDCx burn amount must be greater than 2 USDCx')
@@ -195,30 +198,10 @@ async function main(): Promise<void> {
     : undefined
   if (merkleProof) console.log(`Derived the USDCx freeze-list exclusion proof for ${account.address}.`)
 
-  const walletClient: AleoWalletClient = {
-    executeTransaction: async ({ program, function: functionName, inputs, privateFee, imports }) => {
-      if (imports?.length) throw new Error('The local wallet client does not accept dynamic import names')
-      const startedAt = Date.now()
-      const progress = setInterval(() => {
-        console.log(`Aleo proving is still in progress (${Math.round((Date.now() - startedAt) / 1_000)}s elapsed).`)
-      }, ALEO_PROVING_PROGRESS_INTERVAL_MS)
-      try {
-        const result = await nativeWalletClient.executeContract({
-          program,
-          function: functionName,
-          inputs,
-          privateFee,
-        })
-        return result.transactionId
-      } finally {
-        clearInterval(progress)
-      }
-    },
-  }
   const burnMode: XReserveBurnMode = mode === 'private' ? 'private' : 'public-as-signer'
   const executingBridge = createBridgeClient({
     environment: 'mainnet',
-    clients: { aleo: createAleoClient({ publicClient, account: walletClient }) },
+    clients: { aleo: createAleoClient({ publicClient, account: nativeWalletClient }) },
   })
   const result = await executingBridge.execute({
     plan,

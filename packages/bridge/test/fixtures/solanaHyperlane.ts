@@ -78,7 +78,9 @@ export function registryWithRoute(overrides: Partial<Record<string, string | num
 /** Prepares the fixture's recorded transfer (676.2 SOL to the recorded Aleo recipient) against the given registry. */
 export function transferPlan(registry: BridgeRegistry) {
   return prepare(registry, {
-    routeId: SOLANA_ROUTE_ID,
+    source: { chain: 'solana', asset: 'sol' },
+    destination: { chain: 'aleo', asset: 'sol' },
+    bridgeProtocol: 'hyperlane',
     amount: '676.2',
     recipient: transferFixture.recipientAleoAddress,
     sender: transferFixture.senderAddress,

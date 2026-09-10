@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildXReserveBurnCall } from '../../src/builders/buildXReserveBurnCall.js'
-import { executeXReserveBurn } from '../../src/actions/executeXReserveBurn.js'
+import { execute as executeXReserveBurn } from '../../src/protocols/xreserve/aleoToEvm.js'
 import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import type { AleoWalletClient } from '../../src/types/aleo.js'
@@ -16,9 +16,9 @@ const MERKLE_PROOF = '[{path:0field},{path:1field}]'
 
 function plan(environment: 'mainnet' | 'testnet' = 'mainnet') {
   return prepare(DEFAULT_BRIDGE_REGISTRY, {
-    routeId: environment === 'mainnet'
-      ? 'xreserve:aleo/usdcx->ethereum/usdc'
-      : 'xreserve:aleo-testnet/usdcx->sepolia/usdc',
+    source: { chain: environment === 'mainnet' ? 'aleo' : 'aleo-testnet', asset: 'usdcx' },
+    destination: { chain: environment === 'mainnet' ? 'ethereum' : 'sepolia', asset: 'usdc' },
+    bridgeProtocol: 'xreserve',
     amount: '2.5',
     recipient: EVM_RECIPIENT,
   })
@@ -100,7 +100,7 @@ describe('xReserve USDCx burns', () => {
 
   it('submits the burn and returns service-forwarded resumable state', async () => {
     const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
-      .mockResolvedValue({ transactionId: 'at1burn' })
+      .mockResolvedValue('at1burn')
     const checkpoints: unknown[] = []
     const result = await executeXReserveBurn(DEFAULT_BRIDGE_REGISTRY, { executeTransaction }, {
       plan: plan(),

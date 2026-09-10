@@ -33,7 +33,8 @@ const REQUIRED_SOLANA_HYPERLANE_METADATA_FIELDS: readonly Exclude<
  *
  * Pure and local. Checks field presence and shape only; format-level
  * validation (address charset, digit strings, commit hash shape) is the
- * job of `solanaRouteMetadata` in `actions/solanaRouteMetadata.ts` at plan time.
+ * job of `solanaRouteMetadata` in the Solana Hyperlane protocol module before
+ * live reads or submission.
  */
 function hasCompleteSolanaHyperlaneMetadata(
   metadata: Readonly<Record<string, string | number | boolean>> | undefined,
@@ -73,11 +74,15 @@ export function validateBridgeRegistry(registry: BridgeRegistry): BridgeRegistry
   }
 
   const assetIds = new Set<string>()
+  const assetKeys = new Set<string>()
   for (const asset of registry.assets) {
     if (assetIds.has(asset.id)) throw new BridgeError(`Duplicate bridge asset id: ${asset.id}`)
     if (!chainIds.has(asset.chainId)) {
       throw new BridgeError(`Bridge asset ${asset.id} references unknown chain ${asset.chainId}`)
     }
+    if (!asset.key.trim()) throw new BridgeError(`Bridge asset ${asset.id} has an empty key`)
+    const scopedKey = `${asset.chainId}/${asset.key}`
+    if (assetKeys.has(scopedKey)) throw new BridgeError(`Duplicate bridge asset key: ${scopedKey}`)
     if (!Number.isInteger(asset.decimals) || asset.decimals < 0) {
       throw new BridgeError(`Bridge asset ${asset.id} has invalid decimals ${asset.decimals}`)
     }
@@ -91,6 +96,7 @@ export function validateBridgeRegistry(registry: BridgeRegistry): BridgeRegistry
       }
     }
     assetIds.add(asset.id)
+    assetKeys.add(scopedKey)
   }
 
   const routeIds = new Set<string>()

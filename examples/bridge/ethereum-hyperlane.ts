@@ -26,7 +26,8 @@ type AssetConfiguration = {
   symbol: HyperlaneAsset
   amountEnvironmentVariable: string
   executionEnvironmentVariable: string
-  routeId: string
+  source: { chain: string, asset: string }
+  destination: { chain: string, asset: string }
   decimals: number
 }
 
@@ -35,14 +36,16 @@ const ASSETS: Record<HyperlaneAsset, AssetConfiguration> = {
     symbol: 'ETH',
     amountEnvironmentVariable: 'ETH_AMOUNT',
     executionEnvironmentVariable: 'EXECUTE_HYPERLANE_ETH',
-    routeId: 'hyperlane:ethereum/eth->aleo/eth',
+    source: { chain: 'ethereum', asset: 'eth' },
+    destination: { chain: 'aleo', asset: 'eth' },
     decimals: 18,
   },
   WBTC: {
     symbol: 'WBTC',
     amountEnvironmentVariable: 'WBTC_AMOUNT',
     executionEnvironmentVariable: 'EXECUTE_HYPERLANE_WBTC',
-    routeId: 'hyperlane:ethereum/wbtc->aleo/wbtc',
+    source: { chain: 'ethereum', asset: 'wbtc' },
+    destination: { chain: 'aleo', asset: 'wbtc' },
     decimals: 8,
   },
 }
@@ -108,7 +111,9 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
     clients: { ethereum: createEvmClient({ publicClient, walletClient }) },
   })
   const plan = bridge.prepare({
-    routeId: config.routeId,
+    source: config.source,
+    destination: config.destination,
+    bridgeProtocol: 'hyperlane',
     amount,
     recipient,
     sender: account.address,

@@ -3,16 +3,12 @@ import { getProtocolRoutes, type GetProtocolRoutesParameters } from '../../actio
 import { prepare } from '../../actions/prepare.js'
 import { execute } from '../../actions/execute.js'
 import { quote } from '../../actions/quote.js'
-import { getXReserveAttestation } from '../../actions/getXReserveAttestation.js'
-import { executeXReservePrivateMint } from '../../actions/executeXReservePrivateMint.js'
-import {
-  requireAleoClientWithWallet,
-  type BridgeChainClients,
-} from '../../connections/resolve.js'
-import type { GetXReserveAttestationParameters, XReserveAttestationResult, XReserveHttpTransport } from '../../types/xreserve.js'
-import type { ExecuteXReservePrivateMintParameters, XReservePrivateMintExecution } from '../../types/aleo.js'
-import type { BridgeEnvironment, BridgeRegistry, BridgePlan, PrepareParameters, ProtocolBridgeAsset, ProtocolBridgeRoute } from '../../types/protocol.js'
-import type { ExecuteParameters, QuoteParameters, BridgeExecution, BridgeQuote } from '../../types/actions.js'
+import { complete } from '../../actions/complete.js'
+import { getStatus } from '../../actions/getStatus.js'
+import { waitForStatus } from '../../actions/waitForStatus.js'
+import type { BridgeChainClients } from '../../connections/resolve.js'
+import type { BridgeEnvironment, BridgeReceipt, BridgeRegistry, BridgePlan, PrepareParameters, ProtocolBridgeAsset, ProtocolBridgeRoute } from '../../types/protocol.js'
+import type { CompleteParameters, ExecuteParameters, GetStatusParameters, QuoteParameters, WaitForStatusParameters, BridgeExecution, BridgeQuote } from '../../types/actions.js'
 
 /**
  * Carries validated registry and materialized client state into bound actions.
@@ -28,19 +24,16 @@ export type BridgeActionsConfig = {
   fetch: typeof globalThis.fetch
 }
 
-/** Lists protocol discovery, planning, quote, and execution operations. */
+/** Lists protocol discovery, planning, execution, status, and completion operations. */
 export type BridgeActions = {
   getAssets: (params?: GetProtocolAssetsParameters) => ProtocolBridgeAsset[]
   getRoutes: (params?: GetProtocolRoutesParameters) => ProtocolBridgeRoute[]
   prepare: (params: PrepareParameters) => BridgePlan
   quote: (params: QuoteParameters) => Promise<BridgeQuote>
   execute: (params: ExecuteParameters) => Promise<BridgeExecution>
-  getXReserveAttestation: (params: GetXReserveAttestationParameters) => Promise<XReserveAttestationResult>
-  executeXReservePrivateMint: (params: ExecuteXReservePrivateMintParameters) => Promise<XReservePrivateMintExecution>
-}
-
-function destinationChain(plan: BridgePlan): string {
-  return plan.destinationAsset.chainId
+  getStatus: (params: GetStatusParameters) => Promise<BridgeReceipt>
+  waitForStatus: (params: WaitForStatusParameters) => Promise<BridgeReceipt>
+  complete: (params: CompleteParameters) => Promise<BridgeExecution>
 }
 
 /** Binds registry and private client state to bridge actions. */
@@ -51,7 +44,8 @@ export function bridgeActions(config: BridgeActionsConfig): BridgeActions {
     prepare: (params) => prepare(config.registry, params),
     quote: async (params) => quote(config.registry, config.clients, params),
     execute: async (params) => execute(config.registry, config.clients, params),
-    getXReserveAttestation: async (params) => getXReserveAttestation(config.registry, config.fetch as XReserveHttpTransport, params),
-    executeXReservePrivateMint: async (params) => executeXReservePrivateMint(config.registry, requireAleoClientWithWallet(config.registry, config.clients, destinationChain(params.plan), 'execute xReserve private mint').walletClient, params),
+    getStatus: async (params) => getStatus(config.registry, config.clients, config.fetch, params),
+    waitForStatus: async (params) => waitForStatus(config.registry, config.clients, config.fetch, params),
+    complete: async (params) => complete(config.registry, config.clients, params),
   }
 }

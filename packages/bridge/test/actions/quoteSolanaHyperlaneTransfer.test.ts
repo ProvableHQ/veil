@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { quoteSolanaHyperlaneTransfer } from '../../src/actions/quoteSolanaHyperlaneTransfer.js'
+import { quote as quoteSolanaHyperlaneTransfer } from '../../src/protocols/hyperlane/solana.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 import type { SolanaRpcClient } from '../../src/solana/rpc.js'
 import type { SolanaClient } from '../../src/connections/solana.js'

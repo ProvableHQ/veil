@@ -12,7 +12,7 @@ import {
   solanaKeyPair,
   type BridgeReceipt,
 } from '../../../src/index.js'
-import { loadLiveState, saveLiveState, waitFor, waitForAleoTransaction, waitForHyperlaneDelivery } from './helpers.js'
+import { loadLiveState, saveLiveState, waitForAleoTransaction, waitForHyperlaneDelivery } from './helpers.js'
 
 const liveFunds = process.env.BRIDGE_LIVE_FUNDS === '1'
 const mainnetFunds = process.env.BRIDGE_LIVE_MAINNET_ACK === 'I_ACKNOWLEDGE_BRIDGE_MAINNET_FUNDS'
@@ -53,39 +53,67 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
       },
     })
     const plan = bridge.prepare({
-      routeId,
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+      bridgeProtocol: 'xreserve',
       amount: process.env.BRIDGE_LIVE_XRESERVE_AMOUNT ?? '1',
       recipient,
       sender: required('BRIDGE_LIVE_EVM_TESTNET_ADDRESS'),
       mintMode: 'private',
     })
-    const resumed = state.sourceReceipt as BridgeReceipt | undefined
-    const depositExecution = await bridge.execute({
-      plan,
-      ...(resumed ? { resume: resumed } : {}),
-      onSubmitted(receipt) {
-        state.sourceTxId = receipt.sourceTxId ?? receipt.id
-        state.sourceReceipt = receipt
-        saveLiveState(path, state)
-      },
-    })
-    if (depositExecution.kind !== 'evm-xreserve') throw new Error(`Unexpected execution kind: ${depositExecution.kind}`)
-    const deposit = depositExecution.receipt
-    state.sourceTxId = deposit.sourceTxId ?? state.sourceTxId
-    state.sourceReceipt = deposit
-    if (deposit.status === 'ATTESTATION_PENDING') state.messageId = deposit.id
-    saveLiveState(path, state)
-    if (!state.messageId) throw new Error(`xReserve source transaction ${state.sourceTxId} is still confirming; rerun to resume without resubmitting`)
-    const attestation = await waitFor(async () => {
-      const result = await bridge.getXReserveAttestation({ routeId, messageHash: state.messageId as `0x${string}` })
-      return result.status === 'complete' ? result : undefined
-    })
-    if (!state.destinationTxId) {
-      const mint = await bridge.executeXReservePrivateMint({ plan, deposit, attestation })
-      state.destinationTxId = mint.transactionId
+    let receipt = state.sourceReceipt as BridgeReceipt | undefined
+    if (!receipt || receipt.status === 'SOURCE_APPROVAL_PENDING' || receipt.status === 'SOURCE_CONFIRMING') {
+      const depositExecution = await bridge.execute({
+        plan,
+        ...(receipt ? { resume: receipt } : {}),
+        onSubmitted(checkpoint) {
+          state.sourceTxId = checkpoint.sourceTxId ?? checkpoint.id
+          state.sourceReceipt = checkpoint
+          saveLiveState(path, state)
+        },
+      })
+      if (depositExecution.kind !== 'evm-xreserve') throw new Error(`Unexpected execution kind: ${depositExecution.kind}`)
+      receipt = depositExecution.receipt
+      state.sourceTxId = receipt.sourceTxId ?? state.sourceTxId
+      state.sourceReceipt = receipt
       saveLiveState(path, state)
     }
-    await waitForAleoTransaction(aleo.publicClient, state.destinationTxId)
+    if (receipt.status === 'ATTESTATION_PENDING') {
+      receipt = await bridge.waitForStatus({
+        plan,
+        receipt,
+        until: ['DESTINATION_ACTION_REQUIRED'],
+        onUpdate(checkpoint) {
+          state.messageId = checkpoint.id
+          state.sourceReceipt = checkpoint
+          saveLiveState(path, state)
+        },
+      })
+    }
+    if (receipt.status === 'DESTINATION_ACTION_REQUIRED') {
+      const mint = await bridge.complete({
+        plan,
+        receipt,
+        onSubmitted(checkpoint) {
+          state.destinationTxId = checkpoint.destinationTxId
+          state.sourceReceipt = checkpoint
+          saveLiveState(path, state)
+        },
+      })
+      receipt = mint.receipt
+    }
+    if (receipt.status === 'DESTINATION_CONFIRMING') {
+      receipt = await bridge.waitForStatus({
+        plan,
+        receipt,
+        until: ['COMPLETED'],
+        onUpdate(checkpoint) {
+          state.sourceReceipt = checkpoint
+          saveLiveState(path, state)
+        },
+      })
+    }
+    if (receipt.status !== 'COMPLETED') throw new Error(`Unexpected terminal xReserve status: ${receipt.status}`)
     state.completed = true
     saveLiveState(path, state)
     expect(state).toMatchObject({ completed: true, sourceTxId: expect.any(String), messageId: expect.any(String), destinationTxId: expect.any(String) })
@@ -106,7 +134,9 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
       },
     })
     const plan = bridge.prepare({
-      routeId,
+      source: { chain: 'solana', asset: 'sol' },
+      destination: { chain: 'aleo', asset: 'sol' },
+      bridgeProtocol: 'hyperlane',
       amount: process.env.BRIDGE_LIVE_SOL_AMOUNT ?? '0.002',
       recipient: required('BRIDGE_LIVE_ALEO_MAINNET_RECIPIENT'),
       sender: required('BRIDGE_LIVE_SOLANA_ADDRESS'),
@@ -144,9 +174,16 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
     const state = loadLiveState(path, routeId)
     const aleo = await localAleo('mainnet', required('BRIDGE_LIVE_ALEO_MAINNET_PRIVATE_KEY'))
     const bridge = createBridgeClient({ clients: { aleo: createAleoClient({ publicClient: aleo.publicClient, account: aleo.walletClient }) } })
+    const route = bridge.registry.routes.find((candidate) => candidate.id === routeId)
+    if (!route) throw new Error(`Unknown configured bridge route: ${routeId}`)
+    const source = bridge.registry.assets.find((asset) => asset.id === route.sourceAssetId)
+    const destination = bridge.registry.assets.find((asset) => asset.id === route.destinationAssetId)
+    if (!source || !destination) throw new Error(`Configured route has unknown assets: ${routeId}`)
     if (!state.sourceTxId) {
       const plan = bridge.prepare({
-        routeId,
+        source: { chain: source.chainId, asset: source.key },
+        destination: { chain: destination.chainId, asset: destination.key },
+        bridgeProtocol: route.protocol,
         amount: required('BRIDGE_LIVE_ALEO_HYPERLANE_AMOUNT'),
         recipient: required('BRIDGE_LIVE_HYPERLANE_DESTINATION_RECIPIENT'),
         sender: String(aleo.account.address),

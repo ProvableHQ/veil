@@ -9,10 +9,10 @@ import {
 import type { BridgeRegistry } from '../types/protocol.js'
 import type { QuoteParameters, BridgeQuote } from '../types/actions.js'
 import { aleoAddressToBytes32 } from '../utils/xreserve.js'
-import { quoteAleoHyperlaneGasPayment } from './quoteAleoHyperlaneGasPayment.js'
-import { quoteEvmHyperlaneTransfer } from './quoteEvmHyperlaneTransfer.js'
-import { quoteEvmXReserveTransfer } from './quoteEvmXReserveTransfer.js'
-import { quoteSolanaHyperlaneTransfer } from './quoteSolanaHyperlaneTransfer.js'
+import * as aleoHyperlane from '../protocols/hyperlane/aleo.js'
+import * as evmHyperlane from '../protocols/hyperlane/evm.js'
+import * as solanaHyperlane from '../protocols/hyperlane/solana.js'
+import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 
 /**
@@ -38,14 +38,14 @@ export async function quote(
 
   if (params.plan.protocol === 'hyperlane' && chain.family === 'evm') {
     const client = requireEvmClient(registry, clients, chainId)
-    const quote = await quoteEvmHyperlaneTransfer(registry, client, {
+    const quote = await evmHyperlane.quote(registry, client, {
       plan: params.plan,
       recipientBytes32: aleoAddressToBytes32(params.plan.recipient),
     })
     return { kind: 'evm-hyperlane', ...quote }
   }
   if (params.plan.protocol === 'hyperlane' && chain.family === 'solana') {
-    const quote = await quoteSolanaHyperlaneTransfer(
+    const quote = await solanaHyperlane.quote(
       registry,
       requireSolanaClient(registry, clients, chainId),
       params,
@@ -53,7 +53,7 @@ export async function quote(
     return { kind: 'solana-hyperlane', ...quote }
   }
   if (params.plan.protocol === 'hyperlane' && chain.family === 'aleo') {
-    const quote = await quoteAleoHyperlaneGasPayment(
+    const quote = await aleoHyperlane.quote(
       registry,
       requireAleoClient(registry, clients, chainId).publicClient,
       { routeId: params.plan.route.id },
@@ -61,7 +61,7 @@ export async function quote(
     return { kind: 'aleo-hyperlane', ...quote }
   }
   if (params.plan.protocol === 'xreserve' && chain.family === 'evm') {
-    const quote = await quoteEvmXReserveTransfer(
+    const quote = await evmToAleoXReserve.quote(
       registry,
       requireEvmClientWithWallet(registry, clients, chainId, 'quote xReserve transfer'),
       params,

@@ -1,4 +1,4 @@
-import type { TransactionInput } from '@provablehq/veil-core'
+import type { TransactionInput, WalletClient } from '@provablehq/veil-core'
 import type { BridgePlan, BridgeReceipt } from './protocol.js'
 import type { XReserveAttestationResult } from './xreserve.js'
 
@@ -9,15 +9,7 @@ import type { XReserveAttestationResult } from './xreserve.js'
  *
  * @property executeTransaction Prompts the wallet to prove, sign, and broadcast a program call.
  */
-export type AleoWalletClient = {
-  executeTransaction: (params: {
-    program: string
-    function: string
-    inputs: TransactionInput[]
-    privateFee?: boolean | undefined
-    imports?: string[] | undefined
-  }) => Promise<string | { transactionId: string }>
-}
+export type AleoWalletClient = Pick<WalletClient, 'executeTransaction'>
 
 /**
  * Configures submission of the user-authorized USDCx wrapper mint.
@@ -26,12 +18,14 @@ export type AleoWalletClient = {
  * @property deposit Confirmed EVM deposit receipt carrying the canonical payload.
  * @property attestation Completed Circle payload and signature response.
  * @property privateFee Whether the Aleo wallet should pay its fee privately. Defaults to false.
+ * @property onSubmitted Durable checkpoint hook called immediately after the wallet returns a transaction id.
  */
 export type ExecuteXReservePrivateMintParameters = {
   plan: BridgePlan
   deposit: BridgeReceipt
   attestation: XReserveAttestationResult
   privateFee?: boolean | undefined
+  onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
 }
 
 /**

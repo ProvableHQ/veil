@@ -56,13 +56,24 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
         inputSchema: {
           type: 'object',
           properties: {
-            routeId: { type: 'string' },
+            source: {
+              type: 'object',
+              properties: { chain: { type: 'string' }, asset: { type: 'string' } },
+              required: ['chain', 'asset'],
+            },
+            destination: {
+              type: 'object',
+              properties: { chain: { type: 'string' }, asset: { type: 'string' } },
+              required: ['chain', 'asset'],
+            },
+            bridgeProtocol: { type: 'string', enum: ['xreserve', 'hyperlane'] },
             amount: { type: 'string', description: 'Positive decimal amount in source-asset display units.' },
             recipient: { type: 'string' },
             sender: { type: 'string' },
-            privateRecipient: { type: 'boolean' },
+            mintMode: { type: 'string', enum: ['public', 'record', 'private'] },
+            privateMintSecretNonce: { type: 'string' },
           },
-          required: ['routeId', 'amount', 'recipient'],
+          required: ['source', 'destination', 'amount', 'recipient'],
         },
       },
       handler: async (params) => client.prepare(params as Parameters<BridgeClient['prepare']>[0]),

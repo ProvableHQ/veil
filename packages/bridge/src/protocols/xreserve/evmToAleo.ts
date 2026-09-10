@@ -12,7 +12,12 @@ import {
   type Hex,
 } from 'viem'
 import { BridgeError } from '../../errors/bridgeErrors.js'
-import type { EvmClient, EvmWalletClient } from '../../connections/evm.js'
+import type { EvmClient, EvmReceipt, EvmWalletClient } from '../../connections/evm.js'
+import type {
+  AleoWalletClient,
+  ExecuteXReservePrivateMintParameters,
+  XReservePrivateMintExecution,
+} from '../../types/aleo.js'
 import type { BridgeRegistry, BridgePlan, BridgeReceipt } from '../../types/protocol.js'
 import type {
   EvmXReserveRouteMetadata,
@@ -32,6 +37,7 @@ import {
   buildXReserveHookData,
   calculateXReserveDepositNonce,
   calculateXReserveMessageHash,
+  xReserveHexToAleoBytes,
 } from '../../utils/xreserve.js'
 
 const ERC20_ABI = parseAbi([
@@ -43,12 +49,6 @@ const XRESERVE_ABI = parseAbi([
   'function depositToRemote(uint256 value, uint32 remoteDomain, bytes32 remoteRecipient, address localToken, uint256 maxFee, bytes hookData)',
   'event DepositedToRemote(address indexed localToken, uint256 value, address indexed localDepositor, bytes32 indexed remoteRecipient, uint32 remoteDomain, bytes32 remoteToken, uint256 maxFee, bytes hookData)',
 ])
-
-type RpcReceipt = {
-  status?: Hex | 'reverted' | 'success'
-  transactionHash?: Hash
-  logs?: readonly { address?: Address, data: Hex, topics: readonly Hex[], logIndex?: Hex | number }[]
-}
 
 function metadata(registry: BridgeRegistry, plan: BridgePlan): EvmXReserveRouteMetadata {
   if (plan.protocol !== 'xreserve' || plan.route.protocol !== 'xreserve') throw new BridgeError('xReserve actions require an xReserve transfer plan')
@@ -109,18 +109,18 @@ async function send(client: EvmClient & { walletClient: EvmWalletClient }, chain
   return hash
 }
 
-async function wait(client: EvmClient & { walletClient: EvmWalletClient }, hash: Hash, timeout: number, interval: number): Promise<RpcReceipt | undefined> {
+async function wait(client: EvmClient & { walletClient: EvmWalletClient }, hash: Hash, timeout: number, interval: number): Promise<EvmReceipt | undefined> {
   const deadline = Date.now() + timeout
   do {
     const result = await client.publicClient.getTransactionReceipt(hash)
-    if (result && typeof result === 'object') return result as RpcReceipt
+    if (result && typeof result === 'object') return result
     if (Date.now() >= deadline) return undefined
     await new Promise<void>((resolve) => setTimeout(resolve, interval))
   } while (true)
 }
 
-function successful(receipt: RpcReceipt, hash: Hash): void {
-  if (receipt.status === '0x0' || receipt.status === 'reverted') throw new BridgeError(`EVM transaction reverted: ${hash}`)
+function successful(receipt: EvmReceipt, hash: Hash): void {
+  if (receipt.status === 'reverted') throw new BridgeError(`EVM transaction reverted: ${hash}`)
 }
 
 /**
@@ -136,9 +136,9 @@ function successful(receipt: RpcReceipt, hash: Hash): void {
  * @throws BridgeError When metadata, wallet state, amount, balance, or recipient is invalid.
  *
  * @example
- * const quote = await runQuoteEvmXReserveTransfer(registry, client, { plan })
+ * const result = await quote(registry, client, { plan })
  */
-export async function runQuoteEvmXReserveTransfer(
+export async function quote(
   registry: BridgeRegistry,
   client: EvmClient & { walletClient: EvmWalletClient },
   params: QuoteEvmXReserveTransferParameters,
@@ -223,10 +223,10 @@ function confirmedDepositReceipt(
   owner: Address,
   approvalTxIds: Hash[],
   sourceTxId: Hash,
-  receipt: RpcReceipt,
+  receipt: EvmReceipt,
 ): BridgeReceipt {
   successful(receipt, sourceTxId)
-  let matched: { log: NonNullable<RpcReceipt['logs']>[number], args: {
+  let matched: { log: NonNullable<EvmReceipt['logs']>[number], args: {
     localToken: Address
     value: bigint
     localDepositor: Address
@@ -270,9 +270,9 @@ function confirmedDepositReceipt(
  * @throws BridgeError When validation, submission, confirmation, or event verification fails.
  *
  * @example
- * const execution = await runExecuteEvmXReserveTransfer(registry, client, { plan })
+ * const execution = await execute(registry, client, { plan })
  */
-export async function runExecuteEvmXReserveTransfer(
+export async function execute(
   registry: BridgeRegistry,
   client: EvmClient & { walletClient: EvmWalletClient },
   params: ExecuteEvmXReserveTransferParameters,
@@ -282,7 +282,7 @@ export async function runExecuteEvmXReserveTransfer(
   if (!Number.isFinite(pollingIntervalMs) || pollingIntervalMs < 0 || !Number.isFinite(confirmationTimeoutMs) || confirmationTimeoutMs < 0) throw new BridgeError('Receipt polling controls must be non-negative finite numbers')
   const route = metadata(registry, params.plan)
   const owner = await account(client, params.plan)
-  let quote: EvmXReserveTransferQuote
+  let transferQuote: EvmXReserveTransferQuote
   let approvalTxIds: Hash[] = []
 
   if (params.resume?.status === 'ATTESTATION_PENDING') {
@@ -291,13 +291,13 @@ export async function runExecuteEvmXReserveTransfer(
   }
 
   if (params.resume?.status === 'SOURCE_CONFIRMING') {
-    quote = resumeQuote(params.plan, params.resume)
+    transferQuote = resumeQuote(params.plan, params.resume)
     approvalTxIds = approvalIds(params.resume)
     const sourceTxId = params.resume.sourceTxId
     if (!sourceTxId || !isHash(sourceTxId)) throw new BridgeError('Checkpoint is missing the xReserve source transaction id')
     const receipt = await wait(client, sourceTxId, confirmationTimeoutMs, pollingIntervalMs)
     if (!receipt) return { approvalTxIds, receipt: params.resume }
-    return { approvalTxIds, receipt: confirmedDepositReceipt(params.plan, route, quote, owner, approvalTxIds, sourceTxId, receipt) }
+    return { approvalTxIds, receipt: confirmedDepositReceipt(params.plan, route, transferQuote, owner, approvalTxIds, sourceTxId, receipt) }
   }
 
   if (params.resume?.status === 'SOURCE_APPROVAL_PENDING') {
@@ -308,30 +308,30 @@ export async function runExecuteEvmXReserveTransfer(
     const receipt = await wait(client, approvalTxId, confirmationTimeoutMs, pollingIntervalMs)
     if (!receipt) return { approvalTxIds, receipt: params.resume }
     successful(receipt, approvalTxId)
-    quote = await runQuoteEvmXReserveTransfer(registry, client, params)
+    transferQuote = await quote(registry, client, params)
   } else if (params.resume) {
     throw new BridgeError(`Unsupported xReserve resume status: ${params.resume.status}`)
   } else {
-    quote = await runQuoteEvmXReserveTransfer(registry, client, params)
+    transferQuote = await quote(registry, client, params)
   }
 
-  if (quote.approvalRequired) {
-    const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [route.xReserveContract, quote.amountAtomic] })
-    const hash = await send(client, route.sourceChainId, { from: owner, to: quote.tokenAddress, data })
+  if (transferQuote.approvalRequired) {
+    const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [route.xReserveContract, transferQuote.amountAtomic] })
+    const hash = await send(client, route.sourceChainId, { from: owner, to: transferQuote.tokenAddress, data })
     approvalTxIds.push(hash)
-    const submitted = pendingReceipt(params.plan, 'SOURCE_APPROVAL_PENDING', hash, approvalTxIds, quote)
+    const submitted = pendingReceipt(params.plan, 'SOURCE_APPROVAL_PENDING', hash, approvalTxIds, transferQuote)
     await params.onSubmitted?.(submitted)
     const receipt = await wait(client, hash, confirmationTimeoutMs, pollingIntervalMs)
     if (!receipt) return { approvalTxIds, receipt: submitted }
     successful(receipt, hash)
   }
-  const data = encodeFunctionData({ abi: XRESERVE_ABI, functionName: 'depositToRemote', args: [quote.amountAtomic, route.remoteDomain, quote.remoteRecipientBytes32, quote.tokenAddress, route.maxFeeAtomic, quote.hookData] })
+  const data = encodeFunctionData({ abi: XRESERVE_ABI, functionName: 'depositToRemote', args: [transferQuote.amountAtomic, route.remoteDomain, transferQuote.remoteRecipientBytes32, transferQuote.tokenAddress, route.maxFeeAtomic, transferQuote.hookData] })
   const sourceTxId = await send(client, route.sourceChainId, { from: owner, to: route.xReserveContract, data })
-  const submitted = pendingReceipt(params.plan, 'SOURCE_CONFIRMING', sourceTxId, approvalTxIds, quote, sourceTxId)
+  const submitted = pendingReceipt(params.plan, 'SOURCE_CONFIRMING', sourceTxId, approvalTxIds, transferQuote, sourceTxId)
   await params.onSubmitted?.(submitted)
   const receipt = await wait(client, sourceTxId, confirmationTimeoutMs, pollingIntervalMs)
   if (!receipt) return { approvalTxIds, receipt: submitted }
-  return { approvalTxIds, receipt: confirmedDepositReceipt(params.plan, route, quote, owner, approvalTxIds, sourceTxId, receipt) }
+  return { approvalTxIds, receipt: confirmedDepositReceipt(params.plan, route, transferQuote, owner, approvalTxIds, sourceTxId, receipt) }
 }
 
 /**
@@ -347,9 +347,9 @@ export async function runExecuteEvmXReserveTransfer(
  * @throws BridgeError For invalid routes, HTTP failures other than 404, or malformed responses.
  *
  * @example
- * const result = await runGetXReserveAttestation(registry, fetchTransport, { routeId, messageHash })
+ * const result = await getAttestation(registry, fetchTransport, { routeId, messageHash })
  */
-export async function runGetXReserveAttestation(
+export async function getAttestation(
   registry: BridgeRegistry,
   transport: XReserveHttpTransport,
   params: GetXReserveAttestationParameters,
@@ -367,4 +367,80 @@ export async function runGetXReserveAttestation(
   if (!value || typeof value.payload !== 'string' || !isHex(value.payload) || typeof value.attestation !== 'string' || !isHex(value.attestation) || typeof value.messageHash !== 'string' || !isHash(value.messageHash) || value.messageHash.toLowerCase() !== params.messageHash.toLowerCase()) throw new BridgeError('Circle attester returned an invalid response')
   if (calculateXReserveMessageHash(value.payload) !== params.messageHash) throw new BridgeError('Circle attestation payload does not match the requested message hash')
   return { status: 'complete', messageHash: params.messageHash, payload: value.payload, attestation: value.attestation }
+}
+
+/**
+ * Submits the sole user-authorized Aleo mint in an inbound xReserve flow.
+ *
+ * Requires a private plan and completed Circle attestation. The wallet calls
+ * the wrapper's `private_mint` with the canonical payload, signature, hash,
+ * secret nonce, and intended recipient.
+ *
+ * @param registry Reviewed deployment snapshot used to resolve the wrapper program.
+ * @param client Aleo wallet client that proves, signs, and broadcasts.
+ * @param params Original plan, confirmed deposit, attestation, and checkpoint hook.
+ * @returns The Aleo transaction id and destination-confirming receipt.
+ * @throws BridgeError When the private plan, attestation, or wallet result is invalid.
+ * @example const mint = await complete(registry, client, { plan, deposit, attestation })
+ */
+export async function complete(
+  registry: BridgeRegistry,
+  client: AleoWalletClient,
+  params: ExecuteXReservePrivateMintParameters,
+): Promise<XReservePrivateMintExecution> {
+  const { plan, deposit, attestation } = params
+  if (plan.protocol !== 'xreserve' || plan.route.protocol !== 'xreserve' || plan.mintMode !== 'private') {
+    throw new BridgeError('private_mint requires a private xReserve transfer plan')
+  }
+  if (plan.registryVersion !== registry.version) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
+  const route = registry.routes.find((entry) => entry.id === plan.route.id)
+  if (!route || route.protocol !== 'xreserve' || route.availability !== 'active') throw new BridgeError(`xReserve route is not executable: ${plan.route.id}`)
+  const wrapperProgram = route.metadata?.wrapperProgram
+  if (typeof wrapperProgram !== 'string' || !wrapperProgram.endsWith('.aleo')) throw new BridgeError(`xReserve wrapper program is invalid: ${plan.route.id}`)
+  if (deposit.protocol !== 'xreserve' || deposit.status !== 'ATTESTATION_PENDING') throw new BridgeError('Private mint requires a confirmed xReserve deposit awaiting attestation')
+  if (attestation.status !== 'complete') throw new BridgeError('Private mint requires a completed Circle attestation')
+
+  const depositPayload = deposit.protocolState.payload
+  const depositHash = deposit.protocolState.messageHash
+  const intendedRecipient = deposit.protocolState.intendedRecipient
+  const mintMode = deposit.protocolState.mintMode
+  if (typeof depositPayload !== 'string' || !isHex(depositPayload, { strict: true })) throw new BridgeError('Deposit receipt is missing the canonical xReserve payload')
+  if (typeof depositHash !== 'string' || !isHash(depositHash)) throw new BridgeError('Deposit receipt is missing the Circle message hash')
+  if (typeof intendedRecipient !== 'string' || intendedRecipient !== plan.recipient || mintMode !== 'private') throw new BridgeError('Deposit receipt does not match the private mint plan')
+  if (attestation.payload.toLowerCase() !== depositPayload.toLowerCase() || attestation.messageHash.toLowerCase() !== depositHash.toLowerCase()) throw new BridgeError('Circle attestation does not match the confirmed deposit')
+  if (calculateXReserveMessageHash(attestation.payload) !== attestation.messageHash) throw new BridgeError('Circle attestation payload has an invalid message hash')
+  const secretNonce = plan.privateMintSecretNonce ?? '0scalar'
+  const expectedHookData = await buildXReserveHookData('private', plan.recipient, route.environment, secretNonce)
+  const attestedHookData = `0x${attestation.payload.slice(-130)}`
+  if (attestedHookData.toLowerCase() !== expectedHookData.toLowerCase()) {
+    throw new BridgeError('Private mint secret nonce and recipient do not match the attested hook data')
+  }
+
+  const transactionId = await client.executeTransaction({
+    program: wrapperProgram,
+    function: 'private_mint',
+    inputs: [
+      xReserveHexToAleoBytes(attestation.payload, 305),
+      xReserveHexToAleoBytes(attestation.attestation, 65),
+      xReserveHexToAleoBytes(attestation.messageHash, 32),
+      secretNonce,
+      plan.recipient,
+    ],
+    privateFee: params.privateFee ?? false,
+  })
+  if (!transactionId) throw new BridgeError('Aleo wallet returned an empty private mint transaction id')
+  const receipt: BridgeReceipt = {
+    ...deposit,
+    status: 'DESTINATION_CONFIRMING',
+    destinationTxId: transactionId,
+    protocolState: {
+      ...deposit.protocolState,
+      attestation: attestation.attestation,
+      destinationProgram: wrapperProgram,
+      destinationFunction: 'private_mint',
+      secretNonce,
+    },
+  }
+  await params.onSubmitted?.(receipt)
+  return { transactionId, receipt }
 }

@@ -11,6 +11,13 @@ submission checkpoint hooks, and xReserve and Solana confirmation resume from ch
 without resubmitting funds. Each bridge decorator action now has its own module,
 with protocol mechanics isolated behind internal helpers. Pure call builders are
 standalone utilities rather than bridge client methods.
-The protocol-neutral lifecycle is now `prepare`, `quote`, and `execute`.
+The protocol-neutral lifecycle is now `prepare`, `quote`, `execute`,
+`getStatus`, `waitForStatus`, and `complete`. `prepare` selects structured
+source and destination assets with an optional `bridgeProtocol` constraint;
+encoded route ids are outputs rather than caller input. Private inbound
+xReserve transfers expose an explicit destination-action state, and `complete`
+submits exactly one caller-authorized Aleo mint. Native Veil wallet clients pass
+directly to `createAleoClient`, while protocol-specific escape hatches remain
+exported under the `hyperlane` and `xreserve` namespaces.
 Quoting and execution dispatch from the prepared route, replacing chain- and
 protocol-specific client methods and the longer transfer-suffixed names.

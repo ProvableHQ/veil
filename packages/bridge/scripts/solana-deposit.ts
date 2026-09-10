@@ -218,7 +218,9 @@ async function main(): Promise<void> {
     },
   })
   const plan = bridge.prepare({
-    routeId: ROUTE_ID,
+    source: { chain: 'solana', asset: 'sol' },
+    destination: { chain: 'aleo', asset: 'sol' },
+    bridgeProtocol: 'hyperlane',
     amount,
     recipient,
     sender: senderAddress,

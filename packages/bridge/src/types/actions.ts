@@ -10,6 +10,7 @@ import type {
   BridgeFee,
   BridgePlan,
   BridgeReceipt,
+  BridgeStatus,
 } from './protocol.js'
 import type { SolanaHyperlaneTransferExecution, SolanaHyperlaneTransferQuote } from './solana.js'
 import type { EvmXReserveTransferExecution, EvmXReserveTransferQuote } from './xreserve.js'
@@ -109,3 +110,49 @@ export type BridgeExecution =
   | ({ kind: 'evm-hyperlane' } & EvmHyperlaneTransferExecution)
   | ({ kind: 'evm-xreserve' } & EvmXReserveTransferExecution)
   | ({ kind: 'solana-hyperlane' } & SolanaHyperlaneTransferExecution)
+
+/**
+ * Selects a persisted transfer receipt for one read-only status refresh.
+ *
+ * @property plan Original plan that produced the receipt.
+ * @property receipt Latest persisted lifecycle state.
+ * @property signal Optional cancellation signal for protocol HTTP reads. Defaults to no cancellation.
+ */
+export type GetStatusParameters = {
+  plan: BridgePlan
+  receipt: BridgeReceipt
+  signal?: AbortSignal | undefined
+}
+
+/**
+ * Configures read-only polling until a requested lifecycle state is reached.
+ *
+ * @property plan Original plan that produced the receipt.
+ * @property receipt Latest persisted lifecycle state.
+ * @property until One or more statuses that stop polling.
+ * @property pollingIntervalMs Delay between reads. Defaults to 15,000 milliseconds and is floored at 100 milliseconds.
+ * @property timeoutMs Maximum polling duration. Defaults to 1,200,000 milliseconds.
+ * @property onUpdate Durable callback invoked after each receipt state transition.
+ * @property signal Optional cancellation signal. Defaults to no cancellation.
+ */
+export type WaitForStatusParameters = GetStatusParameters & {
+  until: readonly BridgeStatus[]
+  pollingIntervalMs?: number | undefined
+  timeoutMs?: number | undefined
+  onUpdate?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
+}
+
+/**
+ * Configures one caller-authorized destination-chain submission.
+ *
+ * @property plan Original plan that produced the ready receipt.
+ * @property receipt Receipt whose status and next action authorize submission.
+ * @property privateFee Whether an Aleo wallet pays the execution fee privately. Defaults to false.
+ * @property onSubmitted Durable checkpoint hook invoked immediately after destination broadcast.
+ */
+export type CompleteParameters = {
+  plan: BridgePlan
+  receipt: BridgeReceipt
+  privateFee?: boolean | undefined
+  onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
+}

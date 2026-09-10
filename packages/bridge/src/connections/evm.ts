@@ -84,8 +84,23 @@ export type EvmTransactionParameters = {
   value?: bigint | undefined
 }
 
-/** Represents the receipt fields consumed by bridge protocol actions. */
-export type EvmReceipt = Record<string, unknown>
+/**
+ * Represents normalized EVM receipt fields consumed by bridge actions.
+ *
+ * @property status Viem-normalized execution result.
+ * @property transactionHash Canonical transaction hash when returned by the client.
+ * @property logs Receipt-log envelopes used to verify protocol events.
+ */
+export type EvmReceipt = {
+  status: 'success' | 'reverted'
+  transactionHash: Hash
+  logs: readonly {
+    address?: Address | undefined
+    data: Hex
+    topics: readonly Hex[]
+    logIndex?: number | undefined
+  }[]
+}
 
 /**
  * Exposes account-free EVM operations used by bridge actions.

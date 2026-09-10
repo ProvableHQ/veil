@@ -58,9 +58,9 @@ function assertPrivateInputs(userRecord: TransactionInput | undefined, merklePro
  * @throws BridgeError When the route, amount, recipient, mode-specific inputs, or metadata is invalid.
  *
  * @example
- * const call = runBuildXReserveBurnCall(registry, { plan, mode: 'public-as-signer' })
+ * const call = buildBurnCall(registry, { plan, mode: 'public-as-signer' })
  */
-export function runBuildXReserveBurnCall(
+export function buildBurnCall(
   registry: BridgeRegistry,
   params: ExecuteXReserveBurnParameters,
 ): XReserveBurnCall {
@@ -113,25 +113,24 @@ export function runBuildXReserveBurnCall(
  * @throws BridgeError When call construction fails or the wallet returns no transaction id.
  *
  * @example
- * const burn = await runExecuteXReserveBurn(registry, client, {
+ * const burn = await execute(registry, client, {
  *   plan,
  *   userRecord,
  *   merkleProof,
  * })
  */
-export async function runExecuteXReserveBurn(
+export async function execute(
   registry: BridgeRegistry,
   client: AleoWalletClient,
   params: ExecuteXReserveBurnParameters,
 ): Promise<XReserveBurnExecution> {
-  const call = runBuildXReserveBurnCall(registry, params)
-  const result = await client.executeTransaction({
+  const call = buildBurnCall(registry, params)
+  const transactionId = await client.executeTransaction({
     program: call.program,
     function: call.function,
     inputs: call.inputs,
     privateFee: params.privateFee ?? false,
   })
-  const transactionId = typeof result === 'string' ? result : result.transactionId
   if (!transactionId) throw new BridgeError('Aleo wallet returned an empty burn transaction id')
   const receipt: BridgeReceipt = {
     id: transactionId,

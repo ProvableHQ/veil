@@ -133,11 +133,12 @@ function gasConfigBigint(config: Record<string, unknown>, field: string, routeId
  *   on-chain configuration is missing or unpriced, or the payment overflows u64.
  *
  * @example
- * const quote = await runQuoteAleoHyperlaneGasPayment(registry, client, {
- *   routeId: 'hyperlane:aleo/eth->ethereum/eth',
+ * const result = await quote(registry, client, {
+ *   source: { chain: 'aleo', asset: 'eth' },
+      destination: { chain: 'ethereum', asset: 'eth' },
  * })
  */
-export async function runQuoteAleoHyperlaneGasPayment(
+export async function quote(
   registry: BridgeRegistry,
   client: Client,
   params: QuoteAleoHyperlaneGasPaymentParameters,
@@ -186,9 +187,9 @@ export async function runQuoteAleoHyperlaneGasPayment(
  * @throws BridgeError When the plan or route metadata is inconsistent, or the gas payment is not a positive u64.
  *
  * @example
- * const call = runBuildAleoHyperlaneTransferRemoteCall(registry, { plan })
+ * const call = buildTransferRemoteCall(registry, { plan })
  */
-export function runBuildAleoHyperlaneTransferRemoteCall(
+export function buildTransferRemoteCall(
   registry: BridgeRegistry,
   params: ExecuteAleoHyperlaneTransferRemoteParameters,
 ): AleoHyperlaneTransferRemoteCall {
@@ -265,7 +266,7 @@ export function runBuildAleoHyperlaneTransferRemoteCall(
  * Submits a fully configured Aleo Hyperlane `transfer_remote` transaction.
  *
  * Submission requires an active reviewed route with no placeholder values and
- * a live hook gas payment from `runQuoteAleoHyperlaneGasPayment`. The on-chain
+ * a live hook gas payment from `quote`. The on-chain
  * hook asserts the payment exactly equals its own recomputed quote, so a stale
  * quote aborts at finalization without moving funds.
  *
@@ -276,12 +277,12 @@ export function runBuildAleoHyperlaneTransferRemoteCall(
  * @throws BridgeError When configuration is placeholder or inactive, the gas
  *   payment is absent, or the wallet returns no id.
  */
-export async function runExecuteAleoHyperlaneTransferRemote(
+export async function execute(
   registry: BridgeRegistry,
   client: AleoWalletClient,
   params: ExecuteAleoHyperlaneTransferRemoteParameters,
 ): Promise<AleoHyperlaneTransferRemoteExecution> {
-  const call = runBuildAleoHyperlaneTransferRemoteCall(registry, params)
+  const call = buildTransferRemoteCall(registry, params)
   if (call.usesPlaceholderConfiguration) {
     throw new BridgeError(`Aleo Hyperlane route contains non-executable placeholder configuration: ${call.routeId}`)
   }
@@ -292,13 +293,12 @@ export async function runExecuteAleoHyperlaneTransferRemote(
   if (params.gasPaymentMicrocredits == null) {
     throw new BridgeError(`Aleo Hyperlane execution requires a live hook gas payment; call quote first: ${call.routeId}`)
   }
-  const result = await client.executeTransaction({
+  const transactionId = await client.executeTransaction({
     program: call.program,
     function: call.function,
     inputs: call.inputs,
     privateFee: params.privateFee ?? false,
   })
-  const transactionId = typeof result === 'string' ? result : result.transactionId
   if (!transactionId) throw new BridgeError('Aleo wallet returned an empty Hyperlane transaction id')
   const receipt: BridgeReceipt = {
       id: transactionId,

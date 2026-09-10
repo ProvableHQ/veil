@@ -42,7 +42,7 @@ export type BridgeClient = BridgeActions & {
  * Creates a registry-keyed multi-chain bridge coordinator.
  *
  * @param config Registry, protocol transport, and per-chain clients.
- * @returns A plain bridge client with bound discovery, quote, and execution actions.
+ * @returns A plain bridge client with bound discovery and transfer lifecycle actions.
  * @throws BridgeError When the registry is invalid.
  * @example
  * const bridge = createBridgeClient({ environment: 'mainnet' })

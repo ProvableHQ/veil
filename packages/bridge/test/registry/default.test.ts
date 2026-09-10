@@ -250,6 +250,15 @@ describe('validateBridgeRegistry', () => {
     })).toThrow(/Duplicate bridge route id/)
   })
 
+  it('rejects duplicate caller-facing asset keys on one chain', () => {
+    const asset = DEFAULT_BRIDGE_REGISTRY.assets[0]!
+    expect(() => validateBridgeRegistry({
+      ...DEFAULT_BRIDGE_REGISTRY,
+      assets: [asset, { ...asset, id: `${asset.id}-duplicate` }],
+      routes: [],
+    })).toThrow(/Duplicate bridge asset key/)
+  })
+
   it('rejects malformed address validation expressions', () => {
     expect(() => validateBridgeRegistry({
       ...DEFAULT_BRIDGE_REGISTRY,

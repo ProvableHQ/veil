@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
 import { buildAleoHyperlaneTransferRemoteCall } from '../../src/builders/buildAleoHyperlaneTransferRemoteCall.js'
-import { executeAleoHyperlaneTransferRemote } from '../../src/actions/executeAleoHyperlaneTransferRemote.js'
-import { quoteAleoHyperlaneGasPayment } from '../../src/actions/quoteAleoHyperlaneGasPayment.js'
+import {
+  execute as executeAleoHyperlaneTransferRemote,
+  quote as quoteAleoHyperlaneGasPayment,
+} from '../../src/protocols/hyperlane/aleo.js'
 import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import type { AleoWalletClient } from '../../src/types/aleo.js'
@@ -22,7 +24,16 @@ function mappingClient(value: string | null): Client {
 }
 
 function plan(routeId: string = ROUTES[0][0], recipient: string = ROUTES[0][2]) {
-  return prepare(DEFAULT_BRIDGE_REGISTRY, { routeId, amount: '1', recipient })
+  const route = DEFAULT_BRIDGE_REGISTRY.routes.find((candidate) => candidate.id === routeId)!
+  const source = DEFAULT_BRIDGE_REGISTRY.assets.find((asset) => asset.id === route.sourceAssetId)!
+  const destination = DEFAULT_BRIDGE_REGISTRY.assets.find((asset) => asset.id === route.destinationAssetId)!
+  return prepare(DEFAULT_BRIDGE_REGISTRY, {
+    source: { chain: source.chainId, asset: source.key },
+    destination: { chain: destination.chainId, asset: destination.key },
+    bridgeProtocol: route.protocol,
+    amount: '1',
+    recipient,
+  })
 }
 
 describe('Aleo Hyperlane transfer_remote', () => {
@@ -155,7 +166,9 @@ describe('Aleo Hyperlane transfer_remote', () => {
         : route),
     }
     const replacementPlan = prepare(registry, {
-      routeId: ROUTES[4][0],
+      source: { chain: 'aleo', asset: 'usad' },
+      destination: { chain: 'ethereum', asset: 'usad' },
+      bridgeProtocol: 'hyperlane',
       amount: '1',
       recipient: ROUTES[4][2],
     })

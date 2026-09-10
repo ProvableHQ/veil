@@ -61,8 +61,10 @@ export {
 export { prepare } from './actions/prepare.js'
 export { execute } from './actions/execute.js'
 export { quote } from './actions/quote.js'
-export { getXReserveAttestation } from './actions/getXReserveAttestation.js'
-export { executeXReservePrivateMint } from './actions/executeXReservePrivateMint.js'
+export { complete } from './actions/complete.js'
+export { getStatus } from './actions/getStatus.js'
+export { waitForStatus } from './actions/waitForStatus.js'
+export { hyperlane, xreserve, type ProtocolHelperRegistry } from './protocols/index.js'
 export { buildXReserveBurnCall } from './builders/buildXReserveBurnCall.js'
 export { buildAleoHyperlaneTransferRemoteCall } from './builders/buildAleoHyperlaneTransferRemoteCall.js'
 
@@ -75,9 +77,11 @@ export type {
   BridgeAssetLocator,
   BridgeChainFamily,
   BridgeEnvironment,
+  BridgeEndpoint,
   BridgeExecutionStep,
   BridgeExecutionStepKind,
   BridgeFee,
+  BridgeNextAction,
   BridgeProtocol,
   BridgeRegistry,
   BridgeRouteAvailability,
@@ -92,7 +96,10 @@ export type {
 } from './types/protocol.js'
 export type {
   ExecuteParameters,
+  CompleteParameters,
+  GetStatusParameters,
   QuoteParameters,
+  WaitForStatusParameters,
   BridgeExecution,
   BridgeExecutionKind,
   BridgeQuote,

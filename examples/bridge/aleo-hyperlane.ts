@@ -2,19 +2,18 @@ import {
   buildAleoHyperlaneTransferRemoteCall,
   createAleoClient,
   createBridgeClient,
-  type AleoWalletClient,
 } from '@provablehq/aleo-bridge-sdk'
 
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
-const ALEO_PROVING_PROGRESS_INTERVAL_MS = 15_000
 
 type AleoHyperlaneAsset = 'ETH' | 'SOL' | 'WBTC'
 type AssetConfiguration = {
   symbol: AleoHyperlaneAsset
-  routeId: string
+  source: { chain: string, asset: string }
+  destination: { chain: string, asset: string }
   balanceProgram: string
   decimals: number
-  destination: string
+  destinationName: string
   recipientEnvironmentVariable: string
   amountEnvironmentVariable: string
   executionEnvironmentVariable: string
@@ -23,30 +22,33 @@ type AssetConfiguration = {
 const ASSETS: Record<AleoHyperlaneAsset, AssetConfiguration> = {
   ETH: {
     symbol: 'ETH',
-    routeId: 'hyperlane:aleo/eth->ethereum/eth',
+    source: { chain: 'aleo', asset: 'eth' },
+    destination: { chain: 'ethereum', asset: 'eth' },
     balanceProgram: 'arc20_eth.aleo',
     decimals: 18,
-    destination: 'Ethereum',
+    destinationName: 'Ethereum',
     recipientEnvironmentVariable: 'ETHEREUM_RECIPIENT',
     amountEnvironmentVariable: 'ETH_AMOUNT',
     executionEnvironmentVariable: 'EXECUTE_HYPERLANE_ETH_RETURN',
   },
   SOL: {
     symbol: 'SOL',
-    routeId: 'hyperlane:aleo/sol->solana/sol',
+    source: { chain: 'aleo', asset: 'sol' },
+    destination: { chain: 'solana', asset: 'sol' },
     balanceProgram: 'arc20_sol.aleo',
     decimals: 9,
-    destination: 'Solana',
+    destinationName: 'Solana',
     recipientEnvironmentVariable: 'SOLANA_RECIPIENT',
     amountEnvironmentVariable: 'SOL_AMOUNT',
     executionEnvironmentVariable: 'EXECUTE_HYPERLANE_SOL_RETURN',
   },
   WBTC: {
     symbol: 'WBTC',
-    routeId: 'hyperlane:aleo/wbtc->ethereum/wbtc',
+    source: { chain: 'aleo', asset: 'wbtc' },
+    destination: { chain: 'ethereum', asset: 'wbtc' },
     balanceProgram: 'arc20_wbtc.aleo',
     decimals: 8,
-    destination: 'Ethereum',
+    destinationName: 'Ethereum',
     recipientEnvironmentVariable: 'ETHEREUM_RECIPIENT',
     amountEnvironmentVariable: 'WBTC_AMOUNT',
     executionEnvironmentVariable: 'EXECUTE_HYPERLANE_WBTC_RETURN',
@@ -133,27 +135,18 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     confirmationTimeout: millisecondsFromEnvironment('ALEO_EXECUTION_CONFIRMATION_TIMEOUT_MS', 5 * 60_000),
   })
 
-  const walletClient: AleoWalletClient = {
-    executeTransaction: async ({ program, function: functionName, inputs, privateFee, imports }) => {
-      if (imports?.length) throw new Error('The local wallet client does not accept dynamic import names')
-      const startedAt = Date.now()
-      const progress = setInterval(() => {
-        console.log(`Aleo proving is still in progress (${Math.round((Date.now() - startedAt) / 1_000)}s elapsed).`)
-      }, ALEO_PROVING_PROGRESS_INTERVAL_MS)
-      try {
-        const result = await nativeWalletClient.executeContract({ program, function: functionName, inputs, privateFee })
-        return result.transactionId
-      } finally {
-        clearInterval(progress)
-      }
-    },
-  }
   const bridge = createBridgeClient({
     environment: 'mainnet',
-    clients: { aleo: createAleoClient({ publicClient, account: walletClient }) },
+    clients: { aleo: createAleoClient({ publicClient, account: nativeWalletClient }) },
   })
 
-  const plan = bridge.prepare({ routeId: config.routeId, amount, recipient })
+  const plan = bridge.prepare({
+    source: config.source,
+    destination: config.destination,
+    bridgeProtocol: 'hyperlane',
+    amount,
+    recipient,
+  })
   const previewCall = buildAleoHyperlaneTransferRemoteCall(bridge.registry, { plan, mode: 'signer' })
   if (previewCall.placeholderFields.length !== 1 || previewCall.placeholderFields[0] !== 'aleoAllowanceAmount0') {
     throw new Error(`${asset} return route has unresolved fields: ${previewCall.placeholderFields.join(', ') || 'unknown'}`)
@@ -167,9 +160,9 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   if (gasQuote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${gasQuote.kind}`)
   const assetBalance = parseUnsignedLiteral(assetLiteral, 'u128')
 
-  console.log(`Read-only Aleo ${asset} to ${config.destination} ${asset} preflight`)
+  console.log(`Read-only Aleo ${asset} to ${config.destinationName} ${asset} preflight`)
   console.table({
-    route: config.routeId,
+    route: plan.route.id,
     sender: account.address,
     recipient,
     amount: `${formatAmount(previewCall.amountAtomic, config.decimals)} ${asset}`,

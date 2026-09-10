@@ -1,6 +1,6 @@
-import { BridgeError } from '../errors/bridgeErrors.js'
-import type { BridgeRegistry, BridgePlan } from '../types/protocol.js'
-import type { SolanaHyperlaneRouteMetadata } from '../types/solana.js'
+import { BridgeError } from '../../errors/bridgeErrors.js'
+import type { BridgeRegistry, BridgePlan } from '../../types/protocol.js'
+import type { SolanaHyperlaneRouteMetadata } from '../../types/solana.js'
 
 // Base58, excluding the visually ambiguous 0/O/I/l — matches how Solana
 // encodes a 32-byte account or program public key.
@@ -20,7 +20,7 @@ function requirePubkey(value: unknown, field: string, routeId: string): string {
  * Pure and local: confirms the plan's protocol, registry version, route
  * presence, asset pairing, and availability, then narrows and validates each
  * metadata field. Modeled on `routeMetadata` in `evmHyperlane.ts`. Shared by
- * `quoteSolanaHyperlaneTransfer` and `executeSolanaHyperlaneTransfer`.
+ * the Solana Hyperlane `quote` and `execute` protocol helpers.
  *
  * @param registry Reviewed deployment snapshot used to validate the prepared plan.
  * @param plan Prepared transfer plan naming the Solana Hyperlane route.

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { executeXReservePrivateMint } from '../../src/actions/executeXReservePrivateMint.js'
+import { complete as executeXReservePrivateMint } from '../../src/protocols/xreserve/evmToAleo.js'
 import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import type { AleoWalletClient } from '../../src/types/aleo.js'
@@ -14,7 +14,8 @@ const MESSAGE_HASH = calculateXReserveMessageHash(PAYLOAD)
 describe('xReserve private mint', () => {
   it('submits only private_mint with the wrapper input order and plan scalar', async () => {
     const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'xreserve:sepolia/usdc->aleo-testnet/usdcx',
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
       amount: '2',
       recipient: RECIPIENT,
       mintMode: 'private',
@@ -37,7 +38,7 @@ describe('xReserve private mint', () => {
       },
     }
     const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
-      .mockResolvedValue({ transactionId: 'at1private' })
+      .mockResolvedValue('at1private')
 
     const result = await executeXReservePrivateMint(DEFAULT_BRIDGE_REGISTRY, { executeTransaction }, {
       plan,
@@ -59,7 +60,8 @@ describe('xReserve private mint', () => {
 
   it('rejects public and record plans before prompting the wallet', async () => {
     const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'xreserve:sepolia/usdc->aleo-testnet/usdcx',
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
       amount: '2',
       recipient: RECIPIENT,
       mintMode: 'record',
@@ -75,7 +77,8 @@ describe('xReserve private mint', () => {
 
   it('rejects a secret nonce that does not reproduce the attested hook', async () => {
     const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'xreserve:sepolia/usdc->aleo-testnet/usdcx',
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
       amount: '2',
       recipient: RECIPIENT,
       mintMode: 'private',

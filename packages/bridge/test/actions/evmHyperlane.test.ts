@@ -10,8 +10,10 @@ import {
   type Hex,
 } from 'viem'
 import { describe, expect, it } from 'vitest'
-import { executeEvmHyperlaneTransfer } from '../../src/actions/executeEvmHyperlaneTransfer.js'
-import { quoteEvmHyperlaneTransfer } from '../../src/actions/quoteEvmHyperlaneTransfer.js'
+import {
+  execute as executeEvmHyperlaneTransfer,
+  quote as quoteEvmHyperlaneTransfer,
+} from '../../src/protocols/hyperlane/evm.js'
 import { quote } from '../../src/actions/quote.js'
 import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
@@ -39,8 +41,13 @@ type SentTransaction = {
 }
 
 function plan(routeId: string, amount: string) {
+  const route = DEFAULT_BRIDGE_REGISTRY.routes.find((candidate) => candidate.id === routeId)!
+  const source = DEFAULT_BRIDGE_REGISTRY.assets.find((asset) => asset.id === route.sourceAssetId)!
+  const destination = DEFAULT_BRIDGE_REGISTRY.assets.find((asset) => asset.id === route.destinationAssetId)!
   return prepare(DEFAULT_BRIDGE_REGISTRY, {
-    routeId,
+    source: { chain: source.chainId, asset: source.key },
+    destination: { chain: destination.chainId, asset: destination.key },
+    bridgeProtocol: route.protocol,
     amount,
     recipient: `aleo1${'a'.repeat(58)}`,
     sender: ACCOUNT,
@@ -112,7 +119,8 @@ function executor(options: {
 describe('Ethereum Hyperlane actions', () => {
   it('derives the Hyperlane recipient bytes from the prepared Aleo address', async () => {
     const transferPlan = prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'hyperlane:ethereum/eth->aleo/eth',
+      source: { chain: 'ethereum', asset: 'eth' },
+      destination: { chain: 'aleo', asset: 'eth' },
       amount: '0.0000000000000001',
       recipient: 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n',
       sender: ACCOUNT,

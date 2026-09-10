@@ -1,6 +1,6 @@
 import type { BridgeRegistry } from '../types/protocol.js'
 import type { ExecuteXReserveBurnParameters, XReserveBurnCall } from '../types/aleo.js'
-import { runBuildXReserveBurnCall as buildBurnCall } from '../actions/internal/xreserveBurn.js'
+import { buildBurnCall } from '../protocols/xreserve/aleoToEvm.js'
 
 /**
  * Builds an Aleo xReserve burn call without prompting a wallet.

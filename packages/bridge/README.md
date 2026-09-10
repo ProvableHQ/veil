@@ -12,9 +12,10 @@ planning do not need clients.
 import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'
 
 const bridge = createBridgeClient({ environment: 'mainnet' })
-const routes = bridge.getRoutes({ sourceChainId: 'ethereum', destinationChainId: 'aleo' })
 const plan = bridge.prepare({
-  routeId: routes[0]!.id,
+  source: { chain: 'ethereum', asset: 'usdc' },
+  destination: { chain: 'aleo', asset: 'usdcx' },
+  bridgeProtocol: 'xreserve',
   amount: '1',
   recipient: aleoAddress,
 })
@@ -127,7 +128,9 @@ validated route. They do not fall back to another chain of the same family.
 
 ```ts
 const plan = bridge.prepare({
-  routeId: 'hyperlane:ethereum/wbtc->aleo/wbtc',
+  source: { chain: 'ethereum', asset: 'wbtc' },
+  destination: { chain: 'aleo', asset: 'wbtc' },
+  bridgeProtocol: 'hyperlane',
   amount: '0.001',
   recipient: aleoAddress,
   sender: ethereumAddress,
@@ -163,7 +166,9 @@ For Solana, the active inbound route is native SOL:
 
 ```ts
 const plan = bridge.prepare({
-  routeId: 'hyperlane:solana/sol->aleo/sol',
+  source: { chain: 'solana', asset: 'sol' },
+  destination: { chain: 'aleo', asset: 'sol' },
+  bridgeProtocol: 'hyperlane',
   amount: '0.01',
   recipient: aleoAddress,
   sender: solanaAddress,
@@ -187,12 +192,59 @@ for future SPL-token routes, but it does not support Solana USDC today. SPL or
 Token-2022 support requires reviewed route metadata, token-account handling,
 instruction builders, and golden vectors.
 
-Circle attestation requests use the client-level `fetch` override:
+Circle attestation requests use the client-level `fetch` override. Status
+polling is read-only; a private destination mint requires a separate explicit
+`complete` call:
 
 ```ts
 const bridge = createBridgeClient({ fetch: instrumentedFetch })
-const attestation = await bridge.getXReserveAttestation({ routeId, messageHash })
+let receipt = await bridge.waitForStatus({
+  plan,
+  receipt: sourceExecution.receipt,
+  until: ['DESTINATION_ACTION_REQUIRED'],
+  onUpdate: saveCheckpoint,
+})
+
+const destinationExecution = await bridge.complete({
+  plan,
+  receipt,
+  onSubmitted: saveCheckpoint,
+})
+
+receipt = await bridge.waitForStatus({
+  plan,
+  receipt: destinationExecution.receipt,
+  until: ['COMPLETED', 'FAILED'],
+  onUpdate: saveCheckpoint,
+})
 ```
+
+`onSubmitted` is the crash-safe boundary for both source and destination
+transactions. Persist the receipt before returning from the callback. A caller
+resumes source confirmation with `execute({ resume })` and resumes every later
+phase with `waitForStatus`; neither path resubmits a persisted transaction.
+
+## Direct protocol helpers
+
+Protocol-specific helpers remain available as namespaced escape hatches without
+being mixed into `BridgeClient`:
+
+```ts
+import { hyperlane, xreserve } from '@provablehq/aleo-bridge-sdk'
+
+const hyperlaneQuote = await hyperlane.evm.quote(evmClient, {
+  plan,
+  recipientBytes32,
+})
+const xreserveQuote = await xreserve.evmToAleo.quote(evmClient, { plan })
+```
+
+The namespaces expose the same reviewed adapters used by the generic actions:
+`hyperlane.{aleo,evm,solana}.{quote,execute}`,
+`xreserve.evmToAleo.{quote,execute,getAttestation,complete}`, and
+`xreserve.aleoToEvm.execute`. Pass `registry` inside the helper parameters only
+when overriding the default registry. Pure call construction remains under the
+standalone `build*` utilities.
 
 ## Breaking migration from earlier release candidates
 
@@ -214,6 +266,9 @@ This package is pre-release, so the obsolete fields have no runtime aliases.
 | chain-specific `quote*Transfer` methods | `quote({ plan })` |
 | chain-specific source `execute*Transfer` methods | `execute({ plan })` |
 | `executeXReserveBurn` | `execute({ plan, mode, userRecord, merkleProof })` |
+| encoded `prepare({ routeId })` | `prepare({ source, destination, bridgeProtocol })` |
+| `getXReserveAttestation` | `getStatus({ plan, receipt })` or `waitForStatus(...)` |
+| `executeXReservePrivateMint` | `complete({ plan, receipt })` |
 
 ## Optional dependencies
 

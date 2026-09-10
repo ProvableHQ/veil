@@ -5,9 +5,42 @@ import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 const ALEO_RECIPIENT = `aleo1${'a'.repeat(58)}`
 
 describe('prepare', () => {
+  it('resolves a route from structured source and destination endpoints', () => {
+    const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'ethereum', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
+      amount: '25',
+      recipient: ALEO_RECIPIENT,
+    })
+
+    expect(plan.route.id).toBe('xreserve:ethereum/usdc->aleo/usdcx')
+    expect(plan.protocol).toBe('xreserve')
+  })
+
+  it('uses bridgeProtocol to disambiguate matching endpoint routes', () => {
+    const xreserve = DEFAULT_BRIDGE_REGISTRY.routes.find((route) => route.id === 'xreserve:ethereum/usdc->aleo/usdcx')!
+    const registry = {
+      ...DEFAULT_BRIDGE_REGISTRY,
+      routes: [
+        xreserve,
+        { ...xreserve, id: 'alternate:ethereum/usdc->aleo/usdcx', protocol: 'hyperlane' as const },
+      ],
+    }
+    const params = {
+      source: { chain: 'ethereum', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
+      amount: '25',
+      recipient: ALEO_RECIPIENT,
+    }
+
+    expect(() => prepare(registry, params)).toThrow(/Multiple bridge routes.*bridgeProtocol/)
+    expect(prepare(registry, { ...params, bridgeProtocol: 'xreserve' }).route.id).toBe(xreserve.id)
+  })
+
   it('prepares the xReserve deposit, attestation, and Aleo mint sequence', () => {
     const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
+      source: { chain: 'ethereum', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
       amount: '25.5',
       recipient: ALEO_RECIPIENT,
     })
@@ -20,7 +53,8 @@ describe('prepare', () => {
 
   it('prepares the xReserve burn and withdrawal sequence', () => {
     const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'xreserve:aleo/usdcx->ethereum/usdc',
+      source: { chain: 'aleo', asset: 'usdcx' },
+      destination: { chain: 'ethereum', asset: 'usdc' },
       amount: '10',
       recipient: '0x0000000000000000000000000000000000000001',
     })
@@ -31,13 +65,15 @@ describe('prepare', () => {
 
   it('selects all Aleo mint modes and preserves the private compatibility alias', () => {
     const record = prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
+      source: { chain: 'ethereum', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
       amount: '25',
       recipient: ALEO_RECIPIENT,
       mintMode: 'record',
     })
     const privatePlan = prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
+      source: { chain: 'ethereum', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
       amount: '25',
       recipient: ALEO_RECIPIENT,
       privateRecipient: true,
@@ -50,7 +86,8 @@ describe('prepare', () => {
     expect(privatePlan.privateRecipient).toBe(true)
     expect(privatePlan.steps.at(-1)?.executor).toBe('aleo-wallet')
     const customNoncePlan = prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
+      source: { chain: 'ethereum', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
       amount: '25',
       recipient: ALEO_RECIPIENT,
       mintMode: 'private',
@@ -58,21 +95,24 @@ describe('prepare', () => {
     })
     expect(customNoncePlan.privateMintSecretNonce).toBe('7scalar')
     expect(() => prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
+      source: { chain: 'ethereum', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
       amount: '25',
       recipient: ALEO_RECIPIENT,
       mintMode: 'record',
       privateRecipient: true,
     })).toThrow(/conflicts/)
     expect(() => prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
+      source: { chain: 'ethereum', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
       amount: '25',
       recipient: ALEO_RECIPIENT,
       mintMode: 'record',
       privateMintSecretNonce: '7scalar',
     })).toThrow(/only valid with private/)
     expect(() => prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
+      source: { chain: 'ethereum', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
       amount: '25',
       recipient: ALEO_RECIPIENT,
       mintMode: 'private',
@@ -82,7 +122,8 @@ describe('prepare', () => {
 
   it('prepares Hyperlane token approval only on non-Aleo token sources', () => {
     const inbound = prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'hyperlane:ethereum/wbtc->aleo/wbtc',
+      source: { chain: 'ethereum', asset: 'wbtc' },
+      destination: { chain: 'aleo', asset: 'wbtc' },
       amount: '0.1',
       recipient: ALEO_RECIPIENT,
     })
@@ -92,7 +133,8 @@ describe('prepare', () => {
     expect(inbound.steps.at(-1)?.executor).toBe('protocol')
 
     const outbound = prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'hyperlane:aleo/wbtc->ethereum/wbtc',
+      source: { chain: 'aleo', asset: 'wbtc' },
+      destination: { chain: 'ethereum', asset: 'wbtc' },
       amount: '0.1',
       recipient: '0x0000000000000000000000000000000000000001',
     })
@@ -103,17 +145,20 @@ describe('prepare', () => {
 
   it('rejects invalid amounts and recipients', () => {
     expect(() => prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
+      source: { chain: 'ethereum', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
       amount: '0',
       recipient: ALEO_RECIPIENT,
     })).toThrow(/greater than zero/)
     expect(() => prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'xreserve:ethereum/usdc->aleo/usdcx',
+      source: { chain: 'ethereum', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
       amount: '1',
       recipient: 'not-an-aleo-address',
     })).toThrow(/address format/)
     expect(() => prepare(DEFAULT_BRIDGE_REGISTRY, {
-      routeId: 'xreserve:aleo/usdcx->ethereum/usdc',
+      source: { chain: 'aleo', asset: 'usdcx' },
+      destination: { chain: 'ethereum', asset: 'usdc' },
       amount: '1',
       recipient: '0x0000000000000000000000000000000000000001',
       privateRecipient: true,
