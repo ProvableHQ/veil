@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { complete } from '../../src/actions/complete.js'
 import { getStatus } from '../../src/actions/getStatus.js'
 import { waitForStatus } from '../../src/actions/waitForStatus.js'
+import { wait } from '../../src/actions/wait.js'
 import { recover } from '../../src/actions/recover.js'
 import { createAleoClient } from '../../src/connections/aleo.js'
 import { prepare } from '../../src/actions/prepare.js'
@@ -20,7 +21,6 @@ async function fixture() {
     amount: '2',
     recipient: RECIPIENT,
     mintMode: 'private',
-    privateMintSecretNonce: '7scalar',
   })
   const hookData = await buildXReserveHookData('private', RECIPIENT, 'testnet', '7scalar')
   const payload = `0x${'00'.repeat(240)}${hookData.slice(2)}` as const
@@ -71,7 +71,11 @@ describe('xReserve lifecycle', () => {
     const result = await complete(
       DEFAULT_BRIDGE_REGISTRY,
       { 'aleo-testnet': createAleoClient({ publicClient: {} as never, account: { executeTransaction } }) },
-      { plan, receipt: ready, onCheckpoint(value) { checkpoints.push(value) } },
+      {
+        progress: { next: 'complete', plan, receipt: ready },
+        privateMintSecretNonce: '7scalar',
+        onCheckpoint(value) { checkpoints.push(value) },
+      },
     )
 
     expect(result.kind).toBe('aleo-xreserve')
@@ -80,8 +84,15 @@ describe('xReserve lifecycle', () => {
     expect(result.receipt.nextAction).toBeUndefined()
     expect(checkpoints).toEqual([{
       version: 1,
-      routeId: plan.route.id,
-      protocol: 'xreserve',
+      intent: {
+        source: { chain: 'sepolia', asset: 'usdc' },
+        destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+        bridgeProtocol: 'xreserve',
+        amount: '2',
+        recipient: RECIPIENT,
+        mintMode: 'private',
+      },
+      route: { id: plan.route.id, registryVersion: plan.registryVersion },
       source: { transactionId: receipt.sourceTxId },
       destination: { transactionId: 'at1private' },
     }])
@@ -114,6 +125,25 @@ describe('xReserve lifecycle', () => {
     expect(reads).toBe(2)
     expect(result.status).toBe('DESTINATION_ACTION_REQUIRED')
     expect(updates).toEqual([result])
+  })
+
+  it('waits from recovered progress and returns the next caller operation', async () => {
+    const { plan, payload, messageHash, receipt } = await fixture()
+    const result = await wait(
+      DEFAULT_BRIDGE_REGISTRY,
+      {},
+      async () => ({ ok: true, status: 200, json: async () => ({ attestation: { payload, messageHash, attestation: SIGNATURE } }) }),
+      {
+        progress: { next: 'wait', plan, receipt },
+        pollingIntervalMs: 0,
+        timeoutMs: 1_000,
+      },
+    )
+
+    expect(result).toMatchObject({
+      next: 'complete',
+      receipt: { status: 'DESTINATION_ACTION_REQUIRED' },
+    })
   })
 
   it.each([
@@ -192,16 +222,25 @@ describe('xReserve lifecycle', () => {
       { 'aleo-testnet': createAleoClient({ publicClient }) },
       vi.fn(),
       {
-        plan,
         checkpoint: {
           version: 1,
-          routeId: plan.route.id,
-          protocol: 'xreserve',
+          intent: {
+            source: { chain: 'aleo-testnet', asset: 'usdcx' },
+            destination: { chain: 'sepolia', asset: 'usdc' },
+            bridgeProtocol: 'xreserve',
+            amount: '2.1',
+            recipient: '0x0000000000000000000000000000000000000001',
+          },
+          route: { id: plan.route.id, registryVersion: plan.registryVersion },
           source: { transactionId: 'at1burn' },
         },
       },
     )
 
-    expect(result).toMatchObject({ status: 'DELIVERY_PENDING', sourceTxId: 'at1burn' })
+    expect(result).toMatchObject({
+      next: 'wait',
+      receipt: { status: 'DELIVERY_PENDING', sourceTxId: 'at1burn' },
+      plan: { route: { id: plan.route.id } },
+    })
   })
 })

@@ -71,7 +71,6 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
             recipient: { type: 'string' },
             sender: { type: 'string' },
             mintMode: { type: 'string', enum: ['public', 'record', 'private'] },
-            privateMintSecretNonce: { type: 'string' },
           },
           required: ['source', 'destination', 'amount', 'recipient'],
         },

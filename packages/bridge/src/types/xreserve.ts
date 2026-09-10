@@ -48,9 +48,11 @@ export type EvmXReserveRouteMetadata = {
  * Selects a prepared xReserve transfer for live balance and allowance checks.
  *
  * @property plan Pure plan returned by `prepare`.
+ * @property privateMintSecretNonce Secret Aleo scalar committed by private hook data. Defaults to `0scalar`.
  */
 export type QuoteEvmXReserveTransferParameters = {
   plan: BridgePlan
+  privateMintSecretNonce?: string | undefined
 }
 
 /**
@@ -88,6 +90,7 @@ export type EvmXReserveTransferQuote = {
  * Configures an Ethereum-to-Aleo xReserve deposit submission.
  *
  * @property plan Pure plan returned by `prepare`.
+ * @property privateMintSecretNonce Secret Aleo scalar committed by private hook data. Defaults to `0scalar`.
  * @property pollingIntervalMs Delay between receipt checks. Defaults to 1,000 milliseconds.
  * @property confirmationTimeoutMs Maximum receipt wait per transaction. Defaults to 120,000 milliseconds.
  * @property resume Previously checkpointed source receipt. When supplied, execution
@@ -97,6 +100,7 @@ export type EvmXReserveTransferQuote = {
  */
 export type ExecuteEvmXReserveTransferParameters = {
   plan: BridgePlan
+  privateMintSecretNonce?: string | undefined
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined
   resume?: BridgeReceipt | undefined

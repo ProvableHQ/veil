@@ -90,7 +90,7 @@ async function assertChain(client: EvmClient, expected: number): Promise<void> {
 }
 
 async function observedAccount(client: EvmClient, plan: BridgePlan, receipt?: BridgeReceipt): Promise<Address> {
-  const saved = receipt?.protocolState.sourceAccount
+  const saved = receipt?.protocolState.sourceSender
   const candidate = typeof saved === 'string' ? saved : plan.sender
   if (candidate && isAddress(candidate)) return getAddress(candidate)
   if (client.walletClient) return account(client as EvmClient & { walletClient: EvmWalletClient }, plan)
@@ -163,7 +163,7 @@ export async function quote(
     params.plan.mintMode,
     params.plan.recipient,
     environment,
-    params.plan.privateMintSecretNonce ?? '0scalar',
+    params.privateMintSecretNonce ?? '0scalar',
   )
   const recipient = params.plan.mintMode === 'private'
     ? await aleoProgramAddress(route.wrapperProgram, environment)
@@ -179,8 +179,8 @@ export async function quote(
   return { routeId: params.plan.route.id, xReserveContract: route.xReserveContract, tokenAddress: getAddress(token), sourceChainId: route.sourceChainId, remoteDomain: route.remoteDomain, remoteRecipientBytes32, amountAtomic, maxFeeAtomic: route.maxFeeAtomic, hookData, balanceAtomic, allowanceAtomic, approvalRequired: allowanceAtomic < amountAtomic }
 }
 
-function pendingReceipt(plan: BridgePlan, status: BridgeReceipt['status'], id: string, approvalTxIds: Hash[], quote: EvmXReserveTransferQuote, sourceTxId?: Hash): BridgeReceipt {
-  return { id, protocol: 'xreserve', status, ...(sourceTxId ? { sourceTxId } : {}), protocolState: { routeId: plan.route.id, approvalTxIds, mintMode: plan.mintMode, intendedRecipient: plan.recipient, xReserveContract: quote.xReserveContract, tokenAddress: quote.tokenAddress, sourceChainId: quote.sourceChainId, remoteDomain: quote.remoteDomain, remoteRecipientBytes32: quote.remoteRecipientBytes32, hookData: quote.hookData, amountAtomic: quote.amountAtomic.toString(), maxFeeAtomic: quote.maxFeeAtomic.toString() } }
+function pendingReceipt(plan: BridgePlan, status: BridgeReceipt['status'], id: string, approvalTxIds: Hash[], quote: EvmXReserveTransferQuote, sourceSender: Address, sourceTxId?: Hash): BridgeReceipt {
+  return { id, protocol: 'xreserve', status, ...(sourceTxId ? { sourceTxId } : {}), protocolState: { routeId: plan.route.id, approvalTxIds, sourceSender, mintMode: plan.mintMode, intendedRecipient: plan.recipient, xReserveContract: quote.xReserveContract, tokenAddress: quote.tokenAddress, sourceChainId: quote.sourceChainId, remoteDomain: quote.remoteDomain, remoteRecipientBytes32: quote.remoteRecipientBytes32, hookData: quote.hookData, amountAtomic: quote.amountAtomic.toString(), maxFeeAtomic: quote.maxFeeAtomic.toString() } }
 }
 
 function resumeQuote(plan: BridgePlan, receipt: BridgeReceipt): EvmXReserveTransferQuote {
@@ -262,7 +262,7 @@ function confirmedDepositReceipt(
   const nonce = calculateXReserveDepositNonce(route.sourceDomain, sourceTxId, logIndex)
   const payload = buildXReserveDepositPayload({ amount: args.value, remoteDomain: args.remoteDomain, remoteToken: args.remoteToken, remoteRecipient: args.remoteRecipient, localToken: args.localToken, depositor: args.localDepositor, maxFee: args.maxFee, nonce, hookData: args.hookData })
   const messageHash = calculateXReserveMessageHash(payload)
-  return { id: messageHash, protocol: 'xreserve', status: 'ATTESTATION_PENDING', sourceTxId, protocolState: { ...pendingReceipt(plan, 'ATTESTATION_PENDING', messageHash, approvalTxIds, quote, sourceTxId).protocolState, sourceDomain: route.sourceDomain, remoteDomain: route.remoteDomain, depositLogIndex: logIndex, nonce, payload, messageHash, bridgeProgram: route.bridgeProgram, wrapperProgram: route.wrapperProgram } }
+  return { id: messageHash, protocol: 'xreserve', status: 'ATTESTATION_PENDING', sourceTxId, protocolState: { ...pendingReceipt(plan, 'ATTESTATION_PENDING', messageHash, approvalTxIds, quote, owner, sourceTxId).protocolState, sourceDomain: route.sourceDomain, remoteDomain: route.remoteDomain, depositLogIndex: logIndex, nonce, payload, messageHash, bridgeProgram: route.bridgeProgram, wrapperProgram: route.wrapperProgram } }
 }
 
 /**
@@ -322,7 +322,7 @@ export async function recoverSourceCheckpoint(
   plan: BridgePlan,
   checkpoint: BridgeCheckpoint,
 ): Promise<BridgeReceipt> {
-  if (checkpoint.version !== 1 || checkpoint.protocol !== 'xreserve' || checkpoint.routeId !== plan.route.id) {
+  if (checkpoint.version !== 1 || checkpoint.intent.bridgeProtocol !== 'xreserve' || checkpoint.route.id !== plan.route.id) {
     throw new BridgeError('Bridge checkpoint does not match the prepared route')
   }
   const route = metadata(registry, plan)
@@ -333,11 +333,15 @@ export async function recoverSourceCheckpoint(
     throw new BridgeError('xReserve source token contract is missing')
   }
   const amountAtomic = parseDecimalAmount(plan.amountIn, plan.sourceAsset.decimals)
-  const hookData = await buildXReserveHookData(
+  const storedHookData = checkpoint.source?.hookData
+  if (storedHookData !== undefined && (!isHex(storedHookData, { strict: true }) || storedHookData.length !== 132)) {
+    throw new BridgeError('Bridge checkpoint contains invalid xReserve hook data')
+  }
+  const hookData = storedHookData ?? await buildXReserveHookData(
     plan.mintMode,
     plan.recipient,
     plan.route.environment,
-    plan.privateMintSecretNonce ?? '0scalar',
+    '0scalar',
   )
   const recipient = plan.mintMode === 'private'
     ? await aleoProgramAddress(route.wrapperProgram, plan.route.environment)
@@ -365,7 +369,7 @@ export async function recoverSourceCheckpoint(
   if (!checkpoint.source?.transactionId) {
     const approvalTxId = approvalTxIds.at(-1)
     if (!approvalTxId) throw new BridgeError('Bridge checkpoint contains no submitted transaction')
-    const pending = pendingReceipt(plan, 'SOURCE_APPROVAL_PENDING', approvalTxId, approvalTxIds, quote)
+    const pending = pendingReceipt(plan, 'SOURCE_APPROVAL_PENDING', approvalTxId, approvalTxIds, quote, owner)
     const approvalReceipt = await client.publicClient.getTransactionReceipt(approvalTxId)
     if (!approvalReceipt) return pending
     successful(approvalReceipt, approvalTxId)
@@ -380,6 +384,7 @@ export async function recoverSourceCheckpoint(
     checkpoint.source.transactionId,
     approvalTxIds,
     quote,
+    owner,
     checkpoint.source.transactionId,
   )
   return getSourceStatus(registry, client, plan, pending)
@@ -428,7 +433,14 @@ export async function execute(
     return { approvalTxIds, receipt: confirmedDepositReceipt(params.plan, route, transferQuote, owner, approvalTxIds, sourceTxId, receipt) }
   }
 
-  if (params.resume?.status === 'SOURCE_APPROVAL_PENDING') {
+  if (params.resume?.status === 'SOURCE_SUBMISSION_PENDING') {
+    const checkpointQuote = resumeQuote(params.plan, params.resume)
+    approvalTxIds = approvalIds(params.resume)
+    transferQuote = await quote(registry, client, params)
+    if (transferQuote.hookData.toLowerCase() !== checkpointQuote.hookData.toLowerCase()) {
+      throw new BridgeError('Private mint secret nonce does not match the checkpointed approval')
+    }
+  } else if (params.resume?.status === 'SOURCE_APPROVAL_PENDING') {
     resumeQuote(params.plan, params.resume)
     approvalTxIds = approvalIds(params.resume)
     const approvalTxId = params.resume.id
@@ -447,7 +459,7 @@ export async function execute(
     const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [route.xReserveContract, transferQuote.amountAtomic] })
     const hash = await send(client, route.sourceChainId, { from: owner, to: transferQuote.tokenAddress, data })
     approvalTxIds.push(hash)
-    const submitted = pendingReceipt(params.plan, 'SOURCE_APPROVAL_PENDING', hash, approvalTxIds, transferQuote)
+    const submitted = pendingReceipt(params.plan, 'SOURCE_APPROVAL_PENDING', hash, approvalTxIds, transferQuote, owner)
     await params.onSubmitted?.(submitted)
     const receipt = await wait(client, hash, confirmationTimeoutMs, pollingIntervalMs)
     if (!receipt) return { approvalTxIds, receipt: submitted }
@@ -455,7 +467,7 @@ export async function execute(
   }
   const data = encodeFunctionData({ abi: XRESERVE_ABI, functionName: 'depositToRemote', args: [transferQuote.amountAtomic, route.remoteDomain, transferQuote.remoteRecipientBytes32, transferQuote.tokenAddress, route.maxFeeAtomic, transferQuote.hookData] })
   const sourceTxId = await send(client, route.sourceChainId, { from: owner, to: route.xReserveContract, data })
-  const submitted = pendingReceipt(params.plan, 'SOURCE_CONFIRMING', sourceTxId, approvalTxIds, transferQuote, sourceTxId)
+  const submitted = pendingReceipt(params.plan, 'SOURCE_CONFIRMING', sourceTxId, approvalTxIds, transferQuote, owner, sourceTxId)
   await params.onSubmitted?.(submitted)
   const receipt = await wait(client, sourceTxId, confirmationTimeoutMs, pollingIntervalMs)
   if (!receipt) return { approvalTxIds, receipt: submitted }
@@ -537,7 +549,7 @@ export async function complete(
   if (typeof intendedRecipient !== 'string' || intendedRecipient !== plan.recipient || mintMode !== 'private') throw new BridgeError('Deposit receipt does not match the private mint plan')
   if (attestation.payload.toLowerCase() !== depositPayload.toLowerCase() || attestation.messageHash.toLowerCase() !== depositHash.toLowerCase()) throw new BridgeError('Circle attestation does not match the confirmed deposit')
   if (calculateXReserveMessageHash(attestation.payload) !== attestation.messageHash) throw new BridgeError('Circle attestation payload has an invalid message hash')
-  const secretNonce = plan.privateMintSecretNonce ?? '0scalar'
+  const secretNonce = params.privateMintSecretNonce ?? '0scalar'
   const expectedHookData = await buildXReserveHookData('private', plan.recipient, route.environment, secretNonce)
   const attestedHookData = `0x${attestation.payload.slice(-130)}`
   if (attestedHookData.toLowerCase() !== expectedHookData.toLowerCase()) {

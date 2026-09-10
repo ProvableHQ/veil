@@ -17,6 +17,7 @@ import {
 import { quote } from '../../src/actions/quote.js'
 import { getStatus } from '../../src/actions/getStatus.js'
 import { recover } from '../../src/actions/recover.js'
+import { resume } from '../../src/actions/resume.js'
 import { createBridgeCheckpoint } from '../../src/actions/createBridgeCheckpoint.js'
 import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
@@ -25,6 +26,7 @@ import type { BridgeReceipt } from '../../src/types/protocol.js'
 
 const ACCOUNT = getAddress('0x0000000000000000000000000000000000000001')
 const RECIPIENT = '0x20e3629764d5338f74bee96675801b1fb29d1fc68b177668f9175708bef84311'
+const ALEO_RECIPIENT = 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n'
 const MESSAGE_ID = `0x${'ab'.repeat(32)}` as Hash
 const WBTC = getAddress('0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599')
 const USDT = getAddress('0xdAC17F958D2ee523a2206206994597C13D831ec7')
@@ -52,7 +54,7 @@ function plan(routeId: string, amount: string) {
     destination: { chain: destination.chainId, asset: destination.key },
     bridgeProtocol: route.protocol,
     amount,
-    recipient: `aleo1${'a'.repeat(58)}`,
+    recipient: ALEO_RECIPIENT,
     sender: ACCOUNT,
   })
 }
@@ -249,6 +251,48 @@ describe('Ethereum Hyperlane actions', () => {
     expect(result.receipt.protocolState.approvalTxIds).toEqual(result.approvalTxIds)
   })
 
+  it('resumes a recovered approval at the Hyperlane dispatch boundary', async () => {
+    const transferPlan = plan('hyperlane:ethereum/wbtc->aleo/wbtc', '0.001')
+    const pendingExecutor = executor({
+      token: WBTC,
+      amount: 100_000n,
+      nativeValue: 50_000n,
+      allowance: 0n,
+      receipt: 'pending',
+    })
+    const pending = await executeEvmHyperlaneTransfer(DEFAULT_BRIDGE_REGISTRY, pendingExecutor.bridgeExecutor, {
+      plan: transferPlan,
+      recipientBytes32: RECIPIENT,
+      confirmationTimeoutMs: 0,
+      pollingIntervalMs: 0,
+    })
+    const checkpoint = createBridgeCheckpoint(transferPlan, pending.receipt)
+    const confirmedExecutor = executor({
+      token: WBTC,
+      amount: 100_000n,
+      nativeValue: 50_000n,
+      allowance: 100_000n,
+    })
+    const progress = await recover(
+      DEFAULT_BRIDGE_REGISTRY,
+      { ethereum: confirmedExecutor.bridgeExecutor },
+      globalThis.fetch,
+      { checkpoint },
+    )
+    if (progress.next !== 'resume') throw new Error(`Expected resume, received ${progress.next}`)
+
+    const resumed = await resume(
+      DEFAULT_BRIDGE_REGISTRY,
+      { ethereum: confirmedExecutor.bridgeExecutor },
+      { progress },
+    )
+
+    expect(resumed.kind).toBe('evm-hyperlane')
+    expect(resumed.receipt.status).toBe('DELIVERY_PENDING')
+    expect(confirmedExecutor.sent).toHaveLength(1)
+    expect(decodeFunctionData({ abi: ABI, data: confirmedExecutor.sent[0]!.data }).functionName).toBe('transferRemote')
+  })
+
   it('checkpoints dispatch before confirmation and resumes without resubmitting', async () => {
     const transferPlan = plan('hyperlane:ethereum/eth->aleo/eth', '0.0000000000000001')
     const pendingExecutor = executor({ amount: 100n, nativeValue: 69_000_000_000_101n, receipt: 'pending' })
@@ -323,14 +367,15 @@ describe('Ethereum Hyperlane actions', () => {
     const checkpoint = createBridgeCheckpoint(transferPlan, pending.receipt)
     const confirmingExecutor = executor({ amount: 100n, nativeValue: 69_000_000_000_101n })
 
-    const receipt = await recover(
+    const progress = await recover(
       DEFAULT_BRIDGE_REGISTRY,
       { ethereum: { family: 'evm', publicClient: confirmingExecutor.bridgeExecutor.publicClient } },
       globalThis.fetch,
-      { plan: transferPlan, checkpoint },
+      { checkpoint },
     )
 
-    expect(receipt.status).toBe('DELIVERY_PENDING')
+    expect(progress.next).toBe('wait')
+    expect(progress.receipt.status).toBe('DELIVERY_PENDING')
     expect(confirmingExecutor.sent).toHaveLength(0)
   })
 

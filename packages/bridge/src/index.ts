@@ -65,6 +65,8 @@ export { complete } from './actions/complete.js'
 export { getStatus } from './actions/getStatus.js'
 export { waitForStatus } from './actions/waitForStatus.js'
 export { recover } from './actions/recover.js'
+export { resume } from './actions/resume.js'
+export { wait } from './actions/wait.js'
 export { createBridgeCheckpoint } from './actions/createBridgeCheckpoint.js'
 export { hyperlane, xreserve, type ProtocolHelperRegistry } from './protocols/index.js'
 export { buildXReserveBurnCall } from './builders/buildXReserveBurnCall.js'
@@ -79,6 +81,9 @@ export type {
   BridgeAssetLocator,
   BridgeChainFamily,
   BridgeCheckpoint,
+  BridgeIntent,
+  BridgeProgress,
+  BridgeProgressNext,
   BridgeEnvironment,
   BridgeEndpoint,
   BridgeExecutionStep,
@@ -103,6 +108,8 @@ export type {
   GetStatusParameters,
   QuoteParameters,
   RecoverParameters,
+  ResumeParameters,
+  WaitParameters,
   WaitForStatusParameters,
   BridgeExecution,
   BridgeExecutionKind,

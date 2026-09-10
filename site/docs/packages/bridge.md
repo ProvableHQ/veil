@@ -34,9 +34,9 @@ returns the ordered approval, protocol, attestation/delivery, and destination
 steps without signing or moving funds.
 
 Fund-moving actions accept an optional `onCheckpoint` hook. The compact value
-contains only its format version, route, protocol, and submitted transaction
-identifiers. An uninterrupted application may keep the returned receipt in
-memory without storing a checkpoint.
+contains its format version, public transfer intent, resolved route, and
+submitted transaction identifiers. It excludes wallet secrets, private-mint
+nonces, records, proofs, and protocol response bodies.
 
 ```ts
 const execution = await bridge.execute({
@@ -49,15 +49,16 @@ After an interruption, `recover` reconstructs progress through read-only chain
 and protocol requests. It never signs, proves, or submits a transaction.
 
 ```ts
-const receipt = await bridge.recover({
-  plan,
+const progress = await bridge.recover({
   checkpoint: await loadCheckpoint(),
 })
 ```
 
-`getStatus` performs one read-only lifecycle update, while `waitForStatus`
-polls until one of the caller's requested states. A private inbound xReserve
-mint remains a separate explicit `complete({ plan, receipt })` wallet action.
+`recover` rebuilds the runtime plan and returns `next: 'wait' | 'resume' |
+'complete' | 'done' | 'failed'`. `wait({ progress })` polls to the next caller
+boundary, `resume({ progress })` continues an approval-interrupted source flow,
+and `complete({ progress })` authorizes a private destination mint. The
+lower-level `getStatus` and `waitForStatus` remain available for exact states.
 
 Hyperlane routes marked `metadata-required` are known route families whose
 complete execution deployment has not been pinned yet. Applications MUST NOT

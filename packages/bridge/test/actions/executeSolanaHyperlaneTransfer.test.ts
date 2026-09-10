@@ -245,20 +245,30 @@ describe('executeSolanaHyperlaneTransfer', () => {
       { solana: client(stubExecutor(), executeRpc()) },
       globalThis.fetch,
       {
-        plan,
         checkpoint: {
           version: 1,
-          routeId: plan.route.id,
-          protocol: 'hyperlane',
+          intent: {
+            source: { chain: 'solana', asset: 'sol' },
+            destination: { chain: 'aleo', asset: 'sol' },
+            bridgeProtocol: 'hyperlane',
+            amount: plan.amountIn,
+            recipient: plan.recipient,
+            sender: plan.sender,
+            mintMode: 'public',
+          },
+          route: { id: plan.route.id, registryVersion: plan.registryVersion },
           source: { transactionId: STUB_SIGNATURE },
         },
       },
     )
 
     expect(result).toMatchObject({
-      status: 'DELIVERY_PENDING',
-      sourceTxId: STUB_SIGNATURE,
-      messageId: '0xffe0409d00c184769b4dfa2a1eaac5a0a79bfe52458a38e1d9a71a9e5c677805',
+      next: 'wait',
+      receipt: {
+        status: 'DELIVERY_PENDING',
+        sourceTxId: STUB_SIGNATURE,
+        messageId: '0xffe0409d00c184769b4dfa2a1eaac5a0a79bfe52458a38e1d9a71a9e5c677805',
+      },
     })
   })
 

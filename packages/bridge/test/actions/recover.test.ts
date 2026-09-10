@@ -22,10 +22,13 @@ function plan() {
 
 describe('bridge recovery checkpoints', () => {
   it('exposes recover as a protocol-neutral client action', () => {
-    expect(createBridgeClient().recover).toBeTypeOf('function')
+    const client = createBridgeClient()
+    expect(client.recover).toBeTypeOf('function')
+    expect(client.resume).toBeTypeOf('function')
+    expect(client.wait).toBeTypeOf('function')
   })
 
-  it('reduces an execution receipt to a versioned transaction checkpoint', () => {
+  it('persists the public transfer intent with transaction identifiers', () => {
     const transferPlan = plan()
     const receipt: BridgeReceipt = {
       id: DESTINATION_TX_ID,
@@ -42,8 +45,18 @@ describe('bridge recovery checkpoints', () => {
 
     expect(createBridgeCheckpoint(transferPlan, receipt)).toEqual({
       version: 1,
-      routeId: transferPlan.route.id,
-      protocol: 'xreserve',
+      intent: {
+        source: { chain: 'sepolia', asset: 'usdc' },
+        destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+        bridgeProtocol: 'xreserve',
+        amount: '2',
+        recipient: RECIPIENT,
+        mintMode: 'private',
+      },
+      route: {
+        id: transferPlan.route.id,
+        registryVersion: transferPlan.registryVersion,
+      },
       source: {
         approvalTransactionIds: [APPROVAL_TX_ID],
         transactionId: SOURCE_TX_ID,

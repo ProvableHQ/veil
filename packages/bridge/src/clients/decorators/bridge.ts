@@ -7,9 +7,11 @@ import { complete } from '../../actions/complete.js'
 import { getStatus } from '../../actions/getStatus.js'
 import { waitForStatus } from '../../actions/waitForStatus.js'
 import { recover } from '../../actions/recover.js'
+import { resume } from '../../actions/resume.js'
+import { wait } from '../../actions/wait.js'
 import type { BridgeChainClients } from '../../connections/resolve.js'
-import type { BridgeEnvironment, BridgeReceipt, BridgeRegistry, BridgePlan, PrepareParameters, ProtocolBridgeAsset, ProtocolBridgeRoute } from '../../types/protocol.js'
-import type { CompleteParameters, ExecuteParameters, GetStatusParameters, QuoteParameters, RecoverParameters, WaitForStatusParameters, BridgeExecution, BridgeQuote } from '../../types/actions.js'
+import type { BridgeEnvironment, BridgeProgress, BridgeReceipt, BridgeRegistry, BridgePlan, PrepareParameters, ProtocolBridgeAsset, ProtocolBridgeRoute } from '../../types/protocol.js'
+import type { CompleteParameters, ExecuteParameters, GetStatusParameters, QuoteParameters, RecoverParameters, ResumeParameters, WaitForStatusParameters, WaitParameters, BridgeExecution, BridgeQuote } from '../../types/actions.js'
 
 /**
  * Carries validated registry and materialized client state into bound actions.
@@ -35,7 +37,9 @@ export type BridgeActions = {
   getStatus: (params: GetStatusParameters) => Promise<BridgeReceipt>
   waitForStatus: (params: WaitForStatusParameters) => Promise<BridgeReceipt>
   complete: (params: CompleteParameters) => Promise<BridgeExecution>
-  recover: (params: RecoverParameters) => Promise<BridgeReceipt>
+  recover: (params: RecoverParameters) => Promise<BridgeProgress>
+  resume: (params: ResumeParameters) => Promise<BridgeExecution>
+  wait: (params: WaitParameters) => Promise<BridgeProgress>
 }
 
 /** Binds registry and private client state to bridge actions. */
@@ -50,5 +54,7 @@ export function bridgeActions(config: BridgeActionsConfig): BridgeActions {
     waitForStatus: async (params) => waitForStatus(config.registry, config.clients, config.fetch, params),
     complete: async (params) => complete(config.registry, config.clients, params),
     recover: async (params) => recover(config.registry, config.clients, config.fetch, params),
+    resume: async (params) => resume(config.registry, config.clients, params),
+    wait: async (params) => wait(config.registry, config.clients, config.fetch, params),
   }
 }

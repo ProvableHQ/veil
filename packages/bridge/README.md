@@ -150,8 +150,9 @@ in resumable receipts.
 
 Fund-moving actions accept an optional `onCheckpoint` hook. It runs immediately
 after the wallet or local signer returns a transaction identifier and before
-confirmation polling. The emitted value is a compact, versioned set of route
-and transaction identifiers; it excludes the plan and protocol response bodies:
+confirmation polling. The emitted value contains public transfer intent, the
+resolved route version, and transaction identifiers. It excludes private keys,
+records, proofs, private-mint nonces, and protocol response bodies:
 
 ```ts
 const execution = await bridge.execute({
@@ -162,18 +163,22 @@ const execution = await bridge.execute({
 
 Applications that remain alive can keep the returned receipt in memory and do
 not need to store a checkpoint. After an interruption, `recover` reconstructs
-the receipt with read-only chain and protocol calls:
+the plan and receipt with read-only chain and protocol calls:
 
 ```ts
-const receipt = await bridge.recover({
-  plan,
+const progress = await bridge.recover({
   checkpoint: await loadCheckpoint(),
 })
+
+if (progress.next === 'resume') {
+  await bridge.resume({ progress, onCheckpoint: saveCheckpoint })
+}
 ```
 
-`recover` never signs or submits. An approval-only checkpoint may recover to
-`SOURCE_SUBMISSION_PENDING`; a new explicit `execute({ plan })` call then
-authorizes the source deposit after the confirmed allowance is re-read.
+`recover` never signs or submits. Its `next` field is `wait`, `resume`,
+`complete`, `done`, or `failed`. An approval-only checkpoint may recover to
+`resume`; that action authorizes only the remaining source deposit after the
+confirmed allowance is re-read. Normal execution calls `execute` once.
 
 For Solana, the active inbound route is native SOL:
 
@@ -196,7 +201,7 @@ const execution = await bridge.execute({
 
 The quote reads the deployed IGP, the live fee for the compiled message, and
 the execution preflight reads current rent exemptions. Confirmation searches
-transaction history and records blockhash expiry. `recover({ plan, checkpoint })`
+transaction history and records blockhash expiry. `recover({ checkpoint })`
 checks an existing signature without signing or resubmitting.
 
 Current Solana token support is native SOL only. The client API is ready
@@ -204,38 +209,35 @@ for future SPL-token routes, but it does not support Solana USDC today. SPL or
 Token-2022 support requires reviewed route metadata, token-account handling,
 instruction builders, and golden vectors.
 
-Circle attestation requests use the client-level `fetch` override. Status
-polling is read-only; a private destination mint requires a separate explicit
-`complete` call:
+Circle attestation requests use the client-level `fetch` override. `wait`
+polls through read-only states until the next caller boundary. A private
+destination mint requires a separate explicit `complete` call:
 
 ```ts
 const bridge = createBridgeClient({ fetch: instrumentedFetch })
-let receipt = await bridge.waitForStatus({
-  plan,
-  receipt: sourceExecution.receipt,
-  until: ['DESTINATION_ACTION_REQUIRED'],
-  onUpdate: saveCheckpoint,
+let progress = await bridge.wait({
+  progress: { next: 'wait', plan, receipt: sourceExecution.receipt },
 })
 
-const destinationExecution = await bridge.complete({
-  plan,
-  receipt,
-  onCheckpoint: saveCheckpoint,
-})
+if (progress.next === 'complete') {
+  const destinationExecution = await bridge.complete({
+    progress,
+    privateMintSecretNonce: await secureStorage.get('private-mint-nonce'),
+    onCheckpoint: saveCheckpoint,
+  })
 
-receipt = await bridge.waitForStatus({
-  plan,
-  receipt: destinationExecution.receipt,
-  until: ['COMPLETED', 'FAILED'],
-  onUpdate: saveCheckpoint,
-})
+  progress = await bridge.wait({
+    progress: { next: 'wait', plan, receipt: destinationExecution.receipt },
+  })
+}
 ```
 
 `onCheckpoint` is optional. Persist its value before returning from the callback
 when recovery across a page close or process restart is required. `recover`
-reconstructs progress from submitted transaction identifiers, while
-`getStatus` and `waitForStatus` advance existing receipts through read-only
-confirmation. None of these three actions submits a transaction.
+reconstructs progress from the checkpoint alone. `wait` advances to the next
+caller or relayer boundary. The lower-level `getStatus` and `waitForStatus`
+actions remain available for exact lifecycle-state control. None of these read
+actions submits a transaction.
 
 ## Direct protocol helpers
 
@@ -280,8 +282,8 @@ This package is pre-release, so the obsolete fields have no runtime aliases.
 | chain-specific source `execute*Transfer` methods | `execute({ plan })` |
 | `executeXReserveBurn` | `execute({ plan, mode, userRecord, merkleProof })` |
 | encoded `prepare({ routeId })` | `prepare({ source, destination, bridgeProtocol })` |
-| `getXReserveAttestation` | `getStatus({ plan, receipt })` or `waitForStatus(...)` |
-| `executeXReservePrivateMint` | `complete({ plan, receipt })` |
+| `getXReserveAttestation` | `wait({ progress })` or `getStatus({ plan, receipt })` |
+| `executeXReservePrivateMint` | `complete({ progress, privateMintSecretNonce })` |
 
 ## Optional dependencies
 

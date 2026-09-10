@@ -12,6 +12,7 @@ import {
   solanaHttp,
   solanaKeyPair,
   type BridgeCheckpoint,
+  type BridgeProgress,
   type BridgeReceipt,
 } from '../../../src/index.js'
 import { loadLiveState, saveLiveState, waitForAleoTransaction, waitForHyperlaneDelivery } from './helpers.js'
@@ -63,25 +64,23 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
       sender: required('BRIDGE_LIVE_EVM_TESTNET_ADDRESS'),
       mintMode: 'private',
     })
-    const savedCheckpoint = state.checkpoint as BridgeCheckpoint | undefined
-      ?? (state.sourceReceipt
+    const storedCheckpoint = state.checkpoint as Partial<BridgeCheckpoint> | undefined
+    if (storedCheckpoint && !storedCheckpoint.intent && !state.sourceReceipt) {
+      throw new Error('Legacy checkpoint cannot be migrated without its saved source receipt')
+    }
+    const savedCheckpoint = storedCheckpoint?.intent
+      ? storedCheckpoint as BridgeCheckpoint
+      : (state.sourceReceipt
         ? createBridgeCheckpoint(plan, state.sourceReceipt as BridgeReceipt)
         : undefined)
-    if (savedCheckpoint && !state.checkpoint) {
+    if (savedCheckpoint && (!storedCheckpoint || !storedCheckpoint.intent)) {
       state.checkpoint = savedCheckpoint
       saveLiveState(path, state)
     }
-    let receipt = savedCheckpoint
-      ? await bridge.recover({ plan, checkpoint: savedCheckpoint })
+    let progress: BridgeProgress | undefined = savedCheckpoint
+      ? await bridge.recover({ checkpoint: savedCheckpoint })
       : undefined
-    if (receipt?.status === 'SOURCE_APPROVAL_PENDING') {
-      receipt = await bridge.waitForStatus({
-        plan,
-        receipt,
-        until: ['SOURCE_SUBMISSION_PENDING', 'FAILED'],
-      })
-    }
-    if (!receipt || receipt.status === 'SOURCE_SUBMISSION_PENDING') {
+    if (!progress) {
       const depositExecution = await bridge.execute({
         plan,
         onCheckpoint(checkpoint) {
@@ -91,51 +90,48 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
         },
       })
       if (depositExecution.kind !== 'evm-xreserve') throw new Error(`Unexpected execution kind: ${depositExecution.kind}`)
-      receipt = depositExecution.receipt
-      state.sourceTxId = receipt.sourceTxId ?? state.sourceTxId
+      progress = { next: 'wait', plan, receipt: depositExecution.receipt }
+      state.sourceTxId = depositExecution.receipt.sourceTxId ?? state.sourceTxId
       saveLiveState(path, state)
     }
-    if (receipt.status === 'SOURCE_CONFIRMING') {
-      receipt = await bridge.waitForStatus({
-        plan,
-        receipt,
-        until: ['ATTESTATION_PENDING', 'FAILED'],
-      })
-    }
-    if (receipt.status === 'ATTESTATION_PENDING') {
-      receipt = await bridge.waitForStatus({
-        plan,
-        receipt,
-        until: ['DESTINATION_ACTION_REQUIRED'],
-        onUpdate(checkpoint) {
-          state.messageId = checkpoint.id
+    if (progress.next === 'wait') {
+      progress = await bridge.wait({
+        progress,
+        onUpdate(value) {
+          state.messageId = value.receipt.id
           saveLiveState(path, state)
         },
       })
     }
-    if (receipt.status === 'DESTINATION_ACTION_REQUIRED') {
+    if (progress.next === 'resume') {
+      const resumed = await bridge.resume({
+        progress,
+        onCheckpoint(checkpoint) {
+          state.checkpoint = checkpoint
+          state.sourceTxId = checkpoint.source?.transactionId ?? state.sourceTxId
+          saveLiveState(path, state)
+        },
+      })
+      progress = await bridge.wait({
+        progress: { next: 'wait', plan, receipt: resumed.receipt },
+      })
+    }
+    if (progress.next === 'complete') {
       const mint = await bridge.complete({
-        plan,
-        receipt,
+        progress,
         onCheckpoint(checkpoint) {
           state.checkpoint = checkpoint
           state.destinationTxId = checkpoint.destination?.transactionId
           saveLiveState(path, state)
         },
       })
-      receipt = mint.receipt
-    }
-    if (receipt.status === 'DESTINATION_CONFIRMING') {
-      receipt = await bridge.waitForStatus({
-        plan,
-        receipt,
-        until: ['COMPLETED'],
-        onUpdate(checkpoint) {
-          saveLiveState(path, state)
-        },
+      progress = await bridge.wait({
+        progress: { next: 'wait', plan, receipt: mint.receipt },
+        onUpdate() { saveLiveState(path, state) },
       })
     }
-    if (receipt.status !== 'COMPLETED') throw new Error(`Unexpected terminal xReserve status: ${receipt.status}`)
+    if (progress.next === 'failed') throw new Error(progress.error)
+    if (progress.next !== 'done') throw new Error(`Unexpected xReserve operation: ${progress.next}`)
     state.completed = true
     saveLiveState(path, state)
     expect(state).toMatchObject({ completed: true, sourceTxId: expect.any(String), messageId: expect.any(String), destinationTxId: expect.any(String) })

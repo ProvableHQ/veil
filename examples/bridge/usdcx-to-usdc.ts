@@ -215,6 +215,10 @@ async function main(): Promise<void> {
   })
   if (result.kind !== 'aleo-xreserve') throw new Error(`Unexpected execution kind: ${result.kind}`)
   console.log('\nUSDCx burn accepted:', result.transactionId)
+  const progress = await executingBridge.wait({
+    progress: { next: 'wait', plan, receipt: result.receipt },
+  })
+  if (progress.next === 'failed') throw new Error(progress.error)
   console.log('The Aleo burn-attestation service will forward the withdrawal to Circle for Ethereum delivery.')
 }
 

@@ -15,6 +15,7 @@ export type AleoWalletClient = Pick<WalletClient, 'executeTransaction'>
  * Configures submission of the user-authorized USDCx wrapper mint.
  *
  * @property plan Original private-mint transfer plan.
+ * @property privateMintSecretNonce Secret Aleo scalar committed by the source deposit. Defaults to `0scalar`.
  * @property deposit Confirmed EVM deposit receipt carrying the canonical payload.
  * @property attestation Completed Circle payload and signature response.
  * @property privateFee Whether the Aleo wallet should pay its fee privately. Defaults to false.
@@ -22,6 +23,7 @@ export type AleoWalletClient = Pick<WalletClient, 'executeTransaction'>
  */
 export type ExecuteXReservePrivateMintParameters = {
   plan: BridgePlan
+  privateMintSecretNonce?: string | undefined
   deposit: BridgeReceipt
   attestation: XReserveAttestationResult
   privateFee?: boolean | undefined

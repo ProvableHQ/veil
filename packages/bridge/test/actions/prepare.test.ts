@@ -82,18 +82,9 @@ describe('prepare', () => {
     expect(record.steps.at(-1)?.description).toContain('record')
     expect(record.steps.at(-1)?.executor).toBe('protocol')
     expect(privatePlan.mintMode).toBe('private')
-    expect(privatePlan.privateMintSecretNonce).toBe('0scalar')
+    expect('privateMintSecretNonce' in privatePlan).toBe(false)
     expect(privatePlan.privateRecipient).toBe(true)
     expect(privatePlan.steps.at(-1)?.executor).toBe('aleo-wallet')
-    const customNoncePlan = prepare(DEFAULT_BRIDGE_REGISTRY, {
-      source: { chain: 'ethereum', asset: 'usdc' },
-      destination: { chain: 'aleo', asset: 'usdcx' },
-      amount: '25',
-      recipient: ALEO_RECIPIENT,
-      mintMode: 'private',
-      privateMintSecretNonce: '7scalar',
-    })
-    expect(customNoncePlan.privateMintSecretNonce).toBe('7scalar')
     expect(() => prepare(DEFAULT_BRIDGE_REGISTRY, {
       source: { chain: 'ethereum', asset: 'usdc' },
       destination: { chain: 'aleo', asset: 'usdcx' },
@@ -102,22 +93,6 @@ describe('prepare', () => {
       mintMode: 'record',
       privateRecipient: true,
     })).toThrow(/conflicts/)
-    expect(() => prepare(DEFAULT_BRIDGE_REGISTRY, {
-      source: { chain: 'ethereum', asset: 'usdc' },
-      destination: { chain: 'aleo', asset: 'usdcx' },
-      amount: '25',
-      recipient: ALEO_RECIPIENT,
-      mintMode: 'record',
-      privateMintSecretNonce: '7scalar',
-    })).toThrow(/only valid with private/)
-    expect(() => prepare(DEFAULT_BRIDGE_REGISTRY, {
-      source: { chain: 'ethereum', asset: 'usdc' },
-      destination: { chain: 'aleo', asset: 'usdcx' },
-      amount: '25',
-      recipient: ALEO_RECIPIENT,
-      mintMode: 'private',
-      privateMintSecretNonce: 'not-a-scalar',
-    })).toThrow(/decimal Aleo scalar/)
   })
 
   it('prepares Hyperlane token approval only on non-Aleo token sources', () => {

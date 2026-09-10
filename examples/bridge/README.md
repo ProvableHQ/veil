@@ -81,14 +81,17 @@ becomes available after DPS broadcasts it and the SDK confirms acceptance.
 
 Durable recovery is optional. A production application may store the compact
 value passed to `onCheckpoint`; an uninterrupted script can keep the returned
-receipt only in memory. The checkpoint contains the route, format version, and
-submitted transaction identifiers. It does not contain the plan, private key,
-decrypted records, or Circle response bodies.
+receipt only in memory. The checkpoint contains the public transfer intent,
+resolved route version, and submitted transaction identifiers. It does not
+contain a private key, private-mint nonce, decrypted record, proof, or Circle
+response body.
 
-After a process restart, rebuild the same plan and pass the saved checkpoint to
-`bridge.recover({ plan, checkpoint })`. Recovery only reads chain and protocol
-state. It never signs, proves, or submits. If a private mint is ready, the caller
-still authorizes it explicitly with `bridge.complete({ plan, receipt })`.
+After a process restart, pass the saved checkpoint directly to
+`bridge.recover({ checkpoint })`. Recovery reconstructs the plan, reads chain
+and protocol state, and returns the next operation. It never signs, proves, or
+submits. `resume({ progress })` continues an approval-interrupted deposit, while
+`complete({ progress, privateMintSecretNonce })` explicitly authorizes a ready
+private mint. Store a custom private-mint nonce separately in secure storage.
 
 Delegated mode automatically registers a process-lifetime Provable API consumer
 when credentials are omitted. For an existing consumer, set both

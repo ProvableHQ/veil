@@ -19,7 +19,6 @@ describe('xReserve private mint', () => {
       amount: '2',
       recipient: RECIPIENT,
       mintMode: 'private',
-      privateMintSecretNonce: '7scalar',
     })
     const hookData = await buildXReserveHookData('private', RECIPIENT, 'testnet', '7scalar')
     const payload = `0x${'00'.repeat(240)}${hookData.slice(2)}` as const
@@ -44,6 +43,7 @@ describe('xReserve private mint', () => {
       plan,
       deposit,
       attestation: { status: 'complete', messageHash, payload, attestation: SIGNATURE },
+      privateMintSecretNonce: '7scalar',
     })
 
     expect(executeTransaction).toHaveBeenCalledOnce()
@@ -82,7 +82,6 @@ describe('xReserve private mint', () => {
       amount: '2',
       recipient: RECIPIENT,
       mintMode: 'private',
-      privateMintSecretNonce: '8scalar',
     })
     const hookData = await buildXReserveHookData('private', RECIPIENT, 'testnet', '7scalar')
     const payload = `0x${'00'.repeat(240)}${hookData.slice(2)}` as const
@@ -104,6 +103,7 @@ describe('xReserve private mint', () => {
         },
       },
       attestation: { status: 'complete', messageHash, payload, attestation: SIGNATURE },
+      privateMintSecretNonce: '8scalar',
     })).rejects.toThrow(/do not match the attested hook/)
     expect(executeTransaction).not.toHaveBeenCalled()
   })

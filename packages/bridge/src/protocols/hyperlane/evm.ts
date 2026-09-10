@@ -288,6 +288,7 @@ function executionReceipt(
   id: string,
   quote: EvmHyperlaneTransferQuote,
   approvalTxIds: Hash[],
+  sourceSender: Address,
   sourceTxId?: Hash,
   messageId?: Hash,
 ): BridgeReceipt {
@@ -300,6 +301,7 @@ function executionReceipt(
     protocolState: {
       routeId: plan.route.id,
       approvalTxIds: [...approvalTxIds],
+      sourceSender,
       recipientBytes32: quote.recipientBytes32,
       destinationDomain: quote.destinationDomain,
       nativeValueAtomic: quote.nativeValueAtomic.toString(),
@@ -404,7 +406,7 @@ export async function recoverSourceCheckpoint(
   recipientBytes32: Hex,
   checkpoint: BridgeCheckpoint,
 ): Promise<BridgeReceipt> {
-  if (checkpoint.version !== 1 || checkpoint.protocol !== 'hyperlane' || checkpoint.routeId !== plan.route.id) {
+  if (checkpoint.version !== 1 || checkpoint.intent.bridgeProtocol !== 'hyperlane' || checkpoint.route.id !== plan.route.id) {
     throw new BridgeError('Bridge checkpoint does not match the prepared route')
   }
   const metadata = routeMetadata(registry, plan)
@@ -505,7 +507,10 @@ export async function execute(
         },
       }
     }
-    if (params.resume.status === 'SOURCE_APPROVAL_PENDING') {
+    if (params.resume.status === 'SOURCE_SUBMISSION_PENDING') {
+      // Recovery already observed the final approval as successful. Requote
+      // current allowance and fees before dispatching the source transfer.
+    } else if (params.resume.status === 'SOURCE_APPROVAL_PENDING') {
       const approvalTxId = approvalTxIds.at(-1)
       if (!approvalTxId) throw new BridgeError('Hyperlane checkpoint is missing the approval transaction id')
       const approvalReceipt = await waitForReceipt(client, approvalTxId, confirmationTimeoutMs, pollingIntervalMs)
@@ -541,7 +546,7 @@ export async function execute(
       })
       const hash = await sendTransaction(client, metadata.sourceChainId, { from: account, to: metadata.tokenAddress!, data })
       approvalTxIds.push(hash)
-      const checkpoint = executionReceipt(params.plan, 'SOURCE_APPROVAL_PENDING', hash, transferQuote, approvalTxIds)
+      const checkpoint = executionReceipt(params.plan, 'SOURCE_APPROVAL_PENDING', hash, transferQuote, approvalTxIds, account)
       await params.onSubmitted?.(checkpoint)
       const receipt = await waitForReceipt(client, hash, confirmationTimeoutMs, pollingIntervalMs)
       if (!receipt) return false
@@ -554,14 +559,14 @@ export async function execute(
         if (!await approveAndConfirm(0n)) {
           return {
             approvalTxIds,
-            receipt: executionReceipt(params.plan, 'SOURCE_APPROVAL_PENDING', approvalTxIds.at(-1)!, transferQuote, approvalTxIds),
+            receipt: executionReceipt(params.plan, 'SOURCE_APPROVAL_PENDING', approvalTxIds.at(-1)!, transferQuote, approvalTxIds, account),
           }
         }
       }
       if (!await approveAndConfirm(required)) {
         return {
           approvalTxIds,
-          receipt: executionReceipt(params.plan, 'SOURCE_APPROVAL_PENDING', approvalTxIds.at(-1)!, transferQuote, approvalTxIds),
+          receipt: executionReceipt(params.plan, 'SOURCE_APPROVAL_PENDING', approvalTxIds.at(-1)!, transferQuote, approvalTxIds, account),
         }
       }
     }
@@ -578,7 +583,7 @@ export async function execute(
     data: transferData,
     value: `0x${transferQuote.nativeValueAtomic.toString(16)}`,
   })
-  const checkpoint = executionReceipt(params.plan, 'SOURCE_CONFIRMING', sourceTxId, transferQuote, approvalTxIds, sourceTxId)
+  const checkpoint = executionReceipt(params.plan, 'SOURCE_CONFIRMING', sourceTxId, transferQuote, approvalTxIds, account, sourceTxId)
   await params.onSubmitted?.(checkpoint)
   const sourceReceipt = await waitForReceipt(
     client,
@@ -602,6 +607,7 @@ export async function execute(
       messageId ?? sourceTxId,
       transferQuote,
       approvalTxIds,
+      account,
       sourceTxId,
       messageId,
     ),

@@ -187,7 +187,6 @@ export type BridgeEndpoint = {
  * @property recipient Destination-chain recipient.
  * @property sender Optional source-chain sender used by future fee and approval planning.
  * @property mintMode Aleo mint transition selected for xReserve delivery. Defaults to `public`.
- * @property privateMintSecretNonce Aleo scalar literal committed into a private-mint hook. Defaults to `0scalar`; applies only to `private` mode and must remain available for the destination transaction.
  * @property privateRecipient Deprecated alias for `mintMode: 'private'`. Defaults to false.
  */
 export type PrepareParameters = {
@@ -198,7 +197,6 @@ export type PrepareParameters = {
   recipient: string
   sender?: string | undefined
   mintMode?: AleoMintMode | undefined
-  privateMintSecretNonce?: string | undefined
   /** @deprecated Use `mintMode: 'private'`; retained for compatibility through the next major release. */
   privateRecipient?: boolean | undefined
 }
@@ -216,7 +214,6 @@ export type PrepareParameters = {
  * @property recipient Destination-chain recipient.
  * @property sender Optional source-chain sender.
  * @property mintMode Aleo destination transition selected by the caller.
- * @property privateMintSecretNonce Aleo scalar literal committed into a private-mint hook. Present only for private xReserve mints and sensitive until submission.
  * @property privateRecipient Whether the destination requests private Aleo delivery.
  * @property fees Known fee categories; amounts remain absent until protocol quoting is implemented.
  * @property steps Ordered operations required to complete the transfer.
@@ -232,10 +229,33 @@ export type BridgePlan = {
   recipient: string
   sender?: string | undefined
   mintMode: AleoMintMode
-  privateMintSecretNonce?: string | undefined
   privateRecipient: boolean
   fees: BridgeFee[]
   steps: BridgeExecutionStep[]
+}
+
+/**
+ * Records the public inputs needed to reconstruct a prepared bridge transfer.
+ *
+ * Private keys, records, proofs, and private-mint nonces are deliberately
+ * excluded so this value can be stored with transaction identifiers.
+ *
+ * @property source Chain and asset debited by the transfer.
+ * @property destination Chain and asset delivered by the transfer.
+ * @property bridgeProtocol Resolved protocol selected during preparation.
+ * @property amount Decimal source amount in display units.
+ * @property recipient Destination-chain recipient.
+ * @property sender Source-chain sender when the plan or executing wallet resolved one.
+ * @property mintMode Aleo destination transition selected by the caller.
+ */
+export type BridgeIntent = {
+  source: BridgeEndpoint
+  destination: BridgeEndpoint
+  bridgeProtocol: BridgeProtocol
+  amount: string
+  recipient: string
+  sender?: string | undefined
+  mintMode?: AleoMintMode | undefined
 }
 
 /** Identifies the normalized lifecycle state of a protocol transfer. */
@@ -289,25 +309,58 @@ export type BridgeReceipt = {
 /**
  * Records submitted transaction identifiers needed to recover a bridge transfer.
  *
- * The checkpoint excludes the prepared plan and protocol response bodies. The
- * caller stores it only when recovery across an interrupted process is needed.
+ * The checkpoint excludes expanded registry objects, secrets, and protocol
+ * response bodies. The caller stores it only for interrupted-process recovery.
  *
  * @property version Serialization format version, currently `1`.
- * @property routeId Canonical registry route that produced the submissions.
- * @property protocol Protocol responsible for the transfer.
+ * @property intent Public inputs used to reconstruct the runtime plan.
+ * @property route Canonical route and registry version that bound execution.
  * @property source Submitted source approvals and transfer transaction.
  * @property source.approvalTransactionIds Source token approval transaction identifiers in submission order.
  * @property source.transactionId Irreversible source transfer transaction when submitted.
+ * @property source.hookData Public xReserve hook committed by a submitted approval sequence.
  * @property destination Caller-authorized destination transaction when submitted.
  * @property destination.transactionId Destination-chain transaction identifier.
  */
 export type BridgeCheckpoint = {
   version: 1
-  routeId: string
-  protocol: BridgeProtocol
+  intent: BridgeIntent
+  route: {
+    id: string
+    registryVersion: string
+  }
   source?: {
     approvalTransactionIds?: readonly string[] | undefined
     transactionId?: string | undefined
+    hookData?: string | undefined
   } | undefined
   destination?: { transactionId: string } | undefined
 }
+
+/**
+ * Identifies the operation available after bridge progress is reconstructed.
+ *
+ * `wait` requires only reads, while `resume` and `complete` mark explicit
+ * wallet authorization boundaries.
+ */
+export type BridgeProgressNext = 'wait' | 'resume' | 'complete' | 'done' | 'failed'
+
+type BridgeProgressState = {
+  plan: BridgePlan
+  receipt: BridgeReceipt
+}
+
+/**
+ * Carries reconstructed runtime state and tells the caller what can happen next.
+ *
+ * @property next Read-only observation, source resumption, destination completion, or terminal outcome.
+ * @property plan Runtime plan rebuilt from the checkpoint's public intent.
+ * @property receipt Latest protocol-neutral lifecycle receipt.
+ * @property error Failure description when `next` is `failed`.
+ */
+export type BridgeProgress =
+  | (BridgeProgressState & { next: 'wait' })
+  | (BridgeProgressState & { next: 'resume' })
+  | (BridgeProgressState & { next: 'complete' })
+  | (BridgeProgressState & { next: 'done' })
+  | (BridgeProgressState & { next: 'failed', error: string })

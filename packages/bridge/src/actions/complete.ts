@@ -25,8 +25,21 @@ export async function complete(
   clients: BridgeChainClients,
   params: CompleteParameters,
 ): Promise<BridgeExecution> {
-  const route = resolveTransferRoute(registry, params.plan)
-  const receipt = params.receipt
+  let plan: import('../types/protocol.js').BridgePlan
+  let receipt: BridgeReceipt
+  if (params.progress) {
+    if (params.progress.next !== 'complete') {
+      throw new BridgeError('Bridge progress has no destination action to complete')
+    }
+    plan = params.progress.plan
+    receipt = params.progress.receipt
+  } else if (params.plan && params.receipt) {
+    plan = params.plan
+    receipt = params.receipt
+  } else {
+    throw new BridgeError('Bridge completion requires recovered progress')
+  }
+  const route = resolveTransferRoute(registry, plan)
   if (receipt.status !== 'DESTINATION_ACTION_REQUIRED'
     || receipt.nextAction?.kind !== 'xreserve-private-mint'
     || receipt.nextAction.chainId !== route.destinationChain.id) {
@@ -48,12 +61,13 @@ export async function complete(
     registry,
     requireAleoClientWithWallet(registry, clients, route.destinationChain.id, 'complete xReserve private mint').walletClient,
     {
-      plan: params.plan,
+      plan,
       deposit: { ...deposit, status: 'ATTESTATION_PENDING' },
       attestation: { status: 'complete', payload, messageHash, attestation },
       privateFee: params.privateFee,
+      privateMintSecretNonce: params.privateMintSecretNonce,
       onSubmitted: params.onCheckpoint
-        ? async (submitted) => params.onCheckpoint?.(createBridgeCheckpoint(params.plan, submitted))
+        ? async (submitted) => params.onCheckpoint?.(createBridgeCheckpoint(plan, submitted))
         : undefined,
     },
   )

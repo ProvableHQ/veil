@@ -10,6 +10,7 @@ import type {
   BridgeFee,
   BridgeCheckpoint,
   BridgePlan,
+  BridgeProgress,
   BridgeReceipt,
   BridgeStatus,
 } from './protocol.js'
@@ -20,9 +21,11 @@ import type { EvmXReserveTransferExecution, EvmXReserveTransferQuote } from './x
  * Selects a prepared transfer for a live protocol quote.
  *
  * @property plan Pure transfer plan returned by `prepare`.
+ * @property privateMintSecretNonce Secret Aleo scalar committed by a private xReserve deposit. Defaults to `0scalar` and is never persisted in a checkpoint.
  */
 export type QuoteParameters = {
   plan: BridgePlan
+  privateMintSecretNonce?: string | undefined
 }
 
 /** Identifies the route implementation that produced a transfer quote. */
@@ -81,6 +84,7 @@ export type BridgeQuote =
  * @property merkleProof Encoded `[MerkleProof; 2]` literal required by a private Aleo xReserve burn.
  * @property privateFee Whether an Aleo wallet pays its execution fee privately. Defaults to false.
  * @property gasPaymentMicrocredits Optional exact Aleo Hyperlane hook payment override. Defaults to a fresh live quote.
+ * @property privateMintSecretNonce Secret Aleo scalar committed by a private xReserve deposit. Defaults to `0scalar` and is never persisted in a checkpoint.
  */
 export type ExecuteParameters = {
   plan: BridgePlan
@@ -92,6 +96,7 @@ export type ExecuteParameters = {
   merkleProof?: string | undefined
   privateFee?: boolean | undefined
   gasPaymentMicrocredits?: bigint | undefined
+  privateMintSecretNonce?: string | undefined
 }
 
 /** Identifies the route implementation that submitted a transfer. */
@@ -142,29 +147,77 @@ export type WaitForStatusParameters = GetStatusParameters & {
 }
 
 /**
- * Configures one caller-authorized destination-chain submission.
+ * Holds options shared by supported destination completion inputs.
  *
- * @property plan Original plan that produced the ready receipt.
- * @property receipt Receipt whose status and next action authorize submission.
- * @property privateFee Whether an Aleo wallet pays the execution fee privately. Defaults to false.
- * @property onCheckpoint Optional durable hook receiving a compact checkpoint immediately after destination broadcast.
+ * @property privateMintSecretNonce Secret Aleo scalar required by a private xReserve mint. Defaults to `0scalar`.
+ * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
+ * @property onCheckpoint Durable hook called immediately after destination broadcast.
  */
-export type CompleteParameters = {
-  plan: BridgePlan
-  receipt: BridgeReceipt
+type CompleteOptions = {
+  privateMintSecretNonce?: string | undefined
   privateFee?: boolean | undefined
   onCheckpoint?: ((checkpoint: BridgeCheckpoint) => void | Promise<void>) | undefined
 }
 
 /**
+ * Configures one caller-authorized destination-chain submission.
+ *
+ * Recovered callers pass `progress`; in-memory callers may pass the original
+ * `plan` and `receipt` pair.
+ *
+ * @property progress Recovered progress whose next operation is `complete`.
+ * @property plan Original plan for an uninterrupted in-memory flow.
+ * @property receipt Ready receipt for an uninterrupted in-memory flow.
+ * @property privateMintSecretNonce Secret Aleo scalar required by a private xReserve mint. Defaults to `0scalar` and must match the source deposit.
+ * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
+ * @property onCheckpoint Optional durable hook called immediately after destination broadcast.
+ */
+export type CompleteParameters = CompleteOptions & (
+  | { progress: Extract<BridgeProgress, { next: 'complete' }>, plan?: never, receipt?: never }
+  | { progress?: never, plan: BridgePlan, receipt: BridgeReceipt }
+)
+
+/**
  * Selects a persisted submission checkpoint for read-only recovery.
  *
- * @property plan Original plan that produced the submitted transactions.
  * @property checkpoint Compact checkpoint emitted at a wallet submission boundary.
  * @property signal Optional cancellation signal. Defaults to no cancellation.
  */
 export type RecoverParameters = {
-  plan: BridgePlan
   checkpoint: BridgeCheckpoint
+  signal?: AbortSignal | undefined
+}
+
+/**
+ * Continues an interrupted source sequence from recovered progress.
+ *
+ * @property progress Recovery result whose next operation is `resume`.
+ * @property privateMintSecretNonce Secret Aleo scalar required to resume a private xReserve deposit. Defaults to `0scalar` and must match the checkpointed hook.
+ * @property pollingIntervalMs Delay between source confirmation reads. Defaults to 1,000 milliseconds.
+ * @property confirmationTimeoutMs Maximum source confirmation wait. Defaults to 120,000 milliseconds.
+ * @property onCheckpoint Optional durable hook called immediately after a new transaction is broadcast.
+ */
+export type ResumeParameters = {
+  progress: Extract<BridgeProgress, { next: 'resume' }>
+  privateMintSecretNonce?: string | undefined
+  pollingIntervalMs?: number | undefined
+  confirmationTimeoutMs?: number | undefined
+  onCheckpoint?: ((checkpoint: BridgeCheckpoint) => void | Promise<void>) | undefined
+}
+
+/**
+ * Waits from reconstructed progress until the next caller boundary.
+ *
+ * @property progress Current plan and receipt returned by recovery.
+ * @property pollingIntervalMs Delay between reads. Defaults to 15,000 milliseconds.
+ * @property timeoutMs Maximum polling duration. Defaults to 1,200,000 milliseconds.
+ * @property onUpdate Optional callback invoked after each receipt transition.
+ * @property signal Optional cancellation signal. Defaults to no cancellation.
+ */
+export type WaitParameters = {
+  progress: BridgeProgress
+  pollingIntervalMs?: number | undefined
+  timeoutMs?: number | undefined
+  onUpdate?: ((progress: BridgeProgress) => void | Promise<void>) | undefined
   signal?: AbortSignal | undefined
 }

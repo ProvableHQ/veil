@@ -113,6 +113,7 @@ export async function execute(
         pollingIntervalMs: params.pollingIntervalMs,
         confirmationTimeoutMs: params.confirmationTimeoutMs,
         onSubmitted,
+        privateMintSecretNonce: params.privateMintSecretNonce,
       },
     )
     return { kind: 'evm-xreserve', ...execution }
