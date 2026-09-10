@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { validateBridgeRegistry } from '../../src/registry/validate.js'
-import { getProtocolRoutes } from '../../src/actions/getProtocolRoutes.js'
+import { getRoutes } from '../../src/actions/getRoutes.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 
 describe('DEFAULT_BRIDGE_REGISTRY', () => {
@@ -186,7 +186,7 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
   })
 
   it('activates the reviewed Solana-origin SOL deposit route with its Sealevel metadata', () => {
-    const routes = getProtocolRoutes(DEFAULT_BRIDGE_REGISTRY, { includeUnavailable: true })
+    const routes = getRoutes(DEFAULT_BRIDGE_REGISTRY, { includeUnavailable: true })
     const route = routes.find((entry) => entry.id === 'hyperlane:solana/sol->aleo/sol')!
     expect(route.availability).toBe('active')
     expect(route.metadata).toMatchObject({

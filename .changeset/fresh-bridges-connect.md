@@ -13,6 +13,7 @@ The read-only `recover({ checkpoint })` action returns an explicit `wait`, `resu
 `complete`, `done`, or `failed` next step without resubmitting funds. Each bridge decorator action now has its own module,
 with protocol mechanics isolated behind internal helpers. Pure call builders are
 standalone utilities rather than bridge client methods.
+Registry discovery actions are exported directly as `getAssets` and `getRoutes`.
 The protocol-neutral lifecycle is now `prepare`, `quote`, `execute`,
 `getStatus`, `waitForStatus`, `wait`, `recover`, `resume`, and `complete`. `prepare` selects structured
 source and destination assets with an optional `bridgeProtocol` constraint;

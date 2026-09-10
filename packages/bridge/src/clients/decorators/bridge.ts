@@ -1,5 +1,5 @@
-import { getProtocolAssets, type GetProtocolAssetsParameters } from '../../actions/getProtocolAssets.js'
-import { getProtocolRoutes, type GetProtocolRoutesParameters } from '../../actions/getProtocolRoutes.js'
+import { getAssets, type GetAssetsParameters } from '../../actions/getAssets.js'
+import { getRoutes, type GetRoutesParameters } from '../../actions/getRoutes.js'
 import { prepare } from '../../actions/prepare.js'
 import { execute } from '../../actions/execute.js'
 import { quote } from '../../actions/quote.js'
@@ -29,8 +29,8 @@ export type BridgeActionsConfig = {
 
 /** Lists protocol discovery, planning, execution, status, and completion operations. */
 export type BridgeActions = {
-  getAssets: (params?: GetProtocolAssetsParameters) => ProtocolBridgeAsset[]
-  getRoutes: (params?: GetProtocolRoutesParameters) => ProtocolBridgeRoute[]
+  getAssets: (params?: GetAssetsParameters) => ProtocolBridgeAsset[]
+  getRoutes: (params?: GetRoutesParameters) => ProtocolBridgeRoute[]
   prepare: (params: PrepareParameters) => BridgePlan
   quote: (params: QuoteParameters) => Promise<BridgeQuote>
   execute: (params: ExecuteParameters) => Promise<BridgeExecution>
@@ -45,8 +45,8 @@ export type BridgeActions = {
 /** Binds registry and private client state to bridge actions. */
 export function bridgeActions(config: BridgeActionsConfig): BridgeActions {
   return {
-    getAssets: (params = {}) => getProtocolAssets(config.registry, { ...params, environment: params.environment ?? config.environment }),
-    getRoutes: (params = {}) => getProtocolRoutes(config.registry, { ...params, environment: params.environment ?? config.environment }),
+    getAssets: (params = {}) => getAssets(config.registry, { ...params, environment: params.environment ?? config.environment }),
+    getRoutes: (params = {}) => getRoutes(config.registry, { ...params, environment: params.environment ?? config.environment }),
     prepare: (params) => prepare(config.registry, params),
     quote: async (params) => quote(config.registry, config.clients, params),
     execute: async (params) => execute(config.registry, config.clients, params),

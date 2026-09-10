@@ -51,13 +51,13 @@ export {
 export type { BridgeChainClient, BridgeChainClients } from './connections/resolve.js'
 
 export {
-  getProtocolAssets as getAssets,
-  type GetProtocolAssetsParameters as GetAssetsParameters,
-} from './actions/getProtocolAssets.js'
+  getAssets,
+  type GetAssetsParameters,
+} from './actions/getAssets.js'
 export {
-  getProtocolRoutes as getRoutes,
-  type GetProtocolRoutesParameters as GetRoutesParameters,
-} from './actions/getProtocolRoutes.js'
+  getRoutes,
+  type GetRoutesParameters,
+} from './actions/getRoutes.js'
 export { prepare } from './actions/prepare.js'
 export { execute } from './actions/execute.js'
 export { quote } from './actions/quote.js'

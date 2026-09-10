@@ -7,14 +7,14 @@ import type {
 } from '../../types/protocol.js'
 
 /** Filters the protocol asset catalog. */
-export type GetProtocolAssetsParameters = {
+export type GetAssetsParameters = {
   environment?: BridgeEnvironment | undefined
   chainId?: string | undefined
   symbol?: string | undefined
 }
 
 /** Filters directional protocol routes. */
-export type GetProtocolRoutesParameters = {
+export type GetRoutesParameters = {
   environment?: BridgeEnvironment | undefined
   protocol?: BridgeProtocol | undefined
   sourceChainId?: string | undefined
@@ -37,7 +37,7 @@ export type GetProtocolRoutesParameters = {
  */
 export function filterProtocolAssets(
   registry: BridgeRegistry,
-  params: GetProtocolAssetsParameters = {},
+  params: GetAssetsParameters = {},
 ): ProtocolBridgeAsset[] {
   const chains = new Map(registry.chains.map((chain) => [chain.id, chain]))
   const chainId = params.chainId?.toLowerCase()
@@ -68,7 +68,7 @@ export function filterProtocolAssets(
  */
 export function filterProtocolRoutes(
   registry: BridgeRegistry,
-  params: GetProtocolRoutesParameters = {},
+  params: GetRoutesParameters = {},
 ): ProtocolBridgeRoute[] {
   const assets = new Map(registry.assets.map((asset) => [asset.id, asset]))
   const sourceChainId = params.sourceChainId?.toLowerCase()
