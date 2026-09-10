@@ -1,12 +1,15 @@
 import { transactionStatus } from '@provablehq/veil-core'
 import { isHash } from 'viem'
-import { requireAleoClient, type BridgeChainClients } from '../connections/resolve.js'
+import { requireAleoClient, requireEvmClient, requireSolanaClient, type BridgeChainClients } from '../connections/resolve.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type { GetStatusParameters } from '../types/actions.js'
 import type { BridgeReceipt, BridgeRegistry } from '../types/protocol.js'
 import type { XReserveHttpTransport } from '../types/xreserve.js'
-import { getAttestation } from '../protocols/xreserve/evmToAleo.js'
+import { getAttestation, getSourceStatus } from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
+import { aleoAddressToBytes32 } from '../utils/xreserve.js'
+import { getSourceStatus as getEvmHyperlaneSourceStatus } from '../protocols/hyperlane/evm.js'
+import { getSourceStatus as getSolanaHyperlaneSourceStatus } from '../protocols/hyperlane/solana.js'
 
 function withoutNextAction(receipt: BridgeReceipt): Omit<BridgeReceipt, 'nextAction'> {
   const { nextAction: _nextAction, ...rest } = receipt
@@ -39,8 +42,72 @@ export async function getStatus(
   if (receipt.protocol !== params.plan.protocol || receipt.protocolState.routeId !== params.plan.route.id) {
     throw new BridgeError('Bridge receipt does not match the prepared route')
   }
+
+  if (receipt.status === 'SOURCE_APPROVAL_PENDING' && route.sourceChain.family === 'evm') {
+    if (!isHash(receipt.id)) throw new BridgeError('Bridge receipt is missing its EVM approval transaction id')
+    const evm = requireEvmClient(registry, clients, route.sourceChain.id)
+    const result = await evm.publicClient.getTransactionReceipt(receipt.id)
+    if (!result) return receipt
+    if (result.status === 'reverted') {
+      return {
+        ...withoutNextAction(receipt),
+        status: 'FAILED',
+        protocolState: { ...receipt.protocolState, sourceError: `EVM approval transaction reverted: ${receipt.id}` },
+      }
+    }
+    return { ...receipt, status: 'SOURCE_SUBMISSION_PENDING' }
+  }
+
+  if (receipt.status === 'SOURCE_CONFIRMING' && route.sourceChain.family === 'aleo') {
+    const transactionId = receipt.sourceTxId
+    if (!transactionId) throw new BridgeError('Bridge receipt is missing its Aleo source transaction id')
+    const aleo = requireAleoClient(registry, clients, route.sourceChain.id)
+    const result = await transactionStatus(aleo.publicClient, { transactionId })
+    if (result.status === 'accepted') {
+      return { ...withoutNextAction(receipt), status: 'DELIVERY_PENDING' }
+    }
+    if (result.status === 'rejected') {
+      return {
+        ...withoutNextAction(receipt),
+        status: 'FAILED',
+        protocolState: { ...receipt.protocolState, sourceError: result.error ?? 'Aleo transaction was rejected' },
+      }
+    }
+    return receipt
+  }
+
+  if (receipt.status === 'SOURCE_CONFIRMING'
+    && route.route.protocol === 'hyperlane'
+    && route.sourceChain.family === 'evm') {
+    return getEvmHyperlaneSourceStatus(
+      registry,
+      requireEvmClient(registry, clients, route.sourceChain.id),
+      params.plan,
+      aleoAddressToBytes32(params.plan.recipient),
+      receipt,
+    )
+  }
+
+  if (receipt.status === 'SOURCE_CONFIRMING'
+    && route.route.protocol === 'hyperlane'
+    && route.sourceChain.family === 'solana') {
+    return getSolanaHyperlaneSourceStatus(
+      requireSolanaClient(registry, clients, route.sourceChain.id),
+      receipt,
+    )
+  }
+
   if (route.route.protocol !== 'xreserve' || route.sourceChain.family !== 'evm' || route.destinationChain.family !== 'aleo') {
     throw new BridgeError('Status refresh is not implemented for this bridge route')
+  }
+
+  if (receipt.status === 'SOURCE_CONFIRMING') {
+    return getSourceStatus(
+      registry,
+      requireEvmClient(registry, clients, route.sourceChain.id),
+      params.plan,
+      receipt,
+    )
   }
 
   if (receipt.status === 'ATTESTATION_PENDING') {

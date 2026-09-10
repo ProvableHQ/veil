@@ -8,6 +8,7 @@ export type LiveState = {
   destinationTxId?: string
   completed?: boolean
   sourceReceipt?: unknown
+  checkpoint?: unknown
 }
 
 export function loadLiveState(path: string, routeId: string): LiveState {

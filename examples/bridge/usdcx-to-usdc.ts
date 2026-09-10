@@ -209,6 +209,9 @@ async function main(): Promise<void> {
     ...(userRecord ? { userRecord } : {}),
     ...(merkleProof ? { merkleProof } : {}),
     privateFee: booleanFromEnvironment('ALEO_PRIVATE_FEE', false),
+    onCheckpoint(checkpoint) {
+      console.log('Optional recovery checkpoint:', JSON.stringify(checkpoint))
+    },
   })
   if (result.kind !== 'aleo-xreserve') throw new Error(`Unexpected execution kind: ${result.kind}`)
   console.log('\nUSDCx burn accepted:', result.transactionId)

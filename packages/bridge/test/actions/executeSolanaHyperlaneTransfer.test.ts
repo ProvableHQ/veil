@@ -1,6 +1,8 @@
 import { getTransactionDecoder } from '@solana/kit'
 import { describe, expect, it, vi } from 'vitest'
 import { execute as executeSolanaHyperlaneTransfer } from '../../src/protocols/hyperlane/solana.js'
+import { getStatus } from '../../src/actions/getStatus.js'
+import { recover } from '../../src/actions/recover.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 import type { SolanaRpcClient } from '../../src/solana/rpc.js'
 import type { SolanaWalletClient } from '../../src/connections/solana.js'
@@ -203,6 +205,57 @@ describe('executeSolanaHyperlaneTransfer', () => {
     expect(execution.receipt).toMatchObject({
       id: '0xffe0409d00c184769b4dfa2a1eaac5a0a79bfe52458a38e1d9a71a9e5c677805',
       protocol: 'hyperlane',
+      status: 'DELIVERY_PENDING',
+      sourceTxId: STUB_SIGNATURE,
+      messageId: '0xffe0409d00c184769b4dfa2a1eaac5a0a79bfe52458a38e1d9a71a9e5c677805',
+    })
+  })
+
+  it('confirms a submitted signature through the read-only status action', async () => {
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    const receipt: BridgeReceipt = {
+      id: STUB_SIGNATURE,
+      protocol: 'hyperlane',
+      status: 'SOURCE_CONFIRMING',
+      sourceTxId: STUB_SIGNATURE,
+      protocolState: { routeId: plan.route.id },
+    }
+
+    const result = await getStatus(
+      registry,
+      { solana: client(stubExecutor(), executeRpc()) },
+      globalThis.fetch,
+      { plan, receipt },
+    )
+
+    expect(result).toMatchObject({
+      status: 'DELIVERY_PENDING',
+      sourceTxId: STUB_SIGNATURE,
+      messageId: '0xffe0409d00c184769b4dfa2a1eaac5a0a79bfe52458a38e1d9a71a9e5c677805',
+    })
+  })
+
+  it('recovers a submitted signature from a compact checkpoint', async () => {
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+
+    const result = await recover(
+      registry,
+      { solana: client(stubExecutor(), executeRpc()) },
+      globalThis.fetch,
+      {
+        plan,
+        checkpoint: {
+          version: 1,
+          routeId: plan.route.id,
+          protocol: 'hyperlane',
+          source: { transactionId: STUB_SIGNATURE },
+        },
+      },
+    )
+
+    expect(result).toMatchObject({
       status: 'DELIVERY_PENDING',
       sourceTxId: STUB_SIGNATURE,
       messageId: '0xffe0409d00c184769b4dfa2a1eaac5a0a79bfe52458a38e1d9a71a9e5c677805',

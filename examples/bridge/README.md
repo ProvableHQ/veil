@@ -77,38 +77,18 @@ for the local WASM proving path's practical memory limits. While DPS is proving,
 the script prints a progress message every 15 seconds; the Aleo transaction id
 becomes available after DPS broadcasts it and the SDK confirms acceptance.
 
-### Resume an existing private deposit
+### Recover an interrupted private deposit
 
-If the process exits after the Ethereum deposit, do not rerun the deposit command.
-Set the Circle message hash printed by the original run to bypass Ethereum and
-submit only the Aleo private mint. `USDC_AMOUNT`, `ETHEREUM_RPC_URL`, and
-`EVM_PRIVATE_KEY` are not used in resume mode.
+Durable recovery is optional. A production application may store the compact
+value passed to `onCheckpoint`; an uninterrupted script can keep the returned
+receipt only in memory. The checkpoint contains the route, format version, and
+submitted transaction identifiers. It does not contain the plan, private key,
+decrypted records, or Circle response bodies.
 
-```sh
-export USDCX_MINT_MODE='private'
-export ALEO_RECIPIENT='aleo1...'
-export XRESERVE_RESUME_MESSAGE_HASH='0x...'
-
-# Set this to the same custom scalar used for the deposit; omit it for 0scalar.
-read -s USDCX_SECRET_NONCE
-export USDCX_SECRET_NONCE
-
-# Read-only: verifies Circle's payload and the recipient/scalar commitment.
-pnpm tsx examples/bridge/usdc-to-usdcx.ts
-
-printf 'Aleo Private Key: '
-read -rs ALEO_PRIVATE_KEY
-echo
-export ALEO_PRIVATE_KEY
-
-# After reviewing the resume preflight:
-EXECUTE_XRESERVE_PRIVATE_MINT=I_UNDERSTAND_THIS_SUBMITS_AN_ALEO_PRIVATE_MINT \
-  pnpm tsx examples/bridge/usdc-to-usdcx.ts
-```
-
-The resume path fetches Circle's signed payload, derives the deposited amount,
-and recomputes the private hook from the recipient and scalar. A mismatch fails
-before the Aleo signer or delegated prover submits anything.
+After a process restart, rebuild the same plan and pass the saved checkpoint to
+`bridge.recover({ plan, checkpoint })`. Recovery only reads chain and protocol
+state. It never signs, proves, or submits. If a private mint is ready, the caller
+still authorizes it explicitly with `bridge.complete({ plan, receipt })`.
 
 Delegated mode automatically registers a process-lifetime Provable API consumer
 when credentials are omitted. For an existing consumer, set both

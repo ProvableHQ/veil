@@ -5,6 +5,7 @@ import type { BridgeExecution, CompleteParameters } from '../types/actions.js'
 import type { BridgeReceipt, BridgeRegistry } from '../types/protocol.js'
 import { complete as completePrivateMint } from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
+import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
 
 /**
  * Submits one caller-authorized destination operation from a ready receipt.
@@ -17,7 +18,7 @@ import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
  * @param params Ready receipt, original plan, fee preference, and durable submission hook.
  * @returns The destination-confirming execution state.
  * @throws BridgeError When no supported destination action is ready or its persisted attestation is invalid.
- * @example const execution = await complete(registry, clients, { plan, receipt: ready, onSubmitted: save })
+ * @example const execution = await complete(registry, clients, { plan, receipt: ready, onCheckpoint: save })
  */
 export async function complete(
   registry: BridgeRegistry,
@@ -51,7 +52,9 @@ export async function complete(
       deposit: { ...deposit, status: 'ATTESTATION_PENDING' },
       attestation: { status: 'complete', payload, messageHash, attestation },
       privateFee: params.privateFee,
-      onSubmitted: params.onSubmitted,
+      onSubmitted: params.onCheckpoint
+        ? async (submitted) => params.onCheckpoint?.(createBridgeCheckpoint(params.plan, submitted))
+        : undefined,
     },
   )
   return { kind: 'aleo-xreserve', ...result }

@@ -255,22 +255,22 @@ async function main(): Promise<void> {
   // Nothing above this point touches the Aleo network — the quote and balance
   // reads are Solana-only, so a preflight failure (insufficient balance) never
   // depends on an Aleo read succeeding.
-  // Capture this before submission because `onSubmitted` mutates the
+  // Capture this before submission because `onCheckpoint` mutates the
   // checkpoint while the action is still running.
   const hadExistingDispatch = state.dispatch !== undefined
   if (!hadExistingDispatch) {
     log('Submitting the transfer through the local keypair account.')
     // Never auto-retried: a post-broadcast error would risk a second dispatch.
-    // `onSubmitted` checkpoints the signature before confirmation polling, so
+    // `onCheckpoint` records the signature before confirmation polling, so
     // state.dispatch may already be populated when either branch below runs.
     let execution
     try {
       execution = await bridge.execute({
         plan,
         confirmationTimeoutMs: CONFIRMATION_TIMEOUT_MS,
-        onSubmitted(receipt) {
+        onCheckpoint(checkpoint) {
           state.dispatch = {
-            signature: receipt.sourceTxId!,
+            signature: checkpoint.source!.transactionId!,
             status: 'SOURCE_CONFIRMING',
             dispatchedAt: new Date().toISOString(),
           }

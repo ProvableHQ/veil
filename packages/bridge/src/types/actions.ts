@@ -8,6 +8,7 @@ import type {
 import type { EvmHyperlaneTransferExecution, EvmHyperlaneTransferQuote } from './evm.js'
 import type {
   BridgeFee,
+  BridgeCheckpoint,
   BridgePlan,
   BridgeReceipt,
   BridgeStatus,
@@ -74,8 +75,7 @@ export type BridgeQuote =
  * @property plan Pure transfer plan returned by `prepare`.
  * @property pollingIntervalMs Delay between source confirmation checks. Defaults to 1,000 milliseconds where polling applies.
  * @property confirmationTimeoutMs Maximum source confirmation wait. Defaults to 120,000 milliseconds where polling applies.
- * @property resume Previously checkpointed source receipt. Applies to implementations that support verification-only resumption.
- * @property onSubmitted Durable checkpoint hook invoked immediately after a supported source transaction is broadcast.
+ * @property onCheckpoint Optional durable hook receiving a compact checkpoint immediately after each source transaction is broadcast.
  * @property mode Aleo Hyperlane caller mode or xReserve burn mode. Defaults to `caller` for Hyperlane and `private` for xReserve.
  * @property userRecord Wallet record request or encoded USDCx record required by a private Aleo xReserve burn.
  * @property merkleProof Encoded `[MerkleProof; 2]` literal required by a private Aleo xReserve burn.
@@ -86,8 +86,7 @@ export type ExecuteParameters = {
   plan: BridgePlan
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined
-  resume?: BridgeReceipt | undefined
-  onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
+  onCheckpoint?: ((checkpoint: BridgeCheckpoint) => void | Promise<void>) | undefined
   mode?: 'caller' | 'signer' | XReserveBurnMode | undefined
   userRecord?: TransactionInput | undefined
   merkleProof?: string | undefined
@@ -148,11 +147,24 @@ export type WaitForStatusParameters = GetStatusParameters & {
  * @property plan Original plan that produced the ready receipt.
  * @property receipt Receipt whose status and next action authorize submission.
  * @property privateFee Whether an Aleo wallet pays the execution fee privately. Defaults to false.
- * @property onSubmitted Durable checkpoint hook invoked immediately after destination broadcast.
+ * @property onCheckpoint Optional durable hook receiving a compact checkpoint immediately after destination broadcast.
  */
 export type CompleteParameters = {
   plan: BridgePlan
   receipt: BridgeReceipt
   privateFee?: boolean | undefined
-  onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
+  onCheckpoint?: ((checkpoint: BridgeCheckpoint) => void | Promise<void>) | undefined
+}
+
+/**
+ * Selects a persisted submission checkpoint for read-only recovery.
+ *
+ * @property plan Original plan that produced the submitted transactions.
+ * @property checkpoint Compact checkpoint emitted at a wallet submission boundary.
+ * @property signal Optional cancellation signal. Defaults to no cancellation.
+ */
+export type RecoverParameters = {
+  plan: BridgePlan
+  checkpoint: BridgeCheckpoint
+  signal?: AbortSignal | undefined
 }

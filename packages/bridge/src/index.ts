@@ -64,6 +64,8 @@ export { quote } from './actions/quote.js'
 export { complete } from './actions/complete.js'
 export { getStatus } from './actions/getStatus.js'
 export { waitForStatus } from './actions/waitForStatus.js'
+export { recover } from './actions/recover.js'
+export { createBridgeCheckpoint } from './actions/createBridgeCheckpoint.js'
 export { hyperlane, xreserve, type ProtocolHelperRegistry } from './protocols/index.js'
 export { buildXReserveBurnCall } from './builders/buildXReserveBurnCall.js'
 export { buildAleoHyperlaneTransferRemoteCall } from './builders/buildAleoHyperlaneTransferRemoteCall.js'
@@ -76,6 +78,7 @@ export type {
   BridgeAssetKind,
   BridgeAssetLocator,
   BridgeChainFamily,
+  BridgeCheckpoint,
   BridgeEnvironment,
   BridgeEndpoint,
   BridgeExecutionStep,
@@ -99,6 +102,7 @@ export type {
   CompleteParameters,
   GetStatusParameters,
   QuoteParameters,
+  RecoverParameters,
   WaitForStatusParameters,
   BridgeExecution,
   BridgeExecutionKind,

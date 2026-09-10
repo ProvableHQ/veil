@@ -14,6 +14,10 @@ import {
   execute as executeEvmXReserveTransfer,
   getAttestation as getXReserveAttestation,
 } from '../../src/protocols/xreserve/evmToAleo.js'
+import { execute } from '../../src/actions/execute.js'
+import { waitForStatus } from '../../src/actions/waitForStatus.js'
+import { createBridgeCheckpoint } from '../../src/actions/createBridgeCheckpoint.js'
+import { createBridgeClient } from '../../src/clients/createBridgeClient.js'
 import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'
@@ -117,6 +121,86 @@ describe('Ethereum xReserve actions', () => {
       resume: pending.receipt,
     })
     expect(resumed.receipt.status).toBe('ATTESTATION_PENDING')
+    expect(sent).toHaveLength(2)
+  })
+
+  it('emits compact checkpoints from the protocol-neutral execute action', async () => {
+    const { executor } = mockExecutor()
+    const transfer = transferPlan()
+    const checkpoints: unknown[] = []
+
+    await execute(DEFAULT_BRIDGE_REGISTRY, { sepolia: executor }, {
+      plan: transfer,
+      onCheckpoint(checkpoint) { checkpoints.push(checkpoint) },
+    })
+
+    expect(checkpoints).toEqual([
+      {
+        version: 1,
+        routeId: transfer.route.id,
+        protocol: 'xreserve',
+        source: { approvalTransactionIds: [`0x${'11'.repeat(32)}`] },
+      },
+      {
+        version: 1,
+        routeId: transfer.route.id,
+        protocol: 'xreserve',
+        source: {
+          approvalTransactionIds: [`0x${'11'.repeat(32)}`],
+          transactionId: TX_HASH,
+        },
+      },
+    ])
+  })
+
+  it('continues source confirmation through the read-only status action', async () => {
+    const confirmDeposit = { value: false }
+    const { executor, sent } = mockExecutor(confirmDeposit)
+    const transfer = transferPlan()
+    const submitted = await executeEvmXReserveTransfer(DEFAULT_BRIDGE_REGISTRY, executor, {
+      plan: transfer,
+      confirmationTimeoutMs: 0,
+    })
+    expect(submitted.receipt.status).toBe('SOURCE_CONFIRMING')
+
+    confirmDeposit.value = true
+    const receipt = await waitForStatus(
+      DEFAULT_BRIDGE_REGISTRY,
+      { sepolia: executor },
+      async () => ({ ok: false, status: 404, json: async () => ({}) }),
+      {
+        plan: transfer,
+        receipt: submitted.receipt,
+        until: ['ATTESTATION_PENDING'],
+        pollingIntervalMs: 0,
+        timeoutMs: 1_000,
+      },
+    )
+
+    expect(receipt.status).toBe('ATTESTATION_PENDING')
+    expect(sent).toHaveLength(2)
+  })
+
+  it('recovers a confirmed source deposit from a compact checkpoint without resubmitting', async () => {
+    const confirmDeposit = { value: false }
+    const { executor, sent } = mockExecutor(confirmDeposit)
+    const transfer = transferPlan()
+    const submitted = await executeEvmXReserveTransfer(DEFAULT_BRIDGE_REGISTRY, executor, {
+      plan: transfer,
+      confirmationTimeoutMs: 0,
+    })
+    const checkpoint = createBridgeCheckpoint(transfer, submitted.receipt)
+
+    confirmDeposit.value = true
+    const bridge = createBridgeClient({
+      environment: 'testnet',
+      clients: { sepolia: { family: 'evm', publicClient: executor.publicClient } },
+      fetch: async () => ({ ok: false, status: 404, json: async () => ({}) }) as Response,
+    })
+    const receipt = await bridge.recover({ plan: transfer, checkpoint })
+
+    expect(receipt.status).toBe('ATTESTATION_PENDING')
+    expect(receipt.sourceTxId).toBe(TX_HASH)
     expect(sent).toHaveLength(2)
   })
 

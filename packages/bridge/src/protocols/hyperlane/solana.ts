@@ -179,6 +179,41 @@ function buildReceipt(
 }
 
 /**
+ * Refreshes one submitted Solana Hyperlane dispatch without signing or broadcasting.
+ *
+ * Performs a signature-status read and, after confirmation, reads transaction
+ * logs to recover the Hyperlane message id.
+ *
+ * @param client Registry-selected Solana public capability.
+ * @param receipt Source-confirming receipt containing the submitted signature.
+ * @returns Unchanged pending state or a delivery-pending receipt.
+ * @throws BridgeError When the checkpoint is invalid or the transaction failed.
+ * @example const next = await getSourceStatus(client, receipt)
+ */
+export async function getSourceStatus(
+  client: SolanaClient,
+  receipt: BridgeReceipt,
+): Promise<BridgeReceipt> {
+  if (receipt.protocol !== 'hyperlane' || receipt.status !== 'SOURCE_CONFIRMING' || !receipt.sourceTxId) {
+    throw new BridgeError('Solana Hyperlane source status requires a source-confirming receipt')
+  }
+  const status = await client.publicClient.getSignatureStatus(receipt.sourceTxId)
+  if (status == null || status === 'processed') return receipt
+  if (status === 'failed') throw new BridgeError(`Solana Hyperlane transfer failed on-chain: ${receipt.sourceTxId}`)
+  const messageId = extractSolanaHyperlaneMessageId(await client.publicClient.getTransactionLogs(receipt.sourceTxId))
+  return {
+    ...receipt,
+    id: messageId ?? receipt.sourceTxId,
+    status: 'DELIVERY_PENDING',
+    ...(messageId ? { messageId } : {}),
+    protocolState: {
+      ...receipt.protocolState,
+      ...(!messageId ? { messageIdUnavailable: true } : {}),
+    },
+  }
+}
+
+/**
  * Signs and submits a Solana-to-Aleo Hyperlane Warp Route transfer.
  *
  * Requotes the live IGP payment, then confirms the sender's balance covers

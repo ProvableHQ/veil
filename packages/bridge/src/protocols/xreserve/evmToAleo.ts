@@ -18,7 +18,7 @@ import type {
   ExecuteXReservePrivateMintParameters,
   XReservePrivateMintExecution,
 } from '../../types/aleo.js'
-import type { BridgeRegistry, BridgePlan, BridgeReceipt } from '../../types/protocol.js'
+import type { BridgeCheckpoint, BridgeRegistry, BridgePlan, BridgeReceipt } from '../../types/protocol.js'
 import type {
   EvmXReserveRouteMetadata,
   EvmXReserveTransferExecution,
@@ -84,9 +84,17 @@ function metadata(registry: BridgeRegistry, plan: BridgePlan): EvmXReserveRouteM
   return { xReserveContract: getAddress(xReserveContract), sourceChainId, sourceDomain, remoteDomain, remoteTokenBytes32: remoteTokenBytes32 as Hex, minimumAmountAtomic: BigInt(minimumAmountAtomic), maxFeeAtomic: BigInt(maxFeeAtomic), bridgeProgram, wrapperProgram, attestationBaseUrl }
 }
 
-async function assertChain(client: EvmClient & { walletClient: EvmWalletClient }, expected: number): Promise<void> {
+async function assertChain(client: EvmClient, expected: number): Promise<void> {
   const chain = await client.publicClient.getChainId()
-  if (chain !== expected) throw new BridgeError(`EVM wallet is connected to chain ${chain}; expected ${expected}`)
+  if (chain !== expected) throw new BridgeError(`EVM client is connected to chain ${chain}; expected ${expected}`)
+}
+
+async function observedAccount(client: EvmClient, plan: BridgePlan, receipt?: BridgeReceipt): Promise<Address> {
+  const saved = receipt?.protocolState.sourceAccount
+  const candidate = typeof saved === 'string' ? saved : plan.sender
+  if (candidate && isAddress(candidate)) return getAddress(candidate)
+  if (client.walletClient) return account(client as EvmClient & { walletClient: EvmWalletClient }, plan)
+  throw new BridgeError('Read-only EVM recovery requires the prepared sender address')
 }
 
 async function account(client: EvmClient & { walletClient: EvmWalletClient }, plan: BridgePlan): Promise<Address> {
@@ -255,6 +263,126 @@ function confirmedDepositReceipt(
   const payload = buildXReserveDepositPayload({ amount: args.value, remoteDomain: args.remoteDomain, remoteToken: args.remoteToken, remoteRecipient: args.remoteRecipient, localToken: args.localToken, depositor: args.localDepositor, maxFee: args.maxFee, nonce, hookData: args.hookData })
   const messageHash = calculateXReserveMessageHash(payload)
   return { id: messageHash, protocol: 'xreserve', status: 'ATTESTATION_PENDING', sourceTxId, protocolState: { ...pendingReceipt(plan, 'ATTESTATION_PENDING', messageHash, approvalTxIds, quote, sourceTxId).protocolState, sourceDomain: route.sourceDomain, remoteDomain: route.remoteDomain, depositLogIndex: logIndex, nonce, payload, messageHash, bridgeProgram: route.bridgeProgram, wrapperProgram: route.wrapperProgram } }
+}
+
+/**
+ * Refreshes one submitted EVM xReserve deposit without signing or broadcasting.
+ *
+ * Performs one transaction-receipt read. A pending transaction leaves the
+ * checkpoint unchanged; a confirmed transaction advances to attestation.
+ *
+ * @param registry Reviewed deployment snapshot used to validate the plan.
+ * @param client Registry-selected EVM public and wallet capabilities.
+ * @param plan Original transfer plan that produced the receipt.
+ * @param receipt Source-confirming receipt containing the submitted transaction.
+ * @returns Unchanged pending state or a validated attestation-pending receipt.
+ * @throws BridgeError When the checkpoint, transaction, or deposit event is invalid.
+ * @example const next = await getSourceStatus(registry, client, plan, receipt)
+ */
+export async function getSourceStatus(
+  registry: BridgeRegistry,
+  client: EvmClient,
+  plan: BridgePlan,
+  receipt: BridgeReceipt,
+): Promise<BridgeReceipt> {
+  if (receipt.status !== 'SOURCE_CONFIRMING') {
+    throw new BridgeError('xReserve source status requires a source-confirming receipt')
+  }
+  const route = metadata(registry, plan)
+  const owner = await observedAccount(client, plan, receipt)
+  const transferQuote = resumeQuote(plan, receipt)
+  const approvalTxIds = approvalIds(receipt)
+  const sourceTxId = receipt.sourceTxId
+  if (!sourceTxId || !isHash(sourceTxId)) {
+    throw new BridgeError('Checkpoint is missing the xReserve source transaction id')
+  }
+  const sourceReceipt = await client.publicClient.getTransactionReceipt(sourceTxId)
+  if (!sourceReceipt) return receipt
+  return confirmedDepositReceipt(plan, route, transferQuote, owner, approvalTxIds, sourceTxId, sourceReceipt)
+}
+
+/**
+ * Reconstructs an inbound xReserve source receipt from submitted transaction identifiers.
+ *
+ * Performs read-only chain operations and never calls the wallet submission
+ * capability. Confirmed approval-only checkpoints advance to the state where a
+ * new explicit `execute` call may submit the deposit.
+ *
+ * @param registry Reviewed deployment snapshot used to validate the plan.
+ * @param client Registry-selected EVM public and wallet capabilities.
+ * @param plan Original transfer plan that produced the checkpoint.
+ * @param checkpoint Compact checkpoint containing submitted transaction identifiers.
+ * @returns Reconstructed source receipt at its latest observable state.
+ * @throws BridgeError When the checkpoint or a confirmed transaction is invalid.
+ * @example const receipt = await recoverSourceCheckpoint(registry, client, plan, checkpoint)
+ */
+export async function recoverSourceCheckpoint(
+  registry: BridgeRegistry,
+  client: EvmClient,
+  plan: BridgePlan,
+  checkpoint: BridgeCheckpoint,
+): Promise<BridgeReceipt> {
+  if (checkpoint.version !== 1 || checkpoint.protocol !== 'xreserve' || checkpoint.routeId !== plan.route.id) {
+    throw new BridgeError('Bridge checkpoint does not match the prepared route')
+  }
+  const route = metadata(registry, plan)
+  await assertChain(client, route.sourceChainId)
+  const owner = await observedAccount(client, plan)
+  const token = plan.sourceAsset.locator?.value
+  if (plan.sourceAsset.locator?.kind !== 'evm-contract' || !token || !isAddress(token)) {
+    throw new BridgeError('xReserve source token contract is missing')
+  }
+  const amountAtomic = parseDecimalAmount(plan.amountIn, plan.sourceAsset.decimals)
+  const hookData = await buildXReserveHookData(
+    plan.mintMode,
+    plan.recipient,
+    plan.route.environment,
+    plan.privateMintSecretNonce ?? '0scalar',
+  )
+  const recipient = plan.mintMode === 'private'
+    ? await aleoProgramAddress(route.wrapperProgram, plan.route.environment)
+    : plan.recipient
+  const quote: EvmXReserveTransferQuote = {
+    routeId: plan.route.id,
+    xReserveContract: route.xReserveContract,
+    tokenAddress: getAddress(token),
+    sourceChainId: route.sourceChainId,
+    remoteDomain: route.remoteDomain,
+    remoteRecipientBytes32: aleoAddressToBytes32(recipient),
+    amountAtomic,
+    maxFeeAtomic: route.maxFeeAtomic,
+    hookData,
+    balanceAtomic: 0n,
+    allowanceAtomic: 0n,
+    approvalRequired: false,
+  }
+  const approvals = [...(checkpoint.source?.approvalTransactionIds ?? [])]
+  if (approvals.some((id) => !isHash(id))) {
+    throw new BridgeError('Bridge checkpoint contains an invalid approval transaction id')
+  }
+  const approvalTxIds = approvals as Hash[]
+
+  if (!checkpoint.source?.transactionId) {
+    const approvalTxId = approvalTxIds.at(-1)
+    if (!approvalTxId) throw new BridgeError('Bridge checkpoint contains no submitted transaction')
+    const pending = pendingReceipt(plan, 'SOURCE_APPROVAL_PENDING', approvalTxId, approvalTxIds, quote)
+    const approvalReceipt = await client.publicClient.getTransactionReceipt(approvalTxId)
+    if (!approvalReceipt) return pending
+    successful(approvalReceipt, approvalTxId)
+    return { ...pending, status: 'SOURCE_SUBMISSION_PENDING' }
+  }
+  if (!isHash(checkpoint.source.transactionId)) {
+    throw new BridgeError('Bridge checkpoint contains an invalid source transaction id')
+  }
+  const pending = pendingReceipt(
+    plan,
+    'SOURCE_CONFIRMING',
+    checkpoint.source.transactionId,
+    approvalTxIds,
+    quote,
+    checkpoint.source.transactionId,
+  )
+  return getSourceStatus(registry, client, plan, pending)
 }
 
 /**

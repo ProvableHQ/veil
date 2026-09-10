@@ -6,13 +6,13 @@ Replace flat executor and RPC configuration with registry-keyed EVM, Solana,
 and Aleo clients. Add browser-wallet, viem-client, and local-key adapters,
 live Solana fee and rent reads, and expiry-aware confirmation. Every client
 has a public client by default, while wallet actions require the optional
-wallet client explicitly in their signatures. Source execution exposes durable
-submission checkpoint hooks, and xReserve and Solana confirmation resume from checkpoints
-without resubmitting funds. Each bridge decorator action now has its own module,
+wallet client explicitly in their signatures. Fund-moving actions expose optional
+compact, versioned checkpoint hooks, while the read-only `recover` action reconstructs
+progress from submitted transaction identifiers without resubmitting funds. Each bridge decorator action now has its own module,
 with protocol mechanics isolated behind internal helpers. Pure call builders are
 standalone utilities rather than bridge client methods.
 The protocol-neutral lifecycle is now `prepare`, `quote`, `execute`,
-`getStatus`, `waitForStatus`, and `complete`. `prepare` selects structured
+`getStatus`, `waitForStatus`, `recover`, and `complete`. `prepare` selects structured
 source and destination assets with an optional `bridgeProtocol` constraint;
 encoded route ids are outputs rather than caller input. Private inbound
 xReserve transfers expose an explicit destination-action state, and `complete`

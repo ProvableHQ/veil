@@ -13,7 +13,7 @@ import {
   evmHttp,
   evmPrivateKey,
   type AleoMintMode,
-  type BridgeReceipt,
+  type BridgeCheckpoint,
 } from '@provablehq/aleo-bridge-sdk'
 
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
@@ -39,10 +39,10 @@ function mintMode(): AleoMintMode {
   return value
 }
 
-function checkpoint(label: string, receipt: BridgeReceipt): void {
-  // Store this JSON in durable application state before allowing the process
-  // to continue. Passing it back prevents a crash from causing resubmission.
-  console.log(`${label}:`, JSON.stringify(receipt))
+function checkpoint(label: string, value: BridgeCheckpoint): void {
+  // Durable storage is optional. Saving this compact value enables recovery
+  // after a browser close or process restart without storing protocol payloads.
+  console.log(`${label}:`, JSON.stringify(value))
 }
 
 async function main(): Promise<void> {
@@ -108,26 +108,40 @@ async function main(): Promise<void> {
   })
   if (process.env.EXECUTE_XRESERVE_DEPOSIT !== EXECUTION_ACKNOWLEDGEMENT) return
 
-  // execute submits only the source-side approval/deposit. Persist every
-  // onSubmitted receipt atomically; a saved receipt can be passed as resume.
-  const source = await bridge.execute({
+  // execute submits the source-side approval and deposit. The optional hook
+  // receives only versioned transaction identifiers needed by recover().
+  let source = await bridge.execute({
     plan,
-    onSubmitted(receipt) { checkpoint('source checkpoint', receipt) },
+    onCheckpoint(value) { checkpoint('source checkpoint', value) },
   })
   if (source.kind !== 'evm-xreserve') throw new Error(`Unexpected execution kind: ${source.kind}`)
   let receipt = source.receipt
-  checkpoint('source result', receipt)
-  if (receipt.status !== 'ATTESTATION_PENDING') {
-    console.log('The source transaction is still confirming. Resume bridge.execute with this receipt.')
-    return
+
+  // A timed-out approval becomes an explicit source-submission boundary.
+  // Waiting is read-only; the second execute call is the caller's authorization
+  // to submit the deposit after the approval confirms.
+  if (receipt.status === 'SOURCE_APPROVAL_PENDING') {
+    receipt = await bridge.waitForStatus({
+      plan,
+      receipt,
+      until: ['SOURCE_SUBMISSION_PENDING', 'FAILED'],
+    })
+  }
+  if (receipt.status === 'FAILED') throw new Error('The source USDC approval failed')
+  if (receipt.status === 'SOURCE_SUBMISSION_PENDING') {
+    source = await bridge.execute({
+      plan,
+      onCheckpoint(value) { checkpoint('source checkpoint', value) },
+    })
+    receipt = source.receipt
   }
 
-  // waitForStatus only reads Circle. It never submits a destination action.
+  // waitForStatus confirms the existing deposit and then reads Circle. It
+  // never resubmits the source transaction or submits a destination action.
   receipt = await bridge.waitForStatus({
     plan,
     receipt,
     until: [mode === 'private' ? 'DESTINATION_ACTION_REQUIRED' : 'DELIVERY_PENDING'],
-    onUpdate(value) { checkpoint('attestation checkpoint', value) },
   })
   if (mode !== 'private') {
     console.log(`Circle attested the deposit; the ${mode} Aleo mint is relayer-driven.`)
@@ -140,7 +154,7 @@ async function main(): Promise<void> {
     plan,
     receipt,
     privateFee: process.env.ALEO_PRIVATE_FEE === 'true',
-    onSubmitted(value) { checkpoint('destination checkpoint', value) },
+    onCheckpoint(value) { checkpoint('destination checkpoint', value) },
   })
   receipt = destination.receipt
 
@@ -149,7 +163,6 @@ async function main(): Promise<void> {
     plan,
     receipt,
     until: ['COMPLETED', 'FAILED'],
-    onUpdate(value) { checkpoint('confirmation checkpoint', value) },
   })
   if (receipt.status === 'FAILED') throw new Error(`Aleo private mint failed: ${receipt.destinationTxId}`)
   console.log('Private USDCx mint completed:', receipt.destinationTxId)

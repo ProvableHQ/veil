@@ -20,7 +20,7 @@ import type {
   ExecuteEvmHyperlaneTransferParameters,
   QuoteEvmHyperlaneTransferParameters,
 } from '../../types/evm.js'
-import type { BridgeRegistry, BridgePlan, BridgeReceipt } from '../../types/protocol.js'
+import type { BridgeCheckpoint, BridgeRegistry, BridgePlan, BridgeReceipt } from '../../types/protocol.js'
 import { parseDecimalAmount } from '../../utils/units.js'
 
 const WARP_ROUTE_ABI = parseAbi([
@@ -335,6 +335,114 @@ function validateCheckpoint(
     || state.recipientBytes32.toLowerCase() !== recipientBytes32.toLowerCase()) {
     throw new BridgeError('Hyperlane checkpoint does not match the prepared transfer')
   }
+}
+
+/**
+ * Refreshes one submitted EVM Hyperlane dispatch without signing or broadcasting.
+ *
+ * Performs one transaction-receipt read and extracts the dispatch message id
+ * after confirmation.
+ *
+ * @param registry Reviewed deployment snapshot used to validate the plan.
+ * @param client Registry-selected EVM public and wallet capabilities.
+ * @param plan Original transfer plan that produced the receipt.
+ * @param recipientBytes32 Wire-format destination recipient committed by the plan.
+ * @param receipt Source-confirming receipt containing the submitted transaction.
+ * @returns Unchanged pending state or a delivery-pending receipt.
+ * @throws BridgeError When the checkpoint or confirmed transaction is invalid.
+ * @example const next = await getSourceStatus(registry, client, plan, recipientBytes32, receipt)
+ */
+export async function getSourceStatus(
+  registry: BridgeRegistry,
+  client: EvmClient,
+  plan: BridgePlan,
+  recipientBytes32: Hex,
+  receipt: BridgeReceipt,
+): Promise<BridgeReceipt> {
+  const metadata = routeMetadata(registry, plan)
+  await assertChain(client, metadata.sourceChainId)
+  validateCheckpoint(registry, plan, metadata, recipientBytes32, receipt)
+  if (receipt.status !== 'SOURCE_CONFIRMING') {
+    throw new BridgeError('Hyperlane source status requires a source-confirming receipt')
+  }
+  const sourceTxId = receipt.sourceTxId
+  if (!sourceTxId || !isHash(sourceTxId)) {
+    throw new BridgeError('Hyperlane checkpoint is missing the source transaction id')
+  }
+  const sourceReceipt = await client.publicClient.getTransactionReceipt(sourceTxId)
+  if (!sourceReceipt) return receipt
+  assertSuccessfulReceipt(sourceReceipt, sourceTxId)
+  const messageId = messageIdFromReceipt(sourceReceipt)
+  return {
+    ...receipt,
+    id: messageId ?? sourceTxId,
+    status: 'DELIVERY_PENDING',
+    ...(messageId ? { messageId } : {}),
+  }
+}
+
+/**
+ * Reconstructs an EVM Hyperlane receipt from submitted transaction identifiers.
+ *
+ * Performs read-only chain operations and never calls the wallet submission
+ * capability. An approval-only checkpoint advances to the state where a new
+ * explicit `execute` call may submit the transfer.
+ *
+ * @param registry Reviewed deployment snapshot used to validate the plan.
+ * @param client Registry-selected EVM public and wallet capabilities.
+ * @param plan Original transfer plan that produced the checkpoint.
+ * @param recipientBytes32 Wire-format destination recipient committed by the plan.
+ * @param checkpoint Compact checkpoint containing submitted transaction identifiers.
+ * @returns Reconstructed source receipt at its latest observable state.
+ * @throws BridgeError When the checkpoint or a confirmed transaction is invalid.
+ * @example const receipt = await recoverSourceCheckpoint(registry, client, plan, recipient, checkpoint)
+ */
+export async function recoverSourceCheckpoint(
+  registry: BridgeRegistry,
+  client: EvmClient,
+  plan: BridgePlan,
+  recipientBytes32: Hex,
+  checkpoint: BridgeCheckpoint,
+): Promise<BridgeReceipt> {
+  if (checkpoint.version !== 1 || checkpoint.protocol !== 'hyperlane' || checkpoint.routeId !== plan.route.id) {
+    throw new BridgeError('Bridge checkpoint does not match the prepared route')
+  }
+  const metadata = routeMetadata(registry, plan)
+  const sourceAsset = registry.assets.find((asset) => asset.id === plan.sourceAsset.id)
+  if (!sourceAsset) throw new BridgeError(`Hyperlane source asset is not present in the configured registry: ${plan.sourceAsset.id}`)
+  const approvals = [...(checkpoint.source?.approvalTransactionIds ?? [])]
+  if (approvals.some((id) => !isHash(id))) throw new BridgeError('Bridge checkpoint contains an invalid approval transaction id')
+  const approvalTxIds = approvals as Hash[]
+  const protocolState = {
+    routeId: plan.route.id,
+    approvalTxIds,
+    recipientBytes32,
+    destinationDomain: metadata.destinationDomain,
+    nativeValueAtomic: '0',
+    amountAtomic: parseDecimalAmount(plan.amountIn, sourceAsset.decimals).toString(),
+  }
+  if (!checkpoint.source?.transactionId) {
+    const approvalTxId = approvalTxIds.at(-1)
+    if (!approvalTxId) throw new BridgeError('Bridge checkpoint contains no submitted transaction')
+    const pending: BridgeReceipt = {
+      id: approvalTxId,
+      protocol: 'hyperlane',
+      status: 'SOURCE_APPROVAL_PENDING',
+      protocolState,
+    }
+    const approvalReceipt = await client.publicClient.getTransactionReceipt(approvalTxId)
+    if (!approvalReceipt) return pending
+    assertSuccessfulReceipt(approvalReceipt, approvalTxId)
+    return { ...pending, status: 'SOURCE_SUBMISSION_PENDING' }
+  }
+  if (!isHash(checkpoint.source.transactionId)) throw new BridgeError('Bridge checkpoint contains an invalid source transaction id')
+  return getSourceStatus(registry, client, plan, recipientBytes32, {
+    id: checkpoint.source.transactionId,
+    protocol: 'hyperlane',
+    status: 'SOURCE_CONFIRMING',
+    sourceTxId: checkpoint.source.transactionId,
+    protocolState,
+  })
 }
 
 /**

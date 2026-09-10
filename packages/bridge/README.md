@@ -148,19 +148,32 @@ EVM collateral routes approve only when needed. USDT resets a non-zero
 allowance before setting the required value. Timeouts preserve transaction IDs
 in resumable receipts.
 
-Fund-moving actions accept `onSubmitted`, which runs immediately after the
-wallet or local signer returns the source transaction ID and before confirmation
-polling. Persist that receipt durably inside the hook. xReserve deposits also
-accept the persisted receipt as `resume`; approval or deposit confirmation then
-continues without repeating the submitted transaction:
+Fund-moving actions accept an optional `onCheckpoint` hook. It runs immediately
+after the wallet or local signer returns a transaction identifier and before
+confirmation polling. The emitted value is a compact, versioned set of route
+and transaction identifiers; it excludes the plan and protocol response bodies:
 
 ```ts
 const execution = await bridge.execute({
   plan,
-  ...(checkpoint ? { resume: checkpoint } : {}),
-  onSubmitted: saveCheckpoint,
+  onCheckpoint: saveCheckpoint,
 })
 ```
+
+Applications that remain alive can keep the returned receipt in memory and do
+not need to store a checkpoint. After an interruption, `recover` reconstructs
+the receipt with read-only chain and protocol calls:
+
+```ts
+const receipt = await bridge.recover({
+  plan,
+  checkpoint: await loadCheckpoint(),
+})
+```
+
+`recover` never signs or submits. An approval-only checkpoint may recover to
+`SOURCE_SUBMISSION_PENDING`; a new explicit `execute({ plan })` call then
+authorizes the source deposit after the confirmed allowance is re-read.
 
 For Solana, the active inbound route is native SOL:
 
@@ -177,15 +190,14 @@ const plan = bridge.prepare({
 const quote = await bridge.quote({ plan })
 const execution = await bridge.execute({
   plan,
-  ...(checkpoint ? { resume: checkpoint } : {}),
-  onSubmitted: saveCheckpoint,
+  onCheckpoint: saveCheckpoint,
 })
 ```
 
 The quote reads the deployed IGP, the live fee for the compiled message, and
 the execution preflight reads current rent exemptions. Confirmation searches
-transaction history and records blockhash expiry. Passing the checkpoint back as
-`resume` confirms the existing signature without signing or resubmitting.
+transaction history and records blockhash expiry. `recover({ plan, checkpoint })`
+checks an existing signature without signing or resubmitting.
 
 Current Solana token support is native SOL only. The client API is ready
 for future SPL-token routes, but it does not support Solana USDC today. SPL or
@@ -208,7 +220,7 @@ let receipt = await bridge.waitForStatus({
 const destinationExecution = await bridge.complete({
   plan,
   receipt,
-  onSubmitted: saveCheckpoint,
+  onCheckpoint: saveCheckpoint,
 })
 
 receipt = await bridge.waitForStatus({
@@ -219,10 +231,11 @@ receipt = await bridge.waitForStatus({
 })
 ```
 
-`onSubmitted` is the crash-safe boundary for both source and destination
-transactions. Persist the receipt before returning from the callback. A caller
-resumes source confirmation with `execute({ resume })` and resumes every later
-phase with `waitForStatus`; neither path resubmits a persisted transaction.
+`onCheckpoint` is optional. Persist its value before returning from the callback
+when recovery across a page close or process restart is required. `recover`
+reconstructs progress from submitted transaction identifiers, while
+`getStatus` and `waitForStatus` advance existing receipts through read-only
+confirmation. None of these three actions submits a transaction.
 
 ## Direct protocol helpers
 
@@ -287,9 +300,9 @@ Aleo accounts. They are skipped unless `BRIDGE_LIVE_FUNDS=1` and
 `BRIDGE_LIVE_STATE_DIR` are set. Mainnet fund-moving cases additionally require
 `BRIDGE_LIVE_MAINNET_ACK=I_ACKNOWLEDGE_BRIDGE_MAINNET_FUNDS`.
 
-Each journey writes a mode-`0600` checkpoint immediately after receiving its
-source transaction ID. A rerun with that checkpoint verifies the existing
-transaction and never submits the source transfer again. Passing requires a
+Each journey writes a mode-`0600` checkpoint immediately after receiving each
+submitted transaction identifier. A rerun with that checkpoint verifies the
+existing transaction and never repeats an irreversible transfer. Passing requires a
 confirmed source transaction, a Circle message hash or Hyperlane message ID,
 and a destination transaction. Use dedicated minimally funded accounts; the
 tests never print private keys or signed transaction bytes.

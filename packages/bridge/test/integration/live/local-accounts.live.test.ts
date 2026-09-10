@@ -3,6 +3,7 @@ import bs58 from 'bs58'
 import { describe, expect, it } from 'vitest'
 import {
   createAleoClient,
+  createBridgeCheckpoint,
   createBridgeClient,
   createEvmClient,
   evmHttp,
@@ -10,6 +11,7 @@ import {
   createSolanaClient,
   solanaHttp,
   solanaKeyPair,
+  type BridgeCheckpoint,
   type BridgeReceipt,
 } from '../../../src/index.js'
 import { loadLiveState, saveLiveState, waitForAleoTransaction, waitForHyperlaneDelivery } from './helpers.js'
@@ -61,22 +63,44 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
       sender: required('BRIDGE_LIVE_EVM_TESTNET_ADDRESS'),
       mintMode: 'private',
     })
-    let receipt = state.sourceReceipt as BridgeReceipt | undefined
-    if (!receipt || receipt.status === 'SOURCE_APPROVAL_PENDING' || receipt.status === 'SOURCE_CONFIRMING') {
+    const savedCheckpoint = state.checkpoint as BridgeCheckpoint | undefined
+      ?? (state.sourceReceipt
+        ? createBridgeCheckpoint(plan, state.sourceReceipt as BridgeReceipt)
+        : undefined)
+    if (savedCheckpoint && !state.checkpoint) {
+      state.checkpoint = savedCheckpoint
+      saveLiveState(path, state)
+    }
+    let receipt = savedCheckpoint
+      ? await bridge.recover({ plan, checkpoint: savedCheckpoint })
+      : undefined
+    if (receipt?.status === 'SOURCE_APPROVAL_PENDING') {
+      receipt = await bridge.waitForStatus({
+        plan,
+        receipt,
+        until: ['SOURCE_SUBMISSION_PENDING', 'FAILED'],
+      })
+    }
+    if (!receipt || receipt.status === 'SOURCE_SUBMISSION_PENDING') {
       const depositExecution = await bridge.execute({
         plan,
-        ...(receipt ? { resume: receipt } : {}),
-        onSubmitted(checkpoint) {
-          state.sourceTxId = checkpoint.sourceTxId ?? checkpoint.id
-          state.sourceReceipt = checkpoint
+        onCheckpoint(checkpoint) {
+          state.checkpoint = checkpoint
+          state.sourceTxId = checkpoint.source?.transactionId ?? state.sourceTxId
           saveLiveState(path, state)
         },
       })
       if (depositExecution.kind !== 'evm-xreserve') throw new Error(`Unexpected execution kind: ${depositExecution.kind}`)
       receipt = depositExecution.receipt
       state.sourceTxId = receipt.sourceTxId ?? state.sourceTxId
-      state.sourceReceipt = receipt
       saveLiveState(path, state)
+    }
+    if (receipt.status === 'SOURCE_CONFIRMING') {
+      receipt = await bridge.waitForStatus({
+        plan,
+        receipt,
+        until: ['ATTESTATION_PENDING', 'FAILED'],
+      })
     }
     if (receipt.status === 'ATTESTATION_PENDING') {
       receipt = await bridge.waitForStatus({
@@ -85,7 +109,6 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
         until: ['DESTINATION_ACTION_REQUIRED'],
         onUpdate(checkpoint) {
           state.messageId = checkpoint.id
-          state.sourceReceipt = checkpoint
           saveLiveState(path, state)
         },
       })
@@ -94,9 +117,9 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
       const mint = await bridge.complete({
         plan,
         receipt,
-        onSubmitted(checkpoint) {
-          state.destinationTxId = checkpoint.destinationTxId
-          state.sourceReceipt = checkpoint
+        onCheckpoint(checkpoint) {
+          state.checkpoint = checkpoint
+          state.destinationTxId = checkpoint.destination?.transactionId
           saveLiveState(path, state)
         },
       })
@@ -108,7 +131,6 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
         receipt,
         until: ['COMPLETED'],
         onUpdate(checkpoint) {
-          state.sourceReceipt = checkpoint
           saveLiveState(path, state)
         },
       })
@@ -141,20 +163,18 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
       recipient: required('BRIDGE_LIVE_ALEO_MAINNET_RECIPIENT'),
       sender: required('BRIDGE_LIVE_SOLANA_ADDRESS'),
     })
-    if (!state.sourceTxId || state.sourceReceipt) {
+    if (!state.sourceTxId) {
       const execution = await bridge.execute({
         plan,
-        ...(state.sourceReceipt ? { resume: state.sourceReceipt as BridgeReceipt } : {}),
-        onSubmitted(receipt) {
-          state.sourceTxId = receipt.sourceTxId
-          state.sourceReceipt = receipt
+        onCheckpoint(checkpoint) {
+          state.checkpoint = checkpoint
+          state.sourceTxId = checkpoint.source?.transactionId
           saveLiveState(path, state)
         },
       })
       if (execution.kind !== 'solana-hyperlane') throw new Error(`Unexpected execution kind: ${execution.kind}`)
       state.sourceTxId = execution.receipt.sourceTxId
       state.messageId = execution.receipt.messageId
-      state.sourceReceipt = execution.receipt
       saveLiveState(path, state)
       if (execution.receipt.protocolState.blockhashExpired === true) {
         throw new Error(`Solana source transaction ${state.sourceTxId} expired; inspect it before explicitly clearing the checkpoint`)
@@ -194,9 +214,9 @@ describe.skipIf(!liveFunds || !stateDirectory)('deployed bridges with local acco
         plan,
         mode: 'signer',
         gasPaymentMicrocredits: quote.paymentMicrocredits,
-        onSubmitted(receipt) {
-          state.sourceTxId = receipt.sourceTxId
-          state.sourceReceipt = receipt
+        onCheckpoint(checkpoint) {
+          state.checkpoint = checkpoint
+          state.sourceTxId = checkpoint.source?.transactionId
           saveLiveState(path, state)
         },
       })

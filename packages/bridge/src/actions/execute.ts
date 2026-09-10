@@ -16,6 +16,15 @@ import * as solanaHyperlane from '../protocols/hyperlane/solana.js'
 import * as aleoToEvmXReserve from '../protocols/xreserve/aleoToEvm.js'
 import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
+import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
+
+function submissionCheckpoint(params: ExecuteParameters) {
+  return params.onCheckpoint
+    ? async (receipt: import('../types/protocol.js').BridgeReceipt) => {
+        await params.onCheckpoint?.(createBridgeCheckpoint(params.plan, receipt))
+      }
+    : undefined
+}
 
 function aleoHyperlaneMode(mode: ExecuteParameters['mode']): 'caller' | 'signer' | undefined {
   if (mode == null) return undefined
@@ -33,15 +42,15 @@ function xReserveBurnMode(mode: ExecuteParameters['mode']): XReserveBurnMode | u
  * Executes a prepared transfer through its configured protocol and source chain.
  *
  * Resolves the required wallet client from the plan and requotes live values
- * before submission. Supported checkpoint receipts resume observation without
- * resubmitting an irreversible source transaction.
+ * before submission. Confirmation and interrupted-process recovery use the
+ * read-only status and recovery actions.
  *
  * @param registry Reviewed deployment snapshot.
  * @param clients Materialized chain clients keyed by registry chain id.
- * @param params Prepared transfer, source execution settings, and optional checkpoint.
+ * @param params Prepared transfer, source execution settings, and optional checkpoint hook.
  * @returns A discriminated execution result containing normalized resumable state.
  * @throws BridgeError When the route shape, execution mode, client, or submission is invalid.
- * @example const execution = await execute(registry, clients, { plan, onSubmitted: saveCheckpoint })
+ * @example const execution = await execute(registry, clients, { plan, onCheckpoint: saveCheckpoint })
  */
 export async function execute(
   registry: BridgeRegistry,
@@ -50,6 +59,7 @@ export async function execute(
 ): Promise<BridgeExecution> {
   const chain = resolveTransferRoute(registry, params.plan).sourceChain
   const chainId = chain.id
+  const onSubmitted = submissionCheckpoint(params)
 
   if (params.plan.protocol === 'hyperlane' && chain.family === 'evm') {
     const execution = await evmHyperlane.execute(
@@ -60,8 +70,7 @@ export async function execute(
         recipientBytes32: aleoAddressToBytes32(params.plan.recipient),
         pollingIntervalMs: params.pollingIntervalMs,
         confirmationTimeoutMs: params.confirmationTimeoutMs,
-        resume: params.resume,
-        onSubmitted: params.onSubmitted,
+        onSubmitted,
       },
     )
     return { kind: 'evm-hyperlane', ...execution }
@@ -74,14 +83,12 @@ export async function execute(
         plan: params.plan,
         pollingIntervalMs: params.pollingIntervalMs,
         confirmationTimeoutMs: params.confirmationTimeoutMs,
-        resume: params.resume,
-        onSubmitted: params.onSubmitted,
+        onSubmitted,
       },
     )
     return { kind: 'solana-hyperlane', ...execution }
   }
   if (params.plan.protocol === 'hyperlane' && chain.family === 'aleo') {
-    if (params.resume) throw new BridgeError('Aleo Hyperlane execution does not support source receipt resumption')
     const client = requireAleoClientWithWallet(registry, clients, chainId, 'execute Hyperlane transfer')
     const gasPaymentMicrocredits = params.gasPaymentMicrocredits ?? (await aleoHyperlane.quote(
       registry,
@@ -93,7 +100,7 @@ export async function execute(
       mode: aleoHyperlaneMode(params.mode),
       privateFee: params.privateFee,
       gasPaymentMicrocredits,
-      onSubmitted: params.onSubmitted,
+      onSubmitted,
     })
     return { kind: 'aleo-hyperlane', ...execution }
   }
@@ -105,14 +112,12 @@ export async function execute(
         plan: params.plan,
         pollingIntervalMs: params.pollingIntervalMs,
         confirmationTimeoutMs: params.confirmationTimeoutMs,
-        resume: params.resume,
-        onSubmitted: params.onSubmitted,
+        onSubmitted,
       },
     )
     return { kind: 'evm-xreserve', ...execution }
   }
   if (params.plan.protocol === 'xreserve' && chain.family === 'aleo') {
-    if (params.resume) throw new BridgeError('Aleo xReserve burn execution does not support source receipt resumption')
     const execution = await aleoToEvmXReserve.execute(
       registry,
       requireAleoClientWithWallet(registry, clients, chainId, 'execute xReserve burn').walletClient,
@@ -122,7 +127,7 @@ export async function execute(
         userRecord: params.userRecord,
         merkleProof: params.merkleProof,
         privateFee: params.privateFee,
-        onSubmitted: params.onSubmitted,
+        onSubmitted,
       },
     )
     return { kind: 'aleo-xreserve', ...execution }

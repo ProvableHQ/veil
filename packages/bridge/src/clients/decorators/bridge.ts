@@ -6,9 +6,10 @@ import { quote } from '../../actions/quote.js'
 import { complete } from '../../actions/complete.js'
 import { getStatus } from '../../actions/getStatus.js'
 import { waitForStatus } from '../../actions/waitForStatus.js'
+import { recover } from '../../actions/recover.js'
 import type { BridgeChainClients } from '../../connections/resolve.js'
 import type { BridgeEnvironment, BridgeReceipt, BridgeRegistry, BridgePlan, PrepareParameters, ProtocolBridgeAsset, ProtocolBridgeRoute } from '../../types/protocol.js'
-import type { CompleteParameters, ExecuteParameters, GetStatusParameters, QuoteParameters, WaitForStatusParameters, BridgeExecution, BridgeQuote } from '../../types/actions.js'
+import type { CompleteParameters, ExecuteParameters, GetStatusParameters, QuoteParameters, RecoverParameters, WaitForStatusParameters, BridgeExecution, BridgeQuote } from '../../types/actions.js'
 
 /**
  * Carries validated registry and materialized client state into bound actions.
@@ -34,6 +35,7 @@ export type BridgeActions = {
   getStatus: (params: GetStatusParameters) => Promise<BridgeReceipt>
   waitForStatus: (params: WaitForStatusParameters) => Promise<BridgeReceipt>
   complete: (params: CompleteParameters) => Promise<BridgeExecution>
+  recover: (params: RecoverParameters) => Promise<BridgeReceipt>
 }
 
 /** Binds registry and private client state to bridge actions. */
@@ -47,5 +49,6 @@ export function bridgeActions(config: BridgeActionsConfig): BridgeActions {
     getStatus: async (params) => getStatus(config.registry, config.clients, config.fetch, params),
     waitForStatus: async (params) => waitForStatus(config.registry, config.clients, config.fetch, params),
     complete: async (params) => complete(config.registry, config.clients, params),
+    recover: async (params) => recover(config.registry, config.clients, config.fetch, params),
   }
 }

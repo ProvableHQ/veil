@@ -285,3 +285,29 @@ export type BridgeReceipt = {
   nextAction?: BridgeNextAction | undefined
   protocolState: Readonly<Record<string, unknown>>
 }
+
+/**
+ * Records submitted transaction identifiers needed to recover a bridge transfer.
+ *
+ * The checkpoint excludes the prepared plan and protocol response bodies. The
+ * caller stores it only when recovery across an interrupted process is needed.
+ *
+ * @property version Serialization format version, currently `1`.
+ * @property routeId Canonical registry route that produced the submissions.
+ * @property protocol Protocol responsible for the transfer.
+ * @property source Submitted source approvals and transfer transaction.
+ * @property source.approvalTransactionIds Source token approval transaction identifiers in submission order.
+ * @property source.transactionId Irreversible source transfer transaction when submitted.
+ * @property destination Caller-authorized destination transaction when submitted.
+ * @property destination.transactionId Destination-chain transaction identifier.
+ */
+export type BridgeCheckpoint = {
+  version: 1
+  routeId: string
+  protocol: BridgeProtocol
+  source?: {
+    approvalTransactionIds?: readonly string[] | undefined
+    transactionId?: string | undefined
+  } | undefined
+  destination?: { transactionId: string } | undefined
+}

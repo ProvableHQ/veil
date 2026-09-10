@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { complete } from '../../src/actions/complete.js'
 import { getStatus } from '../../src/actions/getStatus.js'
 import { waitForStatus } from '../../src/actions/waitForStatus.js'
+import { recover } from '../../src/actions/recover.js'
 import { createAleoClient } from '../../src/connections/aleo.js'
 import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
@@ -66,18 +67,24 @@ describe('xReserve lifecycle', () => {
       nextAction: { kind: 'xreserve-private-mint', chainId: 'aleo-testnet' },
       protocolState: { ...receipt.protocolState, attestation: SIGNATURE },
     }
-    const checkpoints: BridgeReceipt[] = []
+    const checkpoints: unknown[] = []
     const result = await complete(
       DEFAULT_BRIDGE_REGISTRY,
       { 'aleo-testnet': createAleoClient({ publicClient: {} as never, account: { executeTransaction } }) },
-      { plan, receipt: ready, onSubmitted(value) { checkpoints.push(value) } },
+      { plan, receipt: ready, onCheckpoint(value) { checkpoints.push(value) } },
     )
 
     expect(result.kind).toBe('aleo-xreserve')
     expect(executeTransaction).toHaveBeenCalledOnce()
     expect(result.receipt).toMatchObject({ status: 'DESTINATION_CONFIRMING', destinationTxId: 'at1private' })
     expect(result.receipt.nextAction).toBeUndefined()
-    expect(checkpoints).toEqual([result.receipt])
+    expect(checkpoints).toEqual([{
+      version: 1,
+      routeId: plan.route.id,
+      protocol: 'xreserve',
+      source: { transactionId: receipt.sourceTxId },
+      destination: { transactionId: 'at1private' },
+    }])
     expect(result.receipt.protocolState).toMatchObject({ payload, messageHash })
   })
 
@@ -137,5 +144,64 @@ describe('xReserve lifecycle', () => {
 
     expect(result.status).toBe(bridgeStatus)
     if (aleoStatus === 'rejected') expect(result.protocolState.destinationError).toBe('execution rejected')
+  })
+
+  it('advances an accepted Aleo burn to relayer delivery', async () => {
+    const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'aleo-testnet', asset: 'usdcx' },
+      destination: { chain: 'sepolia', asset: 'usdc' },
+      amount: '2.1',
+      recipient: '0x0000000000000000000000000000000000000001',
+    })
+    const receipt: BridgeReceipt = {
+      id: 'at1burn',
+      protocol: 'xreserve',
+      status: 'SOURCE_CONFIRMING',
+      sourceTxId: 'at1burn',
+      protocolState: { routeId: plan.route.id },
+    }
+    const publicClient = {
+      account: { type: 'rpc' },
+      request: vi.fn(async () => ({ status: 'accepted', transactionId: 'at1burn' })),
+    } as never
+
+    const result = await getStatus(
+      DEFAULT_BRIDGE_REGISTRY,
+      { 'aleo-testnet': createAleoClient({ publicClient }) },
+      vi.fn(),
+      { plan, receipt },
+    )
+
+    expect(result).toMatchObject({ status: 'DELIVERY_PENDING', sourceTxId: 'at1burn' })
+  })
+
+  it('recovers an Aleo burn from its compact source checkpoint', async () => {
+    const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'aleo-testnet', asset: 'usdcx' },
+      destination: { chain: 'sepolia', asset: 'usdc' },
+      amount: '2.1',
+      recipient: '0x0000000000000000000000000000000000000001',
+    })
+    const publicClient = {
+      account: { type: 'rpc' },
+      request: vi.fn(async () => ({ status: 'accepted', transactionId: 'at1burn' })),
+    } as never
+
+    const result = await recover(
+      DEFAULT_BRIDGE_REGISTRY,
+      { 'aleo-testnet': createAleoClient({ publicClient }) },
+      vi.fn(),
+      {
+        plan,
+        checkpoint: {
+          version: 1,
+          routeId: plan.route.id,
+          protocol: 'xreserve',
+          source: { transactionId: 'at1burn' },
+        },
+      },
+    )
+
+    expect(result).toMatchObject({ status: 'DELIVERY_PENDING', sourceTxId: 'at1burn' })
   })
 })
