@@ -14,6 +14,7 @@ import {
 import { describe, expect, it, vi } from 'vitest'
 import {
   createSolanaClient,
+  DEFAULT_SOLANA_RPC_URL,
   solanaCustom,
   solanaHttp,
   solanaKeyPair,
@@ -29,6 +30,10 @@ async function secretKeyBytes(): Promise<Uint8Array> {
 }
 
 describe('Solana bridge clients', () => {
+  it('exports the official mainnet RPC as the default endpoint', () => {
+    expect(DEFAULT_SOLANA_RPC_URL).toBe('https://api.mainnet-beta.solana.com')
+  })
+
   it('constructs a tagged client without network access and requires a transport', () => {
     const request = vi.fn()
     const transport: SolanaTransport = solanaCustom(request)

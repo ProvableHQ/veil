@@ -39,3 +39,4 @@ canonical blockhash validity instead of provider-reported block heights. Add pro
 make delegated `writeContract` proving return an unbroadcast transaction for
 the configured Aleo transport to submit. Delegated FeeMaster payment now
 defaults to disabled and must be opted into explicitly.
+Export `DEFAULT_SOLANA_RPC_URL` for the official Solana mainnet endpoint.

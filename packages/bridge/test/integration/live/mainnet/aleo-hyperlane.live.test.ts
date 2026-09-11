@@ -4,6 +4,7 @@ import {
   createBridgeClient,
   createEvmClient,
   createSolanaClient,
+  DEFAULT_SOLANA_RPC_URL,
   DEFAULT_BRIDGE_REGISTRY,
   evmHttp,
   parseDecimalAmount,
@@ -70,7 +71,9 @@ describe.skipIf(!enabled)('mainnet Aleo Hyperlane bridge', () => {
     if (destinationChain.family === 'evm') {
       destinationClient = createEvmClient({ transport: evmHttp(required('BRIDGE_LIVE_ETHEREUM_RPC_URL')) })
     } else if (destinationChain.family === 'solana') {
-      destinationClient = createSolanaClient({ transport: solanaHttp(required('BRIDGE_LIVE_SOLANA_RPC_URL')) })
+      destinationClient = createSolanaClient({
+        transport: solanaHttp(process.env.BRIDGE_LIVE_SOLANA_RPC_URL?.trim() || DEFAULT_SOLANA_RPC_URL),
+      })
     } else {
       throw new Error(`Aleo Hyperlane live test cannot verify destination family ${destinationChain.family}`)
     }

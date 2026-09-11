@@ -5,6 +5,7 @@ import {
   createAleoClient,
   createBridgeClient,
   createSolanaClient,
+  DEFAULT_SOLANA_RPC_URL,
   solanaHttp,
   solanaKeyPair,
   type BridgeCheckpoint,
@@ -25,7 +26,7 @@ describe.skipIf(!enabled)('mainnet Solana Hyperlane bridge', () => {
       ? Uint8Array.from(JSON.parse(secret) as number[])
       : bs58.decode(secret)
     const client = createSolanaClient({
-      transport: solanaHttp(required('BRIDGE_LIVE_SOLANA_RPC_URL')),
+      transport: solanaHttp(process.env.BRIDGE_LIVE_SOLANA_RPC_URL?.trim() || DEFAULT_SOLANA_RPC_URL),
       account: solanaKeyPair(secretKeyBytes),
     })
     const aleo = createAleoClient({

@@ -29,6 +29,7 @@ export {
 } from './connections/evm.js'
 export {
   createSolanaClient,
+  DEFAULT_SOLANA_RPC_URL,
   solanaCustom,
   solanaHttp,
   solanaKeyPair,

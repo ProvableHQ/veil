@@ -6,6 +6,9 @@ import type { SolanaRpcHttpTransport } from '../types/solana.js'
 
 const SOLANA_SIGN_AND_SEND_TRANSACTION_FEATURE = 'solana:signAndSendTransaction'
 
+/** Provides the official Solana mainnet JSON-RPC endpoint. */
+export const DEFAULT_SOLANA_RPC_URL = 'https://api.mainnet-beta.solana.com'
+
 type SolanaSignAndSendTransactionFeature = {
   signAndSendTransaction: (input: {
     transaction: Uint8Array

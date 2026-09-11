@@ -421,7 +421,7 @@ network fees, rent, and interchain gas payments remain additional costs.
 | `evm-xreserve` | `BRIDGE_PRIVATE_KEY`, `BRIDGE_LIVE_ETHEREUM_RPC_URL` |
 | `aleo-xreserve` | `BRIDGE_LIVE_ETHEREUM_RPC_URL`, `BRIDGE_LIVE_ETHEREUM_RECIPIENT` |
 | `evm-hyperlane` | `BRIDGE_LIVE_ETHEREUM_RPC_URL`, `BRIDGE_LIVE_ALEO_MAINNET_RECIPIENT`; optional `BRIDGE_LIVE_EVM_HYPERLANE_ROUTE_ID` |
-| `solana-hyperlane` | `BRIDGE_LIVE_SOLANA_RPC_URL`, `BRIDGE_LIVE_ALEO_MAINNET_RECIPIENT` |
+| `solana-hyperlane` | `BRIDGE_LIVE_ALEO_MAINNET_RECIPIENT` (`BRIDGE_LIVE_SOLANA_RPC_URL` optionally overrides `DEFAULT_SOLANA_RPC_URL`) |
 | `aleo-hyperlane` | `BRIDGE_LIVE_ALEO_HYPERLANE_ROUTE_ID`, `BRIDGE_LIVE_HYPERLANE_DESTINATION_RECIPIENT` |
 
 Each journey writes a mode-`0600` checkpoint at every supported prepared and
