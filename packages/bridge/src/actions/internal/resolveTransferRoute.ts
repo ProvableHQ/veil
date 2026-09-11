@@ -7,7 +7,15 @@ import type {
   ProtocolBridgeRoute,
 } from '../../types/protocol.js'
 
-/** Captures the registry entries that define a validated prepared route. */
+/**
+ * Groups the current registry entries that define one validated transfer direction.
+ *
+ * @property route Bridge provider and directional asset pairing.
+ * @property sourceAsset Token or native asset committed on the source chain.
+ * @property destinationAsset Token or native asset delivered on the destination chain.
+ * @property sourceChain Source network and transaction family.
+ * @property destinationChain Destination network and transaction family.
+ */
 export type ResolvedTransferRoute = {
   route: ProtocolBridgeRoute
   sourceAsset: ProtocolBridgeAsset
@@ -17,13 +25,14 @@ export type ResolvedTransferRoute = {
 }
 
 /**
- * Resolves a prepared plan against the exact registry snapshot that created it.
+ * Resolves saved transfer details against the exact route catalog that created them.
  *
- * Pure and local; rejects stale or altered route, asset, and chain references
- * before a dispatcher selects any network or wallet capability.
+ * Rejects stale or altered route, asset, and chain references using only the
+ * supplied registry and transfer details, before any network access or wallet
+ * request occurs.
  *
- * @param registry Reviewed deployment snapshot expected by the action.
- * @param plan Prepared transfer whose registry references are validated.
+ * @param registry Supported chains, assets, routes, and reviewed deployments expected by the action.
+ * @param plan Route, assets, amount, and recipient whose registry references are validated.
  * @returns Canonical route, asset, and chain entries from the registry.
  * @throws BridgeError When the plan is stale or its route topology was altered.
  * @example const route = resolveTransferRoute(registry, plan)

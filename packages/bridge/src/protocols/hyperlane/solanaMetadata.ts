@@ -14,16 +14,17 @@ function requirePubkey(value: unknown, field: string, routeId: string): string {
 }
 
 /**
- * Validates a prepared transfer plan against the registry's Solana Hyperlane
- * route and returns its reviewed deployment metadata.
+ * Validates transfer details against the registry's Solana Hyperlane route and
+ * returns its reviewed deployment metadata.
  *
- * Pure and local: confirms the plan's protocol, registry version, route
- * presence, asset pairing, and availability, then narrows and validates each
- * metadata field. Modeled on `routeMetadata` in `evmHyperlane.ts`. Shared by
- * the Solana Hyperlane `quote` and `execute` protocol helpers.
+ * Confirms the plan's protocol, registry version, route presence, asset
+ * pairing, and availability, then validates each metadata field without
+ * contacting Solana or requesting a signature. These checks prevent an
+ * incomplete or stale deployment snapshot from becoming an account list for a
+ * signed Solana transaction.
  *
- * @param registry Reviewed deployment snapshot used to validate the prepared plan.
- * @param plan Prepared transfer plan naming the Solana Hyperlane route.
+ * @param registry Supported assets and reviewed Solana Hyperlane deployment accounts.
+ * @param plan Route, amount, and recipient selected for the transfer.
  * @returns The route's validated Solana Hyperlane deployment metadata.
  * @throws BridgeError When the plan is not a Hyperlane plan, was built from a
  *   different registry version, the route is missing from the registry, its
@@ -43,6 +44,8 @@ export function solanaRouteMetadata(
   if (plan.registryVersion !== registry.version) {
     throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
   }
+  // Resolve the current registry entry rather than trusting metadata copied
+  // into an older plan after the application or registry has changed.
   const route = registry.routes.find((entry) => entry.id === plan.route.id)
   if (!route || route.protocol !== 'hyperlane') {
     throw new BridgeError(`Hyperlane route is not present in the configured registry: ${plan.route.id}`)
@@ -53,6 +56,8 @@ export function solanaRouteMetadata(
   if (route.availability !== 'active') {
     throw new BridgeError(`Hyperlane route is not executable: ${route.id}`)
   }
+  // Every address below participates in instruction account ordering. Reject
+  // the entire route instead of letting a missing field become a bad public key.
   const metadata = route.metadata
   if (!metadata) throw new BridgeError(`Solana Hyperlane route metadata is missing: ${plan.route.id}`)
 
@@ -88,6 +93,8 @@ export function solanaRouteMetadata(
     throw new BridgeError(`Solana Hyperlane route has an invalid destinationGasAmount: ${routeId}`)
   }
 
+  // Provenance does not prove the live accounts are unchanged, but it makes a
+  // reviewed deployment reproducible across implementations and languages.
   const registryCommit = metadata.registryCommit
   if (typeof registryCommit !== 'string' || !/^[0-9a-f]{40}$/i.test(registryCommit)) {
     throw new BridgeError(`Solana Hyperlane route has an invalid registryCommit: ${routeId}`)

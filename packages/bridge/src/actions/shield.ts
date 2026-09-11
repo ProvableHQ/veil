@@ -6,16 +6,18 @@ import type { BridgeRegistry } from '../types/protocol.js'
 import { privacyAmount, resolvePrivacyAsset } from './internal/aleoPrivacy.js'
 
 /**
- * Shields an Aleo asset's public balance into a private record.
+ * Converts an Aleo token balance visible on the public ledger into a private record owned by the recipient.
  *
- * Resolves the asset's declared ARC-20 or ARC-22 ABI, proves through the
- * configured Aleo wallet, and broadcasts the transaction.
+ * A private record stores spendable value without exposing the owner or amount
+ * in a public account balance. The Aleo wallet proves and submits the
+ * conversion, which spends the public balance and incurs an Aleo transaction
+ * fee.
  *
- * @param registry Reviewed asset registry containing the privacy capability.
- * @param clients Registry-keyed clients containing an Aleo wallet client.
- * @param params Asset, decimal amount, and optional execution controls.
- * @returns Submitted transaction id and exact converted amount.
- * @throws BridgeError When the asset is unknown, lacks shielding support, the amount is invalid, no wallet is configured, or the wallet returns no transaction id.
+ * @param registry Supported Aleo assets and their public-to-private conversion programs.
+ * @param clients Network and wallet access for Aleo.
+ * @param params Asset, amount, optional private recipient, fee preference, and proving progress callbacks.
+ * @returns The submitted Aleo transaction identifier and exact converted amount.
+ * @throws BridgeError When the asset cannot be converted privately, the amount is invalid, required wallet access is unavailable, or submission fails.
  * @example
  * await shield(registry, clients, { asset: { chain: 'aleo', asset: 'sol' }, amount: '0.1' })
  */
@@ -23,9 +25,14 @@ export async function shield(registry: BridgeRegistry, clients: BridgeChainClien
   const asset = resolvePrivacyAsset(registry, params.asset, 'shielding')
   const { amountAtomic, literal } = privacyAmount(asset, params.amount, 'Shielding')
   const { walletClient } = requireAleoClientWithWallet(registry, clients, asset.chainId, `shield ${asset.symbol}`)
+  // ARC-22 names the private recipient explicitly. ARC-20's shield transition
+  // always creates the record for its caller and accepts only the amount.
   const inputs: TransactionInput[] = asset.privacy.kind === 'arc22'
     ? [params.recipient ?? { type: 'address', label: `${asset.symbol} private recipient` }, literal]
     : [literal]
+  // The wallet performs proving, signing, and broadcast. A prepared-transaction
+  // callback lets applications cover the pre-broadcast crash window without
+  // giving this action control of storage.
   const transactionId = await walletClient.executeTransaction({
     program: asset.privacy.program,
     function: asset.privacy.kind === 'arc22' ? 'transfer_public_to_private' : 'shield',

@@ -3,7 +3,7 @@ import { BridgeError } from '../errors/bridgeErrors.js'
 import type { AleoWalletClient } from '../types/aleo.js'
 
 /**
- * Configures one registry-keyed Aleo client.
+ * Configures Aleo network and optional wallet access for one named bridge chain.
  * @property publicClient Required Veil public client used for chain reads.
  * @property account Optional Veil-compatible wallet client used for execution.
  */
@@ -14,7 +14,7 @@ export type AleoClientConfig = {
 
 /**
  * Holds materialized Aleo public and wallet capabilities.
- * @property family Aleo family discriminator.
+ * @property family Prevents this client from being used for an EVM or Solana route stored under the wrong chain identifier.
  * @property publicClient Required Veil public client.
  * @property walletClient Optional Veil-compatible execution client.
  */
@@ -25,9 +25,13 @@ export type AleoClient = {
 }
 
 /**
- * Adapts an Aleo wallet client for bridge authorization.
- * @param client Veil wallet client or compatible adapter.
- * @returns The same client, typed as bridge execution authority.
+ * Selects the Aleo wallet that may authorize bridge and privacy transactions.
+ *
+ * The wallet retains custody of its account and proving configuration. This
+ * helper does not connect to Aleo, request approval, or move funds.
+ *
+ * @param client Veil wallet client or compatible wallet adapter supplied by the application.
+ * @returns The same wallet with only its transaction-execution capability exposed to the bridge.
  * @example const account = aleoWallet(aleoWalletClient)
  */
 export function aleoWallet(client: AleoWalletClient): AleoWalletClient {
@@ -35,9 +39,14 @@ export function aleoWallet(client: AleoWalletClient): AleoWalletClient {
 }
 
 /**
- * Creates an Aleo bridge client with public access and optional wallet authorization.
- * @param config Required public client and optional wallet account.
- * @returns A registry-ready Aleo client.
+ * Creates the Aleo client used to read bridge state and optionally authorize transactions.
+ *
+ * Construction stores the supplied clients without contacting Aleo or prompting
+ * the wallet. Read-only actions need only `publicClient`; fund-moving actions
+ * also require `account`.
+ *
+ * @param config Aleo network access and optional wallet authorization supplied by the application.
+ * @returns Aleo read and optional wallet capabilities used by bridge actions.
  * @throws BridgeError When the public client is absent.
  * @example const client = createAleoClient({ publicClient, account: walletClient })
  */

@@ -19,18 +19,20 @@ function withoutNextAction(receipt: BridgeReceipt): Omit<BridgeReceipt, 'nextAct
 }
 
 /**
- * Refreshes one bridge receipt without signing or submitting transactions.
+ * Checks one stage of an in-progress cross-chain transfer.
  *
- * Supports source confirmation, Circle attestation, destination confirmation,
- * and Hyperlane delivery verification for configured routes. Performs at most
- * one protocol or chain read.
+ * The action checks the relevant source chain, bridge provider, or destination
+ * chain once. The result advances when that stage has completed and otherwise
+ * remains unchanged, which suits refresh buttons and scheduled background jobs.
  *
- * @param registry Reviewed deployment snapshot.
- * @param clients Materialized chain clients keyed by registry chain id.
- * @param client Fetch-compatible transport used for Circle attestation reads.
- * @param params Original plan, persisted receipt, and optional cancellation signal.
- * @returns The unchanged receipt or its next validated lifecycle state.
- * @throws BridgeError When the plan, receipt, protocol response, or required client is invalid.
+ * The action does not request a signature, submit a transaction, or move funds.
+ *
+ * @param registry Supported chains, assets, and bridge provider deployments.
+ * @param clients Network access for the chains involved in the transfer.
+ * @param client HTTP access for bridge provider status checks.
+ * @param params Transfer details, latest receipt, and optional cancellation signal.
+ * @returns The latest known state after one network or provider check.
+ * @throws BridgeError When the receipt does not belong to the transfer, required network access is unavailable, or a provider returns invalid data.
  * @example const receipt = await getStatus(registry, clients, fetch, { plan, receipt: checkpoint })
  */
 export async function getStatus(
@@ -46,6 +48,8 @@ export async function getStatus(
   }
 
   if (receipt.status === 'SOURCE_APPROVAL_PENDING' && route.sourceChain.family === 'evm') {
+    // Approval does not move bridge funds. Once confirmed, stop at an explicit
+    // wallet boundary so an application can decide when to submit the deposit.
     if (!isHash(receipt.id)) throw new BridgeError('Bridge receipt is missing its EVM approval transaction id')
     const evm = requireEvmClient(registry, clients, route.sourceChain.id)
     const result = await evm.publicClient.getTransactionReceipt(receipt.id)
@@ -61,6 +65,8 @@ export async function getStatus(
   }
 
   if (receipt.status === 'SOURCE_CONFIRMING' && route.sourceChain.family === 'aleo') {
+    // Aleo acceptance is the irreversible source boundary. Rejection is a
+    // terminal source failure; an unresolved transaction remains observable.
     const transactionId = receipt.sourceTxId
     if (!transactionId) throw new BridgeError('Bridge receipt is missing its Aleo source transaction id')
     const aleo = requireAleoClient(registry, clients, route.sourceChain.id)
@@ -81,6 +87,8 @@ export async function getStatus(
   if (receipt.status === 'SOURCE_CONFIRMING'
     && route.route.protocol === 'hyperlane'
     && route.sourceChain.family === 'evm') {
+    // EVM Hyperlane confirmation also verifies the dispatch event and extracts
+    // the message id used for canonical destination Mailbox checks.
     return getEvmHyperlaneSourceStatus(
       registry,
       requireEvmClient(registry, clients, route.sourceChain.id),
@@ -93,6 +101,8 @@ export async function getStatus(
   if (receipt.status === 'SOURCE_CONFIRMING'
     && route.route.protocol === 'hyperlane'
     && route.sourceChain.family === 'solana') {
+    // Solana confirmation reads the Mailbox log for the same cross-chain
+    // message id after the signature reaches confirmed or finalized status.
     return getSolanaHyperlaneSourceStatus(
       requireSolanaClient(registry, clients, route.sourceChain.id),
       receipt,
@@ -103,6 +113,8 @@ export async function getStatus(
     && route.route.protocol === 'hyperlane'
     && receipt.messageId
     && (route.destinationChain.family === 'aleo' || route.destinationChain.family === 'evm')) {
+    // The destination Mailbox is the canonical delivery authority. Explorer
+    // APIs are intentionally not used because indexing lag is not chain state.
     const destinationClient = route.destinationChain.family === 'aleo'
       ? requireAleoClient(registry, clients, route.destinationChain.id)
       : requireEvmClient(registry, clients, route.destinationChain.id)
@@ -120,6 +132,9 @@ export async function getStatus(
   if (receipt.status === 'DELIVERY_PENDING'
     && route.route.protocol === 'hyperlane'
     && route.sourceChain.family === 'aleo') {
+    // Some Aleo-origin transfers do not expose a recoverable message id. For
+    // those routes, compare the destination balance against the pre-submit
+    // baseline captured by execute().
     const before = receipt.protocolState.destinationBalanceBeforeAtomic
     const expected = receipt.protocolState.expectedDestinationIncreaseAtomic
     if (typeof before !== 'string' || !/^\d+$/.test(before)
@@ -152,6 +167,9 @@ export async function getStatus(
   }
 
   if (receipt.status === 'ATTESTATION_PENDING') {
+    // Circle's attestation authorizes destination minting. Public and record
+    // delivery is provider-managed; private delivery must stop for an Aleo
+    // wallet because only the recipient can submit the wrapper mint.
     const messageHash = receipt.protocolState.messageHash
     if (typeof messageHash !== 'string' || !isHash(messageHash)) {
       throw new BridgeError('xReserve receipt is missing its Circle message hash')
@@ -176,6 +194,8 @@ export async function getStatus(
   if (receipt.status === 'DESTINATION_ACTION_REQUIRED') return receipt
 
   if (receipt.status === 'DESTINATION_CONFIRMING') {
+    // Private inbound xReserve is complete only after the recipient's Aleo mint
+    // is accepted. A rejected mint fails delivery without changing the source deposit.
     const transactionId = receipt.destinationTxId
     if (!transactionId) throw new BridgeError('xReserve receipt is missing its Aleo destination transaction id')
     const aleo = requireAleoClient(registry, clients, route.destinationChain.id)

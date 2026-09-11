@@ -40,7 +40,7 @@ function xreserveSteps(
       { key: 'destination-confirmation', kind: 'confirm-delivery', chainId: destination.chainId, executor: 'protocol', description: 'Confirm the destination USDC balance change.', irreversible: false },
     ]
   }
-  throw new BridgeError(`Unsupported xReserve route shape: ${route.id}`)
+  throw new BridgeError(`Unsupported xReserve route direction: ${route.id}`)
 }
 
 function hyperlaneSteps(
@@ -69,18 +69,21 @@ function hyperlaneSteps(
 }
 
 /**
- * Prepares the ordered operations for a protocol bridge transfer.
+ * Describes how an amount of an asset can move between two chains.
  *
- * Pure and local: validates the route, amount, and recipient, then returns a
- * serializable plan. It does not query fees, sign, submit, or move funds.
- * Routes marked `metadata-required` can be planned but cannot be executed until
- * a later protocol adapter validates their deployment metadata.
+ * The caller chooses the source asset, destination asset, amount, recipient,
+ * and optionally the bridge provider. The result identifies the supported
+ * route, the assets that will be debited and delivered, and each stage required
+ * to complete the transfer.
  *
- * @param registry Reviewed registry snapshot.
- * @param params Route, decimal amount, recipient, and optional sender/privacy mode.
- * @returns A resumable transfer plan with the irreversible step identified.
- * @throws BridgeError When the route is missing or disabled, the amount is zero
- *   or malformed, its precision exceeds either asset, or the recipient fails validation.
+ * No blockchain or bridge provider is contacted, no wallet approval is
+ * requested, and no funds move. The returned information can be priced before
+ * the caller decides whether to begin the transfer.
+ *
+ * @param registry Supported chains, assets, and bridge provider deployments.
+ * @param params Desired source asset, destination asset, amount, recipient, provider, sender, and Aleo privacy preference.
+ * @returns The route, assets, amount, recipient, and stages required for the cross-chain transfer.
+ * @throws BridgeError When no available provider supports the requested transfer, the amount cannot be represented by both assets, or the recipient is invalid for the destination chain.
  *
  * @example
  * const plan = prepare(registry, {
@@ -94,6 +97,8 @@ export function prepare(
   registry: BridgeRegistry,
   params: PrepareParameters,
 ): BridgePlan {
+  // Resolve both chain-specific asset representations before route selection.
+  // The same symbol can refer to different contracts or programs on each chain.
   const sourceAsset = registry.assets.find((asset) => asset.chainId === params.source.chain && asset.key === params.source.asset)
   if (!sourceAsset) throw new BridgeError(`Unknown source asset ${params.source.asset} on ${params.source.chain}`)
   const destinationAsset = registry.assets.find((asset) => asset.chainId === params.destination.chain && asset.key === params.destination.asset)
@@ -116,6 +121,8 @@ export function prepare(
   if (params.privateRecipient === true && params.mintMode != null && params.mintMode !== 'private') {
     throw new BridgeError('privateRecipient conflicts with the selected mintMode')
   }
+  // xReserve delivery on Aleo can be a public balance, a private record minted
+  // by the provider, or a private wrapper mint authorized by the recipient.
   const mintMode = params.mintMode ?? (params.privateRecipient === true ? 'private' : 'public')
   if ((params.mintMode != null || params.privateRecipient === true) && destinationChain.family !== 'aleo') {
     throw new BridgeError('Aleo mint mode is only valid when the destination chain is Aleo')
@@ -135,6 +142,8 @@ export function prepare(
     }
   }
 
+  // Steps are descriptive application guidance. They do not execute and are
+  // derived from the validated direction and provider rather than caller input.
   const steps = route.protocol === 'xreserve'
     ? xreserveSteps(route, sourceAsset, destinationAsset, sourceChain, destinationChain, mintMode)
     : hyperlaneSteps(sourceAsset, destinationAsset, sourceChain, destinationChain)

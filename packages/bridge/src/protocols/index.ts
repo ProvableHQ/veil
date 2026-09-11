@@ -58,11 +58,15 @@ function splitRegistry<Params extends object>(
 export const hyperlane = {
   aleo: {
     /**
-     * Quotes an Aleo-origin Hyperlane gas payment.
-     * @param client Aleo public client used for mapping reads.
-     * @param params Route selection and optional registry override.
-     * @returns Live gas-oracle values and the exact hook payment.
-     * @throws BridgeError When route metadata or on-chain configuration is invalid.
+     * Calculates the Hyperlane relayer payment for a transfer leaving Aleo.
+     *
+     * Reads the current gas oracle on Aleo without requesting a signature or
+     * moving funds. The payment can change before the transfer is submitted.
+     *
+     * @param client Aleo network access used to read the current gas price and exchange rate.
+     * @param params Route selected for the transfer and optional replacement bridge deployments.
+     * @returns Destination gas requirements and the exact payment in Aleo microcredits.
+     * @throws BridgeError When the route is unavailable or its gas configuration is invalid.
      * @example const result = await hyperlane.aleo.quote(client, { routeId })
      */
     quote(client: Client, params: QuoteAleoHyperlaneGasPaymentParameters & ProtocolHelperRegistry) {
@@ -70,11 +74,15 @@ export const hyperlane = {
       return aleoHyperlane.quote(registry, client, actionParams)
     },
     /**
-     * Executes an Aleo-origin Hyperlane transfer.
-     * @param client Aleo wallet client that proves, signs, and broadcasts.
-     * @param params Prepared transfer and optional registry override.
-     * @returns Submitted transaction and resumable receipt.
-     * @throws BridgeError When route validation or submission fails.
+     * Begins an Aleo-to-Ethereum or Aleo-to-Solana transfer through Hyperlane.
+     *
+     * The Aleo wallet proves, signs, and submits the source transaction, which
+     * commits the asset and incurs an Aleo network fee.
+     *
+     * @param client Aleo wallet that authorizes and submits the source transaction.
+     * @param params Route, assets, amount, recipient, gas payment, and optional replacement bridge deployments.
+     * @returns The Aleo transaction identifier and state needed to follow delivery.
+     * @throws BridgeError When the transfer is unavailable, its payment is invalid, or wallet submission fails.
      * @example const result = await hyperlane.aleo.execute(client, { plan, gasPaymentMicrocredits })
      */
     execute(client: AleoWalletClient, params: ExecuteAleoHyperlaneTransferRemoteParameters & ProtocolHelperRegistry) {
@@ -84,11 +92,15 @@ export const hyperlane = {
   },
   evm: {
     /**
-     * Quotes an EVM-origin Hyperlane transfer.
-     * @param client EVM public client used for router reads.
-     * @param params Prepared transfer, encoded recipient, and optional registry override.
-     * @returns Atomic transfer and fee requirements.
-     * @throws BridgeError When route metadata or live router state is invalid.
+     * Calculates the funds required for a Hyperlane transfer leaving an EVM chain.
+     *
+     * Reads the deployed router without requesting a wallet signature or moving
+     * funds. The quoted network payment can change before submission.
+     *
+     * @param client EVM network access used to read the selected Hyperlane router.
+     * @param params Route, assets, amount, encoded Aleo recipient, and optional replacement bridge deployments.
+     * @returns Source token amount and native network payment required by the router.
+     * @throws BridgeError When the route is unavailable or the router returns invalid values.
      * @example const result = await hyperlane.evm.quote(client, { plan, recipientBytes32 })
      */
     quote(client: EvmClient, params: QuoteEvmHyperlaneTransferParameters & ProtocolHelperRegistry) {
@@ -96,11 +108,15 @@ export const hyperlane = {
       return evmHyperlane.quote(registry, client, actionParams)
     },
     /**
-     * Executes an EVM-origin Hyperlane transfer.
-     * @param client EVM client with wallet authorization.
-     * @param params Prepared transfer, polling controls, and optional registry override.
-     * @returns Submitted transactions and resumable receipt.
-     * @throws BridgeError When validation, submission, or confirmation fails.
+     * Begins an EVM-to-Aleo transfer through Hyperlane.
+     *
+     * An ERC-20 transfer may first request token approval. The wallet then
+     * submits the source dispatch, which commits funds and incurs network fees.
+     *
+     * @param client EVM network and wallet access used to authorize and submit the transfer.
+     * @param params Route, assets, amount, encoded Aleo recipient, confirmation controls, and optional replacement bridge deployments.
+     * @returns Submitted approval identifiers and state needed to follow delivery.
+     * @throws BridgeError When the transfer is unavailable, wallet authorization fails, funds are insufficient, or submission fails.
      * @example const result = await hyperlane.evm.execute(client, { plan, recipientBytes32 })
      */
     execute(client: EvmClient & { walletClient: EvmWalletClient }, params: ExecuteEvmHyperlaneTransferParameters & ProtocolHelperRegistry) {
@@ -110,11 +126,15 @@ export const hyperlane = {
   },
   solana: {
     /**
-     * Quotes a Solana-origin Hyperlane transfer.
-     * @param client Solana public client used for route and fee reads.
-     * @param params Prepared transfer and optional registry override.
-     * @returns Atomic transfer, gas, and network fee requirements.
-     * @throws BridgeError When route metadata or live Solana state is invalid.
+     * Calculates the SOL required for a Solana-to-Aleo Hyperlane transfer.
+     *
+     * Reads current gas, transaction fee, and rent requirements without
+     * requesting a wallet signature or moving funds.
+     *
+     * @param client Solana network access used to read account, fee, and rent values.
+     * @param params Route, amount, recipient, and optional replacement bridge deployments.
+     * @returns Transfer amount, relayer payment, network fee, rent, and total required lamports.
+     * @throws BridgeError When the route is unavailable or Solana returns invalid account or fee data.
      * @example const result = await hyperlane.solana.quote(client, { plan })
      */
     quote(client: SolanaClient, params: QuoteSolanaHyperlaneTransferParameters & ProtocolHelperRegistry) {
@@ -122,11 +142,15 @@ export const hyperlane = {
       return solanaHyperlane.quote(registry, client, actionParams)
     },
     /**
-     * Executes a Solana-origin Hyperlane transfer.
-     * @param client Solana client with wallet authorization.
-     * @param params Prepared transfer, polling controls, and optional registry override.
-     * @returns Submitted signature and resumable receipt.
-     * @throws BridgeError When validation, submission, or confirmation fails.
+     * Begins a Solana-to-Aleo transfer through Hyperlane.
+     *
+     * The Solana wallet signs and submits the source transaction, which commits
+     * SOL and incurs the relayer payment, network fee, and account rent.
+     *
+     * @param client Solana network and wallet access used to authorize and submit the transfer.
+     * @param params Route, amount, recipient, confirmation controls, and optional replacement bridge deployments.
+     * @returns The Solana signature and state needed to follow delivery.
+     * @throws BridgeError When the route is unavailable, funds are insufficient, wallet authorization fails, or submission fails.
      * @example const result = await hyperlane.solana.execute(client, { plan })
      */
     execute(client: SolanaClient & { walletClient: SolanaWalletClient }, params: ExecuteSolanaHyperlaneTransferParameters & ProtocolHelperRegistry) {
@@ -148,11 +172,15 @@ export const hyperlane = {
 export const xreserve = {
   evmToAleo: {
     /**
-     * Quotes an EVM-to-Aleo xReserve deposit.
-     * @param client EVM client with a wallet address.
-     * @param params Prepared transfer and optional registry override.
-     * @returns Deposit, balance, allowance, and fee values.
-     * @throws BridgeError When route or wallet state is invalid.
+     * Calculates the USDC and token approval required for an xReserve transfer to Aleo.
+     *
+     * Reads the connected Ethereum account's USDC balance and existing xReserve
+     * allowance without requesting a signature or moving funds.
+     *
+     * @param client Ethereum network access and the account whose balance and allowance are checked.
+     * @param params Route, amount, Aleo recipient, privacy preference, and optional replacement bridge deployments.
+     * @returns Deposit amount, maximum provider fee, balance, allowance, and whether approval is required.
+     * @throws BridgeError When the route is unavailable, the account lacks funds, or Ethereum returns invalid state.
      * @example const result = await xreserve.evmToAleo.quote(client, { plan })
      */
     quote(client: EvmClient & { walletClient: EvmWalletClient }, params: QuoteEvmXReserveTransferParameters & ProtocolHelperRegistry) {
@@ -160,11 +188,15 @@ export const xreserve = {
       return evmToAleoXReserve.quote(registry, client, actionParams)
     },
     /**
-     * Executes an EVM-to-Aleo xReserve deposit.
-     * @param client EVM client with wallet authorization.
-     * @param params Prepared transfer, polling controls, and optional registry override.
-     * @returns Submitted transactions and resumable receipt.
-     * @throws BridgeError When validation, submission, or confirmation fails.
+     * Begins a USDC-to-USDCx transfer from Ethereum to Aleo through xReserve.
+     *
+     * The wallet may first approve USDC spending, then submits the reserve
+     * deposit that commits funds and incurs Ethereum network fees.
+     *
+     * @param client Ethereum network and wallet access used to authorize and submit the deposit.
+     * @param params Route, amount, Aleo recipient, privacy preference, confirmation controls, and optional replacement bridge deployments.
+     * @returns Submitted approval identifiers and state needed to obtain Circle's attestation and follow delivery.
+     * @throws BridgeError When the route is unavailable, funds are insufficient, wallet authorization fails, or submission fails.
      * @example const result = await xreserve.evmToAleo.execute(client, { plan })
      */
     execute(client: EvmClient & { walletClient: EvmWalletClient }, params: ExecuteEvmXReserveTransferParameters & ProtocolHelperRegistry) {
@@ -172,10 +204,14 @@ export const xreserve = {
       return evmToAleoXReserve.execute(registry, client, actionParams)
     },
     /**
-     * Reads one Circle xReserve attestation.
-     * @param client Fetch-compatible HTTP capability.
-     * @param params Message hash, route, cancellation, and optional registry override.
-     * @returns Pending or completed attestation state.
+     * Checks whether Circle has attested one confirmed xReserve deposit.
+     *
+     * Contacts Circle once and does not request a wallet signature, submit a
+     * transaction, or move funds.
+     *
+     * @param client HTTP access used to contact Circle's attestation service.
+     * @param params Deposit message hash, route, cancellation signal, and optional replacement bridge deployments.
+     * @returns Whether the attestation is pending or the signed attestation is ready.
      * @throws BridgeError When Circle returns an invalid response.
      * @example const result = await xreserve.evmToAleo.getAttestation(fetch, { routeId, messageHash })
      */
@@ -184,11 +220,15 @@ export const xreserve = {
       return evmToAleoXReserve.getAttestation(registry, client, actionParams)
     },
     /**
-     * Completes a private inbound xReserve mint.
-     * @param client Aleo wallet client that proves, signs, and broadcasts.
-     * @param params Attested deposit, plan, checkpoint hook, and optional registry override.
-     * @returns Destination transaction and resumable receipt.
-     * @throws BridgeError When the attestation or private-mint inputs are invalid.
+     * Delivers a private USDCx record after Circle attests an Ethereum deposit.
+     *
+     * The Aleo wallet proves, signs, and submits the private mint, which incurs
+     * an Aleo network fee. The source deposit is not repeated.
+     *
+     * @param client Aleo wallet that authorizes and submits the private mint.
+     * @param params Transfer details, attested deposit, private mint secret, recovery callback, and optional replacement bridge deployments.
+     * @returns The Aleo transaction identifier and state needed to confirm private delivery.
+     * @throws BridgeError When the attestation or private mint secret is invalid, wallet authorization fails, or submission fails.
      * @example const result = await xreserve.evmToAleo.complete(client, { plan, deposit, attestation })
      */
     complete(client: AleoWalletClient, params: ExecuteXReservePrivateMintParameters & ProtocolHelperRegistry) {
@@ -198,11 +238,16 @@ export const xreserve = {
   },
   aleoToEvm: {
     /**
-     * Executes an Aleo-to-EVM xReserve burn.
-     * @param client Aleo wallet client that proves, signs, and broadcasts.
-     * @param params Prepared burn inputs and optional registry override.
-     * @returns Source transaction and resumable receipt.
-     * @throws BridgeError When burn construction or submission fails.
+     * Begins a USDCx-to-USDC transfer from Aleo to Ethereum through xReserve.
+     *
+     * The Aleo wallet proves, signs, and submits a burn that commits USDCx and
+     * incurs an Aleo network fee. The provider completes Ethereum delivery
+     * without another wallet authorization.
+     *
+     * @param client Aleo wallet that authorizes and submits the USDCx burn.
+     * @param params Route, amount, Ethereum recipient, public or private funding preference, and optional replacement bridge deployments.
+     * @returns The Aleo transaction identifier and state needed to follow provider-managed delivery.
+     * @throws BridgeError When the route or private funding inputs are invalid, wallet authorization fails, or submission fails.
      * @example const result = await xreserve.aleoToEvm.execute(client, { plan, mode: 'public' })
      */
     execute(client: AleoWalletClient, params: ExecuteXReserveBurnParameters & ProtocolHelperRegistry) {

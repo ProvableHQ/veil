@@ -17,16 +17,22 @@ import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { formatDecimalAmount, parseDecimalAmount } from '../utils/units.js'
 
 /**
- * Quotes a prepared transfer through its configured protocol and source chain.
+ * Calculates the funds and fees required to begin a cross-chain transfer.
  *
- * Reads live chain state where the route requires it. Aleo xReserve burns have
- * no separate live quote and return the plan's known amount and fee fields.
+ * The result shows the source amount and the bridge and network costs the
+ * selected provider can determine. Depending on the route, it also reports the
+ * expected destination amount, wallet balance, and token approval requirements.
+ * These values can change as network conditions and provider fees change.
  *
- * @param registry Reviewed deployment snapshot.
- * @param clients Materialized chain clients keyed by registry chain id.
- * @param params Prepared transfer to quote.
- * @returns A discriminated quote containing route-specific atomic values.
- * @throws BridgeError When the route shape is unsupported or its source client is unavailable.
+ * Routes with live pricing read current network and provider state; other routes
+ * return their configured costs. The action does not request a wallet signature
+ * or move funds.
+ *
+ * @param registry Supported chains, assets, and bridge provider deployments.
+ * @param clients Network access for the chains involved in the transfer.
+ * @param params Transfer details whose current cost and requirements are calculated.
+ * @returns The amount expected at the destination and the known bridge, network, and approval costs.
+ * @throws BridgeError When the selected provider cannot quote the transfer or required network access is unavailable.
  * @example const quote = await quote(registry, clients, { plan })
  */
 export async function quote(
@@ -34,6 +40,8 @@ export async function quote(
   clients: BridgeChainClients,
   params: QuoteParameters,
 ): Promise<BridgeQuote> {
+  // Quote from the source side because that is where funds, approvals, and the
+  // first network fee are paid. The validated route selects the protocol helper.
   const chain = resolveTransferRoute(registry, params.plan).sourceChain
   const chainId = chain.id
 
@@ -70,6 +78,9 @@ export async function quote(
     return { kind: 'evm-xreserve', ...quote }
   }
   if (params.plan.protocol === 'xreserve' && chain.family === 'aleo') {
+    // Aleo-origin xReserve has no provider quote endpoint. Its only known
+    // bridge charge is the configured withdrawal fee, so report that fixed
+    // deduction without pretending live state was queried.
     const rawFee = params.plan.route.metadata?.withdrawalFeeAtomic
     if (typeof rawFee !== 'string' || !/^\d+$/.test(rawFee)) {
       throw new BridgeError(`xReserve withdrawal fee is missing or invalid: ${params.plan.route.id}`)

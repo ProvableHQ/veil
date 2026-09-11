@@ -34,9 +34,9 @@ export type EvmHyperlaneRouteMetadata = {
 }
 
 /**
- * Selects a prepared Ethereum Hyperlane transfer for live fee quoting.
+ * Supplies an Ethereum-to-Aleo Hyperlane transfer for current fee calculation.
  *
- * @property plan Pure transfer plan returned by `prepare`.
+ * @property plan Route, assets, amount, and recipient selected for the transfer.
  * @property recipientBytes32 Aleo recipient in the exact 32-byte encoding expected by the enrolled Warp Route.
  */
 export type QuoteEvmHyperlaneTransferParameters = {
@@ -77,7 +77,7 @@ export type EvmHyperlaneTransferQuote = {
  * The action requotes immediately before submission. ERC-20 allowance is
  * checked first and only insufficient allowances generate approval calls.
  *
- * @property plan Pure transfer plan returned by `prepare`.
+ * @property plan Route, assets, amount, and recipient selected for the transfer.
  * @property recipientBytes32 Aleo recipient in the exact 32-byte encoding expected by the enrolled Warp Route.
  * @property pollingIntervalMs Delay between transaction-receipt checks. Defaults to 1,000 milliseconds.
  * @property confirmationTimeoutMs Maximum time to wait for each approval or dispatch receipt. Defaults to 120,000 milliseconds; a timeout returns resumable pending state.

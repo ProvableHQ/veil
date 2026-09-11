@@ -67,9 +67,9 @@ export type SolanaHyperlaneRouteMetadata = {
 }
 
 /**
- * Selects a prepared Solana Hyperlane transfer for live fee quoting.
+ * Supplies a Solana-to-Aleo Hyperlane transfer for current fee calculation.
  *
- * @property plan Pure transfer plan returned by `prepare`.
+ * @property plan Route, amount, and recipient selected for the transfer.
  */
 export type QuoteSolanaHyperlaneTransferParameters = {
   plan: BridgePlan
@@ -102,7 +102,7 @@ export type SolanaHyperlaneTransferQuote = {
  * The action signs and sends the transaction through the Solana client's
  * wallet client, then polls its public client for confirmation.
  *
- * @property plan Pure transfer plan returned by `prepare`.
+ * @property plan Route, amount, and recipient selected for the transfer.
  * @property pollingIntervalMs Delay between confirmation checks. Defaults to 1,000 milliseconds; floored at 100 milliseconds so a small or zero value cannot busy-poll the RPC endpoint.
  * @property confirmationTimeoutMs Maximum time to wait for confirmation. Defaults to 120,000 milliseconds; a timeout returns resumable pending state.
  * @property resume Previously checkpointed receipt. When supplied, the action

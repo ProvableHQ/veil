@@ -5,12 +5,13 @@ import { buildTransferRemoteCall as buildTransferCall } from '../protocols/hyper
 /**
  * Builds an Aleo Hyperlane `transfer_remote` call without prompting a wallet.
  *
- * Pure and local. Validates the prepared plan against reviewed route metadata.
+ * Validates the transfer details against reviewed route metadata without
+ * contacting Aleo or prompting a wallet.
  *
- * @param registry Reviewed route snapshot.
- * @param params Prepared Aleo-origin transfer and fee settings.
- * @returns Program, function, and ordered Aleo inputs.
- * @throws BridgeError When the plan or route metadata is invalid.
+ * @param registry Supported assets and reviewed Hyperlane deployments.
+ * @param params Route, amount, recipient, authorization mode, and optional current relayer payment.
+ * @returns Aleo program, transition, ordered inputs, atomic amount, and any configuration that is not ready for submission.
+ * @throws BridgeError When the transfer conflicts with the deployment or the relayer payment is invalid.
  * @example const call = buildAleoHyperlaneTransferRemoteCall(registry, { plan, gasPaymentMicrocredits })
  */
 export function buildAleoHyperlaneTransferRemoteCall(

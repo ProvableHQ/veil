@@ -5,15 +5,16 @@ import type { BridgeClient } from '../clients/createBridgeClient.js'
 export type { McpServer, McpToolDefinition } from '@provablehq/veil-core/mcp'
 
 /**
- * Creates an MCP server exposing the bridge tools.
+ * Creates an MCP server for discovering and describing cross-chain transfers.
  *
- * Binds core's `toMcpServer` to the protocol bridge discovery and planning
- * tools. The current server cannot sign transactions or move funds.
+ * The exposed tools list assets and routes and validate a proposed transfer.
+ * They cannot read live prices, access a wallet, request a signature, submit a
+ * transaction, or move funds.
  *
  * Exposed via subpath export: `import { createBridgeMcpServer } from '@provablehq/aleo-bridge-sdk/mcp'`.
  *
- * @param client A bridge client from `createBridgeClient`.
- * @returns An {@link McpServer} whose `handleToolCall` dispatches by tool name.
+ * @param client Bridge client supplying the supported asset and route catalog.
+ * @returns MCP server exposing the non-fund-moving bridge tools.
  *
  * @example
  * const server = createBridgeMcpServer(client)

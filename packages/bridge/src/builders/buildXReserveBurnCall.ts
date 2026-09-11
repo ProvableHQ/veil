@@ -5,12 +5,13 @@ import { buildBurnCall } from '../protocols/xreserve/aleoToEvm.js'
 /**
  * Builds an Aleo xReserve burn call without prompting a wallet.
  *
- * Pure and local. Selects the reviewed entrypoint and validates mode-specific inputs.
+ * Selects the reviewed entrypoint and validates mode-specific inputs without
+ * contacting Aleo or prompting a wallet.
  *
- * @param registry Reviewed route snapshot.
- * @param params Prepared reverse route and burn inputs.
- * @returns Program, function, ordered inputs, and native recipient metadata.
- * @throws BridgeError When the route or burn inputs are invalid.
+ * @param registry Supported assets and reviewed xReserve deployments.
+ * @param params Route, amount, Ethereum recipient, funding mode, and private inputs when applicable.
+ * @returns Aleo program, transition, ordered inputs, atomic amount, destination domain, and encoded recipient.
+ * @throws BridgeError When the route is unavailable, the amount cannot cover the withdrawal fee, the recipient is invalid, or private funding inputs are missing.
  * @example const call = buildXReserveBurnCall(registry, { plan, mode: 'public' })
  */
 export function buildXReserveBurnCall(

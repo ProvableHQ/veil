@@ -5,10 +5,10 @@ import type { AleoWalletClient } from '../types/aleo.js'
 import type { EvmClient, EvmWalletClient } from './evm.js'
 import type { SolanaClient, SolanaWalletClient } from './solana.js'
 
-/** Represents every materialized bridge client family. */
+/** Represents the EVM, Solana, or Aleo network access stored for one registry chain. */
 export type BridgeChainClient = EvmClient | SolanaClient | AleoClient
 
-/** Stores materialized clients by registry chain identifier. */
+/** Stores network and optional wallet access under the same chain identifiers used by routes. */
 export type BridgeChainClients = Readonly<Record<string, BridgeChainClient>>
 
 function resolve(
@@ -17,6 +17,8 @@ function resolve(
   chainId: string,
   family: BridgeChainClient['family'],
 ): BridgeChainClient {
+  // Check both the registry declaration and the client discriminator. A client
+  // stored under the wrong key must fail before any RPC request or signature.
   const chain = registry.chains.find((entry) => entry.id === chainId)
   if (!chain) throw new BridgeError(`Unknown bridge chain: "${chainId}"`)
   const client = clients[chainId]
@@ -27,36 +29,36 @@ function resolve(
   return client
 }
 
-/** Resolves the readable EVM client configured for one action. */
+/** Returns EVM network access for a registry chain without requiring wallet authorization. */
 export function requireEvmClient(registry: BridgeRegistry, clients: BridgeChainClients, chainId: string): EvmClient {
   return resolve(registry, clients, chainId, 'evm') as EvmClient
 }
 
-/** Resolves an EVM client with wallet access for one action. */
+/** Returns EVM network and wallet access, or fails before an action can request a signature. */
 export function requireEvmClientWithWallet(registry: BridgeRegistry, clients: BridgeChainClients, chainId: string, action: string): EvmClient & { walletClient: EvmWalletClient } {
   const client = requireEvmClient(registry, clients, chainId)
   if (!client.walletClient) throw new BridgeError(`EVM wallet client is required to ${action} on chain "${chainId}"`)
   return client as EvmClient & { walletClient: EvmWalletClient }
 }
 
-/** Resolves the readable Solana client configured for one action. */
+/** Returns Solana network access for a registry chain without requiring wallet authorization. */
 export function requireSolanaClient(registry: BridgeRegistry, clients: BridgeChainClients, chainId: string): SolanaClient {
   return resolve(registry, clients, chainId, 'solana') as SolanaClient
 }
 
-/** Resolves a Solana client with wallet access for one action. */
+/** Returns Solana network and wallet access, or fails before an action can request a signature. */
 export function requireSolanaClientWithWallet(registry: BridgeRegistry, clients: BridgeChainClients, chainId: string, action: string): SolanaClient & { walletClient: SolanaWalletClient } {
   const client = requireSolanaClient(registry, clients, chainId)
   if (!client.walletClient) throw new BridgeError(`Solana wallet client is required to ${action} on chain "${chainId}"`)
   return client as SolanaClient & { walletClient: SolanaWalletClient }
 }
 
-/** Resolves the readable Aleo client configured for one action. */
+/** Returns Aleo network access for a registry chain without requiring wallet authorization. */
 export function requireAleoClient(registry: BridgeRegistry, clients: BridgeChainClients, chainId: string): AleoClient {
   return resolve(registry, clients, chainId, 'aleo') as AleoClient
 }
 
-/** Resolves an Aleo client with wallet access for one action. */
+/** Returns Aleo network and wallet access, or fails before an action can request proving or a signature. */
 export function requireAleoClientWithWallet(registry: BridgeRegistry, clients: BridgeChainClients, chainId: string, action: string): AleoClient & { walletClient: AleoWalletClient } {
   const client = requireAleoClient(registry, clients, chainId)
   if (!client.walletClient) throw new BridgeError(`Aleo wallet client is required to ${action} on chain "${chainId}"`)

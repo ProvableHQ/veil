@@ -34,15 +34,17 @@ function accountRole(kit: Awaited<ReturnType<typeof loadKit>>, account: SolanaAc
 }
 
 /**
- * Quotes a Solana-to-Aleo Hyperlane Warp Route transfer.
+ * Calculates the SOL required for a Solana-to-Aleo Hyperlane transfer.
  *
- * Reads live gas-oracle and transaction-fee state without signing or submitting.
+ * The total includes the transferred amount, relayer payment, current network
+ * fee, and rent for accounts created by the dispatch. The action reads Solana
+ * without requesting a signature or moving funds.
  *
- * @param registry Reviewed deployment snapshot used to validate the prepared plan.
- * @param client Registry-selected Solana public capability.
- * @param params Prepared Solana Hyperlane plan.
- * @returns Atomic transfer amount, gas payment, network fee, rent, and executable total.
- * @throws BridgeError When route metadata or live chain state is invalid.
+ * @param registry Supported assets and reviewed Hyperlane deployments.
+ * @param client Solana network access used to read route accounts, fees, and rent.
+ * @param params Route, amount, recipient, and source account used to compile the fee quote.
+ * @returns Transfer amount, relayer payment, network fee, rent, and total in lamports.
+ * @throws BridgeError When the route is unavailable, no source account is supplied, or Solana returns invalid account or fee data.
  * @example const result = await quote(registry, client, { plan })
  */
 export async function quote(
@@ -50,9 +52,13 @@ export async function quote(
   client: SolanaClient,
   params: QuoteSolanaHyperlaneTransferParameters,
 ): Promise<SolanaHyperlaneTransferQuote> {
+  // Validate every reviewed program and account address before reading Solana;
+  // ports must not infer these deployment-specific accounts from token symbols.
   const metadata = solanaRouteMetadata(registry, params.plan)
   const rpc = client.publicClient
   const amountLamports = parseDecimalAmount(params.plan.amountIn, params.plan.sourceAsset.decimals)
+  // The on-chain IGP account is authoritative for destination gas price and
+  // exchange rate. A registry snapshot alone cannot safely quote this payment.
   const igpAccountData = await rpc.getAccountData(metadata.igpAccount)
   if (!igpAccountData) throw new BridgeError(`Solana IGP account does not exist: ${metadata.igpAccount}`)
   const igpPaymentLamports = quoteIgpGasPayment({
@@ -62,6 +68,8 @@ export async function quote(
   })
   if (!params.plan.sender) throw new BridgeError('Solana sender is required to quote the transaction fee')
   const kit = await loadKit()
+  // A transfer creates message-specific PDAs, so even fee estimation needs a
+  // disposable unique-message public key. No signature from this key is sent.
   const uniqueMessageSigner = await kit.generateKeyPairSigner()
   const built = await buildTransferRemoteInstruction({
     metadata,
@@ -83,6 +91,8 @@ export async function quote(
     }, transaction),
   )
   const compiled = kit.compileTransaction(message)
+  // Network fee and rent are independent reads. Include both newly created
+  // protocol accounts plus the sender's rent floor in the required balance.
   const [networkFeeLamports, gasPaymentRent, dispatchedMessageRent, senderRent] = await Promise.all([
     rpc.getFeeForMessage(new Uint8Array(compiled.messageBytes)),
     rpc.getMinimumBalanceForRentExemption(GAS_PAYMENT_ACCOUNT_DATA_LENGTH),
@@ -105,8 +115,8 @@ export async function quote(
  * threshold is reached, the network reports failure, or the caller's
  * timeout elapses.
  *
- * Pure network polling: sleeps `pollingIntervalMs` between reads and never
- * signs or submits. Mirrors `waitForReceipt` in `evmHyperlane.ts`.
+ * Reads Solana repeatedly, sleeping `pollingIntervalMs` between requests. It
+ * never signs or submits a transaction.
  *
  * A thrown error from the status read itself (a transient RPC hiccup, a rate
  * limit) never aborts the wait — the transaction was already broadcast, so
@@ -188,15 +198,16 @@ function buildReceipt(
 }
 
 /**
- * Refreshes one submitted Solana Hyperlane dispatch without signing or broadcasting.
+ * Checks whether one submitted Solana Hyperlane source transaction has committed funds.
  *
- * Performs a signature-status read and, after confirmation, reads transaction
- * logs to recover the Hyperlane message id.
+ * A pending signature leaves the state unchanged. A successful transaction
+ * advances to destination delivery and records the canonical Hyperlane message
+ * identifier when its log is available. No signature or submission occurs.
  *
- * @param client Registry-selected Solana public capability.
- * @param receipt Source-confirming receipt containing the submitted signature.
- * @returns Unchanged pending state or a delivery-pending receipt.
- * @throws BridgeError When the checkpoint is invalid or the transaction failed.
+ * @param client Solana network access used to read signature status and transaction logs.
+ * @param receipt Latest state containing the submitted Solana signature.
+ * @returns Unchanged source confirmation state or state ready to follow destination delivery.
+ * @throws BridgeError When the saved state is invalid or Solana reports that the transaction failed.
  * @example const next = await getSourceStatus(client, receipt)
  */
 export async function getSourceStatus(
@@ -209,6 +220,8 @@ export async function getSourceStatus(
   const status = await client.publicClient.getSignatureStatus(receipt.sourceTxId)
   if (status == null || status === 'processed') return receipt
   if (status === 'failed') throw new BridgeError(`Solana Hyperlane transfer failed on-chain: ${receipt.sourceTxId}`)
+  // Confirmation proves the source instruction committed. The Mailbox log is
+  // then the canonical source of the message id used for destination delivery.
   const messageId = extractSolanaHyperlaneMessageId(await client.publicClient.getTransactionLogs(receipt.sourceTxId))
   return {
     ...receipt,
@@ -223,33 +236,19 @@ export async function getSourceStatus(
 }
 
 /**
- * Signs and submits a Solana-to-Aleo Hyperlane Warp Route transfer.
+ * Begins a Solana-to-Aleo Hyperlane transfer by committing SOL on Solana.
  *
- * Requotes the live IGP payment, then confirms the sender's balance covers
- * the transfer amount, gas, the rent overhead of the two accounts the
- * instruction creates, and the sender's own rent-exempt floor once every one
- * of those lamports has left it. Generates the ephemeral unique-message
- * signer, then assembles, partially signs, and hands the transaction to the
- * configured client to sign and broadcast. Hits the network throughout,
- * prompts a wallet or signs locally, and moves funds; never local-only.
+ * The source account must cover the transfer, relayer payment, network fee, and
+ * account rent while retaining its own rent-exempt floor. The connected wallet
+ * MUST match any sender chosen earlier. After broadcast, a confirmation timeout
+ * remains pending because the transaction may still land; it is not reported as
+ * a failed transfer.
  *
- * When the plan names a `sender`, the wallet client's address MUST match it: a
- * plan prepared for one account is never executed by another connected
- * wallet or keypair. Mirrors the connected-account check in the EVM
- * Hyperlane executor.
- *
- * A confirmation timeout returns a resumable `SOURCE_CONFIRMING` receipt
- * rather than throwing — the signature is already submitted and may still
- * land. An absent or unparsable dispatch log likewise does not throw: the
- * returned receipt carries the signature with `messageId` left `undefined`.
- *
- * @param registry Reviewed deployment snapshot used to validate the prepared plan.
- * @param client Registry-selected Solana public and wallet capabilities.
- * @param params Prepared plan and optional confirmation polling controls.
- * @returns The resumable Hyperlane transfer receipt.
- * @throws BridgeError When route validation or quoting fails, the plan's sender does
- *   not match the wallet client's address, the sender's balance is insufficient, or the
- *   submitted transaction is reported failed.
+ * @param registry Supported assets and reviewed Hyperlane deployments.
+ * @param client Solana network and wallet access used to read, sign, and submit.
+ * @param params Route, amount, Aleo recipient, confirmation controls, and optional recovery callback.
+ * @returns The source signature and state needed to follow source confirmation or destination delivery.
+ * @throws BridgeError When the route is unavailable, the wallet account differs from the selected sender, funds are insufficient, authorization fails, or Solana reports failure.
  *
  * @example
  * const execution = await execute(registry, client, { plan })

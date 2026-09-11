@@ -144,7 +144,7 @@ export type BridgeExecutionStepKind =
   | 'confirm-delivery'
 
 /**
- * Describes one ordered operation in a prepared transfer.
+ * Describes one stage required to move an asset between two chains.
  *
  * @property key Stable step key within the plan.
  * @property kind Operation the executor performs.
@@ -218,7 +218,10 @@ export type PrepareParameters = {
 }
 
 /**
- * Captures a locally prepared, non-fund-moving bridge transfer.
+ * Records the route, assets, amount, recipient, and stages of a cross-chain transfer.
+ *
+ * This information can be quoted before any wallet authorization is requested
+ * or funds move.
  *
  * @property registryVersion Registry snapshot used to build the plan.
  * @property protocol Protocol responsible for delivery.
@@ -251,7 +254,7 @@ export type BridgePlan = {
 }
 
 /**
- * Records the public inputs needed to reconstruct a prepared bridge transfer.
+ * Records the public inputs needed to reconstruct a cross-chain transfer.
  *
  * Private keys, records, proofs, and private-mint nonces are deliberately
  * excluded so this value can be stored with transaction identifiers.

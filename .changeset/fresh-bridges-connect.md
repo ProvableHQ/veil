@@ -14,8 +14,9 @@ transactions before source or destination broadcast; other wallet APIs
 checkpoint submitted identifiers. Checkpoints exclude private-mint secrets.
 The read-only `recover({ checkpoint })` action returns an explicit `wait`, `resume`,
 `complete`, `done`, or `failed` next step without resubmitting funds. Each bridge decorator action now has its own module,
-with protocol mechanics isolated behind internal helpers. Pure call builders are
-standalone utilities rather than bridge client methods.
+with protocol mechanics isolated behind internal helpers. Call builders compute
+wallet inputs without network access and remain standalone utilities rather
+than bridge client methods.
 Registry discovery actions are exported directly as `getAssets` and `getRoutes`.
 The protocol-neutral lifecycle is now `prepare`, `quote`, `execute`,
 `getStatus`, `waitForStatus`, `wait`, `recover`, `resume`, and `complete`. `prepare` selects structured
@@ -50,3 +51,9 @@ Teach client construction, planning, quoting, execution, and recovery beside the
 corresponding example code. The Aleo-to-Ethereum xReserve example now stops at
 the supported source-confirmation boundary instead of attempting unsupported
 destination delivery polling.
+Rewrite bridge action documentation around the caller's cross-chain lifecycle,
+including when funds move, when wallet authorization is required, which calls
+contact networks or providers, and what recovery information applications own.
+Document helper side effects and annotate protocol encodings, authorization
+boundaries, irreversible submissions, provider handoffs, and retry-safe
+recovery behavior for maintainers and independent implementations.

@@ -45,9 +45,9 @@ export type EvmXReserveRouteMetadata = {
 }
 
 /**
- * Selects a prepared xReserve transfer for live balance and allowance checks.
+ * Supplies an Ethereum-to-Aleo xReserve transfer for current balance and allowance checks.
  *
- * @property plan Pure plan returned by `prepare`.
+ * @property plan Route, amount, Aleo recipient, and privacy preference selected for the transfer.
  * @property privateMintSecretNonce Secret Aleo scalar committed by private hook data. Defaults to `0scalar`.
  */
 export type QuoteEvmXReserveTransferParameters = {
@@ -89,7 +89,7 @@ export type EvmXReserveTransferQuote = {
 /**
  * Configures an Ethereum-to-Aleo xReserve deposit submission.
  *
- * @property plan Pure plan returned by `prepare`.
+ * @property plan Route, amount, Aleo recipient, and privacy preference selected for the transfer.
  * @property privateMintSecretNonce Secret Aleo scalar committed by private hook data. Defaults to `0scalar`.
  * @property pollingIntervalMs Delay between receipt checks. Defaults to 1,000 milliseconds.
  * @property confirmationTimeoutMs Maximum receipt wait per transaction. Defaults to 120,000 milliseconds.

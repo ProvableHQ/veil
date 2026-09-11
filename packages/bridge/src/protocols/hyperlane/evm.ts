@@ -44,6 +44,8 @@ function routeMetadata(registry: BridgeRegistry, plan: BridgePlan): EvmHyperlane
   if (plan.registryVersion !== registry.version) {
     throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
   }
+  // Resolve deployment addresses from the current reviewed registry rather
+  // than trusting the copies carried by a serialized plan.
   const route = registry.routes.find((entry) => entry.id === plan.route.id)
   if (!route || route.protocol !== 'hyperlane') {
     throw new BridgeError(`Hyperlane route is not present in the configured registry: ${plan.route.id}`)
@@ -139,6 +141,8 @@ async function resolveAccount(client: EvmClient & { walletClient: EvmWalletClien
   const account = await client.walletClient.getAddress()
   if (!isAddress(account)) throw new BridgeError('EVM wallet client account is invalid')
   const normalized = getAddress(account)
+  // A plan can pin the account used for its balance and allowance checks. Never
+  // let a later wallet switch commit funds from a different account.
   if (plan.sender && (!isAddress(plan.sender) || getAddress(plan.sender) !== normalized)) {
     throw new BridgeError(`Prepared sender ${plan.sender} does not match connected account ${normalized}`)
   }
@@ -183,6 +187,8 @@ function assertSuccessfulReceipt(receipt: EvmReceipt, hash: Hash): void {
 }
 
 function messageIdFromReceipt(receipt: EvmReceipt): Hash | undefined {
+  // Hyperlane emits the cross-chain message id from its Mailbox. Other logs in
+  // the same receipt belong to the token, router, and gas-payment contracts.
   for (const log of receipt.logs ?? []) {
     try {
       const signature = log.topics[0]
@@ -203,16 +209,18 @@ function messageIdFromReceipt(receipt: EvmReceipt): Hash | undefined {
 }
 
 /**
- * Quotes an Ethereum-to-Aleo Hyperlane Warp Route transfer.
+ * Calculates the source funds required for an Ethereum-to-Aleo Hyperlane transfer.
  *
- * Calls the reviewed router's `quoteTransferRemote` through the supplied EVM
- * client. The call reads live state but does not request a signature or move funds.
+ * Native routes include the asset and relayer payment in `msg.value`; token
+ * routes report the ERC-20 amount separately from the native relayer payment.
+ * The action reads the current router without requesting a signature or moving
+ * funds.
  *
- * @param registry Reviewed deployment snapshot used to validate the prepared plan.
- * @param client Registry-selected EVM public capability.
- * @param params Prepared plan and exact 32-byte Aleo recipient encoding.
- * @returns Atomic native payment and ERC-20 allowance requirements.
- * @throws BridgeError When the route is not an active Ethereum source route, metadata is incomplete, the client is on the wrong chain, or the router returns an unusable quote.
+ * @param registry Supported assets and reviewed Hyperlane deployments.
+ * @param client Ethereum network access used to read the selected Warp Route router.
+ * @param params Route, amount, and Aleo recipient encoded as the router's 32-byte destination value.
+ * @returns Atomic source amount, native payment, and token amount that may require approval.
+ * @throws BridgeError When the route is unavailable, the client is on the wrong chain, or the router returns values that cannot cover the transfer.
  *
  * @example
  * const result = await quote(registry, client, {
@@ -230,6 +238,8 @@ export async function quote(
   await assertChain(client, metadata.sourceChainId)
   const sourceAsset = registry.assets.find((asset) => asset.id === params.plan.sourceAsset.id)!
   const amountAtomic = parseDecimalAmount(params.plan.amountIn, sourceAsset.decimals)
+  // Ask the deployed router for every asset it requires. Hyperlane returns a
+  // list because native value and ERC-20 collateral are accounted separately.
   const data = encodeFunctionData({
     abi: WARP_ROUTE_ABI,
     functionName: 'quoteTransferRemote',
@@ -246,6 +256,8 @@ export async function quote(
     .reduce((sum, quote) => sum + quote.amount, 0n)
 
   if (metadata.routerType === 'native') {
+    // On a native route, msg.value contains both the bridged asset and the
+    // relayer payment. The difference is the fee visible to the caller.
     if (nativeValueAtomic < amountAtomic) {
       throw new BridgeError('Native Hyperlane quote does not cover the transfer amount')
     }
@@ -261,6 +273,8 @@ export async function quote(
     }
   }
 
+  // On a collateral route, the ERC-20 amount is approved and transferred while
+  // msg.value pays only native-denominated delivery costs.
   const tokenAddress = metadata.tokenAddress!
   const tokenAmountAtomic = quotes
     .filter((quote) => getAddress(quote.token) === tokenAddress)
@@ -325,6 +339,8 @@ function validateCheckpoint(
   recipientBytes32: Hex,
   receipt: BridgeReceipt,
 ): void {
+  // A checkpoint is application-controlled input. Bind every value that affects
+  // the dispatch before trusting its transaction identifiers during recovery.
   const state = receipt.protocolState
   const sourceAsset = registry.assets.find((asset) => asset.id === plan.sourceAsset.id)
   if (!sourceAsset) throw new BridgeError(`Hyperlane source asset is not present in the configured registry: ${plan.sourceAsset.id}`)
@@ -340,18 +356,19 @@ function validateCheckpoint(
 }
 
 /**
- * Refreshes one submitted EVM Hyperlane dispatch without signing or broadcasting.
+ * Checks whether one submitted EVM Hyperlane source transaction has committed funds.
  *
- * Performs one transaction-receipt read and extracts the dispatch message id
- * after confirmation.
+ * A pending transaction leaves the state unchanged. A successful transaction
+ * advances to destination delivery and records the canonical Hyperlane message
+ * identifier when the receipt contains it. No signature or submission occurs.
  *
- * @param registry Reviewed deployment snapshot used to validate the plan.
- * @param client Registry-selected EVM public and wallet capabilities.
- * @param plan Original transfer plan that produced the receipt.
- * @param recipientBytes32 Wire-format destination recipient committed by the plan.
- * @param receipt Source-confirming receipt containing the submitted transaction.
- * @returns Unchanged pending state or a delivery-pending receipt.
- * @throws BridgeError When the checkpoint or confirmed transaction is invalid.
+ * @param registry Supported assets and reviewed Hyperlane deployments.
+ * @param client EVM network access used to read the transaction receipt.
+ * @param plan Route, assets, amount, and recipient for the transfer.
+ * @param recipientBytes32 Aleo recipient committed by the transaction in its 32-byte wire encoding.
+ * @param receipt Latest state containing the submitted source transaction identifier.
+ * @returns Unchanged source confirmation state or state ready to follow destination delivery.
+ * @throws BridgeError When the saved state does not match the transfer or the source transaction reverted.
  * @example const next = await getSourceStatus(registry, client, plan, recipientBytes32, receipt)
  */
 export async function getSourceStatus(
@@ -374,6 +391,9 @@ export async function getSourceStatus(
   const sourceReceipt = await client.publicClient.getTransactionReceipt(sourceTxId)
   if (!sourceReceipt) return receipt
   assertSuccessfulReceipt(sourceReceipt, sourceTxId)
+  // Confirmation proves the source dispatch executed. The message id is the
+  // preferred destination lookup key, but retaining the source hash still lets
+  // an operator diagnose a missing or unparseable Mailbox log.
   const messageId = messageIdFromReceipt(sourceReceipt)
   return {
     ...receipt,
@@ -384,19 +404,20 @@ export async function getSourceStatus(
 }
 
 /**
- * Reconstructs an EVM Hyperlane receipt from submitted transaction identifiers.
+ * Reconstructs an interrupted EVM Hyperlane transfer from saved transaction identifiers.
  *
- * Performs read-only chain operations and never calls the wallet submission
- * capability. An approval-only checkpoint advances to the state where a new
- * explicit `execute` call may submit the transfer.
+ * The helper checks whether the last saved token approval or source dispatch
+ * was accepted. It never requests a signature or repeats a transaction. A
+ * confirmed approval with no dispatch means the source transfer still needs
+ * wallet authorization.
  *
- * @param registry Reviewed deployment snapshot used to validate the plan.
- * @param client Registry-selected EVM public and wallet capabilities.
- * @param plan Original transfer plan that produced the checkpoint.
- * @param recipientBytes32 Wire-format destination recipient committed by the plan.
- * @param checkpoint Compact checkpoint containing submitted transaction identifiers.
- * @returns Reconstructed source receipt at its latest observable state.
- * @throws BridgeError When the checkpoint or a confirmed transaction is invalid.
+ * @param registry Supported assets and reviewed Hyperlane deployments.
+ * @param client EVM network access used to check submitted transactions.
+ * @param plan Route, assets, amount, and recipient reconstructed from the saved information.
+ * @param recipientBytes32 Aleo recipient committed by the transfer in its 32-byte wire encoding.
+ * @param checkpoint Saved route and submitted transaction identifiers.
+ * @returns Current source state and whether confirmation, submission, or destination delivery comes next.
+ * @throws BridgeError When the saved information does not match the transfer or a submitted transaction reverted.
  * @example const receipt = await recoverSourceCheckpoint(registry, client, plan, recipient, checkpoint)
  */
 export async function recoverSourceCheckpoint(
@@ -424,6 +445,8 @@ export async function recoverSourceCheckpoint(
     amountAtomic: parseDecimalAmount(plan.amountIn, sourceAsset.decimals).toString(),
   }
   if (!checkpoint.source?.transactionId) {
+    // With only approvals saved, inspect the latest approval. A confirmed
+    // approval stops before dispatch so recovery never moves funds by itself.
     const approvalTxId = approvalTxIds.at(-1)
     if (!approvalTxId) throw new BridgeError('Bridge checkpoint contains no submitted transaction')
     const pending: BridgeReceipt = {
@@ -438,6 +461,8 @@ export async function recoverSourceCheckpoint(
     return { ...pending, status: 'SOURCE_SUBMISSION_PENDING' }
   }
   if (!isHash(checkpoint.source.transactionId)) throw new BridgeError('Bridge checkpoint contains an invalid source transaction id')
+  // A saved source transaction is already the irreversible dispatch. Observe
+  // it through the normal status path rather than authorizing anything again.
   return getSourceStatus(registry, client, plan, recipientBytes32, {
     id: checkpoint.source.transactionId,
     protocol: 'hyperlane',
@@ -448,17 +473,18 @@ export async function recoverSourceCheckpoint(
 }
 
 /**
- * Approves collateral when needed and dispatches an Ethereum Hyperlane transfer.
+ * Begins an Ethereum-to-Aleo Hyperlane transfer by committing funds on Ethereum.
  *
- * Requotes immediately before submission, checks the connected chain and account,
- * and waits for approval receipts before dispatch. USDT routes reset an existing
- * non-zero allowance before setting a new one. Calls can prompt the wallet and move funds.
+ * A token route requests approval only when the current allowance is too low;
+ * tokens such as USDT may require resetting an existing allowance to zero first.
+ * The wallet then submits the source dispatch. Every submitted transaction can
+ * incur a network fee, and an accepted dispatch may no longer be reversible.
  *
- * @param registry Reviewed deployment snapshot used to validate the prepared plan.
- * @param client Registry-selected EVM public and wallet capabilities.
- * @param params Prepared plan, wire recipient, and optional receipt polling controls.
- * @returns Submitted transaction ids plus resumable transfer state. Receipt timeouts return a pending state and do not report failure.
- * @throws BridgeError When validation, quoting, wallet submission, or a confirmed transaction fails.
+ * @param registry Supported assets and reviewed Hyperlane deployments.
+ * @param client Ethereum network and wallet access used to read, authorize, and submit.
+ * @param params Route, assets, amount, Aleo recipient, confirmation controls, and optional recovery callback.
+ * @returns Submitted approval identifiers and state needed to follow source confirmation or destination delivery. A timeout remains pending rather than reporting failure.
+ * @throws BridgeError When the route is unavailable, the wallet uses a different chain or account, authorization fails, or a confirmed transaction reverted.
  *
  * @example
  * const execution = await execute(registry, client, {
@@ -485,6 +511,9 @@ export async function execute(
   let approvalTxIds: Hash[] = []
 
   if (params.resume) {
+    // Resume receipts represent already-submitted work. Each branch observes
+    // the recorded transaction and only the approval-complete branch may fall
+    // through to a new source dispatch.
     validateCheckpoint(registry, params.plan, metadata, params.recipientBytes32, params.resume)
     approvalTxIds = checkpointApprovalIds(params.resume)
     if (params.resume.status === 'DELIVERY_PENDING') {
@@ -521,10 +550,14 @@ export async function execute(
     }
   }
 
+  // Quote at the last responsible moment because router fees and token
+  // allowances can change between display and wallet authorization.
   const transferQuote = await quote(registry, client, params)
   const account = await resolveAccount(client, params.plan)
 
   if (metadata.routerType === 'collateral') {
+    // The router, not Hyperlane globally, is the ERC-20 spender. Approval is a
+    // separate transaction and does not yet commit funds to the bridge.
     const allowanceData = encodeFunctionData({
       abi: ERC20_ABI,
       functionName: 'allowance',
@@ -546,6 +579,8 @@ export async function execute(
       })
       const hash = await sendTransaction(client, metadata.sourceChainId, { from: account, to: metadata.tokenAddress!, data })
       approvalTxIds.push(hash)
+      // Persist immediately after broadcast and before polling. A process crash
+      // can then recover this exact transaction rather than submit it again.
       const checkpoint = executionReceipt(params.plan, 'SOURCE_APPROVAL_PENDING', hash, transferQuote, approvalTxIds, account)
       await params.onSubmitted?.(checkpoint)
       const receipt = await waitForReceipt(client, hash, confirmationTimeoutMs, pollingIntervalMs)
@@ -556,6 +591,8 @@ export async function execute(
 
     if (allowance < required) {
       if (allowance > 0n && metadata.requiresApprovalReset) {
+        // Some tokens, notably USDT, reject non-zero-to-non-zero allowance
+        // changes. Confirm the zero reset before setting the required amount.
         if (!await approveAndConfirm(0n)) {
           return {
             approvalTxIds,
@@ -572,6 +609,8 @@ export async function execute(
     }
   }
 
+  // This dispatch is the irreversible source boundary: the router locks or
+  // burns the source asset and emits the cross-chain message.
   const transferData = encodeFunctionData({
     abi: WARP_ROUTE_ABI,
     functionName: 'transferRemote',
@@ -584,6 +623,8 @@ export async function execute(
     value: `0x${transferQuote.nativeValueAtomic.toString(16)}`,
   })
   const checkpoint = executionReceipt(params.plan, 'SOURCE_CONFIRMING', sourceTxId, transferQuote, approvalTxIds, account, sourceTxId)
+  // The transaction may land even if receipt polling times out or the process
+  // exits, so checkpoint the hash before any confirmation read.
   await params.onSubmitted?.(checkpoint)
   const sourceReceipt = await waitForReceipt(
     client,
@@ -592,12 +633,15 @@ export async function execute(
     pollingIntervalMs,
   )
   if (!sourceReceipt) {
+    // Lack of a receipt is unknown, not failure. Return enough state for a later
+    // status check to distinguish pending, success, and revert.
     return {
       approvalTxIds,
       receipt: checkpoint,
     }
   }
   assertSuccessfulReceipt(sourceReceipt, sourceTxId)
+  // Destination verification is keyed by the Mailbox message id when present.
   const messageId = messageIdFromReceipt(sourceReceipt)
   return {
     approvalTxIds,

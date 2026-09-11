@@ -30,7 +30,13 @@ export type BridgeActionsConfig = {
   fetch: typeof globalThis.fetch
 }
 
-/** Lists protocol discovery, planning, execution, status, and completion operations. */
+/**
+ * Groups the complete cross-chain transfer lifecycle exposed by a bridge client.
+ *
+ * Discovery and preparation require no network access. Quoting and monitoring
+ * read chains or providers. Execution, resumption, completion, shielding, and
+ * unshielding can request wallet authorization and move funds.
+ */
 export type BridgeActions = {
   getAssets: (params?: GetAssetsParameters) => ProtocolBridgeAsset[]
   getRoutes: (params?: GetRoutesParameters) => ProtocolBridgeRoute[]
@@ -47,11 +53,20 @@ export type BridgeActions = {
   unshield: (params: UnshieldParameters) => Promise<AleoPrivacyExecution>
 }
 
-/** Binds registry and private client state to bridge actions. */
+/**
+ * Binds configured chains, wallets, and provider HTTP access to every bridge action.
+ *
+ * Calling this function only creates closures; it does not contact a chain,
+ * request a signature, submit a transaction, move funds, or store state.
+ */
 export function bridgeActions(config: BridgeActionsConfig): BridgeActions {
   return {
+    // Discovery inherits the client's environment unless a call explicitly
+    // asks for another environment in the same catalog.
     getAssets: (params = {}) => getAssets(config.registry, { ...params, environment: params.environment ?? config.environment }),
     getRoutes: (params = {}) => getRoutes(config.registry, { ...params, environment: params.environment ?? config.environment }),
+    // Every remaining closure injects the same validated route catalog and
+    // registry-keyed clients, preventing per-action configuration drift.
     prepare: (params) => prepare(config.registry, params),
     quote: async (params) => quote(config.registry, config.clients, params),
     execute: async (params) => execute(config.registry, config.clients, params),

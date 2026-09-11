@@ -5,7 +5,7 @@ import { BridgeError } from '../errors/bridgeErrors.js'
  *
  * Protocol inputs use display decimals (`"0.5"` ALEO), while onchain calls
  * use atomic integers (`500000n` microcredits). String arithmetic keeps the
- * conversion exact without floating-point rounding. Pure and local.
+ * conversion exact without floating-point rounding or contacting a chain.
  *
  * @param amount Decimal amount as a string (e.g. `"0.5"`, `"100"`).
  * @param decimals The asset's display decimals (e.g. 6 for ALEO/USDC, 18 for ETH).
@@ -36,8 +36,8 @@ export function parseDecimalAmount(amount: string, decimals: number): bigint {
 /**
  * Formats a non-negative atomic amount as an exact decimal display value.
  *
- * Pure string arithmetic removes trailing fractional zeroes without using
- * floating point.
+ * String arithmetic removes trailing fractional zeroes without floating-point
+ * rounding and does not read a balance or contact a chain.
  *
  * @param amount Atomic amount to format; MUST be non-negative.
  * @param decimals Number of fractional decimal places used by the asset.

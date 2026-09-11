@@ -6,14 +6,29 @@ import type {
   ProtocolBridgeRoute,
 } from '../../types/protocol.js'
 
-/** Filters the protocol asset catalog. */
+/**
+ * Selects chain-specific assets from a registry catalog.
+ *
+ * @property environment Optional mainnet or testnet filter.
+ * @property chainId Optional registry chain identifier filter.
+ * @property symbol Optional case-insensitive token symbol filter.
+ */
 export type GetAssetsParameters = {
   environment?: BridgeEnvironment | undefined
   chainId?: string | undefined
   symbol?: string | undefined
 }
 
-/** Filters directional protocol routes. */
+/**
+ * Selects directional bridge routes from a registry catalog.
+ *
+ * @property environment Optional mainnet or testnet filter.
+ * @property protocol Optional bridge provider filter.
+ * @property sourceChainId Optional source registry chain identifier.
+ * @property destinationChainId Optional destination registry chain identifier.
+ * @property symbol Optional case-insensitive source or destination token symbol.
+ * @property includeUnavailable Includes disabled routes when true. Defaults to false; routes awaiting metadata remain visible.
+ */
 export type GetRoutesParameters = {
   environment?: BridgeEnvironment | undefined
   protocol?: BridgeProtocol | undefined
@@ -26,9 +41,10 @@ export type GetRoutesParameters = {
 /**
  * Lists chain-specific assets from a protocol bridge registry.
  *
- * Pure and local. Filters match identifiers and symbols case-insensitively.
+ * Reads only the supplied registry. Filters match identifiers and symbols
+ * case-insensitively without contacting a chain or bridge provider.
  *
- * @param registry Reviewed registry snapshot.
+ * @param registry Supported chains and chain-specific assets available to the application.
  * @param params Optional environment, chain, and symbol filters.
  * @returns Matching assets in registry order.
  *
@@ -55,11 +71,12 @@ export function filterProtocolAssets(
 /**
  * Lists directional routes from a protocol bridge registry.
  *
- * Pure and local. Routes marked `disabled` are omitted unless
+ * Reads only the supplied registry. Routes marked `disabled` are omitted unless
  * `includeUnavailable` is true; `metadata-required` routes remain visible so
- * applications can distinguish known protocol support from execution readiness.
+ * applications can distinguish known protocol support from execution readiness
+ * without contacting a chain or bridge provider.
  *
- * @param registry Reviewed registry snapshot.
+ * @param registry Supported chains, assets, and directional provider routes available to the application.
  * @param params Optional protocol, environment, endpoint, and symbol filters.
  * @returns Matching directional routes in registry order.
  *

@@ -25,6 +25,7 @@ function littleEndianU128(bytes: Uint8Array): bigint {
   return value
 }
 
+/** Encodes a 32-byte Hyperlane message id as the two little-endian u128 limbs used by the Aleo Mailbox mapping key. */
 function aleoDeliveryKey(messageId: `0x${string}`): string {
   const bytes = hexToBytes(messageId)
   const first = littleEndianU128(bytes.slice(0, 16))
@@ -33,16 +34,16 @@ function aleoDeliveryKey(messageId: `0x${string}`): string {
 }
 
 /**
- * Reads canonical Hyperlane delivery state from a destination mailbox.
+ * Checks whether the destination Hyperlane Mailbox accepted a transfer message.
  *
- * Supports EVM Mailbox `delivered(bytes32)` calls and Aleo
- * `hyp_mailbox.aleo/deliveries` mapping reads. Hits the destination chain but
- * never signs or submits a transaction.
+ * The Mailbox contract or program is the authoritative delivery record, unlike
+ * a third-party explorer that may lag or omit a route. The helper reads the
+ * destination chain once and never requests a signature or moves funds.
  *
- * @param client Destination EVM or Aleo client used for the mailbox read.
- * @param params Message identifier and destination mailbox deployment.
- * @returns Whether the destination mailbox has processed the message.
- * @throws BridgeError When the message id or mailbox does not match the destination family.
+ * @param client Destination EVM or Aleo network access used to read the Mailbox.
+ * @param params Hyperlane message identifier and the destination Mailbox contract or program.
+ * @returns Whether the destination chain has recorded the message as delivered.
+ * @throws BridgeError When the message identifier is invalid or the Mailbox does not belong to the destination chain family.
  * @example const delivered = await readHyperlaneDelivery(client, { messageId, mailbox: 'hyp_mailbox.aleo' })
  */
 export async function readHyperlaneDelivery(
@@ -53,6 +54,8 @@ export async function readHyperlaneDelivery(
 
   if (client.family === 'aleo') {
     if (!params.mailbox.endsWith('.aleo')) throw new BridgeError(`Invalid Aleo Hyperlane mailbox program: ${params.mailbox}`)
+    // Aleo stores successful deliveries by a struct containing two u128 limbs;
+    // mapping presence, not a third-party API, is the acceptance signal.
     return await readContract(client.publicClient, {
       programId: params.mailbox,
       mapping: 'deliveries',
@@ -62,6 +65,7 @@ export async function readHyperlaneDelivery(
 
   if (!isAddress(params.mailbox)) throw new BridgeError(`Invalid EVM Hyperlane mailbox address: ${params.mailbox}`)
   const mailbox = getAddress(params.mailbox)
+  // EVM Mailboxes expose the same canonical state through delivered(bytes32).
   const data = encodeFunctionData({
     abi: EVM_MAILBOX_ABI,
     functionName: 'delivered',

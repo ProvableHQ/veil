@@ -16,19 +16,21 @@ const CALLER_BOUNDARIES: readonly BridgeStatus[] = [
 ]
 
 /**
- * Waits until recovered progress reaches a caller-action or terminal boundary.
+ * Follows a cross-chain transfer until it finishes or requires another wallet authorization.
  *
- * Performs reads only. It returns immediately when progress already identifies
- * a source resumption, destination completion, or terminal result. Delivery
- * pending is not a stopping boundary because it requires no caller
- * authorization; polling continues until delivery completes or fails.
+ * The action monitors source confirmation, provider processing, and destination
+ * delivery where those stages can be verified. The result states whether the
+ * funds arrived, the transfer failed, or another source- or destination-chain
+ * transaction is required.
  *
- * @param registry Reviewed deployment snapshot.
- * @param clients Materialized chain clients used only for status reads.
- * @param client Fetch-compatible protocol transport used for attestation reads.
- * @param params Reconstructed progress and optional polling controls.
- * @returns Updated progress with an explicit next operation.
- * @throws BridgeError When progress is mismatched or polling fails.
+ * Monitoring does not request a signature, submit a transaction, or move funds.
+ *
+ * @param registry Supported chains, assets, and bridge provider deployments.
+ * @param clients Network access for the chains involved in the transfer.
+ * @param client HTTP access for bridge provider status checks.
+ * @param params Current transfer state, polling controls, and optional progress callback.
+ * @returns The completed or failed transfer, or the next transaction the caller must authorize.
+ * @throws BridgeError When the saved state does not belong to the transfer, the wait times out or is cancelled, or a network or provider check fails.
  * @example const next = await wait(registry, clients, fetch, { progress })
  */
 export async function wait(

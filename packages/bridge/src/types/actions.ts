@@ -18,9 +18,9 @@ import type { SolanaHyperlaneTransferExecution, SolanaHyperlaneTransferQuote } f
 import type { EvmXReserveTransferExecution, EvmXReserveTransferQuote } from './xreserve.js'
 
 /**
- * Selects a prepared transfer for a live protocol quote.
+ * Supplies the cross-chain transfer whose current cost is calculated.
  *
- * @property plan Pure transfer plan returned by `prepare`.
+ * @property plan Route, assets, amount, and recipient selected for the transfer.
  * @property privateMintSecretNonce Secret Aleo scalar committed by a private xReserve deposit. Defaults to `0scalar` and is never persisted in a checkpoint.
  */
 export type QuoteParameters = {
@@ -69,13 +69,12 @@ export type BridgeQuote =
   | ({ kind: 'solana-hyperlane' } & SolanaHyperlaneTransferQuote)
 
 /**
- * Configures the next source-chain execution for a prepared transfer.
+ * Controls how the source wallet begins a cross-chain transfer.
  *
- * The route selects the required chain client and protocol implementation.
- * Execution requotes live values before submission rather than trusting a
- * previously displayed quote.
+ * Current fees and approval requirements are recalculated before funds are
+ * committed, so a previously displayed quote is not treated as final.
  *
- * @property plan Pure transfer plan returned by `prepare`.
+ * @property plan Route, assets, amount, and recipient selected for the transfer.
  * @property pollingIntervalMs Delay between source confirmation checks. Defaults to 1,000 milliseconds where polling applies.
  * @property confirmationTimeoutMs Maximum source confirmation wait. Defaults to 120,000 milliseconds where polling applies.
  * @property onCheckpoint Optional durable hook receiving compact recovery state before supported local Aleo broadcasts and after every submission.
@@ -118,10 +117,10 @@ export type BridgeExecution =
   | ({ kind: 'solana-hyperlane' } & SolanaHyperlaneTransferExecution)
 
 /**
- * Selects a persisted transfer receipt for one read-only status refresh.
+ * Supplies an in-progress cross-chain transfer for one status check.
  *
- * @property plan Original plan that produced the receipt.
- * @property receipt Latest persisted lifecycle state.
+ * @property plan Route, assets, amount, and recipient for the transfer.
+ * @property receipt Latest known state and submitted transaction identifiers.
  * @property signal Optional cancellation signal for protocol HTTP reads. Defaults to no cancellation.
  */
 export type GetStatusParameters = {
@@ -131,10 +130,10 @@ export type GetStatusParameters = {
 }
 
 /**
- * Configures read-only polling until a requested lifecycle state is reached.
+ * Controls how an in-progress cross-chain transfer is followed until a requested state.
  *
- * @property plan Original plan that produced the receipt.
- * @property receipt Latest persisted lifecycle state.
+ * @property plan Route, assets, amount, and recipient for the transfer.
+ * @property receipt Latest known state and submitted transaction identifiers.
  * @property until One or more statuses that stop polling.
  * @property pollingIntervalMs Delay between reads. Defaults to 15,000 milliseconds and is floored at 100 milliseconds.
  * @property timeoutMs Maximum polling duration. Defaults to 1,200,000 milliseconds.
@@ -149,7 +148,7 @@ export type WaitForStatusParameters = GetStatusParameters & {
 }
 
 /**
- * Holds options shared by supported destination completion inputs.
+ * Controls the wallet transaction that privately delivers USDCx on Aleo.
  *
  * @property privateMintSecretNonce Secret Aleo scalar required by a private xReserve mint. Defaults to `0scalar`.
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
@@ -164,14 +163,15 @@ type CompleteOptions = {
 }
 
 /**
- * Configures one caller-authorized destination-chain submission.
+ * Supplies the state and wallet preferences required to receive private USDCx on Aleo.
  *
- * Recovered callers pass `progress`; in-memory callers may pass the original
- * `plan` and `receipt` pair.
+ * An application returning after an interruption passes recovered progress. An
+ * application that stayed open passes the original transfer details and latest
+ * receipt.
  *
  * @property progress Recovered progress whose next operation is `complete`.
- * @property plan Original plan for an uninterrupted in-memory flow.
- * @property receipt Ready receipt for an uninterrupted in-memory flow.
+ * @property plan Route, assets, amount, and recipient retained while the application stayed open.
+ * @property receipt Circle-attested transfer state retained while the application stayed open.
  * @property privateMintSecretNonce Secret Aleo scalar required by a private xReserve mint. Defaults to `0scalar` and must match the source deposit.
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
  * @property onCheckpoint Optional durable hook called before supported local Aleo broadcast and again after destination submission.
@@ -182,7 +182,7 @@ export type CompleteParameters = CompleteOptions & (
 )
 
 /**
- * Selects a persisted submission checkpoint for read-only recovery.
+ * Supplies saved public transfer information for recovery after an interruption.
  *
  * @property checkpoint Compact checkpoint emitted at a wallet submission boundary.
  * @property signal Optional cancellation signal. Defaults to no cancellation.
@@ -193,7 +193,7 @@ export type RecoverParameters = {
 }
 
 /**
- * Continues an interrupted source sequence from recovered progress.
+ * Controls submission of a source-chain transaction left unfinished after an interruption.
  *
  * @property progress Recovery result whose next operation is `resume`.
  * @property privateMintSecretNonce Secret Aleo scalar required to resume a private xReserve deposit. Defaults to `0scalar` and must match the checkpointed hook.
@@ -210,9 +210,9 @@ export type ResumeParameters = {
 }
 
 /**
- * Waits from reconstructed progress until the next caller boundary.
+ * Controls how a recovered cross-chain transfer is followed until it finishes or needs a wallet.
  *
- * @property progress Current plan and receipt returned by recovery.
+ * @property progress Current transfer details, receipt, and required next operation.
  * @property pollingIntervalMs Delay between reads. Defaults to 15,000 milliseconds.
  * @property timeoutMs Maximum polling duration. Defaults to 1,200,000 milliseconds.
  * @property onUpdate Optional callback invoked after each receipt transition.

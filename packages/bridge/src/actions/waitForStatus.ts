@@ -7,18 +7,20 @@ import { getStatus } from './getStatus.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 
 /**
- * Polls bridge status using read-only protocol and chain operations.
+ * Follows an in-progress cross-chain transfer until it reaches a selected state.
  *
- * Never signs or submits a transaction. Returns only after a requested state
- * is reached; timeout and cancellation errors leave the caller's last
- * `onUpdate` checkpoint resumable.
+ * The action repeatedly checks source confirmation, bridge provider processing,
+ * and destination delivery until one of the caller's requested states is
+ * reached. Progress updates can be saved for display or later recovery.
  *
- * @param registry Reviewed deployment snapshot.
- * @param clients Materialized chain clients keyed by registry chain id.
- * @param client Fetch-compatible protocol transport.
- * @param params Receipt, stopping states, polling controls, and checkpoint callback.
- * @returns The first refreshed receipt whose status matches `until`.
- * @throws BridgeError When polling controls are invalid, time expires, cancellation is requested, or a status read fails.
+ * The action does not request a signature, submit a transaction, or move funds.
+ *
+ * @param registry Supported chains, assets, and bridge provider deployments.
+ * @param clients Network access for the chains involved in the transfer.
+ * @param client HTTP access for bridge provider status checks.
+ * @param params Transfer details, latest receipt, stopping states, polling controls, and optional progress callback.
+ * @returns The transfer state that first matches one of the requested stopping states.
+ * @throws BridgeError When polling settings are invalid, the wait times out or is cancelled, required network access is unavailable, or a provider returns invalid data.
  * @example const ready = await waitForStatus(registry, clients, fetch, { plan, receipt, until: ['DESTINATION_ACTION_REQUIRED'] })
  */
 export async function waitForStatus(

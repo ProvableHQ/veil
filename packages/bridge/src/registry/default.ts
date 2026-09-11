@@ -420,7 +420,8 @@ const routes: ProtocolBridgeRoute[] = [
  * xReserve contract identifiers are populated from Circle's published
  * mainnet and testnet tables. Hyperlane routes intentionally remain
  * `metadata-required` until their router, domain, ISM, and token identifiers
- * are pinned from one reviewed registry commit. Pure and local.
+ * are pinned from one reviewed registry commit. Reading this snapshot does not
+ * contact any chain or bridge provider.
  *
  * @example
  * const bridge = createBridgeClient({ registry: DEFAULT_BRIDGE_REGISTRY })

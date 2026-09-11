@@ -2,15 +2,19 @@ import { BridgeError } from '../errors/bridgeErrors.js'
 import type { BridgeCheckpoint, BridgePlan, BridgeReceipt } from '../types/protocol.js'
 
 /**
- * Reduces one execution receipt to a versioned recovery checkpoint.
+ * Captures the information an application needs to return to a cross-chain transfer after an interruption.
  *
- * Pure and local: retains public transfer intent and submitted transaction
- * identifiers while excluding secrets and protocol-native response data.
+ * The result includes the route, assets, amount, recipient, and submitted
+ * transaction identifiers. It excludes private keys, Aleo record contents, and
+ * the secret used for a private xReserve mint.
  *
- * @param plan Prepared transfer whose route binds the checkpoint.
- * @param receipt Latest receipt emitted after a wallet submission.
- * @returns Compact checkpoint suitable for optional durable storage.
- * @throws BridgeError When the receipt does not belong to the prepared route.
+ * Creating a checkpoint does not contact a network or store data on the
+ * caller's behalf. The application decides whether and where to save it.
+ *
+ * @param plan Transfer details that identify the route, assets, amount, and recipient.
+ * @param receipt Latest state returned after a wallet submission.
+ * @returns Public recovery information suitable for optional durable storage.
+ * @throws BridgeError When the receipt belongs to a different transfer route.
  * @example const checkpoint = createBridgeCheckpoint(plan, execution.receipt)
  */
 export function createBridgeCheckpoint(
@@ -20,6 +24,8 @@ export function createBridgeCheckpoint(
   if (receipt.protocol !== plan.protocol || receipt.protocolState.routeId !== plan.route.id) {
     throw new BridgeError('Bridge receipt does not match the prepared route')
   }
+  // Checkpoints use an allowlist, not a copy of protocolState. This prevents
+  // protocol response bodies and private-mint secrets from leaking into storage.
   const rawApprovals = receipt.protocolState.approvalTxIds
   if (rawApprovals !== undefined
     && (!Array.isArray(rawApprovals) || rawApprovals.some((value) => typeof value !== 'string'))) {
@@ -41,6 +47,8 @@ export function createBridgeCheckpoint(
     && (typeof preparedDestinationTransaction !== 'string' || !preparedDestinationTransaction)) {
     throw new BridgeError('Bridge receipt contains an invalid prepared destination transaction')
   }
+  // Source state records either a proved Aleo transaction, submitted approval
+  // transactions, or the irreversible source transaction identifier.
   const source = approvals.length > 0 || receipt.sourceTxId || preparedTransaction
     ? {
         ...(approvals.length > 0 ? { approvalTransactionIds: approvals } : {}),
@@ -60,6 +68,8 @@ export function createBridgeCheckpoint(
       || typeof expectedIncreaseAtomic !== 'string' || !/^\d+$/.test(expectedIncreaseAtomic))) {
     throw new BridgeError('Bridge receipt contains invalid destination balance verification state')
   }
+  // The intent is sufficient to resolve the current route catalog again during
+  // recovery; deployed contracts and provider payloads are deliberately omitted.
   return {
     version: 1,
     intent: {

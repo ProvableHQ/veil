@@ -53,6 +53,9 @@ const XRESERVE_ABI = parseAbi([
 function metadata(registry: BridgeRegistry, plan: BridgePlan): EvmXReserveRouteMetadata {
   if (plan.protocol !== 'xreserve' || plan.route.protocol !== 'xreserve') throw new BridgeError('xReserve actions require an xReserve transfer plan')
   if (plan.registryVersion !== registry.version) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
+  // Resolve contracts, domains, limits, and provider endpoints from the current
+  // reviewed registry. A serialized plan identifies a route but is not trusted
+  // as a source of deployment addresses after an application restart.
   const route = registry.routes.find((entry) => entry.id === plan.route.id)
   if (!route || route.availability !== 'active') throw new BridgeError(`xReserve route is not executable: ${plan.route.id}`)
   if (route.sourceAssetId !== plan.sourceAsset.id || route.destinationAssetId !== plan.destinationAsset.id) throw new BridgeError(`Transfer plan assets do not match configured route: ${route.id}`)
@@ -90,6 +93,8 @@ async function assertChain(client: EvmClient, expected: number): Promise<void> {
 }
 
 async function observedAccount(client: EvmClient, plan: BridgePlan, receipt?: BridgeReceipt): Promise<Address> {
+  // Recovery can run with network access alone. Prefer the sender committed to
+  // the receipt or plan so checking a past transfer never prompts a wallet.
   const saved = receipt?.protocolState.sourceSender
   const candidate = typeof saved === 'string' ? saved : plan.sender
   if (candidate && isAddress(candidate)) return getAddress(candidate)
@@ -105,18 +110,21 @@ async function account(client: EvmClient & { walletClient: EvmWalletClient }, pl
   return resolved
 }
 
+/** Reads one unsigned integer from the USDC contract and rejects malformed RPC data before it can influence authorization. */
 async function callUint(client: EvmClient & { walletClient: EvmWalletClient }, to: Address, data: Hex, functionName: 'balanceOf' | 'allowance'): Promise<bigint> {
   const result = await client.publicClient.call({ to, data })
   if (typeof result !== 'string' || !isHex(result)) throw new BridgeError('EVM public client returned an invalid contract result')
   return decodeFunctionResult({ abi: ERC20_ABI, functionName, data: result })
 }
 
+/** Submits one EVM transaction after binding the requested chain and sender to the connected wallet. */
 async function send(client: EvmClient & { walletClient: EvmWalletClient }, chainId: number, transaction: { from: Address, to: Address, data: Hex }): Promise<Hash> {
   const hash = await client.walletClient.sendTransaction({ chainId, ...transaction })
   if (typeof hash !== 'string' || !isHash(hash)) throw new BridgeError('EVM wallet client returned an invalid transaction hash')
   return hash
 }
 
+/** Polls an already-submitted EVM transaction. A timeout remains unknown because the transaction may still land. */
 async function wait(client: EvmClient & { walletClient: EvmWalletClient }, hash: Hash, timeout: number, interval: number): Promise<EvmReceipt | undefined> {
   const deadline = Date.now() + timeout
   do {
@@ -127,21 +135,23 @@ async function wait(client: EvmClient & { walletClient: EvmWalletClient }, hash:
   } while (true)
 }
 
+/** Turns a confirmed EVM revert into a terminal bridge error while accepting any successful receipt representation. */
 function successful(receipt: EvmReceipt, hash: Hash): void {
   if (receipt.status === 'reverted') throw new BridgeError(`EVM transaction reverted: ${hash}`)
 }
 
 /**
- * Reads live USDC balance and xReserve allowance for a prepared deposit.
+ * Calculates the USDC and approval required for an Ethereum-to-Aleo xReserve deposit.
  *
- * Derives the hook and wire recipient before performing read-only EVM calls. It
- * does not request a signature or move funds.
+ * The result includes the connected account's balance, current xReserve
+ * allowance, maximum provider fee, and the Aleo delivery instruction committed
+ * by the deposit. It reads Ethereum but does not request a signature or move funds.
  *
- * @param registry Reviewed deployment snapshot used to validate the plan.
- * @param client Registry-selected EVM public and wallet capabilities.
- * @param params Prepared Ethereum-to-Aleo xReserve plan.
- * @returns Atomic deposit values, account balance, allowance, and approval requirement.
- * @throws BridgeError When metadata, wallet state, amount, balance, or recipient is invalid.
+ * @param registry Supported assets and reviewed xReserve deployments.
+ * @param client Ethereum network access and the account whose balance and allowance are checked.
+ * @param params Route, amount, Aleo recipient, privacy preference, and private mint secret when applicable.
+ * @returns Deposit amount, maximum provider fee, balance, allowance, delivery instruction, and whether approval is required.
+ * @throws BridgeError When the route is unavailable, the client uses the wrong chain or account, funds are insufficient, or the Aleo recipient is invalid.
  *
  * @example
  * const result = await quote(registry, client, { plan })
@@ -159,6 +169,8 @@ export async function quote(
   const amountAtomic = parseDecimalAmount(params.plan.amountIn, params.plan.sourceAsset.decimals)
   if (amountAtomic < route.minimumAmountAtomic) throw new BridgeError(`xReserve minimum deposit is ${route.minimumAmountAtomic} atomic units`)
   const environment = params.plan.route.environment
+  // Hook data tells the Aleo side whether Circle may mint publicly on arrival
+  // or must wait for the recipient to reveal a secret and authorize private_mint.
   const hookData = await buildXReserveHookData(
     params.plan.mintMode,
     params.plan.recipient,
@@ -168,9 +180,14 @@ export async function quote(
   const recipient = params.plan.mintMode === 'private'
     ? await aleoProgramAddress(route.wrapperProgram, environment)
     : params.plan.recipient
+  // Private deposits target the wrapper program, which holds the attested mint
+  // until the intended recipient supplies the secret. Public deposits target
+  // the recipient address directly.
   const remoteRecipientBytes32 = aleoAddressToBytes32(recipient)
   const balanceData = encodeFunctionData({ abi: ERC20_ABI, functionName: 'balanceOf', args: [owner] })
   const allowanceData = encodeFunctionData({ abi: ERC20_ABI, functionName: 'allowance', args: [owner, route.xReserveContract] })
+  // Balance and allowance describe the same account at approximately the same
+  // block. Read them together to reduce quote latency without changing state.
   const [balanceAtomic, allowanceAtomic] = await Promise.all([
     callUint(client, getAddress(token), balanceData, 'balanceOf'),
     callUint(client, getAddress(token), allowanceData, 'allowance'),
@@ -179,10 +196,12 @@ export async function quote(
   return { routeId: params.plan.route.id, xReserveContract: route.xReserveContract, tokenAddress: getAddress(token), sourceChainId: route.sourceChainId, remoteDomain: route.remoteDomain, remoteRecipientBytes32, amountAtomic, maxFeeAtomic: route.maxFeeAtomic, hookData, balanceAtomic, allowanceAtomic, approvalRequired: allowanceAtomic < amountAtomic }
 }
 
+/** Captures every value that determines an xReserve deposit so later recovery can verify rather than reconstruct the submitted call. */
 function pendingReceipt(plan: BridgePlan, status: BridgeReceipt['status'], id: string, approvalTxIds: Hash[], quote: EvmXReserveTransferQuote, sourceSender: Address, sourceTxId?: Hash): BridgeReceipt {
   return { id, protocol: 'xreserve', status, ...(sourceTxId ? { sourceTxId } : {}), protocolState: { routeId: plan.route.id, approvalTxIds, sourceSender, mintMode: plan.mintMode, intendedRecipient: plan.recipient, xReserveContract: quote.xReserveContract, tokenAddress: quote.tokenAddress, sourceChainId: quote.sourceChainId, remoteDomain: quote.remoteDomain, remoteRecipientBytes32: quote.remoteRecipientBytes32, hookData: quote.hookData, amountAtomic: quote.amountAtomic.toString(), maxFeeAtomic: quote.maxFeeAtomic.toString() } }
 }
 
+/** Rebuilds the deposit arguments from saved state and binds them to the current transfer before any transaction is observed or submitted. */
 function resumeQuote(plan: BridgePlan, receipt: BridgeReceipt): EvmXReserveTransferQuote {
   const state = receipt.protocolState
   if (receipt.protocol !== 'xreserve' || state.routeId !== plan.route.id) {
@@ -216,6 +235,7 @@ function resumeQuote(plan: BridgePlan, receipt: BridgeReceipt): EvmXReserveTrans
   }
 }
 
+/** Returns only well-formed approval transaction hashes from application-controlled recovery state. */
 function approvalIds(receipt: BridgeReceipt): Hash[] {
   const ids = receipt.protocolState.approvalTxIds
   if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string' || !isHash(id))) {
@@ -224,6 +244,7 @@ function approvalIds(receipt: BridgeReceipt): Hash[] {
   return ids as Hash[]
 }
 
+/** Verifies the source deposit event and derives the exact Circle attestation lookup key from its canonical fields. */
 function confirmedDepositReceipt(
   plan: BridgePlan,
   route: EvmXReserveRouteMetadata,
@@ -255,10 +276,15 @@ function confirmedDepositReceipt(
   }
   if (!matched) throw new BridgeError('Confirmed receipt does not contain a valid DepositedToRemote event')
   const { log: eventLog, args } = matched
+  // A successful transaction is not enough: verify every event field against
+  // the authorized deposit before trusting it as the source of an Aleo mint.
   if (getAddress(args.localToken) !== quote.tokenAddress || getAddress(args.localDepositor) !== owner || args.value !== quote.amountAtomic || args.remoteDomain !== route.remoteDomain || args.remoteRecipient.toLowerCase() !== quote.remoteRecipientBytes32.toLowerCase() || args.remoteToken.toLowerCase() !== route.remoteTokenBytes32.toLowerCase() || args.maxFee !== route.maxFeeAtomic || args.hookData.toLowerCase() !== quote.hookData.toLowerCase()) throw new BridgeError('DepositedToRemote event does not match the prepared transfer')
   const rawIndex = eventLog.logIndex
   const logIndex = typeof rawIndex === 'string' ? Number(BigInt(rawIndex)) : rawIndex
   if (!Number.isSafeInteger(logIndex) || logIndex == null || logIndex < 0) throw new BridgeError('DepositedToRemote log index is missing or invalid')
+  // xReserve identifies one deposit by source domain, transaction hash, and log
+  // index. The ordered payload below is the message Circle signs; its hash is
+  // therefore the only safe attestation lookup identifier.
   const nonce = calculateXReserveDepositNonce(route.sourceDomain, sourceTxId, logIndex)
   const payload = buildXReserveDepositPayload({ amount: args.value, remoteDomain: args.remoteDomain, remoteToken: args.remoteToken, remoteRecipient: args.remoteRecipient, localToken: args.localToken, depositor: args.localDepositor, maxFee: args.maxFee, nonce, hookData: args.hookData })
   const messageHash = calculateXReserveMessageHash(payload)
@@ -266,17 +292,18 @@ function confirmedDepositReceipt(
 }
 
 /**
- * Refreshes one submitted EVM xReserve deposit without signing or broadcasting.
+ * Checks whether one submitted xReserve deposit has committed USDC on Ethereum.
  *
- * Performs one transaction-receipt read. A pending transaction leaves the
- * checkpoint unchanged; a confirmed transaction advances to attestation.
+ * A pending transaction leaves the state unchanged. A successful deposit is
+ * verified against its event before the Circle message and attestation lookup
+ * identifier are derived. No signature or submission occurs.
  *
- * @param registry Reviewed deployment snapshot used to validate the plan.
- * @param client Registry-selected EVM public and wallet capabilities.
- * @param plan Original transfer plan that produced the receipt.
- * @param receipt Source-confirming receipt containing the submitted transaction.
- * @returns Unchanged pending state or a validated attestation-pending receipt.
- * @throws BridgeError When the checkpoint, transaction, or deposit event is invalid.
+ * @param registry Supported assets and reviewed xReserve deployments.
+ * @param client Ethereum network access used to read the transaction receipt.
+ * @param plan Route, assets, amount, recipient, and privacy preference for the transfer.
+ * @param receipt Latest state containing the submitted deposit transaction identifier.
+ * @returns Unchanged source confirmation state or state ready for Circle attestation checks.
+ * @throws BridgeError When the saved state does not match the transfer, the transaction reverted, or its deposit event differs from the intended transfer.
  * @example const next = await getSourceStatus(registry, client, plan, receipt)
  */
 export async function getSourceStatus(
@@ -302,18 +329,19 @@ export async function getSourceStatus(
 }
 
 /**
- * Reconstructs an inbound xReserve source receipt from submitted transaction identifiers.
+ * Reconstructs an interrupted Ethereum-to-Aleo xReserve transfer from saved transaction identifiers.
  *
- * Performs read-only chain operations and never calls the wallet submission
- * capability. Confirmed approval-only checkpoints advance to the state where a
- * new explicit `execute` call may submit the deposit.
+ * The helper checks whether the last saved USDC approval or xReserve deposit was
+ * accepted. It never requests a signature or repeats a transaction. A confirmed
+ * approval with no deposit means the source transfer still needs wallet
+ * authorization.
  *
- * @param registry Reviewed deployment snapshot used to validate the plan.
- * @param client Registry-selected EVM public and wallet capabilities.
- * @param plan Original transfer plan that produced the checkpoint.
- * @param checkpoint Compact checkpoint containing submitted transaction identifiers.
- * @returns Reconstructed source receipt at its latest observable state.
- * @throws BridgeError When the checkpoint or a confirmed transaction is invalid.
+ * @param registry Supported assets and reviewed xReserve deployments.
+ * @param client Ethereum network access used to check submitted transactions.
+ * @param plan Route, assets, amount, recipient, and privacy preference reconstructed from saved information.
+ * @param checkpoint Saved route, delivery instruction, and submitted transaction identifiers.
+ * @returns Current source state and whether confirmation, deposit submission, or Circle attestation comes next.
+ * @throws BridgeError When the saved information does not match the transfer or a submitted transaction reverted.
  * @example const receipt = await recoverSourceCheckpoint(registry, client, plan, checkpoint)
  */
 export async function recoverSourceCheckpoint(
@@ -367,6 +395,9 @@ export async function recoverSourceCheckpoint(
   const approvalTxIds = approvals as Hash[]
 
   if (!checkpoint.source?.transactionId) {
+    // No source transaction means the checkpoint ended after approval
+    // broadcast. Observe the latest approval, then stop before the deposit so
+    // recovery itself never commits USDC to xReserve.
     const approvalTxId = approvalTxIds.at(-1)
     if (!approvalTxId) throw new BridgeError('Bridge checkpoint contains no submitted transaction')
     const pending = pendingReceipt(plan, 'SOURCE_APPROVAL_PENDING', approvalTxId, approvalTxIds, quote, owner)
@@ -387,20 +418,24 @@ export async function recoverSourceCheckpoint(
     owner,
     checkpoint.source.transactionId,
   )
+  // A saved source transaction is already the irreversible deposit. From this
+  // point recovery only observes Ethereum and verifies the emitted message.
   return getSourceStatus(registry, client, plan, pending)
 }
 
 /**
- * Approves USDC when needed and submits a nonpayable Circle xReserve deposit.
+ * Begins a USDC-to-USDCx transfer by committing USDC to xReserve on Ethereum.
  *
- * Calls the wallet for each required signature, confirms the approval before
- * depositing, and derives the Circle message hash from the confirmed event.
+ * The wallet approves USDC only when the current allowance is too low, then
+ * submits the deposit. Every submitted transaction can incur an Ethereum fee.
+ * Once the deposit is accepted, Circle attestation and Aleo delivery happen in
+ * later stages and the source transfer may no longer be reversible.
  *
- * @param registry Reviewed deployment snapshot used to validate the plan.
- * @param client Registry-selected EVM public and wallet capabilities.
- * @param params Prepared plan and optional receipt polling controls.
- * @returns Submitted approval ids and resumable xReserve transfer state.
- * @throws BridgeError When validation, submission, confirmation, or event verification fails.
+ * @param registry Supported assets and reviewed xReserve deployments.
+ * @param client Ethereum network and wallet access used to read, authorize, and submit.
+ * @param params Route, amount, Aleo recipient, privacy preference, confirmation controls, and recovery callback.
+ * @returns Submitted approval identifiers and state needed to follow source confirmation or Circle attestation.
+ * @throws BridgeError When the route is unavailable, funds are insufficient, wallet authorization fails, a transaction reverts, or the deposit event differs from the intended transfer.
  *
  * @example
  * const execution = await execute(registry, client, { plan })
@@ -419,11 +454,15 @@ export async function execute(
   let approvalTxIds: Hash[] = []
 
   if (params.resume?.status === 'ATTESTATION_PENDING') {
+    // Ethereum already accepted and verified the deposit. Returning the saved
+    // state prevents another approval or deposit while Circle is still working.
     resumeQuote(params.plan, params.resume)
     return { approvalTxIds: approvalIds(params.resume), receipt: params.resume }
   }
 
   if (params.resume?.status === 'SOURCE_CONFIRMING') {
+    // The deposit hash is known, so confirmation reads are the only permitted
+    // operation in this branch.
     transferQuote = resumeQuote(params.plan, params.resume)
     approvalTxIds = approvalIds(params.resume)
     const sourceTxId = params.resume.sourceTxId
@@ -436,6 +475,8 @@ export async function execute(
   if (params.resume?.status === 'SOURCE_SUBMISSION_PENDING') {
     const checkpointQuote = resumeQuote(params.plan, params.resume)
     approvalTxIds = approvalIds(params.resume)
+    // A prior approval succeeded without a deposit. Re-read balance, allowance,
+    // and hook data before asking the wallet to authorize the irreversible step.
     transferQuote = await quote(registry, client, params)
     if (transferQuote.hookData.toLowerCase() !== checkpointQuote.hookData.toLowerCase()) {
       throw new BridgeError('Private mint secret nonce does not match the checkpointed approval')
@@ -456,6 +497,9 @@ export async function execute(
   }
 
   if (transferQuote.approvalRequired) {
+    // Approval authorizes xReserve to spend exactly this amount but does not
+    // move USDC. Persist the hash immediately because it may confirm after a
+    // timeout or process failure.
     const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [route.xReserveContract, transferQuote.amountAtomic] })
     const hash = await send(client, route.sourceChainId, { from: owner, to: transferQuote.tokenAddress, data })
     approvalTxIds.push(hash)
@@ -465,6 +509,8 @@ export async function execute(
     if (!receipt) return { approvalTxIds, receipt: submitted }
     successful(receipt, hash)
   }
+  // depositToRemote is the irreversible source boundary: xReserve takes USDC
+  // custody and commits the Aleo recipient, token, fee ceiling, and hook data.
   const data = encodeFunctionData({ abi: XRESERVE_ABI, functionName: 'depositToRemote', args: [transferQuote.amountAtomic, route.remoteDomain, transferQuote.remoteRecipientBytes32, transferQuote.tokenAddress, route.maxFeeAtomic, transferQuote.hookData] })
   const sourceTxId = await send(client, route.sourceChainId, { from: owner, to: route.xReserveContract, data })
   const submitted = pendingReceipt(params.plan, 'SOURCE_CONFIRMING', sourceTxId, approvalTxIds, transferQuote, owner, sourceTxId)
@@ -475,16 +521,18 @@ export async function execute(
 }
 
 /**
- * Fetches and validates one Circle attestation, treating HTTP 404 as pending.
+ * Checks whether Circle has attested one confirmed xReserve deposit.
  *
- * Performs one request through the injected transport. Completed responses are
- * checked against the requested message hash before being returned.
+ * A missing attestation is reported as pending rather than failed. A completed
+ * response is cryptographically tied to the requested deposit hash before it is
+ * returned. The helper contacts Circle once and never requests a signature or
+ * moves funds.
  *
- * @param registry Reviewed snapshot supplying the Circle endpoint.
- * @param transport Fetch-compatible HTTP capability supplied by the application.
- * @param params Route, message hash, and optional cancellation signal.
- * @returns Pending state or the verified payload and Circle signature.
- * @throws BridgeError For invalid routes, HTTP failures other than 404, or malformed responses.
+ * @param registry Supported assets and reviewed xReserve provider endpoints.
+ * @param transport HTTP access supplied by the application for the Circle request.
+ * @param params Route, deposit message hash, and optional cancellation signal.
+ * @returns Pending state or the verified deposit payload and Circle signature.
+ * @throws BridgeError When the route is unavailable, Circle cannot be reached, or its response does not match the requested deposit.
  *
  * @example
  * const result = await getAttestation(registry, fetchTransport, { routeId, messageHash })
@@ -499,28 +547,32 @@ export async function getAttestation(
   if (route.protocol !== 'xreserve' || route.availability !== 'active') throw new BridgeError(`xReserve route is not executable: ${params.routeId}`)
   const attestationBaseUrl = route.metadata?.attestationBaseUrl
   if (typeof attestationBaseUrl !== 'string' || !attestationBaseUrl.startsWith('https://')) throw new BridgeError(`xReserve attestation URL is invalid: ${params.routeId}`)
+  // A 404 means Circle has not signed yet; other HTTP failures indicate that
+  // status is unavailable rather than that the cross-chain transfer failed.
   const response = await transport(`${attestationBaseUrl}/${params.messageHash}`, params.signal ? { signal: params.signal } : undefined)
   if (response.status === 404) return { status: 'pending', messageHash: params.messageHash }
   if (!response.ok) throw new BridgeError(`Circle attester request failed with HTTP ${response.status}`)
   const body = await response.json() as { attestation?: { payload?: unknown, messageHash?: unknown, attestation?: unknown } }
   const value = body.attestation
   if (!value || typeof value.payload !== 'string' || !isHex(value.payload) || typeof value.attestation !== 'string' || !isHex(value.attestation) || typeof value.messageHash !== 'string' || !isHash(value.messageHash) || value.messageHash.toLowerCase() !== params.messageHash.toLowerCase()) throw new BridgeError('Circle attester returned an invalid response')
+  // Validate both the provider's echoed hash and a locally recomputed hash so
+  // a mismatched response can never authorize an Aleo mint.
   if (calculateXReserveMessageHash(value.payload) !== params.messageHash) throw new BridgeError('Circle attestation payload does not match the requested message hash')
   return { status: 'complete', messageHash: params.messageHash, payload: value.payload, attestation: value.attestation }
 }
 
 /**
- * Submits the sole user-authorized Aleo mint in an inbound xReserve flow.
+ * Delivers a private USDCx record after Circle attests an Ethereum deposit.
  *
- * Requires a private plan and completed Circle attestation. The wallet calls
- * the wrapper's `private_mint` with the canonical payload, signature, hash,
- * secret nonce, and intended recipient.
+ * The private mint secret must reproduce the recipient commitment embedded in
+ * the source deposit. The Aleo wallet proves, signs, and submits the mint, which
+ * incurs an Aleo transaction fee. The source deposit is never repeated.
  *
- * @param registry Reviewed deployment snapshot used to resolve the wrapper program.
- * @param client Aleo wallet client that proves, signs, and broadcasts.
- * @param params Original plan, confirmed deposit, attestation, and checkpoint hook.
- * @returns The Aleo transaction id and destination-confirming receipt.
- * @throws BridgeError When the private plan, attestation, or wallet result is invalid.
+ * @param registry Supported assets and reviewed xReserve deployments.
+ * @param client Aleo wallet that proves, signs, and broadcasts the private mint.
+ * @param params Route, recipient, confirmed deposit, Circle attestation, private mint secret, fee preference, and recovery callbacks.
+ * @returns The Aleo transaction identifier and state needed to confirm private delivery.
+ * @throws BridgeError When the transfer is not a private mint, the attestation or secret does not match the deposit, or wallet submission fails.
  * @example const mint = await complete(registry, client, { plan, deposit, attestation })
  */
 export async function complete(
@@ -550,12 +602,16 @@ export async function complete(
   if (attestation.payload.toLowerCase() !== depositPayload.toLowerCase() || attestation.messageHash.toLowerCase() !== depositHash.toLowerCase()) throw new BridgeError('Circle attestation does not match the confirmed deposit')
   if (calculateXReserveMessageHash(attestation.payload) !== attestation.messageHash) throw new BridgeError('Circle attestation payload has an invalid message hash')
   const secretNonce = params.privateMintSecretNonce ?? '0scalar'
+  // Recreate the commitment embedded in the Ethereum deposit. The wallet is not
+  // involved unless the recipient and secret open that exact commitment.
   const expectedHookData = await buildXReserveHookData('private', plan.recipient, route.environment, secretNonce)
   const attestedHookData = `0x${attestation.payload.slice(-130)}`
   if (attestedHookData.toLowerCase() !== expectedHookData.toLowerCase()) {
     throw new BridgeError('Private mint secret nonce and recipient do not match the attested hook data')
   }
 
+  // Circle's signed bytes are passed verbatim into the wrapper. The Aleo
+  // program verifies the attestation and consumes the deposit exactly once.
   const transactionId = await client.executeTransaction({
     program: wrapperProgram,
     function: 'private_mint',

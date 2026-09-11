@@ -77,18 +77,16 @@ function writeU256LE(bytes: Uint8Array, offset: number, value: bigint): void {
 }
 
 /**
- * Builds the Sealevel `TransferRemote` instruction that deposits native SOL into a Hyperlane Warp
- * Route bound for Aleo.
+ * Builds the Solana instruction that commits SOL to a Hyperlane transfer bound for Aleo.
  *
- * Reads no network state itself: every account beyond the two per-transfer signers is either a
- * reviewed static address from `metadata` or a program-derived address computed locally via
- * `@solana/kit`. Verified byte-for-byte against a real mainnet deposit
- * (`test/fixtures/sealevel-transfer-remote.json`); every constant and account slot below cites the
- * `SEALEVEL_NOTES.md` section it was pinned from.
+ * The result is unsigned and cannot move funds until the sender and unique
+ * message account sign it and a client broadcasts it. Every program account is
+ * supplied by reviewed route metadata or derived from the unique message key;
+ * no network or wallet is contacted. The encoding is verified byte-for-byte
+ * against `test/fixtures/sealevel-transfer-remote.json`.
  *
  * @param params Route metadata, transfer parties, and the lamport amount to move.
- * @returns The warp program address, its ordered account list with signer/writable flags, and the
- * raw 77-byte instruction data.
+ * @returns The Warp Route program, ordered accounts, and raw 77-byte instruction data needed to assemble the transaction.
  * @throws BridgeError When `amountLamports` does not fit the instruction's 32-byte unsigned width,
  * or when `recipientAleoAddress` is not a valid Aleo address.
  *

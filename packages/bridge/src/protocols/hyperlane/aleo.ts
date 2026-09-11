@@ -92,6 +92,8 @@ function validatedRoute(registry: BridgeRegistry, params: ExecuteAleoHyperlaneTr
   const { plan } = params
   if (plan.protocol !== 'hyperlane' || plan.route.protocol !== 'hyperlane') throw new BridgeError('Aleo transfer_remote requires a Hyperlane transfer plan')
   if (plan.registryVersion !== registry.version) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
+  // Reload the deployed programs and remote-domain configuration from the
+  // current reviewed registry before constructing wallet inputs.
   const route = registry.routes.find((entry) => entry.id === plan.route.id)
   if (!route || route.protocol !== 'hyperlane') throw new BridgeError(`Hyperlane route is not configured: ${plan.route.id}`)
   if (route.sourceAssetId !== plan.sourceAsset.id || route.destinationAssetId !== plan.destinationAsset.id) throw new BridgeError(`Transfer plan assets do not match configured route: ${route.id}`)
@@ -116,33 +118,32 @@ function gasConfigBigint(config: Record<string, unknown>, field: string, routeId
 }
 
 /**
- * Quotes the exact Hyperlane hook payment for one Aleo-origin transfer.
+ * Calculates the relayer payment required for a Hyperlane transfer leaving Aleo.
  *
- * Reads the interchain gas paymaster's destination gas configuration from
- * `hyp_hook_manager.aleo` through the supplied Aleo public client and applies
- * the same formula the hook enforces at finalization:
+ * The payment covers destination-chain delivery rather than the Aleo
+ * transaction fee. It is calculated from the gas oracle values enforced by
+ * the bridge program at finalization:
  * `(gas_limit + gas_overhead) * gas_price * exchange_rate / 10^10`.
- * The hook asserts exact equality with its own recomputation, so quote shortly
- * before submission and requote after any delay. Hits the network; does not sign.
+ * Quote shortly before submission because a stale value causes the source
+ * transaction to fail. The action reads Aleo but does not request a signature
+ * or move funds.
  *
- * @param registry Reviewed route snapshot supplying the hook and domain identifiers.
- * @param client Aleo public client whose transport serves the mapping read.
- * @param params Aleo-origin Hyperlane route to quote.
- * @returns The oracle components and the exact payment in microcredits (u64).
- * @throws BridgeError When the route is not an Aleo-origin Hyperlane route, the
- *   on-chain configuration is missing or unpriced, or the payment overflows u64.
+ * @param registry Supported assets and reviewed Hyperlane deployments.
+ * @param client Aleo network access used to read the current destination gas configuration.
+ * @param params Aleo-origin route whose destination delivery payment is calculated.
+ * @returns Current gas values and the exact relayer payment in Aleo microcredits (u64).
+ * @throws BridgeError When the route is unavailable, the on-chain gas configuration is missing or unpriced, or the payment cannot fit in a positive u64.
  *
  * @example
- * const result = await quote(registry, client, {
- *   source: { chain: 'aleo', asset: 'eth' },
-      destination: { chain: 'ethereum', asset: 'eth' },
- * })
+ * const result = await quote(registry, client, { routeId: plan.route.id })
  */
 export async function quote(
   registry: BridgeRegistry,
   client: Client,
   params: QuoteAleoHyperlaneGasPaymentParameters,
 ): Promise<AleoHyperlaneGasQuote> {
+  // The route tells the hook manager which IGP and destination-domain tuple is
+  // authoritative for this transfer.
   const route = registry.routes.find((entry) => entry.id === params.routeId)
   if (!route || route.protocol !== 'hyperlane') throw new BridgeError(`Hyperlane route is not configured: ${params.routeId}`)
   const sourceAsset = registry.assets.find((asset) => asset.id === route.sourceAssetId)
@@ -152,6 +153,8 @@ export async function quote(
   const igp = metadataString(route, 'aleoMailboxDefaultHook')
   const destination = metadataNumber(route, 'aleoDestinationDomain')
   const gasLimitMetadata = BigInt(metadataString(route, 'aleoRemoteRouterGas'))
+  // Read the same mapping entry consumed by hyp_hook_manager.aleo during
+  // finalization; an off-chain service quote would not be authoritative.
   const literal = await readContract(client, {
     programId: hookManager,
     mapping: 'destination_gas_configs',
@@ -160,11 +163,15 @@ export async function quote(
   if (literal == null) throw new BridgeError(`Hyperlane destination gas configuration is missing on chain: ${params.routeId}`)
   const config = parsePlaintextValue(literal)
   if (typeof config !== 'object' || Array.isArray(config)) throw new BridgeError(`Hyperlane destination gas configuration is malformed: ${params.routeId}`)
+  // A zero exchange rate or gas price means the destination is configured but
+  // cannot currently be priced, so submission would be unsafe.
   const gasOverhead = gasConfigBigint(config, 'gas_overhead', route.id)
   const exchangeRate = gasConfigBigint(config, 'exchange_rate', route.id)
   const gasPrice = gasConfigBigint(config, 'gas_price', route.id)
   if (exchangeRate === 0n || gasPrice === 0n) throw new BridgeError(`Hyperlane destination gas configuration is unpriced: ${params.routeId}`)
   const gasLimit = gasLimitMetadata === 0n ? ZERO_GAS_LIMIT_FALLBACK : gasLimitMetadata
+  // Preserve integer operation order and truncation so every language port
+  // reproduces the exact u64 amount checked by the Aleo program.
   const paymentMicrocredits = ((gasLimit + gasOverhead) * gasPrice * exchangeRate) / GAS_QUOTE_SCALE
   if (paymentMicrocredits <= 0n || paymentMicrocredits > MAX_U64) {
     throw new BridgeError(`Hyperlane hook payment does not fit a positive u64: ${paymentMicrocredits}`)
@@ -185,18 +192,17 @@ export async function quote(
 }
 
 /**
- * Builds an Aleo Hyperlane `transfer_remote` call without prompting a wallet.
+ * Builds the Aleo program call that commits an asset to a Hyperlane transfer.
  *
- * Routes still under review produce non-executable calls containing conspicuous
- * placeholder deployment values, keeping the seven-input ABI inspectable while
- * preventing those values from being mistaken for live data. Active routes
- * embed the supplied live gas payment as the hook allowance; without one the
- * call reports `aleoAllowanceAmount0` as unresolved.
+ * The result lets an application inspect the program, transition, amount, remote
+ * recipient, and relayer allowance before a wallet is involved. It does not
+ * contact Aleo, request a signature, or move funds. Routes still under review
+ * return named placeholder fields and MUST NOT be submitted.
  *
- * @param registry Reviewed route snapshot supplying the Aleo Warp Route configuration.
- * @param params Prepared Aleo-origin Hyperlane plan and optional live gas payment.
- * @returns Exact program, transition, and ordered Aleo inputs.
- * @throws BridgeError When the plan or route metadata is inconsistent, or the gas payment is not a positive u64.
+ * @param registry Supported assets and reviewed Hyperlane deployments.
+ * @param params Route, assets, amount, recipient, authorization mode, and optional current relayer payment.
+ * @returns Exact Aleo program, transition, ordered inputs, atomic amount, and any configuration that is not ready for submission.
+ * @throws BridgeError When the transfer conflicts with the deployment or the relayer payment cannot fit in a positive u64.
  *
  * @example
  * const call = buildTransferRemoteCall(registry, { plan })
@@ -217,9 +223,13 @@ export function buildTransferRemoteCall(
   const destination = metadataNumber(route, 'aleoDestinationDomain')
   const localDecimals = optionalMetadataNumber(route, 'aleoLocalDecimals', params.plan.sourceAsset.decimals)
   const remoteDecimals = optionalMetadataNumber(route, 'aleoRemoteDecimals', params.plan.destinationAsset.decimals)
+  // Freeze the reviewed route into the three Aleo structs the Warp Route checks:
+  // token configuration, Mailbox hooks, and the enrolled remote router.
   const appMetadata = `{ token_type: ${metadataString(route, 'aleoTokenType')}u8, token_owner: ${metadataString(route, 'aleoTokenOwner')}, ism: ${metadataString(route, 'aleoIsm')}, hook: ${metadataString(route, 'aleoHook')}, token_id: ${metadataString(route, 'aleoTokenId')}, local_decimals: ${localDecimals}u8, remote_decimals: ${remoteDecimals}u8 }`
   const mailboxState = `{ default_hook: ${metadataString(route, 'aleoMailboxDefaultHook')}, required_hook: ${metadataString(route, 'aleoMailboxRequiredHook')} }`
   const remoteRouter = `{ domain: ${destination}u32, recipient: ${metadataString(route, 'aleoRemoteRouterRecipient')}, gas: ${metadataString(route, 'aleoRemoteRouterGas')}u128 }`
+  // Aleo represents a 32-byte remote recipient as two little-endian u128 limbs.
+  // EVM addresses are left-padded to 32 bytes; Solana public keys already occupy 32.
   const recipientLimbs = destinationChain.family === 'evm'
     ? evmAddressToAleoHyperlaneRecipient(params.plan.recipient)
     : destinationChain.family === 'solana'
@@ -228,8 +238,13 @@ export function buildTransferRemoteCall(
   const recipient = recipientLimbs
     ? `[${recipientLimbs[0]}u128, ${recipientLimbs[1]}u128]`
     : metadataString(route, 'aleoRecipient')
+  // The ABI always carries four allowances. Slot 0 pays the live IGP quote;
+  // unused slots retain their reviewed zero-value configuration.
   const allowances = `[${[0, 1, 2, 3].map((index) => allowance(route, index, index === 0 ? gasPayment?.toString() : undefined)).join(', ')}]`
   const usesPlaceholderConfiguration = route.metadata?.aleoPlaceholderConfiguration === true
+  // Verification flags record which groups were checked against live Aleo data.
+  // Report every unverified field so inspection tools cannot mistake a partial
+  // deployment snapshot for an executable transaction.
   let placeholderFields = route.metadata?.aleoAppMetadataVerified === true
     ? PLACEHOLDER_FIELDS.filter((field) => !APP_METADATA_FIELDS.has(field))
     : PLACEHOLDER_FIELDS
@@ -275,19 +290,18 @@ export function buildTransferRemoteCall(
 }
 
 /**
- * Submits a fully configured Aleo Hyperlane `transfer_remote` transaction.
+ * Begins a Hyperlane transfer from Aleo by submitting its source transaction.
  *
- * Submission requires an active reviewed route with no placeholder values and
- * a live hook gas payment from `quote`. The on-chain
- * hook asserts the payment exactly equals its own recomputed quote, so a stale
- * quote aborts at finalization without moving funds.
+ * The wallet proves, signs, and broadcasts the call that commits the source
+ * asset. An active reviewed route and current relayer payment are required. A
+ * stale payment causes the on-chain call to fail before funds move, but the Aleo
+ * transaction fee may still be charged.
  *
- * @param registry Reviewed route snapshot supplying the Aleo Warp Route configuration.
- * @param client Connected Aleo wallet client that proves, signs, and broadcasts.
- * @param params Prepared Aleo-origin Hyperlane plan, fee preference, and live gas payment.
- * @returns The Aleo transaction id and resumable Hyperlane receipt.
- * @throws BridgeError When configuration is placeholder or inactive, the gas
- *   payment is absent, or the wallet returns no id.
+ * @param registry Supported assets and reviewed Hyperlane deployments.
+ * @param client Aleo wallet that proves, signs, and broadcasts the source transaction.
+ * @param params Route, assets, amount, recipient, fee preference, current relayer payment, and recovery callbacks.
+ * @returns The Aleo transaction identifier and state needed to follow destination delivery.
+ * @throws BridgeError When the route is not ready, the relayer payment is absent, or wallet submission fails.
  */
 export async function execute(
   registry: BridgeRegistry,
@@ -295,6 +309,8 @@ export async function execute(
   params: ExecuteAleoHyperlaneTransferRemoteParameters,
 ): Promise<AleoHyperlaneTransferRemoteExecution> {
   const call = buildTransferRemoteCall(registry, params)
+  // Submission is the hard safety boundary. Builders remain inspectable for
+  // incomplete routes, but a wallet must never receive placeholder inputs.
   if (call.usesPlaceholderConfiguration) {
     throw new BridgeError(`Aleo Hyperlane route contains non-executable placeholder configuration: ${call.routeId}`)
   }
@@ -305,6 +321,8 @@ export async function execute(
   if (params.gasPaymentMicrocredits == null) {
     throw new BridgeError(`Aleo Hyperlane execution requires a live hook gas payment; call quote first: ${call.routeId}`)
   }
+  // `onPrepared` runs after proof construction and before broadcast, allowing
+  // the caller to persist the exact immutable transaction for crash recovery.
   const transactionId = await client.executeTransaction({
     program: call.program,
     function: call.function,
@@ -323,6 +341,8 @@ export async function execute(
       sourceTxId: transactionId,
       protocolState: { routeId: call.routeId, sourceProgram: call.program, sourceFunction: call.function },
   }
+  // After broadcast, persist only the public transaction identifier needed to
+  // observe Aleo acceptance and later destination delivery.
   await params.onSubmitted?.(receipt)
   return {
     transactionId,

@@ -33,18 +33,18 @@ export type EvmRequest = (args: {
  */
 export type EvmHttpOptions = { fetch?: typeof globalThis.fetch | undefined }
 
-/** Describes either an HTTP endpoint or custom EIP-1193 request transport. */
+/** Stores either an HTTP endpoint or custom EIP-1193 request function without contacting Ethereum. */
 export type EvmTransport =
   | { type: 'http'; url: string; fetch?: typeof globalThis.fetch | undefined }
   | { type: 'custom'; request: EvmRequest }
 
-/** Describes either an injected provider account or locally held viem account. */
+/** Selects whether an injected provider or application-held viem account authorizes transactions. */
 export type EvmAccount =
   | { type: 'provider'; provider: { request: EvmRequest }; account?: Address | undefined }
   | { type: 'local'; account: LocalAccount }
 
 /**
- * Configures one registry-keyed EVM client.
+ * Configures EVM network and optional wallet access for one named bridge chain.
  *
  * @property transport Lazy public JSON-RPC transport.
  * @property publicClient Existing viem public client used directly.
@@ -131,7 +131,7 @@ export type EvmWalletClient = {
 /**
  * Holds materialized EVM public and wallet capabilities.
  *
- * @property family EVM family discriminator.
+ * @property family Prevents this client from being used for a Solana or Aleo route stored under the wrong chain identifier.
  * @property publicClient Required read capability.
  * @property walletClient Optional signing capability.
  */
@@ -142,11 +142,13 @@ export type EvmClient = {
 }
 
 /**
- * Creates a lazy EVM HTTP transport.
+ * Defines the EVM JSON-RPC endpoint used when a bridge action reads or submits.
  *
- * @param url EVM JSON-RPC endpoint.
- * @param options Optional Fetch API override.
- * @returns An inert EVM transport.
+ * Creating the transport does not contact the endpoint.
+ *
+ * @param url EVM JSON-RPC endpoint contacted by the resulting client.
+ * @param options Optional Fetch API implementation. Defaults to `globalThis.fetch` when the client is created.
+ * @returns Deferred HTTP configuration accepted by `createEvmClient`.
  * @example const transport = evmHttp('https://rpc.example')
  */
 export function evmHttp(url: string, options: EvmHttpOptions = {}): EvmTransport {
@@ -154,10 +156,12 @@ export function evmHttp(url: string, options: EvmHttpOptions = {}): EvmTransport
 }
 
 /**
- * Creates a lazy EVM transport from an EIP-1193-compatible request function.
+ * Defines EVM network access through an application-supplied EIP-1193 request function.
  *
- * @param request EIP-1193 request function.
- * @returns An inert custom transport.
+ * Creating the transport does not call the request function.
+ *
+ * @param request Function that sends JSON-RPC methods when a bridge action needs network access.
+ * @returns Deferred custom transport configuration accepted by `createEvmClient`.
  * @example const transport = evmCustom(window.ethereum.request.bind(window.ethereum))
  */
 export function evmCustom(request: EvmRequest): EvmTransport {
@@ -165,11 +169,14 @@ export function evmCustom(request: EvmRequest): EvmTransport {
 }
 
 /**
- * Adapts an injected EIP-1193 provider for bridge account authorization.
+ * Selects an injected EIP-1193 wallet to authorize EVM bridge transactions.
  *
- * @param provider Provider exposing `request`.
- * @param options Optional fixed account; otherwise `eth_accounts` is read lazily.
- * @returns An inert provider-backed account definition.
+ * The provider retains custody of the account and controls every signature
+ * request. This helper does not connect to the wallet or request a signature.
+ *
+ * @param provider Browser or application wallet exposing an EIP-1193 `request` function.
+ * @param options Optional account that MUST authorize transactions. Defaults to the first account returned by `eth_accounts` at submission time.
+ * @returns Deferred wallet configuration accepted by `createEvmClient`.
  * @example const account = evmProvider(window.ethereum)
  */
 export function evmProvider(
@@ -180,10 +187,14 @@ export function evmProvider(
 }
 
 /**
- * Creates a local EVM account from a raw 32-byte private key.
+ * Selects an application-held EVM private key for unattended bridge transactions.
  *
- * @param privateKey Hex-encoded private key.
- * @returns An inert locally signing account definition.
+ * The key is converted to a viem account that signs on the caller's device or
+ * server. This helper does not contact a chain or submit a transaction; the
+ * application remains responsible for keeping the key secret.
+ *
+ * @param privateKey Secret 32-byte hexadecimal key held by the application.
+ * @returns Deferred local signing configuration accepted by `createEvmClient`.
  * @example const account = evmPrivateKey(process.env.EVM_PRIVATE_KEY as Hex)
  */
 export function evmPrivateKey(privateKey: Hex): EvmAccount {
@@ -191,10 +202,13 @@ export function evmPrivateKey(privateKey: Hex): EvmAccount {
 }
 
 /**
- * Adapts an existing viem local account for bridge authorization.
+ * Selects an existing viem local account for unattended bridge transactions.
  *
- * @param account Viem local account.
- * @returns An inert locally signing account definition.
+ * The account signs on the caller's device or server. This helper does not
+ * contact a chain, request an external wallet approval, or submit a transaction.
+ *
+ * @param account Viem account whose signer and address remain owned by the application.
+ * @returns Deferred local signing configuration accepted by `createEvmClient`.
  * @example const account = evmLocalAccount(privateKeyToAccount(privateKey))
  */
 export function evmLocalAccount(account: LocalAccount): EvmAccount {
@@ -202,13 +216,15 @@ export function evmLocalAccount(account: LocalAccount): EvmAccount {
 }
 
 /**
- * Creates an EVM bridge client with public access and optional wallet authorization.
+ * Creates the EVM client used to read bridge state and optionally authorize transactions.
  *
- * Construction is local and performs no RPC requests.
+ * Construction wires together existing clients or deferred transports without
+ * making an RPC request. Read-only actions need only a transport or public
+ * client; fund-moving actions also require an account or wallet client.
  *
- * @param config Public transport/client and optional account/wallet client.
- * @returns A registry-ready EVM client.
- * @throws BridgeError When capabilities conflict or local signing has no public client.
+ * @param config EVM network access and optional wallet authorization supplied by the application.
+ * @returns EVM read and optional wallet capabilities used by bridge actions.
+ * @throws BridgeError When multiple alternatives are supplied for one capability, no capability is supplied, or a local signer has no network access.
  * @example const client = createEvmClient({ transport: evmHttp(rpcUrl), account: evmPrivateKey(key) })
  */
 export function createEvmClient(
@@ -251,6 +267,8 @@ function normalizePublicClient(client: PublicClient): EvmPublicClient {
 }
 
 function normalizeWalletClient(client: WalletClient): EvmWalletClient {
+  // A viem WalletClient may carry a local account or obtain accounts from an
+  // injected provider. Resolve either form only when authorization is needed.
   const resolveAddress = async (): Promise<Address> => {
     if (client.account) return client.account.address
     const [address] = await client.getAddresses()
@@ -260,11 +278,15 @@ function normalizeWalletClient(client: WalletClient): EvmWalletClient {
   return {
     getAddress: resolveAddress,
     sendTransaction: async ({ chainId, from, ...transaction }) => {
+      // Public reads and wallet submissions can be backed by different viem
+      // clients. Bind the wallet itself to the intended chain before broadcast.
       const currentChainId = await client.getChainId()
       if (currentChainId !== chainId) {
         throw new BridgeError(`EVM wallet is connected to chain ${currentChainId}; expected ${chainId}`)
       }
       const account = await resolveAddress()
+      // Passing the resolved account supports accountless injected clients;
+      // passing the local account object preserves its local signing behavior.
       if (from && getAddress(from) !== getAddress(account)) {
         throw new BridgeError(`EVM transaction sender ${from} does not match connected account ${account}`)
       }
@@ -273,17 +295,21 @@ function normalizeWalletClient(client: WalletClient): EvmWalletClient {
   }
 }
 
-/** Builds the EVM public and optional wallet capabilities. */
+/** Normalizes viem, EIP-1193, and local-account inputs behind the bridge's EVM capabilities. */
 function materializeEvmClient(
   config: EvmClientConfig,
   defaultFetch: typeof globalThis.fetch,
 ): EvmClient {
   const transport = config.transport ? transportFor(config.transport, defaultFetch) : undefined
+  // Prefer caller-owned viem clients. A deferred transport is materialized only
+  // when the corresponding public capability was not supplied directly.
   const viemPublic = config.publicClient ?? (transport ? createPublicClient({ transport }) : undefined)
   let publicClient = viemPublic ? normalizePublicClient(viemPublic) : undefined
   let walletClient = config.walletClient ? normalizeWalletClient(config.walletClient) : undefined
 
   if (!publicClient && config.walletClient) {
+    // A viem wallet transport can answer read-only JSON-RPC calls. Expose that
+    // capability when no separate public transport was configured.
     const request = config.walletClient.request as EvmRequest
     publicClient = normalizePublicClient(createPublicClient({ transport: custom({ request }) }))
   }
@@ -301,6 +327,8 @@ function materializeEvmClient(
         return address as Address
       },
       sendTransaction: async ({ chainId, from, to, data, value }) => {
+        // EIP-1193 providers own chain selection. Refuse to request a signature
+        // on a different chain instead of silently switching or misdirecting funds.
         const current = await provider.request({ method: 'eth_chainId' })
         if (typeof current !== 'string' || Number.parseInt(current, 16) !== chainId) {
           throw new BridgeError(`EVM wallet is connected to chain ${String(current)}; expected ${chainId}`)
@@ -320,6 +348,8 @@ function materializeEvmClient(
     walletClient = {
       getAddress: async () => localAccount.address,
       sendTransaction: async ({ chainId, from, ...transaction }) => {
+        // Local signing still derives nonce, gas, and broadcast behavior from
+        // the public transport, so bind that transport to the requested chain.
         const currentChainId = await viemPublic.getChainId()
         if (currentChainId !== chainId) {
           throw new BridgeError(`EVM transport is connected to chain ${currentChainId}; expected ${chainId}`)
@@ -333,6 +363,8 @@ function materializeEvmClient(
           nativeCurrency: { name: 'Native token', symbol: 'ETH', decimals: 18 },
           rpcUrls: { default: { http: [] } },
         })
+        // Reuse the caller's public-client request path for submission. This
+        // keeps custom transports, batching, and authentication consistent.
         const localWallet = createWalletClient({
           account: localAccount,
           chain,

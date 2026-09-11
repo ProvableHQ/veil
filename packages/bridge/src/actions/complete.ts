@@ -9,16 +9,20 @@ import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
 
 /**
- * Submits one caller-authorized destination operation from a ready receipt.
+ * Submits the destination-chain transaction required to receive bridged funds.
  *
- * Never polls or repeats a source transaction. Currently completes private
- * EVM-to-Aleo xReserve transfers by submitting one Aleo `private_mint` call.
+ * This currently applies to a private USDC-to-USDCx xReserve transfer after
+ * Circle has attested the source deposit. The Aleo wallet proves, signs, and
+ * submits the private mint that delivers a private record to the recipient.
  *
- * @param registry Reviewed deployment snapshot.
- * @param clients Materialized chain clients keyed by registry chain id.
- * @param params Ready receipt, original plan, fee preference, and durable submission hook.
- * @returns The destination-confirming execution state.
- * @throws BridgeError When no supported destination action is ready or its persisted attestation is invalid.
+ * The source transaction is never repeated. The destination transaction incurs
+ * an Aleo network fee even if it fails.
+ *
+ * @param registry Supported chains, assets, and bridge provider deployments.
+ * @param clients Network and wallet access for the Aleo destination chain.
+ * @param params Transfer state ready for private delivery, fee preference, secret nonce, and optional callback for saving recovery information.
+ * @returns The Aleo transaction identifier and the destination confirmation state.
+ * @throws BridgeError When no destination transaction is required, the Circle attestation is invalid, required wallet access is unavailable, or submission fails.
  * @example const execution = await complete(registry, clients, { plan, receipt: ready, onCheckpoint: save })
  */
 export async function complete(
@@ -28,6 +32,8 @@ export async function complete(
 ): Promise<BridgeExecution> {
   let plan: import('../types/protocol.js').BridgePlan
   let receipt: BridgeReceipt
+  // Accept either recovered progress or the equivalent in-memory pair. Both
+  // paths must reach the same explicit destination-authorization boundary.
   if (params.progress) {
     if (params.progress.next !== 'complete') {
       throw new BridgeError('Bridge progress has no destination action to complete')
@@ -52,6 +58,8 @@ export async function complete(
   const payload = receipt.protocolState.payload
   const messageHash = receipt.protocolState.messageHash
   const attestation = receipt.protocolState.attestation
+  // These values came from Circle but are untrusted persisted input on a later
+  // process. Validate their wire encodings again before involving the wallet.
   if (typeof payload !== 'string' || !isHex(payload, { strict: true })
     || typeof messageHash !== 'string' || !isHash(messageHash)
     || typeof attestation !== 'string' || !isHex(attestation, { strict: true })) {
@@ -59,6 +67,8 @@ export async function complete(
   }
   const preparedTransaction = receipt.protocolState.preparedDestinationTransaction
   if (preparedTransaction !== undefined) {
+    // A previous process finished proving the private mint but stopped before
+    // broadcast. Submit those exact bytes so the transaction id and proof remain stable.
     if (typeof preparedTransaction !== 'string' || !preparedTransaction) {
       throw new BridgeError('Prepared Aleo destination recovery is missing its serialized transaction')
     }
@@ -68,6 +78,8 @@ export async function complete(
     } catch (error) {
       throw new BridgeError('Prepared Aleo destination recovery contains an invalid serialized transaction', { cause: error })
     }
+    // Duplicate means the prior broadcast won the crash race. Treat it as the
+    // same transfer and continue confirmation rather than creating a new mint.
     const transactionId = decoded && typeof decoded === 'object'
       ? (decoded as { id?: unknown }).id
       : undefined
@@ -105,6 +117,8 @@ export async function complete(
     return { kind: 'aleo-xreserve', transactionId, receipt: submitted }
   }
   const { nextAction: _nextAction, ...deposit } = receipt
+  // No proved transaction was recovered, so this is the only point where the
+  // destination wallet may be asked to prove and authorize the private mint.
   const result = await completePrivateMint(
     registry,
     requireAleoClientWithWallet(registry, clients, route.destinationChain.id, 'complete xReserve private mint').walletClient,

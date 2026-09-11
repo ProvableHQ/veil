@@ -39,13 +39,13 @@ export type SolanaRpcClient = {
   getTransactionLogs: (signature: string) => Promise<string[] | null>
 }
 
-/** Shape of a Solana JSON-RPC response envelope, generic over the `result` payload. */
+/** Describes the result and error fields returned by a Solana JSON-RPC request. */
 type JsonRpcResponse<T> = {
   result?: T
   error?: { code?: number; message?: string }
 }
 
-/** Shape of the `{ context, value }` envelope Solana wraps most read results in. */
+/** Describes the `{ context, value }` envelope Solana uses for most read results. */
 type ContextualResult<T> = { value: T }
 
 function decodeBase64(value: string): Uint8Array {
@@ -58,14 +58,14 @@ function decodeBase64(value: string): Uint8Array {
 }
 
 /**
- * Builds a Solana JSON-RPC client over a plain HTTP transport.
+ * Creates the Solana network reader used to quote and follow Hyperlane transfers.
  *
- * Speaks JSON-RPC directly rather than depending on `@solana/kit`.
- * Every method sends one POST request through `config.transport` (defaulting
- * to `globalThis.fetch`) and hits the network; none of them are pure.
+ * Every method sends one JSON-RPC request through the supplied transport and
+ * validates the response before returning it. No method requests a wallet
+ * signature or submits a transaction.
  *
- * @param config Solana JSON-RPC endpoint and optional transport override.
- * @returns A {@link SolanaRpcClient} bound to `config.url`.
+ * @param config Solana JSON-RPC endpoint and optional Fetch API replacement. The transport defaults to `globalThis.fetch`.
+ * @returns Network reads for blockhashes, balances, fees, rent, accounts, signatures, and logs.
  *
  * @example
  * const rpc = createSolanaRpcClient({ url: 'https://api.mainnet-beta.solana.com' })
@@ -73,6 +73,9 @@ function decodeBase64(value: string): Uint8Array {
  */
 export function createSolanaRpcClient(config: SolanaRpcConfig): SolanaRpcClient {
   async function call<T>(method: string, params: unknown[]): Promise<T> {
+    // This is the single trust boundary for every Solana read: distinguish
+    // transport failure, invalid JSON, JSON-RPC error, and a missing result so
+    // operators can tell endpoint problems from transaction failure.
     const transport = config.transport ?? globalThis.fetch
     const response = await transport(config.url, {
       method: 'POST',
@@ -107,6 +110,8 @@ export function createSolanaRpcClient(config: SolanaRpcConfig): SolanaRpcClient 
   }
 
   function integer(method: string, value: unknown): bigint {
+    // Solana emits these quantities as JSON numbers. Convert only safe,
+    // non-negative integers before later arithmetic switches to bigint.
     if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
       throw new BridgeError(`Solana RPC ${method} returned an invalid result`)
     }
@@ -182,6 +187,8 @@ export function createSolanaRpcClient(config: SolanaRpcConfig): SolanaRpcClient 
     },
 
     async getSignatureStatus(signature) {
+      // Search historical slots as well as the node's recent-status cache;
+      // recovery may run long after the original process submitted the transfer.
       const result = await call<unknown>(
         'getSignatureStatuses',
         [[signature], { searchTransactionHistory: true }],

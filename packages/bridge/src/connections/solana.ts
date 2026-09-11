@@ -6,7 +6,7 @@ import type { SolanaRpcHttpTransport } from '../types/solana.js'
 
 const SOLANA_SIGN_AND_SEND_TRANSACTION_FEATURE = 'solana:signAndSendTransaction'
 
-/** Provides the official Solana mainnet JSON-RPC endpoint. */
+/** Provides Solana's public mainnet endpoint as the default for examples and low-volume reads. */
 export const DEFAULT_SOLANA_RPC_URL = 'https://api.mainnet-beta.solana.com'
 
 type SolanaSignAndSendTransactionFeature = {
@@ -31,12 +31,12 @@ export type SolanaRequest = (method: string, params: unknown[]) => Promise<unkno
  */
 export type SolanaHttpOptions = { fetch?: SolanaRpcHttpTransport | undefined }
 
-/** Describes a lazy Solana network transport. */
+/** Stores an HTTP endpoint or custom JSON-RPC function without contacting Solana. */
 export type SolanaTransport =
   | { type: 'http'; url: string; fetch?: SolanaRpcHttpTransport | undefined }
   | { type: 'custom'; request: SolanaRequest }
 
-/** Describes a Solana account authority without network access. */
+/** Selects whether a Wallet Standard account or application-held key authorizes transactions. */
 export type SolanaAccount =
   | {
       type: 'wallet'
@@ -47,7 +47,7 @@ export type SolanaAccount =
   | { type: 'local'; secretKeyBytes: Uint8Array }
 
 /**
- * Configures one registry-keyed Solana client.
+ * Configures Solana network and optional wallet access for one named bridge chain.
  * @property transport Required public JSON-RPC transport.
  * @property account Optional Wallet Standard or local-key signing authority.
  */
@@ -76,7 +76,7 @@ export type SolanaWalletClient = {
 
 /**
  * Holds materialized Solana public and wallet capabilities.
- * @property family Solana family discriminator.
+ * @property family Prevents this client from being used for an EVM or Aleo route stored under the wrong chain identifier.
  * @property publicClient Read and broadcast capability.
  * @property walletClient Optional signing capability.
  */
@@ -87,10 +87,13 @@ export type SolanaClient = {
 }
 
 /**
- * Creates a lazy Solana HTTP transport.
- * @param url Solana JSON-RPC endpoint.
- * @param options Optional fetch-compatible override.
- * @returns An inert Solana transport.
+ * Defines the Solana JSON-RPC endpoint used when a bridge action reads or submits.
+ *
+ * Creating the transport does not contact the endpoint.
+ *
+ * @param url Solana JSON-RPC endpoint contacted by the resulting client.
+ * @param options Optional Fetch API implementation. Defaults to `globalThis.fetch` when the client is created.
+ * @returns Deferred HTTP configuration accepted by `createSolanaClient`.
  * @example const transport = solanaHttp('https://api.mainnet-beta.solana.com')
  */
 export function solanaHttp(url: string, options: SolanaHttpOptions = {}): SolanaTransport {
@@ -98,9 +101,12 @@ export function solanaHttp(url: string, options: SolanaHttpOptions = {}): Solana
 }
 
 /**
- * Creates a lazy Solana transport from a JSON-RPC request function.
- * @param request Application JSON-RPC request function.
- * @returns An inert custom transport.
+ * Defines Solana network access through an application-supplied JSON-RPC function.
+ *
+ * Creating the transport does not call the request function.
+ *
+ * @param request Function that sends JSON-RPC methods when a bridge action needs network access.
+ * @returns Deferred custom transport configuration accepted by `createSolanaClient`.
  * @example const transport = solanaCustom((method, params) => rpc.request(method, params))
  */
 export function solanaCustom(request: SolanaRequest): SolanaTransport {
@@ -108,9 +114,13 @@ export function solanaCustom(request: SolanaRequest): SolanaTransport {
 }
 
 /**
- * Adapts a Wallet Standard account for Solana bridge authorization.
- * @param params Wallet, selected account, and Wallet Standard chain identifier.
- * @returns An inert wallet-backed account definition.
+ * Selects a Wallet Standard account to authorize Solana bridge transactions.
+ *
+ * The wallet retains custody of the account and controls signing and broadcast.
+ * This helper does not connect to the wallet or request a signature.
+ *
+ * @param params Wallet, selected account, and Wallet Standard chain identifier used for later authorization.
+ * @returns Deferred wallet configuration accepted by `createSolanaClient`.
  * @example const account = solanaWallet({ wallet, account: wallet.accounts[0], chain: 'solana:mainnet' })
  */
 export function solanaWallet(params: Omit<Extract<SolanaAccount, { type: 'wallet' }>, 'type'>): SolanaAccount {
@@ -118,9 +128,14 @@ export function solanaWallet(params: Omit<Extract<SolanaAccount, { type: 'wallet
 }
 
 /**
- * Creates a network-free Solana local-key account definition.
- * @param secretKeyBytes Solana CLI-format 64-byte secret key.
- * @returns An inert locally signing account definition.
+ * Selects an application-held Solana keypair for unattended bridge transactions.
+ *
+ * The keypair signs on the caller's device or server. This helper copies the
+ * key bytes but does not contact Solana or submit a transaction; the application
+ * remains responsible for keeping the key secret.
+ *
+ * @param secretKeyBytes Secret Solana CLI-format 64-byte keypair held by the application.
+ * @returns Deferred local signing configuration accepted by `createSolanaClient`.
  * @throws BridgeError When the key is not exactly 64 bytes.
  * @example const account = solanaKeyPair(secretKeyBytes)
  */
@@ -130,12 +145,14 @@ export function solanaKeyPair(secretKeyBytes: Uint8Array): SolanaAccount {
 }
 
 /**
- * Creates a Solana bridge client with public access and optional wallet authorization.
+ * Creates the Solana client used to read bridge state and optionally authorize transactions.
  *
- * Construction is local and performs no RPC requests.
+ * Construction wires the transport and optional account without making an RPC
+ * request. Read-only actions need only the transport; fund-moving actions also
+ * require a Wallet Standard account or local keypair.
  *
- * @param config Required transport and optional account.
- * @returns A registry-ready Solana client.
+ * @param config Solana network access and optional wallet authorization supplied by the application.
+ * @returns Solana read, broadcast, and optional wallet capabilities used by bridge actions.
  * @throws BridgeError When the transport is absent.
  * @example const client = createSolanaClient({ transport: solanaHttp(rpcUrl), account: solanaKeyPair(key) })
  */
@@ -146,12 +163,14 @@ export function createSolanaClient(
   return materializeSolanaClient(config, globalThis.fetch)
 }
 
-/** Builds the Solana public and optional wallet capabilities. */
+/** Normalizes HTTP, custom RPC, Wallet Standard, and local-key inputs behind the bridge's Solana capabilities. */
 function materializeSolanaClient(
   config: SolanaClientConfig,
   defaultFetch: SolanaRpcHttpTransport,
 ): SolanaClient {
   const transportDefinition = config.transport
+  // Adapt custom method/parameter transports to the fetch-like boundary shared
+  // by the RPC reader, keeping response validation in one implementation.
   const httpTransport: SolanaRpcHttpTransport = transportDefinition.type === 'http'
     ? transportDefinition.fetch ?? defaultFetch
     : async (_url, init) => {
@@ -163,6 +182,8 @@ function materializeSolanaClient(
   const publicClient: SolanaPublicClient = {
     ...rpcClient,
     async sendTransaction(signedTransaction) {
+      // Solana's RPC accepts the complete wire transaction as base64. This path
+      // never signs; callers must supply all required signatures first.
       const base64 = btoa(String.fromCharCode(...signedTransaction))
       const sendOptions = { encoding: 'base64', preflightCommitment: 'confirmed' }
       if (transportDefinition.type === 'custom') {
@@ -192,6 +213,8 @@ function materializeSolanaClient(
       | SolanaSignAndSendTransactionFeature
       | undefined
     if (!feature) throw new BridgeError(`Connected wallet does not expose the '${SOLANA_SIGN_AND_SEND_TRANSACTION_FEATURE}' feature`)
+    // Wallet Standard combines authorization and broadcast. Preserve that
+    // boundary because browser wallets do not expose private signing keys.
     walletClient = {
       getAddress: async () => walletAccount.account.address,
       sendTransaction: async (transaction) => {
@@ -205,6 +228,8 @@ function materializeSolanaClient(
       },
     }
   } else if (config.account?.type === 'local') {
+    // Import the secret key lazily so creating a read/write client performs no
+    // cryptographic setup until an address or signature is requested.
     let signerPromise: ReturnType<typeof createSigner> | undefined
     const create = () => signerPromise ??= createSigner(config.account!.type === 'local'
       ? config.account!.secretKeyBytes
@@ -212,6 +237,8 @@ function materializeSolanaClient(
     walletClient = {
       getAddress: async () => (await create()).address,
       sendTransaction: async (wireTransaction) => {
+        // Protocol code may have already added ephemeral signer signatures.
+        // Partial signing adds the fee payer without discarding those bytes.
         const kit = await loadKit()
         const signer = await create()
         const transaction = kit.getTransactionDecoder().decode(wireTransaction)

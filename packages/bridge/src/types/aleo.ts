@@ -5,16 +5,17 @@ import type { XReserveAttestationResult } from './xreserve.js'
 /**
  * Submits one Aleo program execution through an application-provided wallet client.
  *
- * The shape is compatible with Veil wallet clients and connected Aleo wallet adapters.
+ * The required method is available on Veil wallet clients and connected Aleo
+ * wallet adapters.
  *
  * @property executeTransaction Prompts the wallet to prove, sign, and broadcast a program call.
  */
 export type AleoWalletClient = Pick<WalletClient, 'executeTransaction'>
 
 /**
- * Configures shielding an Aleo asset's public balance into a private record.
+ * Controls conversion of a public Aleo token balance into a private record.
  *
- * @property asset Registry chain and asset key. The asset MUST declare a privacy capability.
+ * @property asset Aleo chain and token selected for the private conversion. The token MUST support shielding.
  * @property amount Positive decimal amount in the asset's display units.
  * @property recipient Optional Aleo recipient for ARC-22 assets. Defaults to the active wallet address.
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
@@ -31,9 +32,9 @@ export type ShieldParameters = {
 }
 
 /**
- * Configures unshielding an Aleo asset's private record into a public balance.
+ * Controls conversion of an Aleo private record into a public token balance.
  *
- * @property asset Registry chain and asset key. The asset MUST declare a privacy capability.
+ * @property asset Aleo chain and token selected for the public conversion. The token MUST support unshielding.
  * @property amount Positive decimal amount in the asset's display units.
  * @property record Optional encoded `Token` record or wallet record request. Defaults to wallet selection by minimum amount.
  * @property recipient Optional Aleo public recipient for ARC-22 assets. Defaults to the active wallet address.
@@ -57,7 +58,7 @@ export type UnshieldParameters = {
  * Captures a submitted Aleo public/private asset conversion.
  *
  * @property transactionId Aleo transaction id returned by the wallet.
- * @property assetId Registry asset converted by the transaction.
+ * @property assetId Chain-scoped asset identifier converted by the transaction.
  * @property amount Original decimal amount supplied by the caller.
  * @property amountAtomic Exact amount submitted as a u128 atomic value.
  */

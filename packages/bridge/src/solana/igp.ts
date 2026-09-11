@@ -40,9 +40,9 @@ function readUint128LE(view: DataView, offset: number): bigint {
  * Computes the lamport gas payment a Sealevel interchain gas paymaster (IGP)
  * quotes for delivering a message to a given destination domain.
  *
- * Pure and local: decodes the IGP account's own gas-oracle table and applies
- * the paymaster's `compute_gas_fee` formula (SEALEVEL_NOTES.md §4) without
- * touching the network. `igpAccountData` must be the terminal, quoted `Igp`
+ * Decodes the supplied IGP account's gas-oracle table and applies the
+ * paymaster's `compute_gas_fee` formula (SEALEVEL_NOTES.md §4) without
+ * contacting Solana. `igpAccountData` must be the terminal, quoted `Igp`
  * account — the one an `OverheadIgp` wrapper's own `inner` field points at,
  * not the `OverheadIgp` wrapper account itself — and `gasAmount` must be the
  * warp token's own `destination_gas` value for the domain, not derived from

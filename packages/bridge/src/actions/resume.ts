@@ -10,16 +10,22 @@ import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 
 /**
- * Continues the remaining source submission from recovered progress.
+ * Submits the source-chain transaction left unfinished after an interruption.
  *
- * Calls a wallet only when recovery identified a confirmed approval with no
- * irreversible source transfer. It never repeats a checkpointed transaction.
+ * This applies when a token approval succeeded without the following deposit,
+ * or an Aleo transaction was fully proved before the application stopped. Only
+ * the pending submission continues. A proved Aleo transaction may be
+ * rebroadcast byte-for-byte with the same transaction identifier, so recovery
+ * cannot create a second transfer.
  *
- * @param registry Reviewed deployment snapshot.
- * @param clients Materialized chain clients used for the remaining submission.
- * @param params Recovered resumable progress and optional confirmation controls.
- * @returns Protocol-discriminated execution state after source continuation.
- * @throws BridgeError When progress is not resumable or the route lacks source resumption.
+ * The action may request authorization from the source wallet. A submitted
+ * transaction can commit funds and incur a network fee.
+ *
+ * @param registry Supported chains, assets, and bridge provider deployments.
+ * @param clients Network and wallet access for the source chain.
+ * @param params Recovered transfer state, confirmation controls, and an optional callback for saving the new submission.
+ * @returns The submitted transaction identifier and the updated state of the in-progress transfer.
+ * @throws BridgeError When no source transaction remains to be submitted, required wallet access is unavailable, or submission fails.
  * @example const execution = await resume(registry, clients, { progress })
  */
 export async function resume(
@@ -37,6 +43,9 @@ export async function resume(
     : undefined
 
   if (route.sourceChain.family === 'aleo') {
+    // This checkpoint was written after proving and before broadcast. Validate
+    // that the serialized transaction carries the saved id before sending bytes
+    // to the node; recovery must not substitute or rebuild a transaction.
     const serializedTransaction = receipt.protocolState.preparedTransaction
     if (typeof serializedTransaction !== 'string' || !serializedTransaction) {
       throw new BridgeError('Prepared Aleo recovery is missing its serialized transaction')
@@ -73,6 +82,8 @@ export async function resume(
       // race with the process failure.
       if (!(classified instanceof DuplicateTransactionError)) throw classified
     }
+    // Once broadcast succeeds (or the node reports the same transaction as a
+    // duplicate), discard the serialized bytes and retain only public tracking state.
     const submitted: BridgeReceipt = {
       id: transactionId,
       protocol: plan.protocol,
@@ -95,6 +106,8 @@ export async function resume(
   }
 
   if (route.route.protocol === 'xreserve' && route.sourceChain.family === 'evm') {
+    // The EVM protocol helper accepts only approval-complete state here and
+    // requotes allowance, fees, and private hook data before depositing.
     const execution = await evmToAleoXReserve.execute(
       registry,
       requireEvmClientWithWallet(registry, clients, route.sourceChain.id, 'resume xReserve transfer'),
@@ -110,6 +123,8 @@ export async function resume(
     return { kind: 'evm-xreserve', ...execution }
   }
   if (route.route.protocol === 'hyperlane' && route.sourceChain.family === 'evm') {
+    // Hyperlane follows the same approval-complete boundary: the saved approval
+    // is observed, while the source dispatch is newly authorized once.
     const execution = await evmHyperlane.execute(
       registry,
       requireEvmClientWithWallet(registry, clients, route.sourceChain.id, 'resume Hyperlane transfer'),

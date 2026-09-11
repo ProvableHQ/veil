@@ -8,6 +8,8 @@ const EMPTY_PROOF = `{ siblings: [${Array(16).fill('0field').join(', ')}], leaf_
 /**
  * Supplies the canonical proof pair accepted while an ARC-22 freeze list is empty.
  *
+ * The value is computed in memory and does not read Aleo or reveal a record.
+ *
  * @example
  * const proof = EMPTY_MERKLE_PROOF_PAIR
  */
@@ -15,6 +17,9 @@ export const EMPTY_MERKLE_PROOF_PAIR = `[${EMPTY_PROOF}, ${EMPTY_PROOF}]`
 
 /**
  * Resolves an Aleo asset that declares the requested privacy conversion.
+ *
+ * Reads only the supplied registry. No chain, wallet, or private record is
+ * accessed while deciding whether the asset supports the conversion.
  *
  * @param registry Registry containing chain and asset capabilities.
  * @param endpoint Chain and asset key selected by the caller.
@@ -37,6 +42,9 @@ export function resolvePrivacyAsset(registry: BridgeRegistry, endpoint: BridgeEn
 /**
  * Converts a positive display amount to its u128 Aleo literal.
  *
+ * Computes the exact integer in memory without reading a balance, selecting a
+ * private record, or contacting Aleo.
+ *
  * @param asset Asset whose decimals determine atomic precision.
  * @param amount Positive decimal amount in display units.
  * @param operation Conversion name included in invalid-amount errors.
@@ -53,6 +61,9 @@ export function privacyAmount(asset: ProtocolBridgeAsset, amount: string, operat
 
 /**
  * Builds a wallet-side request for a token record covering an amount.
+ *
+ * Returns selection criteria rather than record plaintext. A compatible wallet
+ * searches its private records only when the later transaction is authorized.
  *
  * @param program Program defining the `Token` record.
  * @param amount Minimum u128 amount the selected record must contain.

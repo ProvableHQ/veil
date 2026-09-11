@@ -36,6 +36,8 @@ function withDeliveryVerification(
 }
 
 function submissionCheckpoint(params: ExecuteParameters) {
+  // Protocol executors emit rich receipts. Reduce them to the documented
+  // recovery fields before crossing the application-owned persistence boundary.
   return params.onCheckpoint
     ? async (receipt: import('../types/protocol.js').BridgeReceipt) => {
         await params.onCheckpoint?.(createBridgeCheckpoint(params.plan, receipt))
@@ -47,6 +49,9 @@ function preparedAleoCheckpoint(
   params: ExecuteParameters,
   verification?: DeliveryVerification,
 ) {
+  // Aleo proving finishes before broadcast. Persisting the immutable proved
+  // transaction here closes the crash window between those two operations;
+  // recovery can rebroadcast the same transaction id without proving again.
   return params.onCheckpoint
     ? async (transaction: Transaction) => {
         await params.onCheckpoint?.(createBridgeCheckpoint(params.plan, {
@@ -76,17 +81,21 @@ function xReserveBurnMode(mode: ExecuteParameters['mode']): XReserveBurnMode | u
 }
 
 /**
- * Executes a prepared transfer through its configured protocol and source chain.
+ * Begins a cross-chain transfer by committing funds on the source chain.
  *
- * Resolves the required wallet client from the plan and requotes live values
- * before submission. Confirmation and interrupted-process recovery use the
- * read-only status and recovery actions.
+ * Token transfers may first require the source wallet to approve the bridge
+ * contract. The action then submits the deposit, burn, or dispatch that commits
+ * the asset to the selected bridge provider.
  *
- * @param registry Reviewed deployment snapshot.
- * @param clients Materialized chain clients keyed by registry chain id.
- * @param params Prepared transfer, source execution settings, and optional checkpoint hook.
- * @returns A discriminated execution result containing normalized resumable state.
- * @throws BridgeError When the route shape, execution mode, client, or submission is invalid.
+ * The returned receipt identifies the in-progress transfer. Once the source
+ * transaction is accepted, the transfer may no longer be reversible. Each
+ * submitted transaction may incur a network fee even if a later stage fails.
+ *
+ * @param registry Supported chains, assets, and bridge provider deployments.
+ * @param clients Network and wallet access for the source and destination chains.
+ * @param params Transfer details, source wallet preferences, and an optional callback for saving recovery information.
+ * @returns The submitted transaction identifier and the initial state of the in-progress transfer.
+ * @throws BridgeError When the transfer is unsupported, the connected wallet cannot authorize it, current funds or fees are insufficient, or submission fails.
  * @example const execution = await execute(registry, clients, { plan, onCheckpoint: saveCheckpoint })
  */
 export async function execute(
@@ -94,6 +103,8 @@ export async function execute(
   clients: BridgeChainClients,
   params: ExecuteParameters,
 ): Promise<BridgeExecution> {
+  // The selected route, not caller-supplied chain branching, determines which
+  // protocol implementation and wallet capability may commit the funds.
   const chain = resolveTransferRoute(registry, params.plan).sourceChain
   const chainId = chain.id
   const onSubmitted = submissionCheckpoint(params)
@@ -127,6 +138,9 @@ export async function execute(
   }
   if (params.plan.protocol === 'hyperlane' && chain.family === 'aleo') {
     const client = requireAleoClientWithWallet(registry, clients, chainId, 'execute Hyperlane transfer')
+    // Hyperlane's explorer does not index every Aleo-origin route reliably.
+    // Capture a destination balance baseline so delivery can still be verified
+    // from the destination chain when no canonical message id is available.
     const destinationBalanceBefore = await readDestinationBalance(registry, clients, params.plan)
     const verification = destinationBalanceBefore === undefined
       ? undefined
@@ -145,6 +159,9 @@ export async function execute(
           ))
         }
       : undefined
+    // The Aleo hook checks its relayer payment for exact equality on-chain.
+    // Read it immediately before proving unless the caller deliberately pinned
+    // a value, minimizing failures caused by an oracle update.
     const gasPaymentMicrocredits = params.gasPaymentMicrocredits ?? (await aleoHyperlane.quote(
       registry,
       requireAleoClient(registry, clients, chainId).publicClient,
@@ -180,6 +197,8 @@ export async function execute(
     return { kind: 'evm-xreserve', ...execution }
   }
   if (params.plan.protocol === 'xreserve' && chain.family === 'aleo') {
+    // An Aleo burn is the only caller-authorized step in the outbound xReserve
+    // direction. The attestation service and Circle manage Ethereum delivery.
     const execution = await aleoToEvmXReserve.execute(
       registry,
       requireAleoClientWithWallet(registry, clients, chainId, 'execute xReserve burn').walletClient,

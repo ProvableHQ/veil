@@ -27,8 +27,8 @@ see the README and the documentation site under `site/`.
 - Document units, widths, and bounds: microcredits rather than credits where applicable, valid
   ranges, and the numeric width (`number` for u64 and smaller, `bigint` for u128
   and larger).
-- Note side effects: whether the call hits the network, signs, proves locally, or
-  is pure and local.
+- Note side effects: whether the call hits the network, signs, proves on the
+  caller's device, or only computes a result without contacting another system.
 - Document object-type fields with `@property` tags on the type's docblock, not
   with inline per-field comments.
 - Include an `@example` that compiles in context.

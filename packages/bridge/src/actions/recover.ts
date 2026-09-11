@@ -12,17 +12,21 @@ import { prepare } from './prepare.js'
 import { toBridgeProgress } from './internal/toBridgeProgress.js'
 
 /**
- * Reconstructs bridge progress from a versioned submission checkpoint.
+ * Reconstructs an interrupted cross-chain transfer from a saved checkpoint.
  *
- * Performs read-only chain and protocol operations and never signs or submits
- * a transaction.
+ * The action determines which transactions were submitted, which stages have
+ * completed, and whether the transfer is still moving, finished, failed, or
+ * waiting for another wallet authorization.
  *
- * @param registry Reviewed deployment snapshot.
- * @param clients Materialized chain clients used only for status reads.
- * @param client Fetch-compatible protocol transport used for attestation reads.
- * @param params Self-contained public recovery checkpoint.
- * @returns Reconstructed runtime state and the caller's next operation.
- * @throws BridgeError When the checkpoint is invalid, stale, or unsupported by the selected route.
+ * Recovery reads existing network and provider state. It never repeats a
+ * transaction or moves funds.
+ *
+ * @param registry Supported chains, assets, and bridge provider deployments.
+ * @param clients Network access for the chains involved in the transfer.
+ * @param client HTTP access for bridge provider status checks.
+ * @param params Saved route, amount, recipient, and submitted transaction identifiers.
+ * @returns The current transfer state and whether to wait, resume source submission, authorize destination completion, or stop.
+ * @throws BridgeError When the saved information is invalid, no longer matches the configured route, or describes an unsupported recovery path.
  * @example const progress = await recover(registry, clients, fetch, { checkpoint })
  */
 export async function recover(
@@ -35,6 +39,8 @@ export async function recover(
   if (checkpoint.version !== 1 || !checkpoint.intent || !checkpoint.route) {
     throw new BridgeError('Bridge checkpoint format is invalid or unsupported')
   }
+  // Rebuild route details from the current reviewed catalog instead of trusting
+  // serialized contracts or programs from an older application process.
   const plan = prepare(registry, checkpoint.intent)
   const route = resolveTransferRoute(registry, plan)
   if (checkpoint.version !== 1
@@ -44,6 +50,8 @@ export async function recover(
   }
   let receipt: BridgeReceipt
   if (route.sourceChain.family === 'aleo') {
+    // Aleo can checkpoint after proving but before broadcast. This state needs
+    // no network read: resume() can submit the exact immutable transaction.
     const deliveryVerification = checkpoint.deliveryVerification
       ? {
           destinationBalanceBeforeAtomic: checkpoint.deliveryVerification.balanceBeforeAtomic,
@@ -82,6 +90,8 @@ export async function recover(
     if (checkpoint.destination || (checkpoint.source.approvalTransactionIds?.length ?? 0) > 0) {
       throw new BridgeError('Bridge checkpoint contains transactions that are invalid for an Aleo source route')
     }
+    // A submitted Aleo source transaction is never rebroadcast during recovery;
+    // inspect its ledger status once and expose the next caller operation.
     receipt = await getStatus(registry, clients, client, {
       plan,
       receipt: {
@@ -96,6 +106,8 @@ export async function recover(
     return toBridgeProgress(plan, receipt)
   }
   if (route.sourceChain.family === 'solana') {
+    // Solana has one source transaction and no approval phase. Recovery only
+    // checks the saved signature and rejects impossible destination state.
     if (!checkpoint.source?.transactionId) {
       throw new BridgeError('Bridge checkpoint contains no submitted source transaction')
     }
@@ -116,6 +128,8 @@ export async function recover(
     return toBridgeProgress(plan, receipt)
   }
   if (route.route.protocol === 'hyperlane' && route.sourceChain.family === 'evm') {
+    // EVM Hyperlane may have one or more token approvals before its dispatch.
+    // The protocol helper determines which submitted boundary was reached.
     if (checkpoint.destination) {
       throw new BridgeError('Bridge checkpoint contains a destination transaction that is invalid for this Hyperlane route')
     }
@@ -133,6 +147,8 @@ export async function recover(
     || route.destinationChain.family !== 'aleo') {
     throw new BridgeError('Bridge checkpoint recovery is not implemented for this route')
   }
+  // EVM xReserve likewise separates token approval from the irreversible
+  // deposit, then may add a caller-authorized private mint on Aleo.
   receipt = await recoverSourceCheckpoint(
     registry,
     requireEvmClient(registry, clients, route.sourceChain.id),
@@ -140,6 +156,8 @@ export async function recover(
     checkpoint,
   )
   const preparedDestination = checkpoint.destination?.preparedTransaction
+  // A destination transaction is either proved or submitted, never both.
+  // Keeping those states exclusive prevents recovery from minting twice.
   if (preparedDestination && checkpoint.destination?.transactionId) {
     throw new BridgeError('Bridge checkpoint cannot contain both prepared and submitted destination transactions')
   }
@@ -156,6 +174,8 @@ export async function recover(
     }
   }
   if (checkpoint.destination?.transactionId) {
+    // A submitted private mint is observed as destination confirmation; it is
+    // never routed back through the wallet.
     receipt = {
       ...receipt,
       status: 'DESTINATION_CONFIRMING',
@@ -170,6 +190,8 @@ export async function recover(
     })
   }
   if (preparedDestination) {
+    // Preserve the proved transaction only while Circle's attestation still
+    // requires the same private destination action.
     if (receipt.status !== 'DESTINATION_ACTION_REQUIRED') {
       throw new BridgeError('Prepared destination transaction is no longer valid for the recovered bridge state')
     }

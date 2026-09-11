@@ -4,7 +4,8 @@ const DISPATCHED_MESSAGE_LOG_PATTERN = /Dispatched message to \d+, ID (0x[0-9a-f
 /**
  * Extracts the Hyperlane message id from confirmed Solana program logs.
  *
- * Pure and local. Ignores abbreviated IGP and warp-completion identifiers.
+ * Reads only the supplied logs and ignores abbreviated IGP and warp-completion
+ * identifiers. It does not contact Solana.
  *
  * @param logs Program log lines, or `null` when the transaction was not found.
  * @returns The complete 32-byte message id, or `undefined` when absent.
