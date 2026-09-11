@@ -57,3 +57,7 @@ contact networks or providers, and what recovery information applications own.
 Document helper side effects and annotate protocol encodings, authorization
 boundaries, irreversible submissions, provider handoffs, and retry-safe
 recovery behavior for maintainers and independent implementations.
+Revamp every bridge example comment around the caller-visible transfer outcome,
+custody changes, wallet boundaries, settlement authority, and safe recovery after
+an uncertain post-broadcast result. Provider-managed xReserve mint examples now
+stop at the attestation boundary instead of waiting for an unverifiable delivery.

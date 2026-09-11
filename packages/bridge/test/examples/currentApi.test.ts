@@ -93,9 +93,13 @@ describe('bridge examples', () => {
 
     for (const name of implementations) {
       const source = readFileSync(join(EXAMPLE_DIRECTORY, name), 'utf8')
-      for (const section of ['The clients', 'The plan', 'The quote', 'The execution', 'Settlement and recovery']) {
-        expect(source, `${name} must explain ${section.toLowerCase()}`).toContain(`// ── ${section}`)
+      for (const lesson of ['checkpoint', 'irreversible']) {
+        expect(source.toLowerCase(), `${name} must explain ${lesson}`).toContain(lesson)
       }
+      expect(source, `${name} must explain wallet authorization`).toMatch(/sign(?:ature|s|ing)/i)
+      expect(source, `${name} must identify the transfer being described`)
+        .toContain('// ── Describe the intended transfer')
+      expect(source.toLowerCase(), `${name} must explain uncertain post-submission outcomes`).toContain('timeout')
     }
   })
 

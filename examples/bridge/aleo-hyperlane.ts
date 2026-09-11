@@ -67,15 +67,18 @@ function formatAmount(value: bigint, decimals: number): string {
 }
 
 /**
- * Quotes or submits one reviewed Aleo-origin Hyperlane route.
+ * Moves a public wrapped asset from Aleo back to Ethereum or Solana through Hyperlane.
  *
- * Reads a public ARC-20 balance and the live interchain gas paymaster quote
- * without a record scanner. Execution requotes the hook payment and burns
- * through the signer-bound Warp Route transition.
+ * The default run reads the source balance and current relayer payment, prints
+ * them, and exits without requesting a signature. With execution enabled, the
+ * Aleo wallet burns the public wrapped balance and dispatches a cross-chain
+ * message; Hyperlane then releases the corresponding asset on the destination.
  *
- * @param asset Aleo-origin asset whose return journey runs.
- * @returns A promise that resolves after preflight or accepted Aleo submission.
- * @throws Error When route metadata, balances, the live gas quote, or execution fails.
+ * @param asset ETH, SOL, or WBTC representation to burn on Aleo and release on its origin chain.
+ * @returns After read-only inspection or verified destination delivery,
+ * depending on the execution acknowledgement.
+ * @throws Error When configuration is missing, the source balance or fee
+ * balance is insufficient, the source transaction fails, or delivery cannot be verified.
  *
  * @example
  * await runAleoHyperlaneExample('ETH')
@@ -91,11 +94,11 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     throw new Error('ALEO_CONSUMER_ID and ALEO_DPS_API_KEY must be supplied together')
   }
 
-  // ── The clients ─────────────────────────────────────────────────────
-  // Aleo is the source, so this route needs both halves of its client: the
-  // public client reads balances and transaction status, while the wallet
-  // client signs and delegates proof construction. FeeMaster stays disabled;
-  // the account pays the execution fee from its own public credits.
+  // ── Connect the source account and networks ──────────────────────────
+  // The public Aleo client reads visible token balances and transaction status.
+  // The wallet client holds the source authority, delegates proof construction,
+  // signs the completed proof, and broadcasts it. FeeMaster is disabled, so the
+  // same Aleo account pays the transaction fee from its public credits balance.
   const { loadNetwork } = await import('@provablehq/veil-aleo-sdk')
   const aleo = await loadNetwork('mainnet')
   const { publicClient, walletClient: nativeWalletClient, account } = aleo.createAleoClient({
@@ -107,9 +110,9 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     confirmationTimeout: ALEO_CONFIRMATION_TIMEOUT_MS,
   })
 
-  // Destination clients are needed only after submission, when `wait` proves
-  // that the release happened on Ethereum or Solana. The quote-only path does
-  // not touch the destination network.
+  // A destination client is unnecessary for the read-only source inspection.
+  // Execution adds one so settlement can compare the recipient's destination
+  // balance with the value recorded immediately before source submission.
   const executionEnabled = process.env[EXECUTION_ENVIRONMENT_VARIABLE] === EXECUTION_ACKNOWLEDGEMENT
   const destinationClient = executionEnabled
     ? config.destination.chain === 'ethereum'
@@ -127,11 +130,12 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     },
   })
 
-  // ── The plan ────────────────────────────────────────────────────────
-  // The caller selects endpoints; `prepare` resolves the reviewed directional
-  // route and returns its canonical id, asset decimals, and ordered steps. The
-  // minimum amount is written beside the route configuration above so this
-  // tutorial cannot silently move more of an asset through an environment flag.
+  // ── Describe the intended transfer ──────────────────────────────────
+  // The caller supplies familiar chain and asset names, an amount, and the
+  // destination account. The bridge catalog supplies the deployed programs,
+  // remote domain, decimal widths, and required stages for that direction.
+  // No network is read and no wallet is involved here. Each configured amount
+  // is one atomic unit, keeping an accidental mainnet execution to a minimum.
   const plan = bridge.prepare({
     source: config.source,
     destination: config.destination,
@@ -142,10 +146,11 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   })
   const amountAtomic = parseDecimalAmount(plan.amountIn, plan.sourceAsset.decimals)
 
-  // ── The quote ───────────────────────────────────────────────────────
-  // An Aleo-origin Hyperlane quote reads the interchain gas payment. That hook
-  // payment is separate from the Aleo execution fee, so both the public token
-  // balance and public credits balance are checked before proving begins.
+  // ── Check funds and the current delivery payment ────────────────────
+  // Hyperlane's interchain gas paymaster charges for relaying and executing the
+  // message on the destination. That payment is separate from the Aleo fee for
+  // proving and submitting the source transaction. These three concurrent
+  // reads do not request a signature or move the wrapped asset.
   const [assetLiteral, publicCredits, gasQuote] = await Promise.all([
     publicClient.readContract({ programId: config.balanceProgram, mapping: 'balances', key: account.address }),
     publicClient.getBalance({ address: account.address }),
@@ -168,9 +173,10 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     recordScanner: 'not used',
   })
 
-  // ── The execution ───────────────────────────────────────────────────
-  // Running the file normally stops here. The explicit acknowledgement keeps
-  // a copied tutorial read-only until the operator reviews its route and fees.
+  // ── Stop before the fund-moving boundary by default ─────────────────
+  // A normal run ends after printing the route, balances, and relayer payment.
+  // The exact acknowledgement makes mainnet submission an explicit operator
+  // decision rather than a side effect of copying or inspecting the tutorial.
   if (!executionEnabled) {
     console.log(`\nPreflight complete; no ${asset} was burned.`)
     console.log(`Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to submit the transfer.`)
@@ -178,10 +184,11 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   }
   if (assetBalance < amountAtomic) throw new Error(`Insufficient public Aleo ${asset} balance`)
 
-  // Gas quotes can change between inspection and proof construction. Requote
-  // at the authorization boundary and pass that exact payment into `execute`.
-  // The action burns the public ARC-20 balance and dispatches one Hyperlane
-  // message; it does not shield or select private records automatically.
+  // The Aleo hook requires the submitted relayer payment to equal its current
+  // on-chain calculation. Read it again immediately before proving; an oracle
+  // update between the earlier display and submission would otherwise reject
+  // the transaction while still risking its Aleo fee. This route spends only a
+  // public ARC-20 balance. A private record must be unshielded separately.
   const latestQuote = await bridge.quote({ plan })
   if (latestQuote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${latestQuote.kind}`)
   if (publicCredits < latestQuote.paymentMicrocredits) {
@@ -198,15 +205,20 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     privateFee: false,
     gasPaymentMicrocredits: latestQuote.paymentMicrocredits,
     onCheckpoint(checkpoint) {
+      // The callback can run after proof construction and again after broadcast.
+      // A durable application replaces its saved checkpoint each time; this
+      // tutorial prints it and does not manage storage.
       console.log('Optional recovery checkpoint:', JSON.stringify(checkpoint))
     },
   })
   if (result.kind !== 'aleo-hyperlane') throw new Error(`Unexpected execution kind: ${result.kind}`)
 
-  // ── Settlement and recovery ─────────────────────────────────────────
-  // `wait` performs reads only. It follows the dispatched message until the
-  // destination client confirms delivery. The checkpoint printed above is a
-  // serializable recovery input; the SDK does not write it to storage.
+  // ── Observe settlement without authorizing another transaction ──────
+  // Source acceptance is irreversible: the wrapped asset has been burned and
+  // must not be submitted again. Settlement reads chain state until the
+  // destination balance has increased by the expected amount. A timeout or RPC
+  // error does not undo the source burn; inspect the printed transaction id and
+  // recover from the latest checkpoint instead of starting a second transfer.
   const progress = await bridge.wait({ progress: { next: 'wait', plan, receipt: result.receipt } })
   if (progress.next === 'failed') throw new Error(progress.error)
   if (progress.next !== 'done') throw new Error(`Unexpected next operation: ${progress.next}`)

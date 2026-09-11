@@ -1,8 +1,10 @@
 /**
- * Preflights or submits a mainnet Aleo USDCx burn for Ethereum USDC.
+ * Moves USDCx from Aleo back to USDC on Ethereum through Circle xReserve.
  *
- * Private burn is the default. The local wallet's record scanner finds and
- * decrypts the smallest unspent USDCx record that covers the withdrawal.
+ * The default run displays the route, fixed withdrawal boundary, and burn mode,
+ * then exits before loading a signing key. Execution burns either a public
+ * balance or one private record on Aleo. The bridge provider then attests the
+ * burn, withdraws through Circle, and delivers USDC to the Ethereum recipient.
  */
 
 import {
@@ -41,6 +43,9 @@ function burnModeFromEnvironment(): ExampleBurnMode {
 }
 
 function atomicAmount(amount: string, decimals: number): bigint {
+  // Bridge contracts accept integer base units, not floating-point values.
+  // Convert the reviewed decimal text exactly and reject precision the token
+  // cannot represent. This calculation reads no network and moves no funds.
   const match = /^(0|[1-9][0-9]*)(?:\.([0-9]+))?$/.exec(amount)
   if (!match) throw new Error(`Invalid decimal amount: ${amount}`)
   const fraction = match[2] ?? ''
@@ -49,6 +54,8 @@ function atomicAmount(amount: string, decimals: number): bigint {
 }
 
 function recordAmount(record: OwnedRecord): bigint | undefined {
+  // Scanner results may contain other record names or stale malformed entries.
+  // Ignore those candidates rather than treating unreadable data as spendable.
   if (record.recordName && record.recordName !== 'Token') return undefined
   try {
     const amount = parseRecord(record.recordPlaintext).fields.amount?.value
@@ -62,12 +69,18 @@ async function selectPrivateRecord(
   walletClient: { requestRecords: (params: { program: string, statusFilter: 'unspent' }) => Promise<unknown[]> },
   minimumAmount: bigint,
 ): Promise<OwnedRecord> {
+  // Aleo does not publish private record ownership in an address index. The
+  // authenticated scanner finds records belonging to this account and returns
+  // their decrypted plaintext so the wallet can choose a concrete spend input.
   const records = await walletClient.requestRecords({
     program: USDCX_PROGRAM,
     statusFilter: 'unspent',
   }) as OwnedRecord[]
 
   let selected: { amount: bigint, record: OwnedRecord } | undefined
+  // One private burn consumes one record; it does not combine several small
+  // records automatically. Choose the smallest single record that covers the
+  // withdrawal to avoid consuming more private value than necessary.
   for (const record of records) {
     const amount = recordAmount(record)
     if (amount === undefined || amount < minimumAmount) continue
@@ -84,6 +97,9 @@ async function selectPrivateRecord(
 }
 
 async function createExclusionProof(address: string): Promise<string> {
+  // Private USDCx must prove the signer is absent from the current freeze list.
+  // Refuse missing or malformed provider data before proving, because an old or
+  // invented list is not a valid statement about current compliance state.
   const response = await fetch(FREEZE_LIST_URL)
   if (!response.ok) {
     throw new Error(`USDCx freeze-list request failed with HTTP ${response.status}`)
@@ -96,6 +112,8 @@ async function createExclusionProof(address: string): Promise<string> {
   const { SealanceMerkleTree } = await import('@provablehq/sdk/mainnet.js')
   const sealance = new SealanceMerkleTree()
   const tree = sealance.convertTreeToBigInt(payload as string[])
+  // The neighboring leaves on both sides of the address prove its absence from
+  // the ordered tree. The Aleo program checks these sibling paths during burn.
   const [leftIndex, rightIndex] = sealance.getLeafIndices(tree, address)
   const leftProof = sealance.getSiblingPath(tree, leftIndex, FREEZE_LIST_DEPTH)
   const rightProof = sealance.getSiblingPath(tree, rightIndex, FREEZE_LIST_DEPTH)
@@ -106,11 +124,12 @@ async function main(): Promise<void> {
   const recipient = requiredEnvironmentVariable('ETHEREUM_RECIPIENT')
   const mode = burnModeFromEnvironment()
 
-  // ── The plan ────────────────────────────────────────────────────────
-  // Planning needs no chain client. The registry resolves the Aleo burn
-  // programs, Circle domains, withdrawal fee, and Ethereum USDC destination
-  // from these structured endpoints. The amount is one atomic unit above the
-  // fee so the minimum non-zero USDC withdrawal reaches Ethereum.
+  // ── Describe the intended transfer ──────────────────────────────────
+  // The caller supplies familiar chain and asset names, the amount, and the
+  // Ethereum recipient. The bridge catalog supplies the reviewed Aleo programs,
+  // Circle domains, token identifiers, and fixed two-USDCx withdrawal boundary.
+  // No network is read and no wallet is involved here. This amount is one base
+  // unit above that boundary so the example moves the minimum possible value.
   const bridge = createBridgeClient({ environment: 'mainnet' })
   const plan = bridge.prepare({
     source: { chain: 'aleo', asset: 'usdcx' },
@@ -120,12 +139,10 @@ async function main(): Promise<void> {
     recipient,
   })
 
-  // ── The quote ───────────────────────────────────────────────────────
-  // Aleo-origin xReserve has no separate source-side market quote. The registry
-  // supplies the fixed withdrawal constraint, while Circle calculates live
-  // forwarding data after the accepted burn. This preflight therefore displays
-  // the exact amount, fee boundary, burn mode, and destination before any key is
-  // loaded.
+  // ── Review the withdrawal before loading an account ─────────────────
+  // This direction has no live source-side market quote. The important caller
+  // choices are the amount, public or private custody being spent, and final
+  // Ethereum recipient. Display them before any key or private record is loaded.
   const amountAtomic = atomicAmount(plan.amountIn, plan.sourceAsset.decimals)
   if (amountAtomic <= MINIMUM_BURN_AMOUNT_ATOMIC) {
     throw new Error('USDCx burn amount must be greater than 2 USDCx')
@@ -149,9 +166,10 @@ async function main(): Promise<void> {
       : 'not used',
   })
 
-  // ── The execution ───────────────────────────────────────────────────
-  // Stop before constructing a wallet unless the operator has reviewed the
-  // preflight and supplied the common acknowledgement.
+  // ── Stop before the fund-moving boundary by default ─────────────────
+  // The exact acknowledgement separates inspection from an irreversible Aleo
+  // burn. A copied tutorial therefore cannot load private records, request a
+  // proof, spend a fee, or destroy USDCx without an explicit operator decision.
   if (process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
     console.log('\nPreflight complete; no USDCx was burned.')
     console.log(`Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to submit the withdrawal.`)
@@ -168,10 +186,11 @@ async function main(): Promise<void> {
     throw new Error('Private burn record discovery requires ALEO_CONSUMER_ID and ALEO_DPS_API_KEY')
   }
 
-  // ── The clients ─────────────────────────────────────────────────────
-  // The source wallet delegates proving and pays its own public execution fee.
-  // Private mode also attaches a remote scanner because private USDCx exists as
-  // records that cannot be discovered through a public address index.
+  // ── Connect the account that owns the source funds ───────────────────
+  // The Aleo account delegates proof construction, signs the finished proof,
+  // broadcasts the burn, and pays the transaction fee from public credits.
+  // Private mode also authenticates a remote scanner because record ownership
+  // is encrypted and cannot be discovered from ordinary public chain reads.
   const { loadNetwork } = await import('@provablehq/veil-aleo-sdk')
   const aleo = await loadNetwork('mainnet')
   const records = mode === 'private'
@@ -186,13 +205,14 @@ async function main(): Promise<void> {
     useFeeMaster: false,
     confirmationTimeout: ALEO_CONFIRMATION_TIMEOUT_MS,
   })
+  // Authentication lets the delegated prover and scanner act for this account;
+  // neither service receives the Aleo private key.
   if (consumerId && apiKey) await nativeWalletClient.authenticateProvableApi()
   console.log(`Aleo signer ready: ${account.address} (delegated proving)`)
 
   // A private burn spends one concrete record and proves that the signer is not
-  // frozen. Select the smallest covering record to avoid consuming more private
-  // value than necessary, then derive the current two-sided exclusion proof
-  // from the published freeze list.
+  // frozen. Record discovery and the freeze-list request happen before proving;
+  // failure here means no burn was submitted and no USDCx moved.
   const userRecord = mode === 'private'
     ? (await selectPrivateRecord(nativeWalletClient, amountAtomic)).recordPlaintext
     : undefined
@@ -206,6 +226,10 @@ async function main(): Promise<void> {
     environment: 'mainnet',
     clients: { aleo: createAleoClient({ publicClient, account: nativeWalletClient }) },
   })
+  // This Aleo transaction is the irreversible source boundary. Acceptance means
+  // the chosen public balance or private record was burned and the withdrawal
+  // was committed for the Ethereum recipient. The provider and Circle continue
+  // from that accepted burn; never burn a second time because polling failed.
   const result = await executingBridge.execute({
     plan,
     mode: burnMode,
@@ -213,18 +237,21 @@ async function main(): Promise<void> {
     ...(merkleProof ? { merkleProof } : {}),
     privateFee: false,
     onCheckpoint(checkpoint) {
+      // Aleo may emit a checkpoint after proof construction and another after
+      // broadcast. A durable application atomically replaces its saved value;
+      // this tutorial only prints it and does not choose or manage storage.
       console.log('Optional recovery checkpoint:', JSON.stringify(checkpoint))
     },
   })
   if (result.kind !== 'aleo-xreserve') throw new Error(`Unexpected execution kind: ${result.kind}`)
   console.log('\nUSDCx burn accepted:', result.transactionId)
 
-  // ── Settlement and recovery ─────────────────────────────────────────
-  // The checkpoint identifies the submitted Aleo burn. This SDK can verify its
-  // acceptance, but it does not yet expose status for the later attester,
-  // Circle withdrawal, or Ethereum delivery. Stop at `DELIVERY_PENDING` rather
-  // than calling `wait`, which is reserved for routes with complete destination
-  // verification. Persisting the checkpoint remains an application decision.
+  // ── Verify the source burn and hand off provider settlement ─────────
+  // The toolkit can prove that Aleo accepted or rejected this burn. It cannot
+  // yet observe the later bridge-provider attestation, Circle withdrawal, or
+  // Ethereum delivery, so this script stops honestly at delivery pending. A
+  // timeout or RPC error leaves the burn outcome unknown; recover from the
+  // latest checkpoint and transaction id instead of authorizing another burn.
   const receipt = await executingBridge.waitForStatus({
     plan,
     receipt: result.receipt,

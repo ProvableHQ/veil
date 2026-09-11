@@ -1,8 +1,10 @@
 /**
- * Mainnet WBTC to Aleo WBTC Hyperlane demo.
+ * Moves the minimum WBTC amount from Ethereum into wrapped WBTC on Aleo.
  *
- * Run without EXECUTE_BRIDGE for a read-only quote. Live execution
- * submits an exact WBTC approval only when the Warp Route allowance is low.
+ * A normal run only displays balances, allowance, current Ethereum gas, and the
+ * Hyperlane delivery payment. Execution signs with the private key held by this
+ * process, grants the reviewed Warp Route an exact allowance when necessary,
+ * then dispatches WBTC for delivery and minting on Aleo.
  */
 
 import { runEthereumHyperlaneExample } from './ethereum-hyperlane.js'
