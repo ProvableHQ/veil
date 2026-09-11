@@ -50,8 +50,13 @@ describe('createSolanaRpcClient', () => {
     const reader = createSolanaRpcClient({ url: 'http://rpc.test', transport })
     const result = await reader.getLatestBlockhash()
     expect(result).toEqual({ blockhash: 'abc123', lastValidBlockHeight: 123456789n })
-    const [, init] = (transport as ReturnType<typeof vi.fn>).mock.calls[0] as [string, { body: string }]
-    expect(parseBody(init).method).toBe('getLatestBlockhash')
+    const [, init] = (transport as ReturnType<typeof vi.fn>).mock.calls[0] as [string, {
+      body: string
+      cache?: string
+      headers: Record<string, string>
+    }]
+    expect(parseBody(init)).toEqual({ method: 'getLatestBlockhash', params: [{ commitment: 'confirmed' }] })
+    expect(init).toMatchObject({ cache: 'no-store', headers: { 'cache-control': 'no-cache' } })
   })
 
   it('getBalance posts the address and maps the result to a bigint', async () => {
@@ -65,6 +70,19 @@ describe('createSolanaRpcClient', () => {
     const { method, params } = parseBody(init)
     expect(method).toBe('getBalance')
     expect(params).toEqual(['SenderAddress111111111111111111111111111'])
+  })
+
+  it('checks blockhash validity at confirmed commitment', async () => {
+    const transport: SolanaRpcHttpTransport = vi.fn(async () =>
+      jsonResponse({ result: { context: { slot: 1 }, value: true } }),
+    )
+    const reader = createSolanaRpcClient({ url: 'http://rpc.test', transport })
+    await expect(reader.isBlockhashValid('blockhash')).resolves.toBe(true)
+    const [, init] = (transport as ReturnType<typeof vi.fn>).mock.calls[0] as [string, { body: string }]
+    expect(parseBody(init)).toEqual({
+      method: 'isBlockhashValid',
+      params: ['blockhash', { commitment: 'confirmed' }],
+    })
   })
 
   describe('getAccountData', () => {
@@ -208,6 +226,7 @@ describe('createSolanaRpcClient', () => {
   it.each([
     ['getLatestBlockhash', (reader: ReturnType<typeof createSolanaRpcClient>) => reader.getLatestBlockhash(), {}],
     ['getBlockHeight', (reader: ReturnType<typeof createSolanaRpcClient>) => reader.getBlockHeight(), '1'],
+    ['isBlockhashValid', (reader: ReturnType<typeof createSolanaRpcClient>) => reader.isBlockhashValid('hash'), { value: 'yes' }],
     ['getBalance', (reader: ReturnType<typeof createSolanaRpcClient>) => reader.getBalance('addr'), { value: '1' }],
     ['getAccountInfo', (reader: ReturnType<typeof createSolanaRpcClient>) => reader.getAccountData('addr'), { value: { data: 'bad' } }],
     ['getFeeForMessage', (reader: ReturnType<typeof createSolanaRpcClient>) => reader.getFeeForMessage(new Uint8Array()), { value: null }],

@@ -33,7 +33,9 @@ Include Solana rent in executable quotes, expose honest Aleo Hyperlane fee
 limits, enforce the xReserve withdrawal fee, and verify Aleo-origin delivery
 from configured destination clients. Hyperlane inbound waits now verify the
 message id against the destination Aleo Mailbox `deliveries` mapping instead
-of treating an explorer index as canonical. Add proving lifecycle events to core and
+of treating an explorer index as canonical. Solana submissions align blockhash
+reads and transaction preflight at confirmed commitment, and expiry checks use
+canonical blockhash validity instead of provider-reported block heights. Add proving lifecycle events to core and
 make delegated `writeContract` proving return an unbroadcast transaction for
 the configured Aleo transport to submit. Delegated FeeMaster payment now
 defaults to disabled and must be opted into explicitly.

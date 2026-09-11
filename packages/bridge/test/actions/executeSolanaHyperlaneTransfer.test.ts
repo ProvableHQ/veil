@@ -39,6 +39,7 @@ function executeRpc(overrides: Partial<SolanaRpcClient> = {}): SolanaRpcClient {
   return {
     getLatestBlockhash: async () => ({ blockhash: WARP_PROGRAM_ADDRESS, lastValidBlockHeight: 100n }),
     getBlockHeight: async () => 1n,
+    isBlockhashValid: async () => true,
     getBalance: async () => 800_000_000_000n,
     getAccountData: async () => igpAccountData(),
     getFeeForMessage: async () => 10_000n,
@@ -172,7 +173,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const plan = transferPlan(registry)
     let submissions = 0
     const executor = stubExecutor({ onSend: () => { submissions += 1 } })
-    const rpc = executeRpc({ getSignatureStatus: async () => null, getBlockHeight: async () => 101n })
+    const rpc = executeRpc({ getSignatureStatus: async () => null, isBlockhashValid: async () => false })
 
     const execution = await executeSolanaHyperlaneTransfer(registry, client(executor, rpc), { plan })
 

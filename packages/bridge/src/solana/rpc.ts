@@ -19,6 +19,7 @@ type SolanaSignatureConfirmationStatus = 'processed' | 'confirmed' | 'finalized'
  *
  * @property getLatestBlockhash Reads the current blockhash and the block height it remains valid through.
  * @property getBlockHeight Reads the current block height used to detect transaction expiry.
+ * @property isBlockhashValid Reports whether a recent blockhash remains valid at confirmed commitment.
  * @property getBalance Reads an account's lamport balance.
  * @property getAccountData Reads an account's raw data, or `null` when the account does not exist.
  * @property getFeeForMessage Reads the network fee for a compiled transaction message, in lamports.
@@ -29,6 +30,7 @@ type SolanaSignatureConfirmationStatus = 'processed' | 'confirmed' | 'finalized'
 export type SolanaRpcClient = {
   getLatestBlockhash: () => Promise<{ blockhash: string; lastValidBlockHeight: bigint }>
   getBlockHeight: () => Promise<bigint>
+  isBlockhashValid: (blockhash: string) => Promise<boolean>
   getBalance: (address: string) => Promise<bigint>
   getAccountData: (address: string) => Promise<Uint8Array | null>
   getFeeForMessage: (message: Uint8Array) => Promise<bigint>
@@ -74,8 +76,9 @@ export function createSolanaRpcClient(config: SolanaRpcConfig): SolanaRpcClient 
     const transport = config.transport ?? globalThis.fetch
     const response = await transport(config.url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-cache' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+      cache: 'no-store',
     })
     if (!response.ok) {
       throw new BridgeError(`Solana RPC ${method} request failed with HTTP status ${response.status}`, {
@@ -121,7 +124,7 @@ export function createSolanaRpcClient(config: SolanaRpcConfig): SolanaRpcClient 
     async getLatestBlockhash() {
       const result = await call<unknown>(
         'getLatestBlockhash',
-        [],
+        [{ commitment: 'confirmed' }],
       )
       const value = contextualValue<{ blockhash: string; lastValidBlockHeight: number }>('getLatestBlockhash', result)
       if (!value || typeof value.blockhash !== 'string' || !value.blockhash) {
@@ -132,6 +135,15 @@ export function createSolanaRpcClient(config: SolanaRpcConfig): SolanaRpcClient 
 
     async getBlockHeight() {
       return integer('getBlockHeight', await call<unknown>('getBlockHeight', []))
+    },
+
+    async isBlockhashValid(blockhash) {
+      const result = await call<unknown>('isBlockhashValid', [blockhash, { commitment: 'confirmed' }])
+      const value = contextualValue<unknown>('isBlockhashValid', result)
+      if (typeof value !== 'boolean') {
+        throw new BridgeError('Solana RPC isBlockhashValid returned an invalid result')
+      }
+      return value
     },
 
     async getBalance(address) {

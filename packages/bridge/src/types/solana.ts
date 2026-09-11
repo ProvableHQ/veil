@@ -8,7 +8,7 @@ import type { BridgePlan, BridgeReceipt } from './protocol.js'
  */
 export type SolanaRpcHttpTransport = (
   url: string,
-  init: { method: 'POST'; headers: Record<string, string>; body: string },
+  init: { method: 'POST'; headers: Record<string, string>; body: string; cache?: 'no-store' | undefined },
 ) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>
 
 /**

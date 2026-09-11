@@ -119,7 +119,7 @@ export async function quote(
  * @param signature Submitted transaction signature to track.
  * @param pollingIntervalMs Delay between confirmation checks.
  * @param confirmationTimeoutMs Maximum time to wait before giving up.
- * @returns `'confirmed'` or `'finalized'` once reached, or `undefined` on timeout.
+ * @returns A confirmed state, `'expired'` once the blockhash is invalid, or `undefined` on timeout.
  * @throws BridgeError When the network reports the transaction failed.
  */
 async function pollForConfirmation(
@@ -127,7 +127,7 @@ async function pollForConfirmation(
   signature: string,
   pollingIntervalMs: number,
   confirmationTimeoutMs: number,
-  lastValidBlockHeight: bigint,
+  blockhash: string,
 ): Promise<'confirmed' | 'finalized' | 'expired' | undefined> {
   const deadline = Date.now() + confirmationTimeoutMs
   do {
@@ -144,9 +144,9 @@ async function pollForConfirmation(
     }
     if (status === 'confirmed' || status === 'finalized') return status
     try {
-      if (await rpc.getBlockHeight() > lastValidBlockHeight) return 'expired'
+      if (!await rpc.isBlockhashValid(blockhash)) return 'expired'
     } catch {
-      // A block-height read is advisory while the signature may still land.
+      // A blockhash-validity read is advisory while the signature may still land.
     }
     if (Date.now() >= deadline) return undefined
     await new Promise<void>((resolve) => setTimeout(resolve, pollingIntervalMs))
@@ -303,7 +303,7 @@ export async function execute(
         signature,
         pollingIntervalMs,
         confirmationTimeoutMs,
-        BigInt(state.lastValidBlockHeight),
+        state.blockhash,
       )
       if (!confirmation) return { receipt }
       if (confirmation === 'expired') {
@@ -416,7 +416,7 @@ export async function execute(
   try {
     // 8. Poll for confirmation; a timeout returns a resumable pending receipt
     // rather than throwing, since the transaction may still land.
-    const confirmation = await pollForConfirmation(rpc, signature, pollingIntervalMs, confirmationTimeoutMs, lastValidBlockHeight)
+    const confirmation = await pollForConfirmation(rpc, signature, pollingIntervalMs, confirmationTimeoutMs, blockhash)
     if (!confirmation) {
       return {
         receipt: submittedReceipt,

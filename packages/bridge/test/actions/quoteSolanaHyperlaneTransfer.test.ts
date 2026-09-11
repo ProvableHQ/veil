@@ -21,6 +21,7 @@ function rpcReturning(accountData: Uint8Array | null): SolanaRpcClient {
   return {
     getLatestBlockhash: async () => ({ blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 1n }),
     getBlockHeight: () => { throw new Error('not used by quoteSolanaHyperlaneTransfer') },
+    isBlockhashValid: () => { throw new Error('not used by quoteSolanaHyperlaneTransfer') },
     getBalance: () => { throw new Error('not used by quoteSolanaHyperlaneTransfer') },
     getAccountData: async () => accountData,
     getFeeForMessage: async () => NETWORK_FEE_LAMPORTS,

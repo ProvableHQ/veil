@@ -65,27 +65,35 @@ describe('Solana bridge clients', () => {
   })
 
   it('preserves Solana simulation details when submission fails', async () => {
+    const fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        error: {
+          code: -32002,
+          message: 'Transaction simulation failed',
+          data: {
+            err: { InstructionError: [0, 'Custom'] },
+            logs: ['Program log: insufficient lamports'],
+          },
+        },
+      }),
+    }))
     const client = createSolanaClient({
       transport: solanaHttp('https://solana.example', {
-        fetch: vi.fn(async () => ({
-          ok: true,
-          status: 200,
-          json: async () => ({
-            error: {
-              code: -32002,
-              message: 'Transaction simulation failed',
-              data: {
-                err: { InstructionError: [0, 'Custom'] },
-                logs: ['Program log: insufficient lamports'],
-              },
-            },
-          }),
-        })),
+        fetch,
       }),
     })
 
     await expect(client.publicClient.sendTransaction(new Uint8Array([1, 2, 3])))
       .rejects.toThrow(/insufficient lamports/)
+    expect(fetch).toHaveBeenCalledWith('https://solana.example', expect.objectContaining({
+      cache: 'no-store',
+      headers: expect.objectContaining({ 'cache-control': 'no-cache' }),
+    }))
+    const [, init] = fetch.mock.calls[0]!
+    const request = JSON.parse(init.body) as { params: unknown[] }
+    expect(request.params[1]).toEqual({ encoding: 'base64', preflightCommitment: 'confirmed' })
   })
 
   it('adds the local fee-payer signature and broadcasts through the public transport', async () => {

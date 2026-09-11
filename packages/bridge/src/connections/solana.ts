@@ -161,15 +161,17 @@ function materializeSolanaClient(
     ...rpcClient,
     async sendTransaction(signedTransaction) {
       const base64 = btoa(String.fromCharCode(...signedTransaction))
+      const sendOptions = { encoding: 'base64', preflightCommitment: 'confirmed' }
       if (transportDefinition.type === 'custom') {
-        const signature = await transportDefinition.request('sendTransaction', [base64, { encoding: 'base64' }])
+        const signature = await transportDefinition.request('sendTransaction', [base64, sendOptions])
         if (typeof signature !== 'string' || !signature) throw new BridgeError('Solana RPC sendTransaction returned an invalid signature')
         return { signature }
       }
       const response = await httpTransport(url, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sendTransaction', params: [base64, { encoding: 'base64' }] }),
+        headers: { 'content-type': 'application/json', 'cache-control': 'no-cache' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sendTransaction', params: [base64, sendOptions] }),
+        cache: 'no-store',
       })
       const body = await response.json() as { result?: unknown; error?: { message?: string; data?: unknown } }
       if (!response.ok || body.error || typeof body.result !== 'string' || !body.result) {
