@@ -40,3 +40,6 @@ make delegated `writeContract` proving return an unbroadcast transaction for
 the configured Aleo transport to submit. Delegated FeeMaster payment now
 defaults to disabled and must be opted into explicitly.
 Export `DEFAULT_SOLANA_RPC_URL` for the official Solana mainnet endpoint.
+Rewrite every bridge example and the Solana deposit operator script around the
+structured route and recoverable lifecycle APIs, with application-owned optional
+checkpoint persistence and no imports from protocol-internal utilities.

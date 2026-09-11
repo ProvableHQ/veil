@@ -1,7 +1,12 @@
 import {
-  buildAleoHyperlaneTransferRemoteCall,
   createAleoClient,
   createBridgeClient,
+  createEvmClient,
+  createSolanaClient,
+  DEFAULT_SOLANA_RPC_URL,
+  evmHttp,
+  parseDecimalAmount,
+  solanaHttp,
 } from '@provablehq/aleo-bridge-sdk'
 
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
@@ -135,9 +140,21 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     confirmationTimeout: millisecondsFromEnvironment('ALEO_EXECUTION_CONFIRMATION_TIMEOUT_MS', 5 * 60_000),
   })
 
+  const executionEnabled = process.env[config.executionEnvironmentVariable] === EXECUTION_ACKNOWLEDGEMENT
+  const destinationClient = executionEnabled
+    ? config.destination.chain === 'ethereum'
+      ? createEvmClient({ transport: evmHttp(requiredEnvironmentVariable('ETHEREUM_RPC_URL')) })
+      : createSolanaClient({
+          transport: solanaHttp(process.env.SOLANA_RPC_URL?.trim() || DEFAULT_SOLANA_RPC_URL),
+        })
+    : undefined
+
   const bridge = createBridgeClient({
     environment: 'mainnet',
-    clients: { aleo: createAleoClient({ publicClient, account: nativeWalletClient }) },
+    clients: {
+      aleo: createAleoClient({ publicClient, account: nativeWalletClient }),
+      ...(destinationClient ? { [config.destination.chain]: destinationClient } : {}),
+    },
   })
 
   const plan = bridge.prepare({
@@ -146,11 +163,9 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     bridgeProtocol: 'hyperlane',
     amount,
     recipient,
+    sender: String(account.address),
   })
-  const previewCall = buildAleoHyperlaneTransferRemoteCall(bridge.registry, { plan, mode: 'signer' })
-  if (previewCall.placeholderFields.length !== 1 || previewCall.placeholderFields[0] !== 'aleoAllowanceAmount0') {
-    throw new Error(`${asset} return route has unresolved fields: ${previewCall.placeholderFields.join(', ') || 'unknown'}`)
-  }
+  const amountAtomic = parseDecimalAmount(plan.amountIn, plan.sourceAsset.decimals)
 
   const [assetLiteral, publicCredits, gasQuote] = await Promise.all([
     publicClient.readContract({ programId: config.balanceProgram, mapping: 'balances', key: account.address }),
@@ -165,21 +180,21 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     route: plan.route.id,
     sender: account.address,
     recipient,
-    amount: `${formatAmount(previewCall.amountAtomic, config.decimals)} ${asset}`,
+    amount: `${formatAmount(amountAtomic, config.decimals)} ${asset}`,
     [`${asset.toLowerCase()}PublicBalance`]: `${formatAmount(assetBalance, config.decimals)} ${asset}`,
     publicCreditsBalance: `${formatAmount(publicCredits, 6)} credits`,
     hyperlaneHookPayment: `${formatAmount(gasQuote.paymentMicrocredits, 6)} credits`,
-    sourceOperation: `${previewCall.program}/${previewCall.function}`,
+    sourceOperation: 'selected by plan.route',
     sourceBalanceType: 'public',
     recordScanner: 'not used',
   })
 
-  if (process.env[config.executionEnvironmentVariable] !== EXECUTION_ACKNOWLEDGEMENT) {
+  if (!executionEnabled) {
     console.log(`\nPreflight complete; no ${asset} was burned.`)
     console.log(`Set ${config.executionEnvironmentVariable}=${EXECUTION_ACKNOWLEDGEMENT} to submit the transfer.`)
     return
   }
-  if (assetBalance < previewCall.amountAtomic) throw new Error(`Insufficient public Aleo ${asset} balance`)
+  if (assetBalance < amountAtomic) throw new Error(`Insufficient public Aleo ${asset} balance`)
 
   const latestQuote = await bridge.quote({ plan })
   if (latestQuote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${latestQuote.kind}`)
@@ -196,8 +211,13 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     mode: 'signer',
     privateFee: booleanFromEnvironment('ALEO_PRIVATE_FEE', false),
     gasPaymentMicrocredits: latestQuote.paymentMicrocredits,
+    onCheckpoint(checkpoint) {
+      console.log('Optional recovery checkpoint:', JSON.stringify(checkpoint))
+    },
   })
   if (result.kind !== 'aleo-hyperlane') throw new Error(`Unexpected execution kind: ${result.kind}`)
-  console.log(`\nAleo ${asset} burn accepted:`, result.transactionId)
-  console.log(`A Hyperlane relayer will deliver the message and release ${asset} to the ${config.destination} recipient.`)
+  const progress = await bridge.wait({ progress: { next: 'wait', plan, receipt: result.receipt } })
+  if (progress.next === 'failed') throw new Error(progress.error)
+  if (progress.next !== 'done') throw new Error(`Unexpected next operation: ${progress.next}`)
+  console.log(`\nAleo ${asset} bridge completed:`, progress.receipt)
 }

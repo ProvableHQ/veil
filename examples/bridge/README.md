@@ -1,440 +1,215 @@
-# Ethereum USDC to Aleo USDCx
+# Bridge examples
 
-`usdc-to-usdcx.ts` exercises the mainnet bridge client against Circle xReserve.
-It quotes the transfer without submitting by default. A live execution may send
-an exact USDC approval followed by the irreversible xReserve deposit.
+These scripts demonstrate the current `@provablehq/aleo-bridge-sdk` lifecycle
+against reviewed mainnet routes. Every script is read-only by default. It
+prepares a structured route and obtains a live quote, but submits nothing until
+its documented acknowledgement variable is set.
 
-Set the inputs without putting the private key directly in shell history:
+The examples cover:
+
+| Script | Route | Protocol |
+| --- | --- | --- |
+| `eth-to-aleo.ts` | Ethereum ETH → Aleo ETH | Hyperlane |
+| `wbtc-to-aleo.ts` | Ethereum WBTC → Aleo WBTC | Hyperlane |
+| `eth-to-ethereum.ts` | Aleo ETH → Ethereum ETH | Hyperlane |
+| `wbtc-to-ethereum.ts` | Aleo WBTC → Ethereum WBTC | Hyperlane |
+| `sol-to-aleo.ts` | Solana SOL → Aleo SOL | Hyperlane |
+| `sol-to-solana.ts` | Aleo SOL → Solana SOL | Hyperlane |
+| `usdc-to-usdcx.ts` | Ethereum USDC → Aleo USDCx | Circle xReserve |
+| `usdcx-to-usdc.ts` | Aleo USDCx → Ethereum USDC | Circle xReserve |
+
+## Current lifecycle
+
+Every implementation follows the same public API:
+
+```ts
+const plan = bridge.prepare({
+  source: { chain: 'ethereum', asset: 'eth' },
+  destination: { chain: 'aleo', asset: 'eth' },
+  bridgeProtocol: 'hyperlane',
+  amount: '0.001',
+  sender,
+  recipient,
+})
+
+const quote = await bridge.quote({ plan })
+const execution = await bridge.execute({
+  plan,
+  onCheckpoint(checkpoint) {
+    // Optional application-owned persistence boundary.
+    saveCheckpoint(checkpoint)
+  },
+})
+
+let progress = await bridge.wait({
+  progress: { next: 'wait', plan, receipt: execution.receipt },
+})
+
+if (progress.next === 'resume') {
+  const resumed = await bridge.resume({ progress, onCheckpoint: saveCheckpoint })
+  progress = await bridge.wait({
+    progress: { next: 'wait', plan, receipt: resumed.receipt },
+  })
+}
+```
+
+`wait()` verifies destination delivery. It does not submit another transaction.
+For a private inbound xReserve transfer, `wait()` returns `next: 'complete'`
+after Circle attests the deposit; `complete()` is the explicit authorization
+for the Aleo private mint.
+
+Checkpoints are plain JSON values, not storage. The SDK calls the supplied
+closure, and the application chooses whether to save the value in a file,
+database, browser storage, or nowhere. After a restart, pass the saved value to
+`bridge.recover({ checkpoint })`. Recovery only reads state and never
+resubmits funds.
+
+## Accounts and RPC endpoints
+
+The examples use the bridge package's account adapters directly:
+
+```ts
+const ethereum = createEvmClient({
+  transport: evmHttp(process.env.ETHEREUM_RPC_URL!),
+  account: evmPrivateKey(process.env.EVM_PRIVATE_KEY as `0x${string}`),
+})
+
+const solana = createSolanaClient({
+  transport: solanaHttp(process.env.SOLANA_RPC_URL || DEFAULT_SOLANA_RPC_URL),
+  account: solanaKeyPair(secretKeyBytes),
+})
+
+const aleo = createAleoClient({
+  publicClient: nativeAleo.publicClient,
+  account: nativeAleo.walletClient,
+})
+```
+
+Local EVM and Solana keys sign locally. Aleo examples default to delegated
+proving and accept the same `ALEO_RPC_URL`, `ALEO_PROVER_URL`,
+`ALEO_CONSUMER_ID`, and `ALEO_DPS_API_KEY` overrides as
+`@provablehq/veil-aleo-sdk`.
+
+Never put private keys directly in shell history. Read them silently:
 
 ```sh
-export ETHEREUM_RPC_URL='https://eth-mainnet.g.alchemy.com/public'
+read -rs EVM_PRIVATE_KEY && export EVM_PRIVATE_KEY
+read -rs SOLANA_PRIVATE_KEY && export SOLANA_PRIVATE_KEY
+read -rs ALEO_PRIVATE_KEY && export ALEO_PRIVATE_KEY
+```
+
+## Ethereum → Aleo Hyperlane
+
+Shared configuration:
+
+```sh
+export ETHEREUM_RPC_URL='https://ethereum-rpc.publicnode.com'
 export ALEO_RECIPIENT='aleo1...'
-export USDC_AMOUNT='3'
-export USDCX_MINT_MODE='record'
-
-printf 'Ethereum Private Key: '
-read -rs EVM_PRIVATE_KEY
-echo
-export EVM_PRIVATE_KEY
 ```
 
-`EVM_PRIVATE_KEY` accepts exactly 64 hexadecimal characters with or without a
-`0x` prefix. It is used only for local Ethereum transaction signing. The Aleo
-recipient—not the private key—is serialized into xReserve's Aleo `bytes32`
-wire representation by the bridge client.
-
-## Private mint
-
-When `USDCX_MINT_MODE='private'`, the script also requires the private key for
-the account named by `ALEO_RECIPIENT`. Enter it without placing it in shell
-history:
-
-```sh
-printf 'Aleo Private Key: '
-read -rs ALEO_PRIVATE_KEY
-echo
-export ALEO_PRIVATE_KEY
-```
-
-The private recipient commitment uses `0scalar` by default. To select a secret
-nonce without placing it in shell history, enter either a decimal value or a
-complete Aleo scalar literal:
-
-```sh
-read -s USDCX_SECRET_NONCE
-export USDCX_SECRET_NONCE
-# Accepted examples: 123 or 123scalar
-```
-
-The same scalar is used to construct the Ethereum deposit's hook data and the
-later Aleo `private_mint` call. Keep a custom value secret and available until
-the private mint has been submitted. The preflight reports whether the default
-or a custom value is selected without printing the custom scalar.
-
-For an enabled private-mode execution, the script loads
-`@provablehq/veil-aleo-sdk`. Before the Ethereum deposit, it derives the Aleo
-signer, requires its address to equal `ALEO_RECIPIENT`, and authenticates
-delegated proving. After Circle attests, it submits
-`shielded_usdcx_wrapper.aleo/private_mint` and polls the Aleo transaction until
-accepted, rejected, or timed out. A read-only quote does not load the Aleo SDK
-or require `ALEO_PRIVATE_KEY`. The example does not configure a record scanner
-or attempt to locate or decrypt the resulting private record.
-
-Private-mode defaults and optional overrides are:
-
-```sh
-export ALEO_RPC_URL='https://api.provable.com/v2'
-export ALEO_PROVING_MODE='delegated'
-export ALEO_USE_FEE_MASTER='true'
-export ALEO_PRIVATE_FEE='false'
-export ALEO_EXECUTION_CONFIRMATION_TIMEOUT_MS='300000'
-export ALEO_TRANSACTION_POLL_INTERVAL_MS='5000'
-export ALEO_TRANSACTION_TIMEOUT_MS='300000'
-```
-
-Private mint always uses delegated proving. The wrapper circuit is too large
-for the local WASM proving path's practical memory limits. While DPS is proving,
-the script reports lifecycle timing. DPS returns a proved transaction and the
-SDK broadcasts it through the configured Aleo transport.
-
-### Recover an interrupted private deposit
-
-Durable recovery is optional. A production application may store the compact
-value passed to `onCheckpoint`; an uninterrupted script can keep the returned
-receipt only in memory. The checkpoint contains the public transfer intent,
-resolved route version, submitted transaction identifiers, and—for local Aleo
-accounts—a fully proved serialized transaction before broadcast. That
-transaction is public once submitted. It does not
-contain a private key, private-mint nonce, decrypted record, proof, or Circle
-response body.
-
-After a process restart, pass the saved checkpoint directly to
-`bridge.recover({ checkpoint })`. Recovery reconstructs the plan, reads chain
-and protocol state, and returns the next operation. It never signs, proves, or
-submits. `resume({ progress })` continues an approval-interrupted deposit, while
-`complete({ progress, privateMintSecretNonce })` explicitly authorizes a ready
-private mint. Store a custom private-mint nonce separately in secure storage.
-
-Delegated mode automatically registers a process-lifetime Provable API consumer
-when credentials are omitted. For an existing consumer, set both
-`ALEO_CONSUMER_ID` and `ALEO_DPS_API_KEY`. `ALEO_PROVER_URL` optionally selects
-a different delegated prover base URL.
-
-Run the read-only preflight:
-
-```sh
-pnpm tsx examples/bridge/usdc-to-usdcx.ts
-```
-
-Review the sender, balance, allowance, recipient, hook data, fee ceiling, and
-xReserve contract. Then explicitly enable the live approval and deposit:
-
-```sh
-EXECUTE_XRESERVE_DEPOSIT=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
-  pnpm tsx examples/bridge/usdc-to-usdcx.ts
-```
-
-The route requires at least 2 USDC and ETH for gas. `public` and `record` mints
-are completed by the Aleo-side service. `private` requires a later user-signed
-`shielded_usdcx_wrapper.aleo/private_mint` transaction after Circle attests the
-deposit.
-
-After the Ethereum deposit confirms, the script polls Circle every 10 seconds
-for up to 30 minutes. These defaults can be changed before execution:
-
-```sh
-export EVM_CONFIRMATION_TIMEOUT_MS='300000'
-export ATTESTATION_POLL_INTERVAL_MS='10000'
-export ATTESTATION_TIMEOUT_MS='1800000'
-```
-
-The EVM confirmation timeout applies independently to each submitted approval
-or deposit. If an approval remains pending when that timeout expires, the script
-states that no deposit or Circle message exists and exits safely. Once the
-approval confirms, rerun with the same recipient and secret scalar; the next
-quote observes the allowance and skips the approval.
-
-For public and record modes, the monitor is observational: closing it does not
-cancel or pause the confirmed deposit, Circle attestation, or automatic Aleo
-mint. For private mode, closing before `private_mint` is submitted leaves the
-deposit attested but unminted until an Aleo signer resumes that step. If Circle
-monitoring times out, the script prints the direct URL that can be queried later.
-An attestation proves that Circle signed the deposit payload; public and record
-mint confirmation still requires Aleo-side discovery.
-
-# Aleo USDCx to Ethereum USDC
-
-`usdcx-to-usdc.ts` prepares a mainnet xReserve withdrawal and submits it only
-after an explicit acknowledgement. Private burn is the default; set
-`USDCX_BURN_MODE='public'` to burn the Aleo signer's public USDCx balance
-instead.
-
-```sh
-export USDCX_AMOUNT='3'
-export ETHEREUM_RECIPIENT='0x...'
-
-# Optional; private is the default.
-export USDCX_BURN_MODE='private'
-
-pnpm tsx examples/bridge/usdcx-to-usdc.ts
-```
-
-Private burn does not require the caller to paste a record. During execution,
-the example attaches Provable's record scanner to the local wallet client,
-requests the account's unspent `usdcx_stablecoin.aleo/Token` records, and passes
-the smallest record covering the burn amount to the bridge. The private key and
-decrypted record stay in the local process. If no single record covers the
-amount, join records before retrying.
-
-The wrapper also requires the current `[MerkleProof; 2]` non-inclusion witness
-for its compliance list. The example fetches the live tree from
-`usdcx_freezelist.aleo/compliance/freeze-list` and uses the Provable SDK's
-`SealanceMerkleTree` to derive the witness for the Aleo signer immediately
-before submission. Supply the Aleo and Provable API credentials used for
-proving and record scanning:
-
-```sh
-printf 'Aleo Private Key: '
-read -rs ALEO_PRIVATE_KEY
-echo
-export ALEO_PRIVATE_KEY
-
-export ALEO_CONSUMER_ID='...'
-read -s ALEO_DPS_API_KEY
-export ALEO_DPS_API_KEY
-
-EXECUTE_XRESERVE_BURN=I_UNDERSTAND_THIS_BURNS_USDCX \
-  pnpm tsx examples/bridge/usdcx-to-usdc.ts
-```
-
-For a public withdrawal, the script calls `burn_public_as_signer`; neither a
-record scanner nor an exclusion proof is used:
-
-```sh
-export USDCX_BURN_MODE='public'
-printf 'Aleo Private Key: '
-read -rs ALEO_PRIVATE_KEY
-echo
-export ALEO_PRIVATE_KEY
-
-EXECUTE_XRESERVE_BURN=I_UNDERSTAND_THIS_BURNS_USDCX \
-  pnpm tsx examples/bridge/usdcx-to-usdc.ts
-```
-
-Delegated proving is the default. `ALEO_RPC_URL`, `ALEO_PROVER_URL`,
-`ALEO_USE_FEE_MASTER`, `ALEO_PRIVATE_FEE`, and
-`ALEO_EXECUTION_CONFIRMATION_TIMEOUT_MS` use the same meanings as the deposit
-example. Once Aleo accepts the burn, the operated burn-attestation service
-forwards it to Circle; no Ethereum transaction is submitted by this script.
-
-# Ethereum Hyperlane to Aleo
-
-`eth-to-aleo.ts` and `wbtc-to-aleo.ts` exercise the reviewed mainnet Ethereum
-Hyperlane Warp Routes. Both scripts quote without submitting by default and use
-a local viem account when execution is explicitly enabled. ETH dispatches in a
-single transaction. WBTC checks its Warp Route allowance and submits an exact
-approval only when the existing allowance is insufficient.
-
-Set the shared inputs and enter the Ethereum private key without placing it in
-shell history:
-
-```sh
-export ETHEREUM_RPC_URL='https://eth-mainnet.g.alchemy.com/public'
-export ALEO_RECIPIENT='aleo1...'
-printf 'Ethereum Private Key: '
-read -rs EVM_PRIVATE_KEY
-echo
-export EVM_PRIVATE_KEY
-```
-
-For the native ETH read-only preflight:
+Quote ETH:
 
 ```sh
 export ETH_AMOUNT='0.001'
 pnpm tsx examples/bridge/eth-to-aleo.ts
 ```
 
-After reviewing the recipient encoding, live Hyperlane fee, total transaction
-value, balance, and Warp Route contract, explicitly enable the ETH transfer:
+Submit ETH after reviewing the quote:
 
 ```sh
 EXECUTE_HYPERLANE_ETH=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
   pnpm tsx examples/bridge/eth-to-aleo.ts
 ```
 
-For the WBTC read-only preflight:
+For WBTC, set `WBTC_AMOUNT` and run `wbtc-to-aleo.ts`. Execution uses
+`EXECUTE_HYPERLANE_WBTC=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS`. The bridge action
+checks allowance and submits an exact approval only when required.
+
+## Aleo → Ethereum or Solana Hyperlane
+
+These routes burn public ARC-20 balances on Aleo. Use `bridge.unshield()` first
+when the asset is held privately.
 
 ```sh
-export WBTC_AMOUNT='0.0001'
-pnpm tsx examples/bridge/wbtc-to-aleo.ts
-```
-
-After reviewing the WBTC balance, allowance, approval requirement, native ETH
-fee, recipient encoding, and contracts, explicitly enable the WBTC transfer:
-
-```sh
-EXECUTE_HYPERLANE_WBTC=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
-  pnpm tsx examples/bridge/wbtc-to-aleo.ts
-```
-
-`EVM_PRIVATE_KEY` accepts exactly 64 hexadecimal characters with or without a
-`0x` prefix. It signs locally and is not sent to Veil or the RPC service. Both
-routes require ETH for Ethereum gas and the quoted Hyperlane interchain fee.
-The ETH route's transaction value includes the bridged ETH amount plus that
-fee; the WBTC route's transaction value contains only the native fee.
-
-Each submitted Ethereum transaction is allowed five minutes to confirm by
-default. Override that interval when needed:
-
-```sh
-export EVM_CONFIRMATION_TIMEOUT_MS='600000'
-```
-
-If a WBTC approval times out, the transfer is not submitted. After the approval
-confirms, rerun the same live command; the client sees the sufficient allowance
-and proceeds without approving again. If the transfer itself times out, use the
-printed Ethereum hash to check its state before rerunning, since the dispatch
-may already have been broadcast.
-
-# Aleo WBTC to Ethereum WBTC
-
-`wbtc-to-ethereum.ts` exercises the return journey through
-`hyp_warp_token_wbtc_v2.aleo/transfer_remote_as_signer`. The Aleo Warp Route
-burns public `arc20_wbtc.aleo`; private WBTC records must be unshielded before
-using this example. No record scanner is configured.
-
-Set the amount, Ethereum recipient, and Aleo signer:
-
-```sh
-export WBTC_AMOUNT='0.0001'
+export ALEO_PRIVATE_KEY='...'
+export ETHEREUM_RPC_URL='https://ethereum-rpc.publicnode.com'
 export ETHEREUM_RECIPIENT='0x...'
-
-printf 'Aleo Private Key: '
-read -rs ALEO_PRIVATE_KEY
-echo
-export ALEO_PRIVATE_KEY
-```
-
-Run the read-only preflight:
-
-```sh
-pnpm tsx examples/bridge/wbtc-to-ethereum.ts
-```
-
-The preflight reads the signer's public Aleo WBTC and credits balances. It also
-quotes the current `hyp_hook_manager.aleo/destination_gas_configs` entry with
-`quote`, which returns the exact public-credits
-allowance consumed by the Interchain Gas Paymaster. The example asserts that
-this live allowance is WBTC's only unresolved field and passes the quote to
-execution as `gasPaymentMicrocredits`.
-
-After reviewing the amount, Ethereum recipient, balances, and hook payment:
-
-```sh
-EXECUTE_HYPERLANE_WBTC_RETURN=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
-  pnpm tsx examples/bridge/wbtc-to-ethereum.ts
-```
-
-The hook payment is requoted immediately before proving. Delegated proving is
-the default; `ALEO_CONSUMER_ID`, `ALEO_DPS_API_KEY`, `ALEO_RPC_URL`,
-`ALEO_PROVER_URL`, `ALEO_USE_FEE_MASTER`, `ALEO_PRIVATE_FEE`, and
-`ALEO_EXECUTION_CONFIRMATION_TIMEOUT_MS` are optional overrides. The hook
-payment always comes from public credits. FeeMaster is disabled by default and
-must be enabled only when the configured proving service grants that
-capability; it covers the Aleo execution fee, not the hook payment. The public
-quote cannot know the account-specific execution fee, so it reports that fee
-and the total as `null`. Hyperlane relayers deliver the accepted message and release
-WBTC on Ethereum independently of this process.
-
-# Aleo ETH to Ethereum ETH
-
-`eth-to-ethereum.ts` uses the same return runner for public
-`arc20_eth.aleo`. It fetches the live IGP configuration for the ETH route's
-`44000u128` gas limit, checks the public Aleo ETH and credits balances, and
-calls `hyp_warp_token_eth_v2.aleo/transfer_remote_as_signer`. Private ETH
-records must be unshielded first; no record scanner is used.
-
-```sh
 export ETH_AMOUNT='0.001'
-export ETHEREUM_RECIPIENT='0x...'
-
-printf 'Aleo Private Key: '
-read -rs ALEO_PRIVATE_KEY
-echo
-export ALEO_PRIVATE_KEY
-
-# Read-only preflight
 pnpm tsx examples/bridge/eth-to-ethereum.ts
 ```
 
-After reviewing the Ethereum recipient, public ETH balance, public credits
-balance, and live hook payment:
+Execution acknowledgements are:
+
+- `EXECUTE_HYPERLANE_ETH_RETURN=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS`
+- `EXECUTE_HYPERLANE_WBTC_RETURN=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS`
+- `EXECUTE_HYPERLANE_SOL_RETURN=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS`
+
+The action obtains a fresh Hyperlane gas quote before proving. The hook payment
+comes from public Aleo credits and is separate from the Aleo execution fee.
+
+## Solana → Aleo Hyperlane
+
+The read-only path accepts `SOLANA_SENDER`; execution derives the sender from
+`SOLANA_PRIVATE_KEY` and rejects a conflicting configured address.
 
 ```sh
-EXECUTE_HYPERLANE_ETH_RETURN=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
-  pnpm tsx examples/bridge/eth-to-ethereum.ts
-```
-
-The hook payment is requoted immediately before proving. The accepted Aleo
-transaction burns the specified public ETH; Hyperlane relayers release native
-ETH to the Ethereum recipient asynchronously.
-
-# Solana SOL to Aleo SOL
-
-`sol-to-aleo.ts` builds a bridge client with an injected Solana RPC endpoint
-and plans `hyperlane:solana/sol->aleo/sol` with Veil. The read-only path needs
-only the sender's public address; it quotes the Hyperlane hook payment and
-Solana network fee through `quote` and reads the
-sender's native SOL balance.
-
-```sh
-export SOLANA_RPC_URL='https://api.mainnet-beta.solana.com'
-export SOLANA_SENDER='...'
 export ALEO_RECIPIENT='aleo1...'
+export SOLANA_SENDER='...'
 export SOL_AMOUNT='0.01'
-
 pnpm tsx examples/bridge/sol-to-aleo.ts
 ```
 
-The output includes the native SOL balance, Hyperlane hook payment, Solana
-network fee, total required balance, Warp Route program, and Aleo destination
-domain. A production RPC endpoint is recommended because Solana's public
-endpoint is rate-limited.
-
-To submit, enter either a base58-encoded 64-byte Solana keypair or the JSON byte
-array stored by the Solana CLI. The derived address must match `SOLANA_SENDER`
-when both are set.
+`SOLANA_RPC_URL` defaults to the exported `DEFAULT_SOLANA_RPC_URL`. Submit with:
 
 ```sh
-printf 'Solana Private Key: '
-read -rs SOLANA_PRIVATE_KEY
-echo
-export SOLANA_PRIVATE_KEY
-
 EXECUTE_HYPERLANE_SOL=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
   pnpm tsx examples/bridge/sol-to-aleo.ts
 ```
 
-Execution supplies the key bytes through `solanaKeyPair`, which signs locally
-with `@solana/kit`, then calls `execute`. That action assembles the
-transaction, requotes the live hook payment, checks the sender's balance,
-submits the signed transaction, and polls until confirmed or finalized. The
-accepted source transaction locks native SOL in the Warp Route; Hyperlane
-relayers mint SOL to the Aleo recipient asynchronously.
-`SOLANA_CONFIRMATION_TIMEOUT_MS` optionally overrides the two-minute
-confirmation timeout.
+The quote includes transfer amount, network fee, interchain gas payment, and
+rent. Execution signs with `solanaKeyPair()`, checkpoints the signature at the
+broadcast boundary, and waits for canonical Aleo mailbox delivery.
 
-# Aleo SOL to Solana SOL
-
-`sol-to-solana.ts` exercises the return route through
-`hyp_warp_token_sol_v2.aleo/transfer_remote_as_signer`. It burns public
-`arc20_sol.aleo`; private SOL records must be unshielded before using this
-example. No record scanner or Solana private key is required because the source
-transaction is signed on Aleo.
+The package also includes a durable operator-oriented version:
 
 ```sh
-export SOL_AMOUNT='0.01'
-export SOLANA_RECIPIENT='...'
-
-printf 'Aleo Private Key: '
-read -rs ALEO_PRIVATE_KEY
-echo
-export ALEO_PRIVATE_KEY
-
-# Read-only preflight
-pnpm tsx examples/bridge/sol-to-solana.ts
+cd packages/bridge
+pnpm solana-deposit
 ```
 
-The preflight validates the Solana recipient, reads the signer's public SOL and
-credits balances, and calculates the live Hyperlane hook payment from
-`hyp_hook_manager.aleo/destination_gas_configs`. No SOL is burned unless the
-execution acknowledgement is set:
+It stores the checkpoint in `scripts/.solana-deposit.state.json`. Set
+`EXECUTE_SOLANA_DEPOSIT=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS` to submit, or pass
+`--reset` to deliberately discard the saved checkpoint.
+
+## Ethereum USDC → Aleo USDCx
 
 ```sh
-EXECUTE_HYPERLANE_SOL_RETURN=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
-  pnpm tsx examples/bridge/sol-to-solana.ts
+export ETHEREUM_RPC_URL='https://ethereum-rpc.publicnode.com'
+export ALEO_RECIPIENT='aleo1...'
+export USDC_AMOUNT='2'
+export USDCX_MINT_MODE='public' # public, record, or private
+pnpm tsx examples/bridge/usdc-to-usdcx.ts
 ```
 
-The hook payment is requoted immediately before proving. The accepted Aleo
-transaction burns the specified public SOL; Hyperlane relayers release native
-SOL to the Solana recipient asynchronously.
+Submit with
+`EXECUTE_XRESERVE_DEPOSIT=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS`. Public and record
+mints are relayer-driven. Private mode requires the matching `ALEO_PRIVATE_KEY`
+and optionally `USDCX_SECRET_NONCE`; after Circle attests, the script calls
+`complete()` exactly once to submit the private mint.
+
+The minimum inbound amount is 2 USDC. A custom private-mint nonce is never
+included in a checkpoint and must be stored separately by the application.
+
+## Aleo USDCx → Ethereum USDC
+
+```sh
+export USDCX_AMOUNT='2.000001'
+export ETHEREUM_RECIPIENT='0x...'
+export USDCX_BURN_MODE='private' # or public
+pnpm tsx examples/bridge/usdcx-to-usdc.ts
+```
+
+Submit with `EXECUTE_XRESERVE_BURN=I_UNDERSTAND_THIS_BURNS_USDCX`. Private mode
+uses the configured Aleo record scanner to select an unspent USDCx record and
+derives the live freeze-list exclusion proof before executing. The burn amount
+must exceed the deployed 2 USDCx withdrawal fee.

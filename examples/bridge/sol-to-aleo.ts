@@ -1,11 +1,13 @@
-import { createKeyPairSignerFromBytes, getBase58Encoder } from '@solana/kit'
+import { getBase58Encoder } from '@solana/kit'
+import { createPublicClient as createAleoPublicClient, http as aleoHttp } from '@provablehq/veil-core'
 import {
+  createAleoClient,
   createBridgeClient,
   createSolanaClient,
+  DEFAULT_SOLANA_RPC_URL,
   solanaHttp,
   solanaKeyPair,
 } from '@provablehq/aleo-bridge-sdk'
-import { createSolanaRpcClient } from '@provablehq/aleo-bridge-sdk/solana'
 
 const ROUTE_ID = 'hyperlane:solana/sol->aleo/sol'
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
@@ -69,25 +71,32 @@ function formatAmount(value: bigint, decimals: number): string {
  * await runSolanaHyperlaneExample()
  */
 export async function runSolanaHyperlaneExample(): Promise<void> {
-  const rpcUrl = process.env.SOLANA_RPC_URL?.trim() || 'https://api.mainnet-beta.solana.com'
+  const rpcUrl = process.env.SOLANA_RPC_URL?.trim() || DEFAULT_SOLANA_RPC_URL
   const recipient = requiredEnvironmentVariable('ALEO_RECIPIENT')
   const amount = requiredEnvironmentVariable('SOL_AMOUNT')
 
   const privateKey = process.env.SOLANA_PRIVATE_KEY?.trim()
   const keypairBytes = privateKey ? privateKeyBytes(privateKey) : undefined
-  const signer = keypairBytes ? await createKeyPairSignerFromBytes(keypairBytes) : undefined
-  const senderAddress = signer ? String(signer.address) : requiredEnvironmentVariable('SOLANA_SENDER')
+  const solana = createSolanaClient({
+    transport: solanaHttp(rpcUrl),
+    ...(keypairBytes ? { account: solanaKeyPair(keypairBytes) } : {}),
+  })
+  const senderAddress = solana.walletClient
+    ? await solana.walletClient.getAddress()
+    : requiredEnvironmentVariable('SOLANA_SENDER')
   const configuredSender = process.env.SOLANA_SENDER?.trim()
-  if (signer && configuredSender && configuredSender !== senderAddress) {
+  if (solana.walletClient && configuredSender && configuredSender !== senderAddress) {
     throw new Error(`SOLANA_SENDER does not match the private-key account ${senderAddress}`)
   }
 
   const bridge = createBridgeClient({
     environment: 'mainnet',
     clients: {
-      solana: createSolanaClient({
-        transport: solanaHttp(rpcUrl),
-        ...(keypairBytes ? { account: solanaKeyPair(keypairBytes) } : {}),
+      solana,
+      aleo: createAleoClient({
+        publicClient: createAleoPublicClient({
+          transport: aleoHttp(process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2', { network: 'mainnet' }),
+        }),
       }),
     },
   })
@@ -101,7 +110,7 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
   })
   const quote = await bridge.quote({ plan })
   if (quote.kind !== 'solana-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
-  const balance = await createSolanaRpcClient({ url: rpcUrl }).getBalance(senderAddress)
+  const balance = await solana.publicClient.getBalance(senderAddress)
   const decimals = plan.sourceAsset.decimals
 
   console.log('Read-only Solana SOL to Aleo SOL preflight')
@@ -123,25 +132,21 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
     console.log(`Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to submit the transfer.`)
     return
   }
-  if (!signer) throw new Error('SOLANA_PRIVATE_KEY is required for execution')
+  if (!solana.walletClient) throw new Error('SOLANA_PRIVATE_KEY is required for execution')
 
   console.log('\nExecution enabled. Submitting the transfer through the local keypair account.')
   const execution = await bridge.execute({
     plan,
     confirmationTimeoutMs: millisecondsFromEnvironment('SOLANA_CONFIRMATION_TIMEOUT_MS', DEFAULT_CONFIRMATION_TIMEOUT_MS),
+    onCheckpoint(checkpoint) {
+      console.log('Optional recovery checkpoint:', JSON.stringify(checkpoint))
+    },
   })
   if (execution.kind !== 'solana-hyperlane') throw new Error(`Unexpected execution kind: ${execution.kind}`)
-
-  console.log('Transfer status:', execution.receipt.status)
-  console.log('Submitted Solana transaction:', execution.receipt.sourceTxId)
-  if (execution.receipt.status === 'SOURCE_CONFIRMING') {
-    console.log('Confirmation timed out; the transaction was already broadcast and may still land.')
-    console.log('Check the printed signature before resubmitting.')
-    return
-  }
-  console.log('Solana dispatch confirmed.')
-  console.log('Hyperlane message id:', execution.receipt.messageId ?? 'not found in the confirmed transaction logs')
-  console.log('A Hyperlane relayer will deliver the message and mint SOL on Aleo.')
+  const progress = await bridge.wait({ progress: { next: 'wait', plan, receipt: execution.receipt } })
+  if (progress.next === 'failed') throw new Error(progress.error)
+  if (progress.next !== 'done') throw new Error(`Unexpected next operation: ${progress.next}`)
+  console.log('Bridge completed:', progress.receipt)
 }
 
 runSolanaHyperlaneExample().catch((error: unknown) => {
