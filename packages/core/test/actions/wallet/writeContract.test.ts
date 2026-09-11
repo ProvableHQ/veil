@@ -65,6 +65,48 @@ describe('writeContract', () => {
     })
   })
 
+  it('reports a prepared transaction before broadcast and submission after the node returns', async () => {
+    const order: string[] = []
+    const builtTx = { type: 'execute', id: 'at1built' }
+    const client = {
+      account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },
+      proving: {
+        buildTransaction: vi.fn(async () => {
+          order.push('built')
+          return builtTx
+        }),
+      },
+      request: vi.fn(async () => {
+        order.push('broadcast')
+        return 'at1built'
+      }),
+    } as any
+
+    await writeContract(client, {
+      ...baseParams,
+      async onProgress(event) {
+        order.push(event.type)
+      },
+    })
+
+    expect(order).toEqual(['built', 'transaction-prepared', 'broadcast', 'transaction-submitted'])
+  })
+
+  it('reports wallet submission for an RPC account', async () => {
+    const events: unknown[] = []
+    const client = {
+      account: { type: 'rpc', address: 'aleo1abc', sign: vi.fn() },
+      request: vi.fn().mockResolvedValue('at1wallet'),
+    } as any
+
+    await writeContract(client, {
+      ...baseParams,
+      onProgress(event) { events.push(event) },
+    })
+
+    expect(events).toEqual([{ type: 'transaction-submitted', transactionId: 'at1wallet' }])
+  })
+
   it('throws ProvingNotConfiguredError for local account without proving config', async () => {
     const client = {
       account: { type: 'local', address: 'aleo1abc', sign: vi.fn() },

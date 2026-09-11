@@ -1,5 +1,7 @@
 ---
 '@provablehq/aleo-bridge-sdk': minor
+'@provablehq/veil-core': minor
+'@provablehq/veil-aleo-sdk': minor
 ---
 
 Replace flat executor and RPC configuration with registry-keyed EVM, Solana,
@@ -7,8 +9,9 @@ and Aleo clients. Add browser-wallet, viem-client, and local-key adapters,
 live Solana fee and rent reads, and expiry-aware confirmation. Every client
 has a public client by default, while wallet actions require the optional
 wallet client explicitly in their signatures. Fund-moving actions expose optional
-compact, versioned checkpoint hooks. Checkpoints carry reconstructable public
-intent and submitted transaction identifiers but exclude private-mint secrets.
+compact, versioned checkpoint hooks. Local Aleo flows checkpoint fully proved
+transactions before source or destination broadcast; other wallet APIs
+checkpoint submitted identifiers. Checkpoints exclude private-mint secrets.
 The read-only `recover({ checkpoint })` action returns an explicit `wait`, `resume`,
 `complete`, `done`, or `failed` next step without resubmitting funds. Each bridge decorator action now has its own module,
 with protocol mechanics isolated behind internal helpers. Pure call builders are
@@ -26,3 +29,9 @@ Quoting and execution dispatch from the prepared route, replacing chain- and
 protocol-specific client methods and the longer transfer-suffixed names.
 Add deterministic recovery journeys and independently gated, minimum-amount
 mainnet suites for xReserve and Hyperlane routes using local accounts.
+Include Solana rent in executable quotes, expose honest Aleo Hyperlane fee
+limits, enforce the xReserve withdrawal fee, and verify Aleo-origin delivery
+from configured destination clients. Add proving lifecycle events to core and
+make delegated `writeContract` proving return an unbroadcast transaction for
+the configured Aleo transport to submit. Delegated FeeMaster payment now
+defaults to disabled and must be opted into explicitly.

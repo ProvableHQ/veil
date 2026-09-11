@@ -131,7 +131,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     provingMode,
     ...(process.env.ALEO_PROVER_URL?.trim() ? { proverUrl: process.env.ALEO_PROVER_URL.trim() } : {}),
     ...(consumerId && apiKey ? { consumerId, apiKey } : {}),
-    useFeeMaster: booleanFromEnvironment('ALEO_USE_FEE_MASTER', true),
+    useFeeMaster: booleanFromEnvironment('ALEO_USE_FEE_MASTER', false),
     confirmationTimeout: millisecondsFromEnvironment('ALEO_EXECUTION_CONFIRMATION_TIMEOUT_MS', 5 * 60_000),
   })
 

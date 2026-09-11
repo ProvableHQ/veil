@@ -35,6 +35,9 @@ const txId = await client.writeContract({
   program: 'token.aleo',
   function: 'transfer_public',
   inputs: ['aleo1...', '100u64'],
+  onProgress(event) {
+    console.log(event.type)
+  },
 })
 // 'at1...'
 ```
@@ -45,11 +48,21 @@ A wallet-adapter (RPC) account hands the call to the connected wallet, which
 proves, signs, and broadcasts in one step and prompts the user. A local SDK
 account builds and proves the transaction through the client's `proving`
 config — in process for `mode: 'local'`, via a delegated prover for
-`mode: 'delegated'` — then broadcasts it through the transport. Delegated mode
+`mode: 'delegated'` — then broadcasts the proved transaction through the
+client's transport. The delegated prover does not broadcast for
+`writeContract`. Delegated mode
 requires `proverUrl` on the proving config (plus `apiKey` and `consumerId` for
 the hosted Provable prover); local mode needs neither. Either way the fee
-comes out of the account, unless a delegated prover with `useFeeMaster`
-covers it.
+comes out of the account. `useFeeMaster` defaults to `false`; enable it only
+when the configured prover service has explicitly granted FeeMaster access.
+
+`onProgress` is awaited at available proving and submission boundaries. Local
+accounts may report `request-built`, `prover-submitted`, `prover-returned`,
+`transaction-prepared`, and `transaction-submitted`. The
+`transaction-prepared` event includes the fully proved transaction before the
+transport broadcasts it, allowing durable recovery without proving a
+replacement. Wallet-adapter accounts generally expose only
+`transaction-submitted` because their request combines proving and broadcast.
 
 `inputs` may contain `record` and `address` InputRequests only on the
 wallet-adapter path — the wallet resolves them without exposing private data

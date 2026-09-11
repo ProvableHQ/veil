@@ -148,11 +148,14 @@ EVM collateral routes approve only when needed. USDT resets a non-zero
 allowance before setting the required value. Timeouts preserve transaction IDs
 in resumable receipts.
 
-Fund-moving actions accept an optional `onCheckpoint` hook. It runs immediately
-after the wallet or local signer returns a transaction identifier and before
-confirmation polling. The emitted value contains public transfer intent, the
-resolved route version, and transaction identifiers. It excludes private keys,
-records, proofs, private-mint nonces, and protocol response bodies:
+Fund-moving actions accept an optional `onCheckpoint` hook. EVM, Solana, and
+injected-wallet clients call it as soon as submission returns an identifier.
+A local Aleo client also calls it before broadcast with the fully proved,
+serialized transaction, then again after submission. The pre-broadcast value
+lets a restarted process submit the same transaction rather than prove or sign
+a replacement. Checkpoints exclude private keys, records, proofs,
+private-mint nonces, and Circle response bodies. A serialized Aleo transaction
+is retained only because it becomes public when broadcast:
 
 ```ts
 const execution = await bridge.execute({
@@ -180,6 +183,21 @@ if (progress.next === 'resume') {
 `resume`; that action authorizes only the remaining source deposit after the
 confirmed allowance is re-read. Normal execution calls `execute` once.
 
+A prepared Aleo source transaction recovers to `resume`, which broadcasts its
+exact serialized transaction. A prepared private Aleo destination mint
+recovers to `complete` with the same guarantee. Use `onProgress` for timing and
+UI updates around Aleo proving:
+
+```ts
+await bridge.execute({
+  plan,
+  onProgress(event) {
+    console.log(event.type)
+  },
+  onCheckpoint: saveCheckpoint,
+})
+```
+
 For Solana, the active inbound route is native SOL:
 
 ```ts
@@ -200,7 +218,9 @@ const execution = await bridge.execute({
 ```
 
 The quote reads the deployed IGP, the live fee for the compiled message, and
-the execution preflight reads current rent exemptions. Confirmation searches
+current rent exemptions. Its `totalLamports` is the executable balance
+requirement: bridged amount, IGP payment, network fee, and required account
+rent. Confirmation searches
 transaction history and records blockhash expiry. `recover({ checkpoint })`
 checks an existing signature without signing or resubmitting.
 
@@ -260,6 +280,15 @@ The namespaces expose the same reviewed adapters used by the generic actions:
 `xreserve.aleoToEvm.execute`. Pass `registry` inside the helper parameters only
 when overriding the default registry. Pure call construction remains under the
 standalone `build*` utilities.
+
+An Aleo-origin xReserve quote subtracts the deployed 2 USDCx withdrawal fee
+and rejects amounts that cannot leave a positive destination amount. An
+Aleo-origin Hyperlane quote reports the exact public hook payment in
+`paymentMicrocredits`; `executionFeeMicrocredits` and `totalMicrocredits` are
+`null` because an execution fee is available only after account-authorized
+transaction construction. When an Aleo-origin Hyperlane destination client is
+configured, status polling verifies delivery from the destination balance
+increase because the explorer does not currently index Aleo-origin messages.
 
 ## Breaking migration from earlier release candidates
 
@@ -343,9 +372,11 @@ network fees, rent, and interchain gas payments remain additional costs.
 | `solana-hyperlane` | `BRIDGE_LIVE_SOLANA_RPC_URL`, `BRIDGE_LIVE_ALEO_MAINNET_RECIPIENT` |
 | `aleo-hyperlane` | `BRIDGE_LIVE_ALEO_HYPERLANE_ROUTE_ID`, `BRIDGE_LIVE_HYPERLANE_DESTINATION_RECIPIENT` |
 
-Each journey writes a mode-`0600` checkpoint immediately after receiving each
-submitted transaction identifier. A rerun with that checkpoint verifies the
-existing transaction and never repeats an irreversible transfer. Passing requires a
+Each journey writes a mode-`0600` checkpoint at every supported prepared and
+submitted transaction boundary. Local Aleo transactions are durable before
+broadcast; EVM, Solana, and injected-wallet APIs can checkpoint only after
+their submission method returns. A rerun verifies the existing transaction or
+broadcasts the exact prepared Aleo transaction. Passing requires a
 confirmed source transaction plus route-appropriate destination evidence: an
 accepted private mint, a Hyperlane destination transaction, or an observed EVM
 balance increase. Use dedicated minimally funded accounts; the tests never

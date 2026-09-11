@@ -35,8 +35,11 @@ steps without signing or moving funds.
 
 Fund-moving actions accept an optional `onCheckpoint` hook. The compact value
 contains its format version, public transfer intent, resolved route, and
-submitted transaction identifiers. It excludes wallet secrets, private-mint
-nonces, records, proofs, and protocol response bodies.
+transaction recovery data. Local Aleo clients emit a fully proved serialized
+transaction before broadcast and a submitted identifier afterward. EVM,
+Solana, and injected-wallet APIs checkpoint after their submission method
+returns. Checkpoints exclude wallet secrets, private-mint nonces, records,
+proofs, and Circle response bodies.
 
 ```ts
 const execution = await bridge.execute({
@@ -56,9 +59,18 @@ const progress = await bridge.recover({
 
 `recover` rebuilds the runtime plan and returns `next: 'wait' | 'resume' |
 'complete' | 'done' | 'failed'`. `wait({ progress })` polls to the next caller
-boundary, `resume({ progress })` continues an approval-interrupted source flow,
-and `complete({ progress })` authorizes a private destination mint. The
+boundary, `resume({ progress })` continues an approval-interrupted source flow
+or broadcasts the exact checkpointed Aleo source transaction. A prepared Aleo
+private mint recovers to `complete({ progress })`, which broadcasts that exact
+destination transaction. The
 lower-level `getStatus` and `waitForStatus` remain available for exact states.
+
+`onProgress` reports Aleo proving boundaries for UI and timing instrumentation.
+Solana quotes include the bridged amount, IGP payment, network fee, and required
+rent in `totalLamports`. Aleo xReserve withdrawals subtract the deployed 2
+USDCx fee and require a positive net amount. Aleo Hyperlane quotes report the
+public hook payment; their account-specific execution fee and total remain
+`null` until transaction construction.
 
 Hyperlane routes marked `metadata-required` are known route families whose
 complete execution deployment has not been pinned yet. Applications MUST NOT

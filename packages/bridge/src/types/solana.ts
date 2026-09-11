@@ -84,13 +84,15 @@ export type QuoteSolanaHyperlaneTransferParameters = {
  * @property amountLamports Amount to be transferred, in lamports.
  * @property igpPaymentLamports Interchain gas paymaster payment required for destination delivery, in lamports.
  * @property networkFeeLamports Solana network fee estimated for the transaction, in lamports.
- * @property totalLamports Sum of the amount, gas payment, and network fee, in lamports.
+ * @property rentLamports Rent-exempt funding for the gas-payment account, dispatched-message account, and fee payer, in lamports.
+ * @property totalLamports Executable balance requirement: amount, gas payment, network fee, and rent, in lamports.
  */
 export type SolanaHyperlaneTransferQuote = {
   routeId: string
   amountLamports: bigint
   igpPaymentLamports: bigint
   networkFeeLamports: bigint
+  rentLamports: bigint
   totalLamports: bigint
 }
 

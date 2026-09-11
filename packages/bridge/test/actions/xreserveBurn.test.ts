@@ -98,6 +98,16 @@ describe('xReserve USDCx burns', () => {
     })).toThrow(/Unsupported USDCx burn mode/)
   })
 
+  it('rejects a burn that cannot cover the deployed withdrawal fee', () => {
+    const transferPlan = plan()
+    const feeOnlyPlan = { ...transferPlan, amountIn: '2' }
+
+    expect(() => buildXReserveBurnCall(DEFAULT_BRIDGE_REGISTRY, {
+      plan: feeOnlyPlan,
+      mode: 'public-as-signer',
+    })).toThrow(/must exceed.*2 USDCx/i)
+  })
+
   it('submits the burn and returns service-forwarded resumable state', async () => {
     const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
       .mockResolvedValue('at1burn')

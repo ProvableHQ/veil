@@ -7,7 +7,7 @@ import {
   type BridgeChainClients,
 } from '../connections/resolve.js'
 import type { XReserveBurnMode } from '../types/aleo.js'
-import type { BridgeRegistry } from '../types/protocol.js'
+import type { BridgeReceipt, BridgeRegistry } from '../types/protocol.js'
 import type { ExecuteParameters, BridgeExecution } from '../types/actions.js'
 import { aleoAddressToBytes32 } from '../utils/xreserve.js'
 import * as aleoHyperlane from '../protocols/hyperlane/aleo.js'
@@ -17,11 +17,48 @@ import * as aleoToEvmXReserve from '../protocols/xreserve/aleoToEvm.js'
 import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
+import type { Transaction } from '@provablehq/veil-core'
+import { readDestinationBalance } from './internal/readDestinationBalance.js'
+import { parseDecimalAmount } from '../utils/units.js'
+
+type DeliveryVerification = {
+  destinationBalanceBeforeAtomic: string
+  expectedDestinationIncreaseAtomic: string
+}
+
+function withDeliveryVerification(
+  receipt: BridgeReceipt,
+  verification: DeliveryVerification | undefined,
+): BridgeReceipt {
+  return verification
+    ? { ...receipt, protocolState: { ...receipt.protocolState, ...verification } }
+    : receipt
+}
 
 function submissionCheckpoint(params: ExecuteParameters) {
   return params.onCheckpoint
     ? async (receipt: import('../types/protocol.js').BridgeReceipt) => {
         await params.onCheckpoint?.(createBridgeCheckpoint(params.plan, receipt))
+      }
+    : undefined
+}
+
+function preparedAleoCheckpoint(
+  params: ExecuteParameters,
+  verification?: DeliveryVerification,
+) {
+  return params.onCheckpoint
+    ? async (transaction: Transaction) => {
+        await params.onCheckpoint?.(createBridgeCheckpoint(params.plan, {
+          id: transaction.id,
+          protocol: params.plan.protocol,
+          status: 'SOURCE_SUBMISSION_PENDING',
+          protocolState: {
+            routeId: params.plan.route.id,
+            preparedTransaction: JSON.stringify(transaction),
+            ...verification,
+          },
+        }))
       }
     : undefined
 }
@@ -90,6 +127,24 @@ export async function execute(
   }
   if (params.plan.protocol === 'hyperlane' && chain.family === 'aleo') {
     const client = requireAleoClientWithWallet(registry, clients, chainId, 'execute Hyperlane transfer')
+    const destinationBalanceBefore = await readDestinationBalance(registry, clients, params.plan)
+    const verification = destinationBalanceBefore === undefined
+      ? undefined
+      : {
+          destinationBalanceBeforeAtomic: destinationBalanceBefore.toString(),
+          expectedDestinationIncreaseAtomic: parseDecimalAmount(
+            params.plan.amountIn,
+            params.plan.destinationAsset.decimals,
+          ).toString(),
+        }
+    const onAleoSubmitted = params.onCheckpoint
+      ? async (receipt: BridgeReceipt) => {
+          await params.onCheckpoint?.(createBridgeCheckpoint(
+            params.plan,
+            withDeliveryVerification(receipt, verification),
+          ))
+        }
+      : undefined
     const gasPaymentMicrocredits = params.gasPaymentMicrocredits ?? (await aleoHyperlane.quote(
       registry,
       requireAleoClient(registry, clients, chainId).publicClient,
@@ -100,9 +155,15 @@ export async function execute(
       mode: aleoHyperlaneMode(params.mode),
       privateFee: params.privateFee,
       gasPaymentMicrocredits,
-      onSubmitted,
+      onSubmitted: onAleoSubmitted,
+      onProgress: params.onProgress,
+      onPrepared: preparedAleoCheckpoint(params, verification),
     })
-    return { kind: 'aleo-hyperlane', ...execution }
+    return {
+      kind: 'aleo-hyperlane',
+      ...execution,
+      receipt: withDeliveryVerification(execution.receipt, verification),
+    }
   }
   if (params.plan.protocol === 'xreserve' && chain.family === 'evm') {
     const execution = await evmToAleoXReserve.execute(
@@ -129,6 +190,8 @@ export async function execute(
         merkleProof: params.merkleProof,
         privateFee: params.privateFee,
         onSubmitted,
+        onProgress: params.onProgress,
+        onPrepared: preparedAleoCheckpoint(params),
       },
     )
     return { kind: 'aleo-xreserve', ...execution }

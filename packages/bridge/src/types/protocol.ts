@@ -307,20 +307,24 @@ export type BridgeReceipt = {
 }
 
 /**
- * Records submitted transaction identifiers needed to recover a bridge transfer.
+ * Records prepared or submitted transaction data needed to recover a bridge transfer.
  *
  * The checkpoint excludes expanded registry objects, secrets, and protocol
- * response bodies. The caller stores it only for interrupted-process recovery.
+ * response bodies, except serialized Aleo transactions that become public on
+ * broadcast. The caller stores it only for interrupted-process recovery.
  *
  * @property version Serialization format version, currently `1`.
  * @property intent Public inputs used to reconstruct the runtime plan.
  * @property route Canonical route and registry version that bound execution.
- * @property source Submitted source approvals and transfer transaction.
+ * @property source Prepared or submitted source transactions.
  * @property source.approvalTransactionIds Source token approval transaction identifiers in submission order.
  * @property source.transactionId Irreversible source transfer transaction when submitted.
+ * @property source.preparedTransaction Fully proved Aleo transaction retained before broadcast for idempotent recovery.
  * @property source.hookData Public xReserve hook committed by a submitted approval sequence.
  * @property destination Caller-authorized destination transaction when submitted.
  * @property destination.transactionId Destination-chain transaction identifier.
+ * @property destination.preparedTransaction Fully proved Aleo destination transaction retained before broadcast for idempotent recovery.
+ * @property deliveryVerification Destination balance snapshot used when the protocol explorer does not index Aleo origins.
  */
 export type BridgeCheckpoint = {
   version: 1
@@ -333,8 +337,16 @@ export type BridgeCheckpoint = {
     approvalTransactionIds?: readonly string[] | undefined
     transactionId?: string | undefined
     hookData?: string | undefined
+    preparedTransaction?: { transactionId: string; serializedTransaction: string } | undefined
   } | undefined
-  destination?: { transactionId: string } | undefined
+  destination?: {
+    transactionId?: string | undefined
+    preparedTransaction?: { transactionId: string; serializedTransaction: string } | undefined
+  } | undefined
+  deliveryVerification?: {
+    balanceBeforeAtomic: string
+    expectedIncreaseAtomic: string
+  } | undefined
 }
 
 /**

@@ -567,6 +567,10 @@ export async function complete(
       plan.recipient,
     ],
     privateFee: params.privateFee ?? false,
+    onProgress: async (event) => {
+      await params.onProgress?.(event)
+      if (event.type === 'transaction-prepared') await params.onPrepared?.(event.transaction)
+    },
   })
   if (!transactionId) throw new BridgeError('Aleo wallet returned an empty private mint transaction id')
   const receipt: BridgeReceipt = {

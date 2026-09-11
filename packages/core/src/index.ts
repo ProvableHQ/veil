@@ -22,6 +22,8 @@ export type {
   RawSimulateResult,
   RawExecuteResult,
   RawTransitionResult,
+  ProvingProgressEvent,
+  ProvingProgressHandler,
 } from './types/proving.js'
 
 export type {

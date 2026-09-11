@@ -44,6 +44,38 @@ export async function recover(
   }
   let receipt: BridgeReceipt
   if (route.sourceChain.family === 'aleo') {
+    const deliveryVerification = checkpoint.deliveryVerification
+      ? {
+          destinationBalanceBeforeAtomic: checkpoint.deliveryVerification.balanceBeforeAtomic,
+          expectedDestinationIncreaseAtomic: checkpoint.deliveryVerification.expectedIncreaseAtomic,
+        }
+      : {}
+    const prepared = checkpoint.source?.preparedTransaction
+    if (prepared && !checkpoint.source?.transactionId) {
+      if (checkpoint.destination || (checkpoint.source?.approvalTransactionIds?.length ?? 0) > 0) {
+        throw new BridgeError('Bridge checkpoint contains transactions that are invalid for a prepared Aleo source route')
+      }
+      let decoded: unknown
+      try {
+        decoded = JSON.parse(prepared.serializedTransaction)
+      } catch (error) {
+        throw new BridgeError('Bridge checkpoint contains an invalid prepared Aleo transaction', { cause: error })
+      }
+      if (!decoded || typeof decoded !== 'object'
+        || (decoded as { id?: unknown }).id !== prepared.transactionId) {
+        throw new BridgeError('Bridge checkpoint prepared Aleo transaction id does not match its payload')
+      }
+      return toBridgeProgress(plan, {
+        id: prepared.transactionId,
+        protocol: plan.protocol,
+        status: 'SOURCE_SUBMISSION_PENDING',
+        protocolState: {
+          routeId: checkpoint.route.id,
+          preparedTransaction: prepared.serializedTransaction,
+          ...deliveryVerification,
+        },
+      })
+    }
     if (!checkpoint.source?.transactionId) {
       throw new BridgeError('Bridge checkpoint contains no submitted source transaction')
     }
@@ -57,7 +89,7 @@ export async function recover(
         protocol: plan.protocol,
         status: 'SOURCE_CONFIRMING',
         sourceTxId: checkpoint.source.transactionId,
-        protocolState: { routeId: checkpoint.route.id },
+        protocolState: { routeId: checkpoint.route.id, ...deliveryVerification },
       },
       signal: params.signal,
     })
@@ -107,7 +139,23 @@ export async function recover(
     plan,
     checkpoint,
   )
-  if (checkpoint.destination) {
+  const preparedDestination = checkpoint.destination?.preparedTransaction
+  if (preparedDestination && checkpoint.destination?.transactionId) {
+    throw new BridgeError('Bridge checkpoint cannot contain both prepared and submitted destination transactions')
+  }
+  if (preparedDestination) {
+    let decoded: unknown
+    try {
+      decoded = JSON.parse(preparedDestination.serializedTransaction)
+    } catch (error) {
+      throw new BridgeError('Bridge checkpoint contains an invalid prepared Aleo destination transaction', { cause: error })
+    }
+    if (!decoded || typeof decoded !== 'object'
+      || (decoded as { id?: unknown }).id !== preparedDestination.transactionId) {
+      throw new BridgeError('Bridge checkpoint prepared Aleo destination transaction id does not match its payload')
+    }
+  }
+  if (checkpoint.destination?.transactionId) {
     receipt = {
       ...receipt,
       status: 'DESTINATION_CONFIRMING',
@@ -120,6 +168,19 @@ export async function recover(
       receipt,
       signal: params.signal,
     })
+  }
+  if (preparedDestination) {
+    if (receipt.status !== 'DESTINATION_ACTION_REQUIRED') {
+      throw new BridgeError('Prepared destination transaction is no longer valid for the recovered bridge state')
+    }
+    receipt = {
+      ...receipt,
+      id: preparedDestination.transactionId,
+      protocolState: {
+        ...receipt.protocolState,
+        preparedDestinationTransaction: preparedDestination.serializedTransaction,
+      },
+    }
   }
   return toBridgeProgress(plan, receipt)
 }

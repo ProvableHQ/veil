@@ -166,4 +166,4 @@ export {
 } from './utils/hyperlane.js'
 
 export { BridgeError } from './errors/bridgeErrors.js'
-export { parseDecimalAmount } from './utils/units.js'
+export { formatDecimalAmount, parseDecimalAmount } from './utils/units.js'

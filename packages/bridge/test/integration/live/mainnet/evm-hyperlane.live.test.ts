@@ -8,7 +8,7 @@ import {
   type BridgeCheckpoint,
   type BridgeProgress,
 } from '../../../../src/index.js'
-import { loadLiveState, saveLiveState, waitForHyperlaneDelivery } from '../helpers.js'
+import { createLiveBenchmark, loadLiveState, saveLiveState, waitForHyperlaneDelivery } from '../helpers.js'
 import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, oneAtomicUnit, required } from '../config.js'
 
 const enabled = mainnetCaseEnabled('evm-hyperlane')
@@ -16,6 +16,7 @@ const ERC20_ABI = parseAbi(['function balanceOf(address owner) view returns (uin
 
 describe.skipIf(!enabled)('mainnet EVM Hyperlane bridge', () => {
   it('recovers and delivers one atomic unit from Ethereum to Aleo', async () => {
+    const benchmark = createLiveBenchmark('evm-hyperlane')
     const routeId = process.env.BRIDGE_LIVE_EVM_HYPERLANE_ROUTE_ID?.trim()
       || 'hyperlane:ethereum/eth->aleo/eth'
     const path = liveStatePath('mainnet', 'evm-hyperlane')
@@ -26,6 +27,7 @@ describe.skipIf(!enabled)('mainnet EVM Hyperlane bridge', () => {
     })
     const sender = await evm.walletClient!.getAddress()
     const bridge = createBridgeClient({ environment: 'mainnet', clients: { ethereum: evm } })
+    benchmark.mark('clients-created')
     const route = bridge.registry.routes.find((candidate) => candidate.id === routeId)
     if (!route) throw new Error(`Unknown configured bridge route: ${routeId}`)
     const source = bridge.registry.assets.find((asset) => asset.id === route.sourceAssetId)
@@ -39,12 +41,14 @@ describe.skipIf(!enabled)('mainnet EVM Hyperlane bridge', () => {
       recipient: required('BRIDGE_LIVE_ALEO_MAINNET_RECIPIENT'),
       sender,
     })
+    benchmark.mark('plan-prepared')
 
     let progress: BridgeProgress | undefined
     if (state.checkpoint) {
       progress = await bridge.recover({ checkpoint: state.checkpoint as BridgeCheckpoint })
     } else {
       const quote = await bridge.quote({ plan })
+      benchmark.mark('quote-returned')
       if (quote.kind !== 'evm-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
       if (quote.tokenAddress && quote.tokenAmountAtomic != null) {
         const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'balanceOf', args: [sender] })
@@ -60,12 +64,15 @@ describe.skipIf(!enabled)('mainnet EVM Hyperlane bridge', () => {
         plan,
         confirmationTimeoutMs: 0,
         onCheckpoint(checkpoint) {
+          benchmark.mark('checkpoint-saved')
           state.checkpoint = checkpoint
           state.sourceTxId = checkpoint.source?.transactionId ?? state.sourceTxId
           saveLiveState(path, state)
         },
       })
+      benchmark.mark('execute-returned')
       progress = await bridge.recover({ checkpoint: state.checkpoint as BridgeCheckpoint })
+      benchmark.mark('source-recovered')
     }
 
     if (progress.next === 'wait') progress = await bridge.wait({ progress })
@@ -88,6 +95,7 @@ describe.skipIf(!enabled)('mainnet EVM Hyperlane bridge', () => {
     saveLiveState(path, state)
 
     const delivery = await waitForHyperlaneDelivery(state.sourceTxId!)
+    benchmark.mark('destination-delivered')
     state.messageId = delivery.messageId
     state.destinationTxId = delivery.destinationTxId
     state.completed = true

@@ -12,6 +12,22 @@ export type LiveState = {
   checkpoint?: unknown
 }
 
+export function createLiveBenchmark(
+  label: string,
+  now: () => number = Date.now,
+  log: (message: string) => void = console.log,
+): { mark(step: string): void } {
+  const startedAt = now()
+  let previousAt = startedAt
+  return {
+    mark(step) {
+      const current = now()
+      log(`[${label}] ${step}: +${current - previousAt}ms (total ${current - startedAt}ms)`)
+      previousAt = current
+    },
+  }
+}
+
 export function loadLiveState(path: string, routeId: string): LiveState {
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown
@@ -81,12 +97,18 @@ export async function waitForHyperlaneDelivery(originTxHash: string): Promise<{ 
   })
 }
 
-export async function waitForAleoTransaction(client: { getTransaction(params: { id: string }): Promise<unknown> }, id: string): Promise<void> {
+export async function waitForAleoTransaction(
+  client: { getConfirmedTransaction(params: { id: string }): Promise<{ status: string } | null> },
+  id: string,
+): Promise<void> {
   await waitFor(async () => {
+    let confirmed: { status: string } | null
     try {
-      return await client.getTransaction({ id }) ? true : undefined
+      confirmed = await client.getConfirmedTransaction({ id })
     } catch {
       return undefined
     }
+    if (confirmed?.status === 'rejected') throw new Error(`Aleo transaction ${id} was rejected`)
+    return confirmed?.status === 'accepted' ? true : undefined
   })
 }

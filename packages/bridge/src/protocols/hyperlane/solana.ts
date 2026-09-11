@@ -40,7 +40,7 @@ function accountRole(kit: Awaited<ReturnType<typeof loadKit>>, account: SolanaAc
  * @param registry Reviewed deployment snapshot used to validate the prepared plan.
  * @param client Registry-selected Solana public capability.
  * @param params Prepared Solana Hyperlane plan.
- * @returns Atomic transfer amount, gas payment, network fee, and total.
+ * @returns Atomic transfer amount, gas payment, network fee, rent, and executable total.
  * @throws BridgeError When route metadata or live chain state is invalid.
  * @example const result = await quote(registry, client, { plan })
  */
@@ -81,13 +81,20 @@ export async function quote(
     }, transaction),
   )
   const compiled = kit.compileTransaction(message)
-  const networkFeeLamports = await rpc.getFeeForMessage(new Uint8Array(compiled.messageBytes))
+  const [networkFeeLamports, gasPaymentRent, dispatchedMessageRent, senderRent] = await Promise.all([
+    rpc.getFeeForMessage(new Uint8Array(compiled.messageBytes)),
+    rpc.getMinimumBalanceForRentExemption(GAS_PAYMENT_ACCOUNT_DATA_LENGTH),
+    rpc.getMinimumBalanceForRentExemption(DISPATCHED_MESSAGE_ACCOUNT_DATA_LENGTH),
+    rpc.getMinimumBalanceForRentExemption(0),
+  ])
+  const rentLamports = gasPaymentRent + dispatchedMessageRent + senderRent
   return {
     routeId: params.plan.route.id,
     amountLamports,
     igpPaymentLamports,
     networkFeeLamports,
-    totalLamports: amountLamports + igpPaymentLamports + networkFeeLamports,
+    rentLamports,
+    totalLamports: amountLamports + igpPaymentLamports + networkFeeLamports + rentLamports,
   }
 }
 
@@ -335,19 +342,13 @@ export async function execute(
   // the two accounts (gas-payment PDA, dispatched-message PDA) the
   // instruction creates fresh, and must still clear its own rent-exempt
   // floor once every one of those lamports has left it.
-  const [gasPaymentRent, dispatchedMessageRent, senderRent] = await Promise.all([
-    rpc.getMinimumBalanceForRentExemption(GAS_PAYMENT_ACCOUNT_DATA_LENGTH),
-    rpc.getMinimumBalanceForRentExemption(DISPATCHED_MESSAGE_ACCOUNT_DATA_LENGTH),
-    rpc.getMinimumBalanceForRentExemption(0),
-  ])
-  const rentLamports = gasPaymentRent + dispatchedMessageRent + senderRent
-  const requiredLamports = transferQuote.totalLamports + rentLamports
+  const requiredLamports = transferQuote.totalLamports
   const balance = await rpc.getBalance(senderAddress)
   if (balance < requiredLamports) {
     throw new BridgeError(
       `Insufficient Solana balance for this Hyperlane transfer: balance ${balance} lamports, `
       + `required ${requiredLamports} lamports (amount ${transferQuote.amountLamports} `
-      + `+ gas ${transferQuote.igpPaymentLamports + transferQuote.networkFeeLamports} + rent ${rentLamports})`,
+      + `+ gas ${transferQuote.igpPaymentLamports + transferQuote.networkFeeLamports} + rent ${transferQuote.rentLamports})`,
     )
   }
 

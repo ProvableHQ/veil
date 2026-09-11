@@ -60,7 +60,11 @@ describe('xReserve lifecycle', () => {
 
   it('completes a ready private mint through the native Veil wallet capability', async () => {
     const { plan, payload, messageHash, receipt } = await fixture()
-    const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>().mockResolvedValue('at1private')
+    const transaction = { type: 'execute', id: 'at1private', fee: {} } as never
+    const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>(async (params) => {
+      await params.onProgress?.({ type: 'transaction-prepared', transactionId: 'at1private', transaction })
+      return 'at1private'
+    })
     const ready: BridgeReceipt = {
       ...receipt,
       status: 'DESTINATION_ACTION_REQUIRED',
@@ -94,9 +98,60 @@ describe('xReserve lifecycle', () => {
       },
       route: { id: plan.route.id, registryVersion: plan.registryVersion },
       source: { transactionId: receipt.sourceTxId },
+      destination: {
+        preparedTransaction: {
+          transactionId: 'at1private',
+          serializedTransaction: JSON.stringify(transaction),
+        },
+      },
+    }, {
+      version: 1,
+      intent: {
+        source: { chain: 'sepolia', asset: 'usdc' },
+        destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+        bridgeProtocol: 'xreserve',
+        amount: '2',
+        recipient: RECIPIENT,
+        mintMode: 'private',
+      },
+      route: { id: plan.route.id, registryVersion: plan.registryVersion },
+      source: { transactionId: receipt.sourceTxId },
       destination: { transactionId: 'at1private' },
     }])
     expect(result.receipt.protocolState).toMatchObject({ payload, messageHash })
+  })
+
+  it('broadcasts an identical prepared destination transaction without prompting the wallet again', async () => {
+    const { plan, payload, messageHash, receipt } = await fixture()
+    const transaction = { type: 'execute', id: 'at1private', fee: {} }
+    const request = vi.fn(async () => 'at1private')
+    const ready: BridgeReceipt = {
+      ...receipt,
+      id: 'at1private',
+      status: 'DESTINATION_ACTION_REQUIRED',
+      nextAction: { kind: 'xreserve-private-mint', chainId: 'aleo-testnet' },
+      protocolState: {
+        ...receipt.protocolState,
+        attestation: SIGNATURE,
+        preparedDestinationTransaction: JSON.stringify(transaction),
+      },
+    }
+
+    const result = await complete(
+      DEFAULT_BRIDGE_REGISTRY,
+      { 'aleo-testnet': createAleoClient({ publicClient: { request } as never }) },
+      { progress: { next: 'complete', plan, receipt: ready } },
+    )
+
+    expect(request).toHaveBeenCalledWith({
+      method: 'sendTransaction',
+      params: { transaction: JSON.stringify(transaction) },
+    })
+    expect(result.receipt).toMatchObject({
+      status: 'DESTINATION_CONFIRMING',
+      destinationTxId: 'at1private',
+      protocolState: { payload, messageHash },
+    })
   })
 
   it('waits through read-only pending responses until the requested status', async () => {

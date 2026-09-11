@@ -220,6 +220,8 @@ describe('quoteAleoHyperlaneGasPayment', () => {
       gasPrice: 1000000000n,
       exchangeRate: 402n,
       paymentMicrocredits: 8174147n,
+      executionFeeMicrocredits: null,
+      totalMicrocredits: null,
     })
   })
 

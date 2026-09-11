@@ -7,7 +7,7 @@ import type {
   XReserveBurnExecution,
 } from '../../types/aleo.js'
 import type { BridgeRegistry, BridgeReceipt } from '../../types/protocol.js'
-import { parseDecimalAmount } from '../../utils/units.js'
+import { formatDecimalAmount, parseDecimalAmount } from '../../utils/units.js'
 import { evmAddressToXReserveBytes32, xReserveHexToAleoBytes } from '../../utils/xreserve.js'
 
 const ETHEREUM_DESTINATION_DOMAIN = 0
@@ -26,11 +26,13 @@ function validatedRoute(registry: BridgeRegistry, params: ExecuteXReserveBurnPar
   const wrapperProgram = route.metadata?.wrapperProgram
   const tokenProgram = route.metadata?.remoteToken
   const nativeDomain = route.metadata?.ethereumDestinationDomain
+  const withdrawalFee = route.metadata?.withdrawalFeeAtomic
   if (typeof bridgeProgram !== 'string' || !bridgeProgram.endsWith('.aleo')) throw new BridgeError(`xReserve bridge program is invalid: ${route.id}`)
   if (typeof wrapperProgram !== 'string' || !wrapperProgram.endsWith('.aleo')) throw new BridgeError(`xReserve wrapper program is invalid: ${route.id}`)
   if (typeof tokenProgram !== 'string' || !tokenProgram.endsWith('.aleo')) throw new BridgeError(`xReserve token program is invalid: ${route.id}`)
+  if (typeof withdrawalFee !== 'string' || !/^\d+$/.test(withdrawalFee)) throw new BridgeError(`xReserve withdrawal fee is invalid: ${route.id}`)
   if (nativeDomain !== ETHEREUM_DESTINATION_DOMAIN) throw new BridgeError(`xReserve Ethereum destination domain must be ${ETHEREUM_DESTINATION_DOMAIN}: ${route.id}`)
-  return { route, bridgeProgram, wrapperProgram, tokenProgram, nativeDomain }
+  return { route, bridgeProgram, wrapperProgram, tokenProgram, nativeDomain, withdrawalFeeAtomic: BigInt(withdrawalFee) }
 }
 
 function assertPrivateInputs(userRecord: TransactionInput | undefined, merkleProof: string | undefined, tokenProgram: string): asserts userRecord is TransactionInput {
@@ -69,6 +71,10 @@ export function buildBurnCall(
   if (mode !== 'public-as-signer' && mode !== 'public' && mode !== 'private') throw new BridgeError(`Unsupported USDCx burn mode: ${String(mode)}`)
   const amountAtomic = parseDecimalAmount(params.plan.amountIn, params.plan.sourceAsset.decimals)
   if (amountAtomic <= 0n) throw new BridgeError('USDCx burn amount must be greater than zero')
+  if (amountAtomic <= deployment.withdrawalFeeAtomic) {
+    const fee = formatDecimalAmount(deployment.withdrawalFeeAtomic, params.plan.sourceAsset.decimals)
+    throw new BridgeError(`USDCx burn amount must exceed the ${fee} ${params.plan.sourceAsset.symbol} withdrawal fee`)
+  }
   const nativeRecipientBytes32 = evmAddressToXReserveBytes32(params.plan.recipient)
   const amount = `${amountAtomic}u128`
   const nativeDomain = `${deployment.nativeDomain}u32`
@@ -130,6 +136,10 @@ export async function execute(
     function: call.function,
     inputs: call.inputs,
     privateFee: params.privateFee ?? false,
+    onProgress: async (event) => {
+      await params.onProgress?.(event)
+      if (event.type === 'transaction-prepared') await params.onPrepared?.(event.transaction)
+    },
   })
   if (!transactionId) throw new BridgeError('Aleo wallet returned an empty burn transaction id')
   const receipt: BridgeReceipt = {

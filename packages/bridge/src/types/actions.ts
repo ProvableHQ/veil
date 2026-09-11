@@ -1,4 +1,4 @@
-import type { TransactionInput } from '@provablehq/veil-core'
+import type { ProvingProgressHandler, TransactionInput } from '@provablehq/veil-core'
 import type {
   AleoHyperlaneGasQuote,
   AleoHyperlaneTransferRemoteExecution,
@@ -78,13 +78,14 @@ export type BridgeQuote =
  * @property plan Pure transfer plan returned by `prepare`.
  * @property pollingIntervalMs Delay between source confirmation checks. Defaults to 1,000 milliseconds where polling applies.
  * @property confirmationTimeoutMs Maximum source confirmation wait. Defaults to 120,000 milliseconds where polling applies.
- * @property onCheckpoint Optional durable hook receiving a compact checkpoint immediately after each source transaction is broadcast.
+ * @property onCheckpoint Optional durable hook receiving compact recovery state before supported local Aleo broadcasts and after every submission.
  * @property mode Aleo Hyperlane caller mode or xReserve burn mode. Defaults to `caller` for Hyperlane and `private` for xReserve.
  * @property userRecord Wallet record request or encoded USDCx record required by a private Aleo xReserve burn.
  * @property merkleProof Encoded `[MerkleProof; 2]` literal required by a private Aleo xReserve burn.
  * @property privateFee Whether an Aleo wallet pays its execution fee privately. Defaults to false.
  * @property gasPaymentMicrocredits Optional exact Aleo Hyperlane hook payment override. Defaults to a fresh live quote.
  * @property privateMintSecretNonce Secret Aleo scalar committed by a private xReserve deposit. Defaults to `0scalar` and is never persisted in a checkpoint.
+ * @property onProgress Optional awaited callback for Aleo proving and submission boundaries. Non-Aleo routes emit no events.
  */
 export type ExecuteParameters = {
   plan: BridgePlan
@@ -97,6 +98,7 @@ export type ExecuteParameters = {
   privateFee?: boolean | undefined
   gasPaymentMicrocredits?: bigint | undefined
   privateMintSecretNonce?: string | undefined
+  onProgress?: ProvingProgressHandler | undefined
 }
 
 /** Identifies the route implementation that submitted a transfer. */
@@ -151,12 +153,14 @@ export type WaitForStatusParameters = GetStatusParameters & {
  *
  * @property privateMintSecretNonce Secret Aleo scalar required by a private xReserve mint. Defaults to `0scalar`.
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
- * @property onCheckpoint Durable hook called immediately after destination broadcast.
+ * @property onCheckpoint Durable hook called before supported local Aleo broadcast and again after destination submission.
+ * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
  */
 type CompleteOptions = {
   privateMintSecretNonce?: string | undefined
   privateFee?: boolean | undefined
   onCheckpoint?: ((checkpoint: BridgeCheckpoint) => void | Promise<void>) | undefined
+  onProgress?: ProvingProgressHandler | undefined
 }
 
 /**
@@ -170,7 +174,7 @@ type CompleteOptions = {
  * @property receipt Ready receipt for an uninterrupted in-memory flow.
  * @property privateMintSecretNonce Secret Aleo scalar required by a private xReserve mint. Defaults to `0scalar` and must match the source deposit.
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
- * @property onCheckpoint Optional durable hook called immediately after destination broadcast.
+ * @property onCheckpoint Optional durable hook called before supported local Aleo broadcast and again after destination submission.
  */
 export type CompleteParameters = CompleteOptions & (
   | { progress: Extract<BridgeProgress, { next: 'complete' }>, plan?: never, receipt?: never }

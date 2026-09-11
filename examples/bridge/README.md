@@ -74,15 +74,17 @@ export ALEO_TRANSACTION_TIMEOUT_MS='300000'
 
 Private mint always uses delegated proving. The wrapper circuit is too large
 for the local WASM proving path's practical memory limits. While DPS is proving,
-the script prints a progress message every 15 seconds; the Aleo transaction id
-becomes available after DPS broadcasts it and the SDK confirms acceptance.
+the script reports lifecycle timing. DPS returns a proved transaction and the
+SDK broadcasts it through the configured Aleo transport.
 
 ### Recover an interrupted private deposit
 
 Durable recovery is optional. A production application may store the compact
 value passed to `onCheckpoint`; an uninterrupted script can keep the returned
 receipt only in memory. The checkpoint contains the public transfer intent,
-resolved route version, and submitted transaction identifiers. It does not
+resolved route version, submitted transaction identifiers, and—for local Aleo
+accounts—a fully proved serialized transaction before broadcast. That
+transaction is public once submitted. It does not
 contain a private key, private-mint nonce, decrypted record, proof, or Circle
 response body.
 
@@ -317,8 +319,11 @@ The hook payment is requoted immediately before proving. Delegated proving is
 the default; `ALEO_CONSUMER_ID`, `ALEO_DPS_API_KEY`, `ALEO_RPC_URL`,
 `ALEO_PROVER_URL`, `ALEO_USE_FEE_MASTER`, `ALEO_PRIVATE_FEE`, and
 `ALEO_EXECUTION_CONFIRMATION_TIMEOUT_MS` are optional overrides. The hook
-payment always comes from public credits even when FeeMaster pays the Aleo
-transaction fee. Hyperlane relayers deliver the accepted message and release
+payment always comes from public credits. FeeMaster is disabled by default and
+must be enabled only when the configured proving service grants that
+capability; it covers the Aleo execution fee, not the hook payment. The public
+quote cannot know the account-specific execution fee, so it reports that fee
+and the total as `null`. Hyperlane relayers deliver the accepted message and release
 WBTC on Ethereum independently of this process.
 
 # Aleo ETH to Ethereum ETH

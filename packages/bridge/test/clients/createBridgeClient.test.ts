@@ -106,12 +106,12 @@ describe('createBridgeClient', () => {
     await expect(client.quote({ plan })).rejects.toThrow(/EVM wallet client is required to quote xReserve transfer/)
   })
 
-  it('returns the prepared estimate when an Aleo xReserve burn has no live quote', async () => {
+  it('returns the deployed fee and net output when an Aleo xReserve burn has no live query', async () => {
     const client = createBridgeClient()
     const plan = client.prepare({
       source: { chain: 'aleo', asset: 'usdcx' },
       destination: { chain: 'ethereum', asset: 'usdc' },
-      amount: '1',
+      amount: '2.000001',
       recipient: '0x0000000000000000000000000000000000000001',
     })
 
@@ -119,8 +119,15 @@ describe('createBridgeClient', () => {
       kind: 'aleo-xreserve',
       routeId: plan.route.id,
       protocol: 'xreserve',
-      amountIn: '1',
-      fees: [],
+      amountIn: '2.000001',
+      amountOut: '0.000001',
+      fees: [{
+        kind: 'protocol',
+        chainId: 'aleo',
+        assetId: 'aleo/usdcx',
+        amount: '2',
+        estimated: false,
+      }],
       status: 'not-queried',
     })
   })

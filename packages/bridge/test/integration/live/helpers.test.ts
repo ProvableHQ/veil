@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mainnetCaseEnabled, mainnetExecutionEnabled, oneAtomicUnit } from './config.js'
-import { loadLiveState, saveLiveState, waitForHyperlaneDelivery } from './helpers.js'
+import { createLiveBenchmark, loadLiveState, saveLiveState, waitForAleoTransaction, waitForHyperlaneDelivery } from './helpers.js'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -11,6 +11,18 @@ afterEach(() => {
 })
 
 describe('live bridge checkpoints', () => {
+  it('reports per-step and total elapsed time', () => {
+    const times = [1_000, 1_250, 1_900]
+    const log = vi.fn()
+    const benchmark = createLiveBenchmark('route', () => times.shift()!, log)
+
+    benchmark.mark('quote')
+    benchmark.mark('submit')
+
+    expect(log).toHaveBeenNthCalledWith(1, '[route] quote: +250ms (total 250ms)')
+    expect(log).toHaveBeenNthCalledWith(2, '[route] submit: +650ms (total 900ms)')
+  })
+
   it('round-trips a route-bound checkpoint and starts only for an absent file', () => {
     const directory = mkdtempSync(join(tmpdir(), 'bridge-live-state-'))
     const path = join(directory, 'state.json')
@@ -89,6 +101,19 @@ describe('Hyperlane live delivery', () => {
 
     await expect(waitForHyperlaneDelivery('0xsource')).rejects.toThrow(
       'Hyperlane explorer query failed: invalid bytea input',
+    )
+  })
+})
+
+describe('Aleo live confirmation', () => {
+  it('rejects a transaction whose execution was rejected on chain', async () => {
+    const client = {
+      getTransaction: vi.fn(async () => ({})),
+      getConfirmedTransaction: vi.fn(async () => ({ status: 'rejected' })),
+    }
+
+    await expect(waitForAleoTransaction(client, 'at1rejected')).rejects.toThrow(
+      'Aleo transaction at1rejected was rejected',
     )
   })
 })

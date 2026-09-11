@@ -10,6 +10,7 @@ import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { aleoAddressToBytes32 } from '../utils/xreserve.js'
 import { getSourceStatus as getEvmHyperlaneSourceStatus } from '../protocols/hyperlane/evm.js'
 import { getSourceStatus as getSolanaHyperlaneSourceStatus } from '../protocols/hyperlane/solana.js'
+import { readDestinationBalance } from './internal/readDestinationBalance.js'
 
 function withoutNextAction(receipt: BridgeReceipt): Omit<BridgeReceipt, 'nextAction'> {
   const { nextAction: _nextAction, ...rest } = receipt
@@ -95,6 +96,23 @@ export async function getStatus(
       requireSolanaClient(registry, clients, route.sourceChain.id),
       receipt,
     )
+  }
+
+  if (receipt.status === 'DELIVERY_PENDING'
+    && route.route.protocol === 'hyperlane'
+    && route.sourceChain.family === 'aleo') {
+    const before = receipt.protocolState.destinationBalanceBeforeAtomic
+    const expected = receipt.protocolState.expectedDestinationIncreaseAtomic
+    if (typeof before !== 'string' || !/^\d+$/.test(before)
+      || typeof expected !== 'string' || !/^\d+$/.test(expected)) {
+      return receipt
+    }
+    const current = await readDestinationBalance(registry, clients, params.plan)
+    if (current === undefined) {
+      throw new BridgeError(`No supported destination balance verifier is configured for ${route.destinationChain.id}`)
+    }
+    if (current < BigInt(before) + BigInt(expected)) return receipt
+    return { ...withoutNextAction(receipt), status: 'COMPLETED' }
   }
 
   if (route.route.protocol !== 'xreserve' || route.sourceChain.family !== 'evm' || route.destinationChain.family !== 'aleo') {

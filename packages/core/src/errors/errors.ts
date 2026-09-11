@@ -272,20 +272,26 @@ export class TransactionTimeoutError extends BaseError {
  * (mappings, balances) changed since the inputs were built — re-read state
  * and retry with fresh inputs.
  *
- * @property transactionId ID of the rejected transaction.
+ * @property transactionId Original execution transaction ID used for confirmation lookup.
+ * @property feeTransactionId Confirmed fee-only transaction ID recorded by the chain when available.
  */
 export class FinalizeRevertError extends BaseError {
   readonly transactionId: string
+  readonly feeTransactionId?: string
 
-  constructor(transactionId: string, options?: ErrorOptions) {
+  constructor(transactionId: string, options?: ErrorOptions & { feeTransactionId?: string }) {
+    const feeTransaction = options?.feeTransactionId
+      ? ` The consumed fee is recorded in ${options.feeTransactionId}.`
+      : ''
     super(
       `Transaction ${transactionId} was rejected — the finalize block reverted on-chain. ` +
-      'The base fee has been consumed. Check that on-chain state (mappings, balances) ' +
+      `The base fee has been consumed.${feeTransaction} Check that on-chain state (mappings, balances) ` +
       'still matches your expectations and retry with fresh inputs.',
       options,
     )
     this.name = 'FinalizeRevertError'
     this.transactionId = transactionId
+    if (options?.feeTransactionId) this.feeTransactionId = options.feeTransactionId
   }
 }
 

@@ -14,6 +14,7 @@ import * as evmHyperlane from '../protocols/hyperlane/evm.js'
 import * as solanaHyperlane from '../protocols/hyperlane/solana.js'
 import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
+import { formatDecimalAmount, parseDecimalAmount } from '../utils/units.js'
 
 /**
  * Quotes a prepared transfer through its configured protocol and source chain.
@@ -69,13 +70,33 @@ export async function quote(
     return { kind: 'evm-xreserve', ...quote }
   }
   if (params.plan.protocol === 'xreserve' && chain.family === 'aleo') {
+    const rawFee = params.plan.route.metadata?.withdrawalFeeAtomic
+    if (typeof rawFee !== 'string' || !/^\d+$/.test(rawFee)) {
+      throw new BridgeError(`xReserve withdrawal fee is missing or invalid: ${params.plan.route.id}`)
+    }
+    const feeAtomic = BigInt(rawFee)
+    const amountAtomic = parseDecimalAmount(params.plan.amountIn, params.plan.sourceAsset.decimals)
+    const formattedFee = formatDecimalAmount(feeAtomic, params.plan.sourceAsset.decimals)
+    if (amountAtomic <= feeAtomic) {
+      throw new BridgeError(`xReserve burn amount must exceed the ${formattedFee} ${params.plan.sourceAsset.symbol} withdrawal fee`)
+    }
+    const amountOutAtomic = amountAtomic - feeAtomic
     return {
       kind: 'aleo-xreserve',
       routeId: params.plan.route.id,
       protocol: 'xreserve',
       amountIn: params.plan.amountIn,
-      ...(params.plan.amountOut == null ? {} : { amountOut: params.plan.amountOut }),
-      fees: [...params.plan.fees],
+      amountOut: formatDecimalAmount(amountOutAtomic, params.plan.destinationAsset.decimals),
+      fees: [
+        ...params.plan.fees,
+        {
+          kind: 'protocol',
+          chainId,
+          assetId: params.plan.sourceAsset.id,
+          amount: formattedFee,
+          estimated: false,
+        },
+      ],
       status: 'not-queried',
     }
   }

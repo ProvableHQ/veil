@@ -169,7 +169,19 @@ export async function quote(
   if (paymentMicrocredits <= 0n || paymentMicrocredits > MAX_U64) {
     throw new BridgeError(`Hyperlane hook payment does not fit a positive u64: ${paymentMicrocredits}`)
   }
-  return { routeId: route.id, gasLimit, gasOverhead, gasPrice, exchangeRate, paymentMicrocredits }
+  return {
+    routeId: route.id,
+    gasLimit,
+    gasOverhead,
+    gasPrice,
+    exchangeRate,
+    paymentMicrocredits,
+    // A public quote cannot authorize the program execution needed to price
+    // its Aleo network fee. Keep the absent total explicit so callers do not
+    // mistake the Hyperlane hook payment for their complete balance need.
+    executionFeeMicrocredits: null,
+    totalMicrocredits: null,
+  }
 }
 
 /**
@@ -298,6 +310,10 @@ export async function execute(
     function: call.function,
     inputs: call.inputs,
     privateFee: params.privateFee ?? false,
+    onProgress: async (event) => {
+      await params.onProgress?.(event)
+      if (event.type === 'transaction-prepared') await params.onPrepared?.(event.transaction)
+    },
   })
   if (!transactionId) throw new BridgeError('Aleo wallet returned an empty Hyperlane transaction id')
   const receipt: BridgeReceipt = {

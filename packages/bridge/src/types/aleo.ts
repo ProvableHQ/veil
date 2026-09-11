@@ -1,4 +1,4 @@
-import type { TransactionInput, WalletClient } from '@provablehq/veil-core'
+import type { ProvingProgressHandler, Transaction, TransactionInput, WalletClient } from '@provablehq/veil-core'
 import type { BridgePlan, BridgeReceipt } from './protocol.js'
 import type { XReserveAttestationResult } from './xreserve.js'
 
@@ -20,6 +20,8 @@ export type AleoWalletClient = Pick<WalletClient, 'executeTransaction'>
  * @property attestation Completed Circle payload and signature response.
  * @property privateFee Whether the Aleo wallet should pay its fee privately. Defaults to false.
  * @property onSubmitted Durable checkpoint hook called immediately after the wallet returns a transaction id.
+ * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
+ * @property onPrepared Durable callback invoked with a fully proved transaction before network broadcast.
  */
 export type ExecuteXReservePrivateMintParameters = {
   plan: BridgePlan
@@ -28,6 +30,8 @@ export type ExecuteXReservePrivateMintParameters = {
   attestation: XReserveAttestationResult
   privateFee?: boolean | undefined
   onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
+  onProgress?: ProvingProgressHandler | undefined
+  onPrepared?: ((transaction: Transaction) => void | Promise<void>) | undefined
 }
 
 /**
@@ -76,6 +80,8 @@ export type XReserveBurnCall = {
  * @property merkleProof Encoded `[MerkleProof; 2]` Aleo literal. Required only for `private`.
  * @property privateFee Whether the Aleo wallet should pay its fee privately. Defaults to false.
  * @property onSubmitted Durable checkpoint hook called immediately after the wallet returns a transaction id.
+ * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
+ * @property onPrepared Durable callback invoked with a fully proved transaction before network broadcast.
  */
 export type ExecuteXReserveBurnParameters = {
   plan: BridgePlan
@@ -84,6 +90,8 @@ export type ExecuteXReserveBurnParameters = {
   merkleProof?: string | undefined
   privateFee?: boolean | undefined
   onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
+  onProgress?: ProvingProgressHandler | undefined
+  onPrepared?: ((transaction: Transaction) => void | Promise<void>) | undefined
 }
 
 /**
@@ -118,6 +126,8 @@ export type QuoteAleoHyperlaneGasPaymentParameters = {
  * @property gasPrice Destination gas price reported by the on-chain oracle.
  * @property exchangeRate Destination-to-Aleo exchange rate reported by the on-chain oracle.
  * @property paymentMicrocredits Exact hook payment in microcredits (u64) the transfer must allow.
+ * @property executionFeeMicrocredits Always `null`; calculating the Aleo execution fee requires building an account-authorized execution.
+ * @property totalMicrocredits Always `null` until an execution fee is available. The hook payment alone is not the sender's total cost.
  */
 export type AleoHyperlaneGasQuote = {
   routeId: string
@@ -126,6 +136,8 @@ export type AleoHyperlaneGasQuote = {
   gasPrice: bigint
   exchangeRate: bigint
   paymentMicrocredits: bigint
+  executionFeeMicrocredits: null
+  totalMicrocredits: null
 }
 
 /**
@@ -158,6 +170,8 @@ export type AleoHyperlaneTransferRemoteCall = {
  * @property gasPaymentMicrocredits Live hook payment in microcredits (u64) from `quote`. Optional for inspection-only call construction; required by the route-specific execution implementation.
  * @property onSubmitted Durable checkpoint hook called immediately after the wallet
  *   returns a transaction id.
+ * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
+ * @property onPrepared Durable callback invoked with a fully proved transaction before network broadcast.
  */
 export type ExecuteAleoHyperlaneTransferRemoteParameters = {
   plan: BridgePlan
@@ -165,6 +179,8 @@ export type ExecuteAleoHyperlaneTransferRemoteParameters = {
   privateFee?: boolean | undefined
   gasPaymentMicrocredits?: bigint | undefined
   onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
+  onProgress?: ProvingProgressHandler | undefined
+  onPrepared?: ((transaction: Transaction) => void | Promise<void>) | undefined
 }
 
 /**

@@ -208,4 +208,15 @@ describe('EVM bridge clients', () => {
     expect(getTransactionReceipt).toHaveBeenCalledWith({ hash })
     expect(providerRequest).not.toHaveBeenCalled()
   })
+
+  it('normalizes native balance reads on a direct viem public client', async () => {
+    const address = '0x0000000000000000000000000000000000000001' as const
+    const getBalance = vi.fn(async () => 42n)
+    const client = createEvmClient({
+      publicClient: { getBalance } as never,
+    })
+
+    await expect(client.publicClient.getBalance(address)).resolves.toBe(42n)
+    expect(getBalance).toHaveBeenCalledWith({ address })
+  })
 })

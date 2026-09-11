@@ -106,11 +106,13 @@ export type EvmReceipt = {
  * Exposes account-free EVM operations used by bridge actions.
  *
  * @property getChainId Reads the current EIP-155 chain id.
+ * @property getBalance Reads one account's native-currency balance in atomic units.
  * @property call Executes a read-only EVM call.
  * @property getTransactionReceipt Reads a receipt or returns `null` while unavailable.
  */
 export type EvmPublicClient = {
   getChainId: () => Promise<number>
+  getBalance: (address: Address) => Promise<bigint>
   call: (params: EvmCallParameters) => Promise<Hex>
   getTransactionReceipt: (hash: Hash) => Promise<EvmReceipt | null>
 }
@@ -235,6 +237,7 @@ function transportFor(transport: EvmTransport, defaultFetch: typeof globalThis.f
 function normalizePublicClient(client: PublicClient): EvmPublicClient {
   return {
     getChainId: () => client.getChainId(),
+    getBalance: (address) => client.getBalance({ address }),
     call: async (params) => (await client.call(params)).data ?? '0x',
     getTransactionReceipt: async (hash) => {
       try {

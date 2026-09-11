@@ -184,7 +184,7 @@ async function main(): Promise<void> {
     ...(process.env.ALEO_PROVER_URL?.trim() ? { proverUrl: process.env.ALEO_PROVER_URL.trim() } : {}),
     ...(consumerId && apiKey ? { consumerId, apiKey } : {}),
     ...(records ? { records } : {}),
-    useFeeMaster: booleanFromEnvironment('ALEO_USE_FEE_MASTER', true),
+    useFeeMaster: booleanFromEnvironment('ALEO_USE_FEE_MASTER', false),
     confirmationTimeout: millisecondsFromEnvironment('ALEO_EXECUTION_CONFIRMATION_TIMEOUT_MS', 5 * 60_000),
   })
   if (consumerId && apiKey) await nativeWalletClient.authenticateProvableApi()

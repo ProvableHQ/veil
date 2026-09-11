@@ -8,7 +8,7 @@ import {
   type BridgeCheckpoint,
   type BridgeProgress,
 } from '../../../../src/index.js'
-import { loadLiveState, saveLiveState } from '../helpers.js'
+import { createLiveBenchmark, loadLiveState, saveLiveState } from '../helpers.js'
 import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, required } from '../config.js'
 
 const enabled = mainnetCaseEnabled('evm-xreserve')
@@ -18,9 +18,10 @@ async function delegatedAleo(privateKey: string, apiKey: string) {
   const aleo = await loadNetwork('mainnet')
   return aleo.createAleoClient({
     privateKey,
-    networkUrl: 'https://api.provable.com/v2',
+    networkUrl: 'https://edge.provable.com/api/v2',
+    proverUrl: 'https://edge.provable.com/api/prove',
     provingMode: 'delegated',
-    apiKey,
+    auth: { mode: 'api-key', value: apiKey },
     confirmationTimeout: 10 * 60_000,
   })
 }
@@ -30,14 +31,16 @@ describe.skipIf(!enabled)('mainnet EVM xReserve bridge', () => {
     const routeId = 'xreserve:ethereum/usdc->aleo/usdcx'
     const path = liveStatePath('mainnet', 'evm-xreserve-recovery')
     const state = loadLiveState(path, routeId)
+    const benchmark = createLiveBenchmark('evm-xreserve')
     const evm = createEvmClient({
       transport: evmHttp(required('BRIDGE_LIVE_ETHEREUM_RPC_URL')),
       account: evmPrivateKey(required('BRIDGE_EVM_PRIVATE_KEY') as `0x${string}`),
     })
     const aleo = await delegatedAleo(
       required('BRIDGE_PRIVATE_KEY'),
-      required('ALEO_DPS_API_KEY'),
+      required('EDGE_PROVABLE_API_KEY'),
     )
+    benchmark.mark('clients-ready')
     const sender = await evm.walletClient!.getAddress()
     const bridge = createBridgeClient({
       environment: 'mainnet',
@@ -59,6 +62,7 @@ describe.skipIf(!enabled)('mainnet EVM xReserve bridge', () => {
     let progress: BridgeProgress
     if (!state.checkpoint) {
       const quote = await bridge.quote({ plan })
+      benchmark.mark('quote-ready')
       if (quote.kind !== 'evm-xreserve') throw new Error(`Unexpected quote kind: ${quote.kind}`)
       expect(quote.amountAtomic).toBe(2_000_000n)
       console.table({ route: routeId, amount: plan.amountIn, sender, recipient: plan.recipient, maximumProtocolFeeAtomic: quote.maxFeeAtomic.toString() })
@@ -72,6 +76,7 @@ describe.skipIf(!enabled)('mainnet EVM xReserve bridge', () => {
           saveLiveState(path, state)
         },
       })
+      benchmark.mark('source-execute-returned')
     }
 
     // Recovery is intentionally performed by a newly constructed public-only
@@ -84,7 +89,9 @@ describe.skipIf(!enabled)('mainnet EVM xReserve bridge', () => {
       },
     })
     progress = await recoveryBridge.recover({ checkpoint: state.checkpoint as BridgeCheckpoint })
+    benchmark.mark('recovered')
     if (progress.next === 'wait') progress = await recoveryBridge.wait({ progress })
+    benchmark.mark('source-wait-returned')
     if (progress.next === 'resume') {
       if (!mainnetExecutionEnabled()) return
       const resumed = await bridge.resume({
@@ -104,15 +111,21 @@ describe.skipIf(!enabled)('mainnet EVM xReserve bridge', () => {
       if (!mainnetExecutionEnabled()) return
       const completed = await bridge.complete({
         progress,
+        onProgress(event) {
+          benchmark.mark(event.type)
+        },
         onCheckpoint(checkpoint) {
           state.checkpoint = checkpoint
           state.destinationTxId = checkpoint.destination?.transactionId
           saveLiveState(path, state)
+          benchmark.mark('destination-checkpoint-saved')
         },
       })
+      benchmark.mark('complete-returned')
       progress = await recoveryBridge.wait({
         progress: { next: 'wait', plan: progress.plan, receipt: completed.receipt },
       })
+      benchmark.mark('destination-wait-returned')
     }
     if (progress.next === 'failed') throw new Error(progress.error)
     if (progress.next !== 'done') {
