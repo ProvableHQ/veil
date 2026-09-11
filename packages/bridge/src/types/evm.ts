@@ -1,37 +1,5 @@
 import type { Address, Hash, Hex } from 'viem'
-import type { BridgeTransferPlan, BridgeTransferReceipt } from './protocol.js'
-import type { AleoBridgeExecutor } from './aleo.js'
-import type { SolanaBridgeExecutor } from './solana.js'
-
-/**
- * Sends JSON-RPC requests through an injected or application-provided EVM wallet.
- *
- * The shape is compatible with EIP-1193 providers exposed by wallets such as
- * MetaMask and Phantom. The bridge package never reads a runtime global.
- *
- * @property request Executes one EIP-1193 request, which may prompt the wallet for transaction approval.
- * @property account Optional connected account. When omitted, the executor resolves the first `eth_accounts` entry.
- */
-export type EvmBridgeExecutor = {
-  request: (args: {
-    method: string
-    params?: readonly unknown[] | Record<string, unknown> | undefined
-  }) => Promise<unknown>
-  account?: Address | undefined
-}
-
-/**
- * Groups optional chain executors supplied to a bridge client.
- *
- * @property evm EIP-1193 executor used by Ethereum bridge actions when present.
- * @property aleo Wallet client used only for user-authorized Aleo transactions such as private USDCx minting.
- * @property solana Wallet executor used by Solana Hyperlane bridge actions when present.
- */
-export type BridgeExecutors = {
-  evm?: EvmBridgeExecutor | undefined
-  aleo?: AleoBridgeExecutor | undefined
-  solana?: SolanaBridgeExecutor | undefined
-}
+import type { BridgePlan, BridgeReceipt } from './protocol.js'
 
 /** Identifies the Ethereum Hyperlane router's collateral model. */
 export type EvmHyperlaneRouterType = 'native' | 'collateral'
@@ -66,13 +34,13 @@ export type EvmHyperlaneRouteMetadata = {
 }
 
 /**
- * Selects a prepared Ethereum Hyperlane transfer for live fee quoting.
+ * Supplies an Ethereum-to-Aleo Hyperlane transfer for current fee calculation.
  *
- * @property plan Pure transfer plan returned by `prepareTransfer`.
+ * @property plan Route, assets, amount, and recipient selected for the transfer.
  * @property recipientBytes32 Aleo recipient in the exact 32-byte encoding expected by the enrolled Warp Route.
  */
 export type QuoteEvmHyperlaneTransferParameters = {
-  plan: BridgeTransferPlan
+  plan: BridgePlan
   recipientBytes32: Hex
 }
 
@@ -109,16 +77,20 @@ export type EvmHyperlaneTransferQuote = {
  * The action requotes immediately before submission. ERC-20 allowance is
  * checked first and only insufficient allowances generate approval calls.
  *
- * @property plan Pure transfer plan returned by `prepareTransfer`.
+ * @property plan Route, assets, amount, and recipient selected for the transfer.
  * @property recipientBytes32 Aleo recipient in the exact 32-byte encoding expected by the enrolled Warp Route.
  * @property pollingIntervalMs Delay between transaction-receipt checks. Defaults to 1,000 milliseconds.
  * @property confirmationTimeoutMs Maximum time to wait for each approval or dispatch receipt. Defaults to 120,000 milliseconds; a timeout returns resumable pending state.
+ * @property resume Previously checkpointed approval or source receipt. Verification resumes without repeating its transaction.
+ * @property onSubmitted Durable checkpoint hook called after each approval or dispatch broadcast and before receipt polling begins.
  */
 export type ExecuteEvmHyperlaneTransferParameters = {
-  plan: BridgeTransferPlan
+  plan: BridgePlan
   recipientBytes32: Hex
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined
+  resume?: BridgeReceipt | undefined
+  onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
 }
 
 /**
@@ -128,6 +100,6 @@ export type ExecuteEvmHyperlaneTransferParameters = {
  * @property approvalTxIds ERC-20 approval transactions submitted before dispatch.
  */
 export type EvmHyperlaneTransferExecution = {
-  receipt: BridgeTransferReceipt
+  receipt: BridgeReceipt
   approvalTxIds: Hash[]
 }

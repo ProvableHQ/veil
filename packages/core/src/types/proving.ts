@@ -2,6 +2,31 @@ import type { Transaction } from './transaction.js'
 import type { Network } from './wallet.js'
 
 /**
+ * Reports an execution's proving and submission boundary.
+ *
+ * Events are ordered and callbacks are awaited, allowing callers to record
+ * timing or durably store a transaction identifier before later work begins.
+ * Not every account or proving mode emits every event.
+ *
+ * @property type Stable lifecycle boundary.
+ * @property transactionId Deterministic transaction identifier once proving has produced it.
+ * @property transaction Fully proved transaction exposed before local-account broadcast.
+ *
+ * @example
+ * const onProgress = (event: ProvingProgressEvent) => console.log(event.type)
+ */
+export type ProvingProgressEvent =
+  | { type: 'request-built' }
+  | { type: 'prover-submitted' }
+  | { type: 'prover-returned'; transactionId: string }
+  | { type: 'transaction-prepared'; transactionId: string; transaction: Transaction }
+  | { type: 'transaction-submitted'; transactionId: string }
+  | { type: 'transaction-confirmed'; transactionId: string }
+
+/** Receives one proving lifecycle boundary and may delay the next operation. */
+export type ProvingProgressHandler = (event: ProvingProgressEvent) => void | Promise<void>
+
+/**
  * Options for building an execution transaction.
  *
  * `imports` are program names the caller knows will be reached via
@@ -20,6 +45,7 @@ import type { Network } from './wallet.js'
  * @property {string[]} inputs - Function inputs as Aleo-encoded strings (e.g. `'100u64'`, `'aleo1...'`).
  * @property {boolean} [privateFee] - If true, pay the fee from a private record instead of the public credits balance. Defaults to `false`. The fee record is resolved via the record provider; callers do not supply one.
  * @property {string[]} [imports] - Names of programs reached via dynamic dispatch that the prover can't discover statically.
+ * @property onProgress Optional awaited callback for proving lifecycle boundaries. Defaults to no reporting.
  */
 export type BuildTransactionOptions = {
   programName: string
@@ -27,6 +53,7 @@ export type BuildTransactionOptions = {
   inputs: string[]
   privateFee?: boolean | undefined
   imports?: string[] | undefined
+  onProgress?: ProvingProgressHandler | undefined
 }
 
 /**
@@ -43,6 +70,7 @@ export type SimulateOptions = {
   inputs: string[]
   programSource?: string | undefined
   programImports?: Record<string, string> | undefined
+  onProgress?: ProvingProgressHandler | undefined
 }
 
 /**
@@ -119,7 +147,7 @@ export type BuildDeploymentOptions = {
  * @property {'delegated' | 'local'} mode - Where proofs are produced. `'local'` builds in-process via the SDK's WASM binaries; `'delegated'` submits a proving request to a remote prover service (configured via `url`/`apiKey`).
  * @property {string} [url] - Prover service URL. Required for `mode: 'delegated'`, ignored otherwise.
  * @property {string} [apiKey] - API key for the prover service, if it requires one.
- * @property {boolean} [useFeeMaster] - If true, the delegated prover pays transaction fees from its own FeeMaster account on behalf of the caller. Only meaningful when `mode: 'delegated'` — a billing arrangement with the prover service, not a per-transaction flag.
+ * @property {boolean} [useFeeMaster] - If true, requests that the delegated prover pay transaction fees from its FeeMaster account. Defaults to `false`; enable only when the prover service has granted that capability.
  */
 export type ProvingConfig = {
   mode: 'delegated' | 'local' | 'devnode'
@@ -141,4 +169,3 @@ export type ProvingConfig = {
   /** Build, broadcast, wait for confirmation, and return raw output strings */
   execute?: (options: ExecuteOptions) => Promise<RawExecuteResult>
 }
-

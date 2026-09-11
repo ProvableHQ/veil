@@ -16,7 +16,8 @@ describe('createBridgeAgentTools', () => {
     const tool = createBridgeAgentTools(createBridgeClient())
       .find((entry) => entry.schema.name === 'bridge_prepare_transfer')!
     const plan = await tool.handler({
-      routeId: 'xreserve:aleo/usdcx->ethereum/usdc',
+      source: { chain: 'aleo', asset: 'usdcx' },
+      destination: { chain: 'ethereum', asset: 'usdc' },
       amount: '1',
       recipient: '0x0000000000000000000000000000000000000001',
     }) as { protocol: string }

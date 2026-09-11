@@ -1,18 +1,4 @@
-import type { BridgeTransferPlan, BridgeTransferReceipt } from './protocol.js'
-
-/**
- * Signs and submits a Solana transaction through an application-provided wallet.
- *
- * The shape is compatible with connected Solana wallet adapters. The bridge
- * package never reads a runtime global and never handles a private key directly.
- *
- * @property getAddress Reads the connected wallet's base58 public key. Hits the wallet, not the network.
- * @property signAndSendTransaction Prompts the wallet to sign a serialized transaction and broadcast it to the configured RPC endpoint.
- */
-export type SolanaBridgeExecutor = {
-  getAddress: () => Promise<string>
-  signAndSendTransaction: (wireTransaction: Uint8Array) => Promise<{ signature: string }>
-}
+import type { BridgePlan, BridgeReceipt } from './protocol.js'
 
 /**
  * Sends a Solana JSON-RPC POST request without coupling the bridge client to a runtime global.
@@ -22,7 +8,7 @@ export type SolanaBridgeExecutor = {
  */
 export type SolanaRpcHttpTransport = (
   url: string,
-  init: { method: 'POST'; headers: Record<string, string>; body: string },
+  init: { method: 'POST'; headers: Record<string, string>; body: string; cache?: 'no-store' | undefined },
 ) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>
 
 /**
@@ -81,12 +67,12 @@ export type SolanaHyperlaneRouteMetadata = {
 }
 
 /**
- * Selects a prepared Solana Hyperlane transfer for live fee quoting.
+ * Supplies a Solana-to-Aleo Hyperlane transfer for current fee calculation.
  *
- * @property plan Pure transfer plan returned by `prepareTransfer`.
+ * @property plan Route, amount, and recipient selected for the transfer.
  */
 export type QuoteSolanaHyperlaneTransferParameters = {
-  plan: BridgeTransferPlan
+  plan: BridgePlan
 }
 
 /**
@@ -98,30 +84,38 @@ export type QuoteSolanaHyperlaneTransferParameters = {
  * @property amountLamports Amount to be transferred, in lamports.
  * @property igpPaymentLamports Interchain gas paymaster payment required for destination delivery, in lamports.
  * @property networkFeeLamports Solana network fee estimated for the transaction, in lamports.
- * @property totalLamports Sum of the amount, gas payment, and network fee, in lamports.
+ * @property rentLamports Rent-exempt funding for the gas-payment account, dispatched-message account, and fee payer, in lamports.
+ * @property totalLamports Executable balance requirement: amount, gas payment, network fee, and rent, in lamports.
  */
 export type SolanaHyperlaneTransferQuote = {
   routeId: string
   amountLamports: bigint
   igpPaymentLamports: bigint
   networkFeeLamports: bigint
+  rentLamports: bigint
   totalLamports: bigint
 }
 
 /**
  * Configures submission of a Solana Hyperlane transfer.
  *
- * The action signs and sends the transaction through the injected Solana
- * executor, then polls the configured RPC endpoint for confirmation.
+ * The action signs and sends the transaction through the Solana client's
+ * wallet client, then polls its public client for confirmation.
  *
- * @property plan Pure transfer plan returned by `prepareTransfer`.
+ * @property plan Route, amount, and recipient selected for the transfer.
  * @property pollingIntervalMs Delay between confirmation checks. Defaults to 1,000 milliseconds; floored at 100 milliseconds so a small or zero value cannot busy-poll the RPC endpoint.
  * @property confirmationTimeoutMs Maximum time to wait for confirmation. Defaults to 120,000 milliseconds; a timeout returns resumable pending state.
+ * @property resume Previously checkpointed receipt. When supplied, the action
+ *   verifies the existing signature without signing or broadcasting again.
+ * @property onSubmitted Durable checkpoint hook called immediately after broadcast
+ *   and before confirmation polling begins.
  */
 export type ExecuteSolanaHyperlaneTransferParameters = {
-  plan: BridgeTransferPlan
+  plan: BridgePlan
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined
+  resume?: BridgeReceipt | undefined
+  onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
 }
 
 /**
@@ -130,5 +124,5 @@ export type ExecuteSolanaHyperlaneTransferParameters = {
  * @property receipt Protocol-neutral transfer state, including the source signature and message id when confirmed.
  */
 export type SolanaHyperlaneTransferExecution = {
-  receipt: BridgeTransferReceipt
+  receipt: BridgeReceipt
 }

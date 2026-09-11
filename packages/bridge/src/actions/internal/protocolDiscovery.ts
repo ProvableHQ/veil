@@ -4,17 +4,32 @@ import type {
   BridgeRegistry,
   ProtocolBridgeAsset,
   ProtocolBridgeRoute,
-} from '../types/protocol.js'
+} from '../../types/protocol.js'
 
-/** Filters the protocol asset catalog. */
-export type GetProtocolAssetsParameters = {
+/**
+ * Selects chain-specific assets from a registry catalog.
+ *
+ * @property environment Optional mainnet or testnet filter.
+ * @property chainId Optional registry chain identifier filter.
+ * @property symbol Optional case-insensitive token symbol filter.
+ */
+export type GetAssetsParameters = {
   environment?: BridgeEnvironment | undefined
   chainId?: string | undefined
   symbol?: string | undefined
 }
 
-/** Filters directional protocol routes. */
-export type GetProtocolRoutesParameters = {
+/**
+ * Selects directional bridge routes from a registry catalog.
+ *
+ * @property environment Optional mainnet or testnet filter.
+ * @property protocol Optional bridge provider filter.
+ * @property sourceChainId Optional source registry chain identifier.
+ * @property destinationChainId Optional destination registry chain identifier.
+ * @property symbol Optional case-insensitive source or destination token symbol.
+ * @property includeUnavailable Includes disabled routes when true. Defaults to false; routes awaiting metadata remain visible.
+ */
+export type GetRoutesParameters = {
   environment?: BridgeEnvironment | undefined
   protocol?: BridgeProtocol | undefined
   sourceChainId?: string | undefined
@@ -26,18 +41,19 @@ export type GetProtocolRoutesParameters = {
 /**
  * Lists chain-specific assets from a protocol bridge registry.
  *
- * Pure and local. Filters match identifiers and symbols case-insensitively.
+ * Reads only the supplied registry. Filters match identifiers and symbols
+ * case-insensitively without contacting a chain or bridge provider.
  *
- * @param registry Reviewed registry snapshot.
+ * @param registry Supported chains and chain-specific assets available to the application.
  * @param params Optional environment, chain, and symbol filters.
  * @returns Matching assets in registry order.
  *
  * @example
- * const usdcx = getProtocolAssets(registry, { symbol: 'USDCx' })
+ * const usdcx = filterProtocolAssets(registry, { symbol: 'USDCx' })
  */
-export function getProtocolAssets(
+export function filterProtocolAssets(
   registry: BridgeRegistry,
-  params: GetProtocolAssetsParameters = {},
+  params: GetAssetsParameters = {},
 ): ProtocolBridgeAsset[] {
   const chains = new Map(registry.chains.map((chain) => [chain.id, chain]))
   const chainId = params.chainId?.toLowerCase()
@@ -55,20 +71,21 @@ export function getProtocolAssets(
 /**
  * Lists directional routes from a protocol bridge registry.
  *
- * Pure and local. Routes marked `disabled` are omitted unless
+ * Reads only the supplied registry. Routes marked `disabled` are omitted unless
  * `includeUnavailable` is true; `metadata-required` routes remain visible so
- * applications can distinguish known protocol support from execution readiness.
+ * applications can distinguish known protocol support from execution readiness
+ * without contacting a chain or bridge provider.
  *
- * @param registry Reviewed registry snapshot.
+ * @param registry Supported chains, assets, and directional provider routes available to the application.
  * @param params Optional protocol, environment, endpoint, and symbol filters.
  * @returns Matching directional routes in registry order.
  *
  * @example
- * const outbound = getProtocolRoutes(registry, { sourceChainId: 'aleo' })
+ * const outbound = filterProtocolRoutes(registry, { sourceChainId: 'aleo' })
  */
-export function getProtocolRoutes(
+export function filterProtocolRoutes(
   registry: BridgeRegistry,
-  params: GetProtocolRoutesParameters = {},
+  params: GetRoutesParameters = {},
 ): ProtocolBridgeRoute[] {
   const assets = new Map(registry.assets.map((asset) => [asset.id, asset]))
   const sourceChainId = params.sourceChainId?.toLowerCase()

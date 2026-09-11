@@ -31,9 +31,10 @@ const REQUIRED_SOLANA_HYPERLANE_METADATA_FIELDS: readonly Exclude<
  * Reports whether route metadata carries every required
  * `SolanaHyperlaneRouteMetadata` field with the expected primitive type.
  *
- * Pure and local. Checks field presence and shape only; format-level
- * validation (address charset, digit strings, commit hash shape) is the
- * job of `solanaRouteMetadata` in `actions/solanaRouteMetadata.ts` at plan time.
+ * Checks only the supplied field names and primitive types; format-level
+ * validation (address charset, digit strings, and commit hash format) is the
+ * job of `solanaRouteMetadata` in the Solana Hyperlane protocol module before
+ * live reads or submission. It does not contact Solana.
  */
 function hasCompleteSolanaHyperlaneMetadata(
   metadata: Readonly<Record<string, string | number | boolean>> | undefined,
@@ -48,11 +49,12 @@ function hasCompleteSolanaHyperlaneMetadata(
 /**
  * Validates the referential integrity of a protocol bridge registry.
  *
- * Pure and local. Duplicate identifiers and dangling asset/chain references
- * throw before a client can prepare a misleading transfer plan. An active
- * Hyperlane route sourced from a Solana-family chain additionally must carry
- * a complete `SolanaHyperlaneRouteMetadata` object, so a route cannot be
- * flipped to `active` ahead of its metadata being reviewed and filled in.
+ * Duplicate identifiers and dangling asset or chain references throw before a
+ * client can describe a misleading transfer. An active Hyperlane route sourced
+ * from a Solana-family chain additionally must carry a complete
+ * `SolanaHyperlaneRouteMetadata` object, so a route cannot be made active ahead
+ * of its metadata being reviewed and filled in. Validation does not contact a
+ * chain or bridge provider.
  *
  * @param registry Registry supplied to `createBridgeClient`.
  * @returns The validated registry unchanged.
@@ -66,18 +68,26 @@ function hasCompleteSolanaHyperlaneMetadata(
 export function validateBridgeRegistry(registry: BridgeRegistry): BridgeRegistry {
   if (!registry.version.trim()) throw new BridgeError('Bridge registry version must not be empty')
 
+  // Establish chain identity first because every asset and route ultimately
+  // inherits its environment and transaction family from these entries.
   const chainIds = new Set<string>()
   for (const chain of registry.chains) {
     if (chainIds.has(chain.id)) throw new BridgeError(`Duplicate bridge chain id: ${chain.id}`)
     chainIds.add(chain.id)
   }
 
+  // Asset ids are globally unique; caller-facing keys are unique only within a
+  // chain so the same symbol can represent different contracts or programs.
   const assetIds = new Set<string>()
+  const assetKeys = new Set<string>()
   for (const asset of registry.assets) {
     if (assetIds.has(asset.id)) throw new BridgeError(`Duplicate bridge asset id: ${asset.id}`)
     if (!chainIds.has(asset.chainId)) {
       throw new BridgeError(`Bridge asset ${asset.id} references unknown chain ${asset.chainId}`)
     }
+    if (!asset.key.trim()) throw new BridgeError(`Bridge asset ${asset.id} has an empty key`)
+    const scopedKey = `${asset.chainId}/${asset.key}`
+    if (assetKeys.has(scopedKey)) throw new BridgeError(`Duplicate bridge asset key: ${scopedKey}`)
     if (!Number.isInteger(asset.decimals) || asset.decimals < 0) {
       throw new BridgeError(`Bridge asset ${asset.id} has invalid decimals ${asset.decimals}`)
     }
@@ -90,9 +100,25 @@ export function validateBridgeRegistry(registry: BridgeRegistry): BridgeRegistry
         })
       }
     }
+    if (asset.privacy) {
+      const chain = registry.chains.find((entry) => entry.id === asset.chainId)
+      if (chain?.family !== 'aleo') {
+        throw new BridgeError(`Bridge asset ${asset.id} declares a privacy capability on a non-Aleo chain`)
+      }
+      if (!asset.privacy.program.trim()) {
+        throw new BridgeError(`Bridge asset ${asset.id} has an empty privacy program`)
+      }
+      if (asset.privacy.kind !== 'arc20' && asset.privacy.kind !== 'arc22') {
+        throw new BridgeError(`Bridge asset ${asset.id} has an unsupported privacy capability kind`)
+      }
+    }
     assetIds.add(asset.id)
+    assetKeys.add(scopedKey)
   }
 
+  // Validate directional topology after chains and assets. Active Solana-source
+  // routes have an additional gate because transaction account ordering depends
+  // on reviewed Sealevel deployment metadata.
   const routeIds = new Set<string>()
   for (const route of registry.routes) {
     if (routeIds.has(route.id)) throw new BridgeError(`Duplicate bridge route id: ${route.id}`)

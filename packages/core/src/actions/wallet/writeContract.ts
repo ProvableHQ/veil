@@ -2,6 +2,7 @@ import { AccountNotFoundError, ProvingNotConfiguredError } from '../../errors/er
 import type { Client } from '../../clients/createClient.js'
 import { assertNoInputRequests } from '../../types/inputRequest.js'
 import type { TransactionInput } from '../../types/inputRequest.js'
+import type { ProvingProgressHandler } from '../../types/proving.js'
 
 /**
  * Parameters for `walletClient.writeContract` (alias `executeTransaction`).
@@ -17,6 +18,7 @@ import type { TransactionInput } from '../../types/inputRequest.js'
  * @property imports Names of programs reached via dynamic dispatch that the prover or
  *   wallet can't discover statically. Static imports in the program's `import` block are
  *   auto-discovered.
+ * @property onProgress Optional awaited callback for proving and submission boundaries. Defaults to no reporting.
  */
 export type WriteContractParameters = {
   program: string
@@ -24,6 +26,7 @@ export type WriteContractParameters = {
   inputs: TransactionInput[]
   privateFee?: boolean
   imports?: string[]
+  onProgress?: ProvingProgressHandler | undefined
 }
 
 /** Transaction id (`at1...`) of the broadcast execution. */
@@ -71,7 +74,7 @@ export async function writeContract(
 
   if (account.type === 'rpc') {
     // RPC account — wallet handles proving, signing, and broadcasting
-    return client.request({
+    const transactionId = await client.request({
       method: 'executeTransaction',
       params: {
         programName: params.program,
@@ -80,7 +83,9 @@ export async function writeContract(
         privateFee: params.privateFee,
         imports: params.imports,
       },
-    }) as Promise<string>
+    }) as string
+    await params.onProgress?.({ type: 'transaction-submitted', transactionId })
+    return transactionId
   }
 
   if (account.type === 'local') {
@@ -98,12 +103,17 @@ export async function writeContract(
       inputs: params.inputs,
       privateFee: params.privateFee,
       imports: params.imports,
+      ...(params.onProgress ? { onProgress: params.onProgress } : {}),
     })
 
-    return client.request({
+    await params.onProgress?.({ type: 'transaction-prepared', transactionId: tx.id, transaction: tx })
+
+    const transactionId = await client.request({
       method: 'sendTransaction',
       params: { transaction: JSON.stringify(tx) },
-    }) as Promise<string>
+    }) as string
+    await params.onProgress?.({ type: 'transaction-submitted', transactionId })
+    return transactionId
   }
 
   throw new AccountNotFoundError()

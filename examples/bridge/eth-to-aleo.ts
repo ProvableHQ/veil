@@ -1,8 +1,10 @@
 /**
- * Mainnet native ETH to Aleo ETH Hyperlane demo.
+ * Moves the minimum native ETH amount from Ethereum into wrapped ETH on Aleo.
  *
- * Run without EXECUTE_HYPERLANE_ETH for a read-only quote. Native ETH is sent
- * directly to the reviewed Warp Route and does not require ERC-20 approval.
+ * A normal run only displays balances, current Ethereum gas, and the Hyperlane
+ * delivery payment. Execution signs with the private key held by this process
+ * and sends ETH directly to the reviewed Warp Route; no ERC-20 approval is
+ * needed. Hyperlane then delivers and mints the Aleo representation.
  */
 
 import { runEthereumHyperlaneExample } from './ethereum-hyperlane.js'

@@ -1,5 +1,5 @@
 import type { Address, Hash, Hex } from 'viem'
-import type { BridgeTransferPlan, BridgeTransferReceipt } from './protocol.js'
+import type { BridgePlan, BridgeReceipt } from './protocol.js'
 
 /**
  * Supplies a fetch-compatible HTTP response for Circle attestation requests.
@@ -45,12 +45,14 @@ export type EvmXReserveRouteMetadata = {
 }
 
 /**
- * Selects a prepared xReserve transfer for live balance and allowance checks.
+ * Supplies an Ethereum-to-Aleo xReserve transfer for current balance and allowance checks.
  *
- * @property plan Pure plan returned by `prepareTransfer`.
+ * @property plan Route, amount, Aleo recipient, and privacy preference selected for the transfer.
+ * @property privateMintSecretNonce Secret Aleo scalar committed by private hook data. Defaults to `0scalar`.
  */
 export type QuoteEvmXReserveTransferParameters = {
-  plan: BridgeTransferPlan
+  plan: BridgePlan
+  privateMintSecretNonce?: string | undefined
 }
 
 /**
@@ -87,14 +89,22 @@ export type EvmXReserveTransferQuote = {
 /**
  * Configures an Ethereum-to-Aleo xReserve deposit submission.
  *
- * @property plan Pure plan returned by `prepareTransfer`.
+ * @property plan Route, amount, Aleo recipient, and privacy preference selected for the transfer.
+ * @property privateMintSecretNonce Secret Aleo scalar committed by private hook data. Defaults to `0scalar`.
  * @property pollingIntervalMs Delay between receipt checks. Defaults to 1,000 milliseconds.
  * @property confirmationTimeoutMs Maximum receipt wait per transaction. Defaults to 120,000 milliseconds.
+ * @property resume Previously checkpointed source receipt. When supplied, execution
+ *   verifies that transaction and never repeats its submission.
+ * @property onSubmitted Durable checkpoint hook called immediately after an approval
+ *   or deposit is broadcast and before receipt polling begins.
  */
 export type ExecuteEvmXReserveTransferParameters = {
-  plan: BridgeTransferPlan
+  plan: BridgePlan
+  privateMintSecretNonce?: string | undefined
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined
+  resume?: BridgeReceipt | undefined
+  onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
 }
 
 /**
@@ -104,7 +114,7 @@ export type ExecuteEvmXReserveTransferParameters = {
  * @property approvalTxIds ERC-20 approvals submitted before the deposit.
  */
 export type EvmXReserveTransferExecution = {
-  receipt: BridgeTransferReceipt
+  receipt: BridgeReceipt
   approvalTxIds: Hash[]
 }
 

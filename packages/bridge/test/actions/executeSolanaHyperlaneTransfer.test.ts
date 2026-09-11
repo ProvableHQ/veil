@@ -1,9 +1,13 @@
-import { getTransactionDecoder } from '@solana/kit'
+import { getCompiledTransactionMessageDecoder, getTransactionDecoder } from '@solana/kit'
 import { describe, expect, it, vi } from 'vitest'
-import { executeSolanaHyperlaneTransfer } from '../../src/actions/executeSolanaHyperlaneTransfer.js'
+import { execute as executeSolanaHyperlaneTransfer } from '../../src/protocols/hyperlane/solana.js'
+import { getStatus } from '../../src/actions/getStatus.js'
+import { recover } from '../../src/actions/recover.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
-import type { SolanaRpcReader } from '../../src/solana/rpc.js'
-import type { SolanaBridgeExecutor } from '../../src/types/solana.js'
+import type { SolanaRpcClient } from '../../src/solana/rpc.js'
+import type { SolanaWalletClient } from '../../src/connections/solana.js'
+import type { SolanaClient } from '../../src/connections/solana.js'
+import type { BridgeReceipt } from '../../src/types/protocol.js'
 import {
   WARP_PROGRAM_ADDRESS,
   igpAccountData,
@@ -21,41 +25,41 @@ const OTHER_SENDER = '11111111111111111111111111111112'
 
 function stubExecutor(
   options: { onSend?: (wireTransaction: Uint8Array) => void; address?: string } = {},
-): SolanaBridgeExecutor {
+): SolanaWalletClient {
   return {
     getAddress: async () => options.address ?? transferFixture.senderAddress,
-    signAndSendTransaction: async (wireTransaction) => {
+    sendTransaction: async (wireTransaction) => {
       options.onSend?.(wireTransaction)
       return { signature: STUB_SIGNATURE }
     },
   }
 }
 
-function executeRpc(overrides: Partial<SolanaRpcReader> = {}): SolanaRpcReader {
+function executeRpc(overrides: Partial<SolanaRpcClient> = {}): SolanaRpcClient {
   return {
     getLatestBlockhash: async () => ({ blockhash: WARP_PROGRAM_ADDRESS, lastValidBlockHeight: 100n }),
+    getBlockHeight: async () => 1n,
+    isBlockhashValid: async () => true,
     getBalance: async () => 800_000_000_000n,
     getAccountData: async () => igpAccountData(),
+    getFeeForMessage: async () => 10_000n,
+    getMinimumBalanceForRentExemption: async (dataLength) => {
+      if (dataLength === 141) return 1_872_240n
+      if (dataLength === 194) return 2_241_120n
+      return 890_880n
+    },
     getSignatureStatus: async () => 'confirmed',
     getTransactionLogs: async () => transferFixture.logMessages,
     ...overrides,
   }
 }
 
-/**
- * Advances fake timers in small increments until the action settles. A single
- * large advance can race ahead of the real (non-timer) async work the action
- * does before it starts polling — key generation, PDA derivation, and
- * transaction signing — since advancing past a moment with no pending timer
- * resolves near-instantly and does not wait for that work.
- */
-async function settleWithFakeTimers<T>(promise: Promise<T>): Promise<T> {
-  let settled = false
-  void promise.then(() => { settled = true }, () => { settled = true })
-  for (let iteration = 0; iteration < 200 && !settled; iteration++) {
-    await vi.advanceTimersByTimeAsync(100)
+function client(executor: SolanaWalletClient, publicClient: SolanaRpcClient): SolanaClient & { walletClient: SolanaWalletClient } {
+  return {
+    family: 'solana',
+    publicClient: { ...publicClient, sendTransaction: async () => ({ signature: 'unused' }) },
+    walletClient: executor,
   }
-  return promise
 }
 
 describe('executeSolanaHyperlaneTransfer', () => {
@@ -66,7 +70,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const executor = stubExecutor({ onSend: (wire) => { capturedWire = wire } })
     const rpc = executeRpc()
 
-    const execution = await executeSolanaHyperlaneTransfer(registry, executor, rpc, { plan })
+    const execution = await executeSolanaHyperlaneTransfer(registry, client(executor, rpc), { plan })
 
     expect(execution.receipt.status).toBe('DELIVERY_PENDING')
     expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
@@ -80,6 +84,11 @@ describe('executeSolanaHyperlaneTransfer', () => {
     // partially signs with the ephemeral keypair before dispatch.
     expect(capturedWire).toBeInstanceOf(Uint8Array)
     const decoded = getTransactionDecoder().decode(capturedWire!)
+    const decodedMessage = getCompiledTransactionMessageDecoder().decode(decoded.messageBytes)
+    const firstInstruction = decodedMessage.instructions[0]!
+    expect(decodedMessage.staticAccounts[firstInstruction.programAddressIndex]).toBe(
+      'ComputeBudget111111111111111111111111111111',
+    )
     const signedEntries = Object.entries(decoded.signatures).filter(([, signature]) => signature !== null)
     expect(signedEntries).toHaveLength(1)
     expect(signedEntries[0]?.[0]).toBe(execution.receipt.protocolState.uniqueMessageAddress)
@@ -92,7 +101,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const getBalance = vi.fn(async () => 800_000_000_000n)
     const rpc = executeRpc({ getBalance })
 
-    await expect(executeSolanaHyperlaneTransfer(registry, executor, rpc, { plan })).rejects.toThrow(
+    await expect(executeSolanaHyperlaneTransfer(registry, client(executor, rpc), { plan })).rejects.toThrow(
       new RegExp(`Prepared sender ${transferFixture.senderAddress} does not match connected account ${OTHER_SENDER}`),
     )
     // The mismatch is caught before any balance read or transaction assembly.
@@ -105,7 +114,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const executor = stubExecutor({ address: OTHER_SENDER })
     const rpc = executeRpc()
 
-    const execution = await executeSolanaHyperlaneTransfer(registry, executor, rpc, { plan })
+    const execution = await executeSolanaHyperlaneTransfer(registry, client(executor, rpc), { plan })
 
     expect(execution.receipt.status).toBe('DELIVERY_PENDING')
   })
@@ -117,7 +126,7 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const rpc = executeRpc({ getBalance: async () => 0n })
 
     try {
-      await executeSolanaHyperlaneTransfer(registry, executor, rpc, { plan })
+      await executeSolanaHyperlaneTransfer(registry, client(executor, rpc), { plan })
       expect.unreachable('expected an insufficient-balance BridgeError')
     } catch (error) {
       expect(error).toBeInstanceOf(BridgeError)
@@ -135,83 +144,221 @@ describe('executeSolanaHyperlaneTransfer', () => {
     const executor = stubExecutor()
     const rpc = executeRpc({ getSignatureStatus: async () => 'failed' })
 
-    await expect(executeSolanaHyperlaneTransfer(registry, executor, rpc, { plan })).rejects.toThrow(
+    await expect(executeSolanaHyperlaneTransfer(registry, client(executor, rpc), { plan })).rejects.toThrow(
       new RegExp(STUB_SIGNATURE),
     )
   })
 
   it('returns a resumable SOURCE_CONFIRMING receipt on confirmation timeout, without throwing', async () => {
-    vi.useFakeTimers()
-    try {
-      const registry = registryWithRoute()
-      const plan = transferPlan(registry)
-      const executor = stubExecutor()
-      const rpc = executeRpc({ getSignatureStatus: async () => null })
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    const executor = stubExecutor()
+    const rpc = executeRpc({ getSignatureStatus: async () => null })
 
-      const execution = await settleWithFakeTimers(executeSolanaHyperlaneTransfer(registry, executor, rpc, {
-        plan,
-        pollingIntervalMs: 1_000,
-        confirmationTimeoutMs: 3_000,
-      }))
+    const execution = await executeSolanaHyperlaneTransfer(registry, client(executor, rpc), {
+      plan,
+      confirmationTimeoutMs: 0,
+    })
 
-      expect(execution.receipt.status).toBe('SOURCE_CONFIRMING')
-      expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
-      expect(execution.receipt.messageId).toBeUndefined()
-      expect(execution.receipt.id).toBe(STUB_SIGNATURE)
-    } finally {
-      vi.useRealTimers()
+    expect(execution.receipt.status).toBe('SOURCE_CONFIRMING')
+    expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
+    expect(execution.receipt.messageId).toBeUndefined()
+    expect(execution.receipt.id).toBe(STUB_SIGNATURE)
+    expect(execution.receipt.protocolState.blockhash).toBe(WARP_PROGRAM_ADDRESS)
+    expect(execution.receipt.protocolState.lastValidBlockHeight).toBe('100')
+  })
+
+  it('returns resumable expired state without resubmitting after blockhash expiry', async () => {
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    let submissions = 0
+    const executor = stubExecutor({ onSend: () => { submissions += 1 } })
+    const rpc = executeRpc({ getSignatureStatus: async () => null, isBlockhashValid: async () => false })
+
+    const execution = await executeSolanaHyperlaneTransfer(registry, client(executor, rpc), { plan })
+
+    expect(execution.receipt.status).toBe('SOURCE_CONFIRMING')
+    expect(execution.receipt.protocolState.blockhashExpired).toBe(true)
+    expect(submissions).toBe(1)
+  })
+
+  it('resumes a checkpointed signature without signing or submitting again', async () => {
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    let submissions = 0
+    const receipt: BridgeReceipt = {
+      id: STUB_SIGNATURE,
+      protocol: 'hyperlane',
+      status: 'SOURCE_CONFIRMING',
+      sourceTxId: STUB_SIGNATURE,
+      protocolState: {
+        routeId: plan.route.id,
+        destinationDomain: 1634493807,
+        blockhash: WARP_PROGRAM_ADDRESS,
+        lastValidBlockHeight: '100',
+        uniqueMessageAddress: OTHER_SENDER,
+        quotedLamports: '676207023360',
+      },
     }
+
+    const execution = await executeSolanaHyperlaneTransfer(
+      registry,
+      client(stubExecutor({ onSend: () => { submissions += 1 } }), executeRpc()),
+      { plan, resume: receipt },
+    )
+
+    expect(submissions).toBe(0)
+    expect(execution.receipt).toMatchObject({
+      id: '0xffe0409d00c184769b4dfa2a1eaac5a0a79bfe52458a38e1d9a71a9e5c677805',
+      protocol: 'hyperlane',
+      status: 'DELIVERY_PENDING',
+      sourceTxId: STUB_SIGNATURE,
+      messageId: '0xffe0409d00c184769b4dfa2a1eaac5a0a79bfe52458a38e1d9a71a9e5c677805',
+    })
+  })
+
+  it('confirms a submitted signature through the read-only status action', async () => {
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    const receipt: BridgeReceipt = {
+      id: STUB_SIGNATURE,
+      protocol: 'hyperlane',
+      status: 'SOURCE_CONFIRMING',
+      sourceTxId: STUB_SIGNATURE,
+      protocolState: { routeId: plan.route.id },
+    }
+
+    const result = await getStatus(
+      registry,
+      { solana: client(stubExecutor(), executeRpc()) },
+      globalThis.fetch,
+      { plan, receipt },
+    )
+
+    expect(result).toMatchObject({
+      status: 'DELIVERY_PENDING',
+      sourceTxId: STUB_SIGNATURE,
+      messageId: '0xffe0409d00c184769b4dfa2a1eaac5a0a79bfe52458a38e1d9a71a9e5c677805',
+    })
+  })
+
+  it('recovers a submitted signature from a compact checkpoint', async () => {
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+
+    const result = await recover(
+      registry,
+      { solana: client(stubExecutor(), executeRpc()) },
+      globalThis.fetch,
+      {
+        checkpoint: {
+          version: 1,
+          intent: {
+            source: { chain: 'solana', asset: 'sol' },
+            destination: { chain: 'aleo', asset: 'sol' },
+            bridgeProtocol: 'hyperlane',
+            amount: plan.amountIn,
+            recipient: plan.recipient,
+            sender: plan.sender,
+            mintMode: 'public',
+          },
+          route: { id: plan.route.id, registryVersion: plan.registryVersion },
+          source: { transactionId: STUB_SIGNATURE },
+        },
+      },
+    )
+
+    expect(result).toMatchObject({
+      next: 'wait',
+      receipt: {
+        status: 'DELIVERY_PENDING',
+        sourceTxId: STUB_SIGNATURE,
+        messageId: '0xffe0409d00c184769b4dfa2a1eaac5a0a79bfe52458a38e1d9a71a9e5c677805',
+      },
+    })
+  })
+
+  it('rejects a resume receipt checkpointed for another route', async () => {
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    const receipt: BridgeReceipt = {
+      id: STUB_SIGNATURE,
+      protocol: 'hyperlane',
+      status: 'SOURCE_CONFIRMING',
+      sourceTxId: STUB_SIGNATURE,
+      protocolState: {
+        source: { chain: 'other', asset: 'sol' },
+      destination: { chain: 'aleo', asset: 'sol' },
+        destinationDomain: 1634493807,
+        blockhash: WARP_PROGRAM_ADDRESS,
+        lastValidBlockHeight: '100',
+      },
+    }
+
+    await expect(executeSolanaHyperlaneTransfer(
+      registry,
+      client(stubExecutor(), executeRpc()),
+      { plan, resume: receipt },
+    )).rejects.toThrow(/does not match the prepared route/)
+  })
+
+  it('checkpoints the signature and lifetime before confirmation polling', async () => {
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    const checkpoints: BridgeReceipt[] = []
+    const rpc = executeRpc()
+
+    await executeSolanaHyperlaneTransfer(registry, client(stubExecutor(), rpc), {
+      plan,
+      onSubmitted(receipt) { checkpoints.push(receipt) },
+    })
+
+    expect(checkpoints).toHaveLength(1)
+    expect(checkpoints[0]).toMatchObject({
+      status: 'SOURCE_CONFIRMING',
+      sourceTxId: STUB_SIGNATURE,
+      protocolState: { blockhash: WARP_PROGRAM_ADDRESS, lastValidBlockHeight: '100' },
+    })
   })
 
   it('tolerates transient getSignatureStatus errors and succeeds once the status resolves', async () => {
-    vi.useFakeTimers()
-    try {
-      const registry = registryWithRoute()
-      const plan = transferPlan(registry)
-      const executor = stubExecutor()
-      let calls = 0
-      const rpc = executeRpc({
-        getSignatureStatus: async () => {
-          calls += 1
-          if (calls <= 2) throw new Error('transient RPC error')
-          return 'confirmed'
-        },
-      })
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    const executor = stubExecutor()
+    let calls = 0
+    const rpc = executeRpc({
+      getSignatureStatus: async () => {
+        calls += 1
+        if (calls <= 2) throw new Error('transient RPC error')
+        return 'confirmed'
+      },
+    })
 
-      const execution = await settleWithFakeTimers(executeSolanaHyperlaneTransfer(registry, executor, rpc, {
-        plan,
-        pollingIntervalMs: 1_000,
-        confirmationTimeoutMs: 30_000,
-      }))
+    const execution = await executeSolanaHyperlaneTransfer(registry, client(executor, rpc), {
+      plan,
+      pollingIntervalMs: 0,
+      confirmationTimeoutMs: 2_000,
+    })
 
-      expect(execution.receipt.status).toBe('DELIVERY_PENDING')
-      expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
-      expect(calls).toBeGreaterThanOrEqual(3)
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(execution.receipt.status).toBe('DELIVERY_PENDING')
+    expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
+    expect(calls).toBeGreaterThanOrEqual(3)
   })
 
   it('returns a resumable SOURCE_CONFIRMING receipt, without throwing, when status-read errors persist until the timeout', async () => {
-    vi.useFakeTimers()
-    try {
-      const registry = registryWithRoute()
-      const plan = transferPlan(registry)
-      const executor = stubExecutor()
-      const rpc = executeRpc({
-        getSignatureStatus: async () => { throw new Error('persistent RPC error') },
-      })
+    const registry = registryWithRoute()
+    const plan = transferPlan(registry)
+    const executor = stubExecutor()
+    const rpc = executeRpc({
+      getSignatureStatus: async () => { throw new Error('persistent RPC error') },
+    })
 
-      const execution = await settleWithFakeTimers(executeSolanaHyperlaneTransfer(registry, executor, rpc, {
-        plan,
-        pollingIntervalMs: 1_000,
-        confirmationTimeoutMs: 3_000,
-      }))
+    const execution = await executeSolanaHyperlaneTransfer(registry, client(executor, rpc), {
+      plan,
+      confirmationTimeoutMs: 0,
+    })
 
-      expect(execution.receipt.status).toBe('SOURCE_CONFIRMING')
-      expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(execution.receipt.status).toBe('SOURCE_CONFIRMING')
+    expect(execution.receipt.sourceTxId).toBe(STUB_SIGNATURE)
   })
 })

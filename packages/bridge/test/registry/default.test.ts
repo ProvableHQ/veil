@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { validateBridgeRegistry } from '../../src/registry/validate.js'
-import { getProtocolRoutes } from '../../src/actions/protocolDiscovery.js'
+import { getRoutes } from '../../src/actions/getRoutes.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 
 describe('DEFAULT_BRIDGE_REGISTRY', () => {
@@ -186,7 +186,7 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
   })
 
   it('activates the reviewed Solana-origin SOL deposit route with its Sealevel metadata', () => {
-    const routes = getProtocolRoutes(DEFAULT_BRIDGE_REGISTRY, { includeUnavailable: true })
+    const routes = getRoutes(DEFAULT_BRIDGE_REGISTRY, { includeUnavailable: true })
     const route = routes.find((entry) => entry.id === 'hyperlane:solana/sol->aleo/sol')!
     expect(route.availability).toBe('active')
     expect(route.metadata).toMatchObject({
@@ -250,12 +250,41 @@ describe('validateBridgeRegistry', () => {
     })).toThrow(/Duplicate bridge route id/)
   })
 
+  it('rejects duplicate caller-facing asset keys on one chain', () => {
+    const asset = DEFAULT_BRIDGE_REGISTRY.assets[0]!
+    expect(() => validateBridgeRegistry({
+      ...DEFAULT_BRIDGE_REGISTRY,
+      assets: [asset, { ...asset, id: `${asset.id}-duplicate` }],
+      routes: [],
+    })).toThrow(/Duplicate bridge asset key/)
+  })
+
   it('rejects malformed address validation expressions', () => {
     expect(() => validateBridgeRegistry({
       ...DEFAULT_BRIDGE_REGISTRY,
       assets: [{ ...DEFAULT_BRIDGE_REGISTRY.assets[0]!, addressValidationRegex: '[' }],
       routes: [],
     })).toThrow(/invalid address validation regex/)
+  })
+
+  it('rejects privacy capabilities on non-Aleo assets', () => {
+    const asset = DEFAULT_BRIDGE_REGISTRY.assets.find((entry) => entry.id === 'ethereum/usdc')!
+    expect(() => validateBridgeRegistry({
+      ...DEFAULT_BRIDGE_REGISTRY,
+      assets: DEFAULT_BRIDGE_REGISTRY.assets.map((entry) => entry.id === asset.id
+        ? { ...entry, privacy: { kind: 'arc20' as const, program: 'arc20_usdc.aleo' } }
+        : entry),
+    })).toThrow(/privacy capability.*non-Aleo/i)
+  })
+
+  it('rejects privacy capabilities without a program id', () => {
+    const asset = DEFAULT_BRIDGE_REGISTRY.assets.find((entry) => entry.id === 'aleo/sol')!
+    expect(() => validateBridgeRegistry({
+      ...DEFAULT_BRIDGE_REGISTRY,
+      assets: DEFAULT_BRIDGE_REGISTRY.assets.map((entry) => entry.id === asset.id
+        ? { ...entry, privacy: { ...entry.privacy!, program: '' } }
+        : entry),
+    })).toThrow(/privacy program/i)
   })
 
   it('rejects an active Solana-source Hyperlane route missing required Sealevel metadata', () => {

@@ -1,28 +1,23 @@
 import {
-  TransactionReceiptNotFoundError,
-  createPublicClient,
-  createWalletClient,
+  decodeFunctionResult,
+  encodeFunctionData,
   formatEther,
   formatUnits,
-  getAddress,
-  http,
-  isAddress,
-  isHash,
-  isHex,
   parseAbi,
-  type Address,
   type Hex,
 } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
-import { mainnet } from 'viem/chains'
+import { createPublicClient as createAleoPublicClient, http as aleoHttp } from '@provablehq/veil-core'
 import {
-  aleoAddressToBytes32,
+  createAleoClient,
   createBridgeClient,
-  type EvmBridgeExecutor,
+  createEvmClient,
+  evmHttp,
+  evmPrivateKey,
 } from '@provablehq/aleo-bridge-sdk'
 
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
 const DEFAULT_EVM_CONFIRMATION_TIMEOUT_MS = 5 * 60_000
+const EXECUTION_ENVIRONMENT_VARIABLE = 'EXECUTE_BRIDGE'
 const ERC20_READ_ABI = parseAbi([
   'function allowance(address owner, address spender) view returns (uint256)',
   'function balanceOf(address account) view returns (uint256)',
@@ -30,27 +25,21 @@ const ERC20_READ_ABI = parseAbi([
 
 type HyperlaneAsset = 'ETH' | 'WBTC'
 type AssetConfiguration = {
-  symbol: HyperlaneAsset
-  amountEnvironmentVariable: string
-  executionEnvironmentVariable: string
-  routeId: string
-  decimals: number
+  source: { chain: string, asset: string }
+  destination: { chain: string, asset: string }
+  amount: string
 }
 
 const ASSETS: Record<HyperlaneAsset, AssetConfiguration> = {
   ETH: {
-    symbol: 'ETH',
-    amountEnvironmentVariable: 'ETH_AMOUNT',
-    executionEnvironmentVariable: 'EXECUTE_HYPERLANE_ETH',
-    routeId: 'hyperlane:ethereum/eth->aleo/eth',
-    decimals: 18,
+    source: { chain: 'ethereum', asset: 'eth' },
+    destination: { chain: 'aleo', asset: 'eth' },
+    amount: '0.000000000000000001',
   },
   WBTC: {
-    symbol: 'WBTC',
-    amountEnvironmentVariable: 'WBTC_AMOUNT',
-    executionEnvironmentVariable: 'EXECUTE_HYPERLANE_WBTC',
-    routeId: 'hyperlane:ethereum/wbtc->aleo/wbtc',
-    decimals: 8,
+    source: { chain: 'ethereum', asset: 'wbtc' },
+    destination: { chain: 'aleo', asset: 'wbtc' },
+    amount: '0.00000001',
   },
 }
 
@@ -71,124 +60,21 @@ function privateKeyFromEnvironment(): Hex {
   return `0x${unprefixed}` as Hex
 }
 
-function millisecondsFromEnvironment(name: string, defaultValue: number): number {
-  const raw = process.env[name]?.trim()
-  if (!raw) return defaultValue
-  const value = Number(raw)
-  if (!Number.isSafeInteger(value) || value < 1_000) {
-    throw new Error(`${name} must be an integer greater than or equal to 1000`)
-  }
-  return value
-}
-
-function positionalParameters(
-  params: readonly unknown[] | Record<string, unknown> | undefined,
-  method: string,
-): readonly unknown[] {
-  if (!Array.isArray(params)) throw new Error(`${method} requires positional parameters`)
-  return params
-}
-
-function callParameter(value: unknown): { to: Address, data: Hex } {
-  if (!value || typeof value !== 'object') throw new Error('The RPC method requires a transaction object')
-  const transaction = value as Record<string, unknown>
-  if (typeof transaction.to !== 'string' || !isAddress(transaction.to)) throw new Error('Transaction destination is invalid')
-  if (typeof transaction.data !== 'string' || !isHex(transaction.data)) throw new Error('Transaction calldata is invalid')
-  return { to: getAddress(transaction.to), data: transaction.data }
-}
-
-function transactionParameter(value: unknown): {
-  from: Address
-  to: Address
-  data: Hex
-  value?: bigint | undefined
-} {
-  const call = callParameter(value)
-  const transaction = value as Record<string, unknown>
-  if (typeof transaction.from !== 'string' || !isAddress(transaction.from)) throw new Error('Transaction sender is invalid')
-  if (transaction.value != null && (typeof transaction.value !== 'string' || !/^0x[0-9a-f]+$/i.test(transaction.value))) {
-    throw new Error('Transaction value is invalid')
-  }
-  return {
-    from: getAddress(transaction.from),
-    ...call,
-    ...(typeof transaction.value === 'string' ? { value: BigInt(transaction.value) } : {}),
-  }
-}
-
-function createLocalSigner(rpcUrl: string, privateKey: Hex) {
-  const account = privateKeyToAccount(privateKey)
-  const transport = http(rpcUrl)
-  const publicClient = createPublicClient({ chain: mainnet, transport })
-  const walletClient = createWalletClient({ account, chain: mainnet, transport })
-  const executor: EvmBridgeExecutor = {
-    account: account.address,
-    request: async ({ method, params }) => {
-      if (method === 'eth_accounts') return [account.address]
-      if (method === 'eth_chainId') {
-        const chainId = await publicClient.getChainId()
-        return `0x${chainId.toString(16)}`
-      }
-      if (method === 'eth_call') {
-        const values = positionalParameters(params, method)
-        const transaction = callParameter(values[0])
-        const result = await publicClient.call({ to: transaction.to, data: transaction.data })
-        return result.data ?? '0x'
-      }
-      if (method === 'eth_sendTransaction') {
-        const values = positionalParameters(params, method)
-        const transaction = transactionParameter(values[0])
-        if (transaction.from !== getAddress(account.address)) {
-          throw new Error(`Transaction sender ${transaction.from} does not match ${account.address}`)
-        }
-        const hash = await walletClient.sendTransaction({
-          account,
-          chain: mainnet,
-          to: transaction.to,
-          data: transaction.data,
-          ...(transaction.value == null ? {} : { value: transaction.value }),
-        })
-        console.log('Broadcast Ethereum transaction:', hash)
-        return hash
-      }
-      if (method === 'eth_getTransactionReceipt') {
-        const values = positionalParameters(params, method)
-        const hash = values[0]
-        if (typeof hash !== 'string' || !isHash(hash)) throw new Error('Transaction hash is invalid')
-        try {
-          const receipt = await publicClient.getTransactionReceipt({ hash })
-          return {
-            status: receipt.status === 'success' ? '0x1' : '0x0',
-            transactionHash: receipt.transactionHash,
-            logs: receipt.logs.map((log) => ({
-              address: log.address,
-              data: log.data,
-              topics: log.topics,
-              logIndex: log.logIndex,
-            })),
-          }
-        } catch (error) {
-          if (error instanceof TransactionReceiptNotFoundError) return null
-          throw error
-        }
-      }
-      throw new Error(`Unsupported EVM executor method: ${method}`)
-    },
-  }
-  return { account, executor, publicClient }
-}
-
 /**
- * Quotes or submits one reviewed mainnet Ethereum-to-Aleo Hyperlane route.
+ * Moves native ETH or WBTC from Ethereum to its wrapped representation on
+ * Aleo through Hyperlane.
  *
- * The example signs locally with a viem private-key account. It is read-only
- * unless the asset-specific execution acknowledgement is set. WBTC allowance
- * is displayed before execution; the bridge client submits an exact approval
- * only when that allowance is insufficient. Native ETH has no approval step.
+ * The default run reads balances and current fees, prints them, and exits
+ * without requesting a signature. With execution enabled, the viem account
+ * created from this process's private key signs the Ethereum transaction. WBTC
+ * may require an approval first; native ETH is dispatched directly. Hyperlane
+ * relays the message and mints the corresponding wrapped asset to the Aleo recipient.
  *
- * @param asset Asset-specific demo to run.
- * @returns A promise that resolves after quoting or after the submitted source transaction is confirmed or times out.
- * @throws Error When environment input, the live quote, balances, allowance reads, or submission fails.
+ * @param asset ETH or WBTC to lock on Ethereum and mint on Aleo.
+ * @returns After read-only inspection or verified Aleo delivery, depending on
+ * the execution acknowledgement.
+ * @throws Error When configuration is missing, funds are insufficient, an
+ * Ethereum transaction fails, or Aleo delivery cannot be verified.
  *
  * @example
  * await runEthereumHyperlaneExample('ETH')
@@ -197,18 +83,52 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
   const config = ASSETS[asset]
   const rpcUrl = requiredEnvironmentVariable('ETHEREUM_RPC_URL')
   const recipient = requiredEnvironmentVariable('ALEO_RECIPIENT')
-  const amount = requiredEnvironmentVariable(config.amountEnvironmentVariable)
-  const { account, executor, publicClient } = createLocalSigner(rpcUrl, privateKeyFromEnvironment())
-  const recipientBytes32 = aleoAddressToBytes32(recipient)
-  const bridge = createBridgeClient({ environment: 'mainnet', executors: { evm: executor } })
-  const plan = bridge.prepareTransfer({
-    routeId: config.routeId,
-    amount,
-    recipient,
-    sender: account.address,
+
+  // ── Connect the source account and destination network ──────────────
+  // The EVM client reads Ethereum state, signs with the configured private key,
+  // and broadcasts through the selected RPC endpoint. The Aleo client has no
+  // account because the Hyperlane relayer submits the destination mint. It is
+  // used only to verify the delivered message in Aleo's canonical Mailbox.
+  const evm = createEvmClient({
+    transport: evmHttp(rpcUrl),
+    account: evmPrivateKey(privateKeyFromEnvironment()),
   })
-  const quote = await bridge.quoteEvmHyperlaneTransfer({ plan, recipientBytes32 })
-  const nativeBalance = await publicClient.getBalance({ address: account.address })
+  const sender = await evm.walletClient!.getAddress()
+  const bridge = createBridgeClient({
+    environment: 'mainnet',
+    clients: {
+      ethereum: evm,
+      aleo: createAleoClient({
+        publicClient: createAleoPublicClient({
+          transport: aleoHttp(process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2', { network: 'mainnet' }),
+        }),
+      }),
+    },
+  })
+
+  // ── Describe the intended transfer ──────────────────────────────────
+  // The caller supplies familiar chain and asset names, an amount, and the
+  // recipient. The bridge catalog supplies the reviewed router, token contract,
+  // destination domain, decimal widths, and required stages for that direction.
+  // No network is read and no wallet is involved here. Each example transfers
+  // one atomic unit; Ethereum gas and the relayer payment cost more than that.
+  const plan = bridge.prepare({
+    source: config.source,
+    destination: config.destination,
+    bridgeProtocol: 'hyperlane',
+    amount: config.amount,
+    recipient,
+    sender,
+  })
+
+  // ── Check funds and current fees ────────────────────────────────────
+  // Hyperlane's router reports the value required to send the asset and pay the
+  // destination relayer. WBTC also needs visible ERC-20 balance and allowance
+  // reads. None of these calls requests a signature or changes Ethereum state.
+  // A low WBTC allowance means execution needs an approval before dispatch.
+  const quote = await bridge.quote({ plan })
+  if (quote.kind !== 'evm-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
+  const nativeBalance = await evm.publicClient.getBalance(sender)
 
   let assetBalance = nativeBalance
   let allowance: bigint | undefined
@@ -218,18 +138,14 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
       throw new Error('The reviewed WBTC route did not return collateral token metadata')
     }
     ;[assetBalance, allowance] = await Promise.all([
-      publicClient.readContract({
-        address: quote.tokenAddress,
-        abi: ERC20_READ_ABI,
-        functionName: 'balanceOf',
-        args: [account.address],
-      }),
-      publicClient.readContract({
-        address: quote.tokenAddress,
-        abi: ERC20_READ_ABI,
-        functionName: 'allowance',
-        args: [account.address, quote.routerAddress],
-      }),
+      evm.publicClient.call({
+        to: quote.tokenAddress,
+        data: encodeFunctionData({ abi: ERC20_READ_ABI, functionName: 'balanceOf', args: [sender] }),
+      }).then((data) => decodeFunctionResult({ abi: ERC20_READ_ABI, functionName: 'balanceOf', data })),
+      evm.publicClient.call({
+        to: quote.tokenAddress,
+        data: encodeFunctionData({ abi: ERC20_READ_ABI, functionName: 'allowance', args: [sender, quote.routerAddress] }),
+      }).then((data) => decodeFunctionResult({ abi: ERC20_READ_ABI, functionName: 'allowance', data })),
     ])
     approvalRequired = allowance < quote.tokenAmountAtomic
   }
@@ -237,27 +153,31 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
   console.log(`Read-only Hyperlane ${asset} preflight`)
   console.table({
     route: quote.routeId,
-    sender: account.address,
+    sender,
     recipient,
-    amount: `${formatUnits(quote.amountAtomic, config.decimals)} ${asset}`,
-    assetBalance: `${formatUnits(assetBalance, config.decimals)} ${asset}`,
+    amount: `${formatUnits(quote.amountAtomic, plan.sourceAsset.decimals)} ${asset}`,
+    assetBalance: `${formatUnits(assetBalance, plan.sourceAsset.decimals)} ${asset}`,
     nativeBalance: `${formatEther(nativeBalance)} ETH`,
     hyperlaneFee: `${formatEther(quote.nativeFeeAtomic)} ETH`,
     transactionValue: `${formatEther(quote.nativeValueAtomic)} ETH`,
     approvalRequired: asset === 'WBTC' ? approvalRequired : false,
-    allowance: allowance == null ? 'not applicable' : `${formatUnits(allowance, config.decimals)} WBTC`,
+    allowance: allowance == null ? 'not applicable' : `${formatUnits(allowance, plan.sourceAsset.decimals)} WBTC`,
     tokenContract: quote.tokenAddress ?? 'native ETH',
     warpRouteContract: quote.routerAddress,
     destinationDomain: quote.destinationDomain,
-    recipientBytes32,
+    recipientBytes32: quote.recipientBytes32,
   })
 
-  if (process.env[config.executionEnvironmentVariable] !== EXECUTION_ACKNOWLEDGEMENT) {
+  // ── Stop before the fund-moving boundary by default ─────────────────
+  // A normal run ends after printing the route, balances, allowance, and fees.
+  // The exact acknowledgement makes mainnet submission an explicit operator
+  // decision rather than a side effect of copying or inspecting the tutorial.
+  if (process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
     console.log('\nQuote complete; no transaction was submitted.')
     console.log(
       asset === 'WBTC' && approvalRequired
-        ? `Set ${config.executionEnvironmentVariable}=${EXECUTION_ACKNOWLEDGEMENT} to approve WBTC and dispatch the transfer.`
-        : `Set ${config.executionEnvironmentVariable}=${EXECUTION_ACKNOWLEDGEMENT} to dispatch the transfer.`,
+        ? `Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to approve WBTC and dispatch the transfer.`
+        : `Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to dispatch the transfer.`,
     )
     return
   }
@@ -269,37 +189,49 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
     throw new Error('Insufficient ETH balance for the quoted transaction value plus Ethereum gas')
   }
 
-  console.log('\nExecution enabled. The local viem signer will automatically sign and broadcast; no wallet prompt will appear.')
+  // An ERC-20 approval changes only how much WBTC the reviewed router may use;
+  // it does not transfer the token. The following dispatch is the irreversible
+  // boundary: it locks or burns the source asset and creates the message that
+  // Hyperlane must deliver. Every submitted Ethereum transaction also costs gas.
+  console.log('\nExecution enabled. The private key held by this process will sign and broadcast; no wallet prompt will appear.')
   console.log(asset === 'WBTC' && approvalRequired
     ? 'Submitting an exact WBTC approval, waiting for confirmation, then dispatching through Hyperlane.'
     : `Submitting the ${asset} transfer directly through Hyperlane; no approval transaction is needed.`)
-  const execution = await bridge.executeEvmHyperlaneTransfer({
+
+  const execution = await bridge.execute({
     plan,
-    recipientBytes32,
-    confirmationTimeoutMs: millisecondsFromEnvironment(
-      'EVM_CONFIRMATION_TIMEOUT_MS',
-      DEFAULT_EVM_CONFIRMATION_TIMEOUT_MS,
-    ),
+    confirmationTimeoutMs: DEFAULT_EVM_CONFIRMATION_TIMEOUT_MS,
+    onCheckpoint(checkpoint) {
+      // The callback runs after each transaction is broadcast and before the
+      // example waits for confirmation. A durable application atomically
+      // replaces its saved checkpoint here; the SDK and this example do not
+      // choose or manage storage. The checkpoint contains no signing key.
+      console.log('Optional recovery checkpoint:', JSON.stringify(checkpoint))
+    },
   })
+  if (execution.kind !== 'evm-hyperlane') throw new Error(`Unexpected execution kind: ${execution.kind}`)
 
-  console.log('Approval transaction(s):', execution.approvalTxIds)
-  console.log('Transfer status:', execution.receipt.status)
-  if (execution.receipt.status === 'SOURCE_APPROVAL_PENDING') {
-    console.log('WBTC approval status: pending confirmation')
-    console.log('Hyperlane transfer status: not submitted')
-    console.log('After the approval confirms, rerun the same command; the client will observe the allowance and dispatch.')
-    return
+  // ── Observe settlement without repeating completed work ────────────
+  // From this point, chain and relayer reads determine what happened. A timeout
+  // or RPC error after broadcast is an unknown outcome, not proof of failure;
+  // use the latest checkpoint to recover rather than starting another transfer.
+  // Completion requires both the Ethereum dispatch and the canonical Aleo
+  // Mailbox delivery, not merely a successful source receipt.
+  let progress = await bridge.wait({ progress: { next: 'wait', plan, receipt: execution.receipt } })
+  if (progress.next === 'resume') {
+    // This state can occur when a WBTC approval confirmed but no dispatch was
+    // submitted. Resuming asks the same source account to authorize only that
+    // remaining dispatch. It never repeats the confirmed approval.
+    const resumed = await bridge.resume({
+      progress,
+      onCheckpoint(checkpoint) {
+        // Replace the earlier approval checkpoint with the dispatch checkpoint.
+        console.log('Optional recovery checkpoint:', JSON.stringify(checkpoint))
+      },
+    })
+    progress = await bridge.wait({ progress: { next: 'wait', plan, receipt: resumed.receipt } })
   }
-  if (execution.receipt.status === 'SOURCE_CONFIRMING') {
-    console.log(`${asset} approval status: ${asset === 'WBTC' ? 'confirmed or previously sufficient' : 'not applicable'}`)
-    console.log('Transfer transaction:', execution.receipt.sourceTxId)
-    console.log('Hyperlane transfer status: pending Ethereum confirmation')
-    return
-  }
-
-  console.log(`${asset} approval status: ${asset === 'WBTC' ? execution.approvalTxIds.length ? 'confirmed' : 'previously sufficient' : 'not applicable'}`)
-  console.log('Transfer transaction:', execution.receipt.sourceTxId)
-  console.log('Ethereum dispatch status: confirmed')
-  console.log('Hyperlane message id:', execution.receipt.messageId ?? 'not found in the confirmed receipt')
-  console.log('A Hyperlane relayer will process the Aleo mint independently of this script.')
+  if (progress.next === 'failed') throw new Error(progress.error)
+  if (progress.next !== 'done') throw new Error(`Unexpected next operation: ${progress.next}`)
+  console.log('Bridge completed:', progress.receipt)
 }

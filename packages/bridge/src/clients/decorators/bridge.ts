@@ -1,194 +1,82 @@
-import type { Client } from '@provablehq/veil-core'
-import {
-  getProtocolAssets,
-  getProtocolRoutes,
-  type GetProtocolAssetsParameters,
-  type GetProtocolRoutesParameters,
-} from '../../actions/protocolDiscovery.js'
-import { prepareTransfer } from '../../actions/prepareTransfer.js'
-import {
-  executeEvmHyperlaneTransfer,
-  quoteEvmHyperlaneTransfer,
-} from '../../actions/evmHyperlane.js'
-import {
-  executeEvmXReserveTransfer,
-  getXReserveAttestation,
-  quoteEvmXReserveTransfer,
-} from '../../actions/evmXReserve.js'
-import { executeXReservePrivateMint } from '../../actions/xreservePrivateMint.js'
-import { executeXReserveBurn } from '../../actions/xreserveBurn.js'
-import {
-  buildAleoHyperlaneTransferRemoteCall,
-  executeAleoHyperlaneTransferRemote,
-  quoteAleoHyperlaneGasPayment,
-} from '../../actions/aleoHyperlane.js'
-import { executeSolanaHyperlaneTransfer } from '../../actions/executeSolanaHyperlaneTransfer.js'
-import { quoteSolanaHyperlaneTransfer } from '../../actions/quoteSolanaHyperlaneTransfer.js'
-import { BridgeError } from '../../errors/bridgeErrors.js'
-import { createSolanaRpcReader } from '../../solana/rpc.js'
-import type {
-  BridgeExecutors,
-  EvmHyperlaneTransferExecution,
-  EvmHyperlaneTransferQuote,
-  ExecuteEvmHyperlaneTransferParameters,
-  QuoteEvmHyperlaneTransferParameters,
-} from '../../types/evm.js'
-import type {
-  ExecuteSolanaHyperlaneTransferParameters,
-  QuoteSolanaHyperlaneTransferParameters,
-  SolanaBridgeExecutor,
-  SolanaHyperlaneTransferExecution,
-  SolanaHyperlaneTransferQuote,
-  SolanaRpcConfig,
-} from '../../types/solana.js'
-import type {
-  EvmXReserveTransferExecution,
-  EvmXReserveTransferQuote,
-  ExecuteEvmXReserveTransferParameters,
-  GetXReserveAttestationParameters,
-  QuoteEvmXReserveTransferParameters,
-  XReserveAttestationResult,
-  XReserveHttpTransport,
-} from '../../types/xreserve.js'
-import type {
-  AleoHyperlaneGasQuote,
-  AleoHyperlaneTransferRemoteCall,
-  AleoHyperlaneTransferRemoteExecution,
-  ExecuteAleoHyperlaneTransferRemoteParameters,
-  ExecuteXReservePrivateMintParameters,
-  ExecuteXReserveBurnParameters,
-  QuoteAleoHyperlaneGasPaymentParameters,
-  XReserveBurnExecution,
-  XReservePrivateMintExecution,
-} from '../../types/aleo.js'
-import type {
-  BridgeEnvironment,
-  BridgeRegistry,
-  BridgeTransferPlan,
-  PrepareTransferParameters,
-  ProtocolBridgeAsset,
-  ProtocolBridgeRoute,
-} from '../../types/protocol.js'
+import { getAssets, type GetAssetsParameters } from '../../actions/getAssets.js'
+import { getRoutes, type GetRoutesParameters } from '../../actions/getRoutes.js'
+import { prepare } from '../../actions/prepare.js'
+import { execute } from '../../actions/execute.js'
+import { quote } from '../../actions/quote.js'
+import { complete } from '../../actions/complete.js'
+import { getStatus } from '../../actions/getStatus.js'
+import { waitForStatus } from '../../actions/waitForStatus.js'
+import { recover } from '../../actions/recover.js'
+import { resume } from '../../actions/resume.js'
+import { wait } from '../../actions/wait.js'
+import { shield } from '../../actions/shield.js'
+import { unshield } from '../../actions/unshield.js'
+import type { BridgeChainClients } from '../../connections/resolve.js'
+import type { BridgeEnvironment, BridgeProgress, BridgeReceipt, BridgeRegistry, BridgePlan, PrepareParameters, ProtocolBridgeAsset, ProtocolBridgeRoute } from '../../types/protocol.js'
+import type { CompleteParameters, ExecuteParameters, GetStatusParameters, QuoteParameters, RecoverParameters, ResumeParameters, WaitForStatusParameters, WaitParameters, BridgeExecution, BridgeQuote } from '../../types/actions.js'
+import type { AleoPrivacyExecution, ShieldParameters, UnshieldParameters } from '../../types/aleo.js'
 
 /**
- * Carries registry defaults from client construction into bound actions.
- *
- * @property environment Environment applied when an action omits its filter.
- * @property registry Reviewed snapshot supplying chains, assets, and routes.
- * @property executors Optional wallet capabilities injected at construction.
- * @property xReserveHttpTransport Optional HTTP capability for Circle attestation lookups.
- * @property aleoPublicClient Optional Aleo public client for on-chain reads such as Hyperlane gas quotes.
- * @property solanaRpc Optional Solana JSON-RPC endpoint for on-chain reads such as blockhash and confirmation lookups.
+ * Carries validated registry and materialized client state into bound actions.
+ * @property environment Default route environment.
+ * @property registry Validated deployment registry.
+ * @property clients Materialized chain capabilities keyed by registry chain id.
+ * @property fetch Fetch implementation used for protocol HTTP requests.
  */
 export type BridgeActionsConfig = {
   environment: BridgeEnvironment
   registry: BridgeRegistry
-  executors?: BridgeExecutors | undefined
-  xReserveHttpTransport?: XReserveHttpTransport | undefined
-  aleoPublicClient?: Client | undefined
-  solanaRpc?: SolanaRpcConfig | undefined
+  clients: BridgeChainClients
+  fetch: typeof globalThis.fetch
 }
 
 /**
- * Lists the protocol-oriented actions bound to a bridge client.
+ * Groups the complete cross-chain transfer lifecycle exposed by a bridge client.
  *
- * @property getAssets Lists chain-specific registry assets without network access.
- * @property getRoutes Lists directional registry routes without network access.
- * @property prepareTransfer Validates inputs and returns a non-fund-moving execution plan.
- * @property quoteEvmHyperlaneTransfer Reads live Ethereum Warp Route fees without signing.
- * @property executeEvmHyperlaneTransfer Approves collateral when needed, then signs and dispatches through the Ethereum wallet.
- * @property quoteEvmXReserveTransfer Reads USDC balance and allowance and derives Circle deposit inputs.
- * @property executeEvmXReserveTransfer Approves USDC when needed and submits the Circle deposit.
- * @property getXReserveAttestation Fetches one Circle attestation by message hash.
- * @property executeXReservePrivateMint Prompts the Aleo wallet for the wrapper private mint.
- * @property executeXReserveBurn Prompts the Aleo wallet for one of the reviewed USDCx burn transitions.
- * @property buildAleoHyperlaneTransferRemoteCall Constructs the seven-input Aleo Warp Route call without wallet access.
- * @property quoteAleoHyperlaneGasPayment Reads the live interchain gas paymaster quote through the injected Aleo public client.
- * @property executeAleoHyperlaneTransferRemote Submits only fully reviewed, non-placeholder Aleo Warp Route calls.
- * @property quoteSolanaHyperlaneTransfer Reads the live Solana interchain gas paymaster quote through the injected Solana RPC reader.
- * @property executeSolanaHyperlaneTransfer Signs and submits a Solana Hyperlane transfer through the injected Solana executor.
+ * Discovery and preparation require no network access. Quoting and monitoring
+ * read chains or providers. Execution, resumption, completion, shielding, and
+ * unshielding can request wallet authorization and move funds.
  */
 export type BridgeActions = {
-  getAssets: (params?: GetProtocolAssetsParameters) => ProtocolBridgeAsset[]
-  getRoutes: (params?: GetProtocolRoutesParameters) => ProtocolBridgeRoute[]
-  prepareTransfer: (params: PrepareTransferParameters) => BridgeTransferPlan
-  quoteEvmHyperlaneTransfer: (params: QuoteEvmHyperlaneTransferParameters) => Promise<EvmHyperlaneTransferQuote>
-  executeEvmHyperlaneTransfer: (params: ExecuteEvmHyperlaneTransferParameters) => Promise<EvmHyperlaneTransferExecution>
-  quoteEvmXReserveTransfer: (params: QuoteEvmXReserveTransferParameters) => Promise<EvmXReserveTransferQuote>
-  executeEvmXReserveTransfer: (params: ExecuteEvmXReserveTransferParameters) => Promise<EvmXReserveTransferExecution>
-  getXReserveAttestation: (params: GetXReserveAttestationParameters) => Promise<XReserveAttestationResult>
-  executeXReservePrivateMint: (params: ExecuteXReservePrivateMintParameters) => Promise<XReservePrivateMintExecution>
-  executeXReserveBurn: (params: ExecuteXReserveBurnParameters) => Promise<XReserveBurnExecution>
-  buildAleoHyperlaneTransferRemoteCall: (params: ExecuteAleoHyperlaneTransferRemoteParameters) => AleoHyperlaneTransferRemoteCall
-  quoteAleoHyperlaneGasPayment: (params: QuoteAleoHyperlaneGasPaymentParameters) => Promise<AleoHyperlaneGasQuote>
-  executeAleoHyperlaneTransferRemote: (params: ExecuteAleoHyperlaneTransferRemoteParameters) => Promise<AleoHyperlaneTransferRemoteExecution>
-  quoteSolanaHyperlaneTransfer: (params: QuoteSolanaHyperlaneTransferParameters) => Promise<SolanaHyperlaneTransferQuote>
-  executeSolanaHyperlaneTransfer: (params: ExecuteSolanaHyperlaneTransferParameters) => Promise<SolanaHyperlaneTransferExecution>
+  getAssets: (params?: GetAssetsParameters) => ProtocolBridgeAsset[]
+  getRoutes: (params?: GetRoutesParameters) => ProtocolBridgeRoute[]
+  prepare: (params: PrepareParameters) => BridgePlan
+  quote: (params: QuoteParameters) => Promise<BridgeQuote>
+  execute: (params: ExecuteParameters) => Promise<BridgeExecution>
+  getStatus: (params: GetStatusParameters) => Promise<BridgeReceipt>
+  waitForStatus: (params: WaitForStatusParameters) => Promise<BridgeReceipt>
+  complete: (params: CompleteParameters) => Promise<BridgeExecution>
+  recover: (params: RecoverParameters) => Promise<BridgeProgress>
+  resume: (params: ResumeParameters) => Promise<BridgeExecution>
+  wait: (params: WaitParameters) => Promise<BridgeProgress>
+  shield: (params: ShieldParameters) => Promise<AleoPrivacyExecution>
+  unshield: (params: UnshieldParameters) => Promise<AleoPrivacyExecution>
 }
 
 /**
- * Binds registry discovery and transfer planning to a client.
+ * Binds configured chains, wallets, and provider HTTP access to every bridge action.
  *
- * Discovery and planning are pure and local. EVM actions use the optional
- * executor injected through the configuration and fail before network access
- * when it is absent.
- *
- * @param client Client receiving the action layer.
- * @param config Registry and default environment selected at construction.
- * @returns Bound protocol bridge actions.
- *
- * @example
- * const actions = bridgeActions(client, { environment: 'mainnet', registry })
+ * Calling this function only creates closures; it does not contact a chain,
+ * request a signature, submit a transaction, move funds, or store state.
  */
-export function bridgeActions(_client: Client, config: BridgeActionsConfig): BridgeActions {
-  const evmExecutor = () => {
-    if (!config.executors?.evm) {
-      throw new BridgeError('An EVM executor is required for Ethereum bridge actions')
-    }
-    return config.executors.evm
-  }
-  const xReserveTransport = () => {
-    if (!config.xReserveHttpTransport) throw new BridgeError('An xReserve HTTP transport is required for attestation requests')
-    return config.xReserveHttpTransport
-  }
-  const aleoExecutor = () => {
-    if (!config.executors?.aleo) throw new BridgeError('An Aleo executor is required for Aleo bridge transactions')
-    return config.executors.aleo
-  }
-  const aleoPublicClient = () => {
-    if (!config.aleoPublicClient) throw new BridgeError('An Aleo public client is required for Hyperlane gas quotes')
-    return config.aleoPublicClient
-  }
-  const solanaRpcReader = () => {
-    if (!config.solanaRpc) throw new BridgeError('Solana actions require solanaRpc configuration on the bridge client')
-    return createSolanaRpcReader(config.solanaRpc)
-  }
-  const solanaExecutor = (): SolanaBridgeExecutor => {
-    if (!config.executors?.solana) throw new BridgeError('A Solana executor is required for Solana bridge transactions')
-    return config.executors.solana
-  }
+export function bridgeActions(config: BridgeActionsConfig): BridgeActions {
   return {
-    getAssets: (params = {}) => getProtocolAssets(config.registry, {
-      ...params,
-      environment: params.environment ?? config.environment,
-    }),
-    getRoutes: (params = {}) => getProtocolRoutes(config.registry, {
-      ...params,
-      environment: params.environment ?? config.environment,
-    }),
-    prepareTransfer: (params) => prepareTransfer(config.registry, params),
-    quoteEvmHyperlaneTransfer: async (params) => quoteEvmHyperlaneTransfer(config.registry, evmExecutor(), params),
-    executeEvmHyperlaneTransfer: async (params) => executeEvmHyperlaneTransfer(config.registry, evmExecutor(), params),
-    quoteEvmXReserveTransfer: async (params) => quoteEvmXReserveTransfer(config.registry, evmExecutor(), params),
-    executeEvmXReserveTransfer: async (params) => executeEvmXReserveTransfer(config.registry, evmExecutor(), params),
-    getXReserveAttestation: async (params) => getXReserveAttestation(config.registry, xReserveTransport(), params),
-    executeXReservePrivateMint: async (params) => executeXReservePrivateMint(config.registry, aleoExecutor(), params),
-    executeXReserveBurn: async (params) => executeXReserveBurn(config.registry, aleoExecutor(), params),
-    buildAleoHyperlaneTransferRemoteCall: (params) => buildAleoHyperlaneTransferRemoteCall(config.registry, params),
-    quoteAleoHyperlaneGasPayment: async (params) => quoteAleoHyperlaneGasPayment(config.registry, aleoPublicClient(), params),
-    executeAleoHyperlaneTransferRemote: async (params) => executeAleoHyperlaneTransferRemote(config.registry, aleoExecutor(), params),
-    quoteSolanaHyperlaneTransfer: async (params) => quoteSolanaHyperlaneTransfer(config.registry, solanaRpcReader(), params),
-    executeSolanaHyperlaneTransfer: async (params) =>
-      executeSolanaHyperlaneTransfer(config.registry, solanaExecutor(), solanaRpcReader(), params),
+    // Discovery inherits the client's environment unless a call explicitly
+    // asks for another environment in the same catalog.
+    getAssets: (params = {}) => getAssets(config.registry, { ...params, environment: params.environment ?? config.environment }),
+    getRoutes: (params = {}) => getRoutes(config.registry, { ...params, environment: params.environment ?? config.environment }),
+    // Every remaining closure injects the same validated route catalog and
+    // registry-keyed clients, preventing per-action configuration drift.
+    prepare: (params) => prepare(config.registry, params),
+    quote: async (params) => quote(config.registry, config.clients, params),
+    execute: async (params) => execute(config.registry, config.clients, params),
+    getStatus: async (params) => getStatus(config.registry, config.clients, config.fetch, params),
+    waitForStatus: async (params) => waitForStatus(config.registry, config.clients, config.fetch, params),
+    complete: async (params) => complete(config.registry, config.clients, params),
+    recover: async (params) => recover(config.registry, config.clients, config.fetch, params),
+    resume: async (params) => resume(config.registry, config.clients, params),
+    wait: async (params) => wait(config.registry, config.clients, config.fetch, params),
+    shield: async (params) => shield(config.registry, config.clients, params),
+    unshield: async (params) => unshield(config.registry, config.clients, params),
   }
 }

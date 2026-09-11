@@ -2,14 +2,14 @@ import type { AgentTool } from '@provablehq/veil-core/agent'
 import type { BridgeClient } from '../clients/createBridgeClient.js'
 
 /**
- * Builds read-only discovery and non-fund-moving planning tools.
+ * Creates tools an agent can use to discover and describe cross-chain transfers.
  *
- * The current tool set cannot sign or submit transactions. A later execution
- * phase adds privileged tools only after xReserve and Hyperlane adapters expose
- * inspectable transaction plans.
+ * The tools list supported assets and routes, validate an amount and recipient,
+ * and describe the stages required to move funds. They cannot read live prices,
+ * access a wallet, request a signature, submit a transaction, or move funds.
  *
- * @param client Protocol bridge client supplying registry-bound actions.
- * @returns Agent tools for asset discovery, route discovery, and transfer planning.
+ * @param client Bridge client supplying the supported asset and route catalog.
+ * @returns Non-fund-moving agent tools for discovering and describing transfers.
  *
  * @example
  * const tools = createBridgeAgentTools(createBridgeClient())
@@ -19,7 +19,7 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
     {
       schema: {
         name: 'bridge_list_assets',
-        description: 'List chain-specific xReserve and Hyperlane assets from the reviewed bridge registry. Returns stable asset ids, chain ids, decimals, and known onchain locators.',
+        description: 'List assets available for cross-chain transfers. Returns each chain representation, symbol, decimal precision, and public token identifier without contacting a chain or wallet.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -34,7 +34,7 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
     {
       schema: {
         name: 'bridge_list_routes',
-        description: 'List directional protocol routes. USDCx routes use Circle xReserve; ETH, WBTC, SOL, ALEO, and USAD routes use Hyperlane. metadata-required means the route is known but its execution deployment is not pinned yet.',
+        description: 'List supported ways to move assets between chains and the provider responsible for each direction. A metadata-required route is recognized but cannot move funds until its deployed contracts or programs are reviewed.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -52,20 +52,30 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
     {
       schema: {
         name: 'bridge_prepare_transfer',
-        description: 'Validate a route, amount, and recipient, then return the ordered xReserve or Hyperlane execution plan. This tool is pure and local: it does not query fees, sign transactions, or move funds.',
+        description: 'Describe how an amount of an asset can move between two chains through xReserve or Hyperlane. This tool does not contact a blockchain or bridge provider, request a wallet signature, or move funds.',
         inputSchema: {
           type: 'object',
           properties: {
-            routeId: { type: 'string' },
+            source: {
+              type: 'object',
+              properties: { chain: { type: 'string' }, asset: { type: 'string' } },
+              required: ['chain', 'asset'],
+            },
+            destination: {
+              type: 'object',
+              properties: { chain: { type: 'string' }, asset: { type: 'string' } },
+              required: ['chain', 'asset'],
+            },
+            bridgeProtocol: { type: 'string', enum: ['xreserve', 'hyperlane'] },
             amount: { type: 'string', description: 'Positive decimal amount in source-asset display units.' },
             recipient: { type: 'string' },
             sender: { type: 'string' },
-            privateRecipient: { type: 'boolean' },
+            mintMode: { type: 'string', enum: ['public', 'record', 'private'] },
           },
-          required: ['routeId', 'amount', 'recipient'],
+          required: ['source', 'destination', 'amount', 'recipient'],
         },
       },
-      handler: async (params) => client.prepareTransfer(params as Parameters<BridgeClient['prepareTransfer']>[0]),
+      handler: async (params) => client.prepare(params as Parameters<BridgeClient['prepare']>[0]),
     },
   ]
 }

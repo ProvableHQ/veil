@@ -56,7 +56,8 @@ function decodeAleoBech32m(address: string): Uint8Array {
 /**
  * Decodes a checksummed Aleo bech32m address into xReserve bytes32 form.
  *
- * Pure and local; validates the prefix, length, checksum, padding, and payload width.
+ * Validates the supplied prefix, length, checksum, padding, and payload width
+ * without contacting Aleo or Circle.
  *
  * @param address Aleo account address to encode.
  * @returns Exactly 32 decoded bytes as prefixed hexadecimal.
@@ -107,8 +108,9 @@ export async function aleoProgramAddress(programId: string, environment: BridgeE
 /**
  * Builds the fixed 65-byte xReserve hook for public, record, or wrapper-private minting.
  *
- * Public and record hooks are pure and local. Private hooks lazily load Aleo WASM
- * to commit the intended recipient with BHP256 and the selected secret nonce.
+ * Public and record hooks use only the supplied values. Private hooks lazily
+ * load Aleo WASM to commit the intended recipient with BHP256 and the selected
+ * secret nonce. No chain or bridge provider is contacted.
  *
  * @param mode Destination mint transition selected by the caller.
  * @param recipient Intended Aleo recipient committed by private mode.
@@ -127,6 +129,9 @@ export async function buildXReserveHookData(
   secretNonce = '0scalar',
 ): Promise<Hex> {
   const bytes = new Uint8Array(HOOK_DATA_BYTES)
+  // Byte 0 selects the Aleo delivery transition. The remaining 64 bytes are
+  // zero for provider-managed public/record mints and carry the private
+  // recipient commitment in bytes 1..32 for wrapper-managed private minting.
   bytes[0] = mode === 'public' ? 0 : mode === 'record' ? 1 : 2
   if (mode === 'private') {
     const sdk = await loadAleoSdk(environment)
@@ -137,6 +142,8 @@ export async function buildXReserveHookData(
     } catch (cause) {
       throw new BridgeError(`Invalid private mint secret nonce: ${secretNonce}`, { cause })
     }
+    // BHP256 binds the intended Aleo address to the secret nonce. Revealing the
+    // same pair later proves who may complete the private destination mint.
     const commitment = new sdk.BHP256().commit(bits, scalar).toBytesLe()
     if (commitment.length !== 32) throw new BridgeError('Private mint commitment must contain 32 bytes')
     bytes.set(commitment, 1)
@@ -147,7 +154,8 @@ export async function buildXReserveHookData(
 /**
  * Derives the Circle deposit nonce from source domain, transaction hash, and log index.
  *
- * Pure and local; follows Circle's ABI-padded nonce preimage exactly.
+ * Follows Circle's ABI-padded nonce preimage exactly without contacting Circle
+ * or either chain.
  *
  * @param sourceDomain Circle domain of the source xReserve contract.
  * @param transactionHash Confirmed deposit transaction hash.
@@ -158,6 +166,8 @@ export async function buildXReserveHookData(
  * const nonce = calculateXReserveDepositNonce(0, txHash, 3)
  */
 export function calculateXReserveDepositNonce(sourceDomain: number, transactionHash: Hash, logIndex: number): Hash {
+  // ABI encoding fixes domain and log index at 32 bytes each. Concatenate those
+  // encodings with the 32-byte transaction hash before Keccak-256.
   const domain = encodeAbiParameters([{ type: 'uint32' }], [sourceDomain])
   const index = encodeAbiParameters([{ type: 'uint256' }], [BigInt(logIndex)])
   return keccak256(`0x${domain.slice(2)}${transactionHash.slice(2)}${index.slice(2)}`)
@@ -171,7 +181,8 @@ function uintBytes(value: bigint, bytes: number): Uint8Array {
 /**
  * Builds the canonical 305-byte Circle xReserve v2 deposit payload.
  *
- * Pure and local; rejects fields with invalid wire widths before constructing the payload.
+ * Rejects fields with invalid wire widths before constructing the payload. It
+ * does not contact Circle or either chain.
  *
  * @param params Event-derived deposit values and reviewed route identifiers.
  * @returns The exact payload submitted to Circle's attester.
@@ -195,6 +206,11 @@ export function buildXReserveDepositPayload(params: {
   if (!isHex(params.remoteRecipient, { strict: true }) || hexToBytes(params.remoteRecipient).length !== 32) throw new BridgeError('remoteRecipient must contain 32 bytes')
   if (!isHex(params.hookData, { strict: true }) || hexToBytes(params.hookData).length !== HOOK_DATA_BYTES) throw new BridgeError('hookData must contain 65 bytes')
   if (!isAddress(params.localToken) || !isAddress(params.depositor)) throw new BridgeError('Payload EVM address is invalid')
+  // Circle's signed message is a fixed 305-byte binary layout. Keep explicit
+  // offsets so a port can reproduce the wire format without ABI assumptions:
+  // header[0..8), amount[8..40), domain[40..44), remote token[44..76),
+  // recipient[76..108), local token[108..140), depositor[140..172),
+  // max fee[172..204), nonce[204..236), hook length[236..240), hook[240..305).
   const payload = new Uint8Array(305)
   payload.set([0x5a, 0x2e, 0x0a, 0xcd, 0, 0, 0, 1], 0)
   payload.set(uintBytes(params.amount, 32), 8)
@@ -213,7 +229,7 @@ export function buildXReserveDepositPayload(params: {
 /**
  * Hashes a canonical xReserve deposit payload for Circle attestation lookup.
  *
- * Pure and local; computes Keccak-256 without contacting Circle.
+ * Computes Keccak-256 from the supplied payload without contacting Circle.
  *
  * @param payload Canonical xReserve deposit bytes.
  * @returns The 32-byte Circle message hash.
@@ -228,7 +244,8 @@ export function calculateXReserveMessageHash(payload: Hex): Hash {
 /**
  * Formats fixed-width hexadecimal bytes as an Aleo `[u8; N]` literal.
  *
- * Pure and local; validates the exact byte width before formatting inputs for a wallet.
+ * Validates the exact byte width before formatting inputs for a wallet. It does
+ * not contact Aleo or prompt the wallet.
  *
  * @param value Prefixed hexadecimal bytes to format.
  * @param expectedBytes Required array width from the target Aleo function.
@@ -248,7 +265,8 @@ export function xReserveHexToAleoBytes(value: Hex, expectedBytes: number): strin
 /**
  * Encodes an Ethereum address as the 32-byte recipient required by xReserve burns.
  *
- * Pure and local; preserves the 20 address bytes and adds twelve leading zero bytes.
+ * Preserves the 20 address bytes and adds twelve leading zero bytes without
+ * contacting Ethereum or Circle.
  *
  * @param address Checksummed or lowercase Ethereum address selected by the caller.
  * @returns The address left-padded to exactly 32 bytes.

@@ -10,10 +10,18 @@ import {
   type Hex,
 } from 'viem'
 import { describe, expect, it } from 'vitest'
-import { executeEvmXReserveTransfer, getXReserveAttestation } from '../../src/actions/evmXReserve.js'
-import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
+import {
+  execute as executeEvmXReserveTransfer,
+  getAttestation as getXReserveAttestation,
+} from '../../src/protocols/xreserve/evmToAleo.js'
+import { execute } from '../../src/actions/execute.js'
+import { waitForStatus } from '../../src/actions/waitForStatus.js'
+import { createBridgeCheckpoint } from '../../src/actions/createBridgeCheckpoint.js'
+import { createBridgeClient } from '../../src/clients/createBridgeClient.js'
+import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
-import type { EvmBridgeExecutor } from '../../src/types/evm.js'
+import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'
+import type { BridgeReceipt } from '../../src/types/protocol.js'
 
 const ACCOUNT = getAddress('0x0000000000000000000000000000000000000001')
 const TOKEN = getAddress('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238')
@@ -30,21 +38,26 @@ const ABI = parseAbi([
 
 type Sent = { from: Address, to: Address, data: Hex, value?: Hex }
 
-function transferPlan() {
-  return prepareTransfer(DEFAULT_BRIDGE_REGISTRY, { routeId: 'xreserve:sepolia/usdc->aleo-testnet/usdcx', amount: '2', recipient: RECIPIENT, sender: ACCOUNT, mintMode: 'record' })
+function transferPlan(mintMode: 'private' | 'record' = 'record') {
+  return prepare(DEFAULT_BRIDGE_REGISTRY, { source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' }, amount: '2', recipient: RECIPIENT, sender: ACCOUNT, mintMode })
 }
 
-function mockExecutor() {
+function mockExecutor(
+  confirmDeposit = { value: true },
+  confirmApproval = { value: true },
+) {
   const sent: Sent[] = []
-  const executor: EvmBridgeExecutor = {
-    account: ACCOUNT,
-    request: async ({ method, params }) => {
+  const request = async ({ method, params }: { method: string, params?: readonly unknown[] | Record<string, unknown> }) => {
       if (method === 'eth_chainId') return '0xaa36a7'
       if (method === 'eth_call') {
         const transaction = (params as readonly [{ data: Hex }])[0]
         const decoded = decodeFunctionData({ abi: ABI, data: transaction.data })
         if (decoded.functionName === 'balanceOf') return encodeFunctionResult({ abi: ABI, functionName: 'balanceOf', result: 3_000_000n })
-        if (decoded.functionName === 'allowance') return encodeFunctionResult({ abi: ABI, functionName: 'allowance', result: 0n })
+        if (decoded.functionName === 'allowance') {
+          const result = confirmApproval.value && sent.length > 0 ? 2_000_000n : 0n
+          return encodeFunctionResult({ abi: ABI, functionName: 'allowance', result })
+        }
       }
       if (method === 'eth_sendTransaction') {
         sent.push((params as readonly [Sent])[0])
@@ -52,7 +65,8 @@ function mockExecutor() {
       }
       if (method === 'eth_getTransactionReceipt') {
         const hash = (params as readonly [Hash])[0]
-        if (hash !== TX_HASH) return { status: '0x1', logs: [] }
+        if (hash !== TX_HASH) return confirmApproval.value ? { status: '0x1', logs: [] } : null
+        if (!confirmDeposit.value) return null
         const deposit = decodeFunctionData({ abi: ABI, data: sent.at(-1)!.data })
         if (deposit.functionName !== 'depositToRemote') throw new Error('Expected deposit')
         const [value, remoteDomain, remoteRecipient, localToken, maxFee, hookData] = deposit.args
@@ -71,8 +85,11 @@ function mockExecutor() {
         }
       }
       throw new Error(`Unexpected RPC method ${method}`)
-    },
   }
+  const executor = createEvmClient({
+    transport: evmCustom(request),
+    account: evmProvider({ request }, { account: ACCOUNT }),
+  }) as Required<ReturnType<typeof createEvmClient>>
   return { executor, sent }
 }
 
@@ -88,6 +105,168 @@ describe('Ethereum xReserve actions', () => {
     expect(execution.receipt.id).toMatch(/^0x[0-9a-f]{64}$/)
     expect(execution.receipt.protocolState.payload).toMatch(/^0x[0-9a-f]{610}$/)
     expect(execution.receipt.protocolState.mintMode).toBe('record')
+  })
+
+  it('checkpoints at broadcast and resumes confirmation without resubmitting', async () => {
+    const confirmDeposit = { value: false }
+    const { executor, sent } = mockExecutor(confirmDeposit)
+    const checkpoints: BridgeReceipt[] = []
+    const pending = await executeEvmXReserveTransfer(DEFAULT_BRIDGE_REGISTRY, executor, {
+      plan: transferPlan(),
+      confirmationTimeoutMs: 0,
+      onSubmitted(receipt) { checkpoints.push(receipt) },
+    })
+
+    expect(checkpoints.map((receipt) => receipt.status)).toEqual(['SOURCE_APPROVAL_PENDING', 'SOURCE_CONFIRMING'])
+    expect(pending.receipt).toEqual(checkpoints[1])
+    expect(sent).toHaveLength(2)
+
+    confirmDeposit.value = true
+    const resumed = await executeEvmXReserveTransfer(DEFAULT_BRIDGE_REGISTRY, executor, {
+      plan: transferPlan(),
+      resume: pending.receipt,
+    })
+    expect(resumed.receipt.status).toBe('ATTESTATION_PENDING')
+    expect(sent).toHaveLength(2)
+  })
+
+  it('emits compact checkpoints from the protocol-neutral execute action', async () => {
+    const { executor } = mockExecutor()
+    const transfer = transferPlan()
+    const checkpoints: unknown[] = []
+
+    await execute(DEFAULT_BRIDGE_REGISTRY, { sepolia: executor }, {
+      plan: transfer,
+      onCheckpoint(checkpoint) { checkpoints.push(checkpoint) },
+    })
+
+    expect(checkpoints).toHaveLength(2)
+    expect(checkpoints).toMatchObject([
+      { source: { approvalTransactionIds: [`0x${'11'.repeat(32)}`] } },
+      { source: { approvalTransactionIds: [`0x${'11'.repeat(32)}`], transactionId: TX_HASH } },
+    ])
+  })
+
+  it('continues source confirmation through the read-only status action', async () => {
+    const confirmDeposit = { value: false }
+    const { executor, sent } = mockExecutor(confirmDeposit)
+    const transfer = transferPlan()
+    const submitted = await executeEvmXReserveTransfer(DEFAULT_BRIDGE_REGISTRY, executor, {
+      plan: transfer,
+      confirmationTimeoutMs: 0,
+    })
+    expect(submitted.receipt.status).toBe('SOURCE_CONFIRMING')
+
+    confirmDeposit.value = true
+    const receipt = await waitForStatus(
+      DEFAULT_BRIDGE_REGISTRY,
+      { sepolia: executor },
+      async () => ({ ok: false, status: 404, json: async () => ({}) }),
+      {
+        plan: transfer,
+        receipt: submitted.receipt,
+        until: ['ATTESTATION_PENDING'],
+        pollingIntervalMs: 0,
+        timeoutMs: 1_000,
+      },
+    )
+
+    expect(receipt.status).toBe('ATTESTATION_PENDING')
+    expect(sent).toHaveLength(2)
+  })
+
+  it('recovers a confirmed source deposit from a compact checkpoint without resubmitting', async () => {
+    const confirmDeposit = { value: false }
+    const { executor, sent } = mockExecutor(confirmDeposit)
+    const transfer = transferPlan()
+    const submitted = await executeEvmXReserveTransfer(DEFAULT_BRIDGE_REGISTRY, executor, {
+      plan: transfer,
+      confirmationTimeoutMs: 0,
+    })
+    const checkpoint = createBridgeCheckpoint(transfer, submitted.receipt)
+
+    confirmDeposit.value = true
+    const bridge = createBridgeClient({
+      environment: 'testnet',
+      clients: { sepolia: { family: 'evm', publicClient: executor.publicClient } },
+      fetch: async () => ({ ok: false, status: 404, json: async () => ({}) }) as Response,
+    })
+    const progress = await bridge.recover({ checkpoint })
+
+    expect(progress.next).toBe('wait')
+    expect(progress.receipt.status).toBe('ATTESTATION_PENDING')
+    expect(progress.receipt.sourceTxId).toBe(TX_HASH)
+    expect(sent).toHaveLength(2)
+  })
+
+  it('checkpoints the connected source account when the plan omits sender', async () => {
+    const confirmApproval = { value: false }
+    const { executor } = mockExecutor({ value: true }, confirmApproval)
+    const { sender: _sender, ...transfer } = transferPlan()
+    let checkpoint: ReturnType<typeof createBridgeCheckpoint> | undefined
+
+    await execute(DEFAULT_BRIDGE_REGISTRY, { sepolia: executor }, {
+      plan: transfer,
+      confirmationTimeoutMs: 0,
+      onCheckpoint(value) { checkpoint = value },
+    })
+
+    expect(checkpoint?.intent.sender).toBe(ACCOUNT)
+  })
+
+  it('resumes an approval-only recovery without asking the caller to execute twice', async () => {
+    const confirmApproval = { value: false }
+    const { executor, sent } = mockExecutor({ value: true }, confirmApproval)
+    const transfer = transferPlan()
+    const submitted = await execute(DEFAULT_BRIDGE_REGISTRY, { sepolia: executor }, {
+      plan: transfer,
+      confirmationTimeoutMs: 0,
+    })
+    expect(submitted.receipt.status).toBe('SOURCE_APPROVAL_PENDING')
+    const checkpoint = createBridgeCheckpoint(transfer, submitted.receipt)
+
+    confirmApproval.value = true
+    const bridge = createBridgeClient({
+      environment: 'testnet',
+      clients: { sepolia: executor },
+      fetch: async () => ({ ok: false, status: 404, json: async () => ({}) }) as Response,
+    })
+    const progress = await bridge.recover({ checkpoint })
+    expect(progress.next).toBe('resume')
+    if (progress.next !== 'resume') throw new Error(`Expected resume, received ${progress.next}`)
+
+    const resumed = await bridge.resume({ progress })
+
+    expect(resumed.kind).toBe('evm-xreserve')
+    expect(resumed.receipt.status).toBe('ATTESTATION_PENDING')
+    expect(sent).toHaveLength(2)
+    expect(decodeFunctionData({ abi: ABI, data: sent[1]!.data }).functionName).toBe('depositToRemote')
+  })
+
+  it('requires the original private nonce when resuming a checkpointed approval', async () => {
+    const confirmApproval = { value: false }
+    const { executor } = mockExecutor({ value: true }, confirmApproval)
+    const transfer = transferPlan('private')
+    let checkpoint: ReturnType<typeof createBridgeCheckpoint> | undefined
+    await execute(DEFAULT_BRIDGE_REGISTRY, { sepolia: executor }, {
+      plan: transfer,
+      privateMintSecretNonce: '7scalar',
+      confirmationTimeoutMs: 0,
+      onCheckpoint(value) { checkpoint = value },
+    })
+    expect(checkpoint?.source?.hookData).toMatch(/^0x[0-9a-f]{130}$/)
+    expect(JSON.stringify(checkpoint)).not.toContain('7scalar')
+
+    confirmApproval.value = true
+    const bridge = createBridgeClient({ environment: 'testnet', clients: { sepolia: executor } })
+    const progress = await bridge.recover({ checkpoint: checkpoint! })
+    if (progress.next !== 'resume') throw new Error(`Expected resume, received ${progress.next}`)
+
+    await expect(bridge.resume({ progress })).rejects.toThrow(/secret nonce does not match/)
+    await expect(bridge.resume({ progress, privateMintSecretNonce: '7scalar' })).resolves.toMatchObject({
+      kind: 'evm-xreserve',
+      receipt: { status: 'ATTESTATION_PENDING' },
+    })
   })
 
   it('maps an absent Circle attestation to pending', async () => {

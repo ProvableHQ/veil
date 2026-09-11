@@ -33,7 +33,7 @@ import {
 import { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR } from '@provablehq/veil-aleo-devnode'
 export { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR }
 import type { LocalAccount } from '@provablehq/veil-core'
-import type { ProvingConfig, BuildTransactionOptions, BuildDeploymentOptions, SimulateOptions, ExecuteOptions, RawSimulateResult, RawExecuteResult } from '@provablehq/veil-core'
+import type { ProvingConfig, BuildTransactionOptions, BuildDeploymentOptions, SimulateOptions, ExecuteOptions, RawSimulateResult, RawExecuteResult, Transaction } from '@provablehq/veil-core'
 import type { OwnedRecord, RecordProvider, StandaloneRecordScanner, RequestRecordsParameters } from '@provablehq/veil-core'
 import type { Network, PublicClient, WalletClient } from '@provablehq/veil-core'
 import {
@@ -492,8 +492,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
      * The delegated prover pays the transaction fee from its FeeMaster
      * account instead of the caller's public credits. Only meaningful with
      * `mode: 'delegated'`; requires the prover service to allow it for the
-     * consumer. Defaults to true — accounts need no public credits to
-     * transact. Set false when the account funds its own fees.
+     * consumer. Defaults to false because support is a service-side capability;
+     * set true only after the prover operator enables it for the caller.
      */
     useFeeMaster?: boolean
     /**
@@ -584,6 +584,72 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             merged[name] = await programManager.networkClient.getProgram(name)
           }
           resolvedImports = merged
+        }
+
+        if (options.mode === 'delegated') {
+          const proverUrl = resolveProverUrl()
+          if (!proverUrl) {
+            throw new ConfigurationError(
+              'Delegated execution requires proverUrl. Pass proverUrl to createProvingConfig or createAleoClient.',
+            )
+          }
+
+          try {
+            const provingRequest = await programManager.provingRequest({
+              programName: txOptions.programName,
+              functionName: txOptions.functionName,
+              priorityFee: 0,
+              privateFee: txOptions.privateFee ?? false,
+              inputs: txOptions.inputs,
+              ...(resolvedImports ? { programImports: resolvedImports } : {}),
+              broadcast: false,
+              useFeeMaster: options.useFeeMaster ?? false,
+            })
+            await txOptions.onProgress?.({ type: 'request-built' })
+
+            const dpsClient = new AleoNetworkClient(proverUrl)
+            const auth = async (forceRefresh: boolean) => {
+              if (options.auth) return { auth: options.auth }
+              if (options.session) return { jwtData: await options.session.getJwt({ forceRefresh }) }
+              return { apiKey: options.apiKey, consumerId: options.consumerId }
+            }
+
+            await txOptions.onProgress?.({ type: 'prover-submitted' })
+            let credentials = await auth(false)
+            let result = await dpsClient.submitProvingRequestSafe({
+              provingRequest,
+              url: proverUrl,
+              ...credentials,
+            })
+            if (!result.ok && (result.status === 401 || result.status === 403) && options.session) {
+              credentials = await auth(true)
+              result = await dpsClient.submitProvingRequestSafe({
+                provingRequest,
+                url: proverUrl,
+                ...credentials,
+              })
+            }
+            if (!result.ok) {
+              throw new ProvingError({
+                message: `Delegated proving failed (HTTP ${result.status}): ${result.error?.message ?? 'unknown error'}`,
+                statusCode: result.status,
+              })
+            }
+            const transaction = result.data.transaction
+            if (!transaction?.id) {
+              throw new ConfigurationError(
+                'DPS response did not contain a transaction ID — check prover service configuration.',
+              )
+            }
+            await txOptions.onProgress?.({
+              type: 'prover-returned',
+              transactionId: transaction.id,
+            })
+            return transaction as Transaction
+          } catch (error) {
+            if (error instanceof BaseError) throw error
+            throw classifyProvingError(error)
+          }
         }
 
         const tx = await programManager.buildExecutionTransaction({
@@ -708,7 +774,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               priorityFee,
               privateFee: execOptions.privateFee ?? false,
               broadcast: true,
-              useFeeMaster: options.useFeeMaster ?? true,
+              useFeeMaster: options.useFeeMaster ?? false,
             })
 
             const dpsClient = new AleoNetworkClient(proverUrl)
@@ -753,6 +819,18 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 
           const txId = response.transaction?.id
           if (!txId) throw new ConfigurationError('DPS response did not contain a transaction ID — check prover service configuration.')
+
+          const broadcastResult = response.broadcast_result
+          if (!broadcastResult || broadcastResult.status !== 'Accepted') {
+            const message = broadcastResult?.status === 'Skipped'
+              ? 'Delegated prover skipped transaction broadcast'
+              : broadcastResult?.message ?? 'Delegated prover did not report an accepted transaction broadcast'
+            const error = new Error(message) as Error & { status?: number }
+            if (broadcastResult && 'status_code' in broadcastResult) {
+              error.status = Number(broadcastResult.status_code)
+            }
+            throw classifyBroadcastError(error, txId)
+          }
 
           const confirmedTx = await waitForConfirmation(buildPollingClient(), txId, options.confirmationTimeout)
           const { transitions, outputs } = extractTransitions(confirmedTx, decryptor)
@@ -1164,7 +1242,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     proverUrl?: string
     apiKey?: string
     consumerId?: string
-    /** Forwarded to `createProvingConfig` — the delegated prover pays fees. Defaults to true. */
+    /** Forwarded to `createProvingConfig` — requests delegated FeeMaster payment. Defaults to false. */
     useFeeMaster?: boolean
     confirmationTimeout?: number
     username?: string | (() => string)

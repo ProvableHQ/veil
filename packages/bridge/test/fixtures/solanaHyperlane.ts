@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
+import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import type { SolanaHyperlaneRouteMetadata } from '../../src/types/solana.js'
 import type { BridgeRegistry } from '../../src/types/protocol.js'
@@ -77,8 +77,10 @@ export function registryWithRoute(overrides: Partial<Record<string, string | num
 
 /** Prepares the fixture's recorded transfer (676.2 SOL to the recorded Aleo recipient) against the given registry. */
 export function transferPlan(registry: BridgeRegistry) {
-  return prepareTransfer(registry, {
-    routeId: SOLANA_ROUTE_ID,
+  return prepare(registry, {
+    source: { chain: 'solana', asset: 'sol' },
+    destination: { chain: 'aleo', asset: 'sol' },
+    bridgeProtocol: 'hyperlane',
     amount: '676.2',
     recipient: transferFixture.recipientAleoAddress,
     sender: transferFixture.senderAddress,

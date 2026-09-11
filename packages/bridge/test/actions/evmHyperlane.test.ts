@@ -11,15 +11,22 @@ import {
 } from 'viem'
 import { describe, expect, it } from 'vitest'
 import {
-  executeEvmHyperlaneTransfer,
-  quoteEvmHyperlaneTransfer,
-} from '../../src/actions/evmHyperlane.js'
-import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
+  execute as executeEvmHyperlaneTransfer,
+  quote as quoteEvmHyperlaneTransfer,
+} from '../../src/protocols/hyperlane/evm.js'
+import { quote } from '../../src/actions/quote.js'
+import { getStatus } from '../../src/actions/getStatus.js'
+import { recover } from '../../src/actions/recover.js'
+import { resume } from '../../src/actions/resume.js'
+import { createBridgeCheckpoint } from '../../src/actions/createBridgeCheckpoint.js'
+import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
-import type { EvmBridgeExecutor } from '../../src/types/evm.js'
+import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'
+import type { BridgeReceipt } from '../../src/types/protocol.js'
 
 const ACCOUNT = getAddress('0x0000000000000000000000000000000000000001')
 const RECIPIENT = '0x20e3629764d5338f74bee96675801b1fb29d1fc68b177668f9175708bef84311'
+const ALEO_RECIPIENT = 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n'
 const MESSAGE_ID = `0x${'ab'.repeat(32)}` as Hash
 const WBTC = getAddress('0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599')
 const USDT = getAddress('0xdAC17F958D2ee523a2206206994597C13D831ec7')
@@ -39,10 +46,15 @@ type SentTransaction = {
 }
 
 function plan(routeId: string, amount: string) {
-  return prepareTransfer(DEFAULT_BRIDGE_REGISTRY, {
-    routeId,
+  const route = DEFAULT_BRIDGE_REGISTRY.routes.find((candidate) => candidate.id === routeId)!
+  const source = DEFAULT_BRIDGE_REGISTRY.assets.find((asset) => asset.id === route.sourceAssetId)!
+  const destination = DEFAULT_BRIDGE_REGISTRY.assets.find((asset) => asset.id === route.destinationAssetId)!
+  return prepare(DEFAULT_BRIDGE_REGISTRY, {
+    source: { chain: source.chainId, asset: source.key },
+    destination: { chain: destination.chainId, asset: destination.key },
+    bridgeProtocol: route.protocol,
     amount,
-    recipient: `aleo1${'a'.repeat(58)}`,
+    recipient: ALEO_RECIPIENT,
     sender: ACCOUNT,
   })
 }
@@ -57,9 +69,7 @@ function executor(options: {
 }) {
   const sent: SentTransaction[] = []
   const hashes: Hash[] = []
-  const bridgeExecutor: EvmBridgeExecutor = {
-    account: ACCOUNT,
-    request: async ({ method, params }) => {
+  const request = async ({ method, params }: { method: string, params?: readonly unknown[] | Record<string, unknown> }) => {
       if (method === 'eth_chainId') return `0x${(options.chainId ?? 1).toString(16)}`
       if (method === 'eth_call') {
         const call = (params as readonly [{ to: Address, data: Hex }])[0]
@@ -103,12 +113,32 @@ function executor(options: {
         }
       }
       throw new Error(`Unexpected RPC method ${method}`)
-    },
   }
+  const bridgeExecutor = createEvmClient({
+    transport: evmCustom(request),
+    account: evmProvider({ request }, { account: ACCOUNT }),
+  }) as Required<ReturnType<typeof createEvmClient>>
   return { bridgeExecutor, sent }
 }
 
 describe('Ethereum Hyperlane actions', () => {
+  it('derives the Hyperlane recipient bytes from the prepared Aleo address', async () => {
+    const transferPlan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'ethereum', asset: 'eth' },
+      destination: { chain: 'aleo', asset: 'eth' },
+      amount: '0.0000000000000001',
+      recipient: 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n',
+      sender: ACCOUNT,
+    })
+    const { bridgeExecutor } = executor({ amount: 100n, nativeValue: 69_000_000_000_101n })
+
+    const result = await quote(DEFAULT_BRIDGE_REGISTRY, { ethereum: bridgeExecutor }, { plan: transferPlan })
+
+    expect(result.kind).toBe('evm-hyperlane')
+    if (result.kind !== 'evm-hyperlane') throw new Error(`Unexpected quote kind: ${result.kind}`)
+    expect(result.recipientBytes32).toBe('0xb102e0d37e02ec5dbba2460287ac07ef7ea8ee636392ce235402308299901811')
+  })
+
   it('quotes and dispatches native ETH without an approval', async () => {
     const transferPlan = plan('hyperlane:ethereum/eth->aleo/eth', '0.0000000000000001')
     const { bridgeExecutor, sent } = executor({ amount: 100n, nativeValue: 69_000_000_000_101n })
@@ -219,6 +249,134 @@ describe('Ethereum Hyperlane actions', () => {
     expect(result.receipt.status).toBe('SOURCE_APPROVAL_PENDING')
     expect(result.receipt.sourceTxId).toBeUndefined()
     expect(result.receipt.protocolState.approvalTxIds).toEqual(result.approvalTxIds)
+  })
+
+  it('resumes a recovered approval at the Hyperlane dispatch boundary', async () => {
+    const transferPlan = plan('hyperlane:ethereum/wbtc->aleo/wbtc', '0.001')
+    const pendingExecutor = executor({
+      token: WBTC,
+      amount: 100_000n,
+      nativeValue: 50_000n,
+      allowance: 0n,
+      receipt: 'pending',
+    })
+    const pending = await executeEvmHyperlaneTransfer(DEFAULT_BRIDGE_REGISTRY, pendingExecutor.bridgeExecutor, {
+      plan: transferPlan,
+      recipientBytes32: RECIPIENT,
+      confirmationTimeoutMs: 0,
+      pollingIntervalMs: 0,
+    })
+    const checkpoint = createBridgeCheckpoint(transferPlan, pending.receipt)
+    const confirmedExecutor = executor({
+      token: WBTC,
+      amount: 100_000n,
+      nativeValue: 50_000n,
+      allowance: 100_000n,
+    })
+    const progress = await recover(
+      DEFAULT_BRIDGE_REGISTRY,
+      { ethereum: confirmedExecutor.bridgeExecutor },
+      globalThis.fetch,
+      { checkpoint },
+    )
+    if (progress.next !== 'resume') throw new Error(`Expected resume, received ${progress.next}`)
+
+    const resumed = await resume(
+      DEFAULT_BRIDGE_REGISTRY,
+      { ethereum: confirmedExecutor.bridgeExecutor },
+      { progress },
+    )
+
+    expect(resumed.kind).toBe('evm-hyperlane')
+    expect(resumed.receipt.status).toBe('DELIVERY_PENDING')
+    expect(confirmedExecutor.sent).toHaveLength(1)
+    expect(decodeFunctionData({ abi: ABI, data: confirmedExecutor.sent[0]!.data }).functionName).toBe('transferRemote')
+  })
+
+  it('checkpoints dispatch before confirmation and resumes without resubmitting', async () => {
+    const transferPlan = plan('hyperlane:ethereum/eth->aleo/eth', '0.0000000000000001')
+    const pendingExecutor = executor({ amount: 100n, nativeValue: 69_000_000_000_101n, receipt: 'pending' })
+    const checkpoints: BridgeReceipt[] = []
+
+    const pending = await executeEvmHyperlaneTransfer(DEFAULT_BRIDGE_REGISTRY, pendingExecutor.bridgeExecutor, {
+      plan: transferPlan,
+      recipientBytes32: RECIPIENT,
+      confirmationTimeoutMs: 0,
+      onSubmitted(receipt) { checkpoints.push(receipt) },
+    })
+
+    expect(checkpoints).toEqual([pending.receipt])
+    expect(pending.receipt.status).toBe('SOURCE_CONFIRMING')
+    expect(pendingExecutor.sent).toHaveLength(1)
+
+    const resumedExecutor = executor({ amount: 100n, nativeValue: 69_000_000_000_101n })
+    const resumed = await executeEvmHyperlaneTransfer(DEFAULT_BRIDGE_REGISTRY, resumedExecutor.bridgeExecutor, {
+      plan: transferPlan,
+      recipientBytes32: RECIPIENT,
+      resume: pending.receipt,
+    })
+
+    expect(resumed.receipt.status).toBe('DELIVERY_PENDING')
+    expect(resumed.receipt.sourceTxId).toBe(pending.receipt.sourceTxId)
+    expect(resumedExecutor.sent).toHaveLength(0)
+  })
+
+  it('confirms a submitted dispatch through the read-only status action', async () => {
+    const transferPlan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'ethereum', asset: 'eth' },
+      destination: { chain: 'aleo', asset: 'eth' },
+      amount: '0.0000000000000001',
+      recipient: 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n',
+      sender: ACCOUNT,
+    })
+    const recipientBytes32 = '0xb102e0d37e02ec5dbba2460287ac07ef7ea8ee636392ce235402308299901811'
+    const pendingExecutor = executor({ amount: 100n, nativeValue: 69_000_000_000_101n, receipt: 'pending' })
+    const pending = await executeEvmHyperlaneTransfer(DEFAULT_BRIDGE_REGISTRY, pendingExecutor.bridgeExecutor, {
+      plan: transferPlan,
+      recipientBytes32,
+      confirmationTimeoutMs: 0,
+    })
+    const confirmingExecutor = executor({ amount: 100n, nativeValue: 69_000_000_000_101n })
+
+    const receipt = await getStatus(
+      DEFAULT_BRIDGE_REGISTRY,
+      { ethereum: confirmingExecutor.bridgeExecutor },
+      globalThis.fetch,
+      { plan: transferPlan, receipt: pending.receipt },
+    )
+
+    expect(receipt.status).toBe('DELIVERY_PENDING')
+    expect(confirmingExecutor.sent).toHaveLength(0)
+  })
+
+  it('recovers a submitted dispatch from a compact checkpoint', async () => {
+    const transferPlan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'ethereum', asset: 'eth' },
+      destination: { chain: 'aleo', asset: 'eth' },
+      amount: '0.0000000000000001',
+      recipient: 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n',
+      sender: ACCOUNT,
+    })
+    const recipientBytes32 = '0xb102e0d37e02ec5dbba2460287ac07ef7ea8ee636392ce235402308299901811'
+    const pendingExecutor = executor({ amount: 100n, nativeValue: 69_000_000_000_101n, receipt: 'pending' })
+    const pending = await executeEvmHyperlaneTransfer(DEFAULT_BRIDGE_REGISTRY, pendingExecutor.bridgeExecutor, {
+      plan: transferPlan,
+      recipientBytes32,
+      confirmationTimeoutMs: 0,
+    })
+    const checkpoint = createBridgeCheckpoint(transferPlan, pending.receipt)
+    const confirmingExecutor = executor({ amount: 100n, nativeValue: 69_000_000_000_101n })
+
+    const progress = await recover(
+      DEFAULT_BRIDGE_REGISTRY,
+      { ethereum: { family: 'evm', publicClient: confirmingExecutor.bridgeExecutor.publicClient } },
+      globalThis.fetch,
+      { checkpoint },
+    )
+
+    expect(progress.next).toBe('wait')
+    expect(progress.receipt.status).toBe('DELIVERY_PENDING')
+    expect(confirmingExecutor.sent).toHaveLength(0)
   })
 
   it('rejects a wallet connected to the wrong chain', async () => {

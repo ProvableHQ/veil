@@ -21,25 +21,25 @@ const chains: ProtocolBridgeChain[] = [
 ]
 
 const assets: ProtocolBridgeAsset[] = [
-  { id: 'aleo/aleo', chainId: 'aleo', symbol: 'ALEO', name: 'Aleo', decimals: 6, kind: 'native', locator: { kind: 'aleo-program', value: 'credits.aleo' }, addressValidationRegex: ALEO_ADDRESS },
-  { id: 'aleo/usdcx', chainId: 'aleo', symbol: 'USDCx', name: 'USDCx', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'usdcx_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS },
-  { id: 'aleo/eth', chainId: 'aleo', symbol: 'ETH', name: 'Hyperlane ETH', decimals: 18, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_eth_v2.aleo', tokenId: 'aleo1t7f29tq9qng2lfvrkpcuvu59jn24hrmzqdyqfn6p0u5p80npfvqqecmkj8' }, addressValidationRegex: ALEO_ADDRESS },
-  { id: 'aleo/wbtc', chainId: 'aleo', symbol: 'WBTC', name: 'Hyperlane WBTC', decimals: 8, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_wbtc_v2.aleo', tokenId: 'aleo1240fsvz2dhmj0cdtt8mc0yc8um9fmu236rqcl2qnlj9703hd2vpsdwyrtf' }, addressValidationRegex: ALEO_ADDRESS },
-  { id: 'aleo/usdt', chainId: 'aleo', symbol: 'USDT', name: 'Hyperlane USDT', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_usdt_v2.aleo', tokenId: 'aleo18yynfz0lrfx0tund540vy2z7gju7ekgqsueg5jgu28mpm2z42ufq7qua8y' }, addressValidationRegex: ALEO_ADDRESS },
-  { id: 'aleo/sol', chainId: 'aleo', symbol: 'SOL', name: 'Hyperlane SOL', decimals: 9, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_sol_v2.aleo', tokenId: 'aleo1aa0zt0vg9uwknekpqeefkvad55swp7833wc5crp2prv0lm4djuxs5r7k6v' }, addressValidationRegex: ALEO_ADDRESS },
-  { id: 'aleo/usad', chainId: 'aleo', symbol: 'USAD', name: 'USAD', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'usad_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS },
-  { id: 'ethereum/usdc', chainId: 'ethereum', symbol: 'USDC', name: 'USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' }, addressValidationRegex: EVM_ADDRESS },
-  { id: 'ethereum/eth', chainId: 'ethereum', symbol: 'ETH', name: 'Ether', decimals: 18, kind: 'native', locator: { kind: 'native', value: 'ETH' }, addressValidationRegex: EVM_ADDRESS },
-  { id: 'ethereum/wbtc', chainId: 'ethereum', symbol: 'WBTC', name: 'Wrapped Bitcoin', decimals: 8, kind: 'token', locator: { kind: 'evm-contract', value: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599' }, addressValidationRegex: EVM_ADDRESS },
-  { id: 'ethereum/usdt', chainId: 'ethereum', symbol: 'USDT', name: 'Tether USD', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0xdAC17F958D2ee523a2206206994597C13D831ec7' }, addressValidationRegex: EVM_ADDRESS },
-  { id: 'ethereum/aleo', chainId: 'ethereum', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
-  { id: 'ethereum/usad', chainId: 'ethereum', symbol: 'USAD', name: 'USAD route collateral', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
-  { id: 'solana/sol', chainId: 'solana', symbol: 'SOL', name: 'Solana', decimals: 9, kind: 'native', locator: { kind: 'native', value: 'SOL' }, addressValidationRegex: SOLANA_ADDRESS },
-  { id: 'solana/aleo', chainId: 'solana', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: SOLANA_ADDRESS },
-  { id: 'base/aleo', chainId: 'base', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
-  { id: 'hyperevm/aleo', chainId: 'hyperevm', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
-  { id: 'aleo-testnet/usdcx', chainId: 'aleo-testnet', symbol: 'USDCx', name: 'Testnet USDCx', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'test_usdcx_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS },
-  { id: 'sepolia/usdc', chainId: 'sepolia', symbol: 'USDC', name: 'Testnet USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' }, addressValidationRegex: EVM_ADDRESS },
+  { id: 'aleo/aleo', key: 'aleo', chainId: 'aleo', symbol: 'ALEO', name: 'Aleo', decimals: 6, kind: 'native', locator: { kind: 'aleo-program', value: 'credits.aleo' }, addressValidationRegex: ALEO_ADDRESS },
+  { id: 'aleo/usdcx', key: 'usdcx', chainId: 'aleo', symbol: 'USDCx', name: 'USDCx', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'usdcx_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc22', program: 'usdcx_stablecoin.aleo' } },
+  { id: 'aleo/eth', key: 'eth', chainId: 'aleo', symbol: 'ETH', name: 'Hyperlane ETH', decimals: 18, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_eth_v2.aleo', tokenId: 'aleo1t7f29tq9qng2lfvrkpcuvu59jn24hrmzqdyqfn6p0u5p80npfvqqecmkj8' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc20', program: 'arc20_eth.aleo' } },
+  { id: 'aleo/wbtc', key: 'wbtc', chainId: 'aleo', symbol: 'WBTC', name: 'Hyperlane WBTC', decimals: 8, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_wbtc_v2.aleo', tokenId: 'aleo1240fsvz2dhmj0cdtt8mc0yc8um9fmu236rqcl2qnlj9703hd2vpsdwyrtf' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc20', program: 'arc20_wbtc.aleo' } },
+  { id: 'aleo/usdt', key: 'usdt', chainId: 'aleo', symbol: 'USDT', name: 'Hyperlane USDT', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_usdt_v2.aleo', tokenId: 'aleo18yynfz0lrfx0tund540vy2z7gju7ekgqsueg5jgu28mpm2z42ufq7qua8y' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc20', program: 'arc20_usdt.aleo' } },
+  { id: 'aleo/sol', key: 'sol', chainId: 'aleo', symbol: 'SOL', name: 'Hyperlane SOL', decimals: 9, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_sol_v2.aleo', tokenId: 'aleo1aa0zt0vg9uwknekpqeefkvad55swp7833wc5crp2prv0lm4djuxs5r7k6v' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc20', program: 'arc20_sol.aleo' } },
+  { id: 'aleo/usad', key: 'usad', chainId: 'aleo', symbol: 'USAD', name: 'USAD', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'usad_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS },
+  { id: 'ethereum/usdc', key: 'usdc', chainId: 'ethereum', symbol: 'USDC', name: 'USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' }, addressValidationRegex: EVM_ADDRESS },
+  { id: 'ethereum/eth', key: 'eth', chainId: 'ethereum', symbol: 'ETH', name: 'Ether', decimals: 18, kind: 'native', locator: { kind: 'native', value: 'ETH' }, addressValidationRegex: EVM_ADDRESS },
+  { id: 'ethereum/wbtc', key: 'wbtc', chainId: 'ethereum', symbol: 'WBTC', name: 'Wrapped Bitcoin', decimals: 8, kind: 'token', locator: { kind: 'evm-contract', value: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599' }, addressValidationRegex: EVM_ADDRESS },
+  { id: 'ethereum/usdt', key: 'usdt', chainId: 'ethereum', symbol: 'USDT', name: 'Tether USD', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0xdAC17F958D2ee523a2206206994597C13D831ec7' }, addressValidationRegex: EVM_ADDRESS },
+  { id: 'ethereum/aleo', key: 'aleo', chainId: 'ethereum', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
+  { id: 'ethereum/usad', key: 'usad', chainId: 'ethereum', symbol: 'USAD', name: 'USAD route collateral', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
+  { id: 'solana/sol', key: 'sol', chainId: 'solana', symbol: 'SOL', name: 'Solana', decimals: 9, kind: 'native', locator: { kind: 'native', value: 'SOL' }, addressValidationRegex: SOLANA_ADDRESS },
+  { id: 'solana/aleo', key: 'aleo', chainId: 'solana', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: SOLANA_ADDRESS },
+  { id: 'base/aleo', key: 'aleo', chainId: 'base', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
+  { id: 'hyperevm/aleo', key: 'aleo', chainId: 'hyperevm', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
+  { id: 'aleo-testnet/usdcx', key: 'usdcx', chainId: 'aleo-testnet', symbol: 'USDCx', name: 'Testnet USDCx', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'test_usdcx_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc22', program: 'test_usdcx_stablecoin.aleo' } },
+  { id: 'sepolia/usdc', key: 'usdc', chainId: 'sepolia', symbol: 'USDC', name: 'Testnet USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' }, addressValidationRegex: EVM_ADDRESS },
 ]
 
 const XRESERVE_SOURCE = 'https://developers.circle.com/xreserve/references/supported-blockchains-and-domains'
@@ -98,7 +98,7 @@ const USDT_HYPERLANE_METADATA = {
 } as const
 
 // Intentionally non-live values used only to expose the Aleo transfer_remote ABI.
-// executeAleoHyperlaneTransferRemote refuses these routes while the flag is true.
+// execute refuses these routes while the flag is true.
 const ALEO_PLACEHOLDER_ADDRESS = 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n'
 const ALEO_PLACEHOLDER_BYTES32 = `[${Array.from({ length: 32 }, () => '0u8').join(', ')}]`
 
@@ -376,6 +376,7 @@ const routes: ProtocolBridgeRoute[] = [
     remoteToken: 'usdcx_stablecoin.aleo',
     remoteTokenBytes32: '0x11ea7dab1d29d5f61500582c63e98c42e1165f9ba050ea9d0c6af9f871987711',
     minimumAmountAtomic: '2000000',
+    withdrawalFeeAtomic: '2000000',
     maxFeeAtomic: '100000',
     bridgeProgram: 'usdcx_bridge_v2.aleo',
     wrapperProgram: 'shielded_usdcx_wrapper.aleo',
@@ -391,6 +392,7 @@ const routes: ProtocolBridgeRoute[] = [
     remoteToken: 'test_usdcx_stablecoin.aleo',
     remoteTokenBytes32: '0xb143ed52c774cd1d4a519d0e796f15916be5a9e1d45edcd9852dd23f68f53401',
     minimumAmountAtomic: '2000000',
+    withdrawalFeeAtomic: '2000000',
     maxFeeAtomic: '100000',
     bridgeProgram: 'test_usdcx_bridge_v2.aleo',
     wrapperProgram: 'shielded_usdcx_wrapper.aleo',
@@ -418,7 +420,8 @@ const routes: ProtocolBridgeRoute[] = [
  * xReserve contract identifiers are populated from Circle's published
  * mainnet and testnet tables. Hyperlane routes intentionally remain
  * `metadata-required` until their router, domain, ISM, and token identifiers
- * are pinned from one reviewed registry commit. Pure and local.
+ * are pinned from one reviewed registry commit. Reading this snapshot does not
+ * contact any chain or bridge provider.
  *
  * @example
  * const bridge = createBridgeClient({ registry: DEFAULT_BRIDGE_REGISTRY })

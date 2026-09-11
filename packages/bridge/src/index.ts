@@ -8,103 +8,154 @@ export {
   type BridgeActions,
   type BridgeActionsConfig,
 } from './clients/decorators/bridge.js'
+export {
+  createEvmClient,
+  evmCustom,
+  evmHttp,
+  evmLocalAccount,
+  evmPrivateKey,
+  evmProvider,
+  type EvmAccount,
+  type EvmCallParameters,
+  type EvmClient,
+  type EvmClientConfig,
+  type EvmHttpOptions,
+  type EvmPublicClient,
+  type EvmReceipt,
+  type EvmRequest,
+  type EvmTransactionParameters,
+  type EvmTransport,
+  type EvmWalletClient,
+} from './connections/evm.js'
+export {
+  createSolanaClient,
+  DEFAULT_SOLANA_RPC_URL,
+  solanaCustom,
+  solanaHttp,
+  solanaKeyPair,
+  solanaWallet,
+  type SolanaAccount,
+  type SolanaClient,
+  type SolanaClientConfig,
+  type SolanaHttpOptions,
+  type SolanaPublicClient,
+  type SolanaRequest,
+  type SolanaTransport,
+  type SolanaWalletClient,
+} from './connections/solana.js'
+export {
+  createAleoClient,
+  aleoWallet,
+  type AleoClient,
+  type AleoClientConfig,
+} from './connections/aleo.js'
+export type { BridgeChainClient, BridgeChainClients } from './connections/resolve.js'
 
 export {
-  getProtocolAssets as getAssets,
-  getProtocolRoutes as getRoutes,
-  type GetProtocolAssetsParameters as GetAssetsParameters,
-  type GetProtocolRoutesParameters as GetRoutesParameters,
-} from './actions/protocolDiscovery.js'
-export { prepareTransfer } from './actions/prepareTransfer.js'
+  getAssets,
+  type GetAssetsParameters,
+} from './actions/getAssets.js'
 export {
-  executeEvmHyperlaneTransfer,
-  quoteEvmHyperlaneTransfer,
-} from './actions/evmHyperlane.js'
-export {
-  executeEvmXReserveTransfer,
-  getXReserveAttestation,
-  quoteEvmXReserveTransfer,
-} from './actions/evmXReserve.js'
-export { executeXReservePrivateMint } from './actions/xreservePrivateMint.js'
-export { buildXReserveBurnCall, executeXReserveBurn } from './actions/xreserveBurn.js'
-export {
-  buildAleoHyperlaneTransferRemoteCall,
-  executeAleoHyperlaneTransferRemote,
-  quoteAleoHyperlaneGasPayment,
-} from './actions/aleoHyperlane.js'
-export { quoteSolanaHyperlaneTransfer } from './actions/quoteSolanaHyperlaneTransfer.js'
-export { executeSolanaHyperlaneTransfer } from './actions/executeSolanaHyperlaneTransfer.js'
+  getRoutes,
+  type GetRoutesParameters,
+} from './actions/getRoutes.js'
+export { prepare } from './actions/prepare.js'
+export { execute } from './actions/execute.js'
+export { quote } from './actions/quote.js'
+export { complete } from './actions/complete.js'
+export { getStatus } from './actions/getStatus.js'
+export { waitForStatus } from './actions/waitForStatus.js'
+export { recover } from './actions/recover.js'
+export { resume } from './actions/resume.js'
+export { wait } from './actions/wait.js'
+export { shield } from './actions/shield.js'
+export { unshield } from './actions/unshield.js'
+export { createBridgeCheckpoint } from './actions/createBridgeCheckpoint.js'
+export { hyperlane, xreserve, type ProtocolHelperRegistry } from './protocols/index.js'
+export { buildXReserveBurnCall } from './builders/buildXReserveBurnCall.js'
+export { buildAleoHyperlaneTransferRemoteCall } from './builders/buildAleoHyperlaneTransferRemoteCall.js'
 
 export { DEFAULT_BRIDGE_REGISTRY } from './registry/default.js'
 export { validateBridgeRegistry } from './registry/validate.js'
 
 export type {
   AleoMintMode,
+  AleoPrivacyCapability,
+  AleoPrivacyKind,
   BridgeAssetKind,
   BridgeAssetLocator,
   BridgeChainFamily,
+  BridgeCheckpoint,
+  BridgeIntent,
+  BridgeProgress,
+  BridgeProgressNext,
   BridgeEnvironment,
+  BridgeEndpoint,
   BridgeExecutionStep,
   BridgeExecutionStepKind,
   BridgeFee,
+  BridgeNextAction,
   BridgeProtocol,
-  BridgeQuoteStatus,
   BridgeRegistry,
   BridgeRouteAvailability,
   BridgeStepExecutor,
-  BridgeTransferPlan,
-  BridgeTransferQuote,
-  BridgeTransferReceipt,
-  BridgeTransferStatus,
-  PrepareTransferParameters,
+  BridgePlan,
+  BridgeReceipt,
+  BridgeStatus,
+  PrepareParameters,
   ProtocolBridgeAsset,
   ProtocolBridgeChain,
   ProtocolBridgeRoute,
 } from './types/protocol.js'
 export type {
-  BridgeExecutors,
-  EvmBridgeExecutor,
+  ExecuteParameters,
+  CompleteParameters,
+  GetStatusParameters,
+  QuoteParameters,
+  RecoverParameters,
+  ResumeParameters,
+  WaitParameters,
+  WaitForStatusParameters,
+  BridgeExecution,
+  BridgeExecutionKind,
+  BridgeQuote,
+  BridgeQuoteKind,
+} from './types/actions.js'
+export type {
   EvmHyperlaneRouteMetadata,
   EvmHyperlaneRouterType,
   EvmHyperlaneTransferExecution,
   EvmHyperlaneTransferQuote,
-  ExecuteEvmHyperlaneTransferParameters,
-  QuoteEvmHyperlaneTransferParameters,
 } from './types/evm.js'
 export type {
   EvmXReserveRouteMetadata,
   EvmXReserveTransferExecution,
   EvmXReserveTransferQuote,
-  ExecuteEvmXReserveTransferParameters,
   GetXReserveAttestationParameters,
-  QuoteEvmXReserveTransferParameters,
   XReserveAttestationResult,
   XReserveHttpResponse,
   XReserveHttpTransport,
 } from './types/xreserve.js'
 export type {
-  AleoBridgeExecutor,
+  AleoWalletClient,
+  AleoPrivacyExecution,
   AleoHyperlaneGasQuote,
   AleoHyperlaneTransferRemoteCall,
   AleoHyperlaneTransferRemoteExecution,
   ExecuteAleoHyperlaneTransferRemoteParameters,
   ExecuteXReserveBurnParameters,
   ExecuteXReservePrivateMintParameters,
-  QuoteAleoHyperlaneGasPaymentParameters,
+  ShieldParameters,
+  UnshieldParameters,
   XReserveBurnCall,
   XReserveBurnExecution,
   XReserveBurnMode,
   XReservePrivateMintExecution,
 } from './types/aleo.js'
 export type {
-  ExecuteSolanaHyperlaneTransferParameters,
-  QuoteSolanaHyperlaneTransferParameters,
-  SolanaBridgeExecutor,
   SolanaHyperlaneRouteMetadata,
   SolanaHyperlaneTransferExecution,
   SolanaHyperlaneTransferQuote,
-  SolanaRpcConfig,
-  SolanaRpcHttpTransport,
 } from './types/solana.js'
 
 export {
@@ -121,6 +172,10 @@ export {
   evmAddressToAleoHyperlaneRecipient,
   solanaAddressToAleoHyperlaneRecipient,
 } from './utils/hyperlane.js'
+export {
+  readHyperlaneDelivery,
+  type ReadHyperlaneDeliveryParameters,
+} from './utils/hyperlaneDelivery.js'
 
 export { BridgeError } from './errors/bridgeErrors.js'
-export { parseDecimalAmount } from './utils/units.js'
+export { formatDecimalAmount, parseDecimalAmount } from './utils/units.js'
