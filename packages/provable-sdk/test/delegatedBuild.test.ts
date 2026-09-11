@@ -48,4 +48,38 @@ describe('delegated transaction building', () => {
       { type: 'prover-returned', transactionId: 'at1proved' },
     ])
   })
+
+  it('reports a failed delegated broadcast without polling for confirmation', async () => {
+    const transaction = { type: 'execute', id: 'at1notbroadcast', fee: {} }
+    vi.spyOn(testnetSdk.ProgramManager.prototype, 'provingRequest')
+      .mockResolvedValue({ encrypted: true } as never)
+    vi.spyOn(testnetSdk.AleoNetworkClient.prototype, 'submitProvingRequestSafe')
+      .mockResolvedValue({
+        ok: true,
+        data: {
+          transaction,
+          broadcast_result: {
+            status: 'Failed',
+            message: 'upstream node did not accept the transaction',
+          },
+        },
+      } as never)
+    const config = aleo.createProvingConfig({
+      mode: 'delegated',
+      networkUrl: 'https://node.example',
+      proverUrl: 'https://prover.example',
+      account: aleo.generateAccount(),
+      confirmationTimeout: 0,
+    })
+
+    await expect(config.execute!({
+      programName: 'credits.aleo',
+      functionName: 'transfer_public',
+      inputs: ['aleo1recipient', '1u64'],
+      fee: 0n,
+    })).rejects.toMatchObject({
+      name: 'BroadcastError',
+      message: expect.stringContaining('upstream node did not accept the transaction'),
+    })
+  })
 })

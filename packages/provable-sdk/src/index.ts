@@ -820,6 +820,18 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           const txId = response.transaction?.id
           if (!txId) throw new ConfigurationError('DPS response did not contain a transaction ID — check prover service configuration.')
 
+          const broadcastResult = response.broadcast_result
+          if (!broadcastResult || broadcastResult.status !== 'Accepted') {
+            const message = broadcastResult?.status === 'Skipped'
+              ? 'Delegated prover skipped transaction broadcast'
+              : broadcastResult?.message ?? 'Delegated prover did not report an accepted transaction broadcast'
+            const error = new Error(message) as Error & { status?: number }
+            if (broadcastResult && 'status_code' in broadcastResult) {
+              error.status = Number(broadcastResult.status_code)
+            }
+            throw classifyBroadcastError(error, txId)
+          }
+
           const confirmedTx = await waitForConfirmation(buildPollingClient(), txId, options.confirmationTimeout)
           const { transitions, outputs } = extractTransitions(confirmedTx, decryptor)
           return { transactionId: txId, transitions, outputs }
