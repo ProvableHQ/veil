@@ -79,6 +79,12 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
   const config = ASSETS[asset]
   const rpcUrl = requiredEnvironmentVariable('ETHEREUM_RPC_URL')
   const recipient = requiredEnvironmentVariable('ALEO_RECIPIENT')
+
+  // ── The clients ─────────────────────────────────────────────────────
+  // The EVM account signs locally, while the transport handles public reads
+  // and broadcasts signed transactions. Aleo needs only a public client here:
+  // Hyperlane's relayer performs the destination mint, and `wait` reads the
+  // Aleo mailbox to verify that the message was delivered.
   const evm = createEvmClient({
     transport: evmHttp(rpcUrl),
     account: evmPrivateKey(privateKeyFromEnvironment()),
@@ -95,6 +101,12 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
       }),
     },
   })
+
+  // ── The plan ────────────────────────────────────────────────────────
+  // Structured endpoints are caller input. The route id, token metadata, and
+  // destination domain come from the registry selected by the bridge client.
+  // Each tutorial route transfers one atomic unit; network and relayer fees are
+  // quoted separately and normally cost more than the transferred amount.
   const plan = bridge.prepare({
     source: config.source,
     destination: config.destination,
@@ -103,6 +115,11 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
     recipient,
     sender,
   })
+
+  // ── The quote ───────────────────────────────────────────────────────
+  // `quote` performs reads only. Native ETH needs a value quote; WBTC also
+  // needs token balance and allowance reads because an insufficient allowance
+  // adds an approval transaction before the irreversible dispatch.
   const quote = await bridge.quote({ plan })
   if (quote.kind !== 'evm-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
   const nativeBalance = await evm.publicClient.getBalance(sender)
@@ -145,6 +162,9 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
     recipientBytes32: quote.recipientBytes32,
   })
 
+  // ── The execution ───────────────────────────────────────────────────
+  // The normal path ends after printing the quote. Requiring an exact value
+  // prevents a copied example or mistyped command from moving funds.
   if (process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
     console.log('\nQuote complete; no transaction was submitted.')
     console.log(
@@ -166,6 +186,10 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
   console.log(asset === 'WBTC' && approvalRequired
     ? 'Submitting an exact WBTC approval, waiting for confirmation, then dispatching through Hyperlane.'
     : `Submitting the ${asset} transfer directly through Hyperlane; no approval transaction is needed.`)
+
+  // `execute` owns the approval-and-dispatch sequence. Each submitted id is
+  // emitted through `onCheckpoint` before confirmation polling, which gives an
+  // application a recovery boundary without making the SDK own its storage.
   const execution = await bridge.execute({
     plan,
     confirmationTimeoutMs: DEFAULT_EVM_CONFIRMATION_TIMEOUT_MS,
@@ -174,6 +198,11 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
     },
   })
   if (execution.kind !== 'evm-hyperlane') throw new Error(`Unexpected execution kind: ${execution.kind}`)
+
+  // ── Settlement and recovery ─────────────────────────────────────────
+  // `wait` is read-only. A `resume` result means an approval confirmed but the
+  // bridge dispatch did not happen; `resume` authorizes only that remaining
+  // source transaction, then settlement returns to the same read-only wait.
   let progress = await bridge.wait({ progress: { next: 'wait', plan, receipt: execution.receipt } })
   if (progress.next === 'resume') {
     const resumed = await bridge.resume({

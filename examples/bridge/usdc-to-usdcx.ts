@@ -56,8 +56,11 @@ async function main(): Promise<void> {
   const evmAccount = evmPrivateKey(evmPrivateKeyFromEnvironment())
   if (evmAccount.type !== 'local') throw new Error('Expected a local EVM account')
 
-  // A private mint needs an Aleo wallet because the caller submits the final
-  // private_mint transition. Public and record mints are relayer-driven.
+  // ── The clients ─────────────────────────────────────────────────────
+  // Ethereum is always the signing source. Aleo needs a wallet client only for
+  // `private` mode because that mode stops after attestation and asks the caller
+  // to submit `private_mint`. Public and record mints are relayer-driven, so
+  // those modes do not expose a destination signing step.
   let aleoClient: ReturnType<typeof createAleoClient> | undefined
   if (mode === 'private') {
     const { loadNetwork } = await import('@provablehq/veil-aleo-sdk')
@@ -85,8 +88,11 @@ async function main(): Promise<void> {
     },
   })
 
-  // Callers select endpoints and optionally constrain the bridge protocol.
-  // The canonical registry route id is an output on plan.route.id.
+  // ── The plan ────────────────────────────────────────────────────────
+  // The caller selects assets and constrains the protocol to xReserve. The
+  // registry resolves the xReserve contract, Circle and Aleo domains, remote
+  // token identifier, minimum amount, and destination programs. The canonical
+  // route id is an output on `plan.route.id`.
   const plan = bridge.prepare({
     source: { chain: 'ethereum', asset: 'usdc' },
     destination: { chain: 'aleo', asset: 'usdcx' },
@@ -97,7 +103,10 @@ async function main(): Promise<void> {
     mintMode: mode,
   })
 
-  // quote performs reads only. It never signs or submits.
+  // ── The quote ───────────────────────────────────────────────────────
+  // `quote` reads USDC balance, allowance, and the route's maximum protocol
+  // fee. It never signs or submits. A private nonce influences the destination
+  // commitment, so the same secret must be supplied again after recovery.
   const transferQuote = await bridge.quote({ plan, privateMintSecretNonce })
   if (transferQuote.kind !== 'evm-xreserve') throw new Error(`Unexpected quote kind: ${transferQuote.kind}`)
   console.table({
@@ -110,21 +119,26 @@ async function main(): Promise<void> {
   })
   if (process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) return
 
-  // execute submits the source-side approval and deposit. The optional hook
-  // receives public intent and transaction identifiers needed by recover().
+  // ── The execution ───────────────────────────────────────────────────
+  // `execute` submits an approval when required, then deposits USDC into the
+  // xReserve contract. `onCheckpoint` receives public intent and submitted
+  // transaction ids at each crash boundary; storing them remains an application
+  // decision.
   let source = await bridge.execute({
     plan,
     privateMintSecretNonce,
     onCheckpoint(value) { checkpoint('source checkpoint', value) },
   })
   if (source.kind !== 'evm-xreserve') throw new Error(`Unexpected execution kind: ${source.kind}`)
+
+  // ── Settlement and recovery ─────────────────────────────────────────
+  // Circle waits for source finality before issuing the deposit attestation.
+  // `wait` polls that read-only service. It returns `resume` only when an
+  // approval landed but the deposit still needs explicit authorization.
   let progress = await bridge.wait({
     progress: { next: 'wait', plan, receipt: source.receipt },
   })
 
-  // Recovery may discover that an approval landed but the source deposit was
-  // never broadcast. resume(), rather than a second execute(), authorizes only
-  // that remaining source operation.
   if (progress.next === 'resume') {
     source = await bridge.resume({
       progress,
@@ -143,8 +157,9 @@ async function main(): Promise<void> {
   }
   if (progress.next !== 'complete') throw new Error(`Unexpected next operation: ${progress.next}`)
 
-  // complete is the explicit authorization boundary. It submits exactly one
-  // destination transaction and checkpoints its id before confirmation reads.
+  // Private delivery has one more caller boundary. `complete` submits exactly
+  // one Aleo private-mint transaction and checkpoints its id before confirmation
+  // reads; public and record modes never enter this branch.
   const destination = await bridge.complete({
     progress,
     privateMintSecretNonce,

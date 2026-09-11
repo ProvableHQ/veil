@@ -46,3 +46,7 @@ checkpoint persistence and no imports from protocol-internal utilities.
 Use visible minimum transfer amounts and fixed execution defaults in the bridge
 examples, and document the complete lifecycle in a tutorial with runnable route
 commands and recovery guidance.
+Teach client construction, planning, quoting, execution, and recovery beside the
+corresponding example code. The Aleo-to-Ethereum xReserve example now stops at
+the supported source-confirmation boundary instead of attempting unsupported
+destination delivery polling.

@@ -105,6 +105,12 @@ async function createExclusionProof(address: string): Promise<string> {
 async function main(): Promise<void> {
   const recipient = requiredEnvironmentVariable('ETHEREUM_RECIPIENT')
   const mode = burnModeFromEnvironment()
+
+  // ── The plan ────────────────────────────────────────────────────────
+  // Planning needs no chain client. The registry resolves the Aleo burn
+  // programs, Circle domains, withdrawal fee, and Ethereum USDC destination
+  // from these structured endpoints. The amount is one atomic unit above the
+  // fee so the minimum non-zero USDC withdrawal reaches Ethereum.
   const bridge = createBridgeClient({ environment: 'mainnet' })
   const plan = bridge.prepare({
     source: { chain: 'aleo', asset: 'usdcx' },
@@ -113,6 +119,13 @@ async function main(): Promise<void> {
     amount: AMOUNT,
     recipient,
   })
+
+  // ── The quote ───────────────────────────────────────────────────────
+  // Aleo-origin xReserve has no separate source-side market quote. The registry
+  // supplies the fixed withdrawal constraint, while Circle calculates live
+  // forwarding data after the accepted burn. This preflight therefore displays
+  // the exact amount, fee boundary, burn mode, and destination before any key is
+  // loaded.
   const amountAtomic = atomicAmount(plan.amountIn, plan.sourceAsset.decimals)
   if (amountAtomic <= MINIMUM_BURN_AMOUNT_ATOMIC) {
     throw new Error('USDCx burn amount must be greater than 2 USDCx')
@@ -136,6 +149,9 @@ async function main(): Promise<void> {
       : 'not used',
   })
 
+  // ── The execution ───────────────────────────────────────────────────
+  // Stop before constructing a wallet unless the operator has reviewed the
+  // preflight and supplied the common acknowledgement.
   if (process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
     console.log('\nPreflight complete; no USDCx was burned.')
     console.log(`Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to submit the withdrawal.`)
@@ -152,6 +168,10 @@ async function main(): Promise<void> {
     throw new Error('Private burn record discovery requires ALEO_CONSUMER_ID and ALEO_DPS_API_KEY')
   }
 
+  // ── The clients ─────────────────────────────────────────────────────
+  // The source wallet delegates proving and pays its own public execution fee.
+  // Private mode also attaches a remote scanner because private USDCx exists as
+  // records that cannot be discovered through a public address index.
   const { loadNetwork } = await import('@provablehq/veil-aleo-sdk')
   const aleo = await loadNetwork('mainnet')
   const records = mode === 'private'
@@ -169,6 +189,10 @@ async function main(): Promise<void> {
   if (consumerId && apiKey) await nativeWalletClient.authenticateProvableApi()
   console.log(`Aleo signer ready: ${account.address} (delegated proving)`)
 
+  // A private burn spends one concrete record and proves that the signer is not
+  // frozen. Select the smallest covering record to avoid consuming more private
+  // value than necessary, then derive the current two-sided exclusion proof
+  // from the published freeze list.
   const userRecord = mode === 'private'
     ? (await selectPrivateRecord(nativeWalletClient, amountAtomic)).recordPlaintext
     : undefined
@@ -194,10 +218,21 @@ async function main(): Promise<void> {
   })
   if (result.kind !== 'aleo-xreserve') throw new Error(`Unexpected execution kind: ${result.kind}`)
   console.log('\nUSDCx burn accepted:', result.transactionId)
-  const progress = await executingBridge.wait({
-    progress: { next: 'wait', plan, receipt: result.receipt },
+
+  // ── Settlement and recovery ─────────────────────────────────────────
+  // The checkpoint identifies the submitted Aleo burn. This SDK can verify its
+  // acceptance, but it does not yet expose status for the later attester,
+  // Circle withdrawal, or Ethereum delivery. Stop at `DELIVERY_PENDING` rather
+  // than calling `wait`, which is reserved for routes with complete destination
+  // verification. Persisting the checkpoint remains an application decision.
+  const receipt = await executingBridge.waitForStatus({
+    plan,
+    receipt: result.receipt,
+    until: ['DELIVERY_PENDING', 'FAILED'],
   })
-  if (progress.next === 'failed') throw new Error(progress.error)
+  if (receipt.status === 'FAILED') {
+    throw new Error(String(receipt.protocolState.sourceError ?? 'Aleo burn failed'))
+  }
   console.log('The Aleo burn-attestation service will forward the withdrawal to Circle for Ethereum delivery.')
 }
 

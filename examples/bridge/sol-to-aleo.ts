@@ -64,6 +64,11 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
   const rpcUrl = process.env.SOLANA_RPC_URL?.trim() || DEFAULT_SOLANA_RPC_URL
   const recipient = requiredEnvironmentVariable('ALEO_RECIPIENT')
 
+  // ── The clients ─────────────────────────────────────────────────────
+  // A quote needs only a Solana public client and a sender address. Supplying
+  // `SOLANA_PRIVATE_KEY` adds the wallet client required for execution. The
+  // Aleo client remains public because the relayer performs the destination
+  // mint and `wait` verifies it through the Aleo mailbox.
   const privateKey = process.env.SOLANA_PRIVATE_KEY?.trim()
   const keypairBytes = privateKey ? privateKeyBytes(privateKey) : undefined
   const solana = createSolanaClient({
@@ -89,6 +94,11 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
       }),
     },
   })
+
+  // ── The plan ────────────────────────────────────────────────────────
+  // `prepare` selects the reviewed SOL Warp Route from structured endpoints.
+  // The returned plan carries Solana program metadata and the Aleo destination
+  // domain; the caller does not construct a route id or list program accounts.
   const plan = bridge.prepare({
     source: { chain: 'solana', asset: 'sol' },
     destination: { chain: 'aleo', asset: 'sol' },
@@ -97,6 +107,11 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
     recipient,
     sender: senderAddress,
   })
+
+  // ── The quote ───────────────────────────────────────────────────────
+  // Solana execution needs more than the transferred lamport. The live quote
+  // includes the Hyperlane gas payment, transaction fee, and rent for temporary
+  // accounts, so `totalLamports` is the balance requirement that matters.
   const quote = await bridge.quote({ plan })
   if (quote.kind !== 'solana-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
   const balance = await solana.publicClient.getBalance(senderAddress)
@@ -116,6 +131,10 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
     destinationDomain: plan.route.metadata?.destinationDomain ?? 'unknown',
   })
 
+  // ── The execution ───────────────────────────────────────────────────
+  // The read-only form accepts `SOLANA_SENDER`; execution requires the private
+  // key and derives the sender again so a configured address cannot redirect
+  // the quote away from the account that actually signs.
   if (process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
     console.log('\nPreflight complete; no SOL was transferred.')
     console.log(`Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to submit the transfer.`)
@@ -132,6 +151,12 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
     },
   })
   if (execution.kind !== 'solana-hyperlane') throw new Error(`Unexpected execution kind: ${execution.kind}`)
+
+  // ── Settlement and recovery ─────────────────────────────────────────
+  // The checkpoint callback exposes the signature at the broadcast boundary.
+  // `wait` then reads Solana confirmation and Aleo delivery without signing a
+  // second transaction. A durable application can pass that checkpoint to
+  // `recover` after a restart instead of submitting the transfer again.
   const progress = await bridge.wait({ progress: { next: 'wait', plan, receipt: execution.receipt } })
   if (progress.next === 'failed') throw new Error(progress.error)
   if (progress.next !== 'done') throw new Error(`Unexpected next operation: ${progress.next}`)

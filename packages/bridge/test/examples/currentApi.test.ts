@@ -81,4 +81,27 @@ describe('bridge examples', () => {
     }
     expect(sources).toContain('EXECUTE_BRIDGE')
   })
+
+  it('teaches each bridge lifecycle next to the code that performs it', () => {
+    const implementations = [
+      'aleo-hyperlane.ts',
+      'ethereum-hyperlane.ts',
+      'sol-to-aleo.ts',
+      'usdc-to-usdcx.ts',
+      'usdcx-to-usdc.ts',
+    ]
+
+    for (const name of implementations) {
+      const source = readFileSync(join(EXAMPLE_DIRECTORY, name), 'utf8')
+      for (const section of ['The clients', 'The plan', 'The quote', 'The execution', 'Settlement and recovery']) {
+        expect(source, `${name} must explain ${section.toLowerCase()}`).toContain(`// ── ${section}`)
+      }
+    }
+  })
+
+  it('does not teach unsupported outbound xReserve destination waiting', () => {
+    const source = readFileSync(join(EXAMPLE_DIRECTORY, 'usdcx-to-usdc.ts'), 'utf8')
+    expect(source).toContain('executingBridge.waitForStatus({')
+    expect(source).not.toContain('executingBridge.wait({')
+  })
 })
