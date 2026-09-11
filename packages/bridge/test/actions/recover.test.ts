@@ -65,6 +65,85 @@ describe('bridge recovery checkpoints', () => {
     })
   })
 
+  it('persists the Solana lifetime needed to detect an expired submission', () => {
+    const bridge = createBridgeClient({ environment: 'mainnet' })
+    const transferPlan = bridge.prepare({
+      source: { chain: 'solana', asset: 'sol' },
+      destination: { chain: 'aleo', asset: 'sol' },
+      bridgeProtocol: 'hyperlane',
+      amount: '0.000000001',
+      recipient: RECIPIENT,
+      sender: '11111111111111111111111111111111',
+    })
+
+    const checkpoint = createBridgeCheckpoint(transferPlan, {
+      id: 'solana-signature',
+      protocol: 'hyperlane',
+      status: 'SOURCE_CONFIRMING',
+      sourceTxId: 'solana-signature',
+      protocolState: {
+        routeId: transferPlan.route.id,
+        blockhash: 'recent-blockhash',
+        lastValidBlockHeight: '123456789',
+      },
+    })
+
+    expect(checkpoint.source).toEqual({
+      transactionId: 'solana-signature',
+      blockhash: 'recent-blockhash',
+      lastValidBlockHeight: '123456789',
+    })
+  })
+
+  it('reports an unseen expired Solana submission without requesting another signature', async () => {
+    const getSignatureStatus = vi.fn(async () => null)
+    const isBlockhashValid = vi.fn(async () => false)
+    const bridge = createBridgeClient({
+      environment: 'mainnet',
+      clients: {
+        solana: {
+          family: 'solana',
+          publicClient: {
+            getSignatureStatus,
+            isBlockhashValid,
+          } as never,
+        },
+      },
+    })
+    const transferPlan = bridge.prepare({
+      source: { chain: 'solana', asset: 'sol' },
+      destination: { chain: 'aleo', asset: 'sol' },
+      bridgeProtocol: 'hyperlane',
+      amount: '0.000000001',
+      recipient: RECIPIENT,
+      sender: '11111111111111111111111111111111',
+    })
+    const checkpoint = createBridgeCheckpoint(transferPlan, {
+      id: 'solana-signature',
+      protocol: 'hyperlane',
+      status: 'SOURCE_CONFIRMING',
+      sourceTxId: 'solana-signature',
+      protocolState: {
+        routeId: transferPlan.route.id,
+        blockhash: 'recent-blockhash',
+        lastValidBlockHeight: '123456789',
+      },
+    })
+
+    const progress = await bridge.recover({ checkpoint })
+
+    expect(progress).toMatchObject({
+      next: 'failed',
+      receipt: {
+        sourceTxId: 'solana-signature',
+        status: 'EXPIRED',
+        protocolState: { blockhashExpired: true },
+      },
+    })
+    expect(getSignatureStatus).toHaveBeenCalledOnce()
+    expect(isBlockhashValid).toHaveBeenCalledWith('recent-blockhash')
+  })
+
   it('rejects receipts that do not belong to the prepared route', () => {
     const transferPlan = plan()
     const receipt: BridgeReceipt = {

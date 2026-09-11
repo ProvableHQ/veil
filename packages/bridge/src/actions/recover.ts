@@ -114,6 +114,12 @@ export async function recover(
     if (checkpoint.destination || (checkpoint.source.approvalTransactionIds?.length ?? 0) > 0) {
       throw new BridgeError('Bridge checkpoint contains transactions that are invalid for a Solana source route')
     }
+    const { blockhash, lastValidBlockHeight } = checkpoint.source
+    if ((blockhash !== undefined || lastValidBlockHeight !== undefined)
+      && (typeof blockhash !== 'string' || !blockhash
+        || typeof lastValidBlockHeight !== 'string' || !/^\d+$/.test(lastValidBlockHeight))) {
+      throw new BridgeError('Bridge checkpoint contains an invalid Solana blockhash lifetime')
+    }
     receipt = await getStatus(registry, clients, client, {
       plan,
       receipt: {
@@ -121,7 +127,12 @@ export async function recover(
         protocol: plan.protocol,
         status: 'SOURCE_CONFIRMING',
         sourceTxId: checkpoint.source.transactionId,
-        protocolState: { routeId: checkpoint.route.id },
+        protocolState: {
+          routeId: checkpoint.route.id,
+          ...(typeof blockhash === 'string' && typeof lastValidBlockHeight === 'string'
+            ? { blockhash, lastValidBlockHeight }
+            : {}),
+        },
       },
       signal: params.signal,
     })

@@ -47,6 +47,13 @@ export function createBridgeCheckpoint(
     && (typeof preparedDestinationTransaction !== 'string' || !preparedDestinationTransaction)) {
     throw new BridgeError('Bridge receipt contains an invalid prepared destination transaction')
   }
+  const blockhash = receipt.protocolState.blockhash
+  const lastValidBlockHeight = receipt.protocolState.lastValidBlockHeight
+  if ((blockhash !== undefined || lastValidBlockHeight !== undefined)
+    && (typeof blockhash !== 'string' || !blockhash
+      || typeof lastValidBlockHeight !== 'string' || !/^\d+$/.test(lastValidBlockHeight))) {
+    throw new BridgeError('Bridge receipt contains an invalid Solana blockhash lifetime')
+  }
   // Source state records either a proved Aleo transaction, submitted approval
   // transactions, or the irreversible source transaction identifier.
   const source = approvals.length > 0 || receipt.sourceTxId || preparedTransaction
@@ -55,6 +62,9 @@ export function createBridgeCheckpoint(
         ...(receipt.sourceTxId ? { transactionId: receipt.sourceTxId } : {}),
         ...(typeof receipt.protocolState.hookData === 'string'
           ? { hookData: receipt.protocolState.hookData }
+          : {}),
+        ...(typeof blockhash === 'string' && typeof lastValidBlockHeight === 'string'
+          ? { blockhash, lastValidBlockHeight }
           : {}),
         ...(typeof preparedTransaction === 'string'
           ? { preparedTransaction: { transactionId: receipt.id, serializedTransaction: preparedTransaction } }

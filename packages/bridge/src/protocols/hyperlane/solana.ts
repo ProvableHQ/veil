@@ -218,7 +218,31 @@ export async function getSourceStatus(
     throw new BridgeError('Solana Hyperlane source status requires a source-confirming receipt')
   }
   const status = await client.publicClient.getSignatureStatus(receipt.sourceTxId)
-  if (status == null || status === 'processed') return receipt
+  if (status == null) {
+    const { blockhash, lastValidBlockHeight } = receipt.protocolState
+    if (blockhash === undefined && lastValidBlockHeight === undefined) return receipt
+    if (typeof blockhash !== 'string' || !blockhash
+      || typeof lastValidBlockHeight !== 'string' || !/^\d+$/.test(lastValidBlockHeight)) {
+      throw new BridgeError('Solana Hyperlane source receipt has an invalid blockhash lifetime')
+    }
+    try {
+      if (!await client.publicClient.isBlockhashValid(blockhash)) {
+        return {
+          ...receipt,
+          status: 'EXPIRED',
+          protocolState: {
+            ...receipt.protocolState,
+            blockhashExpired: true,
+            sourceError: `Solana transaction expired before confirmation: ${receipt.sourceTxId}`,
+          },
+        }
+      }
+    } catch {
+      return receipt
+    }
+    return receipt
+  }
+  if (status === 'processed') return receipt
   if (status === 'failed') throw new BridgeError(`Solana Hyperlane transfer failed on-chain: ${receipt.sourceTxId}`)
   // Confirmation proves the source instruction committed. The Mailbox log is
   // then the canonical source of the message id used for destination delivery.
