@@ -10,17 +10,18 @@ import { waitForStatus } from './waitForStatus.js'
 const CALLER_BOUNDARIES: readonly BridgeStatus[] = [
   'SOURCE_SUBMISSION_PENDING',
   'DESTINATION_ACTION_REQUIRED',
-  'DELIVERY_PENDING',
   'COMPLETED',
   'FAILED',
   'EXPIRED',
 ]
 
 /**
- * Waits until recovered progress reaches a caller or protocol handoff boundary.
+ * Waits until recovered progress reaches a caller-action or terminal boundary.
  *
  * Performs reads only. It returns immediately when progress already identifies
- * a source resumption, destination completion, terminal result, or relayer handoff.
+ * a source resumption, destination completion, or terminal result. Delivery
+ * pending is not a stopping boundary because it requires no caller
+ * authorization; polling continues until delivery completes or fails.
  *
  * @param registry Reviewed deployment snapshot.
  * @param clients Materialized chain clients used only for status reads.

@@ -239,6 +239,50 @@ describe('bridge recovery checkpoints', () => {
     expect(result.status).toBe('COMPLETED')
   })
 
+  it('waits through Aleo-origin Hyperlane delivery instead of returning the pending handoff', async () => {
+    let reads = 0
+    const bridge = createBridgeClient({
+      environment: 'mainnet',
+      clients: {
+        solana: {
+          family: 'solana',
+          publicClient: {
+            getBalance: vi.fn(async () => ++reads === 1 ? 100n : 101n),
+          } as never,
+        },
+      },
+    })
+    const transferPlan = bridge.prepare({
+      source: { chain: 'aleo', asset: 'sol' },
+      destination: { chain: 'solana', asset: 'sol' },
+      bridgeProtocol: 'hyperlane',
+      amount: '0.000000001',
+      recipient: '11111111111111111111111111111111',
+    })
+
+    const result = await bridge.wait({
+      progress: {
+        next: 'wait',
+        plan: transferPlan,
+        receipt: {
+          id: 'at1source',
+          protocol: 'hyperlane',
+          status: 'DELIVERY_PENDING',
+          sourceTxId: 'at1source',
+          protocolState: {
+            routeId: transferPlan.route.id,
+            destinationBalanceBeforeAtomic: '100',
+            expectedDestinationIncreaseAtomic: '1',
+          },
+        },
+      },
+      pollingIntervalMs: 0,
+      timeoutMs: 1_000,
+    })
+
+    expect(result).toMatchObject({ next: 'done', receipt: { status: 'COMPLETED' } })
+  })
+
   it('captures destination balance verification before Aleo Hyperlane submission', async () => {
     const bridge = createBridgeClient({
       environment: 'mainnet',

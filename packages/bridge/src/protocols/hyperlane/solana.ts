@@ -24,6 +24,7 @@ import { solanaRouteMetadata } from './solanaMetadata.js'
 // which the quote already accounts for.
 const GAS_PAYMENT_ACCOUNT_DATA_LENGTH = 141
 const DISPATCHED_MESSAGE_ACCOUNT_DATA_LENGTH = 194
+const SOLANA_HYPERLANE_COMPUTE_UNIT_LIMIT = 400_000
 
 function accountRole(kit: Awaited<ReturnType<typeof loadKit>>, account: SolanaAccountMeta) {
   if (account.signer && account.writable) return kit.AccountRole.WRITABLE_SIGNER
@@ -74,6 +75,7 @@ export async function quote(
     kit.createTransactionMessage({ version: 0 }),
     (transaction) => kit.setTransactionMessageFeePayer(kit.address(params.plan.sender!), transaction),
     (transaction) => kit.setTransactionMessageLifetimeUsingBlockhash({ blockhash: kit.blockhash(blockhash), lastValidBlockHeight }, transaction),
+    (transaction) => kit.setTransactionMessageComputeUnitLimit(SOLANA_HYPERLANE_COMPUTE_UNIT_LIMIT, transaction),
     (transaction) => kit.appendTransactionMessageInstruction({
       programAddress: kit.address(built.programAddress),
       accounts: built.accounts.map((account) => ({ address: kit.address(account.address), role: accountRole(kit, account) })),
@@ -382,6 +384,7 @@ export async function execute(
       { blockhash: kit.blockhash(blockhash), lastValidBlockHeight },
       tx,
     ),
+    (tx) => kit.setTransactionMessageComputeUnitLimit(SOLANA_HYPERLANE_COMPUTE_UNIT_LIMIT, tx),
     (tx) => kit.appendTransactionMessageInstruction(instruction, tx),
   )
   const compiledTransaction = kit.compileTransaction(message)

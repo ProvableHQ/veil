@@ -171,9 +171,10 @@ function materializeSolanaClient(
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sendTransaction', params: [base64, { encoding: 'base64' }] }),
       })
-      const body = await response.json() as { result?: unknown; error?: { message?: string } }
+      const body = await response.json() as { result?: unknown; error?: { message?: string; data?: unknown } }
       if (!response.ok || body.error || typeof body.result !== 'string' || !body.result) {
-        throw new BridgeError(`Solana RPC sendTransaction failed: ${body.error?.message ?? `HTTP ${response.status}`}`)
+        const details = body.error?.data === undefined ? '' : `; ${JSON.stringify(body.error.data)}`
+        throw new BridgeError(`Solana RPC sendTransaction failed: ${body.error?.message ?? `HTTP ${response.status}`}${details}`)
       }
       return { signature: body.result }
     },

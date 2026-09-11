@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import bs58 from 'bs58'
 
 export type LiveState = {
   routeId: string
@@ -63,6 +64,9 @@ export async function waitFor<T>(read: () => Promise<T | undefined>, timeoutMs =
 }
 
 export async function waitForHyperlaneDelivery(originTxHash: string): Promise<{ messageId: string; destinationTxId: string }> {
+  const originBytes = originTxHash.startsWith('0x')
+    ? originTxHash.slice(2)
+    : Array.from(bs58.decode(originTxHash), (byte) => byte.toString(16).padStart(2, '0')).join('')
   return waitFor(async () => {
     const response = await fetch('https://explorer4.hasura.app/v1/graphql', {
       method: 'POST',
@@ -74,7 +78,7 @@ export async function waitForHyperlaneDelivery(originTxHash: string): Promise<{ 
           }
         }`,
         variables: {
-          hash: originTxHash.startsWith('0x') ? `\\x${originTxHash.slice(2)}` : originTxHash,
+          hash: `\\x${originBytes}`,
         },
       }),
     })

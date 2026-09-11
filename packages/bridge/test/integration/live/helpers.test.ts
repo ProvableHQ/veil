@@ -102,6 +102,29 @@ describe('Hyperlane live delivery', () => {
     expect(fetchMock).toHaveBeenCalledOnce()
   })
 
+  it('decodes a Solana base58 signature to PostgreSQL bytea', async () => {
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { variables: { hash: string } }
+      expect(body.variables.hash).toBe(
+        '\\x1491b6d2018d56b09ce9e368e701ccfc618485ff784f6419fe72d660a4a992d5f5d0a4392bf75b8172f57faeea28c3e660c0e9544e4320fb9f4df4d9cce9da06',
+      )
+      return new Response(JSON.stringify({
+        data: {
+          message_view: [{
+            msg_id: '\\xmessage',
+            is_delivered: true,
+            destination_tx_hash: '\\xdestination',
+          }],
+        },
+      }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(waitForHyperlaneDelivery(
+      'QrRfJM8xSiKgvqgd8PeiYTgyA7EkLbzKSnEn5wV6amxA4P15cQY41Vh4H85km8RvTX5pDph6oKxhVzsewdGhdnM',
+    )).resolves.toMatchObject({ destinationTxId: '0xdestination' })
+  })
+
   it('surfaces GraphQL errors instead of polling until timeout', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       errors: [{ message: 'invalid bytea input' }],

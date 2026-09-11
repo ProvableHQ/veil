@@ -15,6 +15,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createSolanaClient,
   solanaCustom,
+  solanaHttp,
   solanaKeyPair,
   solanaWallet,
   type SolanaTransport,
@@ -61,6 +62,30 @@ describe('Solana bridge clients', () => {
 
     expect(await client.walletClient?.getAddress()).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)
     expect(request).not.toHaveBeenCalled()
+  })
+
+  it('preserves Solana simulation details when submission fails', async () => {
+    const client = createSolanaClient({
+      transport: solanaHttp('https://solana.example', {
+        fetch: vi.fn(async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            error: {
+              code: -32002,
+              message: 'Transaction simulation failed',
+              data: {
+                err: { InstructionError: [0, 'Custom'] },
+                logs: ['Program log: insufficient lamports'],
+              },
+            },
+          }),
+        })),
+      }),
+    })
+
+    await expect(client.publicClient.sendTransaction(new Uint8Array([1, 2, 3])))
+      .rejects.toThrow(/insufficient lamports/)
   })
 
   it('adds the local fee-payer signature and broadcasts through the public transport', async () => {

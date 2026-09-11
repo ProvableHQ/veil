@@ -1,4 +1,4 @@
-import { getTransactionDecoder } from '@solana/kit'
+import { getCompiledTransactionMessageDecoder, getTransactionDecoder } from '@solana/kit'
 import { describe, expect, it, vi } from 'vitest'
 import { execute as executeSolanaHyperlaneTransfer } from '../../src/protocols/hyperlane/solana.js'
 import { getStatus } from '../../src/actions/getStatus.js'
@@ -83,6 +83,11 @@ describe('executeSolanaHyperlaneTransfer', () => {
     // partially signs with the ephemeral keypair before dispatch.
     expect(capturedWire).toBeInstanceOf(Uint8Array)
     const decoded = getTransactionDecoder().decode(capturedWire!)
+    const decodedMessage = getCompiledTransactionMessageDecoder().decode(decoded.messageBytes)
+    const firstInstruction = decodedMessage.instructions[0]!
+    expect(decodedMessage.staticAccounts[firstInstruction.programAddressIndex]).toBe(
+      'ComputeBudget111111111111111111111111111111',
+    )
     const signedEntries = Object.entries(decoded.signatures).filter(([, signature]) => signature !== null)
     expect(signedEntries).toHaveLength(1)
     expect(signedEntries[0]?.[0]).toBe(execution.receipt.protocolState.uniqueMessageAddress)
