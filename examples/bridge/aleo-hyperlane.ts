@@ -10,77 +10,45 @@ import {
 } from '@provablehq/aleo-bridge-sdk'
 
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
+const EXECUTION_ENVIRONMENT_VARIABLE = 'EXECUTE_BRIDGE'
+const ALEO_CONFIRMATION_TIMEOUT_MS = 5 * 60_000
 
 type AleoHyperlaneAsset = 'ETH' | 'SOL' | 'WBTC'
 type AssetConfiguration = {
-  symbol: AleoHyperlaneAsset
   source: { chain: string, asset: string }
   destination: { chain: string, asset: string }
   balanceProgram: string
-  decimals: number
-  destinationName: string
+  amount: string
   recipientEnvironmentVariable: string
-  amountEnvironmentVariable: string
-  executionEnvironmentVariable: string
 }
 
 const ASSETS: Record<AleoHyperlaneAsset, AssetConfiguration> = {
   ETH: {
-    symbol: 'ETH',
     source: { chain: 'aleo', asset: 'eth' },
     destination: { chain: 'ethereum', asset: 'eth' },
     balanceProgram: 'arc20_eth.aleo',
-    decimals: 18,
-    destinationName: 'Ethereum',
+    amount: '0.000000000000000001',
     recipientEnvironmentVariable: 'ETHEREUM_RECIPIENT',
-    amountEnvironmentVariable: 'ETH_AMOUNT',
-    executionEnvironmentVariable: 'EXECUTE_HYPERLANE_ETH_RETURN',
   },
   SOL: {
-    symbol: 'SOL',
     source: { chain: 'aleo', asset: 'sol' },
     destination: { chain: 'solana', asset: 'sol' },
     balanceProgram: 'arc20_sol.aleo',
-    decimals: 9,
-    destinationName: 'Solana',
+    amount: '0.000000001',
     recipientEnvironmentVariable: 'SOLANA_RECIPIENT',
-    amountEnvironmentVariable: 'SOL_AMOUNT',
-    executionEnvironmentVariable: 'EXECUTE_HYPERLANE_SOL_RETURN',
   },
   WBTC: {
-    symbol: 'WBTC',
     source: { chain: 'aleo', asset: 'wbtc' },
     destination: { chain: 'ethereum', asset: 'wbtc' },
     balanceProgram: 'arc20_wbtc.aleo',
-    decimals: 8,
-    destinationName: 'Ethereum',
+    amount: '0.00000001',
     recipientEnvironmentVariable: 'ETHEREUM_RECIPIENT',
-    amountEnvironmentVariable: 'WBTC_AMOUNT',
-    executionEnvironmentVariable: 'EXECUTE_HYPERLANE_WBTC_RETURN',
   },
 }
 
 function requiredEnvironmentVariable(name: string): string {
   const value = process.env[name]?.trim()
   if (!value) throw new Error(`${name} is required`)
-  return value
-}
-
-function booleanFromEnvironment(name: string, defaultValue: boolean): boolean {
-  const raw = process.env[name]?.trim().toLowerCase()
-  if (!raw) return defaultValue
-  if (raw === 'true') return true
-  if (raw === 'false') return false
-  throw new Error(`${name} must be true or false`)
-}
-
-function millisecondsFromEnvironment(name: string, defaultValue: number): number {
-  const raw = process.env[name]?.trim()
-  if (!raw) return defaultValue
-  const value = Number(raw)
-  if (!Number.isSafeInteger(value) || value < 1_000) {
-    throw new Error(`${name} must be an integer greater than or equal to 1000`)
-  }
   return value
 }
 
@@ -114,14 +82,9 @@ function formatAmount(value: bigint, decimals: number): string {
  */
 export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promise<void> {
   const config = ASSETS[asset]
-  const amount = requiredEnvironmentVariable(config.amountEnvironmentVariable)
   const recipient = requiredEnvironmentVariable(config.recipientEnvironmentVariable)
   const privateKey = requiredEnvironmentVariable('ALEO_PRIVATE_KEY')
   const networkUrl = process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2'
-  const provingMode = process.env.ALEO_PROVING_MODE?.trim() || 'delegated'
-  if (provingMode !== 'delegated' && provingMode !== 'local') {
-    throw new Error('ALEO_PROVING_MODE must be delegated or local')
-  }
   const consumerId = process.env.ALEO_CONSUMER_ID?.trim()
   const apiKey = process.env.ALEO_DPS_API_KEY?.trim()
   if ((consumerId && !apiKey) || (!consumerId && apiKey)) {
@@ -133,14 +96,13 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   const { publicClient, walletClient: nativeWalletClient, account } = aleo.createAleoClient({
     privateKey,
     networkUrl,
-    provingMode,
-    ...(process.env.ALEO_PROVER_URL?.trim() ? { proverUrl: process.env.ALEO_PROVER_URL.trim() } : {}),
+    provingMode: 'delegated',
     ...(consumerId && apiKey ? { consumerId, apiKey } : {}),
-    useFeeMaster: booleanFromEnvironment('ALEO_USE_FEE_MASTER', false),
-    confirmationTimeout: millisecondsFromEnvironment('ALEO_EXECUTION_CONFIRMATION_TIMEOUT_MS', 5 * 60_000),
+    useFeeMaster: false,
+    confirmationTimeout: ALEO_CONFIRMATION_TIMEOUT_MS,
   })
 
-  const executionEnabled = process.env[config.executionEnvironmentVariable] === EXECUTION_ACKNOWLEDGEMENT
+  const executionEnabled = process.env[EXECUTION_ENVIRONMENT_VARIABLE] === EXECUTION_ACKNOWLEDGEMENT
   const destinationClient = executionEnabled
     ? config.destination.chain === 'ethereum'
       ? createEvmClient({ transport: evmHttp(requiredEnvironmentVariable('ETHEREUM_RPC_URL')) })
@@ -161,7 +123,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     source: config.source,
     destination: config.destination,
     bridgeProtocol: 'hyperlane',
-    amount,
+    amount: config.amount,
     recipient,
     sender: String(account.address),
   })
@@ -175,13 +137,13 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   if (gasQuote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${gasQuote.kind}`)
   const assetBalance = parseUnsignedLiteral(assetLiteral, 'u128')
 
-  console.log(`Read-only Aleo ${asset} to ${config.destinationName} ${asset} preflight`)
+  console.log(`Read-only Aleo ${asset} to ${config.destination.chain} ${asset} preflight`)
   console.table({
     route: plan.route.id,
     sender: account.address,
     recipient,
-    amount: `${formatAmount(amountAtomic, config.decimals)} ${asset}`,
-    [`${asset.toLowerCase()}PublicBalance`]: `${formatAmount(assetBalance, config.decimals)} ${asset}`,
+    amount: `${formatAmount(amountAtomic, plan.sourceAsset.decimals)} ${asset}`,
+    [`${asset.toLowerCase()}PublicBalance`]: `${formatAmount(assetBalance, plan.sourceAsset.decimals)} ${asset}`,
     publicCreditsBalance: `${formatAmount(publicCredits, 6)} credits`,
     hyperlaneHookPayment: `${formatAmount(gasQuote.paymentMicrocredits, 6)} credits`,
     sourceOperation: 'selected by plan.route',
@@ -191,7 +153,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
 
   if (!executionEnabled) {
     console.log(`\nPreflight complete; no ${asset} was burned.`)
-    console.log(`Set ${config.executionEnvironmentVariable}=${EXECUTION_ACKNOWLEDGEMENT} to submit the transfer.`)
+    console.log(`Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to submit the transfer.`)
     return
   }
   if (assetBalance < amountAtomic) throw new Error(`Insufficient public Aleo ${asset} balance`)
@@ -209,7 +171,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   const result = await bridge.execute({
     plan,
     mode: 'signer',
-    privateFee: booleanFromEnvironment('ALEO_PRIVATE_FEE', false),
+    privateFee: false,
     gasPaymentMicrocredits: latestQuote.paymentMicrocredits,
     onCheckpoint(checkpoint) {
       console.log('Optional recovery checkpoint:', JSON.stringify(checkpoint))

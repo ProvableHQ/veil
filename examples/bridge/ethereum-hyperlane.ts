@@ -17,6 +17,7 @@ import {
 
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
 const DEFAULT_EVM_CONFIRMATION_TIMEOUT_MS = 5 * 60_000
+const EXECUTION_ENVIRONMENT_VARIABLE = 'EXECUTE_BRIDGE'
 const ERC20_READ_ABI = parseAbi([
   'function allowance(address owner, address spender) view returns (uint256)',
   'function balanceOf(address account) view returns (uint256)',
@@ -24,30 +25,21 @@ const ERC20_READ_ABI = parseAbi([
 
 type HyperlaneAsset = 'ETH' | 'WBTC'
 type AssetConfiguration = {
-  symbol: HyperlaneAsset
-  amountEnvironmentVariable: string
-  executionEnvironmentVariable: string
   source: { chain: string, asset: string }
   destination: { chain: string, asset: string }
-  decimals: number
+  amount: string
 }
 
 const ASSETS: Record<HyperlaneAsset, AssetConfiguration> = {
   ETH: {
-    symbol: 'ETH',
-    amountEnvironmentVariable: 'ETH_AMOUNT',
-    executionEnvironmentVariable: 'EXECUTE_HYPERLANE_ETH',
     source: { chain: 'ethereum', asset: 'eth' },
     destination: { chain: 'aleo', asset: 'eth' },
-    decimals: 18,
+    amount: '0.000000000000000001',
   },
   WBTC: {
-    symbol: 'WBTC',
-    amountEnvironmentVariable: 'WBTC_AMOUNT',
-    executionEnvironmentVariable: 'EXECUTE_HYPERLANE_WBTC',
     source: { chain: 'ethereum', asset: 'wbtc' },
     destination: { chain: 'aleo', asset: 'wbtc' },
-    decimals: 8,
+    amount: '0.00000001',
   },
 }
 
@@ -68,21 +60,11 @@ function privateKeyFromEnvironment(): Hex {
   return `0x${unprefixed}` as Hex
 }
 
-function millisecondsFromEnvironment(name: string, defaultValue: number): number {
-  const raw = process.env[name]?.trim()
-  if (!raw) return defaultValue
-  const value = Number(raw)
-  if (!Number.isSafeInteger(value) || value < 1_000) {
-    throw new Error(`${name} must be an integer greater than or equal to 1000`)
-  }
-  return value
-}
-
 /**
  * Quotes or submits one reviewed mainnet Ethereum-to-Aleo Hyperlane route.
  *
  * The example signs locally with a viem private-key account. It is read-only
- * unless the asset-specific execution acknowledgement is set. WBTC allowance
+ * unless the shared execution acknowledgement is set. WBTC allowance
  * is displayed before execution; the bridge client submits an exact approval
  * only when that allowance is insufficient. Native ETH has no approval step.
  *
@@ -97,7 +79,6 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
   const config = ASSETS[asset]
   const rpcUrl = requiredEnvironmentVariable('ETHEREUM_RPC_URL')
   const recipient = requiredEnvironmentVariable('ALEO_RECIPIENT')
-  const amount = requiredEnvironmentVariable(config.amountEnvironmentVariable)
   const evm = createEvmClient({
     transport: evmHttp(rpcUrl),
     account: evmPrivateKey(privateKeyFromEnvironment()),
@@ -118,7 +99,7 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
     source: config.source,
     destination: config.destination,
     bridgeProtocol: 'hyperlane',
-    amount,
+    amount: config.amount,
     recipient,
     sender,
   })
@@ -151,25 +132,25 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
     route: quote.routeId,
     sender,
     recipient,
-    amount: `${formatUnits(quote.amountAtomic, config.decimals)} ${asset}`,
-    assetBalance: `${formatUnits(assetBalance, config.decimals)} ${asset}`,
+    amount: `${formatUnits(quote.amountAtomic, plan.sourceAsset.decimals)} ${asset}`,
+    assetBalance: `${formatUnits(assetBalance, plan.sourceAsset.decimals)} ${asset}`,
     nativeBalance: `${formatEther(nativeBalance)} ETH`,
     hyperlaneFee: `${formatEther(quote.nativeFeeAtomic)} ETH`,
     transactionValue: `${formatEther(quote.nativeValueAtomic)} ETH`,
     approvalRequired: asset === 'WBTC' ? approvalRequired : false,
-    allowance: allowance == null ? 'not applicable' : `${formatUnits(allowance, config.decimals)} WBTC`,
+    allowance: allowance == null ? 'not applicable' : `${formatUnits(allowance, plan.sourceAsset.decimals)} WBTC`,
     tokenContract: quote.tokenAddress ?? 'native ETH',
     warpRouteContract: quote.routerAddress,
     destinationDomain: quote.destinationDomain,
     recipientBytes32: quote.recipientBytes32,
   })
 
-  if (process.env[config.executionEnvironmentVariable] !== EXECUTION_ACKNOWLEDGEMENT) {
+  if (process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
     console.log('\nQuote complete; no transaction was submitted.')
     console.log(
       asset === 'WBTC' && approvalRequired
-        ? `Set ${config.executionEnvironmentVariable}=${EXECUTION_ACKNOWLEDGEMENT} to approve WBTC and dispatch the transfer.`
-        : `Set ${config.executionEnvironmentVariable}=${EXECUTION_ACKNOWLEDGEMENT} to dispatch the transfer.`,
+        ? `Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to approve WBTC and dispatch the transfer.`
+        : `Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to dispatch the transfer.`,
     )
     return
   }
@@ -187,10 +168,7 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
     : `Submitting the ${asset} transfer directly through Hyperlane; no approval transaction is needed.`)
   const execution = await bridge.execute({
     plan,
-    confirmationTimeoutMs: millisecondsFromEnvironment(
-      'EVM_CONFIRMATION_TIMEOUT_MS',
-      DEFAULT_EVM_CONFIRMATION_TIMEOUT_MS,
-    ),
+    confirmationTimeoutMs: DEFAULT_EVM_CONFIRMATION_TIMEOUT_MS,
     onCheckpoint(checkpoint) {
       console.log('Optional recovery checkpoint:', JSON.stringify(checkpoint))
     },

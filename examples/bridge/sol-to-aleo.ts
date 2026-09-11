@@ -9,10 +9,10 @@ import {
   solanaKeyPair,
 } from '@provablehq/aleo-bridge-sdk'
 
-const ROUTE_ID = 'hyperlane:solana/sol->aleo/sol'
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
-const EXECUTION_ENVIRONMENT_VARIABLE = 'EXECUTE_HYPERLANE_SOL'
+const EXECUTION_ENVIRONMENT_VARIABLE = 'EXECUTE_BRIDGE'
 const DEFAULT_CONFIRMATION_TIMEOUT_MS = 2 * 60_000
+const AMOUNT = '0.000000001'
 
 function requiredEnvironmentVariable(name: string): string {
   const value = process.env[name]?.trim()
@@ -35,16 +35,6 @@ function privateKeyBytes(raw: string): Uint8Array {
     throw new Error('SOLANA_PRIVATE_KEY must be a base58-encoded 64-byte keypair or a Solana CLI JSON byte array')
   }
   return bytes
-}
-
-function millisecondsFromEnvironment(name: string, defaultValue: number): number {
-  const raw = process.env[name]?.trim()
-  if (!raw) return defaultValue
-  const value = Number(raw)
-  if (!Number.isSafeInteger(value) || value < 1_000) {
-    throw new Error(`${name} must be an integer greater than or equal to 1000`)
-  }
-  return value
 }
 
 function formatAmount(value: bigint, decimals: number): string {
@@ -73,7 +63,6 @@ function formatAmount(value: bigint, decimals: number): string {
 export async function runSolanaHyperlaneExample(): Promise<void> {
   const rpcUrl = process.env.SOLANA_RPC_URL?.trim() || DEFAULT_SOLANA_RPC_URL
   const recipient = requiredEnvironmentVariable('ALEO_RECIPIENT')
-  const amount = requiredEnvironmentVariable('SOL_AMOUNT')
 
   const privateKey = process.env.SOLANA_PRIVATE_KEY?.trim()
   const keypairBytes = privateKey ? privateKeyBytes(privateKey) : undefined
@@ -104,7 +93,7 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
     source: { chain: 'solana', asset: 'sol' },
     destination: { chain: 'aleo', asset: 'sol' },
     bridgeProtocol: 'hyperlane',
-    amount,
+    amount: AMOUNT,
     recipient,
     sender: senderAddress,
   })
@@ -115,7 +104,7 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
 
   console.log('Read-only Solana SOL to Aleo SOL preflight')
   console.table({
-    route: ROUTE_ID,
+    route: plan.route.id,
     sender: senderAddress,
     recipient,
     amount: `${formatAmount(quote.amountLamports, decimals)} SOL`,
@@ -137,7 +126,7 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
   console.log('\nExecution enabled. Submitting the transfer through the local keypair account.')
   const execution = await bridge.execute({
     plan,
-    confirmationTimeoutMs: millisecondsFromEnvironment('SOLANA_CONFIRMATION_TIMEOUT_MS', DEFAULT_CONFIRMATION_TIMEOUT_MS),
+    confirmationTimeoutMs: DEFAULT_CONFIRMATION_TIMEOUT_MS,
     onCheckpoint(checkpoint) {
       console.log('Optional recovery checkpoint:', JSON.stringify(checkpoint))
     },

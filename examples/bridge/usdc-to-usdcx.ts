@@ -17,6 +17,8 @@ import {
 } from '@provablehq/aleo-bridge-sdk'
 
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
+const EXECUTION_ENVIRONMENT_VARIABLE = 'EXECUTE_BRIDGE'
+const AMOUNT = '2'
 
 function required(name: string): string {
   const value = process.env[name]?.trim()
@@ -63,7 +65,7 @@ async function main(): Promise<void> {
     const aleo = network.createAleoClient({
       privateKey: required('ALEO_PRIVATE_KEY'),
       networkUrl: process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2',
-      provingMode: process.env.ALEO_PROVING_MODE === 'local' ? 'local' : 'delegated',
+      provingMode: 'delegated',
       confirmationTimeout: 5 * 60_000,
     })
     if (String(aleo.account.address) !== recipient) {
@@ -89,7 +91,7 @@ async function main(): Promise<void> {
     source: { chain: 'ethereum', asset: 'usdc' },
     destination: { chain: 'aleo', asset: 'usdcx' },
     bridgeProtocol: 'xreserve',
-    amount: required('USDC_AMOUNT'),
+    amount: AMOUNT,
     recipient,
     sender: evmAccount.account.address,
     mintMode: mode,
@@ -106,7 +108,7 @@ async function main(): Promise<void> {
     approvalRequired: transferQuote.approvalRequired,
     mintMode: mode,
   })
-  if (process.env.EXECUTE_XRESERVE_DEPOSIT !== EXECUTION_ACKNOWLEDGEMENT) return
+  if (process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) return
 
   // execute submits the source-side approval and deposit. The optional hook
   // receives public intent and transaction identifiers needed by recover().
@@ -146,7 +148,7 @@ async function main(): Promise<void> {
   const destination = await bridge.complete({
     progress,
     privateMintSecretNonce,
-    privateFee: process.env.ALEO_PRIVATE_FEE === 'true',
+    privateFee: false,
     onCheckpoint(value) { checkpoint('destination checkpoint', value) },
   })
   progress = await bridge.wait({

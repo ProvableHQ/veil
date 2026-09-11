@@ -1,7 +1,7 @@
 /**
  * Mainnet native ETH to Aleo ETH Hyperlane demo.
  *
- * Run without EXECUTE_HYPERLANE_ETH for a read-only quote. Native ETH is sent
+ * Run without EXECUTE_BRIDGE for a read-only quote. Native ETH is sent
  * directly to the reviewed Warp Route and does not require ERC-20 approval.
  */
 

@@ -15,6 +15,22 @@ const LEGACY_OR_LOW_LEVEL_APIS = [
   'solanaExecutorFromKeyPair',
   'solanaExecutorFromWalletAccount',
 ]
+const EXAMPLE_CONFIGURATION_HELPERS = [
+  'booleanFromEnvironment',
+  'millisecondsFromEnvironment',
+]
+const ROUTE_SPECIFIC_AMOUNT_OR_EXECUTION_ENVIRONMENT_VARIABLES = [
+  'ETH_AMOUNT',
+  'SOL_AMOUNT',
+  'WBTC_AMOUNT',
+  'USDC_AMOUNT',
+  'USDCX_AMOUNT',
+  'EXECUTE_HYPERLANE_ETH',
+  'EXECUTE_HYPERLANE_WBTC',
+  'EXECUTE_HYPERLANE_SOL',
+  'EXECUTE_XRESERVE_DEPOSIT',
+  'EXECUTE_XRESERVE_BURN',
+]
 
 describe('bridge examples', () => {
   it('use the current bridge lifecycle instead of legacy or protocol-internal utilities', () => {
@@ -46,5 +62,23 @@ describe('bridge examples', () => {
       const source = readFileSync(join(EXAMPLE_DIRECTORY, name), 'utf8')
       expect(source, `${name} must prepare a structured route`).toContain('bridge.prepare({')
     }
+  })
+
+  it('uses visible defaults instead of parsing optional example configuration', () => {
+    const files = readdirSync(EXAMPLE_DIRECTORY)
+      .filter((name) => name.endsWith('.ts'))
+      .map((name) => join(EXAMPLE_DIRECTORY, name))
+    const sources = [
+      ...files.map((file) => readFileSync(file, 'utf8')),
+      readFileSync(join(EXAMPLE_DIRECTORY, 'README.md'), 'utf8'),
+    ].join('\n')
+
+    for (const identifier of [
+      ...EXAMPLE_CONFIGURATION_HELPERS,
+      ...ROUTE_SPECIFIC_AMOUNT_OR_EXECUTION_ENVIRONMENT_VARIABLES,
+    ]) {
+      expect(sources, `bridge examples still configure ${identifier}`).not.toContain(identifier)
+    }
+    expect(sources).toContain('EXECUTE_BRIDGE')
   })
 })

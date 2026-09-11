@@ -19,7 +19,10 @@ const USDCX_PROGRAM = 'usdcx_stablecoin.aleo'
 const FREEZE_LIST_URL = 'https://api.provable.com/v2/mainnet/programs/usdcx_freezelist.aleo/compliance/freeze-list'
 const FREEZE_LIST_DEPTH = 15
 const MINIMUM_BURN_AMOUNT_ATOMIC = 2_000_000n
-const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_BURNS_USDCX'
+const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
+const EXECUTION_ENVIRONMENT_VARIABLE = 'EXECUTE_BRIDGE'
+const ALEO_CONFIRMATION_TIMEOUT_MS = 5 * 60_000
+const AMOUNT = '2.000001'
 
 type ExampleBurnMode = 'private' | 'public'
 
@@ -33,24 +36,6 @@ function burnModeFromEnvironment(): ExampleBurnMode {
   const value = process.env.USDCX_BURN_MODE?.trim() || 'private'
   if (value !== 'private' && value !== 'public') {
     throw new Error('USDCX_BURN_MODE must be private or public')
-  }
-  return value
-}
-
-function booleanFromEnvironment(name: string, defaultValue: boolean): boolean {
-  const raw = process.env[name]?.trim().toLowerCase()
-  if (!raw) return defaultValue
-  if (raw === 'true') return true
-  if (raw === 'false') return false
-  throw new Error(`${name} must be true or false`)
-}
-
-function millisecondsFromEnvironment(name: string, defaultValue: number): number {
-  const raw = process.env[name]?.trim()
-  if (!raw) return defaultValue
-  const value = Number(raw)
-  if (!Number.isSafeInteger(value) || value < 1_000) {
-    throw new Error(`${name} must be an integer greater than or equal to 1000`)
   }
   return value
 }
@@ -118,7 +103,6 @@ async function createExclusionProof(address: string): Promise<string> {
 }
 
 async function main(): Promise<void> {
-  const amount = requiredEnvironmentVariable('USDCX_AMOUNT')
   const recipient = requiredEnvironmentVariable('ETHEREUM_RECIPIENT')
   const mode = burnModeFromEnvironment()
   const bridge = createBridgeClient({ environment: 'mainnet' })
@@ -126,7 +110,7 @@ async function main(): Promise<void> {
     source: { chain: 'aleo', asset: 'usdcx' },
     destination: { chain: 'ethereum', asset: 'usdc' },
     bridgeProtocol: 'xreserve',
-    amount,
+    amount: AMOUNT,
     recipient,
   })
   const amountAtomic = atomicAmount(plan.amountIn, plan.sourceAsset.decimals)
@@ -152,9 +136,9 @@ async function main(): Promise<void> {
       : 'not used',
   })
 
-  if (process.env.EXECUTE_XRESERVE_BURN !== EXECUTION_ACKNOWLEDGEMENT) {
+  if (process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
     console.log('\nPreflight complete; no USDCx was burned.')
-    console.log(`Set EXECUTE_XRESERVE_BURN=${EXECUTION_ACKNOWLEDGEMENT} to submit the withdrawal.`)
+    console.log(`Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to submit the withdrawal.`)
     return
   }
 
@@ -168,10 +152,6 @@ async function main(): Promise<void> {
     throw new Error('Private burn record discovery requires ALEO_CONSUMER_ID and ALEO_DPS_API_KEY')
   }
 
-  const provingMode = process.env.ALEO_PROVING_MODE?.trim() || 'delegated'
-  if (provingMode !== 'delegated' && provingMode !== 'local') {
-    throw new Error('ALEO_PROVING_MODE must be delegated or local')
-  }
   const { loadNetwork } = await import('@provablehq/veil-aleo-sdk')
   const aleo = await loadNetwork('mainnet')
   const records = mode === 'private'
@@ -180,15 +160,14 @@ async function main(): Promise<void> {
   const { publicClient, walletClient: nativeWalletClient, account } = aleo.createAleoClient({
     privateKey,
     networkUrl: process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2',
-    provingMode,
-    ...(process.env.ALEO_PROVER_URL?.trim() ? { proverUrl: process.env.ALEO_PROVER_URL.trim() } : {}),
+    provingMode: 'delegated',
     ...(consumerId && apiKey ? { consumerId, apiKey } : {}),
     ...(records ? { records } : {}),
-    useFeeMaster: booleanFromEnvironment('ALEO_USE_FEE_MASTER', false),
-    confirmationTimeout: millisecondsFromEnvironment('ALEO_EXECUTION_CONFIRMATION_TIMEOUT_MS', 5 * 60_000),
+    useFeeMaster: false,
+    confirmationTimeout: ALEO_CONFIRMATION_TIMEOUT_MS,
   })
   if (consumerId && apiKey) await nativeWalletClient.authenticateProvableApi()
-  console.log(`Aleo signer ready: ${account.address} (${provingMode} proving)`)
+  console.log(`Aleo signer ready: ${account.address} (delegated proving)`)
 
   const userRecord = mode === 'private'
     ? (await selectPrivateRecord(nativeWalletClient, amountAtomic)).recordPlaintext
@@ -208,7 +187,7 @@ async function main(): Promise<void> {
     mode: burnMode,
     ...(userRecord ? { userRecord } : {}),
     ...(merkleProof ? { merkleProof } : {}),
-    privateFee: booleanFromEnvironment('ALEO_PRIVATE_FEE', false),
+    privateFee: false,
     onCheckpoint(checkpoint) {
       console.log('Optional recovery checkpoint:', JSON.stringify(checkpoint))
     },

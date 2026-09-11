@@ -43,3 +43,6 @@ Export `DEFAULT_SOLANA_RPC_URL` for the official Solana mainnet endpoint.
 Rewrite every bridge example and the Solana deposit operator script around the
 structured route and recoverable lifecycle APIs, with application-owned optional
 checkpoint persistence and no imports from protocol-internal utilities.
+Use visible minimum transfer amounts and fixed execution defaults in the bridge
+examples, and document the complete lifecycle in a tutorial with runnable route
+commands and recovery guidance.
