@@ -267,6 +267,26 @@ describe('validateBridgeRegistry', () => {
     })).toThrow(/invalid address validation regex/)
   })
 
+  it('rejects privacy capabilities on non-Aleo assets', () => {
+    const asset = DEFAULT_BRIDGE_REGISTRY.assets.find((entry) => entry.id === 'ethereum/usdc')!
+    expect(() => validateBridgeRegistry({
+      ...DEFAULT_BRIDGE_REGISTRY,
+      assets: DEFAULT_BRIDGE_REGISTRY.assets.map((entry) => entry.id === asset.id
+        ? { ...entry, privacy: { kind: 'arc20' as const, program: 'arc20_usdc.aleo' } }
+        : entry),
+    })).toThrow(/privacy capability.*non-Aleo/i)
+  })
+
+  it('rejects privacy capabilities without a program id', () => {
+    const asset = DEFAULT_BRIDGE_REGISTRY.assets.find((entry) => entry.id === 'aleo/sol')!
+    expect(() => validateBridgeRegistry({
+      ...DEFAULT_BRIDGE_REGISTRY,
+      assets: DEFAULT_BRIDGE_REGISTRY.assets.map((entry) => entry.id === asset.id
+        ? { ...entry, privacy: { ...entry.privacy!, program: '' } }
+        : entry),
+    })).toThrow(/privacy program/i)
+  })
+
   it('rejects an active Solana-source Hyperlane route missing required Sealevel metadata', () => {
     const route = DEFAULT_BRIDGE_REGISTRY.routes.find(
       (entry) => entry.id === 'hyperlane:solana/sol->aleo/sol',

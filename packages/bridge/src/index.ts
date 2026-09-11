@@ -67,6 +67,8 @@ export { waitForStatus } from './actions/waitForStatus.js'
 export { recover } from './actions/recover.js'
 export { resume } from './actions/resume.js'
 export { wait } from './actions/wait.js'
+export { shield } from './actions/shield.js'
+export { unshield } from './actions/unshield.js'
 export { createBridgeCheckpoint } from './actions/createBridgeCheckpoint.js'
 export { hyperlane, xreserve, type ProtocolHelperRegistry } from './protocols/index.js'
 export { buildXReserveBurnCall } from './builders/buildXReserveBurnCall.js'
@@ -77,6 +79,8 @@ export { validateBridgeRegistry } from './registry/validate.js'
 
 export type {
   AleoMintMode,
+  AleoPrivacyCapability,
+  AleoPrivacyKind,
   BridgeAssetKind,
   BridgeAssetLocator,
   BridgeChainFamily,
@@ -133,12 +137,15 @@ export type {
 } from './types/xreserve.js'
 export type {
   AleoWalletClient,
+  AleoPrivacyExecution,
   AleoHyperlaneGasQuote,
   AleoHyperlaneTransferRemoteCall,
   AleoHyperlaneTransferRemoteExecution,
   ExecuteAleoHyperlaneTransferRemoteParameters,
   ExecuteXReserveBurnParameters,
   ExecuteXReservePrivateMintParameters,
+  ShieldParameters,
+  UnshieldParameters,
   XReserveBurnCall,
   XReserveBurnExecution,
   XReserveBurnMode,

@@ -104,6 +104,48 @@ Local EVM accounts sign through viem and broadcast through the configured
 public source. Local Solana accounts sign locally and broadcast through their
 client's public client; the account never receives a duplicate RPC URL.
 
+## Shielding Aleo assets
+
+`shield` converts a public Aleo token balance into a private record.
+`unshield` converts a private record back into a public balance. The default
+registry supports ETH, WBTC, USDT, and SOL through their ARC-20 programs, and
+USDCx through its ARC-22 public/private transfer transitions.
+
+```ts
+const shielded = await bridge.shield({
+  asset: { chain: 'aleo', asset: 'sol' },
+  amount: '0.01',
+})
+
+const unshielded = await bridge.unshield({
+  asset: { chain: 'aleo', asset: 'sol' },
+  amount: '0.01',
+})
+```
+
+Compatible wallets select the private `Token` record without exposing it to
+the application. A caller can instead pass `record` as an encoded record or a
+wallet record request. For USDCx, the recipient defaults to the active wallet
+address and the freeze-list witness defaults to the canonical empty-tree proof:
+
+```ts
+await bridge.unshield({
+  asset: { chain: 'aleo', asset: 'usdcx' },
+  amount: '2.5',
+  // Supply these when the default wallet selection or empty proof no longer applies.
+  record: { type: 'record', program: 'usdcx_stablecoin.aleo', recordname: 'Token', uid },
+  recipient: aleoAddress,
+  merkleProof,
+})
+```
+
+Local-proving clients cannot resolve wallet-side input requests. Bots using a
+local Aleo key MUST pass an encoded `record` when unshielding and an explicit
+`recipient` for USDCx conversions.
+
+The empty proof is valid only while the deployed freeze-list tree is empty.
+Applications MUST provide a current proof after that tree is populated.
+
 ## Existing viem clients
 
 ```ts

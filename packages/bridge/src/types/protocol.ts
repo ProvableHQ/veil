@@ -42,6 +42,20 @@ export type BridgeAssetLocator = {
   tokenId?: string | undefined
 }
 
+/** Identifies the Aleo transition family used to convert an asset between public and private state. */
+export type AleoPrivacyKind = 'arc20' | 'arc22'
+
+/**
+ * Describes how an Aleo asset converts between public balances and private records.
+ *
+ * @property kind ABI family that determines the transition names and input order.
+ * @property program Program containing the public balance and private `Token` record.
+ */
+export type AleoPrivacyCapability = {
+  kind: AleoPrivacyKind
+  program: string
+}
+
 /**
  * Describes one chain-specific representation of a bridgeable asset.
  *
@@ -54,6 +68,7 @@ export type BridgeAssetLocator = {
  * @property kind Whether the representation is native currency or a token.
  * @property locator Onchain identifier when the deployment is known.
  * @property addressValidationRegex Optional recipient validation expression.
+ * @property privacy Optional Aleo public/private conversion capability.
  */
 export type ProtocolBridgeAsset = {
   id: string
@@ -65,6 +80,7 @@ export type ProtocolBridgeAsset = {
   kind: BridgeAssetKind
   locator?: BridgeAssetLocator | undefined
   addressValidationRegex?: string | undefined
+  privacy?: AleoPrivacyCapability | undefined
 }
 
 /** Reports whether a route has enough reviewed metadata for execution. */

@@ -95,6 +95,18 @@ export function validateBridgeRegistry(registry: BridgeRegistry): BridgeRegistry
         })
       }
     }
+    if (asset.privacy) {
+      const chain = registry.chains.find((entry) => entry.id === asset.chainId)
+      if (chain?.family !== 'aleo') {
+        throw new BridgeError(`Bridge asset ${asset.id} declares a privacy capability on a non-Aleo chain`)
+      }
+      if (!asset.privacy.program.trim()) {
+        throw new BridgeError(`Bridge asset ${asset.id} has an empty privacy program`)
+      }
+      if (asset.privacy.kind !== 'arc20' && asset.privacy.kind !== 'arc22') {
+        throw new BridgeError(`Bridge asset ${asset.id} has an unsupported privacy capability kind`)
+      }
+    }
     assetIds.add(asset.id)
     assetKeys.add(scopedKey)
   }

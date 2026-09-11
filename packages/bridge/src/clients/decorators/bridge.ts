@@ -9,9 +9,12 @@ import { waitForStatus } from '../../actions/waitForStatus.js'
 import { recover } from '../../actions/recover.js'
 import { resume } from '../../actions/resume.js'
 import { wait } from '../../actions/wait.js'
+import { shield } from '../../actions/shield.js'
+import { unshield } from '../../actions/unshield.js'
 import type { BridgeChainClients } from '../../connections/resolve.js'
 import type { BridgeEnvironment, BridgeProgress, BridgeReceipt, BridgeRegistry, BridgePlan, PrepareParameters, ProtocolBridgeAsset, ProtocolBridgeRoute } from '../../types/protocol.js'
 import type { CompleteParameters, ExecuteParameters, GetStatusParameters, QuoteParameters, RecoverParameters, ResumeParameters, WaitForStatusParameters, WaitParameters, BridgeExecution, BridgeQuote } from '../../types/actions.js'
+import type { AleoPrivacyExecution, ShieldParameters, UnshieldParameters } from '../../types/aleo.js'
 
 /**
  * Carries validated registry and materialized client state into bound actions.
@@ -40,6 +43,8 @@ export type BridgeActions = {
   recover: (params: RecoverParameters) => Promise<BridgeProgress>
   resume: (params: ResumeParameters) => Promise<BridgeExecution>
   wait: (params: WaitParameters) => Promise<BridgeProgress>
+  shield: (params: ShieldParameters) => Promise<AleoPrivacyExecution>
+  unshield: (params: UnshieldParameters) => Promise<AleoPrivacyExecution>
 }
 
 /** Binds registry and private client state to bridge actions. */
@@ -56,5 +61,7 @@ export function bridgeActions(config: BridgeActionsConfig): BridgeActions {
     recover: async (params) => recover(config.registry, config.clients, config.fetch, params),
     resume: async (params) => resume(config.registry, config.clients, params),
     wait: async (params) => wait(config.registry, config.clients, config.fetch, params),
+    shield: async (params) => shield(config.registry, config.clients, params),
+    unshield: async (params) => unshield(config.registry, config.clients, params),
   }
 }

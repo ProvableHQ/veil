@@ -47,6 +47,8 @@ describe('createBridgeClient', () => {
     expect(client.waitForStatus).toBeTypeOf('function')
     expect(client.resume).toBeTypeOf('function')
     expect(client.complete).toBeTypeOf('function')
+    expect(client.shield).toBeTypeOf('function')
+    expect(client.unshield).toBeTypeOf('function')
     expect('prepareTransfer' in client).toBe(false)
     expect('quoteTransfer' in client).toBe(false)
     expect('executeTransfer' in client).toBe(false)

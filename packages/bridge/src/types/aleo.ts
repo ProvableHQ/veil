@@ -1,5 +1,5 @@
 import type { ProvingProgressHandler, Transaction, TransactionInput, WalletClient } from '@provablehq/veil-core'
-import type { BridgePlan, BridgeReceipt } from './protocol.js'
+import type { BridgeEndpoint, BridgePlan, BridgeReceipt } from './protocol.js'
 import type { XReserveAttestationResult } from './xreserve.js'
 
 /**
@@ -10,6 +10,63 @@ import type { XReserveAttestationResult } from './xreserve.js'
  * @property executeTransaction Prompts the wallet to prove, sign, and broadcast a program call.
  */
 export type AleoWalletClient = Pick<WalletClient, 'executeTransaction'>
+
+/**
+ * Configures shielding an Aleo asset's public balance into a private record.
+ *
+ * @property asset Registry chain and asset key. The asset MUST declare a privacy capability.
+ * @property amount Positive decimal amount in the asset's display units.
+ * @property recipient Optional Aleo recipient for ARC-22 assets. Defaults to the active wallet address.
+ * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
+ * @property onProgress Optional awaited callback for proving and submission boundaries.
+ * @property onPrepared Optional awaited callback receiving the proved transaction before broadcast.
+ */
+export type ShieldParameters = {
+  asset: BridgeEndpoint
+  amount: string
+  recipient?: string | undefined
+  privateFee?: boolean | undefined
+  onProgress?: ProvingProgressHandler | undefined
+  onPrepared?: ((transaction: Transaction) => void | Promise<void>) | undefined
+}
+
+/**
+ * Configures unshielding an Aleo asset's private record into a public balance.
+ *
+ * @property asset Registry chain and asset key. The asset MUST declare a privacy capability.
+ * @property amount Positive decimal amount in the asset's display units.
+ * @property record Optional encoded `Token` record or wallet record request. Defaults to wallet selection by minimum amount.
+ * @property recipient Optional Aleo public recipient for ARC-22 assets. Defaults to the active wallet address.
+ * @property merkleProof Optional ARC-22 freeze-list proof literal. Defaults to the canonical empty-tree proof pair.
+ * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
+ * @property onProgress Optional awaited callback for proving and submission boundaries.
+ * @property onPrepared Optional awaited callback receiving the proved transaction before broadcast.
+ */
+export type UnshieldParameters = {
+  asset: BridgeEndpoint
+  amount: string
+  record?: TransactionInput | undefined
+  recipient?: string | undefined
+  merkleProof?: string | undefined
+  privateFee?: boolean | undefined
+  onProgress?: ProvingProgressHandler | undefined
+  onPrepared?: ((transaction: Transaction) => void | Promise<void>) | undefined
+}
+
+/**
+ * Captures a submitted Aleo public/private asset conversion.
+ *
+ * @property transactionId Aleo transaction id returned by the wallet.
+ * @property assetId Registry asset converted by the transaction.
+ * @property amount Original decimal amount supplied by the caller.
+ * @property amountAtomic Exact amount submitted as a u128 atomic value.
+ */
+export type AleoPrivacyExecution = {
+  transactionId: string
+  assetId: string
+  amount: string
+  amountAtomic: bigint
+}
 
 /**
  * Configures submission of the user-authorized USDCx wrapper mint.
