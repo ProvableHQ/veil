@@ -1,0 +1,129 @@
+import { describe, expect, it } from 'vitest'
+import {
+  createAleoClient,
+  createBridgeClient,
+  createEvmClient,
+  evmHttp,
+  evmPrivateKey,
+  type BridgeCheckpoint,
+  type BridgeProgress,
+} from '../../../../src/index.js'
+import { loadLiveState, saveLiveState } from '../helpers.js'
+import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, required } from '../config.js'
+
+const enabled = mainnetCaseEnabled('evm-xreserve')
+
+async function localAleo(privateKey: string) {
+  const { loadNetwork } = await import('../../../../../provable-sdk/src/index.js')
+  const aleo = await loadNetwork('mainnet')
+  return aleo.createAleoClient({
+    privateKey,
+    networkUrl: 'https://api.provable.com/v2',
+    provingMode: 'local',
+    confirmationTimeout: 10 * 60_000,
+  })
+}
+
+describe.skipIf(!enabled)('mainnet EVM xReserve bridge', () => {
+  it('recovers the minimum USDC deposit and privately mints on Aleo', async () => {
+    const routeId = 'xreserve:ethereum/usdc->aleo/usdcx'
+    const path = liveStatePath('mainnet', 'evm-xreserve-recovery')
+    const state = loadLiveState(path, routeId)
+    const evm = createEvmClient({
+      transport: evmHttp(required('BRIDGE_LIVE_ETHEREUM_RPC_URL')),
+      account: evmPrivateKey(required('BRIDGE_EVM_PRIVATE_KEY') as `0x${string}`),
+    })
+    const aleo = await localAleo(required('BRIDGE_PRIVATE_KEY'))
+    const sender = await evm.walletClient!.getAddress()
+    const bridge = createBridgeClient({
+      environment: 'mainnet',
+      clients: {
+        ethereum: evm,
+        aleo: createAleoClient({ publicClient: aleo.publicClient, account: aleo.walletClient }),
+      },
+    })
+    const plan = bridge.prepare({
+      source: { chain: 'ethereum', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
+      bridgeProtocol: 'xreserve',
+      amount: '2',
+      recipient: String(aleo.account.address),
+      sender,
+      mintMode: 'private',
+    })
+
+    let progress: BridgeProgress
+    if (!state.checkpoint) {
+      const quote = await bridge.quote({ plan })
+      if (quote.kind !== 'evm-xreserve') throw new Error(`Unexpected quote kind: ${quote.kind}`)
+      expect(quote.amountAtomic).toBe(2_000_000n)
+      console.table({ route: routeId, amount: plan.amountIn, sender, recipient: plan.recipient, maximumProtocolFeeAtomic: quote.maxFeeAtomic.toString() })
+      if (!mainnetExecutionEnabled()) return
+      await bridge.execute({
+        plan,
+        confirmationTimeoutMs: 0,
+        onCheckpoint(checkpoint) {
+          state.checkpoint = checkpoint
+          state.sourceTxId = checkpoint.source?.transactionId ?? state.sourceTxId
+          saveLiveState(path, state)
+        },
+      })
+    }
+
+    // Recovery is intentionally performed by a newly constructed public-only
+    // client, proving that it cannot repeat an approval or deposit.
+    const recoveryBridge = createBridgeClient({
+      environment: 'mainnet',
+      clients: {
+        ethereum: { family: 'evm', publicClient: evm.publicClient },
+        aleo: createAleoClient({ publicClient: aleo.publicClient }),
+      },
+    })
+    progress = await recoveryBridge.recover({ checkpoint: state.checkpoint as BridgeCheckpoint })
+    if (progress.next === 'wait') progress = await recoveryBridge.wait({ progress })
+    if (progress.next === 'resume') {
+      if (!mainnetExecutionEnabled()) return
+      const resumed = await bridge.resume({
+        progress,
+        onCheckpoint(checkpoint) {
+          state.checkpoint = checkpoint
+          state.sourceTxId = checkpoint.source?.transactionId ?? state.sourceTxId
+          saveLiveState(path, state)
+        },
+      })
+      progress = await recoveryBridge.wait({
+        progress: { next: 'wait', plan: progress.plan, receipt: resumed.receipt },
+      })
+    }
+    if (progress.next === 'failed') throw new Error(progress.error)
+    if (progress.next === 'complete') {
+      if (!mainnetExecutionEnabled()) return
+      const completed = await bridge.complete({
+        progress,
+        onCheckpoint(checkpoint) {
+          state.checkpoint = checkpoint
+          state.destinationTxId = checkpoint.destination?.transactionId
+          saveLiveState(path, state)
+        },
+      })
+      progress = await recoveryBridge.wait({
+        progress: { next: 'wait', plan: progress.plan, receipt: completed.receipt },
+      })
+    }
+    if (progress.next === 'failed') throw new Error(progress.error)
+    if (progress.next !== 'done') {
+      throw new Error(`Expected completed private mint, received ${progress.next}`)
+    }
+
+    state.sourceTxId = progress.receipt.sourceTxId ?? state.sourceTxId
+    state.messageId = progress.receipt.id
+    state.completed = true
+    saveLiveState(path, state)
+    expect(state).toMatchObject({
+      completed: true,
+      sourceTxId: expect.any(String),
+      messageId: expect.any(String),
+      destinationTxId: expect.any(String),
+    })
+  }, 30 * 60_000)
+})

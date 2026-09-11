@@ -24,3 +24,5 @@ directly to `createAleoClient`, while protocol-specific escape hatches remain
 exported under the `hyperlane` and `xreserve` namespaces.
 Quoting and execution dispatch from the prepared route, replacing chain- and
 protocol-specific client methods and the longer transfer-suffixed names.
+Add deterministic recovery journeys and independently gated, minimum-amount
+mainnet suites for xReserve and Hyperlane routes using local accounts.

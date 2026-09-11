@@ -40,7 +40,9 @@
   "scripts": {
     "build": "tsup",
     "test": "vitest run --root ../.. packages/bridge/test",
+    "test:integration": "vitest run --root ../.. packages/bridge/test/integration/lifecycle",
     "test:live": "vitest run --root ../.. packages/bridge/test/integration/live",
+    "test:live:mainnet": "vitest run --root ../.. packages/bridge/test/integration/live/mainnet",
     "typecheck": "tsc --noEmit",
     "solana-deposit": "tsx scripts/solana-deposit.ts"
   },

@@ -6,6 +6,7 @@ export type LiveState = {
   sourceTxId?: string
   messageId?: string
   destinationTxId?: string
+  destinationBalanceBefore?: string
   completed?: boolean
   sourceReceipt?: unknown
   checkpoint?: unknown
@@ -17,7 +18,7 @@ export function loadLiveState(path: string, routeId: string): LiveState {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(`Live state is not an object: ${path}`)
     const state = parsed as LiveState
     if (state.routeId !== routeId) throw new Error(`Live state route ${String(state.routeId)} does not match ${routeId}`)
-    for (const field of ['sourceTxId', 'messageId', 'destinationTxId'] as const) {
+    for (const field of ['sourceTxId', 'messageId', 'destinationTxId', 'destinationBalanceBefore'] as const) {
       if (state[field] !== undefined && typeof state[field] !== 'string') throw new Error(`Live state ${field} is invalid: ${path}`)
     }
     if (state.completed !== undefined && typeof state.completed !== 'boolean') throw new Error(`Live state completed flag is invalid: ${path}`)

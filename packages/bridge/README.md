@@ -295,16 +295,59 @@ The default registry is a reviewed, versioned deployment snapshot. Routes stay
 `metadata-required` until every protocol identifier required for execution has
 been verified.
 
-## Live local-account release gate
+## Integration and live bridge tests
 
-`pnpm --filter @provablehq/aleo-bridge-sdk test:live` contains deployed-bridge journeys for local EVM, Solana, and
-Aleo accounts. They are skipped unless `BRIDGE_LIVE_FUNDS=1` and
-`BRIDGE_LIVE_STATE_DIR` are set. Mainnet fund-moving cases additionally require
-`BRIDGE_LIVE_MAINNET_ACK=I_ACKNOWLEDGE_BRIDGE_MAINNET_FUNDS`.
+`pnpm --filter @provablehq/aleo-bridge-sdk test:integration` runs deterministic
+end-to-end lifecycle tests with controlled transports. These cover recovery,
+waiting, private completion, rejection, and timeout behavior without spending
+funds.
+
+`pnpm --filter @provablehq/aleo-bridge-sdk test:live` contains deployed-bridge
+journeys for local EVM, Solana, and Aleo accounts. Testnet and mainnet cases live
+in separate directories under `test/integration/live`. They are skipped unless
+`BRIDGE_LIVE_FUNDS=1` and `BRIDGE_LIVE_STATE_DIR` are set.
+
+Mainnet cases are individually selected through a comma-separated allowlist:
+
+```sh
+export BRIDGE_LIVE_MAINNET_ACK=I_ACKNOWLEDGE_BRIDGE_MAINNET_FUNDS
+export BRIDGE_LIVE_MAINNET_CASES=evm-xreserve
+pnpm --filter @provablehq/aleo-bridge-sdk test:live:mainnet
+```
+
+Without the final execution acknowledgement, a newly selected case performs
+only its live quote and prints the route, amount, source address, destination,
+and protocol debit. After reviewing that output, submission additionally
+requires:
+
+```sh
+export BRIDGE_LIVE_MAINNET_EXECUTE=I_ACKNOWLEDGE_THIS_SUBMITS_MAINNET_TRANSACTIONS
+```
+
+Available case names are `evm-xreserve`, `aleo-xreserve`, `evm-hyperlane`,
+`solana-hyperlane`, and `aleo-hyperlane`. Aleo-source cases use
+`BRIDGE_PRIVATE_KEY`, Ethereum-source cases use `BRIDGE_EVM_PRIVATE_KEY`, and
+Solana-source cases use `BRIDGE_SOLANA_PRIVATE_KEY`. Each case also requires
+only its relevant RPC and recipient variables.
+The EVM xReserve case bridges exactly 2 USDC, the configured protocol minimum,
+and also uses `BRIDGE_PRIVATE_KEY` to complete the private Aleo mint.
+The Aleo xReserve case burns 2.000001 USDCx, one atomic unit above its
+strict minimum. Hyperlane token amounts use one atomic source unit; required
+network fees, rent, and interchain gas payments remain additional costs.
+
+| Case | Additional configuration |
+| --- | --- |
+| `evm-xreserve` | `BRIDGE_PRIVATE_KEY`, `BRIDGE_LIVE_ETHEREUM_RPC_URL` |
+| `aleo-xreserve` | `BRIDGE_LIVE_ETHEREUM_RPC_URL`, `BRIDGE_LIVE_ETHEREUM_RECIPIENT` |
+| `evm-hyperlane` | `BRIDGE_LIVE_ETHEREUM_RPC_URL`, `BRIDGE_LIVE_ALEO_MAINNET_RECIPIENT`; optional `BRIDGE_LIVE_EVM_HYPERLANE_ROUTE_ID` |
+| `solana-hyperlane` | `BRIDGE_LIVE_SOLANA_RPC_URL`, `BRIDGE_LIVE_ALEO_MAINNET_RECIPIENT` |
+| `aleo-hyperlane` | `BRIDGE_LIVE_ALEO_HYPERLANE_ROUTE_ID`, `BRIDGE_LIVE_HYPERLANE_DESTINATION_RECIPIENT` |
 
 Each journey writes a mode-`0600` checkpoint immediately after receiving each
 submitted transaction identifier. A rerun with that checkpoint verifies the
 existing transaction and never repeats an irreversible transfer. Passing requires a
-confirmed source transaction, a Circle message hash or Hyperlane message ID,
-and a destination transaction. Use dedicated minimally funded accounts; the
-tests never print private keys or signed transaction bytes.
+confirmed source transaction plus route-appropriate destination evidence: an
+accepted private mint, a Hyperlane destination transaction, or an observed EVM
+balance increase. Use dedicated minimally funded accounts; the tests never
+print private keys or signed transaction bytes. Mainnet checkpoints are
+separated by case beneath `$BRIDGE_LIVE_STATE_DIR/mainnet`.
