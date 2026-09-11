@@ -12,7 +12,7 @@ import {
   type BridgeReceipt,
 } from '../../../../src/index.js'
 import { loadLiveState, saveLiveState } from '../helpers.js'
-import { liveFundsEnabled, required } from '../config.js'
+import { liveFundsEnabled, required, requiredEvmPrivateKey } from '../config.js'
 
 const stateDirectory = process.env.BRIDGE_LIVE_STATE_DIR
 
@@ -39,7 +39,7 @@ describe.skipIf(!liveFundsEnabled())('deployed testnet bridges with local accoun
       clients: {
         sepolia: createEvmClient({
           transport: evmHttp(required('BRIDGE_LIVE_SEPOLIA_RPC_URL')),
-          account: evmPrivateKey(required('BRIDGE_LIVE_EVM_TESTNET_PRIVATE_KEY') as `0x${string}`),
+          account: evmPrivateKey(requiredEvmPrivateKey('BRIDGE_LIVE_EVM_TESTNET_PRIVATE_KEY')),
         }),
         'aleo-testnet': createAleoClient({ publicClient: aleo.publicClient, account: aleo.walletClient }),
       },

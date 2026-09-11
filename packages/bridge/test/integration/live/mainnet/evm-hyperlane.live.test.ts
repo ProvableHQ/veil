@@ -9,7 +9,7 @@ import {
   type BridgeProgress,
 } from '../../../../src/index.js'
 import { createLiveBenchmark, loadLiveState, saveLiveState, waitForHyperlaneDelivery } from '../helpers.js'
-import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, oneAtomicUnit, required } from '../config.js'
+import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, oneAtomicUnit, required, requiredEvmPrivateKey } from '../config.js'
 
 const enabled = mainnetCaseEnabled('evm-hyperlane')
 const ERC20_ABI = parseAbi(['function balanceOf(address owner) view returns (uint256)'])
@@ -23,7 +23,7 @@ describe.skipIf(!enabled)('mainnet EVM Hyperlane bridge', () => {
     const state = loadLiveState(path, routeId)
     const evm = createEvmClient({
       transport: evmHttp(required('BRIDGE_LIVE_ETHEREUM_RPC_URL')),
-      account: evmPrivateKey(required('BRIDGE_EVM_PRIVATE_KEY') as `0x${string}`),
+      account: evmPrivateKey(requiredEvmPrivateKey('BRIDGE_EVM_PRIVATE_KEY')),
     })
     const sender = await evm.walletClient!.getAddress()
     const bridge = createBridgeClient({ environment: 'mainnet', clients: { ethereum: evm } })

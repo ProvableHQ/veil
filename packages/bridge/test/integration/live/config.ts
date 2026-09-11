@@ -5,6 +5,15 @@ export function required(name: string): string {
   return value
 }
 
+/** Normalizes one required 32-byte EVM private key without exposing it. */
+export function requiredEvmPrivateKey(name: string): `0x${string}` {
+  const value = required(name).replace(/^0x/i, '')
+  if (!/^[0-9a-f]{64}$/i.test(value)) {
+    throw new Error(`${name} must contain exactly 32 hexadecimal bytes`)
+  }
+  return `0x${value}`
+}
+
 /** Reports whether deployed bridge tests have been explicitly enabled. */
 export function liveFundsEnabled(): boolean {
   return process.env.BRIDGE_LIVE_FUNDS === '1' && Boolean(process.env.BRIDGE_LIVE_STATE_DIR)

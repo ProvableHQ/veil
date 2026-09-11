@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mainnetCaseEnabled, mainnetExecutionEnabled, oneAtomicUnit } from './config.js'
+import { mainnetCaseEnabled, mainnetExecutionEnabled, oneAtomicUnit, requiredEvmPrivateKey } from './config.js'
 import { createLiveBenchmark, loadLiveState, saveLiveState, waitForAleoTransaction, waitForHyperlaneDelivery } from './helpers.js'
 
 afterEach(() => {
@@ -11,6 +11,14 @@ afterEach(() => {
 })
 
 describe('live bridge checkpoints', () => {
+  it('normalizes prefixed and unprefixed EVM private keys', () => {
+    const key = 'ab'.repeat(32)
+    vi.stubEnv('TEST_EVM_KEY', key)
+    expect(requiredEvmPrivateKey('TEST_EVM_KEY')).toBe(`0x${key}`)
+    vi.stubEnv('TEST_EVM_KEY', `0x${key}`)
+    expect(requiredEvmPrivateKey('TEST_EVM_KEY')).toBe(`0x${key}`)
+  })
+
   it('reports per-step and total elapsed time', () => {
     const times = [1_000, 1_250, 1_900]
     const log = vi.fn()

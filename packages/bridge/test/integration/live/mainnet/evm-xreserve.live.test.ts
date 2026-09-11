@@ -9,7 +9,7 @@ import {
   type BridgeProgress,
 } from '../../../../src/index.js'
 import { createLiveBenchmark, loadLiveState, saveLiveState } from '../helpers.js'
-import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, required } from '../config.js'
+import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, required, requiredEvmPrivateKey } from '../config.js'
 
 const enabled = mainnetCaseEnabled('evm-xreserve')
 
@@ -34,7 +34,7 @@ describe.skipIf(!enabled)('mainnet EVM xReserve bridge', () => {
     const benchmark = createLiveBenchmark('evm-xreserve')
     const evm = createEvmClient({
       transport: evmHttp(required('BRIDGE_LIVE_ETHEREUM_RPC_URL')),
-      account: evmPrivateKey(required('BRIDGE_EVM_PRIVATE_KEY') as `0x${string}`),
+      account: evmPrivateKey(requiredEvmPrivateKey('BRIDGE_EVM_PRIVATE_KEY')),
     })
     const aleo = await delegatedAleo(
       required('BRIDGE_PRIVATE_KEY'),
