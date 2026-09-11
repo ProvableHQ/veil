@@ -13,13 +13,14 @@ import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, required } 
 const enabled = mainnetCaseEnabled('aleo-xreserve')
 const ERC20_ABI = parseAbi(['function balanceOf(address owner) view returns (uint256)'])
 
-async function localAleo(privateKey: string) {
+async function delegatedAleo(privateKey: string, apiKey: string) {
   const { loadNetwork } = await import('../../../../../provable-sdk/src/index.js')
   const aleo = await loadNetwork('mainnet')
   return aleo.createAleoClient({
     privateKey,
     networkUrl: 'https://api.provable.com/v2',
-    provingMode: 'local',
+    provingMode: 'delegated',
+    apiKey,
     confirmationTimeout: 10 * 60_000,
   })
 }
@@ -39,7 +40,10 @@ describe.skipIf(!enabled)('mainnet Aleo xReserve bridge', () => {
     const routeId = 'xreserve:aleo/usdcx->ethereum/usdc'
     const path = liveStatePath('mainnet', 'aleo-xreserve')
     const state = loadLiveState(path, routeId)
-    const aleo = await localAleo(required('BRIDGE_PRIVATE_KEY'))
+    const aleo = await delegatedAleo(
+      required('BRIDGE_PRIVATE_KEY'),
+      required('ALEO_DPS_API_KEY'),
+    )
     const ethereum = createEvmClient({ transport: evmHttp(required('BRIDGE_LIVE_ETHEREUM_RPC_URL')) })
     const recipient = getAddress(required('BRIDGE_LIVE_ETHEREUM_RECIPIENT'))
     const bridge = createBridgeClient({

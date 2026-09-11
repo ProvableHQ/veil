@@ -3,9 +3,12 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mainnetCaseEnabled, mainnetExecutionEnabled, oneAtomicUnit } from './config.js'
-import { loadLiveState, saveLiveState } from './helpers.js'
+import { loadLiveState, saveLiveState, waitForHyperlaneDelivery } from './helpers.js'
 
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => {
+  vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
+})
 
 describe('live bridge checkpoints', () => {
   it('round-trips a route-bound checkpoint and starts only for an absent file', () => {
@@ -51,5 +54,41 @@ describe('mainnet live bridge safeguards', () => {
     expect(oneAtomicUnit(0)).toBe('1')
     expect(oneAtomicUnit(6)).toBe('0.000001')
     expect(oneAtomicUnit(18)).toBe('0.000000000000000001')
+  })
+})
+
+describe('Hyperlane live delivery', () => {
+  it('uses PostgreSQL bytea hashes and normalizes explorer results', async () => {
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { query: string, variables: { hash: string } }
+      expect(body.query).toContain('$hash: bytea!')
+      expect(body.variables.hash).toBe('\\xsource')
+      return new Response(JSON.stringify({
+        data: {
+          message_view: [{
+            msg_id: '\\xmessage',
+            is_delivered: true,
+            destination_tx_hash: '\\xdestination',
+          }],
+        },
+      }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(waitForHyperlaneDelivery('0xsource')).resolves.toEqual({
+      messageId: '0xmessage',
+      destinationTxId: '0xdestination',
+    })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('surfaces GraphQL errors instead of polling until timeout', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      errors: [{ message: 'invalid bytea input' }],
+    }))))
+
+    await expect(waitForHyperlaneDelivery('0xsource')).rejects.toThrow(
+      'Hyperlane explorer query failed: invalid bytea input',
+    )
   })
 })

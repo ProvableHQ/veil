@@ -17,13 +17,14 @@ function unsignedU128(value: string | null): bigint {
   return BigInt(match[1]!)
 }
 
-async function localAleo(privateKey: string) {
+async function delegatedAleo(privateKey: string, apiKey: string) {
   const { loadNetwork } = await import('../../../../../provable-sdk/src/index.js')
   const aleo = await loadNetwork('mainnet')
   return aleo.createAleoClient({
     privateKey,
     networkUrl: 'https://api.provable.com/v2',
-    provingMode: 'local',
+    provingMode: 'delegated',
+    apiKey,
     confirmationTimeout: 10 * 60_000,
   })
 }
@@ -33,7 +34,10 @@ describe.skipIf(!enabled)('mainnet Aleo Hyperlane bridge', () => {
     const routeId = required('BRIDGE_LIVE_ALEO_HYPERLANE_ROUTE_ID')
     const path = liveStatePath('mainnet', 'aleo-hyperlane')
     const state = loadLiveState(path, routeId)
-    const aleo = await localAleo(required('BRIDGE_PRIVATE_KEY'))
+    const aleo = await delegatedAleo(
+      required('BRIDGE_PRIVATE_KEY'),
+      required('ALEO_DPS_API_KEY'),
+    )
     const bridge = createBridgeClient({
       clients: { aleo: createAleoClient({ publicClient: aleo.publicClient, account: aleo.walletClient }) },
     })

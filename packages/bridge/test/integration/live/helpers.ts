@@ -52,21 +52,31 @@ export async function waitForHyperlaneDelivery(originTxHash: string): Promise<{ 
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        query: `query ByOrigin($hash: String!) {
+        query: `query ByOrigin($hash: bytea!) {
           message_view(where: {origin_tx_hash: {_eq: $hash}}, limit: 1) {
             msg_id is_delivered destination_tx_hash
           }
         }`,
-        variables: { hash: originTxHash },
+        variables: {
+          hash: originTxHash.startsWith('0x') ? `\\x${originTxHash.slice(2)}` : originTxHash,
+        },
       }),
     })
     if (!response.ok) throw new Error(`Hyperlane explorer returned HTTP ${response.status}`)
-    const body = await response.json() as { data?: { message_view?: Array<{ msg_id?: string; is_delivered?: boolean; destination_tx_hash?: string }> } }
+    const body = await response.json() as {
+      data?: { message_view?: Array<{ msg_id?: string; is_delivered?: boolean; destination_tx_hash?: string }> }
+      errors?: Array<{ message?: string }>
+    }
+    if (body.errors?.length) {
+      throw new Error(`Hyperlane explorer query failed: ${body.errors.map((error) => error.message ?? 'unknown error').join('; ')}`)
+    }
     const message = body.data?.message_view?.[0]
     if (!message?.is_delivered || !message.msg_id || !message.destination_tx_hash) return undefined
     return {
       messageId: message.msg_id.startsWith('\\x') ? `0x${message.msg_id.slice(2)}` : message.msg_id,
-      destinationTxId: message.destination_tx_hash,
+      destinationTxId: message.destination_tx_hash.startsWith('\\x')
+        ? `0x${message.destination_tx_hash.slice(2)}`
+        : message.destination_tx_hash,
     }
   })
 }

@@ -13,13 +13,14 @@ import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, required } 
 
 const enabled = mainnetCaseEnabled('evm-xreserve')
 
-async function localAleo(privateKey: string) {
+async function delegatedAleo(privateKey: string, apiKey: string) {
   const { loadNetwork } = await import('../../../../../provable-sdk/src/index.js')
   const aleo = await loadNetwork('mainnet')
   return aleo.createAleoClient({
     privateKey,
     networkUrl: 'https://api.provable.com/v2',
-    provingMode: 'local',
+    provingMode: 'delegated',
+    apiKey,
     confirmationTimeout: 10 * 60_000,
   })
 }
@@ -33,7 +34,10 @@ describe.skipIf(!enabled)('mainnet EVM xReserve bridge', () => {
       transport: evmHttp(required('BRIDGE_LIVE_ETHEREUM_RPC_URL')),
       account: evmPrivateKey(required('BRIDGE_EVM_PRIVATE_KEY') as `0x${string}`),
     })
-    const aleo = await localAleo(required('BRIDGE_PRIVATE_KEY'))
+    const aleo = await delegatedAleo(
+      required('BRIDGE_PRIVATE_KEY'),
+      required('ALEO_DPS_API_KEY'),
+    )
     const sender = await evm.walletClient!.getAddress()
     const bridge = createBridgeClient({
       environment: 'mainnet',
