@@ -1,10 +1,13 @@
 import bs58 from 'bs58'
+import { createPublicClient as createAleoPublicClient, http as aleoHttp } from '@provablehq/veil-core'
 import { describe, expect, it } from 'vitest'
 import {
+  createAleoClient,
   createBridgeClient,
   createSolanaClient,
   solanaHttp,
   solanaKeyPair,
+  type BridgeCheckpoint,
 } from '../../../../src/index.js'
 import { createLiveBenchmark, loadLiveState, saveLiveState, waitForHyperlaneDelivery } from '../helpers.js'
 import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, oneAtomicUnit, required } from '../config.js'
@@ -25,8 +28,13 @@ describe.skipIf(!enabled)('mainnet Solana Hyperlane bridge', () => {
       transport: solanaHttp(required('BRIDGE_LIVE_SOLANA_RPC_URL')),
       account: solanaKeyPair(secretKeyBytes),
     })
+    const aleo = createAleoClient({
+      publicClient: createAleoPublicClient({
+        transport: aleoHttp('https://edge.provable.com/api/v2', { network: 'mainnet' }),
+      }),
+    })
     const sender = await client.walletClient!.getAddress()
-    const bridge = createBridgeClient({ clients: { solana: client } })
+    const bridge = createBridgeClient({ clients: { solana: client, aleo } })
     benchmark.mark('clients-created')
     const source = bridge.getAssets({ chainId: 'solana', symbol: 'SOL' })[0]!
     const plan = bridge.prepare({
@@ -64,10 +72,17 @@ describe.skipIf(!enabled)('mainnet Solana Hyperlane bridge', () => {
       }
     }
 
-    const delivery = await waitForHyperlaneDelivery(state.sourceTxId!)
+    if (!state.checkpoint) throw new Error('Solana Hyperlane source has no recovery checkpoint')
+    let progress = await bridge.recover({ checkpoint: state.checkpoint as BridgeCheckpoint })
+    if (progress.next === 'wait') progress = await bridge.wait({ progress })
+    if (progress.next === 'failed') throw new Error(progress.error)
+    if (progress.next !== 'done') throw new Error(`Expected completed Hyperlane delivery, received ${progress.next}`)
     benchmark.mark('destination-delivered')
-    state.messageId = delivery.messageId
-    state.destinationTxId = delivery.destinationTxId
+    state.messageId = progress.receipt.messageId
+    if (!state.destinationTxId) {
+      const delivery = await waitForHyperlaneDelivery(state.sourceTxId!)
+      state.destinationTxId = delivery.destinationTxId
+    }
     state.completed = true
     saveLiveState(path, state)
     expect(state).toMatchObject({ completed: true, messageId: expect.any(String), destinationTxId: expect.any(String) })

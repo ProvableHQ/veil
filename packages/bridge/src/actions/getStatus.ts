@@ -11,6 +11,7 @@ import { aleoAddressToBytes32 } from '../utils/xreserve.js'
 import { getSourceStatus as getEvmHyperlaneSourceStatus } from '../protocols/hyperlane/evm.js'
 import { getSourceStatus as getSolanaHyperlaneSourceStatus } from '../protocols/hyperlane/solana.js'
 import { readDestinationBalance } from './internal/readDestinationBalance.js'
+import { readHyperlaneDelivery } from '../utils/hyperlaneDelivery.js'
 
 function withoutNextAction(receipt: BridgeReceipt): Omit<BridgeReceipt, 'nextAction'> {
   const { nextAction: _nextAction, ...rest } = receipt
@@ -20,9 +21,9 @@ function withoutNextAction(receipt: BridgeReceipt): Omit<BridgeReceipt, 'nextAct
 /**
  * Refreshes one bridge receipt without signing or submitting transactions.
  *
- * Currently supports the Circle attestation and Aleo confirmation phases of
- * private EVM-to-Aleo xReserve transfers. Performs at most one protocol or
- * chain read.
+ * Supports source confirmation, Circle attestation, destination confirmation,
+ * and Hyperlane delivery verification for configured routes. Performs at most
+ * one protocol or chain read.
  *
  * @param registry Reviewed deployment snapshot.
  * @param clients Materialized chain clients keyed by registry chain id.
@@ -100,6 +101,24 @@ export async function getStatus(
 
   if (receipt.status === 'DELIVERY_PENDING'
     && route.route.protocol === 'hyperlane'
+    && receipt.messageId
+    && (route.destinationChain.family === 'aleo' || route.destinationChain.family === 'evm')) {
+    const destinationClient = route.destinationChain.family === 'aleo'
+      ? requireAleoClient(registry, clients, route.destinationChain.id)
+      : requireEvmClient(registry, clients, route.destinationChain.id)
+    const mailbox = route.destinationChain.family === 'aleo'
+      ? route.route.metadata?.aleoMailboxProgram
+      : route.route.metadata?.mailboxAddress
+    if (typeof mailbox !== 'string' || !mailbox) {
+      throw new BridgeError(`Hyperlane destination mailbox is not configured for ${route.route.id}`)
+    }
+    const delivered = await readHyperlaneDelivery(destinationClient, { messageId: receipt.messageId, mailbox })
+    if (!delivered) return receipt
+    return { ...withoutNextAction(receipt), status: 'COMPLETED' }
+  }
+
+  if (receipt.status === 'DELIVERY_PENDING'
+    && route.route.protocol === 'hyperlane'
     && route.sourceChain.family === 'aleo') {
     const before = receipt.protocolState.destinationBalanceBeforeAtomic
     const expected = receipt.protocolState.expectedDestinationIncreaseAtomic
@@ -113,6 +132,10 @@ export async function getStatus(
     }
     if (current < BigInt(before) + BigInt(expected)) return receipt
     return { ...withoutNextAction(receipt), status: 'COMPLETED' }
+  }
+
+  if (receipt.status === 'DELIVERY_PENDING' && route.route.protocol === 'hyperlane') {
+    return receipt
   }
 
   if (route.route.protocol !== 'xreserve' || route.sourceChain.family !== 'evm' || route.destinationChain.family !== 'aleo') {

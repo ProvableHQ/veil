@@ -171,6 +171,10 @@ export {
   evmAddressToAleoHyperlaneRecipient,
   solanaAddressToAleoHyperlaneRecipient,
 } from './utils/hyperlane.js'
+export {
+  readHyperlaneDelivery,
+  type ReadHyperlaneDeliveryParameters,
+} from './utils/hyperlaneDelivery.js'
 
 export { BridgeError } from './errors/bridgeErrors.js'
 export { formatDecimalAmount, parseDecimalAmount } from './utils/units.js'

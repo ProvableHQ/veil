@@ -301,6 +301,12 @@ caller or relayer boundary. The lower-level `getStatus` and `waitForStatus`
 actions remain available for exact lifecycle-state control. None of these read
 actions submits a transaction.
 
+For Hyperlane receipts carrying a message id, `wait` verifies delivery against
+the destination Mailbox rather than an explorer index. An Aleo destination
+therefore requires its Aleo public client in `clients`; an EVM destination uses
+its EVM public client. Explorer data may enrich live diagnostics with a
+destination transaction id, but it does not determine `COMPLETED`.
+
 ## Direct protocol helpers
 
 Protocol-specific helpers remain available as namespaced escape hatches without
@@ -322,6 +328,10 @@ The namespaces expose the same reviewed adapters used by the generic actions:
 `xreserve.aleoToEvm.execute`. Pass `registry` inside the helper parameters only
 when overriding the default registry. Pure call construction remains under the
 standalone `build*` utilities.
+
+`readHyperlaneDelivery(client, { messageId, mailbox })` is the standalone
+canonical Mailbox helper used internally by `wait`; it is a utility export, not
+a `BridgeClient` action.
 
 An Aleo-origin xReserve quote subtracts the deployed 2 USDCx withdrawal fee
 and rejects amounts that cannot leave a positive destination amount. An

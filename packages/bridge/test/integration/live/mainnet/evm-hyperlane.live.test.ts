@@ -1,7 +1,9 @@
 import { decodeFunctionResult, encodeFunctionData, getAddress, parseAbi } from 'viem'
+import { createPublicClient as createAleoPublicClient, http as aleoHttp } from '@provablehq/veil-core'
 import { describe, expect, it } from 'vitest'
 import {
   createBridgeClient,
+  createAleoClient,
   createEvmClient,
   evmHttp,
   evmPrivateKey,
@@ -26,7 +28,12 @@ describe.skipIf(!enabled)('mainnet EVM Hyperlane bridge', () => {
       account: evmPrivateKey(requiredEvmPrivateKey('BRIDGE_EVM_PRIVATE_KEY')),
     })
     const sender = await evm.walletClient!.getAddress()
-    const bridge = createBridgeClient({ environment: 'mainnet', clients: { ethereum: evm } })
+    const aleo = createAleoClient({
+      publicClient: createAleoPublicClient({
+        transport: aleoHttp('https://edge.provable.com/api/v2', { network: 'mainnet' }),
+      }),
+    })
+    const bridge = createBridgeClient({ environment: 'mainnet', clients: { ethereum: evm, aleo } })
     benchmark.mark('clients-created')
     const route = bridge.registry.routes.find((candidate) => candidate.id === routeId)
     if (!route) throw new Error(`Unknown configured bridge route: ${routeId}`)
@@ -94,10 +101,13 @@ describe.skipIf(!enabled)('mainnet EVM Hyperlane bridge', () => {
     state.sourceTxId = progress.receipt.sourceTxId ?? state.sourceTxId
     saveLiveState(path, state)
 
-    const delivery = await waitForHyperlaneDelivery(state.sourceTxId!)
+    if (progress.next !== 'done') throw new Error(`Expected completed Hyperlane delivery, received ${progress.next}`)
     benchmark.mark('destination-delivered')
-    state.messageId = delivery.messageId
-    state.destinationTxId = delivery.destinationTxId
+    state.messageId = progress.receipt.messageId
+    if (!state.destinationTxId) {
+      const delivery = await waitForHyperlaneDelivery(state.sourceTxId!)
+      state.destinationTxId = delivery.destinationTxId
+    }
     state.completed = true
     saveLiveState(path, state)
     expect(state).toMatchObject({ completed: true, messageId: expect.any(String), destinationTxId: expect.any(String) })
