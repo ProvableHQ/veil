@@ -481,6 +481,9 @@ export async function execute(
     if (transferQuote.hookData.toLowerCase() !== checkpointQuote.hookData.toLowerCase()) {
       throw new BridgeError('Private mint secret nonce does not match the checkpointed approval')
     }
+    if (transferQuote.approvalRequired) {
+      throw new BridgeError('The recovered xReserve approval allowance is no longer available. Inspect source history before starting another transfer.')
+    }
   } else if (params.resume?.status === 'SOURCE_APPROVAL_PENDING') {
     resumeQuote(params.plan, params.resume)
     approvalTxIds = approvalIds(params.resume)

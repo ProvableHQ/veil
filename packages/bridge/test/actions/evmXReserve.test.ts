@@ -46,6 +46,7 @@ function transferPlan(mintMode: 'private' | 'record' = 'record') {
 function mockExecutor(
   confirmDeposit = { value: true },
   confirmApproval = { value: true },
+  allowanceOverride: { value?: bigint } = {},
 ) {
   const sent: Sent[] = []
   const request = async ({ method, params }: { method: string, params?: readonly unknown[] | Record<string, unknown> }) => {
@@ -55,7 +56,8 @@ function mockExecutor(
         const decoded = decodeFunctionData({ abi: ABI, data: transaction.data })
         if (decoded.functionName === 'balanceOf') return encodeFunctionResult({ abi: ABI, functionName: 'balanceOf', result: 3_000_000n })
         if (decoded.functionName === 'allowance') {
-          const result = confirmApproval.value && sent.length > 0 ? 2_000_000n : 0n
+          const result = allowanceOverride.value
+            ?? (confirmApproval.value && sent.length > 0 ? 2_000_000n : 0n)
           return encodeFunctionResult({ abi: ABI, functionName: 'allowance', result })
         }
       }
@@ -241,6 +243,33 @@ describe('Ethereum xReserve actions', () => {
     expect(resumed.receipt.status).toBe('ATTESTATION_PENDING')
     expect(sent).toHaveLength(2)
     expect(decodeFunctionData({ abi: ABI, data: sent[1]!.data }).functionName).toBe('depositToRemote')
+  })
+
+  it('does not approve again when a recovered approval allowance was consumed', async () => {
+    const confirmApproval = { value: false }
+    const allowance = { value: 0n }
+    const { executor, sent } = mockExecutor(
+      { value: true },
+      confirmApproval,
+      allowance,
+    )
+    const transfer = transferPlan()
+    const submitted = await execute(DEFAULT_BRIDGE_REGISTRY, { sepolia: executor }, {
+      plan: transfer,
+      confirmationTimeoutMs: 0,
+    })
+    const checkpoint = createBridgeCheckpoint(transfer, submitted.receipt)
+
+    confirmApproval.value = true
+    const bridge = createBridgeClient({
+      environment: 'testnet',
+      clients: { sepolia: executor },
+    })
+    const progress = await bridge.recover({ checkpoint })
+    if (progress.next !== 'resume') throw new Error(`Expected resume, received ${progress.next}`)
+
+    await expect(bridge.resume({ progress })).rejects.toThrow(/allowance is no longer available/)
+    expect(sent).toHaveLength(1)
   })
 
   it('requires the original private nonce when resuming a checkpointed approval', async () => {
