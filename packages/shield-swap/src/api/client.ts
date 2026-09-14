@@ -32,6 +32,30 @@ export function defaultApiUrl(network: string | null | undefined): string {
 }
 
 /**
+ * Returns the unified Swap URL for an explicit Aleo network.
+ * @param network Selects mainnet or testnet. Other networks fail before a request.
+ * @param origin Selects the gateway host. Defaults to https://api.shield.fi.
+ * @returns The Swap base URL without a final slash.
+ * @throws If the network is unsupported.
+ * @example
+ * new ApiClient({ baseUrl: apigeeApiUrl('testnet'), apiInterface: 'apigee' })
+ */
+export function apigeeApiUrl(network: string | null | undefined, origin = 'https://api.shield.fi'): string {
+  if (network !== 'mainnet' && network !== 'testnet') throw new Error('Apigee requires mainnet or testnet')
+  return `${origin.replace(/\/$/, '')}/api/swap/${network}`
+}
+
+function isApigeePublicPath(path: string): boolean {
+  const topLevelPaths = ['/health', '/protocol/state', '/tokens', '/route', '/route/topology', '/fee-tiers']
+  if (topLevelPaths.includes(path)) return true
+  if (path.startsWith('/compliance')) return true
+  if (path === '/pools') return true
+  const poolPath = path.match(/^\/pools\/[^/]+(?:\/([^/]+))?$/)
+  const poolResources = ['ohlcv', 'liquidity-distribution', 'trades', 'stats', 'initialized-ticks', 'rebalance-state']
+  return poolPath !== null && (poolPath[1] === undefined || poolResources.includes(poolPath[1]))
+}
+
+/**
  * The DEX API a client defaults to when no network is known.
  *
  * @deprecated The API is per-network — use {@link defaultApiUrl} with the
@@ -53,6 +77,8 @@ export const DEFAULT_API_URL = SHIELD_SWAP_API_URLS.testnet
  *   without a signature handshake — suited to bots, CI, and servers holding a
  *   provisioned key. Token management still requires a session JWT from
  *   {@link ApiClient.authenticate}.
+ * @property apiInterface Selects the Shield or Apigee interface. Defaults to Shield.
+ *   Apigee permits free public requests and requires an explicit baseUrl.
  * @property autoReauthenticate Re-run the challenge/verify handshake and
  *   retry once when a gated call fails with 401 after
  *   {@link ApiClient.authenticate} — session JWTs expire after ~24h, so
@@ -65,6 +91,7 @@ export type ApiClientOptions = {
   baseUrl?: string | (() => string)
   fetch?: typeof fetch
   apiToken?: string
+  apiInterface?: 'shield' | 'apigee'
   autoReauthenticate?: boolean
 }
 
@@ -134,6 +161,7 @@ export class ApiClient {
   }
   private readonly fetchImpl: typeof fetch
   private readonly apiToken: string | undefined
+  private readonly isApigee: boolean
   private readonly autoReauthenticate: boolean
   private token: string | undefined
   // Kept from the last authenticate() call so an expired session can be
@@ -142,6 +170,10 @@ export class ApiClient {
   private reauthInFlight: Promise<string> | undefined
 
   constructor(options: ApiClientOptions = {}) {
+    this.isApigee = options.apiInterface === 'apigee'
+    if (this.isApigee && (options.apiToken || !options.baseUrl)) {
+      throw new Error('Apigee requires an explicit baseUrl and does not accept an API token')
+    }
     const configured = options.baseUrl ?? DEFAULT_API_URL
     this.resolveBaseUrl =
       typeof configured === 'function'
@@ -183,7 +215,11 @@ export class ApiClient {
     }
     const headers: Record<string, string> = { accept: 'application/json' }
     if (opts.body !== undefined) headers['content-type'] = 'application/json'
-    if (opts.auth === 'session') {
+    if (this.isApigee) {
+      if (method !== 'GET' || !isApigeePublicPath(path)) {
+        throw new Error('The Apigee interface supports free public routes only')
+      }
+    } else if (opts.auth === 'session') {
       if (!this.token) {
         throw new Error(`${path} requires a session JWT — call authenticate() first (API tokens are not accepted here)`)
       }
@@ -197,6 +233,7 @@ export class ApiClient {
       method,
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      ...(this.isApigee ? { credentials: 'omit' as const, redirect: 'error' as const } : {}),
     })
     if (!res.ok) {
       const error = new ApiError(res.status, path, await res.text())

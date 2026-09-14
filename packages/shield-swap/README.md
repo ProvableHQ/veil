@@ -140,6 +140,31 @@ or the service. By default everything targets `shield_swap.aleo` and the
 Provable dev API; override either with
 `shieldSwapActions({ program, api: { baseUrl } })`.
 
+### Unified Apigee interface
+
+Use the unified interface for free public access. It does not accept an API key or a wallet session.
+The new interface requires a deployed gateway. Existing SDK defaults continue to use the existing Shield API.
+
+```ts
+import { ApiClient, apigeeApiUrl, shieldSwapActions } from '@provablehq/shield-swap-sdk'
+
+const api = new ApiClient({
+  baseUrl: apigeeApiUrl('testnet'),
+  apiInterface: 'apigee',
+})
+const pools = await api.getPools()
+
+const client = walletClient.extend(shieldSwapActions({ api: { apiInterface: 'apigee' } }))
+```
+
+Public access permits 90 requests per minute for each IP address and proxy.
+Quotes, fees, pool data, and public analytics require no key.
+The decorator derives `mainnet` or `testnet` from the transport.
+Other networks fail before a request.
+For a custom gateway, pass `apigeeApiUrl('testnet', 'https://gateway.example.com')` as `baseUrl`.
+The client omits browser cookies and rejects redirects.
+Use the existing Shield interface for private routes, wallet login, WebSocket tickets, and key management.
+
 ### Authenticating with the DEX API
 
 Most API endpoints beyond pool and token discovery — routes, swaps, positions,
