@@ -65,6 +65,6 @@ export function createBridgeClient(config: BridgeClientConfig = {}): BridgeClien
     name: config.name ?? 'Bridge Client',
     environment,
     registry,
-    ...bridgeActions({ environment, registry, clients, fetch }),
+    ...bridgeActions({ registry, clients, fetch }),
   }
 }

@@ -12,6 +12,11 @@ planning do not need clients.
 import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'
 
 const bridge = createBridgeClient({ environment: 'mainnet' })
+const routes = bridge.registry.getRoutes({
+  environment: bridge.environment,
+  sourceChainId: 'ethereum',
+  destinationChainId: 'aleo',
+})
 const plan = bridge.prepare({
   source: { chain: 'ethereum', asset: 'usdc' },
   destination: { chain: 'aleo', asset: 'usdcx' },
@@ -21,9 +26,10 @@ const plan = bridge.prepare({
 })
 ```
 
-`prepare` is pure and local. It validates the reviewed route, amount,
-recipient, required signers, and first irreversible step without reading a
-network or prompting a wallet.
+The registry methods list the supported assets and routes from the reviewed
+catalog without reading a network. `prepare` validates the selected route,
+amount, recipient, required signers, and first irreversible step without
+prompting a wallet.
 
 ## Browser application
 

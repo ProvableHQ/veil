@@ -209,21 +209,24 @@ execution is under development.
 import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'
 
 const bridge = createBridgeClient({ environment: 'mainnet' })
-const [route] = bridge.getRoutes({
+const [route] = bridge.registry.getRoutes({
+  environment: bridge.environment,
   protocol: 'xreserve',
   sourceChainId: 'ethereum',
   destinationChainId: 'aleo',
 })
 
-const plan = bridge.prepareTransfer({
-  routeId: route.id,
+const plan = bridge.prepare({
+  source: { chain: 'ethereum', asset: 'usdc' },
+  destination: { chain: 'aleo', asset: 'usdcx' },
+  bridgeProtocol: route.protocol,
   amount: '25',
   recipient: aleoAddress,
 })
 plan.steps // approve → deposit → wait-attestation → mint
 ```
 
-`prepareTransfer` validates the route, amount precision, and recipient without
+`prepare` validates the route, amount precision, and recipient without
 querying fees, signing, submitting, or moving funds. See
 [`packages/bridge/README.md`](./packages/bridge/README.md) for registry status
 and the remaining execution phases.

@@ -37,7 +37,7 @@ describe.skipIf(!enabled)('mainnet Solana Hyperlane bridge', () => {
     const sender = await client.walletClient!.getAddress()
     const bridge = createBridgeClient({ clients: { solana: client, aleo } })
     benchmark.mark('clients-created')
-    const source = bridge.getAssets({ chainId: 'solana', symbol: 'SOL' })[0]!
+    const source = bridge.registry.getAssets({ environment: bridge.environment, chainId: 'solana', symbol: 'SOL' })[0]!
     const plan = bridge.prepare({
       source: { chain: 'solana', asset: 'sol' },
       destination: { chain: 'aleo', asset: 'sol' },

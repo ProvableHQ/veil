@@ -5,6 +5,8 @@ import type {
   ProtocolBridgeChain,
   ProtocolBridgeRoute,
 } from '../types/protocol.js'
+import { getAssets } from '../actions/getAssets.js'
+import { getRoutes } from '../actions/getRoutes.js'
 
 const EVM_ADDRESS = '^0x[0-9a-fA-F]{40}$'
 const SOLANA_ADDRESS = '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
@@ -432,4 +434,10 @@ export const DEFAULT_BRIDGE_REGISTRY: BridgeRegistry = Object.freeze({
   assets: Object.freeze(assets),
   routes: Object.freeze(routes),
   sources: Object.freeze([XRESERVE_SOURCE, HYPERLANE_SOURCE]),
+  getAssets(this: BridgeRegistry, params = {}) {
+    return getAssets(this, params)
+  },
+  getRoutes(this: BridgeRegistry, params = {}) {
+    return getRoutes(this, params)
+  },
 })

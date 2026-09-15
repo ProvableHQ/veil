@@ -1,42 +1,10 @@
 import type {
-  BridgeEnvironment,
-  BridgeProtocol,
   BridgeRegistry,
+  GetAssetsParameters,
+  GetRoutesParameters,
   ProtocolBridgeAsset,
   ProtocolBridgeRoute,
 } from '../../types/protocol.js'
-
-/**
- * Selects chain-specific assets from a registry catalog.
- *
- * @property environment Optional mainnet or testnet filter.
- * @property chainId Optional registry chain identifier filter.
- * @property symbol Optional case-insensitive token symbol filter.
- */
-export type GetAssetsParameters = {
-  environment?: BridgeEnvironment | undefined
-  chainId?: string | undefined
-  symbol?: string | undefined
-}
-
-/**
- * Selects directional bridge routes from a registry catalog.
- *
- * @property environment Optional mainnet or testnet filter.
- * @property protocol Optional bridge provider filter.
- * @property sourceChainId Optional source registry chain identifier.
- * @property destinationChainId Optional destination registry chain identifier.
- * @property symbol Optional case-insensitive source or destination token symbol.
- * @property includeUnavailable Includes disabled routes when true. Defaults to false; routes awaiting metadata remain visible.
- */
-export type GetRoutesParameters = {
-  environment?: BridgeEnvironment | undefined
-  protocol?: BridgeProtocol | undefined
-  sourceChainId?: string | undefined
-  destinationChainId?: string | undefined
-  symbol?: string | undefined
-  includeUnavailable?: boolean | undefined
-}
 
 /**
  * Lists chain-specific assets from a protocol bridge registry.

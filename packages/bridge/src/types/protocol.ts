@@ -112,6 +112,38 @@ export type ProtocolBridgeRoute = {
 }
 
 /**
+ * Selects chain-specific assets from a bridge registry.
+ *
+ * @property environment Optional mainnet or testnet filter. Defaults to both environments.
+ * @property chainId Optional registry chain identifier filter. Defaults to all chains.
+ * @property symbol Optional case-insensitive token symbol filter. Defaults to all symbols.
+ */
+export type GetAssetsParameters = {
+  environment?: BridgeEnvironment | undefined
+  chainId?: string | undefined
+  symbol?: string | undefined
+}
+
+/**
+ * Selects directional routes from a bridge registry.
+ *
+ * @property environment Optional mainnet or testnet filter. Defaults to both environments.
+ * @property protocol Optional bridge provider filter. Defaults to all providers.
+ * @property sourceChainId Optional source registry chain identifier. Defaults to all source chains.
+ * @property destinationChainId Optional destination registry chain identifier. Defaults to all destination chains.
+ * @property symbol Optional case-insensitive source or destination token symbol. Defaults to all symbols.
+ * @property includeUnavailable Includes disabled routes when true. Defaults to false; routes awaiting metadata remain visible.
+ */
+export type GetRoutesParameters = {
+  environment?: BridgeEnvironment | undefined
+  protocol?: BridgeProtocol | undefined
+  sourceChainId?: string | undefined
+  destinationChainId?: string | undefined
+  symbol?: string | undefined
+  includeUnavailable?: boolean | undefined
+}
+
+/**
  * Stores reviewed bridge chains, assets, and directional routes.
  *
  * @property version Caller-visible version used to pin and audit configuration.
@@ -119,6 +151,8 @@ export type ProtocolBridgeRoute = {
  * @property assets Chain-specific assets referenced by routes.
  * @property routes Directional protocol routes.
  * @property sources Upstream registries and documentation used to build the snapshot.
+ * @property getAssets Lists matching chain-specific assets without contacting a chain or wallet.
+ * @property getRoutes Lists matching directional routes without contacting a chain or wallet.
  */
 export type BridgeRegistry = {
   version: string
@@ -126,6 +160,8 @@ export type BridgeRegistry = {
   assets: readonly ProtocolBridgeAsset[]
   routes: readonly ProtocolBridgeRoute[]
   sources?: readonly string[] | undefined
+  getAssets: (params?: GetAssetsParameters) => ProtocolBridgeAsset[]
+  getRoutes: (params?: GetRoutesParameters) => ProtocolBridgeRoute[]
 }
 
 /** Identifies the signer or service responsible for a transfer step. */

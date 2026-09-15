@@ -18,7 +18,9 @@ with protocol mechanics isolated behind internal helpers. Call builders compute
 wallet inputs without network access and remain standalone utilities rather
 than bridge client methods. Resuming a confirmed xReserve approval now fails
 before another wallet request when its allowance is no longer available.
-Registry discovery actions are exported directly as `getAssets` and `getRoutes`.
+Registry discovery is available directly through `registry.getAssets` and
+`registry.getRoutes`, while the matching bare helpers remain exported for
+callers that do not use a bridge client.
 The protocol-neutral lifecycle is now `prepare`, `quote`, `execute`,
 `getStatus`, `waitForStatus`, `wait`, `recover`, `resume`, and `complete`. `prepare` selects structured
 source and destination assets with an optional `bridgeProtocol` constraint;

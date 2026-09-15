@@ -8,14 +8,18 @@ describe('createBridgeClient', () => {
   it('defaults discovery to mainnet without exposing a fake base client', () => {
     const client = createBridgeClient()
     expect(client.environment).toBe('mainnet')
-    expect(client.getAssets().every((asset) => !asset.chainId.includes('testnet') && asset.chainId !== 'sepolia')).toBe(true)
+    expect(client.registry.getAssets({ environment: client.environment })
+      .every((asset) => !asset.chainId.includes('testnet') && asset.chainId !== 'sepolia')).toBe(true)
+    expect('getAssets' in client).toBe(false)
+    expect('getRoutes' in client).toBe(false)
     expect('extend' in client).toBe(false)
   })
 
-  it('selects testnet without hiding explicit environment queries', () => {
+  it('keeps registry discovery independent from the client actions', () => {
     const client = createBridgeClient({ environment: 'testnet' })
-    expect(client.getRoutes().every((route) => route.environment === 'testnet')).toBe(true)
-    expect(client.getRoutes({ environment: 'mainnet' }).length).toBeGreaterThan(0)
+    expect(client.registry.getRoutes({ environment: client.environment })
+      .every((route) => route.environment === 'testnet')).toBe(true)
+    expect(client.registry.getRoutes({ environment: 'mainnet' }).length).toBeGreaterThan(0)
   })
 
   it('binds transfer planning to the configured registry', () => {

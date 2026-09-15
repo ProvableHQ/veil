@@ -1,5 +1,6 @@
 import type { AgentTool } from '@provablehq/veil-core/agent'
 import type { BridgeClient } from '../clients/createBridgeClient.js'
+import type { GetAssetsParameters, GetRoutesParameters } from '../types/protocol.js'
 
 /**
  * Creates tools an agent can use to discover and describe cross-chain transfers.
@@ -29,7 +30,13 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
           },
         },
       },
-      handler: async (params) => client.getAssets(params),
+      handler: async (params) => {
+        const filters = params as GetAssetsParameters
+        return client.registry.getAssets({
+          ...filters,
+          environment: filters.environment ?? client.environment,
+        })
+      },
     },
     {
       schema: {
@@ -47,7 +54,13 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
           },
         },
       },
-      handler: async (params) => client.getRoutes(params),
+      handler: async (params) => {
+        const filters = params as GetRoutesParameters
+        return client.registry.getRoutes({
+          ...filters,
+          environment: filters.environment ?? client.environment,
+        })
+      },
     },
     {
       schema: {

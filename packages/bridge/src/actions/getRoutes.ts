@@ -1,10 +1,7 @@
-import type { BridgeRegistry, ProtocolBridgeRoute } from '../types/protocol.js'
-import {
-  filterProtocolRoutes as listRoutes,
-  type GetRoutesParameters,
-} from './internal/protocolDiscovery.js'
+import type { BridgeRegistry, GetRoutesParameters, ProtocolBridgeRoute } from '../types/protocol.js'
+import { filterProtocolRoutes as listRoutes } from './internal/protocolDiscovery.js'
 
-export type { GetRoutesParameters } from './internal/protocolDiscovery.js'
+export type { GetRoutesParameters } from '../types/protocol.js'
 
 /**
  * Lists the supported ways to move assets between chains.

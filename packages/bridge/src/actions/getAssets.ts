@@ -1,10 +1,7 @@
-import type { BridgeRegistry, ProtocolBridgeAsset } from '../types/protocol.js'
-import {
-  filterProtocolAssets as listAssets,
-  type GetAssetsParameters,
-} from './internal/protocolDiscovery.js'
+import type { BridgeRegistry, GetAssetsParameters, ProtocolBridgeAsset } from '../types/protocol.js'
+import { filterProtocolAssets as listAssets } from './internal/protocolDiscovery.js'
 
-export type { GetAssetsParameters } from './internal/protocolDiscovery.js'
+export type { GetAssetsParameters } from '../types/protocol.js'
 
 /**
  * Lists the assets available for cross-chain transfers.

@@ -1,5 +1,3 @@
-import { getAssets, type GetAssetsParameters } from '../../actions/getAssets.js'
-import { getRoutes, type GetRoutesParameters } from '../../actions/getRoutes.js'
 import { prepare } from '../../actions/prepare.js'
 import { execute } from '../../actions/execute.js'
 import { quote } from '../../actions/quote.js'
@@ -12,19 +10,17 @@ import { wait } from '../../actions/wait.js'
 import { shield } from '../../actions/shield.js'
 import { unshield } from '../../actions/unshield.js'
 import type { BridgeChainClients } from '../../connections/resolve.js'
-import type { BridgeEnvironment, BridgeProgress, BridgeReceipt, BridgeRegistry, BridgePlan, PrepareParameters, ProtocolBridgeAsset, ProtocolBridgeRoute } from '../../types/protocol.js'
+import type { BridgeProgress, BridgeReceipt, BridgeRegistry, BridgePlan, PrepareParameters } from '../../types/protocol.js'
 import type { CompleteParameters, ExecuteParameters, GetStatusParameters, QuoteParameters, RecoverParameters, ResumeParameters, WaitForStatusParameters, WaitParameters, BridgeExecution, BridgeQuote } from '../../types/actions.js'
 import type { AleoPrivacyExecution, ShieldParameters, UnshieldParameters } from '../../types/aleo.js'
 
 /**
  * Carries validated registry and materialized client state into bound actions.
- * @property environment Default route environment.
  * @property registry Validated deployment registry.
  * @property clients Materialized chain capabilities keyed by registry chain id.
  * @property fetch Fetch implementation used for protocol HTTP requests.
  */
 export type BridgeActionsConfig = {
-  environment: BridgeEnvironment
   registry: BridgeRegistry
   clients: BridgeChainClients
   fetch: typeof globalThis.fetch
@@ -33,13 +29,11 @@ export type BridgeActionsConfig = {
 /**
  * Groups the complete cross-chain transfer lifecycle exposed by a bridge client.
  *
- * Discovery and preparation require no network access. Quoting and monitoring
- * read chains or providers. Execution, resumption, completion, shielding, and
- * unshielding can request wallet authorization and move funds.
+ * Preparation requires no network access. Quoting and monitoring read chains
+ * or providers. Execution, resumption, completion, shielding, and unshielding
+ * can request wallet authorization and move funds.
  */
 export type BridgeActions = {
-  getAssets: (params?: GetAssetsParameters) => ProtocolBridgeAsset[]
-  getRoutes: (params?: GetRoutesParameters) => ProtocolBridgeRoute[]
   prepare: (params: PrepareParameters) => BridgePlan
   quote: (params: QuoteParameters) => Promise<BridgeQuote>
   execute: (params: ExecuteParameters) => Promise<BridgeExecution>
@@ -61,11 +55,7 @@ export type BridgeActions = {
  */
 export function bridgeActions(config: BridgeActionsConfig): BridgeActions {
   return {
-    // Discovery inherits the client's environment unless a call explicitly
-    // asks for another environment in the same catalog.
-    getAssets: (params = {}) => getAssets(config.registry, { ...params, environment: params.environment ?? config.environment }),
-    getRoutes: (params = {}) => getRoutes(config.registry, { ...params, environment: params.environment ?? config.environment }),
-    // Every remaining closure injects the same validated route catalog and
+    // Every closure injects the same validated route catalog and
     // registry-keyed clients, preventing per-action configuration drift.
     prepare: (params) => prepare(config.registry, params),
     quote: async (params) => quote(config.registry, config.clients, params),
