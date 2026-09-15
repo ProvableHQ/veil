@@ -101,12 +101,14 @@ async function main(): Promise<void> {
     },
   })
 
-  // ── Describe the intended transfer ──────────────────────────────────
+  // ── Price the intended transfer ─────────────────────────────────────
   // The caller supplies familiar chain and asset names, the amount, recipient,
   // and desired Aleo privacy mode. The bridge catalog supplies the reviewed
   // xReserve contract, Circle domains, token identifier, minimum amount, and
-  // Aleo programs. No network is read and no wallet is asked to sign here.
-  const plan = bridge.prepare({
+  // Aleo programs. Quote checks the current USDC balance, allowance, and fee cap
+  // and returns the plan execution must use. It does not ask the wallet to sign
+  // or move USDC.
+  const transferQuote = await bridge.quote({
     source: { chain: 'ethereum', asset: 'usdc' },
     destination: { chain: 'aleo', asset: 'usdcx' },
     bridgeProtocol: 'xreserve',
@@ -114,15 +116,14 @@ async function main(): Promise<void> {
     recipient,
     sender: evmAccount.account.address,
     mintMode: mode,
+    privateMintSecretNonce,
   })
+  if (transferQuote.kind !== 'evm-xreserve') throw new Error(`Unexpected quote kind: ${transferQuote.kind}`)
+  const plan = transferQuote.plan
 
   // ── Check funds and destination constraints ─────────────────────────
-  // Current Ethereum reads confirm the USDC balance and allowance and construct
-  // the data xReserve will commit for Aleo delivery. They do not request a
-  // signature or move USDC. For a private mint, a custom nonce changes that
-  // commitment and must be retained separately for recovery and final delivery.
-  const transferQuote = await bridge.quote({ plan, privateMintSecretNonce })
-  if (transferQuote.kind !== 'evm-xreserve') throw new Error(`Unexpected quote kind: ${transferQuote.kind}`)
+  // For a private mint, a custom nonce changes the delivery commitment and must
+  // be retained separately for recovery and final delivery.
   console.table({
     route: plan.route.id,
     amount: `${formatUnits(transferQuote.amountAtomic, 6)} USDC`,
@@ -160,28 +161,26 @@ async function main(): Promise<void> {
     // Provider-managed mints have no destination transaction that this toolkit
     // can verify. Stop at the observable boundary instead of waiting forever
     // for a completion state the provider does not expose.
-    let receipt = await bridge.waitForStatus({
-      plan,
-      receipt: source.receipt,
+    let progress = await bridge.wait({
+      progress: { next: 'wait', plan, receipt: source.receipt },
       until: ['SOURCE_SUBMISSION_PENDING', 'DELIVERY_PENDING', 'FAILED'],
     })
-    if (receipt.status === 'SOURCE_SUBMISSION_PENDING') {
+    if (progress.next === 'resume') {
       // This state means an approval confirmed but no deposit was submitted.
       // Resuming requests authorization for the remaining deposit only and
       // never repeats the confirmed approval.
       source = await bridge.resume({
-        progress: { next: 'resume', plan, receipt },
+        progress,
         privateMintSecretNonce,
         onCheckpoint(value) { checkpoint('source checkpoint', value) },
       })
-      receipt = await bridge.waitForStatus({
-        plan,
-        receipt: source.receipt,
+      progress = await bridge.wait({
+        progress: { next: 'wait', plan, receipt: source.receipt },
         until: ['DELIVERY_PENDING', 'FAILED'],
       })
     }
-    if (receipt.status === 'FAILED') {
-      throw new Error(String(receipt.protocolState.sourceError ?? 'Bridge transfer failed'))
+    if (progress.next === 'failed') {
+      throw new Error(progress.error)
     }
     // Circle has authorized destination delivery. The provider now submits the
     // public or record mint; this toolkit cannot yet verify that provider-owned

@@ -13,18 +13,20 @@ import type {
   BridgeProgress,
   BridgeReceipt,
   BridgeStatus,
+  PrepareParameters,
 } from './protocol.js'
 import type { SolanaHyperlaneTransferExecution, SolanaHyperlaneTransferQuote } from './solana.js'
 import type { EvmXReserveTransferExecution, EvmXReserveTransferQuote } from './xreserve.js'
 
 /**
- * Supplies the cross-chain transfer whose current cost is calculated.
+ * Describes the cross-chain transfer whose current cost is calculated.
  *
- * @property plan Route, assets, amount, and recipient selected for the transfer.
+ * The same source, destination, amount, and recipient become the plan returned
+ * with the quote, so the caller can execute exactly what was priced.
+ *
  * @property privateMintSecretNonce Secret Aleo scalar committed by a private xReserve deposit. Defaults to `0scalar` and is never persisted in a checkpoint.
  */
-export type QuoteParameters = {
-  plan: BridgePlan
+export type QuoteParameters = PrepareParameters & {
   privateMintSecretNonce?: string | undefined
 }
 
@@ -61,12 +63,13 @@ type AleoXReserveQuote = {
 }
 
 /** Captures every quote returned by the protocol-neutral transfer action. */
-export type BridgeQuote =
+export type BridgeQuote = ({ plan: BridgePlan }) & (
   | ({ kind: 'aleo-hyperlane' } & AleoHyperlaneGasQuote)
   | AleoXReserveQuote
   | ({ kind: 'evm-hyperlane' } & EvmHyperlaneTransferQuote)
   | ({ kind: 'evm-xreserve' } & EvmXReserveTransferQuote)
   | ({ kind: 'solana-hyperlane' } & SolanaHyperlaneTransferQuote)
+)
 
 /**
  * Controls how the source wallet begins a cross-chain transfer.
@@ -127,24 +130,6 @@ export type GetStatusParameters = {
   plan: BridgePlan
   receipt: BridgeReceipt
   signal?: AbortSignal | undefined
-}
-
-/**
- * Controls how an in-progress cross-chain transfer is followed until a requested state.
- *
- * @property plan Route, assets, amount, and recipient for the transfer.
- * @property receipt Latest known state and submitted transaction identifiers.
- * @property until One or more statuses that stop polling.
- * @property pollingIntervalMs Delay between reads. Defaults to 15,000 milliseconds and is floored at 100 milliseconds.
- * @property timeoutMs Maximum polling duration. Defaults to 1,200,000 milliseconds.
- * @property onUpdate Durable callback invoked after each receipt state transition.
- * @property signal Optional cancellation signal. Defaults to no cancellation.
- */
-export type WaitForStatusParameters = GetStatusParameters & {
-  until: readonly BridgeStatus[]
-  pollingIntervalMs?: number | undefined
-  timeoutMs?: number | undefined
-  onUpdate?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
 }
 
 /**
@@ -213,6 +198,7 @@ export type ResumeParameters = {
  * Controls how a recovered cross-chain transfer is followed until it finishes or needs a wallet.
  *
  * @property progress Current transfer details, receipt, and required next operation.
+ * @property until Optional protocol statuses that also stop polling. Defaults to wallet authorization and terminal boundaries.
  * @property pollingIntervalMs Delay between reads. Defaults to 15,000 milliseconds.
  * @property timeoutMs Maximum polling duration. Defaults to 1,200,000 milliseconds.
  * @property onUpdate Optional callback invoked after each receipt transition.
@@ -220,6 +206,7 @@ export type ResumeParameters = {
  */
 export type WaitParameters = {
   progress: BridgeProgress
+  until?: readonly BridgeStatus[] | undefined
   pollingIntervalMs?: number | undefined
   timeoutMs?: number | undefined
   onUpdate?: ((progress: BridgeProgress) => void | Promise<void>) | undefined

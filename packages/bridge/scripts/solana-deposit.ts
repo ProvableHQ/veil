@@ -86,7 +86,7 @@ async function main(): Promise<void> {
     console.log('Recovered checkpoint:', checkpoint.source?.transactionId)
   } else {
     const sender = await solana.walletClient!.getAddress()
-    const plan = bridge.prepare({
+    const quote = await bridge.quote({
       source: { chain: 'solana', asset: 'sol' },
       destination: { chain: 'aleo', asset: 'sol' },
       bridgeProtocol: 'hyperlane',
@@ -94,8 +94,8 @@ async function main(): Promise<void> {
       recipient: required('ALEO_RECIPIENT'),
       sender,
     })
-    const quote = await bridge.quote({ plan })
     if (quote.kind !== 'solana-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
+    const plan = quote.plan
     const balance = await solana.publicClient.getBalance(sender)
     console.table({
       route: plan.route.id,

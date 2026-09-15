@@ -19,12 +19,13 @@ wallet inputs without network access and remain standalone utilities rather
 than bridge client methods. Resuming a confirmed xReserve approval now fails
 before another wallet request when its allowance is no longer available.
 Registry discovery is available directly through `registry.getAssets` and
-`registry.getRoutes`, while the matching bare helpers remain exported for
-callers that do not use a bridge client.
-The protocol-neutral lifecycle is now `prepare`, `quote`, `execute`,
-`getStatus`, `waitForStatus`, `wait`, `recover`, `resume`, and `complete`. `prepare` selects structured
-source and destination assets with an optional `bridgeProtocol` constraint;
-encoded route ids are outputs rather than caller input. Private inbound
+`registry.getRoutes`.
+The protocol-neutral lifecycle is now `quote`, `execute`, `getStatus`, `wait`,
+`recover`, `resume`, and `complete`. `quote` selects structured source and
+destination assets with an optional `bridgeProtocol` constraint, returns the
+validated plan with live costs, and replaces the separate preparation action.
+`wait` accepts optional stopping statuses, replacing `waitForStatus`. Encoded
+route ids are outputs rather than caller input. Private inbound
 xReserve transfers expose an explicit destination-action state, and `complete`
 submits exactly one caller-authorized Aleo mint. Native Veil wallet clients pass
 directly to `createAleoClient`, while protocol-specific escape hatches remain

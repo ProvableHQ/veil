@@ -124,20 +124,23 @@ async function main(): Promise<void> {
   const recipient = requiredEnvironmentVariable('ETHEREUM_RECIPIENT')
   const mode = burnModeFromEnvironment()
 
-  // ── Describe the intended transfer ──────────────────────────────────
+  // ── Price the intended transfer ─────────────────────────────────────
   // The caller supplies familiar chain and asset names, the amount, and the
   // Ethereum recipient. The bridge catalog supplies the reviewed Aleo programs,
-  // Circle domains, token identifiers, and fixed two-USDCx withdrawal boundary.
-  // No network is read and no wallet is involved here. This amount is one base
-  // unit above that boundary so the example moves the minimum possible value.
+  // Circle domains, token identifiers, and fixed two-USDCx withdrawal fee.
+  // This direction has no live provider quote, so the returned result applies
+  // the reviewed fixed fee without loading a wallet or reading account state.
+  // This amount is one base unit above the fee, keeping the example minimal.
   const bridge = createBridgeClient({ environment: 'mainnet' })
-  const plan = bridge.prepare({
+  const quote = await bridge.quote({
     source: { chain: 'aleo', asset: 'usdcx' },
     destination: { chain: 'ethereum', asset: 'usdc' },
     bridgeProtocol: 'xreserve',
     amount: AMOUNT,
     recipient,
   })
+  if (quote.kind !== 'aleo-xreserve') throw new Error(`Unexpected quote kind: ${quote.kind}`)
+  const plan = quote.plan
 
   // ── Review the withdrawal before loading an account ─────────────────
   // This direction has no live source-side market quote. The important caller
@@ -252,13 +255,12 @@ async function main(): Promise<void> {
   // Ethereum delivery, so this script stops honestly at delivery pending. A
   // timeout or RPC error leaves the burn outcome unknown; recover from the
   // latest checkpoint and transaction id instead of authorizing another burn.
-  const receipt = await executingBridge.waitForStatus({
-    plan,
-    receipt: result.receipt,
+  const progress = await executingBridge.wait({
+    progress: { next: 'wait', plan, receipt: result.receipt },
     until: ['DELIVERY_PENDING', 'FAILED'],
   })
-  if (receipt.status === 'FAILED') {
-    throw new Error(String(receipt.protocolState.sourceError ?? 'Aleo burn failed'))
+  if (progress.next === 'failed') {
+    throw new Error(progress.error)
   }
   console.log('The Aleo burn-attestation service will forward the withdrawal to Circle for Ethereum delivery.')
 }

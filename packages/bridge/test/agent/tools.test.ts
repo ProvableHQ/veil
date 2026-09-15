@@ -8,19 +8,19 @@ describe('createBridgeAgentTools', () => {
     expect(tools.map((tool) => tool.schema.name)).toEqual([
       'bridge_list_assets',
       'bridge_list_routes',
-      'bridge_prepare_transfer',
+      'bridge_quote_transfer',
     ])
   })
 
-  it('prepares a transfer through the bound client', async () => {
+  it('quotes a transfer through the bound client', async () => {
     const tool = createBridgeAgentTools(createBridgeClient())
-      .find((entry) => entry.schema.name === 'bridge_prepare_transfer')!
-    const plan = await tool.handler({
+      .find((entry) => entry.schema.name === 'bridge_quote_transfer')!
+    const quote = await tool.handler({
       source: { chain: 'aleo', asset: 'usdcx' },
       destination: { chain: 'ethereum', asset: 'usdc' },
-      amount: '1',
+      amount: '2.000001',
       recipient: '0x0000000000000000000000000000000000000001',
-    }) as { protocol: string }
-    expect(plan.protocol).toBe('xreserve')
+    }) as { plan: { protocol: string } }
+    expect(quote.plan.protocol).toBe('xreserve')
   })
 })

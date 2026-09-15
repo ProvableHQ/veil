@@ -25,7 +25,8 @@ The repo-wide contributor constraints in the root `AGENTS.md` and
 
 ## Execution safety
 
-- `prepare` remains pure and local.
+- Quote validation resolves the transfer plan without contacting a network or
+  requesting a signature before any live price reads begin.
 - Validate route availability, amount precision, recipient encoding, signer
   capability, protocol fees, and required compliance data before the first
   irreversible step.

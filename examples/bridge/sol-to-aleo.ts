@@ -100,12 +100,13 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
     },
   })
 
-  // ── Describe the intended transfer ──────────────────────────────────
+  // ── Price the intended transfer ─────────────────────────────────────
   // The caller supplies familiar chain and asset names, an amount, and the
   // recipient. The bridge catalog supplies the reviewed Solana programs,
   // required accounts, Aleo domain, decimal widths, and stages for this route.
-  // No network is read and no wallet is asked to sign. The amount is one lamport.
-  const plan = bridge.prepare({
+  // Quote also reads the current relayer, network-fee, and rent requirements. It
+  // does not ask the wallet to sign or move SOL. The amount is one lamport.
+  const quote = await bridge.quote({
     source: { chain: 'solana', asset: 'sol' },
     destination: { chain: 'aleo', asset: 'sol' },
     bridgeProtocol: 'hyperlane',
@@ -115,12 +116,11 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
   })
 
   // ── Check funds and current fees ────────────────────────────────────
-  // The source account needs more than the transferred lamport. Current chain
-  // reads price the Hyperlane delivery payment, Solana network fee, and rent
-  // required by the route's temporary accounts. Their sum is the balance that
-  // must be available. These reads do not request a signature or move SOL.
-  const quote = await bridge.quote({ plan })
   if (quote.kind !== 'solana-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
+  const plan = quote.plan
+  // The source account needs more than the transferred lamport. The quoted
+  // Hyperlane delivery payment, Solana network fee, and account rent form the
+  // reserve that must remain available alongside the transfer amount.
   const balance = await solana.publicClient.getBalance(senderAddress)
   const decimals = plan.sourceAsset.decimals
 

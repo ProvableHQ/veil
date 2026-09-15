@@ -77,6 +77,44 @@ export function aleoAddressToBytes32(address: string): Hex {
   }
 }
 
+/**
+ * Restores the Aleo account address carried in a bridge protocol's bytes32 recipient field.
+ *
+ * Call this when reconstructing a transfer from Solana instructions or EVM
+ * events, where the destination address is stored without its human-readable
+ * prefix and checksum.
+ *
+ * @param recipient Exactly 32 Aleo address bytes encoded as prefixed hexadecimal.
+ * @returns The canonical checksummed `aleo1…` account address.
+ * @throws BridgeError When the recipient is not exactly 32 bytes.
+ */
+export function bytes32ToAleoAddress(recipient: Hex): string {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(recipient)) {
+    throw new BridgeError(`Invalid 32-byte Aleo recipient: ${recipient}`)
+  }
+  const prefix = 'aleo'
+  const words: number[] = []
+  let accumulator = 0
+  let bits = 0
+  for (const byte of hexToBytes(recipient)) {
+    accumulator = (accumulator << 8) | byte
+    bits += 8
+    while (bits >= 5) {
+      bits -= 5
+      words.push((accumulator >>> bits) & 31)
+    }
+  }
+  if (bits > 0) words.push((accumulator << (5 - bits)) & 31)
+
+  const expanded = [...prefix].map((character) => character.charCodeAt(0) >>> 5)
+    .concat([0], [...prefix].map((character) => character.charCodeAt(0) & 31))
+  const checksum = bech32Polymod([...expanded, ...words, 0, 0, 0, 0, 0, 0]) ^ 0x2bc830a3
+  for (let index = 0; index < 6; index++) {
+    words.push((checksum >>> (5 * (5 - index))) & 31)
+  }
+  return `${prefix}1${words.map((word) => BECH32_ALPHABET[word]).join('')}`
+}
+
 async function loadAleoSdk(environment: BridgeEnvironment) {
   const moduleName = '@provablehq/sdk/dynamic.js'
   try {

@@ -106,13 +106,14 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
     },
   })
 
-  // ── Describe the intended transfer ──────────────────────────────────
+  // ── Price the intended transfer ─────────────────────────────────────
   // The caller supplies familiar chain and asset names, an amount, and the
-  // recipient. The bridge catalog supplies the reviewed router, token contract,
-  // destination domain, decimal widths, and required stages for that direction.
-  // No network is read and no wallet is involved here. Each example transfers
-  // one atomic unit; Ethereum gas and the relayer payment cost more than that.
-  const plan = bridge.prepare({
+  // recipient. Quote validates that intent against the reviewed bridge catalog,
+  // selects the route, and reads the router's current delivery requirements.
+  // It returns the plan that execution must use without requesting a signature
+  // or changing Ethereum state. Each example transfers one atomic unit;
+  // Ethereum gas and the relayer payment cost more than that.
+  const quote = await bridge.quote({
     source: config.source,
     destination: config.destination,
     bridgeProtocol: 'hyperlane',
@@ -120,14 +121,14 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
     recipient,
     sender,
   })
+  if (quote.kind !== 'evm-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
+  const plan = quote.plan
 
   // ── Check funds and current fees ────────────────────────────────────
   // Hyperlane's router reports the value required to send the asset and pay the
   // destination relayer. WBTC also needs visible ERC-20 balance and allowance
   // reads. None of these calls requests a signature or changes Ethereum state.
   // A low WBTC allowance means execution needs an approval before dispatch.
-  const quote = await bridge.quote({ plan })
-  if (quote.kind !== 'evm-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
   const nativeBalance = await evm.publicClient.getBalance(sender)
 
   let assetBalance = nativeBalance

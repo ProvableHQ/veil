@@ -15,7 +15,7 @@ import {
   getAttestation as getXReserveAttestation,
 } from '../../src/protocols/xreserve/evmToAleo.js'
 import { execute } from '../../src/actions/execute.js'
-import { waitForStatus } from '../../src/actions/waitForStatus.js'
+import { wait } from '../../src/actions/wait.js'
 import { createBridgeCheckpoint } from '../../src/actions/createBridgeCheckpoint.js'
 import { createBridgeClient } from '../../src/clients/createBridgeClient.js'
 import { prepare } from '../../src/actions/prepare.js'
@@ -168,20 +168,19 @@ describe('Ethereum xReserve actions', () => {
     expect(submitted.receipt.status).toBe('SOURCE_CONFIRMING')
 
     confirmDeposit.value = true
-    const receipt = await waitForStatus(
+    const progress = await wait(
       DEFAULT_BRIDGE_REGISTRY,
       { sepolia: executor },
       async () => ({ ok: false, status: 404, json: async () => ({}) }),
       {
-        plan: transfer,
-        receipt: submitted.receipt,
+        progress: { next: 'wait', plan: transfer, receipt: submitted.receipt },
         until: ['ATTESTATION_PENDING'],
         pollingIntervalMs: 0,
         timeoutMs: 1_000,
       },
     )
 
-    expect(receipt.status).toBe('ATTESTATION_PENDING')
+    expect(progress.receipt.status).toBe('ATTESTATION_PENDING')
     expect(sent).toHaveLength(2)
   })
 

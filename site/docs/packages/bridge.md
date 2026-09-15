@@ -13,25 +13,26 @@ The bridge client assigns each asset family to its canonical protocol:
 - Circle xReserve moves USDC into and out of Aleo as USDCx.
 - Hyperlane Warp Routes move ETH, WBTC, USDT, SOL, ALEO, and USAD.
 
-The current API provides a versioned route registry, discovery, and local
-transfer planning:
+The current API provides a versioned route registry, discovery, and transfer
+quotes that return the validated execution plan:
 
 ```ts
 import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'
 
 const bridge = createBridgeClient({ environment: 'mainnet' })
-const plan = bridge.prepare({
+const quote = await bridge.quote({
   source: { chain: 'ethereum', asset: 'usdc' },
   destination: { chain: 'aleo', asset: 'usdcx' },
   bridgeProtocol: 'xreserve',
   amount: '25',
   recipient: aleoAddress,
 })
+const plan = quote.plan
 ```
 
-`prepare` validates the route, decimal precision, and recipient. It
-returns the ordered approval, protocol, attestation/delivery, and destination
-steps without signing or moving funds.
+`quote` validates the route, decimal precision, and recipient and returns the
+ordered approval, protocol, attestation/delivery, and destination steps with
+current costs where available. It does not sign or move funds.
 
 Fund-moving actions accept an optional `onCheckpoint` hook. The compact value
 contains its format version, public transfer intent, resolved route, and
@@ -63,7 +64,8 @@ boundary, `resume({ progress })` continues an approval-interrupted source flow
 or broadcasts the exact checkpointed Aleo source transaction. A prepared Aleo
 private mint recovers to `complete({ progress })`, which broadcasts that exact
 destination transaction. The
-lower-level `getStatus` and `waitForStatus` remain available for exact states.
+lower-level `getStatus` remains available for one status read. Pass `until` to
+`wait` to stop at an additional protocol state.
 
 `onProgress` reports Aleo proving boundaries for UI and timing instrumentation.
 Solana quotes include the bridged amount, IGP payment, network fee, and required

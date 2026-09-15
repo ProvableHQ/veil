@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { getAssets } from '../../src/actions/getAssets.js'
-import { getRoutes } from '../../src/actions/getRoutes.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 
 describe('getAssets', () => {
@@ -10,9 +8,9 @@ describe('getAssets', () => {
   })
 
   it('filters by the client-facing environment, chain, and symbol', () => {
-    expect(getAssets(DEFAULT_BRIDGE_REGISTRY, { environment: 'testnet' })
+    expect(DEFAULT_BRIDGE_REGISTRY.getAssets({ environment: 'testnet' })
       .every((asset) => asset.chainId === 'aleo-testnet' || asset.chainId === 'sepolia')).toBe(true)
-    expect(getAssets(DEFAULT_BRIDGE_REGISTRY, { chainId: 'ETHEREUM', symbol: 'usdc' })
+    expect(DEFAULT_BRIDGE_REGISTRY.getAssets({ chainId: 'ETHEREUM', symbol: 'usdc' })
       .map((asset) => asset.id)).toEqual(['ethereum/usdc'])
   })
 })
@@ -30,7 +28,7 @@ describe('getRoutes', () => {
   })
 
   it('returns directional xReserve routes for USDCx', () => {
-    const routes = getRoutes(DEFAULT_BRIDGE_REGISTRY, {
+    const routes = DEFAULT_BRIDGE_REGISTRY.getRoutes({
       environment: 'mainnet',
       protocol: 'xreserve',
       symbol: 'USDCx',
@@ -42,7 +40,7 @@ describe('getRoutes', () => {
   })
 
   it('filters directional Hyperlane routes by endpoints', () => {
-    const routes = getRoutes(DEFAULT_BRIDGE_REGISTRY, {
+    const routes = DEFAULT_BRIDGE_REGISTRY.getRoutes({
       environment: 'mainnet',
       protocol: 'hyperlane',
       sourceChainId: 'aleo',

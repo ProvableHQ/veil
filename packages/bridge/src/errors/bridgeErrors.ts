@@ -3,7 +3,7 @@
  *
  * @example
  * try {
- *   bridge.prepare(params)
+ *   await bridge.quote(params)
  * } catch (error) {
  *   if (error instanceof BridgeError) console.error(error.message)
  * }

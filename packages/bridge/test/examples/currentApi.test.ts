@@ -49,7 +49,7 @@ describe('bridge examples', () => {
     }
   })
 
-  it('keeps every lifecycle implementation on the structured prepare API', () => {
+  it('quotes structured transfer details without a separate prepare action', () => {
     const implementations = [
       'aleo-hyperlane.ts',
       'ethereum-hyperlane.ts',
@@ -60,7 +60,8 @@ describe('bridge examples', () => {
 
     for (const name of implementations) {
       const source = readFileSync(join(EXAMPLE_DIRECTORY, name), 'utf8')
-      expect(source, `${name} must prepare a structured route`).toContain('bridge.prepare({')
+      expect(source, `${name} must quote a structured route`).toMatch(/bridge\.quote\((?:\{|quoteParams)/)
+      expect(source, `${name} still calls the removed prepare action`).not.toContain('bridge.prepare({')
     }
   })
 
@@ -97,15 +98,15 @@ describe('bridge examples', () => {
         expect(source.toLowerCase(), `${name} must explain ${lesson}`).toContain(lesson)
       }
       expect(source, `${name} must explain wallet authorization`).toMatch(/sign(?:ature|s|ing)/i)
-      expect(source, `${name} must identify the transfer being described`)
-        .toContain('// ── Describe the intended transfer')
+      expect(source, `${name} must identify the transfer being priced`)
+        .toContain('// ── Price the intended transfer')
       expect(source.toLowerCase(), `${name} must explain uncertain post-submission outcomes`).toContain('timeout')
     }
   })
 
   it('does not teach unsupported outbound xReserve destination waiting', () => {
     const source = readFileSync(join(EXAMPLE_DIRECTORY, 'usdcx-to-usdc.ts'), 'utf8')
-    expect(source).toContain('executingBridge.waitForStatus({')
-    expect(source).not.toContain('executingBridge.wait({')
+    expect(source).toContain('executingBridge.wait({')
+    expect(source).not.toContain('executingBridge.waitForStatus({')
   })
 })

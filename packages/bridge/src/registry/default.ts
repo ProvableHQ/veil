@@ -5,9 +5,6 @@ import type {
   ProtocolBridgeChain,
   ProtocolBridgeRoute,
 } from '../types/protocol.js'
-import { getAssets } from '../actions/getAssets.js'
-import { getRoutes } from '../actions/getRoutes.js'
-
 const EVM_ADDRESS = '^0x[0-9a-fA-F]{40}$'
 const SOLANA_ADDRESS = '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
 const ALEO_ADDRESS = '^aleo1[0-9a-z]{58}$'
@@ -435,9 +432,34 @@ export const DEFAULT_BRIDGE_REGISTRY: BridgeRegistry = Object.freeze({
   routes: Object.freeze(routes),
   sources: Object.freeze([XRESERVE_SOURCE, HYPERLANE_SOURCE]),
   getAssets(this: BridgeRegistry, params = {}) {
-    return getAssets(this, params)
+    const chains = new Map(this.chains.map((chain) => [chain.id, chain]))
+    const chainId = params.chainId?.toLowerCase()
+    const symbol = params.symbol?.toLowerCase()
+    return this.assets.filter((asset) => {
+      const chain = chains.get(asset.chainId)
+      return (
+        (params.environment == null || chain?.environment === params.environment) &&
+        (chainId == null || asset.chainId.toLowerCase() === chainId) &&
+        (symbol == null || asset.symbol.toLowerCase() === symbol)
+      )
+    })
   },
   getRoutes(this: BridgeRegistry, params = {}) {
-    return getRoutes(this, params)
+    const assets = new Map(this.assets.map((asset) => [asset.id, asset]))
+    const sourceChainId = params.sourceChainId?.toLowerCase()
+    const destinationChainId = params.destinationChainId?.toLowerCase()
+    const symbol = params.symbol?.toLowerCase()
+    return this.routes.filter((route) => {
+      const source = assets.get(route.sourceAssetId)!
+      const destination = assets.get(route.destinationAssetId)!
+      return (
+        (params.includeUnavailable === true || route.availability !== 'disabled') &&
+        (params.environment == null || route.environment === params.environment) &&
+        (params.protocol == null || route.protocol === params.protocol) &&
+        (sourceChainId == null || source.chainId.toLowerCase() === sourceChainId) &&
+        (destinationChainId == null || destination.chainId.toLowerCase() === destinationChainId) &&
+        (symbol == null || source.symbol.toLowerCase() === symbol || destination.symbol.toLowerCase() === symbol)
+      )
+    })
   },
 })

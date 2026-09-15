@@ -130,21 +130,21 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     },
   })
 
-  // ── Describe the intended transfer ──────────────────────────────────
+  // ── Price the intended transfer ─────────────────────────────────────
   // The caller supplies familiar chain and asset names, an amount, and the
   // destination account. The bridge catalog supplies the deployed programs,
   // remote domain, decimal widths, and required stages for that direction.
-  // No network is read and no wallet is involved here. Each configured amount
-  // is one atomic unit, keeping an accidental mainnet execution to a minimum.
-  const plan = bridge.prepare({
+  // Quote reads the current Hyperlane delivery payment and returns the plan
+  // execution must use. It does not request a signature or move the wrapped
+  // asset. Each configured amount is one atomic unit.
+  const quoteParams = {
     source: config.source,
     destination: config.destination,
-    bridgeProtocol: 'hyperlane',
+    bridgeProtocol: 'hyperlane' as const,
     amount: config.amount,
     recipient,
     sender: String(account.address),
-  })
-  const amountAtomic = parseDecimalAmount(plan.amountIn, plan.sourceAsset.decimals)
+  }
 
   // ── Check funds and the current delivery payment ────────────────────
   // Hyperlane's interchain gas paymaster charges for relaying and executing the
@@ -154,9 +154,11 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   const [assetLiteral, publicCredits, gasQuote] = await Promise.all([
     publicClient.readContract({ programId: config.balanceProgram, mapping: 'balances', key: account.address }),
     publicClient.getBalance({ address: account.address }),
-    bridge.quote({ plan }),
+    bridge.quote(quoteParams),
   ])
   if (gasQuote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${gasQuote.kind}`)
+  const plan = gasQuote.plan
+  const amountAtomic = parseDecimalAmount(plan.amountIn, plan.sourceAsset.decimals)
   const assetBalance = parseUnsignedLiteral(assetLiteral, 'u128')
 
   console.log(`Read-only Aleo ${asset} to ${config.destination.chain} ${asset} preflight`)
@@ -189,7 +191,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   // update between the earlier display and submission would otherwise reject
   // the transaction while still risking its Aleo fee. This route spends only a
   // public ARC-20 balance. A private record must be unshielded separately.
-  const latestQuote = await bridge.quote({ plan })
+  const latestQuote = await bridge.quote(quoteParams)
   if (latestQuote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${latestQuote.kind}`)
   if (publicCredits < latestQuote.paymentMicrocredits) {
     throw new Error(`Insufficient public credits for the Hyperlane hook payment of ${latestQuote.paymentMicrocredits} microcredits`)

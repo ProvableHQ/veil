@@ -131,16 +131,16 @@ function executor(options: {
 
 describe('Ethereum Hyperlane actions', () => {
   it('derives the Hyperlane recipient bytes from the prepared Aleo address', async () => {
-    const transferPlan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+    const params = {
       source: { chain: 'ethereum', asset: 'eth' },
       destination: { chain: 'aleo', asset: 'eth' },
       amount: '0.0000000000000001',
       recipient: 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n',
       sender: ACCOUNT,
-    })
+    }
     const { bridgeExecutor } = executor({ amount: 100n, nativeValue: 69_000_000_000_101n })
 
-    const result = await quote(DEFAULT_BRIDGE_REGISTRY, { ethereum: bridgeExecutor }, { plan: transferPlan })
+    const result = await quote(DEFAULT_BRIDGE_REGISTRY, { ethereum: bridgeExecutor }, params)
 
     expect(result.kind).toBe('evm-hyperlane')
     if (result.kind !== 'evm-hyperlane') throw new Error(`Unexpected quote kind: ${result.kind}`)

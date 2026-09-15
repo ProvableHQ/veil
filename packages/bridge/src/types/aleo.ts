@@ -132,7 +132,7 @@ export type XReserveBurnCall = {
 /**
  * Configures an Aleo USDCx burn destined for Ethereum USDC.
  *
- * @property plan Aleo-to-Ethereum plan returned by `prepare`.
+ * @property plan Aleo-to-Ethereum plan returned with the transfer quote.
  * @property mode Burn transition to submit. Defaults to `private`.
  * @property userRecord Wallet record request or encoded USDCx token record. Required only for `private`.
  * @property merkleProof Encoded `[MerkleProof; 2]` Aleo literal. Required only for `private`.
@@ -222,7 +222,7 @@ export type AleoHyperlaneTransferRemoteCall = {
 /**
  * Configures construction or submission of an Aleo Hyperlane withdrawal.
  *
- * @property plan Aleo-origin Hyperlane plan returned by `prepare`.
+ * @property plan Aleo-origin Hyperlane plan returned with the transfer quote.
  * @property mode Whether the program burns from `self.caller` or the EOA-bound `self.signer`. Defaults to `caller`.
  * @property privateFee Whether the Aleo wallet should pay its fee privately. Defaults to false.
  * @property gasPaymentMicrocredits Live hook payment in microcredits (u64) from `quote`. Optional for inspection-only call construction; required by the route-specific execution implementation.

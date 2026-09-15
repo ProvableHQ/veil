@@ -5,8 +5,8 @@ ETH, WBTC, USDT, SOL, ALEO, and USAD use Hyperlane Warp Routes.
 
 ## Create a client
 
-Clients are keyed by the chain IDs in the registry. Discovery and transfer
-planning do not need clients.
+Clients are keyed by the chain IDs in the registry. Discovery does not need
+clients.
 
 ```ts
 import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'
@@ -17,19 +17,12 @@ const routes = bridge.registry.getRoutes({
   sourceChainId: 'ethereum',
   destinationChainId: 'aleo',
 })
-const plan = bridge.prepare({
-  source: { chain: 'ethereum', asset: 'usdc' },
-  destination: { chain: 'aleo', asset: 'usdcx' },
-  bridgeProtocol: 'xreserve',
-  amount: '1',
-  recipient: aleoAddress,
-})
 ```
 
 The registry methods list the supported assets and routes from the reviewed
-catalog without reading a network. `prepare` validates the selected route,
-amount, recipient, required signers, and first irreversible step without
-prompting a wallet.
+catalog without reading a network. `quote` accepts the selected endpoints,
+amount, and recipient and returns both current costs and the validated plan
+used for execution without prompting a wallet.
 
 ## Browser application
 
@@ -175,7 +168,7 @@ All actions resolve the exact source or destination client implied by the
 validated route. They do not fall back to another chain of the same family.
 
 ```ts
-const plan = bridge.prepare({
+const quote = await bridge.quote({
   source: { chain: 'ethereum', asset: 'wbtc' },
   destination: { chain: 'aleo', asset: 'wbtc' },
   bridgeProtocol: 'hyperlane',
@@ -183,14 +176,13 @@ const plan = bridge.prepare({
   recipient: aleoAddress,
   sender: ethereumAddress,
 })
-
-const quote = await bridge.quote({ plan })
+const plan = quote.plan
 const execution = await bridge.execute({ plan })
 ```
 
-`quote` derives protocol wire values, including the Aleo recipient's
-32-byte Hyperlane encoding, from the validated plan. Its `kind` field narrows
-route-specific quote fields when an application needs them.
+`quote` validates the intent and derives protocol wire values, including the
+Aleo recipient's 32-byte Hyperlane encoding. Its `plan` is the exact transfer
+passed to execution, and its `kind` field narrows route-specific quote fields.
 
 EVM collateral routes approve only when needed. USDT resets a non-zero
 allowance before setting the required value. Timeouts preserve transaction IDs
@@ -249,7 +241,7 @@ await bridge.execute({
 For Solana, the active inbound route is native SOL:
 
 ```ts
-const plan = bridge.prepare({
+const quote = await bridge.quote({
   source: { chain: 'solana', asset: 'sol' },
   destination: { chain: 'aleo', asset: 'sol' },
   bridgeProtocol: 'hyperlane',
@@ -257,8 +249,7 @@ const plan = bridge.prepare({
   recipient: aleoAddress,
   sender: solanaAddress,
 })
-
-const quote = await bridge.quote({ plan })
+const plan = quote.plan
 const execution = await bridge.execute({
   plan,
   onCheckpoint: saveCheckpoint,
@@ -303,9 +294,9 @@ if (progress.next === 'complete') {
 `onCheckpoint` is optional. Persist its value before returning from the callback
 when recovery across a page close or process restart is required. `recover`
 reconstructs progress from the checkpoint alone. `wait` advances to the next
-caller or relayer boundary. The lower-level `getStatus` and `waitForStatus`
-actions remain available for exact lifecycle-state control. None of these read
-actions submits a transaction.
+caller or relayer boundary. Pass `until` to `wait` when an application also
+needs to stop at a specific protocol status. `getStatus` remains available for
+one status read. Neither action submits a transaction.
 
 For Hyperlane receipts carrying a message id, `wait` verifies delivery against
 the destination Mailbox rather than an explorer index. An Aleo destination
@@ -362,13 +353,12 @@ This package is pre-release, so the obsolete fields have no runtime aliases.
 | `xReserveHttpTransport` | top-level `fetch` |
 | `solanaExecutorFromKeyPair` | `solanaKeyPair(secretKeyBytes)` |
 | `solanaExecutorFromWalletAccount` | `solanaWallet({ wallet, account, chain })` |
-| `prepareTransfer` | `prepare` |
-| `quoteTransfer` | `quote` |
+| `prepareTransfer` and `quoteTransfer` | `quote({ source, destination, amount, recipient })` and use `quote.plan` |
 | `executeTransfer` | `execute` |
-| chain-specific `quote*Transfer` methods | `quote({ plan })` |
+| chain-specific `quote*Transfer` methods | `quote({ source, destination, amount, recipient })` |
 | chain-specific source `execute*Transfer` methods | `execute({ plan })` |
 | `executeXReserveBurn` | `execute({ plan, mode, userRecord, merkleProof })` |
-| encoded `prepare({ routeId })` | `prepare({ source, destination, bridgeProtocol })` |
+| encoded route or separate `prepare` call | structured `quote({ source, destination, bridgeProtocol, amount, recipient })` |
 | `getXReserveAttestation` | `wait({ progress })` or `getStatus({ plan, receipt })` |
 | `executeXReservePrivateMint` | `complete({ progress, privateMintSecretNonce })` |
 

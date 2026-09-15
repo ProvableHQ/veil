@@ -1,6 +1,7 @@
 import { decodeFunctionResult, encodeFunctionData, getAddress, parseAbi } from 'viem'
 import { createPublicClient as createAleoPublicClient, http as aleoHttp } from '@provablehq/veil-core'
 import { describe, expect, it } from 'vitest'
+import { prepare } from '../../../../src/actions/prepare.js'
 import {
   createBridgeClient,
   createAleoClient,
@@ -10,7 +11,7 @@ import {
   type BridgeCheckpoint,
   type BridgeProgress,
 } from '../../../../src/index.js'
-import { createLiveBenchmark, loadLiveState, saveLiveState, waitForHyperlaneDelivery } from '../helpers.js'
+import { createLiveBenchmark, loadLiveState, quoteParametersFromPlan, saveLiveState, waitForHyperlaneDelivery } from '../helpers.js'
 import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, oneAtomicUnit, required, requiredEvmPrivateKey } from '../config.js'
 
 const enabled = mainnetCaseEnabled('evm-hyperlane')
@@ -40,7 +41,7 @@ describe.skipIf(!enabled)('mainnet EVM Hyperlane bridge', () => {
     const source = bridge.registry.assets.find((asset) => asset.id === route.sourceAssetId)
     const destination = bridge.registry.assets.find((asset) => asset.id === route.destinationAssetId)
     if (!source || !destination) throw new Error(`Configured route has unknown assets: ${routeId}`)
-    const plan = bridge.prepare({
+    const plan = prepare(bridge.registry, {
       source: { chain: source.chainId, asset: source.key },
       destination: { chain: destination.chainId, asset: destination.key },
       bridgeProtocol: 'hyperlane',
@@ -54,7 +55,7 @@ describe.skipIf(!enabled)('mainnet EVM Hyperlane bridge', () => {
     if (state.checkpoint) {
       progress = await bridge.recover({ checkpoint: state.checkpoint as BridgeCheckpoint })
     } else {
-      const quote = await bridge.quote({ plan })
+      const quote = await bridge.quote(quoteParametersFromPlan(plan))
       benchmark.mark('quote-returned')
       if (quote.kind !== 'evm-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
       if (quote.tokenAddress && quote.tokenAmountAtomic != null) {

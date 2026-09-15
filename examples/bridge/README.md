@@ -4,11 +4,10 @@ The bridge client moves assets across reviewed Hyperlane and Circle xReserve
 routes. Every transfer follows the same lifecycle:
 
 1. Create chain clients.
-2. Prepare a route.
-3. Quote the transfer.
-4. Execute the source transaction.
-5. Wait for destination delivery.
-6. Resume or complete a transfer only when the returned progress requests it.
+2. Quote the transfer and retain its plan.
+3. Execute the source transaction.
+4. Wait for destination delivery.
+5. Resume or complete a transfer only when the returned progress requests it.
 
 The scripts in this directory run against mainnet. They use minimum transfer
 amounts and remain read-only unless `EXECUTE_BRIDGE` contains the exact
@@ -109,21 +108,21 @@ const bridge = createBridgeClient({
 })
 ```
 
-Read-only applications may omit accounts. `prepare`, registry discovery, and
-most status reads do not need a wallet client. `quote` needs the source public
-client when the protocol reads balances, allowances, or fees.
+Read-only applications may omit accounts. Registry discovery and most status
+reads do not need a wallet client. `quote` needs the source public client when
+the protocol reads balances, allowances, or fees.
 
-## 2. Prepare a route
+## 2. Quote a route
 
-`prepare` validates a structured transfer intent against the registry. The
-caller names the source asset, destination asset, amount, sender, recipient,
-and optional protocol constraint. The returned plan contains the canonical
-route id and asset metadata used by later actions.
+`quote` validates a structured transfer intent against the registry and reads
+current provider or network costs where the route exposes them. The caller
+names the source asset, destination asset, amount, sender, recipient, and
+optional protocol constraint. The returned `plan` is used by later actions.
 
 ```ts
 const sender = await ethereum.walletClient!.getAddress()
 
-const plan = bridge.prepare({
+const quote = await bridge.quote({
   source: { chain: 'ethereum', asset: 'eth' },
   destination: { chain: 'aleo', asset: 'eth' },
   bridgeProtocol: 'hyperlane',
@@ -131,19 +130,8 @@ const plan = bridge.prepare({
   sender,
   recipient: process.env.ALEO_RECIPIENT!,
 })
-
+const plan = quote.plan
 console.log(plan.route.id)
-```
-
-The route id is an output. Applications do not need to construct strings such
-as `hyperlane:ethereum/eth->aleo/eth`.
-
-## 3. Quote before signing
-
-`quote` performs reads and does not sign or submit a transaction.
-
-```ts
-const quote = await bridge.quote({ plan })
 
 if (quote.kind !== 'evm-hyperlane') {
   throw new Error(`Unexpected quote kind: ${quote.kind}`)
@@ -156,11 +144,14 @@ console.table({
 })
 ```
 
-Protocol-specific quote fields remain available after narrowing `quote.kind`.
-The top-level action still selects the protocol implementation from
-`plan.route`.
+The route id is an output. Applications do not need to construct strings such
+as `hyperlane:ethereum/eth->aleo/eth`.
 
-## 4. Execute and wait
+Protocol-specific quote fields remain available after narrowing `quote.kind`.
+The top-level action selects the protocol implementation from the validated
+route. It does not sign or submit a transaction.
+
+## 3. Execute and wait
 
 `execute` authorizes the source-side operation. It may submit an ERC-20
 approval before the bridge transaction when the allowance is insufficient.
@@ -209,7 +200,7 @@ transfer was not submitted. It submits only the remaining source operation.
 Calling `execute` again would restart the broader source workflow and is not
 the recovery path.
 
-## 5. Persist checkpoints when recovery matters
+## 4. Persist checkpoints when recovery matters
 
 A checkpoint contains the public transfer intent, registry version, and
 transaction identifiers needed to reconstruct progress. It does not contain a

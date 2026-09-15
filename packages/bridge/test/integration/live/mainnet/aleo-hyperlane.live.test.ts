@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { prepare } from '../../../../src/actions/prepare.js'
 import {
   createAleoClient,
   createBridgeClient,
@@ -12,7 +13,7 @@ import {
   type BridgeChainClient,
   type BridgeCheckpoint,
 } from '../../../../src/index.js'
-import { createLiveBenchmark, loadLiveState, saveLiveState, waitForAleoTransaction } from '../helpers.js'
+import { createLiveBenchmark, loadLiveState, quoteParametersFromPlan, saveLiveState, waitForAleoTransaction } from '../helpers.js'
 import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, oneAtomicUnit, required } from '../config.js'
 
 const enabled = mainnetCaseEnabled('aleo-hyperlane')
@@ -86,7 +87,7 @@ describe.skipIf(!enabled)('mainnet Aleo Hyperlane bridge', () => {
     const amount = process.env.BRIDGE_LIVE_ALEO_HYPERLANE_AMOUNT?.trim()
       || oneAtomicUnit(source.decimals)
     const amountAtomic = parseDecimalAmount(amount, source.decimals)
-    const plan = bridge.prepare({
+    const plan = prepare(bridge.registry, {
       source: { chain: source.chainId, asset: source.key },
       destination: { chain: destination.chainId, asset: destination.key },
       bridgeProtocol: route.protocol,
@@ -97,7 +98,7 @@ describe.skipIf(!enabled)('mainnet Aleo Hyperlane bridge', () => {
 
     if (!state.sourceTxId) {
       console.log('[aleo-hyperlane] reading Hyperlane gas quote')
-      const quote = await bridge.quote({ plan })
+      const quote = await bridge.quote(quoteParametersFromPlan(plan))
       benchmark.mark('quote-ready')
       console.log('[aleo-hyperlane] Hyperlane gas quote ready')
       if (quote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)

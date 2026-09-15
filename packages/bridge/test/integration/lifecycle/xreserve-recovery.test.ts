@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { complete } from '../../../src/actions/complete.js'
 import { getStatus } from '../../../src/actions/getStatus.js'
-import { waitForStatus } from '../../../src/actions/waitForStatus.js'
 import { wait } from '../../../src/actions/wait.js'
 import { recover } from '../../../src/actions/recover.js'
 import { createAleoClient } from '../../../src/connections/aleo.js'
@@ -227,11 +226,11 @@ describe('xReserve lifecycle', () => {
     })
   })
 
-  it('waits through read-only pending responses until the requested status', async () => {
+  it('lets wait stop at an explicitly requested protocol status', async () => {
     const { plan, payload, messageHash, receipt } = await fixture()
     let reads = 0
-    const updates: BridgeReceipt[] = []
-    const result = await waitForStatus(
+    const updates: unknown[] = []
+    const result = await wait(
       DEFAULT_BRIDGE_REGISTRY,
       {},
       async () => {
@@ -241,8 +240,7 @@ describe('xReserve lifecycle', () => {
           : { ok: true, status: 200, json: async () => ({ attestation: { payload, messageHash, attestation: SIGNATURE } }) }
       },
       {
-        plan,
-        receipt,
+        progress: { next: 'wait', plan, receipt },
         until: ['DESTINATION_ACTION_REQUIRED'],
         pollingIntervalMs: 0,
         timeoutMs: 1_000,
@@ -251,7 +249,10 @@ describe('xReserve lifecycle', () => {
     )
 
     expect(reads).toBe(2)
-    expect(result.status).toBe('DESTINATION_ACTION_REQUIRED')
+    expect(result).toMatchObject({
+      next: 'complete',
+      receipt: { status: 'DESTINATION_ACTION_REQUIRED' },
+    })
     expect(updates).toEqual([result])
   })
 
@@ -272,6 +273,20 @@ describe('xReserve lifecycle', () => {
       next: 'complete',
       receipt: { status: 'DESTINATION_ACTION_REQUIRED' },
     })
+  })
+
+  it('rejects an empty explicit status list before returning current progress', async () => {
+    const { plan, receipt } = await fixture()
+
+    await expect(wait(
+      DEFAULT_BRIDGE_REGISTRY,
+      {},
+      vi.fn(),
+      {
+        progress: { next: 'wait', plan, receipt },
+        until: [],
+      },
+    )).rejects.toThrow('wait requires at least one target status')
   })
 
   it.each([

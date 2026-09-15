@@ -64,8 +64,8 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
     },
     {
       schema: {
-        name: 'bridge_prepare_transfer',
-        description: 'Describe how an amount of an asset can move between two chains through xReserve or Hyperlane. This tool does not contact a blockchain or bridge provider, request a wallet signature, or move funds.',
+        name: 'bridge_quote_transfer',
+        description: 'Validate and price an intended transfer between two chains through xReserve or Hyperlane. This tool reads current chain or provider state where the selected route exposes live costs, but does not request a wallet signature or move funds.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -88,7 +88,7 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
           required: ['source', 'destination', 'amount', 'recipient'],
         },
       },
-      handler: async (params) => client.prepare(params as Parameters<BridgeClient['prepare']>[0]),
+      handler: async (params) => client.quote(params as Parameters<BridgeClient['quote']>[0]),
     },
   ]
 }

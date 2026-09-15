@@ -1,6 +1,20 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import bs58 from 'bs58'
+import type { QuoteParameters } from '../../../src/types/actions.js'
+import type { BridgePlan } from '../../../src/types/protocol.js'
+
+export function quoteParametersFromPlan(plan: BridgePlan): QuoteParameters {
+  return {
+    source: { chain: plan.sourceAsset.chainId, asset: plan.sourceAsset.key },
+    destination: { chain: plan.destinationAsset.chainId, asset: plan.destinationAsset.key },
+    bridgeProtocol: plan.protocol,
+    amount: plan.amountIn,
+    recipient: plan.recipient,
+    ...(plan.sender ? { sender: plan.sender } : {}),
+    mintMode: plan.mintMode,
+  }
+}
 
 export type LiveState = {
   routeId: string
