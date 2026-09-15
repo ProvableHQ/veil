@@ -1,5 +1,6 @@
 import {
   decodeFunctionData,
+  encodeAbiParameters,
   encodeEventTopics,
   encodeFunctionResult,
   getAddress,
@@ -9,7 +10,7 @@ import {
   type Hash,
   type Hex,
 } from 'viem'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   execute as executeEvmHyperlaneTransfer,
   quote as quoteEvmHyperlaneTransfer,
@@ -23,11 +24,14 @@ import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'
 import type { BridgeReceipt } from '../../src/types/protocol.js'
+import { aleoAddressToBytes32 } from '../../src/utils/xreserve.js'
 
 const ACCOUNT = getAddress('0x0000000000000000000000000000000000000001')
 const RECIPIENT = '0x20e3629764d5338f74bee96675801b1fb29d1fc68b177668f9175708bef84311'
 const ALEO_RECIPIENT = 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n'
 const MESSAGE_ID = `0x${'ab'.repeat(32)}` as Hash
+const RECOVERED_MESSAGE_ID = `0x${'cd'.repeat(32)}` as Hash
+const RECOVERED_TX_HASH = `0x${'44'.repeat(32)}` as Hash
 const WBTC = getAddress('0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599')
 const USDT = getAddress('0xdAC17F958D2ee523a2206206994597C13D831ec7')
 const ABI = parseAbi([
@@ -36,6 +40,7 @@ const ABI = parseAbi([
   'function allowance(address owner, address spender) view returns (uint256)',
   'function approve(address spender, uint256 amount) returns (bool)',
   'event DispatchId(bytes32 indexed messageId)',
+  'event SentTransferRemote(uint32 indexed destination, bytes32 indexed recipient, uint256 amount)',
 ])
 
 type SentTransaction = {
@@ -107,11 +112,14 @@ function executor(options: {
         const isLast = hash === hashes.at(-1)
         return {
           status: '0x1',
+          transactionHash: hash,
+          blockNumber: '0x64',
           logs: isLast && sent.at(-1)?.to.toLowerCase() !== options.token?.toLowerCase()
             ? [{ data: '0x', topics: encodeEventTopics({ abi: ABI, eventName: 'DispatchId', args: { messageId: MESSAGE_ID } }) }]
             : [],
         }
       }
+      if (method === 'eth_getLogs') return []
       throw new Error(`Unexpected RPC method ${method}`)
   }
   const bridgeExecutor = createEvmClient({
@@ -291,6 +299,97 @@ describe('Ethereum Hyperlane actions', () => {
     expect(resumed.receipt.status).toBe('DELIVERY_PENDING')
     expect(confirmedExecutor.sent).toHaveLength(1)
     expect(decodeFunctionData({ abi: ABI, data: confirmedExecutor.sent[0]!.data }).functionName).toBe('transferRemote')
+  })
+
+  it('finds a matching Hyperlane dispatch immediately before resume instead of submitting another transfer', async () => {
+    const transferPlan = plan('hyperlane:ethereum/wbtc->aleo/wbtc', '0.001')
+    const pendingExecutor = executor({
+      token: WBTC,
+      amount: 100_000n,
+      nativeValue: 50_000n,
+      allowance: 0n,
+      receipt: 'pending',
+    })
+    const pending = await executeEvmHyperlaneTransfer(DEFAULT_BRIDGE_REGISTRY, pendingExecutor.bridgeExecutor, {
+      plan: transferPlan,
+      recipientBytes32: RECIPIENT,
+      confirmationTimeoutMs: 0,
+      pollingIntervalMs: 0,
+    })
+    const checkpoint = createBridgeCheckpoint(transferPlan, pending.receipt)
+    const confirmedExecutor = executor({
+      token: WBTC,
+      amount: 100_000n,
+      nativeValue: 50_000n,
+      allowance: 100_000n,
+    })
+    const progress = await recover(
+      DEFAULT_BRIDGE_REGISTRY,
+      { ethereum: confirmedExecutor.bridgeExecutor },
+      globalThis.fetch,
+      { checkpoint },
+    )
+    if (progress.next !== 'resume') throw new Error(`Expected resume, received ${progress.next}`)
+
+    const router = getAddress('0x20CDC85778b732073F7EecEF3DF25c0d310f8772')
+    const recoveredRecipient = aleoAddressToBytes32(ALEO_RECIPIENT)
+    const dispatchLog = {
+      address: router,
+      blockNumber: 101n,
+      transactionHash: RECOVERED_TX_HASH,
+      logIndex: 4,
+      topics: encodeEventTopics({
+        abi: ABI,
+        eventName: 'SentTransferRemote',
+        args: { destination: 1_634_493_807, recipient: recoveredRecipient },
+      }),
+      data: encodeAbiParameters([{ type: 'uint256' }], [100_000n]),
+    }
+    const messageLog = {
+      address: getAddress('0xc005dc82818d67AF737725bD4bf75435d065D239'),
+      blockNumber: 101n,
+      transactionHash: RECOVERED_TX_HASH,
+      logIndex: 5,
+      data: '0x' as Hex,
+      topics: encodeEventTopics({ abi: ABI, eventName: 'DispatchId', args: { messageId: RECOVERED_MESSAGE_ID } }),
+    }
+    const getLogs = vi.fn(async () => [dispatchLog])
+    const getTransaction = vi.fn(async () => ({
+        hash: RECOVERED_TX_HASH,
+        blockNumber: 101n,
+        from: ACCOUNT,
+        to: router,
+        input: '0x',
+      }))
+    Object.assign(confirmedExecutor.bridgeExecutor.publicClient, {
+      getLogs,
+      getTransaction,
+      getTransactionReceipt: async () => ({
+        status: 'success',
+        transactionHash: RECOVERED_TX_HASH,
+        blockNumber: 101n,
+        logs: [dispatchLog, messageLog],
+      }),
+    })
+
+    const resumed = await resume(
+      DEFAULT_BRIDGE_REGISTRY,
+      { ethereum: confirmedExecutor.bridgeExecutor },
+      { progress },
+    )
+
+    expect(progress.receipt.protocolState.sourceSender).toBe(ACCOUNT)
+    expect(getLogs).toHaveBeenCalledOnce()
+    expect(getTransaction).toHaveBeenCalledWith(RECOVERED_TX_HASH)
+    expect(resumed).toMatchObject({
+      kind: 'evm-hyperlane',
+      receipt: {
+        status: 'DELIVERY_PENDING',
+        sourceTxId: RECOVERED_TX_HASH,
+        messageId: RECOVERED_MESSAGE_ID,
+      },
+    })
+    expect(confirmedExecutor.sent).toHaveLength(0)
   })
 
   it('checkpoints dispatch before confirmation and resumes without resubmitting', async () => {

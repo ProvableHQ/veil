@@ -291,6 +291,62 @@ function confirmedDepositReceipt(
   return { id: messageHash, protocol: 'xreserve', status: 'ATTESTATION_PENDING', sourceTxId, protocolState: { ...pendingReceipt(plan, 'ATTESTATION_PENDING', messageHash, approvalTxIds, quote, owner, sourceTxId).protocolState, sourceDomain: route.sourceDomain, remoteDomain: route.remoteDomain, depositLogIndex: logIndex, nonce, payload, messageHash, bridgeProgram: route.bridgeProgram, wrapperProgram: route.wrapperProgram } }
 }
 
+/** Finds the latest confirmed approval block without treating an unresolved hash as failed. */
+async function approvalScanBlock(client: EvmClient, approvalTxIds: readonly Hash[]): Promise<bigint | undefined> {
+  let blockNumber: bigint | undefined
+  for (const approvalTxId of approvalTxIds) {
+    const receipt = await client.publicClient.getTransactionReceipt(approvalTxId)
+    if (!receipt) continue
+    successful(receipt, approvalTxId)
+    if (typeof receipt.blockNumber === 'bigint'
+      && (blockNumber === undefined || receipt.blockNumber > blockNumber)) {
+      blockNumber = receipt.blockNumber
+    }
+  }
+  return blockNumber
+}
+
+/**
+ * Searches only the source blocks following a known approval and accepts a
+ * deposit only when every emitted field matches the saved transfer intent.
+ */
+async function recoverConfirmedDepositFromHistory(
+  plan: BridgePlan,
+  route: EvmXReserveRouteMetadata,
+  client: EvmClient,
+  quote: EvmXReserveTransferQuote,
+  owner: Address,
+  approvalTxIds: Hash[],
+  options: { required: boolean },
+): Promise<BridgeReceipt | undefined> {
+  const fromBlock = await approvalScanBlock(client, approvalTxIds)
+  if (fromBlock === undefined) {
+    if (options.required) {
+      throw new BridgeError('Cannot safely resume xReserve because no confirmed approval block is available for source history verification')
+    }
+    return undefined
+  }
+
+  const logs = await client.publicClient.getLogs({ address: route.xReserveContract, fromBlock })
+  const transactionHashes = [...new Set(logs.map((log) => log.transactionHash))]
+  const matches: BridgeReceipt[] = []
+  for (const transactionHash of transactionHashes) {
+    const receipt = await client.publicClient.getTransactionReceipt(transactionHash)
+    if (!receipt) continue
+    try {
+      matches.push(confirmedDepositReceipt(plan, route, quote, owner, approvalTxIds, transactionHash, receipt))
+    } catch (error) {
+      if (!(error instanceof BridgeError)) throw error
+      // The xReserve contract emits deposits for many accounts and routes. A
+      // rejected candidate is unrelated unless every canonical field matches.
+    }
+  }
+  if (matches.length > 1) {
+    throw new BridgeError('Multiple matching xReserve deposits were found; recovery cannot safely choose one source transaction')
+  }
+  return matches[0]
+}
+
 /**
  * Checks whether one submitted xReserve deposit has committed USDC on Ethereum.
  *
@@ -404,6 +460,16 @@ export async function recoverSourceCheckpoint(
     const approvalReceipt = await client.publicClient.getTransactionReceipt(approvalTxId)
     if (!approvalReceipt) return pending
     successful(approvalReceipt, approvalTxId)
+    const recovered = await recoverConfirmedDepositFromHistory(
+      plan,
+      route,
+      client,
+      quote,
+      owner,
+      approvalTxIds,
+      { required: false },
+    )
+    if (recovered) return recovered
     return { ...pending, status: 'SOURCE_SUBMISSION_PENDING' }
   }
   if (!isHash(checkpoint.source.transactionId)) {
@@ -420,7 +486,17 @@ export async function recoverSourceCheckpoint(
   )
   // A saved source transaction is already the irreversible deposit. From this
   // point recovery only observes Ethereum and verifies the emitted message.
-  return getSourceStatus(registry, client, plan, pending)
+  const observed = await getSourceStatus(registry, client, plan, pending)
+  if (observed !== pending) return observed
+  return await recoverConfirmedDepositFromHistory(
+    plan,
+    route,
+    client,
+    quote,
+    owner,
+    approvalTxIds,
+    { required: false },
+  ) ?? observed
 }
 
 /**
@@ -475,6 +551,19 @@ export async function execute(
   if (params.resume?.status === 'SOURCE_SUBMISSION_PENDING') {
     const checkpointQuote = resumeQuote(params.plan, params.resume)
     approvalTxIds = approvalIds(params.resume)
+    // Recheck source history immediately before the wallet boundary. A process
+    // may have broadcast the deposit before its checkpoint was saved, and the
+    // resulting transaction can have a different hash than the wallet returned.
+    const recovered = await recoverConfirmedDepositFromHistory(
+      params.plan,
+      route,
+      client,
+      checkpointQuote,
+      owner,
+      approvalTxIds,
+      { required: true },
+    )
+    if (recovered) return { approvalTxIds, receipt: recovered }
     // A prior approval succeeded without a deposit. Re-read balance, allowance,
     // and hook data before asking the wallet to authorize the irreversible step.
     transferQuote = await quote(registry, client, params)

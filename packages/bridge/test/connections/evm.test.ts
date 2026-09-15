@@ -219,4 +219,32 @@ describe('EVM bridge clients', () => {
     await expect(client.publicClient.getBalance(address)).resolves.toBe(42n)
     expect(getBalance).toHaveBeenCalledWith({ address })
   })
+
+  it('exposes normalized logs and transactions for recovery without using the wallet', async () => {
+    const address = '0x0000000000000000000000000000000000000001' as const
+    const hash = `0x${'ab'.repeat(32)}` as const
+    const log = {
+      address,
+      blockNumber: 12n,
+      transactionHash: hash,
+      logIndex: 3,
+      data: '0x' as const,
+      topics: [] as const,
+    }
+    const transaction = {
+      hash,
+      blockNumber: 12n,
+      from: address,
+      to: address,
+      input: '0x' as const,
+    }
+    const getLogs = vi.fn(async () => [log])
+    const getTransaction = vi.fn(async () => transaction)
+    const client = createEvmClient({ publicClient: { getLogs, getTransaction } as never })
+
+    await expect(client.publicClient.getLogs({ address, fromBlock: 10n, toBlock: 20n })).resolves.toEqual([log])
+    await expect(client.publicClient.getTransaction(hash)).resolves.toEqual(transaction)
+    expect(getLogs).toHaveBeenCalledWith({ address, fromBlock: 10n, toBlock: 20n })
+    expect(getTransaction).toHaveBeenCalledWith({ hash })
+  })
 })

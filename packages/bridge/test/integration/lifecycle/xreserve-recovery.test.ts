@@ -9,7 +9,7 @@ import { prepare } from '../../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../../src/registry/default.js'
 import type { AleoWalletClient } from '../../../src/types/aleo.js'
 import type { BridgeReceipt } from '../../../src/types/protocol.js'
-import { buildXReserveHookData, calculateXReserveMessageHash } from '../../../src/utils/xreserve.js'
+import { buildXReserveDepositPayload, buildXReserveHookData, calculateXReserveMessageHash } from '../../../src/utils/xreserve.js'
 
 const RECIPIENT = 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n'
 const SIGNATURE = `0x${'11'.repeat(65)}` as const
@@ -23,7 +23,17 @@ async function fixture() {
     mintMode: 'private',
   })
   const hookData = await buildXReserveHookData('private', RECIPIENT, 'testnet', '7scalar')
-  const payload = `0x${'00'.repeat(240)}${hookData.slice(2)}` as const
+  const payload = buildXReserveDepositPayload({
+    amount: 2_000_000n,
+    remoteDomain: 10_002,
+    remoteToken: `0x${'11'.repeat(32)}`,
+    remoteRecipient: `0x${'22'.repeat(32)}`,
+    localToken: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+    depositor: '0x0000000000000000000000000000000000000001',
+    maxFee: 100_000n,
+    nonce: `0x${'00'.repeat(32)}`,
+    hookData,
+  })
   const messageHash = calculateXReserveMessageHash(payload)
   const receipt: BridgeReceipt = {
     id: messageHash,
@@ -42,6 +52,69 @@ async function fixture() {
 }
 
 describe('xReserve lifecycle', () => {
+  it('recognizes an already-minted inbound deposit before asking the caller to complete it', async () => {
+    const { plan, receipt } = await fixture()
+    const request = vi.fn(async () => 'true')
+    const awaitingPrivateMint: BridgeReceipt = {
+      ...receipt,
+      status: 'DESTINATION_ACTION_REQUIRED',
+      nextAction: { kind: 'xreserve-private-mint', chainId: 'aleo-testnet' },
+      protocolState: {
+        ...receipt.protocolState,
+        bridgeProgram: 'test_usdcx_bridge_v2.aleo',
+        nonce: `0x${'33'.repeat(32)}`,
+        attestation: SIGNATURE,
+      },
+    }
+
+    const result = await getStatus(
+      DEFAULT_BRIDGE_REGISTRY,
+      { 'aleo-testnet': createAleoClient({ publicClient: { request } as never }) },
+      vi.fn(),
+      { plan, receipt: awaitingPrivateMint },
+    )
+
+    expect(result).toMatchObject({ status: 'COMPLETED' })
+    expect(result.nextAction).toBeUndefined()
+    expect(request).toHaveBeenCalledWith({
+      method: 'getMappingValue',
+      params: {
+        programId: 'test_usdcx_bridge_v2.aleo',
+        mapping: 'nullifier',
+        key: `[${Array.from({ length: 32 }, () => '51u8').join(',')}]`,
+      },
+    })
+  })
+
+  it('recovers the delivery nonce from the attested payload when older progress omitted it', async () => {
+    const { plan, receipt, payload } = await fixture()
+    const request = vi.fn(async () => 'true')
+    const legacyReceipt: BridgeReceipt = {
+      ...receipt,
+      status: 'DELIVERY_PENDING',
+      protocolState: {
+        ...receipt.protocolState,
+        payload,
+        bridgeProgram: 'test_usdcx_bridge_v2.aleo',
+      },
+    }
+
+    const result = await getStatus(
+      DEFAULT_BRIDGE_REGISTRY,
+      { 'aleo-testnet': createAleoClient({ publicClient: { request } as never }) },
+      vi.fn(),
+      { plan, receipt: legacyReceipt },
+    )
+
+    expect(result.status).toBe('COMPLETED')
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      params: expect.objectContaining({
+        mapping: 'nullifier',
+        key: `[${Array.from({ length: 32 }, () => '0u8').join(',')}]`,
+      }),
+    }))
+  })
+
   it('turns a verified Circle attestation into a destination action', async () => {
     const { plan, payload, messageHash, receipt } = await fixture()
     const result = await getStatus(

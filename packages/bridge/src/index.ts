@@ -20,11 +20,14 @@ export {
   type EvmClient,
   type EvmClientConfig,
   type EvmHttpOptions,
+  type EvmGetLogsParameters,
+  type EvmLog,
   type EvmPublicClient,
   type EvmReceipt,
   type EvmRequest,
   type EvmTransactionParameters,
   type EvmTransport,
+  type EvmTransaction,
   type EvmWalletClient,
 } from './connections/evm.js'
 export {
@@ -166,6 +169,7 @@ export {
   calculateXReserveDepositNonce,
   calculateXReserveMessageHash,
   evmAddressToXReserveBytes32,
+  xReserveDepositNonceFromPayload,
   xReserveHexToAleoBytes,
 } from './utils/xreserve.js'
 export {
@@ -176,6 +180,10 @@ export {
   readHyperlaneDelivery,
   type ReadHyperlaneDeliveryParameters,
 } from './utils/hyperlaneDelivery.js'
+export {
+  readXReserveDelivery,
+  type ReadXReserveDeliveryParameters,
+} from './utils/xreserveDelivery.js'
 
 export { BridgeError } from './errors/bridgeErrors.js'
 export { formatDecimalAmount, parseDecimalAmount } from './utils/units.js'

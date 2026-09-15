@@ -26,6 +26,7 @@ import { parseDecimalAmount } from '../../utils/units.js'
 const WARP_ROUTE_ABI = parseAbi([
   'function quoteTransferRemote(uint32 destination, bytes32 recipient, uint256 amount) view returns ((address token, uint256 amount)[] quotes)',
   'function transferRemote(uint32 destination, bytes32 recipient, uint256 amount) payable returns (bytes32 messageId)',
+  'event SentTransferRemote(uint32 indexed destination, bytes32 indexed recipient, uint256 amount)',
 ])
 const ERC20_ABI = parseAbi([
   'function allowance(address owner, address spender) view returns (uint256)',
@@ -355,6 +356,96 @@ function validateCheckpoint(
   }
 }
 
+/** Finds the latest confirmed approval block without treating an unresolved hash as failed. */
+async function approvalScanBlock(client: EvmClient, approvalTxIds: readonly Hash[]): Promise<bigint | undefined> {
+  let blockNumber: bigint | undefined
+  for (const approvalTxId of approvalTxIds) {
+    const receipt = await client.publicClient.getTransactionReceipt(approvalTxId)
+    if (!receipt) continue
+    assertSuccessfulReceipt(receipt, approvalTxId)
+    if (typeof receipt.blockNumber === 'bigint'
+      && (blockNumber === undefined || receipt.blockNumber > blockNumber)) {
+      blockNumber = receipt.blockNumber
+    }
+  }
+  return blockNumber
+}
+
+/**
+ * Searches only the source blocks following a known approval and requires both
+ * the router event and transaction sender to match the saved transfer intent.
+ */
+async function recoverDispatchFromHistory(
+  client: EvmClient,
+  metadata: EvmHyperlaneRouteMetadata,
+  recipientBytes32: Hex,
+  receipt: BridgeReceipt,
+  approvalTxIds: Hash[],
+  options: { required: boolean },
+): Promise<BridgeReceipt | undefined> {
+  const sourceSender = receipt.protocolState.sourceSender
+  if (typeof sourceSender !== 'string' || !isAddress(sourceSender)) {
+    if (options.required) throw new BridgeError('Cannot safely resume Hyperlane without the source account used by the approval')
+    return undefined
+  }
+  const fromBlock = await approvalScanBlock(client, approvalTxIds)
+  if (fromBlock === undefined) {
+    if (options.required) {
+      throw new BridgeError('Cannot safely resume Hyperlane because no confirmed approval block is available for source history verification')
+    }
+    return undefined
+  }
+  const amountAtomic = receipt.protocolState.amountAtomic
+  if (typeof amountAtomic !== 'string' || !/^\d+$/.test(amountAtomic)) {
+    throw new BridgeError('Hyperlane checkpoint contains an invalid source amount')
+  }
+
+  const logs = await client.publicClient.getLogs({ address: metadata.routerAddress, fromBlock })
+  const candidates = new Set<Hash>()
+  for (const log of logs) {
+    try {
+      const decoded = decodeEventLog({
+        abi: WARP_ROUTE_ABI,
+        data: log.data,
+        topics: log.topics as [Hex, ...Hex[]],
+      })
+      if (decoded.eventName === 'SentTransferRemote'
+        && decoded.args.destination === metadata.destinationDomain
+        && decoded.args.recipient.toLowerCase() === recipientBytes32.toLowerCase()
+        && decoded.args.amount === BigInt(amountAtomic)) {
+        candidates.add(log.transactionHash)
+      }
+    } catch {
+      // Other router events do not identify a source transfer.
+    }
+  }
+
+  const matches: BridgeReceipt[] = []
+  for (const transactionHash of candidates) {
+    const [transaction, sourceReceipt] = await Promise.all([
+      client.publicClient.getTransaction(transactionHash),
+      client.publicClient.getTransactionReceipt(transactionHash),
+    ])
+    if (!transaction || !sourceReceipt
+      || getAddress(transaction.from) !== getAddress(sourceSender)
+      || !transaction.to
+      || getAddress(transaction.to) !== metadata.routerAddress) continue
+    assertSuccessfulReceipt(sourceReceipt, transactionHash)
+    const messageId = messageIdFromReceipt(sourceReceipt)
+    matches.push({
+      ...receipt,
+      id: messageId ?? transactionHash,
+      status: 'DELIVERY_PENDING',
+      sourceTxId: transactionHash,
+      ...(messageId ? { messageId } : {}),
+    })
+  }
+  if (matches.length > 1) {
+    throw new BridgeError('Multiple matching Hyperlane dispatches were found; recovery cannot safely choose one source transaction')
+  }
+  return matches[0]
+}
+
 /**
  * Checks whether one submitted EVM Hyperlane source transaction has committed funds.
  *
@@ -443,6 +534,7 @@ export async function recoverSourceCheckpoint(
     destinationDomain: metadata.destinationDomain,
     nativeValueAtomic: '0',
     amountAtomic: parseDecimalAmount(plan.amountIn, sourceAsset.decimals).toString(),
+    ...(plan.sender && isAddress(plan.sender) ? { sourceSender: getAddress(plan.sender) } : {}),
   }
   if (!checkpoint.source?.transactionId) {
     // With only approvals saved, inspect the latest approval. A confirmed
@@ -458,18 +550,37 @@ export async function recoverSourceCheckpoint(
     const approvalReceipt = await client.publicClient.getTransactionReceipt(approvalTxId)
     if (!approvalReceipt) return pending
     assertSuccessfulReceipt(approvalReceipt, approvalTxId)
+    const recovered = await recoverDispatchFromHistory(
+      client,
+      metadata,
+      recipientBytes32,
+      pending,
+      approvalTxIds,
+      { required: false },
+    )
+    if (recovered) return recovered
     return { ...pending, status: 'SOURCE_SUBMISSION_PENDING' }
   }
   if (!isHash(checkpoint.source.transactionId)) throw new BridgeError('Bridge checkpoint contains an invalid source transaction id')
   // A saved source transaction is already the irreversible dispatch. Observe
   // it through the normal status path rather than authorizing anything again.
-  return getSourceStatus(registry, client, plan, recipientBytes32, {
+  const pending: BridgeReceipt = {
     id: checkpoint.source.transactionId,
     protocol: 'hyperlane',
     status: 'SOURCE_CONFIRMING',
     sourceTxId: checkpoint.source.transactionId,
     protocolState,
-  })
+  }
+  const observed = await getSourceStatus(registry, client, plan, recipientBytes32, pending)
+  if (observed !== pending) return observed
+  return await recoverDispatchFromHistory(
+    client,
+    metadata,
+    recipientBytes32,
+    pending,
+    approvalTxIds,
+    { required: false },
+  ) ?? observed
 }
 
 /**
@@ -537,8 +648,18 @@ export async function execute(
       }
     }
     if (params.resume.status === 'SOURCE_SUBMISSION_PENDING') {
+      const recovered = await recoverDispatchFromHistory(
+        client,
+        metadata,
+        params.recipientBytes32,
+        params.resume,
+        approvalTxIds,
+        { required: true },
+      )
+      if (recovered) return { approvalTxIds, receipt: recovered }
       // Recovery already observed the final approval as successful. Requote
-      // current allowance and fees before dispatching the source transfer.
+      // current allowance and fees only after source history proves that no
+      // matching dispatch has finalized.
     } else if (params.resume.status === 'SOURCE_APPROVAL_PENDING') {
       const approvalTxId = approvalTxIds.at(-1)
       if (!approvalTxId) throw new BridgeError('Hyperlane checkpoint is missing the approval transaction id')

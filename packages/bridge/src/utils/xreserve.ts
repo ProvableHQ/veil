@@ -242,6 +242,29 @@ export function calculateXReserveMessageHash(payload: Hex): Hash {
 }
 
 /**
+ * Reads the deposit nonce from Circle's fixed-width xReserve payload.
+ *
+ * Applications can use the nonce to verify Aleo delivery even when older saved
+ * progress retained the signed payload but omitted the nonce as a separate field.
+ * The payload is decoded in memory and no network or wallet is contacted.
+ *
+ * @param payload Canonical 305-byte xReserve deposit payload returned by Circle.
+ * @returns The 32-byte deposit nonce used by the Aleo bridge nullifier mapping.
+ * @throws BridgeError When the payload has the wrong header, width, or hook length.
+ * @example const nonce = xReserveDepositNonceFromPayload(attestation.payload)
+ */
+export function xReserveDepositNonceFromPayload(payload: Hex): Hash {
+  if (!isHex(payload, { strict: true })) throw new BridgeError('xReserve payload must be prefixed hexadecimal')
+  const bytes = hexToBytes(payload)
+  if (bytes.length !== 305
+    || toHex(bytes.slice(0, 8)) !== '0x5a2e0acd00000001'
+    || toHex(bytes.slice(236, 240)) !== '0x00000041') {
+    throw new BridgeError('xReserve payload has an invalid deposit layout')
+  }
+  return toHex(bytes.slice(204, 236))
+}
+
+/**
  * Formats fixed-width hexadecimal bytes as an Aleo `[u8; N]` literal.
  *
  * Validates the exact byte width before formatting inputs for a wallet. It does

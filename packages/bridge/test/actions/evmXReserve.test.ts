@@ -22,12 +22,14 @@ import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'
 import type { BridgeReceipt } from '../../src/types/protocol.js'
+import { aleoAddressToBytes32 } from '../../src/utils/xreserve.js'
 
 const ACCOUNT = getAddress('0x0000000000000000000000000000000000000001')
 const TOKEN = getAddress('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238')
 const XRESERVE = getAddress('0x008888878f94C0d87defdf0B07f46B93C1934442')
 const RECIPIENT = 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n'
 const TX_HASH = `0x${'22'.repeat(32)}` as Hash
+const RECOVERED_TX_HASH = `0x${'44'.repeat(32)}` as Hash
 const ABI = parseAbi([
   'function balanceOf(address owner) view returns (uint256)',
   'function allowance(address owner, address spender) view returns (uint256)',
@@ -67,7 +69,12 @@ function mockExecutor(
       }
       if (method === 'eth_getTransactionReceipt') {
         const hash = (params as readonly [Hash])[0]
-        if (hash !== TX_HASH) return confirmApproval.value ? { status: '0x1', logs: [] } : null
+        if (hash !== TX_HASH) return confirmApproval.value ? {
+          status: '0x1',
+          transactionHash: hash,
+          blockNumber: '0x64',
+          logs: [],
+        } : null
         if (!confirmDeposit.value) return null
         const deposit = decodeFunctionData({ abi: ABI, data: sent.at(-1)!.data })
         if (deposit.functionName !== 'depositToRemote') throw new Error('Expected deposit')
@@ -86,6 +93,7 @@ function mockExecutor(
           }],
         }
       }
+      if (method === 'eth_getLogs') return []
       throw new Error(`Unexpected RPC method ${method}`)
   }
   const executor = createEvmClient({
@@ -243,6 +251,55 @@ describe('Ethereum xReserve actions', () => {
     expect(resumed.receipt.status).toBe('ATTESTATION_PENDING')
     expect(sent).toHaveLength(2)
     expect(decodeFunctionData({ abi: ABI, data: sent[1]!.data }).functionName).toBe('depositToRemote')
+  })
+
+  it('finds a matching source deposit immediately before resume instead of submitting another deposit', async () => {
+    const confirmApproval = { value: false }
+    const { executor, sent } = mockExecutor({ value: true }, confirmApproval)
+    const transfer = transferPlan()
+    const submitted = await execute(DEFAULT_BRIDGE_REGISTRY, { sepolia: executor }, {
+      plan: transfer,
+      confirmationTimeoutMs: 0,
+    })
+    const checkpoint = createBridgeCheckpoint(transfer, submitted.receipt)
+
+    confirmApproval.value = true
+    const bridge = createBridgeClient({ environment: 'testnet', clients: { sepolia: executor } })
+    const progress = await bridge.recover({ checkpoint })
+    if (progress.next !== 'resume') throw new Error(`Expected resume, received ${progress.next}`)
+
+    const hookData = `0x01${'00'.repeat(64)}` as Hex
+    const remoteRecipient = aleoAddressToBytes32(RECIPIENT)
+    const depositLog = {
+      address: XRESERVE,
+      blockNumber: 101n,
+      transactionHash: RECOVERED_TX_HASH,
+      logIndex: 3,
+      topics: encodeEventTopics({
+        abi: ABI,
+        eventName: 'DepositedToRemote',
+        args: { localToken: TOKEN, localDepositor: ACCOUNT, remoteRecipient },
+      }),
+      data: encodeAbiParameters(
+        [{ type: 'uint256' }, { type: 'uint32' }, { type: 'bytes32' }, { type: 'uint256' }, { type: 'bytes' }],
+        [2_000_000n, 10_002, '0xb143ed52c774cd1d4a519d0e796f15916be5a9e1d45edcd9852dd23f68f53401', 100_000n, hookData],
+      ),
+    }
+    const originalGetReceipt = executor.publicClient.getTransactionReceipt
+    Object.assign(executor.publicClient, {
+      getLogs: async () => [depositLog],
+      getTransactionReceipt: async (hash: Hash) => hash === RECOVERED_TX_HASH
+        ? { status: 'success', transactionHash: RECOVERED_TX_HASH, blockNumber: 101n, logs: [depositLog] }
+        : originalGetReceipt(hash),
+    })
+
+    const resumed = await bridge.resume({ progress })
+
+    expect(resumed).toMatchObject({
+      kind: 'evm-xreserve',
+      receipt: { status: 'ATTESTATION_PENDING', sourceTxId: RECOVERED_TX_HASH },
+    })
+    expect(sent).toHaveLength(1)
   })
 
   it('does not approve again when a recovered approval allowance was consumed', async () => {

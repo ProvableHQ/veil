@@ -89,11 +89,13 @@ export type EvmTransactionParameters = {
  *
  * @property status Viem-normalized execution result.
  * @property transactionHash Canonical transaction hash when returned by the client.
+ * @property blockNumber Block containing the transaction when available.
  * @property logs Receipt-log envelopes used to verify protocol events.
  */
 export type EvmReceipt = {
   status: 'success' | 'reverted'
   transactionHash: Hash
+  blockNumber?: bigint | undefined
   logs: readonly {
     address?: Address | undefined
     data: Hex
@@ -103,18 +105,71 @@ export type EvmReceipt = {
 }
 
 /**
+ * Represents one finalized EVM log used to recover a source bridge submission.
+ *
+ * @property address Contract that emitted the event.
+ * @property blockNumber Block containing the event.
+ * @property transactionHash Transaction that emitted the event.
+ * @property logIndex Event position used by protocols such as xReserve.
+ * @property data ABI-encoded non-indexed event values.
+ * @property topics ABI event signature and indexed values.
+ */
+export type EvmLog = {
+  address: Address
+  blockNumber: bigint
+  transactionHash: Hash
+  logIndex: number
+  data: Hex
+  topics: readonly Hex[]
+}
+
+/**
+ * Represents the source transaction fields needed to identify a recovered bridge submission.
+ *
+ * @property hash Canonical transaction identifier.
+ * @property blockNumber Block containing the transaction, or `null` while pending.
+ * @property from Account that authorized the transaction.
+ * @property to Destination contract, or `null` for contract creation.
+ * @property input ABI-encoded call data.
+ */
+export type EvmTransaction = {
+  hash: Hash
+  blockNumber: bigint | null
+  from: Address
+  to: Address | null
+  input: Hex
+}
+
+/**
+ * Selects one contract and inclusive block range for a recovery event scan.
+ *
+ * @property address Contract whose events should be returned.
+ * @property fromBlock First block included in the scan.
+ * @property toBlock Last block included in the scan. Defaults to the latest block.
+ */
+export type EvmGetLogsParameters = {
+  address: Address
+  fromBlock: bigint
+  toBlock?: bigint | undefined
+}
+
+/**
  * Exposes account-free EVM operations used by bridge actions.
  *
  * @property getChainId Reads the current EIP-155 chain id.
  * @property getBalance Reads one account's native-currency balance in atomic units.
  * @property call Executes a read-only EVM call.
  * @property getTransactionReceipt Reads a receipt or returns `null` while unavailable.
+ * @property getLogs Reads finalized contract events within an inclusive block range.
+ * @property getTransaction Reads a transaction or returns `null` while unavailable.
  */
 export type EvmPublicClient = {
   getChainId: () => Promise<number>
   getBalance: (address: Address) => Promise<bigint>
   call: (params: EvmCallParameters) => Promise<Hex>
   getTransactionReceipt: (hash: Hash) => Promise<EvmReceipt | null>
+  getLogs: (params: EvmGetLogsParameters) => Promise<readonly EvmLog[]>
+  getTransaction: (hash: Hash) => Promise<EvmTransaction | null>
 }
 
 /**
@@ -260,6 +315,15 @@ function normalizePublicClient(client: PublicClient): EvmPublicClient {
         return await client.getTransactionReceipt({ hash }) as unknown as EvmReceipt
       } catch (error) {
         if (error instanceof Error && error.name === 'TransactionReceiptNotFoundError') return null
+        throw error
+      }
+    },
+    getLogs: async (params) => client.getLogs(params) as unknown as EvmLog[],
+    getTransaction: async (hash) => {
+      try {
+        return await client.getTransaction({ hash }) as unknown as EvmTransaction
+      } catch (error) {
+        if (error instanceof Error && error.name === 'TransactionNotFoundError') return null
         throw error
       }
     },

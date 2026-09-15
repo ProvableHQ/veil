@@ -7,11 +7,12 @@ import type { BridgeReceipt, BridgeRegistry } from '../types/protocol.js'
 import type { XReserveHttpTransport } from '../types/xreserve.js'
 import { getAttestation, getSourceStatus } from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
-import { aleoAddressToBytes32 } from '../utils/xreserve.js'
+import { aleoAddressToBytes32, xReserveDepositNonceFromPayload } from '../utils/xreserve.js'
 import { getSourceStatus as getEvmHyperlaneSourceStatus } from '../protocols/hyperlane/evm.js'
 import { getSourceStatus as getSolanaHyperlaneSourceStatus } from '../protocols/hyperlane/solana.js'
 import { readDestinationBalance } from './internal/readDestinationBalance.js'
 import { readHyperlaneDelivery } from '../utils/hyperlaneDelivery.js'
+import { readXReserveDelivery } from '../utils/xreserveDelivery.js'
 
 function withoutNextAction(receipt: BridgeReceipt): Omit<BridgeReceipt, 'nextAction'> {
   const { nextAction: _nextAction, ...rest } = receipt
@@ -155,6 +156,30 @@ export async function getStatus(
 
   if (route.route.protocol !== 'xreserve' || route.sourceChain.family !== 'evm' || route.destinationChain.family !== 'aleo') {
     throw new BridgeError('Status refresh is not implemented for this bridge route')
+  }
+
+  const shouldCheckDelivery = receipt.status === 'ATTESTATION_PENDING'
+    || receipt.status === 'DELIVERY_PENDING'
+    || receipt.status === 'DESTINATION_ACTION_REQUIRED'
+  if (shouldCheckDelivery && clients[route.destinationChain.id]) {
+    const storedNonce = receipt.protocolState.nonce
+    const payload = receipt.protocolState.payload
+    const nonce = typeof storedNonce === 'string'
+      ? storedNonce
+      : typeof payload === 'string'
+        ? xReserveDepositNonceFromPayload(payload as `0x${string}`)
+        : undefined
+    const bridgeProgram = receipt.protocolState.bridgeProgram ?? route.route.metadata?.bridgeProgram
+    // Every inbound mint mode consumes the same Circle nonce. Reading that
+    // destination nullifier first makes completion independent of stale local
+    // UI state, a missing private scalar, or an already-used attestation.
+    if (typeof nonce === 'string' && typeof bridgeProgram === 'string') {
+      const delivered = await readXReserveDelivery(
+        requireAleoClient(registry, clients, route.destinationChain.id),
+        { bridgeProgram, nonce },
+      )
+      if (delivered) return { ...withoutNextAction(receipt), status: 'COMPLETED' }
+    }
   }
 
   if (receipt.status === 'SOURCE_CONFIRMING') {
