@@ -25,6 +25,7 @@ acknowledgement shown below.
 | `sol-to-aleo.ts` | Solana SOL → Aleo SOL | Hyperlane | 1 lamport |
 | `sol-to-solana.ts` | Aleo SOL → Solana SOL | Hyperlane | 1 lamport |
 | `usdc-to-usdcx.ts` | Ethereum USDC → Aleo USDCx | Circle xReserve | 2 USDC |
+| `arc-to-aleo.ts` | Arc USDC → Aleo USDCx | Circle xReserve | 5 USDC |
 | `usdcx-to-usdc.ts` | Aleo USDCx → Ethereum USDC | Circle xReserve | 2.000001 USDCx |
 
 Network fees and Hyperlane hook payments are separate from the transferred
@@ -311,6 +312,27 @@ if (progress.next === 'complete') {
 
 A custom `USDCX_SECRET_NONCE` must be stored separately. Checkpoints exclude
 that secret.
+
+### Arc USDC to Aleo USDCx
+
+`arc-to-aleo.ts` prepares the Arc mainnet public- or private-mint route. Set
+`ARC_RPC_URL`, `ALEO_RECIPIENT`, `EVM_PRIVATE_KEY`, and optionally
+`USDCX_MINT_MODE`, then run its read-only preflight:
+
+```sh
+pnpm tsx examples/bridge/arc-to-aleo.ts
+```
+
+Standard output shows the sender, recipient, amount, and lifecycle milestones.
+Pass `--verbose` to inspect balances, allowance, fee ceiling, encoded recipient,
+hook data, verified contract calls, simulation results, and polling diagnostics.
+The script derives the sender locally and validates Arc chain id `5042` and
+Circle source domain `26` before signing.
+
+Private mode commits to `ALEO_RECIPIENT` and an optional
+`USDCX_SECRET_NONCE`. Live private execution also requires `ALEO_PRIVATE_KEY`.
+Persist the emitted checkpoint to recover without repeating the Arc deposit.
+Every live operation requires the script's explicit acknowledgement.
 
 ### Aleo USDCx to Ethereum USDC
 

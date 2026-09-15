@@ -71,6 +71,7 @@ function privateKeyFromEnvironment(): Hex {
  * relays the message and mints the corresponding wrapped asset to the Aleo recipient.
  *
  * @param asset ETH or WBTC to lock on Ethereum and mint on Aleo.
+ * @param options Optional CLI overrides for the visible default amount and execution gate.
  * @returns After read-only inspection or verified Aleo delivery, depending on
  * the execution acknowledgement.
  * @throws Error When configuration is missing, funds are insufficient, an
@@ -79,8 +80,9 @@ function privateKeyFromEnvironment(): Hex {
  * @example
  * await runEthereumHyperlaneExample('ETH')
  */
-export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promise<void> {
+export async function runEthereumHyperlaneExample(asset: HyperlaneAsset, options: { amount?: string, execute?: boolean } = {}): Promise<void> {
   const config = ASSETS[asset]
+  const amount = options.amount ?? config.amount
   const rpcUrl = requiredEnvironmentVariable('ETHEREUM_RPC_URL')
   const recipient = requiredEnvironmentVariable('ALEO_RECIPIENT')
 
@@ -116,7 +118,7 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
     source: config.source,
     destination: config.destination,
     bridgeProtocol: 'hyperlane',
-    amount: config.amount,
+    amount,
     recipient,
     sender,
   })
@@ -172,7 +174,7 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
   // A normal run ends after printing the route, balances, allowance, and fees.
   // The exact acknowledgement makes mainnet submission an explicit operator
   // decision rather than a side effect of copying or inspecting the tutorial.
-  if (process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
+  if (options.execute !== true && process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
     console.log('\nQuote complete; no transaction was submitted.')
     console.log(
       asset === 'WBTC' && approvalRequired
