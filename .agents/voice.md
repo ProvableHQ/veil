@@ -84,8 +84,23 @@ Use `number` for u64 and smaller, `bigint` for u128 and larger.
 ```ts
 // Good — the caller learns it hits the network and signs.
 /** Submits the transaction to the configured transport and waits for acceptance. */
-// Good — the caller learns it is pure and local.
+// Good — the caller learns it neither contacts the network nor requests a signature.
 /** Computes the blinded address locally. Does not touch the network. */
+```
+
+### Never say “pure and local”
+
+“Pure and local” makes the caller translate implementation jargon before they
+can understand the consequence of a call. Never say “pure and local.” Describe
+what that means in the context of the caller: whether the call contacts a
+network or provider, requests a signature, moves funds, stores data, or only
+computes and returns a value.
+
+```ts
+// Good — states the effects the caller needs to plan around.
+/** Computes the recipient bytes without contacting a network or requesting a signature. */
+// Bad — requires the caller to interpret a programming-language property.
+/** Pure and local. */
 ```
 
 ### Object-type fields with `@property` on the docblock

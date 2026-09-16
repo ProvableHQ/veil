@@ -40,9 +40,9 @@ function readUint128LE(view: DataView, offset: number): bigint {
  * Computes the lamport gas payment a Sealevel interchain gas paymaster (IGP)
  * quotes for delivering a message to a given destination domain.
  *
- * Pure and local: decodes the IGP account's own gas-oracle table and applies
- * the paymaster's `compute_gas_fee` formula (SEALEVEL_NOTES.md §4) without
- * touching the network. `igpAccountData` must be the terminal, quoted `Igp`
+ * Decodes the supplied IGP account's gas-oracle table and applies the
+ * paymaster's `compute_gas_fee` formula (SEALEVEL_NOTES.md §4) without
+ * contacting Solana. `igpAccountData` must be the terminal, quoted `Igp`
  * account — the one an `OverheadIgp` wrapper's own `inner` field points at,
  * not the `OverheadIgp` wrapper account itself — and `gasAmount` must be the
  * warp token's own `destination_gas` value for the domain, not derived from
@@ -69,10 +69,24 @@ export function quoteIgpGasPayment(params: {
   const { igpAccountData } = params
   const view = new DataView(igpAccountData.buffer, igpAccountData.byteOffset, igpAccountData.byteLength)
 
+  const requireBytes = (offset: number, length: number): void => {
+    if (offset < 0 || length < 0 || offset + length > view.byteLength) {
+      throw new BridgeError('malformed Sealevel IGP account data: declared layout exceeds the supplied bytes')
+    }
+  }
+
   let offset = INITIALIZED_BYTES + DISCRIMINATOR_BYTES + BUMP_SEED_BYTES + SALT_BYTES
+  requireBytes(offset, 1)
   const ownerOptionTag = view.getUint8(offset)
   offset += 1
-  if (ownerOptionTag !== 0) offset += PUBKEY_BYTES // owner: Option<Pubkey>, present
+  if (ownerOptionTag !== 0 && ownerOptionTag !== 1) {
+    throw new BridgeError(`malformed Sealevel IGP account data: unsupported owner option tag ${ownerOptionTag}`)
+  }
+  if (ownerOptionTag === 1) {
+    requireBytes(offset, PUBKEY_BYTES)
+    offset += PUBKEY_BYTES
+  }
+  requireBytes(offset, PUBKEY_BYTES + ORACLE_COUNT_BYTES)
   offset += PUBKEY_BYTES // beneficiary
 
   const oracleCount = view.getUint32(offset, true)
@@ -80,6 +94,7 @@ export function quoteIgpGasPayment(params: {
 
   for (let index = 0; index < oracleCount; index++) {
     const entryStart = offset
+    requireBytes(entryStart, GAS_ORACLE_ENTRY_BYTES)
     const domain = view.getUint32(entryStart, true)
     if (domain === params.destinationDomain) {
       // SEALEVEL_NOTES.md §4: `RemoteGasData` (tag 0) is the only `GasOracle`

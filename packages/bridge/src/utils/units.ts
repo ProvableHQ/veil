@@ -5,7 +5,7 @@ import { BridgeError } from '../errors/bridgeErrors.js'
  *
  * Protocol inputs use display decimals (`"0.5"` ALEO), while onchain calls
  * use atomic integers (`500000n` microcredits). String arithmetic keeps the
- * conversion exact without floating-point rounding. Pure and local.
+ * conversion exact without floating-point rounding or contacting a chain.
  *
  * @param amount Decimal amount as a string (e.g. `"0.5"`, `"100"`).
  * @param decimals The asset's display decimals (e.g. 6 for ALEO/USDC, 18 for ETH).
@@ -31,4 +31,30 @@ export function parseDecimalAmount(amount: string, decimals: number): bigint {
     )
   }
   return BigInt(whole + frac.padEnd(decimals, '0'))
+}
+
+/**
+ * Formats a non-negative atomic amount as an exact decimal display value.
+ *
+ * String arithmetic removes trailing fractional zeroes without floating-point
+ * rounding and does not read a balance or contact a chain.
+ *
+ * @param amount Atomic amount to format; MUST be non-negative.
+ * @param decimals Number of fractional decimal places used by the asset.
+ * @returns Canonical decimal text with no redundant trailing zeroes.
+ * @throws BridgeError When the amount or decimal width is negative.
+ *
+ * @example
+ * formatDecimalAmount(2_000_001n, 6) // '2.000001'
+ */
+export function formatDecimalAmount(amount: bigint, decimals: number): string {
+  if (amount < 0n) throw new BridgeError('Atomic amount must be non-negative')
+  if (!Number.isSafeInteger(decimals) || decimals < 0) {
+    throw new BridgeError('Asset decimals must be a non-negative safe integer')
+  }
+  if (decimals === 0) return amount.toString()
+  const digits = amount.toString().padStart(decimals + 1, '0')
+  const whole = digits.slice(0, -decimals)
+  const fraction = digits.slice(-decimals).replace(/0+$/, '')
+  return fraction ? `${whole}.${fraction}` : whole
 }

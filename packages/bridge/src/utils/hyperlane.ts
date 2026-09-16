@@ -13,8 +13,9 @@ function littleEndianU128(bytes: Uint8Array): bigint {
 /**
  * Encodes an Ethereum account as the two little-endian limbs used by Aleo Warp Routes.
  *
- * Pure and local; validates a 20-byte EVM address, left-pads it to Hyperlane
- * bytes32 form, and interprets each 16-byte half as an Aleo `u128`.
+ * Validates a 20-byte EVM address, left-pads it to Hyperlane bytes32 form, and
+ * interprets each 16-byte half as an Aleo `u128` without contacting either
+ * chain.
  *
  * @param address Destination Ethereum account supplied by the transfer plan.
  * @returns Two unsigned 128-bit limbs in Hyperlane message order.
@@ -35,8 +36,8 @@ export function evmAddressToAleoHyperlaneRecipient(address: string): readonly [b
 /**
  * Encodes a Solana account as the two little-endian limbs used by Aleo Warp Routes.
  *
- * Pure and local; decodes a base58 account to its 32-byte public key and
- * interprets each 16-byte half as an Aleo `u128`.
+ * Decodes a base58 account to its 32-byte public key and interprets each
+ * 16-byte half as an Aleo `u128` without contacting either chain.
  *
  * @param address Destination Solana account supplied by the transfer plan.
  * @returns Two unsigned 128-bit limbs in Hyperlane message order.

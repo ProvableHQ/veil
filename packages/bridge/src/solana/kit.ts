@@ -6,10 +6,9 @@ let kitModulePromise: Promise<typeof import('@solana/kit')> | undefined
  * Lazily imports the optional `@solana/kit` peer dependency.
  *
  * This is the only module in the package permitted to import `@solana/kit`
- * directly, so the main entry point stays free of the dependency for callers
- * who never touch Solana. The import is performed at most once per process;
- * the resolved module promise is cached and reused by every caller. Purely a
- * module loader — it hits neither the network nor a wallet.
+ * directly, so applications that never use Solana do not load the optional
+ * dependency. The import is performed at most once per process and does not
+ * contact a chain or wallet.
  *
  * @returns The `@solana/kit` module namespace once dynamic import resolves.
  * @throws BridgeError When `@solana/kit` cannot be resolved, naming the
