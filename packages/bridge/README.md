@@ -1,39 +1,49 @@
 # @provablehq/aleo-bridge-sdk
 
-A preview client for reviewed Aleo bridge routes. USDCx uses Circle xReserve;
-ETH, WBTC, USDT, SOL, ALEO, and USAD use Hyperlane Warp Routes.
+Moves assets between Aleo, Ethereum, and Solana through reviewed Hyperlane and
+Circle xReserve deployments.
 
-## Create a client
+The package supports browser wallets and local keys. It does not choose a
+wallet, store transfer progress, or submit a second transaction after an
+interruption without caller authorization.
 
-Clients are keyed by the chain IDs in the registry. Discovery does not need
-clients.
+> This package is in preview and is not published yet.
 
-```ts
-import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'
+## Supported transfers
 
-const bridge = createBridgeClient({ environment: 'mainnet' })
-const routes = bridge.registry.getRoutes({
-  environment: bridge.environment,
-  sourceChainId: 'ethereum',
-  destinationChainId: 'aleo',
-})
-```
+| Source | Destination | Asset received | Provider |
+| --- | --- | --- | --- |
+| Ethereum ETH | Aleo | ETH | Hyperlane |
+| Aleo ETH | Ethereum | ETH | Hyperlane |
+| Ethereum WBTC | Aleo | WBTC | Hyperlane |
+| Aleo WBTC | Ethereum | WBTC | Hyperlane |
+| Ethereum USDT | Aleo | USDT | Hyperlane |
+| Aleo USDT | Ethereum | USDT | Hyperlane |
+| Solana SOL | Aleo | SOL | Hyperlane |
+| Aleo SOL | Solana | SOL | Hyperlane |
+| Ethereum USDC | Aleo | USDCx | Circle xReserve |
+| Aleo USDCx | Ethereum | USDC | Circle xReserve |
 
-The registry methods list the supported assets and routes from the reviewed
-catalog without reading a network. `quote` accepts the selected endpoints,
-amount, and recipient and returns both current costs and the validated plan
-used for execution without prompting a wallet.
+The registry also contains incomplete ALEO and USAD Hyperlane entries for
+deployment discovery. Those entries are marked `metadata-required` and cannot
+be quoted or executed. Solana routes currently support native SOL, not USDC or
+other SPL tokens.
 
-## Browser application
+## Create a browser client
+
+A browser application supplies public network access and the wallet accounts
+that may authorize transfers. Public clients read balances, fees, and
+transaction status. Wallet clients request signatures only when a fund-moving
+action runs.
 
 ```ts
 import {
   createAleoClient,
   createBridgeClient,
   createEvmClient,
+  createSolanaClient,
   evmHttp,
   evmProvider,
-  createSolanaClient,
   solanaHttp,
   solanaWallet,
 } from '@provablehq/aleo-bridge-sdk'
@@ -61,24 +71,43 @@ const bridge = createBridgeClient({
 })
 ```
 
-The dedicated EVM transport performs reads and confirmation polling while the
-EIP-1193 provider authorizes submissions. Omitting `transport` uses the
-provider as the public fallback. Solana always requires a public transport;
-Wallet Standard accounts retain their atomic `signAndSendTransaction` flow.
+An EIP-1193 provider, such as `window.ethereum`, can supply both EVM reads and
+wallet requests when `transport` is omitted. A separate transport keeps public
+reads independent from the wallet provider. Solana always requires a public
+transport because Wallet Standard accounts authorize transactions but do not
+provide general RPC access.
 
-## Local-key bot
+An existing viem wallet client can be passed as
+`createEvmClient({ walletClient })`. Add `publicClient` when reads and receipt
+polling should use a different viem client.
+
+## Create a local-key client
+
+A bot or server can use local EVM and Solana keys through the supplied account
+adapters. An Aleo local account comes from `@provablehq/veil-aleo-sdk`, which
+supports delegated or local proving.
 
 ```ts
 import {
   createAleoClient,
   createBridgeClient,
   createEvmClient,
+  createSolanaClient,
   evmHttp,
   evmPrivateKey,
-  createSolanaClient,
   solanaHttp,
   solanaKeyPair,
 } from '@provablehq/aleo-bridge-sdk'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+
+const aleoNetwork = await loadNetwork('mainnet')
+const {
+  publicClient: aleoPublicClient,
+  walletClient: aleoWalletClient,
+} = aleoNetwork.createAleoClient({
+    privateKey: aleoPrivateKey,
+    provingMode: 'delegated',
+  })
 
 const bridge = createBridgeClient({
   environment: 'mainnet',
@@ -93,79 +122,58 @@ const bridge = createBridgeClient({
     }),
     aleo: createAleoClient({
       publicClient: aleoPublicClient,
-      account: localAleoWalletClient,
+      account: aleoWalletClient,
     }),
   },
 })
 ```
 
-Local EVM accounts sign through viem and broadcast through the configured
-public source. Local Solana accounts sign locally and broadcast through their
-client's public client; the account never receives a duplicate RPC URL.
+Local EVM and Solana accounts sign inside the caller's process and broadcast
+through their configured transports. The bridge client never receives the raw
+key after the account adapter is created.
 
-## Shielding Aleo assets
+## Find supported assets and routes
 
-`shield` converts a public Aleo token balance into a private record.
-`unshield` converts a private record back into a public balance. The default
-registry supports ETH, WBTC, USDT, and SOL through their ARC-20 programs, and
-USDCx through its ARC-22 public/private transfer transitions.
+The registry is the reviewed catalog bundled with the package. Reading it does
+not contact a network or request a wallet signature.
 
 ```ts
-const shielded = await bridge.shield({
-  asset: { chain: 'aleo', asset: 'sol' },
-  amount: '0.01',
+const assets = bridge.registry.getAssets({
+  environment: bridge.environment,
+  chainId: 'aleo',
 })
 
-const unshielded = await bridge.unshield({
-  asset: { chain: 'aleo', asset: 'sol' },
-  amount: '0.01',
+const routes = bridge.registry.getRoutes({
+  environment: bridge.environment,
+  sourceChainId: 'ethereum',
+  destinationChainId: 'aleo',
 })
 ```
 
-Compatible wallets select the private `Token` record without exposing it to
-the application. A caller can instead pass `record` as an encoded record or a
-wallet record request. For USDCx, the recipient defaults to the active wallet
-address and the freeze-list witness defaults to the canonical empty-tree proof:
+Applications select assets by chain and asset names. They do not construct
+encoded route strings or copy contract addresses into transfer requests.
+`getRoutes` can also return `metadata-required` entries; check `availability`
+before presenting a route as executable.
 
-```ts
-await bridge.unshield({
-  asset: { chain: 'aleo', asset: 'usdcx' },
-  amount: '2.5',
-  // Supply these when the default wallet selection or empty proof no longer applies.
-  record: { type: 'record', program: 'usdcx_stablecoin.aleo', recordname: 'Token', uid },
-  recipient: aleoAddress,
-  merkleProof,
-})
-```
+## Move an asset across chains
 
-Local-proving clients cannot resolve wallet-side input requests. Bots using a
-local Aleo key MUST pass an encoded `record` when unshielding and an explicit
-`recipient` for USDCx conversions.
+Every transfer follows the same caller lifecycle:
 
-The empty proof is valid only while the deployed freeze-list tree is empty.
-Applications MUST provide a current proof after that tree is populated.
+1. `quote` checks that the requested transfer is supported and reports current
+   costs that can be known before submission.
+2. `execute` asks the source wallet to authorize the required source-chain
+   transactions.
+3. `wait` follows the submitted transfer until it finishes, fails, or requires
+   another wallet authorization.
+4. `resume` or `complete` runs only when `progress.next` requests that action.
 
-## Existing viem clients
+### 1. Quote the transfer
 
-```ts
-const bridge = createBridgeClient({
-  clients: {
-    ethereum: createEvmClient({ walletClient }),
-  },
-})
-```
-
-An existing viem `walletClient` also supplies the client's public RPC
-access. Pass a separate `publicClient` when reads and receipt polling should use
-a different transport. It may be paired with `evmProvider(window.ethereum)` or
-`evmLocalAccount(privateKeyToAccount(key))`. A client rejects duplicate
-public sources (`transport` plus `publicClient`) and duplicate wallet sources
-(`account` plus `walletClient`). A local account requires a public source.
-
-## Executing routes
-
-All actions resolve the exact source or destination client implied by the
-validated route. They do not fall back to another chain of the same family.
+The caller supplies the source asset, destination asset, amount, recipient, and
+optional provider. The result reports route-specific fees, balance or approval
+requirements where available, and the plan that must be passed to execution.
+Quoting can read networks and providers, but it does not request a signature or
+move funds.
 
 ```ts
 const quote = await bridge.quote({
@@ -173,260 +181,208 @@ const quote = await bridge.quote({
   destination: { chain: 'aleo', asset: 'wbtc' },
   bridgeProtocol: 'hyperlane',
   amount: '0.001',
-  recipient: aleoAddress,
   sender: ethereumAddress,
+  recipient: aleoAddress,
 })
-const plan = quote.plan
-const execution = await bridge.execute({ plan })
+
+if (quote.kind !== 'evm-hyperlane') {
+  throw new Error(`Unexpected quote kind: ${quote.kind}`)
+}
+
+console.log(quote.amountAtomic)
+console.log(quote.nativeFeeAtomic)
 ```
 
-`quote` validates the intent and derives protocol wire values, including the
-Aleo recipient's 32-byte Hyperlane encoding. Its `plan` is the exact transfer
-passed to execution, and its `kind` field narrows route-specific quote fields.
+`quote.plan` identifies the exact route, amount, recipient, and reviewed
+deployment that produced the quote. Keep this value unchanged for execution.
 
-EVM collateral routes approve only when needed. USDT resets a non-zero
-allowance before setting the required value. Timeouts preserve transaction IDs
-in resumable receipts.
+### 2. Authorize the source transfer
 
-Fund-moving actions accept an optional `onCheckpoint` hook. EVM, Solana, and
-injected-wallet clients call it as soon as submission returns an identifier.
-A local Aleo client also calls it before broadcast with the fully proved,
-serialized transaction, then again after submission. The pre-broadcast value
-lets a restarted process submit the same transaction rather than prove or sign
-a replacement. Checkpoints exclude private keys, records, proofs,
-private-mint nonces, and Circle response bodies. A serialized Aleo transaction
-is retained only because it becomes public when broadcast:
+Execution may request more than one wallet transaction. An ERC-20 route can
+require an approval before its bridge deposit. The result contains the latest
+receipt and every transaction identifier already submitted.
 
 ```ts
 const execution = await bridge.execute({
-  plan,
-  onCheckpoint: saveCheckpoint,
+  plan: quote.plan,
+  onCheckpoint(checkpoint) {
+    saveCheckpoint(checkpoint)
+  },
 })
 ```
 
-Applications that remain alive can keep the returned receipt in memory and do
-not need to store a checkpoint. After an interruption, `recover` reconstructs
-the plan and receipt with read-only chain and protocol calls:
+Once a source transaction has been submitted, do not call `execute` again for
+the same transfer. Use the returned receipt while the application remains open,
+or recover from the latest checkpoint after an interruption.
+
+### 3. Follow the transfer
+
+`wait` reads source confirmation, provider processing, and destination delivery
+where the route exposes verifiable evidence. It does not request another
+signature or submit a transaction.
 
 ```ts
-const progress = await bridge.recover({
-  checkpoint: await loadCheckpoint(),
+let progress = await bridge.wait({
+  progress: {
+    next: 'wait',
+    plan: quote.plan,
+    receipt: execution.receipt,
+  },
 })
+```
 
+The `next` field is the only value an application needs to select the next
+lifecycle action:
+
+| `progress.next` | Caller action |
+| --- | --- |
+| `done` | Show completion. No further wallet action is required. |
+| `failed` | Show the reported failure. Do not repeat a transaction that already succeeded. |
+| `wait` | Call `wait` again when polling stopped at an application-selected status. |
+| `resume` | Ask the source wallet to submit the remaining source operation. |
+| `complete` | Ask the Aleo recipient to authorize a private USDCx mint. |
+
+`resume` is used when work such as an ERC-20 approval succeeded but the source
+deposit was not submitted. It does not repeat the confirmed approval.
+
+```ts
 if (progress.next === 'resume') {
-  await bridge.resume({ progress, onCheckpoint: saveCheckpoint })
+  const resumed = await bridge.resume({ progress })
+  progress = await bridge.wait({
+    progress: {
+      next: 'wait',
+      plan: progress.plan,
+      receipt: resumed.receipt,
+    },
+  })
 }
 ```
 
-`recover` never signs or submits. Its `next` field is `wait`, `resume`,
-`complete`, `done`, or `failed`. An approval-only checkpoint may recover to
-`resume`; that action authorizes only the remaining source deposit after the
-confirmed allowance is re-read. Normal execution calls `execute` once.
+`complete` applies only to an Ethereum USDC deposit that selected a private
+USDCx mint. Circle first attests the deposit. The Aleo recipient then authorizes
+one destination transaction that creates the private record.
 
-A prepared Aleo source transaction recovers to `resume`, which broadcasts its
-exact serialized transaction. A prepared private Aleo destination mint
-recovers to `complete` with the same guarantee. Use `onProgress` for timing and
-UI updates around Aleo proving:
+```ts
+if (progress.next === 'complete') {
+  const destination = await bridge.complete({
+    progress,
+    privateMintSecretNonce,
+  })
+  progress = await bridge.wait({
+    progress: {
+      next: 'wait',
+      plan: progress.plan,
+      receipt: destination.receipt,
+    },
+  })
+}
+```
+
+## Recover after an interruption
+
+A checkpoint contains the public transfer intent and transaction identifiers
+needed to find the transfer again. It excludes private keys, Aleo record
+plaintext, proofs, and private-mint secret nonces.
+
+The SDK calls `onCheckpoint` at supported submission boundaries. The callback
+does not imply a storage system. A browser can use IndexedDB or local storage;
+a server can use a database or file. Applications that stay open can keep the
+receipt in memory and omit the callback.
 
 ```ts
 await bridge.execute({
-  plan,
-  onProgress(event) {
-    console.log(event.type)
+  plan: quote.plan,
+  onCheckpoint(checkpoint) {
+    localStorage.setItem('bridge-checkpoint', JSON.stringify(checkpoint))
   },
-  onCheckpoint: saveCheckpoint,
 })
 ```
 
-For Solana, the active inbound route is native SOL:
+After a restart, `recover` reconstructs the plan and checks existing network or
+provider state. It never signs, submits, or repeats a transaction.
 
 ```ts
-const quote = await bridge.quote({
-  source: { chain: 'solana', asset: 'sol' },
-  destination: { chain: 'aleo', asset: 'sol' },
-  bridgeProtocol: 'hyperlane',
-  amount: '0.01',
-  recipient: aleoAddress,
-  sender: solanaAddress,
-})
-const plan = quote.plan
-const execution = await bridge.execute({
-  plan,
-  onCheckpoint: saveCheckpoint,
-})
-```
+const checkpoint = JSON.parse(localStorage.getItem('bridge-checkpoint')!)
+let progress = await bridge.recover({ checkpoint })
 
-The quote reads the deployed IGP, the live fee for the compiled message, and
-current rent exemptions. Its `totalLamports` is the executable balance
-requirement: bridged amount, IGP payment, network fee, and required account
-rent. Confirmation searches
-transaction history and records blockhash expiry. `recover({ checkpoint })`
-checks an existing signature without signing or resubmitting.
-
-Current Solana token support is native SOL only. The client API is ready
-for future SPL-token routes, but it does not support Solana USDC today. SPL or
-Token-2022 support requires reviewed route metadata, token-account handling,
-instruction builders, and golden vectors.
-
-Circle attestation requests use the client-level `fetch` override. `wait`
-polls through read-only states until the next caller boundary. A private
-destination mint requires a separate explicit `complete` call:
-
-```ts
-const bridge = createBridgeClient({ fetch: instrumentedFetch })
-let progress = await bridge.wait({
-  progress: { next: 'wait', plan, receipt: sourceExecution.receipt },
-})
-
-if (progress.next === 'complete') {
-  const destinationExecution = await bridge.complete({
-    progress,
-    privateMintSecretNonce: await secureStorage.get('private-mint-nonce'),
-    onCheckpoint: saveCheckpoint,
-  })
-
-  progress = await bridge.wait({
-    progress: { next: 'wait', plan, receipt: destinationExecution.receipt },
-  })
+if (progress.next === 'wait') {
+  progress = await bridge.wait({ progress })
 }
 ```
 
-`onCheckpoint` is optional. Persist its value before returning from the callback
-when recovery across a page close or process restart is required. `recover`
-reconstructs progress from the checkpoint alone. `wait` advances to the next
-caller or relayer boundary. Pass `until` to `wait` when an application also
-needs to stop at a specific protocol status. `getStatus` remains available for
-one status read. Neither action submits a transaction.
+The application then handles `progress.next` by the same table above. A private
+mint nonce must be stored separately because it is intentionally absent from
+the checkpoint.
 
-For Hyperlane receipts carrying a message id, `wait` verifies delivery against
-the destination Mailbox rather than an explorer index. An Aleo destination
-therefore requires its Aleo public client in `clients`; an EVM destination uses
-its EVM public client. Explorer data may enrich live diagnostics with a
-destination transaction id, but it does not determine `COMPLETED`.
+## Use private assets on Aleo
 
-## Direct protocol helpers
+Hyperlane routes mint wrapped assets into public Aleo balances and spend public
+balances when bridging out of Aleo. Shielding and unshielding let the same asset
+move between that public balance and a private Aleo record.
 
-Protocol-specific helpers remain available as namespaced escape hatches without
-being mixed into `BridgeClient`:
+### Unshield before bridging out through Hyperlane
+
+An outbound Hyperlane transfer cannot spend a private record directly. Convert
+the amount into the account's public balance before quoting and executing the
+bridge transfer.
 
 ```ts
-import { hyperlane, xreserve } from '@provablehq/aleo-bridge-sdk'
-
-const hyperlaneQuote = await hyperlane.evm.quote(evmClient, {
-  plan,
-  recipientBytes32,
+const conversion = await bridge.unshield({
+  asset: { chain: 'aleo', asset: 'sol' },
+  amount: '0.01',
 })
-const xreserveQuote = await xreserve.evmToAleo.quote(evmClient, { plan })
+
+console.log(conversion.transactionId)
 ```
 
-The namespaces expose the same reviewed adapters used by the generic actions:
-`hyperlane.{aleo,evm,solana}.{quote,execute}`,
-`xreserve.evmToAleo.{quote,execute,getAttestation,complete}`, and
-`xreserve.aleoToEvm.execute`. Pass `registry` inside the helper parameters only
-when overriding the default registry. Pure call construction remains under the
-standalone `build*` utilities.
+The Aleo wallet selects a sufficient record when it supports wallet-side record
+requests. A local-key caller must supply the encoded record because a local
+account cannot resolve a wallet-side record request. Wait for the Aleo
+transaction to be accepted before spending the resulting public balance.
 
-`readHyperlaneDelivery(client, { messageId, mailbox })` is the standalone
-canonical Mailbox helper used internally by `wait`; it is a utility export, not
-a `BridgeClient` action.
+Private USDCx can be burned directly by the xReserve private withdrawal flow.
+It does not need to be unshielded first.
 
-An Aleo-origin xReserve quote subtracts the deployed 2 USDCx withdrawal fee
-and rejects amounts that cannot leave a positive destination amount. An
-Aleo-origin Hyperlane quote reports the exact public hook payment in
-`paymentMicrocredits`; `executionFeeMicrocredits` and `totalMicrocredits` are
-`null` because an execution fee is available only after account-authorized
-transaction construction. When an Aleo-origin Hyperlane destination client is
-configured, status polling verifies delivery from the destination balance
-increase because the explorer does not currently index Aleo-origin messages.
+### Shield an asset for private use on Aleo
 
-## Breaking migration from earlier release candidates
+After a Hyperlane transfer arrives, its Aleo balance is public. Convert any
+amount that should be held or spent privately into a record owned by the Aleo
+account.
 
-This package is pre-release, so the obsolete fields have no runtime aliases.
+```ts
+const conversion = await bridge.shield({
+  asset: { chain: 'aleo', asset: 'sol' },
+  amount: '0.01',
+})
 
-| Removed API | Replacement |
+console.log(conversion.transactionId)
+```
+
+Shielding and unshielding each submit an Aleo transaction and incur an Aleo
+transaction fee. They are separate from bridge delivery. A failed privacy
+conversion does not repeat or reverse the completed cross-chain transfer.
+
+The default registry supports these conversions for wrapped ETH, WBTC, USDT,
+and SOL through their ARC-20 programs, and for USDCx through its ARC-22
+transfers. The current USDCx default uses the empty freeze-list proof. Supply a
+current proof after the deployed freeze-list tree is populated.
+
+## Complete examples
+
+The [bridge tutorial](../../examples/bridge/README.md) explains configuration,
+safe read-only runs, mainnet authorization, checkpoints, and each provider's
+observable completion boundary.
+
+| Transfer | Example |
 | --- | --- |
-| `executors.evm` | `clients[chainId]: createEvmClient({ account, transport/publicClient })` |
-| `executors.solana` | `clients[chainId]: createSolanaClient({ account, transport })` |
-| `executors.aleo` | `clients[chainId]: createAleoClient({ account, publicClient })` |
-| `solanaRpc` | `createSolanaClient({ transport: solanaHttp(url) })` |
-| `aleoPublicClient` | `createAleoClient({ publicClient })` |
-| `xReserveHttpTransport` | top-level `fetch` |
-| `solanaExecutorFromKeyPair` | `solanaKeyPair(secretKeyBytes)` |
-| `solanaExecutorFromWalletAccount` | `solanaWallet({ wallet, account, chain })` |
-| `prepareTransfer` and `quoteTransfer` | `quote({ source, destination, amount, recipient })` and use `quote.plan` |
-| `executeTransfer` | `execute` |
-| chain-specific `quote*Transfer` methods | `quote({ source, destination, amount, recipient })` |
-| chain-specific source `execute*Transfer` methods | `execute({ plan })` |
-| `executeXReserveBurn` | `execute({ plan, mode, userRecord, merkleProof })` |
-| encoded route or separate `prepare` call | structured `quote({ source, destination, bridgeProtocol, amount, recipient })` |
-| `getXReserveAttestation` | `wait({ progress })` or `getStatus({ plan, receipt })` |
-| `executeXReservePrivateMint` | `complete({ progress, privateMintSecretNonce })` |
+| Ethereum ETH → Aleo ETH | [`eth-to-aleo.ts`](../../examples/bridge/eth-to-aleo.ts) |
+| Ethereum WBTC → Aleo WBTC | [`wbtc-to-aleo.ts`](../../examples/bridge/wbtc-to-aleo.ts) |
+| Aleo ETH → Ethereum ETH | [`eth-to-ethereum.ts`](../../examples/bridge/eth-to-ethereum.ts) |
+| Aleo WBTC → Ethereum WBTC | [`wbtc-to-ethereum.ts`](../../examples/bridge/wbtc-to-ethereum.ts) |
+| Solana SOL → Aleo SOL | [`sol-to-aleo.ts`](../../examples/bridge/sol-to-aleo.ts) |
+| Aleo SOL → Solana SOL | [`sol-to-solana.ts`](../../examples/bridge/sol-to-solana.ts) |
+| Ethereum USDC → Aleo USDCx | [`usdc-to-usdcx.ts`](../../examples/bridge/usdc-to-usdcx.ts) |
+| Aleo USDCx → Ethereum USDC | [`usdcx-to-usdc.ts`](../../examples/bridge/usdcx-to-usdc.ts) |
 
-## Optional dependencies
-
-Install `@solana/kit` for Solana routes and `@provablehq/sdk` for private
-USDCx recipient commitments. React Native applications using Solana also need
-an Ed25519 Web Crypto polyfill.
-
-The default registry is a reviewed, versioned deployment snapshot. Routes stay
-`metadata-required` until every protocol identifier required for execution has
-been verified.
-
-## Integration and live bridge tests
-
-`pnpm --filter @provablehq/aleo-bridge-sdk test:integration` runs deterministic
-end-to-end lifecycle tests with controlled transports. These cover recovery,
-waiting, private completion, rejection, and timeout behavior without spending
-funds.
-
-`pnpm --filter @provablehq/aleo-bridge-sdk test:live` contains deployed-bridge
-journeys for local EVM, Solana, and Aleo accounts. Testnet and mainnet cases live
-in separate directories under `test/integration/live`. They are skipped unless
-`BRIDGE_LIVE_FUNDS=1` and `BRIDGE_LIVE_STATE_DIR` are set.
-
-Mainnet cases are individually selected through a comma-separated allowlist:
-
-```sh
-export BRIDGE_LIVE_MAINNET_ACK=I_ACKNOWLEDGE_BRIDGE_MAINNET_FUNDS
-export BRIDGE_LIVE_MAINNET_CASES=evm-xreserve
-pnpm --filter @provablehq/aleo-bridge-sdk test:live:mainnet
-```
-
-Without the final execution acknowledgement, a newly selected case performs
-only its live quote and prints the route, amount, source address, destination,
-and protocol debit. After reviewing that output, submission additionally
-requires:
-
-```sh
-export BRIDGE_LIVE_MAINNET_EXECUTE=I_ACKNOWLEDGE_THIS_SUBMITS_MAINNET_TRANSACTIONS
-```
-
-Available case names are `evm-xreserve`, `aleo-xreserve`, `evm-hyperlane`,
-`solana-hyperlane`, and `aleo-hyperlane`. Aleo-source cases use
-`BRIDGE_PRIVATE_KEY`, Ethereum-source cases use `BRIDGE_EVM_PRIVATE_KEY`, and
-Solana-source cases use `BRIDGE_SOLANA_PRIVATE_KEY`. Each case also requires
-only its relevant RPC and recipient variables.
-The EVM xReserve case bridges exactly 2 USDC, the configured protocol minimum,
-and also uses `BRIDGE_PRIVATE_KEY` to complete the private Aleo mint.
-The Aleo xReserve case burns 2.000001 USDCx, one atomic unit above its
-strict minimum. Hyperlane token amounts use one atomic source unit; required
-network fees, rent, and interchain gas payments remain additional costs.
-
-| Case | Additional configuration |
-| --- | --- |
-| `evm-xreserve` | `BRIDGE_PRIVATE_KEY`, `BRIDGE_LIVE_ETHEREUM_RPC_URL` |
-| `aleo-xreserve` | `BRIDGE_LIVE_ETHEREUM_RPC_URL`, `BRIDGE_LIVE_ETHEREUM_RECIPIENT` |
-| `evm-hyperlane` | `BRIDGE_LIVE_ETHEREUM_RPC_URL`, `BRIDGE_LIVE_ALEO_MAINNET_RECIPIENT`; optional `BRIDGE_LIVE_EVM_HYPERLANE_ROUTE_ID` |
-| `solana-hyperlane` | `BRIDGE_LIVE_ALEO_MAINNET_RECIPIENT` (`BRIDGE_LIVE_SOLANA_RPC_URL` optionally overrides `DEFAULT_SOLANA_RPC_URL`) |
-| `aleo-hyperlane` | `BRIDGE_LIVE_ALEO_HYPERLANE_ROUTE_ID`, `BRIDGE_LIVE_HYPERLANE_DESTINATION_RECIPIENT` |
-
-Each journey writes a mode-`0600` checkpoint at every supported prepared and
-submitted transaction boundary. Local Aleo transactions are durable before
-broadcast; EVM, Solana, and injected-wallet APIs can checkpoint only after
-their submission method returns. A rerun verifies the existing transaction or
-broadcasts the exact prepared Aleo transaction. Passing requires a
-confirmed source transaction plus route-appropriate destination evidence: an
-accepted private mint, a Hyperlane destination transaction, or an observed EVM
-balance increase. Use dedicated minimally funded accounts; the tests never
-print private keys or signed transaction bytes. Mainnet checkpoints are
-separated by case beneath `$BRIDGE_LIVE_STATE_DIR/mainnet`.
+Each script quotes mainnet state and exits without submitting by default. The
+script prints the exact acknowledgement required to authorize real funds.

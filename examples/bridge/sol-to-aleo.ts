@@ -174,6 +174,9 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
   if (progress.next === 'failed') throw new Error(progress.error)
   if (progress.next !== 'done') throw new Error(`Unexpected next operation: ${progress.next}`)
   console.log('Bridge completed:', progress.receipt)
+  // Hyperlane delivered SOL into a public Aleo balance. Connect the recipient's
+  // Aleo wallet and call shield() afterward when the asset should become a
+  // private record.
 }
 
 runSolanaHyperlaneExample().catch((error: unknown) => {

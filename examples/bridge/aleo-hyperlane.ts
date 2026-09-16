@@ -94,6 +94,10 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     throw new Error('ALEO_CONSUMER_ID and ALEO_DPS_API_KEY must be supplied together')
   }
 
+  // This route spends a public Aleo token balance. If the amount is held in a
+  // private record, unshield it and wait for that transaction to be accepted
+  // before running this example. Hyperlane cannot spend the record directly.
+
   // ── Connect the source account and networks ──────────────────────────
   // The public Aleo client reads visible token balances and transaction status.
   // The wallet client holds the source authority, delegates proof construction,
@@ -190,7 +194,8 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   // on-chain calculation. Read it again immediately before proving; an oracle
   // update between the earlier display and submission would otherwise reject
   // the transaction while still risking its Aleo fee. This route spends only a
-  // public ARC-20 balance. A private record must be unshielded separately.
+  // public ARC-20 balance. The earlier unshield transaction, when needed, is
+  // separate from this bridge transfer and is never repeated by execute().
   const latestQuote = await bridge.quote(quoteParams)
   if (latestQuote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${latestQuote.kind}`)
   if (publicCredits < latestQuote.paymentMicrocredits) {

@@ -235,4 +235,7 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
   if (progress.next === 'failed') throw new Error(progress.error)
   if (progress.next !== 'done') throw new Error(`Unexpected next operation: ${progress.next}`)
   console.log('Bridge completed:', progress.receipt)
+  // Hyperlane delivered the asset into a public Aleo balance. If the recipient
+  // wants to hold or spend it privately, connect that Aleo wallet and call
+  // shield() as a separate transaction after this delivery has completed.
 }

@@ -185,6 +185,8 @@ async function main(): Promise<void> {
     // Circle has authorized destination delivery. The provider now submits the
     // public or record mint; this toolkit cannot yet verify that provider-owned
     // Aleo transaction, so the script reports the honest observable boundary.
+    // Public mode creates a visible USDCx balance that can be shielded later.
+    // Record mode already delivers private value and needs no shield action.
     console.log(`Circle attested the deposit; the ${mode} Aleo mint is relayer-driven.`)
     return
   }
@@ -220,6 +222,8 @@ async function main(): Promise<void> {
   })
   if (progress.next === 'failed') throw new Error(progress.error)
   if (progress.next !== 'done') throw new Error(`Unexpected next operation: ${progress.next}`)
+  // Private completion already created the USDCx record. Calling shield after
+  // this point would target a separate public balance and is not required.
   console.log('Private USDCx mint completed:', progress.receipt.destinationTxId)
 }
 

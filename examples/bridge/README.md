@@ -17,14 +17,14 @@ acknowledgement shown below.
 
 | Script | Route | Protocol | Default amount |
 | --- | --- | --- | ---: |
-| `eth-to-aleo.ts` | Ethereum ETH → Aleo ETH | Hyperlane | 1 wei |
-| `wbtc-to-aleo.ts` | Ethereum WBTC → Aleo WBTC | Hyperlane | 1 satoshi |
-| `eth-to-ethereum.ts` | Aleo ETH → Ethereum ETH | Hyperlane | 1 atomic unit |
-| `wbtc-to-ethereum.ts` | Aleo WBTC → Ethereum WBTC | Hyperlane | 1 satoshi |
-| `sol-to-aleo.ts` | Solana SOL → Aleo SOL | Hyperlane | 1 lamport |
-| `sol-to-solana.ts` | Aleo SOL → Solana SOL | Hyperlane | 1 lamport |
-| `usdc-to-usdcx.ts` | Ethereum USDC → Aleo USDCx | Circle xReserve | 2 USDC |
-| `usdcx-to-usdc.ts` | Aleo USDCx → Ethereum USDC | Circle xReserve | 2.000001 USDCx |
+| [`eth-to-aleo.ts`](./eth-to-aleo.ts) | Ethereum ETH → Aleo ETH | Hyperlane | 1 wei |
+| [`wbtc-to-aleo.ts`](./wbtc-to-aleo.ts) | Ethereum WBTC → Aleo WBTC | Hyperlane | 1 satoshi |
+| [`eth-to-ethereum.ts`](./eth-to-ethereum.ts) | Aleo ETH → Ethereum ETH | Hyperlane | 1 atomic unit |
+| [`wbtc-to-ethereum.ts`](./wbtc-to-ethereum.ts) | Aleo WBTC → Ethereum WBTC | Hyperlane | 1 satoshi |
+| [`sol-to-aleo.ts`](./sol-to-aleo.ts) | Solana SOL → Aleo SOL | Hyperlane | 1 lamport |
+| [`sol-to-solana.ts`](./sol-to-solana.ts) | Aleo SOL → Solana SOL | Hyperlane | 1 lamport |
+| [`usdc-to-usdcx.ts`](./usdc-to-usdcx.ts) | Ethereum USDC → Aleo USDCx | Circle xReserve | 2 USDC |
+| [`usdcx-to-usdc.ts`](./usdcx-to-usdc.ts) | Aleo USDCx → Ethereum USDC | Circle xReserve | 2.000001 USDCx |
 
 Network fees and Hyperlane hook payments are separate from the transferred
 amount. The xReserve withdrawal sends 2 USDC to Ethereum because the deployed
@@ -114,10 +114,11 @@ the protocol reads balances, allowances, or fees.
 
 ## 2. Quote a route
 
-`quote` validates a structured transfer intent against the registry and reads
+`quote` validates a transfer against the reviewed route catalog and reads
 current provider or network costs where the route exposes them. The caller
 names the source asset, destination asset, amount, sender, recipient, and
-optional protocol constraint. The returned `plan` is used by later actions.
+optional provider. The returned `plan` records the exact transfer that later
+actions must use.
 
 ```ts
 const sender = await ethereum.walletClient!.getAddress()
@@ -173,8 +174,9 @@ let progress = await bridge.wait({
 })
 ```
 
-`wait` performs reads until the transfer reaches a caller boundary or a
-terminal state. It does not sign and does not submit another transaction.
+`wait` follows source confirmation, provider processing, and verifiable
+destination delivery until the transfer finishes or needs another wallet
+authorization. It does not sign and does not submit another transaction.
 
 Handle every returned operation explicitly:
 
@@ -262,9 +264,16 @@ pnpm tsx examples/bridge/sol-to-aleo.ts
 The Solana read-only path accepts `SOLANA_SENDER`. Execution derives the sender
 from `SOLANA_PRIVATE_KEY` and rejects a conflicting configured address.
 
-Aleo-origin Hyperlane transfers burn public ARC-20 balances. Call
-`bridge.unshield()` before preparing the transfer when an asset is held in a
-private record.
+Aleo-origin Hyperlane transfers spend public ARC-20 balances. If the amount is
+held in a private record, call `bridge.unshield()` and wait for that Aleo
+transaction to be accepted before running the outbound example. The xReserve
+private withdrawal can spend a USDCx record directly and does not need this
+conversion.
+
+Hyperlane mints inbound Aleo assets into public balances. After delivery, call
+`bridge.shield()` when the asset should be held or spent as a private record.
+Shielding is a separate Aleo transaction and does not change the completed
+cross-chain transfer.
 
 ## xReserve transfers
 

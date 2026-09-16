@@ -224,6 +224,10 @@ async function main(): Promise<void> {
     : undefined
   if (merkleProof) console.log(`Derived the USDCx freeze-list exclusion proof for ${account.address}.`)
 
+  // xReserve can burn the selected USDCx record directly. Do not unshield it
+  // first: that would create a separate public balance and add an unnecessary
+  // Aleo transaction before the withdrawal.
+
   const burnMode: XReserveBurnMode = mode === 'private' ? 'private' : 'public-as-signer'
   const executingBridge = createBridgeClient({
     environment: 'mainnet',
