@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildXReserveBurnCall, executeXReserveBurn } from '../../src/actions/xreserveBurn.js'
-import { prepareTransfer } from '../../src/actions/prepareTransfer.js'
+import { buildXReserveBurnCall } from '../../src/builders/buildXReserveBurnCall.js'
+import { execute as executeXReserveBurn } from '../../src/protocols/xreserve/aleoToEvm.js'
+import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
-import type { AleoBridgeExecutor } from '../../src/types/aleo.js'
+import type { AleoWalletClient } from '../../src/types/aleo.js'
 
 const EVM_RECIPIENT = '0x0000000000000000000000000000000000000001'
 const MAINNET_RECORD = {
@@ -14,10 +15,10 @@ const MAINNET_RECORD = {
 const MERKLE_PROOF = '[{path:0field},{path:1field}]'
 
 function plan(environment: 'mainnet' | 'testnet' = 'mainnet') {
-  return prepareTransfer(DEFAULT_BRIDGE_REGISTRY, {
-    routeId: environment === 'mainnet'
-      ? 'xreserve:aleo/usdcx->ethereum/usdc'
-      : 'xreserve:aleo-testnet/usdcx->sepolia/usdc',
+  return prepare(DEFAULT_BRIDGE_REGISTRY, {
+    source: { chain: environment === 'mainnet' ? 'aleo' : 'aleo-testnet', asset: 'usdcx' },
+    destination: { chain: environment === 'mainnet' ? 'ethereum' : 'sepolia', asset: 'usdc' },
+    bridgeProtocol: 'xreserve',
     amount: '2.5',
     recipient: EVM_RECIPIENT,
   })
@@ -82,7 +83,7 @@ describe('xReserve USDCx burns', () => {
   })
 
   it('rejects incomplete private inputs before prompting the wallet', async () => {
-    const executeTransaction = vi.fn<AleoBridgeExecutor['executeTransaction']>()
+    const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
     await expect(executeXReserveBurn(DEFAULT_BRIDGE_REGISTRY, { executeTransaction }, {
       plan: plan(),
       mode: 'private',
@@ -97,13 +98,25 @@ describe('xReserve USDCx burns', () => {
     })).toThrow(/Unsupported USDCx burn mode/)
   })
 
+  it('rejects a burn that cannot cover the deployed withdrawal fee', () => {
+    const transferPlan = plan()
+    const feeOnlyPlan = { ...transferPlan, amountIn: '2' }
+
+    expect(() => buildXReserveBurnCall(DEFAULT_BRIDGE_REGISTRY, {
+      plan: feeOnlyPlan,
+      mode: 'public-as-signer',
+    })).toThrow(/must exceed.*2 USDCx/i)
+  })
+
   it('submits the burn and returns service-forwarded resumable state', async () => {
-    const executeTransaction = vi.fn<AleoBridgeExecutor['executeTransaction']>()
-      .mockResolvedValue({ transactionId: 'at1burn' })
+    const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
+      .mockResolvedValue('at1burn')
+    const checkpoints: unknown[] = []
     const result = await executeXReserveBurn(DEFAULT_BRIDGE_REGISTRY, { executeTransaction }, {
       plan: plan(),
       userRecord: MAINNET_RECORD,
       merkleProof: MERKLE_PROOF,
+      onSubmitted(receipt) { checkpoints.push(receipt) },
     })
     expect(executeTransaction).toHaveBeenCalledWith(expect.objectContaining({
       program: 'shielded_usdcx_wrapper.aleo',
@@ -114,5 +127,6 @@ describe('xReserve USDCx burns', () => {
       sourceTxId: 'at1burn',
       protocolState: { forwardingService: 'aleo-burn-attestation', nativeDomain: 0 },
     })
+    expect(checkpoints).toEqual([result.receipt])
   })
 })

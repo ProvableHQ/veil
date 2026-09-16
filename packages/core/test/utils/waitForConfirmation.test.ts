@@ -31,8 +31,10 @@ describe('waitForConfirmation', () => {
   })
 
   it('throws FinalizeRevertError without waiting out the window', async () => {
-    const { client, calls } = pollingClient([{ status: 'rejected', transaction: { id: TX } }])
-    await expect(waitForConfirmation(client, TX, 600_000)).rejects.toBeInstanceOf(FinalizeRevertError)
+    const { client, calls } = pollingClient([{ status: 'rejected', transaction: { id: 'at1fee' } }])
+    const error = await waitForConfirmation(client, TX, 600_000).catch((caught) => caught)
+    expect(error).toBeInstanceOf(FinalizeRevertError)
+    expect(error).toMatchObject({ transactionId: TX, feeTransactionId: 'at1fee' })
     // One poll, not a full window: a rejection is terminal.
     expect(calls()).toBe(1)
   })

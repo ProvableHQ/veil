@@ -3,5 +3,5 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["."]
+  "include": [".", "../../packages/bridge/scripts/solana-deposit.ts"]
 }

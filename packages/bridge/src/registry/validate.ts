@@ -1,15 +1,66 @@
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type { BridgeRegistry } from '../types/protocol.js'
+import type { SolanaHyperlaneRouteMetadata } from '../types/solana.js'
+
+// Required `SolanaHyperlaneRouteMetadata` fields an active Solana-source
+// Hyperlane route must carry. `igpOverheadAccount` is intentionally excluded:
+// it is optional on the type, present only when the reviewed deployment
+// wraps its IGP in an `OverheadIgp` layer (see the type's docblock).
+const REQUIRED_SOLANA_HYPERLANE_METADATA_FIELDS: readonly Exclude<
+  keyof SolanaHyperlaneRouteMetadata,
+  'igpOverheadAccount'
+>[] = [
+  'warpProgramAddress',
+  'tokenPda',
+  'nativeCollateralPda',
+  'dispatchAuthorityPda',
+  'mailboxProgramAddress',
+  'mailboxOutboxPda',
+  'igpProgramAddress',
+  'igpProgramDataPda',
+  'igpAccount',
+  'splNoopProgramAddress',
+  'destinationDomain',
+  'destinationGasAmount',
+  'registryCommit',
+  'solanaReviewedAt',
+  'solanaConfigSource',
+]
+
+/**
+ * Reports whether route metadata carries every required
+ * `SolanaHyperlaneRouteMetadata` field with the expected primitive type.
+ *
+ * Checks only the supplied field names and primitive types; format-level
+ * validation (address charset, digit strings, and commit hash format) is the
+ * job of `solanaRouteMetadata` in the Solana Hyperlane protocol module before
+ * live reads or submission. It does not contact Solana.
+ */
+function hasCompleteSolanaHyperlaneMetadata(
+  metadata: Readonly<Record<string, string | number | boolean>> | undefined,
+): boolean {
+  if (!metadata) return false
+  return REQUIRED_SOLANA_HYPERLANE_METADATA_FIELDS.every((field) => {
+    const value = metadata[field]
+    return field === 'destinationDomain' ? typeof value === 'number' : typeof value === 'string' && value.length > 0
+  })
+}
 
 /**
  * Validates the referential integrity of a protocol bridge registry.
  *
- * Pure and local. Duplicate identifiers and dangling asset/chain references
- * throw before a client can prepare a misleading transfer plan.
+ * Duplicate identifiers and dangling asset or chain references throw before a
+ * client can describe a misleading transfer. An active Hyperlane route sourced
+ * from a Solana-family chain additionally must carry a complete
+ * `SolanaHyperlaneRouteMetadata` object, so a route cannot be made active ahead
+ * of its metadata being reviewed and filled in. Validation does not contact a
+ * chain or bridge provider.
  *
  * @param registry Registry supplied to `createBridgeClient`.
  * @returns The validated registry unchanged.
- * @throws BridgeError When identifiers are duplicated or references are missing.
+ * @throws BridgeError When identifiers are duplicated, references are
+ *   missing, or an active Solana-source Hyperlane route is missing required
+ *   Sealevel deployment metadata.
  *
  * @example
  * const registry = validateBridgeRegistry(DEFAULT_BRIDGE_REGISTRY)
@@ -17,18 +68,26 @@ import type { BridgeRegistry } from '../types/protocol.js'
 export function validateBridgeRegistry(registry: BridgeRegistry): BridgeRegistry {
   if (!registry.version.trim()) throw new BridgeError('Bridge registry version must not be empty')
 
+  // Establish chain identity first because every asset and route ultimately
+  // inherits its environment and transaction family from these entries.
   const chainIds = new Set<string>()
   for (const chain of registry.chains) {
     if (chainIds.has(chain.id)) throw new BridgeError(`Duplicate bridge chain id: ${chain.id}`)
     chainIds.add(chain.id)
   }
 
+  // Asset ids are globally unique; caller-facing keys are unique only within a
+  // chain so the same symbol can represent different contracts or programs.
   const assetIds = new Set<string>()
+  const assetKeys = new Set<string>()
   for (const asset of registry.assets) {
     if (assetIds.has(asset.id)) throw new BridgeError(`Duplicate bridge asset id: ${asset.id}`)
     if (!chainIds.has(asset.chainId)) {
       throw new BridgeError(`Bridge asset ${asset.id} references unknown chain ${asset.chainId}`)
     }
+    if (!asset.key.trim()) throw new BridgeError(`Bridge asset ${asset.id} has an empty key`)
+    const scopedKey = `${asset.chainId}/${asset.key}`
+    if (assetKeys.has(scopedKey)) throw new BridgeError(`Duplicate bridge asset key: ${scopedKey}`)
     if (!Number.isInteger(asset.decimals) || asset.decimals < 0) {
       throw new BridgeError(`Bridge asset ${asset.id} has invalid decimals ${asset.decimals}`)
     }
@@ -41,9 +100,25 @@ export function validateBridgeRegistry(registry: BridgeRegistry): BridgeRegistry
         })
       }
     }
+    if (asset.privacy) {
+      const chain = registry.chains.find((entry) => entry.id === asset.chainId)
+      if (chain?.family !== 'aleo') {
+        throw new BridgeError(`Bridge asset ${asset.id} declares a privacy capability on a non-Aleo chain`)
+      }
+      if (!asset.privacy.program.trim()) {
+        throw new BridgeError(`Bridge asset ${asset.id} has an empty privacy program`)
+      }
+      if (asset.privacy.kind !== 'arc20' && asset.privacy.kind !== 'arc22') {
+        throw new BridgeError(`Bridge asset ${asset.id} has an unsupported privacy capability kind`)
+      }
+    }
     assetIds.add(asset.id)
+    assetKeys.add(scopedKey)
   }
 
+  // Validate directional topology after chains and assets. Active Solana-source
+  // routes have an additional gate because transaction account ordering depends
+  // on reviewed Sealevel deployment metadata.
   const routeIds = new Set<string>()
   for (const route of registry.routes) {
     if (routeIds.has(route.id)) throw new BridgeError(`Duplicate bridge route id: ${route.id}`)
@@ -59,6 +134,14 @@ export function validateBridgeRegistry(registry: BridgeRegistry): BridgeRegistry
     const destinationChain = registry.chains.find((chain) => chain.id === destination.chainId)!
     if (sourceChain.environment !== route.environment || destinationChain.environment !== route.environment) {
       throw new BridgeError(`Bridge route ${route.id} crosses registry environments`)
+    }
+    if (
+      route.protocol === 'hyperlane'
+      && route.availability === 'active'
+      && sourceChain.family === 'solana'
+      && !hasCompleteSolanaHyperlaneMetadata(route.metadata)
+    ) {
+      throw new BridgeError(`Bridge route ${route.id} is active but missing required Solana Hyperlane metadata`)
     }
     routeIds.add(route.id)
   }

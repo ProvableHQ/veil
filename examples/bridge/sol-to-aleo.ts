@@ -1,51 +1,18 @@
+import { getBase58Encoder } from '@solana/kit'
+import { createPublicClient as createAleoPublicClient, http as aleoHttp } from '@provablehq/veil-core'
 import {
-  AccountRole,
-  address,
-  appendTransactionMessageInstructions,
-  compileTransaction,
-  createKeyPairSignerFromBytes,
-  createNoopSigner,
-  createSolanaRpc,
-  createTransactionMessage,
-  generateKeyPairSigner,
-  getBase58Encoder,
-  getBase64Decoder,
-  getBase64EncodedWireTransaction,
-  getProgramDerivedAddress,
-  getUtf8Encoder,
-  pipe,
-  setTransactionMessageFeePayerSigner,
-  setTransactionMessageLifetimeUsingBlockhash,
-  signTransactionMessageWithSigners,
-  type Address,
-  type KeyPairSigner,
-  type TransactionMessageBytesBase64,
-  type TransactionSigner,
-} from '@solana/kit'
-import {
-  decodeHyperlaneTokenAccount,
-  decodeIgpAccount,
-  decodeOverheadIgpAccount,
-  deriveHyperlaneTokenPda,
-  deriveIgpGasPaymentPda,
-  deriveIgpProgramDataPda,
-  getComputeBudgetInstructions,
-  getTokenTransferRemoteInstruction,
-} from '@hyperlane-xyz/sealevel-sdk'
-import {
-  aleoAddressToBytes32,
+  createAleoClient,
   createBridgeClient,
+  createSolanaClient,
+  DEFAULT_SOLANA_RPC_URL,
+  solanaHttp,
+  solanaKeyPair,
 } from '@provablehq/aleo-bridge-sdk'
 
-const ROUTE_ID = 'hyperlane:solana/sol->aleo/sol'
-const WARP_ROUTE_PROGRAM = address('8YGT2pZwyZe94qBpGzWfY2TMEVcwaQ1bXAE7YAgpUaM7')
-const SYSTEM_PROGRAM = address('11111111111111111111111111111111')
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
-const EXECUTION_ENVIRONMENT_VARIABLE = 'EXECUTE_HYPERLANE_SOL'
-const SOL_DECIMALS = 9
-const NATIVE_TOKEN_PLUGIN_SIZE = 1
-const IGP_KIND = 0
-const OVERHEAD_IGP_KIND = 1
+const EXECUTION_ENVIRONMENT_VARIABLE = 'EXECUTE_BRIDGE'
+const DEFAULT_CONFIRMATION_TIMEOUT_MS = 2 * 60_000
+const AMOUNT = '0.000000001'
 
 function requiredEnvironmentVariable(name: string): string {
   const value = process.env[name]?.trim()
@@ -54,6 +21,9 @@ function requiredEnvironmentVariable(name: string): string {
 }
 
 function privateKeyBytes(raw: string): Uint8Array {
+  // Solana tooling commonly exports either base58 text or a CLI JSON array.
+  // Normalizing both formats here keeps the original secret in process memory
+  // and rejects truncated material before a wallet account is constructed.
   let bytes: Uint8Array
   if (raw.startsWith('[')) {
     const parsed: unknown = JSON.parse(raw)
@@ -70,256 +40,143 @@ function privateKeyBytes(raw: string): Uint8Array {
   return bytes
 }
 
-async function signerFromEnvironment(): Promise<{
-  signer: TransactionSigner
-  localSigner: KeyPairSigner | undefined
-}> {
-  const privateKey = process.env.SOLANA_PRIVATE_KEY?.trim()
-  if (privateKey) {
-    const localSigner = await createKeyPairSignerFromBytes(privateKeyBytes(privateKey))
-    const configuredSender = process.env.SOLANA_SENDER?.trim()
-    if (configuredSender && configuredSender !== localSigner.address) {
-      throw new Error(`SOLANA_SENDER does not match the private-key account ${localSigner.address}`)
-    }
-    return { signer: localSigner, localSigner }
-  }
-  const sender = address(requiredEnvironmentVariable('SOLANA_SENDER'))
-  return { signer: createNoopSigner(sender), localSigner: undefined }
-}
-
-function parseAmount(value: string): bigint {
-  if (!/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)) throw new Error('SOL_AMOUNT must be a positive decimal')
-  const [whole, fraction = ''] = value.split('.')
-  if (fraction.length > SOL_DECIMALS) throw new Error(`SOL_AMOUNT supports at most ${SOL_DECIMALS} decimal places`)
-  const atomic = BigInt(whole!) * 10n ** BigInt(SOL_DECIMALS)
-    + BigInt(fraction.padEnd(SOL_DECIMALS, '0') || '0')
-  if (atomic <= 0n) throw new Error('SOL_AMOUNT must be greater than zero')
-  return atomic
-}
-
-function formatAmount(value: bigint, decimals = SOL_DECIMALS): string {
+function formatAmount(value: bigint, decimals: number): string {
   const unit = 10n ** BigInt(decimals)
   const fraction = (value % unit).toString().padStart(decimals, '0').replace(/0+$/, '')
   return fraction ? `${value / unit}.${fraction}` : (value / unit).toString()
 }
 
-function hexToBytes(value: string): Uint8Array {
-  const hex = value.startsWith('0x') ? value.slice(2) : value
-  if (!/^[0-9a-f]{64}$/i.test(hex)) throw new Error('Expected a 32-byte hexadecimal Hyperlane recipient')
-  return Uint8Array.from(hex.match(/../g)!.map((byte) => Number.parseInt(byte, 16)))
-}
-
-function accountData(value: readonly [string, string] | Uint8Array): Uint8Array {
-  if (value instanceof Uint8Array) return value
-  if (!Array.isArray(value) || value[1] !== 'base64') throw new Error('Solana RPC returned unsupported account encoding')
-  return Uint8Array.from(Buffer.from(value[0], 'base64'))
-}
-
-function millisecondsFromEnvironment(name: string, defaultValue: number): number {
-  const raw = process.env[name]?.trim()
-  if (!raw) return defaultValue
-  const value = Number(raw)
-  if (!Number.isSafeInteger(value) || value < 1_000) {
-    throw new Error(`${name} must be an integer greater than or equal to 1000`)
-  }
-  return value
-}
-
-function stringify(value: unknown): string {
-  return JSON.stringify(value, (_key, nested) => typeof nested === 'bigint' ? nested.toString() : nested)
-}
-
 /**
- * Quotes or submits the reviewed mainnet Solana SOL-to-Aleo SOL Warp Route.
+ * Moves native SOL from Solana to its wrapped representation on Aleo through
+ * Hyperlane.
  *
- * The example uses Veil for route planning, Solana Kit for local keypair
- * signing and RPC, and Hyperlane's Kit-native Sealevel codecs for the deployed
- * Warp Route instruction. It remains read-only unless the execution
- * acknowledgement is set.
+ * The default run reads the sender's balance and current fees, prints them, and
+ * exits without requesting a signature. With execution enabled, the Solana
+ * keypair held by this process signs one source transaction. Hyperlane relays
+ * its message and mints wrapped SOL to the Aleo recipient.
  *
- * @returns A promise that resolves after preflight or confirmed Solana submission.
- * @throws Error When input, deployed route state, fee quoting, simulation, or submission fails.
+ * @returns After read-only inspection or verified Aleo delivery, depending on
+ * the execution acknowledgement.
+ * @throws Error When configuration is missing, SOL is insufficient, the source
+ * transaction fails, or Aleo delivery cannot be verified.
  *
  * @example
  * await runSolanaHyperlaneExample()
  */
 export async function runSolanaHyperlaneExample(): Promise<void> {
-  const rpcUrl = process.env.SOLANA_RPC_URL?.trim() || 'https://api.mainnet-beta.solana.com'
+  const rpcUrl = process.env.SOLANA_RPC_URL?.trim() || DEFAULT_SOLANA_RPC_URL
   const recipient = requiredEnvironmentVariable('ALEO_RECIPIENT')
-  const amount = requiredEnvironmentVariable('SOL_AMOUNT')
-  const amountAtomic = parseAmount(amount)
-  const { signer, localSigner } = await signerFromEnvironment()
-  const rpc = createSolanaRpc(rpcUrl)
-  const bridge = createBridgeClient({ environment: 'mainnet' })
-  const plan = bridge.prepareTransfer({
-    routeId: ROUTE_ID,
-    amount,
+
+  // ── Connect the source account and destination network ──────────────
+  // Balance and fee inspection needs only a Solana RPC endpoint and sender
+  // address. A private key adds the authority that signs the source transfer.
+  // The Aleo client has no account because the Hyperlane relayer submits the
+  // mint; it only verifies delivery in Aleo's canonical Mailbox.
+  const privateKey = process.env.SOLANA_PRIVATE_KEY?.trim()
+  const keypairBytes = privateKey ? privateKeyBytes(privateKey) : undefined
+  const solana = createSolanaClient({
+    transport: solanaHttp(rpcUrl),
+    ...(keypairBytes ? { account: solanaKeyPair(keypairBytes) } : {}),
+  })
+  const senderAddress = solana.walletClient
+    ? await solana.walletClient.getAddress()
+    : requiredEnvironmentVariable('SOLANA_SENDER')
+  const configuredSender = process.env.SOLANA_SENDER?.trim()
+  if (solana.walletClient && configuredSender && configuredSender !== senderAddress) {
+    // Quote and execution must name the same owner. Refusing a mismatch keeps
+    // displayed balances and fees tied to the account that will actually sign.
+    throw new Error(`SOLANA_SENDER does not match the private-key account ${senderAddress}`)
+  }
+
+  const bridge = createBridgeClient({
+    environment: 'mainnet',
+    clients: {
+      solana,
+      aleo: createAleoClient({
+        publicClient: createAleoPublicClient({
+          transport: aleoHttp(process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2', { network: 'mainnet' }),
+        }),
+      }),
+    },
+  })
+
+  // ── Price the intended transfer ─────────────────────────────────────
+  // The caller supplies familiar chain and asset names, an amount, and the
+  // recipient. The bridge catalog supplies the reviewed Solana programs,
+  // required accounts, Aleo domain, decimal widths, and stages for this route.
+  // Quote also reads the current relayer, network-fee, and rent requirements. It
+  // does not ask the wallet to sign or move SOL. The amount is one lamport.
+  const quote = await bridge.quote({
+    source: { chain: 'solana', asset: 'sol' },
+    destination: { chain: 'aleo', asset: 'sol' },
+    bridgeProtocol: 'hyperlane',
+    amount: AMOUNT,
     recipient,
-    sender: signer.address,
+    sender: senderAddress,
   })
-  if (plan.amountIn !== amount || plan.sourceAsset.decimals !== SOL_DECIMALS) {
-    throw new Error('Veil returned unexpected SOL route units')
-  }
-  const destinationDomain = bridge.registry.chains.find((chain) => chain.id === 'aleo')?.protocolDomains?.hyperlane
-  if (typeof destinationDomain !== 'number' || !Number.isSafeInteger(destinationDomain)) {
-    throw new Error('The Veil registry is missing the numeric Aleo Hyperlane domain')
-  }
 
-  const { address: tokenPda } = await deriveHyperlaneTokenPda(WARP_ROUTE_PROGRAM)
-  const tokenAccount = await rpc.getAccountInfo(tokenPda, { commitment: 'confirmed', encoding: 'base64' }).send()
-  if (!tokenAccount.value) throw new Error(`Missing Hyperlane token account ${tokenPda}`)
-  const token = decodeHyperlaneTokenAccount(accountData(tokenAccount.value.data), NATIVE_TOKEN_PLUGIN_SIZE)
-  if (!token) throw new Error('Unable to decode the deployed SOL Warp Route account')
-  if (token.decimals !== SOL_DECIMALS || token.remoteDecimals !== SOL_DECIMALS) {
-    throw new Error(`Unexpected SOL Warp Route decimals: ${token.decimals}/${token.remoteDecimals}`)
-  }
-  if (!token.remoteRouters.has(destinationDomain)) throw new Error('The SOL Warp Route has no enrolled Aleo router')
-  if (token.feeConfig) throw new Error('The SOL Warp Route now requires a route fee that this reviewed example does not support')
-  if (!token.interchainGasPaymaster) throw new Error('The SOL Warp Route has no configured Interchain Gas Paymaster')
-
-  const destinationGas = token.destinationGas.get(destinationDomain)
-  if (destinationGas == null) throw new Error('The SOL Warp Route has no Aleo destination gas configuration')
-  const igp = token.interchainGasPaymaster
-  let innerIgp: Address
-  let overhead = 0n
-  if (igp.igpType.kind === OVERHEAD_IGP_KIND) {
-    const overheadAccount = await rpc.getAccountInfo(igp.igpType.account, { commitment: 'confirmed', encoding: 'base64' }).send()
-    if (!overheadAccount.value) throw new Error(`Missing overhead IGP account ${igp.igpType.account}`)
-    const decoded = decodeOverheadIgpAccount(accountData(overheadAccount.value.data))
-    if (!decoded) throw new Error('Unable to decode the overhead IGP account')
-    innerIgp = decoded.inner
-    overhead = decoded.gasOverheads.get(destinationDomain) ?? 0n
-  } else if (igp.igpType.kind === IGP_KIND) {
-    innerIgp = igp.igpType.account
-  } else {
-    throw new Error(`Unsupported Hyperlane IGP kind: ${igp.igpType.kind}`)
-  }
-
-  const innerIgpAccount = await rpc.getAccountInfo(innerIgp, { commitment: 'confirmed', encoding: 'base64' }).send()
-  if (!innerIgpAccount.value) throw new Error(`Missing IGP account ${innerIgp}`)
-  const decodedIgp = decodeIgpAccount(accountData(innerIgpAccount.value.data))
-  if (!decodedIgp) throw new Error('Unable to decode the IGP account')
-  if (decodedIgp.feeConfig) throw new Error('The IGP now requires an off-chain signed quote that this reviewed example does not support')
-  const gasOracle = decodedIgp.gasOracles.get(destinationDomain)
-  if (!gasOracle) throw new Error('The IGP has no Aleo gas oracle')
-  const gas = gasOracle.value
-  const quoteScale = 10n ** BigInt(10 + gas.tokenDecimals)
-  const hookPayment = ((destinationGas + overhead) * gas.gasPrice * gas.tokenExchangeRate) / quoteScale
-
-  const [balanceResult, latestBlockhash, uniqueMessageAccount] = await Promise.all([
-    rpc.getBalance(signer.address, { commitment: 'confirmed' }).send(),
-    rpc.getLatestBlockhash({ commitment: 'confirmed' }).send(),
-    generateKeyPairSigner(),
-  ])
-  const balance = BigInt(balanceResult.value)
-  const { address: programData } = await deriveIgpProgramDataPda(igp.programId)
-  const { address: paymentPda } = await deriveIgpGasPaymentPda(igp.programId, uniqueMessageAccount.address)
-  const utf8 = getUtf8Encoder()
-  const [nativeCollateral] = await getProgramDerivedAddress({
-    programAddress: WARP_ROUTE_PROGRAM,
-    seeds: [utf8.encode('hyperlane_token'), utf8.encode('-'), utf8.encode('native_collateral')],
-  })
-  const transferInstruction = await getTokenTransferRemoteInstruction({
-    programAddress: WARP_ROUTE_PROGRAM,
-    sender: signer,
-    uniqueMessageAccount,
-    mailbox: token.mailbox,
-    data: {
-      destinationDomain,
-      recipient: hexToBytes(aleoAddressToBytes32(recipient)),
-      amountOrId: amountAtomic,
-    },
-    igp: {
-      programId: igp.programId,
-      programData,
-      paymentPda,
-      igpAccount: igp.igpType.account,
-      ...(igp.igpType.kind === OVERHEAD_IGP_KIND ? { innerIgp } : {}),
-    },
-    pluginAccounts: [
-      { address: SYSTEM_PROGRAM, role: AccountRole.READONLY },
-      { address: nativeCollateral, role: AccountRole.WRITABLE },
-    ],
-  })
-  const transactionMessage = pipe(
-    createTransactionMessage({ version: 0 }),
-    (message) => setTransactionMessageFeePayerSigner(signer, message),
-    (message) => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash.value, message),
-    (message) => appendTransactionMessageInstructions([
-      ...getComputeBudgetInstructions(),
-      transferInstruction,
-    ], message),
-  )
-  const compiled = compileTransaction(transactionMessage)
-  const encodedMessage = getBase64Decoder().decode(compiled.messageBytes) as TransactionMessageBytesBase64
-  const feeResult = await rpc.getFeeForMessage(encodedMessage, { commitment: 'confirmed' }).send()
-  if (feeResult.value == null) throw new Error('Solana RPC could not quote the transaction fee')
-  const transactionFee = BigInt(feeResult.value)
-  const unsignedSimulation = await rpc.simulateTransaction(getBase64EncodedWireTransaction(compiled), {
-    commitment: 'confirmed',
-    encoding: 'base64',
-    sigVerify: false,
-  }).send()
-  if (unsignedSimulation.value.err) {
-    throw new Error(`Solana preflight simulation failed: ${stringify(unsignedSimulation.value.err)}\n${unsignedSimulation.value.logs?.join('\n') ?? ''}`)
-  }
+  // ── Check funds and current fees ────────────────────────────────────
+  if (quote.kind !== 'solana-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
+  const plan = quote.plan
+  // The source account needs more than the transferred lamport. The quoted
+  // Hyperlane delivery payment, Solana network fee, and account rent form the
+  // reserve that must remain available alongside the transfer amount.
+  const balance = await solana.publicClient.getBalance(senderAddress)
+  const decimals = plan.sourceAsset.decimals
 
   console.log('Read-only Solana SOL to Aleo SOL preflight')
   console.table({
-    route: ROUTE_ID,
-    sender: signer.address,
+    route: plan.route.id,
+    sender: senderAddress,
     recipient,
-    amount: `${formatAmount(amountAtomic)} SOL`,
-    nativeBalance: `${formatAmount(balance)} SOL`,
-    hyperlaneHookPayment: `${formatAmount(hookPayment)} SOL`,
-    solanaTransactionFee: `${formatAmount(transactionFee)} SOL`,
-    transactionValue: `${formatAmount(amountAtomic + hookPayment + transactionFee)} SOL`,
-    warpRouteProgram: WARP_ROUTE_PROGRAM,
-    destinationDomain,
-    sourceBalanceType: 'native SOL',
-    signingLibrary: '@solana/kit',
+    amount: `${formatAmount(quote.amountLamports, decimals)} SOL`,
+    nativeBalance: `${formatAmount(balance, decimals)} SOL`,
+    hyperlaneHookPayment: `${formatAmount(quote.igpPaymentLamports, decimals)} SOL`,
+    solanaNetworkFee: `${formatAmount(quote.networkFeeLamports, decimals)} SOL`,
+    totalRequired: `${formatAmount(quote.totalLamports, decimals)} SOL`,
+    warpRouteProgram: plan.route.metadata?.warpProgramAddress ?? 'unknown',
+    destinationDomain: plan.route.metadata?.destinationDomain ?? 'unknown',
   })
 
+  // ── Stop before the fund-moving boundary by default ─────────────────
+  // The read-only run can inspect any configured sender. Mainnet submission
+  // additionally requires the matching private key and the exact acknowledgement.
+  // This keeps copying the tutorial from creating an unexpected transfer.
   if (process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
     console.log('\nPreflight complete; no SOL was transferred.')
     console.log(`Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to submit the transfer.`)
     return
   }
-  if (!localSigner) throw new Error('SOLANA_PRIVATE_KEY is required for execution')
-  const totalRequired = amountAtomic + hookPayment + transactionFee
-  if (balance < totalRequired) {
-    throw new Error(`Insufficient SOL balance; requires at least ${formatAmount(totalRequired)} SOL`)
-  }
+  if (!solana.walletClient) throw new Error('SOLANA_PRIVATE_KEY is required for execution')
 
-  const signedTransaction = await signTransactionMessageWithSigners(transactionMessage)
-  const encodedTransaction = getBase64EncodedWireTransaction(signedTransaction)
-  const simulation = await rpc.simulateTransaction(encodedTransaction, {
-    commitment: 'confirmed',
-    encoding: 'base64',
-    sigVerify: true,
-  }).send()
-  if (simulation.value.err) {
-    throw new Error(`Solana simulation failed: ${stringify(simulation.value.err)}\n${simulation.value.logs?.join('\n') ?? ''}`)
-  }
-  const signature = await rpc.sendTransaction(encodedTransaction, {
-    encoding: 'base64',
-    preflightCommitment: 'confirmed',
-  }).send()
-  console.log('\nBroadcast Solana transaction:', signature)
+  // One signed Solana transaction commits the SOL to the route, pays the
+  // relayer, and creates the message for Aleo. That broadcast is the irreversible
+  // source boundary; a timeout is not permission to submit the transfer again.
+  console.log('\nExecution enabled. Submitting the transfer with the keypair held by this process.')
+  const execution = await bridge.execute({
+    plan,
+    confirmationTimeoutMs: DEFAULT_CONFIRMATION_TIMEOUT_MS,
+    onCheckpoint(checkpoint) {
+      // The checkpoint records the public transfer intent and source signature
+      // immediately after broadcast. A durable application atomically replaces
+      // its saved checkpoint here; this tutorial only prints it.
+      console.log('Optional recovery checkpoint:', JSON.stringify(checkpoint))
+    },
+  })
+  if (execution.kind !== 'solana-hyperlane') throw new Error(`Unexpected execution kind: ${execution.kind}`)
 
-  const confirmationTimeout = millisecondsFromEnvironment('SOLANA_CONFIRMATION_TIMEOUT_MS', 2 * 60_000)
-  const deadline = Date.now() + confirmationTimeout
-  while (Date.now() < deadline) {
-    const status = (await rpc.getSignatureStatuses([signature], { searchTransactionHistory: true }).send()).value[0]
-    if (status?.err) throw new Error(`Solana transaction failed: ${stringify(status.err)}`)
-    if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
-      console.log('Solana SOL dispatch confirmed:', signature)
-      console.log('A Hyperlane relayer will deliver the message and mint SOL on Aleo.')
-      return
-    }
-    await new Promise((resolve) => setTimeout(resolve, 2_000))
-  }
-  throw new Error(`Timed out waiting for ${signature}; check its status before retrying because it was already broadcast`)
+  // ── Observe settlement without authorizing another transaction ──────
+  // Chain reads first determine whether Solana accepted the signature, then
+  // verify delivery in Aleo's canonical Mailbox. A timeout or RPC error leaves
+  // the outcome unknown and does not undo a landed transfer. After a restart,
+  // recover from the saved signature instead of signing another transaction.
+  const progress = await bridge.wait({ progress: { next: 'wait', plan, receipt: execution.receipt } })
+  if (progress.next === 'failed') throw new Error(progress.error)
+  if (progress.next !== 'done') throw new Error(`Unexpected next operation: ${progress.next}`)
+  console.log('Bridge completed:', progress.receipt)
+  // Hyperlane delivered SOL into a public Aleo balance. Connect the recipient's
+  // Aleo wallet and call shield() afterward when the asset should become a
+  // private record.
 }
 
 runSolanaHyperlaneExample().catch((error: unknown) => {

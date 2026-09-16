@@ -45,7 +45,10 @@ export async function waitForConfirmation(
       }) as ConfirmedTransaction | null
       if (confirmed) {
         if (confirmed.status === 'rejected') {
-          throw new FinalizeRevertError(txId)
+          const feeTransactionId = typeof confirmed.transaction.id === 'string'
+            ? confirmed.transaction.id
+            : undefined
+          throw new FinalizeRevertError(txId, { feeTransactionId })
         }
         return confirmed.transaction
       }
