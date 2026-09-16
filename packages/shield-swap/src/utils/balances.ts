@@ -1,5 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
 import type { ApiClient } from '../api/client.js'
+import { getPublicBalances } from '../actions/reads/getPublicBalances.js'
 import { getPrivateBalances } from './records.js'
 
 /**
@@ -22,7 +23,8 @@ export type GetBalancesParameters = {
  *
  * @property symbol Token symbol from the registry (e.g. `ETHx`).
  * @property decimals Token decimals — apply them to render a human amount.
- * @property public Public/authorized balance (raw base units) from the API.
+ * @property public Public balance (raw base units) from the AMM token
+ *   program's on-chain `balances` mapping.
  * @property private Private balance (raw base units) summed from the user's records.
  * @property total `public + private`.
  */
@@ -40,20 +42,22 @@ export type GetBalancesReturnType = Record<string, BalanceEntry>
 /**
  * Tabulates public, private, and total balances per token.
  *
- * Composes the two balance views into one: the API's public/authorized
- * balances ({@link ApiClient.getPublicBalances}) and the record-derived
- * private balances ({@link getPrivateBalances}). The API's token registry
- * bridges them — public balances key by token id, private records key by
- * wrapper program — and supplies the token set to scan, so no program list
- * needs to be passed. Both sides are raw base units in each token's own decimals, so
+ * Composes the two chain-derived balance views into one: the AMM token
+ * programs' public `balances` mappings ({@link getPublicBalances}) and the
+ * record-derived private balances ({@link getPrivateBalances}). The API's
+ * token registry bridges them — public balances live in each token's
+ * `amm_token_program`, private records in its `underlying_program` — and
+ * supplies the token set to scan, so no program list needs to be passed.
+ * Both sides are raw base units in each token's own decimals, so
  * `total = public + private` is meaningful per token.
  *
- * Hits the network: the token list, the public-balance read, and one record
- * scan per token program (via the client's record provider). Requires
- * `client.api` to be configured.
+ * Hits the network: the API's token list, one mapping read per token
+ * program, and one record scan per underlying program (via the client's
+ * record provider). Requires `client.api` to be configured; the token list
+ * is a public endpoint, so no credential is needed.
  *
  * @param client A Veil wallet client with a record provider (for private balances).
- * @param api The DEX API client (for the token list and public balances).
+ * @param api The DEX API client (for the token list).
  * @param params Optional address override and token filter.
  * @returns Per-token `{ symbol, decimals, public, private, total }`, keyed by token id.
  * @throws When no `user` is given and the client has no account address.
@@ -72,27 +76,36 @@ export async function getBalances(
     throw new Error('getBalances needs a user address — pass params.user or use a client with an account')
   }
 
-  // Registry: token id ↔ underlying program, plus symbol/decimals for the result.
+  // Registry: token id ↔ programs, plus symbol/decimals for the result.
   const tokens = (await api.getTokens()).data
   const scoped = params.tokens ? tokens.filter((t) => params.tokens!.includes(t.address)) : tokens
 
-  // Public balances key by token id; private records live in the underlying
-  // program — the spendable inventory users actually hold (a plain ARC-20's
-  // own records, or a wrapped asset's underlying, e.g. credits for ALEO).
-  const publicByToken = new Map(
-    (await api.getPublicBalances({ user })).data.map((b) => [b.token_id, BigInt(b.balance)]),
-  )
-  const programs = scoped.map((t) => t.underlying_program).filter((p): p is string => !!p)
-  const priv = await getPrivateBalances(client, { programs })
+  // Public balances live in the AMM token program the DEX dispatches through
+  // (`ARC20@(token_id)::transfer_from_public`); private records live in the
+  // underlying program — the spendable inventory users actually hold (a
+  // plain ARC-20's own records, or a wrapped asset's underlying, e.g. credits
+  // for ALEO). Both reads run concurrently.
+  const publicPrograms = scoped.map((t) => t.amm_token_program).filter((p): p is string => !!p)
+  const privatePrograms = scoped.map((t) => t.underlying_program).filter((p): p is string => !!p)
+  const [pub, priv] = await Promise.all([
+    getPublicBalances(client, { user, programs: publicPrograms }),
+    getPrivateBalances(client, { programs: privatePrograms }),
+  ])
 
   const out: GetBalancesReturnType = {}
   for (const t of scoped) {
-    const pub = publicByToken.get(t.address) ?? 0n
-    const prv = t.underlying_program ? (priv[t.underlying_program] ?? 0n) : 0n
+    const publicBalance = t.amm_token_program ? (pub[t.amm_token_program] ?? 0n) : 0n
+    const privateBalance = t.underlying_program ? (priv[t.underlying_program] ?? 0n) : 0n
     // With an explicit token filter, report every requested token; otherwise
     // skip tokens the user does not hold at all.
-    if (!params.tokens && pub === 0n && prv === 0n) continue
-    out[t.address] = { symbol: t.symbol, decimals: t.decimals, public: pub, private: prv, total: pub + prv }
+    if (!params.tokens && publicBalance === 0n && privateBalance === 0n) continue
+    out[t.address] = {
+      symbol: t.symbol,
+      decimals: t.decimals,
+      public: publicBalance,
+      private: privateBalance,
+      total: publicBalance + privateBalance,
+    }
   }
   return out
 }

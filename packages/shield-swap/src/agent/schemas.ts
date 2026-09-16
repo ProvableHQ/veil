@@ -168,6 +168,28 @@ export const getPrivateBalancesSchema: AgentToolSchema = {
   },
 }
 
+/** Declares the `shield_swap_get_public_balances` tool — an address's public balances from each AMM token program's on-chain `balances` mapping (backed by `getPublicBalances`). */
+export const getPublicBalancesSchema: AgentToolSchema = {
+  name: 'shield_swap_get_public_balances',
+  description:
+    "Read an address's public token balances from chain — each AMM token program's `balances` " +
+    'mapping, keyed by program. Raw base-unit strings; absent entries read as "0". The public ' +
+    'counterpart to shield_swap_get_private_balances. Defaults to the client account when user ' +
+    'is omitted.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      user: { type: 'string', description: 'Address to read balances for (aleo1…). Defaults to the client account.' },
+      programs: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'AMM token programs to read (the token registry\'s amm_token_program), e.g. ["test_arc20_eth.aleo"].',
+      },
+    },
+    required: ['programs'],
+  },
+}
+
 /** Declares the `shield_swap_get_owned_positions` tool — lists the caller's liquidity positions from their PositionNFT records with on-chain state and derived values (backed by `getOwnedPositions`). */
 export const getOwnedPositionsSchema: AgentToolSchema = {
   name: 'shield_swap_get_owned_positions',
@@ -249,19 +271,6 @@ export const listTokensSchema: AgentToolSchema = {
   inputSchema: { type: 'object', properties: {}, required: [] },
 }
 
-/** Declares the `shield_swap_get_public_balances` tool — an address's public/authorized balances from the DEX API (backed by `ApiClient.getPublicBalances`). */
-export const getPublicBalancesSchema: AgentToolSchema = {
-  name: 'shield_swap_get_public_balances',
-  description:
-    "Read an address's public/authorized token balances from the DEX API. Raw base-unit " +
-    'strings. This is the public counterpart to shield_swap_get_private_balances.',
-  inputSchema: {
-    type: 'object',
-    properties: { user: { type: 'string', description: 'Address to read balances for (aleo1…).' } },
-    required: ['user'],
-  },
-}
-
 // ---------------------------------------------------------------------------
 // Composed (needs both client and API).
 // ---------------------------------------------------------------------------
@@ -304,26 +313,26 @@ export const authenticateSchema: AgentToolSchema = {
   inputSchema: { type: 'object', properties: {}, required: [] },
 }
 
-/** Declares the `shield_swap_get_access_status` tool — whether the account has redeemed an invite code (backed by `ApiClient.getAccessStatus`). */
+/** Declares the `shield_swap_get_access_status` tool — whether the account has redeemed a referral code (backed by `ApiClient.getReferralStatus`). */
 export const getAccessStatusSchema: AgentToolSchema = {
   name: 'shield_swap_get_access_status',
   description:
-    'Check whether the authenticated account has redeemed an invite code. Gated DEX API ' +
-    'endpoints return 403 until it has — when has_access is false, redeem a code with ' +
+    'Check whether the authenticated account has redeemed a referral (invite) code. Gated DEX ' +
+    'API endpoints return 403 until it has — when has_access is false, redeem a code with ' +
     'shield_swap_redeem_access_code. Requires shield_swap_authenticate first.',
   inputSchema: { type: 'object', properties: {}, required: [] },
 }
 
-/** Declares the `shield_swap_redeem_access_code` tool — redeems an invite code, unlocking the gated DEX API endpoints (backed by `ApiClient.redeemAccessCode`). */
+/** Declares the `shield_swap_redeem_access_code` tool — redeems a referral code, unlocking the gated DEX API endpoints (backed by `ApiClient.redeemReferralCode`). */
 export const redeemAccessCodeSchema: AgentToolSchema = {
   name: 'shield_swap_redeem_access_code',
   description:
-    'Redeem an invite code to unlock the gated DEX API endpoints for the account. One-time: ' +
-    'an already-used code is rejected. The upgraded session applies immediately. Requires ' +
+    'Redeem a referral (invite) code to unlock the gated DEX API endpoints for the account. ' +
+    'One-time: an already-used code is rejected. Access applies immediately. Requires ' +
     'shield_swap_authenticate first.',
   inputSchema: {
     type: 'object',
-    properties: { code: { type: 'string', description: 'The invite code to redeem.' } },
+    properties: { code: { type: 'string', description: 'The referral code to redeem.' } },
     required: ['code'],
   },
 }
@@ -688,6 +697,7 @@ export const chainToolSchemas: AgentToolSchema[] = [
   isPoolInitializedSchema,
   getFeeToTickSpacingSchema,
   getPrivateBalancesSchema,
+  getPublicBalancesSchema,
   getOwnedPositionsSchema,
   getOwnedPositionSchema,
   getPoolCreatorSchema,
@@ -708,7 +718,6 @@ export const apiToolSchemas: AgentToolSchema[] = [
   listPoolsSchema,
   getRouteSchema,
   listTokensSchema,
-  getPublicBalancesSchema,
 ]
 
 /** Composed tools — require both a client and an ApiClient. */

@@ -1,6 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
 import type { AgentToolHandler } from '@provablehq/veil-core/agent'
-import { authenticateWithAccount, ApiError, type ApiClient } from '../api/client.js'
+import { authenticateWithAccount, type ApiClient } from '../api/client.js'
 import { resolveDexImports } from '../utils/imports.js'
 import { getPool } from '../actions/reads/getPool.js'
 import { getSlot } from '../actions/reads/getSlot.js'
@@ -16,6 +16,7 @@ import { getFrozenPosition } from '../actions/reads/getFrozenPosition.js'
 import { isPoolCreationOpen } from '../actions/reads/isPoolCreationOpen.js'
 import { isPoolInitialized } from '../actions/reads/isPoolInitialized.js'
 import { getFeeToTickSpacing } from '../actions/reads/getFeeToTickSpacing.js'
+import { getPublicBalances } from '../actions/reads/getPublicBalances.js'
 import { getPrivateBalances } from '../utils/records.js'
 import { getBalances } from '../utils/balances.js'
 import {
@@ -80,6 +81,10 @@ export function createChainHandlers(client: Client, program?: string): Record<st
     }),
     shield_swap_get_private_balances: async (i) =>
       jsonSafe(await getPrivateBalances(client, { programs: i.programs as string[] })),
+    shield_swap_get_public_balances: async (i) =>
+      jsonSafe(
+        await getPublicBalances(client, { user: i.user as string | undefined, programs: i.programs as string[] }),
+      ),
     shield_swap_get_owned_positions: async (i) =>
       jsonSafe(
         (await getOwnedPositions(client, { poolKey: i.poolKey as string | undefined, program })).map(stripRecord),
@@ -117,7 +122,6 @@ export function createApiHandlers(api: ApiClient): Record<string, AgentToolHandl
         ...(i.amountIn !== undefined ? { amount_in: String(i.amountIn) } : {}),
       }),
     shield_swap_list_tokens: async () => api.getTokens(),
-    shield_swap_get_public_balances: async (i) => api.getPublicBalances({ user: i.user as string }),
   }
 }
 
@@ -147,20 +151,12 @@ export function createAuthHandlers(client: Client, api: ApiClient): Record<strin
       await authenticateWithAccount(api, client.account)
       return { authenticated: true, address: client.account!.address }
     },
-    shield_swap_get_access_status: async () => api.getAccessStatus(),
+    shield_swap_get_access_status: async () => api.getReferralStatus(),
     shield_swap_redeem_access_code: async (i) => {
-      // Distributed codes come as access codes or referral codes; both
-      // unlock the account, so try both endpoints before failing. The
-      // upgraded session token stays inside the ApiClient — the agent
-      // needs the outcome, not the credential.
-      try {
-        const { code, status } = await api.redeemAccessCode(i.code as string)
-        return { code, status }
-      } catch (err) {
-        if (!(err instanceof ApiError) || err.status !== 400) throw err
-        const { code, status } = await api.redeemReferralCode(i.code as string)
-        return { code, status }
-      }
+      // The access grant stays server-side against the ApiClient's session —
+      // the agent needs the outcome, not a credential.
+      const { code, status } = await api.redeemReferralCode(i.code as string)
+      return { code, status }
     },
     shield_swap_create_api_token: async (i) =>
       api.createApiToken({

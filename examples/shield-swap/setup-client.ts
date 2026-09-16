@@ -20,7 +20,7 @@
  * Reads that touch only pools and tokens need none of this. Start at
  * `readClient` if that is all the work requires.
  */
-import { createPublicClient, http } from '../../packages/core/src/index.js'
+import { createPublicClient, http, publicActions } from '../../packages/core/src/index.js'
 import { generateAccount, loadNetwork, registerProvableApi } from '../../packages/provable-sdk/src/index.js'
 import { shieldSwapActions } from '../../packages/shield-swap/src/index.js'
 
@@ -117,7 +117,7 @@ export async function setupClient(config: {
   // `.extend()` is viem's composition step: it returns a client carrying the DEX
   // actions, so everything afterwards is `client.planSwap()`, `client.swap()`,
   // and the rest hanging off one object.
-  const client = walletClient.extend(shieldSwapActions({ api: {} }))
+  const client = walletClient.extend(publicActions).extend(shieldSwapActions({ api: {} }))
 
   // ── 4. The DEX session ──────────────────────────────────────────────
   // The account signs a challenge and gets a session back. Routes, balances, fee
@@ -129,12 +129,12 @@ export async function setupClient(config: {
   // Separate from authentication: the session proves who the account is, access
   // decides whether it may trade at all. Check before redeeming, because a code
   // is spent on use and there is no way to get it back.
-  const access = await client.api.getAccessStatus()
+  const access = await client.api.getReferralStatus()
   if (!access.has_access) {
     if (!config.inviteCode) {
       throw new Error(`${account.address} has no DEX access yet — pass an invite code to redeem one.`)
     }
-    await client.api.redeemAccessCode(config.inviteCode)
+    await client.api.redeemReferralCode(config.inviteCode)
   }
 
   return { client, account, privateKey, provable }

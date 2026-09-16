@@ -231,7 +231,7 @@ export async function claimSwapOutput(
   if (!handle.blindedAddress) {
     throw new Error(
       'handle.blindedAddress is not set — recover it from the confirmed request transaction ' +
-        "(or the API's swap.recipient) so the wallet can re-derive the blinding factor.",
+        "(or getSwapOutput's recipient) so the wallet can re-derive the blinding factor.",
     )
   }
   // The derivation scope is the CORE program even for router-submitted

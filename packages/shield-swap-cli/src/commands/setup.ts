@@ -205,7 +205,9 @@ async function setup(argv: string[]): Promise<void> {
   )
 
   // ── 4: invite-code access gate ───────────────────────────────────────
-  const status = await client.api.getAccessStatus()
+  // Distributed invite codes are referral codes; /referral/redeem is the
+  // single endpoint that unlocks an account.
+  const status = await client.api.getReferralStatus()
   if (!status.has_access) {
     if (!inviteCode) {
       console.error(
@@ -215,27 +217,13 @@ async function setup(argv: string[]): Promise<void> {
       )
       process.exit(2)
     }
-    // Distributed codes come in two kinds with one purpose: access codes
-    // (/access/redeem) and referral codes (/referral/redeem) both unlock
-    // the account. Try both before rejecting the code.
-    let redeemed = false
-    for (const attempt of [
-      () => client.api.redeemAccessCode(inviteCode),
-      () => client.api.redeemReferralCode(inviteCode),
-    ]) {
-      try {
-        await attempt()
-        redeemed = true
-        break
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 400) continue
-        throw err
-      }
-    }
-    if (!redeemed) {
+    try {
+      await client.api.redeemReferralCode(inviteCode)
+    } catch (err) {
+      if (!(err instanceof ApiError) || err.status !== 400) throw err
       console.error(
-        `\nINVALID_INVITE_CODE: the server rejected "${inviteCode}" as both an access ` +
-          'code and a referral code. Ask the user for a valid, unused code and re-run.\n',
+        `\nINVALID_INVITE_CODE: the server rejected "${inviteCode}". ` +
+          'Ask the user for a valid, unused code and re-run.\n',
       )
       process.exit(2)
     }

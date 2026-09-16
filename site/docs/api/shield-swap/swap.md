@@ -121,7 +121,7 @@ process since it is plain JSON.
 - **blindedAddress** — `string | undefined`. The public single-use address
   the swap recorded. Set immediately on the local path; on the wallet path,
   recover it post-confirmation from the transition's public inputs or the
-  API's `swap.recipient`.
+  `recipient` of the chain's `swap_outputs` entry (`getSwapOutput`).
 - **tokenInId** — `string`. Token id (field literal) that was sold.
 - **tokenOutId** — `string`. Token id (field literal) that was bought.
 - **poolKey** — `string`. The pool the swap executed against.

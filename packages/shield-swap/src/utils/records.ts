@@ -419,9 +419,9 @@ export type GetPrivateBalancesReturnType = Record<string, bigint>
 /**
  * Tabulates the caller's private balances from their unspent token records.
  *
- * This is the record-derived, private counterpart to the API's
- * `getPublicBalances` (which reports public/authorized balances for any address):
- * it sums what the caller can actually spend privately, per token.
+ * This is the record-derived, private counterpart to the chain-direct
+ * `getPublicBalances` (which reads any address's public `balances` mapping
+ * entries): it sums what the caller can actually spend privately, per token.
  *
  * Hits the network (or the wallet's scanner): one `requestRecords` call per
  * program. A privacy-preserving wallet may withhold plaintext for ungranted

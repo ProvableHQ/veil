@@ -324,6 +324,14 @@ Set `USDCX_BURN_MODE=public` to spend the public USDCx balance. Private mode
 uses the configured record scanner to select the smallest unspent record that
 covers the transfer and derives the current freeze-list exclusion proof.
 
+The wrapper requires a `[MerkleProof; 2]` non-inclusion witness for its
+compliance list. The example fetches the live tree from
+`usdcx_freezelist.aleo/compliance/freeze-list` and uses the Provable SDK's
+`SealanceMerkleTree` to derive the witness for the Aleo signer immediately
+before submission. The depth-15 tree is encoded as the wrapper contract's
+required 16-field path because the SDK includes the selected leaf as the first
+path element.
+
 ## Submit a reviewed example
 
 Every script quotes first and exits without submitting by default. After

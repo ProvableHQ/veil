@@ -19,7 +19,8 @@ import {
 
 const USDCX_PROGRAM = 'usdcx_stablecoin.aleo'
 const FREEZE_LIST_URL = 'https://api.provable.com/v2/mainnet/programs/usdcx_freezelist.aleo/compliance/freeze-list'
-const FREEZE_LIST_DEPTH = 15
+const FREEZE_LIST_TREE_DEPTH = 15
+const FREEZE_LIST_PROOF_LENGTH = FREEZE_LIST_TREE_DEPTH + 1
 const MINIMUM_BURN_AMOUNT_ATOMIC = 2_000_000n
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
 const EXECUTION_ENVIRONMENT_VARIABLE = 'EXECUTE_BRIDGE'
@@ -115,8 +116,19 @@ async function createExclusionProof(address: string): Promise<string> {
   // The neighboring leaves on both sides of the address prove its absence from
   // the ordered tree. The Aleo program checks these sibling paths during burn.
   const [leftIndex, rightIndex] = sealance.getLeafIndices(tree, address)
-  const leftProof = sealance.getSiblingPath(tree, leftIndex, FREEZE_LIST_DEPTH)
-  const rightProof = sealance.getSiblingPath(tree, rightIndex, FREEZE_LIST_DEPTH)
+  // The SDK includes the selected leaf as the first path element, so a
+  // depth-15 tree produces the contract's required [field; 16u32] array.
+  const leftProof = sealance.getSiblingPath(tree, leftIndex, FREEZE_LIST_PROOF_LENGTH)
+  const rightProof = sealance.getSiblingPath(tree, rightIndex, FREEZE_LIST_PROOF_LENGTH)
+  if (
+    leftProof.siblings.length !== FREEZE_LIST_PROOF_LENGTH ||
+    rightProof.siblings.length !== FREEZE_LIST_PROOF_LENGTH
+  ) {
+    throw new Error(
+      `USDCx exclusion proof paths must contain ${FREEZE_LIST_PROOF_LENGTH} fields; ` +
+      `received ${leftProof.siblings.length} and ${rightProof.siblings.length}`,
+    )
+  }
   return sealance.formatMerkleProof([leftProof, rightProof])
 }
 

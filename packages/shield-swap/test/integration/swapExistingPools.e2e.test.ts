@@ -47,6 +47,16 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
   let account: ReturnType<Awaited<ReturnType<typeof loadNetwork>>['createAleoClient']>['account']
   let dex: ReturnType<ReturnType<typeof shieldSwapActions>>
 
+  /** Public wrapper-program balances keyed by token id, read from chain. */
+  async function publicBalancesByToken(): Promise<Map<string, bigint>> {
+    const tokens = (await dex.api.getTokens()).data.filter((t) => !!t.amm_token_program)
+    const byProgram = await dex.getPublicBalances({
+      user: account.address,
+      programs: tokens.map((t) => t.amm_token_program!),
+    })
+    return new Map(tokens.map((t) => [t.address, byProgram[t.amm_token_program!] ?? 0n]))
+  }
+
   const state: {
     poolKey?: string
     tokenIn?: { address: string; program: string; decimals: number }
@@ -80,8 +90,8 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
     // job, and don't abort the suite if the faucet misbehaves — the discovery
     // step reports an unfunded account with a clear message.
     const funded = async () => {
-      const b = await dex.api.getPublicBalances({ user: account.address })
-      return b.data.some((x) => BigInt(x.balance ?? 0) > 0n)
+      const balances = await publicBalancesByToken()
+      return [...balances.values()].some((balance) => balance > 0n)
     }
     if (!(await funded())) {
       try {
@@ -95,8 +105,8 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
 
   it('discovers an existing pool with liquidity the account can fund', async (ctx) => {
     const pools = await dex.api.getPools({ limit: 50 })
-    const balances = await dex.api.getPublicBalances({ user: account.address })
-    const funded = new Set(balances.data.filter((b) => BigInt(b.balance ?? 0) > 0n).map((b) => b.token_id))
+    const balances = await publicBalancesByToken()
+    const funded = new Set([...balances].filter(([, balance]) => balance > 0n).map(([tokenId]) => tokenId))
 
     // A live pool needs: both tokens wrapper-backed, non-zero on-chain
     // liquidity, and the account funded in one of the two tokens (that side

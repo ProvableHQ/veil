@@ -29,11 +29,7 @@ import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 import { ShieldWalletAdapter } from '@provablehq/aleo-wallet-adaptor-shield'
 import { Network } from '@provablehq/aleo-types'
 import { WalletDecryptPermission } from '@provablehq/aleo-wallet-standard'
-import {
-  shieldSwapActions,
-  SHIELD_SWAP_ALGORITHM_GRANTS,
-  SwapOutputNotFinalizedError,
-} from '@provablehq/shield-swap-sdk'
+import { shieldSwapActions, SHIELD_SWAP_ALGORITHM_GRANTS } from '@provablehq/shield-swap-sdk'
 
 const NODE_URL = 'https://api.provable.com/v2' // Aleo node — chain reads
 const AMM_API_URL = 'https://api.testnet.swap.shield.fi' // Shield Swap indexer — pool discovery
@@ -99,28 +95,28 @@ export async function shieldPrivateSwap(amountIn = 1_000_000n) {
     tokenRecord,
   })
 
-  // 6. Recover swapId + blindedAddress from the confirmed request transaction —
-  //    the wallet filled the blinding slots, so the handle lacks them. swapId is
-  //    the swap transition's first `field` output; the blinded address is the
-  //    swap's recorded recipient.
+  // 6. Recover swapId from the confirmed request transaction — the wallet
+  //    filled the blinding slots, so the handle lacks it. swapId is the swap
+  //    transition's first `field` output.
   const tx = await getTransaction(client, { id: handle.transactionId })
   const swapId = extractTransitions(tx).outputs.find((output) => output.endsWith('field'))
   if (!swapId) {
     throw new Error('swap_id not in the request transaction yet — retry once it finalizes.')
   }
   handle.swapId = swapId
-  handle.blindedAddress = (await client.api.getSwap(swapId)).data.recipient
 
-  // 7. Phase 2 — claim. The output is not yours until claimed. Retry while the
-  //    request finalizes (the indexer runs a few seconds behind the chain).
+  // 7. Phase 2 — claim. The output is not yours until claimed. Poll the chain's
+  //    `swap_outputs` mapping until the request finalizes: the entry's
+  //    `recipient` is the blinded address the wallet recorded, which the wallet
+  //    re-derives its blinding factor from at claim time.
   for (let attempt = 0; attempt < 20; attempt++) {
-    try {
+    const output = await client.getSwapOutput({ swapId })
+    if (output) {
+      handle.blindedAddress = output.recipient
       const { amountOut, amountRemaining } = await client.claimSwapOutput({ handle, imports })
       return { swapId, amountOut, amountRemaining }
-    } catch (err) {
-      if (!(err instanceof SwapOutputNotFinalizedError)) throw err
-      await new Promise((resolve) => setTimeout(resolve, 3_000))
     }
+    await new Promise((resolve) => setTimeout(resolve, 3_000))
   }
   throw new Error('Swap output did not finalize in time.')
 }
