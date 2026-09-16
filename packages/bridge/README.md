@@ -7,7 +7,9 @@ The package supports browser wallets and local keys. It does not choose a
 wallet, store transfer progress, or submit a second transaction after an
 interruption without caller authorization.
 
-> This package is in preview and is not published yet.
+> This package is published as a preview. It is versioned separately from the
+> `@provablehq/veil-*` packages, and its API is subject to breaking changes
+> between minor releases.
 
 ## Supported transfers
 
