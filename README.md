@@ -92,7 +92,7 @@ and transport interfaces.
 | `@provablehq/veil-codegen` | Generate typed bindings from an Aleo program ABI (library + `veil-codegen` CLI). | You want typed reads and writes for a specific program's ABI. |
 | `@provablehq/veil-aleo-devnode` | Run and drive a local Aleo devnode for tests. | You need a local Aleo node in tests or local development. |
 | `@provablehq/veil-leo` | Typed wrapper around the `leo` CLI (build, deploy, …). | You compile or deploy Leo programs — including during testing, where it pairs with `@provablehq/veil-aleo-devnode`. |
-| `@provablehq/aleo-bridge-sdk` | Cross-chain bridge client (preview). | Not yet — in preview, not published. |
+| `@provablehq/aleo-bridge-sdk` | Cross-chain bridge client (preview). Versioned separately from the Veil packages; expect breaking changes between minor releases. | You move assets between Aleo and Ethereum or Solana over Circle xReserve or Hyperlane. |
 
 ## Quick Start
 

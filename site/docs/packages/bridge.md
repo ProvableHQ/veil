@@ -5,7 +5,7 @@ sidebar_position: 10
 # @provablehq/aleo-bridge-sdk
 
 :::caution Preview
-The package is private and not yet published to npm. Execution is available for select routes through registry-keyed chain clients; other execution paths remain under development.
+The package is published to npm as a preview and is versioned separately from the `veil-*` packages. Its API is subject to breaking changes between minor releases. Execution is available for select routes through registry-keyed chain clients; other execution paths remain under development.
 :::
 
 The bridge client assigns each asset family to its canonical protocol:
