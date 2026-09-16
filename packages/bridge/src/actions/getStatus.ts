@@ -47,6 +47,11 @@ export async function getStatus(
   if (receipt.protocol !== params.plan.protocol || receipt.protocolState.routeId !== params.plan.route.id) {
     throw new BridgeError('Bridge receipt does not match the prepared route')
   }
+  // Terminal receipts are facts already established by an earlier chain read.
+  // Checking them again must not route into a protocol-specific pending branch.
+  if (receipt.status === 'COMPLETED' || receipt.status === 'FAILED' || receipt.status === 'EXPIRED') {
+    return receipt
+  }
 
   if (receipt.status === 'SOURCE_APPROVAL_PENDING' && route.sourceChain.family === 'evm') {
     // Approval does not move bridge funds. Once confirmed, stop at an explicit
@@ -150,7 +155,18 @@ export async function getStatus(
     return { ...withoutNextAction(receipt), status: 'COMPLETED' }
   }
 
-  if (receipt.status === 'DELIVERY_PENDING' && route.route.protocol === 'hyperlane') {
+  if (route.route.protocol === 'hyperlane') {
+    return receipt
+  }
+
+  // Circle's Aleo-to-EVM relayer does not expose a canonical delivery query in
+  // the current integration. Preserve the last verified source state so a
+  // caller can continue displaying or persisting it instead of receiving an
+  // unrelated unsupported-route error.
+  if (receipt.status === 'DELIVERY_PENDING'
+    && route.route.protocol === 'xreserve'
+    && route.sourceChain.family === 'aleo'
+    && route.destinationChain.family === 'evm') {
     return receipt
   }
 
@@ -161,6 +177,9 @@ export async function getStatus(
   const shouldCheckDelivery = receipt.status === 'ATTESTATION_PENDING'
     || receipt.status === 'DELIVERY_PENDING'
     || receipt.status === 'DESTINATION_ACTION_REQUIRED'
+  if (receipt.status === 'DELIVERY_PENDING' && !clients[route.destinationChain.id]) {
+    throw new BridgeError(`An Aleo client is required to verify xReserve delivery on chain "${route.destinationChain.id}"`)
+  }
   if (shouldCheckDelivery && clients[route.destinationChain.id]) {
     const storedNonce = receipt.protocolState.nonce
     const payload = receipt.protocolState.payload

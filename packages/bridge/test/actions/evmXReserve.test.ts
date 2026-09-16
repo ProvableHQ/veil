@@ -104,6 +104,30 @@ function mockExecutor(
 }
 
 describe('Ethereum xReserve actions', () => {
+  it('quotes a prepared sender through read-only EVM network access', async () => {
+    const { executor } = mockExecutor()
+    const bridge = createBridgeClient({
+      environment: 'testnet',
+      clients: {
+        sepolia: { family: 'evm', publicClient: executor.publicClient },
+      },
+    })
+
+    await expect(bridge.quote({
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+      amount: '2',
+      recipient: RECIPIENT,
+      sender: ACCOUNT,
+      mintMode: 'record',
+    })).resolves.toMatchObject({
+      kind: 'evm-xreserve',
+      balanceAtomic: 3_000_000n,
+      allowanceAtomic: 0n,
+      approvalRequired: true,
+    })
+  })
+
   it('approves USDC, deposits without msg.value, and returns resumable attestation state', async () => {
     const { executor, sent } = mockExecutor()
     const execution = await executeEvmXReserveTransfer(DEFAULT_BRIDGE_REGISTRY, executor, { plan: transferPlan() })

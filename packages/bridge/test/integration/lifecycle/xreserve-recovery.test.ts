@@ -348,6 +348,58 @@ describe('xReserve lifecycle', () => {
     expect(result).toMatchObject({ status: 'DELIVERY_PENDING', sourceTxId: 'at1burn' })
   })
 
+  it('keeps an accepted Aleo burn observable while xReserve relays to EVM', async () => {
+    const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'aleo-testnet', asset: 'usdcx' },
+      destination: { chain: 'sepolia', asset: 'usdc' },
+      amount: '2.1',
+      recipient: '0x0000000000000000000000000000000000000001',
+    })
+    const receipt: BridgeReceipt = {
+      id: 'at1burn',
+      protocol: 'xreserve',
+      status: 'DELIVERY_PENDING',
+      sourceTxId: 'at1burn',
+      protocolState: { routeId: plan.route.id },
+    }
+
+    await expect(getStatus(
+      DEFAULT_BRIDGE_REGISTRY,
+      {},
+      vi.fn(),
+      { plan, receipt },
+    )).resolves.toBe(receipt)
+  })
+
+  it('requires Aleo network access to verify provider-managed inbound delivery', async () => {
+    const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+      amount: '2',
+      recipient: RECIPIENT,
+      mintMode: 'record',
+    })
+    const waitingForDelivery: BridgeReceipt = {
+      id: `0x${'44'.repeat(32)}`,
+      protocol: 'xreserve',
+      status: 'DELIVERY_PENDING',
+      sourceTxId: `0x${'22'.repeat(32)}`,
+      protocolState: {
+        routeId: plan.route.id,
+        mintMode: 'record',
+        bridgeProgram: 'test_usdcx_bridge_v2.aleo',
+        nonce: `0x${'33'.repeat(32)}`,
+      },
+    }
+
+    await expect(getStatus(
+      DEFAULT_BRIDGE_REGISTRY,
+      {},
+      vi.fn(),
+      { plan, receipt: waitingForDelivery },
+    )).rejects.toThrow(/Aleo client.*verify xReserve delivery/i)
+  })
+
   it('recovers an Aleo burn from its compact source checkpoint', async () => {
     const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
       source: { chain: 'aleo-testnet', asset: 'usdcx' },

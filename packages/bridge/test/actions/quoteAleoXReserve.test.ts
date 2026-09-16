@@ -45,4 +45,25 @@ describe('Aleo xReserve quote', () => {
       params,
     )).rejects.toThrow(/must exceed.*2 USDCx/i)
   })
+
+  it('reports the same display amount when source and destination decimals differ', async () => {
+    const registry = {
+      ...DEFAULT_BRIDGE_REGISTRY,
+      assets: DEFAULT_BRIDGE_REGISTRY.assets.map((asset) =>
+        asset.id === 'ethereum/usdc' ? { ...asset, decimals: 18 } : asset),
+    }
+
+    const result = await quote(
+      registry,
+      { aleo: { family: 'aleo', publicClient: {} as never } },
+      {
+        source: { chain: 'aleo', asset: 'usdcx' },
+        destination: { chain: 'ethereum', asset: 'usdc' },
+        amount: '2.000001',
+        recipient: '0x0000000000000000000000000000000000000001',
+      },
+    )
+
+    expect(result.amountOut).toBe('0.000001')
+  })
 })

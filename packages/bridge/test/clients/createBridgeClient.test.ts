@@ -100,7 +100,7 @@ describe('createBridgeClient', () => {
     })).rejects.toThrow(/No client is configured for chain "ethereum"/)
   })
 
-  it('dispatches xReserve quotes to the wallet-capable EVM implementation', async () => {
+  it('requires a sender when quoting xReserve through read-only EVM access', async () => {
     const client = createBridgeClient({
       clients: { ethereum: createEvmClient({ transport: evmCustom(async () => '0x1') }) },
     })
@@ -109,7 +109,7 @@ describe('createBridgeClient', () => {
       destination: { chain: 'aleo', asset: 'usdcx' },
       amount: '1',
       recipient: 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n',
-    })).rejects.toThrow(/EVM wallet client is required to quote xReserve transfer/)
+    })).rejects.toThrow(/Read-only EVM access requires the prepared sender address/)
   })
 
   it('returns the deployed fee and net output when an Aleo xReserve burn has no live query', async () => {

@@ -99,7 +99,7 @@ async function observedAccount(client: EvmClient, plan: BridgePlan, receipt?: Br
   const candidate = typeof saved === 'string' ? saved : plan.sender
   if (candidate && isAddress(candidate)) return getAddress(candidate)
   if (client.walletClient) return account(client as EvmClient & { walletClient: EvmWalletClient }, plan)
-  throw new BridgeError('Read-only EVM recovery requires the prepared sender address')
+  throw new BridgeError('Read-only EVM access requires the prepared sender address')
 }
 
 async function account(client: EvmClient & { walletClient: EvmWalletClient }, plan: BridgePlan): Promise<Address> {
@@ -111,7 +111,7 @@ async function account(client: EvmClient & { walletClient: EvmWalletClient }, pl
 }
 
 /** Reads one unsigned integer from the USDC contract and rejects malformed RPC data before it can influence authorization. */
-async function callUint(client: EvmClient & { walletClient: EvmWalletClient }, to: Address, data: Hex, functionName: 'balanceOf' | 'allowance'): Promise<bigint> {
+async function callUint(client: EvmClient, to: Address, data: Hex, functionName: 'balanceOf' | 'allowance'): Promise<bigint> {
   const result = await client.publicClient.call({ to, data })
   if (typeof result !== 'string' || !isHex(result)) throw new BridgeError('EVM public client returned an invalid contract result')
   return decodeFunctionResult({ abi: ERC20_ABI, functionName, data: result })
@@ -143,12 +143,12 @@ function successful(receipt: EvmReceipt, hash: Hash): void {
 /**
  * Calculates the USDC and approval required for an Ethereum-to-Aleo xReserve deposit.
  *
- * The result includes the connected account's balance, current xReserve
+ * The result includes the source account's balance, current xReserve
  * allowance, maximum provider fee, and the Aleo delivery instruction committed
  * by the deposit. It reads Ethereum but does not request a signature or move funds.
  *
  * @param registry Supported assets and reviewed xReserve deployments.
- * @param client Ethereum network access and the account whose balance and allowance are checked.
+ * @param client Ethereum network access, plus a wallet when the plan does not identify the source account.
  * @param params Route, amount, Aleo recipient, privacy preference, and private mint secret when applicable.
  * @returns Deposit amount, maximum provider fee, balance, allowance, delivery instruction, and whether approval is required.
  * @throws BridgeError When the route is unavailable, the client uses the wrong chain or account, funds are insufficient, or the Aleo recipient is invalid.
@@ -158,12 +158,12 @@ function successful(receipt: EvmReceipt, hash: Hash): void {
  */
 export async function quote(
   registry: BridgeRegistry,
-  client: EvmClient & { walletClient: EvmWalletClient },
+  client: EvmClient,
   params: QuoteEvmXReserveTransferParameters,
 ): Promise<EvmXReserveTransferQuote> {
   const route = metadata(registry, params.plan)
   await assertChain(client, route.sourceChainId)
-  const owner = await account(client, params.plan)
+  const owner = await observedAccount(client, params.plan)
   const token = params.plan.sourceAsset.locator?.value
   if (params.plan.sourceAsset.locator?.kind !== 'evm-contract' || !token || !isAddress(token)) throw new BridgeError('xReserve source token contract is missing')
   const amountAtomic = parseDecimalAmount(params.plan.amountIn, params.plan.sourceAsset.decimals)

@@ -103,4 +103,26 @@ describe('readHyperlaneDelivery', () => {
 
     await expect(bridge.getStatus({ plan, receipt })).resolves.toBe(receipt)
   })
+
+  it.each(['COMPLETED', 'FAILED', 'EXPIRED'] as const)(
+    'returns an already-%s Hyperlane receipt without another network read',
+    async (status) => {
+      const bridge = createBridgeClient({ environment: 'mainnet' })
+      const plan = prepare(bridge.registry, {
+        source: { chain: 'ethereum', asset: 'eth' },
+        destination: { chain: 'aleo', asset: 'eth' },
+        bridgeProtocol: 'hyperlane',
+        amount: '0.000000000000000001',
+        recipient: ALEO_RECIPIENT,
+      })
+      const receipt = {
+        id: MESSAGE_ID,
+        protocol: 'hyperlane' as const,
+        status,
+        protocolState: { routeId: plan.route.id },
+      }
+
+      await expect(bridge.getStatus({ plan, receipt })).resolves.toBe(receipt)
+    },
+  )
 })

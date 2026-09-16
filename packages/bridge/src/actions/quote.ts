@@ -2,7 +2,6 @@ import { BridgeError } from '../errors/bridgeErrors.js'
 import {
   requireAleoClient,
   requireEvmClient,
-  requireEvmClientWithWallet,
   requireSolanaClient,
   type BridgeChainClients,
 } from '../connections/resolve.js'
@@ -81,7 +80,7 @@ export async function quote(
   if (plan.protocol === 'xreserve' && chain.family === 'evm') {
     const quote = await evmToAleoXReserve.quote(
       registry,
-      requireEvmClientWithWallet(registry, clients, chainId, 'quote xReserve transfer'),
+      requireEvmClient(registry, clients, chainId),
       protocolParams,
     )
     return { kind: 'evm-xreserve', plan, ...quote }
@@ -107,7 +106,10 @@ export async function quote(
       routeId: plan.route.id,
       protocol: 'xreserve',
       amountIn: plan.amountIn,
-      amountOut: formatDecimalAmount(amountOutAtomic, plan.destinationAsset.decimals),
+      // xReserve preserves the displayed denomination across USDC and USDCx.
+      // The remaining atomic amount is still expressed in source units here;
+      // formatting it with destination decimals would change its value.
+      amountOut: formatDecimalAmount(amountOutAtomic, plan.sourceAsset.decimals),
       fees: [
         ...plan.fees,
         {

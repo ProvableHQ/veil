@@ -354,7 +354,14 @@ function normalizeWalletClient(client: WalletClient): EvmWalletClient {
       if (from && getAddress(from) !== getAddress(account)) {
         throw new BridgeError(`EVM transaction sender ${from} does not match connected account ${account}`)
       }
-      return client.sendTransaction({ ...transaction, account: client.account ?? account } as never)
+      return client.sendTransaction({
+        ...transaction,
+        account: client.account ?? account,
+        // Viem treats an omitted chain as a request to validate against a
+        // configured chain and throws when an account-only client has none.
+        // The adapter already compared getChainId() with the requested id.
+        chain: client.chain ?? null,
+      } as never)
     },
   }
 }

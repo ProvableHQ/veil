@@ -174,16 +174,17 @@ export const xreserve = {
     /**
      * Calculates the USDC and token approval required for an xReserve transfer to Aleo.
      *
-     * Reads the connected Ethereum account's USDC balance and existing xReserve
-     * allowance without requesting a signature or moving funds.
+     * Reads the prepared sender's USDC balance and existing xReserve allowance
+     * without requesting a signature or moving funds. When the plan omits a
+     * sender, the client resolves it from its optional wallet capability.
      *
-     * @param client Ethereum network access and the account whose balance and allowance are checked.
+     * @param client Ethereum network access, plus a wallet when the plan does not identify the source account.
      * @param params Route, amount, Aleo recipient, privacy preference, and optional replacement bridge deployments.
      * @returns Deposit amount, maximum provider fee, balance, allowance, and whether approval is required.
      * @throws BridgeError When the route is unavailable, the account lacks funds, or Ethereum returns invalid state.
      * @example const result = await xreserve.evmToAleo.quote(client, { plan })
      */
-    quote(client: EvmClient & { walletClient: EvmWalletClient }, params: QuoteEvmXReserveTransferParameters & ProtocolHelperRegistry) {
+    quote(client: EvmClient, params: QuoteEvmXReserveTransferParameters & ProtocolHelperRegistry) {
       const [registry, actionParams] = splitRegistry<QuoteEvmXReserveTransferParameters>(params)
       return evmToAleoXReserve.quote(registry, client, actionParams)
     },
