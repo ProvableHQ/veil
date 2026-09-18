@@ -13,12 +13,9 @@ jobs:
     timeout-minutes: 20
     env:
       VEIL_INTEGRATION: '1'
-      # Balances test credentials: the E2E account key plus the registered
-      # Provable API consumer (see "Registering with the Provable API" in
-      # AGENTS.md). The test self-skips when these are absent.
+      # The E2E account key. The Provable gateway needs no credentials; the
+      # keyed tests self-skip when the key is absent.
       VEIL_E2E_PRIVATE_KEY: ${{ secrets.VEIL_E2E_PRIVATE_KEY }}
-      ALEO_DPS_API_KEY: ${{ secrets.ALEO_DPS_API_KEY }}
-      ALEO_CONSUMER_ID: ${{ secrets.ALEO_CONSUMER_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

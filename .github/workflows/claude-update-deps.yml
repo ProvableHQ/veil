@@ -24,11 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      # Integration suites the update skill re-runs. Same secrets as the CI
-      # live-api job; the keyed tests self-skip if these are ever removed.
+      # Integration suites the update skill re-runs. Same secret as the CI
+      # live-api job; the keyed tests self-skip if it is ever removed.
       VEIL_E2E_PRIVATE_KEY: ${{ secrets.VEIL_E2E_PRIVATE_KEY }}
-      ALEO_DPS_API_KEY: ${{ secrets.ALEO_DPS_API_KEY }}
-      ALEO_CONSUMER_ID: ${{ secrets.ALEO_CONSUMER_ID }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4

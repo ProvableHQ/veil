@@ -17,18 +17,14 @@ import { trackLiquidityPosition } from './lp-fill-tracker.js'
  * Three tiers, gated by what each needs:
  *
  *   VEIL_INTEGRATION=1                        pool and token reads
- *   + VEIL_E2E_PRIVATE_KEY,                   reads that need an account,
- *     ALEO_CONSUMER_ID, ALEO_DPS_API_KEY      but spend nothing
+ *   + VEIL_E2E_PRIVATE_KEY                    reads that need an account,
+ *                                             but spend nothing
  *   + VEIL_EXAMPLES_SPEND=1                   the ones that move funds
  */
 const READS = process.env.VEIL_INTEGRATION === '1'
-const KEYED =
-  READS &&
-  !!process.env.VEIL_E2E_PRIVATE_KEY &&
-  !!process.env.ALEO_CONSUMER_ID &&
-  !!process.env.ALEO_DPS_API_KEY
-// Opt in separately: the credentials above are enough to read, and a run that
-// spends should be asked for rather than inferred from them being present.
+const KEYED = READS && !!process.env.VEIL_E2E_PRIVATE_KEY
+// Opt in separately: the key above is enough to read, and a run that spends
+// should be asked for rather than inferred from it being present.
 const SPENDS = KEYED && process.env.VEIL_EXAMPLES_SPEND === '1'
 const POSITION = READS && !!process.env.VEIL_E2E_PRIVATE_KEY && !!process.env.VEIL_POSITION_TOKEN_ID
 

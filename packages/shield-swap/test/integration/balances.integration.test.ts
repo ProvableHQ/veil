@@ -14,12 +14,9 @@ import { getBalances } from '../../src/utils/balances.js'
  * Requirements (skipped when absent):
  *   VEIL_INTEGRATION=1
  *   VEIL_E2E_PRIVATE_KEY   the account whose balances we read
- *   ALEO_DPS_API_KEY, ALEO_CONSUMER_ID   authenticate + register the scanner
  */
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
-const DPS_API_KEY = process.env.ALEO_DPS_API_KEY
-const CONSUMER_ID = process.env.ALEO_CONSUMER_ID
-const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!DPS_API_KEY && !!CONSUMER_ID
+const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY
 
 const NETWORK_URL = 'https://edge.provable.com/api/v2'
 const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://edge.provable.com/api/scanner'
@@ -31,13 +28,11 @@ describe.runIf(RUN)('balances against the real chain + records', () => {
 
   beforeAll(async () => {
     const aleo = await loadNetwork('testnet')
-    const scanner = aleo.createRemoteScanner({ url: RSS_URL, consumerId: CONSUMER_ID!, apiKey: DPS_API_KEY })
+    const scanner = aleo.createRemoteScanner({ url: RSS_URL })
     const { walletClient, account } = aleo.createAleoClient({
       privateKey: PRIVATE_KEY!,
       networkUrl: NETWORK_URL,
       provingMode: 'delegated',
-      apiKey: DPS_API_KEY,
-      consumerId: CONSUMER_ID,
       records: scanner,
     })
     address = account.address

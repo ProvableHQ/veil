@@ -13,7 +13,6 @@ import { parseTokenRecordInfo } from '../../src/utils/records.js'
  * Requirements (skipped when absent):
  *   VEIL_INTEGRATION=1
  *   VEIL_E2E_PRIVATE_KEY   funded testnet account (credits for fees)
- *   ALEO_DPS_API_KEY, ALEO_CONSUMER_ID   delegated proving credentials
  * Optional: ALEO_DPS_URL, ALEO_RSS_URL, VEIL_DEX_PROGRAM (defaults to
  * shield_swap.aleo).
  *
@@ -22,9 +21,7 @@ import { parseTokenRecordInfo } from '../../src/utils/records.js'
  */
 
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
-const DPS_API_KEY = process.env.ALEO_DPS_API_KEY
-const CONSUMER_ID = process.env.ALEO_CONSUMER_ID
-const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!DPS_API_KEY && !!CONSUMER_ID
+const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY
 
 const NETWORK_URL = 'https://edge.provable.com/api/v2'
 const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://edge.provable.com/api/prove'
@@ -66,14 +63,12 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
 
   beforeAll(async () => {
     const aleo = await loadNetwork('testnet')
-    scanner = aleo.createRemoteScanner({ url: RSS_URL, consumerId: CONSUMER_ID!, apiKey: DPS_API_KEY })
+    scanner = aleo.createRemoteScanner({ url: RSS_URL })
     ;({ walletClient, account } = aleo.createAleoClient({
       privateKey: PRIVATE_KEY!,
       networkUrl: NETWORK_URL,
       provingMode: 'delegated',
       proverUrl: DPS_URL,
-      apiKey: DPS_API_KEY,
-      consumerId: CONSUMER_ID,
       records: scanner,
     }))
     dex = walletClient.extend(shieldSwapActions({ api: {}, program: DEX_PROGRAM }))

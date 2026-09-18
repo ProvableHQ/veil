@@ -16,15 +16,12 @@ import { fileBlindedIdentityStore } from '../../src/node.js'
  * Spends real testnet balances. Requirements (skipped when absent):
  *   VEIL_INTEGRATION=1
  *   VEIL_E2E_PRIVATE_KEY   funded testnet account
- *   ALEO_CONSUMER_ID, ALEO_DPS_API_KEY   Provable API credentials
  *
  *   VEIL_INTEGRATION=1 npx vitest run packages/shield-swap/test/integration/liveSwaps.e2e.test.ts
  */
 
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
-const CONSUMER_ID = process.env.ALEO_CONSUMER_ID
-const API_KEY = process.env.ALEO_DPS_API_KEY
-const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!CONSUMER_ID && !!API_KEY
+const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY
 const TX = 600_000
 
 type Token = { address: string; symbol: string; decimals: number; amm_token_program?: string | null }
@@ -59,8 +56,6 @@ describe.runIf(RUN)('live swaps on testnet', () => {
     const { walletClient } = aleo.createAleoClient({
       privateKey: PRIVATE_KEY!,
       networkUrl: 'https://edge.provable.com/api/v2',
-      consumerId: CONSUMER_ID,
-      apiKey: API_KEY,
       records: aleo.createRemoteScanner(),
       // Above the default: multi-hop swaps are the slow path here, one measured
       // at 322s. Not far above it — a write still absent after this is far more
