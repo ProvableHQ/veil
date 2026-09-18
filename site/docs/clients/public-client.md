@@ -18,7 +18,7 @@ at all.
 import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 })
 ```
 
@@ -168,7 +168,7 @@ earlier `extend` call attached:
 
 ```ts
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 }).extend((base) => ({
   getBlockAge: async () => {
     const block = await base.request({ method: 'getBlock', params: {} })

@@ -41,18 +41,14 @@ import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 const aleo = await loadNetwork('testnet')
 
 const scanner = aleo.createRemoteScanner({
-  url: 'https://api.provable.com/scanner',
-  consumerId: CONSUMER_ID,
-  apiKey: DPS_API_KEY,
+  url: 'https://edge.provable.com/api/scanner',
 })
 
 const { walletClient } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
-  networkUrl: 'https://api.provable.com/v2',
+  networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated',
-  proverUrl: 'https://api.provable.com/prove',
-  apiKey: DPS_API_KEY,
-  consumerId: CONSUMER_ID,
+  proverUrl: 'https://edge.provable.com/api/prove',
   records: scanner,
 })
 
@@ -61,9 +57,8 @@ const client = walletClient.extend(
 )
 ```
 
-Delegated proving and the hosted scanner authenticate with a consumer id and
-API key issued by the Provable API; registration is a one-time step against
-the Provable API's registration and JWT-issuance endpoints. See
+Delegated proving and the hosted scanner run on the Provable gateway, which
+needs no credentials. See
 [`createRemoteScanner`](/api/provable-sdk/createRemoteScanner) for the
 scanner's registration behavior.
 
@@ -308,7 +303,7 @@ import { createPublicClient, http } from '@provablehq/veil-core'
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
 }).extend(shieldSwapActions({ api: {} }))
 
 const pool = await client.getPool({ poolKey })  // static config: token pair, fee, decimals

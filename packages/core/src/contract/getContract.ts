@@ -195,7 +195,7 @@ function isABI(abi: ABI | Program): abi is ABI {
  * @example
  * import { createPublicClient, http, parseProgram, getContract } from '@provablehq/veil-core'
  *
- * const client = createPublicClient({ transport: http('https://api.provable.com/v2', { network: 'mainnet' }) })
+ * const client = createPublicClient({ transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }) })
  * const source = await client.getCode({ programId: 'credits.aleo' })
  * const credits = getContract({ program: 'credits.aleo', abi: parseProgram(source), client })
  *

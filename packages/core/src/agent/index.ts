@@ -57,7 +57,7 @@ export function aleoAgentToolSchemas(config?: AgentToolsConfig): AgentToolSchema
  * import { aleoAgentTools } from '@provablehq/veil-core/agent'
  *
  * const client = createPublicClient({
- *   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+ *   transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
  * })
  * const tools = aleoAgentTools({ client })
  * // Register each tool's name/description/inputSchema with the agent framework

@@ -39,7 +39,7 @@ const aleo = await loadNetwork('mainnet')
 
 const { publicClient, walletClient, account } = aleo.createAleoClient({
   privateKey: 'APrivateKey1...',
-  networkUrl: 'https://api.provable.com/v2',
+  networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated', // or 'local'
 })
 ```

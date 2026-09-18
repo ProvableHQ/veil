@@ -21,16 +21,14 @@ const account = aleo.privateKeyToAccount('APrivateKey1...')
 
 const proving = aleo.createProvingConfig({
   mode: 'delegated',
-  networkUrl: 'https://api.provable.com/v2',
-  proverUrl: 'https://api.provable.com',
-  consumerId: '<consumer-id>',
-  apiKey: '<api-key>',
+  networkUrl: 'https://edge.provable.com/api/v2',
+  proverUrl: 'https://edge.provable.com/api/prove',
   account,
 })
 
 const walletClient = createWalletClient({
   account,
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
   proving,
 })
 ```
@@ -74,15 +72,18 @@ Base URL of the delegated proving service. Required when `mode` is
 - **Type:** `string`
 - **Optional**
 
-API key for the delegated proving service's JWT issuance.
+API key for the legacy JWT model. With `consumerId` it forms the pair a session
+mints JWTs from when `proverUrl` names a legacy gateway such as
+`https://api.provable.com/prove`. On the default gateway the pair is carried and
+nothing mints. For a provisioned gateway key use `auth`.
 
 ### consumerId
 
 - **Type:** `string`
 - **Optional**
 
-Consumer id used to mint and refresh the JWT for the delegated proving
-service.
+Consumer id for the legacy JWT model, paired with `apiKey`. Omit both for the
+default gateway, which needs no consumer.
 
 ### account
 

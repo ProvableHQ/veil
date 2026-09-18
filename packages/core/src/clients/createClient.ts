@@ -115,7 +115,7 @@ export type Client<extended extends Extended = {}> = ClientBase &
  * import { createClient, http } from '@provablehq/veil-core'
  *
  * const client = createClient({
- *   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+ *   transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
  * }).extend((c) => ({ blockNumber: () => c.request({ method: 'getBlockNumber' }) }))
  */
 export function createClient(config: ClientConfig): Client {

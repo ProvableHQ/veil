@@ -83,18 +83,14 @@ import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 const aleo = await loadNetwork('testnet')
 
 const scanner = aleo.createRemoteScanner({
-  url: 'https://api.provable.com/scanner',
-  consumerId: CONSUMER_ID,
-  apiKey: DPS_API_KEY, // authenticates + registers the view key for scanning
+  url: 'https://edge.provable.com/api/scanner',
 })
 
 const { walletClient, account } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
-  networkUrl: 'https://api.provable.com/v2',
+  networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated',
-  proverUrl: 'https://api.provable.com/prove',
-  apiKey: DPS_API_KEY,
-  consumerId: CONSUMER_ID,
+  proverUrl: 'https://edge.provable.com/api/prove',
   records: scanner,
 })
 
@@ -1048,16 +1044,15 @@ regressions. They're gated behind environment variables so the default
 opt in. They double as the most complete usage examples in the repo.
 
 There are two tiers of gating. The read-only tier needs only `VEIL_INTEGRATION=1`.
-The write tier additionally needs a funded testnet account and delegated-proving
-credentials, because it broadcasts real transactions and pays fees. Most DEX API
+The write tier additionally needs a funded testnet account, because it
+broadcasts real transactions and pays fees. Delegated proving and record scanning
+run on the Provable gateway and need no credentials. Most DEX API
 endpoints are bearer-gated, so the API-auth suites also need the account key —
 it signs the challenge, no fees involved:
 
 ```sh
 VEIL_INTEGRATION=1          # enables every integration test
 VEIL_E2E_PRIVATE_KEY=...    # testnet account — signs DEX API auth; write tier needs it funded (pays fees)
-ALEO_DPS_API_KEY=...        # delegated proving — write tier only
-ALEO_CONSUMER_ID=...        # delegated proving + record scanning — write tier only
 ```
 
 | File | Tier | What it exercises |

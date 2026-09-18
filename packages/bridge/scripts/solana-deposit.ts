@@ -74,7 +74,7 @@ async function main(): Promise<void> {
   })
   const aleo = createAleoClient({
     publicClient: createAleoPublicClient({
-      transport: aleoHttp(process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2', { network: 'mainnet' }),
+      transport: aleoHttp(process.env.ALEO_RPC_URL?.trim() || 'https://edge.provable.com/api/v2', { network: 'mainnet' }),
     }),
   })
   const bridge = createBridgeClient({ environment: 'mainnet', clients: { solana, aleo } })

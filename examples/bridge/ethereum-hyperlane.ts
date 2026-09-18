@@ -100,7 +100,7 @@ export async function runEthereumHyperlaneExample(asset: HyperlaneAsset): Promis
       ethereum: evm,
       aleo: createAleoClient({
         publicClient: createAleoPublicClient({
-          transport: aleoHttp(process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2', { network: 'mainnet' }),
+          transport: aleoHttp(process.env.ALEO_RPC_URL?.trim() || 'https://edge.provable.com/api/v2', { network: 'mainnet' }),
         }),
       }),
     },

@@ -25,9 +25,7 @@ const aleo = await loadNetwork('testnet')
 const account = aleo.privateKeyToAccount('APrivateKey1...')
 
 const records = aleo.createRemoteScanner({
-  url: 'https://api.provable.com/scanner',
-  consumerId: '<consumer-id>',
-  apiKey: '<api-key>',
+  url: 'https://edge.provable.com/api/scanner',
 })
 
 records.setAccount({ viewKey: account.viewKey })
@@ -54,16 +52,20 @@ Base URL of the Record Scanner Service. The SDK appends the network segment
 ### consumerId
 
 - **Type:** `string`
+- **Optional**
 
-Consumer id used to mint and refresh the JWT the service authenticates with.
+Consumer id for the legacy JWT model, paired with `apiKey`. Omit both for the
+default gateway, which needs no consumer.
 
 ### apiKey
 
 - **Type:** `string`
 - **Optional**
 
-API key for an authenticated service instance (for example, the hosted
-Provable RSS). Omit for an open, unauthenticated service.
+API key for the legacy JWT model, paired with `consumerId`. A session mints the
+JWT when `url` names a legacy gateway such as `https://api.provable.com/scanner`;
+on the default gateway the pair is carried and nothing mints. For a provisioned
+gateway key use `auth`; omit both for the default gateway.
 
 ### startBlock
 

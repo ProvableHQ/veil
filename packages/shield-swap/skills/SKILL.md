@@ -42,7 +42,7 @@ history. That is a recovery path, not a substitute for keeping the file.
 ## Session model
 
 All long-lived material lives in `./.shield-swap/<network>/state.json`
-(private key, Provable API credentials, DEX API token). It is created by
+(private key, DEX API token). It is created by
 `shield-swap setup` with mode 0600. NEVER commit it — add `.shield-swap/` to
 `.gitignore`. Swap handles and position ids are NOT stored there: handles
 live in the SDK's blinded identity store, and positions are discovered from
@@ -73,7 +73,6 @@ transfers directly into code. A local-key integration builds the client once:
 
 ```ts
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
-import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
 
@@ -82,11 +81,8 @@ import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
 const aleo = await loadNetwork('testnet')
 const { walletClient } = aleo.createAleoClient({
   privateKey,
-  networkUrl: 'https://api.provable.com/v2',
+  networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated',
-  // Credentials reach both the prover and the scanner through one session the
-  // client builds from this store, registering a consumer on first use.
-  credentialStore: fileCredentialStore('./provable-credentials.json'),
   records: aleo.createRemoteScanner(),
 })
 
@@ -116,8 +112,7 @@ for the middle path. In the Veil repo, `pnpm install && pnpm shield-swap
 ## Before doing anything: two questions for the user
 
 1. **Existing account?** If there is no `./.shield-swap/state.json`, ask
-   whether the user already has a shield-swap account (a private key, and
-   possibly Provable API credentials) before creating anything. The setup
+   whether the user already has a shield-swap account (a private key) before creating anything. The setup
    script enforces this: with no config and no `--new` flag it exits with
    `NEEDS_CONFIG_DECISION`. Never generate a fresh key for a user who may
    already have one — their funds and access live on the old account.

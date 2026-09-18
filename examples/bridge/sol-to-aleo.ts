@@ -94,7 +94,7 @@ export async function runSolanaHyperlaneExample(): Promise<void> {
       solana,
       aleo: createAleoClient({
         publicClient: createAleoPublicClient({
-          transport: aleoHttp(process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2', { network: 'mainnet' }),
+          transport: aleoHttp(process.env.ALEO_RPC_URL?.trim() || 'https://edge.provable.com/api/v2', { network: 'mainnet' }),
         }),
       }),
     },

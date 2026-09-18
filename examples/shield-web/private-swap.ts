@@ -31,7 +31,7 @@ import { Network } from '@provablehq/aleo-types'
 import { WalletDecryptPermission } from '@provablehq/aleo-wallet-standard'
 import { shieldSwapActions, SHIELD_SWAP_ALGORITHM_GRANTS } from '@provablehq/shield-swap-sdk'
 
-const NODE_URL = 'https://api.provable.com/v2' // Aleo node — chain reads
+const NODE_URL = 'https://edge.provable.com/api/v2' // Aleo node — chain reads
 const AMM_API_URL = 'https://api.testnet.swap.shield.fi' // Shield Swap indexer — pool discovery
 
 /**

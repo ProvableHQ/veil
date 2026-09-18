@@ -7,8 +7,8 @@
  *   1. Key material        — reuse the stored account, import the user's
  *                            existing key, or (only with --new) generate one
  *   2. DEX authentication  — challenge/verify session with the account
- *   3. Provable API        — reuse/import credentials, else self-register a
- *                            consumer for proving + scanning
+ *   3. Provable gateway    — needs no credentials; a legacy consumer pair on
+ *                            file is kept but unused on the default gateway
  *   4. Invite code         — check access; redeem a code when one is provided
  *   5. API token           — mint a long-lived ss_ token for later sessions
  *   6. Airdrop             — request testnet tokens when holdings are empty,
@@ -60,8 +60,8 @@ const USAGE = `shield-swap setup — bootstrap an account and get it funded
 
   --new                         generate a brand-new account
   --private-key-file <path>     import an existing key, read from this file
-  --consumer-id <id>            Provable API consumer id (else self-registers)
-  --api-key <key>               Provable API key
+  --consumer-id <id>            legacy Provable API consumer id (optional)
+  --api-key <key>               legacy Provable API key (optional)
   --invite-code <code>          redeem an invite code when access is locked
   --api-url <origin>            pin a DEX API deployment
   --network <testnet|mainnet>   default testnet
@@ -159,8 +159,6 @@ async function setup(argv: string[]): Promise<void> {
           'a private key into the conversation:\n' +
           '  - existing account → the user saves their key to a file themselves, then re-run\n' +
           '    with --private-key-file <path> (or they export SHIELD_SWAP_PRIVATE_KEY in\n' +
-          '    their own shell). Add --consumer-id/--api-key if they have Provable API\n' +
-          '    credentials.\n' +
           '  - brand new       → re-run with --new\n',
       )
       process.exit(2)
@@ -169,18 +167,16 @@ async function setup(argv: string[]): Promise<void> {
   }
   console.log(`✓ account: ${state.address}`)
 
-  // Supplied credentials win over registering a new consumer, so a returning
-  // user keeps theirs. Absent both, the client registers one below. Awaited
-  // because ProvableCredentialStore permits async: this store happens to be
-  // synchronous, but reading a promise as a value would silently skip the seed
-  // and leave the write unobserved.
+  // A legacy pair is kept on file for a user who still holds one; the gateway
+  // itself needs none. Awaited because ProvableCredentialStore permits async:
+  // this store happens to be synchronous, but reading a promise as a value
+  // would silently skip the seed and leave the write unobserved.
   if (consumerId && apiKey && !(await credentialStore.load())) {
     await credentialStore.save({ consumerId, apiKey })
   }
 
-  // Credentials used to live in the state file. Move them rather than letting
-  // the client register a replacement: an API key is issued once and cannot be
-  // reissued, so a fresh consumer would abandon the old one.
+  // Credentials used to live in the state file. Move them so an old state file
+  // still loads cleanly.
   const legacy = (state as { provableApi?: { consumerId: string; apiKey: string } }).provableApi
   if (legacy && !(await credentialStore.load())) {
     await credentialStore.save(legacy)
@@ -196,12 +192,12 @@ async function setup(argv: string[]): Promise<void> {
   const { client, account } = await loadSession({ network })
   console.log('✓ DEX API session established (challenge/verify)')
 
-  // Front-loaded on purpose: registration would otherwise happen on the first
-  // prove or scan, and a newly issued API key is only reportable here.
+  // The gateway needs no consumer or JWT; the call only reports which paths
+  // carry the client's session, so a stale credential file cannot block setup.
   const provable = await client.authenticateProvableApi()
   console.log(
-    `✓ Provable API consumer: ${provable.credentials.consumerId}` +
-      (provable.registered ? ` (registered, saved to ${credentialsPath(network)})` : ''),
+    '✓ Provable gateway: no credentials needed' +
+      (provable.credentials ? ` (legacy consumer ${provable.credentials.consumerId} on file, unused)` : ''),
   )
 
   // ── 4: invite-code access gate ───────────────────────────────────────

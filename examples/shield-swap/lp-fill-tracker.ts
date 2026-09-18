@@ -281,7 +281,7 @@ export async function trackLiquidityPosition(options: TrackLiquidityPositionOpti
   const aleo = await loadNetwork(network)
   const swapClient = createClient({
     account: aleo.privateKeyToAccount(privateKey),
-    transport: http('https://api.provable.com/v2', { network }),
+    transport: http('https://edge.provable.com/api/v2', { network }),
   })
     .extend(publicActions)
     .extend(shieldSwapActions({ api: {} }))

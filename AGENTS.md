@@ -72,36 +72,22 @@ subject to breaking changes between minor releases.
 
 ### Registering with the Provable API
 
-Delegated proving (DPS) and the hosted Record Scanner Service authenticate
-with a consumer id and API key issued by the Provable API
-([registration](https://docs.provable.com/docs/api/services/get-auth-register),
-[JWT issuance](https://docs.provable.com/docs/api/services/issue-jwt)).
+Delegated proving (DPS) and the hosted Record Scanner Service run on the
+Provable gateway at `https://edge.provable.com/api`, which every SDK default
+targets. The gateway is unauthenticated: there is no consumer to register and
+no JWT to mint, and a client with nothing but a private key and a network URL
+proves and scans. An operator may hand out a provisioned API key; pass it as
+`auth: { mode: 'api-key', value }` and every request carries it in `X-API-Key`.
 
-1. Register a consumer (one-time):
-
-   ```sh
-   curl -X POST https://api.provable.com/consumers \
-     -H 'Content-Type: application/json' \
-     -d '{"username": "<handle>"}'
-   ```
-
-   The response carries the credentials: `consumer.id` (the consumer id) and
-   `key` (the API key). Store both — the key is not retrievable later.
-
-2. Requests authenticate with a short-lived JWT minted from those credentials:
-
-   ```sh
-   curl -X POST https://api.provable.com/jwts/<consumer-id> \
-     -H 'X-Provable-API-Key: <api-key>'
-   ```
-
-   The JWT arrives in the `Authorization` response header, Bearer-prefixed.
-   The SDK mints and refreshes JWTs automatically — pass `consumerId` and
-   `apiKey` to `createProvingConfig`, `createRemoteScanner`, or
-   `createStandaloneScanner` and never handle JWTs directly.
-
-The keyed integration tests read these credentials from `ALEO_CONSUMER_ID`
-and `ALEO_DPS_API_KEY`.
+The legacy gateway, `https://api.provable.com`, still authenticates with JWTs
+minted from a consumer id and API key. A caller who points `proverUrl` or
+the scanner `url` at it and passes `consumerId` and `apiKey`
+(or a `credentialStore`) gets a session that mints at that gateway's `/jwts`
+and injects the token. On the default gateway the pair is carried and nothing
+mints, since edge has no JWT route. Consumer registration is retired:
+`registerProvableApi` is a no-op and `username` is ignored. The integration
+matrices read a provisioned key from `EDGE_PROVABLE_API_KEY` and a legacy pair
+from `ALEO_CONSUMER_ID` and `ALEO_DPS_API_KEY`.
 
 ## Contributing to Veil
 

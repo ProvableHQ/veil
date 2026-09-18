@@ -44,9 +44,6 @@ shield-swap setup --new
 # what travels — the key never appears in the conversation or shell history
 shield-swap setup --private-key-file <path>
 
-# returning user who also has Provable API credentials
-shield-swap setup --private-key-file <path> --consumer-id <id> --api-key <key>
-
 # when setup asks for an invite code
 shield-swap setup --invite-code <code>
 
@@ -62,14 +59,14 @@ shell before you re-run setup. Do not accept a pasted key, and do not echo
 one if pasted anyway.
 
 Environment variables work as fallbacks for the other flags too:
-`ALEO_CONSUMER_ID`, `ALEO_DPS_API_KEY`, `SHIELD_SWAP_INVITE_CODE`. State
+`SHIELD_SWAP_INVITE_CODE`. State
 location overrides with `SHIELD_SWAP_STATE_DIR` (default `./.shield-swap`).
 
 The API URL persists in the state file, so `--api-url` is needed once, not
 per command. Switching deployments resets the deployment-scoped state
 (access grant, API token, pending airdrop job) — expect setup to walk the
-invite and token gates again on the new deployment. Key material and
-Provable API credentials carry over unchanged. `SHIELD_SWAP_API_URL` is
+invite and token gates again on the new deployment. Key material carries
+over unchanged. `SHIELD_SWAP_API_URL` is
 deliberately different: it is an ephemeral per-run override honored by
 every session script, and it neither persists nor resets anything — use
 the flag to switch deployments, the env var to peek at one.
@@ -89,9 +86,8 @@ the flag to switch deployments, the env var to peek at one.
 1. **Key material** — reuses the stored key, imports one from
    `--private-key-file` (or the user's own env), or generates one under
    `--new`. The address is derived and stored.
-2. **Provable API consumer** — self-registers at
-   `https://api.provable.com/consumers` (or adopts imported credentials).
-   These credentials authenticate delegated proving and the record scanner.
+2. **Provable gateway** — delegated proving and the record scanner run on
+   `edge.provable.com/api`, which needs no credentials. Nothing registers.
 3. **DEX session** — challenge/verify handshake; the account signs, the
    session lasts ~24h and auto-renews on expiry.
 4. **Invite code** — checks `getReferralStatus()`; redeems the code through

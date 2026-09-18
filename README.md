@@ -15,7 +15,7 @@ import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 
 // A read-only client — point a transport at an Aleo node (viem's createPublicClient).
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2'),
+  transport: http('https://edge.provable.com/api/v2'),
 })
 
 // Similar method names as in viem, now reading Aleo state.
@@ -102,7 +102,7 @@ and transport interfaces.
 import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2'),
+  transport: http('https://edge.provable.com/api/v2'),
 })
 
 // Familiar viem-style actions
@@ -156,9 +156,9 @@ const aleo = await loadNetwork('testnet')
 
 const { publicClient, walletClient } = aleo.createAleoClient({
   privateKey: 'APrivateKey1...',
-  networkUrl: 'https://api.provable.com/v2',
+  networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated', // or 'local' to prove in-process
-  proverUrl: 'https://api.provable.com/prove/testnet',
+  proverUrl: 'https://edge.provable.com/api/prove/testnet',
 })
 ```
 
@@ -186,7 +186,7 @@ const txId = await contract.write.transfer({
 import { createPublicClient, http, viewOnlyAccount } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2'),
+  transport: http('https://edge.provable.com/api/v2'),
 })
 
 const account = viewOnlyAccount({
@@ -245,7 +245,7 @@ import { createMcpServer } from '@provablehq/veil-core/mcp'
 import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2'),
+  transport: http('https://edge.provable.com/api/v2'),
 })
 
 await createMcpServer({ client })

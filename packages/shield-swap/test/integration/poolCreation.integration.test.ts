@@ -15,15 +15,12 @@ import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
  * Requirements (skipped when absent):
  *   VEIL_INTEGRATION=1
  *   VEIL_E2E_PRIVATE_KEY   funded testnet account (pays the fee)
- *   ALEO_DPS_API_KEY, ALEO_CONSUMER_ID   delegated proving credentials
  */
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
-const DPS_API_KEY = process.env.ALEO_DPS_API_KEY
-const CONSUMER_ID = process.env.ALEO_CONSUMER_ID
-const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!DPS_API_KEY && !!CONSUMER_ID
+const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY
 
-const NETWORK_URL = 'https://api.provable.com/v2'
-const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove'
+const NETWORK_URL = 'https://edge.provable.com/api/v2'
+const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://edge.provable.com/api/prove'
 const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap.aleo'
 const CANDIDATE_FEES = [100, 500, 3000, 10000] // common Uniswap-style tiers
 const TX_TIMEOUT = 420_000
@@ -52,8 +49,6 @@ describe.runIf(RUN)('pool creation on testnet', () => {
       networkUrl: NETWORK_URL,
       provingMode: 'delegated',
       proverUrl: DPS_URL,
-      apiKey: DPS_API_KEY,
-      consumerId: CONSUMER_ID,
     })
     client = walletClient.extend(shieldSwapActions({ api: {}, program: DEX_PROGRAM }))
 

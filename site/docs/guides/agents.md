@@ -46,7 +46,7 @@ import { createPublicClient, http } from '@provablehq/veil-core'
 import { createAgentTools } from '@provablehq/veil-core/agent'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 })
 
 const tools = createAgentTools({ client })
