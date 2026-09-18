@@ -169,9 +169,9 @@ export async function deriveBlindedAddress(
  * @property program Program to derive for and scan against. Defaults to the
  *   `DEFAULT_PROGRAM`.
  * @property startCounter First counter to try. Defaults to 0.
- * @property maxScan Counters to try before giving up. Defaults to 64 —
- *   generous for interactive use while still failing fast when something is
- *   systematically wrong (e.g. scanning the wrong program).
+ * @property maxScan Counters to scan one by one before the search gallops
+ *   ahead. Defaults to 64, which covers a store a few swaps behind the chain
+ *   without a network round-trip per doubling.
  */
 export type NextBlindedIdentityParameters = {
   viewKeyScalar: string
@@ -182,14 +182,82 @@ export type NextBlindedIdentityParameters = {
 }
 
 /**
+ * Highest counter the galloping search probes before giving up.
+ *
+ * Every counter below it reading as used means the chain is answering for a
+ * different account or program, not that the account swapped four million
+ * times; failing names that rather than searching forever.
+ */
+const MAX_GALLOP_COUNTER = 1 << 22
+
+/**
+ * Finds the lowest unused counter at or after `start`.
+ *
+ * Scans `maxScan` counters one by one, which is the common case of a store a
+ * few swaps behind the chain. When every one of them is used the account has
+ * swapped past the window — a cold store on a long-lived account — so the
+ * search gallops ahead in doubling strides until a probe reads unused, then
+ * binary-searches back for the lowest unused counter above the last used
+ * probe. An account 250 swaps deep costs about 75 reads instead of failing.
+ *
+ * Any unused counter is a valid identity, so a gap left by a rejected swap is
+ * an acceptable answer; the binary search only promises the lowest unused
+ * counter between the last used probe and the first unused one.
+ *
+ * @param isUsed Reads whether the chain has consumed the counter's address.
+ * @param start First counter to try.
+ * @param maxScan Counters to scan one by one before galloping. Values below 1
+ *   are treated as 1.
+ * @returns An unused counter, never below `start`.
+ * @throws When every probe up to {@link MAX_GALLOP_COUNTER} reads used.
+ */
+export async function findUnusedCounter(
+  isUsed: (counter: number) => Promise<boolean>,
+  start: number,
+  maxScan: number,
+): Promise<number> {
+  // At least one linear step, so the gallop always starts above `start` and
+  // can never hand back a counter the caller has already moved past.
+  const window = Math.max(1, Math.floor(maxScan))
+  for (let counter = start; counter < start + window; counter++) {
+    if (!(await isUsed(counter))) return counter
+  }
+
+  let lastUsed = start + window - 1
+  let stride = window
+  let probe = lastUsed + stride
+  while (await isUsed(probe)) {
+    if (probe - start >= MAX_GALLOP_COUNTER) {
+      throw new Error(
+        `No unused blinded address in counters ${start}…${probe}. ` +
+          'Check that the store and the program match the account.',
+      )
+    }
+    lastUsed = probe
+    stride *= 2
+    probe = lastUsed + stride
+  }
+
+  let lo = lastUsed
+  let hi = probe
+  while (hi - lo > 1) {
+    const mid = lo + Math.floor((hi - lo) / 2)
+    if (await isUsed(mid)) lo = mid
+    else hi = mid
+  }
+  return hi
+}
+
+/**
  * Finds the first unused blinded identity for an account.
  *
  * Blinded addresses are single-use: each private swap consumes one and the
- * program records it in `used_blinded_addresses`. This scans counters
- * upward, derives each candidate address, and returns the first one the
- * chain has not seen.
+ * program records it in `used_blinded_addresses`. This derives candidate
+ * addresses counter by counter and returns the first one the chain has not
+ * seen, galloping ahead when the account has swapped past the scan window
+ * (see {@link findUnusedCounter}).
  *
- * Hits the network: one mapping read per scanned counter. Also loads the
+ * Hits the network: one mapping read per probed counter. Also loads the
  * WASM SDK on first call (local derivation).
  *
  * The scan is not atomic with the swap that consumes the identity: two
@@ -200,10 +268,10 @@ export type NextBlindedIdentityParameters = {
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param params View-key scalar, signer, and optional scan bounds.
  * @returns The first unused identity, with the counter that produced it.
- * @throws When every counter in the scan window is already used — persist
- *   the last-used counter (or raise `startCounter`) to skip the scan; also
- *   propagates SDK-missing and transport errors. A duplicate-identity
- *   rejection on-chain means concurrent calls raced — serialize them.
+ * @throws When every probed counter reads as used, which points at the wrong
+ *   program or account rather than a spent identity space; also propagates
+ *   SDK-missing and transport errors. A duplicate-identity rejection on-chain
+ *   means concurrent calls raced — serialize them.
  *
  * @example
  * const id = await nextBlindedIdentity(client, { viewKeyScalar, signer })
@@ -213,19 +281,18 @@ export async function nextBlindedIdentity(
   client: Client,
   params: NextBlindedIdentityParameters,
 ): Promise<BlindedIdentity> {
-  const start = params.startCounter ?? 0
-  const maxScan = params.maxScan ?? 64
-
-  for (let counter = start; counter < start + maxScan; counter++) {
+  const derive = async (counter: number) => {
     const blindingFactor = await deriveBlindingFactor(params.viewKeyScalar, counter, params.program)
     const blindedAddress = await deriveBlindedAddress(blindingFactor, params.signer, params.program)
-    if (!(await isBlindedAddressUsed(client, { address: blindedAddress, program: params.program }))) {
-      return { counter, blindingFactor, blindedAddress }
-    }
+    return { counter, blindingFactor, blindedAddress }
   }
-
-  throw new Error(
-    `No unused blinded address in counters ${start}…${start + maxScan - 1}. ` +
-      'Pass a higher startCounter, or persist your last-used counter to skip the scan.',
+  const counter = await findUnusedCounter(
+    async (candidate) => {
+      const { blindedAddress } = await derive(candidate)
+      return isBlindedAddressUsed(client, { address: blindedAddress, program: params.program })
+    },
+    params.startCounter ?? 0,
+    params.maxScan ?? 64,
   )
+  return derive(counter)
 }

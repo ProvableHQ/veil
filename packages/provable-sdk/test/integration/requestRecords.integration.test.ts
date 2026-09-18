@@ -198,14 +198,22 @@ describe.runIf(RUN && target.enabled)(`RecordFilter bounds applied by the scanne
   it("returns at least the unspent set for statusFilter 'all'", async () => {
     // Regression for the 'all' defect: 'all' used to send unspent: true, which
     // the service reads as spent = false, so it returned the unspent set only.
-    // Omitting the key must return a superset.
-    const all = await scan({ program: 'credits.aleo', statusFilter: 'all' })
-    expect(all.length).toBeGreaterThanOrEqual(baseline.length)
+    // Omitting the key must return a superset. Bounded to the block range of
+    // the newest unspent records: the service pages 'all' from the oldest
+    // block, so on an account with more records than one page the newest
+    // unspent records never appear in an unbounded first page.
+    const newest = [...baseline].sort((a, b) => b.blockHeight - a.blockHeight).slice(0, 20)
+    const heights = newest.map((r) => r.blockHeight)
+    const all = await scan({
+      program: 'credits.aleo',
+      statusFilter: 'all',
+      filter: { start: Math.min(...heights), end: Math.max(...heights) + 1, resultsPerPage: 500 },
+    })
+    expect(all.length).toBeGreaterThanOrEqual(newest.length)
 
-    const unspentCommitments = new Set(baseline.map((r) => r.commitment))
     const allCommitments = new Set(all.map((r) => r.commitment))
-    for (const commitment of unspentCommitments) {
-      expect(allCommitments.has(commitment)).toBe(true)
+    for (const record of newest) {
+      expect(allCommitments.has(record.commitment)).toBe(true)
     }
   }, 120_000)
 
