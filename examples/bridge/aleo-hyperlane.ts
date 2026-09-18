@@ -88,11 +88,6 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   const recipient = requiredEnvironmentVariable(config.recipientEnvironmentVariable)
   const privateKey = requiredEnvironmentVariable('ALEO_PRIVATE_KEY')
   const networkUrl = process.env.ALEO_RPC_URL?.trim() || 'https://edge.provable.com/api/v2'
-  const consumerId = process.env.ALEO_CONSUMER_ID?.trim()
-  const apiKey = process.env.ALEO_DPS_API_KEY?.trim()
-  if ((consumerId && !apiKey) || (!consumerId && apiKey)) {
-    throw new Error('ALEO_CONSUMER_ID and ALEO_DPS_API_KEY must be supplied together')
-  }
 
   // This route spends a public Aleo token balance. If the amount is held in a
   // private record, unshield it and wait for that transaction to be accepted
@@ -109,7 +104,6 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     privateKey,
     networkUrl,
     provingMode: 'delegated',
-    ...(consumerId && apiKey ? { consumerId, apiKey } : {}),
     useFeeMaster: false,
     confirmationTimeout: ALEO_CONFIRMATION_TIMEOUT_MS,
   })
@@ -204,8 +198,6 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   if (latestQuote.paymentMicrocredits !== gasQuote.paymentMicrocredits) {
     console.log(`Hyperlane hook quote changed from ${gasQuote.paymentMicrocredits} to ${latestQuote.paymentMicrocredits} microcredits; using the latest quote.`)
   }
-  if (consumerId && apiKey) await nativeWalletClient.authenticateProvableApi()
-
   const result = await bridge.execute({
     plan,
     mode: 'signer',

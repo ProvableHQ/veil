@@ -23,7 +23,6 @@ const aleo = await loadNetwork('testnet')
 
 const scanner = aleo.createStandaloneScanner({
   url: 'https://edge.provable.com/api/scanner',
-  consumerId: '<consumer-id>',
   viewKey: 'AViewKey1...',
 })
 
@@ -48,8 +47,10 @@ Base URL of the Record Scanner Service. The SDK appends the network segment.
 ### consumerId
 
 - **Type:** `string`
+- **Optional**
 
-Consumer id used to mint and refresh the JWT the service authenticates with.
+Legacy consumer id from the retired consumer model. Accepted so existing
+configuration keeps loading; the hosted scanner needs no consumer.
 
 ### viewKey
 
@@ -62,8 +63,8 @@ Aleo view key (`AViewKey1...`) to scan and decrypt records with.
 - **Type:** `string`
 - **Optional**
 
-API key for an authenticated service instance. Omit for an open,
-unauthenticated service.
+Legacy API key paired with `consumerId`. Nothing is sent or minted from it.
+For a provisioned gateway key use `auth`; omit both for the hosted scanner.
 
 ### startBlock
 

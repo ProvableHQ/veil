@@ -26,8 +26,6 @@ const account = aleo.privateKeyToAccount('APrivateKey1...')
 
 const records = aleo.createRemoteScanner({
   url: 'https://edge.provable.com/api/scanner',
-  consumerId: '<consumer-id>',
-  apiKey: '<api-key>',
 })
 
 records.setAccount({ viewKey: account.viewKey })
@@ -54,16 +52,18 @@ Base URL of the Record Scanner Service. The SDK appends the network segment
 ### consumerId
 
 - **Type:** `string`
+- **Optional**
 
-Consumer id used to mint and refresh the JWT the service authenticates with.
+Legacy consumer id from the retired consumer model. Accepted so existing
+configuration keeps loading; the hosted scanner needs no consumer.
 
 ### apiKey
 
 - **Type:** `string`
 - **Optional**
 
-API key for an authenticated service instance (for example, the hosted
-Provable RSS). Omit for an open, unauthenticated service.
+Legacy API key paired with `consumerId`. Nothing is sent or minted from it.
+For a provisioned gateway key use `auth`; omit both for the hosted scanner.
 
 ### startBlock
 

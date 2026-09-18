@@ -23,11 +23,8 @@ const { publicClient, walletClient, account } = aleo.createAleoClient({
   networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated',
   proverUrl: 'https://edge.provable.com/api/prove',
-  consumerId: '<consumer-id>',
-  apiKey: '<api-key>',
   records: aleo.createRemoteScanner({
     url: 'https://edge.provable.com/api/scanner',
-    consumerId: '<consumer-id>',
   }),
 })
 
@@ -82,15 +79,17 @@ Base URL of the delegated proving service. Required when `provingMode` is
 - **Type:** `string`
 - **Optional**
 
-API key for the delegated proving service.
+Legacy API key from the retired consumer model. Accepted with `consumerId` so
+existing configuration keeps loading; nothing is sent or minted from it. For a
+provisioned gateway key use `auth`.
 
 ### consumerId
 
 - **Type:** `string`
 - **Optional**
 
-Consumer id used to mint and refresh the JWT for the delegated proving
-service.
+Legacy consumer id from the retired consumer model. Accepted so existing
+configuration keeps loading; the gateway needs no consumer.
 
 ### records
 

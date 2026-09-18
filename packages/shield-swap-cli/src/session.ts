@@ -95,11 +95,11 @@ export function blindedStorePath(network: Network): string {
 }
 
 /**
- * Where Provable API credentials live for a network.
+ * Where legacy Provable API credentials live for a network.
  *
- * Separate from the state file because the SDK owns the format: `shield-swap setup`
- * hands `fileCredentialStore` this path and the client reads and writes it
- * directly, including registering a consumer when the file is absent.
+ * Separate from the state file because the SDK owns the format. The gateway
+ * needs no credentials anymore; the file is kept for a user who still holds a
+ * pair, and the client only reads it.
  */
 export function credentialsPath(network: Network): string {
   return join(stateDir(network), 'provable-credentials.json')
@@ -256,10 +256,9 @@ export async function loadSession(options: { network?: string } = {}) {
   }
 
   const aleo = await loadNetwork(network)
-  // Credentials reach both the prover and the scanner through one session the
-  // client builds from the store, so a single JWT serves both.
-  // No prover or scanner URL: both default to the Provable API and take the
-  // network from the client, so naming them here would only risk drift.
+  // No prover or scanner URL: both default to the Provable gateway and take the
+  // network from the client, so naming them here would only risk drift. The
+  // gateway needs no credentials; the store only carries a legacy pair.
   const scanner = aleo.createRemoteScanner()
   const { walletClient, account } = aleo.createAleoClient({
     privateKey: state.privateKey,

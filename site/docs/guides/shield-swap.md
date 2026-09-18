@@ -42,8 +42,6 @@ const aleo = await loadNetwork('testnet')
 
 const scanner = aleo.createRemoteScanner({
   url: 'https://edge.provable.com/api/scanner',
-  consumerId: CONSUMER_ID,
-  apiKey: DPS_API_KEY,
 })
 
 const { walletClient } = aleo.createAleoClient({
@@ -51,8 +49,6 @@ const { walletClient } = aleo.createAleoClient({
   networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated',
   proverUrl: 'https://edge.provable.com/api/prove',
-  apiKey: DPS_API_KEY,
-  consumerId: CONSUMER_ID,
   records: scanner,
 })
 
@@ -61,9 +57,8 @@ const client = walletClient.extend(
 )
 ```
 
-Delegated proving and the hosted scanner authenticate with a consumer id and
-API key issued by the Provable API; registration is a one-time step against
-the Provable API's registration and JWT-issuance endpoints. See
+Delegated proving and the hosted scanner run on the Provable gateway, which
+needs no credentials. See
 [`createRemoteScanner`](/api/provable-sdk/createRemoteScanner) for the
 scanner's registration behavior.
 

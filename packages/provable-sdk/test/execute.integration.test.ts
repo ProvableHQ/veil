@@ -3,12 +3,12 @@
  *
  * These tests hit the real Aleo network and require:
  * - A funded account (uses the SDK demo account)
- * - Network connectivity to api.provable.com
+ * - Network connectivity to edge.provable.com
  *
  * Run with: RUN_INTEGRATION=true pnpm vitest run packages/provable-sdk/test/execute.integration.test.ts
  *
- * For delegated tests, also set:
- *   ALEO_DPS_API_KEY, ALEO_CONSUMER_ID (and optionally ALEO_DPS_URL)
+ * The delegated tests run unauthenticated against the gateway; set
+ * EDGE_PROVABLE_API_KEY to also run them with a provisioned key.
  *
  * Skipped by default in CI / normal test runs.
  *
@@ -26,37 +26,32 @@ import { loadNetwork, type AleoSdk } from '../src/index.js'
 // SDK demo account — funded on testnet
 const DEMO_PRIVATE_KEY = 'APrivateKey1zkp6aEqdUdRpZs1fnfGBEitWZNzxNhPz4kb2W382nuX8G42'
 const DEMO_ADDRESS = 'aleo1vskzxa2qqgnhznxsqh6tgq93c30sfkj6xqwe7sr85lgjkexjlcxs3lxhy3'
-const NETWORK_URL = 'https://api.provable.com/v2'
-
-// DPS credentials — set via env vars for delegated tests
-const DPS_URL = process.env.ALEO_DPS_URL ?? 'https://api.provable.com/prove'
-const DPS_API_KEY = process.env.ALEO_DPS_API_KEY
-const DPS_CONSUMER_ID = process.env.ALEO_CONSUMER_ID
+const EDGE_BASE = process.env.EDGE_BASE_URL ?? 'https://edge.provable.com/api'
+const NETWORK_URL = `${EDGE_BASE}/v2`
+const DPS_URL = process.env.ALEO_DPS_URL ?? `${EDGE_BASE}/prove`
 
 const shouldRun = process.env.RUN_INTEGRATION === 'true'
-const hasDpsCredentials = !!(DPS_API_KEY && DPS_CONSUMER_ID)
 
-const EDGE_BASE = process.env.EDGE_BASE_URL ?? 'https://edge.provable.com/api'
 const EDGE_PROVABLE_API_KEY = process.env.EDGE_PROVABLE_API_KEY
 
 /**
- * Prover routes the delegated suite runs against, each with its auth model:
- * the JWT pair on api.provable.com and the provisioned key on
- * edge.provable.com. Each enabled target runs the same delegated tests.
+ * Prover routes the delegated suite runs against: the gateway with no
+ * credentials, and the gateway with a provisioned key when one is present.
+ * Each enabled target runs the same delegated tests.
  */
 const PROVER_TARGETS = [
   {
-    name: 'via api.provable.com (jwt)',
-    enabled: hasDpsCredentials,
+    name: 'via edge.provable.com (unauthenticated)',
+    enabled: true,
     networkUrl: NETWORK_URL,
     proverUrl: DPS_URL,
-    clientAuth: { apiKey: DPS_API_KEY, consumerId: DPS_CONSUMER_ID },
+    clientAuth: {},
   },
   {
     name: 'via edge.provable.com (provisioned key)',
     enabled: !!EDGE_PROVABLE_API_KEY,
-    networkUrl: `${EDGE_BASE}/v2`,
-    proverUrl: `${EDGE_BASE}/prove`,
+    networkUrl: NETWORK_URL,
+    proverUrl: DPS_URL,
     clientAuth: { auth: { mode: 'api-key' as const, value: EDGE_PROVABLE_API_KEY! } },
   },
 ]

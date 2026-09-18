@@ -22,16 +22,12 @@ import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 const aleo = await loadNetwork('testnet')
 const scanner = aleo.createRemoteScanner({
   url: 'https://edge.provable.com/api/scanner',
-  consumerId: CONSUMER_ID,
-  apiKey: DPS_API_KEY,
 })
 const { walletClient } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
   networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated',
   proverUrl: 'https://edge.provable.com/api/prove',
-  apiKey: DPS_API_KEY,
-  consumerId: CONSUMER_ID,
   records: scanner,
 })
 const client = walletClient.extend(shieldSwapActions())

@@ -67,8 +67,6 @@ const account = aleo.privateKeyToAccount('APrivateKey1...')
 
 const recordProvider = aleo.createRemoteScanner({
   url: 'https://edge.provable.com/api/scanner',
-  consumerId: '<consumer-id>',
-  apiKey: '<api-key>',
 })
 recordProvider.setAccount({ viewKey: account.viewKey })
 
@@ -243,8 +241,6 @@ const account = aleo.privateKeyToAccount('APrivateKey1...')
 // Service on the first scan and reuses the registration across calls.
 const recordProvider = aleo.createRemoteScanner({
   url: 'https://edge.provable.com/api/scanner',
-  consumerId: '<consumer-id>',
-  apiKey: '<api-key>',
 })
 recordProvider.setAccount({ viewKey: account.viewKey })
 

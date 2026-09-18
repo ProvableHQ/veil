@@ -18,7 +18,6 @@ const account = aleo.privateKeyToAccount('APrivateKey1...')
 
 const recordProvider = aleo.createRemoteScanner({
   url: 'https://rss.provable.com',
-  consumerId: '<consumer-id>',
 })
 recordProvider.setAccount({ viewKey: account.viewKey })
 

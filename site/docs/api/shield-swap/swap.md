@@ -37,8 +37,6 @@ const aleo = await loadNetwork('testnet')
 
 const scanner = aleo.createRemoteScanner({
   url: 'https://edge.provable.com/api/scanner',
-  consumerId: CONSUMER_ID,
-  apiKey: DPS_API_KEY,
 })
 
 const { walletClient } = aleo.createAleoClient({
@@ -46,8 +44,6 @@ const { walletClient } = aleo.createAleoClient({
   networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated',
   proverUrl: 'https://edge.provable.com/api/prove',
-  apiKey: DPS_API_KEY,
-  consumerId: CONSUMER_ID,
   records: scanner,
 })
 

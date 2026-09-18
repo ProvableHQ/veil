@@ -59,7 +59,6 @@ const walletClient = createWalletClient({
   }),
   recordProvider: aleo.createRemoteScanner({
     url: 'https://edge.provable.com/api/scanner',
-    consumerId: '<consumer-id>',
   }),
 })
 
@@ -89,7 +88,6 @@ const aleo = await loadNetwork('mainnet')
 
 const scanner = aleo.createStandaloneScanner({
   url: 'https://edge.provable.com/api/scanner',
-  consumerId: '<consumer-id>',
   viewKey: 'AViewKey1...',
 })
 

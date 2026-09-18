@@ -192,37 +192,25 @@ async function main(): Promise<void> {
   }
 
   const privateKey = requiredEnvironmentVariable('ALEO_PRIVATE_KEY')
-  const consumerId = process.env.ALEO_CONSUMER_ID?.trim()
-  const apiKey = process.env.ALEO_DPS_API_KEY?.trim()
-  if ((consumerId && !apiKey) || (!consumerId && apiKey)) {
-    throw new Error('ALEO_CONSUMER_ID and ALEO_DPS_API_KEY must be supplied together')
-  }
-  if (mode === 'private' && (!consumerId || !apiKey)) {
-    throw new Error('Private burn record discovery requires ALEO_CONSUMER_ID and ALEO_DPS_API_KEY')
-  }
 
   // ── Connect the account that owns the source funds ───────────────────
   // The Aleo account delegates proof construction, signs the finished proof,
   // broadcasts the burn, and pays the transaction fee from public credits.
-  // Private mode also authenticates a remote scanner because record ownership
-  // is encrypted and cannot be discovered from ordinary public chain reads.
+  // Private mode also attaches a remote scanner because record ownership is
+  // encrypted and cannot be discovered from ordinary public chain reads. The
+  // Provable gateway needs no credentials, and neither service receives the
+  // Aleo private key.
   const { loadNetwork } = await import('@provablehq/veil-aleo-sdk')
   const aleo = await loadNetwork('mainnet')
-  const records = mode === 'private'
-    ? aleo.createRemoteScanner({ consumerId: consumerId!, apiKey: apiKey! })
-    : undefined
+  const records = mode === 'private' ? aleo.createRemoteScanner() : undefined
   const { publicClient, walletClient: nativeWalletClient, account } = aleo.createAleoClient({
     privateKey,
     networkUrl: process.env.ALEO_RPC_URL?.trim() || 'https://edge.provable.com/api/v2',
     provingMode: 'delegated',
-    ...(consumerId && apiKey ? { consumerId, apiKey } : {}),
     ...(records ? { records } : {}),
     useFeeMaster: false,
     confirmationTimeout: ALEO_CONFIRMATION_TIMEOUT_MS,
   })
-  // Authentication lets the delegated prover and scanner act for this account;
-  // neither service receives the Aleo private key.
-  if (consumerId && apiKey) await nativeWalletClient.authenticateProvableApi()
   console.log(`Aleo signer ready: ${account.address} (delegated proving)`)
 
   // A private burn spends one concrete record and proves that the signer is not

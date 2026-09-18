@@ -1,27 +1,25 @@
 /**
  * Getting from nothing to a client that can trade.
  *
- * Four things have to exist before a swap will go through, and they are issued
- * by three different services, so it is worth knowing which is which:
+ * Three things have to exist before a swap will go through, and they are issued
+ * by different services, so it is worth knowing which is which:
  *
  *   1. An Aleo account. A private key. Generated locally, never registered
  *      anywhere.
- *   2. Provable API credentials. A consumer id and an API key, which pay for
- *      delegated proving and the record scanner. Issued once per handle.
- *   3. A Shield Swap session. The account signs a challenge; most DEX endpoints
+ *   2. A Shield Swap session. The account signs a challenge; most DEX endpoints
  *      refuse to answer without it.
- *   4. DEX access. Invite-gated per account, redeemed with a code.
+ *   3. DEX access. Invite-gated per account, redeemed with a code.
  *
- * Each step below checks before it acts, so running this twice is safe. Every
- * credential it obtains is returned rather than written anywhere — persisting
- * them is the caller's decision, and the Provable API key in particular is
- * shown exactly once and cannot be read back.
+ * Delegated proving and the record scanner run on the Provable gateway, which
+ * needs no credentials. Each step below checks before it acts, so running this
+ * twice is safe. Every credential it obtains is returned rather than written
+ * anywhere — persisting them is the caller's decision.
  *
  * Reads that touch only pools and tokens need none of this. Start at
  * `readClient` if that is all the work requires.
  */
 import { createPublicClient, http, publicActions } from '../../packages/core/src/index.js'
-import { generateAccount, loadNetwork, registerProvableApi } from '../../packages/provable-sdk/src/index.js'
+import { generateAccount, loadNetwork } from '../../packages/provable-sdk/src/index.js'
 import { shieldSwapActions } from '../../packages/shield-swap/src/index.js'
 
 const NODE_URL = 'https://edge.provable.com/api/v2'
@@ -44,12 +42,10 @@ export function readClient() {
  *
  * @param config.privateKey An existing account. Omit to generate a fresh one —
  *   which is a new, unfunded account, not a way to recover an old one.
- * @param config.provable Existing Provable credentials. Falls back to
- *   ALEO_CONSUMER_ID and ALEO_DPS_API_KEY in the environment.
- * @param config.username Handle to register new credentials under, when there
- *   are none. Registering is deliberate rather than automatic: the name is
- *   globally unique and spent on first use, and a taken one cannot be traded
- *   back for the credentials it belongs to.
+ * @param config.provable Legacy Provable consumer credentials. Falls back to
+ *   ALEO_CONSUMER_ID and ALEO_DPS_API_KEY in the environment. Not needed; the
+ *   gateway is unauthenticated, and the pair is carried but never sent.
+ * @param config.username Ignored. Nothing registers anymore.
  * @param config.inviteCode Redeemed when the account does not yet have DEX
  *   access. Codes are one-time.
  */
@@ -65,53 +61,26 @@ export async function setupClient(config: {
   // returning user passes their existing key instead.
   const privateKey = config.privateKey ?? generateAccount().privateKey
 
-  // ── 2. Provable API credentials ─────────────────────────────────────
-  // These pay for two services: the prover that builds proofs on the caller's
-  // behalf, and the scanner that finds the account's private records. Both are
-  // needed to trade — proving because transactions must be proved, scanning
-  // because a swap spends a record it first has to locate.
-  //
-  // Existing credentials always win, because registering is not repeatable.
-  // A username is globally unique and spent on first use: the API has no
-  // endpoint that reads a consumer back, and registering the same name again
-  // fails rather than returning the original pair. So a lost key is lost, and
-  // registration only happens when a caller names a username on purpose.
+  // ── 2. The client ───────────────────────────────────────────────────
+  // `provingMode: 'delegated'` sends proving to the Provable prover instead of
+  // running it locally, which is what keeps this usable without a heavy WASM
+  // build. The prover also pays transaction fees from its FeeMaster account, so
+  // a faucet-funded account needs no public credits of its own. The gateway
+  // needs no credentials: legacy consumer credentials are accepted and unused.
   const provable =
     config.provable ??
     (process.env.ALEO_CONSUMER_ID && process.env.ALEO_DPS_API_KEY
       ? { consumerId: process.env.ALEO_CONSUMER_ID, apiKey: process.env.ALEO_DPS_API_KEY }
-      : config.username
-        ? // Answers with the API key exactly once — whatever calls this has to
-          // store what it gets back.
-          await registerProvableApi({ username: config.username })
-        : undefined)
-  if (!provable) {
-    throw new Error(
-      'No Provable API credentials. Pass `provable` (or set ALEO_CONSUMER_ID and ALEO_DPS_API_KEY), ' +
-        'or pass `username` to register a new consumer — which spends that name permanently.',
-    )
-  }
-
-  // ── 3. The client ───────────────────────────────────────────────────
-  // `provingMode: 'delegated'` sends proving to the Provable prover instead of
-  // running it locally, which is what keeps this usable without a heavy WASM
-  // build. The prover also pays transaction fees from its FeeMaster account, so
-  // a faucet-funded account needs no public credits of its own.
+      : undefined)
   const aleo = await loadNetwork('testnet')
   const { walletClient, account } = aleo.createAleoClient({
     privateKey,
     networkUrl: NODE_URL,
     provingMode: 'delegated',
-    proverUrl: 'https://edge.provable.com/api/prove',
-    consumerId: provable.consumerId,
-    apiKey: provable.apiKey,
+    ...(provable ?? {}),
     // The scanner is what makes private balances readable. Without it the
     // client can still read pools, but cannot find a record to spend.
-    records: aleo.createRemoteScanner({
-      url: 'https://edge.provable.com/api/scanner',
-      consumerId: provable.consumerId,
-      apiKey: provable.apiKey,
-    }),
+    records: aleo.createRemoteScanner(),
   })
 
   // `.extend()` is viem's composition step: it returns a client carrying the DEX

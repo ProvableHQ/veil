@@ -54,12 +54,8 @@ to `DEFAULT_SOLANA_RPC_URL`, and `ALEO_RPC_URL` defaults to the Provable mainnet
 API. Aleo transactions use delegated proving, public fee payment, a five-minute
 confirmation timeout, and FeeMaster disabled.
 
-Delegated proving accepts optional Provable API credentials:
-
-```sh
-export ALEO_CONSUMER_ID='...'
-export ALEO_DPS_API_KEY='...'
-```
+Delegated proving and record scanning run on the Provable gateway, which needs
+no credentials.
 
 ## 1. Create chain clients
 
