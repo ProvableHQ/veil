@@ -17,7 +17,7 @@ env:
   # Keep in step with ci.yml: this workflow verifies dependency bumps against
   # the devnode suite, so building on an older compiler than CI uses would
   # green a bump CI then rejects.
-  LEO_RELEASE: leo-lang-v4.3.4
+  LEO_RELEASE: leo-lang-v4.4.4
 
 jobs:
   update:
