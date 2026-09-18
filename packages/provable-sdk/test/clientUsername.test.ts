@@ -8,10 +8,10 @@ import {
 } from '../src/index.js'
 
 /**
- * What a client does with the credential options now that the gateway needs
- * none of them. Nothing may register a consumer or mint a JWT, whatever the
- * caller passes; the options are carried for compatibility and reported back
- * by `authenticateProvableApi`, and that is all.
+ * What a client does with the credential options. The default gateway needs
+ * none, so nothing may register a consumer or mint a JWT there, whatever the
+ * caller passes. A pair together with legacy URLs selects the legacy JWT model
+ * and mints at the gateway those URLs name.
  */
 describe('createAleoClient credentials', () => {
   let aleo: AleoSdk
@@ -67,7 +67,7 @@ describe('createAleoClient credentials', () => {
     expect(result.registered).toBe(false)
   }, 30_000)
 
-  it('reports a configured pair without minting from it', async () => {
+  it('carries a configured pair on the default gateway without minting from it', async () => {
     const urls = forbidFetch()
     const result = await client({
       consumerId: 'existing-consumer',
@@ -76,8 +76,87 @@ describe('createAleoClient credentials', () => {
     }).authenticateProvableApi()
     expect(urls).toEqual([])
     expect(result.registered).toBe(false)
+    expect(result.expiration).toBeUndefined()
     expect(result.credentials).toEqual({ consumerId: 'existing-consumer', apiKey: 'existing-key' })
   }, 30_000)
+
+  it('mints from a configured pair at the legacy gateway the URLs name', async () => {
+    const urls: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) => {
+        urls.push(url.toString())
+        return new Response(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }), {
+          status: 201,
+          headers: { authorization: 'Bearer legacy' },
+        })
+      }),
+    )
+    const result = await client({
+      networkUrl: 'https://api.provable.com/v2',
+      proverUrl: 'https://api.provable.com/prove',
+      consumerId: 'existing-consumer',
+      apiKey: 'existing-key',
+    }).authenticateProvableApi()
+    expect(urls).toEqual(['https://api.provable.com/jwts/existing-consumer'])
+    expect(result.expiration).toBeGreaterThan(Date.now())
+    expect(result.registered).toBe(false)
+  }, 30_000)
+
+  it('ignores a non-default node URL: only the prover names a JWT gateway', async () => {
+    const urls = forbidFetch()
+    const result = await client({
+      networkUrl: 'http://localhost:3030',
+      consumerId: 'c-1',
+      apiKey: 'k-1',
+    }).authenticateProvableApi()
+    expect(urls).toEqual([])
+    expect(result.expiration).toBeUndefined()
+  }, 30_000)
+
+  it('mints for a legacy scanner even when the prover is the default', async () => {
+    const urls: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) => {
+        urls.push(url.toString())
+        return new Response(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }), {
+          status: 201,
+          headers: { authorization: 'Bearer legacy' },
+        })
+      }),
+    )
+    const result = await client({
+      records: aleo.createRemoteScanner({ url: 'https://api.provable.com/scanner' }),
+      consumerId: 'c-1',
+      apiKey: 'k-1',
+    }).authenticateProvableApi()
+    expect(urls).toEqual(['https://api.provable.com/jwts/c-1'])
+    expect(result.applied).toEqual({ proving: true, recordScanning: true })
+  }, 30_000)
+
+  it('derives the mint root from a legacy prover even when the node URL is the default', async () => {
+    const urls: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) => {
+        urls.push(url.toString())
+        return new Response(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }), {
+          status: 201,
+          headers: { authorization: 'Bearer legacy' },
+        })
+      }),
+    )
+    const proving = aleo.createProvingConfig({
+      mode: 'delegated',
+      networkUrl: 'https://edge.provable.com/api/v2',
+      proverUrl: 'https://legacy.example/prove',
+      consumerId: 'c-1',
+      apiKey: 'k-1',
+    })
+    await expect(proving.session!.getJwt()).resolves.toMatchObject({ jwt: 'Bearer legacy' })
+    expect(urls).toEqual(['https://legacy.example/jwts/c-1'])
+  })
 
   it('reports stored credentials without minting from them', async () => {
     const urls = forbidFetch()
@@ -87,7 +166,7 @@ describe('createAleoClient credentials', () => {
     expect(result.credentials).toEqual({ consumerId: 'stored', apiKey: 'stored-key' })
   }, 30_000)
 
-  it('carries a bare pair on the proving config as an inert session', async () => {
+  it('carries a bare pair on a default-gateway proving config as an inert session', async () => {
     const urls = forbidFetch()
     const proving = aleo.createProvingConfig({
       mode: 'delegated',

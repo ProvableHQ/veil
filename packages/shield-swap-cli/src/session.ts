@@ -258,7 +258,7 @@ export async function loadSession(options: { network?: string } = {}) {
   const aleo = await loadNetwork(network)
   // No prover or scanner URL: both default to the Provable gateway and take the
   // network from the client, so naming them here would only risk drift. The
-  // gateway needs no credentials; the store only carries a legacy pair.
+  // gateway needs no credentials; a legacy pair in the store stays unused.
   const scanner = aleo.createRemoteScanner()
   const { walletClient, account } = aleo.createAleoClient({
     privateKey: state.privateKey,

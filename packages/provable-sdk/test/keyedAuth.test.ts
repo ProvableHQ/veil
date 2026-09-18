@@ -100,18 +100,22 @@ describe('keyed auth wiring', () => {
     expect((walletClient.proving as ProvingConfigWithSession).session).toBeUndefined()
   })
 
-  it('createProvableSession never contacts the network, even through a supplied transport', async () => {
-    const transport = vi.fn<typeof fetch>(async () => {
-      throw new Error('transport must not be used')
-    })
+  it('createProvableSession mints through a supplied transport instead of global fetch', async () => {
+    const urls: string[] = []
+    const exp = Math.floor(Date.now() / 1000) + 3600
+    const transport: typeof fetch = async (input) => {
+      urls.push(String(input))
+      return new Response(JSON.stringify({ exp }), { status: 201, headers: { authorization: 'Bearer minted' } })
+    }
     vi.stubGlobal('fetch', vi.fn(() => { throw new Error('global fetch must not be used') }))
     const session = createProvableSession({
       credentials: { consumerId: 'cid', apiKey: 'key' },
+      baseUrl: 'https://api.provable.com',
       transport,
     })
-    await expect(session.getJwt()).resolves.toBeUndefined()
-    await expect(session.getCredentials()).resolves.toEqual({ consumerId: 'cid', apiKey: 'key' })
-    expect(transport).not.toHaveBeenCalled()
+    const jwt = await session.getJwt()
+    expect(jwt?.jwt).toBe('Bearer minted')
+    expect(urls).toEqual(['https://api.provable.com/jwts/cid'])
   })
 
   it('authenticateProvableApi is a no-op on a keyed client and reports no session paths', async () => {

@@ -89,22 +89,34 @@ A 401 under keyed auth means the key is invalid or revoked, which only the
 operator can fix. `auth` is mutually exclusive with the consumer options below;
 combining them throws at construction.
 
-The consumer model — `consumerId` + `apiKey`, `credentialStore`, `username`,
-`registerProvableApi`, `authenticateProvableApi`, `createProvableSession` — is
-retired. Every option and helper still exists so existing code compiles and runs,
-but they are no-ops: nothing registers, nothing mints, and a configured pair is
-carried on the client without ever being sent. `authenticateProvableApi()`
-resolves immediately and reports the configured credentials (or `undefined`) and
-which paths carry the client's session:
+The legacy gateway, `https://api.provable.com`, authenticates with JWTs minted
+from a consumer id and API key. That model is still supported for a caller who
+points the client at it: set `proverUrl` (and the scanner `url`) to the legacy
+gateway and pass `consumerId` and `apiKey` (or a `credentialStore` that holds
+them), and one session mints the JWT at that gateway and hands it to proving and
+scanning. The mint root is the origin of the prover URL, so a self-hosted legacy gateway
+serving `/jwts` at its own origin works the same way. On the default gateway the pair
+is carried and nothing mints, because edge has no JWT route:
 
 ```ts
-const { credentials, registered, applied } = await walletClient.authenticateProvableApi()
-registered // always false
-applied    // { proving: true, recordScanning: true }
+const { walletClient } = aleo.createAleoClient({
+  privateKey,
+  networkUrl: 'https://api.provable.com/v2',
+  proverUrl: 'https://api.provable.com/prove',
+  records: aleo.createRemoteScanner({ url: 'https://api.provable.com/scanner' }),
+  consumerId,
+  apiKey,
+})
+const { expiration } = await walletClient.authenticateProvableApi() // mints eagerly
 ```
 
-`fileCredentialStore` and `memoryCredentialStore` remain for callers that still
-hold a legacy pair on disk; a store is read once and never written.
+Consumer registration is retired: `registerProvableApi` is a no-op that resolves
+`undefined`, `username` is ignored, and a client without a pair never registers
+one. `authenticateProvableApi()` never throws for lack of credentials; on a
+credential-less or keyed client it resolves with `credentials: undefined`,
+`expiration: undefined`, and `registered: false`. `fileCredentialStore` and
+`memoryCredentialStore` remain for a pair held on disk; a store is read once and
+never written.
 
 The handle also exposes the pieces individually when the caller does not want the
 full pair:

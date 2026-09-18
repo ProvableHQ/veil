@@ -54,16 +54,18 @@ Base URL of the Record Scanner Service. The SDK appends the network segment
 - **Type:** `string`
 - **Optional**
 
-Legacy consumer id from the retired consumer model. Accepted so existing
-configuration keeps loading; the hosted scanner needs no consumer.
+Consumer id for the legacy JWT model, paired with `apiKey`. Omit both for the
+default gateway, which needs no consumer.
 
 ### apiKey
 
 - **Type:** `string`
 - **Optional**
 
-Legacy API key paired with `consumerId`. Nothing is sent or minted from it.
-For a provisioned gateway key use `auth`; omit both for the hosted scanner.
+API key for the legacy JWT model, paired with `consumerId`. A session mints the
+JWT when `url` names a legacy gateway such as `https://api.provable.com/scanner`;
+on the default gateway the pair is carried and nothing mints. For a provisioned
+gateway key use `auth`; omit both for the default gateway.
 
 ### startBlock
 

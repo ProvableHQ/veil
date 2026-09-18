@@ -79,12 +79,15 @@ no JWT to mint, and a client with nothing but a private key and a network URL
 proves and scans. An operator may hand out a provisioned API key; pass it as
 `auth: { mode: 'api-key', value }` and every request carries it in `X-API-Key`.
 
-The consumer model (`consumerId` + `apiKey`, `credentialStore`, `username`,
-`registerProvableApi`, `authenticateProvableApi`) is retired. The options and
-helpers remain so existing code compiles and runs, but they are no-ops: nothing
-is registered, minted, or sent. `ALEO_CONSUMER_ID` and `ALEO_DPS_API_KEY` in the
-environment are accepted and ignored. The keyed integration tests read a
-provisioned key from `EDGE_PROVABLE_API_KEY`.
+The legacy gateway, `https://api.provable.com`, still authenticates with JWTs
+minted from a consumer id and API key. A caller who points `proverUrl` or
+the scanner `url` at it and passes `consumerId` and `apiKey`
+(or a `credentialStore`) gets a session that mints at that gateway's `/jwts`
+and injects the token. On the default gateway the pair is carried and nothing
+mints, since edge has no JWT route. Consumer registration is retired:
+`registerProvableApi` is a no-op and `username` is ignored. The integration
+matrices read a provisioned key from `EDGE_PROVABLE_API_KEY` and a legacy pair
+from `ALEO_CONSUMER_ID` and `ALEO_DPS_API_KEY`.
 
 ## Contributing to Veil
 

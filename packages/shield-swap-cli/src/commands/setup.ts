@@ -7,8 +7,8 @@
  *   1. Key material        — reuse the stored account, import the user's
  *                            existing key, or (only with --new) generate one
  *   2. DEX authentication  — challenge/verify session with the account
- *   3. Provable gateway    — needs no credentials; legacy consumer credentials
- *                            are kept on file but unused
+ *   3. Provable gateway    — needs no credentials; a legacy consumer pair on
+ *                            file is kept but unused on the default gateway
  *   4. Invite code         — check access; redeem a code when one is provided
  *   5. API token           — mint a long-lived ss_ token for later sessions
  *   6. Airdrop             — request testnet tokens when holdings are empty,
@@ -60,8 +60,8 @@ const USAGE = `shield-swap setup — bootstrap an account and get it funded
 
   --new                         generate a brand-new account
   --private-key-file <path>     import an existing key, read from this file
-  --consumer-id <id>            legacy Provable API consumer id (no longer needed)
-  --api-key <key>               legacy Provable API key (no longer needed)
+  --consumer-id <id>            legacy Provable API consumer id (optional)
+  --api-key <key>               legacy Provable API key (optional)
   --invite-code <code>          redeem an invite code when access is locked
   --api-url <origin>            pin a DEX API deployment
   --network <testnet|mainnet>   default testnet
@@ -167,10 +167,10 @@ async function setup(argv: string[]): Promise<void> {
   }
   console.log(`✓ account: ${state.address}`)
 
-  // Legacy credentials are kept on file for a user who still holds them; the
-  // gateway itself needs none. Awaited because ProvableCredentialStore permits
-  // async: this store happens to be synchronous, but reading a promise as a
-  // value would silently skip the seed and leave the write unobserved.
+  // A legacy pair is kept on file for a user who still holds one; the gateway
+  // itself needs none. Awaited because ProvableCredentialStore permits async:
+  // this store happens to be synchronous, but reading a promise as a value
+  // would silently skip the seed and leave the write unobserved.
   if (consumerId && apiKey && !(await credentialStore.load())) {
     await credentialStore.save({ consumerId, apiKey })
   }
@@ -196,7 +196,7 @@ async function setup(argv: string[]): Promise<void> {
   // carry the client's session, so a stale credential file cannot block setup.
   const provable = await client.authenticateProvableApi()
   console.log(
-    `✓ Provable gateway: no credentials needed` +
+    '✓ Provable gateway: no credentials needed' +
       (provable.credentials ? ` (legacy consumer ${provable.credentials.consumerId} on file, unused)` : ''),
   )
 

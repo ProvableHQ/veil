@@ -72,17 +72,18 @@ Base URL of the delegated proving service. Required when `mode` is
 - **Type:** `string`
 - **Optional**
 
-Legacy API key from the retired consumer model. Accepted with `consumerId` so
-existing configuration keeps loading; nothing is sent or minted from it. For a
-provisioned gateway key use `auth`.
+API key for the legacy JWT model. With `consumerId` it forms the pair a session
+mints JWTs from when `proverUrl` names a legacy gateway such as
+`https://api.provable.com/prove`. On the default gateway the pair is carried and
+nothing mints. For a provisioned gateway key use `auth`.
 
 ### consumerId
 
 - **Type:** `string`
 - **Optional**
 
-Legacy consumer id from the retired consumer model. Accepted so existing
-configuration keeps loading; the gateway needs no consumer.
+Consumer id for the legacy JWT model, paired with `apiKey`. Omit both for the
+default gateway, which needs no consumer.
 
 ### account
 
