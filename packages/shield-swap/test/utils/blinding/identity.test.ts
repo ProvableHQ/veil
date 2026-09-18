@@ -91,10 +91,33 @@ describe('nextBlindedIdentity (counter scan)', () => {
     expect(id.counter).toBe(7)
     expect(id.blindingFactor).toBe(VECTORS[2]!.blindingFactor)
 
-    // Every address reads as used → the window exhausts.
+    // Every address reads as used → no counter anywhere, so the search gives up.
     const allUsed = { request: async () => 'true' } as unknown as Client
     await expect(
       nextBlindedIdentity(allUsed, { viewKeyScalar: VIEW_KEY_SCALAR, signer: SIGNER, program: SHIELD_SWAP, maxScan: 3 }),
-    ).rejects.toThrow(/No unused blinded address/)
+    ).rejects.toThrow(/No unused blinded address in counters 0…/)
   })
+
+  it('gallops past a spent scan window and lands on the first free counter', async () => {
+    // An account 250 swaps deep with a cold store: the 64-counter window is all
+    // used, so the search must jump ahead and binary-search back instead of
+    // failing, and do so in far fewer reads than a counter-by-counter walk.
+    const used = new Set<string>()
+    for (let counter = 0; counter < 250; counter++) {
+      const factor = await deriveBlindingFactor(VIEW_KEY_SCALAR, counter, SHIELD_SWAP)
+      used.add(await deriveBlindedAddress(factor, SIGNER, SHIELD_SWAP))
+    }
+    let reads = 0
+    const client = {
+      request: async (req: { params: { key: string } }) => {
+        reads++
+        return used.has(req.params.key) ? 'true' : null
+      },
+    } as unknown as Client
+
+    const id = await nextBlindedIdentity(client, { viewKeyScalar: VIEW_KEY_SCALAR, signer: SIGNER, program: SHIELD_SWAP })
+    expect(id.counter).toBe(250)
+    expect(used.has(id.blindedAddress)).toBe(false)
+    expect(reads).toBeLessThan(100)
+  }, 60_000)
 })

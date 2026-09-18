@@ -150,18 +150,50 @@ describe('reserveBlindedIdentity', () => {
     expect(second.counter).toBe(1)
   })
 
-  it('throws past the scan bound rather than reusing a counter', async () => {
+  it('gallops past an exhausted scan window rather than reusing a counter', async () => {
     // Learn what counters 0 and 1 derive to, then tell the chain both are
-    // already used: with maxScan 2 there is nowhere left to go, and the only
-    // wrong answer would be handing one of them back anyway.
+    // already used: with maxScan 2 the linear window is spent, and the only
+    // wrong answers would be handing one of them back or giving up while
+    // counter 2 sits free.
     const seen = memoryBlindedIdentityStore()
     const zero = await reserveBlindedIdentity(localClient(), { store: seen })
     const one = await reserveBlindedIdentity(localClient(), { store: seen })
 
     const client = localClient([zero.blindedAddress, one.blindedAddress])
+    const next = await reserveBlindedIdentity(client, { store: memoryBlindedIdentityStore(), maxScan: 2 })
+    expect(next.counter).toBe(2)
+  })
+
+  it('finds the frontier of a long-lived account from a cold store in far fewer reads than counters', async () => {
+    // A test account or a returning CLI user is hundreds of swaps deep; a cold
+    // store must still land on the first free counter without a read per
+    // counter, or every fresh store would stall on the window.
+    const seen = memoryBlindedIdentityStore()
+    const used: string[] = []
+    for (let i = 0; i < 100; i++) used.push((await reserveBlindedIdentity(localClient(), { store: seen })).blindedAddress)
+
+    let reads = 0
+    const counting = {
+      ...(localClient(used) as object),
+      request: async (req: { method: string; params?: { mapping?: string; key?: string } }) => {
+        reads++
+        return used.includes(req.params?.key ?? '') ? 'true' : null
+      },
+      account: local,
+    } as unknown as Client
+    const next = await reserveBlindedIdentity(counting, { store: memoryBlindedIdentityStore(), maxScan: 8 })
+    expect(next.counter).toBe(100)
+    expect(reads).toBeLessThan(40)
+  })
+
+  it('throws when every probe reads as used, which means the wrong program or account', async () => {
+    const allUsed = {
+      request: async () => 'true',
+      account: local,
+    } as unknown as Client
     await expect(
-      reserveBlindedIdentity(client, { store: memoryBlindedIdentityStore(), maxScan: 2 }),
-    ).rejects.toThrow(/No unused blinded address in counters 0…1/)
+      reserveBlindedIdentity(allUsed, { store: memoryBlindedIdentityStore(), maxScan: 2 }),
+    ).rejects.toThrow(/No unused blinded address in counters 0…/)
   })
 
   it('refuses a wallet account, which tracks its own identities', async () => {
