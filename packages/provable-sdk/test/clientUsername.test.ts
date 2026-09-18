@@ -54,8 +54,8 @@ describe('createAleoClient username', () => {
   const client = (username?: string | (() => string)) =>
     aleo.createAleoClient({
       privateKey: aleo.generateAccount().privateKey,
-      networkUrl: 'https://api.provable.com/v2',
-      proverUrl: 'https://api.provable.com/prove',
+      networkUrl: 'https://edge.provable.com/api/v2',
+      proverUrl: 'https://edge.provable.com/api/prove',
       credentialStore: memoryCredentialStore(),
       ...(username !== undefined ? { username } : {}),
     }).walletClient
@@ -94,8 +94,8 @@ describe('createAleoClient username', () => {
     const usernames = stubRegistration()
     const wallet = aleo.createAleoClient({
       privateKey: aleo.generateAccount().privateKey,
-      networkUrl: 'https://api.provable.com/v2',
-      proverUrl: 'https://api.provable.com/prove',
+      networkUrl: 'https://edge.provable.com/api/v2',
+      proverUrl: 'https://edge.provable.com/api/prove',
       consumerId: 'existing-consumer',
       apiKey: 'existing-key',
       username: 'would-be-ignored',
@@ -112,14 +112,14 @@ describe('createAleoClient username', () => {
       // Half a pair authenticates nothing: the id is the path segment and the
       // key the header, so this would 401 four times instead of failing here.
       expect(() =>
-        aleo.createRemoteScanner({ url: 'https://api.provable.com/scanner', apiKey: 'k' }),
+        aleo.createRemoteScanner({ url: 'https://edge.provable.com/api/scanner', apiKey: 'k' }),
       ).toThrow(/apiKey also needs consumerId/)
     })
 
     it('rejects an apiKey without a consumerId on a standalone scanner', () => {
       expect(() =>
         aleo.createStandaloneScanner({
-          url: 'https://api.provable.com/scanner',
+          url: 'https://edge.provable.com/api/scanner',
           viewKey: aleo.generateAccount().viewKey,
           apiKey: 'k',
         }),
@@ -129,7 +129,7 @@ describe('createAleoClient username', () => {
     it('accepts an apiKey without a consumerId when a session supplies tokens', () => {
       const session = createProvableSession({ credentials: { consumerId: 'c', apiKey: 'k' } })
       expect(() =>
-        aleo.createRemoteScanner({ url: 'https://api.provable.com/scanner', apiKey: 'k', session }),
+        aleo.createRemoteScanner({ url: 'https://edge.provable.com/api/scanner', apiKey: 'k', session }),
       ).not.toThrow()
     })
 
@@ -151,10 +151,37 @@ describe('createAleoClient username', () => {
       ).not.toThrow()
     })
 
+    it('mints a bare consumer pair at the Provable API root, not at the edge prover', async () => {
+      // Edge has no /jwts route. Left to the Provable SDK, the pair would mint
+      // at the prover origin and 404; a session keeps the mint on the API root.
+      const urls: string[] = []
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string | URL) => {
+          urls.push(url.toString())
+          return new Response(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }), {
+            status: 201,
+            headers: { authorization: 'Bearer stub' },
+          })
+        }),
+      )
+      const proving = aleo.createProvingConfig({
+        mode: 'delegated',
+        networkUrl: 'https://edge.provable.com/api/v2',
+        consumerId: 'c-1',
+        apiKey: 'k-1',
+      })
+      expect(proving.session).toBeDefined()
+      await expect(proving.session!.getJwt()).resolves.toEqual(
+        expect.objectContaining({ jwt: 'Bearer stub' }),
+      )
+      expect(urls).toEqual(['https://api.provable.com/jwts/c-1'])
+    })
+
     it('gives a client with nothing configured a working prover endpoint', () => {
       const { walletClient } = aleo.createAleoClient({
         privateKey: aleo.generateAccount().privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
         records: aleo.createRemoteScanner(),
       })
       expect(walletClient.proving.mode).toBe('delegated')

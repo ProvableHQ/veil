@@ -7,7 +7,7 @@ import { http } from '../../src/transports/http.js'
  * correct Aleo REST URL on the wire.
  */
 describe('http transport: new endpoint URL mappings', () => {
-  const BASE = 'https://api.provable.com/v2'
+  const BASE = 'https://edge.provable.com/api/v2'
   const MAINNET = `${BASE}/mainnet`
 
   function makeTransport() {

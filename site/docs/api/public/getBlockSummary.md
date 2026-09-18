@@ -12,7 +12,7 @@ explorer-style recent-blocks view without downloading full blocks;
 import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 })
 
 const summaries = await client.getBlockSummary()

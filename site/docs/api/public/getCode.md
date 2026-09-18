@@ -13,7 +13,7 @@ record types before calling it. `getProgram` is an alias for `getCode`.
 import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 })
 
 const source = await client.getCode({ programId: 'credits.aleo' })

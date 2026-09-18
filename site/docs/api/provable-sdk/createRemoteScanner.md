@@ -25,7 +25,7 @@ const aleo = await loadNetwork('testnet')
 const account = aleo.privateKeyToAccount('APrivateKey1...')
 
 const records = aleo.createRemoteScanner({
-  url: 'https://api.provable.com/scanner',
+  url: 'https://edge.provable.com/api/scanner',
   consumerId: '<consumer-id>',
   apiKey: '<api-key>',
 })

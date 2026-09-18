@@ -1,6 +1,6 @@
 /**
  * Types for endpoints that aren't defined in the Aleo SDK — derived from live samples
- * against `https://api.provable.com/v2/mainnet/...`.
+ * against `https://edge.provable.com/api/v2/mainnet/...`.
  *
  * These cover summaries, metrics, staking, supply, and token data served by the
  * explorer-side API. snake_case matches the wire; numeric widths follow the repo rule

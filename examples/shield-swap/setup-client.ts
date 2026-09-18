@@ -24,7 +24,7 @@ import { createPublicClient, http, publicActions } from '../../packages/core/src
 import { generateAccount, loadNetwork, registerProvableApi } from '../../packages/provable-sdk/src/index.js'
 import { shieldSwapActions } from '../../packages/shield-swap/src/index.js'
 
-const NODE_URL = 'https://api.provable.com/v2'
+const NODE_URL = 'https://edge.provable.com/api/v2'
 
 /**
  * Builds a client that reads pools, tokens, and chain state.
@@ -102,13 +102,13 @@ export async function setupClient(config: {
     privateKey,
     networkUrl: NODE_URL,
     provingMode: 'delegated',
-    proverUrl: 'https://api.provable.com/prove',
+    proverUrl: 'https://edge.provable.com/api/prove',
     consumerId: provable.consumerId,
     apiKey: provable.apiKey,
     // The scanner is what makes private balances readable. Without it the
     // client can still read pools, but cannot find a record to spend.
     records: aleo.createRemoteScanner({
-      url: 'https://api.provable.com/scanner',
+      url: 'https://edge.provable.com/api/scanner',
       consumerId: provable.consumerId,
       apiKey: provable.apiKey,
     }),

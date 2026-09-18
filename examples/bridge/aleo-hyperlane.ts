@@ -87,7 +87,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   const config = ASSETS[asset]
   const recipient = requiredEnvironmentVariable(config.recipientEnvironmentVariable)
   const privateKey = requiredEnvironmentVariable('ALEO_PRIVATE_KEY')
-  const networkUrl = process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2'
+  const networkUrl = process.env.ALEO_RPC_URL?.trim() || 'https://edge.provable.com/api/v2'
   const consumerId = process.env.ALEO_CONSUMER_ID?.trim()
   const apiKey = process.env.ALEO_DPS_API_KEY?.trim()
   if ((consumerId && !apiKey) || (!consumerId && apiKey)) {

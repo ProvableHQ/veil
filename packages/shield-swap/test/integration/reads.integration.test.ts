@@ -29,7 +29,7 @@ import { PROGRAM_ID } from '../../src/generated/shield_swap.js'
 const RUN = process.env.VEIL_INTEGRATION === '1'
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
 
-const API_BASE = 'https://api.provable.com/v2'
+const API_BASE = 'https://edge.provable.com/api/v2'
 const NODE_URL = `${API_BASE}/testnet`
 // The migrated shapes are served by staging; override for another endpoint.
 const INDEXER_URL = process.env.VEIL_DEX_API_URL ?? SHIELD_SWAP_API_URLS.testnet

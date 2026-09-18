@@ -18,7 +18,7 @@ import {
 } from '@provablehq/aleo-bridge-sdk'
 
 const USDCX_PROGRAM = 'usdcx_stablecoin.aleo'
-const FREEZE_LIST_URL = 'https://api.provable.com/v2/mainnet/programs/usdcx_freezelist.aleo/compliance/freeze-list'
+const FREEZE_LIST_URL = 'https://edge.provable.com/api/v2/mainnet/programs/usdcx_freezelist.aleo/compliance/freeze-list'
 const FREEZE_LIST_TREE_DEPTH = 15
 const FREEZE_LIST_PROOF_LENGTH = FREEZE_LIST_TREE_DEPTH + 1
 const MINIMUM_BURN_AMOUNT_ATOMIC = 2_000_000n
@@ -213,7 +213,7 @@ async function main(): Promise<void> {
     : undefined
   const { publicClient, walletClient: nativeWalletClient, account } = aleo.createAleoClient({
     privateKey,
-    networkUrl: process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2',
+    networkUrl: process.env.ALEO_RPC_URL?.trim() || 'https://edge.provable.com/api/v2',
     provingMode: 'delegated',
     ...(consumerId && apiKey ? { consumerId, apiKey } : {}),
     ...(records ? { records } : {}),

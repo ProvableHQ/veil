@@ -15,7 +15,7 @@ import {
 } from '@provablehq/veil-core'
 import { fromWalletAdapter, type AleoWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 
-const API_URL = 'https://api.provable.com/v2'
+const API_URL = 'https://edge.provable.com/api/v2'
 
 // ---------------------------------------------------------------------------
 // Public client — always available, no wallet needed

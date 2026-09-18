@@ -41,16 +41,16 @@ import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 const aleo = await loadNetwork('testnet')
 
 const scanner = aleo.createRemoteScanner({
-  url: 'https://api.provable.com/scanner',
+  url: 'https://edge.provable.com/api/scanner',
   consumerId: CONSUMER_ID,
   apiKey: DPS_API_KEY,
 })
 
 const { walletClient } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
-  networkUrl: 'https://api.provable.com/v2',
+  networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated',
-  proverUrl: 'https://api.provable.com/prove',
+  proverUrl: 'https://edge.provable.com/api/prove',
   apiKey: DPS_API_KEY,
   consumerId: CONSUMER_ID,
   records: scanner,
@@ -308,7 +308,7 @@ import { createPublicClient, http } from '@provablehq/veil-core'
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
 }).extend(shieldSwapActions({ api: {} }))
 
 const pool = await client.getPool({ poolKey })  // static config: token pair, fee, decimals

@@ -247,7 +247,7 @@ function buildUrl(
  * request and throws on a non-2xx response.
  *
  * @param url Base URL of the Aleo node, without a trailing network segment
- *   (e.g. `https://api.provable.com/v2`).
+ *   (e.g. `https://edge.provable.com/api/v2`).
  * @param config Optional transport settings.
  * @param config.clientHeader Optional value for the `X-Veil-Client` header
  *   identifying the SDK to the node. Defaults to `veil-core/<version>`. The
@@ -272,7 +272,7 @@ function buildUrl(
  * @example
  * import { http } from '@provablehq/veil-core'
  *
- * const transport = http('https://api.provable.com/v2', { network: 'testnet' })
+ * const transport = http('https://edge.provable.com/api/v2', { network: 'testnet' })
  */
 export function http(
   url: string,

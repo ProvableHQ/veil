@@ -38,7 +38,7 @@ key is involved anywhere in this path.
 import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 })
 
 // Current chain height
@@ -116,7 +116,7 @@ browser wallet in the loop.
 import { createPublicClient, createWalletClient, http } from '@provablehq/veil-core'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 
-const transport = http('https://api.provable.com/v2', { network: 'testnet' })
+const transport = http('https://edge.provable.com/api/v2', { network: 'testnet' })
 
 // Public client for reads — same interface as the read-only path above.
 const publicClient = createPublicClient({ transport })
@@ -129,8 +129,8 @@ const walletClient = createWalletClient({
   transport,
   proving: aleo.createProvingConfig({
     mode: 'delegated',
-    networkUrl: 'https://api.provable.com/v2',
-    proverUrl: 'https://api.provable.com',
+    networkUrl: 'https://edge.provable.com/api/v2',
+    proverUrl: 'https://edge.provable.com/api/prove',
     consumerId: '<consumer-id>',
     apiKey: '<api-key>',
     account,

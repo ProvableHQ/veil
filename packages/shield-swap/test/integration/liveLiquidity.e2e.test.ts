@@ -148,7 +148,7 @@ describe.runIf(RUN)('live liquidity lifecycle on testnet', () => {
     const aleo = await loadNetwork('testnet')
     const built = aleo.createAleoClient({
       privateKey: PRIVATE_KEY!,
-      networkUrl: 'https://api.provable.com/v2',
+      networkUrl: 'https://edge.provable.com/api/v2',
       consumerId: CONSUMER_ID,
       apiKey: API_KEY,
       records: aleo.createRemoteScanner(),

@@ -55,7 +55,7 @@ export function resolveNetwork(explicit?: string): Network {
   return value
 }
 
-export const NETWORK_URL = 'https://api.provable.com/v2'
+export const NETWORK_URL = 'https://edge.provable.com/api/v2'
 
 /** Everything that must survive between agent sessions. */
 export type ShieldSwapState = {

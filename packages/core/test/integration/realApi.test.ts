@@ -25,7 +25,7 @@ import { assertShape, type ShapeSpec } from '../support/assertShape.js'
  *           see https://github.com/ProvableHQ/veil/issues/40.
  *
  * Optional env overrides:
- *   VEIL_API_URL               — base API URL (default: https://api.provable.com/v2)
+ *   VEIL_API_URL               — base API URL (default: https://edge.provable.com/api/v2)
  *   VEIL_NETWORK               — 'mainnet' | 'testnet' (default: 'mainnet')
  *   VEIL_TEST_PROGRAM_ID       — first-class program (default: 'credits.aleo')
  *   VEIL_TEST_DEPLOYED_PROGRAM — deployed program for edition lookups
@@ -38,7 +38,7 @@ import { assertShape, type ShapeSpec } from '../support/assertShape.js'
 
 const RUN = process.env.VEIL_INTEGRATION === '1'
 
-const API_URL = process.env.VEIL_API_URL ?? 'https://api.provable.com/v2'
+const API_URL = process.env.VEIL_API_URL ?? 'https://edge.provable.com/api/v2'
 const NETWORK = (process.env.VEIL_NETWORK as 'mainnet' | 'testnet' | undefined) ?? 'mainnet'
 const PROGRAM_ID = process.env.VEIL_TEST_PROGRAM_ID ?? 'credits.aleo'
 const DEPLOYED_PROGRAM = process.env.VEIL_TEST_DEPLOYED_PROGRAM ?? 'puzzle_arcade_coin_v002.aleo'

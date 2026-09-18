@@ -37,7 +37,7 @@ const walletClient = createWalletClient({
   account,
   // The adapter transport routes wallet operations (sign, execute, decrypt, …);
   // pair it with http() so reads (getBlock, getBalance, …) still resolve.
-  transport: fallback([transport, http('https://api.provable.com/v2', { network: 'mainnet' })]),
+  transport: fallback([transport, http('https://edge.provable.com/api/v2', { network: 'mainnet' })]),
 })
 ```
 

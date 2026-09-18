@@ -31,7 +31,7 @@ const API_OPTS = { baseUrl: process.env.VEIL_DEX_API_URL ?? SHIELD_SWAP_API_URLS
  */
 const RUN = process.env.VEIL_INTEGRATION === '1'
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
-const NODE = 'https://api.provable.com/v2'
+const NODE = 'https://edge.provable.com/api/v2'
 
 describe.runIf(RUN)('trader workflows against live pool + route data', () => {
   let client: PublicClient

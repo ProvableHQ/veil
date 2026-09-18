@@ -82,7 +82,7 @@ import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
 const aleo = await loadNetwork('testnet')
 const { walletClient } = aleo.createAleoClient({
   privateKey,
-  networkUrl: 'https://api.provable.com/v2',
+  networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated',
   // Credentials reach both the prover and the scanner through one session the
   // client builds from this store, registering a consumer on first use.

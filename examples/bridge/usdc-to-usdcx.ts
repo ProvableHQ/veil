@@ -77,7 +77,7 @@ async function main(): Promise<void> {
     const network = await loadNetwork('mainnet')
     const aleo = network.createAleoClient({
       privateKey: required('ALEO_PRIVATE_KEY'),
-      networkUrl: process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2',
+      networkUrl: process.env.ALEO_RPC_URL?.trim() || 'https://edge.provable.com/api/v2',
       provingMode: 'delegated',
       confirmationTimeout: 5 * 60_000,
     })

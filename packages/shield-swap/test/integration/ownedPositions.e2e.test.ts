@@ -20,8 +20,8 @@ const DPS_API_KEY = process.env.ALEO_DPS_API_KEY
 const CONSUMER_ID = process.env.ALEO_CONSUMER_ID
 const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!DPS_API_KEY && !!CONSUMER_ID
 
-const NETWORK_URL = 'https://api.provable.com/v2'
-const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://api.provable.com/scanner'
+const NETWORK_URL = 'https://edge.provable.com/api/v2'
+const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://edge.provable.com/api/scanner'
 const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap.aleo'
 
 describe.runIf(RUN)('owned positions against the real chain + scanner', () => {

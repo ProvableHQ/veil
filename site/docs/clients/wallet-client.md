@@ -42,7 +42,7 @@ const { account, transport } = fromWalletAdapter(connectedAdapter)
 
 const client = createWalletClient({
   account,
-  transport: fallback([transport, http('https://api.provable.com/v2')]),
+  transport: fallback([transport, http('https://edge.provable.com/api/v2')]),
 })
 ```
 
@@ -66,7 +66,7 @@ const aleo = await loadNetwork('testnet')
 const account = aleo.privateKeyToAccount('APrivateKey1...')
 
 const recordProvider = aleo.createRemoteScanner({
-  url: 'https://api.provable.com/v2',
+  url: 'https://edge.provable.com/api/scanner',
   consumerId: '<consumer-id>',
   apiKey: '<api-key>',
 })
@@ -74,11 +74,11 @@ recordProvider.setAccount({ viewKey: account.viewKey })
 
 const client = createWalletClient({
   account,
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
   proving: aleo.createProvingConfig({
     mode: 'delegated',
-    networkUrl: 'https://api.provable.com/v2',
-    proverUrl: 'https://api.provable.com/prove',
+    networkUrl: 'https://edge.provable.com/api/v2',
+    proverUrl: 'https://edge.provable.com/api/prove',
     account,
   }),
   recordProvider,
@@ -242,7 +242,7 @@ const account = aleo.privateKeyToAccount('APrivateKey1...')
 // Remote scanner: registers a view key with the hosted Record Scanning
 // Service on the first scan and reuses the registration across calls.
 const recordProvider = aleo.createRemoteScanner({
-  url: 'https://api.provable.com/v2',
+  url: 'https://edge.provable.com/api/scanner',
   consumerId: '<consumer-id>',
   apiKey: '<api-key>',
 })
@@ -250,11 +250,11 @@ recordProvider.setAccount({ viewKey: account.viewKey })
 
 const walletClient = createWalletClient({
   account,
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
   proving: aleo.createProvingConfig({
     mode: 'delegated',
-    networkUrl: 'https://api.provable.com/v2',
-    proverUrl: 'https://api.provable.com/prove',
+    networkUrl: 'https://edge.provable.com/api/v2',
+    proverUrl: 'https://edge.provable.com/api/prove',
     account,
   }),
   recordProvider,

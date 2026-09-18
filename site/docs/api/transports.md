@@ -86,7 +86,7 @@ throws on a non-2xx response.
 
 | Parameter | Type | Description |
 | --- | --- | --- |
-| `url` | `string` | Base URL of the Aleo node, without a trailing network segment (e.g. `https://api.provable.com/v2`). |
+| `url` | `string` | Base URL of the Aleo node, without a trailing network segment (e.g. `https://edge.provable.com/api/v2`). |
 | `config.network` | `Network` | Optional. Network segment used in request paths. Defaults to `'mainnet'`. For local accounts, `switchChain` mutates this field to re-route reads at the new network's path segment. |
 | `config.fetchFn` | `typeof fetch` | Optional. `fetch` implementation used for requests. Defaults to the global `fetch`; supply one for non-browser runtimes or tests. |
 | `config.clientHeader` | `string \| false` | Optional. Value of the `X-Veil-Client` header identifying the SDK. Defaults to `veil-core/<version>`; pass a non-empty string to replace the value or `false` to never send the header. See [the client header](/clients/transports#the-client-header). |
@@ -97,12 +97,12 @@ throws on a non-2xx response.
 ```ts
 import { http } from '@provablehq/veil-core'
 
-const transport = http('https://api.provable.com/v2', { network: 'testnet' })
+const transport = http('https://edge.provable.com/api/v2', { network: 'testnet' })
 ```
 
 ### Base URL resolution
 
-Every request resolves against `{url}/{network}`, so `http('https://api.provable.com/v2', { network: 'testnet' })` issues requests under `https://api.provable.com/v2/testnet`. Each method maps to one REST path under that base — for example `getLatestHeight` reads `GET {base}/block/height/latest`, `getBalance` reads `GET {base}/program/credits.aleo/mapping/account/{address}`, and `sendTransaction` posts to `POST {base}/transaction/broadcast`. An unrecognized method throws `TransportError` before any request is issued; a non-2xx response throws `TransportError` with a message of the form `HTTP {status}: {response body}`.
+Every request resolves against `{url}/{network}`, so `http('https://edge.provable.com/api/v2', { network: 'testnet' })` issues requests under `https://edge.provable.com/api/v2/testnet`. Each method maps to one REST path under that base — for example `getLatestHeight` reads `GET {base}/block/height/latest`, `getBalance` reads `GET {base}/program/credits.aleo/mapping/account/{address}`, and `sendTransaction` posts to `POST {base}/transaction/broadcast`. An unrecognized method throws `TransportError` before any request is issued; a non-2xx response throws `TransportError` with a message of the form `HTTP {status}: {response body}`.
 
 ## `custom`
 
@@ -158,6 +158,6 @@ import { fallback, http, custom } from '@provablehq/veil-core'
 
 const transport = fallback([
   custom({ request: (args) => wallet.request(args) }),
-  http('https://api.provable.com/v2', { network: 'mainnet' }),
+  http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 ])
 ```

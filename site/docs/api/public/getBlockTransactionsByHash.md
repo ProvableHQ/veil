@@ -14,7 +14,7 @@ with a height for the complete confirmed transactions.
 import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 })
 
 const { transactions } = await client.getBlockTransactionsByHash({ hash: 'ab1...' })

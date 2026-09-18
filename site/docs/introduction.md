@@ -29,7 +29,7 @@ import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 
 // Read chain state — no wallet needed.
 const publicClient = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 })
 const balance = await publicClient.getBalance({ address: 'aleo1...' })
 
@@ -37,7 +37,7 @@ const balance = await publicClient.getBalance({ address: 'aleo1...' })
 const { account, transport } = fromWalletAdapter(connectedAdapter)
 const walletClient = createWalletClient({
   account,
-  transport: fallback([transport, http('https://api.provable.com/v2', { network: 'mainnet' })]),
+  transport: fallback([transport, http('https://edge.provable.com/api/v2', { network: 'mainnet' })]),
 })
 const txId = await walletClient.writeContract({
   program: 'my_program.aleo',

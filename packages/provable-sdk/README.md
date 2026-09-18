@@ -42,7 +42,7 @@ import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
 
 const { publicClient, walletClient, account } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
-  networkUrl: 'https://api.provable.com/v2',
+  networkUrl: 'https://edge.provable.com/api/v2',
   credentialStore: fileCredentialStore('./.provable-credentials.json'),
   records: scanner,
 })
@@ -132,8 +132,8 @@ When a client registers for you, `username` chooses the name:
 ```ts
 const { walletClient } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
-  networkUrl: 'https://api.provable.com/v2',
-  proverUrl: 'https://api.provable.com/prove',
+  networkUrl: 'https://edge.provable.com/api/v2',
+  proverUrl: 'https://edge.provable.com/api/prove',
   credentialStore: fileCredentialStore('./.provable-credentials.json'),
   username: 'my-bot-42',        // or () => `bot-${shard}`, resolved at registration
 })
@@ -156,8 +156,8 @@ import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
 
 const { walletClient } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
-  networkUrl: 'https://api.provable.com/v2',
-  proverUrl: 'https://api.provable.com/prove',
+  networkUrl: 'https://edge.provable.com/api/v2',
+  proverUrl: 'https://edge.provable.com/api/prove',
   credentialStore: fileCredentialStore('./.provable-credentials.json'),
   records: scanner,
 })
@@ -217,19 +217,19 @@ For local iteration without a live chain, `createDevnodeClient()` returns the
 same client pair pointed at an Aleo Devnode instance with a pre-funded seeded
 account.
 
-## Provisioned API keys (edge gateway)
+## The edge gateway and provisioned API keys
 
-The edge gateway (`edge.provable.com`) runs a different auth model: no consumer
-registration and no JWTs. An operator hands out an API key, and every request
-carries it verbatim in an `X-API-Key` header. Configure it with `auth` instead
-of the consumer options:
+The prover and the record scanner default to the edge gateway
+(`edge.provable.com/api`). Edge is unauthenticated: it never mints or accepts
+JWTs, and a client with no credentials works as is. An operator can hand out an
+API key, which every request then carries verbatim in an `X-API-Key` header.
+Configure it with `auth` instead of the consumer options:
 
 ```ts
 const { walletClient } = aleo.createAleoClient({
   privateKey,
   networkUrl: 'https://edge.provable.com/api/v2',
-  proverUrl: 'https://edge.provable.com/api/prove',
-  records: aleo.createRemoteScanner({ url: 'https://edge.provable.com/api/scanner' }),
+  records: aleo.createRemoteScanner(),
   auth: { mode: 'api-key', value: process.env.PROVABLE_API_KEY! },
 })
 ```
@@ -239,6 +239,13 @@ The two models are mutually exclusive: combining `auth` with `apiKey`,
 construction. There is no session under keyed auth — nothing registers,
 persists, or refreshes — so `authenticateProvableApi()` throws, and a 401
 means the key is invalid or revoked, which only the operator can fix.
+
+Consumer registration and JWT minting stay on `api.provable.com`. A
+`consumerId` + `apiKey` pair, a `credentialStore`, or a `session` mints there
+and hands the token to the prover and the scanner. Edge ignores the token, so
+the pair keeps working against the default endpoints; point `proverUrl` and the
+scanner `url` at `https://api.provable.com/prove` and
+`https://api.provable.com/scanner` to keep authenticating with it.
 
 ## WASM dependency
 

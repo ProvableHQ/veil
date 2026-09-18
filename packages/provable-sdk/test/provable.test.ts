@@ -218,7 +218,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
     it('creates a delegated proving config', () => {
       const config = aleo.createProvingConfig({
         mode: 'delegated',
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
         proverUrl: 'https://prover.example.com',
       })
 
@@ -232,7 +232,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
     it('creates a local proving config', () => {
       const config = aleo.createProvingConfig({
         mode: 'local',
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       expect(config.mode).toBe('local')
@@ -243,7 +243,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
     it('exposes switchNetwork for runtime SDK rebinding', () => {
       const config = aleo.createProvingConfig({
         mode: 'delegated',
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       expect(config.switchNetwork).toBeTypeOf('function')
@@ -252,7 +252,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
     it('switchNetwork rejects unsupported network names', async () => {
       const config = aleo.createProvingConfig({
         mode: 'delegated',
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       await expect(config.switchNetwork!('canary')).rejects.toThrow(/mainnet.*testnet/)
@@ -261,7 +261,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
 
   describe('createNetworkClient', () => {
     it('creates an AleoNetworkClient', () => {
-      const client = aleo.createNetworkClient('https://api.provable.com/v2')
+      const client = aleo.createNetworkClient('https://edge.provable.com/api/v2')
       expect(client).toBeDefined()
       expect(client.getLatestHeight).toBeTypeOf('function')
     })
@@ -272,7 +272,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const config = aleo.createProvingConfig({
         mode: 'local',
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
         account,
       })
 
@@ -283,7 +283,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
     it('works without account', () => {
       const config = aleo.createProvingConfig({
         mode: 'delegated',
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
         proverUrl: 'https://prover.example.com',
       })
 
@@ -383,7 +383,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const result = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       expect(result.account).toBeDefined()
@@ -397,7 +397,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const { publicClient } = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       expect(publicClient.transport.config.network).toBe('testnet')
@@ -407,7 +407,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const result = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       expect(result.walletClient).toBeDefined()
@@ -418,7 +418,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const result = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
         provingMode: 'local',
       })
 
@@ -430,7 +430,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const { publicClient } = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       expect(publicClient.getBlockNumber).toBeTypeOf('function')
@@ -443,7 +443,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const { walletClient } = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       expect(walletClient.writeContract).toBeTypeOf('function')
@@ -456,7 +456,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const { walletClient } = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       expect(walletClient.recordProvider).toBeUndefined()
@@ -467,7 +467,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const scanner = aleo.createRemoteScanner({ url: 'https://rss.provable.com', consumerId: 'test' })
       const { walletClient } = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
         records: scanner,
       })
 
@@ -478,7 +478,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const { walletClient } = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       await expect(
@@ -488,7 +488,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
 
     it('createRemoteScanner supports network switching', async () => {
       const scanner = aleo.createRemoteScanner({
-        url: 'https://api.provable.com/scanner',
+        url: 'https://edge.provable.com/api/scanner',
         consumerId: 'test-consumer',
       })
       expect(scanner.switchNetwork).toBeTypeOf('function')

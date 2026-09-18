@@ -22,7 +22,7 @@ import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 const aleo = await loadNetwork('testnet')
 
 const scanner = aleo.createStandaloneScanner({
-  url: 'https://api.provable.com/scanner',
+  url: 'https://edge.provable.com/api/scanner',
   consumerId: '<consumer-id>',
   viewKey: 'AViewKey1...',
 })

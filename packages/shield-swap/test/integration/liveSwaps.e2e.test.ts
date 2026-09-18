@@ -58,7 +58,7 @@ describe.runIf(RUN)('live swaps on testnet', () => {
     // credentials build one Provable session shared by proving and scanning.
     const { walletClient } = aleo.createAleoClient({
       privateKey: PRIVATE_KEY!,
-      networkUrl: 'https://api.provable.com/v2',
+      networkUrl: 'https://edge.provable.com/api/v2',
       consumerId: CONSUMER_ID,
       apiKey: API_KEY,
       records: aleo.createRemoteScanner(),

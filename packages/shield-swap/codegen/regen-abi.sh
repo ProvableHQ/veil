@@ -13,7 +13,7 @@ PROGRAMS=("${@:-shield_swap.aleo shield_swap_router.aleo shield_swap_lp_router.a
 if [ $# -eq 0 ]; then
   PROGRAMS=(shield_swap.aleo shield_swap_router.aleo shield_swap_lp_router.aleo)
 fi
-API="https://api.provable.com/v2/testnet/program"
+API="https://edge.provable.com/api/v2/testnet/program"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/imports"

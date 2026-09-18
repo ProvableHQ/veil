@@ -22,7 +22,7 @@ async function localAleo(network: 'mainnet' | 'testnet', privateKey: string) {
   const aleo = await loadNetwork(network)
   return aleo.createAleoClient({
     privateKey,
-    networkUrl: 'https://api.provable.com/v2',
+    networkUrl: 'https://edge.provable.com/api/v2',
     provingMode: 'local',
     confirmationTimeout: 10 * 60_000,
   })

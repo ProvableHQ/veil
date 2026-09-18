@@ -19,7 +19,7 @@ and untyped for cases without a parsed ABI on hand.
 import { createPublicClient, http, parseValue } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 })
 
 const raw = await client.readContract({
