@@ -15,8 +15,8 @@ importers:
         specifier: ^0.2.4
         version: 0.2.4
       '@provablehq/sdk':
-        specifier: ^0.11.6
-        version: 0.11.9
+        specifier: ^0.11.10
+        version: 0.11.10
       '@solana/kit':
         specifier: ^8.0.0
         version: 8.1.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -105,8 +105,8 @@ importers:
         version: 2.54.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76)
     devDependencies:
       '@provablehq/sdk':
-        specifier: ^0.11.6
-        version: 0.11.9
+        specifier: ^0.11.10
+        version: 0.11.10
       '@solana/kit':
         specifier: ^8.0.0
         version: 8.1.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -156,8 +156,8 @@ importers:
         specifier: ^1.7.2
         version: 1.8.0
       '@provablehq/sdk':
-        specifier: ^0.11.9
-        version: 0.11.9
+        specifier: ^0.11.10
+        version: 0.11.10
       '@provablehq/veil-aleo-devnode':
         specifier: workspace:>=0.10.0 <1.0.0
         version: link:../devnode
@@ -219,8 +219,8 @@ importers:
         version: link:../core
     devDependencies:
       '@provablehq/sdk':
-        specifier: ^0.11.9
-        version: 0.11.9
+        specifier: ^0.11.10
+        version: 0.11.10
       '@provablehq/veil-aleo-sdk':
         specifier: workspace:*
         version: link:../provable-sdk
@@ -839,11 +839,11 @@ packages:
   '@provablehq/aleo-wallet-standard@1.0.0':
     resolution: {integrity: sha512-3QVgBd9Mq0y769VRj6a5FIzWEI5TPQ2CzwgpMurq8JwHxKLRry9Zze0XF92dWAqE6ILvvPCew3pwapC8gerYQA==}
 
-  '@provablehq/sdk@0.11.9':
-    resolution: {integrity: sha512-YJqbj9eBnLqJuq4FvR2ZUNouSGSdDO8F/Mfy0a6u2mUX8pThk0Bp9gwkzohTGnqKmofsoiQB9y6Sp7u6fj9ZIw==}
+  '@provablehq/sdk@0.11.10':
+    resolution: {integrity: sha512-mLCzgOGgBTFF72hlsBIUz3rYVosE74cSqmALMmMqS4wbhxh8QwUhGJFT2TXYdvEZ0qf47mt+Aami7xbDV2E3uw==}
 
-  '@provablehq/wasm@0.11.9':
-    resolution: {integrity: sha512-ZqSPR6IOljKElyYg8p9eMrTP9VjVSN3zLzZQkf8s4UcctZjoJQIfkk6ksbrSK1phcTRKQcvcLFCuCKLLQ+ODRg==}
+  '@provablehq/wasm@0.11.10':
+    resolution: {integrity: sha512-Ow2+C9DU5g/8lXb23U/fsTEmopmYYwrS9oLGVivdsDh/ym2V+AU2ZViMZa+3YPErZZx0HHoRW9QQzo9kFn9awg==}
 
   '@puzzlehq/sdk-core@1.0.4':
     resolution: {integrity: sha512-tL/RzseDfSRaVLCqMg9UIbgVK0+jDEq5QgBwvvboBixEiL1qseYkEN5udX4nsJF3J5YrNm984MKQIt08JZra7A==}
@@ -3137,9 +3137,9 @@ snapshots:
       '@provablehq/aleo-types': 1.0.0
       eventemitter3: 5.0.4
 
-  '@provablehq/sdk@0.11.9':
+  '@provablehq/sdk@0.11.10':
     dependencies:
-      '@provablehq/wasm': 0.11.9
+      '@provablehq/wasm': 0.11.10
       '@scure/base': 2.0.0
       '@serenity-kit/noble-sodium': 0.2.3
       comlink: 4.4.2
@@ -3147,7 +3147,7 @@ snapshots:
       mime: 4.1.0
       xmlhttprequest-ssl: 4.0.0
 
-  '@provablehq/wasm@0.11.9': {}
+  '@provablehq/wasm@0.11.10': {}
 
   '@puzzlehq/sdk-core@1.0.4(buffer@6.0.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)':
     dependencies:
