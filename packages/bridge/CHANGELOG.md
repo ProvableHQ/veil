@@ -1,5 +1,12 @@
 # @provablehq/aleo-bridge-sdk
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [caf4425]
+  - @provablehq/veil-core@0.10.1
+
 ## 0.1.0
 
 This is the first release on the bridge SDK's own version line. The package is
