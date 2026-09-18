@@ -116,7 +116,7 @@ import {
   type BlindedIdentityRecord,
   type BlindedIdentityStore,
 } from '../utils/blinding/store.js'
-import { ApiClient, authenticateWithAccount, defaultApiUrl, type ApiClientOptions } from '../api/client.js'
+import { ApiClient, authenticateWithAccount, apigeeApiUrl, defaultApiUrl, type ApiClientOptions } from '../api/client.js'
 
 /**
  * Configuration for {@link shieldSwapActions}.
@@ -294,7 +294,12 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       // would let an explicit-but-undefined `baseUrl` — `process.env.X` with X
       // unset — win, and the ApiClient would fall back to its deprecated
       // testnet constant, silently pointing a mainnet client at testnet.
-      baseUrl: config.api.baseUrl ?? (() => defaultApiUrl(client.transport.config.network)),
+      baseUrl: config.api.baseUrl ?? (() => {
+        const useApigee = config.api && !(config.api instanceof ApiClient) && config.api.apiInterface === 'apigee'
+        return useApigee
+          ? apigeeApiUrl(client.transport.config.network)
+          : defaultApiUrl(client.transport.config.network)
+      }),
     })
   }
 

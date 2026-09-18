@@ -135,6 +135,7 @@ export {
   ApiClient,
   ApiError,
   DEFAULT_API_URL,
+  apigeeApiUrl,
   authenticateWithAccount,
   type ApiClientOptions,
 } from './api/client.js'
