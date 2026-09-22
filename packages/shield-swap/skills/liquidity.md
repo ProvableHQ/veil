@@ -151,6 +151,36 @@ saveState(latest)
 
 `burn` requires an empty position — zero liquidity AND zero owed.
 
+## Track a position's fills
+
+A position's liquidity is fixed, but every swap that moves the pool price
+re-expresses it as a different mix of token0 and token1. `getPositionFills`
+reconstructs those changes swap by swap, in chain order, for one or more
+positions, from the position mapping, the API's pool trade history, and the
+blocks that order it; `watchPositionFills` does the same and then streams new
+fills as they land. Positions in one pool share its history read. Fills are
+inventory, not fees — `getOwnedPosition` reports what `collect` would pay.
+Neither needs record access, so a bot can follow positions it does not own.
+
+```ts
+// The last 20 fills per pool, or everything since a block with `fromBlock`.
+const { fills } = await client.getPositionFills({ positionTokenIds: [positionTokenId], history: 20 })
+for (const fill of fills) {
+  console.log(fill.positionTokenId, fill.blockHeight, fill.amount0After - fill.amount0Before, fill.amount1After - fill.amount1Before)
+}
+
+// Live: replays, then emits each new fill. A position whose range or liquidity
+// changes is dropped (PositionTrackingError naming it to onError); the watch
+// stops itself once none remain — restart with fresh ids then.
+const owned = await client.getOwnedPositions()
+const stop = client.watchPositionFills({
+  positionTokenIds: owned.filter((p) => p.state).map((p) => p.positionTokenId),
+  onFill: (fill) => console.log(fill),
+})
+```
+
+From the command line: `shield-swap fills --position <tokenId>... | --all [--history N | --from-block H] [--watch]`.
+
 ## Failure modes
 
 | Symptom | Cause | Remedy |

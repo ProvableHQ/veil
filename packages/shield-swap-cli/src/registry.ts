@@ -43,6 +43,10 @@ export const COMMANDS: Record<string, Command> = {
     summary: 'Liquidity positions held + their ranges and fees earned (with option to collect).',
     load: () => import('./commands/positions.js'),
   },
+  fills: {
+    summary: "A position's swap fills — inventory before and after each pool swap, replayed or streamed live.",
+    load: () => import('./commands/fills.js'),
+  },
   swap: {
     summary: 'Sell one token for another and claim the output.',
     load: () => import('./commands/swap.js'),

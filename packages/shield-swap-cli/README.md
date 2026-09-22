@@ -110,6 +110,7 @@ FeeMaster account by default, so a faucet-funded account needs no public credits
 | `pools` | Lists pools from the API and joins each with chain state, so the tradeable flag and the depth come from the mappings rather than the index. | Session |
 | `balances` | Private and public holdings per token, reconciled against the registry. | Session, record access |
 | `positions` | Every liquidity position the account holds, with its range, its backing amounts, and the fees earned that a collect would pay. | Session, record access |
+| `fills` | Positions' swap fills: how each pool swap, in chain order, changed the tokens backing their fixed liquidity. Names positions with `--position` or discovers them with `--all`; replays a count or everything since `--from-block`, or streams live with `--watch`. | Session (`--all` needs record access) |
 | `swap` | Sells one token for another, single hop or routed, then claims the output. | Funds in the token being sold |
 | `swap-concurrent` | Makes multiple swaps concurrently, one per token sold, planned before any is submitted. | Funds in each token being sold |
 | `history` | Swap history and the status of each swap, claiming what is still waiting; rebuilds a lost identity store from chain history. | Session (claiming needs the prover) |
@@ -140,6 +141,8 @@ the Provable API credentials it registers. Reads that touch only mappings
    trading against it. Read the plan carefully: the range, and how much of each
    side the range actually consumes.
 7. **`shield-swap positions`** — watch what the position holds and earns.
+   `shield-swap fills --all --watch` shows the other side of that: each swap in
+   your pools, as it lands, and what it did to each position's inventory.
 8. **`shield-swap liquidity --position … --increase|--decrease`** — top it up, or
    take part of it back out. A decrease books the proceeds; it does not pay them
    out.
