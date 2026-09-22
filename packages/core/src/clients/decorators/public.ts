@@ -30,6 +30,7 @@ import { findBlockHash, type FindBlockHashParameters, type FindBlockHashReturnTy
 import { findTransactionId, type FindTransactionIdParameters, type FindTransactionIdReturnType } from '../../actions/public/findTransactionId.js'
 import { getTransitions, type GetTransitionsParameters, type GetTransitionsReturnType } from '../../actions/public/getTransitions.js'
 import { findTransitionId, type FindTransitionIdParameters, type FindTransitionIdReturnType } from '../../actions/public/findTransitionId.js'
+import { getFreezeList, type GetFreezeListParameters, type GetFreezeListReturnType } from '../../actions/public/getFreezeList.js'
 import { getMappingNames, type GetMappingNamesParameters, type GetMappingNamesReturnType } from '../../actions/public/getMappingNames.js'
 import { getDeploymentTransaction, type GetDeploymentTransactionParameters, type GetDeploymentTransactionReturnType } from '../../actions/public/getDeploymentTransaction.js'
 import { getProgramCalls, type GetProgramCallsParameters, type GetProgramCallsReturnType } from '../../actions/public/getProgramCalls.js'
@@ -99,6 +100,7 @@ export type PublicActions = {
   getTransitions: (params: GetTransitionsParameters) => Promise<GetTransitionsReturnType>
   findTransitionId: (params: FindTransitionIdParameters) => Promise<FindTransitionIdReturnType>
   getMappingNames: (params: GetMappingNamesParameters) => Promise<GetMappingNamesReturnType>
+  getFreezeList: (params: GetFreezeListParameters) => Promise<GetFreezeListReturnType>
   getDeploymentTransaction: (params: GetDeploymentTransactionParameters) => Promise<GetDeploymentTransactionReturnType>
   getProgramCalls: (params: GetProgramCallsParameters) => Promise<GetProgramCallsReturnType>
   getCommittee: (params?: GetCommitteeParameters) => Promise<GetCommitteeReturnType>
@@ -176,6 +178,7 @@ export function publicActions(client: Client): PublicActions {
     getTransitions: (params) => getTransitions(client, params),
     findTransitionId: (params) => findTransitionId(client, params),
     getMappingNames: (params) => getMappingNames(client, params),
+    getFreezeList: (params) => getFreezeList(client, params),
     getDeploymentTransaction: (params) => getDeploymentTransaction(client, params),
     getProgramCalls: (params) => getProgramCalls(client, params),
     getCommittee: (params) => getCommittee(client, params),
