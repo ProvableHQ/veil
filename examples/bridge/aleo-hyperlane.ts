@@ -13,7 +13,7 @@ const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
 const EXECUTION_ENVIRONMENT_VARIABLE = 'EXECUTE_BRIDGE'
 const ALEO_CONFIRMATION_TIMEOUT_MS = 5 * 60_000
 
-type AleoHyperlaneAsset = 'ETH' | 'SOL' | 'WBTC'
+type AleoHyperlaneAsset = 'ETH' | 'SOL' | 'WBTC' | 'USDT'
 type AssetConfiguration = {
   source: { chain: string, asset: string }
   destination: { chain: string, asset: string }
@@ -42,6 +42,13 @@ const ASSETS: Record<AleoHyperlaneAsset, AssetConfiguration> = {
     destination: { chain: 'ethereum', asset: 'wbtc' },
     balanceProgram: 'arc20_wbtc.aleo',
     amount: '0.00000001',
+    recipientEnvironmentVariable: 'ETHEREUM_RECIPIENT',
+  },
+  USDT: {
+    source: { chain: 'aleo', asset: 'usdt' },
+    destination: { chain: 'ethereum', asset: 'usdt' },
+    balanceProgram: 'arc20_usdt.aleo',
+    amount: '3',
     recipientEnvironmentVariable: 'ETHEREUM_RECIPIENT',
   },
 }
@@ -74,7 +81,7 @@ function formatAmount(value: bigint, decimals: number): string {
  * Aleo wallet burns the public wrapped balance and dispatches a cross-chain
  * message; Hyperlane then releases the corresponding asset on the destination.
  *
- * @param asset ETH, SOL, or WBTC representation to burn on Aleo and release on its origin chain.
+ * @param asset ETH, SOL, WBTC, or USDT representation to burn on Aleo and release on its origin chain.
  * @returns After read-only inspection or verified destination delivery,
  * depending on the execution acknowledgement.
  * @throws Error When configuration is missing, the source balance or fee
@@ -134,7 +141,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   // remote domain, decimal widths, and required stages for that direction.
   // Quote reads the current Hyperlane delivery payment and returns the plan
   // execution must use. It does not request a signature or move the wrapped
-  // asset. Each configured amount is one atomic unit.
+  // asset. ETH, SOL, and WBTC use one atomic unit. USDT uses 3.
   const quoteParams = {
     source: config.source,
     destination: config.destination,
