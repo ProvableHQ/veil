@@ -44,14 +44,14 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
   let account: ReturnType<Awaited<ReturnType<typeof loadNetwork>>['createAleoClient']>['account']
   let dex: ReturnType<ReturnType<typeof shieldSwapActions>>
 
-  /** Public wrapper-program balances keyed by token id, read from chain. */
-  async function publicBalancesByToken(): Promise<Map<string, bigint>> {
-    const tokens = (await dex.api.getTokens()).data.filter((t) => !!t.amm_token_program)
-    const byProgram = await dex.getPublicBalances({
-      user: account.address,
-      programs: tokens.map((t) => t.amm_token_program!),
-    })
-    return new Map(tokens.map((t) => [t.address, byProgram[t.amm_token_program!] ?? 0n]))
+  /**
+   * Token ids the account can fund a swap from: a public balance in the AMM
+   * token program, or private records. Both count, since the privatize step
+   * turns public balance into a record when no covering one exists.
+   */
+  async function fundedTokens(): Promise<Set<string>> {
+    const balances = await dex.getBalances()
+    return new Set(Object.entries(balances).filter(([, b]) => b.total > 0n).map(([id]) => id))
   }
 
   const state: {
@@ -79,15 +79,12 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
     if ((await dex.api.getPools({ limit: 1 })).data.length === 0) return
     await dex.authenticateShieldSwap()
 
-    // Airdrop once if the account holds nothing — the swap privatizes public
-    // balance, so it needs a funded token.
+    // Airdrop once if the account holds nothing, publicly or as records — the
+    // swap needs a funded token either way.
     // Best-effort: poll the account's balance rather than the ephemeral faucet
     // job, and don't abort the suite if the faucet misbehaves — the discovery
     // step reports an unfunded account with a clear message.
-    const funded = async () => {
-      const balances = await publicBalancesByToken()
-      return [...balances.values()].some((balance) => balance > 0n)
-    }
+    const funded = async () => (await fundedTokens()).size > 0
     if (!(await funded())) {
       try {
         await dex.api.airdrop(account.address)
@@ -100,12 +97,11 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
 
   it('discovers an existing pool with liquidity the account can fund', async (ctx) => {
     const pools = await dex.api.getPools({ limit: 50 })
-    const balances = await publicBalancesByToken()
-    const funded = new Set([...balances].filter(([, balance]) => balance > 0n).map(([tokenId]) => tokenId))
+    const funded = await fundedTokens()
 
     // A live pool needs: both tokens wrapper-backed, non-zero on-chain
-    // liquidity, and the account funded in one of the two tokens (that side
-    // becomes the swap input — either direction works).
+    // liquidity, and the account funded in one of the two tokens, publicly or
+    // as records (that side becomes the swap input — either direction works).
     for (const p of pools.data) {
       if (!p.token0_info?.amm_token_program || !p.token1_info?.amm_token_program) continue
       const inInfo = funded.has(p.token0) ? p.token0_info : funded.has(p.token1) ? p.token1_info : undefined
@@ -146,6 +142,13 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
       })
     }
     if (!(await hasCovering())) {
+      // Sending the privatize with too little public balance only burns the
+      // fee on a finalize revert; say what is missing instead.
+      const publicBalance = (await dex.getBalances())[state.tokenIn!.address]?.public ?? 0n
+      expect(
+        publicBalance >= unit,
+        `no unspent ${state.tokenIn!.program} record covers ${need} and the public balance (${publicBalance}) cannot privatize ${unit}`,
+      ).toBe(true)
       const result = await walletClient.executeContract({
         program: state.tokenIn!.program,
         function: 'transfer_public_to_private',
