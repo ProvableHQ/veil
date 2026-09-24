@@ -55,6 +55,8 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     token1?: { address: string; program: string; decimals: number }
     imports?: Record<string, string>
     poolKey?: string
+    /** Set once both tokens hold a record covering the swap input. */
+    funded?: boolean
     handle?: Awaited<ReturnType<typeof client.swap>>
   } = {}
 
@@ -65,13 +67,34 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   }, 60_000)
 
   /**
-   * Token ids the account can fund a swap from: a public balance in the AMM
-   * token program, or private records. Both count, since the privatize step
-   * below turns public balance into a record when no covering one exists.
+   * Whether one unspent record in `program` holds at least `need`. Record
+   * selection spends a single record and never aggregates, so a balance spread
+   * over small change records does not count.
+   */
+  async function hasCovering(program: string, need: bigint): Promise<boolean> {
+    const records = await scanner.requestRecords({ program, statusFilter: 'unspent' })
+    return records.some((r) => {
+      const info = r.recordPlaintext ? parseTokenRecordInfo(r.recordPlaintext) : null
+      return info != null && info.amount >= need
+    })
+  }
+
+  /**
+   * Token ids the suite can swap a tenth of a unit of: an unspent record in the
+   * AMM token program covering half a unit, or a public balance the privatize
+   * step can turn into a whole unit's record.
    */
   async function fundedTokens(): Promise<Set<string>> {
+    const tokens = (await client.api.getTokens()).data.filter((t) => !!t.amm_token_program)
     const balances = await client.getBalances()
-    return new Set(Object.entries(balances).filter(([, b]) => b.total > 0n).map(([id]) => id))
+    const funded = new Set<string>()
+    for (const t of tokens) {
+      const unit = 10n ** BigInt(t.decimals)
+      if ((balances[t.address]?.public ?? 0n) >= unit || (await hasCovering(t.amm_token_program!, unit / 2n))) {
+        funded.add(t.address)
+      }
+    }
+    return funded
   }
 
   it('funds the account via the async airdrop when balances are empty', async () => {
@@ -96,7 +119,10 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
         }
       }
     }
-    expect((await fundedTokens()).size, 'the account holds no token balance and the faucet did not fund it').toBeGreaterThan(0)
+    expect(
+      (await fundedTokens()).size,
+      'no token has a record covering half a unit or a public balance of a unit, and the faucet did not fund one',
+    ).toBeGreaterThan(0)
   }, TX_TIMEOUT)
 
   it('picks a token pair and fetches wrapper program sources (dyn-dispatch imports)', async () => {
@@ -148,19 +174,11 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     })
   }, 60_000)
 
-  it('privatizes token balances into records (transfer_public_to_private)', async () => {
+  it('privatizes token balances into records (transfer_public_to_private)', async (ctx) => {
+    if (!state.token0 || !state.token1) ctx.skip()
     // Ensure each token has ONE unspent record large enough for the swap's
-    // input draw (record selection picks a single sufficient record — it does
-    // not aggregate). Skipping merely on record existence is wrong: prior runs
+    // input draw. Skipping merely on record existence is wrong: prior runs
     // leave small change records that don't cover the swap.
-    const hasCovering = async (program: string, need: bigint) => {
-      const records = await scanner.requestRecords({ program, statusFilter: 'unspent' })
-      return records.some((r) => {
-        const info = r.recordPlaintext ? parseTokenRecordInfo(r.recordPlaintext) : null
-        return info != null && info.amount >= need
-      })
-    }
-
     const balances = await client.getBalances()
     for (const t of [state.token0!, state.token1!]) {
       const unit = 10n ** BigInt(t.decimals)
@@ -189,9 +207,11 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
       const visible = await pollUntil(() => hasCovering(t.program, need), 30, 5000)
       expect(visible, `privatized ${t.program} record did not become scannable`).toBe(true)
     }
+    state.funded = true
   }, TX_TIMEOUT * 2)
 
-  it('ensures a pool exists for the pair (API discovery, create, or prior run)', async () => {
+  it('ensures a pool exists for the pair (API discovery, create, or prior run)', async (ctx) => {
+    if (!state.token0 || !state.token1) ctx.skip()
     // 1) API discovery — authoritative where the API serves this program
     //    find a live pool for the chosen pair. Skip when the
     //    token-pick step already locked in a specific pool with liquidity —
@@ -243,7 +263,10 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     expect(await client.isPoolInitialized({ poolKey: state.poolKey! })).toBe(true)
   }, TX_TIMEOUT)
 
-  it('swaps privately and the chain computes the output', async () => {
+  it('swaps privately and the chain computes the output', async (ctx) => {
+    // A swap without a covering record or a pool has nothing to do; the
+    // earlier step's failure is the report.
+    if (!state.poolKey || !state.funded) ctx.skip()
     const pool = await client.getPool({ poolKey: state.poolKey! })
     const tokenIn = pool!.token0
     const inMeta = tokenIn === state.token0!.address ? state.token0! : state.token1!
@@ -270,7 +293,8 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     expect(out!.amount_out > 0n).toBe(true)
   }, TX_TIMEOUT)
 
-  it('claims the output as private records and the entry is consumed', async () => {
+  it('claims the output as private records and the entry is consumed', async (ctx) => {
+    if (!state.handle) ctx.skip()
     const res = await client.claimSwapOutput({ handle: state.handle!, imports: state.imports })
     expect(res.transactionId).toMatch(/^at1/)
     expect(res.amountOut > 0n).toBe(true)

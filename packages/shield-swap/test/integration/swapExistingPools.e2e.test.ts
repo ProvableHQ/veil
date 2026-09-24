@@ -45,13 +45,34 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
   let dex: ReturnType<ReturnType<typeof shieldSwapActions>>
 
   /**
-   * Token ids the account can fund a swap from: a public balance in the AMM
-   * token program, or private records. Both count, since the privatize step
-   * turns public balance into a record when no covering one exists.
+   * Whether one unspent record in `program` holds at least `need`. Record
+   * selection spends a single record and never aggregates, so a balance spread
+   * over small change records does not count.
+   */
+  async function hasCovering(program: string, need: bigint): Promise<boolean> {
+    const records = await scanner.requestRecords({ program, statusFilter: 'unspent' })
+    return records.some((r) => {
+      const info = r.recordPlaintext ? parseTokenRecordInfo(r.recordPlaintext) : null
+      return info != null && info.amount >= need
+    })
+  }
+
+  /**
+   * Token ids the suite can swap a tenth of a unit of: an unspent record in the
+   * AMM token program covering half a unit, or a public balance the privatize
+   * step can turn into a whole unit's record.
    */
   async function fundedTokens(): Promise<Set<string>> {
+    const tokens = (await dex.api.getTokens()).data.filter((t) => !!t.amm_token_program)
     const balances = await dex.getBalances()
-    return new Set(Object.entries(balances).filter(([, b]) => b.total > 0n).map(([id]) => id))
+    const funded = new Set<string>()
+    for (const t of tokens) {
+      const unit = 10n ** BigInt(t.decimals)
+      if ((balances[t.address]?.public ?? 0n) >= unit || (await hasCovering(t.amm_token_program!, unit / 2n))) {
+        funded.add(t.address)
+      }
+    }
+    return funded
   }
 
   const state: {
@@ -134,14 +155,8 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
     if (!state.poolKey) ctx.skip()
     const unit = 10n ** BigInt(state.tokenIn!.decimals)
     const need = unit / 2n
-    const hasCovering = async () => {
-      const records = await scanner.requestRecords({ program: state.tokenIn!.program, statusFilter: 'unspent' })
-      return records.some((r) => {
-        const info = r.recordPlaintext ? parseTokenRecordInfo(r.recordPlaintext) : null
-        return info != null && info.amount >= need
-      })
-    }
-    if (!(await hasCovering())) {
+    const covering = () => hasCovering(state.tokenIn!.program, need)
+    if (!(await covering())) {
       // Sending the privatize with too little public balance only burns the
       // fee on a finalize revert; say what is missing instead.
       const publicBalance = (await dex.getBalances())[state.tokenIn!.address]?.public ?? 0n
@@ -156,7 +171,7 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
       })
       expect(result.transactionId).toMatch(/^at1/)
       // RSS indexes the new record asynchronously — wait until scannable.
-      const visible = await pollUntil(hasCovering, 30, 5000)
+      const visible = await pollUntil(covering, 30, 5000)
       expect(visible, 'privatized record did not become scannable').toBe(true)
     }
   }, TX_TIMEOUT * 2)
