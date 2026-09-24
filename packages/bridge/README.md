@@ -381,6 +381,7 @@ observable completion boundary.
 | Ethereum WBTC → Aleo WBTC | [`wbtc-to-aleo.ts`](../../examples/bridge/wbtc-to-aleo.ts) |
 | Aleo ETH → Ethereum ETH | [`eth-to-ethereum.ts`](../../examples/bridge/eth-to-ethereum.ts) |
 | Aleo WBTC → Ethereum WBTC | [`wbtc-to-ethereum.ts`](../../examples/bridge/wbtc-to-ethereum.ts) |
+| Aleo USDT → Ethereum USDT | [`usdt-to-ethereum.ts`](../../examples/bridge/usdt-to-ethereum.ts) |
 | Solana SOL → Aleo SOL | [`sol-to-aleo.ts`](../../examples/bridge/sol-to-aleo.ts) |
 | Aleo SOL → Solana SOL | [`sol-to-solana.ts`](../../examples/bridge/sol-to-solana.ts) |
 | Ethereum USDC → Aleo USDCx | [`usdc-to-usdcx.ts`](../../examples/bridge/usdc-to-usdcx.ts) |

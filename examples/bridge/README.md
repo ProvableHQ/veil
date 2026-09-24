@@ -21,6 +21,7 @@ acknowledgement shown below.
 | [`wbtc-to-aleo.ts`](./wbtc-to-aleo.ts) | Ethereum WBTC → Aleo WBTC | Hyperlane | 1 satoshi |
 | [`eth-to-ethereum.ts`](./eth-to-ethereum.ts) | Aleo ETH → Ethereum ETH | Hyperlane | 1 atomic unit |
 | [`wbtc-to-ethereum.ts`](./wbtc-to-ethereum.ts) | Aleo WBTC → Ethereum WBTC | Hyperlane | 1 satoshi |
+| [`usdt-to-ethereum.ts`](./usdt-to-ethereum.ts) | Aleo USDT → Ethereum USDT | Hyperlane | 3 USDT |
 | [`sol-to-aleo.ts`](./sol-to-aleo.ts) | Solana SOL → Aleo SOL | Hyperlane | 1 lamport |
 | [`sol-to-solana.ts`](./sol-to-solana.ts) | Aleo SOL → Solana SOL | Hyperlane | 1 lamport |
 | [`usdc-to-usdcx.ts`](./usdc-to-usdcx.ts) | Ethereum USDC → Aleo USDCx | Circle xReserve | 2 USDC |
@@ -234,7 +235,7 @@ for the complete transfer.
 
 ## Hyperlane transfers
 
-Hyperlane handles ETH, WBTC, and SOL routes in these examples. The source
+Hyperlane handles ETH, WBTC, USDT, and SOL routes in these examples. The source
 transaction dispatches a message, a relayer delivers it, and `wait` verifies
 the destination chain rather than treating an explorer index as canonical.
 
@@ -248,6 +249,12 @@ Run an Aleo-to-Ethereum quote:
 
 ```sh
 pnpm tsx examples/bridge/eth-to-ethereum.ts
+```
+
+Run an Aleo-USDT-to-Ethereum quote:
+
+```sh
+pnpm tsx examples/bridge/usdt-to-ethereum.ts
 ```
 
 Run a Solana-to-Aleo quote:
