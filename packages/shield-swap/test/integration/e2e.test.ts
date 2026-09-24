@@ -49,9 +49,15 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   const client = walletClient.extend(shieldSwapActions({ api: {}, program: DEX_PROGRAM }))
 
   // Resolved during the run and shared across steps (tests run in order).
+  /**
+   * A chosen token: `program` is the AMM token program (imports, public
+   * balance, privatize target); `recordProgram` is where the swap spends
+   * records from — the underlying program for a wrapped token, else the same.
+   */
+  type ChosenToken = { address: string; program: string; recordProgram: string; decimals: number }
   const state: {
-    token0?: { address: string; program: string; decimals: number }
-    token1?: { address: string; program: string; decimals: number }
+    token0?: ChosenToken
+    token1?: ChosenToken
     imports?: Record<string, string>
     poolKey?: string
     /** Set once both tokens hold a record covering the swap input. */
@@ -78,10 +84,14 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     })
   }
 
+  /** The program a swap spends a token's records from. */
+  const recordProgramOf = (t: { amm_token_program?: string | null; underlying_program?: string | null }) =>
+    t.underlying_program ?? t.amm_token_program!
+
   /**
    * Token ids the suite can swap a tenth of a unit of: an unspent record in the
-   * AMM token program covering half a unit, or a public balance the privatize
-   * step can turn into a whole unit's record.
+   * program the swap spends from covering half a unit, or a public balance the
+   * privatize step can turn into a whole unit's record.
    */
   async function fundedTokens(): Promise<Set<string>> {
     const tokens = (await client.api.getTokens()).data.filter((t) => !!t.amm_token_program)
@@ -89,7 +99,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     const funded = new Set<string>()
     for (const t of tokens) {
       const unit = 10n ** BigInt(t.decimals)
-      if ((balances[t.address]?.public ?? 0n) >= unit || (await hasCovering(t.amm_token_program!, unit / 2n))) {
+      if ((balances[t.address]?.public ?? 0n) >= unit || (await hasCovering(recordProgramOf(t), unit / 2n))) {
         funded.add(t.address)
       }
     }
@@ -138,8 +148,18 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
       }
     }
     if (live?.token0_info?.amm_token_program && live?.token1_info?.amm_token_program) {
-      state.token0 = { address: live.token0, program: live.token0_info.amm_token_program, decimals: live.token0_info.decimals }
-      state.token1 = { address: live.token1, program: live.token1_info.amm_token_program, decimals: live.token1_info.decimals }
+      state.token0 = {
+        address: live.token0,
+        program: live.token0_info.amm_token_program,
+        recordProgram: recordProgramOf(live.token0_info),
+        decimals: live.token0_info.decimals,
+      }
+      state.token1 = {
+        address: live.token1,
+        program: live.token1_info.amm_token_program,
+        recordProgram: recordProgramOf(live.token1_info),
+        decimals: live.token1_info.decimals,
+      }
       // Lock in THIS pool — the pair can have several pools across fee tiers and
       // most have zero liquidity; only this one was verified to have depth.
       state.poolKey = live.key
@@ -148,8 +168,8 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
       const withWrappers = tokens.data.filter((t) => t.amm_token_program && funded.has(t.address))
       expect(withWrappers.length, 'the account holds fewer than two wrapper tokens').toBeGreaterThanOrEqual(2)
       const [a, b] = withWrappers
-      state.token0 = { address: a!.address, program: a!.amm_token_program!, decimals: a!.decimals }
-      state.token1 = { address: b!.address, program: b!.amm_token_program!, decimals: b!.decimals }
+      state.token0 = { address: a!.address, program: a!.amm_token_program!, recordProgram: recordProgramOf(a!), decimals: a!.decimals }
+      state.token1 = { address: b!.address, program: b!.amm_token_program!, recordProgram: recordProgramOf(b!), decimals: b!.decimals }
     }
 
     // The prover cannot statically discover IARC20 callees, nor the DEX
@@ -169,8 +189,14 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     for (const t of [state.token0!, state.token1!]) {
       const unit = 10n ** BigInt(t.decimals)
       const need = unit / 2n // comfortably covers the swap's 0.1-token input
-      if (await hasCovering(t.program, need)) continue
+      if (await hasCovering(t.recordProgram, need)) continue
 
+      // A wrapped token's public balance privatizes into a wrapper record,
+      // which the swap does not spend — it needs an underlying record.
+      expect(
+        t.recordProgram === t.program,
+        `no unspent ${t.recordProgram} record covers ${need}; ${t.program} is a wrapper, so privatizing cannot produce one`,
+      ).toBe(true)
       // Sending the privatize with too little public balance only burns the
       // fee on a finalize revert; say what is missing instead.
       const publicBalance = balances[t.address]?.public ?? 0n
@@ -190,7 +216,7 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
       // The transaction is accepted on-chain, but the RSS indexes the new
       // record asynchronously — poll until it is scannable before the swap
       // tries to select it.
-      const visible = await pollUntil(() => hasCovering(t.program, need), 30, 5000)
+      const visible = await pollUntil(() => hasCovering(t.recordProgram, need), 30, 5000)
       expect(visible, `privatized ${t.program} record did not become scannable`).toBe(true)
     }
     state.funded = true

@@ -57,10 +57,14 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
     })
   }
 
+  /** The program a swap spends a token's records from. */
+  const recordProgramOf = (t: { amm_token_program?: string | null; underlying_program?: string | null }) =>
+    t.underlying_program ?? t.amm_token_program!
+
   /**
    * Token ids the suite can swap a tenth of a unit of: an unspent record in the
-   * AMM token program covering half a unit, or a public balance the privatize
-   * step can turn into a whole unit's record.
+   * program the swap spends from covering half a unit, or a public balance the
+   * privatize step can turn into a whole unit's record.
    */
   async function fundedTokens(): Promise<Set<string>> {
     const tokens = (await dex.api.getTokens()).data.filter((t) => !!t.amm_token_program)
@@ -68,7 +72,7 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
     const funded = new Set<string>()
     for (const t of tokens) {
       const unit = 10n ** BigInt(t.decimals)
-      if ((balances[t.address]?.public ?? 0n) >= unit || (await hasCovering(t.amm_token_program!, unit / 2n))) {
+      if ((balances[t.address]?.public ?? 0n) >= unit || (await hasCovering(recordProgramOf(t), unit / 2n))) {
         funded.add(t.address)
       }
     }
@@ -77,7 +81,12 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
 
   const state: {
     poolKey?: string
-    tokenIn?: { address: string; program: string; decimals: number }
+    /**
+     * `program` is the AMM token program (imports, privatize target);
+     * `recordProgram` is where the swap spends records from — the underlying
+     * program for a wrapped token, else the same.
+     */
+    tokenIn?: { address: string; program: string; recordProgram: string; decimals: number }
     imports?: Record<string, string>
     handle?: Awaited<ReturnType<ReturnType<ReturnType<typeof shieldSwapActions>>['swap']>>
   } = {}
@@ -133,7 +142,12 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
       if (!slot || slot.liquidity === 0n) continue
       const inAddress = inInfo === p.token0_info ? p.token0 : p.token1
       state.poolKey = p.key
-      state.tokenIn = { address: inAddress, program: inInfo.amm_token_program!, decimals: inInfo.decimals }
+      state.tokenIn = {
+        address: inAddress,
+        program: inInfo.amm_token_program!,
+        recordProgram: recordProgramOf(inInfo),
+        decimals: inInfo.decimals,
+      }
       state.imports = await resolveDexImports(walletClient, {
         tokenPrograms: [state.tokenIn.program],
         program: DEX_PROGRAM,
@@ -157,8 +171,14 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
     if (!state.poolKey) ctx.skip()
     const unit = 10n ** BigInt(state.tokenIn!.decimals)
     const need = unit / 2n
-    const covering = () => hasCovering(state.tokenIn!.program, need)
+    const covering = () => hasCovering(state.tokenIn!.recordProgram, need)
     if (!(await covering())) {
+      // A wrapped token's public balance privatizes into a wrapper record,
+      // which the swap does not spend — it needs an underlying record.
+      expect(
+        state.tokenIn!.recordProgram === state.tokenIn!.program,
+        `no unspent ${state.tokenIn!.recordProgram} record covers ${need}; ${state.tokenIn!.program} is a wrapper, so privatizing cannot produce one`,
+      ).toBe(true)
       // Sending the privatize with too little public balance only burns the
       // fee on a finalize revert; say what is missing instead.
       const publicBalance = (await dex.getBalances())[state.tokenIn!.address]?.public ?? 0n
