@@ -148,8 +148,10 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
         recordProgram: recordProgramOf(inInfo),
         decimals: inInfo.decimals,
       }
+      // Both sides: the swap spends the input token, and the claim pays out
+      // through a dynamic call into the output token's program.
       state.imports = await resolveDexImports(walletClient, {
-        tokenPrograms: [state.tokenIn.program],
+        tokenPrograms: [p.token0_info.amm_token_program, p.token1_info.amm_token_program],
         program: DEX_PROGRAM,
       })
       break
