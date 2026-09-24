@@ -4,7 +4,6 @@ import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { resolveDexImports } from '../../src/utils/imports.js'
 import { parseTokenRecordInfo } from '../../src/utils/records.js'
 import { SwapOutputNotFinalizedError } from '../../src/actions/swap/claimSwapOutput.js'
-import { ApiError } from '../../src/api/client.js'
 
 /**
  * The headline e2e: the private-swap lifecycle against the REAL testnet —
@@ -100,24 +99,11 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   it('funds the account via the async airdrop when balances are empty', async () => {
     const empty = (await fundedTokens()).size === 0
     if (empty) {
-      // The faucet is rate-limited per address. A 429 is not a failure when the
-      // account already holds funds from an earlier drop; the balance check
-      // below is the assertion either way.
-      let started: { job_id: string } | undefined
-      try {
-        started = await client.api.airdrop(account.address)
-      } catch (err) {
-        if (!(err instanceof ApiError) || err.status !== 429) throw err
-      }
-      if (started) {
-        expect(started.job_id).toBeTruthy()
-        // Poll until the faucet's per-token transfers settle.
-        for (let i = 0; i < 60; i++) {
-          const job = await client.api.getAirdropStatus(started.job_id)
-          if (job.status === 'completed' || job.status === 'done') break
-          await sleep(5000)
-        }
-      }
+      // A rate-limited faucet is not a failure when the account already holds
+      // funds from an earlier drop; the balance check below is the assertion
+      // either way.
+      const drop = await client.api.confirmAirdrop(account.address, { timeoutMs: TX_TIMEOUT - 30_000 })
+      if (drop.status === 'settled') expect(drop.job.results.length).toBe(drop.job.total)
     }
     expect(
       (await fundedTokens()).size,

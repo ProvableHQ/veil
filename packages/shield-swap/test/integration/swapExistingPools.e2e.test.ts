@@ -108,11 +108,13 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
     const funded = async () => (await fundedTokens()).size > 0
     if (!(await funded())) {
       try {
-        await dex.api.airdrop(account.address)
+        const drop = await dex.api.confirmAirdrop(account.address, { timeoutMs: TX_TIMEOUT - 60_000 })
+        if (drop.status === 'rate_limited') console.warn('airdrop refused (continuing to poll balances):', drop.message)
       } catch (err) {
-        console.warn('airdrop request failed (continuing to poll balances):', (err as Error).message)
+        console.warn('airdrop failed (continuing to poll balances):', (err as Error).message)
       }
-      await pollUntil(funded, 60, 5000)
+      // The records the faucet delivered still need to reach the scanner.
+      await pollUntil(funded, 12, 5000)
     }
   }, TX_TIMEOUT)
 
