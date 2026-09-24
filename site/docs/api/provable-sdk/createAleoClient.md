@@ -5,11 +5,17 @@ sidebar_position: 10
 # createAleoClient
 
 Creates a fully-wired `publicClient`/`walletClient`/`account` triple from a
-private key and network URL in one call — the fastest path to a working
-client pair for a script, bot, or server that holds its own key. Derives the
-account, builds a shared transport, and wires a
-[`createProvingConfig`](./createProvingConfig) for the wallet client
-internally.
+private key in one call — the fastest path to a working client pair for a
+script, bot, or server that holds its own key. Derives the account, builds a
+shared transport, wires a [`createProvingConfig`](./createProvingConfig) for
+the wallet client, and attaches a [`createRemoteScanner`](./createRemoteScanner)
+for record reads.
+
+Every hosted service defaults to the Provable gateway at
+`https://edge.provable.com/api`, which needs no credentials: the node API for
+reads and broadcasts, the delegated prover with its FeeMaster paying fees, and
+the record scanner. A private key alone is a working client; each service is
+an option for a self-hosted or legacy deployment.
 
 ## Usage
 
@@ -20,18 +26,27 @@ const aleo = await loadNetwork('testnet')
 
 const { publicClient, walletClient, account } = aleo.createAleoClient({
   privateKey: 'APrivateKey1...',
-  networkUrl: 'https://edge.provable.com/api/v2',
-  provingMode: 'delegated',
-  proverUrl: 'https://edge.provable.com/api/prove',
-  records: aleo.createRemoteScanner({
-    url: 'https://edge.provable.com/api/scanner',
-  }),
 })
 
 const txId = await walletClient.writeContract({
   program: 'credits.aleo',
   function: 'transfer_public',
   inputs: ['aleo1recipient...', '1000000u64'],
+})
+```
+
+The same client, with every default written out:
+
+```ts
+const { walletClient } = aleo.createAleoClient({
+  privateKey: 'APrivateKey1...',
+  networkUrl: 'https://edge.provable.com/api/v2',
+  provingMode: 'delegated',
+  proverUrl: 'https://edge.provable.com/api/prove',
+  useFeeMaster: true,
+  records: aleo.createRemoteScanner({
+    url: 'https://edge.provable.com/api/scanner',
+  }),
 })
 ```
 
@@ -55,8 +70,13 @@ sign with.
 ### networkUrl
 
 - **Type:** `string`
+- **Optional**
+- **Default:** `'https://edge.provable.com/api/v2'` (`DEFAULT_NETWORK_URL`)
 
-Base URL of the Aleo node both returned clients read from and broadcast to.
+Base URL of the Aleo node both returned clients read from and broadcast to,
+without the network segment — the transport appends it, which is what lets
+`switchChain` re-target reads. Pass an override for a self-hosted node or a
+devnode.
 
 ### provingMode
 
@@ -64,15 +84,29 @@ Base URL of the Aleo node both returned clients read from and broadcast to.
 - **Optional**
 - **Default:** `'delegated'`
 
-Where proofs are produced — passed through to `createProvingConfig`.
+Where proofs are produced — passed through to `createProvingConfig`. `'local'`
+proves in-process and reaches no prover.
 
 ### proverUrl
 
 - **Type:** `string`
 - **Optional**
+- **Default:** `'https://edge.provable.com/api/prove'` (`DEFAULT_PROVER_URL`)
 
-Base URL of the delegated proving service. Required when `provingMode` is
-`'delegated'`.
+Base URL of the delegated proving service, without the network segment. Only
+read under `provingMode: 'delegated'`; pass an override for a self-hosted
+prover.
+
+### useFeeMaster
+
+- **Type:** `boolean`
+- **Optional**
+- **Default:** `true`
+
+Whether the delegated prover pays the transaction fee from its FeeMaster
+account instead of the caller's public credits. The default lets a
+faucet-funded account with no public credits write. Pass `false` when the
+account funds its own fees. Only meaningful under delegated proving.
 
 ### apiKey
 
@@ -96,8 +130,9 @@ default gateway, which needs no consumer.
 
 - **Type:** `RecordProvider`
 - **Optional**
+- **Default:** `aleo.createRemoteScanner()`
 
-Record provider wired into the wallet client's `requestRecords`. Not
-supplied by default — pass [`createRemoteScanner`](./createRemoteScanner)'s
-result or a custom `RecordProvider`. `requestRecords` throws with a setup
-hint when none is configured.
+Record provider wired into the wallet client's `requestRecords`. Defaults to
+a [`createRemoteScanner`](./createRemoteScanner) against the hosted scanner;
+pass a scanner built with a custom `url` or any custom `RecordProvider` to
+override.

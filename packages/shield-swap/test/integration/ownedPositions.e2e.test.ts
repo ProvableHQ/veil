@@ -40,19 +40,25 @@ describe.runIf(RUN)('owned positions against the real chain + scanner', () => {
   }, 60_000)
 
   it('lists at least one position with a coherent joined view', async () => {
-    positions = await client.getOwnedPositions()
-    expect(positions.length).toBeGreaterThanOrEqual(1)
+    const all = await client.getOwnedPositions()
+    expect(all.length).toBeGreaterThanOrEqual(1)
 
-    for (const p of positions) {
+    for (const p of all) {
       expect(p.positionTokenId).toMatch(/field$/)
       expect(p.poolKey).toMatch(/field$/)
       expect(p.tickLower).toBeLessThan(p.tickUpper)
       expect(p.withdrawal).toMatch(/^aleo1/)
       expect(p.record.recordPlaintext).toBeTruthy()
 
-      // Live positions should be finalized; cross-check against the mapping.
-      expect(p.state).not.toBeNull()
+      // A `null` state is a position the public mapping no longer carries — a
+      // burned position whose record the scanner still serves as unspent. The
+      // view is coherent when the mapping agrees; the live checks below apply
+      // to the rest.
       const mapped = await getPosition(client, { positionTokenId: p.positionTokenId, program: DEX_PROGRAM })
+      if (p.state === null) {
+        expect(mapped).toBeNull()
+        continue
+      }
       expect(mapped).not.toBeNull()
       expect(p.state!.liquidity).toBe(mapped!.liquidity)
       expect(p.state!.tokensOwed0).toBe(mapped!.tokens_owed0)
@@ -70,6 +76,10 @@ describe.runIf(RUN)('owned positions against the real chain + scanner', () => {
         expect(p.state!.amount1).toBe(0n)
       }
     }
+
+    // The single-position test below reads a live one.
+    positions = all.filter((p) => p.state !== null)
+    expect(positions.length).toBeGreaterThanOrEqual(1)
   }, 180_000)
 
   it('resolves a single position by id and misses cleanly on a bogus id', async () => {

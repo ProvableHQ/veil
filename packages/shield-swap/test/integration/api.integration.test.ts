@@ -28,11 +28,40 @@ const RUN_AUTHED = RUN && !!PRIVATE_KEY
 // in beforeAll so the account never hits the server's active-token limit.
 const TEST_TOKEN_PREFIX = 'veil-itest-'
 
-/** Revokes any unexpired test tokens this suite (or a crashed run) minted. */
-async function sweepTestTokens(api: ApiClient): Promise<void> {
-  for (const row of await api.listApiTokens()) {
+// The server caps active tokens per account; the lifecycle tests need one slot.
+const ACTIVE_TOKEN_LIMIT = 5
+
+type TokenRow = Awaited<ReturnType<ApiClient['listApiTokens']>>[number]
+
+/**
+ * Revokes any unexpired test tokens this suite (or a crashed run) minted and
+ * returns the active tokens that remain. Those belong to someone else and
+ * are never revoked here.
+ */
+async function sweepTestTokens(api: ApiClient): Promise<TokenRow[]> {
+  const rows = await api.listApiTokens()
+  for (const row of rows) {
     if (row.name.startsWith(TEST_TOKEN_PREFIX) && !row.revoked_at) await api.revokeApiToken(row.id)
   }
+  const now = Date.now()
+  return rows.filter(
+    (row) =>
+      !row.name.startsWith(TEST_TOKEN_PREFIX) &&
+      !row.revoked_at &&
+      (!row.expires_at || Date.parse(row.expires_at) > now),
+  )
+}
+
+/**
+ * Fails a token-minting test up front, naming the foreign tokens that fill
+ * every slot, instead of letting the server's bare 400 explain it.
+ */
+function assertTokenSlotFree(active: TokenRow[]): void {
+  if (active.length < ACTIVE_TOKEN_LIMIT) return
+  const listing = active.map((row) => `${row.name} (${row.token_prefix}, created ${row.created_at})`).join('\n  ')
+  throw new Error(
+    `the account holds ${active.length} active API tokens, the server's limit — revoke one so this test can mint:\n  ${listing}`,
+  )
 }
 
 describe.runIf(RUN)('ApiClient against the live DEX API (public surface)', () => {
@@ -70,6 +99,8 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
   let api: ApiClient
   let account: AnyAccount
   let address: string
+  // Foreign active tokens after the sweep; the minting tests check for a slot.
+  let activeTokens: TokenRow[] = []
 
   beforeAll(async () => {
     const aleo = await loadNetwork('testnet')
@@ -81,7 +112,7 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     expect(jwt.length).toBeGreaterThan(0)
 
     // Sweep API tokens left behind by crashed runs.
-    await sweepTestTokens(api)
+    activeTokens = await sweepTestTokens(api)
   }, 60_000)
 
   it('session JWT covers the gated read surface', async () => {
@@ -129,6 +160,7 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
   }, 30_000)
 
   it('API token lifecycle: mint → use on gated reads → list → revoke → rejected', async () => {
+    assertTokenSlotFree(activeTokens)
     const name = `${TEST_TOKEN_PREFIX}${Date.now()}`
     const created = await api.createApiToken({ name, expires_in_days: 1 })
     expect(created.token.length).toBeGreaterThan(0)
@@ -211,6 +243,7 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
   }, 30_000)
 
   it('agent auth tools drive the full token lifecycle end-to-end', async () => {
+    assertTokenSlotFree(activeTokens)
     const { createShieldSwapAgentTools } = await import('../../src/agent/index.js')
     // The auth tools need only the signing account from the client.
     const toolApi = new ApiClient(API_OPTS)

@@ -116,6 +116,15 @@ export const DEFAULT_PROVER_URL = 'https://edge.provable.com/api/prove'
  */
 export const DEFAULT_SCANNER_URL = 'https://edge.provable.com/api/scanner'
 
+/**
+ * Base URL of Provable's hosted Aleo node API.
+ *
+ * The default `networkUrl` for `createAleoClient`. A base — the transport
+ * appends the network segment, so `switchChain` re-targets reads and
+ * broadcasts. Served by the edge gateway, which needs no credentials.
+ */
+export const DEFAULT_NETWORK_URL = 'https://edge.provable.com/api/v2'
+
 /** The default gateway. Unauthenticated, with no `/jwts` route to mint at. */
 const EDGE_GATEWAY = 'https://edge.provable.com/api'
 
@@ -365,14 +374,31 @@ export interface AleoSdk {
   }): StandaloneRecordScanner
 
   /**
-   * Creates a fully-wired Aleo client from a private key and network URL.
+   * Creates a fully-wired Aleo client from a private key.
    *
-   * Targets the Provable gateway, which needs no credentials: proving and
-   * scanning work with nothing but the private key and the network URL. A
-   * consumer pair together with legacy URLs (`https://api.provable.com/...`)
-   * selects the legacy JWT model, with one session minting for proving and
-   * scanning; a provisioned gateway key goes through `auth`.
+   * Targets the Provable gateway, which needs no credentials: with nothing but
+   * the private key the client reads and broadcasts through the hosted node,
+   * proves through the hosted delegated prover with the FeeMaster paying fees,
+   * and scans records through the hosted scanner. Every one of those is an
+   * option for a self-hosted or legacy service. A consumer pair together with
+   * legacy URLs (`https://api.provable.com/...`) selects the legacy JWT model,
+   * with one session minting for proving and scanning; a provisioned gateway
+   * key goes through `auth`.
    *
+   * @param options.networkUrl Base URL of the Aleo node both clients read from
+   *   and broadcast to, without the network segment. Defaults to
+   *   {@link DEFAULT_NETWORK_URL}; pass an override for a self-hosted node or
+   *   a devnode.
+   * @param options.provingMode Where proofs are produced. Defaults to
+   *   `'delegated'`; `'local'` proves in-process and reaches no prover.
+   * @param options.useFeeMaster Whether the delegated prover pays the fee from
+   *   its FeeMaster account instead of the caller's public credits. Defaults
+   *   to true, so a faucet-funded account with no public credits can write.
+   *   Pass false when the account funds its own fees. Only meaningful under
+   *   delegated proving.
+   * @param options.records Record provider behind `requestRecords`. Defaults
+   *   to `createRemoteScanner()` against the hosted scanner; pass a scanner
+   *   built with a custom `url` or any `RecordProvider` to override.
    * @param options.apiKey Optional API key for the legacy JWT model. Paired
    *   with `consumerId`, it seeds the session that mints JWTs at the legacy
    *   gateway `proverUrl` or the scanner's `url` names. On the default gateway
@@ -407,14 +433,12 @@ export interface AleoSdk {
    *   `authenticateProvableApi`, and the account.
    *
    * @example
-   * const { walletClient } = aleo.createAleoClient({
-   *   privateKey, networkUrl, records: aleo.createRemoteScanner(),
-   * })
+   * const { walletClient } = aleo.createAleoClient({ privateKey })
    * const txId = await walletClient.writeContract({ program, function: 'transfer_public', inputs })
    */
   createAleoClient(options: {
     privateKey: string
-    networkUrl: string
+    networkUrl?: string
     provingMode?: 'delegated' | 'local'
     proverUrl?: string
     apiKey?: string
@@ -426,10 +450,9 @@ export interface AleoSdk {
     session?: ProvableSession
     auth?: ProvableKeyedAuth
     /**
-     * Record provider for `requestRecords`. Not wired by default — pass
-     * `aleo.createRemoteScanner(...)` or any
-     * custom `RecordProvider`. `requestRecords` throws with a setup hint
-     * when no provider is configured.
+     * Record provider for `requestRecords`. Defaults to
+     * `aleo.createRemoteScanner()` against the hosted scanner; pass a scanner
+     * with a custom `url` or any custom `RecordProvider` to override.
      */
     records?: RecordProvider & {
       url?: string
@@ -1292,12 +1315,12 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 
   function createAleoClient(options: {
     privateKey: string
-    networkUrl: string
+    networkUrl?: string
     provingMode?: 'delegated' | 'local'
     proverUrl?: string
     apiKey?: string
     consumerId?: string
-    /** Forwarded to `createProvingConfig` — requests delegated FeeMaster payment. Defaults to false. */
+    /** Forwarded to `createProvingConfig` — requests delegated FeeMaster payment. Defaults to true. */
     useFeeMaster?: boolean
     confirmationTimeout?: number
     username?: string | (() => string)
@@ -1321,16 +1344,22 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       credentialStore: options.credentialStore,
       session: options.session,
     })
+    // Every hosted service defaults to the gateway, so a bare private key is a
+    // working client. The scanner is built here rather than by the caller;
+    // its url stays the default unless the caller passes their own provider.
+    const networkUrl = options.networkUrl ?? DEFAULT_NETWORK_URL
+    const records = options.records ?? createRemoteScanner()
+
     // A keyed client must be able to hand its key to the record provider; a
     // provider without setAuth would scan unauthenticated and 401 at runtime.
-    if (options.auth && options.records && !options.records.setAuth) {
+    if (options.auth && !records.setAuth) {
       throw new ConfigurationError(
         'Provisioned-key auth needs a record provider with setAuth — pass a scanner from createRemoteScanner, or construct the provider with the key.',
       )
     }
 
     const account = privateKeyToAccount(options.privateKey)
-    const transport = http(options.networkUrl, { network: network as Network })
+    const transport = http(networkUrl, { network: network as Network })
 
     // One session for the whole client, so a single authenticateProvableApi()
     // covers proving and scanning. Keyed auth builds none. The session mints
@@ -1353,12 +1382,12 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           // The prover names the legacy gateway first; a legacy scanner url
           // counts too, so a client on the default prover that scans the
           // legacy service still mints for it.
-          baseUrl: legacyMintRoot(options.proverUrl, options.records?.url),
+          baseUrl: legacyMintRoot(options.proverUrl, records.url),
         })
 
     const proving = createProvingConfig({
       mode: options.provingMode ?? 'delegated',
-      networkUrl: options.networkUrl,
+      networkUrl,
       proverUrl: options.proverUrl,
       session,
       auth: options.auth,
@@ -1367,7 +1396,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       apiKey: options.apiKey,
       consumerId: options.consumerId,
       account,
-      ...(options.useFeeMaster !== undefined ? { useFeeMaster: options.useFeeMaster } : {}),
+      // The hosted prover pays fees by default, so an account holding no public
+      // credits can write; a caller funding its own fees opts out.
+      useFeeMaster: options.useFeeMaster ?? true,
       ...(options.confirmationTimeout !== undefined
         ? { confirmationTimeout: options.confirmationTimeout }
         : {}),
@@ -1375,22 +1406,20 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 
     const publicClient = createPublicClient({ transport })
 
-    if (options.records) {
-      // Credentials before account: sharing them rebuilds the scanner to drop
-      // any credentials it was constructed with, and setAccount is what triggers
-      // the one build that matters. Only shared when the caller named a
-      // credential source — an unconfigured client must leave a scanner aimed at
-      // an open service exactly as it was.
-      if (options.auth) options.records.setAuth?.(options.auth)
-      else if (configured && session) options.records.setSession?.(session)
-      options.records.setAccount({ viewKey: account.viewKey })
-    }
+    // Credentials before account: sharing them rebuilds the scanner to drop
+    // any credentials it was constructed with, and setAccount is what triggers
+    // the one build that matters. Only shared when the caller named a
+    // credential source — an unconfigured client must leave a scanner aimed at
+    // an open service exactly as it was.
+    if (options.auth) records.setAuth?.(options.auth)
+    else if (configured && session) records.setSession?.(session)
+    records.setAccount({ viewKey: account.viewKey })
 
     const walletClient = createWalletClient({
       account,
       transport,
       proving,
-      ...(options.records ? { recordProvider: options.records } : {}),
+      recordProvider: records,
     }).extend(provableApiActions())
 
     return { publicClient, walletClient, account }
