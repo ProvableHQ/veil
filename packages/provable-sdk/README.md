@@ -28,36 +28,34 @@ import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 
 const aleo = await loadNetwork('testnet')
 
-// A record scanner so the wallet client can find the private records that
-// program calls spend. The first requestRecords registers the view key with the
-// service (one network round-trip); later calls reuse it.
-// `url` defaults to Provable's hosted scanner, so this needs no arguments.
-const scanner = aleo.createRemoteScanner()
-
 // A fully-wired client pair: an account from the private key, a public client
-// for reads, and a wallet client with proving + the scanner attached.
+// for reads, and a wallet client with delegated proving and a record scanner
+// attached. Every service defaults to the Provable gateway.
 const { publicClient, walletClient, account } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
-  networkUrl: 'https://edge.provable.com/api/v2',
-  records: scanner,
 })
 
 account.address // 'aleo1...'
 ```
 
-No API key appears above: the hosted prover and scanner run on the Provable
-gateway, which needs no credentials. A provisioned key, when an operator issues
-one, goes through `auth` — see [Provable API access](#provable-api-access).
+No URL or API key appears above: the node API, the hosted prover, and the
+record scanner all run on the Provable gateway, which needs no credentials.
+`networkUrl` defaults to `DEFAULT_NETWORK_URL`, `proverUrl` to
+`DEFAULT_PROVER_URL`, and `records` to `aleo.createRemoteScanner()` against
+`DEFAULT_SCANNER_URL`; each is an option for a self-hosted or legacy service.
+The prover pays fees from its FeeMaster account by default (`useFeeMaster:
+true`), so a faucet-funded account with no public credits can write; pass
+`useFeeMaster: false` when the account funds its own fees. A provisioned key,
+when an operator issues one, goes through `auth` — see
+[Provable API access](#provable-api-access).
 
-`proverUrl` is a base URL — the active network is appended, the same way the
-record scanner's `url` works — so `switchChain` re-targets proving instead of
-leaving it on the network the client started from. Do not include the network
-segment yourself. It defaults to Provable's hosted prover
-(`DEFAULT_PROVER_URL`) under delegated proving, so the option only needs setting
-for a self-hosted one.
+`networkUrl`, `proverUrl`, and the scanner's `url` are base URLs — the active
+network is appended — so `switchChain` re-targets reads, proving, and scanning
+instead of leaving them on the network the client started from. Do not include
+the network segment yourself.
 
 Pass `provingMode: 'local'` to prove in-process instead of delegating to a prover
-service (drop `proverUrl`). The `walletClient` composes with
+service. The `walletClient` composes with
 action packages the same way a wallet-backed client does:
 
 ```ts
@@ -79,8 +77,6 @@ it through `auth` and every request carries it in an `X-API-Key` header:
 ```ts
 const { walletClient } = aleo.createAleoClient({
   privateKey,
-  networkUrl: 'https://edge.provable.com/api/v2',
-  records: aleo.createRemoteScanner(),
   auth: { mode: 'api-key', value: process.env.PROVABLE_API_KEY! },
 })
 ```

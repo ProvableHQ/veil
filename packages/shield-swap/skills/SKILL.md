@@ -77,14 +77,11 @@ import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
 
 // The WASM binaries are per network, so the SDK is loaded for one and the
-// account, prover, and scanner all come off that handle.
+// account, prover, and scanner all come off that handle. The node, delegated
+// prover (FeeMaster paying fees), and record scanner default to the Provable
+// gateway, which needs no credentials.
 const aleo = await loadNetwork('testnet')
-const { walletClient } = aleo.createAleoClient({
-  privateKey,
-  networkUrl: 'https://edge.provable.com/api/v2',
-  provingMode: 'delegated',
-  records: aleo.createRemoteScanner(),
-})
+const { walletClient } = aleo.createAleoClient({ privateKey })
 
 const client = walletClient.extend(
   // The identity store MUST persist — see the rule above. A file-backed store is

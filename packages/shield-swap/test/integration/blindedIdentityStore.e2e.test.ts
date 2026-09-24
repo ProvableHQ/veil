@@ -225,16 +225,26 @@ describe.runIf(RUN)('blinded identity store on testnet', () => {
     // anywhere the account can read — the claim consumed the mapping entry.
     const recoveredPath = join(await mkdtemp(join(tmpdir(), 'veil-blinded-lost-')), 'blinded.json')
     const recovered = fileBlindedIdentityStore(recoveredPath)
-    await recovered.save([
-      {
-        counter: state.identity!.counter,
-        blindingFactor: state.identity!.blindingFactor,
-        blindedAddress: state.identity!.blindedAddress,
-        status: 'reserved',
-      },
-    ])
+    const lost: BlindedIdentityRecord = {
+      counter: state.identity!.counter,
+      blindingFactor: state.identity!.blindingFactor,
+      blindedAddress: state.identity!.blindedAddress,
+      status: 'reserved',
+    }
 
-    const result = await reconcileSwapHistory(client, { store: recovered, maxPages: 20 })
+    // The claim confirmed moments ago, and the program-call history the walk
+    // reads is indexed behind the chain — the newest page can miss a call the
+    // mapping already reflects. Poll the walk from a fresh copy of the lost
+    // store each time, so a miss leaves nothing behind for the next attempt.
+    let result = await (async () => {
+      await recovered.save([lost])
+      return reconcileSwapHistory(client, { store: recovered, maxPages: 20 })
+    })()
+    for (let i = 0; i < 20 && !result.claims.some((c) => c.blindedAddress === lost.blindedAddress); i++) {
+      await new Promise((r) => setTimeout(r, 5_000))
+      await recovered.save([lost])
+      result = await reconcileSwapHistory(client, { store: recovered, maxPages: 20 })
+    }
     expect(result.claims.map((c) => c.blindedAddress)).toContain(state.identity!.blindedAddress)
     const claim = result.claims.find((c) => c.blindedAddress === state.identity!.blindedAddress)!
     // The swap id came back out of the claim call's inputs, matching the one the

@@ -29,7 +29,6 @@ import {
   loadNetwork,
   generateAccount,
 } from '@provablehq/veil-aleo-sdk'
-import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
 import { shieldSwapActions, getPrivateBalances, parseUnits, DEFAULT_PROGRAM } from '@provablehq/shield-swap-sdk'
 import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
 
@@ -92,17 +91,6 @@ export function stateDir(network: Network): string {
  */
 export function blindedStorePath(network: Network): string {
   return join(stateDir(network), 'blinded.json')
-}
-
-/**
- * Where legacy Provable API credentials live for a network.
- *
- * Separate from the state file because the SDK owns the format. The gateway
- * needs no credentials anymore; the file is kept for a user who still holds a
- * pair, and the client only reads it.
- */
-export function credentialsPath(network: Network): string {
-  return join(stateDir(network), 'provable-credentials.json')
 }
 
 function statePath(network: Network): string {
@@ -241,10 +229,8 @@ export function namedAmounts(params: {
  * Authenticates with the DEX API on every call — the session JWT covers
  * everything including access/token management, and auto-renews on expiry.
  *
- * Provable API credentials are not required up front: the client registers a
- * consumer through the credential file on first prove or scan when it holds
- * none — though `shield-swap setup` registers and verifies eagerly, so a session built
- * after setup has working credentials rather than untested ones.
+ * The Provable gateway needs no credentials: proving and record scanning work
+ * from the private key alone, so nothing is registered or minted.
  */
 export async function loadSession(options: { network?: string } = {}) {
   const network = resolveNetwork(options.network)
@@ -257,19 +243,14 @@ export async function loadSession(options: { network?: string } = {}) {
 
   const aleo = await loadNetwork(network)
   // No prover or scanner URL: both default to the Provable gateway and take the
-  // network from the client, so naming them here would only risk drift. The
-  // gateway needs no credentials; a legacy pair in the store stays unused.
-  const scanner = aleo.createRemoteScanner()
+  // network from the client, so naming them here would only risk drift.
   const { walletClient, account } = aleo.createAleoClient({
     privateKey: state.privateKey,
     networkUrl: NETWORK_URL,
-    provingMode: 'delegated',
-    credentialStore: fileCredentialStore(credentialsPath(network)),
     // Faucet-funded accounts hold no public credits; the delegated prover
     // pays fees from its FeeMaster account. Opt out with
     // SHIELD_SWAP_FEE_MASTER=0 when the account funds its own fees.
     useFeeMaster: process.env.SHIELD_SWAP_FEE_MASTER !== '0',
-    records: scanner,
   })
   // SHIELD_SWAP_API_URL overrides for one-off runs; the persistent choice
   // lives in the state file (`shield-swap setup --api-url`).
@@ -299,7 +280,7 @@ export async function loadSession(options: { network?: string } = {}) {
     )
   }
 
-  return { client, account, scanner, state, aleo, network, blindedIdentities }
+  return { client, account, state, aleo, network, blindedIdentities }
 }
 
 

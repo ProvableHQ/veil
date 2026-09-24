@@ -42,8 +42,7 @@ export function readClient() {
  *
  * @param config.privateKey An existing account. Omit to generate a fresh one —
  *   which is a new, unfunded account, not a way to recover an old one.
- * @param config.provable Legacy Provable consumer credentials. Falls back to
- *   ALEO_CONSUMER_ID and ALEO_DPS_API_KEY in the environment. Not needed; the
+ * @param config.provable Legacy Provable consumer credentials. Not needed; the
  *   gateway is unauthenticated, and the pair is carried but never sent.
  * @param config.username Ignored. Nothing registers anymore.
  * @param config.inviteCode Redeemed when the account does not yet have DEX
@@ -62,25 +61,17 @@ export async function setupClient(config: {
   const privateKey = config.privateKey ?? generateAccount().privateKey
 
   // ── 2. The client ───────────────────────────────────────────────────
-  // `provingMode: 'delegated'` sends proving to the Provable prover instead of
-  // running it locally, which is what keeps this usable without a heavy WASM
-  // build. The prover also pays transaction fees from its FeeMaster account, so
-  // a faucet-funded account needs no public credits of its own. The gateway
-  // needs no credentials: legacy consumer credentials are accepted and unused.
-  const provable =
-    config.provable ??
-    (process.env.ALEO_CONSUMER_ID && process.env.ALEO_DPS_API_KEY
-      ? { consumerId: process.env.ALEO_CONSUMER_ID, apiKey: process.env.ALEO_DPS_API_KEY }
-      : undefined)
+  // Proving is delegated by default: the Provable prover runs it instead of a
+  // heavy local WASM build, and pays transaction fees from its FeeMaster
+  // account, so a faucet-funded account needs no public credits of its own.
+  // A record scanner is attached by default too — it is what makes private
+  // balances readable; without one the client could read pools but not find
+  // a record to spend. The gateway needs no credentials.
   const aleo = await loadNetwork('testnet')
   const { walletClient, account } = aleo.createAleoClient({
     privateKey,
     networkUrl: NODE_URL,
-    provingMode: 'delegated',
-    ...(provable ?? {}),
-    // The scanner is what makes private balances readable. Without it the
-    // client can still read pools, but cannot find a record to spend.
-    records: aleo.createRemoteScanner(),
+    ...(config.provable ?? {}),
   })
 
   // `.extend()` is viem's composition step: it returns a client carrying the DEX
@@ -106,7 +97,7 @@ export async function setupClient(config: {
     await client.api.redeemReferralCode(config.inviteCode)
   }
 
-  return { client, account, privateKey, provable }
+  return { client, account, privateKey, provable: config.provable }
 }
 
 /**

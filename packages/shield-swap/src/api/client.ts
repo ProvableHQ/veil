@@ -45,7 +45,9 @@ export const DEFAULT_API_URL = SHIELD_SWAP_API_URLS.testnet
 /**
  * Options for {@link ApiClient}.
  *
- * @property baseUrl DEX API origin. Defaults to the Provable dev API.
+ * @property baseUrl DEX API origin, or a function that resolves it per
+ *   request. Defaults to the testnet Shield Swap host; `shieldSwapActions`
+ *   derives it from the client's network via {@link defaultApiUrl}.
  * @property fetch Custom fetch implementation (tests, polyfills). Defaults
  *   to the global fetch.
  * @property apiToken Long-lived API token (`ss_…`) minted via
@@ -67,6 +69,20 @@ export type ApiClientOptions = {
   apiToken?: string
   autoReauthenticate?: boolean
 }
+
+/**
+ * Outcome of {@link ApiClient.confirmAirdrop}.
+ *
+ * @property status `'settled'` when the faucet job finished, or
+ *   `'rate_limited'` when the faucet refused the address and nothing started.
+ * @property job The finished job, with one result per token. Present on
+ *   `'settled'`; a token's own `status` can still be `rejected` or `failed`.
+ * @property message The faucet's explanation of the refusal. Present on
+ *   `'rate_limited'`.
+ */
+export type ConfirmAirdropResult =
+  | { status: 'settled'; job: Schemas['AirdropJob'] }
+  | { status: 'rate_limited'; message: string }
 
 /** A DEX API request that came back non-2xx, with the server's error body. */
 export class ApiError extends Error {
@@ -523,6 +539,8 @@ export class ApiClient {
    *
    * Asynchronous on the server: returns a `job_id` to poll with
    * {@link getAirdropStatus}. Used by the e2e to fund fresh accounts.
+   *
+   * Testnet only: the mainnet API does not serve `/airdrop` and answers 404.
    */
   async airdrop(address: string): Promise<Schemas['AirdropStartResult']> {
     const res = await this.request<{ data: Schemas['AirdropStartResult'] }>('POST', '/airdrop', {
@@ -532,7 +550,12 @@ export class ApiClient {
     return res.data
   }
 
-  /** Polls a faucet job until its per-token transfers complete. */
+  /**
+   * Polls a faucet job until its per-token transfers complete.
+   *
+   * Testnet only: the mainnet API does not serve `/airdrop/{job_id}` and
+   * answers 404.
+   */
   async getAirdropStatus(jobId: string): Promise<Schemas['AirdropJob']> {
     const res = await this.request<{ data: Schemas['AirdropJob'] }>(
       'GET',
@@ -542,7 +565,73 @@ export class ApiClient {
     return res.data
   }
 
-  /** Raw on-chain pool introspection (slot + tick statuses) via the API. */
+  /**
+   * Requests a testnet faucet drop and waits for it to settle.
+   *
+   * Wraps {@link airdrop} and {@link getAirdropStatus}: starts the job, polls
+   * until its status leaves `"running"`, and returns the finished job. A
+   * faucet that refuses the address (one claim per address per window)
+   * answers 429; that comes back as `status: 'rate_limited'` rather than
+   * throwing, since an account that already holds funds can carry on. Every
+   * other error propagates. A settled job can still carry a `rejected` or
+   * `failed` per-token result, so a caller that needs a specific token checks
+   * `job.results`.
+   *
+   * Testnet only: the mainnet API does not serve `/airdrop` and answers 404.
+   * Hits the network once to start and once per poll.
+   *
+   * @param address The receiving account's address (`aleo1…`).
+   * @param options.pollIntervalMs Milliseconds between status reads. Defaults
+   *   to 5000; each token's transfer needs a confirmation, so polling faster
+   *   only adds requests.
+   * @param options.timeoutMs Milliseconds to wait for the job to settle before
+   *   giving up. Defaults to 600000 (ten minutes), which covers every token's
+   *   confirmation on a healthy network with room to spare.
+   * @returns `{ status: 'settled', job }` with the per-token results, or
+   *   `{ status: 'rate_limited', message }` when the faucet refused the address.
+   * @throws When the job is still running at `timeoutMs`, and on any API
+   *   error other than the faucet's 429.
+   *
+   * @example
+   * const drop = await api.confirmAirdrop(account.address)
+   * if (drop.status === 'settled') console.table(drop.job.results)
+   * else console.log(drop.message)
+   */
+  async confirmAirdrop(
+    address: string,
+    options: { pollIntervalMs?: number; timeoutMs?: number } = {},
+  ): Promise<ConfirmAirdropResult> {
+    const pollIntervalMs = options.pollIntervalMs ?? 5_000
+    const timeoutMs = options.timeoutMs ?? 600_000
+
+    let started: Schemas['AirdropStartResult']
+    try {
+      started = await this.airdrop(address)
+    } catch (err) {
+      // The faucet's per-address window: nothing started, nothing to poll.
+      if (err instanceof ApiError && err.status === 429) return { status: 'rate_limited', message: err.message }
+      throw err
+    }
+
+    const deadline = Date.now() + timeoutMs
+    let job = await this.getAirdropStatus(started.job_id)
+    while (job.status === 'running') {
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `airdrop job ${started.job_id} is still running after ${timeoutMs}ms (${job.results.length} of ${job.total} tokens landed)`,
+        )
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+      job = await this.getAirdropStatus(started.job_id)
+    }
+    return { status: 'settled', job }
+  }
+
+  /**
+   * Raw on-chain pool introspection (slot + tick statuses) via the API.
+   *
+   * Testnet only: the mainnet API does not serve `/debug/pool` and answers 404.
+   */
   async debugPool(query: { pool_key: string; ticks?: string }): Promise<Schemas['PoolDebugResponseDoc']> {
     return this.request('GET', '/debug/pool', { query, auth: true })
   }

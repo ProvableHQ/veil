@@ -137,6 +137,7 @@ export {
   DEFAULT_API_URL,
   authenticateWithAccount,
   type ApiClientOptions,
+  type ConfirmAirdropResult,
 } from './api/client.js'
 
 // Wallet-signer InputRequest builders + the connect-time algorithm grants.

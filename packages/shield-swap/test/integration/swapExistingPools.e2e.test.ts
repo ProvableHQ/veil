@@ -44,19 +44,49 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
   let account: ReturnType<Awaited<ReturnType<typeof loadNetwork>>['createAleoClient']>['account']
   let dex: ReturnType<ReturnType<typeof shieldSwapActions>>
 
-  /** Public wrapper-program balances keyed by token id, read from chain. */
-  async function publicBalancesByToken(): Promise<Map<string, bigint>> {
-    const tokens = (await dex.api.getTokens()).data.filter((t) => !!t.amm_token_program)
-    const byProgram = await dex.getPublicBalances({
-      user: account.address,
-      programs: tokens.map((t) => t.amm_token_program!),
+  /**
+   * Whether one unspent record in `program` holds at least `need`. Record
+   * selection spends a single record and never aggregates, so a balance spread
+   * over small change records does not count.
+   */
+  async function hasCovering(program: string, need: bigint): Promise<boolean> {
+    const records = await scanner.requestRecords({ program, statusFilter: 'unspent' })
+    return records.some((r) => {
+      const info = r.recordPlaintext ? parseTokenRecordInfo(r.recordPlaintext) : null
+      return info != null && info.amount >= need
     })
-    return new Map(tokens.map((t) => [t.address, byProgram[t.amm_token_program!] ?? 0n]))
+  }
+
+  /** The program a swap spends a token's records from. */
+  const recordProgramOf = (t: { amm_token_program?: string | null; underlying_program?: string | null }) =>
+    t.underlying_program ?? t.amm_token_program!
+
+  /**
+   * Token ids the suite can swap a tenth of a unit of: an unspent record in the
+   * program the swap spends from covering half a unit, or a public balance the
+   * privatize step can turn into a whole unit's record.
+   */
+  async function fundedTokens(): Promise<Set<string>> {
+    const tokens = (await dex.api.getTokens()).data.filter((t) => !!t.amm_token_program)
+    const balances = await dex.getBalances()
+    const funded = new Set<string>()
+    for (const t of tokens) {
+      const unit = 10n ** BigInt(t.decimals)
+      if ((balances[t.address]?.public ?? 0n) >= unit || (await hasCovering(recordProgramOf(t), unit / 2n))) {
+        funded.add(t.address)
+      }
+    }
+    return funded
   }
 
   const state: {
     poolKey?: string
-    tokenIn?: { address: string; program: string; decimals: number }
+    /**
+     * `program` is the AMM token program (imports, privatize target);
+     * `recordProgram` is where the swap spends records from — the underlying
+     * program for a wrapped token, else the same.
+     */
+    tokenIn?: { address: string; program: string; recordProgram: string; decimals: number }
     imports?: Record<string, string>
     handle?: Awaited<ReturnType<ReturnType<ReturnType<typeof shieldSwapActions>>['swap']>>
   } = {}
@@ -79,44 +109,49 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
     if ((await dex.api.getPools({ limit: 1 })).data.length === 0) return
     await dex.authenticateShieldSwap()
 
-    // Airdrop once if the account holds nothing — the swap privatizes public
-    // balance, so it needs a funded token.
+    // Airdrop once if the account holds nothing, publicly or as records — the
+    // swap needs a funded token either way.
     // Best-effort: poll the account's balance rather than the ephemeral faucet
     // job, and don't abort the suite if the faucet misbehaves — the discovery
     // step reports an unfunded account with a clear message.
-    const funded = async () => {
-      const balances = await publicBalancesByToken()
-      return [...balances.values()].some((balance) => balance > 0n)
-    }
+    const funded = async () => (await fundedTokens()).size > 0
     if (!(await funded())) {
       try {
-        await dex.api.airdrop(account.address)
+        const drop = await dex.api.confirmAirdrop(account.address, { timeoutMs: TX_TIMEOUT - 60_000 })
+        if (drop.status === 'rate_limited') console.warn('airdrop refused (continuing to poll balances):', drop.message)
       } catch (err) {
-        console.warn('airdrop request failed (continuing to poll balances):', (err as Error).message)
+        console.warn('airdrop failed (continuing to poll balances):', (err as Error).message)
       }
-      await pollUntil(funded, 60, 5000)
+      // The records the faucet delivered still need to reach the scanner.
+      await pollUntil(funded, 12, 5000)
     }
   }, TX_TIMEOUT)
 
   it('discovers an existing pool with liquidity the account can fund', async (ctx) => {
     const pools = await dex.api.getPools({ limit: 50 })
-    const balances = await publicBalancesByToken()
-    const funded = new Set([...balances].filter(([, balance]) => balance > 0n).map(([tokenId]) => tokenId))
+    const funded = await fundedTokens()
 
     // A live pool needs: both tokens wrapper-backed, non-zero on-chain
-    // liquidity, and the account funded in one of the two tokens (that side
-    // becomes the swap input — either direction works).
+    // liquidity, and the account funded in one of the two tokens, publicly or
+    // as records (that side becomes the swap input — either direction works).
     for (const p of pools.data) {
-      if (!p.token0_info?.wrapper_program || !p.token1_info?.wrapper_program) continue
+      if (!p.token0_info?.amm_token_program || !p.token1_info?.amm_token_program) continue
       const inInfo = funded.has(p.token0) ? p.token0_info : funded.has(p.token1) ? p.token1_info : undefined
       if (!inInfo) continue
       const slot = await dex.getSlot({ poolKey: p.key })
       if (!slot || slot.liquidity === 0n) continue
       const inAddress = inInfo === p.token0_info ? p.token0 : p.token1
       state.poolKey = p.key
-      state.tokenIn = { address: inAddress, program: inInfo.wrapper_program!, decimals: inInfo.decimals }
+      state.tokenIn = {
+        address: inAddress,
+        program: inInfo.amm_token_program!,
+        recordProgram: recordProgramOf(inInfo),
+        decimals: inInfo.decimals,
+      }
+      // Both sides: the swap spends the input token, and the claim pays out
+      // through a dynamic call into the output token's program.
       state.imports = await resolveDexImports(walletClient, {
-        tokenPrograms: [state.tokenIn.program],
+        tokenPrograms: [p.token0_info.amm_token_program, p.token1_info.amm_token_program],
         program: DEX_PROGRAM,
       })
       break
@@ -138,14 +173,21 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
     if (!state.poolKey) ctx.skip()
     const unit = 10n ** BigInt(state.tokenIn!.decimals)
     const need = unit / 2n
-    const hasCovering = async () => {
-      const records = await scanner.requestRecords({ program: state.tokenIn!.program, statusFilter: 'unspent' })
-      return records.some((r) => {
-        const info = r.recordPlaintext ? parseTokenRecordInfo(r.recordPlaintext) : null
-        return info != null && info.amount >= need
-      })
-    }
-    if (!(await hasCovering())) {
+    const covering = () => hasCovering(state.tokenIn!.recordProgram, need)
+    if (!(await covering())) {
+      // A wrapped token's public balance privatizes into a wrapper record,
+      // which the swap does not spend — it needs an underlying record.
+      expect(
+        state.tokenIn!.recordProgram === state.tokenIn!.program,
+        `no unspent ${state.tokenIn!.recordProgram} record covers ${need}; ${state.tokenIn!.program} is a wrapper, so privatizing cannot produce one`,
+      ).toBe(true)
+      // Sending the privatize with too little public balance only burns the
+      // fee on a finalize revert; say what is missing instead.
+      const publicBalance = (await dex.getBalances())[state.tokenIn!.address]?.public ?? 0n
+      expect(
+        publicBalance >= unit,
+        `no unspent ${state.tokenIn!.program} record covers ${need} and the public balance (${publicBalance}) cannot privatize ${unit}`,
+      ).toBe(true)
       const result = await walletClient.executeContract({
         program: state.tokenIn!.program,
         function: 'transfer_public_to_private',
@@ -153,7 +195,7 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
       })
       expect(result.transactionId).toMatch(/^at1/)
       // RSS indexes the new record asynchronously — wait until scannable.
-      const visible = await pollUntil(hasCovering, 30, 5000)
+      const visible = await pollUntil(covering, 30, 5000)
       expect(visible, 'privatized record did not become scannable').toBe(true)
     }
   }, TX_TIMEOUT * 2)

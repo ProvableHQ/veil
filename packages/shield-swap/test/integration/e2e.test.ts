@@ -49,11 +49,19 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
   const client = walletClient.extend(shieldSwapActions({ api: {}, program: DEX_PROGRAM }))
 
   // Resolved during the run and shared across steps (tests run in order).
+  /**
+   * A chosen token: `program` is the AMM token program (imports, public
+   * balance, privatize target); `recordProgram` is where the swap spends
+   * records from — the underlying program for a wrapped token, else the same.
+   */
+  type ChosenToken = { address: string; program: string; recordProgram: string; decimals: number }
   const state: {
-    token0?: { address: string; program: string; decimals: number }
-    token1?: { address: string; program: string; decimals: number }
+    token0?: ChosenToken
+    token1?: ChosenToken
     imports?: Record<string, string>
     poolKey?: string
+    /** Set once both tokens hold a record covering the swap input. */
+    funded?: boolean
     handle?: Awaited<ReturnType<typeof client.swap>>
   } = {}
 
@@ -63,49 +71,71 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     await client.authenticateShieldSwap()
   }, 60_000)
 
-  /** Public wrapper-program balances keyed by token id, read from chain. */
-  async function publicBalancesByToken(): Promise<Map<string, bigint>> {
-    const tokens = (await client.api.getTokens()).data.filter((t) => !!t.amm_token_program)
-    const byProgram = await client.getPublicBalances({
-      user: account.address,
-      programs: tokens.map((t) => t.amm_token_program!),
+  /**
+   * Whether one unspent record in `program` holds at least `need`. Record
+   * selection spends a single record and never aggregates, so a balance spread
+   * over small change records does not count.
+   */
+  async function hasCovering(program: string, need: bigint): Promise<boolean> {
+    const records = await scanner.requestRecords({ program, statusFilter: 'unspent' })
+    return records.some((r) => {
+      const info = r.recordPlaintext ? parseTokenRecordInfo(r.recordPlaintext) : null
+      return info != null && info.amount >= need
     })
-    return new Map(tokens.map((t) => [t.address, byProgram[t.amm_token_program!] ?? 0n]))
+  }
+
+  /** The program a swap spends a token's records from. */
+  const recordProgramOf = (t: { amm_token_program?: string | null; underlying_program?: string | null }) =>
+    t.underlying_program ?? t.amm_token_program!
+
+  /**
+   * Token ids the suite can swap a tenth of a unit of: an unspent record in the
+   * program the swap spends from covering half a unit, or a public balance the
+   * privatize step can turn into a whole unit's record.
+   */
+  async function fundedTokens(): Promise<Set<string>> {
+    const tokens = (await client.api.getTokens()).data.filter((t) => !!t.amm_token_program)
+    const balances = await client.getBalances()
+    const funded = new Set<string>()
+    for (const t of tokens) {
+      const unit = 10n ** BigInt(t.decimals)
+      if ((balances[t.address]?.public ?? 0n) >= unit || (await hasCovering(recordProgramOf(t), unit / 2n))) {
+        funded.add(t.address)
+      }
+    }
+    return funded
   }
 
   it('funds the account via the async airdrop when balances are empty', async () => {
-    const balances = await publicBalancesByToken()
-    const empty = [...balances.values()].every((balance) => balance === 0n)
+    const empty = (await fundedTokens()).size === 0
     if (empty) {
-      const started = await client.api.airdrop(account.address)
-      expect(started.job_id).toBeTruthy()
-      // Poll until the faucet's per-token transfers settle.
-      for (let i = 0; i < 60; i++) {
-        const job = await client.api.getAirdropStatus(started.job_id)
-        if (job.status === 'completed' || job.status === 'done') break
-        await sleep(5000)
-      }
+      // A rate-limited faucet is not a failure when the account already holds
+      // funds from an earlier drop; the balance check below is the assertion
+      // either way.
+      const drop = await client.api.confirmAirdrop(account.address, { timeoutMs: TX_TIMEOUT - 30_000 })
+      if (drop.status === 'settled') expect(drop.job.results.length).toBe(drop.job.total)
     }
-    const after = await publicBalancesByToken()
-    expect(after.size).toBeGreaterThan(0)
+    expect(
+      (await fundedTokens()).size,
+      'no token has a record covering half a unit or a public balance of a unit, and the faucet did not fund one',
+    ).toBeGreaterThan(0)
   }, TX_TIMEOUT)
 
   it('picks a token pair and fetches wrapper program sources (dyn-dispatch imports)', async () => {
     // Pick a live pool that satisfies BOTH swap preconditions:
-    //   1. the account can fund both tokens — the swap privatizes public balance
-    //      into records, so a token the account holds zero of would revert
-    //      transfer_public_to_private; and
+    //   1. the account can fund both tokens — publicly or as records; a token
+    //      the account holds zero of would revert transfer_public_to_private
+    //      or leave the swap with no record to spend; and
     //   2. the pool has non-zero liquidity — create_pool does not seed
     //      liquidity, so an empty pool has nothing to swap against and the swap
     //      finalize reverts.
-    // Fall back to the first two wrapper tokens on a fresh deployment.
+    // Fall back to the first two held wrapper tokens on a fresh deployment.
     const pools = await client.api.getPools({ limit: 50 })
-    const balances = await publicBalancesByToken()
-    const funded = new Set([...balances].filter(([, balance]) => balance > 0n).map(([tokenId]) => tokenId))
+    const funded = await fundedTokens()
     const candidates = pools.data.filter(
       (p) =>
-        p.token0_info?.wrapper_program &&
-        p.token1_info?.wrapper_program &&
+        p.token0_info?.amm_token_program &&
+        p.token1_info?.amm_token_program &&
         funded.has(p.token0) &&
         funded.has(p.token1),
     )
@@ -117,19 +147,29 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
         break
       }
     }
-    if (live?.token0_info?.wrapper_program && live?.token1_info?.wrapper_program) {
-      state.token0 = { address: live.token0, program: live.token0_info.wrapper_program, decimals: live.token0_info.decimals }
-      state.token1 = { address: live.token1, program: live.token1_info.wrapper_program, decimals: live.token1_info.decimals }
+    if (live?.token0_info?.amm_token_program && live?.token1_info?.amm_token_program) {
+      state.token0 = {
+        address: live.token0,
+        program: live.token0_info.amm_token_program,
+        recordProgram: recordProgramOf(live.token0_info),
+        decimals: live.token0_info.decimals,
+      }
+      state.token1 = {
+        address: live.token1,
+        program: live.token1_info.amm_token_program,
+        recordProgram: recordProgramOf(live.token1_info),
+        decimals: live.token1_info.decimals,
+      }
       // Lock in THIS pool — the pair can have several pools across fee tiers and
       // most have zero liquidity; only this one was verified to have depth.
       state.poolKey = live.key
     } else {
       const tokens = await client.api.getTokens()
-      const withWrappers = tokens.data.filter((t) => t.wrapper_program)
-      expect(withWrappers.length).toBeGreaterThanOrEqual(2)
+      const withWrappers = tokens.data.filter((t) => t.amm_token_program && funded.has(t.address))
+      expect(withWrappers.length, 'the account holds fewer than two wrapper tokens').toBeGreaterThanOrEqual(2)
       const [a, b] = withWrappers
-      state.token0 = { address: a!.address, program: a!.wrapper_program!, decimals: a!.decimals }
-      state.token1 = { address: b!.address, program: b!.wrapper_program!, decimals: b!.decimals }
+      state.token0 = { address: a!.address, program: a!.amm_token_program!, recordProgram: recordProgramOf(a!), decimals: a!.decimals }
+      state.token1 = { address: b!.address, program: b!.amm_token_program!, recordProgram: recordProgramOf(b!), decimals: b!.decimals }
     }
 
     // The prover cannot statically discover IARC20 callees, nor the DEX
@@ -140,23 +180,30 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     })
   }, 60_000)
 
-  it('privatizes token balances into records (transfer_public_to_private)', async () => {
+  it('privatizes token balances into records (transfer_public_to_private)', async (ctx) => {
+    if (!state.token0 || !state.token1) ctx.skip()
     // Ensure each token has ONE unspent record large enough for the swap's
-    // input draw (record selection picks a single sufficient record — it does
-    // not aggregate). Skipping merely on record existence is wrong: prior runs
+    // input draw. Skipping merely on record existence is wrong: prior runs
     // leave small change records that don't cover the swap.
-    const hasCovering = async (program: string, need: bigint) => {
-      const records = await scanner.requestRecords({ program, statusFilter: 'unspent' })
-      return records.some((r) => {
-        const info = r.recordPlaintext ? parseTokenRecordInfo(r.recordPlaintext) : null
-        return info != null && info.amount >= need
-      })
-    }
-
+    const balances = await client.getBalances()
     for (const t of [state.token0!, state.token1!]) {
       const unit = 10n ** BigInt(t.decimals)
       const need = unit / 2n // comfortably covers the swap's 0.1-token input
-      if (await hasCovering(t.program, need)) continue
+      if (await hasCovering(t.recordProgram, need)) continue
+
+      // A wrapped token's public balance privatizes into a wrapper record,
+      // which the swap does not spend — it needs an underlying record.
+      expect(
+        t.recordProgram === t.program,
+        `no unspent ${t.recordProgram} record covers ${need}; ${t.program} is a wrapper, so privatizing cannot produce one`,
+      ).toBe(true)
+      // Sending the privatize with too little public balance only burns the
+      // fee on a finalize revert; say what is missing instead.
+      const publicBalance = balances[t.address]?.public ?? 0n
+      expect(
+        publicBalance >= unit,
+        `no unspent ${t.program} record covers ${need} and the public balance (${publicBalance}) cannot privatize ${unit}`,
+      ).toBe(true)
 
       // Privatize a full unit — comfortable headroom over the swap input.
       const result = await walletClient.executeContract({
@@ -169,12 +216,14 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
       // The transaction is accepted on-chain, but the RSS indexes the new
       // record asynchronously — poll until it is scannable before the swap
       // tries to select it.
-      const visible = await pollUntil(() => hasCovering(t.program, need), 30, 5000)
+      const visible = await pollUntil(() => hasCovering(t.recordProgram, need), 30, 5000)
       expect(visible, `privatized ${t.program} record did not become scannable`).toBe(true)
     }
+    state.funded = true
   }, TX_TIMEOUT * 2)
 
-  it('ensures a pool exists for the pair (API discovery, create, or prior run)', async () => {
+  it('ensures a pool exists for the pair (API discovery, create, or prior run)', async (ctx) => {
+    if (!state.token0 || !state.token1) ctx.skip()
     // 1) API discovery — authoritative where the API serves this program
     //    find a live pool for the chosen pair. Skip when the
     //    token-pick step already locked in a specific pool with liquidity —
@@ -226,7 +275,10 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     expect(await client.isPoolInitialized({ poolKey: state.poolKey! })).toBe(true)
   }, TX_TIMEOUT)
 
-  it('swaps privately and the chain computes the output', async () => {
+  it('swaps privately and the chain computes the output', async (ctx) => {
+    // A swap without a covering record or a pool has nothing to do; the
+    // earlier step's failure is the report.
+    if (!state.poolKey || !state.funded) ctx.skip()
     const pool = await client.getPool({ poolKey: state.poolKey! })
     const tokenIn = pool!.token0
     const inMeta = tokenIn === state.token0!.address ? state.token0! : state.token1!
@@ -253,7 +305,8 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     expect(out!.amount_out > 0n).toBe(true)
   }, TX_TIMEOUT)
 
-  it('claims the output as private records and the entry is consumed', async () => {
+  it('claims the output as private records and the entry is consumed', async (ctx) => {
+    if (!state.handle) ctx.skip()
     const res = await client.claimSwapOutput({ handle: state.handle!, imports: state.imports })
     expect(res.transactionId).toMatch(/^at1/)
     expect(res.amountOut > 0n).toBe(true)
