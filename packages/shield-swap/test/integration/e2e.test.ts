@@ -4,6 +4,7 @@ import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { resolveDexImports } from '../../src/utils/imports.js'
 import { parseTokenRecordInfo } from '../../src/utils/records.js'
 import { SwapOutputNotFinalizedError } from '../../src/actions/swap/claimSwapOutput.js'
+import { ApiError } from '../../src/api/client.js'
 
 /**
  * The headline e2e: the private-swap lifecycle against the REAL testnet —
@@ -63,45 +64,52 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     await client.authenticateShieldSwap()
   }, 60_000)
 
-  /** Public wrapper-program balances keyed by token id, read from chain. */
-  async function publicBalancesByToken(): Promise<Map<string, bigint>> {
-    const tokens = (await client.api.getTokens()).data.filter((t) => !!t.amm_token_program)
-    const byProgram = await client.getPublicBalances({
-      user: account.address,
-      programs: tokens.map((t) => t.amm_token_program!),
-    })
-    return new Map(tokens.map((t) => [t.address, byProgram[t.amm_token_program!] ?? 0n]))
+  /**
+   * Token ids the account can fund a swap from: a public balance in the AMM
+   * token program, or private records. Both count, since the privatize step
+   * below turns public balance into a record when no covering one exists.
+   */
+  async function fundedTokens(): Promise<Set<string>> {
+    const balances = await client.getBalances()
+    return new Set(Object.entries(balances).filter(([, b]) => b.total > 0n).map(([id]) => id))
   }
 
   it('funds the account via the async airdrop when balances are empty', async () => {
-    const balances = await publicBalancesByToken()
-    const empty = [...balances.values()].every((balance) => balance === 0n)
+    const empty = (await fundedTokens()).size === 0
     if (empty) {
-      const started = await client.api.airdrop(account.address)
-      expect(started.job_id).toBeTruthy()
-      // Poll until the faucet's per-token transfers settle.
-      for (let i = 0; i < 60; i++) {
-        const job = await client.api.getAirdropStatus(started.job_id)
-        if (job.status === 'completed' || job.status === 'done') break
-        await sleep(5000)
+      // The faucet is rate-limited per address. A 429 is not a failure when the
+      // account already holds funds from an earlier drop; the balance check
+      // below is the assertion either way.
+      let started: { job_id: string } | undefined
+      try {
+        started = await client.api.airdrop(account.address)
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.status !== 429) throw err
+      }
+      if (started) {
+        expect(started.job_id).toBeTruthy()
+        // Poll until the faucet's per-token transfers settle.
+        for (let i = 0; i < 60; i++) {
+          const job = await client.api.getAirdropStatus(started.job_id)
+          if (job.status === 'completed' || job.status === 'done') break
+          await sleep(5000)
+        }
       }
     }
-    const after = await publicBalancesByToken()
-    expect(after.size).toBeGreaterThan(0)
+    expect((await fundedTokens()).size, 'the account holds no token balance and the faucet did not fund it').toBeGreaterThan(0)
   }, TX_TIMEOUT)
 
   it('picks a token pair and fetches wrapper program sources (dyn-dispatch imports)', async () => {
     // Pick a live pool that satisfies BOTH swap preconditions:
-    //   1. the account can fund both tokens — the swap privatizes public balance
-    //      into records, so a token the account holds zero of would revert
-    //      transfer_public_to_private; and
+    //   1. the account can fund both tokens — publicly or as records; a token
+    //      the account holds zero of would revert transfer_public_to_private
+    //      or leave the swap with no record to spend; and
     //   2. the pool has non-zero liquidity — create_pool does not seed
     //      liquidity, so an empty pool has nothing to swap against and the swap
     //      finalize reverts.
-    // Fall back to the first two wrapper tokens on a fresh deployment.
+    // Fall back to the first two held wrapper tokens on a fresh deployment.
     const pools = await client.api.getPools({ limit: 50 })
-    const balances = await publicBalancesByToken()
-    const funded = new Set([...balances].filter(([, balance]) => balance > 0n).map(([tokenId]) => tokenId))
+    const funded = await fundedTokens()
     const candidates = pools.data.filter(
       (p) =>
         p.token0_info?.amm_token_program &&
@@ -125,8 +133,8 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
       state.poolKey = live.key
     } else {
       const tokens = await client.api.getTokens()
-      const withWrappers = tokens.data.filter((t) => t.amm_token_program)
-      expect(withWrappers.length).toBeGreaterThanOrEqual(2)
+      const withWrappers = tokens.data.filter((t) => t.amm_token_program && funded.has(t.address))
+      expect(withWrappers.length, 'the account holds fewer than two wrapper tokens').toBeGreaterThanOrEqual(2)
       const [a, b] = withWrappers
       state.token0 = { address: a!.address, program: a!.amm_token_program!, decimals: a!.decimals }
       state.token1 = { address: b!.address, program: b!.amm_token_program!, decimals: b!.decimals }
@@ -153,10 +161,19 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
       })
     }
 
+    const balances = await client.getBalances()
     for (const t of [state.token0!, state.token1!]) {
       const unit = 10n ** BigInt(t.decimals)
       const need = unit / 2n // comfortably covers the swap's 0.1-token input
       if (await hasCovering(t.program, need)) continue
+
+      // Sending the privatize with too little public balance only burns the
+      // fee on a finalize revert; say what is missing instead.
+      const publicBalance = balances[t.address]?.public ?? 0n
+      expect(
+        publicBalance >= unit,
+        `no unspent ${t.program} record covers ${need} and the public balance (${publicBalance}) cannot privatize ${unit}`,
+      ).toBe(true)
 
       // Privatize a full unit — comfortable headroom over the swap input.
       const result = await walletClient.executeContract({
