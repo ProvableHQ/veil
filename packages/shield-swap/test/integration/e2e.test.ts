@@ -104,8 +104,8 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
     const funded = new Set([...balances].filter(([, balance]) => balance > 0n).map(([tokenId]) => tokenId))
     const candidates = pools.data.filter(
       (p) =>
-        p.token0_info?.wrapper_program &&
-        p.token1_info?.wrapper_program &&
+        p.token0_info?.amm_token_program &&
+        p.token1_info?.amm_token_program &&
         funded.has(p.token0) &&
         funded.has(p.token1),
     )
@@ -117,19 +117,19 @@ describe.runIf(RUN)('e2e: private swap + liquidity lifecycle on testnet', async 
         break
       }
     }
-    if (live?.token0_info?.wrapper_program && live?.token1_info?.wrapper_program) {
-      state.token0 = { address: live.token0, program: live.token0_info.wrapper_program, decimals: live.token0_info.decimals }
-      state.token1 = { address: live.token1, program: live.token1_info.wrapper_program, decimals: live.token1_info.decimals }
+    if (live?.token0_info?.amm_token_program && live?.token1_info?.amm_token_program) {
+      state.token0 = { address: live.token0, program: live.token0_info.amm_token_program, decimals: live.token0_info.decimals }
+      state.token1 = { address: live.token1, program: live.token1_info.amm_token_program, decimals: live.token1_info.decimals }
       // Lock in THIS pool — the pair can have several pools across fee tiers and
       // most have zero liquidity; only this one was verified to have depth.
       state.poolKey = live.key
     } else {
       const tokens = await client.api.getTokens()
-      const withWrappers = tokens.data.filter((t) => t.wrapper_program)
+      const withWrappers = tokens.data.filter((t) => t.amm_token_program)
       expect(withWrappers.length).toBeGreaterThanOrEqual(2)
       const [a, b] = withWrappers
-      state.token0 = { address: a!.address, program: a!.wrapper_program!, decimals: a!.decimals }
-      state.token1 = { address: b!.address, program: b!.wrapper_program!, decimals: b!.decimals }
+      state.token0 = { address: a!.address, program: a!.amm_token_program!, decimals: a!.decimals }
+      state.token1 = { address: b!.address, program: b!.amm_token_program!, decimals: b!.decimals }
     }
 
     // The prover cannot statically discover IARC20 callees, nor the DEX

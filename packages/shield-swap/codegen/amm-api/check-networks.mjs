@@ -31,7 +31,20 @@ function operations(spec) {
   return out
 }
 
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+// Serializes with object keys sorted at every level, so two hosts that emit
+// the same definition with a different property order still compare equal.
+function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
+  if (value && typeof value === 'object') {
+    const entries = Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`)
+    return `{${entries.join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+const same = (a, b) => canonical(a) === canonical(b)
 
 const testnetOps = operations(testnet)
 const mainnetOps = operations(mainnet)

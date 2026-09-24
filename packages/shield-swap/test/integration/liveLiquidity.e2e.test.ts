@@ -220,12 +220,24 @@ describe.runIf(RUN)('live liquidity lifecycle on testnet', () => {
     // revert elsewhere as one side falls short of what the range requires.
     const sqrtLower = getSqrtPriceAtTickX128(tickLower)
     const sqrtUpper = getSqrtPriceAtTickX128(tickUpper)
-    const liquidity = liquidityForAmounts(slot!.sqrt_price, sqrtLower, sqrtUpper, state.budget0!, state.budget1!)
+    const liquidity = liquidityForAmounts({
+      sqrtPriceX128: slot!.sqrt_price,
+      sqrtLowerX128: sqrtLower,
+      sqrtUpperX128: sqrtUpper,
+      amount0: state.budget0!,
+      amount1: state.budget1!,
+    })
     expect(liquidity, 'budget is dust for this range — fund the account further').toBeGreaterThan(0n)
     state.predicted = liquidity
 
     // `true` is the deposit-side rounding, so neither side lands a hair short.
-    const { amount0, amount1 } = amountsForLiquidity(slot!.sqrt_price, sqrtLower, sqrtUpper, liquidity, true)
+    const { amount0, amount1 } = amountsForLiquidity({
+      sqrtPriceX128: slot!.sqrt_price,
+      sqrtLowerX128: sqrtLower,
+      sqrtUpperX128: sqrtUpper,
+      liquidity,
+      roundUp: true,
+    })
     state.amount0 = amount0
     state.amount1 = amount1
     expect(amount0 + amount1).toBeGreaterThan(0n)

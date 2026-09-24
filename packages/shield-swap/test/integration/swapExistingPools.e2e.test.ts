@@ -107,14 +107,14 @@ describe.runIf(RUN)('e2e: swap against an existing testnet pool', () => {
     // liquidity, and the account funded in one of the two tokens (that side
     // becomes the swap input — either direction works).
     for (const p of pools.data) {
-      if (!p.token0_info?.wrapper_program || !p.token1_info?.wrapper_program) continue
+      if (!p.token0_info?.amm_token_program || !p.token1_info?.amm_token_program) continue
       const inInfo = funded.has(p.token0) ? p.token0_info : funded.has(p.token1) ? p.token1_info : undefined
       if (!inInfo) continue
       const slot = await dex.getSlot({ poolKey: p.key })
       if (!slot || slot.liquidity === 0n) continue
       const inAddress = inInfo === p.token0_info ? p.token0 : p.token1
       state.poolKey = p.key
-      state.tokenIn = { address: inAddress, program: inInfo.wrapper_program!, decimals: inInfo.decimals }
+      state.tokenIn = { address: inAddress, program: inInfo.amm_token_program!, decimals: inInfo.decimals }
       state.imports = await resolveDexImports(walletClient, {
         tokenPrograms: [state.tokenIn.program],
         program: DEX_PROGRAM,
