@@ -4,70 +4,6 @@
  */
 
 export interface paths {
-    "/access/codes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["access_list_codes"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/access/generate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["access_generate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/access/redeem": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["access_redeem"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/access/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["access_status"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/admin/sessions/revoke": {
         parameters: {
             query?: never;
@@ -95,18 +31,18 @@ export interface paths {
         put?: never;
         /**
          * POST /airdrop
-         * @description Delivers ~$10 worth each of wALEO, wUSDCx, and wETH to the given address as
+         * @description Delivers configured amounts of ALEO, USDCx, and ETH to the given address as
          *     private records via `transfer_public_to_private`, spent from the
-         *     treasury's wrapped public balance in each program. One claim per
-         *     recipient address per 15 minutes (429 after that).
+         *     treasury's public balance in each target's underlying program. One claim
+         *     per recipient address per 15 minutes (429 after that).
          *
          *     Proving each token takes ~15-30s, so this returns immediately with
          *     `status: "running"` + a `job_id`. The transfers run in a detached worker
          *     (capped concurrency, per-token timeout); poll `GET /airdrop/{job_id}` until
          *     `status == "complete"` to read per-token results.
          *
-         *     Required env: `DEPLOYER_PRIVATE_KEY` (the treasury key whose public wrapped
-         *     balance funds every airdrop; `AIRDROP_PRIVATE_KEY` honored as a fallback),
+         *     Required env: `DEPLOYER_PRIVATE_KEY` (the treasury key whose public balances
+         *     fund every airdrop; `AIRDROP_PRIVATE_KEY` honored as a fallback),
          *     `RPC_URLS` (first entry used).
          */
         post: operations["airdrop"];
@@ -314,22 +250,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/balances": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_balances"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/compliance": {
         parameters: {
             query?: never;
@@ -394,6 +314,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/explore/pools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["explore_list_pools"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/explore/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["explore_list_tokens"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/explore/tokens/{token_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["explore_get_token"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/explore/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["explore_list_transactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fee-tiers": {
         parameters: {
             query?: never;
@@ -402,6 +386,70 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_fee_tiers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/geckoterminal/asset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["asset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/geckoterminal/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/geckoterminal/latest-block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["latest_block"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/geckoterminal/pair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["pair"];
         put?: never;
         post?: never;
         delete?: never;
@@ -435,13 +483,13 @@ export interface paths {
         };
         /**
          * `GET /pools/stats?keys=key1,key2,…`
-         * @description Batched rolling-24h stats for many pools in one request. Used by the
-         *     pools-table page to populate per-row volume / fees / APR without doing
-         *     `N + 1` round-trips. Missing keys are silently dropped from the response
-         *     (they just won't appear in the returned map); the caller treats absence
-         *     as "no stats yet" rather than an error.
-         *
-         *     Cap: hard limit of 100 keys per request to avoid run-away DB load.
+         * @description Return rolling-24h stats for multiple pools in one request. The pools page
+         *     uses this endpoint to avoid `N + 1` requests. The response omits unknown
+         *     keys and keys that fail. Callers treat an absent key as unavailable stats.
+         *     A pool with no indexed square-root price keeps its key and nulls the reserves.
+         *     The endpoint accepts at most 100 unique keys to limit database load.
+         *     At most eight pool calculations run across all requests.
+         *     Each calculation has a 10-second deadline, including capacity wait time.
          */
         get: operations["get_pool_24h_stats_batch"];
         put?: never;
@@ -522,6 +570,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pools/{key}/oracle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_pool_oracle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pools/{key}/rebalance-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_rebalance_state"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pools/{key}/stats": {
         parameters: {
             query?: never;
@@ -570,22 +650,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/positions/{token_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_position"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/protocol/state": {
         parameters: {
             query?: never;
@@ -602,6 +666,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/referral/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["referral_activity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/referral/address-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["referral_record_address_batch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/referral/admin": {
         parameters: {
             query?: never;
@@ -610,6 +706,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["admin_check"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/referral/admin/volume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["referral_admin_volume"];
         put?: never;
         post?: never;
         delete?: never;
@@ -650,14 +762,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/referral/my-codes": {
+    "/referral/my-code": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["my_codes"];
+        get: operations["referral_my_code"];
         put?: never;
         post?: never;
         delete?: never;
@@ -714,6 +826,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/referral/swap-claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["referral_record_swap_claim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/route": {
         parameters: {
             query?: never;
@@ -730,88 +858,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/schema/trading": {
+    "/route/topology": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * GET /schema/trading
-         * @description Returns the full list of on-chain trading, liquidity, and token operations
-         *     with their input signatures. Clients can use this to build transaction
-         *     payloads without hardcoding the Leo function signatures.
-         */
-        get: operations["list_trading_schemas"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/schema/trading/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * GET /schema/trading/{id}
-         * @description Returns the input schema for a single operation (e.g. `swap`, `mint`, `collect`).
-         */
-        get: operations["get_trading_schema"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/swaps": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_swaps"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/swaps/{swap_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_swap"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/tick-spacings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_tick_spacings"];
+        get: operations["route_topology"];
         put?: never;
         post?: never;
         delete?: never;
@@ -828,72 +882,6 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_tokens"];
-        put?: never;
-        post: operations["create_token"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/tokens/deploy": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * POST /tokens/deploy
-         * @description Deploys a fresh self-contained ARC-20 token (the treasury/deployer key is its
-         *     baked-in admin) and mints the initial supply to the creator (`recipient`),
-         *     then registers it (with `amm_token_program`) so it is swap- and airdrop-ready.
-         *
-         *     Deploy + mint are two on-chain txs that take minutes, so this returns
-         *     immediately with `status: "deploying"` and finishes in the background. Poll
-         *     `GET /tokens` for a row whose `amm_token_program` equals the returned
-         *     `program_id` to know it completed.
-         *
-         *     Required env: `DEPLOYER_PRIVATE_KEY` (treasury/admin; `AIRDROP_PRIVATE_KEY`
-         *     honored as fallback), `RPC_URLS`. `leo` must be on the server PATH.
-         */
-        post: operations["deploy_token"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/tokens/mint": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * POST /tokens/mint
-         * @description Admin-mints `amount` (base units) of an existing AMM token to `recipient`.
-         */
-        post: operations["mint_token"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/tokens/{address}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_token"];
         put?: never;
         post?: never;
         delete?: never;
@@ -935,50 +923,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        AccessCodeRow: {
-            code: string;
-            created_at: string;
-            redeemed_at?: string | null;
-            redeemed_by?: string | null;
-        };
-        AccessGenerateRequest: {
-            /** Format: int32 */
-            count: number;
-        };
-        AccessGenerateResponse: {
-            codes: string[];
-        };
-        AccessGenerateResponseDoc: {
-            data: components["schemas"]["AccessGenerateResponse"];
-        };
-        AccessListResponse: {
-            /** Format: int64 */
-            available: number;
-            codes: components["schemas"]["AccessCodeRow"][];
-            /** Format: int64 */
-            redeemed: number;
-            /** Format: int64 */
-            total: number;
-        };
-        AccessListResponseDoc: {
-            data: components["schemas"]["AccessListResponse"];
-        };
-        AccessRedeemRequest: {
-            code: string;
-        };
-        AccessRedeemResponse: {
-            code: string;
-            status: string;
-        };
-        AccessRedeemResponseDoc: {
-            data: components["schemas"]["AccessRedeemResponse"];
-        };
-        AccessStatusResponse: {
-            has_access: boolean;
-        };
-        AccessStatusResponseDoc: {
-            data: components["schemas"]["AccessStatusResponse"];
-        };
         ActiveSessionPayload: {
             current: boolean;
             /** Format: int64 */
@@ -994,6 +938,8 @@ export interface components {
         ActiveSessionsResponseDoc: {
             data: components["schemas"]["ActiveSessionPayload"][];
         };
+        /** @enum {string} */
+        ActivityAction: "create_pool";
         /**
          * @description Status of a background airdrop job. `status` is `"running"` until every token
          *     has resolved, then `"complete"`. `results` grows as each per-token transfer
@@ -1078,16 +1024,32 @@ export interface components {
             revoked_at?: string | null;
             token_prefix: string;
         };
+        Asset: {
+            coinGeckoId?: string | null;
+            /** Format: int32 */
+            decimals: number;
+            id: string;
+            name: string;
+            symbol: string;
+        };
+        AssetResponse: {
+            asset: components["schemas"]["Asset"];
+        };
         AuthTokenPayload: {
             /** Format: int64 */
             expires_at: number;
+            /** Format: int64 */
+            server_time: number;
             token: string;
         };
         AuthTokenResponseDoc: {
             data: components["schemas"]["AuthTokenPayload"];
         };
-        BalanceListResponseDoc: {
-            data: components["schemas"]["TokenBalanceDoc"][];
+        BlockResponse: {
+            /** Format: int64 */
+            blockNumber: number;
+            /** Format: int64 */
+            blockTimestamp: number;
         };
         ChallengePayload: {
             challenge_id: string;
@@ -1100,43 +1062,91 @@ export interface components {
         ChallengeResponseDoc: {
             data: components["schemas"]["ChallengePayload"];
         };
-        CreateTokenRequestDoc: {
-            /** @description Aleo field ID (e.g. `1234567890field`). */
-            address: string;
-            /** @description Program for the token representation used by the AMM; the wrapper program for wrapped assets. */
-            amm_token_program?: string | null;
-            /** Format: int32 */
-            decimals: number;
-            name: string;
-            symbol: string;
-        };
-        DeployTokenRequest: {
-            /** Format: int32 */
-            decimals: number;
-            name: string;
-            /** @description Aleo address (`aleo1...`) of the creator — receives the initial supply. */
-            recipient: string;
-            /** @description Initial supply in whole units (default 1_000_000), minted to `recipient`. */
-            supply?: string | null;
-            symbol: string;
-        };
-        DeployTokenResponseDoc: {
-            data: components["schemas"]["DeployTokenResult"];
-        };
-        DeployTokenResult: {
-            /** @description `<symbol>_<rand>.aleo` — the deployed AMM token program id. */
-            program_id: string;
-            recipient: string;
-            /**
-             * @description Always `"deploying"`. Deploy + initial mint run in the background
-             *     (minutes); poll `GET /tokens` until a token with this `amm_token_program`
-             *     appears to know it finished and was registered.
-             */
-            status: string;
-        };
         ErrorResponseDoc: {
+            code?: string | null;
             error: string;
             ref?: string | null;
+        };
+        EventsResponse: {
+            events: components["schemas"]["SwapEvent"][];
+        };
+        ExplorePoolDoc: {
+            createdAt: string;
+            displayFlipped: boolean;
+            enabled: boolean;
+            feePercent: string;
+            id: string;
+            key: string;
+            price?: string | null;
+            priceChangePct?: string | null;
+            priceUsd?: string | null;
+            token0: string;
+            /** Format: int32 */
+            token0Decimals: number;
+            token0Image?: string | null;
+            token0Name: string;
+            token0Symbol: string;
+            token1: string;
+            /** Format: int32 */
+            token1Decimals: number;
+            token1Image?: string | null;
+            token1Name: string;
+            token1Symbol: string;
+            tvlUsd?: string | null;
+            volumeUsd?: string | null;
+        };
+        ExplorePoolListResponseDoc: {
+            data: components["schemas"]["ExplorePoolDoc"][];
+            pagination: components["schemas"]["PaginationMeta"];
+            valuation?: null | components["schemas"]["UsdcUsdQuote"];
+        };
+        ExploreTokenDetailResponseDoc: {
+            data: components["schemas"]["ExploreTokenDoc"];
+            pools: components["schemas"]["ExplorePoolDoc"][];
+            valuation?: null | components["schemas"]["UsdcUsdQuote"];
+        };
+        ExploreTokenDoc: {
+            address: string;
+            ammTokenProgram?: string | null;
+            /** Format: int32 */
+            decimals: number;
+            id: string;
+            image?: string | null;
+            name: string;
+            /** Format: int64 */
+            poolCount: number;
+            priceChangePct?: string | null;
+            priceUsd?: string | null;
+            symbol: string;
+            tvlUsd?: string | null;
+            volumeUsd?: string | null;
+        };
+        ExploreTokenListResponseDoc: {
+            data: components["schemas"]["ExploreTokenDoc"][];
+            pagination: components["schemas"]["PaginationMeta"];
+            valuation?: null | components["schemas"]["UsdcUsdQuote"];
+        };
+        ExploreTransactionDoc: {
+            amount0: string;
+            amount1: string;
+            executedAt: string;
+            id: string;
+            poolId: string;
+            poolKey: string;
+            token0: string;
+            /** Format: int32 */
+            token0Decimals: number;
+            token0Symbol: string;
+            token1: string;
+            /** Format: int32 */
+            token1Decimals: number;
+            token1Symbol: string;
+            tradeType: string;
+            transactionHash: string;
+        };
+        ExploreTransactionListResponseDoc: {
+            data: components["schemas"]["ExploreTransactionDoc"][];
+            nextCursor?: string | null;
         };
         FeeBinding: {
             /** Format: int32 */
@@ -1162,23 +1172,6 @@ export interface components {
         FeeTierListResponseDoc: {
             data: components["schemas"]["FeeTierDoc"][];
         };
-        /** @description Input schema for one Shield Swap operation. */
-        FunctionSchema: {
-            /** @description One-line human summary. */
-            description: string;
-            /** @description Optional follow-up transactions that must be executed after this one. */
-            follow_up?: string[];
-            /** @description Function name on-chain. */
-            function: string;
-            /** @description Short identifier (`swap`, `mint`, `create_pool`, ...). */
-            id: string;
-            /** @description Ordered list of inputs — index in this array == positional argument index. */
-            inputs: components["schemas"]["SchemaField"][];
-            /** @description Aleo program ID the function lives on (e.g. `shield_swap_v0_0_1.aleo`, `token_registry.aleo`). */
-            program: string;
-            /** @description `public` (clear inputs) or `private` (hidden inputs using records). */
-            visibility: string;
-        };
         GlobalConfigResponseDoc: {
             data: components["schemas"]["GlobalConfigStatus"];
         };
@@ -1191,14 +1184,22 @@ export interface components {
         InitializedTicksResponseDoc: {
             data: number[];
         };
+        LatestBlockResponse: {
+            block: components["schemas"]["BlockResponse"];
+        };
         LiquidityDistributionResponseDoc: {
             data: components["schemas"]["TickLiquidityDoc"][];
         };
         LiveCompatibility: {
             artifacts_checked: number;
+            capabilities?: string[];
             /** Format: date-time */
             checked_at: string;
             failures: components["schemas"]["LiveCompatibilityFailure"][];
+            observed_artifact_vector_hash?: string | null;
+            observed_programs: {
+                [key: string]: components["schemas"]["LiveProgramObservation"];
+            };
             status: components["schemas"]["LiveCompatibilityStatus"];
         };
         LiveCompatibilityFailure: {
@@ -1206,9 +1207,15 @@ export interface components {
             program_id?: string | null;
         };
         /** @enum {string} */
-        LiveCompatibilityFailureCode: "cache_unavailable" | "edition_mismatch" | "edition_unavailable" | "rate_limited" | "rpc_unavailable" | "source_mismatch" | "source_unavailable" | "verification_timeout";
+        LiveCompatibilityFailureCode: "cache_unavailable" | "edition_mismatch" | "edition_unavailable" | "rate_limited" | "rpc_unavailable" | "program_missing" | "source_mismatch" | "source_unavailable" | "verification_timeout";
         /** @enum {string} */
         LiveCompatibilityStatus: "compatible" | "incompatible" | "unavailable";
+        LiveProgramObservation: {
+            /** Format: int32 */
+            edition?: number | null;
+            source_sha256: string;
+            version?: string | null;
+        };
         LogoutAllResponse: {
             address: string;
             ended: boolean;
@@ -1227,21 +1234,6 @@ export interface components {
         };
         LogoutResponseDoc: {
             data: components["schemas"]["LogoutResponse"];
-        };
-        MintTokenRequest: {
-            /** @description Program for the token representation used by the AMM. */
-            amm_token_program: string;
-            /** @description Amount in BASE units (already scaled by 10^decimals), as a string. */
-            amount: string;
-            /** @description Recipient Aleo address (`aleo1...`). */
-            recipient: string;
-        };
-        MintTokenResponseDoc: {
-            data: components["schemas"]["MintTokenResult"];
-        };
-        MintTokenResult: {
-            status: string;
-            tx_id?: string | null;
         };
         OhlcvDoc: {
             /** @description Last raw atomic token1-per-token0 execution price. */
@@ -1270,6 +1262,14 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
+        Pair: {
+            asset0Id: string;
+            asset1Id: string;
+            dexKey: string;
+            /** Format: double */
+            feeBps: number;
+            id: string;
+        };
         PairComplianceResponseDoc: {
             data: components["schemas"]["PairComplianceStatus"];
         };
@@ -1277,6 +1277,9 @@ export interface components {
             paused: boolean;
             token0: string;
             token1: string;
+        };
+        PairResponse: {
+            pair: components["schemas"]["Pair"];
         };
         PendingSwapDoc: {
             is_multi_hop: boolean;
@@ -1315,9 +1318,44 @@ export interface components {
         PoolListResponseDoc: {
             data: components["schemas"]["PoolResponseDoc"][];
             pagination: components["schemas"]["PaginationMeta"];
+            valuation?: null | components["schemas"]["UsdcUsdQuote"];
+        };
+        PoolOracleResponse: {
+            /** Format: int64 */
+            activated_at: number;
+            current_liquidity: string;
+            /** Format: int32 */
+            current_tick: number;
+            /** Format: int64 */
+            end_at: number;
+            /** Format: int32 */
+            epoch: number;
+            /** Format: int64 */
+            evaluated_at: number;
+            harmonic_liquidity: string;
+            /** Format: int64 */
+            last_trade_at?: number | null;
+            /** Format: int32 */
+            mean_tick: number;
+            /** Format: int32 */
+            observed_block: number;
+            /** Format: int64 */
+            oldest_at: number;
+            paused: boolean;
+            /** Format: int64 */
+            start_at: number;
+            tick_variance: string;
+            totals: components["schemas"]["TradingTotalsResponse"];
+            /** Format: int64 */
+            zero_liquidity_seconds: number;
+        };
+        PoolOracleResponseDoc: {
+            data: components["schemas"]["PoolOracleResponse"];
         };
         PoolResponseDoc: components["schemas"]["PoolStateDoc"] & {
             base_token?: null | components["schemas"]["TokenDoc"];
+            /** @description Current fee before Pricing Terms reductions, in basis points. Null if the source is unavailable. */
+            current_fee_percent?: string | null;
             /** @description True when the canonical display orientation is (token1, token0). */
             display_flipped: boolean;
             quote_token?: null | components["schemas"]["TokenDoc"];
@@ -1328,6 +1366,7 @@ export interface components {
             created_at: string;
             creator: string;
             enabled: boolean;
+            /** @description Creation fee in basis points. This value remains part of the pool identity. */
             fee_percent: string;
             id: string;
             init_tx: string;
@@ -1341,7 +1380,9 @@ export interface components {
             };
         };
         PoolStats24hDoc: {
+            /** @description The value compares the earliest execution price with the current spot price. */
             change_24h_pct?: string | null;
+            /** @description The value compares the display open with the current spot price. */
             display_change_24h_pct?: string | null;
             /** @description True when display fields are inverted relative to token0/token1 order. */
             display_flipped: boolean;
@@ -1349,19 +1390,29 @@ export interface components {
             display_high_24h: string;
             display_low_24h: string;
             display_open_24h: string;
-            /** @description Current price in canonical display orientation (quote per base). */
+            /** @description The current spot price uses the canonical display orientation. */
             display_price: string;
-            /** @description Highest raw atomic execution price. */
+            /** @description Net LP fees in raw token0 units. */
+            fee_24h?: string | null;
+            /** @description Net LP fees in raw token0 units for the rolling seven-day window. */
+            fee_7d?: string | null;
+            /** @description The value is the higher of the execution high and the current spot price. */
             high_24h: string;
             liquidity: string;
-            /** @description Lowest raw atomic execution price. */
+            /** @description The value is the lower of the execution low and the current spot price. */
             low_24h: string;
             /** @description Earliest raw atomic execution price. */
             open_24h: string;
+            /** @description The current spot price is token1 per token0 in raw atomic units. */
             price: string;
             price_reversed: string;
+            /** @description Null when the pool slot read fails. Every other field stays valid. */
+            reserve0?: string | null;
+            reserve1?: string | null;
             /** @description Raw token0 units consumed. */
             volume_24h: string;
+            /** @description Raw token0 units consumed in the rolling seven-day window. */
+            volume_7d: string;
         };
         PoolStats24hResponseDoc: {
             data: components["schemas"]["PoolStats24hDoc"];
@@ -1392,8 +1443,22 @@ export interface components {
             amount0: string;
             amount1: string;
             executedAt: string;
+            /** @description Gross token0 swap fee. This value includes `protocol_fee0`. */
+            fee0?: string | null;
+            /** @description Gross token1 swap fee. This value includes `protocol_fee1`. */
+            fee1?: string | null;
             id: string;
+            /** Format: int32 */
+            legIndex: number;
+            liquidityAfter?: string | null;
             pool: string;
+            /** @description Protocol share of `fee0`. */
+            protocolFee0?: string | null;
+            /** @description Protocol share of `fee1`. */
+            protocolFee1?: string | null;
+            sqrtPriceAfter?: string | null;
+            /** Format: int32 */
+            tickAfter?: number | null;
             tradeType: components["schemas"]["PoolTradeTypeDoc"];
             transactionHash: string;
         };
@@ -1407,9 +1472,14 @@ export interface components {
         };
         PoolWithStatsDoc: components["schemas"]["PoolStateDoc"] & {
             base_token?: null | components["schemas"]["TokenDoc"];
+            /** @description Current fee before Pricing Terms reductions, in basis points. Null if the source is unavailable. */
+            current_fee_percent?: string | null;
             /** @description True when the canonical display orientation is (token1, token0). */
             display_flipped: boolean;
             quote_token?: null | components["schemas"]["TokenDoc"];
+            /** @description Null when the pool has no indexed square-root price. */
+            reserve0?: string | null;
+            reserve1?: string | null;
             stats?: null | components["schemas"]["PoolStatsDoc"];
             token0_info?: null | components["schemas"]["TokenDoc"];
             token1_info?: null | components["schemas"]["TokenDoc"];
@@ -1423,8 +1493,8 @@ export interface components {
             created_at: string;
             created_transaction: string;
             created_transaction_hash?: string | null;
-            fee_growth_inside0_last_x_128: string;
-            fee_growth_inside1_last_x_128: string;
+            fee_growth_inside0_last_x_128: string | null;
+            fee_growth_inside1_last_x_128: string | null;
             frozen_at?: string | null;
             id: string;
             is_burned: boolean;
@@ -1446,9 +1516,6 @@ export interface components {
         PositionListResponseDoc: {
             data: components["schemas"]["PositionDoc"][];
             pagination: components["schemas"]["PaginationMeta"];
-        };
-        PositionResponseDoc: {
-            data: components["schemas"]["PositionDoc"];
         };
         PositionWithOwedDoc: {
             frozen_at?: string | null;
@@ -1472,6 +1539,7 @@ export interface components {
             freezelist_proofs: string;
             protocol_config_websocket: boolean;
             token_admin: boolean;
+            twap: boolean;
         };
         ProtocolControls: {
             allowed_tokens: string[];
@@ -1486,6 +1554,7 @@ export interface components {
             abi_version: number;
             /** Format: int64 */
             amm_start_block: number;
+            compatibility_fingerprint: string;
             contract_ref: string;
             contract_repository: string;
             deployment_fingerprint: string;
@@ -1514,6 +1583,7 @@ export interface components {
             /** Format: int64 */
             lag_blocks?: number | null;
             ready_for_entry: boolean;
+            ready_for_quote?: boolean;
             /** Format: date-time */
             updated_at?: string | null;
         };
@@ -1550,11 +1620,113 @@ export interface components {
             /** Format: int64 */
             revision: number;
         };
+        RebalanceState: {
+            fee_growth_global0_x_128: string;
+            fee_growth_global1_x_128: string;
+            lower: components["schemas"]["RebalanceTickState"];
+            /** Format: int32 */
+            observed_block: number;
+            sqrt_price_x_128: string;
+            /** Format: int32 */
+            tick: number;
+            /** Format: int32 */
+            tick_lower_hint: number;
+            /** Format: int32 */
+            tick_spacing: number;
+            /** Format: int32 */
+            tick_upper_hint: number;
+            upper: components["schemas"]["RebalanceTickState"];
+        };
+        RebalanceStateResponseDoc: {
+            data: components["schemas"]["RebalanceState"];
+        };
+        RebalanceTickState: {
+            fee_growth_outside0_x_128: string;
+            fee_growth_outside1_x_128: string;
+            /** Format: int32 */
+            tick: number;
+        };
+        ReferralActivityRequest: {
+            action: components["schemas"]["ActivityAction"];
+            metadata?: unknown;
+            tx_id: string;
+        };
+        ReferralActivityResponse: {
+            recorded: boolean;
+        };
+        ReferralActivityResponseDoc: {
+            data: components["schemas"]["ReferralActivityResponse"];
+        };
+        /**
+         * @description Records unverified links for multiple blinded addresses.
+         *     Authentication does not prove that the caller controls these blinded addresses.
+         */
+        ReferralAddressBatchRequest: {
+            /** @description Blinded addresses for unverified referral links. */
+            blinded_addresses: string[];
+            code: string;
+        };
+        ReferralAddressBatchResponse: {
+            /** Format: int64 */
+            conflict: number;
+            /** Format: int64 */
+            duplicate: number;
+            /** Format: int64 */
+            recorded: number;
+        };
+        ReferralAddressBatchResponseDoc: {
+            data: components["schemas"]["ReferralAddressBatchResponse"];
+        };
         ReferralAdminCheckResponse: {
             is_admin: boolean;
         };
         ReferralAdminResponseDoc: {
             data: components["schemas"]["ReferralAdminCheckResponse"];
+        };
+        /** @description Contains consumed input volume for one token. */
+        ReferralAdminTokenVolume: {
+            /** Format: int64 */
+            swap_count: number;
+            token: string;
+            volume: string;
+        };
+        ReferralAdminVolumeCode: {
+            code: string;
+            issued_to?: string | null;
+            /** Format: int64 */
+            pending_count: number;
+            provisional: components["schemas"]["ReferralAdminTokenVolume"][];
+            /** Format: int64 */
+            provisional_priced_swap_count: number;
+            /** Format: int64 */
+            provisional_swap_count: number;
+            /** Format: int64 */
+            provisional_unpriced_swap_count: number;
+            provisional_usd?: string | null;
+            /** Format: int64 */
+            redemption_count: number;
+            /** Format: int64 */
+            rejected_count: number;
+            verified: components["schemas"]["ReferralAdminTokenVolume"][];
+            /** Format: int64 */
+            verified_priced_swap_count: number;
+            /** Format: int64 */
+            verified_swap_count: number;
+            /** Format: int64 */
+            verified_unpriced_swap_count: number;
+            verified_usd?: string | null;
+        };
+        ReferralAdminVolumeResponse: {
+            /** Format: int64 */
+            attributed_swap_count: number;
+            codes: components["schemas"]["ReferralAdminVolumeCode"][];
+            provisional_usd?: string | null;
+            /** Format: int64 */
+            unpriced_swap_count: number;
+            verified_usd?: string | null;
+        };
+        ReferralAdminVolumeResponseDoc: {
+            data: components["schemas"]["ReferralAdminVolumeResponse"];
         };
         ReferralCodeRow: {
             code: string;
@@ -1562,6 +1734,8 @@ export interface components {
             issued_to?: string | null;
             redeemed_at?: string | null;
             redeemed_by?: string | null;
+            /** Format: int64 */
+            redemption_count: number;
         };
         ReferralGenerateRequest: {
             /** Format: int32 */
@@ -1580,23 +1754,18 @@ export interface components {
             /** Format: int64 */
             redeemed: number;
             /** Format: int64 */
+            redemptions: number;
+            /** Format: int64 */
             total: number;
         };
         ReferralListResponseDoc: {
             data: components["schemas"]["ReferralListResponse"];
         };
-        ReferralMyCodeRow: {
-            code: string;
-            redeemed_at?: string | null;
-            redeemed_by?: string | null;
+        ReferralMyCodeResponse: {
+            code?: string | null;
         };
-        ReferralMyCodesResponse: {
-            codes: components["schemas"]["ReferralMyCodeRow"][];
-            /** Format: int32 */
-            quota: number;
-        };
-        ReferralMyCodesResponseDoc: {
-            data: components["schemas"]["ReferralMyCodesResponse"];
+        ReferralMyCodeResponseDoc: {
+            data: components["schemas"]["ReferralMyCodeResponse"];
         };
         ReferralRedeemRequest: {
             code: string;
@@ -1622,15 +1791,37 @@ export interface components {
         ReferralStatusResponse: {
             code?: string | null;
             has_access: boolean;
+            my_code?: string | null;
+            referred_by?: string | null;
         };
         ReferralStatusResponseDoc: {
             data: components["schemas"]["ReferralStatusResponse"];
+        };
+        /**
+         * @description Records an unverified link between a redeemed referral code and a blinded address.
+         *     Authentication does not prove that the caller controls the blinded address.
+         */
+        ReferralSwapClaimRequest: {
+            /** @description Blinded address for an unverified referral link. */
+            blinded_address: string;
+            code: string;
+        };
+        /** @description Reports whether the database added the unverified link. */
+        ReferralSwapClaimResponse: {
+            recorded: boolean;
+        };
+        ReferralSwapClaimResponseDoc: {
+            data: components["schemas"]["ReferralSwapClaimResponse"];
         };
         ReferralUpdateSettingsRequest: {
             /** Format: int32 */
             codes_per_user: number;
             /** Format: int32 */
             max_users?: number | null;
+        };
+        Reserves: {
+            asset0: string;
+            asset1: string;
         };
         RevokeSessionPayload: {
             current: boolean;
@@ -1655,6 +1846,7 @@ export interface components {
         RouteHopDoc: {
             /** Format: int32 */
             active_tick?: number | null;
+            /** @description Fee in basis points. "2" means 0.02 percent. Divide by 10000 for the fee fraction. */
             fee: string;
             initialized_ticks: number[];
             liquidity?: string | null;
@@ -1671,6 +1863,7 @@ export interface components {
             data: components["schemas"]["RouteResultDoc"];
         };
         RouteResultDoc: {
+            /** @description Estimated output in human token units. With six decimals, "1" means 1000000 base units. */
             estimated_amount_out?: string | null;
             hops: components["schemas"]["RouteHopDoc"][];
             /** Format: int64 */
@@ -1680,21 +1873,16 @@ export interface components {
             token_in: string;
             token_out: string;
         };
-        /** @description Describes a single input field of an on-chain function or struct. */
-        SchemaField: {
-            /** @description Human-readable explanation of the field. */
-            description: string;
-            /** @description For struct-typed inputs, the nested field list. */
-            fields?: components["schemas"]["SchemaField"][] | null;
-            /** @description Parameter/field name as used in the Leo/Aleo program. */
-            name: string;
-            /**
-             * @description Aleo type: `field`, `u128`, `u64`, `u32`, `u16`, `u8`, `i128`, `i32`, `bool`, `address`,
-             *     a struct name (e.g. `SwapRequest`), or `record` for Aleo records.
-             */
-            type: string;
-            /** @description `public` or `private` — controls whether the value is revealed on-chain. */
-            visibility: string;
+        RouteTopologyDoc: {
+            edges: components["schemas"]["TopologyEdgeDoc"][];
+            max_hops: number;
+            /** Format: int64 */
+            protocol_config_observed_block?: number | null;
+            /** Format: int64 */
+            protocol_revision: number;
+        };
+        RouteTopologyResponseDoc: {
+            data: components["schemas"]["RouteTopologyDoc"];
         };
         /**
          * @description Session identity returned on verify/refresh/session. The access + refresh
@@ -1706,6 +1894,8 @@ export interface components {
             csrf_token: string;
             /** Format: int64 */
             expires_at: number;
+            /** Format: int64 */
+            server_time: number;
             /** Format: uuid */
             session_id?: string | null;
             /** Format: int64 */
@@ -1714,54 +1904,33 @@ export interface components {
         SessionResponseDoc: {
             data: components["schemas"]["SessionPayload"];
         };
-        SwapDoc: {
-            amount_remaining: string;
-            claim_tx?: string | null;
-            claimed_at?: string | null;
-            executed_at: string;
-            /** @description Full ordered route for single-hop and multi-hop swaps. */
-            hops: components["schemas"]["SwapHopDoc"][];
-            id: string;
-            input_amount: string;
-            input_token: string;
-            input_token_info?: null | components["schemas"]["TokenDoc"];
-            is_private: boolean;
-            nonce: string;
-            output_amount: string;
-            output_token: string;
-            output_token_info?: null | components["schemas"]["TokenDoc"];
-            /** @description First-hop pool retained for compatibility; use `hops` for the full route. */
-            pool: string;
-            recipient: string;
-            swap_id: string;
-            /** @description Pool analytics trade; absent when a route lacks authoritative per-hop amounts. */
-            trade?: string | null;
-            transaction: string;
-            user: string;
+        SwapEvent: {
+            asset0In?: string | null;
+            asset0Out?: string | null;
+            asset1In?: string | null;
+            asset1Out?: string | null;
+            block: components["schemas"]["BlockResponse"];
+            /** Format: int32 */
+            eventIndex: number;
+            eventType: string;
+            maker: string;
+            metadata: components["schemas"]["SwapMetadata"];
+            pairId: string;
+            priceNative: string;
+            reserves: components["schemas"]["Reserves"];
+            txnId: string;
+            /** Format: int32 */
+            txnIndex: number;
         };
-        SwapHopDoc: {
-            pool: string;
-            zero_for_one: boolean;
-        };
-        SwapListResponseDoc: {
-            data: components["schemas"]["SwapDoc"][];
-            pagination: components["schemas"]["PaginationMeta"];
-        };
-        SwapResponseDoc: {
-            data: components["schemas"]["SwapDoc"];
+        SwapMetadata: {
+            fees0In?: string | null;
+            fees1In?: string | null;
         };
         TickLiquidityDoc: {
             liquidity_net: string;
+            mapping_key: string;
             /** Format: int32 */
             tick: number;
-        };
-        TickSpacingDoc: {
-            id: string;
-            /** Format: int32 */
-            tick_spacing: number;
-        };
-        TickSpacingListResponseDoc: {
-            data: components["schemas"]["TickSpacingDoc"][];
         };
         TickStatusDoc: {
             exists: boolean;
@@ -1769,16 +1938,6 @@ export interface components {
             /** Format: int32 */
             tick: number;
             tick_mapping_key: string;
-        };
-        TokenBalanceDoc: {
-            /** @description Base-unit balance (no decimals applied). */
-            balance: string;
-            /** Format: int32 */
-            decimals: number;
-            name: string;
-            symbol: string;
-            token_address: string;
-            token_id: string;
         };
         TokenComplianceResponseDoc: {
             data: components["schemas"]["TokenComplianceStatus"];
@@ -1804,14 +1963,18 @@ export interface components {
         TokenListResponseDoc: {
             data: components["schemas"]["TokenDoc"][];
         };
-        TokenResponseDoc: {
-            data: components["schemas"]["TokenDoc"];
+        TopologyEdgeDoc: {
+            token0: string;
+            token1: string;
         };
-        TradingSchemaListResponse: {
-            data: components["schemas"]["FunctionSchema"][];
-        };
-        TradingSchemaResponse: {
-            data: components["schemas"]["FunctionSchema"];
+        TradingTotalsResponse: {
+            lp_fees0: string;
+            lp_fees1: string;
+            protocol_fees0: string;
+            protocol_fees1: string;
+            swaps: string;
+            volume0: string;
+            volume1: string;
         };
         UnclaimedPayloadDoc: {
             pending_swaps: components["schemas"]["PendingSwapDoc"][];
@@ -1819,6 +1982,19 @@ export interface components {
         };
         UnclaimedResponseDoc: {
             data: components["schemas"]["UnclaimedPayloadDoc"];
+        };
+        UsdcUsdQuote: {
+            corroborated: boolean;
+            /** Format: int32 */
+            decimals: number;
+            price: string;
+            /** Format: int64 */
+            publishTime: number;
+            /** Format: int64 */
+            serverTime: number;
+            source: string;
+            /** Format: int64 */
+            validUntil: number;
         };
         VerifyRequestDoc: {
             address: string;
@@ -1834,270 +2010,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    access_list_codes: {
-        parameters: {
-            query?: {
-                /** @description Page size (1-2000) */
-                limit?: number;
-                /** @description Page offset */
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Access-code inventory */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AccessListResponseDoc"];
-                };
-            };
-            /** @description Invalid query parameters */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Administrator authorization required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Internal error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-        };
-    };
-    access_generate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AccessGenerateRequest"];
-            };
-        };
-        responses: {
-            /** @description Generated access codes */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AccessGenerateResponseDoc"];
-                };
-            };
-            /** @description Malformed JSON request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Administrator authorization required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Request body too large */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Content-Type must be application/json */
-            415: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Request body does not match schema */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Internal error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-        };
-    };
-    access_redeem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AccessRedeemRequest"];
-            };
-        };
-        responses: {
-            /** @description Access code redeemed */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AccessRedeemResponseDoc"];
-                };
-            };
-            /** @description Invalid or already-used code */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Request body too large */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Content-Type must be application/json */
-            415: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Request body does not match schema */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Internal error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-        };
-    };
-    access_status: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Wallet access status */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AccessStatusResponseDoc"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Internal error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-        };
-    };
     admin_revoke_sessions: {
         parameters: {
             query?: never;
@@ -3099,6 +3011,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
+            /** @description Terms acceptance required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
             /** @description Credential identity changed */
             409: {
                 headers: {
@@ -3128,44 +3049,6 @@ export interface operations {
             };
             /** @description Session revocation state unavailable */
             503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-        };
-    };
-    list_balances: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Per-token on-chain authorized balances */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BalanceListResponseDoc"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Internal database or RPC error */
-            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3313,6 +3196,212 @@ export interface operations {
             };
         };
     };
+    explore_list_pools: {
+        parameters: {
+            query?: {
+                /** @description Metric window: 1h, 1d, 1w, or 1m */
+                window?: string;
+                /** @description Sort field */
+                sort?: string;
+                /** @description Sort order: asc or desc */
+                order?: string;
+                /** @description Page size (1-100) */
+                limit?: number;
+                /** @description Page offset */
+                offset?: number;
+                /** @description Symbol, name, token address, or pool key */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated pool market rows */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExplorePoolListResponseDoc"];
+                };
+            };
+            /** @description Invalid query parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    explore_list_tokens: {
+        parameters: {
+            query?: {
+                /** @description Metric window: 1h, 1d, 1w, or 1m */
+                window?: string;
+                /** @description Sort field */
+                sort?: string;
+                /** @description Sort order: asc or desc */
+                order?: string;
+                /** @description Page size (1-100) */
+                limit?: number;
+                /** @description Page offset */
+                offset?: number;
+                /** @description Symbol, name, or token address */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated token market rows */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExploreTokenListResponseDoc"];
+                };
+            };
+            /** @description Invalid query parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    explore_get_token: {
+        parameters: {
+            query?: {
+                /** @description Metric window: 1h, 1d, 1w, or 1m */
+                window?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Indexed token address */
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Token market detail and its pools */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExploreTokenDetailResponseDoc"];
+                };
+            };
+            /** @description Invalid query parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Token not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    explore_list_transactions: {
+        parameters: {
+            query?: {
+                /** @description Feed window: 1h, 1d, 1w, or 1m */
+                window?: string;
+                /** @description Transaction type: swap, mint, or burn */
+                type?: string;
+                /** @description Token symbol, name, or address */
+                token?: string;
+                /** @description Pool key */
+                pool?: string;
+                /** @description Cursor from the prior response */
+                cursor?: string;
+                /** @description Page size (1-100) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Market transaction feed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExploreTransactionListResponseDoc"];
+                };
+            };
+            /** @description Invalid query parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
     list_fee_tiers: {
         parameters: {
             query?: never;
@@ -3342,6 +3431,246 @@ export interface operations {
             };
         };
     };
+    asset: {
+        parameters: {
+            query: {
+                id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Asset metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetResponse"];
+                };
+            };
+            /** @description The query is invalid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description The asset is unknown */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description The request limit is reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description The database request failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description The full history or request capacity is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    events: {
+        parameters: {
+            query: {
+                fromBlock: number;
+                toBlock: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered swap events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventsResponse"];
+                };
+            };
+            /** @description The block range is invalid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description The request limit is reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description The database request failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description The full history or request capacity is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    latest_block: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The latest complete block */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LatestBlockResponse"];
+                };
+            };
+            /** @description The request limit is reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description The database request failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description The full history or request capacity is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    pair: {
+        parameters: {
+            query: {
+                id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pair metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairResponse"];
+                };
+            };
+            /** @description The query is invalid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description The pair is unknown */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description The request limit is reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description The database request failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description The full history or request capacity is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
     list_pools: {
         parameters: {
             query?: {
@@ -3349,6 +3678,8 @@ export interface operations {
                 limit?: number;
                 /** @description Page offset */
                 offset?: number;
+                /** @description Include the server USDC/USD valuation */
+                include_valuation?: boolean;
             };
             header?: never;
             path?: never;
@@ -3397,7 +3728,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Map of pool key → 24h stats; failed or unknown keys may be omitted */
+            /** @description Map of pool key to 24h stats; failed or unknown keys can be absent */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3590,6 +3921,129 @@ export interface operations {
             };
         };
     };
+    get_pool_oracle: {
+        parameters: {
+            query?: {
+                /** @description Oracle window in seconds */
+                window_seconds?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Pool key */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Indexed pool oracle snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PoolOracleResponseDoc"];
+                };
+            };
+            /** @description Invalid pool or window */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Pool not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Oracle history unavailable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description TWAP not deployed or source unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    get_rebalance_state: {
+        parameters: {
+            query: {
+                /** @description Current lower tick */
+                tick_lower: number;
+                /** @description Current upper tick */
+                tick_upper: number;
+                /** @description Current position liquidity */
+                old_liquidity: string;
+                /** @description New lower tick */
+                mint_tick_lower: number;
+                /** @description New upper tick */
+                mint_tick_upper: number;
+            };
+            header?: never;
+            path: {
+                /** @description Pool key */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Consistent pool state and mint hints */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RebalanceStateResponseDoc"];
+                };
+            };
+            /** @description Invalid position or tick range */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Pool not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Rebalance state is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
     get_pool_24h_stats: {
         parameters: {
             query?: never;
@@ -3602,7 +4056,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Rolling 24h price/volume summary */
+            /** @description Rolling pool price and volume summary */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3740,56 +4194,6 @@ export interface operations {
             };
         };
     };
-    get_position: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description On-chain position NFT token_id */
-                token_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Position details */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PositionResponseDoc"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Position not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Internal error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-        };
-    };
     get_protocol_state: {
         parameters: {
             query?: never;
@@ -3837,6 +4241,216 @@ export interface operations {
             };
         };
     };
+    referral_activity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralActivityRequest"];
+            };
+        };
+        responses: {
+            /** @description Bound wallet activity claim result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralActivityResponseDoc"];
+                };
+            };
+            /** @description Invalid tx_id or metadata */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Terms acceptance required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Content-Type must be application/json */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body does not match schema */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Activity capacity unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    referral_record_address_batch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralAddressBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Unverified referral address batch result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralAddressBatchResponseDoc"];
+                };
+            };
+            /** @description Invalid address batch */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Terms acceptance required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Content-Type must be application/json */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body does not match schema */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request state unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
     admin_check: {
         parameters: {
             query?: never;
@@ -3864,8 +4478,55 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
-            /** @description Invite access required */
+            /** @description Terms acceptance required */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    referral_admin_volume: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All-time referral input volume by code and token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralAdminVolumeResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Administrator authorization required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4023,7 +4684,7 @@ export interface operations {
             };
         };
     };
-    my_codes: {
+    referral_my_code: {
         parameters: {
             query?: never;
             header?: never;
@@ -4032,13 +4693,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Codes issued to the wallet */
+            /** @description The wallet's own shareable referral code */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReferralMyCodesResponseDoc"];
+                    "application/json": components["schemas"]["ReferralMyCodeResponseDoc"];
                 };
             };
             /** @description Authentication required */
@@ -4050,7 +4711,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
-            /** @description Invite access required */
+            /** @description Terms acceptance required */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4329,6 +4990,111 @@ export interface operations {
             };
         };
     };
+    referral_record_swap_claim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralSwapClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description Unverified referral swap claim result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralSwapClaimResponseDoc"];
+                };
+            };
+            /** @description Invalid swap claim */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Terms acceptance required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Content-Type must be application/json */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request body does not match schema */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Request state unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
     find_route: {
         parameters: {
             query: {
@@ -4336,8 +5102,10 @@ export interface operations {
                 token_in: string;
                 /** @description Output token ID */
                 token_out: string;
-                /** @description Optional positive canonical decimal amount for output estimation */
+                /** @description Optional positive amount in human token units. For a token with 6 decimals, 1 means 1000000 base units. */
                 amount_in?: string;
+                /** @description Optional pool key. The route uses only this pool, as a single hop, with no fallback. */
+                pool_key?: string;
             };
             header?: never;
             path?: never;
@@ -4383,7 +5151,7 @@ export interface operations {
             };
         };
     };
-    list_trading_schemas: {
+    route_topology: {
         parameters: {
             query?: never;
             header?: never;
@@ -4392,182 +5160,17 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of all on-chain operation schemas */
+            /** @description All routable pool edges */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TradingSchemaListResponse"];
+                    "application/json": components["schemas"]["RouteTopologyResponseDoc"];
                 };
             };
-        };
-    };
-    get_trading_schema: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Operation ID (swap, mint, create_pool, burn, collect, decrease_liquidity, swap_multi_hop, claim_swap_output, register_token, mint_public, mint_private, transfer_public_to_private, add_fee_tier, add_tick_spacing, bind_fee_to_tick_spacing, set_pool_enabled) */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Schema for the requested operation */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TradingSchemaResponse"];
-                };
-            };
-            /** @description Unknown operation ID */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-        };
-    };
-    list_swaps: {
-        parameters: {
-            query?: {
-                /** @description Page size (1-100) */
-                limit?: number;
-                /** @description Page offset */
-                offset?: number;
-                /** @description Filter by any pool in the route */
-                pool?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Paginated swap history */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SwapListResponseDoc"];
-                };
-            };
-            /** @description Invalid query parameters */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Pool filter not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Internal error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-        };
-    };
-    get_swap: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description On-chain swap ID */
-                swap_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Swap details */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SwapResponseDoc"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Swap not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Internal error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-        };
-    };
-    list_tick_spacings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Registered tick spacings */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TickSpacingListResponseDoc"];
-                };
-            };
-            /** @description Internal error */
-            500: {
+            /** @description The live deployment is incompatible or routing dependencies are unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4593,308 +5196,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TokenListResponseDoc"];
-                };
-            };
-            /** @description Internal error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-        };
-    };
-    create_token: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateTokenRequestDoc"];
-            };
-        };
-        responses: {
-            /** @description Token stored */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenResponseDoc"];
-                };
-            };
-            /** @description Invalid token decimals or request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Administrator authorization required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Administrator authorization required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Request body too large */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Content-Type must be application/json */
-            415: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Request body does not match schema */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Internal error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-        };
-    };
-    deploy_token: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeployTokenRequest"];
-            };
-        };
-        responses: {
-            /** @description Deploy started */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeployTokenResponseDoc"];
-                };
-            };
-            /** @description Bad request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Administrator authorization required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Request body too large */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Content-Type must be application/json */
-            415: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Request body does not match schema */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Misconfigured server */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-        };
-    };
-    mint_token: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MintTokenRequest"];
-            };
-        };
-        responses: {
-            /** @description Mint broadcast */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MintTokenResponseDoc"];
-                };
-            };
-            /** @description Bad request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Administrator authorization required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Request body too large */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Content-Type must be application/json */
-            415: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Request body does not match schema */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-            /** @description Misconfigured server */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
-                };
-            };
-        };
-    };
-    get_token: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Token address (Aleo field ID) */
-                address: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Token details */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenResponseDoc"];
-                };
-            };
-            /** @description Token not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponseDoc"];
                 };
             };
             /** @description Internal error */

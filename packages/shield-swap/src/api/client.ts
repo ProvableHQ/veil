@@ -45,7 +45,9 @@ export const DEFAULT_API_URL = SHIELD_SWAP_API_URLS.testnet
 /**
  * Options for {@link ApiClient}.
  *
- * @property baseUrl DEX API origin. Defaults to the Provable dev API.
+ * @property baseUrl DEX API origin, or a function that resolves it per
+ *   request. Defaults to the testnet Shield Swap host; `shieldSwapActions`
+ *   derives it from the client's network via {@link defaultApiUrl}.
  * @property fetch Custom fetch implementation (tests, polyfills). Defaults
  *   to the global fetch.
  * @property apiToken Long-lived API token (`ss_…`) minted via
@@ -523,6 +525,8 @@ export class ApiClient {
    *
    * Asynchronous on the server: returns a `job_id` to poll with
    * {@link getAirdropStatus}. Used by the e2e to fund fresh accounts.
+   *
+   * Testnet only: the mainnet API does not serve `/airdrop` and answers 404.
    */
   async airdrop(address: string): Promise<Schemas['AirdropStartResult']> {
     const res = await this.request<{ data: Schemas['AirdropStartResult'] }>('POST', '/airdrop', {
@@ -532,7 +536,12 @@ export class ApiClient {
     return res.data
   }
 
-  /** Polls a faucet job until its per-token transfers complete. */
+  /**
+   * Polls a faucet job until its per-token transfers complete.
+   *
+   * Testnet only: the mainnet API does not serve `/airdrop/{job_id}` and
+   * answers 404.
+   */
   async getAirdropStatus(jobId: string): Promise<Schemas['AirdropJob']> {
     const res = await this.request<{ data: Schemas['AirdropJob'] }>(
       'GET',
@@ -542,7 +551,11 @@ export class ApiClient {
     return res.data
   }
 
-  /** Raw on-chain pool introspection (slot + tick statuses) via the API. */
+  /**
+   * Raw on-chain pool introspection (slot + tick statuses) via the API.
+   *
+   * Testnet only: the mainnet API does not serve `/debug/pool` and answers 404.
+   */
   async debugPool(query: { pool_key: string; ticks?: string }): Promise<Schemas['PoolDebugResponseDoc']> {
     return this.request('GET', '/debug/pool', { query, auth: true })
   }
