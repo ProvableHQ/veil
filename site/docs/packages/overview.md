@@ -20,7 +20,7 @@ top of it.
 | [`@provablehq/veil-codegen`](./codegen) | Generates typed TypeScript bindings from an Aleo program ABI (library and `veil-codegen` CLI). |
 | [`@provablehq/veil-aleo-devnode`](./devnode) | Starts and drives a local Aleo devnode process for integration tests. |
 | [`@provablehq/veil-leo`](./leo) | Typed wrapper around the `leo` CLI — build, deploy, run, synthesize. |
-| [`@provablehq/aleo-bridge-sdk`](./bridge) | Cross-chain bridge client (preview, versioned separately from the Veil packages). |
+| [`@provablehq/aleo-bridge-sdk`](./bridge) | Cross-chain bridge client (preview; its API may break between minor releases). |
 
 ## Choosing packages
 

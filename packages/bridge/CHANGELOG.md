@@ -1,5 +1,17 @@
 # @provablehq/aleo-bridge-sdk
 
+## 0.11.0
+
+The package now versions in lockstep with the `@provablehq/veil-*` packages
+and `@provablehq/shield-swap-sdk`: it jumps from 0.1.1 to 0.11.0 to match
+them, and every later release carries the same number across the whole set.
+It remains a preview, and its API is still subject to breaking changes
+between minor releases.
+
+### Patch Changes
+
+- @provablehq/veil-core@0.11.0
+
 ## 0.1.1
 
 ### Patch Changes

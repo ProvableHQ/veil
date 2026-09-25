@@ -1061,7 +1061,6 @@ VEIL_E2E_PRIVATE_KEY=...    # testnet account — signs DEX API auth; write tier
 | [`reads.integration.test.ts`](./test/integration/reads.integration.test.ts) | read-only | Chain-direct reads (pools, slots, fee tiers, validation) against live state. |
 | [`api.integration.test.ts`](./test/integration/api.integration.test.ts) | read-only | The off-chain `ApiClient` — the public surface credential-less, then with `VEIL_E2E_PRIVATE_KEY` both auth flows end-to-end: the session handshake over the gated reads (routes, balances, OHLCV, fee tiers), auto re-auth after expiry, and the API-token lifecycle (mint, use, list, revoke — self-cleaning). |
 | [`balances.integration.test.ts`](./test/integration/balances.integration.test.ts) | write | The composed balance view — public balances from the API joined with private balances decoded from the account's records. Needs the account because private balances live in its records. |
-| [`poolCreation.integration.test.ts`](./test/integration/poolCreation.integration.test.ts) | write | Creates a pool on testnet: finds a token pair and a registered fee tier, calls `createPool`, then polls `isPoolInitialized` until the finalize propagates. If the pair already has a pool at every tier tried, it confirms the contract rejects the duplicate instead. |
 | [`e2e.test.ts`](./test/integration/e2e.test.ts) | write | The full private-swap lifecycle — airdrop, privatize records, ensure a pool, `swap`, read the output, `claimSwapOutput`. |
 
 Run one file, or a set:
@@ -1071,7 +1070,7 @@ Run one file, or a set:
 VEIL_INTEGRATION=1 pnpm exec vitest run packages/shield-swap/test/integration/traders.integration.test.ts
 
 # Write tier — needs the funded account + proving credentials above
-VEIL_INTEGRATION=1 pnpm exec vitest run packages/shield-swap/test/integration/poolCreation.integration.test.ts
+VEIL_INTEGRATION=1 pnpm exec vitest run packages/shield-swap/test/integration/e2e.test.ts
 
 # The whole integration suite
 VEIL_INTEGRATION=1 pnpm exec vitest run packages/shield-swap/test/integration

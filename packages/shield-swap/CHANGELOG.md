@@ -1,5 +1,17 @@
 # @provablehq/shield-swap-sdk
 
+## 0.11.0
+
+### Minor Changes
+
+- 8b97f14: Add `ApiClient.confirmAirdrop(address, options?)`, which requests a testnet faucet drop and polls the job until it settles. It returns `{ status: 'settled', job }` with the per-token results, or `{ status: 'rate_limited', message }` when the faucet refuses the address for its per-address window, so a caller holding funds from an earlier drop can carry on without catching a 429. Other API errors propagate, and a job still running at `timeoutMs` (default ten minutes) throws with its progress. The `ConfirmAirdropResult` type is exported.
+
+### Patch Changes
+
+- 43cd709: `getOwnedPositions` no longer opens every position's mapping reads at once. It resolves positions through a bounded worker pool (`concurrency`, default 8, so at most about 32 reads in flight) and retries a read the gateway refused with a 429 or 5xx or dropped with a connection reset, backing off from 250 ms over four attempts. An account holding ~60 positions previously fanned out ~230 concurrent requests and failed the whole call on a single `ECONNRESET`. `getOwnedPosition` shares the retry. The retry and pool helpers move to a shared module also used by `reconcileSwapHistory`, whose retry now covers connection-level failures as well as busy responses.
+- 8b97f14: Refresh the pinned Shield Swap DEX API OpenAPI spec and the generated types from the live `api.testnet.swap.shield.fi` host. The retired invite-code (`/access/*`), `/balances`, `/swaps`, `/tick-spacings`, trading-schema, and token-management routes drop out of the spec; the explore, GeckoTerminal, pool oracle and rebalance-state, route-topology, and referral activity routes join it. Every endpoint the client calls is unchanged. `pnpm regen-openapi` now fetches from the Shield.fi hosts instead of the dead `amm-api.dev.provable.com`, verifies the mainnet spec is a subset of the testnet one, and lists the routes only testnet serves; `airdrop`, `getAirdropStatus`, and `debugPool` are documented as testnet only.
+  - @provablehq/veil-core@0.11.0
+
 ## 0.10.1
 
 ### Patch Changes
