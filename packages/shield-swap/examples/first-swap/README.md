@@ -40,6 +40,8 @@ control. The example adds no other local storage.
 
 ## Completion and recovery
 
+`waitForConfirmation` waits for the swap transaction to succeed before the
+example submits one claim. Rejection or timeout stops the run before claiming.
 A successful run ends after the claim confirms. `handle.transactionId` identifies
 the swap; `claim.transactionId` and `claim.amountOut` identify the claim and its
 output. The script does not log these values or write a separate result file.

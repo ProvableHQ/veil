@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@provablehq/shield-swap-sdk": "0.11.0",
-    "@provablehq/veil-aleo-sdk": "0.11.0"
+    "@provablehq/veil-aleo-sdk": "0.11.0",
+    "@provablehq/veil-core": "0.11.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

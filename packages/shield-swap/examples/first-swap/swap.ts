@@ -1,7 +1,8 @@
 /** Create and fund a testnet account, swap 1.5 USDCx for ETH, and claim the output. */
 import { writeFile } from 'node:fs/promises'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
-import { parseUnits, shieldSwapActions, SwapOutputNotFinalizedError } from '@provablehq/shield-swap-sdk'
+import { waitForConfirmation } from '@provablehq/veil-core'
+import { parseUnits, shieldSwapActions } from '@provablehq/shield-swap-sdk'
 import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
 
 // Create an account or use an existing key. Retain a generated key for recovery.
@@ -45,14 +46,7 @@ const handle = plan.multiHop
   ? await client.swapMultiHop({ ...parameters, poolKeys: plan.poolKeys })
   : await client.swap({ ...parameters, poolKey: plan.poolKeys[0]! })
 
-// Claim the output. Retry only while it is not yet readable on chain.
-for (let attempt = 0; attempt < 40; attempt++) {
-  try {
-    const claim = await client.claimSwapOutput({ handle, imports: plan.imports })
-    if (claim.amountOut <= 0n) throw new Error('The claim returned no ETH')
-    break
-  } catch (error) {
-    if (!(error instanceof SwapOutputNotFinalizedError) || attempt === 39) throw error
-    await new Promise((resolve) => setTimeout(resolve, 15_000))
-  }
-}
+// Wait for the swap to succeed, then submit the claim once.
+await waitForConfirmation(client, handle.transactionId)
+const claim = await client.claimSwapOutput({ handle, imports: plan.imports })
+if (claim.amountOut <= 0n) throw new Error('The claim returned no ETH')
