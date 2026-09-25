@@ -8,8 +8,9 @@ const [archive] = JSON.parse(execFileSync('npm', [
 ], { cwd: packageDirectory, encoding: 'utf8' }))
 const files = archive.files.map(({ path }) => path)
 const example = 'examples/first-swap/'
-for (const name of ['README.md', 'package.json', 'package-lock.json', 'swap.ts', 'state.ts', 'state.test.ts', 'tsconfig.json']) {
+for (const name of ['README.md', 'package.json', 'package-lock.json', 'swap.ts', 'tsconfig.json']) {
   assert.ok(files.includes(`${example}${name}`), `Missing packaged example file: ${name}`)
 }
 assert.ok(!files.some((path) => /(?:^|\/)\.state(?:\/|$)/.test(path)), 'Account state must not be packaged')
 assert.ok(!files.some((path) => /(?:^|\/)node_modules(?:\/|$)/.test(path)), 'Example dependencies must not be packaged')
+assert.ok(!files.some((path) => /(?:^|\/)(private-key\.txt|aleo[^/]*\.json)$/.test(path)), 'Keys and identity stores must not be packaged')

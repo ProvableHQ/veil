@@ -50,8 +50,8 @@ covering setup, pool and balance reads, swaps, and liquidity.
 Run the [first-swap example](./examples/first-swap) to create an account,
 request test tokens, swap USDCx for ETH, and claim the output. The complete
 project lives at `packages/shield-swap/examples/first-swap`; it installs
-published packages with `npm ci` and runs with `npm start`. It includes
-account storage and a claim-only recovery command. SDK releases also include
+published packages with `npm ci` and runs with `npm start`. It calls the SDK directly and uses its file-backed identity store
+for claim recovery. SDK releases also include
 the example under `node_modules/@provablehq/shield-swap-sdk/examples/first-swap`;
 copy that directory outside `node_modules` before running it.
 

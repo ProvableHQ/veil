@@ -29,7 +29,6 @@ jobs:
           cache-dependency-path: packages/shield-swap/examples/first-swap/package-lock.json
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
       - name: Verify examples in the npm package
         working-directory: .
         run: node .github/scripts/check-first-swap-package.mjs
