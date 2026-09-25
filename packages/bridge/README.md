@@ -225,7 +225,10 @@ const quote = await bridge.quote({
 The store records the counter, derived scalar, recipient, and public commitment
 before the quote returns. The default in-memory store serializes concurrent
 deposits but does not survive a restart. Treat a durable store like a view key:
-its scalars can link and authorize the corresponding private mints.
+its scalars can link and authorize the corresponding private mints. The supplied
+Node file store uses atomic `0600` replacements and locks reservations across
+processes sharing the same path. Custom stores shared by multiple workers should
+implement `runExclusive` with a transaction or distributed lock.
 
 ### 2. Authorize the source transfer
 
