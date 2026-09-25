@@ -1,0 +1,21 @@
+{
+  "name": "shield-first-swap-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --import tsx swap.ts",
+    "claim": "node --import tsx swap.ts --claim",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test state.test.ts"
+  },
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "@provablehq/shield-swap-sdk": "0.11.0",
+    "@provablehq/veil-aleo-sdk": "0.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.3"
+  }
+}

@@ -69,3 +69,12 @@ depth in the trading runbooks:
    the closest example as a starting point.
 4. Wire their client choice from the table above; keep the caveat list
    as a review checklist for their integration.
+
+## Run a complete first swap
+
+The standalone project at
+[`packages/shield-swap/examples/first-swap`](https://github.com/ProvableHQ/veil/tree/main/packages/shield-swap/examples/first-swap)
+creates and funds a testnet account, swaps USDCx for ETH, and claims the
+output. Run `npm ci` and `npm start` from that directory. Its README covers
+an existing account through `SHIELD_SWAP_PRIVATE_KEY`, persisted state,
+and claim-only recovery. No Veil workspace build is required.

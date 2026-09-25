@@ -41,7 +41,8 @@
   },
   "files": [
     "dist",
-    "skills/*.md"
+    "skills/*.md",
+    "examples/first-swap"
   ],
   "engines": {
     "node": ">=18"
