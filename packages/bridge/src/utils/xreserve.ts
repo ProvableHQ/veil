@@ -17,6 +17,9 @@ import type { AleoMintMode, BridgeEnvironment } from '../types/protocol.js'
 const HOOK_DATA_BYTES = 65
 const BECH32_ALPHABET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
 
+/** Field equivalent to `Identifier("shielded_usdcx")`. */
+export const SHIELDED_USDCX_DOMAIN = '2441763828608840563966202633349235field'
+
 function bech32Polymod(values: readonly number[]): number {
   const generators = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3]
   let checksum = 1
@@ -144,6 +147,142 @@ export async function aleoProgramAddress(programId: string, environment: BridgeE
 }
 
 /**
+ * Converts an Aleo view key into the scalar consumed by private-mint derivation.
+ *
+ * @param viewKey Account view key retained by the local signer.
+ * @param environment Consensus environment used to load the matching SDK.
+ * @returns The canonical Aleo scalar literal.
+ * @throws BridgeError When the SDK is unavailable or the view key is invalid.
+ */
+export async function xReserveViewKeyToScalar(
+  viewKey: string,
+  environment: BridgeEnvironment,
+): Promise<string> {
+  const sdk = await loadAleoSdk(environment)
+  try {
+    return sdk.ViewKey.from_string(viewKey).to_scalar().toString()
+  } catch (cause) {
+    throw new BridgeError('Invalid Aleo view key for private xReserve mint derivation', { cause })
+  }
+}
+
+/**
+ * Derives the secret scalar for one shielded USDCx deposit identity.
+ *
+ * This is the local-key counterpart of the Shield implementation:
+ * `Poseidon8::hash_to_scalar([program, domain, view_key, counter])`.
+ * The view key and resulting scalar never leave the caller's process.
+ *
+ * @param viewKeyScalar Account view key serialized as an Aleo scalar literal.
+ * @param counter Monotonic unsigned 32-bit identity counter.
+ * @param environment Consensus environment used to load the matching SDK.
+ * @param program Wrapper program whose address scopes the derivation.
+ * @returns The derived Aleo scalar literal.
+ * @throws BridgeError When an input is invalid or the optional SDK is unavailable.
+ */
+export async function deriveXReservePrivateMintSecretNonce(
+  viewKeyScalar: string,
+  counter: number,
+  environment: BridgeEnvironment,
+  program = 'shielded_usdcx_wrapper.aleo',
+): Promise<string> {
+  if (!Number.isSafeInteger(counter) || counter < 0 || counter > 0xffffffff) {
+    throw new BridgeError('Private mint identity counter must be an unsigned 32-bit integer')
+  }
+  const sdk = await loadAleoSdk(environment)
+  try {
+    const programAddress = sdk.Address.fromProgramId(program).to_string()
+    const programField = sdk.Address.from_string(programAddress).toGroup().toXCoordinate()
+    const viewKeyField = sdk.Scalar.fromString(viewKeyScalar).toField()
+    const counterField = sdk.U32.fromString(`${counter}u32`).toField()
+    const derived = new sdk.Poseidon8().hashToScalar([
+      programField,
+      sdk.Field.fromString(SHIELDED_USDCX_DOMAIN),
+      viewKeyField,
+      counterField,
+    ])
+    return derived.toString()
+  } catch (cause) {
+    throw new BridgeError('Could not derive the private xReserve mint scalar', { cause })
+  }
+}
+
+/**
+ * Commits an Aleo recipient to a private-mint scalar using BHP256.
+ *
+ * @param recipient Aleo address that will own the minted private record.
+ * @param secretNonce Aleo scalar produced for this identity.
+ * @param environment Consensus environment used to load the matching SDK.
+ * @returns Canonical 32-byte little-endian commitment as lowercase hex without a prefix.
+ * @throws BridgeError When an input is invalid or the optional SDK is unavailable.
+ */
+export async function deriveXReservePrivateMintAddressCommitment(
+  recipient: string,
+  secretNonce: string,
+  environment: BridgeEnvironment,
+): Promise<string> {
+  const sdk = await loadAleoSdk(environment)
+  try {
+    const bits = sdk.Plaintext.fromString(recipient).toBitsLe()
+    const scalar = sdk.Scalar.fromString(secretNonce)
+    const committed = new sdk.BHP256().commit(bits, scalar)
+    const field = typeof committed === 'string' ? sdk.Field.fromString(committed) : committed
+    const bytes = field.toBytesLe()
+    if (bytes.length !== 32) throw new Error('commitment did not contain 32 bytes')
+    return toHex(bytes).slice(2)
+  } catch (cause) {
+    throw new BridgeError('Could not derive the private xReserve address commitment', { cause })
+  }
+}
+
+/**
+ * Encodes a shielded USDCx address commitment as xReserve hook data.
+ *
+ * The commitment must be the canonical lowercase hexadecimal representation of
+ * the 32 little-endian bytes returned by the wallet's BHP256 field commitment.
+ * This function performs no network access and never receives the secret scalar.
+ *
+ * @param addressCommitment Public 32-byte recipient commitment without a `0x` prefix.
+ * @returns A 65-byte private-mint hook containing selector 2, the commitment, and 32 reserved zero bytes.
+ * @throws BridgeError When the commitment is not canonical lowercase hexadecimal.
+ *
+ * @example
+ * const hook = buildXReservePrivateMintHookData('00'.repeat(32))
+ */
+export function buildXReservePrivateMintHookData(addressCommitment: string): Hex {
+  if (!/^[0-9a-f]{64}$/.test(addressCommitment)) {
+    throw new BridgeError('Private mint address commitment must be 32 bytes encoded as lowercase hex without a prefix')
+  }
+  return `0x02${addressCommitment}${'00'.repeat(32)}`
+}
+
+/**
+ * Decodes the public address commitment from canonical private-mint hook data.
+ *
+ * Validates the selector and reserved bytes before returning the lowercase
+ * commitment used to look up the locally persisted private-mint identity.
+ *
+ * @param hookData Fixed-width xReserve hook from a deposit or Circle payload.
+ * @returns The 32-byte commitment as lowercase hexadecimal without a prefix.
+ * @throws BridgeError When the hook is malformed or is not a private-mint hook.
+ *
+ * @example
+ * const commitment = xReservePrivateMintCommitmentFromHookData(
+ *   `0x02${'00'.repeat(64)}`,
+ * )
+ */
+export function xReservePrivateMintCommitmentFromHookData(hookData: Hex): string {
+  if (!/^0x[0-9a-fA-F]{130}$/.test(hookData)) {
+    throw new BridgeError('Private mint hook data must contain 65 bytes')
+  }
+  const normalized = hookData.slice(2).toLowerCase()
+  if (normalized.slice(0, 2) !== '02' || normalized.slice(66) !== '00'.repeat(32)) {
+    throw new BridgeError('xReserve hook data is not a canonical private mint commitment')
+  }
+  return normalized.slice(2, 66)
+}
+
+/**
  * Builds the fixed 65-byte xReserve hook for public, record, or wrapper-private minting.
  *
  * Public and record hooks use only the supplied values. Private hooks lazily
@@ -182,9 +321,13 @@ export async function buildXReserveHookData(
     }
     // BHP256 binds the intended Aleo address to the secret nonce. Revealing the
     // same pair later proves who may complete the private destination mint.
-    const commitment = new sdk.BHP256().commit(bits, scalar).toBytesLe()
+    const committed = new sdk.BHP256().commit(bits, scalar)
+    // The web SDK returns a Field object while Shield's mobile SDK returns its
+    // literal string. Normalize both forms before serializing the field.
+    const commitmentField = typeof committed === 'string' ? sdk.Field.fromString(committed) : committed
+    const commitment = commitmentField.toBytesLe()
     if (commitment.length !== 32) throw new BridgeError('Private mint commitment must contain 32 bytes')
-    bytes.set(commitment, 1)
+    return buildXReservePrivateMintHookData(toHex(commitment).slice(2))
   }
   return toHex(bytes)
 }

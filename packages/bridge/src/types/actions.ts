@@ -24,9 +24,11 @@ import type { EvmXReserveTransferExecution, EvmXReserveTransferQuote } from './x
  * The same source, destination, amount, and recipient become the plan returned
  * with the quote, so the caller can execute exactly what was priced.
  *
- * @property privateMintSecretNonce Secret Aleo scalar committed by a private xReserve deposit. Defaults to `0scalar` and is never persisted in a checkpoint.
+ * @property privateMintAddressCommitment Public 32-byte recipient commitment reserved by the bridge identity store. Safe to checkpoint.
+ * @property privateMintSecretNonce Legacy secret Aleo scalar committed by a private xReserve deposit. Defaults to `0scalar` and is never persisted in a checkpoint.
  */
 export type QuoteParameters = PrepareParameters & {
+  privateMintAddressCommitment?: string | undefined
   privateMintSecretNonce?: string | undefined
 }
 
@@ -86,7 +88,8 @@ export type BridgeQuote = ({ plan: BridgePlan }) & (
  * @property merkleProof Encoded `[MerkleProof; 2]` literal required by a private Aleo xReserve burn.
  * @property privateFee Whether an Aleo wallet pays its execution fee privately. Defaults to false.
  * @property gasPaymentMicrocredits Optional exact Aleo Hyperlane hook payment override. Defaults to a fresh live quote.
- * @property privateMintSecretNonce Secret Aleo scalar committed by a private xReserve deposit. Defaults to `0scalar` and is never persisted in a checkpoint.
+ * @property privateMintAddressCommitment Public 32-byte recipient commitment reserved by the bridge identity store. Safe to checkpoint.
+ * @property privateMintSecretNonce Legacy secret Aleo scalar committed by a private xReserve deposit. Defaults to `0scalar` and is never persisted in a checkpoint.
  * @property onProgress Optional awaited callback for Aleo proving and submission boundaries. Non-Aleo routes emit no events.
  */
 export type ExecuteParameters = {
@@ -99,6 +102,7 @@ export type ExecuteParameters = {
   merkleProof?: string | undefined
   privateFee?: boolean | undefined
   gasPaymentMicrocredits?: bigint | undefined
+  privateMintAddressCommitment?: string | undefined
   privateMintSecretNonce?: string | undefined
   onProgress?: ProvingProgressHandler | undefined
 }
@@ -135,7 +139,7 @@ export type GetStatusParameters = {
 /**
  * Controls the wallet transaction that privately delivers USDCx on Aleo.
  *
- * @property privateMintSecretNonce Secret Aleo scalar required by a private xReserve mint. Defaults to `0scalar`.
+ * @property privateMintSecretNonce Caller-managed secret Aleo scalar required when the bridge identity store did not derive the commitment.
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
  * @property onCheckpoint Durable hook called before supported local Aleo broadcast and again after destination submission.
  * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
@@ -157,7 +161,7 @@ type CompleteOptions = {
  * @property progress Recovered progress whose next operation is `complete`.
  * @property plan Route, assets, amount, and recipient retained while the application stayed open.
  * @property receipt Circle-attested transfer state retained while the application stayed open.
- * @property privateMintSecretNonce Secret Aleo scalar required by a private xReserve mint. Defaults to `0scalar` and must match the source deposit.
+ * @property privateMintSecretNonce Caller-managed secret Aleo scalar required when the bridge identity store did not derive the commitment.
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
  * @property onCheckpoint Optional durable hook called before supported local Aleo broadcast and again after destination submission.
  */
@@ -181,7 +185,7 @@ export type RecoverParameters = {
  * Controls submission of a source-chain transaction left unfinished after an interruption.
  *
  * @property progress Recovery result whose next operation is `resume`.
- * @property privateMintSecretNonce Secret Aleo scalar required to resume a private xReserve deposit. Defaults to `0scalar` and must match the checkpointed hook.
+ * @property privateMintSecretNonce Caller-managed Aleo scalar required to resume a legacy private xReserve deposit. Store-derived commitments resume from the checkpoint without it.
  * @property pollingIntervalMs Delay between source confirmation reads. Defaults to 1,000 milliseconds.
  * @property confirmationTimeoutMs Maximum source confirmation wait. Defaults to 120,000 milliseconds.
  * @property onCheckpoint Optional durable hook called immediately after a new transaction is broadcast.

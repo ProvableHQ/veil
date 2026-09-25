@@ -376,6 +376,7 @@ export type BridgeReceipt = {
  * @property source.transactionId Irreversible source transfer transaction when submitted.
  * @property source.preparedTransaction Fully proved Aleo transaction retained before broadcast for idempotent recovery.
  * @property source.hookData Public xReserve hook committed by a submitted approval sequence.
+ * @property source.privateMintAddressCommitment Public locally derived commitment carried by a private xReserve hook.
  * @property source.blockhash Solana blockhash that bounded the submitted source transaction.
  * @property source.lastValidBlockHeight Final Solana block height at which the source transaction can land.
  * @property destination Caller-authorized destination transaction when submitted.
@@ -394,6 +395,7 @@ export type BridgeCheckpoint = {
     approvalTransactionIds?: readonly string[] | undefined
     transactionId?: string | undefined
     hookData?: string | undefined
+    privateMintAddressCommitment?: string | undefined
     blockhash?: string | undefined
     lastValidBlockHeight?: string | undefined
     preparedTransaction?: { transactionId: string; serializedTransaction: string } | undefined

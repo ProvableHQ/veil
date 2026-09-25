@@ -11,17 +11,20 @@ import type { BridgeChainClients } from '../../connections/resolve.js'
 import type { BridgeProgress, BridgeReceipt, BridgeRegistry } from '../../types/protocol.js'
 import type { CompleteParameters, ExecuteParameters, GetStatusParameters, QuoteParameters, RecoverParameters, ResumeParameters, WaitParameters, BridgeExecution, BridgeQuote } from '../../types/actions.js'
 import type { AleoPrivacyExecution, ShieldParameters, UnshieldParameters } from '../../types/aleo.js'
+import type { XReservePrivateMintIdentityStore } from '../../utils/xreservePrivateMintStore.js'
 
 /**
  * Carries validated registry and materialized client state into bound actions.
  * @property registry Validated deployment registry.
  * @property clients Materialized chain capabilities keyed by registry chain id.
  * @property fetch Fetch implementation used for protocol HTTP requests.
+ * @property privateMintIdentities Counter and scalar persistence for local private USDCx identities.
  */
 export type BridgeActionsConfig = {
   registry: BridgeRegistry
   clients: BridgeChainClients
   fetch: typeof globalThis.fetch
+  privateMintIdentities: XReservePrivateMintIdentityStore
 }
 
 /**
@@ -53,10 +56,10 @@ export function bridgeActions(config: BridgeActionsConfig): BridgeActions {
   return {
     // Every closure injects the same validated route catalog and
     // registry-keyed clients, preventing per-action configuration drift.
-    quote: async (params) => quote(config.registry, config.clients, params),
-    execute: async (params) => execute(config.registry, config.clients, params),
+    quote: async (params) => quote(config.registry, config.clients, params, config.privateMintIdentities),
+    execute: async (params) => execute(config.registry, config.clients, params, config.privateMintIdentities),
     getStatus: async (params) => getStatus(config.registry, config.clients, config.fetch, params),
-    complete: async (params) => complete(config.registry, config.clients, params),
+    complete: async (params) => complete(config.registry, config.clients, params, config.privateMintIdentities),
     recover: async (params) => recover(config.registry, config.clients, config.fetch, params),
     resume: async (params) => resume(config.registry, config.clients, params),
     wait: async (params) => wait(config.registry, config.clients, config.fetch, params),
