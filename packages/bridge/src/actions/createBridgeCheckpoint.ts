@@ -48,6 +48,11 @@ export function createBridgeCheckpoint(
     throw new BridgeError('Bridge receipt contains an invalid prepared destination transaction')
   }
   const blockhash = receipt.protocolState.blockhash
+  const privateMintAddressCommitment = receipt.protocolState.privateMintAddressCommitment
+  if (privateMintAddressCommitment !== undefined
+    && (typeof privateMintAddressCommitment !== 'string' || !/^[0-9a-f]{64}$/.test(privateMintAddressCommitment))) {
+    throw new BridgeError('Bridge receipt contains an invalid private mint address commitment')
+  }
   const lastValidBlockHeight = receipt.protocolState.lastValidBlockHeight
   if ((blockhash !== undefined || lastValidBlockHeight !== undefined)
     && (typeof blockhash !== 'string' || !blockhash
@@ -62,6 +67,9 @@ export function createBridgeCheckpoint(
         ...(receipt.sourceTxId ? { transactionId: receipt.sourceTxId } : {}),
         ...(typeof receipt.protocolState.hookData === 'string'
           ? { hookData: receipt.protocolState.hookData }
+          : {}),
+        ...(typeof privateMintAddressCommitment === 'string'
+          ? { privateMintAddressCommitment }
           : {}),
         ...(typeof blockhash === 'string' && typeof lastValidBlockHeight === 'string'
           ? { blockhash, lastValidBlockHeight }

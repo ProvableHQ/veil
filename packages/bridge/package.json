@@ -32,6 +32,10 @@
       "import": "./dist/mcp/index.js",
       "types": "./dist/mcp/index.d.ts"
     },
+    "./node": {
+      "import": "./dist/node.js",
+      "types": "./dist/node.d.ts"
+    },
     "./solana": {
       "import": "./dist/solana/index.js",
       "types": "./dist/solana/index.d.ts"

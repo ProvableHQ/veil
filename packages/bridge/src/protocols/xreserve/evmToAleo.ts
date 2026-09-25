@@ -35,9 +35,11 @@ import {
   aleoProgramAddress,
   buildXReserveDepositPayload,
   buildXReserveHookData,
+  buildXReservePrivateMintHookData,
   calculateXReserveDepositNonce,
   calculateXReserveMessageHash,
   xReserveHexToAleoBytes,
+  xReservePrivateMintCommitmentFromHookData,
 } from '../../utils/xreserve.js'
 
 const ERC20_ABI = parseAbi([
@@ -171,12 +173,20 @@ export async function quote(
   const environment = params.plan.route.environment
   // Hook data tells the Aleo side whether Circle may mint publicly on arrival
   // or must wait for the recipient to reveal a secret and authorize private_mint.
-  const hookData = await buildXReserveHookData(
-    params.plan.mintMode,
-    params.plan.recipient,
-    environment,
-    params.privateMintSecretNonce ?? '0scalar',
-  )
+  if (params.privateMintAddressCommitment !== undefined && params.privateMintSecretNonce !== undefined) {
+    throw new BridgeError('Provide either a private mint address commitment or a legacy secret nonce, not both')
+  }
+  const privateMintAddressCommitment = params.plan.mintMode === 'private'
+    ? params.privateMintAddressCommitment
+    : undefined
+  const hookData = privateMintAddressCommitment === undefined
+    ? await buildXReserveHookData(
+        params.plan.mintMode,
+        params.plan.recipient,
+        environment,
+        params.privateMintSecretNonce ?? '0scalar',
+      )
+    : buildXReservePrivateMintHookData(privateMintAddressCommitment)
   const recipient = params.plan.mintMode === 'private'
     ? await aleoProgramAddress(route.wrapperProgram, environment)
     : params.plan.recipient
@@ -193,12 +203,12 @@ export async function quote(
     callUint(client, getAddress(token), allowanceData, 'allowance'),
   ])
   if (balanceAtomic < amountAtomic) throw new BridgeError(`Insufficient ${params.plan.sourceAsset.symbol} balance`)
-  return { routeId: params.plan.route.id, xReserveContract: route.xReserveContract, tokenAddress: getAddress(token), sourceChainId: route.sourceChainId, remoteDomain: route.remoteDomain, remoteRecipientBytes32, amountAtomic, maxFeeAtomic: route.maxFeeAtomic, hookData, balanceAtomic, allowanceAtomic, approvalRequired: allowanceAtomic < amountAtomic }
+  return { routeId: params.plan.route.id, xReserveContract: route.xReserveContract, tokenAddress: getAddress(token), sourceChainId: route.sourceChainId, remoteDomain: route.remoteDomain, remoteRecipientBytes32, amountAtomic, maxFeeAtomic: route.maxFeeAtomic, hookData, ...(privateMintAddressCommitment === undefined ? {} : { privateMintAddressCommitment }), balanceAtomic, allowanceAtomic, approvalRequired: allowanceAtomic < amountAtomic }
 }
 
 /** Captures every value that determines an xReserve deposit so later recovery can verify rather than reconstruct the submitted call. */
 function pendingReceipt(plan: BridgePlan, status: BridgeReceipt['status'], id: string, approvalTxIds: Hash[], quote: EvmXReserveTransferQuote, sourceSender: Address, sourceTxId?: Hash): BridgeReceipt {
-  return { id, protocol: 'xreserve', status, ...(sourceTxId ? { sourceTxId } : {}), protocolState: { routeId: plan.route.id, approvalTxIds, sourceSender, mintMode: plan.mintMode, intendedRecipient: plan.recipient, xReserveContract: quote.xReserveContract, tokenAddress: quote.tokenAddress, sourceChainId: quote.sourceChainId, remoteDomain: quote.remoteDomain, remoteRecipientBytes32: quote.remoteRecipientBytes32, hookData: quote.hookData, amountAtomic: quote.amountAtomic.toString(), maxFeeAtomic: quote.maxFeeAtomic.toString() } }
+  return { id, protocol: 'xreserve', status, ...(sourceTxId ? { sourceTxId } : {}), protocolState: { routeId: plan.route.id, approvalTxIds, sourceSender, mintMode: plan.mintMode, intendedRecipient: plan.recipient, xReserveContract: quote.xReserveContract, tokenAddress: quote.tokenAddress, sourceChainId: quote.sourceChainId, remoteDomain: quote.remoteDomain, remoteRecipientBytes32: quote.remoteRecipientBytes32, hookData: quote.hookData, ...(quote.privateMintAddressCommitment === undefined ? {} : { privateMintAddressCommitment: quote.privateMintAddressCommitment }), amountAtomic: quote.amountAtomic.toString(), maxFeeAtomic: quote.maxFeeAtomic.toString() } }
 }
 
 /** Rebuilds the deposit arguments from saved state and binds them to the current transfer before any transaction is observed or submitted. */
@@ -219,6 +229,12 @@ function resumeQuote(plan: BridgePlan, receipt: BridgeReceipt): EvmXReserveTrans
     || typeof state.maxFeeAtomic !== 'string' || !/^\d+$/.test(state.maxFeeAtomic)) {
     throw new BridgeError('Checkpoint contains invalid xReserve submission state')
   }
+  const privateMintAddressCommitment = state.privateMintAddressCommitment
+  if (privateMintAddressCommitment !== undefined
+    && (typeof privateMintAddressCommitment !== 'string' || !/^[0-9a-f]{64}$/.test(privateMintAddressCommitment)
+      || xReservePrivateMintCommitmentFromHookData(state.hookData) !== privateMintAddressCommitment)) {
+    throw new BridgeError('Checkpoint contains an invalid private mint address commitment')
+  }
   return {
     routeId: plan.route.id,
     xReserveContract: getAddress(state.xReserveContract),
@@ -229,6 +245,7 @@ function resumeQuote(plan: BridgePlan, receipt: BridgeReceipt): EvmXReserveTrans
     amountAtomic: BigInt(state.amountAtomic),
     maxFeeAtomic: BigInt(state.maxFeeAtomic),
     hookData: state.hookData,
+    ...(privateMintAddressCommitment === undefined ? {} : { privateMintAddressCommitment }),
     balanceAtomic: 0n,
     allowanceAtomic: 0n,
     approvalRequired: false,
@@ -421,12 +438,19 @@ export async function recoverSourceCheckpoint(
   if (storedHookData !== undefined && (!isHex(storedHookData, { strict: true }) || storedHookData.length !== 132)) {
     throw new BridgeError('Bridge checkpoint contains invalid xReserve hook data')
   }
-  const hookData = storedHookData ?? await buildXReserveHookData(
-    plan.mintMode,
-    plan.recipient,
-    plan.route.environment,
-    '0scalar',
-  )
+  const privateMintAddressCommitment = checkpoint.source?.privateMintAddressCommitment
+  if (privateMintAddressCommitment !== undefined
+    && (!/^[0-9a-f]{64}$/.test(privateMintAddressCommitment) || plan.mintMode !== 'private')) {
+    throw new BridgeError('Bridge checkpoint contains an invalid private mint address commitment')
+  }
+  const hookData = storedHookData
+    ?? (privateMintAddressCommitment === undefined
+      ? await buildXReserveHookData(plan.mintMode, plan.recipient, plan.route.environment, '0scalar')
+      : buildXReservePrivateMintHookData(privateMintAddressCommitment))
+  if (privateMintAddressCommitment !== undefined
+    && xReservePrivateMintCommitmentFromHookData(hookData) !== privateMintAddressCommitment) {
+    throw new BridgeError('Bridge checkpoint private mint commitment does not match its hook data')
+  }
   const recipient = plan.mintMode === 'private'
     ? await aleoProgramAddress(route.wrapperProgram, plan.route.environment)
     : plan.recipient
@@ -440,6 +464,7 @@ export async function recoverSourceCheckpoint(
     amountAtomic,
     maxFeeAtomic: route.maxFeeAtomic,
     hookData,
+    ...(privateMintAddressCommitment === undefined ? {} : { privateMintAddressCommitment }),
     balanceAtomic: 0n,
     allowanceAtomic: 0n,
     approvalRequired: false,
@@ -566,22 +591,30 @@ export async function execute(
     if (recovered) return { approvalTxIds, receipt: recovered }
     // A prior approval succeeded without a deposit. Re-read balance, allowance,
     // and hook data before asking the wallet to authorize the irreversible step.
-    transferQuote = await quote(registry, client, params)
+    transferQuote = await quote(registry, client, {
+      ...params,
+      privateMintAddressCommitment: params.privateMintAddressCommitment
+        ?? checkpointQuote.privateMintAddressCommitment,
+    })
     if (transferQuote.hookData.toLowerCase() !== checkpointQuote.hookData.toLowerCase()) {
-      throw new BridgeError('Private mint secret nonce does not match the checkpointed approval')
+      throw new BridgeError('Private mint commitment or legacy secret nonce does not match the checkpointed approval')
     }
     if (transferQuote.approvalRequired) {
       throw new BridgeError('The recovered xReserve approval allowance is no longer available. Inspect source history before starting another transfer.')
     }
   } else if (params.resume?.status === 'SOURCE_APPROVAL_PENDING') {
-    resumeQuote(params.plan, params.resume)
+    const checkpointQuote = resumeQuote(params.plan, params.resume)
     approvalTxIds = approvalIds(params.resume)
     const approvalTxId = params.resume.id
     if (!isHash(approvalTxId)) throw new BridgeError('Checkpoint is missing the xReserve approval transaction id')
     const receipt = await wait(client, approvalTxId, confirmationTimeoutMs, pollingIntervalMs)
     if (!receipt) return { approvalTxIds, receipt: params.resume }
     successful(receipt, approvalTxId)
-    transferQuote = await quote(registry, client, params)
+    transferQuote = await quote(registry, client, {
+      ...params,
+      privateMintAddressCommitment: params.privateMintAddressCommitment
+        ?? checkpointQuote.privateMintAddressCommitment,
+    })
   } else if (params.resume) {
     throw new BridgeError(`Unsupported xReserve resume status: ${params.resume.status}`)
   } else {
@@ -656,15 +689,16 @@ export async function getAttestation(
 /**
  * Delivers a private USDCx record after Circle attests an Ethereum deposit.
  *
- * The private mint secret must reproduce the recipient commitment embedded in
- * the source deposit. The Aleo wallet proves, signs, and submits the mint, which
- * incurs an Aleo transaction fee. The source deposit is never repeated.
+ * The bridge identity store derives the private mint scalar locally and binds it
+ * to the public address commitment embedded in the source deposit. The Aleo
+ * client proves, signs, and submits the mint, which incurs an Aleo transaction
+ * fee. The source deposit is never repeated.
  *
  * @param registry Supported assets and reviewed xReserve deployments.
  * @param client Aleo wallet that proves, signs, and broadcasts the private mint.
  * @param params Route, recipient, confirmed deposit, Circle attestation, private mint secret, fee preference, and recovery callbacks.
  * @returns The Aleo transaction identifier and state needed to confirm private delivery.
- * @throws BridgeError When the transfer is not a private mint, the attestation or secret does not match the deposit, or wallet submission fails.
+ * @throws BridgeError When the transfer is not a private mint, the attestation or commitment does not match the deposit, or wallet submission fails.
  * @example const mint = await complete(registry, client, { plan, deposit, attestation })
  */
 export async function complete(
@@ -693,11 +727,9 @@ export async function complete(
   if (typeof intendedRecipient !== 'string' || intendedRecipient !== plan.recipient || mintMode !== 'private') throw new BridgeError('Deposit receipt does not match the private mint plan')
   if (attestation.payload.toLowerCase() !== depositPayload.toLowerCase() || attestation.messageHash.toLowerCase() !== depositHash.toLowerCase()) throw new BridgeError('Circle attestation does not match the confirmed deposit')
   if (calculateXReserveMessageHash(attestation.payload) !== attestation.messageHash) throw new BridgeError('Circle attestation payload has an invalid message hash')
+  const attestedHookData = `0x${attestation.payload.slice(-130)}` as Hex
   const secretNonce = params.privateMintSecretNonce ?? '0scalar'
-  // Recreate the commitment embedded in the Ethereum deposit. The wallet is not
-  // involved unless the recipient and secret open that exact commitment.
   const expectedHookData = await buildXReserveHookData('private', plan.recipient, route.environment, secretNonce)
-  const attestedHookData = `0x${attestation.payload.slice(-130)}`
   if (attestedHookData.toLowerCase() !== expectedHookData.toLowerCase()) {
     throw new BridgeError('Private mint secret nonce and recipient do not match the attested hook data')
   }
@@ -730,7 +762,6 @@ export async function complete(
       attestation: attestation.attestation,
       destinationProgram: wrapperProgram,
       destinationFunction: 'private_mint',
-      secretNonce,
     },
   }
   await params.onSubmitted?.(receipt)
