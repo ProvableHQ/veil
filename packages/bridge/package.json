@@ -1,6 +1,6 @@
 {
   "name": "@provablehq/aleo-bridge-sdk",
-  "version": "0.1.1",
+  "version": "0.11.0",
   "description": "Protocol bridge client for Circle xReserve and Hyperlane routes connected to Aleo.",
   "license": "MIT",
   "repository": {
