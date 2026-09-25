@@ -47,6 +47,14 @@ covering setup, pool and balance reads, swaps, and liquidity.
 
 ## Examples
 
+Run the [first-swap example](./examples/first-swap) to create an account,
+request test tokens, swap USDCx for ETH, and claim the output. The complete
+project lives at `packages/shield-swap/examples/first-swap`; it installs
+published packages with `npm ci` and runs with `npm start`. It calls the SDK directly and uses its file-backed identity store
+for claim recovery. SDK releases also include
+the example under `node_modules/@provablehq/shield-swap-sdk/examples/first-swap`;
+copy that directory outside `node_modules` before running it.
+
 Worked examples of everything below live in
 [`examples/shield-swap/`](https://github.com/ProvableHQ/veil/tree/main/examples/shield-swap):
 account bootstrap, pool reads, quoting, balances, swap history, swaps, minting a
