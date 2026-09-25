@@ -159,6 +159,7 @@ describe('xReserve lifecycle', () => {
         progress: { next: 'complete', plan, receipt: ready },
         onCheckpoint(value) { checkpoints.push(value) },
       },
+      globalThis.fetch,
       privateMintIdentities,
     )
 

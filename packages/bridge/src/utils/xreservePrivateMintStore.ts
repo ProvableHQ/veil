@@ -25,10 +25,12 @@ export type XReservePrivateMintIdentity = {
  *
  * @property load Returns all identities reserved for the configured account and deployment.
  * @property save Replaces the persisted identities after a reservation.
+ * @property runExclusive Optional transaction boundary spanning a reservation's load and save operations. Required when separate store instances can share one backing resource.
  */
 export interface XReservePrivateMintIdentityStore {
   load: () => Promise<XReservePrivateMintIdentity[]>
   save: (identities: XReservePrivateMintIdentity[]) => Promise<void>
+  runExclusive?: (<T>(action: () => Promise<T>) => Promise<T>) | undefined
 }
 
 /**
@@ -59,7 +61,8 @@ function withStoreLock<T>(
   store: XReservePrivateMintIdentityStore,
   action: () => Promise<T>,
 ): Promise<T> {
-  const next = (queues.get(store) ?? Promise.resolve()).then(action, action)
+  const execute = () => store.runExclusive ? store.runExclusive(action) : action()
+  const next = (queues.get(store) ?? Promise.resolve()).then(execute, execute)
   queues.set(store, next.catch(() => {}))
   return next
 }
@@ -68,9 +71,10 @@ function withStoreLock<T>(
  * Reserves the next local identity for a private USDCx deposit.
  *
  * The counter advances monotonically from the highest persisted value. The
- * reservation is saved before it is returned, closing the in-process race
- * between concurrent deposits. No Shield connection or wallet-derived input is
- * involved.
+ * reservation is saved before it is returned. The process lock closes races on
+ * one store object; a store's optional `runExclusive` closes races across
+ * instances or processes that share its backing resource. No Shield connection
+ * or wallet-derived input is involved.
  *
  * @param params Local view-key scalar, recipient, wrapper deployment, and identity store.
  * @returns The persisted counter, scalar, and public address commitment.
