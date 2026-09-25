@@ -130,6 +130,53 @@ describe('getOwnedPositions', () => {
     expect(await getOwnedPositions(await positionClient(), { poolKey: '888field' })).toEqual([])
     expect(await getOwnedPositions(await positionClient({}, []))).toEqual([])
   })
+
+  it('bounds the mapping reads in flight to the concurrency setting', async () => {
+    // Twenty positions in one pool. Unbounded, every position's four reads go
+    // out at once (80 sockets against a real gateway); the cap keeps the burst
+    // to `concurrency` positions, each with at most four reads plus the shared
+    // slot read.
+    const records = Array.from({ length: 20 }, (_, i) =>
+      POSITION_RECORD.replace('555field.private', `${1000 + i}field.private`).replace('_nonce: 1group', `_nonce: ${i + 1}group`),
+    )
+    const base = await positionClient({}, records)
+    let inFlight = 0
+    let peak = 0
+    const client = {
+      ...base,
+      request: async (req: { method: string }) => {
+        if (req.method !== 'getMappingValue') return (base as unknown as { request: (r: unknown) => Promise<unknown> }).request(req)
+        inFlight++
+        peak = Math.max(peak, inFlight)
+        await new Promise((resolve) => setTimeout(resolve, 1))
+        inFlight--
+        return (base as unknown as { request: (r: unknown) => Promise<unknown> }).request(req)
+      },
+    } as unknown as Client
+    const positions = await getOwnedPositions(client, { concurrency: 3 })
+    expect(positions).toHaveLength(20)
+    expect(peak).toBeLessThanOrEqual(3 * 4 + 1)
+    // Tick-key derivation runs in WASM per position, which dominates the time.
+  }, 30_000)
+
+  it('retries a mapping read the gateway reset mid-request', async () => {
+    const base = await positionClient()
+    let failed = false
+    const client = {
+      ...base,
+      request: async (req: { method: string; params: { mapping?: string } }) => {
+        if (req.method === 'getMappingValue' && req.params.mapping === 'positions' && !failed) {
+          failed = true
+          throw new TypeError('fetch failed', { cause: Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }) })
+        }
+        return (base as unknown as { request: (r: unknown) => Promise<unknown> }).request(req)
+      },
+    } as unknown as Client
+    const [p] = await getOwnedPositions(client)
+    expect(failed).toBe(true)
+    expect(p!.state).not.toBeNull()
+    expect(p!.state!.liquidity).toBe(LIQ)
+  })
 })
 
 describe('getOwnedPositions closed detection', () => {

@@ -184,7 +184,10 @@ describe('reserveBlindedIdentity', () => {
     const next = await reserveBlindedIdentity(counting, { store: memoryBlindedIdentityStore(), maxScan: 8 })
     expect(next.counter).toBe(100)
     expect(reads).toBeLessThan(40)
-  })
+    // Seeding the hundred used counters derives a hundred identities in WASM,
+    // which takes ~2.5 s on a laptop and past vitest's 5 s default on a CI
+    // runner. The budget covers the setup, not the search under test.
+  }, 30_000)
 
   it('throws when every probe reads as used, which means the wrong program or account', async () => {
     const allUsed = {
