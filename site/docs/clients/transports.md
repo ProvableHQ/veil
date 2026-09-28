@@ -28,7 +28,7 @@ import { transportFromAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 
 const transport = fallback([
   transportFromAdapter(walletAdapter),
-  http('https://api.provable.com/v2'),
+  http('https://edge.provable.com/api/v2'),
 ])
 ```
 

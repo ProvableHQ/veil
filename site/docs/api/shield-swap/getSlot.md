@@ -22,7 +22,7 @@ import { createPublicClient, http } from '@provablehq/veil-core'
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
 }).extend(shieldSwapActions())
 
 const slot = await client.getSlot({ poolKey })

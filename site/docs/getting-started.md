@@ -38,7 +38,7 @@ key is involved anywhere in this path.
 import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 })
 
 // Current chain height
@@ -116,7 +116,7 @@ browser wallet in the loop.
 import { createPublicClient, createWalletClient, http } from '@provablehq/veil-core'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 
-const transport = http('https://api.provable.com/v2', { network: 'testnet' })
+const transport = http('https://edge.provable.com/api/v2', { network: 'testnet' })
 
 // Public client for reads — same interface as the read-only path above.
 const publicClient = createPublicClient({ transport })
@@ -129,10 +129,8 @@ const walletClient = createWalletClient({
   transport,
   proving: aleo.createProvingConfig({
     mode: 'delegated',
-    networkUrl: 'https://api.provable.com/v2',
-    proverUrl: 'https://api.provable.com',
-    consumerId: '<consumer-id>',
-    apiKey: '<api-key>',
+    networkUrl: 'https://edge.provable.com/api/v2',
+    proverUrl: 'https://edge.provable.com/api/prove',
     account,
   }),
 })
@@ -146,11 +144,9 @@ const txId = await walletClient.writeContract({
 
 `mode: 'delegated'` sends the proving work to a remote prover at
 `proverUrl` instead of proving in-process; pass `mode: 'local'` to prove
-with the handle's own WASM binaries instead, dropping `proverUrl`,
-`consumerId`, and `apiKey`. `consumerId` and `apiKey` authenticate against
-the delegated prover and come from registering with the Provable API — see
-the "Registering with the Provable API" section of the repository's
-`AGENTS.md` for the one-time registration call.
+with the handle's own WASM binaries instead, dropping `proverUrl`. The hosted
+prover on the Provable gateway needs no credentials; a provisioned key, when an
+operator issues one, goes through `auth`.
 
 ## Next steps
 

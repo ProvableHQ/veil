@@ -7,9 +7,9 @@ export type { McpServer, McpToolDefinition } from '@provablehq/veil-core/mcp'
 /**
  * Creates an MCP server for discovering and describing cross-chain transfers.
  *
- * The exposed tools list assets and routes and validate a proposed transfer.
- * They cannot read live prices, access a wallet, request a signature, submit a
- * transaction, or move funds.
+ * The exposed tools list assets and routes and quote a proposed transfer,
+ * including current costs where the selected route exposes them. They cannot
+ * request a signature, submit a transaction, or move funds.
  *
  * Exposed via subpath export: `import { createBridgeMcpServer } from '@provablehq/aleo-bridge-sdk/mcp'`.
  *

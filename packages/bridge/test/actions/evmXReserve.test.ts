@@ -15,7 +15,7 @@ import {
   getAttestation as getXReserveAttestation,
 } from '../../src/protocols/xreserve/evmToAleo.js'
 import { execute } from '../../src/actions/execute.js'
-import { waitForStatus } from '../../src/actions/waitForStatus.js'
+import { wait } from '../../src/actions/wait.js'
 import { createBridgeCheckpoint } from '../../src/actions/createBridgeCheckpoint.js'
 import { createBridgeClient } from '../../src/clients/createBridgeClient.js'
 import { prepare } from '../../src/actions/prepare.js'
@@ -104,6 +104,30 @@ function mockExecutor(
 }
 
 describe('Ethereum xReserve actions', () => {
+  it('quotes a prepared sender through read-only EVM network access', async () => {
+    const { executor } = mockExecutor()
+    const bridge = createBridgeClient({
+      environment: 'testnet',
+      clients: {
+        sepolia: { family: 'evm', publicClient: executor.publicClient },
+      },
+    })
+
+    await expect(bridge.quote({
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+      amount: '2',
+      recipient: RECIPIENT,
+      sender: ACCOUNT,
+      mintMode: 'record',
+    })).resolves.toMatchObject({
+      kind: 'evm-xreserve',
+      balanceAtomic: 3_000_000n,
+      allowanceAtomic: 0n,
+      approvalRequired: true,
+    })
+  })
+
   it('approves USDC, deposits without msg.value, and returns resumable attestation state', async () => {
     const { executor, sent } = mockExecutor()
     const execution = await executeEvmXReserveTransfer(DEFAULT_BRIDGE_REGISTRY, executor, { plan: transferPlan() })
@@ -168,20 +192,19 @@ describe('Ethereum xReserve actions', () => {
     expect(submitted.receipt.status).toBe('SOURCE_CONFIRMING')
 
     confirmDeposit.value = true
-    const receipt = await waitForStatus(
+    const progress = await wait(
       DEFAULT_BRIDGE_REGISTRY,
       { sepolia: executor },
       async () => ({ ok: false, status: 404, json: async () => ({}) }),
       {
-        plan: transfer,
-        receipt: submitted.receipt,
+        progress: { next: 'wait', plan: transfer, receipt: submitted.receipt },
         until: ['ATTESTATION_PENDING'],
         pollingIntervalMs: 0,
         timeoutMs: 1_000,
       },
     )
 
-    expect(receipt.status).toBe('ATTESTATION_PENDING')
+    expect(progress.receipt.status).toBe('ATTESTATION_PENDING')
     expect(sent).toHaveLength(2)
   })
 

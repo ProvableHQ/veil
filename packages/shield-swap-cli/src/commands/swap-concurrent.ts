@@ -23,7 +23,8 @@
  *   shield-swap swap-concurrent --swap USDCx:ETH:0.5 --swap ALEO:ETH:1 --no-claim --execute
  */
 import { SwapOutputNotFinalizedError, parseUnits } from '@provablehq/shield-swap-sdk'
-import type { SwapPlan } from '@provablehq/shield-swap-sdk'
+import type { SwapPlan, SwapQuote } from '@provablehq/shield-swap-sdk'
+import { planQuotedSwap } from '../quoted-swap.js'
 import { loadSession, formatAmount } from '../session.js'
 import { flags, step, done, warn, output, confirmed, run, fail, basisPoints } from '../shared.js'
 
@@ -67,7 +68,7 @@ export async function main(argv: string[]): Promise<void> {
 
     // Parse and plan every leg first. A malformed or unroutable leg should surface
     // before anything is submitted, not after half the batch has spent.
-    const legs: SwapPlan[] = []
+    const legs: Array<SwapPlan & { quote: SwapQuote }> = []
     for (const spec of specs) {
       const [from, to, amount] = spec.split(':')
       if (!from || !to || !amount) {
@@ -75,7 +76,7 @@ export async function main(argv: string[]): Promise<void> {
       }
       const token = await client.tokenData(from)
       step(`planning ${from} → ${to}`)
-      const plan = await client.planSwap({
+      const plan = await planQuotedSwap(client, {
         from: token.id,
         to,
         amountIn: parseUnits(amount, token.decimals),
@@ -132,25 +133,7 @@ export async function main(argv: string[]): Promise<void> {
     // allSettled, not all: one rejection must not abandon the swaps that landed,
     // because their outputs are claimable and would otherwise be forgotten.
     const submitted = await Promise.allSettled(
-      legs.map((leg) =>
-        leg.multiHop
-          ? client.swapMultiHop({
-              poolKeys: leg.poolKeys,
-              tokenInId: leg.from.id,
-              amountIn: leg.amountIn,
-              ...(leg.expectedOut > 0n ? { expectedOut: leg.expectedOut } : {}),
-              slippageBps: leg.slippageBps,
-              imports: leg.imports,
-            })
-          : client.swap({
-              poolKey: leg.poolKeys[0]!,
-              tokenInId: leg.from.id,
-              amountIn: leg.amountIn,
-              ...(leg.expectedOut > 0n ? { expectedOut: leg.expectedOut } : {}),
-              slippageBps: leg.slippageBps,
-              imports: leg.imports,
-            }),
-      ),
+      legs.map((leg) => client.swap({ quote: leg.quote, imports: leg.imports })),
     )
 
     const results = submitted.map((result, index) => {
@@ -170,7 +153,7 @@ export async function main(argv: string[]): Promise<void> {
         for (let attempt = 0; attempt < 20; attempt++) {
           try {
             step(`claiming ${result.pair} (attempt ${attempt + 1})`)
-            const claim = await client.claimSwapOutput({ handle: result.handle, imports: leg.imports })
+            const claim = await client.claimSwapOutput({ handle: result.handle })
             result.claimed = claim.amountOut
             done(`claimed ${formatAmount(claim.amountOut, leg.to.decimals, leg.to.symbol)}`)
             break

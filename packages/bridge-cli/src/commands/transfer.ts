@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
-import { runAleoHyperlaneExample } from '../../../../examples/bridge/aleo-hyperlane.js'
-import { runArcToAleoExample } from '../../../../examples/bridge/arc-to-aleo.js'
-import { runEthereumHyperlaneExample } from '../../../../examples/bridge/ethereum-hyperlane.js'
-import { runSolanaHyperlaneExample } from '../../../../examples/bridge/sol-to-aleo.js'
-import { runUsdcToUsdcxExample } from '../../../../examples/bridge/usdc-to-usdcx.js'
-import { runUsdcxToUsdcExample } from '../../../../examples/bridge/usdcx-to-usdc.js'
+import { runAleoHyperlaneExample } from '../../../bridge/examples/aleo-hyperlane.js'
+import { runArcToAleoExample } from '../../../bridge/examples/arc-to-aleo.js'
+import { runEthereumHyperlaneExample } from '../../../bridge/examples/ethereum-hyperlane.js'
+import { runSolanaHyperlaneExample } from '../../../bridge/examples/sol-to-aleo.js'
+import { runUsdcToUsdcxExample } from '../../../bridge/examples/usdc-to-usdcx.js'
+import { runUsdcxToUsdcExample } from '../../../bridge/examples/usdcx-to-usdc.js'
 import { CLI_ROUTES } from '../routes.js'
 
 const EXECUTION_ENVIRONMENT_VARIABLES = [
@@ -33,11 +33,13 @@ const USAGE = `aleo-bridge transfer — preview or execute a demonstrated bridge
   --mint-mode <public|record|private> xReserve Aleo delivery; default public
   --burn-mode <public|private>       Aleo USDCx withdrawal; default private
   --secret-nonce-file <path>        private-mint nonce file
-  --consumer-id <id>                existing Provable API consumer
-  --api-key-file <path>             Provable API key file
+  --consumer-id <id>                legacy gateway consumer (optional)
+  --api-key-file <path>             optional provisioned gateway key file
+  --prover-url <url>                custom proving gateway base URL
+  --scanner-url <url>               custom record scanner URL
   --proving-mode <delegated|local>  Aleo proving mode; default delegated
   --execute                         submit transactions; otherwise preview
-  --verbose                         print protocol and transaction diagnostics
+  --verbose                         retain protocol and transaction diagnostics (already enabled)
   -h, --help                        show this text
 
 Private keys and API keys MUST come from files or the caller's environment.`
@@ -64,11 +66,22 @@ function required(values: Values, name: string): string {
 function configureAleo(values: Values, key: string | undefined): void {
   assign('ALEO_PRIVATE_KEY', key)
   assign('ALEO_CONSUMER_ID', values['consumer-id'] as string | undefined)
-  assign('ALEO_DPS_API_KEY', readSecret(values['api-key-file'] as string | undefined, 'Provable API key'))
+  const apiKey = readSecret(values['api-key-file'] as string | undefined, 'Provable API key')
+  assign('ALEO_DPS_API_KEY', apiKey)
+  assign('EDGE_PROVABLE_API_KEY', apiKey)
+  assign('ALEO_PROVER_URL', values['prover-url'] as string | undefined)
+  assign('ALEO_SCANNER_URL', values['scanner-url'] as string | undefined)
   assign('ALEO_PROVING_MODE', values['proving-mode'] as string | undefined)
 }
 
-/** Runs the `transfer` subcommand. */
+/**
+ * Runs the `transfer` subcommand.
+ * @param argv Command arguments without the binary or subcommand name.
+ * @returns Resolves after help, preview, or the explicitly authorized transfer lifecycle.
+ * @throws When arguments or transfer configuration or execution are invalid.
+ * @example
+ * await main(['--help'])
+ */
 export async function main(argv: string[]): Promise<void> {
   let values: Values
   try {
@@ -88,6 +101,8 @@ export async function main(argv: string[]): Promise<void> {
         'secret-nonce-file': { type: 'string' },
         'consumer-id': { type: 'string' },
         'api-key-file': { type: 'string' },
+        'prover-url': { type: 'string' },
+        'scanner-url': { type: 'string' },
         'proving-mode': { type: 'string' },
         execute: { type: 'boolean' },
         verbose: { type: 'boolean' },
@@ -101,6 +116,10 @@ export async function main(argv: string[]): Promise<void> {
   if (values.help) {
     console.log(USAGE)
     return
+  }
+
+  if (values['proving-mode'] !== undefined && !['delegated', 'local'].includes(String(values['proving-mode']))) {
+    throw new Error('--proving-mode must be delegated or local')
   }
 
   const requested = required(values, 'route')
@@ -141,6 +160,7 @@ export async function main(argv: string[]): Promise<void> {
       await runUsdcToUsdcxExample({ amount: transferAmount(), execute })
       return
     case 'usdcx-to-usdc':
+      assign('ALEO_RPC_URL', values['rpc-url'] as string | undefined)
       assign('ETHEREUM_RECIPIENT', recipient)
       configureAleo(values, sourceKey)
       await runUsdcxToUsdcExample({ amount: transferAmount(), execute })

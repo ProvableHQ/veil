@@ -66,7 +66,7 @@ export type WalletClient = Client<WalletActions & {
  *     sign: async (bytes) => bytes,
  *     signMessage: async (bytes) => bytes,
  *   }),
- *   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+ *   transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
  * })
  */
 export function createWalletClient(config: WalletClientConfig): WalletClient {

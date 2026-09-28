@@ -108,7 +108,7 @@ export interface BlindedIdentityStore {
  * Reservations survive for the life of the process, so concurrent swaps from
  * one client do not collide — but nothing survives a restart, and the next run
  * re-derives its starting counter by scanning the chain. Suited to short-lived
- * scripts; a durable store (`fileBlindedIdentityStore` on
+ * scripts; a durable store (`swapFileStore` on
  * `@provablehq/shield-swap-sdk/node`) avoids the rescan.
  *
  * @param initial Records to seed the store with. Defaults to empty.

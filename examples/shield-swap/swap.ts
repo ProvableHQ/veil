@@ -12,44 +12,18 @@
  * proceeds sitting on chain. So this does both, and treats the claim as part of
  * the trade rather than a follow-up.
  *
- * SPENDS REAL FUNDS. Needs a funded account holding the input token. Runs
- * against testnet by default; set SHIELD_SWAP_NETWORK=mainnet to trade on
- * mainnet instead — the program id is the same on both, but the account, its
- * Provable credentials, and its DEX access must all belong to that network.
+ * SPENDS REAL FUNDS. Needs a funded account holding the input token.
  */
-import { parseUnits, formatUnits, SwapOutputNotFinalizedError } from '../../packages/shield-swap/src/index.js'
-import { setupClient, resolveNetwork } from './setup-client.js'
+import { formatUnits, SwapOutputNotFinalizedError } from '../../packages/shield-swap/src/index.js'
+import { setupClient } from './setup-client.js'
 
 export async function swap() {
-  const network = resolveNetwork()
-  const { client } = await setupClient({ privateKey: process.env.VEIL_E2E_PRIVATE_KEY, network })
+  const { client } = await setupClient({ privateKey: process.env.VEIL_E2E_PRIVATE_KEY })
 
-  // Plan first. Everything the two calls below need — the route, the floor, the
-  // program sources — comes out of this one read, and none of it is submitted.
-  // See quote.ts for what the plan contains.
-  const from = await client.tokenData('USDCx')
-  const plan = await client.planSwap({ from: from.id, to: 'ETH', amountIn: parseUnits('1.5', from.decimals) })
+  // Quote first; swap dispatches to the appropriate 1–3-hop action automatically.
+  const offer = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: '1.5' })
 
-  // A route through one pool is `swap`; a route that bridges through an
-  // intermediate token is `swapMultiHop`. The plan already decided which, so the
-  // only thing to do here is call the matching action with it.
-  const handle = plan.multiHop
-    ? await client.swapMultiHop({
-        poolKeys: plan.poolKeys,
-        tokenInId: plan.from.id,
-        amountIn: plan.amountIn,
-        expectedOut: plan.expectedOut,
-        slippageBps: plan.slippageBps,
-        imports: plan.imports,
-      })
-    : await client.swap({
-        poolKey: plan.poolKeys[0]!,
-        tokenInId: plan.from.id,
-        amountIn: plan.amountIn,
-        expectedOut: plan.expectedOut,
-        slippageBps: plan.slippageBps,
-        imports: plan.imports,
-      })
+  const handle = await client.swap({ quote: offer })
 
   // The blinded identity this pays out to was reserved and recorded before the
   // call returned, so the proceeds are locatable even if this process stops
@@ -62,8 +36,8 @@ export async function swap() {
   // lets anything else through.
   for (let attempt = 0; attempt < 20; attempt++) {
     try {
-      const claim = await client.claimSwapOutput({ handle, imports: plan.imports })
-      console.log(`received ${formatUnits(claim.amountOut, plan.to.decimals)} ${plan.to.symbol}`)
+      const claim = await client.claimSwapOutput({ handle })
+      console.log(`received ${formatUnits(claim.amountOut, offer.to.decimals)} ${offer.to.symbol}`)
       return
     } catch (error) {
       if (!(error instanceof SwapOutputNotFinalizedError)) throw error

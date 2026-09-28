@@ -110,19 +110,25 @@ describe('keyed auth wiring', () => {
     vi.stubGlobal('fetch', vi.fn(() => { throw new Error('global fetch must not be used') }))
     const session = createProvableSession({
       credentials: { consumerId: 'cid', apiKey: 'key' },
+      baseUrl: 'https://api.provable.com',
       transport,
     })
     const jwt = await session.getJwt()
-    expect(jwt.jwt).toBe('Bearer minted')
+    expect(jwt?.jwt).toBe('Bearer minted')
     expect(urls).toEqual(['https://api.provable.com/jwts/cid'])
   })
 
-  it('authenticateProvableApi refuses on a keyed client — there is no lifecycle to resolve', async () => {
+  it('authenticateProvableApi is a no-op on a keyed client and reports no session paths', async () => {
     const { walletClient } = aleo.createAleoClient({
       privateKey: PRIVATE_KEY,
       networkUrl: 'http://localhost:3030',
       auth: KEYED,
     })
-    await expect(walletClient.authenticateProvableApi()).rejects.toThrow(/provisioned API key/)
+    await expect(walletClient.authenticateProvableApi()).resolves.toEqual({
+      credentials: undefined,
+      expiration: undefined,
+      registered: false,
+      applied: { proving: false, recordScanning: false },
+    })
   })
 })

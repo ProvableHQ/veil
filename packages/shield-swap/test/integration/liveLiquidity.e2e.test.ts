@@ -23,15 +23,12 @@ import type { GetPositionReturnType } from '../../src/actions/reads/getPosition.
  * Requirements:
  *   VEIL_INTEGRATION=1
  *   VEIL_E2E_PRIVATE_KEY   funded testnet account, both sides of some pool
- *   ALEO_CONSUMER_ID, ALEO_DPS_API_KEY   Provable API credentials
  *
  *   VEIL_INTEGRATION=1 npx vitest run packages/shield-swap/test/integration/liveLiquidity.e2e.test.ts
  */
 
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
-const CONSUMER_ID = process.env.ALEO_CONSUMER_ID
-const API_KEY = process.env.ALEO_DPS_API_KEY
-const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!CONSUMER_ID && !!API_KEY
+const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY
 const TX = 600_000
 
 type Token = { address: string; symbol: string; decimals: number; amm_token_program?: string | null }
@@ -148,9 +145,7 @@ describe.runIf(RUN)('live liquidity lifecycle on testnet', () => {
     const aleo = await loadNetwork('testnet')
     const built = aleo.createAleoClient({
       privateKey: PRIVATE_KEY!,
-      networkUrl: 'https://api.provable.com/v2',
-      consumerId: CONSUMER_ID,
-      apiKey: API_KEY,
+      networkUrl: 'https://edge.provable.com/api/v2',
       records: aleo.createRemoteScanner(),
     })
     account = built.account
@@ -225,12 +220,24 @@ describe.runIf(RUN)('live liquidity lifecycle on testnet', () => {
     // revert elsewhere as one side falls short of what the range requires.
     const sqrtLower = getSqrtPriceAtTickX128(tickLower)
     const sqrtUpper = getSqrtPriceAtTickX128(tickUpper)
-    const liquidity = liquidityForAmounts(slot!.sqrt_price, sqrtLower, sqrtUpper, state.budget0!, state.budget1!)
+    const liquidity = liquidityForAmounts({
+      sqrtPriceX128: slot!.sqrt_price,
+      sqrtLowerX128: sqrtLower,
+      sqrtUpperX128: sqrtUpper,
+      amount0: state.budget0!,
+      amount1: state.budget1!,
+    })
     expect(liquidity, 'budget is dust for this range — fund the account further').toBeGreaterThan(0n)
     state.predicted = liquidity
 
     // `true` is the deposit-side rounding, so neither side lands a hair short.
-    const { amount0, amount1 } = amountsForLiquidity(slot!.sqrt_price, sqrtLower, sqrtUpper, liquidity, true)
+    const { amount0, amount1 } = amountsForLiquidity({
+      sqrtPriceX128: slot!.sqrt_price,
+      sqrtLowerX128: sqrtLower,
+      sqrtUpperX128: sqrtUpper,
+      liquidity,
+      roundUp: true,
+    })
     state.amount0 = amount0
     state.amount1 = amount1
     expect(amount0 + amount1).toBeGreaterThan(0n)

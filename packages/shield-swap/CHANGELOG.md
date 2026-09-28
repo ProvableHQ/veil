@@ -1,5 +1,76 @@
 # @provablehq/shield-swap-sdk
 
+## 0.11.1
+
+### Patch Changes
+
+- 3d329de: Resolve claim program imports automatically from on-chain output tokens and simplify examples and agent tooling.
+- 3d329de: Add `quote` and `swap({ quote })` for API-estimated single- and multi-hop swaps. Preserve the exact quoted minimum output, validate route/network/freshness, and expose the handoff through agent/MCP tools and the CLI. Keep existing manual swap and `planSwap` calls compatible.
+
+  Make the existing `client.api.confirmAirdrop` also wait for the faucet transaction records when the outer client has a record scanner; retain job-only confirmation without one.
+
+  Accept decimal-string quote inputs in token units, resolving decimals inside quote while retaining bigint raw-unit inputs. The agent/MCP quote tool accepts decimal token amounts and returns raw integer-string quote amounts.
+
+- 3d329de: Require Provable SDK 0.11.11 and align devnode transaction building with its 21 consensus versions.
+- 3d329de: Include a standalone first-swap example in the package. The example creates and funds a testnet account, swaps USDCx for ETH, retains claim recovery state, and includes installation and recovery instructions.
+- 3d329de: Export swapFileStore as a Node-only alias of fileBlindedIdentityStore and use it in the examples.
+- 3d329de: Add waitForSwapOutput to confirm the request and poll chain output readiness with configurable timing and simplify the first-swap example.
+  - @provablehq/veil-core@0.11.1
+
+## 0.11.0
+
+### Minor Changes
+
+- 8b97f14: Add `ApiClient.confirmAirdrop(address, options?)`, which requests a testnet faucet drop and polls the job until it settles. It returns `{ status: 'settled', job }` with the per-token results, or `{ status: 'rate_limited', message }` when the faucet refuses the address for its per-address window, so a caller holding funds from an earlier drop can carry on without catching a 429. Other API errors propagate, and a job still running at `timeoutMs` (default ten minutes) throws with its progress. The `ConfirmAirdropResult` type is exported.
+
+### Patch Changes
+
+- 43cd709: `getOwnedPositions` no longer opens every position's mapping reads at once. It resolves positions through a bounded worker pool (`concurrency`, default 8, so at most about 32 reads in flight) and retries a read the gateway refused with a 429 or 5xx or dropped with a connection reset, backing off from 250 ms over four attempts. An account holding ~60 positions previously fanned out ~230 concurrent requests and failed the whole call on a single `ECONNRESET`. `getOwnedPosition` shares the retry. The retry and pool helpers move to a shared module also used by `reconcileSwapHistory`, whose retry now covers connection-level failures as well as busy responses.
+- 8b97f14: Refresh the pinned Shield Swap DEX API OpenAPI spec and the generated types from the live `api.testnet.swap.shield.fi` host. The retired invite-code (`/access/*`), `/balances`, `/swaps`, `/tick-spacings`, trading-schema, and token-management routes drop out of the spec; the explore, GeckoTerminal, pool oracle and rebalance-state, route-topology, and referral activity routes join it. Every endpoint the client calls is unchanged. `pnpm regen-openapi` now fetches from the Shield.fi hosts instead of the dead `amm-api.dev.provable.com`, verifies the mainnet spec is a subset of the testnet one, and lists the routes only testnet serves; `airdrop`, `getAirdropStatus`, and `debugPool` are documented as testnet only.
+  - @provablehq/veil-core@0.11.0
+
+## 0.10.1
+
+### Patch Changes
+
+- Let a cold blinded-identity store find the counter frontier. `reserveBlindedIdentity` and `nextBlindedIdentity` scanned exactly 64 counters and gave up, so an account a few hundred swaps deep could never reserve an identity from a fresh store. The scan now keeps the 64-counter linear window, then gallops ahead in doubling strides and binary-searches back to the lowest free counter. It still throws when every probe reads used, which means the store or program does not match the account.
+- caf4425: Default every hosted endpoint to the `edge.provable.com/api` gateway: the delegated prover, the record scanner, the React hook's node URL, and the shield-swap CLI's network URL. The gateway is unauthenticated and needs no consumer or JWT, so a client built from a private key and a network URL proves and scans out of the box; a provisioned key still goes through `auth`. The legacy JWT model stays supported for a caller who points the client at a legacy gateway: with `proverUrl` or the scanner `url` on `https://api.provable.com/...` and a `consumerId` + `apiKey` pair (or a `credentialStore`), a session mints at that gateway's `/jwts` and injects the token. On the default gateway the pair is carried and nothing mints. Consumer registration is retired: `registerProvableApi` is a no-op that resolves `undefined`, `username` is ignored, and a client without a pair never registers one. `authenticateProvableApi` no longer throws on a keyed or credential-less client; it resolves with `registered: false` and, without a pair, no `credentials` and no `expiration`. Bumps `@provablehq/sdk` to 0.11.10, which makes the same default change in the underlying SDK.
+- Updated dependencies [caf4425]
+  - @provablehq/veil-core@0.10.1
+
+## 0.10.0
+
+### Minor Changes
+
+- 52c63b2: Remove `ApiClient` methods for DEX API routes the server retired: the invite-code
+  access routes (`getAccessStatus`, `redeemAccessCode`, `listAccessCodes`,
+  `generateAccessCodes`), swap history (`getSwaps`, `getSwap`), the position, token,
+  and tick-spacing detail routes (`getPosition`, `getToken`, `getTickSpacings`),
+  token registration (`registerToken`), the trading schema routes
+  (`getTradingSchemas`, `getTradingSchema`), and public balances
+  (`getPublicBalances`, whose `/balances` route was removed earlier).
+
+  Public balances are now read from chain. The new `getPublicBalances` action (also
+  `client.getPublicBalances` and the `shield_swap_get_public_balances` agent tool,
+  which moves from the API tool set to the chain tool set) reads each AMM token
+  program's `balances` mapping for an address and returns raw base units keyed by
+  program. `getBalances` composes it with record-derived private balances and no
+  longer needs a DEX API credential — only the public token registry.
+
+  Access now goes through the referral endpoints: `getReferralStatus()` reports the
+  gate and `redeemReferralCode()` unlocks it. The `shield_swap_get_access_status`
+  and `shield_swap_redeem_access_code` agent tools keep their names and are backed
+  by those methods. Read a position's live state with the chain-direct `getPosition`
+  action, resolve a token from `getTokens()`, take tick spacings from `getFeeTiers()`,
+  and recover a wallet-path swap's blinded address from `getSwapOutput().recipient`.
+
+  The `shield-swap setup` command redeems invite codes through the referral endpoint.
+
+### Patch Changes
+
+- Updated dependencies [ca51d13]
+  - @provablehq/veil-core@0.10.0
+
 ## 0.9.0
 
 ### Minor Changes

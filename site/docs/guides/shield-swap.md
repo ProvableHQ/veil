@@ -41,18 +41,14 @@ import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 const aleo = await loadNetwork('testnet')
 
 const scanner = aleo.createRemoteScanner({
-  url: 'https://api.provable.com/scanner',
-  consumerId: CONSUMER_ID,
-  apiKey: DPS_API_KEY,
+  url: 'https://edge.provable.com/api/scanner',
 })
 
 const { walletClient } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
-  networkUrl: 'https://api.provable.com/v2',
+  networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated',
-  proverUrl: 'https://api.provable.com/prove',
-  apiKey: DPS_API_KEY,
-  consumerId: CONSUMER_ID,
+  proverUrl: 'https://edge.provable.com/api/prove',
   records: scanner,
 })
 
@@ -61,9 +57,8 @@ const client = walletClient.extend(
 )
 ```
 
-Delegated proving and the hosted scanner authenticate with a consumer id and
-API key issued by the Provable API; registration is a one-time step against
-the Provable API's registration and JWT-issuance endpoints. See
+Delegated proving and the hosted scanner run on the Provable gateway, which
+needs no credentials. See
 [`createRemoteScanner`](/api/provable-sdk/createRemoteScanner) for the
 scanner's registration behavior.
 
@@ -114,18 +109,18 @@ requires a fresh session JWT; the tokens themselves cover data and trading
 endpoints only.
 
 Authentication is the first of two gates. The account must also have
-redeemed an invite code, or gated endpoints return 403
-`redeem an invite code to unlock access`:
+redeemed a referral code (the invite codes Shield Swap distributes), or gated
+endpoints return 403 `redeem an invite code to unlock access`:
 
 ```ts
 await client.authenticateShieldSwap()
-if (!(await client.api.getAccessStatus()).has_access) {
-  await client.api.redeemAccessCode(inviteCode) // one-time per account
+if (!(await client.api.getReferralStatus()).has_access) {
+  await client.api.redeemReferralCode(inviteCode) // one-time per account
 }
 ```
 
-Redemption unlocks the session immediately — the client adopts the upgraded
-token the server returns, no second handshake needed.
+Redemption unlocks the session immediately — the grant is recorded
+server-side, no second handshake needed.
 
 ## Pools and tokens
 
@@ -175,26 +170,22 @@ const imports = {
 
 ## Quote, then swap
 
-Quote the trade first — the quote feeds the on-chain slippage check: the
-swap reverts if the output falls more than `slippageBps` below
-`expectedOut`. Omitting `expectedOut` falls back to a spot-price estimate,
-which ignores fees and price impact, so pass a real quote for anything
-beyond a tiny trade.
-
-The API's route estimate is a display decimal in the output token's units;
-`expectedOut` wants raw base units (u128), so scale by the token's decimals:
+`client.quote` resolves a 1–3-hop route and trusts the DEX API's output estimate.
+It converts the estimate to raw base units without floating-point rounding and
+calculates a minimum output. No pool or tick reads occur while quoting.
 
 ```ts
-const amountIn = 1_000_000n
-const route = await client.api.getRoute({
-  token_in: pool.token0,
-  token_out: pool.token1,
-  amount_in: amountIn,
+const quote = await client.quote({
+  from: 'USDCx',
+  to: 'ETH',
+  amountIn: '1.5', // token units; bigint inputs use raw base units
+  slippageBps: 50,
 })
-const expectedOut = BigInt(
-  Math.floor(Number(route.data.estimated_amount_out ?? 0) * 10 ** pool.token1_info.decimals),
-)
 ```
+
+The quote expires after 60 seconds. `swap({ quote })` checks its route pools on
+chain and submits exactly `quote.minOut`. Missing estimates and zero floors
+reject; request a new quote when one expires. Quotes do not reserve liquidity.
 
 [`swap`](/api/shield-swap/swap) submits the request — phase one. On the
 local-signer path the client auto-selects an unspent record covering
@@ -204,15 +195,8 @@ serializable object that is the key to claiming the output. Persist it if
 there is any chance the process dies before the claim.
 
 ```ts
-const handle = await client.swap({
-  poolKey: pool.key,
-  tokenInId: pool.token0,
-  amountIn,               // raw atomic amount, bigint
-  expectedOut,            // scaled to base units above
-  slippageBps: 50,        // 0.5%
-  tokenInProgram: pool.token0_info.wrapper_program,
-  imports,
-})
+const handle = await client.swap({ quote })
+// Wallet accounts additionally pass tokenRecord.
 ```
 
 A wallet never exposes its records, so the wallet path drops
@@ -256,8 +240,9 @@ chain-computed result without claiming, read it directly with
 
 On the wallet path the handle needs `swapId` and `blindedAddress` set before
 claiming — recover them from the confirmed request transaction (the swap id
-is the transition's first public output; the blinded address is also
-readable from `api.getSwap(...).recipient`). The wallet re-derives the
+is the transition's first public output; the blinded address is the
+`recipient` of the chain's `swap_outputs` entry, read with
+[`getSwapOutput`](/api/shield-swap/getSwapOutput)). The wallet re-derives the
 blinding factor from the blinded address, so the dApp never holds it. See
 [`claimSwapOutput`](/api/shield-swap/claimSwapOutput) for the full recovery
 flow.
@@ -307,7 +292,7 @@ import { createPublicClient, http } from '@provablehq/veil-core'
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
 }).extend(shieldSwapActions({ api: {} }))
 
 const pool = await client.getPool({ poolKey })  // static config: token pair, fee, decimals
@@ -325,10 +310,12 @@ SDK offers three views:
 await client.getPrivateBalances({ programs: ['ethx_5a095e.aleo'] })
 // { 'ethx_5a095e.aleo': 3000000000000000000n }
 
-// Public — the API's public/authorized balances for any address.
-await client.api.getPublicBalances({ user: address })
+// Public — each AMM token program's on-chain `balances` mapping, for any address.
+await client.getPublicBalances({ user: address, programs: ['test_arc20_eth.aleo'] })
+// { 'test_arc20_eth.aleo': 5000000000000000000n }
 
-// Combined — public + private + total per token, keyed by token id.
+// Combined — public + private + total per token, keyed by token id. The API's
+// token registry supplies the program list; both balance sides come from chain.
 await client.getBalances()
 // { '1223…045field': { symbol: 'ETHx', decimals: 18, public: 5n, private: 3n, total: 8n }, … }
 ```

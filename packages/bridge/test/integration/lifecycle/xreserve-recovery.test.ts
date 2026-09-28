@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { complete } from '../../../src/actions/complete.js'
 import { getStatus } from '../../../src/actions/getStatus.js'
-import { waitForStatus } from '../../../src/actions/waitForStatus.js'
 import { wait } from '../../../src/actions/wait.js'
 import { recover } from '../../../src/actions/recover.js'
 import { createAleoClient } from '../../../src/connections/aleo.js'
@@ -227,11 +226,11 @@ describe('xReserve lifecycle', () => {
     })
   })
 
-  it('waits through read-only pending responses until the requested status', async () => {
+  it('lets wait stop at an explicitly requested protocol status', async () => {
     const { plan, payload, messageHash, receipt } = await fixture()
     let reads = 0
-    const updates: BridgeReceipt[] = []
-    const result = await waitForStatus(
+    const updates: unknown[] = []
+    const result = await wait(
       DEFAULT_BRIDGE_REGISTRY,
       {},
       async () => {
@@ -241,8 +240,7 @@ describe('xReserve lifecycle', () => {
           : { ok: true, status: 200, json: async () => ({ attestation: { payload, messageHash, attestation: SIGNATURE } }) }
       },
       {
-        plan,
-        receipt,
+        progress: { next: 'wait', plan, receipt },
         until: ['DESTINATION_ACTION_REQUIRED'],
         pollingIntervalMs: 0,
         timeoutMs: 1_000,
@@ -251,7 +249,10 @@ describe('xReserve lifecycle', () => {
     )
 
     expect(reads).toBe(2)
-    expect(result.status).toBe('DESTINATION_ACTION_REQUIRED')
+    expect(result).toMatchObject({
+      next: 'complete',
+      receipt: { status: 'DESTINATION_ACTION_REQUIRED' },
+    })
     expect(updates).toEqual([result])
   })
 
@@ -272,6 +273,20 @@ describe('xReserve lifecycle', () => {
       next: 'complete',
       receipt: { status: 'DESTINATION_ACTION_REQUIRED' },
     })
+  })
+
+  it('rejects an empty explicit status list before returning current progress', async () => {
+    const { plan, receipt } = await fixture()
+
+    await expect(wait(
+      DEFAULT_BRIDGE_REGISTRY,
+      {},
+      vi.fn(),
+      {
+        progress: { next: 'wait', plan, receipt },
+        until: [],
+      },
+    )).rejects.toThrow('wait requires at least one target status')
   })
 
   it.each([
@@ -331,6 +346,58 @@ describe('xReserve lifecycle', () => {
     )
 
     expect(result).toMatchObject({ status: 'DELIVERY_PENDING', sourceTxId: 'at1burn' })
+  })
+
+  it('keeps an accepted Aleo burn observable while xReserve relays to EVM', async () => {
+    const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'aleo-testnet', asset: 'usdcx' },
+      destination: { chain: 'sepolia', asset: 'usdc' },
+      amount: '2.1',
+      recipient: '0x0000000000000000000000000000000000000001',
+    })
+    const receipt: BridgeReceipt = {
+      id: 'at1burn',
+      protocol: 'xreserve',
+      status: 'DELIVERY_PENDING',
+      sourceTxId: 'at1burn',
+      protocolState: { routeId: plan.route.id },
+    }
+
+    await expect(getStatus(
+      DEFAULT_BRIDGE_REGISTRY,
+      {},
+      vi.fn(),
+      { plan, receipt },
+    )).resolves.toBe(receipt)
+  })
+
+  it('requires Aleo network access to verify provider-managed inbound delivery', async () => {
+    const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+      amount: '2',
+      recipient: RECIPIENT,
+      mintMode: 'record',
+    })
+    const waitingForDelivery: BridgeReceipt = {
+      id: `0x${'44'.repeat(32)}`,
+      protocol: 'xreserve',
+      status: 'DELIVERY_PENDING',
+      sourceTxId: `0x${'22'.repeat(32)}`,
+      protocolState: {
+        routeId: plan.route.id,
+        mintMode: 'record',
+        bridgeProgram: 'test_usdcx_bridge_v2.aleo',
+        nonce: `0x${'33'.repeat(32)}`,
+      },
+    }
+
+    await expect(getStatus(
+      DEFAULT_BRIDGE_REGISTRY,
+      {},
+      vi.fn(),
+      { plan, receipt: waitingForDelivery },
+    )).rejects.toThrow(/Aleo client.*verify xReserve delivery/i)
   })
 
   it('recovers an Aleo burn from its compact source checkpoint', async () => {

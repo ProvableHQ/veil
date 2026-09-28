@@ -1,17 +1,12 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import { loadNetwork, registerProvableApi, createProvableSession } from '@provablehq/veil-aleo-sdk'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 
 /**
  * Scans the VEIL_E2E account's credits.aleo records on testnet AND mainnet
  * through one wallet client: switchChain re-targets the proving stack, the
  * transport, and the attached record scanner together, so the second scan
- * hits mainnet without rebuilding the client. Registration with the Provable
- * API is required — see "Registering with the Provable API" in AGENTS.md.
- *
- * Credentials resolve in two steps: the pre-registered consumer from
- * ALEO_DPS_API_KEY + ALEO_CONSUMER_ID is preferred (verified with a JWT
- * mint); when absent or rejected, the test self-registers a throwaway
- * consumer via POST /consumers.
+ * hits mainnet without rebuilding the client. The scanner runs on the Provable
+ * gateway, which needs no credentials.
  *
  * Gated behind VEIL_INTEGRATION=1 and VEIL_E2E_PRIVATE_KEY. Hits the real
  * scanner service on both networks; read-only, no funds move.
@@ -23,56 +18,17 @@ import { loadNetwork, registerProvableApi, createProvableSession } from '@provab
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
 const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY
 
-const NETWORK_URL = process.env.VEIL_API_URL ?? 'https://api.provable.com/v2'
-const SCANNER_URL = process.env.VEIL_SCANNER_URL ?? 'https://api.provable.com/scanner'
-const AUTH_URL = process.env.VEIL_AUTH_URL ?? 'https://api.provable.com'
-
-/** Mints a JWT to prove the consumer credentials are valid. */
-async function credentialsWork(consumerId: string, apiKey: string): Promise<boolean> {
-  try {
-    await createProvableSession({ credentials: { consumerId, apiKey }, baseUrl: AUTH_URL }).getJwt()
-    return true
-  } catch {
-    return false
-  }
-}
-
-/** Registers a throwaway consumer and returns its id and API key. */
-async function selfRegister(): Promise<{ consumerId: string; apiKey: string }> {
-  return registerProvableApi({
-    username: `veil-records-it-${Math.floor(Date.now() / 1000)}`,
-    baseUrl: AUTH_URL,
-  })
-}
-
-/** Pre-registered env credentials when they verify; a fresh consumer otherwise. */
-async function resolveCredentials(): Promise<{ consumerId: string; apiKey: string }> {
-  const envId = process.env.ALEO_CONSUMER_ID
-  const envKey = process.env.ALEO_DPS_API_KEY
-  if (envId && envKey && (await credentialsWork(envId, envKey))) {
-    return { consumerId: envId, apiKey: envKey }
-  }
-  return selfRegister()
-}
+const EDGE_BASE = process.env.EDGE_BASE_URL ?? 'https://edge.provable.com/api'
+const NETWORK_URL = process.env.VEIL_API_URL ?? `${EDGE_BASE}/v2`
+const SCANNER_URL = process.env.VEIL_SCANNER_URL ?? `${EDGE_BASE}/scanner`
 
 describe.runIf(RUN)('requestRecords on testnet and mainnet with switchChain', () => {
-  let consumerId: string
-  let apiKey: string
-
-  beforeAll(async () => {
-    ;({ consumerId, apiKey } = await resolveCredentials())
-  }, 60_000)
-
   it(
     'scans testnet records, switches the client to mainnet, scans mainnet records',
     async () => {
       // --- Testnet: full wallet-client path with an attached remote scanner ---
       const aleoTestnet = await loadNetwork('testnet')
-      const scanner = aleoTestnet.createRemoteScanner({
-        url: SCANNER_URL,
-        consumerId,
-        apiKey,
-      })
+      const scanner = aleoTestnet.createRemoteScanner({ url: SCANNER_URL })
       const { walletClient } = aleoTestnet.createAleoClient({
         privateKey: PRIVATE_KEY!,
         networkUrl: NETWORK_URL,
@@ -122,28 +78,26 @@ describe.runIf(RUN)('requestRecords on testnet and mainnet with switchChain', ()
  * Run with:
  *   VEIL_INTEGRATION=1 npx vitest run packages/provable-sdk/test/integration/requestRecords.integration.test.ts
  */
-const EDGE_BASE = process.env.EDGE_BASE_URL ?? 'https://edge.provable.com/api'
 const EDGE_KEY = process.env.EDGE_PROVABLE_API_KEY
 
 /**
- * Scanner routes the bounds suite runs against. The jwt path resolves consumer
- * credentials lazily (registering a throwaway consumer when the env pair is
- * absent or rejected); the edge path runs only when a provisioned key is
- * present, since edge keys are handed out rather than registered.
+ * Scanner routes the bounds suite runs against: the gateway with no
+ * credentials, and the gateway with a provisioned key when one is present,
+ * since gateway keys are handed out rather than registered.
  */
 const SCAN_TARGETS = [
   {
-    name: 'via api.provable.com (jwt)',
+    name: 'via edge.provable.com (unauthenticated)',
     enabled: true,
     networkUrl: NETWORK_URL,
     scannerUrl: SCANNER_URL,
-    scannerAuth: async () => resolveCredentials(),
+    scannerAuth: async () => ({}),
   },
   {
     name: 'via edge.provable.com (provisioned key)',
     enabled: !!EDGE_KEY,
-    networkUrl: `${EDGE_BASE}/v2`,
-    scannerUrl: `${EDGE_BASE}/scanner`,
+    networkUrl: NETWORK_URL,
+    scannerUrl: SCANNER_URL,
     scannerAuth: async () => ({ auth: { mode: 'api-key' as const, value: EDGE_KEY! } }),
   },
 ]
@@ -244,14 +198,22 @@ describe.runIf(RUN && target.enabled)(`RecordFilter bounds applied by the scanne
   it("returns at least the unspent set for statusFilter 'all'", async () => {
     // Regression for the 'all' defect: 'all' used to send unspent: true, which
     // the service reads as spent = false, so it returned the unspent set only.
-    // Omitting the key must return a superset.
-    const all = await scan({ program: 'credits.aleo', statusFilter: 'all' })
-    expect(all.length).toBeGreaterThanOrEqual(baseline.length)
+    // Omitting the key must return a superset. Bounded to the block range of
+    // the newest unspent records: the service pages 'all' from the oldest
+    // block, so on an account with more records than one page the newest
+    // unspent records never appear in an unbounded first page.
+    const newest = [...baseline].sort((a, b) => b.blockHeight - a.blockHeight).slice(0, 20)
+    const heights = newest.map((r) => r.blockHeight)
+    const all = await scan({
+      program: 'credits.aleo',
+      statusFilter: 'all',
+      filter: { start: Math.min(...heights), end: Math.max(...heights) + 1, resultsPerPage: 500 },
+    })
+    expect(all.length).toBeGreaterThanOrEqual(newest.length)
 
-    const unspentCommitments = new Set(baseline.map((r) => r.commitment))
     const allCommitments = new Set(all.map((r) => r.commitment))
-    for (const commitment of unspentCommitments) {
-      expect(allCommitments.has(commitment)).toBe(true)
+    for (const record of newest) {
+      expect(allCommitments.has(record.commitment)).toBe(true)
     }
   }, 120_000)
 

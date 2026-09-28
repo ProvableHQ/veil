@@ -12,11 +12,11 @@ importers:
         specifier: ^2.31.0
         version: 2.31.0(@types/node@25.5.0)
       '@provablehq/aleo-devnode':
-        specifier: ^0.2.4
-        version: 0.2.4
+        specifier: ^0.2.6
+        version: 0.2.6
       '@provablehq/sdk':
-        specifier: ^0.11.6
-        version: 0.11.9
+        specifier: ^0.11.11
+        version: 0.11.11
       '@solana/kit':
         specifier: ^8.0.0
         version: 8.1.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -105,8 +105,11 @@ importers:
         version: 2.54.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76)
     devDependencies:
       '@provablehq/sdk':
-        specifier: ^0.11.6
-        version: 0.11.9
+        specifier: ^0.11.11
+        version: 0.11.11
+      '@provablehq/veil-aleo-sdk':
+        specifier: workspace:*
+        version: link:../provable-sdk
       '@solana/kit':
         specifier: ^8.0.0
         version: 8.1.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -116,15 +119,12 @@ importers:
 
   packages/bridge-cli:
     dependencies:
-      '@hyperlane-xyz/sealevel-sdk':
-        specifier: 41.3.1
-        version: 41.3.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       '@provablehq/aleo-bridge-sdk':
         specifier: workspace:^
         version: link:../bridge
       '@provablehq/sdk':
-        specifier: ^0.11.9
-        version: 0.11.9
+        specifier: ^0.11.11
+        version: 0.11.11
       '@provablehq/veil-aleo-sdk':
         specifier: workspace:^
         version: link:../provable-sdk
@@ -132,8 +132,8 @@ importers:
         specifier: workspace:^
         version: link:../core
       '@solana/kit':
-        specifier: ^6.10.0
-        version: 6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+        specifier: ^8.0.0
+        version: 8.1.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       viem:
         specifier: ^2.21.0
         version: 2.54.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76)
@@ -169,7 +169,7 @@ importers:
   packages/devnode:
     dependencies:
       '@provablehq/veil-core':
-        specifier: workspace:>=0.6.0 <1.0.0
+        specifier: workspace:>=0.11.1 <1.0.0
         version: link:../core
 
   packages/leo: {}
@@ -180,13 +180,13 @@ importers:
         specifier: ^1.7.2
         version: 1.8.0
       '@provablehq/sdk':
-        specifier: ^0.11.9
-        version: 0.11.9
+        specifier: ^0.11.11
+        version: 0.11.11
       '@provablehq/veil-aleo-devnode':
-        specifier: workspace:>=0.6.0 <1.0.0
+        specifier: workspace:>=0.11.1 <1.0.0
         version: link:../devnode
       '@provablehq/veil-core':
-        specifier: workspace:>=0.6.0 <1.0.0
+        specifier: workspace:>=0.11.1 <1.0.0
         version: link:../core
       '@scure/bip39':
         specifier: ^1.4.0
@@ -243,8 +243,8 @@ importers:
         version: link:../core
     devDependencies:
       '@provablehq/sdk':
-        specifier: ^0.11.9
-        version: 0.11.9
+        specifier: ^0.11.11
+        version: 0.11.11
       '@provablehq/veil-aleo-sdk':
         specifier: workspace:*
         version: link:../provable-sdk
@@ -267,7 +267,7 @@ importers:
   packages/wallet-adapter:
     dependencies:
       '@provablehq/veil-core':
-        specifier: workspace:>=0.6.0 <1.0.0
+        specifier: workspace:>=0.11.1 <1.0.0
         version: link:../core
     devDependencies:
       '@provablehq/aleo-types':
@@ -806,33 +806,33 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
-  '@provablehq/aleo-devnode-darwin-arm64@0.2.4':
-    resolution: {integrity: sha512-oEP9ChX3oPlTBIEEVt0fHPi8mzx359DS+8ZPXh1s/c81J542FB2J13rmtkmmhRmYlmfvh+D2p+EhMvquY+B72g==}
+  '@provablehq/aleo-devnode-darwin-arm64@0.2.6':
+    resolution: {integrity: sha512-eNfy03U9N8HTRVxy9Im+O3+O2647bz9mLkDHLoagusEPL0lUrgrLsQqQni0lVv/d1IbVJvf6+dxtKTAWW4zKpg==}
     cpu: [arm64]
     os: [darwin]
 
-  '@provablehq/aleo-devnode-darwin-x64@0.2.4':
-    resolution: {integrity: sha512-S41MdLuqYyKeIQfUbJ3dTo78T4ErMSy0YQfyAxC+MA818+2PfRA6oiz9mKUqLZQaWgEF5JFiO58SyWyvQTiWCQ==}
+  '@provablehq/aleo-devnode-darwin-x64@0.2.6':
+    resolution: {integrity: sha512-Rfm1Y7Zmg1idHmqR1KBoALjbrsfXH3Jo8uHi1KgzIbchOk9T5KGCvQQBDn9fzDzOzwCqPbVFfpmQ4YhU9ngaNA==}
     cpu: [x64]
     os: [darwin]
 
-  '@provablehq/aleo-devnode-linux-arm64@0.2.4':
-    resolution: {integrity: sha512-eq4sXcCk+tnFklzxoUSiY43MHGgkgPj25q8lRgSBuaHeOLfMxN80XMZ3qgMtqEJPt8iYnJaUaPoJk7TSct/2QA==}
+  '@provablehq/aleo-devnode-linux-arm64@0.2.6':
+    resolution: {integrity: sha512-k+Y62eLXfSjY7NPv08/42A5WdA2Wz1CyXdqc/c4pqAu63nIRLbuPnN97eZdEcxIADGmrHd3f8m6jwJdkI1+d3w==}
     cpu: [arm64]
     os: [linux]
 
-  '@provablehq/aleo-devnode-linux-x64@0.2.4':
-    resolution: {integrity: sha512-izQUP4dKgW4RVhodugnEFR/IlnB2C/p5xEVoOaKGF4QocxPwiBUc7tQhC4x2CfkCXrEiy0cO5XBZYnTkWrPIXg==}
+  '@provablehq/aleo-devnode-linux-x64@0.2.6':
+    resolution: {integrity: sha512-FQEWzj89JSz6MyrfWFeJ9u8sbGbtPQ0zBWzGrUlKWnizZC3wyI+FHMDUQBl2mej4HIjv0/7h8eBRPHU4G4mu6A==}
     cpu: [x64]
     os: [linux]
 
-  '@provablehq/aleo-devnode-win32-x64@0.2.4':
-    resolution: {integrity: sha512-SmpLYcTn1wEAWsPrxyhdPfmkJ6zHmgusc01bwf5E2T0/Efzzc34czxPTFWzeO2OlDvyQeEJBA7MobsJ/AvJtJA==}
+  '@provablehq/aleo-devnode-win32-x64@0.2.6':
+    resolution: {integrity: sha512-XJK6t/CbnPsfg8Wqjwf+jS4F6g98GV2ZQUHFOfxaXeV4pGR0N/9Ff5cWn68zteoqowWT6ArZr98z7o3DGNaO5Q==}
     cpu: [x64]
     os: [win32]
 
-  '@provablehq/aleo-devnode@0.2.4':
-    resolution: {integrity: sha512-vWvnCBPxG1T3PCIAM6y8+goz0RsHeTMfJtEUWrDloihbQVpz2Zxmv7MBIxo/ZskFqkwU5LZfxizwiLyIVCx6aQ==}
+  '@provablehq/aleo-devnode@0.2.6':
+    resolution: {integrity: sha512-Y9fGGdoF4h0mmKNBgkqhDwQYrjCc/8JwUtinR2s9AAuRyogk+krAagNPKxsBs76jCHGiLH3jpF4ksslFNWyh7g==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -863,11 +863,11 @@ packages:
   '@provablehq/aleo-wallet-standard@1.0.0':
     resolution: {integrity: sha512-3QVgBd9Mq0y769VRj6a5FIzWEI5TPQ2CzwgpMurq8JwHxKLRry9Zze0XF92dWAqE6ILvvPCew3pwapC8gerYQA==}
 
-  '@provablehq/sdk@0.11.9':
-    resolution: {integrity: sha512-YJqbj9eBnLqJuq4FvR2ZUNouSGSdDO8F/Mfy0a6u2mUX8pThk0Bp9gwkzohTGnqKmofsoiQB9y6Sp7u6fj9ZIw==}
+  '@provablehq/sdk@0.11.11':
+    resolution: {integrity: sha512-6lrKTwJdfWNUAScDEBuiVYAUNJZtasYmc8VpD026VvQyNyCsoA1g46Vy9FijYNHM+1nDnZaMSeZJakmv3ThXSA==}
 
-  '@provablehq/wasm@0.11.9':
-    resolution: {integrity: sha512-ZqSPR6IOljKElyYg8p9eMrTP9VjVSN3zLzZQkf8s4UcctZjoJQIfkk6ksbrSK1phcTRKQcvcLFCuCKLLQ+ODRg==}
+  '@provablehq/wasm@0.11.11':
+    resolution: {integrity: sha512-XunZexf+KGa7uCZtHtIQ1is5iQ5Fg35NUWakfnr2G/lrmtEOTxYSAZt4n3tMR5HmcVF3uTCpPMeUzeGZm+4abQ==}
 
   '@puzzlehq/sdk-core@1.0.4':
     resolution: {integrity: sha512-tL/RzseDfSRaVLCqMg9UIbgVK0+jDEq5QgBwvvboBixEiL1qseYkEN5udX4nsJF3J5YrNm984MKQIt08JZra7A==}
@@ -3087,28 +3087,28 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@provablehq/aleo-devnode-darwin-arm64@0.2.4':
+  '@provablehq/aleo-devnode-darwin-arm64@0.2.6':
     optional: true
 
-  '@provablehq/aleo-devnode-darwin-x64@0.2.4':
+  '@provablehq/aleo-devnode-darwin-x64@0.2.6':
     optional: true
 
-  '@provablehq/aleo-devnode-linux-arm64@0.2.4':
+  '@provablehq/aleo-devnode-linux-arm64@0.2.6':
     optional: true
 
-  '@provablehq/aleo-devnode-linux-x64@0.2.4':
+  '@provablehq/aleo-devnode-linux-x64@0.2.6':
     optional: true
 
-  '@provablehq/aleo-devnode-win32-x64@0.2.4':
+  '@provablehq/aleo-devnode-win32-x64@0.2.6':
     optional: true
 
-  '@provablehq/aleo-devnode@0.2.4':
+  '@provablehq/aleo-devnode@0.2.6':
     optionalDependencies:
-      '@provablehq/aleo-devnode-darwin-arm64': 0.2.4
-      '@provablehq/aleo-devnode-darwin-x64': 0.2.4
-      '@provablehq/aleo-devnode-linux-arm64': 0.2.4
-      '@provablehq/aleo-devnode-linux-x64': 0.2.4
-      '@provablehq/aleo-devnode-win32-x64': 0.2.4
+      '@provablehq/aleo-devnode-darwin-arm64': 0.2.6
+      '@provablehq/aleo-devnode-darwin-x64': 0.2.6
+      '@provablehq/aleo-devnode-linux-arm64': 0.2.6
+      '@provablehq/aleo-devnode-linux-x64': 0.2.6
+      '@provablehq/aleo-devnode-win32-x64': 0.2.6
 
   '@provablehq/aleo-types@1.0.0': {}
 
@@ -3161,9 +3161,9 @@ snapshots:
       '@provablehq/aleo-types': 1.0.0
       eventemitter3: 5.0.4
 
-  '@provablehq/sdk@0.11.9':
+  '@provablehq/sdk@0.11.11':
     dependencies:
-      '@provablehq/wasm': 0.11.9
+      '@provablehq/wasm': 0.11.11
       '@scure/base': 2.0.0
       '@serenity-kit/noble-sodium': 0.2.3
       comlink: 4.4.2
@@ -3171,7 +3171,7 @@ snapshots:
       mime: 4.1.0
       xmlhttprequest-ssl: 4.0.0
 
-  '@provablehq/wasm@0.11.9': {}
+  '@provablehq/wasm@0.11.11': {}
 
   '@puzzlehq/sdk-core@1.0.4(buffer@6.0.3)(bufferutil@4.1.0)(utf-8-validate@6.0.6)':
     dependencies:

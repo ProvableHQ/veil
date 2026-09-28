@@ -14,7 +14,7 @@ that spent or created it; chain into
 import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 })
 
 const id = await client.findTransitionId({ inputOrOutputId: '1234...field' })

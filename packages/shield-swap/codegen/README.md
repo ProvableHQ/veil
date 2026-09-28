@@ -8,7 +8,7 @@ a reviewable diff.
 | Path | What | Generates |
 | --- | --- | --- |
 | `abi/` | `shield_swap` program bytecode (`.aleo`) + the ABI JSON (`leo abi` output) | `src/generated/shield_swap.ts` |
-| `amm-api/` | the AMM (DEX) API's OpenAPI spec | `src/api/openapi.ts` |
+| `amm-api/` | the AMM (DEX) API's OpenAPI spec, pinned from `api.testnet.swap.shield.fi`; `check-networks.mjs` verifies the mainnet spec is a subset of it at regen time and lists the testnet-only routes | `src/api/openapi.ts` |
 | `veil.config.json` | codegen config (ABI → output) | — |
 
 Regenerate (run from the package root):

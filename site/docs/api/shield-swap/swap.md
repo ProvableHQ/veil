@@ -25,6 +25,23 @@ The call resolves differently by signer:
   transaction id. `swapId` and `blindedAddress` become recoverable only once
   the transaction confirms.
 
+## Execute a quote
+
+```ts
+const quote = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: '1.5' })
+const handle = await client.swap({ quote })
+```
+
+This overload selects single- or multi-hop execution and preserves `quote.minOut`
+exactly. Quote inputs accept decimal strings in token units or bigint in raw
+base units; the quote resolves decimals and rejects excess precision. Quotes expire after 60 seconds;
+expiry is checked during preparation,
+not after proving has begun. The transaction's block deadline remains separate.
+Execution checks only route pools on chain and resolves imports automatically.
+Wallet callers MUST additionally supply `tokenRecord`. The quote's amount,
+route, slippage and program cannot be overridden. The existing manual overload
+below remains supported.
+
 ## Usage
 
 ### Local account
@@ -36,18 +53,14 @@ import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 const aleo = await loadNetwork('testnet')
 
 const scanner = aleo.createRemoteScanner({
-  url: 'https://api.provable.com/scanner',
-  consumerId: CONSUMER_ID,
-  apiKey: DPS_API_KEY,
+  url: 'https://edge.provable.com/api/scanner',
 })
 
 const { walletClient } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
-  networkUrl: 'https://api.provable.com/v2',
+  networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated',
-  proverUrl: 'https://api.provable.com/prove',
-  apiKey: DPS_API_KEY,
-  consumerId: CONSUMER_ID,
+  proverUrl: 'https://edge.provable.com/api/prove',
   records: scanner,
 })
 
@@ -121,7 +134,7 @@ process since it is plain JSON.
 - **blindedAddress** — `string | undefined`. The public single-use address
   the swap recorded. Set immediately on the local path; on the wallet path,
   recover it post-confirmation from the transition's public inputs or the
-  API's `swap.recipient`.
+  `recipient` of the chain's `swap_outputs` entry (`getSwapOutput`).
 - **tokenInId** — `string`. Token id (field literal) that was sold.
 - **tokenOutId** — `string`. Token id (field literal) that was bought.
 - **poolKey** — `string`. The pool the swap executed against.

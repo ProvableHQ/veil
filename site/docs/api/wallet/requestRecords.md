@@ -18,17 +18,16 @@ const account = aleo.privateKeyToAccount('APrivateKey1...')
 
 const recordProvider = aleo.createRemoteScanner({
   url: 'https://rss.provable.com',
-  consumerId: '<consumer-id>',
 })
 recordProvider.setAccount({ viewKey: account.viewKey })
 
 const client = createWalletClient({
   account,
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
   proving: aleo.createProvingConfig({
     mode: 'delegated',
-    networkUrl: 'https://api.provable.com/v2',
-    proverUrl: 'https://api.provable.com/prove',
+    networkUrl: 'https://edge.provable.com/api/v2',
+    proverUrl: 'https://edge.provable.com/api/prove',
     account,
   }),
   recordProvider,

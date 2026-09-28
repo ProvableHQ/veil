@@ -10,7 +10,7 @@ import { version } from '../../src/version.js'
  * requests never fail preflight against nodes Veil does not control.
  */
 describe('http transport: client header', () => {
-  const PROVABLE = 'https://api.provable.com/v2'
+  const PROVABLE = 'https://edge.provable.com/api/v2'
   const THIRD_PARTY = 'https://my-node.example.com/v2'
 
   function makeTransport(url: string, config?: Parameters<typeof http>[1]) {

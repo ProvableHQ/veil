@@ -15,7 +15,7 @@ import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 
 // A read-only client — point a transport at an Aleo node (viem's createPublicClient).
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2'),
+  transport: http('https://edge.provable.com/api/v2'),
 })
 
 // Similar method names as in viem, now reading Aleo state.
@@ -89,11 +89,11 @@ and transport interfaces.
 | `@provablehq/veil-aleo-react-hooks` | `VeilProvider` + `useVeilWallet()` — wallet connection and clients for React apps. | You're building a React dApp with wallet connection. |
 | `@provablehq/shield-swap-sdk` | Client for the `shield_swap` AMM/DEX — private swaps, liquidity, and the DEX API. | You're integrating the Shield Swap DEX — swaps, liquidity, or pool/price data. |
 | `@provablehq/shield-swap-cli` | The `shield-swap` command — setup, pools, balances, swaps, and liquidity from a terminal. | You want to trade or script against the DEX rather than build a client into an app. |
-| `@provablehq/aleo-bridge-cli` | The `aleo-bridge` command — preview and execute reviewed xReserve and Hyperlane routes. | You want to bridge from a terminal rather than integrate the bridge SDK. |
+| `@provablehq/aleo-bridge-cli` | Preview and execute reviewed mainnet bridge routes with `aleo-bridge`. | A developer needs a terminal client for Arc, Ethereum, Solana, and Aleo bridging. |
 | `@provablehq/veil-codegen` | Generate typed bindings from an Aleo program ABI (library + `veil-codegen` CLI). | You want typed reads and writes for a specific program's ABI. |
 | `@provablehq/veil-aleo-devnode` | Run and drive a local Aleo devnode for tests. | You need a local Aleo node in tests or local development. |
 | `@provablehq/veil-leo` | Typed wrapper around the `leo` CLI (build, deploy, …). | You compile or deploy Leo programs — including during testing, where it pairs with `@provablehq/veil-aleo-devnode`. |
-| `@provablehq/aleo-bridge-sdk` | Cross-chain bridge client (preview). | Not yet — in preview, not published. |
+| `@provablehq/aleo-bridge-sdk` | Cross-chain bridge client (preview). Versioned separately from the Veil packages; expect breaking changes between minor releases. | You move assets between Aleo and Ethereum or Solana over Circle xReserve or Hyperlane. |
 
 ## Quick Start
 
@@ -103,7 +103,7 @@ and transport interfaces.
 import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2'),
+  transport: http('https://edge.provable.com/api/v2'),
 })
 
 // Familiar viem-style actions
@@ -157,9 +157,9 @@ const aleo = await loadNetwork('testnet')
 
 const { publicClient, walletClient } = aleo.createAleoClient({
   privateKey: 'APrivateKey1...',
-  networkUrl: 'https://api.provable.com/v2',
+  networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated', // or 'local' to prove in-process
-  proverUrl: 'https://api.provable.com/prove/testnet',
+  proverUrl: 'https://edge.provable.com/api/prove/testnet',
 })
 ```
 
@@ -187,7 +187,7 @@ const txId = await contract.write.transfer({
 import { createPublicClient, http, viewOnlyAccount } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2'),
+  transport: http('https://edge.provable.com/api/v2'),
 })
 
 const account = viewOnlyAccount({
@@ -217,21 +217,21 @@ const [route] = bridge.registry.getRoutes({
   destinationChainId: 'aleo',
 })
 
-const plan = bridge.prepare({
+const quote = await bridge.quote({
   source: { chain: 'ethereum', asset: 'usdc' },
   destination: { chain: 'aleo', asset: 'usdcx' },
   bridgeProtocol: route.protocol,
   amount: '25',
   recipient: aleoAddress,
 })
-plan.steps // approve → deposit → wait-attestation → mint
+quote.plan.steps // approve → deposit → wait-attestation → mint
 ```
 
-`prepare` validates the route, amount precision, and recipient without
-querying fees, signing, submitting, or moving funds. To run reviewed routes
-from a terminal, use `aleo-bridge routes` and `aleo-bridge transfer`; see the
-[`CLI README`](./packages/bridge-cli/README.md). SDK integrations are documented
-in [`packages/bridge/README.md`](./packages/bridge/README.md).
+`quote` validates the route, amount precision, and recipient, reads current
+fees where the provider exposes them, and returns the plan used for execution.
+It does not sign, submit, or move funds. See
+[`packages/bridge/README.md`](./packages/bridge/README.md) for registry status
+and the remaining execution phases.
 
 ## Agent Usage
 
@@ -246,7 +246,7 @@ import { createMcpServer } from '@provablehq/veil-core/mcp'
 import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2'),
+  transport: http('https://edge.provable.com/api/v2'),
 })
 
 await createMcpServer({ client })
@@ -429,7 +429,6 @@ veil/
 │   ├── wallet-adapter/      # @provablehq/veil-aleo-wallet-adapter (wraps wallet standard)
 │   ├── react/              # @provablehq/veil-aleo-react-hooks (VeilProvider, useVeilWallet)
 │   ├── shield-swap/         # @provablehq/shield-swap-sdk (shield_swap AMM/DEX client)
-│   ├── bridge-cli/          # @provablehq/aleo-bridge-cli (reviewed bridge flows)
 │   ├── codegen/             # @provablehq/veil-codegen (ABI → typed bindings + CLI)
 │   ├── devnode/             # @provablehq/veil-aleo-devnode (local Aleo devnode for tests)
 │   ├── leo/                 # @provablehq/veil-leo (typed leo CLI wrapper)

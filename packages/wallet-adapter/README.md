@@ -46,7 +46,7 @@ const { account, transport } = fromWalletAdapter(wallet)
 
 const client = createWalletClient({
   account,
-  transport: fallback([transport, http('https://api.provable.com/v2')]),
+  transport: fallback([transport, http('https://edge.provable.com/api/v2')]),
 })
 ```
 

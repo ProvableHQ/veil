@@ -40,9 +40,9 @@ const aleo = await loadNetwork('testnet')
 
 const { publicClient, walletClient } = aleo.createAleoClient({
   privateKey: 'APrivateKey1...',
-  networkUrl: 'https://api.provable.com/v2',
+  networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated', // or 'local' to prove in-process
-  proverUrl: 'https://api.provable.com/prove',
+  proverUrl: 'https://edge.provable.com/api/prove',
 })
 ```
 
@@ -72,7 +72,7 @@ the target network; every read is a method on the client.
 import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
 })
 
 // Latest block height.
@@ -133,7 +133,7 @@ import { createWalletClient, http } from '@provablehq/veil-core'
 
 const client = createWalletClient({
   account,                                    // from a companion package
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
 })
 
 const txId = await client.writeContract({
@@ -173,7 +173,7 @@ methods onto a base client:
 import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
 }).extend((client) => ({
   async programExists(programId: string) {
     const code = await client.getCode({ programId }).catch(() => null)

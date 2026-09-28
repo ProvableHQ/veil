@@ -2,21 +2,22 @@ import { describe, it, expect, beforeAll } from 'vitest'
 import { loadNetwork, type AleoSdk, type ProvableKeyedAuth } from '../../src/index.js'
 
 /**
- * Live matrix over both Provable API auth paths: the JWT session model on
- * `api.provable.com` (a consumerId + apiKey pair minting short-lived tokens)
- * and the provisioned-key model on `edge.provable.com` (one `X-API-Key`
- * header per request). Each configured path runs the same two probes —
- * an authenticated record scan and a delegated proof with on-chain
- * confirmation — so a regression in either model, or a drift between them,
- * fails the same file.
+ * Live matrix over the Provable auth paths: unauthenticated on the default
+ * gateway (which needs no credentials), the provisioned-key model on the same
+ * gateway (one `X-API-Key` header per request), and the legacy JWT model on
+ * `api.provable.com` (a consumerId + apiKey pair minting short-lived tokens).
+ * Each configured path runs the same two probes — a record scan and a
+ * delegated proof with on-chain confirmation — so a regression in any path,
+ * or a drift between them, fails the same file.
  *
  * The scan is read-only. The proof SPENDS: one microcredit self-transferred
  * via `credits.aleo/transfer_public` per path, with the fee master paying the
  * base fee, so the account needs a public credits balance.
  *
  * Gated behind VEIL_INTEGRATION=1, then per path:
- * - jwt: ALEO_DPS_API_KEY + ALEO_CONSUMER_ID
+ * - unauthenticated: always
  * - api-key: EDGE_PROVABLE_API_KEY
+ * - jwt: ALEO_DPS_API_KEY + ALEO_CONSUMER_ID
  * The account defaults to the SDK demo account (funded on testnet, public
  * balance); override with VEIL_E2E_PRIVATE_KEY.
  *
@@ -49,6 +50,22 @@ type AuthPath = {
 
 const PATHS: AuthPath[] = [
   {
+    name: 'unauthenticated on edge.provable.com',
+    enabled: true,
+    networkUrl: `${EDGE_BASE}/v2`,
+    proverUrl: `${EDGE_BASE}/prove`,
+    scannerUrl: `${EDGE_BASE}/scanner`,
+    clientAuth: {},
+  },
+  {
+    name: 'provisioned key on edge.provable.com',
+    enabled: !!process.env.EDGE_PROVABLE_API_KEY,
+    networkUrl: `${EDGE_BASE}/v2`,
+    proverUrl: `${EDGE_BASE}/prove`,
+    scannerUrl: `${EDGE_BASE}/scanner`,
+    clientAuth: { auth: { mode: 'api-key', value: process.env.EDGE_PROVABLE_API_KEY ?? '' } },
+  },
+  {
     name: 'jwt session on api.provable.com',
     enabled: !!(process.env.ALEO_DPS_API_KEY && process.env.ALEO_CONSUMER_ID),
     networkUrl: `${API_BASE}/v2`,
@@ -58,14 +75,6 @@ const PATHS: AuthPath[] = [
       apiKey: process.env.ALEO_DPS_API_KEY,
       consumerId: process.env.ALEO_CONSUMER_ID,
     },
-  },
-  {
-    name: 'provisioned key on edge.provable.com',
-    enabled: !!process.env.EDGE_PROVABLE_API_KEY,
-    networkUrl: `${EDGE_BASE}/v2`,
-    proverUrl: `${EDGE_BASE}/prove`,
-    scannerUrl: `${EDGE_BASE}/scanner`,
-    clientAuth: { auth: { mode: 'api-key', value: process.env.EDGE_PROVABLE_API_KEY ?? '' } },
   },
 ]
 

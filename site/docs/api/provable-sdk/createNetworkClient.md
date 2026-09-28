@@ -19,7 +19,7 @@ import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 
 const aleo = await loadNetwork('testnet')
 
-const networkClient = aleo.createNetworkClient('https://api.provable.com/v2')
+const networkClient = aleo.createNetworkClient('https://edge.provable.com/api/v2')
 ```
 
 ## Returns

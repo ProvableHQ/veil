@@ -19,7 +19,7 @@ aleo-bridge transfer \
   --route arc-to-aleo \
   --amount 5 \
   --recipient aleo1... \
-  --rpc-url https://rpc.testnet.arc.network \
+  --rpc-url https://rpc.mainnet.arc.io \
   --private-key-file ~/.config/aleo-bridge/arc.key \
   --mint-mode private \
   --aleo-private-key-file ~/.config/aleo-bridge/aleo.key
@@ -30,6 +30,10 @@ aleo-bridge transfer ... --execute
 
 The command reads a trimmed secret from each file. Restrict those files to your
 user account, for example with `chmod 600 <file>`, and never commit them.
+
+Arc uses mainnet chain ID `5042`; a testnet RPC is rejected before approval
+or deposit. USDC transfers use six decimal places, while native gas uses 18.
+The Arc RPC defaults to `https://rpc.mainnet.arc.io`; `--rpc-url` overrides it.
 
 ## Routes
 
@@ -55,8 +59,10 @@ name. Amounts are human-readable units, not base units.
 
 Ethereum xReserve accepts `--mint-mode public`, `record`, or `private`; Arc
 accepts `public` or `private`. Private minting needs a separate Aleo signer
-supplied with `--aleo-private-key-file`. If delegated proving is used, also provide
-`--consumer-id` and `--api-key-file`. A private-mint nonce can be supplied with
+supplied with `--aleo-private-key-file`. Delegated proving uses the credential-free Provable edge gateway by default.
+An optional provisioned key can be passed with `--api-key-file`.
+Legacy gateways require `--consumer-id`, `--api-key-file`, and explicit
+`--prover-url` / `--scanner-url` overrides. A private-mint nonce can be supplied with
 `--secret-nonce-file`.
 
 The outbound `usdcx-to-usdc` route accepts `--burn-mode private` or `public`.
@@ -64,8 +70,8 @@ Its `--private-key-file` is the Aleo signer. The same is true for all routes
 whose source chain is Aleo; Ethereum and Arc routes expect an EVM key, and the
 Solana route accepts either a Solana key or `--sender` for a read-only preview.
 
-Run `aleo-bridge transfer --help` for all flags. `--verbose` preserves the
-underlying example's protocol diagnostics when that runner supports them.
+Run `aleo-bridge transfer --help` for all flags. Protocol diagnostics and
+recovery checkpoints are printed by default; `--verbose` remains accepted.
 
 ## Running from this repository
 

@@ -1,6 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
 import type { AgentToolHandler } from '@provablehq/veil-core/agent'
-import { authenticateWithAccount, ApiError, type ApiClient } from '../api/client.js'
+import { authenticateWithAccount, type ApiClient } from '../api/client.js'
 import { resolveDexImports } from '../utils/imports.js'
 import { getPool } from '../actions/reads/getPool.js'
 import { getSlot } from '../actions/reads/getSlot.js'
@@ -16,6 +16,7 @@ import { getFrozenPosition } from '../actions/reads/getFrozenPosition.js'
 import { isPoolCreationOpen } from '../actions/reads/isPoolCreationOpen.js'
 import { isPoolInitialized } from '../actions/reads/isPoolInitialized.js'
 import { getFeeToTickSpacing } from '../actions/reads/getFeeToTickSpacing.js'
+import { getPublicBalances } from '../actions/reads/getPublicBalances.js'
 import { getPrivateBalances } from '../utils/records.js'
 import { getBalances } from '../utils/balances.js'
 import {
@@ -25,6 +26,7 @@ import {
   derivePositionTokenId,
   deriveMultiHopSwapId,
 } from '../utils/keys.js'
+import { quote, type SwapQuote } from '../actions/swap/quote.js'
 import { swap } from '../actions/swap/swap.js'
 import { claimSwapOutput } from '../actions/swap/claimSwapOutput.js'
 import type { SwapHandle } from '../actions/swap/swap.js'
@@ -80,6 +82,10 @@ export function createChainHandlers(client: Client, program?: string): Record<st
     }),
     shield_swap_get_private_balances: async (i) =>
       jsonSafe(await getPrivateBalances(client, { programs: i.programs as string[] })),
+    shield_swap_get_public_balances: async (i) =>
+      jsonSafe(
+        await getPublicBalances(client, { user: i.user as string | undefined, programs: i.programs as string[] }),
+      ),
     shield_swap_get_owned_positions: async (i) =>
       jsonSafe(
         (await getOwnedPositions(client, { poolKey: i.poolKey as string | undefined, program })).map(stripRecord),
@@ -117,13 +123,16 @@ export function createApiHandlers(api: ApiClient): Record<string, AgentToolHandl
         ...(i.amountIn !== undefined ? { amount_in: String(i.amountIn) } : {}),
       }),
     shield_swap_list_tokens: async () => api.getTokens(),
-    shield_swap_get_public_balances: async (i) => api.getPublicBalances({ user: i.user as string }),
   }
 }
 
 /** Composed (client + API) handlers, keyed by tool name. */
-export function createComposedHandlers(client: Client, api: ApiClient): Record<string, AgentToolHandler> {
+export function createComposedHandlers(client: Client, api: ApiClient, program?: string): Record<string, AgentToolHandler> {
   return {
+    shield_swap_quote: async (i) => jsonSafe(await quote(client, {
+      api, program, from: i.from as string, to: i.to as string,
+      amountIn: i.amountIn as string, slippageBps: i.slippageBps as number | undefined,
+    })),
     shield_swap_get_balances: async (i) =>
       jsonSafe(
         await getBalances(client, api, {
@@ -147,20 +156,12 @@ export function createAuthHandlers(client: Client, api: ApiClient): Record<strin
       await authenticateWithAccount(api, client.account)
       return { authenticated: true, address: client.account!.address }
     },
-    shield_swap_get_access_status: async () => api.getAccessStatus(),
+    shield_swap_get_access_status: async () => api.getReferralStatus(),
     shield_swap_redeem_access_code: async (i) => {
-      // Distributed codes come as access codes or referral codes; both
-      // unlock the account, so try both endpoints before failing. The
-      // upgraded session token stays inside the ApiClient — the agent
-      // needs the outcome, not the credential.
-      try {
-        const { code, status } = await api.redeemAccessCode(i.code as string)
-        return { code, status }
-      } catch (err) {
-        if (!(err instanceof ApiError) || err.status !== 400) throw err
-        const { code, status } = await api.redeemReferralCode(i.code as string)
-        return { code, status }
-      }
+      // The access grant stays server-side against the ApiClient's session —
+      // the agent needs the outcome, not a credential.
+      const { code, status } = await api.redeemReferralCode(i.code as string)
+      return { code, status }
     },
     shield_swap_create_api_token: async (i) =>
       api.createApiToken({
@@ -260,6 +261,22 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
       ),
 
     shield_swap_swap: async (i) => {
+      if ('quote' in i) {
+        if (Object.keys(i).some((key) => key !== 'quote')) throw new Error('Cannot override trade terms when executing a quote')
+        const raw = i.quote as Record<string, unknown>
+        if (!raw || typeof raw !== 'object') throw new Error('Expected a quote object')
+        const amount = (key: string): bigint => {
+          const value = raw[key]
+          if (typeof value !== 'string' || !/^\d+$/.test(value)) throw new Error(`Quote ${key} must be a raw integer string`)
+          return BigInt(value)
+        }
+        const offer = { ...raw, amountIn: amount('amountIn'), expectedOut: amount('expectedOut'), minOut: amount('minOut') } as SwapQuote
+        if (program && offer.program !== program) throw new Error('Quote program does not match the configured program')
+        return jsonSafe(await swap(client, { quote: offer }))
+      }
+      for (const key of ['poolKey', 'tokenInId', 'amountIn', 'tokenInProgram', 'tokenOutProgram']) {
+        if (typeof i[key] !== 'string') throw new Error(`Manual swap requires ${key}, or pass quote instead`)
+      }
       const imports = await fetchImports(client, [i.tokenInProgram as string, i.tokenOutProgram as string], program)
       return jsonSafe(
         await swap(client, {
@@ -275,9 +292,8 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
     },
 
     shield_swap_claim: async (i) => {
-      const imports = await fetchImports(client, [i.tokenInProgram as string, i.tokenOutProgram as string], program)
       // The handle keeps its own program; do not override it with the config default.
-      return jsonSafe(await claimSwapOutput(client, { handle: i.handle as unknown as SwapHandle, imports }))
+      return jsonSafe(await claimSwapOutput(client, { handle: i.handle as unknown as SwapHandle }))
     },
 
     shield_swap_swap_multi_hop: async (i) => {

@@ -13,15 +13,12 @@ import { getPosition } from '../../src/actions/reads/getPosition.js'
  * Requirements (skipped when absent):
  *   VEIL_INTEGRATION=1
  *   VEIL_E2E_PRIVATE_KEY   the account whose positions are read
- *   ALEO_DPS_API_KEY, ALEO_CONSUMER_ID   register the record scanner
  */
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
-const DPS_API_KEY = process.env.ALEO_DPS_API_KEY
-const CONSUMER_ID = process.env.ALEO_CONSUMER_ID
-const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!DPS_API_KEY && !!CONSUMER_ID
+const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY
 
-const NETWORK_URL = 'https://api.provable.com/v2'
-const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://api.provable.com/scanner'
+const NETWORK_URL = 'https://edge.provable.com/api/v2'
+const RSS_URL = process.env.ALEO_RSS_URL ?? 'https://edge.provable.com/api/scanner'
 const DEX_PROGRAM = process.env.VEIL_DEX_PROGRAM ?? 'shield_swap.aleo'
 
 describe.runIf(RUN)('owned positions against the real chain + scanner', () => {
@@ -32,32 +29,36 @@ describe.runIf(RUN)('owned positions against the real chain + scanner', () => {
 
   beforeAll(async () => {
     const aleo = await loadNetwork('testnet')
-    const scanner = aleo.createRemoteScanner({ url: RSS_URL, consumerId: CONSUMER_ID!, apiKey: DPS_API_KEY })
+    const scanner = aleo.createRemoteScanner({ url: RSS_URL })
     const { walletClient } = aleo.createAleoClient({
       privateKey: PRIVATE_KEY!,
       networkUrl: NETWORK_URL,
       provingMode: 'delegated',
-      apiKey: DPS_API_KEY,
-      consumerId: CONSUMER_ID,
       records: scanner,
     })
     client = walletClient.extend(shieldSwapActions({ program: DEX_PROGRAM }))
   }, 60_000)
 
   it('lists at least one position with a coherent joined view', async () => {
-    positions = await client.getOwnedPositions()
-    expect(positions.length).toBeGreaterThanOrEqual(1)
+    const all = await client.getOwnedPositions()
+    expect(all.length).toBeGreaterThanOrEqual(1)
 
-    for (const p of positions) {
+    for (const p of all) {
       expect(p.positionTokenId).toMatch(/field$/)
       expect(p.poolKey).toMatch(/field$/)
       expect(p.tickLower).toBeLessThan(p.tickUpper)
       expect(p.withdrawal).toMatch(/^aleo1/)
       expect(p.record.recordPlaintext).toBeTruthy()
 
-      // Live positions should be finalized; cross-check against the mapping.
-      expect(p.state).not.toBeNull()
+      // A `null` state is a position the public mapping no longer carries — a
+      // burned position whose record the scanner still serves as unspent. The
+      // view is coherent when the mapping agrees; the live checks below apply
+      // to the rest.
       const mapped = await getPosition(client, { positionTokenId: p.positionTokenId, program: DEX_PROGRAM })
+      if (p.state === null) {
+        expect(mapped).toBeNull()
+        continue
+      }
       expect(mapped).not.toBeNull()
       expect(p.state!.liquidity).toBe(mapped!.liquidity)
       expect(p.state!.tokensOwed0).toBe(mapped!.tokens_owed0)
@@ -75,6 +76,10 @@ describe.runIf(RUN)('owned positions against the real chain + scanner', () => {
         expect(p.state!.amount1).toBe(0n)
       }
     }
+
+    // The single-position test below reads a live one.
+    positions = all.filter((p) => p.state !== null)
+    expect(positions.length).toBeGreaterThanOrEqual(1)
   }, 180_000)
 
   it('resolves a single position by id and misses cleanly on a bogus id', async () => {

@@ -1,4 +1,8 @@
-/** Describes one bridge CLI subcommand. */
+/**
+ * Describes one lazily loaded bridge CLI subcommand.
+ * @property summary Description displayed in top-level help.
+ * @property load Loads the command implementation without starting a transfer.
+ */
 export type Command = {
   summary: string
   load: () => Promise<{ main: (argv: string[]) => Promise<void> }>
@@ -16,7 +20,12 @@ export const COMMANDS: Record<string, Command> = {
   },
 }
 
-/** Builds the top-level bridge CLI help. */
+/**
+ * Builds the top-level bridge CLI help without network access.
+ * @returns Usage text and descriptions of the registered commands.
+ * @example
+ * console.log(usage())
+ */
 export function usage(): string {
   const width = Math.max(...Object.keys(COMMANDS).map((name) => name.length))
   const commands = Object.entries(COMMANDS)

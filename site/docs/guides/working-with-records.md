@@ -51,15 +51,14 @@ const account = aleo.privateKeyToAccount('APrivateKey1...')
 
 const walletClient = createWalletClient({
   account,
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
   proving: aleo.createProvingConfig({
     mode: 'delegated',
-    networkUrl: 'https://api.provable.com/v2',
+    networkUrl: 'https://edge.provable.com/api/v2',
     account,
   }),
   recordProvider: aleo.createRemoteScanner({
-    url: 'https://api.provable.com/v2',
-    consumerId: '<consumer-id>',
+    url: 'https://edge.provable.com/api/scanner',
   }),
 })
 
@@ -88,13 +87,12 @@ import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 const aleo = await loadNetwork('mainnet')
 
 const scanner = aleo.createStandaloneScanner({
-  url: 'https://api.provable.com/v2',
-  consumerId: '<consumer-id>',
+  url: 'https://edge.provable.com/api/scanner',
   viewKey: 'AViewKey1...',
 })
 
 const viewClient = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 }).extend(withRecords({ scanner }))
 
 const records = await viewClient.requestRecords({ program: 'loyalty_token.aleo' })

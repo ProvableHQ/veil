@@ -22,11 +22,11 @@ const account = aleo.privateKeyToAccount('APrivateKey1...')
 
 const client = createWalletClient({
   account,
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
   proving: aleo.createProvingConfig({
     mode: 'delegated',
-    networkUrl: 'https://api.provable.com/v2',
-    proverUrl: 'https://api.provable.com/prove',
+    networkUrl: 'https://edge.provable.com/api/v2',
+    proverUrl: 'https://edge.provable.com/api/prove',
     account,
   }),
 })
@@ -51,8 +51,8 @@ config — in process for `mode: 'local'`, via a delegated prover for
 `mode: 'delegated'` — then broadcasts the proved transaction through the
 client's transport. The delegated prover does not broadcast for
 `writeContract`. Delegated mode
-requires `proverUrl` on the proving config (plus `apiKey` and `consumerId` for
-the hosted Provable prover); local mode needs neither. Either way the fee
+uses `proverUrl` on the proving config, which defaults to the hosted Provable
+prover and needs no credentials; local mode needs no prover at all. Either way the fee
 comes out of the account. `useFeeMaster` defaults to `false`; enable it only
 when the configured prover service has explicitly granted FeeMaster access.
 

@@ -103,7 +103,7 @@ export function toMcpServer(tools: AgentTool[]): McpServer {
  * import { createMcpServer } from '@provablehq/veil-core/mcp'
  *
  * const client = createPublicClient({
- *   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+ *   transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
  * })
  * const server = createMcpServer({ client })
  * // Wire into an MCP transport: list server.tools, route calls to

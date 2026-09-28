@@ -6,6 +6,7 @@ import {
   type BlindedIdentityRecord,
   type BlindedIdentityStore,
 } from '../../utils/blinding/store.js'
+import { mapWithLimit, withRetry } from '../../utils/concurrency.js'
 
 /** Function whose calls carry a blinded address and the swap id it settled. */
 const CLAIM_FUNCTION = 'claim_swap_output'
@@ -169,49 +170,6 @@ export type ReconcileSwapHistoryReturnType = {
   callsScanned: number
   pagesScanned: number
   complete: boolean
-}
-
-/**
- * Retries a fetch the node refused for being busy rather than for being wrong.
- *
- * A rate limit or a 5xx says nothing about the request, and a long walk is
- * exactly the shape of traffic that trips one — giving up would discard the whole
- * page's progress. A 404 or a 400 is not retried: those are answers.
- */
-async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
-  let last: unknown
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    try {
-      return await fn()
-    } catch (error) {
-      const status = (error as { status?: number } | null)?.status
-      const retryable = status === 429 || (status !== undefined && status >= 500)
-      if (!retryable || attempt === attempts - 1) throw error
-      last = error
-      await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt))
-    }
-  }
-  throw last
-}
-
-/**
- * Runs `fn` over `items` with a bounded number in flight.
- *
- * The walk's cost is dominated by one transaction fetch per claim, and those are
- * independent of each other — running them one at a time makes a long history
- * take minutes it does not need to.
- */
-async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length)
-  let next = 0
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const index = next++
-      results[index] = await fn(items[index]!)
-    }
-  })
-  await Promise.all(workers)
-  return results
 }
 
 /** Strips an Aleo suffix and reads the integer (`175488u128` → `175488n`). */

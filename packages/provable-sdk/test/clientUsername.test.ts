@@ -8,15 +8,12 @@ import {
 } from '../src/index.js'
 
 /**
- * The name a client registers a Provable API consumer under.
- *
- * A username is spent once — the API exposes no way to read a consumer back and
- * a duplicate registration returns nothing usable — so which name is used, and
- * whether a caller can choose it, is not a cosmetic detail. Registration is
- * stubbed here: hitting the real API would create consumers that cannot be
- * deleted.
+ * What a client does with the credential options. The default gateway needs
+ * none, so nothing may register a consumer or mint a JWT there, whatever the
+ * caller passes. A pair together with legacy URLs selects the legacy JWT model
+ * and mints at the gateway those URLs name.
  */
-describe('createAleoClient username', () => {
+describe('createAleoClient credentials', () => {
   let aleo: AleoSdk
 
   beforeAll(async () => {
@@ -28,120 +25,194 @@ describe('createAleoClient username', () => {
     vi.unstubAllGlobals()
   })
 
-  /** Captures the username each registration is attempted with. */
-  function stubRegistration() {
-    const usernames: string[] = []
+  /** Records every request; the tests assert there are none. */
+  function forbidFetch() {
+    const urls: string[] = []
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string | URL, init?: RequestInit) => {
-        const href = url.toString()
-        if (href.endsWith('/consumers')) {
-          usernames.push(JSON.parse(String(init?.body)).username)
-          return new Response(JSON.stringify({ consumer: { id: 'c-1' }, key: 'k-1' }), { status: 201 })
-        }
-        if (href.includes('/jwts/')) {
-          return new Response(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }), {
-            status: 201,
-            headers: { authorization: 'Bearer stub' },
-          })
-        }
-        throw new Error(`unexpected request: ${href}`)
+      vi.fn(async (url: string | URL) => {
+        urls.push(url.toString())
+        throw new Error(`unexpected request: ${url.toString()}`)
       }),
     )
-    return usernames
+    return urls
   }
 
-  const client = (username?: string | (() => string)) =>
+  const client = (extra: Record<string, unknown> = {}) =>
     aleo.createAleoClient({
       privateKey: aleo.generateAccount().privateKey,
-      networkUrl: 'https://api.provable.com/v2',
-      proverUrl: 'https://api.provable.com/prove',
-      credentialStore: memoryCredentialStore(),
-      ...(username !== undefined ? { username } : {}),
+      networkUrl: 'https://edge.provable.com/api/v2',
+      ...extra,
     }).walletClient
 
-  it('registers under a caller-supplied name verbatim', async () => {
-    const usernames = stubRegistration()
-    await client('my-bot-42').authenticateProvableApi()
-    // Verbatim matters: a silently suffixed name defeats the point of choosing one.
-    expect(usernames).toEqual(['my-bot-42'])
+  it('registers nothing for a client with no credential options', async () => {
+    const urls = forbidFetch()
+    const result = await client().authenticateProvableApi()
+    expect(urls).toEqual([])
+    expect(result).toEqual({
+      credentials: undefined,
+      expiration: undefined,
+      registered: false,
+      applied: { proving: true, recordScanning: false },
+    })
   }, 30_000)
 
-  it('calls a supplied function lazily, at registration time', async () => {
-    const usernames = stubRegistration()
-    let shard = 'unset'
-    const wallet = client(() => `bot-${shard}`)
-    shard = 'eu-1'
-    await wallet.authenticateProvableApi()
-    expect(usernames).toEqual(['bot-eu-1'])
+  it('registers nothing for an empty credential store, and ignores username', async () => {
+    const urls = forbidFetch()
+    const username = vi.fn(() => 'never-used')
+    const result = await client({ credentialStore: memoryCredentialStore(), username }).authenticateProvableApi()
+    expect(urls).toEqual([])
+    expect(username).not.toHaveBeenCalled()
+    expect(result.credentials).toBeUndefined()
+    expect(result.registered).toBe(false)
   }, 30_000)
 
-  it('derives a name from the account address when none is given', async () => {
-    const usernames = stubRegistration()
-    await client().authenticateProvableApi()
-    expect(usernames).toHaveLength(1)
-    expect(usernames[0]).toMatch(/^veil-[a-z0-9]{8}-[a-z0-9]{1,6}$/)
+  it('carries a configured pair on the default gateway without minting from it', async () => {
+    const urls = forbidFetch()
+    const result = await client({
+      consumerId: 'existing-consumer',
+      apiKey: 'existing-key',
+      username: 'would-be-ignored',
+    }).authenticateProvableApi()
+    expect(urls).toEqual([])
+    expect(result.registered).toBe(false)
+    expect(result.expiration).toBeUndefined()
+    expect(result.credentials).toEqual({ consumerId: 'existing-consumer', apiKey: 'existing-key' })
   }, 30_000)
 
-  it('varies the derived name per client, so a lost key can be re-registered', async () => {
-    const usernames = stubRegistration()
-    await client().authenticateProvableApi()
-    await client().authenticateProvableApi()
-    expect(usernames[0]).not.toBe(usernames[1])
-  }, 30_000)
-
-  it('does not register at all when credentials are already configured', async () => {
-    const usernames = stubRegistration()
-    const wallet = aleo.createAleoClient({
-      privateKey: aleo.generateAccount().privateKey,
+  it('mints from a configured pair at the legacy gateway the URLs name', async () => {
+    const urls: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) => {
+        urls.push(url.toString())
+        return new Response(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }), {
+          status: 201,
+          headers: { authorization: 'Bearer legacy' },
+        })
+      }),
+    )
+    const result = await client({
       networkUrl: 'https://api.provable.com/v2',
       proverUrl: 'https://api.provable.com/prove',
       consumerId: 'existing-consumer',
       apiKey: 'existing-key',
-      username: 'would-be-ignored',
-    }).walletClient
-
-    const result = await wallet.authenticateProvableApi()
-    expect(usernames).toEqual([])
+    }).authenticateProvableApi()
+    expect(urls).toEqual(['https://api.provable.com/jwts/existing-consumer'])
+    expect(result.expiration).toBeGreaterThan(Date.now())
     expect(result.registered).toBe(false)
-    expect(result.credentials).toEqual({ consumerId: 'existing-consumer', apiKey: 'existing-key' })
   }, 30_000)
+
+  it('ignores a non-default node URL: only the prover names a JWT gateway', async () => {
+    const urls = forbidFetch()
+    const result = await client({
+      networkUrl: 'http://localhost:3030',
+      consumerId: 'c-1',
+      apiKey: 'k-1',
+    }).authenticateProvableApi()
+    expect(urls).toEqual([])
+    expect(result.expiration).toBeUndefined()
+  }, 30_000)
+
+  it('mints for a legacy scanner even when the prover is the default', async () => {
+    const urls: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) => {
+        urls.push(url.toString())
+        return new Response(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }), {
+          status: 201,
+          headers: { authorization: 'Bearer legacy' },
+        })
+      }),
+    )
+    const result = await client({
+      records: aleo.createRemoteScanner({ url: 'https://api.provable.com/scanner' }),
+      consumerId: 'c-1',
+      apiKey: 'k-1',
+    }).authenticateProvableApi()
+    expect(urls).toEqual(['https://api.provable.com/jwts/c-1'])
+    expect(result.applied).toEqual({ proving: true, recordScanning: true })
+  }, 30_000)
+
+  it('derives the mint root from a legacy prover even when the node URL is the default', async () => {
+    const urls: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) => {
+        urls.push(url.toString())
+        return new Response(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }), {
+          status: 201,
+          headers: { authorization: 'Bearer legacy' },
+        })
+      }),
+    )
+    const proving = aleo.createProvingConfig({
+      mode: 'delegated',
+      networkUrl: 'https://edge.provable.com/api/v2',
+      proverUrl: 'https://legacy.example/prove',
+      consumerId: 'c-1',
+      apiKey: 'k-1',
+    })
+    await expect(proving.session!.getJwt()).resolves.toMatchObject({ jwt: 'Bearer legacy' })
+    expect(urls).toEqual(['https://legacy.example/jwts/c-1'])
+  })
+
+  it('reports stored credentials without minting from them', async () => {
+    const urls = forbidFetch()
+    const store = memoryCredentialStore({ consumerId: 'stored', apiKey: 'stored-key' })
+    const result = await client({ credentialStore: store }).authenticateProvableApi()
+    expect(urls).toEqual([])
+    expect(result.credentials).toEqual({ consumerId: 'stored', apiKey: 'stored-key' })
+  }, 30_000)
+
+  it('carries a bare pair on a default-gateway proving config as an inert session', async () => {
+    const urls = forbidFetch()
+    const proving = aleo.createProvingConfig({
+      mode: 'delegated',
+      networkUrl: 'https://edge.provable.com/api/v2',
+      consumerId: 'c-1',
+      apiKey: 'k-1',
+    })
+    expect(proving.session).toBeDefined()
+    await expect(proving.session!.getJwt()).resolves.toBeUndefined()
+    await expect(proving.session!.getCredentials()).resolves.toEqual({ consumerId: 'c-1', apiKey: 'k-1' })
+    expect(urls).toEqual([])
+  })
 
   describe('scanner credential validation', () => {
     it('rejects an apiKey without a consumerId on a remote scanner', () => {
-      // Half a pair authenticates nothing: the id is the path segment and the
-      // key the header, so this would 401 four times instead of failing here.
+      // A lone key is ambiguous between half a legacy pair and a provisioned
+      // key that belongs in `auth`; refusing beats guessing.
       expect(() =>
-        aleo.createRemoteScanner({ url: 'https://api.provable.com/scanner', apiKey: 'k' }),
+        aleo.createRemoteScanner({ url: 'https://edge.provable.com/api/scanner', apiKey: 'k' }),
       ).toThrow(/apiKey also needs consumerId/)
     })
 
     it('rejects an apiKey without a consumerId on a standalone scanner', () => {
       expect(() =>
         aleo.createStandaloneScanner({
-          url: 'https://api.provable.com/scanner',
+          url: 'https://edge.provable.com/api/scanner',
           viewKey: aleo.generateAccount().viewKey,
           apiKey: 'k',
         }),
       ).toThrow(/apiKey also needs consumerId/)
     })
 
-    it('accepts an apiKey without a consumerId when a session supplies tokens', () => {
+    it('accepts an apiKey without a consumerId when a session is supplied', () => {
       const session = createProvableSession({ credentials: { consumerId: 'c', apiKey: 'k' } })
       expect(() =>
-        aleo.createRemoteScanner({ url: 'https://api.provable.com/scanner', apiKey: 'k', session }),
+        aleo.createRemoteScanner({ url: 'https://edge.provable.com/api/scanner', apiKey: 'k', session }),
       ).not.toThrow()
     })
 
-    it('accepts neither, for an unauthenticated service', () => {
+    it('accepts neither, for the open gateway', () => {
       expect(() => aleo.createRemoteScanner({ url: 'http://localhost:9000' })).not.toThrow()
     })
   })
 
   describe('default service URLs', () => {
     it('builds a remote scanner with no options at all', () => {
-      // url was the only required field, so omitting it makes the whole options
-      // object optional — the zero-configuration path.
       expect(() => aleo.createRemoteScanner()).not.toThrow()
     })
 
@@ -154,21 +225,11 @@ describe('createAleoClient username', () => {
     it('gives a client with nothing configured a working prover endpoint', () => {
       const { walletClient } = aleo.createAleoClient({
         privateKey: aleo.generateAccount().privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
         records: aleo.createRemoteScanner(),
       })
       expect(walletClient.proving.mode).toBe('delegated')
       expect(walletClient.proving.url).toBe(`${DEFAULT_PROVER_URL}/testnet`)
     }, 30_000)
   })
-
-  it('surfaces the unrecoverable-name error when the chosen name is taken', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('{"message":"UNIQUE violation"}', { status: 409 })),
-    )
-    await expect(client('already-taken').authenticateProvableApi()).rejects.toThrow(
-      /username 'already-taken' is already registered.*cannot be recovered/s,
-    )
-  }, 30_000)
 })

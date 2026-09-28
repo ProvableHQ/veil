@@ -1,3 +1,4 @@
+import { waitForSwapOutput, type WaitForSwapOutputParameters, type WaitForSwapOutputReturnType } from '../actions/reads/waitForSwapOutput.js'
 import type { Client } from '@provablehq/veil-core'
 import { getPool, type GetPoolParameters, type GetPoolReturnType } from '../actions/reads/getPool.js'
 import { getSlot, type GetSlotParameters, type GetSlotReturnType } from '../actions/reads/getSlot.js'
@@ -43,7 +44,7 @@ import {
   getTradeControls,
   type GetTradeControlsReturnType,
 } from '../actions/reads/getTradeControls.js'
-import { swap, type SwapParameters, type SwapReturnType } from '../actions/swap/swap.js'
+import { swap, type SwapParameters, type SwapReturnType, type SwapFromQuoteParameters } from '../actions/swap/swap.js'
 import {
   claimSwapOutput,
   type ClaimSwapOutputParameters,
@@ -88,10 +89,16 @@ import {
   type GetPrivateBalancesParameters,
   type GetPrivateBalancesReturnType,
 } from '../utils/records.js'
+import {
+  getPublicBalances,
+  type GetPublicBalancesParameters,
+  type GetPublicBalancesReturnType,
+} from '../actions/reads/getPublicBalances.js'
 import { getBalances, type GetBalancesParameters, type GetBalancesReturnType } from '../utils/balances.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../utils/tick-hints.js'
 import { resolveDexImports, type ResolveDexImportsParameters } from '../utils/imports.js'
 import { tokenData, listTokens, type TokenInfo } from '../utils/tokens.js'
+import { quote, type QuoteParameters, type SwapQuote } from '../actions/swap/quote.js'
 import { planSwap, type PlanSwapParameters, type SwapPlan } from '../actions/swap/planSwap.js'
 import { reserveBlindedIdentity } from '../actions/blinding/reserveBlindedIdentity.js'
 import { syncBlindedIdentities } from '../actions/blinding/syncBlindedIdentities.js'
@@ -127,7 +134,7 @@ import { ApiClient, authenticateWithAccount, defaultApiUrl, type ApiClientOption
  *   `claimSwapOutput`. Defaults to a per-client in-memory store, so concurrent
  *   swaps through one client are safe out of the box; that store is lost on
  *   restart, which costs a chain rescan for the next counter and forgets any
- *   unclaimed swap, so pass `fileBlindedIdentityStore` from
+ *   unclaimed swap, so pass `swapFileStore` from
  *   `@provablehq/shield-swap-sdk/node` for anything long-running. Ignored by
  *   wallet accounts, which derive identities the client never sees. A per-call
  *   `blindedIdentities: undefined` opts that call out of tracking entirely.
@@ -149,6 +156,7 @@ export type ShieldSwapActionsConfig = {
  *   network, so a caller can take `USDCx` from a person and hand an id to an
  *   action. Cached per client after the first call.
  * @property listTokens The network's token registry, cached per client.
+ * @property quote Returns an API-backed quote accepted directly by swap, for 1–3 hops.
  * @property planSwap Turns "sell this for that" into an executable plan: the
  *   route from the API, tradeability checked on chain for every hop, the quote,
  *   a slippage floor, and the `imports` the write needs. Reads only.
@@ -185,12 +193,15 @@ export type ShieldSwapActionsConfig = {
  *   long-lived `apiToken`. Hits the network (challenge + verify) and signs.
  *   Returns the session JWT for callers that persist it; rejects when the
  *   client has no account.
+ * @property waitForSwapOutput Confirms the handle's transaction and polls its
+ *   on-chain output until readable or the shared polling timeout expires. Never signs or submits a transaction.
  * @property authenticateApi Deprecated alias for
  *   {@link ShieldSwapActions.authenticateShieldSwap}.
  * @property api The off-chain DEX API client; throws on first use when no
  *   `api` was configured.
  */
 export type ShieldSwapActions = {
+  waitForSwapOutput: (params: WaitForSwapOutputParameters) => Promise<WaitForSwapOutputReturnType>
   getPool: (params: GetPoolParameters) => Promise<GetPoolReturnType>
   getSlot: (params: GetSlotParameters) => Promise<GetSlotReturnType>
   getSwapOutput: (params: GetSwapOutputParameters) => Promise<GetSwapOutputReturnType>
@@ -213,11 +224,13 @@ export type ShieldSwapActions = {
   getFrozenPosition: (params: { positionTokenId: string; program?: string }) => Promise<number | null>
   getTradeControls: (params: { poolKey: string; program?: string }) => Promise<GetTradeControlsReturnType>
   getPrivateBalances: (params: GetPrivateBalancesParameters) => Promise<GetPrivateBalancesReturnType>
+  getPublicBalances: (params: GetPublicBalancesParameters) => Promise<GetPublicBalancesReturnType>
   getBalances: (params?: GetBalancesParameters) => Promise<GetBalancesReturnType>
   pickInsertHint: (params: PickInsertHintParameters) => Promise<number>
   resolveDexImports: (params: ResolveDexImportsParameters) => Promise<Record<string, string>>
   tokenData: (symbolOrId: string) => Promise<TokenInfo>
   listTokens: () => Promise<TokenInfo[]>
+  quote: (params: QuoteParameters) => Promise<SwapQuote>
   planSwap: (params: PlanSwapParameters) => Promise<SwapPlan>
   previewMint: (params: PreviewMintParameters) => Promise<PreviewMintReturnType>
   reserveBlindedIdentity: (params?: { program?: string; maxScan?: number }) => Promise<BlindedIdentityRecord>
@@ -229,7 +242,10 @@ export type ShieldSwapActions = {
   getUnclaimedSwaps: (
     params?: Omit<GetUnclaimedSwapsParameters, 'store'>,
   ) => Promise<GetUnclaimedSwapsReturnType>
-  swap: (params: SwapParameters) => Promise<SwapReturnType>
+  swap: {
+    (params: SwapParameters): Promise<SwapReturnType>
+    (params: SwapFromQuoteParameters): Promise<SwapReturnType | SwapMultiHopReturnType>
+  }
   claimSwapOutput: (params: ClaimSwapOutputParameters) => Promise<ClaimSwapOutputReturnType>
   swapMultiHop: (params: SwapMultiHopParameters) => Promise<SwapMultiHopReturnType>
   createPool: (params: CreatePoolParameters) => Promise<CreatePoolReturnType>
@@ -312,7 +328,17 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
   })
 
   return (client: Client): ShieldSwapActions => {
-    const api = buildApi(client)
+    const backingApi = buildApi(client)
+    // Bind only this view to the outer client; a supplied API may be shared by
+    // clients with different accounts, and its authentication stays on the original.
+    const api = backingApi && 'recordProvider' in client && client.recordProvider ? new Proxy(backingApi, {
+      get(target, key) {
+        if (key === 'confirmAirdrop') return (address: string, options?: Parameters<ApiClient['confirmAirdrop']>[1]) =>
+          target.confirmAirdrop(address, { ...options, recordClient: client })
+        const value = Reflect.get(target, key, target)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    }) : backingApi
     // Supplied to every hint-deriving action so a caller without the WASM peer
     // gets the exact predecessor from the API's tick list rather than a
     // best-effort guess from the slot. Only consulted on that path, so a client
@@ -341,6 +367,7 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     return {
       getPool: (p) => getPool(client, withProgram(p)),
       getSlot: (p) => getSlot(client, withProgram(p)),
+      waitForSwapOutput: (p) => waitForSwapOutput(client, p),
       getSwapOutput: (p) => getSwapOutput(client, withProgram(p)),
       getPosition: (p) => getPosition(client, withProgram(p)),
       getOwnedPositions: (p) => getOwnedPositions(client, withProgram(p ?? {})),
@@ -361,11 +388,13 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       getFrozenPosition: (p) => getFrozenPosition(client, withProgram(p)),
       getTradeControls: (p) => getTradeControls(client, withProgram(p)),
       getPrivateBalances: (p) => getPrivateBalances(client, p),
+      getPublicBalances: (p) => getPublicBalances(client, p),
       getBalances: (p) => getBalances(client, api ?? missingApi, p),
       pickInsertHint: (p) => pickInsertHint(client, withTicks(withProgram(p))),
       resolveDexImports: (p) => resolveDexImports(client, withProgram(p)),
       tokenData: (symbolOrId) => tokenData(api ?? missingApi, symbolOrId),
       listTokens: () => listTokens(api ?? missingApi),
+      quote: (p) => quote(client, { ...withProgram(p), api: p.api ?? api ?? missingApi }),
       planSwap: (p) => planSwap(client, api ?? missingApi, withProgram(p)),
       previewMint: (p) => previewMint(client, withProgram(p)),
       reserveBlindedIdentity: (p) =>
@@ -377,7 +406,15 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
         reconcileSwapHistory(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
       getUnclaimedSwaps: (p) =>
         getUnclaimedSwaps(client, { ...withProgram(p ?? {}), store: blindedIdentities }),
-      swap: (p) => swap(client, withStore(withProgram(p))),
+      swap: ((p: SwapParameters | SwapFromQuoteParameters) => {
+        if ('quote' in p) {
+          if (config.program && p.quote.program !== config.program) {
+            return Promise.reject(new Error('Quote program does not match the configured client program'))
+          }
+          return swap(client, withStore(p))
+        }
+        return swap(client, withStore(withProgram(p)))
+      }) as ShieldSwapActions['swap'],
       claimSwapOutput: (p) => claimSwapOutput(client, withStore(p)),
       swapMultiHop: (p) => swapMultiHop(client, withStore(withProgram(p))),
       createPool: (p) => createPool(client, withProgram(p)),

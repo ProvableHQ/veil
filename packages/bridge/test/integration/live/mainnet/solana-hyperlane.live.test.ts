@@ -1,6 +1,7 @@
 import bs58 from 'bs58'
 import { createPublicClient as createAleoPublicClient, http as aleoHttp } from '@provablehq/veil-core'
 import { describe, expect, it } from 'vitest'
+import { prepare } from '../../../../src/actions/prepare.js'
 import {
   createAleoClient,
   createBridgeClient,
@@ -10,7 +11,7 @@ import {
   solanaKeyPair,
   type BridgeCheckpoint,
 } from '../../../../src/index.js'
-import { createLiveBenchmark, loadLiveState, saveLiveState, waitForHyperlaneDelivery } from '../helpers.js'
+import { createLiveBenchmark, loadLiveState, quoteParametersFromPlan, saveLiveState, waitForHyperlaneDelivery } from '../helpers.js'
 import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, oneAtomicUnit, required } from '../config.js'
 
 const enabled = mainnetCaseEnabled('solana-hyperlane')
@@ -38,7 +39,7 @@ describe.skipIf(!enabled)('mainnet Solana Hyperlane bridge', () => {
     const bridge = createBridgeClient({ clients: { solana: client, aleo } })
     benchmark.mark('clients-created')
     const source = bridge.registry.getAssets({ environment: bridge.environment, chainId: 'solana', symbol: 'SOL' })[0]!
-    const plan = bridge.prepare({
+    const plan = prepare(bridge.registry, {
       source: { chain: 'solana', asset: 'sol' },
       destination: { chain: 'aleo', asset: 'sol' },
       bridgeProtocol: 'hyperlane',
@@ -49,7 +50,7 @@ describe.skipIf(!enabled)('mainnet Solana Hyperlane bridge', () => {
     benchmark.mark('plan-prepared')
 
     if (!state.sourceTxId) {
-      const quote = await bridge.quote({ plan })
+      const quote = await bridge.quote(quoteParametersFromPlan(plan))
       benchmark.mark('quote-returned')
       if (quote.kind !== 'solana-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
       console.table({ route: routeId, amount: plan.amountIn, sender, recipient: plan.recipient, totalLamports: quote.totalLamports.toString() })

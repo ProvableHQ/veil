@@ -1,5 +1,17 @@
 # @provablehq/veil-aleo-devnode
 
+## 0.11.1
+
+### Patch Changes
+
+- 3d329de: Align the default consensus schedule with aleo-devnode 0.2.6 and Provable SDK 0.11.11, activating all 21 supported versions.
+
+## 0.11.0
+
+## 0.10.1
+
+## 0.10.0
+
 ## 0.9.0
 
 ## 0.8.0

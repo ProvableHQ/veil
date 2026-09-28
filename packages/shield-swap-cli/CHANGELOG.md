@@ -1,5 +1,81 @@
 # @provablehq/shield-swap-cli
 
+## 0.11.1
+
+### Patch Changes
+
+- 3d329de: Resolve claim program imports automatically from on-chain output tokens and simplify examples and agent tooling.
+- 3d329de: Add `quote` and `swap({ quote })` for API-estimated single- and multi-hop swaps. Preserve the exact quoted minimum output, validate route/network/freshness, and expose the handoff through agent/MCP tools and the CLI. Keep existing manual swap and `planSwap` calls compatible.
+
+  Make the existing `client.api.confirmAirdrop` also wait for the faucet transaction records when the outer client has a record scanner; retain job-only confirmation without one.
+
+  Accept decimal-string quote inputs in token units, resolving decimals inside quote while retaining bigint raw-unit inputs. The agent/MCP quote tool accepts decimal token amounts and returns raw integer-string quote amounts.
+
+- Updated dependencies [3d329de]
+- Updated dependencies [3d329de]
+- Updated dependencies [3d329de]
+- Updated dependencies [3d329de]
+- Updated dependencies [3d329de]
+- Updated dependencies [3d329de]
+  - @provablehq/shield-swap-sdk@0.11.1
+  - @provablehq/veil-aleo-sdk@0.11.1
+
+## 0.11.0
+
+### Patch Changes
+
+- 8b97f14: `createAleoClient` now builds a working client from a private key alone. `networkUrl` is optional and defaults to the new `DEFAULT_NETWORK_URL` (`https://edge.provable.com/api/v2`), matching the existing edge defaults for `proverUrl` and the scanner. `records` defaults to `aleo.createRemoteScanner()` against the hosted scanner instead of leaving `requestRecords` unwired. `useFeeMaster` defaults to `true`, so the delegated prover pays fees for an account holding no public credits; pass `useFeeMaster: false` when the account funds its own fees. The shield-swap CLI drops its legacy Provable API credential wiring (`--consumer-id`, `--api-key`, `ALEO_CONSUMER_ID`, `ALEO_DPS_API_KEY`, and the `provable-credentials.json` file): the gateway needs none, and `setup` removes a legacy pair it finds in an old state file.
+- Updated dependencies [8b97f14]
+- Updated dependencies [43cd709]
+- Updated dependencies [8b97f14]
+- Updated dependencies [8b97f14]
+  - @provablehq/veil-aleo-sdk@0.11.0
+  - @provablehq/shield-swap-sdk@0.11.0
+
+## 0.10.1
+
+### Patch Changes
+
+- caf4425: Default every hosted endpoint to the `edge.provable.com/api` gateway: the delegated prover, the record scanner, the React hook's node URL, and the shield-swap CLI's network URL. The gateway is unauthenticated and needs no consumer or JWT, so a client built from a private key and a network URL proves and scans out of the box; a provisioned key still goes through `auth`. The legacy JWT model stays supported for a caller who points the client at a legacy gateway: with `proverUrl` or the scanner `url` on `https://api.provable.com/...` and a `consumerId` + `apiKey` pair (or a `credentialStore`), a session mints at that gateway's `/jwts` and injects the token. On the default gateway the pair is carried and nothing mints. Consumer registration is retired: `registerProvableApi` is a no-op that resolves `undefined`, `username` is ignored, and a client without a pair never registers one. `authenticateProvableApi` no longer throws on a keyed or credential-less client; it resolves with `registered: false` and, without a pair, no `credentials` and no `expiration`. Bumps `@provablehq/sdk` to 0.11.10, which makes the same default change in the underlying SDK.
+- Updated dependencies
+- Updated dependencies [caf4425]
+  - @provablehq/shield-swap-sdk@0.10.1
+  - @provablehq/veil-aleo-sdk@0.10.1
+
+## 0.10.0
+
+### Patch Changes
+
+- 52c63b2: Remove `ApiClient` methods for DEX API routes the server retired: the invite-code
+  access routes (`getAccessStatus`, `redeemAccessCode`, `listAccessCodes`,
+  `generateAccessCodes`), swap history (`getSwaps`, `getSwap`), the position, token,
+  and tick-spacing detail routes (`getPosition`, `getToken`, `getTickSpacings`),
+  token registration (`registerToken`), the trading schema routes
+  (`getTradingSchemas`, `getTradingSchema`), and public balances
+  (`getPublicBalances`, whose `/balances` route was removed earlier).
+
+  Public balances are now read from chain. The new `getPublicBalances` action (also
+  `client.getPublicBalances` and the `shield_swap_get_public_balances` agent tool,
+  which moves from the API tool set to the chain tool set) reads each AMM token
+  program's `balances` mapping for an address and returns raw base units keyed by
+  program. `getBalances` composes it with record-derived private balances and no
+  longer needs a DEX API credential — only the public token registry.
+
+  Access now goes through the referral endpoints: `getReferralStatus()` reports the
+  gate and `redeemReferralCode()` unlocks it. The `shield_swap_get_access_status`
+  and `shield_swap_redeem_access_code` agent tools keep their names and are backed
+  by those methods. Read a position's live state with the chain-direct `getPosition`
+  action, resolve a token from `getTokens()`, take tick spacings from `getFeeTiers()`,
+  and recover a wallet-path swap's blinded address from `getSwapOutput().recipient`.
+
+  The `shield-swap setup` command redeems invite codes through the referral endpoint.
+
+- Updated dependencies [ca51d13]
+- Updated dependencies [ca51d13]
+- Updated dependencies [52c63b2]
+  - @provablehq/veil-aleo-sdk@0.10.0
+  - @provablehq/shield-swap-sdk@0.10.0
+
 ## 0.9.0
 
 ### Patch Changes

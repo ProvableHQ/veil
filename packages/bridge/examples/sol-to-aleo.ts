@@ -1,5 +1,6 @@
-import { getBase58Encoder } from '@solana/kit'
 import { pathToFileURL } from 'node:url'
+import { type ExampleOptions } from './options.js'
+import { getBase58Encoder } from '@solana/kit'
 import { createPublicClient as createAleoPublicClient, http as aleoHttp } from '@provablehq/veil-core'
 import {
   createAleoClient,
@@ -56,7 +57,7 @@ function formatAmount(value: bigint, decimals: number): string {
  * keypair held by this process signs one source transaction. Hyperlane relays
  * its message and mints wrapped SOL to the Aleo recipient.
  *
- * @param options Optional CLI overrides for the visible default amount and execution gate.
+ * @param options Overrides the amount and execution gate; defaults to the example amount and environment acknowledgement.
  * @returns After read-only inspection or verified Aleo delivery, depending on
  * the execution acknowledgement.
  * @throws Error When configuration is missing, SOL is insufficient, the source
@@ -65,8 +66,7 @@ function formatAmount(value: bigint, decimals: number): string {
  * @example
  * await runSolanaHyperlaneExample()
  */
-export async function runSolanaHyperlaneExample(options: { amount?: string, execute?: boolean } = {}): Promise<void> {
-  const amount = options.amount ?? AMOUNT
+export async function runSolanaHyperlaneExample(options: ExampleOptions = {}): Promise<void> {
   const rpcUrl = process.env.SOLANA_RPC_URL?.trim() || DEFAULT_SOLANA_RPC_URL
   const recipient = requiredEnvironmentVariable('ALEO_RECIPIENT')
 
@@ -97,33 +97,33 @@ export async function runSolanaHyperlaneExample(options: { amount?: string, exec
       solana,
       aleo: createAleoClient({
         publicClient: createAleoPublicClient({
-          transport: aleoHttp(process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2', { network: 'mainnet' }),
+          transport: aleoHttp(process.env.ALEO_RPC_URL?.trim() || 'https://edge.provable.com/api/v2', { network: 'mainnet' }),
         }),
       }),
     },
   })
 
-  // ── Describe the intended transfer ──────────────────────────────────
+  // ── Price the intended transfer ─────────────────────────────────────
   // The caller supplies familiar chain and asset names, an amount, and the
   // recipient. The bridge catalog supplies the reviewed Solana programs,
   // required accounts, Aleo domain, decimal widths, and stages for this route.
-  // No network is read and no wallet is asked to sign. The amount is one lamport.
-  const plan = bridge.prepare({
+  // Quote also reads the current relayer, network-fee, and rent requirements. It
+  // does not ask the wallet to sign or move SOL. The amount is one lamport.
+  const quote = await bridge.quote({
     source: { chain: 'solana', asset: 'sol' },
     destination: { chain: 'aleo', asset: 'sol' },
     bridgeProtocol: 'hyperlane',
-    amount,
+    amount: options.amount ?? AMOUNT,
     recipient,
     sender: senderAddress,
   })
 
   // ── Check funds and current fees ────────────────────────────────────
-  // The source account needs more than the transferred lamport. Current chain
-  // reads price the Hyperlane delivery payment, Solana network fee, and rent
-  // required by the route's temporary accounts. Their sum is the balance that
-  // must be available. These reads do not request a signature or move SOL.
-  const quote = await bridge.quote({ plan })
   if (quote.kind !== 'solana-hyperlane') throw new Error(`Unexpected quote kind: ${quote.kind}`)
+  const plan = quote.plan
+  // The source account needs more than the transferred lamport. The quoted
+  // Hyperlane delivery payment, Solana network fee, and account rent form the
+  // reserve that must remain available alongside the transfer amount.
   const balance = await solana.publicClient.getBalance(senderAddress)
   const decimals = plan.sourceAsset.decimals
 
@@ -145,7 +145,7 @@ export async function runSolanaHyperlaneExample(options: { amount?: string, exec
   // The read-only run can inspect any configured sender. Mainnet submission
   // additionally requires the matching private key and the exact acknowledgement.
   // This keeps copying the tutorial from creating an unexpected transfer.
-  if (options.execute !== true && process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
+  if (!(options.execute ?? (process.env[EXECUTION_ENVIRONMENT_VARIABLE] === EXECUTION_ACKNOWLEDGEMENT))) {
     console.log('\nPreflight complete; no SOL was transferred.')
     console.log(`Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to submit the transfer.`)
     return
@@ -177,11 +177,14 @@ export async function runSolanaHyperlaneExample(options: { amount?: string, exec
   if (progress.next === 'failed') throw new Error(progress.error)
   if (progress.next !== 'done') throw new Error(`Unexpected next operation: ${progress.next}`)
   console.log('Bridge completed:', progress.receipt)
+  // Hyperlane delivered SOL into a public Aleo balance. Connect the recipient's
+  // Aleo wallet and call shield() afterward when the asset should become a
+  // private record.
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  runSolanaHyperlaneExample().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error)
-    process.exitCode = 1
-  })
+runSolanaHyperlaneExample().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : error)
+  process.exitCode = 1
+})
 }

@@ -6,7 +6,8 @@ import { requireAccount } from '../../utils/guards.js'
 import { markClaimedQuietly } from '../../utils/blinding/tracking.js'
 import type { BlindedIdentityStore } from '../../utils/blinding/store.js'
 import { blindingFactorResolveRequest, blindedAddressResolveRequest } from '../../utils/blinding/requests.js'
-import { resolveTokenRoute } from '../../utils/routing.js'
+import { resolveDexImports } from '../../utils/imports.js'
+import { resolveTokenRoute, tokenIdToProgram } from '../../utils/routing.js'
 import { resolveProofPair, formatMerkleProofPair, type ProofProvider } from '../../utils/proofs.js'
 import { SHIELD_SWAP_ROUTER, SHIELD_SWAP_FREEZELIST } from '../../constants.js'
 
@@ -44,10 +45,9 @@ export class SwapOutputNotFinalizedError extends Error {
  *   the claim proves the signer against the AMM freezelist, and against each
  *   wrapped token's wrapper list when unwrapping. Defaults to the empty-tree
  *   witness, which the contracts accept while the lists are empty.
- * @property imports Program sources for dynamic-dispatch dependencies
- *   (`{ 'token.aleo': source }`). The prover cannot discover dynamic callees
- *   statically — pass the involved token programs' sources when proving
- *   locally or via a service that requires them.
+ * @property imports Optional program-source override for proving. Defaults to
+ *   fetching the output/refund token programs and the selected claim program
+ *   dependencies from chain. Supply a complete map to reuse cached sources.
  * @property program Core AMM program override. Defaults to the handle's
  *   program.
  * @property routerProgram Swap router override for wrapped-claim dispatch.
@@ -101,8 +101,8 @@ export type ClaimSwapOutputReturnType = {
  * `blindingFactor`; a wallet account gets resolve-mode derived requests
  * targeting the handle's `blindedAddress` and re-derives the factor itself.
  *
- * Hits the network: one mapping read, route reads (cached), and the
- * transaction. Signs, and on the local path proves locally.
+ * Hits the network for the output mapping, token routes (cached), required
+ * program sources unless imports are supplied, and transaction submission. Signs and uses the configured prover on the local path.
  *
  * @param client A Veil wallet client (local or wallet account).
  * @param params The handle to claim.
@@ -199,6 +199,18 @@ export async function claimSwapOutput(
     fn = 'claim_swap_output'
   }
 
+  // Resolve dynamic callees from the chain result, never persisted handle metadata.
+  // Include underlying programs for router unwrapping and the target's static imports.
+  const imports = params.imports ?? await resolveDexImports(client, {
+    program: targetProgram,
+    tokenPrograms: [outRoute, refundRoute].flatMap((route) => {
+      if (route.wrapped) return [route.wrapperProgram, route.underlyingProgram]
+      const tokenProgram = tokenIdToProgram(route.tokenId)
+      if (!tokenProgram) throw new Error(`Cannot resolve program for claim token ${route.tokenId}; supply imports explicitly`)
+      return [tokenProgram]
+    }),
+  })
+
   // Everything after the two blinding slots, verbatim from chain state, then
   // the proof arrays. The no-refund transitions take no amount_remaining slot.
   const tail: string[] = [
@@ -219,7 +231,7 @@ export async function claimSwapOutput(
     const result = await executeContract(client, {
       program: targetProgram,
       function: fn,
-      imports: params.imports,
+      imports,
       inputs: [handle.blindingFactor, handle.blindedAddress, ...tail],
     })
     if (params.blindedIdentities) {
@@ -231,7 +243,7 @@ export async function claimSwapOutput(
   if (!handle.blindedAddress) {
     throw new Error(
       'handle.blindedAddress is not set — recover it from the confirmed request transaction ' +
-        "(or the API's swap.recipient) so the wallet can re-derive the blinding factor.",
+        "(or getSwapOutput's recipient) so the wallet can re-derive the blinding factor.",
     )
   }
   // The derivation scope is the CORE program even for router-submitted
@@ -244,7 +256,7 @@ export async function claimSwapOutput(
   const transactionId = await writeContract(client, {
     program: targetProgram,
     function: fn,
-    imports: params.imports ? Object.keys(params.imports) : undefined,
+    imports: Object.keys(imports),
     inputs,
   })
   if (params.blindedIdentities) {

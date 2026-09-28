@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { prepare } from '../../../../src/actions/prepare.js'
 import {
   createAleoClient,
   createBridgeCheckpoint,
@@ -21,7 +22,7 @@ async function localAleo(network: 'mainnet' | 'testnet', privateKey: string) {
   const aleo = await loadNetwork(network)
   return aleo.createAleoClient({
     privateKey,
-    networkUrl: 'https://api.provable.com/v2',
+    networkUrl: 'https://edge.provable.com/api/v2',
     provingMode: 'local',
     confirmationTimeout: 10 * 60_000,
   })
@@ -44,7 +45,7 @@ describe.skipIf(!liveFundsEnabled())('deployed testnet bridges with local accoun
         'aleo-testnet': createAleoClient({ publicClient: aleo.publicClient, account: aleo.walletClient }),
       },
     })
-    const plan = bridge.prepare({
+    const plan = prepare(bridge.registry, {
       source: { chain: 'sepolia', asset: 'usdc' },
       destination: { chain: 'aleo-testnet', asset: 'usdcx' },
       bridgeProtocol: 'xreserve',

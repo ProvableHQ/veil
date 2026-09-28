@@ -13,7 +13,7 @@ per-transition summaries for an address instead of raw transaction payloads.
 import { createPublicClient, http } from '@provablehq/veil-core'
 
 const client = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 })
 
 const txs = await client.getTransactionsByAddress({

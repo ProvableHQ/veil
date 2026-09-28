@@ -10,6 +10,12 @@ export {
   type GetSwapOutputParameters,
   type GetSwapOutputReturnType,
 } from './actions/reads/getSwapOutput.js'
+export { waitForSwapOutput, type WaitForSwapOutputParameters, type WaitForSwapOutputReturnType } from './actions/reads/waitForSwapOutput.js'
+export {
+  getPublicBalances,
+  type GetPublicBalancesParameters,
+  type GetPublicBalancesReturnType,
+} from './actions/reads/getPublicBalances.js'
 export { isBlindedAddressUsed } from './actions/reads/isBlindedAddressUsed.js'
 export { isPoolInitialized } from './actions/reads/isPoolInitialized.js'
 export { isFeeTierValid } from './actions/reads/isFeeTierValid.js'
@@ -105,7 +111,7 @@ export {
 export {
   swap,
   type SwapHandle,
-  type SwapParameters,
+  type SwapParameters, type SwapFromQuoteParameters,
   type SwapReturnType,
 } from './actions/swap/swap.js'
 export {
@@ -132,6 +138,7 @@ export {
   DEFAULT_API_URL,
   authenticateWithAccount,
   type ApiClientOptions,
+  type ConfirmAirdropResult,
 } from './api/client.js'
 
 // Wallet-signer InputRequest builders + the connect-time algorithm grants.
@@ -234,6 +241,7 @@ export { burn, type BurnParameters, type BurnReturnType } from './actions/liquid
 export { pickInsertHint, type PickInsertHintParameters } from './utils/tick-hints.js'
 export { resolveDexImports, type ResolveDexImportsParameters } from './utils/imports.js'
 export { tokenData, listTokens, type TokenInfo } from './utils/tokens.js'
+export { quote, type QuoteParameters, type SwapQuote, type SwapQuoteHop } from './actions/swap/quote.js'
 export { planSwap, type SwapPlan, type PlanSwapParameters } from './actions/swap/planSwap.js'
 export { parseUnits, formatUnits } from './utils/units.js'
 

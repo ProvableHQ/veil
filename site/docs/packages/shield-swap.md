@@ -52,15 +52,11 @@ import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 const aleo = await loadNetwork('testnet')
 const { walletClient } = aleo.createAleoClient({
   privateKey: PRIVATE_KEY,
-  networkUrl: 'https://api.provable.com/v2',
+  networkUrl: 'https://edge.provable.com/api/v2',
   provingMode: 'delegated',
-  proverUrl: 'https://api.provable.com/prove',
-  apiKey: DPS_API_KEY,
-  consumerId: CONSUMER_ID,
+  proverUrl: 'https://edge.provable.com/api/prove',
   records: aleo.createRemoteScanner({
-    url: 'https://api.provable.com/scanner',
-    consumerId: CONSUMER_ID,
-    apiKey: DPS_API_KEY,
+    url: 'https://edge.provable.com/api/scanner',
   }),
 })
 const client = walletClient.extend(
@@ -103,8 +99,8 @@ discovery, quoting, the `imports` map — and the wallet-signer variants.
   [`getSwapOutput`](/api/shield-swap/getSwapOutput); combined balances via
   `getBalances` and `getPrivateBalances`.
 - **DEX API auth** — `client.authenticateShieldSwap()` (session handshake signed by
-  the account, auto-renewing), `ApiClient.getAccessStatus` /
-  `redeemAccessCode` for the one-time invite-code gate, and
+  the account, auto-renewing), `ApiClient.getReferralStatus` /
+  `redeemReferralCode` for the one-time referral-code gate, and
   `ApiClient.createApiToken` / `listApiTokens` / `revokeApiToken` for
   long-lived `ss_…` keys passed as `api: { apiToken }`. Most API endpoints
   beyond discovery are bearer-gated —

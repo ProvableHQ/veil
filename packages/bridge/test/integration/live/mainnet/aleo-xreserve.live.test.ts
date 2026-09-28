@@ -1,5 +1,6 @@
 import { decodeFunctionResult, encodeFunctionData, getAddress, parseAbi, type Address } from 'viem'
 import { describe, expect, it } from 'vitest'
+import { prepare } from '../../../../src/actions/prepare.js'
 import {
   createAleoClient,
   createBridgeClient,
@@ -7,7 +8,7 @@ import {
   evmHttp,
   type BridgeCheckpoint,
 } from '../../../../src/index.js'
-import { createLiveBenchmark, loadLiveState, saveLiveState, waitFor, waitForAleoTransaction } from '../helpers.js'
+import { createLiveBenchmark, loadLiveState, quoteParametersFromPlan, saveLiveState, waitFor, waitForAleoTransaction } from '../helpers.js'
 import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, required } from '../config.js'
 
 const enabled = mainnetCaseEnabled('aleo-xreserve')
@@ -87,7 +88,7 @@ describe.skipIf(!enabled)('mainnet Aleo xReserve bridge', () => {
     const usdc = bridge.registry.assets.find((asset) => asset.id === 'ethereum/usdc')
     if (usdc?.locator?.kind !== 'evm-contract') throw new Error('Ethereum USDC contract is missing')
     const token = getAddress(usdc.locator.value)
-    const plan = bridge.prepare({
+    const plan = prepare(bridge.registry, {
       source: { chain: 'aleo', asset: 'usdcx' },
       destination: { chain: 'ethereum', asset: 'usdc' },
       bridgeProtocol: 'xreserve',
@@ -97,7 +98,7 @@ describe.skipIf(!enabled)('mainnet Aleo xReserve bridge', () => {
       recipient,
       sender: String(aleo.account.address),
     })
-    const quote = await bridge.quote({ plan })
+    const quote = await bridge.quote(quoteParametersFromPlan(plan))
     if (quote.kind !== 'aleo-xreserve' || quote.amountOut !== '0.000001') {
       throw new Error('Aleo xReserve quote does not match the deployed withdrawal fee')
     }

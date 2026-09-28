@@ -35,15 +35,12 @@ import type { SwapHandle } from '../../src/actions/swap/swap.js'
  * when absent):
  *   VEIL_INTEGRATION=1
  *   VEIL_E2E_PRIVATE_KEY   funded testnet account
- *   ALEO_CONSUMER_ID, ALEO_DPS_API_KEY   Provable API credentials
  *
  *   VEIL_INTEGRATION=1 npx vitest run packages/shield-swap/test/integration/blindedIdentityStore.e2e.test.ts
  */
 
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
-const CONSUMER_ID = process.env.ALEO_CONSUMER_ID
-const API_KEY = process.env.ALEO_DPS_API_KEY
-const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY && !!CONSUMER_ID && !!API_KEY
+const RUN = process.env.VEIL_INTEGRATION === '1' && !!PRIVATE_KEY
 const TX = 600_000
 
 type Token = { address: string; symbol: string; amm_token_program?: string | null }
@@ -94,9 +91,7 @@ describe.runIf(RUN)('blinded identity store on testnet', () => {
     const aleo = await loadNetwork('testnet')
     const { walletClient } = aleo.createAleoClient({
       privateKey: PRIVATE_KEY!,
-      networkUrl: 'https://api.provable.com/v2',
-      consumerId: CONSUMER_ID,
-      apiKey: API_KEY,
+      networkUrl: 'https://edge.provable.com/api/v2',
       records: aleo.createRemoteScanner(),
       confirmationTimeout: 400_000,
     })
@@ -230,16 +225,26 @@ describe.runIf(RUN)('blinded identity store on testnet', () => {
     // anywhere the account can read — the claim consumed the mapping entry.
     const recoveredPath = join(await mkdtemp(join(tmpdir(), 'veil-blinded-lost-')), 'blinded.json')
     const recovered = fileBlindedIdentityStore(recoveredPath)
-    await recovered.save([
-      {
-        counter: state.identity!.counter,
-        blindingFactor: state.identity!.blindingFactor,
-        blindedAddress: state.identity!.blindedAddress,
-        status: 'reserved',
-      },
-    ])
+    const lost: BlindedIdentityRecord = {
+      counter: state.identity!.counter,
+      blindingFactor: state.identity!.blindingFactor,
+      blindedAddress: state.identity!.blindedAddress,
+      status: 'reserved',
+    }
 
-    const result = await reconcileSwapHistory(client, { store: recovered, maxPages: 20 })
+    // The claim confirmed moments ago, and the program-call history the walk
+    // reads is indexed behind the chain — the newest page can miss a call the
+    // mapping already reflects. Poll the walk from a fresh copy of the lost
+    // store each time, so a miss leaves nothing behind for the next attempt.
+    let result = await (async () => {
+      await recovered.save([lost])
+      return reconcileSwapHistory(client, { store: recovered, maxPages: 20 })
+    })()
+    for (let i = 0; i < 20 && !result.claims.some((c) => c.blindedAddress === lost.blindedAddress); i++) {
+      await new Promise((r) => setTimeout(r, 5_000))
+      await recovered.save([lost])
+      result = await reconcileSwapHistory(client, { store: recovered, maxPages: 20 })
+    }
     expect(result.claims.map((c) => c.blindedAddress)).toContain(state.identity!.blindedAddress)
     const claim = result.claims.find((c) => c.blindedAddress === state.identity!.blindedAddress)!
     // The swap id came back out of the claim call's inputs, matching the one the
@@ -294,9 +299,7 @@ describe.runIf(RUN)('concurrent identity derivation on testnet', () => {
     // Deliberately no `blindedIdentities`: this is the unguarded path.
     const built = aleo.createAleoClient({
       privateKey: PRIVATE_KEY!,
-      networkUrl: 'https://api.provable.com/v2',
-      consumerId: CONSUMER_ID,
-      apiKey: API_KEY,
+      networkUrl: 'https://edge.provable.com/api/v2',
     })
     client = built.walletClient
     account = built.account

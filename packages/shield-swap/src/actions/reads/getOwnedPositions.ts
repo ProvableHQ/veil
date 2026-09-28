@@ -1,6 +1,7 @@
 import type { Client, OwnedRecord } from '@provablehq/veil-core'
 import { SHIELD_SWAP } from '../../constants.js'
 import { listPositionNFTs, type PositionNFTInfo } from '../../utils/records.js'
+import { mapWithLimit, withRetry } from '../../utils/concurrency.js'
 import { amountsForLiquidity, feeGrowthInside, feeOwed, getSqrtPriceAtTickX128 } from '../../utils/q128.js'
 import { getPosition } from './getPosition.js'
 import { getSlot, type Slot } from './getSlot.js'
@@ -84,11 +85,16 @@ export interface OwnedPosition {
  *   `closed`. Defaults to `false`. Costs a second record scan over spent
  *   records, so it applies when a caller is reconciling history — a portfolio
  *   view wants only the operable positions the default returns.
+ * @property concurrency Positions resolved at once; each opens up to four
+ *   mapping reads, so the gateway sees about four times this many requests in
+ *   flight. Defaults to 8. Lower it for a rate-limited node, raise it for a
+ *   local one.
  */
 export type GetOwnedPositionsParameters = {
   poolKey?: string
   program?: string
   includeClosed?: boolean
+  concurrency?: number
 }
 
 /** Every owned position — empty when the account holds none. */
@@ -102,6 +108,8 @@ export type GetOwnedPositionsReturnType = OwnedPosition[]
  * Hits the network: `positions`, `frozen_position`, and two `ticks` reads,
  * all in one wave alongside the caller's slot read. The tick reads are
  * speculative — discarded when the position turns out not to be finalized.
+ * Each read retries a busy response or a dropped connection, so one reset
+ * under a wide fan-out does not fail the position.
  *
  * @param client A Veil client whose transport can reach an Aleo node.
  * @param params The scanned record, the program override, and the pool's
@@ -116,11 +124,11 @@ export async function resolveOwnedPosition(
 ): Promise<OwnedPosition> {
   const { nft } = params
   const [position, frozenAt, slot, lowerTick, upperTick] = await Promise.all([
-    getPosition(client, { positionTokenId: nft.tokenId, program: params.program }),
-    getFrozenPosition(client, { positionTokenId: nft.tokenId, program: params.program }),
+    withRetry(() => getPosition(client, { positionTokenId: nft.tokenId, program: params.program })),
+    withRetry(() => getFrozenPosition(client, { positionTokenId: nft.tokenId, program: params.program })),
     params.slot,
-    getTick(client, { poolKey: nft.poolKey, tick: nft.tickLower, program: params.program }),
-    getTick(client, { poolKey: nft.poolKey, tick: nft.tickUpper, program: params.program }),
+    withRetry(() => getTick(client, { poolKey: nft.poolKey, tick: nft.tickLower, program: params.program })),
+    withRetry(() => getTick(client, { poolKey: nft.poolKey, tick: nft.tickUpper, program: params.program })),
   ])
 
   const base = {
@@ -204,10 +212,12 @@ export async function resolveOwnedPosition(
  * id on a transport-only client but carries no record, amounts, or fees.
  *
  * Hits the network: one record scan plus up to five mapping reads per
- * position (the pool slot is read once per pool). Requires record access — a
- * connected wallet, or a local account with a record provider — and the
- * optional `@provablehq/sdk` peer for tick-key derivation. Records whose
- * plaintext a privacy-preserving wallet withholds are skipped.
+ * position (the pool slot is read once per pool), resolving `concurrency`
+ * positions at a time and retrying a read the gateway refused or dropped.
+ * Requires record access — a connected wallet, or a local account with a
+ * record provider — and the optional `@provablehq/sdk` peer for tick-key
+ * derivation. Records whose plaintext a privacy-preserving wallet withholds
+ * are skipped.
  *
  * The record scan and the mappings lag each other in both directions, and a
  * `null` `state` is where that shows. Just after a mint the record arrives
@@ -275,13 +285,25 @@ export async function getOwnedPositions(
   const orphans = [...spentOnly.values()]
 
   // One slot read per pool, shared as an un-awaited promise so it resolves
-  // concurrently with every position's own reads.
+  // concurrently with every position's own reads. A rejection is swallowed
+  // here so an unhandled-rejection cannot fire before a position awaits it;
+  // each position re-raises it through `params.slot`.
   const poolKeys = [...new Set([...nfts, ...orphans].map((nft) => nft.poolKey))]
-  const slots = new Map(poolKeys.map((key) => [key, getSlot(client, { poolKey: key, program })]))
+  const slots = new Map(
+    poolKeys.map((key) => {
+      const slot = withRetry(() => getSlot(client, { poolKey: key, program }))
+      slot.catch(() => {})
+      return [key, slot]
+    }),
+  )
 
+  // Bounded: every position opens four reads, and a gateway resets connections
+  // it cannot serve at once. Eight positions is ~32 sockets, which the hosted
+  // gateway serves without dropping; unbounded, sixty positions is ~240.
+  const concurrency = params.concurrency ?? 8
   const held = (
-    await Promise.all(
-      nfts.map((nft) => resolveOwnedPosition(client, { nft, program, slot: slots.get(nft.poolKey)! })),
+    await mapWithLimit(nfts, concurrency, (nft) =>
+      resolveOwnedPosition(client, { nft, program, slot: slots.get(nft.poolKey)! }),
     )
   ).map((position) => ({
     ...position,
@@ -294,8 +316,8 @@ export async function getOwnedPositions(
   // scanner has not served yet, and those are dropped rather than returned —
   // their `record` is consumed, so handing it back as operable would fail at
   // proving. They reappear as ordinary open positions once the scan catches up.
-  const resolvedOrphans = await Promise.all(
-    orphans.map((nft) => resolveOwnedPosition(client, { nft, program, slot: slots.get(nft.poolKey)! })),
+  const resolvedOrphans = await mapWithLimit(orphans, concurrency, (nft) =>
+    resolveOwnedPosition(client, { nft, program, slot: slots.get(nft.poolKey)! }),
   )
   return [
     ...held,

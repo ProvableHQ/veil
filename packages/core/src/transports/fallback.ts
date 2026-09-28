@@ -21,7 +21,7 @@ import { createTransport } from './createTransport.js'
  *
  * const transport = fallback([
  *   custom({ request: (args) => wallet.request(args) }),
- *   http('https://api.provable.com/v2', { network: 'mainnet' }),
+ *   http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
  * ])
  */
 export function fallback(transports: Transport[]): Transport<'fallback'> {

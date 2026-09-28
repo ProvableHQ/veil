@@ -31,7 +31,7 @@ const API_OPTS = { baseUrl: process.env.VEIL_DEX_API_URL ?? SHIELD_SWAP_API_URLS
  */
 const RUN = process.env.VEIL_INTEGRATION === '1'
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
-const NODE = 'https://api.provable.com/v2'
+const NODE = 'https://edge.provable.com/api/v2'
 
 describe.runIf(RUN)('trader workflows against live pool + route data', () => {
   let client: PublicClient
@@ -82,8 +82,8 @@ describe.runIf(RUN)('trader workflows against live pool + route data', () => {
 
   it('estimates output and price impact from live liquidity (output grows with input)', () => {
     const unit = 10n ** BigInt(decimals0)
-    const small = priceImpact({ pool, slot, amountIn: unit / 100n, zeroForOne: true }) // 0.01 token
-    const big = priceImpact({ pool, slot, amountIn: unit, zeroForOne: true }) // 1 token
+    const small = priceImpact({ slot, amountIn: unit / 100n, zeroForOne: true }) // 0.01 token
+    const big = priceImpact({ slot, amountIn: unit, zeroForOne: true }) // 1 token
 
     expect(small.expectedOut).toBeGreaterThan(0n)
     expect(big.expectedOut).toBeGreaterThan(small.expectedOut) // more in → more out (CFMM)
@@ -109,7 +109,8 @@ describe.runIf(RUN)('trader workflows against live pool + route data', () => {
   it.runIf(!!PRIVATE_KEY)('estimates LP fee APR from live 24h volume (OHLCV)', async () => {
     const to = Math.floor(Date.now() / 1000)
     const candles = (await api.getPoolOhlcv(poolKey, { granularity: '1h', from: to - 86_400, to })).data
-    const volume24h = candles.reduce((sum, c) => sum + (Number(c.volume) || 0), 0)
+    // Candles carry OHLC as `o`/`h`/`l`/`c` and volume as `v`, all decimal strings.
+    const volume24h = candles.reduce((sum, c) => sum + (Number(c.v) || 0), 0)
 
     const apr = feeAprEstimate({ volume24h, feePips: pool.fee, positionValue: 1000 })
     expect(Number.isFinite(apr)).toBe(true)

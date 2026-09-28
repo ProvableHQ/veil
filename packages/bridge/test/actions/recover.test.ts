@@ -67,7 +67,7 @@ describe('bridge recovery checkpoints', () => {
 
   it('persists the Solana lifetime needed to detect an expired submission', () => {
     const bridge = createBridgeClient({ environment: 'mainnet' })
-    const transferPlan = bridge.prepare({
+    const transferPlan = prepare(bridge.registry, {
       source: { chain: 'solana', asset: 'sol' },
       destination: { chain: 'aleo', asset: 'sol' },
       bridgeProtocol: 'hyperlane',
@@ -110,7 +110,7 @@ describe('bridge recovery checkpoints', () => {
         },
       },
     })
-    const transferPlan = bridge.prepare({
+    const transferPlan = prepare(bridge.registry, {
       source: { chain: 'solana', asset: 'sol' },
       destination: { chain: 'aleo', asset: 'sol' },
       bridgeProtocol: 'hyperlane',
@@ -163,7 +163,7 @@ describe('bridge recovery checkpoints', () => {
       environment: 'mainnet',
       clients: { aleo: { family: 'aleo', publicClient: { request } as never } },
     })
-    const transferPlan = bridge.prepare({
+    const transferPlan = prepare(bridge.registry, {
       source: { chain: 'aleo', asset: 'eth' },
       destination: { chain: 'ethereum', asset: 'eth' },
       bridgeProtocol: 'hyperlane',
@@ -202,7 +202,7 @@ describe('bridge recovery checkpoints', () => {
       environment: 'mainnet',
       clients: { aleo: { family: 'aleo', publicClient: { request } as never } },
     })
-    const transferPlan = bridge.prepare({
+    const transferPlan = prepare(bridge.registry, {
       source: { chain: 'aleo', asset: 'eth' },
       destination: { chain: 'ethereum', asset: 'eth' },
       bridgeProtocol: 'hyperlane',
@@ -258,7 +258,7 @@ describe('bridge recovery checkpoints', () => {
         },
       },
     })
-    const transferPlan = bridge.prepare({
+    const transferPlan = prepare(bridge.registry, {
       source: { chain: 'aleo', asset: 'eth' },
       destination: { chain: 'ethereum', asset: 'eth' },
       bridgeProtocol: 'hyperlane',
@@ -292,7 +292,7 @@ describe('bridge recovery checkpoints', () => {
         },
       },
     })
-    const transferPlan = bridge.prepare({
+    const transferPlan = prepare(bridge.registry, {
       source: { chain: 'aleo', asset: 'sol' },
       destination: { chain: 'solana', asset: 'sol' },
       bridgeProtocol: 'hyperlane',
@@ -331,7 +331,7 @@ describe('bridge recovery checkpoints', () => {
         },
       },
     })
-    const transferPlan = bridge.prepare({
+    const transferPlan = prepare(bridge.registry, {
       source: { chain: 'aleo', asset: 'sol' },
       destination: { chain: 'solana', asset: 'sol' },
       bridgeProtocol: 'hyperlane',
@@ -377,7 +377,7 @@ describe('bridge recovery checkpoints', () => {
         },
       },
     })
-    const transferPlan = bridge.prepare({
+    const transferPlan = prepare(bridge.registry, {
       source: { chain: 'aleo', asset: 'sol' },
       destination: { chain: 'solana', asset: 'sol' },
       bridgeProtocol: 'hyperlane',

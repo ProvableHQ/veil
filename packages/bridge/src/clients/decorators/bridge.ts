@@ -1,17 +1,15 @@
-import { prepare } from '../../actions/prepare.js'
 import { execute } from '../../actions/execute.js'
 import { quote } from '../../actions/quote.js'
 import { complete } from '../../actions/complete.js'
 import { getStatus } from '../../actions/getStatus.js'
-import { waitForStatus } from '../../actions/waitForStatus.js'
 import { recover } from '../../actions/recover.js'
 import { resume } from '../../actions/resume.js'
 import { wait } from '../../actions/wait.js'
 import { shield } from '../../actions/shield.js'
 import { unshield } from '../../actions/unshield.js'
 import type { BridgeChainClients } from '../../connections/resolve.js'
-import type { BridgeProgress, BridgeReceipt, BridgeRegistry, BridgePlan, PrepareParameters } from '../../types/protocol.js'
-import type { CompleteParameters, ExecuteParameters, GetStatusParameters, QuoteParameters, RecoverParameters, ResumeParameters, WaitForStatusParameters, WaitParameters, BridgeExecution, BridgeQuote } from '../../types/actions.js'
+import type { BridgeProgress, BridgeReceipt, BridgeRegistry } from '../../types/protocol.js'
+import type { CompleteParameters, ExecuteParameters, GetStatusParameters, QuoteParameters, RecoverParameters, ResumeParameters, WaitParameters, BridgeExecution, BridgeQuote } from '../../types/actions.js'
 import type { AleoPrivacyExecution, ShieldParameters, UnshieldParameters } from '../../types/aleo.js'
 
 /**
@@ -29,16 +27,14 @@ export type BridgeActionsConfig = {
 /**
  * Groups the complete cross-chain transfer lifecycle exposed by a bridge client.
  *
- * Preparation requires no network access. Quoting and monitoring read chains
- * or providers. Execution, resumption, completion, shielding, and unshielding
- * can request wallet authorization and move funds.
+ * Quoting validates the transfer and reads chains or providers where current
+ * costs are available. Execution, resumption, completion, shielding, and
+ * unshielding can request wallet authorization and move funds.
  */
 export type BridgeActions = {
-  prepare: (params: PrepareParameters) => BridgePlan
   quote: (params: QuoteParameters) => Promise<BridgeQuote>
   execute: (params: ExecuteParameters) => Promise<BridgeExecution>
   getStatus: (params: GetStatusParameters) => Promise<BridgeReceipt>
-  waitForStatus: (params: WaitForStatusParameters) => Promise<BridgeReceipt>
   complete: (params: CompleteParameters) => Promise<BridgeExecution>
   recover: (params: RecoverParameters) => Promise<BridgeProgress>
   resume: (params: ResumeParameters) => Promise<BridgeExecution>
@@ -57,11 +53,9 @@ export function bridgeActions(config: BridgeActionsConfig): BridgeActions {
   return {
     // Every closure injects the same validated route catalog and
     // registry-keyed clients, preventing per-action configuration drift.
-    prepare: (params) => prepare(config.registry, params),
     quote: async (params) => quote(config.registry, config.clients, params),
     execute: async (params) => execute(config.registry, config.clients, params),
     getStatus: async (params) => getStatus(config.registry, config.clients, config.fetch, params),
-    waitForStatus: async (params) => waitForStatus(config.registry, config.clients, config.fetch, params),
     complete: async (params) => complete(config.registry, config.clients, params),
     recover: async (params) => recover(config.registry, config.clients, config.fetch, params),
     resume: async (params) => resume(config.registry, config.clients, params),

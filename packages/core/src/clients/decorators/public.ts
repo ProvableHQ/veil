@@ -144,7 +144,7 @@ export type PublicActions = {
  * import { createClient, http } from '@provablehq/veil-core'
  *
  * const client = createClient({
- *   transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+ *   transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
  * }).extend(publicActions)
  */
 export function publicActions(client: Client): PublicActions {

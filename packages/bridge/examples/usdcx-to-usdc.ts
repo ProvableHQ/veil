@@ -1,3 +1,5 @@
+import { pathToFileURL } from 'node:url'
+import { aleoExampleOptions, serviceAuth, type ExampleOptions } from './options.js'
 /**
  * Moves USDCx from Aleo back to USDC on Ethereum through Circle xReserve.
  *
@@ -11,7 +13,6 @@ import {
   parseRecord,
   type OwnedRecord,
 } from '@provablehq/veil-core'
-import { pathToFileURL } from 'node:url'
 import {
   createAleoClient,
   createBridgeClient,
@@ -19,8 +20,9 @@ import {
 } from '@provablehq/aleo-bridge-sdk'
 
 const USDCX_PROGRAM = 'usdcx_stablecoin.aleo'
-const FREEZE_LIST_URL = 'https://api.provable.com/v2/mainnet/programs/usdcx_freezelist.aleo/compliance/freeze-list'
-const FREEZE_LIST_DEPTH = 15
+const FREEZE_LIST_URL = 'https://edge.provable.com/api/v2/mainnet/programs/usdcx_freezelist.aleo/compliance/freeze-list'
+const FREEZE_LIST_TREE_DEPTH = 15
+const FREEZE_LIST_PROOF_LENGTH = FREEZE_LIST_TREE_DEPTH + 1
 const MINIMUM_BURN_AMOUNT_ATOMIC = 2_000_000n
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
 const EXECUTION_ENVIRONMENT_VARIABLE = 'EXECUTE_BRIDGE'
@@ -116,36 +118,51 @@ async function createExclusionProof(address: string): Promise<string> {
   // The neighboring leaves on both sides of the address prove its absence from
   // the ordered tree. The Aleo program checks these sibling paths during burn.
   const [leftIndex, rightIndex] = sealance.getLeafIndices(tree, address)
-  const leftProof = sealance.getSiblingPath(tree, leftIndex, FREEZE_LIST_DEPTH)
-  const rightProof = sealance.getSiblingPath(tree, rightIndex, FREEZE_LIST_DEPTH)
+  // The SDK includes the selected leaf as the first path element, so a
+  // depth-15 tree produces the contract's required [field; 16u32] array.
+  const leftProof = sealance.getSiblingPath(tree, leftIndex, FREEZE_LIST_PROOF_LENGTH)
+  const rightProof = sealance.getSiblingPath(tree, rightIndex, FREEZE_LIST_PROOF_LENGTH)
+  if (
+    leftProof.siblings.length !== FREEZE_LIST_PROOF_LENGTH ||
+    rightProof.siblings.length !== FREEZE_LIST_PROOF_LENGTH
+  ) {
+    throw new Error(
+      `USDCx exclusion proof paths must contain ${FREEZE_LIST_PROOF_LENGTH} fields; ` +
+      `received ${leftProof.siblings.length} and ${rightProof.siblings.length}`,
+    )
+  }
   return sealance.formatMerkleProof([leftProof, rightProof])
 }
 
 /**
- * Runs the Aleo USDCx to Ethereum USDC example.
- *
- * @param options Optional CLI overrides for the visible default amount and execution gate.
- * @returns After read-only inspection or source burn submission.
+ * Runs the usdcx-to-usdc mainnet journey with a preview before submission.
+ * @param options Overrides the example amount and execution gate; defaults to the visible example amount and environment acknowledgement.
+ * @returns Resolves after preview or the selected transfer lifecycle.
+ * @throws When configuration, protocol validation, or delivery fails.
+ * @example
+ * await runUsdcxToUsdcExample({ amount: '5', execute: false })
  */
-export async function runUsdcxToUsdcExample(options: { amount?: string, execute?: boolean } = {}): Promise<void> {
+export async function runUsdcxToUsdcExample(options: ExampleOptions = {}): Promise<void> {
   const recipient = requiredEnvironmentVariable('ETHEREUM_RECIPIENT')
   const mode = burnModeFromEnvironment()
-  const amount = options.amount ?? AMOUNT
 
-  // ── Describe the intended transfer ──────────────────────────────────
+  // ── Price the intended transfer ─────────────────────────────────────
   // The caller supplies familiar chain and asset names, the amount, and the
   // Ethereum recipient. The bridge catalog supplies the reviewed Aleo programs,
-  // Circle domains, token identifiers, and fixed two-USDCx withdrawal boundary.
-  // No network is read and no wallet is involved here. This amount is one base
-  // unit above that boundary so the example moves the minimum possible value.
+  // Circle domains, token identifiers, and fixed two-USDCx withdrawal fee.
+  // This direction has no live provider quote, so the returned result applies
+  // the reviewed fixed fee without loading a wallet or reading account state.
+  // This amount is one base unit above the fee, keeping the example minimal.
   const bridge = createBridgeClient({ environment: 'mainnet' })
-  const plan = bridge.prepare({
+  const quote = await bridge.quote({
     source: { chain: 'aleo', asset: 'usdcx' },
     destination: { chain: 'ethereum', asset: 'usdc' },
     bridgeProtocol: 'xreserve',
-    amount,
+    amount: options.amount ?? AMOUNT,
     recipient,
   })
+  if (quote.kind !== 'aleo-xreserve') throw new Error(`Unexpected quote kind: ${quote.kind}`)
+  const plan = quote.plan
 
   // ── Review the withdrawal before loading an account ─────────────────
   // This direction has no live source-side market quote. The important caller
@@ -178,44 +195,32 @@ export async function runUsdcxToUsdcExample(options: { amount?: string, execute?
   // The exact acknowledgement separates inspection from an irreversible Aleo
   // burn. A copied tutorial therefore cannot load private records, request a
   // proof, spend a fee, or destroy USDCx without an explicit operator decision.
-  if (options.execute !== true && process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
+  if (!(options.execute ?? (process.env[EXECUTION_ENVIRONMENT_VARIABLE] === EXECUTION_ACKNOWLEDGEMENT))) {
     console.log('\nPreflight complete; no USDCx was burned.')
     console.log(`Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to submit the withdrawal.`)
     return
   }
 
   const privateKey = requiredEnvironmentVariable('ALEO_PRIVATE_KEY')
-  const consumerId = process.env.ALEO_CONSUMER_ID?.trim()
-  const apiKey = process.env.ALEO_DPS_API_KEY?.trim()
-  if ((consumerId && !apiKey) || (!consumerId && apiKey)) {
-    throw new Error('ALEO_CONSUMER_ID and ALEO_DPS_API_KEY must be supplied together')
-  }
-  if (mode === 'private' && (!consumerId || !apiKey)) {
-    throw new Error('Private burn record discovery requires ALEO_CONSUMER_ID and ALEO_DPS_API_KEY')
-  }
 
   // ── Connect the account that owns the source funds ───────────────────
   // The Aleo account delegates proof construction, signs the finished proof,
   // broadcasts the burn, and pays the transaction fee from public credits.
-  // Private mode also authenticates a remote scanner because record ownership
-  // is encrypted and cannot be discovered from ordinary public chain reads.
+  // Private mode also attaches a remote scanner because record ownership is
+  // encrypted and cannot be discovered from ordinary public chain reads. The
+  // Provable gateway needs no credentials, and neither service receives the
+  // Aleo private key.
   const { loadNetwork } = await import('@provablehq/veil-aleo-sdk')
   const aleo = await loadNetwork('mainnet')
-  const records = mode === 'private'
-    ? aleo.createRemoteScanner({ consumerId: consumerId!, apiKey: apiKey! })
-    : undefined
+  const records = mode === 'private' ? aleo.createRemoteScanner({ ...serviceAuth(), url: process.env.ALEO_SCANNER_URL?.trim() || undefined }) : undefined
   const { publicClient, walletClient: nativeWalletClient, account } = aleo.createAleoClient({
     privateKey,
-    networkUrl: process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2',
-    provingMode: 'delegated',
-    ...(consumerId && apiKey ? { consumerId, apiKey } : {}),
+    networkUrl: process.env.ALEO_RPC_URL?.trim() || 'https://edge.provable.com/api/v2',
+    ...aleoExampleOptions(),
     ...(records ? { records } : {}),
     useFeeMaster: false,
     confirmationTimeout: ALEO_CONFIRMATION_TIMEOUT_MS,
   })
-  // Authentication lets the delegated prover and scanner act for this account;
-  // neither service receives the Aleo private key.
-  if (consumerId && apiKey) await nativeWalletClient.authenticateProvableApi()
   console.log(`Aleo signer ready: ${account.address} (delegated proving)`)
 
   // A private burn spends one concrete record and proves that the signer is not
@@ -228,6 +233,10 @@ export async function runUsdcxToUsdcExample(options: { amount?: string, execute?
     ? await createExclusionProof(account.address)
     : undefined
   if (merkleProof) console.log(`Derived the USDCx freeze-list exclusion proof for ${account.address}.`)
+
+  // xReserve can burn the selected USDCx record directly. Do not unshield it
+  // first: that would create a separate public balance and add an unnecessary
+  // Aleo transaction before the withdrawal.
 
   const burnMode: XReserveBurnMode = mode === 'private' ? 'private' : 'public-as-signer'
   const executingBridge = createBridgeClient({
@@ -260,20 +269,19 @@ export async function runUsdcxToUsdcExample(options: { amount?: string, execute?
   // Ethereum delivery, so this script stops honestly at delivery pending. A
   // timeout or RPC error leaves the burn outcome unknown; recover from the
   // latest checkpoint and transaction id instead of authorizing another burn.
-  const receipt = await executingBridge.waitForStatus({
-    plan,
-    receipt: result.receipt,
+  const progress = await executingBridge.wait({
+    progress: { next: 'wait', plan, receipt: result.receipt },
     until: ['DELIVERY_PENDING', 'FAILED'],
   })
-  if (receipt.status === 'FAILED') {
-    throw new Error(String(receipt.protocolState.sourceError ?? 'Aleo burn failed'))
+  if (progress.next === 'failed') {
+    throw new Error(progress.error)
   }
   console.log('The Aleo burn-attestation service will forward the withdrawal to Circle for Ethereum delivery.')
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  runUsdcxToUsdcExample().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error)
-    process.exitCode = 1
-  })
+runUsdcxToUsdcExample().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : error)
+  process.exitCode = 1
+})
 }

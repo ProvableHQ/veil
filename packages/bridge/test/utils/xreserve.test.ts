@@ -2,6 +2,7 @@ import { hexToBytes } from 'viem'
 import { describe, expect, it } from 'vitest'
 import {
   aleoAddressToBytes32,
+  bytes32ToAleoAddress,
   buildXReserveDepositPayload,
   buildXReserveHookData,
   calculateXReserveDepositNonce,
@@ -15,7 +16,9 @@ const RECIPIENT = 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm
 describe('xReserve wire utilities', () => {
   it('decodes Aleo bech32m addresses and rejects checksum changes', () => {
     expect(aleoAddressToBytes32(RECIPIENT)).toBe('0xb102e0d37e02ec5dbba2460287ac07ef7ea8ee636392ce235402308299901811')
+    expect(bytes32ToAleoAddress(aleoAddressToBytes32(RECIPIENT))).toBe(RECIPIENT)
     expect(() => aleoAddressToBytes32(`${RECIPIENT.slice(0, -1)}q`)).toThrow(/Invalid Aleo recipient/)
+    expect(() => bytes32ToAleoAddress('0x01')).toThrow(/32-byte Aleo recipient/)
   })
 
   it('uses one-byte public and record selectors in fixed 65-byte hooks', async () => {

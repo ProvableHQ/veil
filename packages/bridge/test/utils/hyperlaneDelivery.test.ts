@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createBridgeClient } from '../../src/clients/createBridgeClient.js'
 import { readHyperlaneDelivery } from '../../src/utils/hyperlaneDelivery.js'
+import { prepare } from '../../src/actions/prepare.js'
 
 const MESSAGE_ID = '0xc7c2c763ef846ff1583d9222d8ecbfc56da2e0cdcc9a63bc4bde51467644794d'
 const ALEO_RECIPIENT = 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n'
@@ -57,7 +58,7 @@ describe('readHyperlaneDelivery', () => {
         },
       },
     })
-    const plan = bridge.prepare({
+    const plan = prepare(bridge.registry, {
       source: { chain: 'ethereum', asset: 'eth' },
       destination: { chain: 'aleo', asset: 'eth' },
       bridgeProtocol: 'hyperlane',
@@ -85,7 +86,7 @@ describe('readHyperlaneDelivery', () => {
 
   it('keeps a Hyperlane receipt pending when source confirmation could not recover its message id', async () => {
     const bridge = createBridgeClient({ environment: 'mainnet' })
-    const plan = bridge.prepare({
+    const plan = prepare(bridge.registry, {
       source: { chain: 'ethereum', asset: 'eth' },
       destination: { chain: 'aleo', asset: 'eth' },
       bridgeProtocol: 'hyperlane',
@@ -102,4 +103,26 @@ describe('readHyperlaneDelivery', () => {
 
     await expect(bridge.getStatus({ plan, receipt })).resolves.toBe(receipt)
   })
+
+  it.each(['COMPLETED', 'FAILED', 'EXPIRED'] as const)(
+    'returns an already-%s Hyperlane receipt without another network read',
+    async (status) => {
+      const bridge = createBridgeClient({ environment: 'mainnet' })
+      const plan = prepare(bridge.registry, {
+        source: { chain: 'ethereum', asset: 'eth' },
+        destination: { chain: 'aleo', asset: 'eth' },
+        bridgeProtocol: 'hyperlane',
+        amount: '0.000000000000000001',
+        recipient: ALEO_RECIPIENT,
+      })
+      const receipt = {
+        id: MESSAGE_ID,
+        protocol: 'hyperlane' as const,
+        status,
+        protocolState: { routeId: plan.route.id },
+      }
+
+      await expect(bridge.getStatus({ plan, receipt })).resolves.toBe(receipt)
+    },
+  )
 })

@@ -1,4 +1,5 @@
-import { beforeAll, describe, it, expect } from 'vitest'
+import { beforeAll, describe, it, expect, vi } from 'vitest'
+import * as testnetSdk from '@provablehq/sdk/testnet.js'
 import {
   loadNetwork,
   type AleoSdk,
@@ -218,7 +219,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
     it('creates a delegated proving config', () => {
       const config = aleo.createProvingConfig({
         mode: 'delegated',
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
         proverUrl: 'https://prover.example.com',
       })
 
@@ -232,7 +233,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
     it('creates a local proving config', () => {
       const config = aleo.createProvingConfig({
         mode: 'local',
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       expect(config.mode).toBe('local')
@@ -243,7 +244,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
     it('exposes switchNetwork for runtime SDK rebinding', () => {
       const config = aleo.createProvingConfig({
         mode: 'delegated',
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       expect(config.switchNetwork).toBeTypeOf('function')
@@ -252,7 +253,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
     it('switchNetwork rejects unsupported network names', async () => {
       const config = aleo.createProvingConfig({
         mode: 'delegated',
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       await expect(config.switchNetwork!('canary')).rejects.toThrow(/mainnet.*testnet/)
@@ -261,7 +262,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
 
   describe('createNetworkClient', () => {
     it('creates an AleoNetworkClient', () => {
-      const client = aleo.createNetworkClient('https://api.provable.com/v2')
+      const client = aleo.createNetworkClient('https://edge.provable.com/api/v2')
       expect(client).toBeDefined()
       expect(client.getLatestHeight).toBeTypeOf('function')
     })
@@ -272,7 +273,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const config = aleo.createProvingConfig({
         mode: 'local',
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
         account,
       })
 
@@ -283,7 +284,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
     it('works without account', () => {
       const config = aleo.createProvingConfig({
         mode: 'delegated',
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
         proverUrl: 'https://prover.example.com',
       })
 
@@ -383,7 +384,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const result = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       expect(result.account).toBeDefined()
@@ -397,7 +398,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const { publicClient } = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       expect(publicClient.transport.config.network).toBe('testnet')
@@ -407,7 +408,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const result = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       expect(result.walletClient).toBeDefined()
@@ -418,7 +419,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const result = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
         provingMode: 'local',
       })
 
@@ -430,7 +431,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const { publicClient } = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       expect(publicClient.getBlockNumber).toBeTypeOf('function')
@@ -443,7 +444,7 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const account = aleo.generateAccount()
       const { walletClient } = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
       })
 
       expect(walletClient.writeContract).toBeTypeOf('function')
@@ -452,14 +453,60 @@ describe('@provablehq/veil-aleo-sdk', () => {
       expect(walletClient.transfer).toBeTypeOf('function')
     })
 
-    it('does not wire a recordProvider by default', () => {
+    it('wires a remote scanner as the recordProvider by default', () => {
       const account = aleo.generateAccount()
-      const { walletClient } = aleo.createAleoClient({
-        privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
-      })
+      const { walletClient } = aleo.createAleoClient({ privateKey: account.privateKey })
 
-      expect(walletClient.recordProvider).toBeUndefined()
+      const provider = walletClient.recordProvider as { requestRecords: unknown; url?: string } | undefined
+      expect(provider?.requestRecords).toBeTypeOf('function')
+      expect(provider?.url).toBe('https://edge.provable.com/api/scanner')
+    })
+
+    it('defaults networkUrl to the edge gateway', async () => {
+      const account = aleo.generateAccount()
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify(42), { status: 200, headers: { 'content-type': 'application/json' } }),
+      )
+      try {
+        const { publicClient } = aleo.createAleoClient({ privateKey: account.privateKey })
+        await publicClient.getBlockNumber()
+        const url = String(fetchSpy.mock.calls[0]![0])
+        expect(url.startsWith('https://edge.provable.com/api/v2/testnet/')).toBe(true)
+      } finally {
+        fetchSpy.mockRestore()
+      }
+    })
+
+    it('asks the delegated prover to pay fees by default', async () => {
+      const account = aleo.generateAccount()
+      const transaction = { type: 'execute', id: 'at1proved', fee: {} }
+      const provingRequest = vi
+        .spyOn(testnetSdk.ProgramManager.prototype, 'provingRequest')
+        .mockResolvedValue({ encrypted: true } as never)
+      vi.spyOn(testnetSdk.AleoNetworkClient.prototype, 'submitProvingRequestSafe').mockResolvedValue({
+        ok: true,
+        data: { transaction, broadcast_result: { status: 'Skipped' } },
+      } as never)
+      try {
+        const { walletClient } = aleo.createAleoClient({ privateKey: account.privateKey })
+        await walletClient.proving!.buildTransaction!({
+          programName: 'credits.aleo',
+          functionName: 'transfer_public',
+          inputs: ['aleo1recipient', '1u64'],
+        })
+        expect(provingRequest).toHaveBeenCalledWith(expect.objectContaining({ useFeeMaster: true }))
+
+        provingRequest.mockClear()
+        const optedOut = aleo.createAleoClient({ privateKey: account.privateKey, useFeeMaster: false })
+        await optedOut.walletClient.proving!.buildTransaction!({
+          programName: 'credits.aleo',
+          functionName: 'transfer_public',
+          inputs: ['aleo1recipient', '1u64'],
+        })
+        expect(provingRequest).toHaveBeenCalledWith(expect.objectContaining({ useFeeMaster: false }))
+      } finally {
+        vi.restoreAllMocks()
+      }
     })
 
     it('accepts a RecordProvider via records option', () => {
@@ -467,28 +514,16 @@ describe('@provablehq/veil-aleo-sdk', () => {
       const scanner = aleo.createRemoteScanner({ url: 'https://rss.provable.com', consumerId: 'test' })
       const { walletClient } = aleo.createAleoClient({
         privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
+        networkUrl: 'https://edge.provable.com/api/v2',
         records: scanner,
       })
 
       expect(walletClient.recordProvider).toBe(scanner)
     })
 
-    it('requestRecords throws without a configured records provider', async () => {
-      const account = aleo.generateAccount()
-      const { walletClient } = aleo.createAleoClient({
-        privateKey: account.privateKey,
-        networkUrl: 'https://api.provable.com/v2',
-      })
-
-      await expect(
-        walletClient.requestRecords({ program: 'token.aleo' }),
-      ).rejects.toThrow(/recordProvider/)
-    })
-
     it('createRemoteScanner supports network switching', async () => {
       const scanner = aleo.createRemoteScanner({
-        url: 'https://api.provable.com/scanner',
+        url: 'https://edge.provable.com/api/scanner',
         consumerId: 'test-consumer',
       })
       expect(scanner.switchNetwork).toBeTypeOf('function')

@@ -29,7 +29,7 @@ import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 
 // Read chain state — no wallet needed.
 const publicClient = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 })
 const balance = await publicClient.getBalance({ address: 'aleo1...' })
 
@@ -37,7 +37,7 @@ const balance = await publicClient.getBalance({ address: 'aleo1...' })
 const { account, transport } = fromWalletAdapter(connectedAdapter)
 const walletClient = createWalletClient({
   account,
-  transport: fallback([transport, http('https://api.provable.com/v2', { network: 'mainnet' })]),
+  transport: fallback([transport, http('https://edge.provable.com/api/v2', { network: 'mainnet' })]),
 })
 const txId = await walletClient.writeContract({
   program: 'my_program.aleo',
@@ -72,7 +72,7 @@ action, and transport interfaces are what the rest of Veil extends.
 | [`@provablehq/veil-codegen`](./packages/codegen) | Generates typed bindings from an Aleo program ABI (library + `veil-codegen` CLI). |
 | [`@provablehq/veil-aleo-devnode`](./packages/devnode) | Runs and drives a local Aleo devnode for tests. |
 | [`@provablehq/veil-leo`](./packages/leo) | Typed wrapper around the `leo` CLI (build, deploy, and more). |
-| [`@provablehq/aleo-bridge-sdk`](./packages/bridge) | Cross-chain bridge client. In preview, not yet published. |
+| [`@provablehq/aleo-bridge-sdk`](./packages/bridge) | Cross-chain bridge client. Preview; its API may break between minor releases. |
 
 Every package composes through viem's `extend()` pattern: a client built from
 `@provablehq/veil-core` gains DEX, devnode, or Leo actions by extending it with the

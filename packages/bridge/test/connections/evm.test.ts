@@ -126,6 +126,7 @@ describe('EVM bridge clients', () => {
     })
     expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({
       account: '0x0000000000000000000000000000000000000001',
+      chain: null,
     }))
     await expect(client.walletClient?.sendTransaction({
       chainId: 2,

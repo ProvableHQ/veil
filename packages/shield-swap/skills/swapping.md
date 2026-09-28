@@ -9,6 +9,24 @@ returns a `SwapHandle`; `claimSwapOutput()` later withdraws the output to a
 private record. Claims are covered in [collecting.md](./collecting.md) —
 this runbook ends with persisted handles.
 
+## Quote handoff
+
+For new SDK integrations, use the configured API estimate through `client.quote`
+and pass the returned object directly to `client.swap`:
+
+```ts
+const quote = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: '1.5' })
+const handle = await client.swap({ quote })
+```
+
+Quote inputs accept decimal strings in token units or bigint in raw units.
+The route can contain 1–3 hops; dispatch is automatic. Quotes expire after
+60 seconds, reject missing estimates or zero minimum output, and carry their
+exact minimum into execution. Quote creation reads only API metadata and routing;
+execution checks route pools on chain. Wallet callers must pass `tokenRecord`.
+The manual flows below remain available. Claims still use `claimSwapOutput`
+with the returned handle and any required program imports.
+
 ## Discovery
 
 Everything a swap needs comes from three reads:
@@ -190,7 +208,7 @@ for (const [i, result] of results.entries()) {
   const handle = result.value
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
-      const { amountOut } = await client.claimSwapOutput({ handle, imports: swaps[i]!.imports })
+      const { amountOut } = await client.claimSwapOutput({ handle })
       // Display in human units (swaps[i] should carry the out token's decimals/symbol).
       console.log(`claimed ${formatAmount(amountOut, swaps[i]!.outDecimals, swaps[i]!.outSymbol)}`)
       break

@@ -21,10 +21,10 @@ const account = aleo.privateKeyToAccount('APrivateKey1...')
 
 const client = createWalletClient({
   account,
-  transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
   proving: aleo.createProvingConfig({
     mode: 'local',
-    networkUrl: 'https://api.provable.com/v2',
+    networkUrl: 'https://edge.provable.com/api/v2',
     account,
   }),
 })

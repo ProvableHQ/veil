@@ -10,9 +10,33 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  LEO_RELEASE: leo-lang-v4.3.4
+  LEO_RELEASE: leo-lang-v4.4.4
 
 jobs:
+  first-swap-example:
+    name: Standalone first-swap example
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: packages/shield-swap/examples/first-swap
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: packages/shield-swap/examples/first-swap/package-lock.json
+      - name: Set up and typecheck the example against this checkout
+        working-directory: .
+        run: pnpm setup:first-swap
+      - name: Verify examples in the npm package
+        working-directory: .
+        run: node .github/scripts/check-first-swap-package.mjs
+
   unit:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -36,8 +60,11 @@ jobs:
       # codegen and react do not extend the root tsconfig, so they get none of
       # its `paths` and resolve workspace imports through node_modules to
       # `dist`. Without a build they fail to resolve at all.
+      # Use the root build script to serialize workspace builds. The reference
+      # app rebuilds its dependencies, which must not clear dist while another
+      # package is generating declarations from those files.
       - name: Build packages
-        run: pnpm -r build
+        run: pnpm build
       # Every package's own sources. `pnpm vitest run` only compiles what a test
       # imports, so a package with no tests — the CLI — would otherwise ship
       # unchecked.
@@ -49,7 +76,9 @@ jobs:
       - name: Typecheck examples
         run: npx tsc --noEmit -p examples/shield-swap/tsconfig.json
       - name: Typecheck bridge example
-        run: npx tsc --noEmit -p examples/bridge/tsconfig.json
+        run: npx tsc --noEmit -p packages/bridge/examples/tsconfig.json
+      - name: Verify installed bridge examples
+        run: node .github/scripts/check-bridge-package.mjs
       - name: Typecheck reference dApp
         run: pnpm --filter @provablehq/veil-loyalty-dapp exec tsc --noEmit
 

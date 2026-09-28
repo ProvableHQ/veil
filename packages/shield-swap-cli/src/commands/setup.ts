@@ -7,8 +7,8 @@
  *   1. Key material        — reuse the stored account, import the user's
  *                            existing key, or (only with --new) generate one
  *   2. DEX authentication  — challenge/verify session with the account
- *   3. Provable API        — reuse/import credentials, else self-register a
- *                            consumer for proving + scanning
+ *   3. Provable gateway    — needs no credentials; a legacy consumer pair on
+ *                            file is kept but unused on the default gateway
  *   4. Invite code         — check access; redeem a code when one is provided
  *   5. API token           — mint a long-lived ss_ token for later sessions
  *   6. Airdrop             — request testnet tokens when holdings are empty,
@@ -24,14 +24,14 @@
  * A private key is NEVER pasted into a conversation or command history: a
  * returning user either writes it to a file and passes the path, or exports
  * SHIELD_SWAP_PRIVATE_KEY (or SHIELD_SWAP_PRIVATE_KEY_FILE) in their own
- * shell. Other environment fallbacks: ALEO_CONSUMER_ID + ALEO_DPS_API_KEY,
- * SHIELD_SWAP_INVITE_CODE, SHIELD_SWAP_API_URL.
+ * shell. Other environment fallbacks: SHIELD_SWAP_INVITE_CODE,
+ * SHIELD_SWAP_API_URL.
  *
  * Exit codes: 0 ready · 2 needs input from the user (message says what) ·
  * 3 airdrop still pending · 1 anything else.
  *
- * State lands in ./.shield-swap/<network>/state.json (private key +
- * credentials — gitignore it, treat it like a wallet file). Nothing is shared
+ * State lands in ./.shield-swap/<network>/state.json (private key —
+ * gitignore it, treat it like a wallet file). Nothing is shared
  * between networks, including the blinded identity store, whose reservations
  * are only meaningful against the chain they were checked on.
  *
@@ -42,12 +42,10 @@
 import { readFileSync } from 'node:fs'
 import { help } from '../color.js'
 import { ApiError, DEFAULT_API_URL } from '@provablehq/shield-swap-sdk'
-import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
 import {
   loadState,
   saveState,
   ensureKeyMaterial,
-  credentialsPath,
   resolveNetwork,
   stateDir,
   NeedsConfigDecisionError,
@@ -60,8 +58,6 @@ const USAGE = `shield-swap setup — bootstrap an account and get it funded
 
   --new                         generate a brand-new account
   --private-key-file <path>     import an existing key, read from this file
-  --consumer-id <id>            Provable API consumer id (else self-registers)
-  --api-key <key>               Provable API key
   --invite-code <code>          redeem an invite code when access is locked
   --api-url <origin>            pin a DEX API deployment
   --network <testnet|mainnet>   default testnet
@@ -71,7 +67,7 @@ Every step is check-then-act, so re-running resumes where a failed run stopped.
 A private key is NEVER pasted into a conversation or command history: write it
 to a file and pass --private-key-file, or export SHIELD_SWAP_PRIVATE_KEY in your
 own shell. Other environment fallbacks: SHIELD_SWAP_PRIVATE_KEY_FILE,
-ALEO_CONSUMER_ID, ALEO_DPS_API_KEY, SHIELD_SWAP_INVITE_CODE, SHIELD_SWAP_API_URL.
+SHIELD_SWAP_INVITE_CODE, SHIELD_SWAP_API_URL.
 
 Exit codes: 0 ready · 2 needs input from the user · 3 airdrop still pending ·
 1 anything else.`
@@ -121,18 +117,15 @@ function resolveImportKey(argv: string[]): string | undefined {
  */
 async function setup(argv: string[]): Promise<void> {
   const inviteCode = argValue(argv, '--invite-code') ?? process.env.SHIELD_SWAP_INVITE_CODE
-  const consumerId = argValue(argv, '--consumer-id') ?? process.env.ALEO_CONSUMER_ID
-  const apiKey = argValue(argv, '--api-key') ?? process.env.ALEO_DPS_API_KEY
   // Flag-only on purpose: SHIELD_SWAP_API_URL stays an ephemeral per-run
   // override (see loadSession); only an explicit --api-url pins the
   // deployment and resets deployment-scoped state.
   const network = resolveNetwork(argValue(argv, '--network'))
   const apiUrl = argValue(argv, '--api-url')?.replace(/\/$/, '')
-  const credentialStore = fileCredentialStore(credentialsPath(network))
   const allowGenerate = argv.includes('--new')
   const importKey = resolveImportKey(argv)
 
-  // ── 1 + 2: key material and Provable API credentials ────────────────
+  // ── 1 + 2: key material ─────────────────────────────────────────────
   let state = loadState(network)
   console.log(`network: ${network}  ·  state: ${stateDir(network)}`)
 
@@ -159,8 +152,6 @@ async function setup(argv: string[]): Promise<void> {
           'a private key into the conversation:\n' +
           '  - existing account → the user saves their key to a file themselves, then re-run\n' +
           '    with --private-key-file <path> (or they export SHIELD_SWAP_PRIVATE_KEY in\n' +
-          '    their own shell). Add --consumer-id/--api-key if they have Provable API\n' +
-          '    credentials.\n' +
           '  - brand new       → re-run with --new\n',
       )
       process.exit(2)
@@ -169,43 +160,25 @@ async function setup(argv: string[]): Promise<void> {
   }
   console.log(`✓ account: ${state.address}`)
 
-  // Supplied credentials win over registering a new consumer, so a returning
-  // user keeps theirs. Absent both, the client registers one below. Awaited
-  // because ProvableCredentialStore permits async: this store happens to be
-  // synchronous, but reading a promise as a value would silently skip the seed
-  // and leave the write unobserved.
-  if (consumerId && apiKey && !(await credentialStore.load())) {
-    await credentialStore.save({ consumerId, apiKey })
-  }
-
-  // Credentials used to live in the state file. Move them rather than letting
-  // the client register a replacement: an API key is issued once and cannot be
-  // reissued, so a fresh consumer would abandon the old one.
-  const legacy = (state as { provableApi?: { consumerId: string; apiKey: string } }).provableApi
-  if (legacy && !(await credentialStore.load())) {
-    await credentialStore.save(legacy)
+  // Legacy Provable API credentials used to live in the state file. The
+  // gateway needs none, so drop them rather than carry them forward.
+  if ('provableApi' in state) {
     delete (state as { provableApi?: unknown }).provableApi
     saveState(state)
-    console.log(`✓ moved Provable API credentials to ${credentialsPath(network)}`)
+    console.log('✓ dropped legacy Provable API credentials from the state file (the gateway needs none)')
   }
 
   // ── 3: wire the client and authenticate with the DEX API ────────────
   // The network must be passed explicitly: loadSession defaults to testnet, so
-  // omitting it would authenticate, register, and redeem against testnet while
-  // writing the results into the network-scoped state this script resolved.
+  // omitting it would authenticate and redeem against testnet while writing
+  // the results into the network-scoped state this script resolved.
   const { client, account } = await loadSession({ network })
   console.log('✓ DEX API session established (challenge/verify)')
 
-  // Front-loaded on purpose: registration would otherwise happen on the first
-  // prove or scan, and a newly issued API key is only reportable here.
-  const provable = await client.authenticateProvableApi()
-  console.log(
-    `✓ Provable API consumer: ${provable.credentials.consumerId}` +
-      (provable.registered ? ` (registered, saved to ${credentialsPath(network)})` : ''),
-  )
-
   // ── 4: invite-code access gate ───────────────────────────────────────
-  const status = await client.api.getAccessStatus()
+  // Distributed invite codes are referral codes; /referral/redeem is the
+  // single endpoint that unlocks an account.
+  const status = await client.api.getReferralStatus()
   if (!status.has_access) {
     if (!inviteCode) {
       console.error(
@@ -215,27 +188,13 @@ async function setup(argv: string[]): Promise<void> {
       )
       process.exit(2)
     }
-    // Distributed codes come in two kinds with one purpose: access codes
-    // (/access/redeem) and referral codes (/referral/redeem) both unlock
-    // the account. Try both before rejecting the code.
-    let redeemed = false
-    for (const attempt of [
-      () => client.api.redeemAccessCode(inviteCode),
-      () => client.api.redeemReferralCode(inviteCode),
-    ]) {
-      try {
-        await attempt()
-        redeemed = true
-        break
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 400) continue
-        throw err
-      }
-    }
-    if (!redeemed) {
+    try {
+      await client.api.redeemReferralCode(inviteCode)
+    } catch (err) {
+      if (!(err instanceof ApiError) || err.status !== 400) throw err
       console.error(
-        `\nINVALID_INVITE_CODE: the server rejected "${inviteCode}" as both an access ` +
-          'code and a referral code. Ask the user for a valid, unused code and re-run.\n',
+        `\nINVALID_INVITE_CODE: the server rejected "${inviteCode}". ` +
+          'Ask the user for a valid, unused code and re-run.\n',
       )
       process.exit(2)
     }

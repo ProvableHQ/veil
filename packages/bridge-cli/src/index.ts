@@ -16,8 +16,8 @@ if (!command) {
   process.exit(64)
 }
 
-const { main } = await command.load()
 try {
+  const { main } = await command.load()
   await main(argv)
 } catch (error) {
   console.error(`\n✗ ${error instanceof Error ? error.message : error}`)

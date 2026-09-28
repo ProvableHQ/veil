@@ -42,7 +42,7 @@ history. That is a recovery path, not a substitute for keeping the file.
 ## Session model
 
 All long-lived material lives in `./.shield-swap/<network>/state.json`
-(private key, Provable API credentials, DEX API token). It is created by
+(private key, DEX API token). It is created by
 `shield-swap setup` with mode 0600. NEVER commit it — add `.shield-swap/` to
 `.gitignore`. Swap handles and position ids are NOT stored there: handles
 live in the SDK's blinded identity store, and positions are discovered from
@@ -73,27 +73,20 @@ transfers directly into code. A local-key integration builds the client once:
 
 ```ts
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
-import { fileCredentialStore } from '@provablehq/veil-aleo-sdk/node'
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
-import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
+import { swapFileStore } from '@provablehq/shield-swap-sdk/node'
 
 // The WASM binaries are per network, so the SDK is loaded for one and the
-// account, prover, and scanner all come off that handle.
+// account, prover, and scanner all come off that handle. The node, delegated
+// prover (FeeMaster paying fees), and record scanner default to the Provable
+// gateway, which needs no credentials.
 const aleo = await loadNetwork('testnet')
-const { walletClient } = aleo.createAleoClient({
-  privateKey,
-  networkUrl: 'https://api.provable.com/v2',
-  provingMode: 'delegated',
-  // Credentials reach both the prover and the scanner through one session the
-  // client builds from this store, registering a consumer on first use.
-  credentialStore: fileCredentialStore('./provable-credentials.json'),
-  records: aleo.createRemoteScanner(),
-})
+const { walletClient } = aleo.createAleoClient({ privateKey })
 
 const client = walletClient.extend(
   // The identity store MUST persist — see the rule above. A file-backed store is
   // what makes a crash between a swap and its claim recoverable.
-  shieldSwapActions({ api: {}, blindedIdentities: fileBlindedIdentityStore('./blinded.json') }),
+  shieldSwapActions({ api: {}, blindedIdentities: swapFileStore('./blinded.json') }),
 )
 await client.authenticateShieldSwap()
 ```
@@ -116,8 +109,7 @@ for the middle path. In the Veil repo, `pnpm install && pnpm shield-swap
 ## Before doing anything: two questions for the user
 
 1. **Existing account?** If there is no `./.shield-swap/state.json`, ask
-   whether the user already has a shield-swap account (a private key, and
-   possibly Provable API credentials) before creating anything. The setup
+   whether the user already has a shield-swap account (a private key) before creating anything. The setup
    script enforces this: with no config and no `--new` flag it exits with
    `NEEDS_CONFIG_DECISION`. Never generate a fresh key for a user who may
    already have one — their funds and access live on the old account.
@@ -195,10 +187,12 @@ funded account).
 
 - **Discover inputs, never invent them.** Pool keys, token ids, wrapper
   programs, and decimals come from `client.api.getPools()` /
-  `getTokens()`; quotes come from `client.api.getRoute()`; live pool state
+  `getTokens()`; executable quotes come from `client.quote()` (backed by `client.api.getRoute()`); live pool state
   comes from `client.getSlot()`. Field literals (`…field`) and addresses
   are opaque — copy them exactly.
-- **Amounts are raw base units** (`bigint`, u128) on the SDK side. Convert
+- **Quote inputs accept decimal strings** in token units (for example,
+  `amountIn: '1.5'`). Quote resolves decimals; bigint inputs remain raw units.
+  Other action amounts are raw base units (`bigint`, u128). Convert
   with the token's `decimals` from the API: 1 token = `10n ** BigInt(decimals)`
   units.
 - **Never show raw units to the user.** Anything user-facing — balances,

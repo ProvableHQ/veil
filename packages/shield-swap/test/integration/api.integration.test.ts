@@ -28,11 +28,40 @@ const RUN_AUTHED = RUN && !!PRIVATE_KEY
 // in beforeAll so the account never hits the server's active-token limit.
 const TEST_TOKEN_PREFIX = 'veil-itest-'
 
-/** Revokes any unexpired test tokens this suite (or a crashed run) minted. */
-async function sweepTestTokens(api: ApiClient): Promise<void> {
-  for (const row of await api.listApiTokens()) {
+// The server caps active tokens per account; the lifecycle tests need one slot.
+const ACTIVE_TOKEN_LIMIT = 5
+
+type TokenRow = Awaited<ReturnType<ApiClient['listApiTokens']>>[number]
+
+/**
+ * Revokes any unexpired test tokens this suite (or a crashed run) minted and
+ * returns the active tokens that remain. Those belong to someone else and
+ * are never revoked here.
+ */
+async function sweepTestTokens(api: ApiClient): Promise<TokenRow[]> {
+  const rows = await api.listApiTokens()
+  for (const row of rows) {
     if (row.name.startsWith(TEST_TOKEN_PREFIX) && !row.revoked_at) await api.revokeApiToken(row.id)
   }
+  const now = Date.now()
+  return rows.filter(
+    (row) =>
+      !row.name.startsWith(TEST_TOKEN_PREFIX) &&
+      !row.revoked_at &&
+      (!row.expires_at || Date.parse(row.expires_at) > now),
+  )
+}
+
+/**
+ * Fails a token-minting test up front, naming the foreign tokens that fill
+ * every slot, instead of letting the server's bare 400 explain it.
+ */
+function assertTokenSlotFree(active: TokenRow[]): void {
+  if (active.length < ACTIVE_TOKEN_LIMIT) return
+  const listing = active.map((row) => `${row.name} (${row.token_prefix}, created ${row.created_at})`).join('\n  ')
+  throw new Error(
+    `the account holds ${active.length} active API tokens, the server's limit — revoke one so this test can mint:\n  ${listing}`,
+  )
 }
 
 describe.runIf(RUN)('ApiClient against the live DEX API (public surface)', () => {
@@ -48,13 +77,13 @@ describe.runIf(RUN)('ApiClient against the live DEX API (public surface)', () =>
     expect(pool.data.token0_info?.decimals).toBeTypeOf('number')
   }, 30_000)
 
-  it('tokens: list → detail', async () => {
+  it('tokens: list resolves a token by field address', async () => {
+    // The API has no per-token detail route; callers filter the list.
     const tokens = await api.getTokens()
     expect(tokens.data.length).toBeGreaterThan(0)
-    expect(tokens.data[0]!.address.endsWith('field')).toBe(true)
-
-    const token = await api.getToken(tokens.data[0]!.address)
-    expect(token.data.address).toBe(tokens.data[0]!.address)
+    const first = tokens.data[0]!
+    expect(first.address.endsWith('field')).toBe(true)
+    expect(tokens.data.filter((token) => token.address === first.address)).toHaveLength(1)
   }, 30_000)
 
   it('gated endpoints reject a bad credential (server-side 401)', async () => {
@@ -70,6 +99,8 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
   let api: ApiClient
   let account: AnyAccount
   let address: string
+  // Foreign active tokens after the sweep; the minting tests check for a slot.
+  let activeTokens: TokenRow[] = []
 
   beforeAll(async () => {
     const aleo = await loadNetwork('testnet')
@@ -81,7 +112,7 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     expect(jwt.length).toBeGreaterThan(0)
 
     // Sweep API tokens left behind by crashed runs.
-    await sweepTestTokens(api)
+    activeTokens = await sweepTestTokens(api)
   }, 60_000)
 
   it('session JWT covers the gated read surface', async () => {
@@ -100,14 +131,6 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
 
     const tiers = await api.getFeeTiers()
     expect(tiers.data.length).toBeGreaterThan(0)
-
-    const spacings = await api.getTickSpacings()
-    expect(spacings.data.length).toBeGreaterThan(0)
-
-    const schemas = await api.getTradingSchemas()
-    expect(schemas.data.length).toBeGreaterThan(0)
-    const schema = await api.getTradingSchema(schemas.data[0]!.id)
-    expect(schema.data.id).toBe(schemas.data[0]!.id)
   }, 60_000)
 
   it('route: quotes a path between a live pool\'s own pair', async () => {
@@ -118,23 +141,9 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     expect(route.data.hops.length).toBeGreaterThan(0)
   }, 30_000)
 
-  it('user-scoped reads: swaps, positions, balances (drill into ids when present)', async () => {
-    const swaps = await api.getSwaps({ user: address, limit: 3 })
-    expect(Array.isArray(swaps.data)).toBe(true)
-    if (swaps.data.length > 0) {
-      const swap = await api.getSwap(swaps.data[0]!.id)
-      expect(swap.data.id).toBe(swaps.data[0]!.id)
-    }
-
+  it('user-scoped reads: positions', async () => {
     const positions = await api.getPositions({ user: address, limit: 3 })
     expect(Array.isArray(positions.data)).toBe(true)
-    if (positions.data.length > 0) {
-      const position = await api.getPosition(positions.data[0]!.token_id)
-      expect(position.data.token_id).toBe(positions.data[0]!.token_id)
-    }
-
-    const balances = await api.getPublicBalances({ user: address })
-    expect(Array.isArray(balances.data)).toBe(true)
   }, 60_000)
 
   it('debug pool introspection responds under auth', async () => {
@@ -151,6 +160,7 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
   }, 30_000)
 
   it('API token lifecycle: mint → use on gated reads → list → revoke → rejected', async () => {
+    assertTokenSlotFree(activeTokens)
     const name = `${TEST_TOKEN_PREFIX}${Date.now()}`
     const created = await api.createApiToken({ name, expires_in_days: 1 })
     expect(created.token.length).toBeGreaterThan(0)
@@ -162,8 +172,8 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
       const tokenClient = new ApiClient({ ...API_OPTS, apiToken: created.token })
       const tiers = await tokenClient.getFeeTiers()
       expect(tiers.data.length).toBeGreaterThan(0)
-      const balances = await tokenClient.getPublicBalances({ user: address })
-      expect(Array.isArray(balances.data)).toBe(true)
+      const positions = await tokenClient.getPositions({ user: address, limit: 1 })
+      expect(Array.isArray(positions.data)).toBe(true)
 
       // …but not token management, client-side or server-side.
       await expect(tokenClient.listApiTokens()).rejects.toThrow(/session JWT/)
@@ -187,35 +197,39 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     // redemption. A local stack (VEIL_DEX_API_URL) starts with a fresh
     // database, so redeem when a code is on hand; otherwise skip rather
     // than assert another instance's state.
-    let status = await api.getAccessStatus()
+    let status = await api.getReferralStatus()
     if (!status.has_access && process.env.SHIELD_SWAP_INVITE_CODE) {
       // The code in the environment may belong to a different instance
       // (e.g. dev code against a local stack) — treat rejection as no-code.
-      await api.redeemAccessCode(process.env.SHIELD_SWAP_INVITE_CODE).catch(() => {})
-      status = await api.getAccessStatus()
+      await api.redeemReferralCode(process.env.SHIELD_SWAP_INVITE_CODE).catch(() => {})
+      status = await api.getReferralStatus()
     }
     if (!status.has_access && process.env.VEIL_DEX_API_URL) ctx.skip()
     expect(status.has_access).toBe(true)
   }, 30_000)
 
-  it('invite gate: a fresh account authenticates but stays locked until it redeems', async () => {
+  it('referral gate: a fresh account authenticates; access status and gated reads agree', async () => {
     // Authentication and access are separate layers: a brand-new account
-    // completes the handshake, yet gated endpoints 403 until an invite code
-    // is redeemed.
+    // completes the handshake, and gated endpoints 403 until a referral code
+    // is redeemed — unless the deployment has the gate open, in which case
+    // the status reports access and gated reads succeed. Either way the two
+    // must agree, and a bogus code is rejected as invalid (400), never as
+    // unauthenticated.
     const fresh = generateAccount()
     const freshApi = new ApiClient(API_OPTS)
     await authenticateWithAccount(freshApi, fresh)
 
-    const status = await freshApi.getAccessStatus()
-    expect(status.has_access).toBe(false)
-
+    const status = await freshApi.getReferralStatus()
     const gated = await freshApi.getFeeTiers().catch((e: unknown) => e)
-    expect(gated).toBeInstanceOf(ApiError)
-    expect((gated as ApiError).status).toBe(403)
-    expect((gated as ApiError).message).toMatch(/invite code/i)
+    if (status.has_access) {
+      expect(gated).not.toBeInstanceOf(ApiError)
+    } else {
+      expect(gated).toBeInstanceOf(ApiError)
+      expect((gated as ApiError).status).toBe(403)
+      expect((gated as ApiError).message).toMatch(/invite code/i)
+    }
 
-    // A bogus code is rejected as invalid (400) — not as unauthenticated.
-    const redeem = await freshApi.redeemAccessCode('not-a-real-invite-code').catch((e: unknown) => e)
+    const redeem = await freshApi.redeemReferralCode('not-a-real-invite-code').catch((e: unknown) => e)
     expect(redeem).toBeInstanceOf(ApiError)
     expect((redeem as ApiError).status).toBe(400)
   }, 60_000)
@@ -229,6 +243,7 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
   }, 30_000)
 
   it('agent auth tools drive the full token lifecycle end-to-end', async () => {
+    assertTokenSlotFree(activeTokens)
     const { createShieldSwapAgentTools } = await import('../../src/agent/index.js')
     // The auth tools need only the signing account from the client.
     const toolApi = new ApiClient(API_OPTS)

@@ -3,7 +3,7 @@ import { http } from '../../src/transports/http.js'
 
 describe('http transport', () => {
   it('creates a transport with type http', () => {
-    const transport = http('https://api.provable.com/v2')
+    const transport = http('https://edge.provable.com/api/v2')
     expect(transport.config.type).toBe('http')
     expect(transport.config.key).toBe('http')
     expect(transport.config.name).toBe('HTTP Transport')
@@ -15,12 +15,12 @@ describe('http transport', () => {
       json: () => Promise.resolve(100),
     })
 
-    const transport = http('https://api.provable.com/v2', { fetchFn: mockFetch })
+    const transport = http('https://edge.provable.com/api/v2', { fetchFn: mockFetch })
     const result = await transport.request({ method: 'getLatestHeight' })
 
     expect(result).toBe(100)
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://api.provable.com/v2/mainnet/block/height/latest',
+      'https://edge.provable.com/api/v2/mainnet/block/height/latest',
       expect.objectContaining({ method: 'GET' }),
     )
   })
@@ -31,11 +31,11 @@ describe('http transport', () => {
       json: () => Promise.resolve({ blockHash: 'ab1...' }),
     })
 
-    const transport = http('https://api.provable.com/v2', { fetchFn: mockFetch })
+    const transport = http('https://edge.provable.com/api/v2', { fetchFn: mockFetch })
     await transport.request({ method: 'getBlock', params: { height: 100 } })
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://api.provable.com/v2/mainnet/block/100',
+      'https://edge.provable.com/api/v2/mainnet/block/100',
       expect.objectContaining({ method: 'GET' }),
     )
   })
@@ -47,7 +47,7 @@ describe('http transport', () => {
       text: () => Promise.resolve('Not found'),
     })
 
-    const transport = http('https://api.provable.com/v2', { fetchFn: mockFetch })
+    const transport = http('https://edge.provable.com/api/v2', { fetchFn: mockFetch })
     await expect(transport.request({ method: 'getLatestHeight' })).rejects.toThrow()
   })
 

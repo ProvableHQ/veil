@@ -72,3 +72,19 @@ export function fileBlindedIdentityStore(path: string): BlindedIdentityStore {
     },
   }
 }
+
+/**
+ * Builds a file-backed store for swap identities and claim recovery data.
+ *
+ * Alias of {@link fileBlindedIdentityStore}; both names use the same JSON format
+ * and filesystem behavior. Available from the Node-only `/node` entry point.
+ * The file contains sensitive blinding factors and is created with mode 0600.
+ *
+ * @param path File to read and write; created on first save with its parent directories.
+ * @returns A store that reads and writes recovery data at the supplied path.
+ *
+ * @example
+ * import { swapFileStore } from '@provablehq/shield-swap-sdk/node'
+ * const store = swapFileStore('.veil/swaps.json')
+ */
+export const swapFileStore = fileBlindedIdentityStore

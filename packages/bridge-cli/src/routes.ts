@@ -1,4 +1,12 @@
-/** Names a demonstrated bridge journey and the runner that implements it. */
+/**
+ * Names a reviewed mainnet journey exposed by the CLI.
+ * @property name CLI alias accepted by transfer.
+ * @property routeId Canonical identifier in the SDK registry.
+ * @property from Display name of the source chain.
+ * @property to Display name of the destination chain.
+ * @property asset Display name of the transferred assets.
+ * @property protocol Protocol responsible for settlement.
+ */
 export type CliRoute = {
   name: string
   routeId: string
@@ -8,7 +16,7 @@ export type CliRoute = {
   protocol: 'xReserve' | 'Hyperlane'
 }
 
-/** Contains every live journey demonstrated under `examples/bridge`. */
+/** Lists the reviewed mainnet journeys supported by the CLI. */
 export const CLI_ROUTES: readonly CliRoute[] = [
   { name: 'arc-to-aleo', routeId: 'xreserve:arc/usdc->aleo/usdcx', from: 'Arc', to: 'Aleo', asset: 'USDC → USDCx', protocol: 'xReserve' },
   { name: 'usdc-to-usdcx', routeId: 'xreserve:ethereum/usdc->aleo/usdcx', from: 'Ethereum', to: 'Aleo', asset: 'USDC → USDCx', protocol: 'xReserve' },

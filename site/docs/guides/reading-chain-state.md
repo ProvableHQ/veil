@@ -18,7 +18,7 @@ actions over it.
 import { createPublicClient, http } from '@provablehq/veil-core'
 
 const publicClient = createPublicClient({
-  transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+  transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
 })
 ```
 

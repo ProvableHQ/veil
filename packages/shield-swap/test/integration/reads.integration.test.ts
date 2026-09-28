@@ -17,7 +17,7 @@ import { isTokenPaused } from '../../src/actions/reads/isTokenPaused.js'
 import { isPairPaused } from '../../src/actions/reads/isPairPaused.js'
 import { getFrozenPosition } from '../../src/actions/reads/getFrozenPosition.js'
 import { getTradeControls } from '../../src/actions/reads/getTradeControls.js'
-import { getSqrtPriceAtTickX128 } from '../../src/utils/q128.js'
+import { getSqrtPriceAtTickX128, MAX_TICK_SENTINEL } from '../../src/utils/q128.js'
 import { ApiClient, authenticateWithAccount, SHIELD_SWAP_API_URLS } from '../../src/api/client.js'
 import { PROGRAM_ID } from '../../src/generated/shield_swap.js'
 
@@ -29,7 +29,7 @@ import { PROGRAM_ID } from '../../src/generated/shield_swap.js'
 const RUN = process.env.VEIL_INTEGRATION === '1'
 const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
 
-const API_BASE = 'https://api.provable.com/v2'
+const API_BASE = 'https://edge.provable.com/api/v2'
 const NODE_URL = `${API_BASE}/testnet`
 // The migrated shapes are served by staging; override for another endpoint.
 const INDEXER_URL = process.env.VEIL_DEX_API_URL ?? SHIELD_SWAP_API_URLS.testnet
@@ -211,8 +211,8 @@ describe.runIf(RUN)('reads against the real API', () => {
       expect(typeof tick.prev).toBe('number')
       expect(typeof tick.next).toBe('number')
     }
-    // An out-of-domain tick is never initialized.
-    expect(await getTick(client, { poolKey, tick: 399999 })).toBeNull()
+    // A tick beyond the valid range and linked-list sentinel is never initialized.
+    expect(await getTick(client, { poolKey, tick: MAX_TICK_SENTINEL + 1 })).toBeNull()
   }, 60_000)
 
   it('getPosition returns null for an unknown position id', async () => {

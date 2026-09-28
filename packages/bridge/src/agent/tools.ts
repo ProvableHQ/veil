@@ -6,8 +6,8 @@ import type { GetAssetsParameters, GetRoutesParameters } from '../types/protocol
  * Creates tools an agent can use to discover and describe cross-chain transfers.
  *
  * The tools list supported assets and routes, validate an amount and recipient,
- * and describe the stages required to move funds. They cannot read live prices,
- * access a wallet, request a signature, submit a transaction, or move funds.
+ * and quote current costs when the selected route exposes them. They cannot
+ * request a signature, submit a transaction, or move funds.
  *
  * @param client Bridge client supplying the supported asset and route catalog.
  * @returns Non-fund-moving agent tools for discovering and describing transfers.
@@ -64,8 +64,8 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
     },
     {
       schema: {
-        name: 'bridge_prepare_transfer',
-        description: 'Describe how an amount of an asset can move between two chains through xReserve or Hyperlane. This tool does not contact a blockchain or bridge provider, request a wallet signature, or move funds.',
+        name: 'bridge_quote_transfer',
+        description: 'Validate and price an intended transfer between two chains through xReserve or Hyperlane. This tool reads current chain or provider state where the selected route exposes live costs, but does not request a wallet signature or move funds.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -88,7 +88,19 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
           required: ['source', 'destination', 'amount', 'recipient'],
         },
       },
-      handler: async (params) => client.prepare(params as Parameters<BridgeClient['prepare']>[0]),
+      handler: async (params) => jsonSafe(await client.quote(params as Parameters<BridgeClient['quote']>[0])),
     },
   ]
+}
+
+/** Converts atomic bigint amounts into decimal strings accepted by JSON-based agent transports. */
+function jsonSafe(value: unknown): unknown {
+  if (typeof value === 'bigint') return value.toString()
+  if (Array.isArray(value)) return value.map(jsonSafe)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, jsonSafe(entry)]),
+    )
+  }
+  return value
 }

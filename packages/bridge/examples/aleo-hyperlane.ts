@@ -1,3 +1,4 @@
+import { aleoExampleOptions, type ExampleOptions } from './options.js'
 import {
   createAleoClient,
   createBridgeClient,
@@ -13,7 +14,7 @@ const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
 const EXECUTION_ENVIRONMENT_VARIABLE = 'EXECUTE_BRIDGE'
 const ALEO_CONFIRMATION_TIMEOUT_MS = 5 * 60_000
 
-type AleoHyperlaneAsset = 'ETH' | 'SOL' | 'WBTC'
+type AleoHyperlaneAsset = 'ETH' | 'SOL' | 'WBTC' | 'USDT'
 type AssetConfiguration = {
   source: { chain: string, asset: string }
   destination: { chain: string, asset: string }
@@ -42,6 +43,13 @@ const ASSETS: Record<AleoHyperlaneAsset, AssetConfiguration> = {
     destination: { chain: 'ethereum', asset: 'wbtc' },
     balanceProgram: 'arc20_wbtc.aleo',
     amount: '0.00000001',
+    recipientEnvironmentVariable: 'ETHEREUM_RECIPIENT',
+  },
+  USDT: {
+    source: { chain: 'aleo', asset: 'usdt' },
+    destination: { chain: 'ethereum', asset: 'usdt' },
+    balanceProgram: 'arc20_usdt.aleo',
+    amount: '3',
     recipientEnvironmentVariable: 'ETHEREUM_RECIPIENT',
   },
 }
@@ -74,8 +82,8 @@ function formatAmount(value: bigint, decimals: number): string {
  * Aleo wallet burns the public wrapped balance and dispatches a cross-chain
  * message; Hyperlane then releases the corresponding asset on the destination.
  *
- * @param asset ETH, SOL, or WBTC representation to burn on Aleo and release on its origin chain.
- * @param options Optional CLI overrides for the visible default amount and execution gate.
+ * @param asset ETH, SOL, WBTC, or USDT representation to burn on Aleo and release on its origin chain.
+ * @param options Overrides the amount and execution gate; defaults to the example amount and environment acknowledgement.
  * @returns After read-only inspection or verified destination delivery,
  * depending on the execution acknowledgement.
  * @throws Error When configuration is missing, the source balance or fee
@@ -84,17 +92,15 @@ function formatAmount(value: bigint, decimals: number): string {
  * @example
  * await runAleoHyperlaneExample('ETH')
  */
-export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset, options: { amount?: string, execute?: boolean } = {}): Promise<void> {
+export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset, options: ExampleOptions = {}): Promise<void> {
   const config = ASSETS[asset]
-  const amount = options.amount ?? config.amount
   const recipient = requiredEnvironmentVariable(config.recipientEnvironmentVariable)
   const privateKey = requiredEnvironmentVariable('ALEO_PRIVATE_KEY')
-  const networkUrl = process.env.ALEO_RPC_URL?.trim() || 'https://api.provable.com/v2'
-  const consumerId = process.env.ALEO_CONSUMER_ID?.trim()
-  const apiKey = process.env.ALEO_DPS_API_KEY?.trim()
-  if ((consumerId && !apiKey) || (!consumerId && apiKey)) {
-    throw new Error('ALEO_CONSUMER_ID and ALEO_DPS_API_KEY must be supplied together')
-  }
+  const networkUrl = process.env.ALEO_RPC_URL?.trim() || 'https://edge.provable.com/api/v2'
+
+  // This route spends a public Aleo token balance. If the amount is held in a
+  // private record, unshield it and wait for that transaction to be accepted
+  // before running this example. Hyperlane cannot spend the record directly.
 
   // ── Connect the source account and networks ──────────────────────────
   // The public Aleo client reads visible token balances and transaction status.
@@ -106,8 +112,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset, options
   const { publicClient, walletClient: nativeWalletClient, account } = aleo.createAleoClient({
     privateKey,
     networkUrl,
-    provingMode: 'delegated',
-    ...(consumerId && apiKey ? { consumerId, apiKey } : {}),
+    ...aleoExampleOptions(),
     useFeeMaster: false,
     confirmationTimeout: ALEO_CONFIRMATION_TIMEOUT_MS,
   })
@@ -115,7 +120,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset, options
   // A destination client is unnecessary for the read-only source inspection.
   // Execution adds one so settlement can compare the recipient's destination
   // balance with the value recorded immediately before source submission.
-  const executionEnabled = options.execute === true || process.env[EXECUTION_ENVIRONMENT_VARIABLE] === EXECUTION_ACKNOWLEDGEMENT
+  const executionEnabled = options.execute ?? (process.env[EXECUTION_ENVIRONMENT_VARIABLE] === EXECUTION_ACKNOWLEDGEMENT)
   const destinationClient = executionEnabled
     ? config.destination.chain === 'ethereum'
       ? createEvmClient({ transport: evmHttp(requiredEnvironmentVariable('ETHEREUM_RPC_URL')) })
@@ -132,21 +137,21 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset, options
     },
   })
 
-  // ── Describe the intended transfer ──────────────────────────────────
+  // ── Price the intended transfer ─────────────────────────────────────
   // The caller supplies familiar chain and asset names, an amount, and the
   // destination account. The bridge catalog supplies the deployed programs,
   // remote domain, decimal widths, and required stages for that direction.
-  // No network is read and no wallet is involved here. Each configured amount
-  // is one atomic unit, keeping an accidental mainnet execution to a minimum.
-  const plan = bridge.prepare({
+  // Quote reads the current Hyperlane delivery payment and returns the plan
+  // execution must use. It does not request a signature or move the wrapped
+  // asset. ETH, SOL, and WBTC use one atomic unit. USDT uses 3.
+  const quoteParams = {
     source: config.source,
     destination: config.destination,
-    bridgeProtocol: 'hyperlane',
-    amount,
+    bridgeProtocol: 'hyperlane' as const,
+    amount: options.amount ?? config.amount,
     recipient,
     sender: String(account.address),
-  })
-  const amountAtomic = parseDecimalAmount(plan.amountIn, plan.sourceAsset.decimals)
+  }
 
   // ── Check funds and the current delivery payment ────────────────────
   // Hyperlane's interchain gas paymaster charges for relaying and executing the
@@ -156,9 +161,11 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset, options
   const [assetLiteral, publicCredits, gasQuote] = await Promise.all([
     publicClient.readContract({ programId: config.balanceProgram, mapping: 'balances', key: account.address }),
     publicClient.getBalance({ address: account.address }),
-    bridge.quote({ plan }),
+    bridge.quote(quoteParams),
   ])
   if (gasQuote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${gasQuote.kind}`)
+  const plan = gasQuote.plan
+  const amountAtomic = parseDecimalAmount(plan.amountIn, plan.sourceAsset.decimals)
   const assetBalance = parseUnsignedLiteral(assetLiteral, 'u128')
 
   console.log(`Read-only Aleo ${asset} to ${config.destination.chain} ${asset} preflight`)
@@ -190,8 +197,9 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset, options
   // on-chain calculation. Read it again immediately before proving; an oracle
   // update between the earlier display and submission would otherwise reject
   // the transaction while still risking its Aleo fee. This route spends only a
-  // public ARC-20 balance. A private record must be unshielded separately.
-  const latestQuote = await bridge.quote({ plan })
+  // public ARC-20 balance. The earlier unshield transaction, when needed, is
+  // separate from this bridge transfer and is never repeated by execute().
+  const latestQuote = await bridge.quote(quoteParams)
   if (latestQuote.kind !== 'aleo-hyperlane') throw new Error(`Unexpected quote kind: ${latestQuote.kind}`)
   if (publicCredits < latestQuote.paymentMicrocredits) {
     throw new Error(`Insufficient public credits for the Hyperlane hook payment of ${latestQuote.paymentMicrocredits} microcredits`)
@@ -199,8 +207,6 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset, options
   if (latestQuote.paymentMicrocredits !== gasQuote.paymentMicrocredits) {
     console.log(`Hyperlane hook quote changed from ${gasQuote.paymentMicrocredits} to ${latestQuote.paymentMicrocredits} microcredits; using the latest quote.`)
   }
-  if (consumerId && apiKey) await nativeWalletClient.authenticateProvableApi()
-
   const result = await bridge.execute({
     plan,
     mode: 'signer',

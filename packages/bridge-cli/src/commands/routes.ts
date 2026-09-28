@@ -6,7 +6,14 @@ const USAGE = `aleo-bridge routes — list demonstrated bridge journeys
   --json     print one machine-readable array
   -h, --help show this text`
 
-/** Runs the `routes` subcommand. */
+/**
+ * Runs the `routes` subcommand.
+ * @param argv Command arguments without the binary or subcommand name.
+ * @returns Resolves after help, route listing.
+ * @throws When arguments or route configuration are invalid.
+ * @example
+ * await main(['--help'])
+ */
 export async function main(argv: string[]): Promise<void> {
   let values: { help?: boolean, json?: boolean }
   try {

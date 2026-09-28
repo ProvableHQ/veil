@@ -27,7 +27,7 @@ derives from the wallet context:
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `rpcUrl` | `string` | `'https://api.provable.com/v2'` | Node endpoint the `publicClient` reads through, and the `walletClient` falls back to if the wallet's own transport is unavailable. |
+| `rpcUrl` | `string` | `'https://edge.provable.com/api/v2'` | Node endpoint the `publicClient` reads through, and the `walletClient` falls back to if the wallet's own transport is unavailable. |
 | `network` | `'mainnet' \| 'testnet'` | The connected wallet's network, or `'mainnet'` before one connects | Pins the transport to one network regardless of which network the wallet is on. |
 
 ```tsx

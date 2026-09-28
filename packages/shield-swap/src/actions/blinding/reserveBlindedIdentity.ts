@@ -1,7 +1,12 @@
 import type { Client } from '@provablehq/veil-core'
 import { isBlindedAddressUsed } from '../reads/isBlindedAddressUsed.js'
 import { requireAccount } from '../../utils/guards.js'
-import { deriveBlindedAddress, deriveBlindingFactor, viewKeyToScalar } from '../../utils/blinding/identity.js'
+import {
+  deriveBlindedAddress,
+  deriveBlindingFactor,
+  findUnusedCounter,
+  viewKeyToScalar,
+} from '../../utils/blinding/identity.js'
 import {
   withStoreLock,
   type BlindedIdentityRecord,
@@ -14,7 +19,8 @@ import {
  * @property store Where reservations are recorded.
  * @property program shield_swap program to derive and scan against. Defaults
  *   to `DEFAULT_PROGRAM` inside the derivation.
- * @property maxScan Counters to try before giving up. Defaults to 64.
+ * @property maxScan Counters to scan one by one before the search gallops
+ *   ahead. Defaults to 64.
  */
 export type ReserveBlindedIdentityParameters = {
   store: BlindedIdentityStore
@@ -33,10 +39,12 @@ export type ReserveBlindedIdentityParameters = {
  * counter at or below one already stored.
  *
  * Cold start (an empty store) scans upward from counter 0 for the first
- * address the chain does not know, so a lost store costs reads rather than
- * correctness. With records present it moves monotonically from the highest
- * known counter, and still skips any address the chain already carries — which
- * is what recovers from a store that another process has moved past.
+ * address the chain does not know, galloping ahead when the account has swapped
+ * past the scan window, so a lost store on a long-lived account costs a few
+ * dozen reads rather than correctness. With records present it moves
+ * monotonically from the highest known counter, and still skips any address the
+ * chain already carries — which is what recovers from a store that another
+ * process has moved past.
  *
  * Requires a local account. A wallet derives and tracks its own blinded
  * identities, and reserving on its behalf would desynchronize both sides.
@@ -47,8 +55,9 @@ export type ReserveBlindedIdentityParameters = {
  * @param client A wallet client with a local account.
  * @param params Store, program override, and scan bound.
  * @returns The reserved record, status `reserved`.
- * @throws When the account is missing or not local, or when `maxScan`
- *   consecutive counters are all already used on chain.
+ * @throws When the account is missing or not local, or when every probed
+ *   counter reads as used on chain, which points at a store or program that
+ *   does not match the account.
  *
  * @example
  * const identity = await client.reserveBlindedIdentity()
@@ -76,19 +85,22 @@ export async function reserveBlindedIdentity(
     // starts at 0 and lets the chain reads find the frontier.
     const start = records.length ? Math.max(...records.map((r) => r.counter)) + 1 : 0
 
-    for (let counter = start; counter < start + maxScan; counter++) {
+    const derive = async (counter: number) => {
       const blindingFactor = await deriveBlindingFactor(viewKeyScalar, counter, params.program)
       const blindedAddress = await deriveBlindedAddress(blindingFactor, account.address, params.program)
-      if (await isBlindedAddressUsed(client, { address: blindedAddress, program: params.program })) continue
-
-      const record: BlindedIdentityRecord = { counter, blindingFactor, blindedAddress, status: 'reserved' }
-      await params.store.save([...records, record])
-      return record
+      return { counter, blindingFactor, blindedAddress }
     }
-
-    throw new Error(
-      `No unused blinded address in counters ${start}…${start + maxScan - 1} for ${account.address}. ` +
-        'Pass a higher maxScan, or check that the store and the program match the account.',
+    const counter = await findUnusedCounter(
+      async (candidate) => {
+        const { blindedAddress } = await derive(candidate)
+        return isBlindedAddressUsed(client, { address: blindedAddress, program: params.program })
+      },
+      start,
+      maxScan,
     )
+
+    const record: BlindedIdentityRecord = { ...(await derive(counter)), status: 'reserved' }
+    await params.store.save([...records, record])
+    return record
   })
 }

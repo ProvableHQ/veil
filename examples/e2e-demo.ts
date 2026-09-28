@@ -18,7 +18,7 @@ import {
 import { aleoAgentTools } from '../packages/core/src/agent/index.js'
 import { loadNetwork, type AleoSdk } from '../packages/provable-sdk/src/index.js'
 
-const API_URL = 'https://api.provable.com/v2'
+const API_URL = 'https://edge.provable.com/api/v2'
 
 describe('E2E: veil against live Aleo mainnet', () => {
   // Create a shared public client for all tests

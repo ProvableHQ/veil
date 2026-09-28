@@ -136,7 +136,7 @@ describe('DEX API host derivation', () => {
   }
 
   const clientOn = (network: 'mainnet' | 'testnet', fetchImpl: typeof fetch) =>
-    createClient({ transport: http('https://api.provable.com/v2', { network }) }).extend(
+    createClient({ transport: http('https://edge.provable.com/api/v2', { network }) }).extend(
       shieldSwapActions({ api: { fetch: fetchImpl } }),
     )
 
@@ -157,7 +157,7 @@ describe('DEX API host derivation', () => {
   it('lets an explicit baseUrl override the derived host', async () => {
     const { urls, fetchImpl } = spy()
     const client = createClient({
-      transport: http('https://api.provable.com/v2', { network: 'testnet' }),
+      transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
     }).extend(shieldSwapActions({ api: { baseUrl: 'https://local.example', fetch: fetchImpl } }))
     await client.api.getPools()
     expect(urls).toEqual(['https://local.example'])
@@ -170,7 +170,7 @@ describe('DEX API host derivation', () => {
     // derived host and fall back to the deprecated testnet constant — pointing a
     // mainnet client at testnet, silently.
     const client = createClient({
-      transport: http('https://api.provable.com/v2', { network: 'mainnet' }),
+      transport: http('https://edge.provable.com/api/v2', { network: 'mainnet' }),
     }).extend(shieldSwapActions({ api: { baseUrl: undefined, fetch: fetchImpl } }))
     await client.api.getPools()
     expect(urls).toEqual([SHIELD_SWAP_API_URLS.mainnet])
@@ -178,7 +178,7 @@ describe('DEX API host derivation', () => {
 
   it('follows switchChain, because the host is resolved per request', async () => {
     const { urls, fetchImpl } = spy()
-    const transport = http('https://api.provable.com/v2', { network: 'testnet' })
+    const transport = http('https://edge.provable.com/api/v2', { network: 'testnet' })
     const client = createClient({ transport }).extend(
       shieldSwapActions({ api: { fetch: fetchImpl } }),
     )

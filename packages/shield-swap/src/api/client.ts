@@ -1,4 +1,4 @@
-import type { AnyAccount } from '@provablehq/veil-core'
+import { requestRecords, type AnyAccount, type Client, type RecordProvider } from '@provablehq/veil-core'
 import type { components } from './openapi.js'
 
 type Schemas = components['schemas']
@@ -45,7 +45,9 @@ export const DEFAULT_API_URL = SHIELD_SWAP_API_URLS.testnet
 /**
  * Options for {@link ApiClient}.
  *
- * @property baseUrl DEX API origin. Defaults to the Provable dev API.
+ * @property baseUrl DEX API origin, or a function that resolves it per
+ *   request. Defaults to the testnet Shield Swap host; `shieldSwapActions`
+ *   derives it from the client's network via {@link defaultApiUrl}.
  * @property fetch Custom fetch implementation (tests, polyfills). Defaults
  *   to the global fetch.
  * @property apiToken Long-lived API token (`ss_…`) minted via
@@ -67,6 +69,21 @@ export type ApiClientOptions = {
   apiToken?: string
   autoReauthenticate?: boolean
 }
+
+/**
+ * Outcome of {@link ApiClient.confirmAirdrop}.
+ *
+ * @property status `'settled'` when the faucet job finished and, if a scanner
+ *   is configured, its successful transfers are readable as private records; or
+ *   `'rate_limited'` when the faucet refused the address and nothing started.
+ * @property job The finished job, with one result per token. Present on
+ *   `'settled'`; a token's own `status` can still be `rejected` or `failed`.
+ * @property message The faucet's explanation of the refusal. Present on
+ *   `'rate_limited'`.
+ */
+export type ConfirmAirdropResult =
+  | { status: 'settled'; job: Schemas['AirdropJob'] }
+  | { status: 'rate_limited'; message: string }
 
 /** A DEX API request that came back non-2xx, with the server's error body. */
 export class ApiError extends Error {
@@ -110,9 +127,9 @@ function sessionTokenFrom(res: Response, body: unknown): string | undefined {
  * `apiToken` at construction and minted once via `createApiToken()`. Gated
  * calls attach whichever is available (session JWT first); API-token
  * management accepts session JWTs only. Access is a second gate on top of
- * auth: an account that has not redeemed an invite code gets 403 from the
- * gated endpoints — see `getAccessStatus()` and `redeemAccessCode()`. Every
- * method hits the network.
+ * auth: an account that has not redeemed a referral code gets 403 from the
+ * gated endpoints — see `getReferralStatus()` and `redeemReferralCode()`.
+ * Every method hits the network.
  *
  * @example
  * const api = new ApiClient()
@@ -284,6 +301,18 @@ export class ApiClient {
   }
 
   /**
+   * Mints the short-lived credential accepted by the Shield Swap WebSocket.
+   *
+   * The gateway does not accept a session JWT or `ss_…` API token directly.
+   * Call this immediately before opening or re-authenticating a socket, then
+   * send the returned `token` in its `authenticate` frame.
+   */
+  async getWebSocketTicket(): Promise<Schemas['AuthTokenPayload']> {
+    const res = await this.request<Schemas['AuthTokenResponseDoc']>('GET', '/auth/ws-ticket', { auth: true })
+    return res.data
+  }
+
+  /**
    * Mints a long-lived API token (`ss_…`) under the current session JWT.
    *
    * The returned `token` is the full secret and is shown only once — the
@@ -337,92 +366,51 @@ export class ApiClient {
     return res.data
   }
 
-  // ── invite-code access ───────────────────────────────────────────────
+  // ── referral-code access ─────────────────────────────────────────────
   // Authentication alone does not unlock the gated endpoints: an account
-  // must also have redeemed an invite code, or they return
-  // 403 "redeem an invite code to unlock access".
+  // must also have redeemed a referral code, or they return
+  // 403 "redeem an invite code to unlock access". The retired `/access/*`
+  // invite-code routes were removed server-side; referral codes are the
+  // single access mechanism.
 
   /**
-   * Reads whether the authenticated account has redeemed an invite code.
+   * Reads whether the authenticated account has redeemed a referral code.
    *
    * Gated data and trading endpoints return 403 until access is granted —
    * check this after {@link authenticate} and prompt for a code when
    * `has_access` is false. Requires a session JWT.
+   *
+   * @returns `has_access`, plus the account's own referral `code` when one
+   *   has been issued.
+   * @throws When no session JWT is held.
    */
-  async getAccessStatus(): Promise<Schemas['AccessStatusResponse']> {
-    const res = await this.request<Schemas['AccessStatusResponseDoc']>('GET', '/access/status', { auth: 'session' })
+  async getReferralStatus(): Promise<Schemas['ReferralStatusResponse']> {
+    const res = await this.request<Schemas['ReferralStatusResponseDoc']>('GET', '/referral/status', { auth: 'session' })
     return res.data
   }
 
   /**
-   * Redeems an invite code, unlocking the gated endpoints for the account.
+   * Redeems a referral code, unlocking the gated endpoints for the account.
    *
    * The access grant is recorded server-side against the session — no new
    * credential is issued, and subsequent calls are unlocked without a new
    * handshake. One-time: the server rejects an already-used code with a
    * 400. Requires a session JWT.
    *
-   * @param code The invite code to redeem.
-   * @returns The redemption result (code and status). The access grant is
-   *   recorded server-side against the session — no new credential is issued.
+   * @param code The referral code to redeem.
+   * @returns The redemption result (code and status).
    * @throws When no session JWT is held, or the code is invalid or already
    *   used (400).
    *
    * @example
    * await authenticateWithAccount(api, account)
-   * if (!(await api.getAccessStatus()).has_access) {
-   *   await api.redeemAccessCode(process.env.SHIELD_SWAP_INVITE_CODE!)
+   * if (!(await api.getReferralStatus()).has_access) {
+   *   await api.redeemReferralCode(process.env.SHIELD_SWAP_INVITE_CODE!)
    * }
-   */
-  async redeemAccessCode(code: string): Promise<Schemas['AccessRedeemResponse']> {
-    const res = await this.request<Schemas['AccessRedeemResponseDoc']>('POST', '/access/redeem', {
-      body: { code },
-      auth: 'session',
-    })
-    return res.data
-  }
-
-  /**
-   * Redeems a referral code, which also unlocks the gated endpoints for the
-   * account — operationally interchangeable with {@link redeemAccessCode}
-   * for first-time access (distributed codes are commonly referral codes).
-   *
-   * The access grant is recorded server-side against the session. One-time:
-   * the server rejects an already-used code with a 400. Requires a session
-   * JWT.
-   *
-   * @param code The referral code to redeem.
-   * @returns The redemption result (code and status).
-   * @throws When no session JWT is held, or the code is invalid or already
-   *   used (400).
    */
   async redeemReferralCode(code: string): Promise<Schemas['ReferralRedeemResponse']> {
     const res = await this.request<Schemas['ReferralRedeemResponseDoc']>('POST', '/referral/redeem', {
       body: { code },
-      auth: 'session',
-    })
-    return res.data
-  }
-
-  /**
-   * Lists the invite-code inventory with redemption state (administrators
-   * only — other accounts receive a 403). Requires a session JWT.
-   */
-  async listAccessCodes(): Promise<Schemas['AccessListResponse']> {
-    const res = await this.request<Schemas['AccessListResponseDoc']>('GET', '/access/codes', { auth: 'session' })
-    return res.data
-  }
-
-  /**
-   * Generates new invite codes (administrators only — other accounts
-   * receive a 403). Requires a session JWT.
-   *
-   * @param body.count Number of codes to mint.
-   * @returns The newly minted codes.
-   */
-  async generateAccessCodes(body: Schemas['AccessGenerateRequest']): Promise<Schemas['AccessGenerateResponse']> {
-    const res = await this.request<Schemas['AccessGenerateResponseDoc']>('POST', '/access/generate', {
-      body,
       auth: 'session',
     })
     return res.data
@@ -461,26 +449,13 @@ export class ApiClient {
     return this.request('GET', `/pools/${encodeURIComponent(key)}/ohlcv`, { query, auth: true })
   }
 
-  // ── swaps & routing ──────────────────────────────────────────────────
-
-  /** Lists a user's swap history (paginated; the API requires `user`). */
-  async getSwaps(query: { user: string; pool?: string; limit?: number; offset?: number }): Promise<Schemas['SwapListResponseDoc']> {
-    return this.request('GET', '/swaps', { query, auth: true })
-  }
-
-  /** Reads one swap by id, with its hops and amounts. */
-  async getSwap(swapId: string): Promise<Schemas['SwapResponseDoc']> {
-    return this.request('GET', `/swaps/${encodeURIComponent(swapId)}`, { auth: true })
-  }
+  // ── routing ──────────────────────────────────────────────────────────
 
   /**
-   * Finds the best route between two tokens (BFS, ≤ 3 hops).
+   * Quotes the best route between two tokens (BFS, ≤ 3 hops).
    *
-   * Use the quoted output as `expectedOut` for `swap`'s slippage
-   * math — a wrong quote only widens protection, never moves funds.
-   */
-  /**
-   * Quotes the best route between two tokens.
+   * Use the quoted output as `expectedOut` for `swap`'s slippage math — a
+   * wrong quote only widens protection, never moves funds.
    *
    * `amount_in` is a DECIMAL string in the input token's own units — `'0.5'`, not
    * `'500000'` — and `estimated_amount_out` comes back the same way, in the
@@ -506,46 +481,37 @@ export class ApiClient {
 
   // ── positions & tokens ───────────────────────────────────────────────
 
-  /** Lists a user's liquidity positions (paginated). */
+  /**
+   * Lists a user's liquidity positions (paginated).
+   *
+   * The API has no per-position detail route; read one position's live
+   * state from chain with the `getPosition` action instead.
+   */
   async getPositions(query: { user: string; limit?: number; offset?: number }): Promise<Schemas['PositionListResponseDoc']> {
     return this.request('GET', '/positions', { query, auth: true })
   }
 
-  /** Reads one position by its token id. */
-  async getPosition(tokenId: string): Promise<Schemas['PositionResponseDoc']> {
-    return this.request('GET', `/positions/${encodeURIComponent(tokenId)}`, { auth: true })
-  }
-
-  /** Lists all registered tokens with metadata. */
+  /**
+   * Lists all registered tokens with metadata.
+   *
+   * The API has no per-token detail route; resolve one token by filtering
+   * this list on its field address.
+   */
   async getTokens(): Promise<Schemas['TokenListResponseDoc']> {
     return this.request('GET', '/tokens')
   }
 
-  /** Reads one token's metadata by its field address. */
-  async getToken(address: string): Promise<Schemas['TokenResponseDoc']> {
-    return this.request('GET', `/tokens/${encodeURIComponent(address)}`)
-  }
-
-  /** Registers a token with the DEX API (auth-gated). */
-  async registerToken(body: Schemas['CreateTokenRequestDoc']): Promise<Schemas['TokenResponseDoc']> {
-    return this.request('POST', '/tokens', { body, auth: true })
-  }
-
-  /** Reads a user's public/authorized balances (base units, as the API sees them). */
-  async getPublicBalances(query: { user: string }): Promise<Schemas['BalanceListResponseDoc']> {
-    return this.request('GET', '/balances', { query, auth: true })
-  }
-
   // ── protocol config ──────────────────────────────────────────────────
 
-  /** Lists registered fee tiers with their tick spacings. */
+  /**
+   * Lists registered fee tiers with their tick spacings.
+   *
+   * Each tier carries its tick spacing, so this also serves as the list of
+   * registered spacings; the chain's `getFeeToTickSpacing` action reads one
+   * tier's spacing directly.
+   */
   async getFeeTiers(): Promise<Schemas['FeeTierListResponseDoc']> {
     return this.request('GET', '/fee-tiers', { auth: true })
-  }
-
-  /** Lists registered tick spacings. */
-  async getTickSpacings(): Promise<Schemas['TickSpacingListResponseDoc']> {
-    return this.request('GET', '/tick-spacings', { auth: true })
   }
 
   /**
@@ -567,16 +533,6 @@ export class ApiClient {
     return this.request('GET', `/pools/${encodeURIComponent(poolKey)}/initialized-ticks`, { auth: true })
   }
 
-  /** Lists the on-chain operation schemas the API publishes. */
-  async getTradingSchemas(): Promise<Schemas['TradingSchemaListResponse']> {
-    return this.request('GET', '/schema/trading', { auth: true })
-  }
-
-  /** Reads one operation schema by id (e.g. `"swap"`). */
-  async getTradingSchema(id: string): Promise<Schemas['TradingSchemaResponse']> {
-    return this.request('GET', `/schema/trading/${encodeURIComponent(id)}`, { auth: true })
-  }
-
   // ── utilities ────────────────────────────────────────────────────────
 
   /**
@@ -584,6 +540,8 @@ export class ApiClient {
    *
    * Asynchronous on the server: returns a `job_id` to poll with
    * {@link getAirdropStatus}. Used by the e2e to fund fresh accounts.
+   *
+   * Testnet only: the mainnet API does not serve `/airdrop` and answers 404.
    */
   async airdrop(address: string): Promise<Schemas['AirdropStartResult']> {
     const res = await this.request<{ data: Schemas['AirdropStartResult'] }>('POST', '/airdrop', {
@@ -593,7 +551,12 @@ export class ApiClient {
     return res.data
   }
 
-  /** Polls a faucet job until its per-token transfers complete. */
+  /**
+   * Polls a faucet job until its per-token transfers complete.
+   *
+   * Testnet only: the mainnet API does not serve `/airdrop/{job_id}` and
+   * answers 404.
+   */
   async getAirdropStatus(jobId: string): Promise<Schemas['AirdropJob']> {
     const res = await this.request<{ data: Schemas['AirdropJob'] }>(
       'GET',
@@ -603,7 +566,125 @@ export class ApiClient {
     return res.data
   }
 
-  /** Raw on-chain pool introspection (slot + tick statuses) via the API. */
+  /**
+   * Requests a testnet faucet drop and waits for it to settle.
+   *
+   * Wraps {@link airdrop} and {@link getAirdropStatus}: starts the job, polls
+   * until its status leaves `"running"`, and returns the finished job. When
+   * called through a Shield Swap client with a record scanner, also waits for
+   * each accepted or pending transfer's unspent, decrypted record. Resolves
+   * wrapped tokens to their underlying record programs and matches transaction
+   * IDs, so earlier balances cannot satisfy confirmation. Without a scanner,
+   * only the faucet job is confirmed. A
+   * faucet that refuses the address (one claim per address per window)
+   * answers 429; that comes back as `status: 'rate_limited'` rather than
+   * throwing, since an account that already holds funds can carry on. Every
+   * other error propagates. A settled job can still carry a `rejected` or
+   * `failed` per-token result, so a caller that needs a specific token checks
+   * `job.results`.
+   *
+   * Testnet only: the mainnet API does not serve `/airdrop` and answers 404.
+   * Hits the network to start, poll status, and scan records when configured.
+   *
+   * @param address The receiving account's address (`aleo1…`).
+   * @param options.pollIntervalMs Milliseconds between status reads. Defaults
+   *   to 5000; each token's transfer needs a confirmation, so polling faster
+   *   only adds requests.
+   * @param options.timeoutMs Total milliseconds to wait for the job and records before
+   *   giving up. Defaults to 600000 (ten minutes), which covers every token's
+   *   confirmation on a healthy network with room to spare.
+   * @param options.recordClient Client supplying the recipient's record scanner.
+   *   Automatically supplied by `shieldSwapActions`; omitted for a standalone
+   *   API client unless explicitly configured for record confirmation.
+   * @returns `{ status: 'settled', job }` with the per-token results, or
+   *   `{ status: 'rate_limited', message }` when the faucet refused the address.
+   * @throws When the job or records exceed `timeoutMs`, the scanner account
+   *   differs from the recipient, or an API/record scan fails (except faucet 429).
+   *
+   * @example
+   * const drop = await api.confirmAirdrop(account.address)
+   * if (drop.status === 'settled') console.table(drop.job.results)
+   * else console.log(drop.message)
+   */
+  async confirmAirdrop(
+    address: string,
+    options: { pollIntervalMs?: number; timeoutMs?: number; recordClient?: Client } = {},
+  ): Promise<ConfirmAirdropResult> {
+    const pollIntervalMs = options.pollIntervalMs ?? 5_000
+    const timeoutMs = options.timeoutMs ?? 600_000
+    const recordClient = options.recordClient
+    const hasScanner = !!(recordClient as (Client & { recordProvider?: RecordProvider }) | undefined)?.recordProvider
+    if (hasScanner && recordClient?.account?.address !== address) {
+      throw new Error('Airdrop record confirmation requires the recipient to match the scanner account')
+    }
+    const deadline = Date.now() + timeoutMs
+
+    let started: Schemas['AirdropStartResult']
+    try {
+      started = await this.airdrop(address)
+    } catch (err) {
+      // The faucet's per-address window: nothing started, nothing to poll.
+      if (err instanceof ApiError && err.status === 429) return { status: 'rate_limited', message: err.message }
+      throw err
+    }
+
+    let job = await this.getAirdropStatus(started.job_id)
+    while (job.status === 'running') {
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `airdrop job ${started.job_id} is still running after ${timeoutMs}ms (${job.results.length} of ${job.total} tokens landed)`,
+        )
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+      job = await this.getAirdropStatus(started.job_id)
+    }
+    if (hasScanner && recordClient) {
+      // Match the faucet's actual transactions, never a pre-existing balance.
+      const pending = job.results.filter((result) => result.status === 'accepted' || result.status === 'pending')
+      if (pending.some((result) => !result.tx_id)) {
+        throw new Error(`Airdrop job ${started.job_id} omitted a transaction id needed to confirm records`)
+      }
+      const tokens = pending.length ? (await this.getTokens()).data : []
+      const remaining = pending.map((result) => ({
+        transactionId: result.tx_id!.trim(),
+        program: tokens.find((token) => token.amm_token_program === result.amm_token_program)?.underlying_program ?? result.amm_token_program,
+      }))
+      while (remaining.length) {
+        for (const program of new Set(remaining.map((result) => result.program))) {
+          // Page explicitly so old records cannot hide a newly indexed drop.
+          for (let page = 0; ; page++) {
+            const records = await requestRecords(recordClient, {
+              program,
+              includePlaintext: true,
+              statusFilter: 'unspent',
+              filter: { page, resultsPerPage: 1000 },
+            })
+            for (let i = remaining.length - 1; i >= 0; i--) {
+              const found = remaining[i]!.program === program && records.some((record) =>
+                record.transactionId?.trim() === remaining[i]!.transactionId &&
+                'recordPlaintext' in record && !!record.recordPlaintext,
+              )
+              if (found) remaining.splice(i, 1)
+            }
+            if (records.length < 1000 || !remaining.some((result) => result.program === program)) break
+            if (Date.now() >= deadline) break
+          }
+        }
+        if (!remaining.length) break
+        if (Date.now() >= deadline) {
+          throw new Error(`Airdrop records for job ${started.job_id} are not readable after ${timeoutMs}ms (${remaining.length} transactions remaining)`)
+        }
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+      }
+    }
+    return { status: 'settled', job }
+  }
+
+  /**
+   * Raw on-chain pool introspection (slot + tick statuses) via the API.
+   *
+   * Testnet only: the mainnet API does not serve `/debug/pool` and answers 404.
+   */
   async debugPool(query: { pool_key: string; ticks?: string }): Promise<Schemas['PoolDebugResponseDoc']> {
     return this.request('GET', '/debug/pool', { query, auth: true })
   }

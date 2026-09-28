@@ -36,9 +36,7 @@ Run them during development when touching anything they cover.
 
 - **`VEIL_INTEGRATION=1`** — enables the read-only tiers (`reads.integration`,
   `api.integration`). No account needed.
-- Plus **`VEIL_E2E_PRIVATE_KEY`** (funded testnet account) and
-  **`ALEO_DPS_API_KEY`** + **`ALEO_CONSUMER_ID`** (delegated proving + scanner
-  auth) — enables the full lifecycle (`e2e`) and the balance tests
+- Plus **`VEIL_E2E_PRIVATE_KEY`** (funded testnet account) — enables the full lifecycle (`e2e`) and the balance tests
   (private balances need the account's records).
 - Optional: `VEIL_DEX_PROGRAM` (default `shield_swap_v0_0_2.aleo`), `ALEO_DPS_URL`,
   `ALEO_RSS_URL`.

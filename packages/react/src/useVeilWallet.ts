@@ -12,14 +12,14 @@ import {
 } from '@provablehq/veil-core'
 import { fromWalletAdapter, type AleoWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 
-const DEFAULT_API_URL = 'https://api.provable.com/v2'
+const DEFAULT_API_URL = 'https://edge.provable.com/api/v2'
 
 /**
  * Options for {@link useVeilWallet}.
  *
  * @property rpcUrl Node endpoint both clients read through (and the wallet
  *   client falls back to). Defaults to the Provable API,
- *   `https://api.provable.com/v2`.
+ *   `https://edge.provable.com/api/v2`.
  * @property network Network for the HTTP transport. Defaults to the connected
  *   wallet's network, or `'mainnet'` before a wallet connects. Set it to pin
  *   the transport to one network regardless of the wallet.

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { prepare } from '../../../../src/actions/prepare.js'
 import {
   createAleoClient,
   createBridgeClient,
@@ -8,7 +9,7 @@ import {
   type BridgeCheckpoint,
   type BridgeProgress,
 } from '../../../../src/index.js'
-import { createLiveBenchmark, loadLiveState, saveLiveState } from '../helpers.js'
+import { createLiveBenchmark, loadLiveState, quoteParametersFromPlan, saveLiveState } from '../helpers.js'
 import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, required, requiredEvmPrivateKey } from '../config.js'
 
 const enabled = mainnetCaseEnabled('evm-xreserve')
@@ -49,7 +50,7 @@ describe.skipIf(!enabled)('mainnet EVM xReserve bridge', () => {
         aleo: createAleoClient({ publicClient: aleo.publicClient, account: aleo.walletClient }),
       },
     })
-    const plan = bridge.prepare({
+    const plan = prepare(bridge.registry, {
       source: { chain: 'ethereum', asset: 'usdc' },
       destination: { chain: 'aleo', asset: 'usdcx' },
       bridgeProtocol: 'xreserve',
@@ -61,7 +62,7 @@ describe.skipIf(!enabled)('mainnet EVM xReserve bridge', () => {
 
     let progress: BridgeProgress
     if (!state.checkpoint) {
-      const quote = await bridge.quote({ plan })
+      const quote = await bridge.quote(quoteParametersFromPlan(plan))
       benchmark.mark('quote-ready')
       if (quote.kind !== 'evm-xreserve') throw new Error(`Unexpected quote kind: ${quote.kind}`)
       expect(quote.amountAtomic).toBe(2_000_000n)

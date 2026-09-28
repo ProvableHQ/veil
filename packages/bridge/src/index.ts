@@ -54,20 +54,10 @@ export {
 } from './connections/aleo.js'
 export type { BridgeChainClient, BridgeChainClients } from './connections/resolve.js'
 
-export {
-  getAssets,
-  type GetAssetsParameters,
-} from './actions/getAssets.js'
-export {
-  getRoutes,
-  type GetRoutesParameters,
-} from './actions/getRoutes.js'
-export { prepare } from './actions/prepare.js'
 export { execute } from './actions/execute.js'
 export { quote } from './actions/quote.js'
 export { complete } from './actions/complete.js'
 export { getStatus } from './actions/getStatus.js'
-export { waitForStatus } from './actions/waitForStatus.js'
 export { recover } from './actions/recover.js'
 export { resume } from './actions/resume.js'
 export { wait } from './actions/wait.js'
@@ -105,6 +95,8 @@ export type {
   BridgePlan,
   BridgeReceipt,
   BridgeStatus,
+  GetAssetsParameters,
+  GetRoutesParameters,
   PrepareParameters,
   ProtocolBridgeAsset,
   ProtocolBridgeChain,
@@ -118,7 +110,6 @@ export type {
   RecoverParameters,
   ResumeParameters,
   WaitParameters,
-  WaitForStatusParameters,
   BridgeExecution,
   BridgeExecutionKind,
   BridgeQuote,
@@ -163,6 +154,7 @@ export type {
 
 export {
   aleoAddressToBytes32,
+  bytes32ToAleoAddress,
   aleoProgramAddress,
   buildXReserveDepositPayload,
   buildXReserveHookData,
