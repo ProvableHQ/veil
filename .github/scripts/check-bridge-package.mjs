@@ -11,7 +11,8 @@ const manifest = JSON.parse(readFileSync(join(root, 'packages/bridge/package.jso
 const temporary = mkdtempSync(join(tmpdir(), 'veil-bridge-package-'))
 try {
   // Install real archives outside the workspace so aliases cannot hide missing files.
-  for (const name of ['core', 'provable-sdk', 'bridge']) {
+  // Include the SDK's devnode peer so unpublished release versions install locally.
+  for (const name of ['core', 'devnode', 'provable-sdk', 'bridge']) {
     execFileSync('pnpm', ['pack', '--pack-destination', temporary], {
       cwd: join(root, 'packages', name), stdio: 'pipe',
     })
