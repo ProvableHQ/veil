@@ -198,6 +198,38 @@ console.log(quote.nativeFeeAtomic)
 `quote.plan` identifies the exact route, amount, recipient, and reviewed
 deployment that produced the quote. Keep this value unchanged for execution.
 
+For a private USDCx mint with a local Aleo account, the bridge client reserves a
+counter and derives the scalar and address commitment itself. The derivation is
+compatible with Shield, but neither quoting nor completion connects to Shield.
+Persist the identity store for any long-running process:
+
+```ts
+import { fileXReservePrivateMintIdentityStore } from '@provablehq/aleo-bridge-sdk/node'
+
+const bridge = createBridgeClient({
+  environment: 'mainnet',
+  clients,
+  privateMintIdentities: fileXReservePrivateMintIdentityStore('.veil/xreserve-private-mints.json'),
+})
+
+const quote = await bridge.quote({
+  source: { chain: 'ethereum', asset: 'usdc' },
+  destination: { chain: 'aleo', asset: 'usdcx' },
+  amount: '10',
+  sender: ethereumAddress,
+  recipient: aleoAddress,
+  mintMode: 'private',
+})
+```
+
+The store records the counter, derived scalar, recipient, and public commitment
+before the quote returns. The default in-memory store serializes concurrent
+deposits but does not survive a restart. Treat a durable store like a view key:
+its scalars can link and authorize the corresponding private mints. The supplied
+Node file store uses atomic `0600` replacements and locks reservations across
+processes sharing the same path. Custom stores shared by multiple workers should
+implement `runExclusive` with a transaction or distributed lock.
+
 ### 2. Authorize the source transfer
 
 Execution may request more than one wallet transaction. An ERC-20 route can
@@ -207,6 +239,9 @@ receipt and every transaction identifier already submitted.
 ```ts
 const execution = await bridge.execute({
   plan: quote.plan,
+  privateMintAddressCommitment: quote.kind === 'evm-xreserve'
+    ? quote.privateMintAddressCommitment
+    : undefined,
   onCheckpoint(checkpoint) {
     saveCheckpoint(checkpoint)
   },
@@ -268,7 +303,6 @@ one destination transaction that creates the private record.
 if (progress.next === 'complete') {
   const destination = await bridge.complete({
     progress,
-    privateMintSecretNonce,
   })
   progress = await bridge.wait({
     progress: {
@@ -285,6 +319,11 @@ if (progress.next === 'complete') {
 A checkpoint contains the public transfer intent and transaction identifiers
 needed to find the transfer again. It excludes private keys, Aleo record
 plaintext, proofs, and private-mint secret nonces.
+
+Locally derived private mints checkpoint only the public address commitment.
+During `complete`, the SDK retrieves the matching scalar from its identity store
+and supplies it directly to `private_mint`. Restore the same durable identity
+store alongside a bridge checkpoint after a process restart.
 
 The SDK calls `onCheckpoint` at supported submission boundaries. The callback
 does not imply a storage system. A browser can use IndexedDB or local storage;
@@ -312,9 +351,9 @@ if (progress.next === 'wait') {
 }
 ```
 
-The application then handles `progress.next` by the same table above. A private
-mint nonce must be stored separately because it is intentionally absent from
-the checkpoint.
+The application then handles `progress.next` by the same table above. Legacy
+callers that supply `privateMintSecretNonce` must store it separately because it
+is intentionally absent from the checkpoint.
 
 ## Use private assets on Aleo
 

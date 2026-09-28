@@ -15,6 +15,11 @@ import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { formatDecimalAmount, parseDecimalAmount } from '../utils/units.js'
 import { prepare } from './prepare.js'
+import {
+  memoryXReservePrivateMintIdentityStore,
+  type XReservePrivateMintIdentityStore,
+} from '../utils/xreservePrivateMintStore.js'
+import { resolvePrivateMintAddressCommitment } from './internal/privateMintIdentity.js'
 
 /**
  * Calculates the funds and fees required to begin a cross-chain transfer.
@@ -32,6 +37,7 @@ import { prepare } from './prepare.js'
  * @param registry Supported chains, assets, and bridge provider deployments.
  * @param clients Network access for the chains involved in the transfer.
  * @param params Transfer details whose current cost and requirements are calculated.
+ * @param privateMintIdentities Counter and scalar persistence for locally derived private mints.
  * @returns The amount expected at the destination and the known bridge, network, and approval costs.
  * @throws BridgeError When the selected provider cannot quote the transfer or required network access is unavailable.
  * @example const result = await quote(registry, clients, { source, destination, amount: '1', recipient })
@@ -40,12 +46,22 @@ export async function quote(
   registry: BridgeRegistry,
   clients: BridgeChainClients,
   params: QuoteParameters,
+  privateMintIdentities: XReservePrivateMintIdentityStore = memoryXReservePrivateMintIdentityStore(),
 ): Promise<BridgeQuote> {
   // Build the canonical plan before reading live prices. The returned plan is
   // the exact value the caller passes to execution and stores in progress.
   const plan = prepare(registry, params)
+  const privateMintAddressCommitment = await resolvePrivateMintAddressCommitment(
+    registry,
+    clients,
+    privateMintIdentities,
+    plan,
+    params.privateMintAddressCommitment,
+    params.privateMintSecretNonce,
+  )
   const protocolParams = {
     plan,
+    privateMintAddressCommitment,
     privateMintSecretNonce: params.privateMintSecretNonce,
   }
   // Quote from the source side because that is where funds, approvals, and the

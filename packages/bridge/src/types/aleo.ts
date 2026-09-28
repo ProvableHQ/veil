@@ -10,7 +10,7 @@ import type { XReserveAttestationResult } from './xreserve.js'
  *
  * @property executeTransaction Prompts the wallet to prove, sign, and broadcast a program call.
  */
-export type AleoWalletClient = Pick<WalletClient, 'executeTransaction'>
+export type AleoWalletClient = Pick<WalletClient, 'executeTransaction'> & Partial<Pick<WalletClient, 'account'>>
 
 /**
  * Controls conversion of a public Aleo token balance into a private record.
@@ -73,7 +73,7 @@ export type AleoPrivacyExecution = {
  * Configures submission of the user-authorized USDCx wrapper mint.
  *
  * @property plan Original private-mint transfer plan.
- * @property privateMintSecretNonce Secret Aleo scalar committed by the source deposit. Defaults to `0scalar`.
+ * @property privateMintSecretNonce Secret Aleo scalar committed by the source deposit. The bridge client resolves locally derived identities from its configured store.
  * @property deposit Confirmed EVM deposit receipt carrying the canonical payload.
  * @property attestation Completed Circle payload and signature response.
  * @property privateFee Whether the Aleo wallet should pay its fee privately. Defaults to false.

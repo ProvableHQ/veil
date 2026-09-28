@@ -21,8 +21,10 @@ import { createBridgeClient } from '../../src/clients/createBridgeClient.js'
 import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'
+import { createAleoClient } from '../../src/connections/aleo.js'
 import type { BridgeReceipt } from '../../src/types/protocol.js'
 import { aleoAddressToBytes32 } from '../../src/utils/xreserve.js'
+import { memoryXReservePrivateMintIdentityStore } from '../../src/utils/xreservePrivateMintStore.js'
 
 const ACCOUNT = getAddress('0x0000000000000000000000000000000000000001')
 const TOKEN = getAddress('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238')
@@ -126,6 +128,45 @@ describe('Ethereum xReserve actions', () => {
       allowanceAtomic: 0n,
       approvalRequired: true,
     })
+  })
+
+  it('reserves and encodes a local private-mint identity without Shield', async () => {
+    const { executor } = mockExecutor()
+    const privateMintIdentities = memoryXReservePrivateMintIdentityStore()
+    const bridge = createBridgeClient({
+      environment: 'testnet',
+      privateMintIdentities,
+      clients: {
+        sepolia: { family: 'evm', publicClient: executor.publicClient },
+        'aleo-testnet': createAleoClient({
+          publicClient: {} as never,
+          account: {
+            executeTransaction: async () => 'at1unused',
+            account: {
+              type: 'local',
+              address: RECIPIENT,
+              viewKey: 'AViewKey1sqm952gJj1tmAWySYDQvSv2NmfnyEMvU6a9ZBCuyG7PN',
+            },
+          } as never,
+        }),
+      },
+    })
+
+    const quote = await bridge.quote({
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+      amount: '2',
+      recipient: RECIPIENT,
+      sender: ACCOUNT,
+      mintMode: 'private',
+    })
+
+    expect(quote).toMatchObject({ kind: 'evm-xreserve', privateMintAddressCommitment: expect.stringMatching(/^[0-9a-f]{64}$/) })
+    const identities = await privateMintIdentities.load()
+    expect(identities).toHaveLength(1)
+    expect(identities[0]).toMatchObject({ counter: 0, recipient: RECIPIENT })
+    expect(quote.kind === 'evm-xreserve' && quote.hookData)
+      .toBe(`0x02${identities[0]!.addressCommitment}${'00'.repeat(32)}`)
   })
 
   it('approves USDC, deposits without msg.value, and returns resumable attestation state', async () => {
@@ -375,6 +416,40 @@ describe('Ethereum xReserve actions', () => {
     await expect(bridge.resume({ progress, privateMintSecretNonce: '7scalar' })).resolves.toMatchObject({
       kind: 'evm-xreserve',
       receipt: { status: 'ATTESTATION_PENDING' },
+    })
+  })
+
+  it('checkpoints and resumes a locally derived private mint using only its public commitment', async () => {
+    const confirmApproval = { value: false }
+    const { executor } = mockExecutor({ value: true }, confirmApproval)
+    const transfer = transferPlan('private')
+    const commitment = '3c47112203a792e5a2d46f059016c06d83bdad32ada95d15ad66e2bc26f7fc0b'
+    let checkpoint: ReturnType<typeof createBridgeCheckpoint> | undefined
+
+    await execute(DEFAULT_BRIDGE_REGISTRY, { sepolia: executor }, {
+      plan: transfer,
+      privateMintAddressCommitment: commitment,
+      confirmationTimeoutMs: 0,
+      onCheckpoint(value) { checkpoint = value },
+    })
+
+    expect(checkpoint?.source).toMatchObject({
+      hookData: `0x02${commitment}${'00'.repeat(32)}`,
+      privateMintAddressCommitment: commitment,
+    })
+    expect(JSON.stringify(checkpoint)).not.toContain('scalar')
+
+    confirmApproval.value = true
+    const bridge = createBridgeClient({ environment: 'testnet', clients: { sepolia: executor } })
+    const progress = await bridge.recover({ checkpoint: checkpoint! })
+    if (progress.next !== 'resume') throw new Error(`Expected resume, received ${progress.next}`)
+
+    await expect(bridge.resume({ progress })).resolves.toMatchObject({
+      kind: 'evm-xreserve',
+      receipt: {
+        status: 'ATTESTATION_PENDING',
+        protocolState: { privateMintAddressCommitment: commitment },
+      },
     })
   })
 

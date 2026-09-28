@@ -48,10 +48,12 @@ export type EvmXReserveRouteMetadata = {
  * Supplies an Ethereum-to-Aleo xReserve transfer for current balance and allowance checks.
  *
  * @property plan Route, amount, Aleo recipient, and privacy preference selected for the transfer.
- * @property privateMintSecretNonce Secret Aleo scalar committed by private hook data. Defaults to `0scalar`.
+ * @property privateMintAddressCommitment Public 32-byte recipient commitment reserved by the bridge identity store.
+ * @property privateMintSecretNonce Legacy secret Aleo scalar committed by private hook data. Defaults to `0scalar`; do not combine with `privateMintAddressCommitment`.
  */
 export type QuoteEvmXReserveTransferParameters = {
   plan: BridgePlan
+  privateMintAddressCommitment?: string | undefined
   privateMintSecretNonce?: string | undefined
 }
 
@@ -67,6 +69,7 @@ export type QuoteEvmXReserveTransferParameters = {
  * @property amountAtomic Deposit amount in USDC base units.
  * @property maxFeeAtomic Maximum Circle fee in USDC base units.
  * @property hookData Fixed 65-byte Aleo mint instruction.
+ * @property privateMintAddressCommitment Public locally derived commitment carried by a private hook. Omitted for public, record, and legacy scalar-based deposits.
  * @property balanceAtomic Connected account balance in USDC base units.
  * @property allowanceAtomic Current xReserve allowance in USDC base units.
  * @property approvalRequired Whether execution must submit an approval first.
@@ -81,6 +84,7 @@ export type EvmXReserveTransferQuote = {
   amountAtomic: bigint
   maxFeeAtomic: bigint
   hookData: Hex
+  privateMintAddressCommitment?: string | undefined
   balanceAtomic: bigint
   allowanceAtomic: bigint
   approvalRequired: boolean
@@ -90,7 +94,8 @@ export type EvmXReserveTransferQuote = {
  * Configures an Ethereum-to-Aleo xReserve deposit submission.
  *
  * @property plan Route, amount, Aleo recipient, and privacy preference selected for the transfer.
- * @property privateMintSecretNonce Secret Aleo scalar committed by private hook data. Defaults to `0scalar`.
+ * @property privateMintAddressCommitment Public 32-byte recipient commitment reserved by the bridge identity store.
+ * @property privateMintSecretNonce Legacy secret Aleo scalar committed by private hook data. Defaults to `0scalar`; do not combine with `privateMintAddressCommitment`.
  * @property pollingIntervalMs Delay between receipt checks. Defaults to 1,000 milliseconds.
  * @property confirmationTimeoutMs Maximum receipt wait per transaction. Defaults to 120,000 milliseconds.
  * @property resume Previously checkpointed source receipt. When supplied, execution
@@ -100,6 +105,7 @@ export type EvmXReserveTransferQuote = {
  */
 export type ExecuteEvmXReserveTransferParameters = {
   plan: BridgePlan
+  privateMintAddressCommitment?: string | undefined
   privateMintSecretNonce?: string | undefined
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined

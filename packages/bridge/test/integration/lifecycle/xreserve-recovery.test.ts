@@ -8,7 +8,8 @@ import { prepare } from '../../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../../src/registry/default.js'
 import type { AleoWalletClient } from '../../../src/types/aleo.js'
 import type { BridgeReceipt } from '../../../src/types/protocol.js'
-import { buildXReserveDepositPayload, buildXReserveHookData, calculateXReserveMessageHash } from '../../../src/utils/xreserve.js'
+import { buildXReserveDepositPayload, buildXReserveHookData, calculateXReserveMessageHash, xReservePrivateMintCommitmentFromHookData } from '../../../src/utils/xreserve.js'
+import { memoryXReservePrivateMintIdentityStore } from '../../../src/utils/xreservePrivateMintStore.js'
 
 const RECIPIENT = 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n'
 const SIGNATURE = `0x${'11'.repeat(65)}` as const
@@ -132,6 +133,13 @@ describe('xReserve lifecycle', () => {
 
   it('completes a ready private mint through the native Veil wallet capability', async () => {
     const { plan, payload, messageHash, receipt } = await fixture()
+    const commitment = xReservePrivateMintCommitmentFromHookData(`0x${payload.slice(-130)}`)
+    const privateMintIdentities = memoryXReservePrivateMintIdentityStore([{
+      counter: 0,
+      recipient: RECIPIENT,
+      secretNonce: '7scalar',
+      addressCommitment: commitment,
+    }])
     const transaction = { type: 'execute', id: 'at1private', fee: {} } as never
     const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>(async (params) => {
       await params.onProgress?.({ type: 'transaction-prepared', transactionId: 'at1private', transaction })
@@ -141,7 +149,7 @@ describe('xReserve lifecycle', () => {
       ...receipt,
       status: 'DESTINATION_ACTION_REQUIRED',
       nextAction: { kind: 'xreserve-private-mint', chainId: 'aleo-testnet' },
-      protocolState: { ...receipt.protocolState, attestation: SIGNATURE },
+      protocolState: { ...receipt.protocolState, privateMintAddressCommitment: commitment, attestation: SIGNATURE },
     }
     const checkpoints: unknown[] = []
     const result = await complete(
@@ -149,9 +157,9 @@ describe('xReserve lifecycle', () => {
       { 'aleo-testnet': createAleoClient({ publicClient: {} as never, account: { executeTransaction } }) },
       {
         progress: { next: 'complete', plan, receipt: ready },
-        privateMintSecretNonce: '7scalar',
         onCheckpoint(value) { checkpoints.push(value) },
       },
+      privateMintIdentities,
     )
 
     expect(result.kind).toBe('aleo-xreserve')
@@ -169,7 +177,7 @@ describe('xReserve lifecycle', () => {
         mintMode: 'private',
       },
       route: { id: plan.route.id, registryVersion: plan.registryVersion },
-      source: { transactionId: receipt.sourceTxId },
+      source: { transactionId: receipt.sourceTxId, privateMintAddressCommitment: commitment },
       destination: {
         preparedTransaction: {
           transactionId: 'at1private',
@@ -187,10 +195,11 @@ describe('xReserve lifecycle', () => {
         mintMode: 'private',
       },
       route: { id: plan.route.id, registryVersion: plan.registryVersion },
-      source: { transactionId: receipt.sourceTxId },
+      source: { transactionId: receipt.sourceTxId, privateMintAddressCommitment: commitment },
       destination: { transactionId: 'at1private' },
     }])
     expect(result.receipt.protocolState).toMatchObject({ payload, messageHash })
+    expect(executeTransaction.mock.calls[0]![0].inputs[3]).toBe('7scalar')
   })
 
   it('broadcasts an identical prepared destination transaction without prompting the wallet again', async () => {
