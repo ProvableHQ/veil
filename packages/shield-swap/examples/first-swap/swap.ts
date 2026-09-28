@@ -12,9 +12,15 @@ if (!process.env.SHIELD_SWAP_PRIVATE_KEY) {
   await writeFile('private-key.txt', privateKey, { mode: 0o600, flag: 'wx' })
 }
 
+// Create a signing client for testnet. Defaults configure delegated proving
+// and a record scanner; account exposes the address derived from the private key.
 const { walletClient, account } = aleo.createAleoClient({ privateKey })
+// Add DEX actions (quote, swap, claim) to the same signing client.
 const client = walletClient.extend(shieldSwapActions({
+  // Enable the DEX API using this client's network defaults for quotes and the faucet.
   api: {},
+  // Persist blinding identities and swap recovery data across process restarts.
+  // Keep this account-specific file private and retain it to recover unclaimed swaps.
   blindedIdentities: fileBlindedIdentityStore(`${account.address}.json`),
 }))
 
@@ -26,7 +32,9 @@ const drop = await client.api.confirmAirdrop(account.address)
 const quote = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: '1.5', slippageBps: 50 })
 const handle = await client.swap({ quote })
 
-// The claim dispatches to the input/output token programs, whose sources it needs.
+// swap({ quote }) resolves its own imports, but the returned handle contains no
+// program sources. The claim currently needs them supplied separately so the
+// prover can call the output token program and refund any unspent input tokens.
 const imports = await client.resolveDexImports({
   tokenPrograms: [quote.from, quote.to].flatMap((token) => token.ammTokenProgram ? [token.ammTokenProgram] : []),
   program: quote.program,
