@@ -1,7 +1,6 @@
 /** Create and fund a testnet account, swap 1.5 USDCx for ETH, and claim the output. */
 import { writeFile } from 'node:fs/promises'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
-import { waitForConfirmation } from '@provablehq/veil-core'
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
 
@@ -31,7 +30,6 @@ const quote = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: '1.5', sl
 const handle = await client.swap({ quote })
 
 // Wait for the swap to succeed, then submit the claim once.
-await waitForConfirmation(client, handle.transactionId)
 await client.waitForSwapOutput({ handle })
 const claim = await client.claimSwapOutput({ handle })
 if (claim.amountOut <= 0n) throw new Error('The claim returned no ETH')

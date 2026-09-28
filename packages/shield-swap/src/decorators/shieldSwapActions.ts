@@ -193,8 +193,8 @@ export type ShieldSwapActionsConfig = {
  *   long-lived `apiToken`. Hits the network (challenge + verify) and signs.
  *   Returns the session JWT for callers that persist it; rejects when the
  *   client has no account.
- * @property waitForSwapOutput Polls the handle's on-chain output until readable
- *   or the polling timeout expires. Never signs or submits a transaction.
+ * @property waitForSwapOutput Confirms the handle's transaction and polls its
+ *   on-chain output until readable or the shared polling timeout expires. Never signs or submits a transaction.
  * @property authenticateApi Deprecated alias for
  *   {@link ShieldSwapActions.authenticateShieldSwap}.
  * @property api The off-chain DEX API client; throws on first use when no
