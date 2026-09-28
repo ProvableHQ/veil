@@ -208,7 +208,7 @@ for (const [i, result] of results.entries()) {
   const handle = result.value
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
-      const { amountOut } = await client.claimSwapOutput({ handle, imports: swaps[i]!.imports })
+      const { amountOut } = await client.claimSwapOutput({ handle })
       // Display in human units (swaps[i] should carry the out token's decimals/symbol).
       console.log(`claimed ${formatAmount(amountOut, swaps[i]!.outDecimals, swaps[i]!.outSymbol)}`)
       break

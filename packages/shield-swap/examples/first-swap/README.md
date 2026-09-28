@@ -75,7 +75,7 @@ output. The script does not log these values or write a separate result file.
 Each run submits a new trade. Do not rerun the whole script to recover an
 interrupted swap. Recreate the client with the same key and identity store,
 then call `getUnclaimedSwaps()` to find its pending handles. Pass the matching
-handle and the token program imports to `claimSwapOutput()`. The SDK recovery
+handle to `claimSwapOutput()`; it resolves the required program imports from chain. The SDK recovery
 guide describes that sequence; it does not require resubmitting the swap.
 
 An empty pending list can mean the request is still pending or the output was

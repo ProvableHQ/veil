@@ -450,10 +450,10 @@ export const claimSchema: AgentToolSchema = {
     type: 'object',
     properties: {
       handle: { type: 'object', description: 'The swap handle returned by shield_swap_swap.' },
-      tokenInProgram: { type: 'string', description: "The input token's wrapper program." },
-      tokenOutProgram: { type: 'string', description: "The output token's wrapper program." },
+      tokenInProgram: { type: 'string', description: 'Deprecated; claim resolves the input program from chain.' },
+      tokenOutProgram: { type: 'string', description: 'Deprecated; claim resolves the output program from chain.' },
     },
-    required: ['handle', 'tokenInProgram', 'tokenOutProgram'],
+    required: ['handle'],
   },
 }
 

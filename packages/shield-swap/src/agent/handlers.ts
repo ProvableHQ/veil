@@ -292,9 +292,8 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
     },
 
     shield_swap_claim: async (i) => {
-      const imports = await fetchImports(client, [i.tokenInProgram as string, i.tokenOutProgram as string], program)
       // The handle keeps its own program; do not override it with the config default.
-      return jsonSafe(await claimSwapOutput(client, { handle: i.handle as unknown as SwapHandle, imports }))
+      return jsonSafe(await claimSwapOutput(client, { handle: i.handle as unknown as SwapHandle }))
     },
 
     shield_swap_swap_multi_hop: async (i) => {

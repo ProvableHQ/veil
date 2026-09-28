@@ -63,16 +63,9 @@ export async function shieldPrivateSwap(amountIn = 1_000_000n) {
   const { data: pools } = await client.api.getPools()
   const pool = pools[0]
   if (!pool) throw new Error('Shield Swap has no pools to trade against yet.')
-  // 4. Authenticate, quote the trade, and prepare sources for the later claim.
+  // 4. Authenticate and quote the trade; swap and claim resolve their own imports.
   await client.authenticateShieldSwap()
   const quote = await client.quote({ from: pool.token0, to: pool.token1, amountIn, slippageBps: 100 })
-  const ids = new Set(quote.hops.flatMap((hop) => [hop.tokenInId, hop.tokenOutId]))
-  const tokens = await Promise.all([...ids].map((id) => client.tokenData(id)))
-  const imports = await client.resolveDexImports({
-    tokenPrograms: tokens.flatMap((token) => [token.ammTokenProgram, token.underlyingProgram].filter((p): p is string => !!p)),
-    program: quote.program,
-  })
-
   // 5. The wallet supplies a record of the underlying asset for wrapped inputs.
   //    It also derives the blinded identity; the returned handle may lack swapId.
   const recordProgram = quote.from.underlyingProgram ?? quote.from.ammTokenProgram
@@ -84,7 +77,7 @@ export async function shieldPrivateSwap(amountIn = 1_000_000n) {
     recordname: isCredits ? 'credits' : 'Token',
     filters: { [isCredits ? 'microcredits' : 'amount']: { gte: `${amountIn}${isCredits ? 'u64' : 'u128'}` } },
   }
-  const handle = await client.swap({ quote, imports, tokenRecord })
+  const handle = await client.swap({ quote, tokenRecord })
 
   // 6. Recover swapId from the confirmed request transaction — the wallet
   //    filled the blinding slots, so the handle lacks it. swapId is the swap
@@ -104,7 +97,7 @@ export async function shieldPrivateSwap(amountIn = 1_000_000n) {
     const output = await client.getSwapOutput({ swapId })
     if (output) {
       handle.blindedAddress = output.recipient
-      const { amountOut, amountRemaining } = await client.claimSwapOutput({ handle, imports })
+      const { amountOut, amountRemaining } = await client.claimSwapOutput({ handle })
       return { swapId, amountOut, amountRemaining }
     }
     await new Promise((resolve) => setTimeout(resolve, 3_000))

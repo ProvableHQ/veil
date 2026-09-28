@@ -153,7 +153,7 @@ export async function main(argv: string[]): Promise<void> {
         for (let attempt = 0; attempt < 20; attempt++) {
           try {
             step(`claiming ${result.pair} (attempt ${attempt + 1})`)
-            const claim = await client.claimSwapOutput({ handle: result.handle, imports: leg.imports })
+            const claim = await client.claimSwapOutput({ handle: result.handle })
             result.claimed = claim.amountOut
             done(`claimed ${formatAmount(claim.amountOut, leg.to.decimals, leg.to.symbol)}`)
             break

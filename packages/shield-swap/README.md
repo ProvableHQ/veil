@@ -412,6 +412,10 @@ it throws `SwapOutputNotFinalizedError`, the request transaction hasn't
 finalized yet; retry after a few blocks. The same error after a successful claim
 means the output was already collected — claiming consumes the on-chain entry.
 
+`claimSwapOutput` resolves required token program sources from chain automatically;
+`imports` is an optional override for callers with cached sources. The handle
+does not need to contain program sources.
+
 `claimSwapOutput` picks the transition automatically from the chain-read
 remainder: a swap that filled completely (`amountRemaining` is `0n`) claims
 through `claim_swap_output_no_refund` — or the router's
@@ -428,10 +432,7 @@ The handle already carries `swapId` and `blindedAddress`, so the claim just
 works:
 
 ```ts
-const { amountOut, amountRemaining } = await client.claimSwapOutput({
-  handle,
-  imports,
-})
+const { amountOut, amountRemaining } = await client.claimSwapOutput({ handle })
 ```
 
 #### Wallet
@@ -459,10 +460,7 @@ handle.swapId = await deriveSwapId({
   nonce: handle.nonce!,
 })
 
-const { amountOut, amountRemaining } = await client.claimSwapOutput({
-  handle,
-  imports,
-})
+const { amountOut, amountRemaining } = await client.claimSwapOutput({ handle })
 ```
 
 ### Auditing a settled swap
@@ -512,10 +510,7 @@ token and one remaining amount, so a multi-hop claim reads the same way a
 single-hop one does:
 
 ```ts
-const { amountOut, amountRemaining } = await client.claimSwapOutput({
-  handle,
-  imports,   // include every token program the route touches
-})
+const { amountOut, amountRemaining } = await client.claimSwapOutput({ handle })
 ```
 
 Signer paths, `SwapOutputNotFinalizedError`, and the wallet-path recovery
@@ -599,7 +594,7 @@ for (const [tokenId, amount] of Object.entries(totals)) {
 }
 
 for (const swap of swaps) {
-  if (swap.claimable) await client.claimSwapOutput({ handle: swap.handle!, imports })
+  if (swap.claimable) await client.claimSwapOutput({ handle: swap.handle! })
 }
 ```
 

@@ -23,15 +23,7 @@ export async function swap() {
   // Quote first; swap dispatches to the appropriate 1–3-hop action automatically.
   const offer = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: '1.5' })
 
-  // Resolve sources once so both the swap and its later claim can reuse them.
-  // Without an explicit map, swap({ quote }) resolves these during preparation.
-  const tokenIds = new Set(offer.hops.flatMap((hop) => [hop.tokenInId, hop.tokenOutId]))
-  const tokens = await Promise.all([...tokenIds].map((id) => client.tokenData(id)))
-  const imports = await client.resolveDexImports({
-    tokenPrograms: tokens.flatMap((token) => token.ammTokenProgram ? [token.ammTokenProgram] : []),
-    program: offer.program,
-  })
-  const handle = await client.swap({ quote: offer, imports })
+  const handle = await client.swap({ quote: offer })
 
   // The blinded identity this pays out to was reserved and recorded before the
   // call returned, so the proceeds are locatable even if this process stops
@@ -44,7 +36,7 @@ export async function swap() {
   // lets anything else through.
   for (let attempt = 0; attempt < 20; attempt++) {
     try {
-      const claim = await client.claimSwapOutput({ handle, imports })
+      const claim = await client.claimSwapOutput({ handle })
       console.log(`received ${formatUnits(claim.amountOut, offer.to.decimals)} ${offer.to.symbol}`)
       return
     } catch (error) {

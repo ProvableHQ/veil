@@ -124,7 +124,7 @@ export async function main(argv: string[]): Promise<void> {
       for (let attempt = 0; attempt < 20 && !claim; attempt++) {
         try {
           step(`claiming the output (attempt ${attempt + 1})`)
-          claim = await client.claimSwapOutput({ handle, imports: plan.imports })
+          claim = await client.claimSwapOutput({ handle })
         } catch (error) {
           if (!(error instanceof SwapOutputNotFinalizedError)) throw error
           await new Promise((resolve) => setTimeout(resolve, 15_000))

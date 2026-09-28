@@ -107,7 +107,7 @@ describe.runIf(RUN)('quote → swap → claim against live testnet', () => {
         expect(output!.amount_out).toBeGreaterThanOrEqual(quote.minOut)
         const receipt = await client.getSwapExecution({ swapId: handle.swapId!, program: quote.program })
         expect(receipt?.hops).toHaveLength(fixture.hops)
-        const claim = await client.claimSwapOutput({ handle, imports })
+        const claim = await client.claimSwapOutput({ handle })
         expect(claim.amountOut).toBe(output!.amount_out)
         expect(claim.transactionId).toBeTruthy()
       }
