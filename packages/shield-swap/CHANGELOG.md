@@ -1,5 +1,22 @@
 # @provablehq/shield-swap-sdk
 
+## 0.11.1
+
+### Patch Changes
+
+- 3d329de: Resolve claim program imports automatically from on-chain output tokens and simplify examples and agent tooling.
+- 3d329de: Add `quote` and `swap({ quote })` for API-estimated single- and multi-hop swaps. Preserve the exact quoted minimum output, validate route/network/freshness, and expose the handoff through agent/MCP tools and the CLI. Keep existing manual swap and `planSwap` calls compatible.
+
+  Make the existing `client.api.confirmAirdrop` also wait for the faucet transaction records when the outer client has a record scanner; retain job-only confirmation without one.
+
+  Accept decimal-string quote inputs in token units, resolving decimals inside quote while retaining bigint raw-unit inputs. The agent/MCP quote tool accepts decimal token amounts and returns raw integer-string quote amounts.
+
+- 3d329de: Require Provable SDK 0.11.11 and align devnode transaction building with its 21 consensus versions.
+- 3d329de: Include a standalone first-swap example in the package. The example creates and funds a testnet account, swaps USDCx for ETH, retains claim recovery state, and includes installation and recovery instructions.
+- 3d329de: Export swapFileStore as a Node-only alias of fileBlindedIdentityStore and use it in the examples.
+- 3d329de: Add waitForSwapOutput to confirm the request and poll chain output readiness with configurable timing and simplify the first-swap example.
+  - @provablehq/veil-core@0.11.1
+
 ## 0.11.0
 
 ### Minor Changes

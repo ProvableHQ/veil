@@ -1,5 +1,13 @@
 # @provablehq/aleo-bridge-sdk
 
+## 0.11.1
+
+### Patch Changes
+
+- 3d329de: Ship runnable bridge examples and an agent guide with resolvable package paths.
+- 3d329de: Require Provable SDK 0.11.11 and align devnode transaction building with its 21 consensus versions.
+  - @provablehq/veil-core@0.11.1
+
 ## 0.11.0
 
 The package now versions in lockstep with the `@provablehq/veil-*` packages
