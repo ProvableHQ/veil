@@ -563,10 +563,10 @@ default, so the two swaps below cannot collide even with no configuration — bu
 that store dies with the process, so name a file one for anything long-running:
 
 ```ts
-import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
+import { swapFileStore } from '@provablehq/shield-swap-sdk/node'
 
 const client = walletClient.extend(
-  shieldSwapActions({ api: {}, blindedIdentities: fileBlindedIdentityStore('.veil/blinded.json') }),
+  shieldSwapActions({ api: {}, blindedIdentities: swapFileStore('.veil/blinded.json') }),
 )
 
 // Nothing else to do — these two cannot collide on an identity.
@@ -575,6 +575,9 @@ const [a, b] = await Promise.all([
   client.swap({ poolKey: poolB, tokenInId: eth, amountIn, imports }),
 ])
 ```
+
+`swapFileStore` is an alias of `fileBlindedIdentityStore`; the existing export
+and saved file format remain supported.
 
 Reservations serialize, so each swap gets its own counter, and each is written
 before its transaction is submitted — which is what keeps an unconfirmed swap from

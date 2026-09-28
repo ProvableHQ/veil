@@ -49,7 +49,7 @@ result. Without a scanner it confirms only the faucet job. Rejected or failed
 token transfers remain visible in `drop.job.results`. One token record must
 cover the input amount.
 
-`fileBlindedIdentityStore` saves claim information in `<account-address>.json`.
+`swapFileStore` saves claim information in `<account-address>.json`.
 Keep that file and the private key for recovery, and keep both out of source
 control. The example adds no other local storage.
 

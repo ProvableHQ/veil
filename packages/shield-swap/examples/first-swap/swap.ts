@@ -2,7 +2,7 @@
 import { writeFile } from 'node:fs/promises'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
-import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
+import { swapFileStore } from '@provablehq/shield-swap-sdk/node'
 
 // Create an account or use an existing key. Retain a generated key for recovery.
 const aleo = await loadNetwork('testnet')
@@ -18,7 +18,7 @@ const client = walletClient.extend(shieldSwapActions({
   // Enable the DEX API using this client's network defaults for quotes and the faucet.
   api: {},
   // Persist swap data to disk across process restarts and multiple processes.
-  blindedIdentities: fileBlindedIdentityStore(`${account.address}.json`),
+  blindedIdentities: swapFileStore(`${account.address}.json`),
 }))
 
 // Authenticate and wait for the faucet records to arrive in the configured scanner.

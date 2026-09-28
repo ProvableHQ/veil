@@ -134,7 +134,7 @@ import { ApiClient, authenticateWithAccount, defaultApiUrl, type ApiClientOption
  *   `claimSwapOutput`. Defaults to a per-client in-memory store, so concurrent
  *   swaps through one client are safe out of the box; that store is lost on
  *   restart, which costs a chain rescan for the next counter and forgets any
- *   unclaimed swap, so pass `fileBlindedIdentityStore` from
+ *   unclaimed swap, so pass `swapFileStore` from
  *   `@provablehq/shield-swap-sdk/node` for anything long-running. Ignored by
  *   wallet accounts, which derive identities the client never sees. A per-call
  *   `blindedIdentities: undefined` opts that call out of tracking entirely.

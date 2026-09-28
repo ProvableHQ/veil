@@ -74,7 +74,7 @@ transfers directly into code. A local-key integration builds the client once:
 ```ts
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
-import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
+import { swapFileStore } from '@provablehq/shield-swap-sdk/node'
 
 // The WASM binaries are per network, so the SDK is loaded for one and the
 // account, prover, and scanner all come off that handle. The node, delegated
@@ -86,7 +86,7 @@ const { walletClient } = aleo.createAleoClient({ privateKey })
 const client = walletClient.extend(
   // The identity store MUST persist — see the rule above. A file-backed store is
   // what makes a crash between a swap and its claim recoverable.
-  shieldSwapActions({ api: {}, blindedIdentities: fileBlindedIdentityStore('./blinded.json') }),
+  shieldSwapActions({ api: {}, blindedIdentities: swapFileStore('./blinded.json') }),
 )
 await client.authenticateShieldSwap()
 ```
