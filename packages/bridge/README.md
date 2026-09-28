@@ -371,21 +371,25 @@ current proof after the deployed freeze-list tree is populated.
 
 ## Complete examples
 
-The [bridge tutorial](../../examples/bridge/README.md) explains configuration,
+The packaged [agent guide](./skills/SKILL.md) explains how to discover and run
+examples from an installed SDK. Resolve it with
+`require.resolve('@provablehq/aleo-bridge-sdk/skills/SKILL.md')`.
+
+The [bridge tutorial](./examples/README.md) explains configuration,
 safe read-only runs, mainnet authorization, checkpoints, and each provider's
 observable completion boundary.
 
 | Transfer | Example |
 | --- | --- |
-| Ethereum ETH → Aleo ETH | [`eth-to-aleo.ts`](../../examples/bridge/eth-to-aleo.ts) |
-| Ethereum WBTC → Aleo WBTC | [`wbtc-to-aleo.ts`](../../examples/bridge/wbtc-to-aleo.ts) |
-| Aleo ETH → Ethereum ETH | [`eth-to-ethereum.ts`](../../examples/bridge/eth-to-ethereum.ts) |
-| Aleo WBTC → Ethereum WBTC | [`wbtc-to-ethereum.ts`](../../examples/bridge/wbtc-to-ethereum.ts) |
-| Aleo USDT → Ethereum USDT | [`usdt-to-ethereum.ts`](../../examples/bridge/usdt-to-ethereum.ts) |
-| Solana SOL → Aleo SOL | [`sol-to-aleo.ts`](../../examples/bridge/sol-to-aleo.ts) |
-| Aleo SOL → Solana SOL | [`sol-to-solana.ts`](../../examples/bridge/sol-to-solana.ts) |
-| Ethereum USDC → Aleo USDCx | [`usdc-to-usdcx.ts`](../../examples/bridge/usdc-to-usdcx.ts) |
-| Aleo USDCx → Ethereum USDC | [`usdcx-to-usdc.ts`](../../examples/bridge/usdcx-to-usdc.ts) |
+| Ethereum ETH → Aleo ETH | [`eth-to-aleo.ts`](./examples/eth-to-aleo.ts) |
+| Ethereum WBTC → Aleo WBTC | [`wbtc-to-aleo.ts`](./examples/wbtc-to-aleo.ts) |
+| Aleo ETH → Ethereum ETH | [`eth-to-ethereum.ts`](./examples/eth-to-ethereum.ts) |
+| Aleo WBTC → Ethereum WBTC | [`wbtc-to-ethereum.ts`](./examples/wbtc-to-ethereum.ts) |
+| Aleo USDT → Ethereum USDT | [`usdt-to-ethereum.ts`](./examples/usdt-to-ethereum.ts) |
+| Solana SOL → Aleo SOL | [`sol-to-aleo.ts`](./examples/sol-to-aleo.ts) |
+| Aleo SOL → Solana SOL | [`sol-to-solana.ts`](./examples/sol-to-solana.ts) |
+| Ethereum USDC → Aleo USDCx | [`usdc-to-usdcx.ts`](./examples/usdc-to-usdcx.ts) |
+| Aleo USDCx → Ethereum USDC | [`usdcx-to-usdc.ts`](./examples/usdcx-to-usdc.ts) |
 
 Each script quotes mainnet state and exits without submitting by default. The
 script prints the exact acknowledgement required to authorize real funds.
