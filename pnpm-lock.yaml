@@ -12,8 +12,8 @@ importers:
         specifier: ^2.31.0
         version: 2.31.0(@types/node@25.5.0)
       '@provablehq/aleo-devnode':
-        specifier: ^0.2.4
-        version: 0.2.4
+        specifier: ^0.2.6
+        version: 0.2.6
       '@provablehq/sdk':
         specifier: ^0.11.11
         version: 0.11.11
@@ -782,33 +782,33 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
-  '@provablehq/aleo-devnode-darwin-arm64@0.2.4':
-    resolution: {integrity: sha512-oEP9ChX3oPlTBIEEVt0fHPi8mzx359DS+8ZPXh1s/c81J542FB2J13rmtkmmhRmYlmfvh+D2p+EhMvquY+B72g==}
+  '@provablehq/aleo-devnode-darwin-arm64@0.2.6':
+    resolution: {integrity: sha512-eNfy03U9N8HTRVxy9Im+O3+O2647bz9mLkDHLoagusEPL0lUrgrLsQqQni0lVv/d1IbVJvf6+dxtKTAWW4zKpg==}
     cpu: [arm64]
     os: [darwin]
 
-  '@provablehq/aleo-devnode-darwin-x64@0.2.4':
-    resolution: {integrity: sha512-S41MdLuqYyKeIQfUbJ3dTo78T4ErMSy0YQfyAxC+MA818+2PfRA6oiz9mKUqLZQaWgEF5JFiO58SyWyvQTiWCQ==}
+  '@provablehq/aleo-devnode-darwin-x64@0.2.6':
+    resolution: {integrity: sha512-Rfm1Y7Zmg1idHmqR1KBoALjbrsfXH3Jo8uHi1KgzIbchOk9T5KGCvQQBDn9fzDzOzwCqPbVFfpmQ4YhU9ngaNA==}
     cpu: [x64]
     os: [darwin]
 
-  '@provablehq/aleo-devnode-linux-arm64@0.2.4':
-    resolution: {integrity: sha512-eq4sXcCk+tnFklzxoUSiY43MHGgkgPj25q8lRgSBuaHeOLfMxN80XMZ3qgMtqEJPt8iYnJaUaPoJk7TSct/2QA==}
+  '@provablehq/aleo-devnode-linux-arm64@0.2.6':
+    resolution: {integrity: sha512-k+Y62eLXfSjY7NPv08/42A5WdA2Wz1CyXdqc/c4pqAu63nIRLbuPnN97eZdEcxIADGmrHd3f8m6jwJdkI1+d3w==}
     cpu: [arm64]
     os: [linux]
 
-  '@provablehq/aleo-devnode-linux-x64@0.2.4':
-    resolution: {integrity: sha512-izQUP4dKgW4RVhodugnEFR/IlnB2C/p5xEVoOaKGF4QocxPwiBUc7tQhC4x2CfkCXrEiy0cO5XBZYnTkWrPIXg==}
+  '@provablehq/aleo-devnode-linux-x64@0.2.6':
+    resolution: {integrity: sha512-FQEWzj89JSz6MyrfWFeJ9u8sbGbtPQ0zBWzGrUlKWnizZC3wyI+FHMDUQBl2mej4HIjv0/7h8eBRPHU4G4mu6A==}
     cpu: [x64]
     os: [linux]
 
-  '@provablehq/aleo-devnode-win32-x64@0.2.4':
-    resolution: {integrity: sha512-SmpLYcTn1wEAWsPrxyhdPfmkJ6zHmgusc01bwf5E2T0/Efzzc34czxPTFWzeO2OlDvyQeEJBA7MobsJ/AvJtJA==}
+  '@provablehq/aleo-devnode-win32-x64@0.2.6':
+    resolution: {integrity: sha512-XJK6t/CbnPsfg8Wqjwf+jS4F6g98GV2ZQUHFOfxaXeV4pGR0N/9Ff5cWn68zteoqowWT6ArZr98z7o3DGNaO5Q==}
     cpu: [x64]
     os: [win32]
 
-  '@provablehq/aleo-devnode@0.2.4':
-    resolution: {integrity: sha512-vWvnCBPxG1T3PCIAM6y8+goz0RsHeTMfJtEUWrDloihbQVpz2Zxmv7MBIxo/ZskFqkwU5LZfxizwiLyIVCx6aQ==}
+  '@provablehq/aleo-devnode@0.2.6':
+    resolution: {integrity: sha512-Y9fGGdoF4h0mmKNBgkqhDwQYrjCc/8JwUtinR2s9AAuRyogk+krAagNPKxsBs76jCHGiLH3jpF4ksslFNWyh7g==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -3063,28 +3063,28 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@provablehq/aleo-devnode-darwin-arm64@0.2.4':
+  '@provablehq/aleo-devnode-darwin-arm64@0.2.6':
     optional: true
 
-  '@provablehq/aleo-devnode-darwin-x64@0.2.4':
+  '@provablehq/aleo-devnode-darwin-x64@0.2.6':
     optional: true
 
-  '@provablehq/aleo-devnode-linux-arm64@0.2.4':
+  '@provablehq/aleo-devnode-linux-arm64@0.2.6':
     optional: true
 
-  '@provablehq/aleo-devnode-linux-x64@0.2.4':
+  '@provablehq/aleo-devnode-linux-x64@0.2.6':
     optional: true
 
-  '@provablehq/aleo-devnode-win32-x64@0.2.4':
+  '@provablehq/aleo-devnode-win32-x64@0.2.6':
     optional: true
 
-  '@provablehq/aleo-devnode@0.2.4':
+  '@provablehq/aleo-devnode@0.2.6':
     optionalDependencies:
-      '@provablehq/aleo-devnode-darwin-arm64': 0.2.4
-      '@provablehq/aleo-devnode-darwin-x64': 0.2.4
-      '@provablehq/aleo-devnode-linux-arm64': 0.2.4
-      '@provablehq/aleo-devnode-linux-x64': 0.2.4
-      '@provablehq/aleo-devnode-win32-x64': 0.2.4
+      '@provablehq/aleo-devnode-darwin-arm64': 0.2.6
+      '@provablehq/aleo-devnode-darwin-x64': 0.2.6
+      '@provablehq/aleo-devnode-linux-arm64': 0.2.6
+      '@provablehq/aleo-devnode-linux-x64': 0.2.6
+      '@provablehq/aleo-devnode-win32-x64': 0.2.6
 
   '@provablehq/aleo-types@1.0.0': {}
 
