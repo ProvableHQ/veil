@@ -412,6 +412,18 @@ it throws `SwapOutputNotFinalizedError`, the request transaction hasn't
 finalized yet; retry after a few blocks. The same error after a successful claim
 means the output was already collected — claiming consumes the on-chain entry.
 
+After transaction confirmation, wait for the output mapping to become readable:
+
+```ts
+await client.waitForSwapOutput({ handle })
+const claim = await client.claimSwapOutput({ handle })
+```
+
+`waitForSwapOutput` polls chain state every three seconds for up to two minutes.
+Override `timeout` and `pollingInterval` in milliseconds when needed. It never
+submits a transaction. A timeout can also mean the output was already claimed;
+recover the existing handle instead of starting another trade.
+
 `claimSwapOutput` resolves required token program sources from chain automatically;
 `imports` is an optional override for callers with cached sources. The handle
 does not need to contain program sources.

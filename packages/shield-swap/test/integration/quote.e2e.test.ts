@@ -97,11 +97,7 @@ describe.runIf(RUN)('quote → swap → claim against live testnet', () => {
           expect(handle.poolKey).toBe(quote.hops[0]!.poolKey)
         }
 
-        let output = await client.getSwapOutput({ swapId: handle.swapId!, program: quote.program })
-        for (let attempt = 0; !output && attempt < 40; attempt++) {
-          await new Promise((resolve) => setTimeout(resolve, 3000))
-          output = await client.getSwapOutput({ swapId: handle.swapId!, program: quote.program })
-        }
+        const output = await client.waitForSwapOutput({ handle })
         expect(output, 'swap must finalize before claiming').not.toBeNull()
         expect(output!.token_out).toBe(quote.to.id)
         expect(output!.amount_out).toBeGreaterThanOrEqual(quote.minOut)

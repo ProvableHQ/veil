@@ -1,3 +1,4 @@
+import { waitForSwapOutput, type WaitForSwapOutputParameters, type WaitForSwapOutputReturnType } from '../actions/reads/waitForSwapOutput.js'
 import type { Client } from '@provablehq/veil-core'
 import { getPool, type GetPoolParameters, type GetPoolReturnType } from '../actions/reads/getPool.js'
 import { getSlot, type GetSlotParameters, type GetSlotReturnType } from '../actions/reads/getSlot.js'
@@ -192,12 +193,15 @@ export type ShieldSwapActionsConfig = {
  *   long-lived `apiToken`. Hits the network (challenge + verify) and signs.
  *   Returns the session JWT for callers that persist it; rejects when the
  *   client has no account.
+ * @property waitForSwapOutput Polls the handle's on-chain output until readable
+ *   or the polling timeout expires. Never signs or submits a transaction.
  * @property authenticateApi Deprecated alias for
  *   {@link ShieldSwapActions.authenticateShieldSwap}.
  * @property api The off-chain DEX API client; throws on first use when no
  *   `api` was configured.
  */
 export type ShieldSwapActions = {
+  waitForSwapOutput: (params: WaitForSwapOutputParameters) => Promise<WaitForSwapOutputReturnType>
   getPool: (params: GetPoolParameters) => Promise<GetPoolReturnType>
   getSlot: (params: GetSlotParameters) => Promise<GetSlotReturnType>
   getSwapOutput: (params: GetSwapOutputParameters) => Promise<GetSwapOutputReturnType>
@@ -363,6 +367,7 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     return {
       getPool: (p) => getPool(client, withProgram(p)),
       getSlot: (p) => getSlot(client, withProgram(p)),
+      waitForSwapOutput: (p) => waitForSwapOutput(client, p),
       getSwapOutput: (p) => getSwapOutput(client, withProgram(p)),
       getPosition: (p) => getPosition(client, withProgram(p)),
       getOwnedPositions: (p) => getOwnedPositions(client, withProgram(p ?? {})),

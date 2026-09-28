@@ -32,10 +32,6 @@ const handle = await client.swap({ quote })
 
 // Wait for the swap to succeed, then submit the claim once.
 await waitForConfirmation(client, handle.transactionId)
-// Mapping reads can briefly lag transaction confirmation on the hosted node.
-for (let attempt = 0; !(await client.getSwapOutput({ swapId: handle.swapId!, program: quote.program })); attempt++) {
-  if (attempt >= 39) throw new Error('Swap output is not readable yet; recover this handle before starting another trade')
-  await new Promise((resolve) => setTimeout(resolve, 3_000))
-}
+await client.waitForSwapOutput({ handle })
 const claim = await client.claimSwapOutput({ handle })
 if (claim.amountOut <= 0n) throw new Error('The claim returned no ETH')

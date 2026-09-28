@@ -190,6 +190,7 @@ describe.runIf(RUN)('e2e: shield_swap lifecycle on devnode (SDK write actions)',
       const chainAmountOut = BigInt(output.match(/amount_out:\s*(\d+)u128/)![1]!)
       expect(chainAmountOut).toBeGreaterThan(0n)
 
+      await dex.waitForSwapOutput({ handle })
       const claim = await dex.claimSwapOutput({ handle })
       expect(claim.transactionId).toMatch(/^at1/)
       expect(claim.amountOut).toBe(chainAmountOut)
@@ -422,6 +423,7 @@ describe.runIf(RUN)('e2e: shield_swap lifecycle on devnode (SDK write actions)',
       const chainAmountOut = BigInt(output.match(/amount_out:\s*(\d+)u128/)![1]!)
       expect(chainAmountOut).toBeGreaterThan(0n)
 
+      await dex.waitForSwapOutput({ handle })
       const claim = await dex.claimSwapOutput({ handle, proofs: ctx.proofs })
       expect(claim.transactionId).toMatch(/^at1/)
       expect(claim.amountOut).toBe(chainAmountOut)

@@ -10,6 +10,7 @@ export {
   type GetSwapOutputParameters,
   type GetSwapOutputReturnType,
 } from './actions/reads/getSwapOutput.js'
+export { waitForSwapOutput, type WaitForSwapOutputParameters, type WaitForSwapOutputReturnType } from './actions/reads/waitForSwapOutput.js'
 export {
   getPublicBalances,
   type GetPublicBalancesParameters,
