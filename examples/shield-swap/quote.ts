@@ -1,15 +1,10 @@
 /**
  * Quoting a swap without submitting one.
  *
- * `planSwap` does everything a swap needs except sign. It resolves both tokens
- * from whatever they were named, asks the API for a route, checks on chain that
- * every hop is tradeable and has liquidity, gathers the program sources the
- * transaction will need, and turns the quote into a slippage floor.
- *
- * That makes it the safe first move on any trade: the plan it returns is exactly
- * what would execute, and producing it spends nothing. Reading a plan before
- * submitting is the difference between a trade that was chosen and one that was
- * hoped for.
+ * `quote` resolves token metadata and trusts the API's route and output estimate.
+ * It converts decimal amounts precisely and calculates the minimum output.
+ * The result can be passed to `client.swap({ quote })` for either 1–3 hops.
+ * Quote creation does not read pool state, fetch imports, sign or submit.
  *
  * The route endpoint is bearer-gated, so this needs an authenticated session —
  * but it never submits a transaction.
@@ -24,7 +19,7 @@ export async function quote() {
   // which are needed to turn a human amount into what the AMM accounts in.
   const from = await client.tokenData('USDCx')
 
-  const plan = await client.planSwap({
+  const offer = await client.quote({
     from: from.id,
     to: 'ETH',
     // Every amount in the SDK is raw base units. `parseUnits` applies the
@@ -36,21 +31,10 @@ export async function quote() {
     slippageBps: 50,
   })
 
-  console.log(`sell  ${formatUnits(plan.amountIn, plan.from.decimals)} ${plan.from.symbol}`)
-  console.log(`buy   ${formatUnits(plan.expectedOut, plan.to.decimals)} ${plan.to.symbol}`)
+  console.log(`sell  ${formatUnits(offer.amountIn, offer.from.decimals)} ${offer.from.symbol}`)
+  console.log(`buy   ${formatUnits(offer.expectedOut, offer.to.decimals)} ${offer.to.symbol}`)
 
-  // A quote is informational, and the API does not always have one. When it does
-  // not, `minOut` is zero — which means the swap carries no floor and would
-  // accept any fill at all. That is a decision to make deliberately, so the plan
-  // reports the absence rather than substituting a floor of its own.
-  //
-  // Passing no `expectedOut` to `swap()` at all is the other option: the action
-  // then derives a floor from the pool's live sqrt price. That one is chain-read
-  // rather than quoted, but it ignores price impact and fees, so it sits above
-  // what a large trade can actually fill.
-  console.log(`floor ${plan.minOut > 0n ? formatUnits(plan.minOut, plan.to.decimals) : 'none — unquoted'}`)
-
-  // One pool key is a direct swap; several means the route bridges through an
-  // intermediate token, and `plan.multiHop` says which action to call.
-  console.log(`route ${plan.poolKeys.join(' → ')}`)
+  // Missing estimates and zero floors reject. Accepted quotes expire after 60 seconds.
+  console.log(`floor ${formatUnits(offer.minOut, offer.to.decimals)}`)
+  console.log(`route ${offer.hops.map((hop) => hop.poolKey).join(' → ')}`)
 }

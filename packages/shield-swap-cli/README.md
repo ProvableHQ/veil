@@ -176,3 +176,8 @@ it like a wallet file. Set `SHIELD_SWAP_STATE_DIR` to keep it somewhere else.
 Nothing is shared between testnet and mainnet — not the key, not the API grant,
 and above all not the blinded identity store, whose reservations are only
 meaningful against the chain they were checked on.
+
+`swap` and `swap-concurrent` obtain API-backed quotes and pass them directly to
+execution. The printed minimum is the submitted minimum, for 1–3-hop routes.
+Missing output estimates and expired quotes fail before submission; rerun to
+obtain fresh terms. Quote lifetime is 60 seconds from the request start.

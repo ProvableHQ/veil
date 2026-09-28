@@ -20,7 +20,6 @@ import {
   createWalletClient,
   fallback,
   http,
-  getProgram,
   getTransaction,
   extractTransitions,
   type InputRequest,
@@ -64,36 +63,28 @@ export async function shieldPrivateSwap(amountIn = 1_000_000n) {
   const { data: pools } = await client.api.getPools()
   const pool = pools[0]
   if (!pool) throw new Error('Shield Swap has no pools to trade against yet.')
-  const t0 = pool.token0_info
-  const t1 = pool.token1_info
-  if (!t0?.wrapper_program || !t1?.wrapper_program) {
-    throw new Error('Pool token metadata is not indexed yet — try again shortly.')
-  }
+  // 4. Authenticate, quote the trade, and prepare sources for the later claim.
+  await client.authenticateShieldSwap()
+  const quote = await client.quote({ from: pool.token0, to: pool.token1, amountIn, slippageBps: 100 })
+  const ids = new Set(quote.hops.flatMap((hop) => [hop.tokenInId, hop.tokenOutId]))
+  const tokens = await Promise.all([...ids].map((id) => client.tokenData(id)))
+  const imports = await client.resolveDexImports({
+    tokenPrograms: tokens.flatMap((token) => [token.ammTokenProgram, token.underlyingProgram].filter((p): p is string => !!p)),
+    program: quote.program,
+  })
 
-  // 4. Preload the token program sources the swap dispatches into.
-  const imports = {
-    [t0.wrapper_program]: await getProgram(client, { programId: t0.wrapper_program }),
-    [t1.wrapper_program]: await getProgram(client, { programId: t1.wrapper_program }),
-  }
-
-  // 5. Phase 1 — request the swap. On the wallet path the records live in the
-  //    wallet, so hand it a `record` InputRequest (it selects one covering the
-  //    amount) rather than a program id, and it fills the blinding slots itself.
-  //    The returned handle therefore comes back WITHOUT swapId / blindedAddress.
+  // 5. The wallet supplies a record of the underlying asset for wrapped inputs.
+  //    It also derives the blinded identity; the returned handle may lack swapId.
+  const recordProgram = quote.from.underlyingProgram ?? quote.from.ammTokenProgram
+  if (!recordProgram) throw new Error('Input token program is not indexed yet')
+  const isCredits = recordProgram === 'credits.aleo'
   const tokenRecord: InputRequest = {
     type: 'record',
-    program: t0.wrapper_program,
-    recordname: 'Token',
-    filters: { amount: { gte: `${amountIn}u128` } },
+    program: recordProgram,
+    recordname: isCredits ? 'credits' : 'Token',
+    filters: { [isCredits ? 'microcredits' : 'amount']: { gte: `${amountIn}${isCredits ? 'u64' : 'u128'}` } },
   }
-  const handle = await client.swap({
-    poolKey: pool.key,
-    tokenInId: pool.token0,
-    amountIn,
-    slippageBps: 100, // 1% spot-price floor; pass expectedOut from a real quote for larger trades
-    imports,
-    tokenRecord,
-  })
+  const handle = await client.swap({ quote, imports, tokenRecord })
 
   // 6. Recover swapId from the confirmed request transaction — the wallet
   //    filled the blinding slots, so the handle lacks it. swapId is the swap

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { ApiClient, ApiError, DEFAULT_API_URL } from '../../src/api/client.js'
+import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
+import type { Client } from '@provablehq/veil-core'
 
 function fetchMock(responses: Array<{ status?: number; json: unknown }>) {
   const calls: Array<{ url: string; init: RequestInit }> = []
@@ -18,6 +20,59 @@ const RESULTS = [
 ]
 
 describe('ApiClient.confirmAirdrop', () => {
+  function decorated(scan?: ReturnType<typeof vi.fn>) {
+    const api = new ApiClient({ apiToken: 'ss_test' })
+    vi.spyOn(api, 'airdrop').mockResolvedValue({ job_id: 'job-records', status: 'running' })
+    vi.spyOn(api, 'getAirdropStatus').mockResolvedValue({ status: 'complete', total: 2, results: RESULTS })
+    vi.spyOn(api, 'getTokens').mockResolvedValue({ data: [{ amm_token_program: 'test_arc20_eth.aleo', underlying_program: 'underlying.aleo' }] } as never)
+    const client = { account: { type: 'local', address: 'aleo1me' }, transport: { config: { network: 'testnet' } }, ...(scan ? { recordProvider: { requestRecords: scan } } : {}) } as unknown as Client
+    return { api, actions: shieldSwapActions({ api })(client) }
+  }
+
+  it('waits for the faucet transaction record, not an older balance, through the outer scanner', async () => {
+    const scan = vi.fn().mockResolvedValueOnce([{ transactionId: 'at1old', programName: 'underlying.aleo', recordPlaintext: 'old' }])
+      .mockResolvedValue([{ transactionId: 'at1a', programName: 'underlying.aleo', recordPlaintext: 'new' }])
+    const { actions } = decorated(scan)
+    await expect(actions.api.confirmAirdrop('aleo1me', { pollIntervalMs: 1 })).resolves.toMatchObject({ status: 'settled' })
+    expect(scan).toHaveBeenCalledTimes(2)
+    expect(scan).toHaveBeenCalledWith(expect.objectContaining({ program: 'underlying.aleo', statusFilter: 'unspent' }))
+  })
+
+  it('times out instead of reporting settled when accepted records never arrive', async () => {
+    const { actions } = decorated(vi.fn().mockResolvedValue([]))
+    await expect(actions.api.confirmAirdrop('aleo1me', { pollIntervalMs: 1, timeoutMs: 0 })).rejects.toThrow(/records.*job-records/)
+  })
+
+  it('preserves job-only confirmation when the outer client has no scanner', async () => {
+    const { actions, api } = decorated()
+    await expect(actions.api.confirmAirdrop('aleo1me', { pollIntervalMs: 1 })).resolves.toMatchObject({ status: 'settled' })
+    expect(api.getTokens).not.toHaveBeenCalled()
+  })
+
+  it('rejects a mismatched scanner account before requesting tokens', async () => {
+    const { actions, api } = decorated(vi.fn())
+    await expect(actions.api.confirmAirdrop('aleo1someoneelse')).rejects.toThrow(/recipient.*scanner account/)
+    expect(api.airdrop).not.toHaveBeenCalled()
+  })
+
+  it('propagates scanner failures instead of claiming record arrival', async () => {
+    const { actions } = decorated(vi.fn().mockRejectedValue(new Error('scanner unavailable')))
+    await expect(actions.api.confirmAirdrop('aleo1me')).rejects.toThrow('scanner unavailable')
+  })
+
+  it('finds a faucet record beyond the first scanner page', async () => {
+    const scan = vi.fn().mockResolvedValueOnce(Array.from({ length: 1000 }, () => ({ transactionId: 'at1old' })))
+      .mockResolvedValue([{ transactionId: 'at1a', recordPlaintext: 'new' }])
+    const { actions } = decorated(scan)
+    await actions.api.confirmAirdrop('aleo1me')
+    expect(scan).toHaveBeenNthCalledWith(2, expect.objectContaining({ filter: { page: 1, resultsPerPage: 1000 } }))
+  })
+
+  it('matches scanner transaction IDs with database padding', async () => {
+    const { actions } = decorated(vi.fn().mockResolvedValue([{ transactionId: 'at1a    ', recordPlaintext: 'new' }]))
+    await expect(actions.api.confirmAirdrop('aleo1me', { pollIntervalMs: 1, timeoutMs: 10 })).resolves.toMatchObject({ status: 'settled' })
+  })
+
   it('starts the job, polls while running, and returns the settled job', async () => {
     const { impl, calls } = fetchMock([
       { json: { data: { job_id: 'job-1', status: 'running' } } },

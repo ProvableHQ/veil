@@ -22,12 +22,26 @@ jobs:
         working-directory: packages/shield-swap/examples/first-swap
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: packages/shield-swap/examples/first-swap/package-lock.json
+      - name: Build and pack the checkout SDK for the example
+        working-directory: .
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @provablehq/shield-swap-sdk... --filter @provablehq/veil-aleo-sdk... build
+          mkdir -p "$RUNNER_TEMP/first-swap-packages"
+          pnpm --filter @provablehq/veil-core pack --pack-destination "$RUNNER_TEMP/first-swap-packages"
+          pnpm --filter @provablehq/veil-aleo-sdk pack --pack-destination "$RUNNER_TEMP/first-swap-packages"
+          pnpm --filter @provablehq/shield-swap-sdk pack --pack-destination "$RUNNER_TEMP/first-swap-packages"
       - run: npm ci
+      - name: Install the checkout SDK without changing dependency pins
+        run: npm install --no-save --package-lock=false "$RUNNER_TEMP/first-swap-packages/"*.tgz
       - run: npm run typecheck
       - name: Verify examples in the npm package
         working-directory: .

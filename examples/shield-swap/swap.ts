@@ -20,32 +20,19 @@ import { setupClient } from './setup-client.js'
 export async function swap() {
   const { client } = await setupClient({ privateKey: process.env.VEIL_E2E_PRIVATE_KEY })
 
-  // Plan first. Everything the two calls below need — the route, the floor, the
-  // program sources — comes out of this one read, and none of it is submitted.
-  // See quote.ts for what the plan contains.
+  // Quote first; swap dispatches to the appropriate 1–3-hop action automatically.
   const from = await client.tokenData('USDCx')
-  const plan = await client.planSwap({ from: from.id, to: 'ETH', amountIn: parseUnits('1.5', from.decimals) })
+  const offer = await client.quote({ from: from.id, to: 'ETH', amountIn: parseUnits('1.5', from.decimals) })
 
-  // A route through one pool is `swap`; a route that bridges through an
-  // intermediate token is `swapMultiHop`. The plan already decided which, so the
-  // only thing to do here is call the matching action with it.
-  const handle = plan.multiHop
-    ? await client.swapMultiHop({
-        poolKeys: plan.poolKeys,
-        tokenInId: plan.from.id,
-        amountIn: plan.amountIn,
-        expectedOut: plan.expectedOut,
-        slippageBps: plan.slippageBps,
-        imports: plan.imports,
-      })
-    : await client.swap({
-        poolKey: plan.poolKeys[0]!,
-        tokenInId: plan.from.id,
-        amountIn: plan.amountIn,
-        expectedOut: plan.expectedOut,
-        slippageBps: plan.slippageBps,
-        imports: plan.imports,
-      })
+  // Resolve sources once so both the swap and its later claim can reuse them.
+  // Without an explicit map, swap({ quote }) resolves these during preparation.
+  const tokenIds = new Set(offer.hops.flatMap((hop) => [hop.tokenInId, hop.tokenOutId]))
+  const tokens = await Promise.all([...tokenIds].map((id) => client.tokenData(id)))
+  const imports = await client.resolveDexImports({
+    tokenPrograms: tokens.flatMap((token) => token.ammTokenProgram ? [token.ammTokenProgram] : []),
+    program: offer.program,
+  })
+  const handle = await client.swap({ quote: offer, imports })
 
   // The blinded identity this pays out to was reserved and recorded before the
   // call returned, so the proceeds are locatable even if this process stops
@@ -58,8 +45,8 @@ export async function swap() {
   // lets anything else through.
   for (let attempt = 0; attempt < 20; attempt++) {
     try {
-      const claim = await client.claimSwapOutput({ handle, imports: plan.imports })
-      console.log(`received ${formatUnits(claim.amountOut, plan.to.decimals)} ${plan.to.symbol}`)
+      const claim = await client.claimSwapOutput({ handle, imports })
+      console.log(`received ${formatUnits(claim.amountOut, offer.to.decimals)} ${offer.to.symbol}`)
       return
     } catch (error) {
       if (!(error instanceof SwapOutputNotFinalizedError)) throw error

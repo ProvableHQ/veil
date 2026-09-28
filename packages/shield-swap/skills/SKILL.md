@@ -187,7 +187,7 @@ funded account).
 
 - **Discover inputs, never invent them.** Pool keys, token ids, wrapper
   programs, and decimals come from `client.api.getPools()` /
-  `getTokens()`; quotes come from `client.api.getRoute()`; live pool state
+  `getTokens()`; executable quotes come from `client.quote()` (backed by `client.api.getRoute()`); live pool state
   comes from `client.getSlot()`. Field literals (`…field`) and addresses
   are opaque — copy them exactly.
 - **Amounts are raw base units** (`bigint`, u128) on the SDK side. Convert

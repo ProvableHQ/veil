@@ -401,16 +401,33 @@ export const createPoolSchema: AgentToolSchema = {
   },
 }
 
+/** Declares an API-backed quote whose JSON result is accepted by shield_swap_swap. */
+export const quoteSchema: AgentToolSchema = {
+  name: 'shield_swap_quote',
+  description: 'Quote a private swap using the DEX API route and output estimate. Returns a 60-second quote with raw integer-string amounts. Pass the complete result as quote to shield_swap_swap; handles 1–3 hops automatically. Does not submit a transaction.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      from: { type: 'string', description: 'Input token symbol or id.' },
+      to: { type: 'string', description: 'Output token symbol or id.' },
+      amountIn: { type: 'string', description: 'Positive input amount in raw base units (u128).' },
+      slippageBps: { type: 'integer', minimum: 0, maximum: 10000, description: 'Defaults to 50 (0.5%); a zero output floor is rejected.' },
+    },
+    required: ['from', 'to', 'amountIn'],
+  },
+}
+
 /** Declares the `shield_swap_swap` write tool — phase one of a private swap; returns the handle `shield_swap_claim` consumes (backed by `swap`). */
 export const swapSchema: AgentToolSchema = {
   name: 'shield_swap_swap',
   description:
     'Request a private swap (phase one). Returns a swap handle to pass to shield_swap_claim ' +
-    'once the request finalizes. Pass a quoted expectedOut (from shield_swap_get_route) so ' +
-    'slippage protection is meaningful.',
+    'once the request finalizes. Pass only quote (the complete shield_swap_quote result) for automatic 1–3-hop execution. ' +
+    'Alternatively supply all five manual fields: poolKey, tokenInId, amountIn, tokenInProgram, tokenOutProgram; expectedOut must be raw base units.',
   inputSchema: {
     type: 'object',
     properties: {
+      quote: { type: 'object', description: 'Complete shield_swap_quote result, unchanged. Amounts are raw integer strings. Mutually exclusive with all manual fields.' },
       poolKey: { type: 'string', description: 'Pool key field literal.' },
       tokenInId: { type: 'string', description: 'Token id being sold (field literal); one of the pool tokens.' },
       amountIn: { type: 'string', description: 'Amount to sell, raw base units (u128) as a string.' },
@@ -419,7 +436,7 @@ export const swapSchema: AgentToolSchema = {
       expectedOut: { type: 'string', description: 'Quoted output (u128 string) for slippage. Optional.' },
       slippageBps: { type: 'number', description: 'Slippage tolerance in basis points. Defaults to 50 (0.5%).' },
     },
-    required: ['poolKey', 'tokenInId', 'amountIn', 'tokenInProgram', 'tokenOutProgram'],
+
   },
 }
 
@@ -721,7 +738,7 @@ export const apiToolSchemas: AgentToolSchema[] = [
 ]
 
 /** Composed tools — require both a client and an ApiClient. */
-export const composedToolSchemas: AgentToolSchema[] = [getBalancesSchema]
+export const composedToolSchemas: AgentToolSchema[] = [getBalancesSchema, quoteSchema]
 
 /** Auth-flow tools — require a client (the signing account) and the API. */
 export const authToolSchemas: AgentToolSchema[] = [

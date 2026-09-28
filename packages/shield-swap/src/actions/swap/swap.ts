@@ -1,3 +1,6 @@
+import type { SwapQuote } from './quote.js'
+import { assertQuote, prepareQuote, executionQuote, assertExecutionQuote } from './internal.js'
+import { swapMultiHop, type MultiHopSwapHandle } from './swapMultiHop.js'
 import {
   executeContract,
   writeContract,
@@ -90,6 +93,35 @@ export type SwapParameters = {
   imports?: Record<string, string>
   program?: string
   routerProgram?: string
+}
+
+/**
+ * Executes a quote with account-specific inputs while preserving its trade terms.
+ * @property quote Quote returned by quote; fixes amount, route, network, program and output floor.
+ * @property tokenRecord Optional record override; required for wallet accounts, selected automatically for local accounts.
+ * @property proofs Optional freezelist proof provider; defaults to the empty-tree witness.
+ * @property imports Optional program-source map; defaults to resolving all route token programs and DEX imports.
+ * @property blindedIdentity Optional explicit identity; otherwise derived by the existing signer path.
+ * @property blindedIdentities Optional tracking store; defaults to the decorator's store when configured.
+ * @property deadlineOffsetBlocks Transaction lifetime from preparation height; defaults to 100 blocks, independent of quote expiry.
+ * @property nonce Optional u64 nonce; defaults to a random value.
+ * @property routerProgram Wrapped-input router override; defaults to shield_swap_router.aleo.
+ */
+export type SwapFromQuoteParameters = Pick<SwapParameters,
+  'tokenRecord' | 'proofs' | 'imports' | 'blindedIdentity' | 'blindedIdentities' |
+  'deadlineOffsetBlocks' | 'nonce' | 'routerProgram'
+> & {
+  quote: SwapQuote
+  poolKey?: never
+  poolKeys?: never
+  tokenInId?: never
+  amountIn?: never
+  expectedOut?: never
+  slippageBps?: never
+  program?: never
+  route?: never
+  sqrtPriceLimit?: never
+  sqrtPriceLimits?: never
 }
 
 /**
@@ -198,7 +230,37 @@ export type SwapReturnType = SwapHandle
  * // …await finalize, then:
  * // const out = await getSwapOutput(client, { swapId: handle.swapId! })
  */
-export async function swap(client: Client, params: SwapParameters): Promise<SwapReturnType> {
+export function swap(client: Client, params: SwapParameters): Promise<SwapReturnType>
+/**
+ * Submits a quoted single- or multi-hop swap without changing its minimum output.
+ * Checks freshness before and after preparation; quote expiry does not cancel
+ * proving already started. The contract separately enforces the block deadline.
+ * @param client Signing client on the quote's network.
+ * @param params Quote and optional execution inputs.
+ * @returns The existing single- or multi-hop handle consumed by claimSwapOutput.
+ * @throws When quote terms are invalid, expired or conflicting, or chain checks fail.
+ * @example
+ * const handle = await swap(client, { quote: offer })
+ */
+export function swap(client: Client, params: SwapFromQuoteParameters): Promise<SwapHandle | MultiHopSwapHandle>
+export async function swap(client: Client, params: SwapParameters | SwapFromQuoteParameters): Promise<SwapHandle | MultiHopSwapHandle> {
+  if ('quote' in params) {
+    for (const key of ['poolKey', 'poolKeys', 'tokenInId', 'amountIn', 'expectedOut', 'slippageBps', 'program', 'route', 'sqrtPriceLimit', 'sqrtPriceLimits']) {
+      if (key in params) throw new Error(`Cannot override ${key} when executing a quote`)
+    }
+    assertQuote(client, params.quote)
+    // Copy accepted terms before awaiting so caller mutation cannot alter the trade.
+    const q: SwapQuote = { ...params.quote, from: { ...params.quote.from }, to: { ...params.quote.to }, hops: params.quote.hops.map((hop) => ({ ...hop })) }
+    const { quote: _quote, ...options } = params
+    const imports = await prepareQuote(client, q, options.imports)
+    assertQuote(client, q)
+    // The existing resolvers apply slippage. Supplying the accepted floor with
+    // zero additional slippage preserves it exactly, including integer rounding.
+    const execution = { [executionQuote]: q, ...options, imports, tokenInId: q.from.id, amountIn: q.amountIn, expectedOut: q.minOut, slippageBps: 0, program: q.program }
+    return q.hops.length === 1
+      ? swap(client, { ...execution, poolKey: q.hops[0]!.poolKey })
+      : swapMultiHop(client, { ...execution, poolKeys: q.hops.map((hop) => hop.poolKey) })
+  }
   const program = params.program ?? SHIELD_SWAP
   const routerProgram = params.routerProgram ?? SHIELD_SWAP_ROUTER
 
@@ -302,6 +364,7 @@ export async function swap(client: Client, params: SwapParameters): Promise<Swap
       minAmount: params.amountIn,
     })
 
+    assertExecutionQuote(client, params)
     const result = route.wrapped
       ? await executeContract(client, {
           program: routerProgram,
@@ -361,6 +424,7 @@ export async function swap(client: Client, params: SwapParameters): Promise<Swap
     }).catch(() => undefined)
   }
 
+  assertExecutionQuote(client, params)
   const transactionId = await writeContract(client, {
     program: route.wrapped ? routerProgram : program,
     function: route.wrapped ? 'swap_from_wrapped' : 'swap',

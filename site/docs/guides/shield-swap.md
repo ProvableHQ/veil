@@ -170,26 +170,22 @@ const imports = {
 
 ## Quote, then swap
 
-Quote the trade first — the quote feeds the on-chain slippage check: the
-swap reverts if the output falls more than `slippageBps` below
-`expectedOut`. Omitting `expectedOut` falls back to a spot-price estimate,
-which ignores fees and price impact, so pass a real quote for anything
-beyond a tiny trade.
-
-The API's route estimate is a display decimal in the output token's units;
-`expectedOut` wants raw base units (u128), so scale by the token's decimals:
+`client.quote` resolves a 1–3-hop route and trusts the DEX API's output estimate.
+It converts the estimate to raw base units without floating-point rounding and
+calculates a minimum output. No pool or tick reads occur while quoting.
 
 ```ts
-const amountIn = 1_000_000n
-const route = await client.api.getRoute({
-  token_in: pool.token0,
-  token_out: pool.token1,
-  amount_in: amountIn,
+const quote = await client.quote({
+  from: 'USDCx',
+  to: 'ETH',
+  amountIn: 1_000_000n,
+  slippageBps: 50,
 })
-const expectedOut = BigInt(
-  Math.floor(Number(route.data.estimated_amount_out ?? 0) * 10 ** pool.token1_info.decimals),
-)
 ```
+
+The quote expires after 60 seconds. `swap({ quote })` checks its route pools on
+chain and submits exactly `quote.minOut`. Missing estimates and zero floors
+reject; request a new quote when one expires. Quotes do not reserve liquidity.
 
 [`swap`](/api/shield-swap/swap) submits the request — phase one. On the
 local-signer path the client auto-selects an unspent record covering
@@ -199,15 +195,8 @@ serializable object that is the key to claiming the output. Persist it if
 there is any chance the process dies before the claim.
 
 ```ts
-const handle = await client.swap({
-  poolKey: pool.key,
-  tokenInId: pool.token0,
-  amountIn,               // raw atomic amount, bigint
-  expectedOut,            // scaled to base units above
-  slippageBps: 50,        // 0.5%
-  tokenInProgram: pool.token0_info.wrapper_program,
-  imports,
-})
+const handle = await client.swap({ quote })
+// Wallet accounts additionally pass tokenRecord.
 ```
 
 A wallet never exposes its records, so the wallet path drops

@@ -5,8 +5,8 @@
  * output into records the account holds. This does both, because leaving the
  * claim for later is how proceeds get forgotten.
  *
- * `planSwap` picks the route from the API and checks every hop on chain before
- * anything is submitted, so the plan printed below is the plan that executes.
+ * `quote` takes the route and output estimate from the API. Execution checks
+ * every route pool on chain and preserves the displayed minimum output.
  * The blinded identity is reserved and recorded automatically — nothing to track.
  *
  * SPENDS REAL FUNDS with --execute. Without it, prints the plan and stops.
@@ -20,6 +20,7 @@
  *   shield-swap swap --from USDCx --to ETH --amount 1.5 --no-claim --execute
  */
 import { SwapOutputNotFinalizedError, parseUnits } from '@provablehq/shield-swap-sdk'
+import { planQuotedSwap } from '../quoted-swap.js'
 import { loadSession, formatAmount } from '../session.js'
 import { flags, step, done, warn, output, confirmed, run, fail, basisPoints } from '../shared.js'
 
@@ -82,7 +83,7 @@ export async function main(argv: string[]): Promise<void> {
     }
 
     step(`planning ${from.symbol} → ${args.to as string}`)
-    const plan = await client.planSwap({
+    const plan = await planQuotedSwap(client, {
       from: from.id,
       to: args.to as string,
       amountIn,
@@ -108,28 +109,12 @@ export async function main(argv: string[]): Promise<void> {
       ['claim', args['no-claim'] ? 'no, left for `shield-swap history`' : 'yes, in this run'],
     ]
     if (!confirmed({ execute: args.execute as boolean | undefined, network, plan: planLines })) {
-      output({ network, submitted: false, plan: { ...plan, imports: Object.keys(plan.imports) } }, () => {})
+      output({ network, submitted: false, quote: plan.quote, plan: { ...plan, imports: Object.keys(plan.imports) } }, () => {})
       return
     }
 
     step('proving and submitting the swap — this takes a minute or two')
-    const handle = plan.multiHop
-      ? await client.swapMultiHop({
-          poolKeys: plan.poolKeys,
-          tokenInId: plan.from.id,
-          amountIn: plan.amountIn,
-          ...(plan.expectedOut > 0n ? { expectedOut: plan.expectedOut } : {}),
-          slippageBps: plan.slippageBps,
-          imports: plan.imports,
-        })
-      : await client.swap({
-          poolKey: plan.poolKeys[0]!,
-          tokenInId: plan.from.id,
-          amountIn: plan.amountIn,
-          ...(plan.expectedOut > 0n ? { expectedOut: plan.expectedOut } : {}),
-          slippageBps: plan.slippageBps,
-          imports: plan.imports,
-        })
+    const handle = await client.swap({ quote: plan.quote, imports: plan.imports })
     done(`swap landed: tx ${handle.transactionId}, swapId ${handle.swapId}`)
 
     let claim: { transactionId: string; amountOut: bigint } | undefined

@@ -1,4 +1,4 @@
-import type { AnyAccount } from '@provablehq/veil-core'
+import { requestRecords, type AnyAccount, type Client, type RecordProvider } from '@provablehq/veil-core'
 import type { components } from './openapi.js'
 
 type Schemas = components['schemas']
@@ -73,7 +73,8 @@ export type ApiClientOptions = {
 /**
  * Outcome of {@link ApiClient.confirmAirdrop}.
  *
- * @property status `'settled'` when the faucet job finished, or
+ * @property status `'settled'` when the faucet job finished and, if a scanner
+ *   is configured, its successful transfers are readable as private records; or
  *   `'rate_limited'` when the faucet refused the address and nothing started.
  * @property job The finished job, with one result per token. Present on
  *   `'settled'`; a token's own `status` can still be `rejected` or `failed`.
@@ -569,7 +570,12 @@ export class ApiClient {
    * Requests a testnet faucet drop and waits for it to settle.
    *
    * Wraps {@link airdrop} and {@link getAirdropStatus}: starts the job, polls
-   * until its status leaves `"running"`, and returns the finished job. A
+   * until its status leaves `"running"`, and returns the finished job. When
+   * called through a Shield Swap client with a record scanner, also waits for
+   * each accepted or pending transfer's unspent, decrypted record. Resolves
+   * wrapped tokens to their underlying record programs and matches transaction
+   * IDs, so earlier balances cannot satisfy confirmation. Without a scanner,
+   * only the faucet job is confirmed. A
    * faucet that refuses the address (one claim per address per window)
    * answers 429; that comes back as `status: 'rate_limited'` rather than
    * throwing, since an account that already holds funds can carry on. Every
@@ -578,19 +584,22 @@ export class ApiClient {
    * `job.results`.
    *
    * Testnet only: the mainnet API does not serve `/airdrop` and answers 404.
-   * Hits the network once to start and once per poll.
+   * Hits the network to start, poll status, and scan records when configured.
    *
    * @param address The receiving account's address (`aleo1…`).
    * @param options.pollIntervalMs Milliseconds between status reads. Defaults
    *   to 5000; each token's transfer needs a confirmation, so polling faster
    *   only adds requests.
-   * @param options.timeoutMs Milliseconds to wait for the job to settle before
+   * @param options.timeoutMs Total milliseconds to wait for the job and records before
    *   giving up. Defaults to 600000 (ten minutes), which covers every token's
    *   confirmation on a healthy network with room to spare.
+   * @param options.recordClient Client supplying the recipient's record scanner.
+   *   Automatically supplied by `shieldSwapActions`; omitted for a standalone
+   *   API client unless explicitly configured for record confirmation.
    * @returns `{ status: 'settled', job }` with the per-token results, or
    *   `{ status: 'rate_limited', message }` when the faucet refused the address.
-   * @throws When the job is still running at `timeoutMs`, and on any API
-   *   error other than the faucet's 429.
+   * @throws When the job or records exceed `timeoutMs`, the scanner account
+   *   differs from the recipient, or an API/record scan fails (except faucet 429).
    *
    * @example
    * const drop = await api.confirmAirdrop(account.address)
@@ -599,10 +608,16 @@ export class ApiClient {
    */
   async confirmAirdrop(
     address: string,
-    options: { pollIntervalMs?: number; timeoutMs?: number } = {},
+    options: { pollIntervalMs?: number; timeoutMs?: number; recordClient?: Client } = {},
   ): Promise<ConfirmAirdropResult> {
     const pollIntervalMs = options.pollIntervalMs ?? 5_000
     const timeoutMs = options.timeoutMs ?? 600_000
+    const recordClient = options.recordClient
+    const hasScanner = !!(recordClient as (Client & { recordProvider?: RecordProvider }) | undefined)?.recordProvider
+    if (hasScanner && recordClient?.account?.address !== address) {
+      throw new Error('Airdrop record confirmation requires the recipient to match the scanner account')
+    }
+    const deadline = Date.now() + timeoutMs
 
     let started: Schemas['AirdropStartResult']
     try {
@@ -613,7 +628,6 @@ export class ApiClient {
       throw err
     }
 
-    const deadline = Date.now() + timeoutMs
     let job = await this.getAirdropStatus(started.job_id)
     while (job.status === 'running') {
       if (Date.now() >= deadline) {
@@ -623,6 +637,45 @@ export class ApiClient {
       }
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
       job = await this.getAirdropStatus(started.job_id)
+    }
+    if (hasScanner && recordClient) {
+      // Match the faucet's actual transactions, never a pre-existing balance.
+      const pending = job.results.filter((result) => result.status === 'accepted' || result.status === 'pending')
+      if (pending.some((result) => !result.tx_id)) {
+        throw new Error(`Airdrop job ${started.job_id} omitted a transaction id needed to confirm records`)
+      }
+      const tokens = pending.length ? (await this.getTokens()).data : []
+      const remaining = pending.map((result) => ({
+        transactionId: result.tx_id!.trim(),
+        program: tokens.find((token) => token.amm_token_program === result.amm_token_program)?.underlying_program ?? result.amm_token_program,
+      }))
+      while (remaining.length) {
+        for (const program of new Set(remaining.map((result) => result.program))) {
+          // Page explicitly so old records cannot hide a newly indexed drop.
+          for (let page = 0; ; page++) {
+            const records = await requestRecords(recordClient, {
+              program,
+              includePlaintext: true,
+              statusFilter: 'unspent',
+              filter: { page, resultsPerPage: 1000 },
+            })
+            for (let i = remaining.length - 1; i >= 0; i--) {
+              const found = remaining[i]!.program === program && records.some((record) =>
+                record.transactionId?.trim() === remaining[i]!.transactionId &&
+                'recordPlaintext' in record && !!record.recordPlaintext,
+              )
+              if (found) remaining.splice(i, 1)
+            }
+            if (records.length < 1000 || !remaining.some((result) => result.program === program)) break
+            if (Date.now() >= deadline) break
+          }
+        }
+        if (!remaining.length) break
+        if (Date.now() >= deadline) {
+          throw new Error(`Airdrop records for job ${started.job_id} are not readable after ${timeoutMs}ms (${remaining.length} transactions remaining)`)
+        }
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+      }
     }
     return { status: 'settled', job }
   }

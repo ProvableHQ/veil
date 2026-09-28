@@ -66,6 +66,46 @@ to browse the set in an editor. The pool and token reads run there as they are;
 anything that signs needs credentials, and a private key does not belong in a
 hosted sandbox — run those locally.
 
+## Quote and execute
+
+```ts
+const quote = await client.quote({
+  from: 'USDCx',
+  to: 'ETH',
+  amountIn: 1_500_000n, // raw input-token base units
+  slippageBps: 50,     // 0.5%; defaults to 50
+})
+const handle = await client.swap({ quote })
+// Persist the handle, then call claimSwapOutput once the output finalizes.
+```
+
+`quote` uses the configured DEX API for token metadata, routing and
+`estimated_amount_out`. It trusts that estimate and converts it from output-token
+decimals using integer arithmetic. It makes no chain reads, performs no local
+swap simulation and does not fetch tick data or program sources. API authentication
+is required for the route endpoint. The transport MUST specify a network.
+
+A quote carries `from`, `to`, `amountIn`, `expectedOut`, `minOut`, `slippageBps`,
+ordered `hops`, `network`, `program`, `version`, `quotedAt`, `expiresAt`, and API
+protocol revision metadata. Amounts are `bigint`; agent/MCP results encode them as
+integer strings. Protocol configuration heights are **not** pool-state snapshot
+heights. Quotes are unsigned estimates and do not reserve liquidity.
+
+Quotes expire 60 seconds after the request starts. `swap({ quote })` validates
+freshness before and after preparation, checks only the quoted pools on chain,
+resolves imports, and selects single- or multi-hop execution automatically.
+It submits exactly `minOut`, without re-quoting or applying slippage twice.
+Quote expiry does not cancel proving already started; the transaction's block
+deadline remains separate. Missing/invalid estimates, disconnected routes and
+zero output floors reject. Trade-term overrides alongside a quote also reject.
+Wallet accounts still supply `tokenRecord`; proofs, identity, imports and other
+execution options remain configurable.
+
+Standalone actions use `quote(client, { api, from, to, amountIn })` followed by
+`swap(client, { quote })`. Existing `planSwap`, manual `swap` and `swapMultiHop`
+calls remain available. Agent/MCP clients use `shield_swap_quote`, then
+`shield_swap_swap({ quote })`; writes remain opt-in.
+
 ## Setup
 
 The client signs one of two ways. Pick the one that fits — every DEX method is
@@ -1088,3 +1128,14 @@ A test that reports as skipped is missing a required variable for its tier. The
 write tier spends real testnet funds on each run. Optional overrides:
 `VEIL_DEX_PROGRAM` (defaults to `shield_swap.aleo`), `ALEO_DPS_URL`, and
 `ALEO_RSS_URL`.
+
+## Quote integration test
+
+`test/integration/quote.e2e.test.ts` verifies quotes, successful swap finalization,
+on-chain hop receipts, and claims for direct and multi-hop routes. It runs only
+with `VEIL_INTEGRATION=1` and `VEIL_QUOTE_E2E=1`, a funded testnet
+`VEIL_E2E_PRIVATE_KEY`, and `VEIL_QUOTE_E2E_CASES` containing explicit input/output
+tokens, raw input amounts and expected hop counts. See the test's header for the
+fixture format. Both route shapes are validated before any funds are spent.
+A deployment whose API always selects direct routes needs a separate multi-hop
+fixture topology; the test fails rather than silently skipping that coverage.
