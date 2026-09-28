@@ -12,9 +12,12 @@ import {
 import { createLiveBenchmark, loadLiveState, quoteParametersFromPlan, saveLiveState } from '../helpers.js'
 import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, required, requiredEvmPrivateKey } from '../config.js'
 
-const enabled = mainnetCaseEnabled('evm-xreserve')
+const cases = [
+  { name: 'evm-xreserve', chain: 'ethereum', rpc: 'BRIDGE_LIVE_ETHEREUM_RPC_URL' },
+  { name: 'arc-xreserve', chain: 'arc', rpc: 'BRIDGE_LIVE_ARC_RPC_URL' },
+] as const
 
-async function delegatedAleo(privateKey: string, apiKey: string) {
+async function delegatedAleo(privateKey: string, apiKey?: string) {
   const { loadNetwork } = await import('../../../../../provable-sdk/src/index.js')
   const aleo = await loadNetwork('mainnet')
   return aleo.createAleoClient({
@@ -22,36 +25,38 @@ async function delegatedAleo(privateKey: string, apiKey: string) {
     networkUrl: 'https://edge.provable.com/api/v2',
     proverUrl: 'https://edge.provable.com/api/prove',
     provingMode: 'delegated',
-    auth: { mode: 'api-key', value: apiKey },
+    ...(apiKey ? { auth: { mode: 'api-key' as const, value: apiKey } } : {}),
     confirmationTimeout: 10 * 60_000,
   })
 }
 
-describe.skipIf(!enabled)('mainnet EVM xReserve bridge', () => {
-  it('recovers the minimum USDC deposit and privately mints on Aleo', async () => {
-    const routeId = 'xreserve:ethereum/usdc->aleo/usdcx'
-    const path = liveStatePath('mainnet', 'evm-xreserve-recovery')
+describe.each(cases)('mainnet $chain xReserve bridge', (scenario) => {
+  it.skipIf(!mainnetCaseEnabled(scenario.name))('recovers the minimum USDC deposit and privately mints on Aleo', async () => {
+    const routeId = `xreserve:${scenario.chain}/usdc->aleo/usdcx`
+    const path = liveStatePath('mainnet', `${scenario.name}-recovery`)
     const state = loadLiveState(path, routeId)
-    const benchmark = createLiveBenchmark('evm-xreserve')
+    const benchmark = createLiveBenchmark(scenario.name)
     const evm = createEvmClient({
-      transport: evmHttp(required('BRIDGE_LIVE_ETHEREUM_RPC_URL')),
+      transport: evmHttp(scenario.chain === 'arc'
+        ? process.env[scenario.rpc]?.trim() || 'https://rpc.mainnet.arc.io'
+        : required(scenario.rpc)),
       account: evmPrivateKey(requiredEvmPrivateKey('BRIDGE_EVM_PRIVATE_KEY')),
     })
     const aleo = await delegatedAleo(
       required('BRIDGE_PRIVATE_KEY'),
-      required('EDGE_PROVABLE_API_KEY'),
+      process.env.EDGE_PROVABLE_API_KEY?.trim(),
     )
     benchmark.mark('clients-ready')
     const sender = await evm.walletClient!.getAddress()
     const bridge = createBridgeClient({
       environment: 'mainnet',
       clients: {
-        ethereum: evm,
+        [scenario.chain]: evm,
         aleo: createAleoClient({ publicClient: aleo.publicClient, account: aleo.walletClient }),
       },
     })
     const plan = prepare(bridge.registry, {
-      source: { chain: 'ethereum', asset: 'usdc' },
+      source: { chain: scenario.chain, asset: 'usdc' },
       destination: { chain: 'aleo', asset: 'usdcx' },
       bridgeProtocol: 'xreserve',
       amount: '2',
@@ -85,7 +90,7 @@ describe.skipIf(!enabled)('mainnet EVM xReserve bridge', () => {
     const recoveryBridge = createBridgeClient({
       environment: 'mainnet',
       clients: {
-        ethereum: { family: 'evm', publicClient: evm.publicClient },
+        [scenario.chain]: { family: 'evm', publicClient: evm.publicClient },
         aleo: createAleoClient({ publicClient: aleo.publicClient }),
       },
     })
