@@ -13,7 +13,8 @@ try {
   // Test the checkout through published-package boundaries, without changing pins.
   run('pnpm', ['install', '--frozen-lockfile'])
   run('pnpm', ['--filter', '@provablehq/shield-swap-sdk...', '--filter', '@provablehq/veil-aleo-sdk...', 'build'])
-  for (const name of ['veil-core', 'veil-aleo-sdk', 'shield-swap-sdk']) {
+  // Include the SDK's devnode peer so unpublished release versions install locally.
+  for (const name of ['veil-core', 'veil-aleo-devnode', 'veil-aleo-sdk', 'shield-swap-sdk']) {
     run('pnpm', ['--filter', `@provablehq/${name}`, 'pack', '--pack-destination', archives])
   }
   run('npm', ['ci'], example)

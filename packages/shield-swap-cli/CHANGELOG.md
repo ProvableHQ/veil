@@ -1,5 +1,25 @@
 # @provablehq/shield-swap-cli
 
+## 0.11.1
+
+### Patch Changes
+
+- 3d329de: Resolve claim program imports automatically from on-chain output tokens and simplify examples and agent tooling.
+- 3d329de: Add `quote` and `swap({ quote })` for API-estimated single- and multi-hop swaps. Preserve the exact quoted minimum output, validate route/network/freshness, and expose the handoff through agent/MCP tools and the CLI. Keep existing manual swap and `planSwap` calls compatible.
+
+  Make the existing `client.api.confirmAirdrop` also wait for the faucet transaction records when the outer client has a record scanner; retain job-only confirmation without one.
+
+  Accept decimal-string quote inputs in token units, resolving decimals inside quote while retaining bigint raw-unit inputs. The agent/MCP quote tool accepts decimal token amounts and returns raw integer-string quote amounts.
+
+- Updated dependencies [3d329de]
+- Updated dependencies [3d329de]
+- Updated dependencies [3d329de]
+- Updated dependencies [3d329de]
+- Updated dependencies [3d329de]
+- Updated dependencies [3d329de]
+  - @provablehq/shield-swap-sdk@0.11.1
+  - @provablehq/veil-aleo-sdk@0.11.1
+
 ## 0.11.0
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @provablehq/veil-aleo-sdk
 
+## 0.11.1
+
+### Patch Changes
+
+- 3d329de: Require Provable SDK 0.11.11 and align devnode transaction building with its 21 consensus versions.
+
 ## 0.11.0
 
 ### Minor Changes
