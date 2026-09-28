@@ -56,6 +56,7 @@ function fakeClient(accountType: 'local' | 'rpc', overrides: Record<string, unkn
       viewKey: 'AViewKey1unused',
     },
     request: async (req: { method: string; params?: { mapping?: string; key?: string } }) => {
+      if (req.method === 'getProgram') return 'program fixture.aleo;'
       if (req.method === 'getLatestHeight' || req.method === 'getBlockNumber') return 1000n
       if (req.method === 'getMappingValue') {
         const { mapping, key } = req.params ?? {}

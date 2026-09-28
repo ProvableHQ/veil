@@ -1,0 +1,4 @@
+node_modules/
+.state/
+private-key.txt
+aleo*.json

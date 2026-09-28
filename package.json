@@ -9,12 +9,13 @@
     "typecheck": "tsc --noEmit",
     "changeset": "changeset",
     "version-packages": "changeset version && node scripts/sync-versions.mjs",
-    "release": "pnpm build && changeset publish"
+    "release": "pnpm build && changeset publish",
+    "setup:first-swap": "node scripts/setup-first-swap.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
-    "@provablehq/aleo-devnode": "^0.2.4",
-    "@provablehq/sdk": "^0.11.10",
+    "@provablehq/aleo-devnode": "^0.2.6",
+    "@provablehq/sdk": "^0.11.11",
     "@solana/kit": "^8.0.0",
     "@types/node": "^25.5.0",
     "tsup": "^8.0.0",

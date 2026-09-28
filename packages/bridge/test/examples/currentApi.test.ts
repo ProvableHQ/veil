@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const REPOSITORY_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../../..')
-const EXAMPLE_DIRECTORY = join(REPOSITORY_ROOT, 'examples/bridge')
+const EXAMPLE_DIRECTORY = join(REPOSITORY_ROOT, 'packages/bridge/examples')
 const LEGACY_OR_LOW_LEVEL_APIS = [
   'buildAleoHyperlaneTransferRemoteCall',
   'createSolanaRpcClient',

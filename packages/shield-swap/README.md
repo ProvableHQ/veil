@@ -47,6 +47,14 @@ covering setup, pool and balance reads, swaps, and liquidity.
 
 ## Examples
 
+Run the [first-swap example](./examples/first-swap) to create an account,
+request test tokens, swap USDCx for ETH, and claim the output. The complete
+project lives at `packages/shield-swap/examples/first-swap`; it installs
+published packages with `npm ci` and runs with `npm start`. It calls the SDK directly and uses its file-backed identity store
+for claim recovery. SDK releases also include
+the example under `node_modules/@provablehq/shield-swap-sdk/examples/first-swap`;
+copy that directory outside `node_modules` before running it.
+
 Worked examples of everything below live in
 [`examples/shield-swap/`](https://github.com/ProvableHQ/veil/tree/main/examples/shield-swap):
 account bootstrap, pool reads, quoting, balances, swap history, swaps, minting a
@@ -57,6 +65,50 @@ is a single file that reads top to bottom.
 to browse the set in an editor. The pool and token reads run there as they are;
 anything that signs needs credentials, and a private key does not belong in a
 hosted sandbox — run those locally.
+
+## Quote and execute
+
+```ts
+const quote = await client.quote({
+  from: 'USDCx',
+  to: 'ETH',
+  amountIn: '1.5',     // decimal input-token units; bigint also accepts raw units
+  slippageBps: 50,     // 0.5%; defaults to 50
+})
+const handle = await client.swap({ quote })
+// Persist the handle, then call claimSwapOutput once the output finalizes.
+```
+
+`quote` uses the configured DEX API for token metadata, routing and
+`estimated_amount_out`. It trusts that estimate and converts it from output-token
+decimals using integer arithmetic. It makes no chain reads, performs no local
+swap simulation and does not fetch tick data or program sources. API authentication
+is required for the route endpoint. The transport MUST specify a network.
+
+Decimal-string inputs are converted using the input token's decimals; bigint
+inputs already represent raw base units. Excess precision and JavaScript numbers
+are rejected. The agent/MCP quote tool accepts decimal strings in token units.
+
+A quote carries `from`, `to`, `amountIn`, `expectedOut`, `minOut`, `slippageBps`,
+ordered `hops`, `network`, `program`, `version`, `quotedAt`, `expiresAt`, and API
+protocol revision metadata. Amounts are `bigint`; agent/MCP results encode them as
+integer strings. Protocol configuration heights are **not** pool-state snapshot
+heights. Quotes are unsigned estimates and do not reserve liquidity.
+
+Quotes expire 60 seconds after the request starts. `swap({ quote })` validates
+freshness before and after preparation, checks only the quoted pools on chain,
+resolves imports, and selects single- or multi-hop execution automatically.
+It submits exactly `minOut`, without re-quoting or applying slippage twice.
+Quote expiry does not cancel proving already started; the transaction's block
+deadline remains separate. Missing/invalid estimates, disconnected routes and
+zero output floors reject. Trade-term overrides alongside a quote also reject.
+Wallet accounts still supply `tokenRecord`; proofs, identity, imports and other
+execution options remain configurable.
+
+Standalone actions use `quote(client, { api, from, to, amountIn })` followed by
+`swap(client, { quote })`. Existing `planSwap`, manual `swap` and `swapMultiHop`
+calls remain available. Agent/MCP clients use `shield_swap_quote`, then
+`shield_swap_swap({ quote })`; writes remain opt-in.
 
 ## Setup
 
@@ -360,6 +412,24 @@ it throws `SwapOutputNotFinalizedError`, the request transaction hasn't
 finalized yet; retry after a few blocks. The same error after a successful claim
 means the output was already collected — claiming consumes the on-chain entry.
 
+Confirm the swap and wait for its output mapping to become readable:
+
+```ts
+await client.waitForSwapOutput({ handle })
+const claim = await client.claimSwapOutput({ handle })
+```
+
+`waitForSwapOutput` confirms the transaction first, then polls its output mapping.
+Both stages share a 15-second timeout and a three-second polling interval.
+A rejected transaction fails immediately.
+Override `timeout` and `pollingInterval` in milliseconds when needed. It never
+submits a transaction. A timeout can also mean the output was already claimed;
+recover the existing handle instead of starting another trade.
+
+`claimSwapOutput` resolves required token program sources from chain automatically;
+`imports` is an optional override for callers with cached sources. The handle
+does not need to contain program sources.
+
 `claimSwapOutput` picks the transition automatically from the chain-read
 remainder: a swap that filled completely (`amountRemaining` is `0n`) claims
 through `claim_swap_output_no_refund` — or the router's
@@ -376,10 +446,7 @@ The handle already carries `swapId` and `blindedAddress`, so the claim just
 works:
 
 ```ts
-const { amountOut, amountRemaining } = await client.claimSwapOutput({
-  handle,
-  imports,
-})
+const { amountOut, amountRemaining } = await client.claimSwapOutput({ handle })
 ```
 
 #### Wallet
@@ -407,10 +474,7 @@ handle.swapId = await deriveSwapId({
   nonce: handle.nonce!,
 })
 
-const { amountOut, amountRemaining } = await client.claimSwapOutput({
-  handle,
-  imports,
-})
+const { amountOut, amountRemaining } = await client.claimSwapOutput({ handle })
 ```
 
 ### Auditing a settled swap
@@ -460,10 +524,7 @@ token and one remaining amount, so a multi-hop claim reads the same way a
 single-hop one does:
 
 ```ts
-const { amountOut, amountRemaining } = await client.claimSwapOutput({
-  handle,
-  imports,   // include every token program the route touches
-})
+const { amountOut, amountRemaining } = await client.claimSwapOutput({ handle })
 ```
 
 Signer paths, `SwapOutputNotFinalizedError`, and the wallet-path recovery
@@ -502,10 +563,10 @@ default, so the two swaps below cannot collide even with no configuration — bu
 that store dies with the process, so name a file one for anything long-running:
 
 ```ts
-import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
+import { swapFileStore } from '@provablehq/shield-swap-sdk/node'
 
 const client = walletClient.extend(
-  shieldSwapActions({ api: {}, blindedIdentities: fileBlindedIdentityStore('.veil/blinded.json') }),
+  shieldSwapActions({ api: {}, blindedIdentities: swapFileStore('.veil/blinded.json') }),
 )
 
 // Nothing else to do — these two cannot collide on an identity.
@@ -514,6 +575,9 @@ const [a, b] = await Promise.all([
   client.swap({ poolKey: poolB, tokenInId: eth, amountIn, imports }),
 ])
 ```
+
+`swapFileStore` is an alias of `fileBlindedIdentityStore`; the existing export
+and saved file format remain supported.
 
 Reservations serialize, so each swap gets its own counter, and each is written
 before its transaction is submitted — which is what keeps an unconfirmed swap from
@@ -547,7 +611,7 @@ for (const [tokenId, amount] of Object.entries(totals)) {
 }
 
 for (const swap of swaps) {
-  if (swap.claimable) await client.claimSwapOutput({ handle: swap.handle!, imports })
+  if (swap.claimable) await client.claimSwapOutput({ handle: swap.handle! })
 }
 ```
 
@@ -1080,3 +1144,14 @@ A test that reports as skipped is missing a required variable for its tier. The
 write tier spends real testnet funds on each run. Optional overrides:
 `VEIL_DEX_PROGRAM` (defaults to `shield_swap.aleo`), `ALEO_DPS_URL`, and
 `ALEO_RSS_URL`.
+
+## Quote integration test
+
+`test/integration/quote.e2e.test.ts` verifies quotes, successful swap finalization,
+on-chain hop receipts, and claims for direct and multi-hop routes. It runs only
+with `VEIL_INTEGRATION=1` and `VEIL_QUOTE_E2E=1`, a funded testnet
+`VEIL_E2E_PRIVATE_KEY`, and `VEIL_QUOTE_E2E_CASES` containing explicit input/output
+tokens, raw input amounts and expected hop counts. See the test's header for the
+fixture format. Both route shapes are validated before any funds are spent.
+A deployment whose API always selects direct routes needs a separate multi-hop
+fixture topology; the test fails rather than silently skipping that coverage.

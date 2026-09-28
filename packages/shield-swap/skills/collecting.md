@@ -21,7 +21,6 @@ import { loadSession, formatAmount } from '@provablehq/shield-swap-cli/session'
 
 const { client } = await loadSession()
 const tokens = (await client.api.getTokens()).data
-const programOf = (tokenId: string) => tokens.find((t) => t.address === tokenId)?.amm_token_program
 const infoOf = (tokenId: string) => tokens.find((t) => t.address === tokenId)
 
 const { swaps, totals, unresolvable } = await client.getUnclaimedSwaps()
@@ -37,19 +36,11 @@ for (const swap of swaps) {
     console.error(`swap ${swap.swapId} is owed but has no stored handle`)
     continue
   }
-  const pIn = programOf(swap.output.token_in)
-  const pOut = programOf(swap.output.token_out)
-  if (!pIn || !pOut) {
-    console.error(`no wrapper program for swap ${swap.swapId} tokens — skipping`)
-    continue
-  }
-  const imports = await client.resolveDexImports({ tokenPrograms: [pIn, pOut] })
-
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
       // One claim serves both single- and multi-hop swaps; it accepts either
       // handle type and routes the withdrawal (wrapped vs plain) internally.
-      const result = await client.claimSwapOutput({ handle: swap.handle!, imports })
+      const result = await client.claimSwapOutput({ handle: swap.handle! })
       const out = infoOf(swap.output.token_out)
       console.log(`claimed ${formatAmount(result.amountOut, out?.decimals ?? 0, out?.symbol)} (tx ${result.transactionId})`)
       break
@@ -171,6 +162,6 @@ minutes before treating a missing balance bump as a failure.
 | Symptom | Cause | Remedy |
 | --- | --- | --- |
 | `SwapOutputNotFinalizedError` persists past ~5 min | Swap tx rejected, or never confirmed | Look up `handle.transactionId` on chain; a rejected swap has nothing to claim — keep the handle and investigate. |
-| Claim reverts (not the finalize error) | Wrong imports, or output already claimed | Rebuild imports from BOTH tokens' wrapper programs; check `getSwapOutput({ swapId })` — `null` after a prior claim is normal. |
+| Claim reverts (not the finalize error) | Wrong imports, or output already claimed | Omit any custom `imports` override to use automatic resolution; check `getSwapOutput({ swapId })` — `null` after a prior claim is normal. |
 | `collect` reverts | Zero owed, or position record not scannable yet | Re-read `getPosition`; wait for the scanner if the position was just changed. |
 | Claimed record not in holdings | Scanner lag | Wait a few minutes; the record service indexes asynchronously. |

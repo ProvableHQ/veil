@@ -74,7 +74,7 @@ transfers directly into code. A local-key integration builds the client once:
 ```ts
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
-import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
+import { swapFileStore } from '@provablehq/shield-swap-sdk/node'
 
 // The WASM binaries are per network, so the SDK is loaded for one and the
 // account, prover, and scanner all come off that handle. The node, delegated
@@ -86,7 +86,7 @@ const { walletClient } = aleo.createAleoClient({ privateKey })
 const client = walletClient.extend(
   // The identity store MUST persist — see the rule above. A file-backed store is
   // what makes a crash between a swap and its claim recoverable.
-  shieldSwapActions({ api: {}, blindedIdentities: fileBlindedIdentityStore('./blinded.json') }),
+  shieldSwapActions({ api: {}, blindedIdentities: swapFileStore('./blinded.json') }),
 )
 await client.authenticateShieldSwap()
 ```
@@ -187,10 +187,12 @@ funded account).
 
 - **Discover inputs, never invent them.** Pool keys, token ids, wrapper
   programs, and decimals come from `client.api.getPools()` /
-  `getTokens()`; quotes come from `client.api.getRoute()`; live pool state
+  `getTokens()`; executable quotes come from `client.quote()` (backed by `client.api.getRoute()`); live pool state
   comes from `client.getSlot()`. Field literals (`…field`) and addresses
   are opaque — copy them exactly.
-- **Amounts are raw base units** (`bigint`, u128) on the SDK side. Convert
+- **Quote inputs accept decimal strings** in token units (for example,
+  `amountIn: '1.5'`). Quote resolves decimals; bigint inputs remain raw units.
+  Other action amounts are raw base units (`bigint`, u128). Convert
   with the token's `decimals` from the API: 1 token = `10n ** BigInt(decimals)`
   units.
 - **Never show raw units to the user.** Anything user-facing — balances,

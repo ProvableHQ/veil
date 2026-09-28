@@ -255,20 +255,12 @@ export async function main(argv: string[]): Promise<void> {
       ) {
         for (const row of claimable) {
           const swap = owed.swaps.find((entry) => entry.swapId === row.swapId)!
-          const pIn = infoOf(swap.output.token_in)?.ammTokenProgram
-          const pOut = infoOf(swap.output.token_out)?.ammTokenProgram
-          if (!pIn || !pOut) {
-            warn(`skipping ${row.swapId}: no wrapper program for one of its tokens`)
-            continue
-          }
-          const imports = await client.resolveDexImports({ tokenPrograms: [pIn, pOut] })
-
           // The output becomes claimable a few blocks after the swap confirms, so
           // an early attempt is expected to fail rather than exceptional.
           for (let attempt = 0; attempt < 10; attempt++) {
             try {
               step(`claiming ${row.swapId.slice(0, 16)}… (attempt ${attempt + 1})`)
-              const result = await client.claimSwapOutput({ handle: swap.handle!, imports })
+              const result = await client.claimSwapOutput({ handle: swap.handle! })
               done(
                 `claimed ${formatAmount(result.amountOut, row.decimalsOut, row.tokenOut)} (tx ${result.transactionId})`,
               )

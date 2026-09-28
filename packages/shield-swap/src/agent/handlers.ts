@@ -26,6 +26,7 @@ import {
   derivePositionTokenId,
   deriveMultiHopSwapId,
 } from '../utils/keys.js'
+import { quote, type SwapQuote } from '../actions/swap/quote.js'
 import { swap } from '../actions/swap/swap.js'
 import { claimSwapOutput } from '../actions/swap/claimSwapOutput.js'
 import type { SwapHandle } from '../actions/swap/swap.js'
@@ -126,8 +127,12 @@ export function createApiHandlers(api: ApiClient): Record<string, AgentToolHandl
 }
 
 /** Composed (client + API) handlers, keyed by tool name. */
-export function createComposedHandlers(client: Client, api: ApiClient): Record<string, AgentToolHandler> {
+export function createComposedHandlers(client: Client, api: ApiClient, program?: string): Record<string, AgentToolHandler> {
   return {
+    shield_swap_quote: async (i) => jsonSafe(await quote(client, {
+      api, program, from: i.from as string, to: i.to as string,
+      amountIn: i.amountIn as string, slippageBps: i.slippageBps as number | undefined,
+    })),
     shield_swap_get_balances: async (i) =>
       jsonSafe(
         await getBalances(client, api, {
@@ -256,6 +261,22 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
       ),
 
     shield_swap_swap: async (i) => {
+      if ('quote' in i) {
+        if (Object.keys(i).some((key) => key !== 'quote')) throw new Error('Cannot override trade terms when executing a quote')
+        const raw = i.quote as Record<string, unknown>
+        if (!raw || typeof raw !== 'object') throw new Error('Expected a quote object')
+        const amount = (key: string): bigint => {
+          const value = raw[key]
+          if (typeof value !== 'string' || !/^\d+$/.test(value)) throw new Error(`Quote ${key} must be a raw integer string`)
+          return BigInt(value)
+        }
+        const offer = { ...raw, amountIn: amount('amountIn'), expectedOut: amount('expectedOut'), minOut: amount('minOut') } as SwapQuote
+        if (program && offer.program !== program) throw new Error('Quote program does not match the configured program')
+        return jsonSafe(await swap(client, { quote: offer }))
+      }
+      for (const key of ['poolKey', 'tokenInId', 'amountIn', 'tokenInProgram', 'tokenOutProgram']) {
+        if (typeof i[key] !== 'string') throw new Error(`Manual swap requires ${key}, or pass quote instead`)
+      }
       const imports = await fetchImports(client, [i.tokenInProgram as string, i.tokenOutProgram as string], program)
       return jsonSafe(
         await swap(client, {
@@ -271,9 +292,8 @@ export function createWriteHandlers(client: Client, program?: string): Record<st
     },
 
     shield_swap_claim: async (i) => {
-      const imports = await fetchImports(client, [i.tokenInProgram as string, i.tokenOutProgram as string], program)
       // The handle keeps its own program; do not override it with the config default.
-      return jsonSafe(await claimSwapOutput(client, { handle: i.handle as unknown as SwapHandle, imports }))
+      return jsonSafe(await claimSwapOutput(client, { handle: i.handle as unknown as SwapHandle }))
     },
 
     shield_swap_swap_multi_hop: async (i) => {

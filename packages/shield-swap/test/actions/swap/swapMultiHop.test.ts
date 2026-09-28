@@ -22,9 +22,9 @@ const executeMock = vi.mocked(executeContract)
 const writeMock = vi.mocked(writeContract)
 
 // Two-hop route A→B→C over pools P1 (A/B) and P2 (C/B — reverse direction).
-const TOKEN_A = '111field'
-const TOKEN_B = '222field'
-const TOKEN_C = '333field'
+const TOKEN_A = programToTokenId('token_a')
+const TOKEN_B = programToTokenId('token_b')
+const TOKEN_C = programToTokenId('token_c')
 // A wrapped route input for the router-dispatch cases.
 const WRAPPED_A = programToTokenId('wtok_wrapper')
 const UNDERLYING_A = programToTokenId('wtok_underlying')
@@ -57,6 +57,7 @@ function fakeClient(accountType: 'local' | 'rpc', overrides: Record<string, unkn
       viewKey: 'AViewKey1unused',
     },
     request: async (req: { method: string; params?: { mapping?: string; key?: string } }) => {
+      if (req.method === 'getProgram') return 'program fixture.aleo;'
       if (req.method === 'getLatestHeight' || req.method === 'getBlockNumber') return 1000n
       if (req.method === 'getMappingValue') {
         const { mapping, key } = req.params ?? {}

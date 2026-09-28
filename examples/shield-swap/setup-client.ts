@@ -75,7 +75,7 @@ export async function setupClient(config: {
   })
 
   // `.extend()` is viem's composition step: it returns a client carrying the DEX
-  // actions, so everything afterwards is `client.planSwap()`, `client.swap()`,
+  // actions, so everything afterwards is `client.quote()`, `client.swap()`,
   // and the rest hanging off one object.
   const client = walletClient.extend(publicActions).extend(shieldSwapActions({ api: {} }))
 

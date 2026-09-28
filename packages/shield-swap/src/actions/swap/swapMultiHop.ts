@@ -1,3 +1,4 @@
+import { assertExecutionQuote } from './internal.js'
 import {
   executeContract,
   writeContract,
@@ -296,6 +297,7 @@ export async function swapMultiHop(client: Client, params: SwapMultiHopParameter
       minAmount: params.amountIn,
     })
 
+    assertExecutionQuote(client, params)
     const result = route.wrapped
       ? await executeContract(client, {
           program: routerProgram,
@@ -353,6 +355,7 @@ export async function swapMultiHop(client: Client, params: SwapMultiHopParameter
     }).catch(() => undefined)
   }
 
+  assertExecutionQuote(client, params)
   const transactionId = await writeContract(client, {
     program: route.wrapped ? routerProgram : program,
     function: route.wrapped ? 'swap_mh_from_wrapped' : 'swap_multi_hop',
