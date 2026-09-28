@@ -9,7 +9,7 @@ import { getSwapOutput, type GetSwapOutputReturnType } from './getSwapOutput.js'
  *   its swapId resolved.
  * @property program AMM program override. Defaults to the handle's program.
  * @property timeout Shared confirmation and output polling timeout in milliseconds.
- *   Defaults to 120,000.
+ *   Defaults to 15,000.
  *   Must be finite and positive. In-flight reads use the transport's timeout.
  * @property pollingInterval Delay between pending confirmation or output reads in milliseconds.
  *   Defaults to 3,000; must be finite and positive.
@@ -48,7 +48,7 @@ export async function waitForSwapOutput(
   client: Client,
   params: WaitForSwapOutputParameters,
 ): Promise<WaitForSwapOutputReturnType> {
-  const { handle, timeout = 120_000, pollingInterval = 3_000 } = params
+  const { handle, timeout = 15_000, pollingInterval = 3_000 } = params
   if (!handle.transactionId) throw new Error('handle.transactionId is required to confirm the swap before waiting for its output')
   if (!handle.swapId) throw new Error('handle.swapId must be resolved from the confirmed swap before waiting for its output')
   for (const [name, value] of Object.entries({ timeout, pollingInterval })) {

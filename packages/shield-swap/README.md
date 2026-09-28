@@ -420,7 +420,7 @@ const claim = await client.claimSwapOutput({ handle })
 ```
 
 `waitForSwapOutput` confirms the transaction first, then polls its output mapping.
-Both stages share a two-minute timeout and a three-second polling interval.
+Both stages share a 15-second timeout and a three-second polling interval.
 A rejected transaction fails immediately.
 Override `timeout` and `pollingInterval` in milliseconds when needed. It never
 submits a transaction. A timeout can also mean the output was already claimed;

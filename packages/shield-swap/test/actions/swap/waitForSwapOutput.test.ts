@@ -30,14 +30,14 @@ describe('waitForSwapOutput', () => {
     expect(await result).toMatchObject({ amount_out: 9n })
     expect(request).toHaveBeenCalledTimes(4)
   })
-  it('times out without starting another read or leaving a polling timer', async () => {
+  it('defaults to a 15-second timeout without leaving a polling timer', async () => {
     const { client, request, mapping } = fixture()
     mapping.mockResolvedValue(null)
-    const result = client.waitForSwapOutput({ handle, pollingInterval: 10, timeout: 15 })
+    const result = client.waitForSwapOutput({ handle })
     const rejected = expect(result).rejects.toThrow(/7field.*recover/i)
-    await vi.advanceTimersByTimeAsync(15)
+    await vi.advanceTimersByTimeAsync(15_000)
     await rejected
-    expect(request).toHaveBeenCalledTimes(3)
+    expect(request).toHaveBeenCalledTimes(6)
     expect(vi.getTimerCount()).toBe(0)
   })
   it('propagates transport errors immediately', async () => {

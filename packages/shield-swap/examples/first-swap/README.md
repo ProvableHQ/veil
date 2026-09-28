@@ -66,7 +66,7 @@ estimate or zero floor fails before submission.
 ## Completion and recovery
 
 `waitForSwapOutput({ handle })` confirms the swap transaction and waits for its
-output mapping to become readable, sharing a two-minute polling timeout.
+output mapping to become readable, sharing a 15-second polling timeout.
 The example then submits one claim. Rejection or timeout stops the run before claiming.
 A successful run ends after the claim confirms. `handle.transactionId` identifies
 the swap; `claim.transactionId` and `claim.amountOut` identify the claim and its
