@@ -73,24 +73,36 @@ output estimates, and faucet requests.
 unfinished trade. **Do not commit the private key or recovery file to source
 control.**
 
-## 3. Request test tokens
+## 3. Check the balance and request tokens if needed
 
-Authenticate with the DEX API, then request tokens from its testnet faucet.
-Authentication signs an API challenge with the configured account.
+Authenticate with the DEX API, then check the account's private USDCx balance.
+Skip the faucet when the balance covers the trade. Public balances do not count
+because this example spends a private token record.
 
 ```ts
+import { parseUnits } from '@provablehq/shield-swap-sdk'
+
 await client.authenticateShieldSwap()
-const drop = await client.api.confirmAirdrop(account.address)
+const amountIn = '1.5'
+const from = await client.tokenData('USDCx')
+const balances = await client.getBalances({ tokens: [from.id] })
+
+if ((balances[from.id]?.private ?? 0n) < parseUnits(amountIn, from.decimals)) {
+  await client.api.confirmAirdrop(account.address)
+}
 ```
+
+Balances are returned in raw units. `parseUnits` converts the decimal amount
+using USDCx's decimals so the comparison uses the same units. The quote below
+still accepts the decimal string directly.
 
 A private token balance consists of unspent records owned by the account.
 The record scanner finds these records so the client can spend them.
 `confirmAirdrop` waits for the faucet job and, when a scanner is configured,
 for its transferred records to arrive. This client includes a scanner.
 
-Inspect `drop` for the faucet outcome, including per-token results or a rate
-limit. The swap needs one USDCx record that covers 1.5 USDCx. An account that
-already holds that record can trade without another airdrop.
+The swap needs one USDCx record that covers 1.5 USDCx. A sufficient total split
+across smaller records must be consolidated before it can fund this swap.
 
 ## 4. Quote 1.5 USDCx for ETH
 
@@ -101,7 +113,7 @@ and a slippage allowance.
 const quote = await client.quote({
   from: 'USDCx',
   to: 'ETH',
-  amountIn: '1.5',
+  amountIn,
   slippageBps: 50,
 })
 ```
