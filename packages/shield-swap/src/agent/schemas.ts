@@ -410,7 +410,7 @@ export const quoteSchema: AgentToolSchema = {
     properties: {
       from: { type: 'string', description: 'Input token symbol or id.' },
       to: { type: 'string', description: 'Output token symbol or id.' },
-      amountIn: { type: 'string', description: 'Positive input amount in raw base units (u128).' },
+      amountIn: { type: 'string', description: 'Positive decimal amount in input-token units, e.g. "1.5" USDCx. The action resolves decimals; do not pre-scale to base units.' },
       slippageBps: { type: 'integer', minimum: 0, maximum: 10000, description: 'Defaults to 50 (0.5%); a zero output floor is rejected.' },
     },
     required: ['from', 'to', 'amountIn'],

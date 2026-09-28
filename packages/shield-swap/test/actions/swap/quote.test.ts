@@ -41,6 +41,27 @@ function setup(count = 1, accountType: 'local' | 'rpc' = 'local') {
   return { client, params, route, request, routeCall, pause: () => { paused = true }, drain: () => { noLiquidity = true } }
 }
 const execution = { tokenRecord: '{ owner: aleo1me.private, amount: 5000000u128.private, _nonce: 1group.public }', blindedIdentity: { blindingFactor: '111field', blindedAddress: 'aleo1t08epjqqv8h7jpuy2m2cxm80zy2pcy5c4f3m82hnac4sjmdrjyysvx3s2h' }, nonce: 42n }
+
+describe('quote decimal inputs', () => {
+  it('converts a decimal string using the resolved input token decimals', async () => {
+    const { client, params, routeCall } = setup()
+    const offer = await client.quote({ ...params, amountIn: '1.5' })
+    expect(offer.amountIn).toBe(1_500_000n)
+    expect(routeCall).toHaveBeenCalledWith(expect.objectContaining({ amount_in: '1.5' }))
+  })
+
+  it('keeps bigint inputs in raw units', async () => {
+    const { client, params } = setup()
+    expect((await client.quote({ ...params, amountIn: 1n })).amountIn).toBe(1n)
+    expect((await client.quote({ ...params, amountIn: '1' })).amountIn).toBe(1_000_000n)
+  })
+
+  it.each(['0', '-1', '1.0000001', '1e6', 'NaN'])('rejects invalid or over-precise decimal input %s before routing', async (amountIn) => {
+    const { client, params, routeCall } = setup()
+    await expect(client.quote({ ...params, amountIn })).rejects.toThrow()
+    expect(routeCall).not.toHaveBeenCalled()
+  })
+})
 beforeEach(() => {
   vi.restoreAllMocks()
   clearRouteCache()
@@ -113,7 +134,8 @@ describe('quote → swap', () => {
     expect(readTools.some((t) => t.schema.name === 'shield_swap_swap')).toBe(false)
     const tool = readTools.find((t) => t.schema.name === 'shield_swap_quote')!
     expect(tool).toBeDefined()
-    const offer = await tool.handler({ ...s.params, amountIn: '500000' }) as any
+    const offer = await tool.handler({ ...s.params, amountIn: '0.5' }) as any
+    expect(offer.amountIn).toBe('500000')
     expect(JSON.parse(JSON.stringify(offer)).minOut).toBe('1219134')
     const write = createShieldSwapAgentTools({ client: s.client, includeWrites: true }).find((t) => t.schema.name === 'shield_swap_swap')!
     const expired = { ...offer, quotedAt: Date.now() - 120000, expiresAt: Date.now() - 60000 }

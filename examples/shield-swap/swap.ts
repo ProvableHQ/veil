@@ -14,15 +14,14 @@
  *
  * SPENDS REAL FUNDS. Needs a funded account holding the input token.
  */
-import { parseUnits, formatUnits, SwapOutputNotFinalizedError } from '../../packages/shield-swap/src/index.js'
+import { formatUnits, SwapOutputNotFinalizedError } from '../../packages/shield-swap/src/index.js'
 import { setupClient } from './setup-client.js'
 
 export async function swap() {
   const { client } = await setupClient({ privateKey: process.env.VEIL_E2E_PRIVATE_KEY })
 
   // Quote first; swap dispatches to the appropriate 1–3-hop action automatically.
-  const from = await client.tokenData('USDCx')
-  const offer = await client.quote({ from: from.id, to: 'ETH', amountIn: parseUnits('1.5', from.decimals) })
+  const offer = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: '1.5' })
 
   // Resolve sources once so both the swap and its later claim can reuse them.
   // Without an explicit map, swap({ quote }) resolves these during preparation.

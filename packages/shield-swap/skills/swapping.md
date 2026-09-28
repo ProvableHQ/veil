@@ -15,10 +15,11 @@ For new SDK integrations, use the configured API estimate through `client.quote`
 and pass the returned object directly to `client.swap`:
 
 ```ts
-const quote = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: 1_000_000n })
+const quote = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: '1.5' })
 const handle = await client.swap({ quote })
 ```
 
+Quote inputs accept decimal strings in token units or bigint in raw units.
 The route can contain 1–3 hops; dispatch is automatic. Quotes expire after
 60 seconds, reject missing estimates or zero minimum output, and carry their
 exact minimum into execution. Quote creation reads only API metadata and routing;

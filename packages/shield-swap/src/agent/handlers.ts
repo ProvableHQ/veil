@@ -131,7 +131,7 @@ export function createComposedHandlers(client: Client, api: ApiClient, program?:
   return {
     shield_swap_quote: async (i) => jsonSafe(await quote(client, {
       api, program, from: i.from as string, to: i.to as string,
-      amountIn: BigInt(i.amountIn as string), slippageBps: i.slippageBps as number | undefined,
+      amountIn: i.amountIn as string, slippageBps: i.slippageBps as number | undefined,
     })),
     shield_swap_get_balances: async (i) =>
       jsonSafe(

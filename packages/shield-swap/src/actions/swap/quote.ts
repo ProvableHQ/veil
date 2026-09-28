@@ -57,7 +57,9 @@ export type SwapQuote = {
  * Describes an exact-input quote request using indexed DEX state.
  * @property from Input token symbol or id.
  * @property to Output token symbol or id.
- * @property amountIn Positive raw input amount (u128).
+ * @property amountIn Positive decimal string in input-token units (e.g. `'1.5'`),
+ * or bigint in raw base units (u128). Strings must fit the token's decimals;
+ * numbers and excess precision are rejected rather than rounded.
  * @property slippageBps Whole basis points below expected output; defaults to 50 (0.5%). A zero floor is rejected.
  * @property program Core AMM deployment; defaults to the decorator's program or shield_swap.aleo.
  * @property api DEX API client; defaults to the decorated client's API. Required on a bare client.
@@ -65,7 +67,7 @@ export type SwapQuote = {
 export type QuoteParameters = {
   from: string
   to: string
-  amountIn: bigint
+  amountIn: bigint | string
   slippageBps?: number
   program?: string
   api?: ApiClient
@@ -78,16 +80,16 @@ export type QuoteParameters = {
  * no pool scans, tick reads, chain reads, signing or proving occur here.
  * The estimate is advisory; execution preserves the quoted minimum output.
  * @param client Client whose transport identifies the execution network.
- * @param params Tokens, raw input, slippage and optional API/deployment configuration.
+ * @param params Tokens, decimal-string or raw-bigint input, slippage and optional API/deployment configuration.
  * @returns A quote that can be passed directly to swap.
  * @throws When amounts, routing or network are invalid, the API estimate is
  * missing or unusable, the minimum is zero, or the quote expires while loading.
  * @example
- * const offer = await quote(client, { api, from: 'USDCx', to: 'ETH', amountIn: 5_000_000n })
+ * const offer = await quote(client, { api, from: 'USDCx', to: 'ETH', amountIn: '1.5' })
  * const handle = await swap(client, { quote: offer })
  */
 export async function quote(client: Client, params: QuoteParameters): Promise<SwapQuote> {
-  assertQuoteAmount(params.amountIn, 'amountIn')
+  if (typeof params.amountIn !== 'string') assertQuoteAmount(params.amountIn, 'amountIn')
   const slippageBps = params.slippageBps ?? 50
   assertQuoteSlippage(slippageBps)
   const network = quoteNetwork(client)
@@ -96,14 +98,16 @@ export async function quote(client: Client, params: QuoteParameters): Promise<Sw
   if (!api) throw new Error('quote requires a DEX API client; configure shieldSwapActions({ api: {} }) or pass api')
   const [from, to] = await Promise.all([tokenData(api, params.from), tokenData(api, params.to)])
   if (from.id === to.id) throw new Error('Cannot quote a token for itself')
-  const route = (await api.getRoute({ token_in: from.id, token_out: to.id, amount_in: formatUnits(params.amountIn, from.decimals) })).data
+  const amountIn = typeof params.amountIn === 'string' ? parseUnits(params.amountIn, from.decimals) : params.amountIn
+  assertQuoteAmount(amountIn, 'amountIn')
+  const route = (await api.getRoute({ token_in: from.id, token_out: to.id, amount_in: formatUnits(amountIn, from.decimals) })).data
   if (route.token_in !== from.id || route.token_out !== to.id) throw new Error('API route endpoints do not match the quote request')
   if (!route.hops?.length || route.hops.length > 3) throw new Error('Quote route must contain 1–3 hops')
   if (!route.estimated_amount_out) throw new Error('API route has no output estimate; request another quote')
   const expectedOut = parseUnits(route.estimated_amount_out, to.decimals)
   const result: SwapQuote = {
     version: 1, network, program: params.program ?? SHIELD_SWAP,
-    from: { ...from }, to: { ...to }, amountIn: params.amountIn, expectedOut,
+    from: { ...from }, to: { ...to }, amountIn, expectedOut,
     minOut: expectedOut * BigInt(10_000 - slippageBps) / 10_000n,
     slippageBps,
     hops: route.hops.map((hop) => ({ poolKey: hop.pool_key, tokenInId: hop.token_in, tokenOutId: hop.token_out })),

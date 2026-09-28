@@ -190,7 +190,9 @@ funded account).
   `getTokens()`; executable quotes come from `client.quote()` (backed by `client.api.getRoute()`); live pool state
   comes from `client.getSlot()`. Field literals (`…field`) and addresses
   are opaque — copy them exactly.
-- **Amounts are raw base units** (`bigint`, u128) on the SDK side. Convert
+- **Quote inputs accept decimal strings** in token units (for example,
+  `amountIn: '1.5'`). Quote resolves decimals; bigint inputs remain raw units.
+  Other action amounts are raw base units (`bigint`, u128). Convert
   with the token's `decimals` from the API: 1 token = `10n ** BigInt(decimals)`
   units.
 - **Never show raw units to the user.** Anything user-facing — balances,

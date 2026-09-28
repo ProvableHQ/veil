@@ -2,7 +2,7 @@
 import { writeFile } from 'node:fs/promises'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { waitForConfirmation } from '@provablehq/veil-core'
-import { parseUnits, shieldSwapActions } from '@provablehq/shield-swap-sdk'
+import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
 import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
 
 // Create an account or use an existing key. Retain a generated key for recovery.
@@ -22,11 +22,8 @@ const client = walletClient.extend(shieldSwapActions({
 await client.authenticateShieldSwap()
 const drop = await client.api.confirmAirdrop(account.address)
 
-const from = await client.tokenData('USDCx')
-const amountIn = parseUnits('1.5', from.decimals)
-
 // Quote a 0.5% output floor. Swap chooses single- or multi-hop execution.
-const quote = await client.quote({ from: from.id, to: 'ETH', amountIn, slippageBps: 50 })
+const quote = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: '1.5', slippageBps: 50 })
 const handle = await client.swap({ quote })
 
 // The claim dispatches to the input/output token programs, whose sources it needs.
@@ -37,5 +34,10 @@ const imports = await client.resolveDexImports({
 
 // Wait for the swap to succeed, then submit the claim once.
 await waitForConfirmation(client, handle.transactionId)
+// Mapping reads can briefly lag transaction confirmation on the hosted node.
+for (let attempt = 0; !(await client.getSwapOutput({ swapId: handle.swapId!, program: quote.program })); attempt++) {
+  if (attempt >= 39) throw new Error('Swap output is not readable yet; recover this handle before starting another trade')
+  await new Promise((resolve) => setTimeout(resolve, 3_000))
+}
 const claim = await client.claimSwapOutput({ handle, imports })
 if (claim.amountOut <= 0n) throw new Error('The claim returned no ETH')

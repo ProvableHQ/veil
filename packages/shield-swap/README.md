@@ -72,7 +72,7 @@ hosted sandbox — run those locally.
 const quote = await client.quote({
   from: 'USDCx',
   to: 'ETH',
-  amountIn: 1_500_000n, // raw input-token base units
+  amountIn: '1.5',     // decimal input-token units; bigint also accepts raw units
   slippageBps: 50,     // 0.5%; defaults to 50
 })
 const handle = await client.swap({ quote })
@@ -84,6 +84,10 @@ const handle = await client.swap({ quote })
 decimals using integer arithmetic. It makes no chain reads, performs no local
 swap simulation and does not fetch tick data or program sources. API authentication
 is required for the route endpoint. The transport MUST specify a network.
+
+Decimal-string inputs are converted using the input token's decimals; bigint
+inputs already represent raw base units. Excess precision and JavaScript numbers
+are rejected. The agent/MCP quote tool accepts decimal strings in token units.
 
 A quote carries `from`, `to`, `amountIn`, `expectedOut`, `minOut`, `slippageBps`,
 ordered `hops`, `network`, `program`, `version`, `quotedAt`, `expiresAt`, and API

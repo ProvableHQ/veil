@@ -28,12 +28,14 @@ The call resolves differently by signer:
 ## Execute a quote
 
 ```ts
-const quote = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: 1_000_000n })
+const quote = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: '1.5' })
 const handle = await client.swap({ quote })
 ```
 
 This overload selects single- or multi-hop execution and preserves `quote.minOut`
-exactly. Quotes expire after 60 seconds; expiry is checked during preparation,
+exactly. Quote inputs accept decimal strings in token units or bigint in raw
+base units; the quote resolves decimals and rejects excess precision. Quotes expire after 60 seconds;
+expiry is checked during preparation,
 not after proving has begun. The transaction's block deadline remains separate.
 Execution checks only route pools on chain and resolves imports automatically.
 Wallet callers MUST additionally supply `tokenRecord`. The quote's amount,

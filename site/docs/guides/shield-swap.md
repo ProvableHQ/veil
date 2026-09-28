@@ -178,7 +178,7 @@ calculates a minimum output. No pool or tick reads occur while quoting.
 const quote = await client.quote({
   from: 'USDCx',
   to: 'ETH',
-  amountIn: 1_000_000n,
+  amountIn: '1.5', // token units; bigint inputs use raw base units
   slippageBps: 50,
 })
 ```

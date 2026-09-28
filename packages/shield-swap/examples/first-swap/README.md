@@ -56,15 +56,18 @@ control. The example adds no other local storage.
 ## Quote and swap
 
 `client.quote` trusts the API's route and output estimate, converts the estimate
-to raw units, and calculates a 0.5% minimum output. `client.swap({ quote })`
+to raw units, and calculates a 0.5% minimum output. The input `'1.5'` is a decimal
+string in USDCx units; quote resolves its decimals automatically. Bigint inputs
+remain raw base units. `client.swap({ quote })`
 checks the route pools on chain and executes one, two or three hops automatically.
 It preserves the exact quoted minimum. Quotes expire after 60 seconds; a missing
 estimate or zero floor fails before submission.
 
 ## Completion and recovery
 
-`waitForConfirmation` waits for the swap transaction to succeed before the
-example submits one claim. Rejection or timeout stops the run before claiming.
+`waitForConfirmation` waits for the swap transaction to succeed. The example
+then allows up to two minutes for its output mapping to become readable before
+submitting one claim. Rejection or timeout stops the run before claiming.
 A successful run ends after the claim confirms. `handle.transactionId` identifies
 the swap; `claim.transactionId` and `claim.amountOut` identify the claim and its
 output. The script does not log these values or write a separate result file.

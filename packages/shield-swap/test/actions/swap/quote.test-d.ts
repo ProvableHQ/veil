@@ -19,6 +19,7 @@ it('retains manual return types and accepts quotes on both action surfaces', () 
   swap(client, { quote, slippageBps: 100 })
   // @ts-expect-error Quote fixes the program.
   client.swap({ quote, program: 'other.aleo' })
-  // @ts-expect-error Quotes use bigint amounts, not API decimal strings.
-  client.quote({ from: 'A', to: 'B', amountIn: '1' })
+  expectTypeOf(client.quote({ from: 'A', to: 'B', amountIn: '1.5' })).toEqualTypeOf<Promise<SwapQuote>>()
+  // @ts-expect-error Floating-point numbers are ambiguous; use strings or bigint.
+  client.quote({ from: 'A', to: 'B', amountIn: 1.5 })
 })
