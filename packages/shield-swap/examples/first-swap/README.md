@@ -1,12 +1,13 @@
-# Your first Shield Swap
+# Make a private swap on testnet
 
-[swap.ts](./swap.ts) creates a testnet account, requests test tokens, swaps
-**1.5 USDCx for ETH**, and claims the ETH as a private record. It also saves
-what is needed to recover a swap if the process stops before claiming.
+This tutorial creates an Aleo account, obtains test tokens, and swaps
+**1.5 USDCx for ETH** through Shield Swap. The trade has two transactions:
+one requests the swap, and the other claims its output as a private record.
+[swap.ts](./swap.ts) contains the complete runnable example.
 
 ## Run the example
 
-Use Node.js 22 or later and pnpm 10. From the Veil repository root:
+Install Node.js 22 or later and pnpm 10. From the Veil repository root, run:
 
 ```bash
 pnpm setup:first-swap
@@ -14,24 +15,19 @@ cd packages/shield-swap/examples/first-swap
 npm start
 ```
 
-The setup command installs dependencies, builds the checkout's SDK packages,
-and installs them into this example. It also checks the example's TypeScript.
-It does not create an account or submit a transaction; `npm start` does.
+The setup command installs the SDK and checks the example's TypeScript.
+`npm start` runs the trade on testnet. A successful run ends after the claim
+confirms and its output amount is positive.
 
-This setup is needed while the new actions are unpublished: the example's
-pinned npm version, `0.11.0`, does not contain them. The packaging details live
-in the setup script, which CI also runs. After changing SDK code, rerun setup
-to refresh the example's installed packages.
+To use an existing account, set `SHIELD_SWAP_PRIVATE_KEY` before starting.
+Otherwise the script creates an account and saves its key to `private-key.txt`.
+Each run submits a new trade; use the recovery steps below to finish a trade
+that was already submitted.
 
-To use an existing account, set `SHIELD_SWAP_PRIVATE_KEY` before `npm start`.
-Otherwise the script generates a key and saves it to `private-key.txt`. Keep
-that key and the generated `<account-address>.json` recovery file private.
+## 1. Load testnet and create an account
 
-The example exits successfully after the claim confirms and its output amount
-is positive. It currently prints no transaction summary. Each successful run
-makes a new trade.
-
-## 1. Load testnet and choose an account
+Load the testnet SDK, then use the supplied private key or generate an account.
+Save a generated key so the same account can be used in a later session.
 
 ```ts
 import { writeFile } from 'node:fs/promises'
@@ -45,21 +41,18 @@ if (!process.env.SHIELD_SWAP_PRIVATE_KEY) {
 }
 ```
 
-`loadNetwork('testnet')` loads the SDK for the chosen network. Supplying
-`SHIELD_SWAP_PRIVATE_KEY` reuses an account; omitting it generates a new one.
-The generated key is written with owner-only permissions. The `wx` flag refuses
-to overwrite an existing key, so an accidental rerun cannot replace it.
-
-To reuse a generated account on a later run, from this example's directory:
+To use the saved account, run this command from the example's directory before
+starting another session:
 
 ```bash
 export SHIELD_SWAP_PRIVATE_KEY="$(cat private-key.txt)"
 ```
 
-Reusing an account does not resume a pending trade automatically. See recovery
-below before rerunning a script that stopped after submission.
+## 2. Add swap actions to the client
 
-## 2. Create the client and its recovery store
+Create a wallet client with the account's key. The client configures delegated
+proving, fee payment, and a record scanner. Extend it with `shieldSwapActions`
+to add quoting, swapping, and claiming.
 
 ```ts
 import { shieldSwapActions } from '@provablehq/shield-swap-sdk'
@@ -72,38 +65,37 @@ const client = walletClient.extend(shieldSwapActions({
 }))
 ```
 
-`createAleoClient` configures the signing account, delegated prover, fee payment,
-and record scanner. `extend(shieldSwapActions(...))` adds the DEX actions to that
-client, including `quote`, `swap`, and `claimSwapOutput`.
+`api: {}` enables the testnet DEX API for token information, route discovery,
+output estimates, and faucet requests.
 
-- `api: {}` enables the DEX API with the defaults for testnet. It supplies
-  token information, route discovery, output estimates, and the faucet.
-- `swapFileStore(...)` saves private swap identities and claim recovery data
-  in an account-specific JSON file. Reopening the same file lets a later process
-  recover unfinished swaps. Program source code is not stored in the handle.
+`swapFileStore` saves the information needed to claim a swap in
+`<account-address>.json`. Reuse this file with the same account to recover an
+unfinished trade. **Do not commit the private key or recovery file to source
+control.**
 
-`swapFileStore` is available from the Node-only `/node` entrypoint because it
-writes to the filesystem. The original name, `fileBlindedIdentityStore`, remains
-an alias for the same function.
+## 3. Request test tokens
 
-## 3. Authenticate and obtain test tokens
+Authenticate with the DEX API, then request tokens from its testnet faucet.
+Authentication signs an API challenge with the configured account.
 
 ```ts
 await client.authenticateShieldSwap()
 const drop = await client.api.confirmAirdrop(account.address)
 ```
 
-Authentication signs the API's challenge with the configured account.
-`confirmAirdrop` requests test tokens and waits for the faucet job. Because this
-client has a record scanner, it also waits for the transferred records to appear
-there, making them available for the swap. No separate record-polling loop is
-needed. Without a scanner, the action confirms only the faucet job.
+A private token balance consists of unspent records owned by the account.
+The record scanner finds these records so the client can spend them.
+`confirmAirdrop` waits for the faucet job and, when a scanner is configured,
+for its transferred records to arrive. This client includes a scanner.
 
-`drop` contains the faucet outcome, including rate limits or per-token results.
-An existing funded account can still trade when the faucet is rate-limited;
-an account without a USDCx record large enough to cover the input cannot.
+Inspect `drop` for the faucet outcome, including per-token results or a rate
+limit. The swap needs one USDCx record that covers 1.5 USDCx. An account that
+already holds that record can trade without another airdrop.
 
-## 4. Quote the trade
+## 4. Quote 1.5 USDCx for ETH
+
+Request a quote with the input and output token symbols, a decimal amount,
+and a slippage allowance.
 
 ```ts
 const quote = await client.quote({
@@ -114,33 +106,34 @@ const quote = await client.quote({
 })
 ```
 
-The amount is a **decimal string in USDCx units**. The SDK looks up the token's
-decimals and converts it to raw units. A `bigint` input instead represents raw
-units; JavaScript numbers are not accepted because they can lose precision.
+`'1.5'` is a decimal string in USDCx units. The SDK looks up the token's decimals
+and converts the amount to raw units. A `bigint` input represents raw units
+instead. JavaScript numbers are not accepted because they can lose precision.
 
-The quote uses the indexed API's route and estimated output. `slippageBps: 50`
-allows 0.5% slippage, setting the minimum output to 99.5% of that estimate,
-rounded down to raw units. Returned amounts such as `quote.expectedOut` and
-`quote.minOut` are raw-unit `bigint` values.
+The quote uses the API's route and estimated output. Fifty basis points allow
+0.5% slippage: `quote.minOut` is 99.5% of `quote.expectedOut`, rounded down to
+raw units. Both returned amounts are `bigint` values.
 
-Routes can contain one, two, or three hops. Quotes expire after 60 seconds, so
-request one shortly before executing it.
+A route can pass through one, two, or three pools. Quotes expire after
+60 seconds, so submit the swap shortly after requesting a quote.
 
 ## 5. Submit the swap
+
+Pass the quote directly to `swap`. The client checks the quoted pools on chain
+and executes the selected route while preserving the quote's minimum output.
 
 ```ts
 const handle = await client.swap({ quote })
 ```
 
-The action checks the quoted pools on chain, resolves the required program
-imports, and selects single-hop or multi-hop execution automatically. It keeps
-the quote's exact minimum output.
+The returned `handle` identifies the swap and its transaction. The configured
+store saves its recovery information. The swap request does not collect the
+output; that requires a claim.
 
-The returned `handle` identifies this swap, including its transaction ID and
-swap ID on this local-account path. The configured store records its recovery
-data. Submission is the first phase: the output still needs to be claimed.
+## 6. Wait for the result and claim the ETH
 
-## 6. Wait and claim the output
+Wait for the request transaction to succeed and its output to become readable,
+then submit the claim.
 
 ```ts
 await client.waitForSwapOutput({ handle })
@@ -148,33 +141,31 @@ const claim = await client.claimSwapOutput({ handle })
 if (claim.amountOut <= 0n) throw new Error('The claim returned no ETH')
 ```
 
-`waitForSwapOutput` first confirms the request transaction, then waits for its
-on-chain output mapping to become readable. Both stages share a **15-second
-polling timeout**, with checks every three seconds. Rejected transactions fail
-immediately. The helper only reads state; it never submits a transaction.
-
-If a slower network needs more time, override the timeout in milliseconds:
+`waitForSwapOutput` checks every three seconds. Transaction confirmation and
+output readiness share a **15-second polling timeout**. A rejected transaction
+fails immediately. To allow more time, pass a timeout in milliseconds:
 
 ```ts
 await client.waitForSwapOutput({ handle, timeout: 60_000 })
 ```
 
-`claimSwapOutput` reads the actual amounts from chain, resolves its program
-imports automatically, and submits the separate claim transaction. There is
-no need to collect imports or copy program sources into the handle. This local
-client waits for claim confirmation before returning.
+`claimSwapOutput` reads the actual output amounts from chain and submits the
+claim transaction. It resolves the required program imports automatically.
+This client waits for claim confirmation before returning.
 
-`claim.transactionId` identifies the claim, `claim.amountOut` is the raw amount
-received, and `claim.amountRemaining` is any unspent input returned as a refund.
-The wrapped ETH output is received as the underlying asset's private record.
+The claim returns three values:
+
+- `transactionId` identifies the claim transaction.
+- `amountOut` is the raw amount of ETH received as a private record.
+- `amountRemaining` is any unspent USDCx returned as a refund, in raw units.
 
 ## Recover an interrupted swap
 
-A timeout does not mean the swap failed. Do not restart the entire script to
-recover a submitted trade: doing so can submit another swap.
+A timeout does not prove that a swap failed. **Do not restart the entire script
+to recover a submitted trade**; that can submit another swap.
 
-Recreate the client with the same private key and `swapFileStore` file, then
-inspect its pending swaps:
+Recreate the client with the same private key and `swapFileStore` file. Find
+its unclaimed outputs and claim those with a stored handle:
 
 ```ts
 const { swaps } = await client.getUnclaimedSwaps()
@@ -186,27 +177,15 @@ for (const swap of swaps) {
 }
 ```
 
-An empty list can mean the request is still pending or its output was already
-claimed. Check transaction status before deciding to submit a new trade. Keep
-the private key and recovery file together; never add either to source control.
-See the [recovery guide](https://shield.fi/docs/sdk/swaps#recover-pending-claims)
-for unknown submission outcomes and history reconciliation.
+An empty list can mean the request is still pending or the output was already
+claimed. Check transaction status before submitting a new trade. See the
+[recovery guide](https://shield.fi/docs/sdk/swaps#recover-pending-claims) for
+unknown submission outcomes and history reconciliation.
 
 ## Check types without trading
 
-From this example's directory:
+From the example's directory, run:
 
 ```bash
 npm run typecheck
 ```
-
-## Using the example from an installed SDK
-
-SDK releases containing this example include it at
-`node_modules/@provablehq/shield-swap-sdk/examples/first-swap`. Copy the folder
-outside `node_modules` before running, so dependency reinstalls cannot remove
-account files.
-
-For this unreleased version, use the repository setup above. A standalone
-`npm ci` requires the example's dependency pins and lockfile to be updated to a
-release containing these actions first.
