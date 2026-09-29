@@ -1,0 +1,38 @@
+{
+  "name": "@provablehq/aleo-bridge-cli",
+  "version": "0.11.1",
+  "description": "Command line client for reviewed Aleo bridge routes.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ProvableHQ/veil.git",
+    "directory": "packages/bridge-cli"
+  },
+  "homepage": "https://github.com/ProvableHQ/veil#readme",
+  "type": "module",
+  "bin": {
+    "aleo-bridge": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run --root ../.. packages/bridge-cli/test",
+    "typecheck": "tsc --noEmit"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@provablehq/aleo-bridge-sdk": "workspace:^",
+    "@provablehq/sdk": "^0.11.11",
+    "@provablehq/veil-aleo-sdk": "workspace:^",
+    "@provablehq/veil-core": "workspace:^",
+    "@solana/kit": "^8.0.0",
+    "viem": "^2.21.0"
+  }
+}
