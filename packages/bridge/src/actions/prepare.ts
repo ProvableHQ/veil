@@ -131,6 +131,14 @@ export function prepare(
     throw new BridgeError('record and private mint modes are only supported by xReserve routes')
   }
 
+  if (params.cctp && route.protocol !== 'cctp') throw new BridgeError('CCTP options require a CCTP route')
+  if (route.protocol === 'cctp') {
+    if (sourceChain.family !== 'evm' || destinationChain.family !== 'evm') throw new BridgeError('CCTP requires EVM endpoints')
+    if (params.cctp?.speed != null && !['fast', 'standard'].includes(params.cctp.speed)) throw new BridgeError('Invalid CCTP speed')
+    if (params.cctp?.forwarding != null && typeof params.cctp.forwarding !== 'boolean') throw new BridgeError('Invalid CCTP forwarding option')
+    if (params.cctp?.maxFee != null && parseDecimalAmount(params.cctp.maxFee, 6) < 0n) throw new BridgeError('Invalid CCTP fee ceiling')
+  }
+
   const atomic = parseDecimalAmount(params.amount, sourceAsset.decimals)
   if (atomic <= 0n) throw new BridgeError('Bridge transfer amount must be greater than zero')
   parseDecimalAmount(params.amount, destinationAsset.decimals)
@@ -144,12 +152,20 @@ export function prepare(
 
   // Steps are descriptive application guidance. They do not execute and are
   // derived from the validated direction and provider rather than caller input.
-  const steps = route.protocol === 'xreserve'
+  const steps: BridgeExecutionStep[] = route.protocol === 'cctp'
+    ? [
+        { key: 'source-approval', kind: 'approve', chainId: sourceChain.id, executor: 'evm-wallet', description: 'Approve native USDC for Circle TokenMessenger.', irreversible: false },
+        { key: 'source-burn', kind: 'burn', chainId: sourceChain.id, executor: 'evm-wallet', description: 'Burn native USDC for minting on the destination chain.', irreversible: true },
+        { key: 'burn-attestation', kind: 'wait-attestation', executor: 'protocol', description: 'Wait for Circle to attest the source burn.', irreversible: false },
+        { key: 'destination-mint', kind: 'mint', chainId: destinationChain.id, executor: params.cctp?.forwarding === false ? 'evm-wallet' : 'protocol', description: 'Mint native USDC and verify the destination transaction.', irreversible: false },
+      ]
+    : route.protocol === 'xreserve'
     ? xreserveSteps(route, sourceAsset, destinationAsset, sourceChain, destinationChain, mintMode)
     : hyperlaneSteps(sourceAsset, destinationAsset, sourceChain, destinationChain)
   const fees: BridgePlan['fees'] = []
 
   return {
+    ...(route.protocol === 'cctp' ? { cctp: { speed: 'standard' as const, forwarding: true, ...params.cctp } } : {}),
     registryVersion: registry.version,
     protocol: route.protocol,
     route,

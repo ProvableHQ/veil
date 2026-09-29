@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { fundArcFromEthereum } from './ethereum-arc.js'
 import { prepare } from '../../../../src/actions/prepare.js'
 import {
   createAleoClient,
@@ -13,6 +14,7 @@ import { createLiveBenchmark, loadLiveState, quoteParametersFromPlan, saveLiveSt
 import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, required, requiredEvmPrivateKey } from '../config.js'
 
 const cases = [
+  { name: 'ethereum-arc-aleo', chain: 'arc', rpc: 'BRIDGE_LIVE_ARC_RPC_URL' },
   { name: 'evm-xreserve', chain: 'ethereum', rpc: 'BRIDGE_LIVE_ETHEREUM_RPC_URL' },
   { name: 'arc-xreserve', chain: 'arc', rpc: 'BRIDGE_LIVE_ARC_RPC_URL' },
 ] as const
@@ -32,6 +34,7 @@ async function delegatedAleo(privateKey: string, apiKey?: string) {
 
 describe.each(cases)('mainnet $chain xReserve bridge', (scenario) => {
   it.skipIf(!mainnetCaseEnabled(scenario.name))('recovers the minimum USDC deposit and privately mints on Aleo', async () => {
+    if (scenario.name === 'ethereum-arc-aleo' && !await fundArcFromEthereum()) return
     const routeId = `xreserve:${scenario.chain}/usdc->aleo/usdcx`
     const path = liveStatePath('mainnet', `${scenario.name}-recovery`)
     const state = loadLiveState(path, routeId)

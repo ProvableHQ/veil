@@ -1,3 +1,4 @@
+import * as cctp from '../protocols/cctp/evm.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import {
   requireAleoClient,
@@ -32,6 +33,7 @@ import { prepare } from './prepare.js'
  * @param registry Supported chains, assets, and bridge provider deployments.
  * @param clients Network access for the chains involved in the transfer.
  * @param params Transfer details whose current cost and requirements are calculated.
+ * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
  * @returns The amount expected at the destination and the known bridge, network, and approval costs.
  * @throws BridgeError When the selected provider cannot quote the transfer or required network access is unavailable.
  * @example const result = await quote(registry, clients, { source, destination, amount: '1', recipient })
@@ -40,10 +42,12 @@ export async function quote(
   registry: BridgeRegistry,
   clients: BridgeChainClients,
   params: QuoteParameters,
+  fetcher: typeof fetch = globalThis.fetch,
 ): Promise<BridgeQuote> {
   // Build the canonical plan before reading live prices. The returned plan is
   // the exact value the caller passes to execution and stores in progress.
   const plan = prepare(registry, params)
+  if (plan.protocol === 'cctp') return cctp.quote(registry, clients, fetcher, { plan })
   const protocolParams = {
     plan,
     privateMintSecretNonce: params.privateMintSecretNonce,

@@ -1,3 +1,4 @@
+import * as cctp from '../protocols/cctp/evm.js'
 import { transactionStatus } from '@provablehq/veil-core'
 import { isHash } from 'viem'
 import { requireAleoClient, requireEvmClient, requireSolanaClient, type BridgeChainClients } from '../connections/resolve.js'
@@ -47,6 +48,7 @@ export async function getStatus(
   if (receipt.protocol !== params.plan.protocol || receipt.protocolState.routeId !== params.plan.route.id) {
     throw new BridgeError('Bridge receipt does not match the prepared route')
   }
+  if (params.plan.protocol === 'cctp') return cctp.getStatus(registry, clients, client, params)
   // Terminal receipts are facts already established by an earlier chain read.
   // Checking them again must not route into a protocol-specific pending branch.
   if (receipt.status === 'COMPLETED' || receipt.status === 'FAILED' || receipt.status === 'EXPIRED') {

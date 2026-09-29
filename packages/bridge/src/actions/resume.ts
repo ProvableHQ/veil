@@ -1,3 +1,4 @@
+import * as cctp from '../protocols/cctp/evm.js'
 import { classifyBroadcastError, DuplicateTransactionError } from '@provablehq/veil-core'
 import { requireAleoClient, requireEvmClientWithWallet, type BridgeChainClients } from '../connections/resolve.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
@@ -24,6 +25,7 @@ import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
  * @param registry Supported chains, assets, and bridge provider deployments.
  * @param clients Network and wallet access for the source chain.
  * @param params Recovered transfer state, confirmation controls, and an optional callback for saving the new submission.
+ * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
  * @returns The submitted transaction identifier and the updated state of the in-progress transfer.
  * @throws BridgeError When no source transaction remains to be submitted, required wallet access is unavailable, or submission fails.
  * @example const execution = await resume(registry, clients, { progress })
@@ -32,11 +34,13 @@ export async function resume(
   registry: BridgeRegistry,
   clients: BridgeChainClients,
   params: ResumeParameters,
+  fetcher: typeof fetch = globalThis.fetch,
 ): Promise<BridgeExecution> {
   const { plan, receipt } = params.progress
   if (params.progress.next !== 'resume' || receipt.status !== 'SOURCE_SUBMISSION_PENDING') {
     throw new BridgeError('Bridge progress has no source submission to resume')
   }
+  if (plan.protocol === 'cctp') return cctp.execute(registry, clients, fetcher, { ...params, plan, resume: receipt })
   const route = resolveTransferRoute(registry, plan)
   const onSubmitted = params.onCheckpoint
     ? async (value: BridgeReceipt) => params.onCheckpoint?.(createBridgeCheckpoint(plan, value))

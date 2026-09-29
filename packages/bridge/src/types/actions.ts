@@ -1,3 +1,4 @@
+import type { EvmCctpTransferQuote, EvmCctpTransferExecution } from './cctp.js'
 import type { ProvingProgressHandler, TransactionInput } from '@provablehq/veil-core'
 import type {
   AleoHyperlaneGasQuote,
@@ -35,6 +36,7 @@ export type BridgeQuoteKind =
   | 'aleo-hyperlane'
   | 'aleo-xreserve'
   | 'evm-hyperlane'
+  | 'evm-cctp'
   | 'evm-xreserve'
   | 'solana-hyperlane'
 
@@ -67,6 +69,7 @@ export type BridgeQuote = ({ plan: BridgePlan }) & (
   | ({ kind: 'aleo-hyperlane' } & AleoHyperlaneGasQuote)
   | AleoXReserveQuote
   | ({ kind: 'evm-hyperlane' } & EvmHyperlaneTransferQuote)
+  | ({ kind: 'evm-cctp' } & EvmCctpTransferQuote)
   | ({ kind: 'evm-xreserve' } & EvmXReserveTransferQuote)
   | ({ kind: 'solana-hyperlane' } & SolanaHyperlaneTransferQuote)
 )
@@ -108,6 +111,7 @@ export type BridgeExecutionKind =
   | 'aleo-hyperlane'
   | 'aleo-xreserve'
   | 'evm-hyperlane'
+  | 'evm-cctp'
   | 'evm-xreserve'
   | 'solana-hyperlane'
 
@@ -116,6 +120,7 @@ export type BridgeExecution =
   | ({ kind: 'aleo-hyperlane' } & AleoHyperlaneTransferRemoteExecution)
   | ({ kind: 'aleo-xreserve' } & XReserveBurnExecution)
   | ({ kind: 'evm-hyperlane' } & EvmHyperlaneTransferExecution)
+  | ({ kind: 'evm-cctp' } & EvmCctpTransferExecution)
   | ({ kind: 'evm-xreserve' } & EvmXReserveTransferExecution)
   | ({ kind: 'solana-hyperlane' } & SolanaHyperlaneTransferExecution)
 
@@ -133,14 +138,16 @@ export type GetStatusParameters = {
 }
 
 /**
- * Controls the wallet transaction that privately delivers USDCx on Aleo.
+ * Controls the destination wallet transaction for xReserve private delivery or CCTP minting.
  *
+ * @property cctp Optional manual-mint override for an attested, unused CCTP message when forwarding stalls. Defaults to waiting for forwarding.
  * @property privateMintSecretNonce Secret Aleo scalar required by a private xReserve mint. Defaults to `0scalar`.
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
  * @property onCheckpoint Durable hook called before supported local Aleo broadcast and again after destination submission.
  * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
  */
 type CompleteOptions = {
+  cctp?: { manualMint: boolean } | undefined
   privateMintSecretNonce?: string | undefined
   privateFee?: boolean | undefined
   onCheckpoint?: ((checkpoint: BridgeCheckpoint) => void | Promise<void>) | undefined
@@ -148,7 +155,7 @@ type CompleteOptions = {
 }
 
 /**
- * Supplies the state and wallet preferences required to receive private USDCx on Aleo.
+ * Supplies transfer state and wallet preferences for destination completion.
  *
  * An application returning after an interruption passes recovered progress. An
  * application that stayed open passes the original transfer details and latest
@@ -157,6 +164,7 @@ type CompleteOptions = {
  * @property progress Recovered progress whose next operation is `complete`.
  * @property plan Route, assets, amount, and recipient retained while the application stayed open.
  * @property receipt Circle-attested transfer state retained while the application stayed open.
+ * @property cctp Optional manual-mint override for an attested, unused CCTP message when forwarding stalls. Defaults to waiting for forwarding.
  * @property privateMintSecretNonce Secret Aleo scalar required by a private xReserve mint. Defaults to `0scalar` and must match the source deposit.
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
  * @property onCheckpoint Optional durable hook called before supported local Aleo broadcast and again after destination submission.

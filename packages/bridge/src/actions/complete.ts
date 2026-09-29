@@ -1,3 +1,4 @@
+import * as cctp from '../protocols/cctp/evm.js'
 import { classifyBroadcastError, DuplicateTransactionError } from '@provablehq/veil-core'
 import { isHash, isHex } from 'viem'
 import { requireAleoClient, requireAleoClientWithWallet, type BridgeChainClients } from '../connections/resolve.js'
@@ -11,17 +12,18 @@ import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
 /**
  * Submits the destination-chain transaction required to receive bridged funds.
  *
- * This currently applies to a private USDC-to-USDCx xReserve transfer after
- * Circle has attested the source deposit. The Aleo wallet proves, signs, and
- * submits the private mint that delivers a private record to the recipient.
+ * Completes an attested xReserve private mint on Aleo or a manual CCTP mint
+ * on an EVM destination. The destination wallet signs and submits; Aleo
+ * private delivery also proves the mint.
  *
  * The source transaction is never repeated. The destination transaction incurs
- * an Aleo network fee even if it fails.
+ * a destination network fee even if it fails.
  *
  * @param registry Supported chains, assets, and bridge provider deployments.
- * @param clients Network and wallet access for the Aleo destination chain.
+ * @param clients Network and wallet access for the destination chain.
  * @param params Transfer state ready for private delivery, fee preference, secret nonce, and optional callback for saving recovery information.
- * @returns The Aleo transaction identifier and the destination confirmation state.
+ * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
+ * @returns The destination transaction identifier and its confirmation state.
  * @throws BridgeError When no destination transaction is required, the Circle attestation is invalid, required wallet access is unavailable, or submission fails.
  * @example const execution = await complete(registry, clients, { plan, receipt: ready, onCheckpoint: save })
  */
@@ -29,13 +31,15 @@ export async function complete(
   registry: BridgeRegistry,
   clients: BridgeChainClients,
   params: CompleteParameters,
+  fetcher: typeof fetch = globalThis.fetch,
 ): Promise<BridgeExecution> {
   let plan: import('../types/protocol.js').BridgePlan
   let receipt: BridgeReceipt
   // Accept either recovered progress or the equivalent in-memory pair. Both
   // paths must reach the same explicit destination-authorization boundary.
   if (params.progress) {
-    if (params.progress.next !== 'complete') {
+    if (params.progress.next !== 'complete'
+      && !(params.progress.next === 'wait' && params.progress.plan.protocol === 'cctp' && params.cctp?.manualMint)) {
       throw new BridgeError('Bridge progress has no destination action to complete')
     }
     plan = params.progress.plan
@@ -46,6 +50,7 @@ export async function complete(
   } else {
     throw new BridgeError('Bridge completion requires recovered progress')
   }
+  if (plan.protocol === 'cctp') return cctp.complete(registry, clients, fetcher, params)
   const route = resolveTransferRoute(registry, plan)
   if (receipt.status !== 'DESTINATION_ACTION_REQUIRED'
     || receipt.nextAction?.kind !== 'xreserve-private-mint'

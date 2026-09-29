@@ -35,3 +35,23 @@ on Aleo. Arc requires USDC for both the deposit and native gas.
 Progress is persisted to `mainnet/arc-xreserve-recovery.json` beneath the state
 directory. Reuse it after timeout; do not delete it to retry a submitted deposit.
 The Ethereum case remains `evm-xreserve` with its own recovery file.
+
+### Ethereum → Arc → Aleo
+
+Select `BRIDGE_LIVE_MAINNET_CASES=ethereum-arc-aleo` with the existing mainnet
+acknowledgements. The SDK first transfers 5 native USDC from Ethereum to Arc
+using CCTP Fast Transfer and forwarding, capped at 0.25 USDC in protocol and
+forwarding fees, then privately mints 2 USDCx on Aleo through xReserve.
+The remaining Arc USDC funds the separate `arc-xreserve` case (another 2 USDC)
+and Arc gas. Run those cases sequentially with the same persistent state
+directory. Each leg recovers its own saved checkpoint before any new submission.
+Ethereum gas and the Aleo proving fee are additional.
+
+Without the transaction acknowledgement, the journey only quotes the first
+leg. A successful quote is not proof of end-to-end delivery.
+
+For a saved, attested CCTP burn whose forwarding stalls, fund the test signer
+with Arc gas and set `BRIDGE_LIVE_CCTP_MANUAL_MINT=1` alongside the execution
+acknowledgement. The SDK manually mints that existing message before proceeding;
+it does not submit another Ethereum burn. This validates manual recovery, not
+successful Circle forwarding.

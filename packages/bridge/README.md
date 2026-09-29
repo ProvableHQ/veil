@@ -1,7 +1,8 @@
 # @provablehq/aleo-bridge-sdk
 
-Moves assets between Aleo, Ethereum, and Solana through reviewed Hyperlane and
-Circle xReserve deployments.
+Moves assets through reviewed Hyperlane, Circle xReserve, and Circle CCTP deployments.
+CCTP brings native USDC from Ethereum, Base, or Arbitrum to Arc; xReserve brings
+Arc USDC to Aleo as USDCx.
 
 The package supports browser wallets and local keys. It does not choose a
 wallet, store transfer progress, or submit a second transaction after an
@@ -25,12 +26,59 @@ interruption without caller authorization.
 | Aleo SOL | Solana | SOL | Hyperlane |
 | Ethereum USDC | Aleo | USDCx | Circle xReserve |
 | Arc USDC | Aleo | USDCx | Circle xReserve |
+| Ethereum, Base, or Arbitrum USDC | Arc | USDC | Circle CCTP V2 |
 | Aleo USDCx | Ethereum | USDC | Circle xReserve |
 
 The registry also contains incomplete ALEO and USAD Hyperlane entries for
 deployment discovery. Those entries are marked `metadata-required` and cannot
 be quoted or executed. Solana routes currently support native SOL, not USDC or
 other SPL tokens.
+
+## Bring USDC to Arc
+
+Configure EVM clients for the source chain and Arc, then use the same bridge
+lifecycle as other routes:
+
+```ts
+const quote = await bridge.quote({
+  source: { chain: 'ethereum', asset: 'usdc' }, // also 'base' or 'arbitrum'
+  destination: { chain: 'arc', asset: 'usdc' },
+  bridgeProtocol: 'cctp',
+  amount: '5',
+  sender: evmAddress,
+  recipient: evmAddress,
+  cctp: { speed: 'fast', forwarding: true, maxFee: '0.25' },
+})
+const execution = await bridge.execute({
+  plan: quote.plan,
+  onCheckpoint: saveCheckpoint,
+})
+const progress = await bridge.wait({
+  progress: { next: 'wait', plan: quote.plan, receipt: execution.receipt },
+})
+```
+
+`speed` defaults to `standard`. `forwarding` defaults to `true`: Circle submits
+the destination mint and deducts its quoted fee, so the recipient need not
+already hold Arc gas. With forwarding disabled, `complete` requires an Arc
+signer with gas. `maxFee` is a decimal USDC ceiling; when omitted, the quote
+pins the current fee. Execute the returned `quote.plan` to retain that ceiling.
+A higher live fee requires a new quote. Source-chain gas is separate.
+
+These routes accept native USDC only. They do not swap ETH or bridge arbitrary
+ERC-20 tokens. After verified Arc delivery, a separate xReserve transfer can
+move Arc USDC to Aleo USDCx. Persist each leg's checkpoint independently and
+recover it before retrying; never repeat a submitted burn after a timeout.
+
+If forwarding stalls after attestation, an application can call
+`bridge.complete({ progress, cctp: { manualMint: true }, onCheckpoint })`
+with a funded Arc signer. The SDK verifies the original burn and checks that
+its nonce is unused; the original recipient and forwarding hook remain fixed.
+This never repeats the source burn. Normal `wait` polling does not trigger
+manual minting automatically.
+
+Consumers with exhaustive switches MUST handle the new `cctp` protocol and
+`evm-cctp` quote/execution variants.
 
 ## Create a browser client
 

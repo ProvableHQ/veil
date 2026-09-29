@@ -72,6 +72,7 @@ export { DEFAULT_BRIDGE_REGISTRY } from './registry/default.js'
 export { validateBridgeRegistry } from './registry/validate.js'
 
 export type {
+  CctpOptions,
   AleoMintMode,
   AleoPrivacyCapability,
   AleoPrivacyKind,
@@ -179,3 +180,5 @@ export {
 
 export { BridgeError } from './errors/bridgeErrors.js'
 export { formatDecimalAmount, parseDecimalAmount } from './utils/units.js'
+
+export type { EvmCctpTransferQuote, EvmCctpTransferExecution } from './types/cctp.js'

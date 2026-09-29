@@ -83,6 +83,7 @@ export function createBridgeCheckpoint(
   return {
     version: 1,
     intent: {
+      ...(plan.cctp ? { cctp: { ...plan.cctp } } : {}),
       source: { chain: plan.sourceAsset.chainId, asset: plan.sourceAsset.key },
       destination: { chain: plan.destinationAsset.chainId, asset: plan.destinationAsset.key },
       bridgeProtocol: plan.protocol,

@@ -1,3 +1,4 @@
+import * as cctp from '../protocols/cctp/evm.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import { requireEvmClient, type BridgeChainClients } from '../connections/resolve.js'
 import type { RecoverParameters } from '../types/actions.js'
@@ -47,6 +48,10 @@ export async function recover(
     || checkpoint.route.id !== plan.route.id
     || checkpoint.route.registryVersion !== plan.registryVersion) {
     throw new BridgeError('Bridge checkpoint does not match the prepared route')
+  }
+  if (plan.protocol === 'cctp') {
+    const receipt = await cctp.recover(registry, clients, client, { checkpoint, plan, signal: params.signal })
+    return toBridgeProgress(plan, receipt)
   }
   let receipt: BridgeReceipt
   if (route.sourceChain.family === 'aleo') {
