@@ -1,3 +1,4 @@
+import { readWithdrawalFee } from '../protocols/xreserve/aleoToEvm.js'
 import * as cctp from '../protocols/cctp/evm.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import {
@@ -90,14 +91,7 @@ export async function quote(
     return { kind: 'evm-xreserve', plan, ...quote }
   }
   if (plan.protocol === 'xreserve' && chain.family === 'aleo') {
-    // Aleo-origin xReserve has no provider quote endpoint. Its only known
-    // bridge charge is the configured withdrawal fee, so report that fixed
-    // deduction without pretending live state was queried.
-    const rawFee = plan.route.metadata?.withdrawalFeeAtomic
-    if (typeof rawFee !== 'string' || !/^\d+$/.test(rawFee)) {
-      throw new BridgeError(`xReserve withdrawal fee is missing or invalid: ${plan.route.id}`)
-    }
-    const feeAtomic = BigInt(rawFee)
+    const { feeAtomic, estimated: liveFee } = await readWithdrawalFee(registry, plan, fetcher)
     const amountAtomic = parseDecimalAmount(plan.amountIn, plan.sourceAsset.decimals)
     const formattedFee = formatDecimalAmount(feeAtomic, plan.sourceAsset.decimals)
     if (amountAtomic <= feeAtomic) {
@@ -121,10 +115,10 @@ export async function quote(
           chainId,
           assetId: plan.sourceAsset.id,
           amount: formattedFee,
-          estimated: false,
+          estimated: liveFee,
         },
       ],
-      status: 'not-queried',
+      status: liveFee ? 'quoted' : 'not-queried',
     }
   }
 

@@ -1,12 +1,12 @@
 import { pathToFileURL } from 'node:url'
 import { aleoExampleOptions, serviceAuth, type ExampleOptions } from './options.js'
 /**
- * Moves USDCx from Aleo back to USDC on Ethereum through Circle xReserve.
+ * Moves USDCx from Aleo back to USDC on Ethereum or Arc through Circle xReserve.
  *
  * The default run displays the route, fixed withdrawal boundary, and burn mode,
  * then exits before loading a signing key. Execution burns either a public
  * balance or one private record on Aleo. The bridge provider then attests the
- * burn, withdraws through Circle, and delivers USDC to the Ethereum recipient.
+ * burn, withdraws through Circle, and delivers USDC to the selected EVM recipient.
  */
 
 import {
@@ -136,41 +136,38 @@ async function createExclusionProof(address: string): Promise<string> {
 
 /**
  * Runs the usdcx-to-usdc mainnet journey with a preview before submission.
- * @param options Overrides the example amount and execution gate; defaults to the visible example amount and environment acknowledgement.
+ * @param options Overrides destination, amount, and execution gate. Destination defaults to Ethereum; Arc uses a two-USDCx default amount. Execution defaults to the environment acknowledgement.
  * @returns Resolves after preview or the selected transfer lifecycle.
  * @throws When configuration, protocol validation, or delivery fails.
  * @example
  * await runUsdcxToUsdcExample({ amount: '5', execute: false })
  */
-export async function runUsdcxToUsdcExample(options: ExampleOptions = {}): Promise<void> {
-  const recipient = requiredEnvironmentVariable('ETHEREUM_RECIPIENT')
+export async function runUsdcxToUsdcExample(options: ExampleOptions & { destination?: 'ethereum' | 'arc' } = {}): Promise<void> {
+  const destination = options.destination ?? 'ethereum'
+  if (destination !== 'ethereum' && destination !== 'arc') throw new Error('Destination must be ethereum or arc')
+  const recipient = requiredEnvironmentVariable(destination === 'arc' ? 'ARC_RECIPIENT' : 'ETHEREUM_RECIPIENT')
   const mode = burnModeFromEnvironment()
 
   // ── Price the intended transfer ─────────────────────────────────────
-  // The caller supplies familiar chain and asset names, the amount, and the
-  // Ethereum recipient. The bridge catalog supplies the reviewed Aleo programs,
-  // Circle domains, token identifiers, and fixed two-USDCx withdrawal fee.
-  // This direction has no live provider quote, so the returned result applies
-  // the reviewed fixed fee without loading a wallet or reading account state.
-  // This amount is one base unit above the fee, keeping the example minimal.
+  // Arc uses a live fee estimate; Ethereum retains its configured fee.
+  // Pass destination: 'arc' and set ARC_RECIPIENT for the reverse Arc route.
   const bridge = createBridgeClient({ environment: 'mainnet' })
   const quote = await bridge.quote({
     source: { chain: 'aleo', asset: 'usdcx' },
-    destination: { chain: 'ethereum', asset: 'usdc' },
+    destination: { chain: destination, asset: 'usdc' },
     bridgeProtocol: 'xreserve',
-    amount: options.amount ?? AMOUNT,
+    amount: options.amount ?? (destination === 'arc' ? '2' : AMOUNT),
     recipient,
   })
   if (quote.kind !== 'aleo-xreserve') throw new Error(`Unexpected quote kind: ${quote.kind}`)
   const plan = quote.plan
 
   // ── Review the withdrawal before loading an account ─────────────────
-  // This direction has no live source-side market quote. The important caller
-  // choices are the amount, public or private custody being spent, and final
-  // Ethereum recipient. Display them before any key or private record is loaded.
+  // Display the amount, public or private custody being spent, and final
+  // EVM recipient before loading any key or private record.
   const amountAtomic = atomicAmount(plan.amountIn, plan.sourceAsset.decimals)
-  if (amountAtomic <= MINIMUM_BURN_AMOUNT_ATOMIC) {
-    throw new Error('USDCx burn amount must be greater than 2 USDCx')
+  if (amountAtomic < MINIMUM_BURN_AMOUNT_ATOMIC) {
+    throw new Error('USDCx burn amount must be at least 2 USDCx')
   }
 
   console.log('USDCx withdrawal preflight')
@@ -179,7 +176,7 @@ export async function runUsdcxToUsdcExample(options: ExampleOptions = {}): Promi
     burnMode: mode,
     amount: `${plan.amountIn} USDCx`,
     amountAtomic: amountAtomic.toString(),
-    ethereumRecipient: plan.recipient,
+    evmRecipient: plan.recipient,
     sourceOperation: mode === 'private'
       ? 'shielded_usdcx_wrapper.aleo/private_burn'
       : 'usdcx_bridge_v2.aleo/burn_public_as_signer',
@@ -245,7 +242,7 @@ export async function runUsdcxToUsdcExample(options: ExampleOptions = {}): Promi
   })
   // This Aleo transaction is the irreversible source boundary. Acceptance means
   // the chosen public balance or private record was burned and the withdrawal
-  // was committed for the Ethereum recipient. The provider and Circle continue
+  // was committed for the EVM recipient. The provider and Circle continue
   // from that accepted burn; never burn a second time because polling failed.
   const result = await executingBridge.execute({
     plan,
@@ -276,7 +273,7 @@ export async function runUsdcxToUsdcExample(options: ExampleOptions = {}): Promi
   if (progress.next === 'failed') {
     throw new Error(progress.error)
   }
-  console.log('The Aleo burn-attestation service will forward the withdrawal to Circle for Ethereum delivery.')
+  console.log('The Aleo burn-attestation service will forward the withdrawal to Circle for delivery on the selected EVM chain.')
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

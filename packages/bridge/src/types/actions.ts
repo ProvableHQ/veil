@@ -41,18 +41,18 @@ export type BridgeQuoteKind =
   | 'solana-hyperlane'
 
 /**
- * Reports the locally known values for an Aleo-origin xReserve burn.
+ * Reports configured or live-estimated fees for an Aleo-origin xReserve burn.
  *
- * The route has no separate source-chain quote call, so the result carries
- * the prepared amount and fees with a `not-queried` status.
+ * Routes with a configured fee endpoint return `quoted`; fixed-fee routes
+ * return `not-queried`. Live estimates do not impose an on-chain fee cap.
  *
  * @property kind Aleo-origin xReserve route discriminator.
  * @property routeId Directional route selected by the plan.
  * @property protocol Circle xReserve protocol discriminator.
  * @property amountIn Decimal source amount.
- * @property amountOut Decimal destination amount when locally determinable.
+ * @property amountOut Decimal expected destination amount after the withdrawal fee.
  * @property fees Fee categories known during preparation.
- * @property status Indicates that no live quote endpoint was queried.
+ * @property status Distinguishes live provider estimates from configured fees.
  */
 type AleoXReserveQuote = {
   kind: 'aleo-xreserve'
@@ -61,7 +61,7 @@ type AleoXReserveQuote = {
   amountIn: string
   amountOut?: string | undefined
   fees: BridgeFee[]
-  status: 'not-queried'
+  status: 'not-queried' | 'quoted'
 }
 
 /** Captures every quote returned by the protocol-neutral transfer action. */

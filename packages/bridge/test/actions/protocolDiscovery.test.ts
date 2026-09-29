@@ -39,6 +39,7 @@ describe('getRoutes', () => {
       'xreserve:ethereum/usdc->aleo/usdcx',
       'xreserve:aleo/usdcx->ethereum/usdc',
       'xreserve:arc/usdc->aleo/usdcx',
+      'xreserve:aleo/usdcx->arc/usdc',
     ])
   })
 
@@ -52,6 +53,7 @@ describe('getRoutes', () => {
       'xreserve:ethereum/usdc->aleo/usdcx',
       'xreserve:aleo/usdcx->ethereum/usdc',
       'xreserve:arc/usdc->aleo/usdcx',
+      'xreserve:aleo/usdcx->arc/usdc',
     ])
   })
 

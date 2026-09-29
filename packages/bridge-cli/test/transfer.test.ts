@@ -20,6 +20,13 @@ afterEach(() => {
 })
 
 describe('CLI preview boundary', () => {
+  it('keeps the selected Ethereum route and recipient despite inherited Arc example settings', async () => {
+    process.env.USDCX_DESTINATION = 'arc'
+    process.env.ARC_RECIPIENT = '0x0000000000000000000000000000000000000002'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ withdrawalFeeBaseUnits: '16400' })))
+    await main(['--route', 'usdcx-to-usdc', '--amount', '3', '--recipient', recipient])
+    expect(console.table).toHaveBeenCalledWith(expect.objectContaining({ route: 'xreserve:aleo/usdcx->ethereum/usdc', evmRecipient: recipient }))
+  })
   it('previews the requested withdrawal amount despite inherited execution acknowledgement', async () => {
     process.env.EXECUTE_BRIDGE = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
     await main(['--route', 'usdcx-to-usdc', '--amount', '7', '--recipient', recipient])

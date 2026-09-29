@@ -401,10 +401,15 @@ const routes: ProtocolBridgeRoute[] = [
     wrapperProgram: 'shielded_usdcx_wrapper.aleo',
     attestationBaseUrl: 'https://xreserve-api.circle.com/v1/attestations',
   }, 'active'),
-  route('xreserve:arc/usdc->aleo/usdcx', 'xreserve', 'mainnet', 'arc/usdc', 'aleo/usdcx', 'active', 'xreserve-usdcx-aleo-arc', {
+  ...pair('xreserve', 'mainnet', 'arc/usdc', 'aleo/usdcx', 'active', 'xreserve-usdcx-aleo-arc', {
     xReserveContract: '0x8888888199b2Df864bf678259607d6D5EBb4e3Ce',
     sourceChainId: 5042,
     sourceDomain: 26,
+    minimumBurnAmountAtomic: '2000000',
+    withdrawalFeeAtomic: '16400',
+    withdrawalFeeUrl: 'https://api.usdcx.aleo.org/api/estimate-burn-fee',
+    withdrawalFeeChain: 'arc',
+    withdrawalFeeSource: 'https://usdcx.aleo.org/assets/index-C4YEghH3.js',
     ethereumDestinationDomain: 0,
     arcDestinationDomain: 26,
     remoteDomain: 10002,

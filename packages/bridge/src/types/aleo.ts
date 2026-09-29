@@ -109,14 +109,14 @@ export type XReserveBurnMode = 'private' | 'public' | 'public-as-signer'
 /**
  * Describes one validated Aleo USDCx burn call without submitting it.
  *
- * @property routeId Aleo-to-Ethereum xReserve route used for the burn.
+ * @property routeId Aleo-to-EVM xReserve route used for the burn.
  * @property mode Transition variant selected by the caller.
  * @property program Deployed bridge or wrapper program receiving the transaction.
  * @property function Exact burn transition invoked by the wallet.
  * @property inputs Ordered Aleo literals and wallet record requests.
  * @property amountAtomic Burn amount in USDCx base units.
- * @property nativeDomain Circle Ethereum destination domain, fixed to 0.
- * @property nativeRecipientBytes32 Ethereum recipient left-padded to 32 bytes.
+ * @property nativeDomain Circle destination domain: 0 for Ethereum or 26 for Arc.
+ * @property nativeRecipientBytes32 EVM recipient left-padded to 32 bytes.
  */
 export type XReserveBurnCall = {
   routeId: string
@@ -130,9 +130,9 @@ export type XReserveBurnCall = {
 }
 
 /**
- * Configures an Aleo USDCx burn destined for Ethereum USDC.
+ * Configures an Aleo USDCx burn destined for Ethereum or Arc USDC.
  *
- * @property plan Aleo-to-Ethereum plan returned with the transfer quote.
+ * @property plan Aleo-to-EVM plan returned with the transfer quote.
  * @property mode Burn transition to submit. Defaults to `private`.
  * @property userRecord Wallet record request or encoded USDCx token record. Required only for `private`.
  * @property merkleProof Encoded `[MerkleProof; 2]` Aleo literal. Required only for `private`.

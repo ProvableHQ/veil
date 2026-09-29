@@ -130,3 +130,45 @@ describe('xReserve USDCx burns', () => {
     expect(checkpoints).toEqual([result.receipt])
   })
 })
+
+
+describe('Aleo to Arc burns', () => {
+  const arcPlan = () => prepare(DEFAULT_BRIDGE_REGISTRY, {
+    source: { chain: 'aleo', asset: 'usdcx' },
+    destination: { chain: 'arc', asset: 'usdc' },
+    amount: '2', recipient: EVM_RECIPIENT,
+  })
+  it.each(['private', 'public', 'public-as-signer'] as const)('encodes Arc domain 26 for %s funding', (mode) => {
+    const call = buildXReserveBurnCall(DEFAULT_BRIDGE_REGISTRY, {
+      plan: arcPlan(), mode, userRecord: MAINNET_RECORD, merkleProof: MERKLE_PROOF,
+    })
+    expect(call.nativeDomain).toBe(26)
+    expect(call.inputs).toContain('26u32')
+    expect(call.amountAtomic).toBe(2_000_000n)
+  })
+  it('rejects a destination domain that disagrees with the reviewed chain', () => {
+    const registry = { ...DEFAULT_BRIDGE_REGISTRY, routes: DEFAULT_BRIDGE_REGISTRY.routes.map(route =>
+      route.id === 'xreserve:aleo/usdcx->arc/usdc'
+        ? { ...route, metadata: { ...route.metadata, arcDestinationDomain: 0 } } : route) }
+    expect(() => buildXReserveBurnCall(registry, { plan: arcPlan(), mode: 'public' })).toThrow(/destination domain/)
+  })
+  it('rejects amounts below the deployed two-USDCx minimum', () => {
+    expect(() => buildXReserveBurnCall(DEFAULT_BRIDGE_REGISTRY, {
+      plan: { ...arcPlan(), amountIn: '1' }, mode: 'public',
+    })).toThrow(/minimum/)
+  })
+})
+
+
+it('rechecks the live Arc fee before asking the wallet to burn', async () => {
+  const transferPlan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+    source: { chain: 'aleo', asset: 'usdcx' }, destination: { chain: 'arc', asset: 'usdc' },
+    amount: '2', recipient: EVM_RECIPIENT,
+  })
+  const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ withdrawalFeeBaseUnits: '2000000' })))
+  await expect(executeXReserveBurn(DEFAULT_BRIDGE_REGISTRY, { executeTransaction }, {
+    plan: transferPlan, userRecord: MAINNET_RECORD, merkleProof: MERKLE_PROOF,
+  }, fetcher)).rejects.toThrow(/fee/)
+  expect(executeTransaction).not.toHaveBeenCalled()
+})

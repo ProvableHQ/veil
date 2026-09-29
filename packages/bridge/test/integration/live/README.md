@@ -58,3 +58,21 @@ successful Circle forwarding.
 
 The Ethereum live-test signer sets an explicit 1-gwei priority fee per transaction.
 A chain-level default alone can be bypassed by RPC transaction filling.
+
+## Aleo private USDCx → Arc USDC
+
+Use the same mainnet acknowledgement variables with
+`BRIDGE_LIVE_MAINNET_CASES=aleo-arc` and run
+`packages/bridge/test/integration/live/mainnet/aleo-arc.live.test.ts`.
+The test spends one unspent 2-USDCx record plus the Aleo proving fee. It derives
+fresh freeze-list proofs, checks the live fee estimate against a 0.10-USDC
+budget at quote and execution, and persists checkpoints to `mainnet/aleo-arc.json`.
+The deployed burn has no on-chain fee cap; actual provider fees may change.
+
+Set `BRIDGE_LIVE_ARC_RECIPIENT` to the receiving address, or supply
+`BRIDGE_EVM_PRIVATE_KEY` only to derive that address. No Arc transaction is
+signed. The test verifies Aleo acceptance, an Arc USDC transfer event, and the
+recipient's exact balance increase. Keep this recipient idle during the test
+so unrelated transactions cannot invalidate the balance check. Timing and both
+transaction IDs are persisted. Restart with the same state file after errors;
+never delete a checkpoint to retry a burn.

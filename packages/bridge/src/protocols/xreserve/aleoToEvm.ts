@@ -6,11 +6,9 @@ import type {
   XReserveBurnCall,
   XReserveBurnExecution,
 } from '../../types/aleo.js'
-import type { BridgeRegistry, BridgeReceipt } from '../../types/protocol.js'
+import type { BridgeRegistry, BridgeReceipt, BridgePlan } from '../../types/protocol.js'
 import { formatDecimalAmount, parseDecimalAmount } from '../../utils/units.js'
 import { evmAddressToXReserveBytes32, xReserveHexToAleoBytes } from '../../utils/xreserve.js'
-
-const ETHEREUM_DESTINATION_DOMAIN = 0
 
 function validatedRoute(registry: BridgeRegistry, params: ExecuteXReserveBurnParameters) {
   const { plan } = params
@@ -23,18 +21,19 @@ function validatedRoute(registry: BridgeRegistry, params: ExecuteXReserveBurnPar
   if (!route || route.protocol !== 'xreserve' || route.availability !== 'active') throw new BridgeError(`xReserve route is not executable: ${plan.route.id}`)
   const sourceChain = registry.chains.find((chain) => chain.id === plan.sourceAsset.chainId)
   const destinationChain = registry.chains.find((chain) => chain.id === plan.destinationAsset.chainId)
-  if (sourceChain?.family !== 'aleo' || destinationChain?.family !== 'evm') throw new BridgeError('USDCx burn action requires an Aleo-to-Ethereum route')
+  if (sourceChain?.family !== 'aleo' || destinationChain?.family !== 'evm') throw new BridgeError('USDCx burn action requires an Aleo-to-EVM route')
   if (route.sourceAssetId !== plan.sourceAsset.id || route.destinationAssetId !== plan.destinationAsset.id) throw new BridgeError(`Transfer plan assets do not match configured route: ${route.id}`)
   const bridgeProgram = route.metadata?.bridgeProgram
   const wrapperProgram = route.metadata?.wrapperProgram
   const tokenProgram = route.metadata?.remoteToken
-  const nativeDomain = route.metadata?.ethereumDestinationDomain
+  const expectedDomain = destinationChain.protocolDomains?.xreserve ?? 0
+  const nativeDomain = expectedDomain === 26 ? route.metadata?.arcDestinationDomain : route.metadata?.ethereumDestinationDomain
   const withdrawalFee = route.metadata?.withdrawalFeeAtomic
   if (typeof bridgeProgram !== 'string' || !bridgeProgram.endsWith('.aleo')) throw new BridgeError(`xReserve bridge program is invalid: ${route.id}`)
   if (typeof wrapperProgram !== 'string' || !wrapperProgram.endsWith('.aleo')) throw new BridgeError(`xReserve wrapper program is invalid: ${route.id}`)
   if (typeof tokenProgram !== 'string' || !tokenProgram.endsWith('.aleo')) throw new BridgeError(`xReserve token program is invalid: ${route.id}`)
   if (typeof withdrawalFee !== 'string' || !/^\d+$/.test(withdrawalFee)) throw new BridgeError(`xReserve withdrawal fee is invalid: ${route.id}`)
-  if (nativeDomain !== ETHEREUM_DESTINATION_DOMAIN) throw new BridgeError(`xReserve Ethereum destination domain must be ${ETHEREUM_DESTINATION_DOMAIN}: ${route.id}`)
+  if ((nativeDomain !== 0 && nativeDomain !== 26) || nativeDomain !== expectedDomain) throw new BridgeError(`xReserve destination domain does not match the destination chain: ${route.id}`)
   return { route, bridgeProgram, wrapperProgram, tokenProgram, nativeDomain, withdrawalFeeAtomic: BigInt(withdrawalFee) }
 }
 
@@ -57,13 +56,13 @@ function assertPrivateInputs(userRecord: TransactionInput | undefined, merklePro
  * Builds the Aleo program call that begins a USDCx-to-USDC xReserve transfer.
  *
  * The result lets an application inspect the source program, public or private
- * funding mode, amount, withdrawal fee, and Ethereum recipient before a wallet
+ * funding mode, amount, withdrawal fee, and EVM recipient before a wallet
  * is involved. It does not contact Aleo, request a signature, or move funds.
  * Pauses, frozen accounts, and burn limits remain enforced by the source program
  * when the call is eventually submitted.
  *
  * @param registry Supported assets and reviewed xReserve deployments.
- * @param params Route, amount, Ethereum recipient, public or private funding preference, and private record proof when applicable.
+ * @param params Route, amount, EVM recipient, public or private funding preference, and private record proof when applicable.
  * @returns Exact Aleo program, transition, ordered inputs, atomic amount, destination domain, and encoded recipient.
  * @throws BridgeError When the route is unavailable, the amount cannot cover the withdrawal fee, the recipient is invalid, or private funding inputs are missing.
  *
@@ -83,6 +82,9 @@ export function buildBurnCall(
     const fee = formatDecimalAmount(deployment.withdrawalFeeAtomic, params.plan.sourceAsset.decimals)
     throw new BridgeError(`USDCx burn amount must exceed the ${fee} ${params.plan.sourceAsset.symbol} withdrawal fee`)
   }
+  const minimum = deployment.route.metadata?.minimumBurnAmountAtomic
+  if (minimum !== undefined && (typeof minimum !== 'string' || !/^\d+$/.test(minimum))) throw new BridgeError('xReserve minimum burn amount is invalid')
+  if (typeof minimum === 'string' && amountAtomic < BigInt(minimum)) throw new BridgeError(`USDCx burn amount is below the configured minimum: ${minimum} base units`)
   // Circle domains use a 32-byte recipient. Ethereum addresses occupy the low
   // 20 bytes and are left-padded with twelve zero bytes.
   const nativeRecipientBytes32 = evmAddressToXReserveBytes32(params.plan.recipient)
@@ -122,6 +124,34 @@ export function buildBurnCall(
 }
 
 /**
+ * Reads the reviewed route's withdrawal fee and rejects an unaffordable burn.
+ * @param registry Reviewed destination domains, programs, and fee configuration.
+ * @param plan Transfer whose amount is checked before requesting provider fees.
+ * @param fetcher HTTP implementation used by routes with live fee estimates.
+ * @returns The USDCx base-unit fee and whether it is a provider estimate.
+ * @throws BridgeError When validation, provider access, or fee coverage fails.
+ * @example const fee = await readWithdrawalFee(registry, plan, fetch)
+ */
+export async function readWithdrawalFee(registry: BridgeRegistry, plan: BridgePlan, fetcher: typeof fetch) {
+  const call = buildBurnCall(registry, { plan, mode: 'public-as-signer' })
+  const { route, withdrawalFeeAtomic } = validatedRoute(registry, { plan })
+  const feeUrl = route.metadata?.withdrawalFeeUrl
+  if (typeof feeUrl !== 'string') return { feeAtomic: withdrawalFeeAtomic, estimated: false }
+  const response = await fetcher(feeUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ evmChain: route.metadata?.withdrawalFeeChain, amountUsdc: plan.amountIn }),
+  })
+  if (!response.ok) throw new BridgeError(`xReserve withdrawal fee request failed: HTTP ${response.status}`)
+  const body = await response.json() as { withdrawalFeeBaseUnits?: unknown } | null
+  const rawFee = body?.withdrawalFeeBaseUnits
+  if (typeof rawFee !== 'string' || !/^\d+$/.test(rawFee)) throw new BridgeError('xReserve withdrawal fee response is invalid')
+  const feeAtomic = BigInt(rawFee)
+  if (feeAtomic >= call.amountAtomic) throw new BridgeError('USDCx burn amount must exceed the live withdrawal fee')
+  return { feeAtomic, estimated: true }
+}
+
+/**
  * Begins a USDCx-to-USDC transfer by burning USDCx on Aleo.
  *
  * The Aleo wallet proves, signs, and broadcasts the source burn, which commits
@@ -131,7 +161,8 @@ export function buildBurnCall(
  *
  * @param registry Supported assets and reviewed xReserve deployments.
  * @param client Aleo wallet that proves, signs, and broadcasts the source burn.
- * @param params Route, amount, Ethereum recipient, public or private funding preference, fee preference, and recovery callbacks.
+ * @param params Route, amount, EVM recipient, public or private funding preference, fee preference, and recovery callbacks.
+ * @param fetcher Optional provider HTTP implementation. Defaults to global fetch; rechecks live withdrawal fees before submission.
  * @returns The Aleo transaction identifier and state needed to follow provider-managed delivery.
  * @throws BridgeError When the burn inputs are invalid or wallet submission fails.
  *
@@ -146,8 +177,10 @@ export async function execute(
   registry: BridgeRegistry,
   client: AleoWalletClient,
   params: ExecuteXReserveBurnParameters,
+  fetcher: typeof fetch = globalThis.fetch,
 ): Promise<XReserveBurnExecution> {
   const call = buildBurnCall(registry, params)
+  await readWithdrawalFee(registry, params.plan, fetcher)
   // Aleo wallets may finish proving before broadcasting. Forward that prepared
   // transaction so an application can persist the exact bytes and recover the
   // crash window without proving or burning again.
@@ -164,7 +197,7 @@ export async function execute(
   if (!transactionId) throw new BridgeError('Aleo wallet returned an empty burn transaction id')
   // Source acceptance completes caller-authorized work. The public transaction
   // id is sufficient for the burn attestation service and Circle to continue
-  // Ethereum delivery without an EVM wallet.
+  // EVM delivery without an EVM wallet.
   const receipt: BridgeReceipt = {
     id: transactionId,
     protocol: 'xreserve',

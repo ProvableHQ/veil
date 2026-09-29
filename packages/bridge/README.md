@@ -2,7 +2,7 @@
 
 Moves assets through reviewed Hyperlane, Circle xReserve, and Circle CCTP deployments.
 CCTP brings native USDC from Ethereum, Base, or Arbitrum to Arc; xReserve brings
-Arc USDC to Aleo as USDCx.
+Arc USDC to Aleo as USDCx and redeems Aleo USDCx back to Arc USDC.
 
 The package supports browser wallets and local keys. It does not choose a
 wallet, store transfer progress, or submit a second transaction after an
@@ -27,12 +27,41 @@ interruption without caller authorization.
 | Ethereum USDC | Aleo | USDCx | Circle xReserve |
 | Arc USDC | Aleo | USDCx | Circle xReserve |
 | Ethereum, Base, or Arbitrum USDC | Arc | USDC | Circle CCTP V2 |
-| Aleo USDCx | Ethereum | USDC | Circle xReserve |
+| Aleo USDCx | Ethereum or Arc | USDC | Circle xReserve |
 
 The registry also contains incomplete ALEO and USAD Hyperlane entries for
 deployment discovery. Those entries are marked `metadata-required` and cannot
 be quoted or executed. Solana routes currently support native SOL, not USDC or
 other SPL tokens.
+
+## Redeem Aleo USDCx on Arc
+
+Use the existing private or public burn flow with `destination: { chain: 'arc',
+asset: 'usdc' }`. The SDK targets xReserve domain `26` and enforces the deployed
+2-USDCx minimum. Arc quotes read the live withdrawal-fee endpoint and execution
+rechecks fee coverage before asking the Aleo wallet to prove and submit.
+The burn transition has no on-chain fee cap; quoted delivery is an estimate.
+The recipient receives USDC without signing or funding gas on Arc.
+
+```ts
+const quote = await bridge.quote({
+  source: { chain: 'aleo', asset: 'usdcx' },
+  destination: { chain: 'arc', asset: 'usdc' },
+  amount: '2',
+  recipient: arcAddress,
+})
+await bridge.execute({ plan: quote.plan, userRecord, merkleProof, onCheckpoint })
+```
+
+Persist checkpoints before submission and use `recover`/`resume` after an
+interruption. Outbound xReserve status tracks source acceptance; destination
+confirmation still requires an Arc receipt or balance check. Do not repeat a
+burn because provider delivery is pending.
+
+The opt-in `aleo-arc` mainnet test checks an accepted private burn, the Arc USDC
+transfer event, and the recipient balance increase. One live run delivered
+1.9836 USDC from a 2-USDCx burn in approximately 46 seconds including proving;
+this measurement is not a delivery guarantee.
 
 ## Bring USDC to Arc
 
@@ -438,7 +467,7 @@ observable completion boundary.
 | Solana SOL → Aleo SOL | [`sol-to-aleo.ts`](./examples/sol-to-aleo.ts) |
 | Aleo SOL → Solana SOL | [`sol-to-solana.ts`](./examples/sol-to-solana.ts) |
 | Ethereum USDC → Aleo USDCx | [`usdc-to-usdcx.ts`](./examples/usdc-to-usdcx.ts) |
-| Aleo USDCx → Ethereum USDC | [`usdcx-to-usdc.ts`](./examples/usdcx-to-usdc.ts) |
+| Aleo USDCx → Ethereum or Arc USDC | [`usdcx-to-usdc.ts`](./examples/usdcx-to-usdc.ts) |
 
 Each script quotes mainnet state and exits without submitting by default. The
 script prints the exact acknowledgement required to authorize real funds.

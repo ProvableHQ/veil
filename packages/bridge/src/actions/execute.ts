@@ -202,7 +202,7 @@ export async function execute(
   }
   if (params.plan.protocol === 'xreserve' && chain.family === 'aleo') {
     // An Aleo burn is the only caller-authorized step in the outbound xReserve
-    // direction. The attestation service and Circle manage Ethereum delivery.
+    // direction. The attestation service and Circle manage EVM delivery.
     const execution = await aleoToEvmXReserve.execute(
       registry,
       requireAleoClientWithWallet(registry, clients, chainId, 'execute xReserve burn').walletClient,
@@ -216,6 +216,7 @@ export async function execute(
         onProgress: params.onProgress,
         onPrepared: preparedAleoCheckpoint(params),
       },
+      fetcher,
     )
     return { kind: 'aleo-xreserve', ...execution }
   }
