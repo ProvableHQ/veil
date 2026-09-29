@@ -23,7 +23,7 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
           tokenMessenger: '0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d',
           messageTransmitter: '0x81D40F21F12A8F0E3252Bccb954D722d4c464B64',
           attestationBaseUrl: 'https://iris-api.circle.com',
-          deploymentReviewedAt: '2026-09-28',
+          deploymentReviewedAt: '2026-09-29',
           tokenSource: 'https://developers.circle.com/stablecoins/usdc-contract-addresses',
         },
       })

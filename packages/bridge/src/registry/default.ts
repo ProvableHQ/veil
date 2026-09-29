@@ -49,14 +49,12 @@ const assets: ProtocolBridgeAsset[] = [
 
 const CCTP_SOURCE = 'https://developers.circle.com/cctp/references/contract-addresses'
 const USDC_SOURCE = 'https://developers.circle.com/stablecoins/usdc-contract-addresses'
-// Pins the Circle CCTP V2 mainnet deployment table reviewed on 2026-09-28.
-const CCTP_ARC_METADATA = {
-  destinationChainId: 5042,
-  destinationDomain: 26,
+// Pins the Circle CCTP V2 mainnet deployment table and remote messengers reviewed on 2026-09-29.
+const CCTP_MAINNET_METADATA = {
   tokenMessenger: '0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d',
   messageTransmitter: '0x81D40F21F12A8F0E3252Bccb954D722d4c464B64',
   attestationBaseUrl: 'https://iris-api.circle.com',
-  deploymentReviewedAt: '2026-09-28',
+  deploymentReviewedAt: '2026-09-29',
   tokenSource: USDC_SOURCE,
 } as const
 
@@ -423,9 +421,12 @@ const routes: ProtocolBridgeRoute[] = [
     deploymentSource: ALEO_XRESERVE_SOURCE,
     onchainReviewedAt: '2026-09-28',
   }),
-  route('cctp:ethereum/usdc->arc/usdc', 'cctp', 'mainnet', 'ethereum/usdc', 'arc/usdc', 'active', 'cctp-v2-ethereum-arc', { ...CCTP_ARC_METADATA, sourceChainId: 1, sourceDomain: 0 }),
-  route('cctp:base/usdc->arc/usdc', 'cctp', 'mainnet', 'base/usdc', 'arc/usdc', 'active', 'cctp-v2-base-arc', { ...CCTP_ARC_METADATA, sourceChainId: 8453, sourceDomain: 6 }),
-  route('cctp:arbitrum/usdc->arc/usdc', 'cctp', 'mainnet', 'arbitrum/usdc', 'arc/usdc', 'active', 'cctp-v2-arbitrum-arc', { ...CCTP_ARC_METADATA, sourceChainId: 42161, sourceDomain: 3 }),
+  route('cctp:ethereum/usdc->arc/usdc', 'cctp', 'mainnet', 'ethereum/usdc', 'arc/usdc', 'active', 'cctp-v2-ethereum-arc', { ...CCTP_MAINNET_METADATA, destinationChainId: 5042, destinationDomain: 26, sourceChainId: 1, sourceDomain: 0 }),
+  route('cctp:base/usdc->arc/usdc', 'cctp', 'mainnet', 'base/usdc', 'arc/usdc', 'active', 'cctp-v2-base-arc', { ...CCTP_MAINNET_METADATA, destinationChainId: 5042, destinationDomain: 26, sourceChainId: 8453, sourceDomain: 6 }),
+  route('cctp:arbitrum/usdc->arc/usdc', 'cctp', 'mainnet', 'arbitrum/usdc', 'arc/usdc', 'active', 'cctp-v2-arbitrum-arc', { ...CCTP_MAINNET_METADATA, destinationChainId: 5042, destinationDomain: 26, sourceChainId: 42161, sourceDomain: 3 }),
+  route('cctp:arc/usdc->ethereum/usdc', 'cctp', 'mainnet', 'arc/usdc', 'ethereum/usdc', 'active', 'cctp-v2-arc-ethereum', { ...CCTP_MAINNET_METADATA, sourceChainId: 5042, sourceDomain: 26, destinationChainId: 1, destinationDomain: 0 }),
+  route('cctp:arc/usdc->base/usdc', 'cctp', 'mainnet', 'arc/usdc', 'base/usdc', 'active', 'cctp-v2-arc-base', { ...CCTP_MAINNET_METADATA, sourceChainId: 5042, sourceDomain: 26, destinationChainId: 8453, destinationDomain: 6 }),
+  route('cctp:arc/usdc->arbitrum/usdc', 'cctp', 'mainnet', 'arc/usdc', 'arbitrum/usdc', 'active', 'cctp-v2-arc-arbitrum', { ...CCTP_MAINNET_METADATA, sourceChainId: 5042, sourceDomain: 26, destinationChainId: 42161, destinationDomain: 3 }),
   ...pair('xreserve', 'testnet', 'sepolia/usdc', 'aleo-testnet/usdcx', 'active', 'xreserve-usdcx-aleo-testnet', {
     xReserveContract: '0x008888878f94C0d87defdf0B07f46B93C1934442',
     sourceChainId: 11155111,

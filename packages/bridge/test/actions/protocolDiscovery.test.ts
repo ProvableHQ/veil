@@ -16,14 +16,17 @@ describe('getAssets', () => {
 })
 
 describe('getRoutes', () => {
-  it('discovers only the three approved mainnet CCTP directions into Arc', () => {
+  it('discovers the six approved mainnet CCTP directions to and from Arc', () => {
     expect(DEFAULT_BRIDGE_REGISTRY.getRoutes({ protocol: 'cctp', environment: 'mainnet', symbol: 'USDC' })
       .map((route) => route.id)).toEqual([
         'cctp:ethereum/usdc->arc/usdc',
         'cctp:base/usdc->arc/usdc',
         'cctp:arbitrum/usdc->arc/usdc',
+        'cctp:arc/usdc->ethereum/usdc',
+        'cctp:arc/usdc->base/usdc',
+        'cctp:arc/usdc->arbitrum/usdc',
       ])
-    expect(DEFAULT_BRIDGE_REGISTRY.getRoutes({ protocol: 'cctp', sourceChainId: 'arc' })).toEqual([])
+    expect(DEFAULT_BRIDGE_REGISTRY.getRoutes({ protocol: 'cctp', sourceChainId: 'arc' })).toHaveLength(3)
     expect(DEFAULT_BRIDGE_REGISTRY.getRoutes({ protocol: 'cctp', environment: 'testnet' })).toEqual([])
     expect(DEFAULT_BRIDGE_REGISTRY.getRoutes({ protocol: 'cctp', symbol: 'USDCx' })).toEqual([])
     expect(DEFAULT_BRIDGE_REGISTRY.getRoutes({ protocol: 'cctp', sourceChainId: 'BASE', destinationChainId: 'ARC' })

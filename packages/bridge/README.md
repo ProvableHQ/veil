@@ -1,7 +1,7 @@
 # @provablehq/aleo-bridge-sdk
 
 Moves assets through reviewed Hyperlane, Circle xReserve, and Circle CCTP deployments.
-CCTP brings native USDC from Ethereum, Base, or Arbitrum to Arc; xReserve brings
+CCTP moves native USDC between Arc and Ethereum, Base, or Arbitrum; xReserve brings
 Arc USDC to Aleo as USDCx and redeems Aleo USDCx back to Arc USDC.
 
 The package supports browser wallets and local keys. It does not choose a
@@ -27,6 +27,7 @@ interruption without caller authorization.
 | Ethereum USDC | Aleo | USDCx | Circle xReserve |
 | Arc USDC | Aleo | USDCx | Circle xReserve |
 | Ethereum, Base, or Arbitrum USDC | Arc | USDC | Circle CCTP V2 |
+| Arc USDC | Ethereum, Base, or Arbitrum | USDC | Circle CCTP V2 |
 | Aleo USDCx | Ethereum or Arc | USDC | Circle xReserve |
 
 The registry also contains incomplete ALEO and USAD Hyperlane entries for
@@ -62,6 +63,34 @@ The opt-in `aleo-arc` mainnet test checks an accepted private burn, the Arc USDC
 transfer event, and the recipient balance increase. One live run delivered
 1.9836 USDC from a 2-USDCx burn in approximately 46 seconds including proving;
 this measurement is not a delivery guarantee.
+
+## Send Arc USDC to Ethereum, Base, or Arbitrum
+
+Connect an Arc EVM wallet and a public client for the destination. Select
+`ethereum` for Ethereum mainnet, `base`, or `arbitrum`:
+
+```ts
+const quote = await bridge.quote({
+  source: { chain: 'arc', asset: 'usdc' },
+  destination: { chain: 'base', asset: 'usdc' },
+  amount: '5',
+  sender: arcAddress,
+  recipient: destinationAddress,
+  cctp: { speed: 'standard', forwarding: true },
+})
+const execution = await bridge.execute({ plan: quote.plan, onCheckpoint })
+const progress = await bridge.wait({
+  progress: { next: 'wait', plan: quote.plan, receipt: execution.receipt },
+})
+```
+
+The quote includes the current destination forwarding cost and carries an
+approved fee ceiling into execution and checkpoint recovery. Forwarding pays
+for destination submission; the recipient needs no destination gas or signature.
+With `forwarding: false`, `complete` requires a destination wallet and its native
+gas. Arc requires USDC for the burn plus source gas in either mode.
+These routes transfer native USDC, including USDC received from an Aleo → Arc
+withdrawal. ETH and bridged USDC variants such as USDC.e are not supported.
 
 ## Bring USDC to Arc
 

@@ -28,11 +28,12 @@ function exactTopics(topics: ReturnType<typeof encodeEventTopics>): Hex[] {
     return topic
   })
 }
-function plan(forwarding = true): BridgePlan {
-  return prepare(registry, { source: { chain: 'ethereum', asset: 'usdc' }, destination: { chain: 'arc', asset: 'usdc' }, amount: '5', sender, recipient, cctp: { speed: 'fast', forwarding, maxFee: '0.1' } })
+function plan(forwarding = true, source = 'ethereum', destination = 'arc'): BridgePlan {
+  return prepare(registry, { source: { chain: source, asset: 'usdc' }, destination: { chain: destination, asset: 'usdc' }, amount: '5', sender, recipient, cctp: { speed: source === 'arc' ? 'standard' : 'fast', forwarding, maxFee: '0.1' } })
 }
-function fixture(forwarding = true, hookVersion: 0 | 1 = 0) {
-  const transfer = plan(forwarding)
+function fixture(forwarding = true, hookVersion: 0 | 1 = 0, sourceChain = 'ethereum', destinationChain = 'arc') {
+  const transfer = plan(forwarding, sourceChain, destinationChain)
+  const finality = transfer.cctp?.speed === 'standard' ? 2000 : 1000
   const m = transfer.route.metadata!
   const messenger = m.tokenMessenger as Address
   const transmitter = m.messageTransmitter as Address
@@ -42,7 +43,7 @@ function fixture(forwarding = true, hookVersion: 0 | 1 = 0) {
   const message = (attested: boolean) => concat([
     toHex(1, { size: 4 }), toHex(m.sourceDomain as number, { size: 4 }), toHex(m.destinationDomain as number, { size: 4 }),
     attested ? nonce : toHex(0, { size: 32 }), pad(messenger, { size: 32 }), pad(messenger, { size: 32 }), pad(zeroAddress, { size: 32 }),
-    toHex(1000, { size: 4 }), toHex(attested ? 1000 : 0, { size: 4 }), toHex(1, { size: 4 }),
+    toHex(finality, { size: 4 }), toHex(attested ? finality : 0, { size: 4 }), toHex(1, { size: 4 }),
     pad(sourceToken, { size: 32 }), pad(recipient, { size: 32 }), toHex(5_000_000n, { size: 32 }), pad(sender, { size: 32 }),
     toHex(100_000n, { size: 32 }), toHex(attested ? 10_000 : 0, { size: 32 }), toHex(attested ? 999999999 : 0, { size: 32 }), hook,
   ])
@@ -51,7 +52,7 @@ function fixture(forwarding = true, hookVersion: 0 | 1 = 0) {
   const sourceReceipt: EvmReceipt = { transactionHash: sourceHash, status: 'success', logs: [{ address: transmitter,
     topics: exactTopics(encodeEventTopics({ abi, eventName: 'MessageSent' })), data: encodeAbiParameters([{ type: 'bytes' }], [burned]) }] }
   const destinationReceipt: EvmReceipt = { transactionHash: destinationHash, status: 'success', logs: [
-    { address: transmitter, topics: exactTopics(encodeEventTopics({ abi, eventName: 'MessageReceived', args: { caller: sender, nonce, finalityThresholdExecuted: 1000 } })),
+    { address: transmitter, topics: exactTopics(encodeEventTopics({ abi, eventName: 'MessageReceived', args: { caller: sender, nonce, finalityThresholdExecuted: finality } })),
       data: encodeAbiParameters([{ type: 'uint32' }, { type: 'bytes32' }, { type: 'bytes' }], [m.sourceDomain as number, pad(messenger, { size: 32 }), slice(attested, 148)]) },
     { address: destinationToken, topics: exactTopics(encodeEventTopics({ abi, eventName: 'Transfer', args: { from: zeroAddress, to: recipient } })),
       data: encodeAbiParameters([{ type: 'uint256' }], [4_990_000n]) },
@@ -79,7 +80,7 @@ function fixture(forwarding = true, hookVersion: 0 | 1 = 0) {
     getTransactionReceipt: vi.fn(async () => minedDestination),
   }, walletClient: { getAddress: vi.fn(async () => sender), sendTransaction: vi.fn(async () => destinationHash) } }
   const receipt: BridgeReceipt = { id: sourceHash, protocol: 'cctp', status: 'SOURCE_CONFIRMING', sourceTxId: sourceHash, protocolState: { routeId: transfer.route.id, sourceSender: sender, approvalTxIds: [] } }
-  return { transfer, source, destination, sourceReceipt, destinationReceipt, receipt, fetch, clients: { ethereum: source, arc: destination },
+  return { transfer, source, destination, sourceReceipt, destinationReceipt, receipt, fetch, clients: { [sourceChain]: source, [destinationChain]: destination },
     pendingSource: () => { minedSource = null }, pendingDestination: () => { minedDestination = null },
     unused: () => { used = 0n }, noAllowance: () => { allowance = 0n }, noFunds: () => { balance = 0n }, noGas: () => { gasBalance = 0n },
     fee: (value: string | number) => { minimumFee = value },
@@ -189,4 +190,48 @@ describe('CCTP V2 adapter', () => {
     expect(f.destination.walletClient!.sendTransaction).not.toHaveBeenCalled()
   })
 
+})
+
+
+describe.each([['ethereum', 1, 0], ['base', 8453, 6], ['arbitrum', 42161, 3]] as const)('Arc to %s CCTP', (destination, chainId, domain) => {
+  it('quotes the correct domain and burns native Arc USDC', async () => {
+    const f = fixture(true, 0, 'arc', destination)
+    const priced = await quote(registry, f.clients, f.fetch, { plan: f.transfer })
+    expect(f.fetch).toHaveBeenCalledWith(`https://iris-api.circle.com/v2/burn/USDC/fees/26/${domain}?forward=true`, undefined)
+    expect(priced.minFinalityThreshold).toBe(2000)
+    expect(f.transfer.route.metadata).toMatchObject({ sourceChainId: 5042, sourceDomain: 26, destinationChainId: chainId, destinationDomain: domain })
+    f.pendingSource()
+    const saved = vi.fn()
+    await execute(registry, f.clients, f.fetch, { plan: priced.plan, confirmationTimeoutMs: 0, onCheckpoint: saved })
+    const sent = vi.mocked(f.source.walletClient!.sendTransaction).mock.calls[0]![0]
+    expect(sent.chainId).toBe(5042)
+    const decoded = decodeFunctionData({ abi: parseAbi(['function depositForBurnWithHook(uint256,uint32,bytes32,address,bytes32,uint256,uint32,bytes)']), data: sent.data! })
+    expect(decoded.args[1]).toBe(domain)
+    expect(decoded.args[3]).toBe('0x3600000000000000000000000000000000000000')
+    expect(saved).toHaveBeenCalledOnce()
+    expect(f.destination.walletClient!.sendTransaction).not.toHaveBeenCalled()
+  })
+  it('recovers forwarded delivery from exact destination evidence without signatures', async () => {
+    const f = fixture(true, 0, 'arc', destination)
+    const receipt = await recover(registry, f.clients, f.fetch, { plan: f.transfer, checkpoint: createBridgeCheckpoint(f.transfer, f.receipt) })
+    expect(receipt).toMatchObject({ status: 'COMPLETED', sourceTxId: sourceHash, destinationTxId: destinationHash })
+    expect(f.source.walletClient!.sendTransaction).not.toHaveBeenCalled()
+    expect(f.destination.walletClient!.sendTransaction).not.toHaveBeenCalled()
+    f.destinationReceipt.logs = f.destinationReceipt.logs.slice(0, 1)
+    await expect(getStatus(registry, f.clients, f.fetch, { plan: f.transfer, receipt: f.receipt })).rejects.toThrow('expected USDC mint')
+  })
+  it('submits manual completion only on the selected destination chain', async () => {
+    const f = fixture(false, 0, 'arc', destination); f.unused(); f.pendingDestination()
+    const result = await complete(registry, f.clients, f.fetch, { plan: f.transfer, receipt: f.receipt })
+    expect(f.destination.walletClient!.sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ chainId }))
+    await complete(registry, f.clients, f.fetch, { plan: f.transfer, receipt: result.receipt })
+    expect(f.destination.walletClient!.sendTransaction).toHaveBeenCalledOnce()
+    expect(f.source.walletClient!.sendTransaction).not.toHaveBeenCalled()
+  })
+  it('rejects the wrong source RPC before requesting a signature', async () => {
+    const f = fixture(true, 0, 'arc', destination)
+    vi.mocked(f.source.publicClient.getChainId).mockResolvedValue(chainId)
+    await expect(execute(registry, f.clients, f.fetch, { plan: f.transfer })).rejects.toThrow('chain 5042')
+    expect(f.source.walletClient!.sendTransaction).not.toHaveBeenCalled()
+  })
 })

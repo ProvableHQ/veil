@@ -9,7 +9,10 @@ BRIDGE_ARC_READ_ONLY=1 pnpm vitest run packages/bridge/test/integration/live/mai
 ```
 
 This quotes against deployed Arc contracts using public fixture addresses. It
-creates no signer and submits no transactions. It does not verify settlement.
+creates no signer and submits no transactions. It does not verify settlement. The same read-only suite verifies CCTP domains
+and remote messengers for Arc → Ethereum/Base/Arbitrum, checks destination USDC
+decimals, and fetches live Standard forwarding quotes for all three routes.
+These outbound CCTP checks do not submit transfers.
 
 ## Arc mainnet deposit and private mint
 
