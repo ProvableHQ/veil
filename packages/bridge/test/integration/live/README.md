@@ -79,3 +79,26 @@ recipient's exact balance increase. Keep this recipient idle during the test
 so unrelated transactions cannot invalidate the balance check. Timing and both
 transaction IDs are persisted. Restart with the same state file after errors;
 never delete a checkpoint to retry a burn.
+
+## Arc CCTP roundtrips
+
+Run `mainnet/cctp-roundtrip.live.test.ts` with the usual mainnet acknowledgements
+and any of `cctp-roundtrip-ethereum`, `cctp-roundtrip-base`, or
+`cctp-roundtrip-arbitrum` in `BRIDGE_LIVE_MAINNET_CASES`. The test sends Arc USDC
+out and returns only the attested net amount received. Both legs use forwarding
+and verify the exact mint plus recipient balance increase through the SDK.
+
+The configured outbound amounts are 2.75 USDC for Ethereum and 0.25 USDC each
+for Base and Arbitrum. Every new leg chooses a ceiling close to the live fee
+estimate, within the scenario's absolute budget. Forwarding may spend the full
+ceiling; budget headroom is not promised as a refund. The wallet needs USDC for
+Arc gas and native ETH on the other chain for its return approval/burn. Gas
+funding is a separate, explicitly authorized operation; these tests do not fund
+other chains automatically.
+
+Each leg keeps its own `mainnet/cctp-roundtrip-<chain>-outbound.json` or
+`-return.json` checkpoint, transaction IDs, delivered amount, and elapsed time.
+Reuse those files after an interruption. Completed legs are reverified rather
+than repeated, and submitted legs remain recoverable without fresh gas. Keep
+the recipient idle during each roundtrip so unrelated transfers cannot distort
+the exact balance assertions.

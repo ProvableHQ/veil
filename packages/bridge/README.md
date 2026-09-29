@@ -85,7 +85,9 @@ const progress = await bridge.wait({
 ```
 
 The quote includes the current destination forwarding cost and carries an
-approved fee ceiling into execution and checkpoint recovery. Forwarding pays
+approved fee ceiling into execution and checkpoint recovery. With forwarding,
+the displayed receive amount deducts that full ceiling: excess forwarding gas
+budget may be spent as a priority fee and is not promised as a refund. Forwarding pays
 for destination submission; the recipient needs no destination gas or signature.
 With `forwarding: false`, `complete` requires a destination wallet and its native
 gas. Arc requires USDC for the burn plus source gas in either mode.

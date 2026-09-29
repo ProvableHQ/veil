@@ -131,7 +131,9 @@ export async function quote(registry: BridgeRegistry, clients: BridgeChainClient
   const maxFeeAtomic = params.plan.cctp?.maxFee === undefined ? required : parseDecimalAmount(params.plan.cctp.maxFee, 6)
   if (required > maxFeeAtomic) fail('Live CCTP fees exceed the approved maxFee; request a new quote')
   if (maxFeeAtomic >= amountAtomic) fail('CCTP fees must be less than the burn amount')
-  const amountOutAtomic = amountAtomic - required
+  // Forwarding spends the approved gas budget; surplus may become a priority
+  // fee rather than a refund. Do not promise that headroom to the recipient.
+  const amountOutAtomic = amountAtomic - (forwarding ? maxFeeAtomic : required)
   const plan: BridgePlan = {
     ...params.plan, cctp: { speed, forwarding, maxFee: formatDecimalAmount(maxFeeAtomic, 6) },
     amountOut: formatDecimalAmount(amountOutAtomic, 6),

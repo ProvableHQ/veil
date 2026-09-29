@@ -3,7 +3,7 @@ import type { BridgeReceipt } from './protocol.js'
 /**
  * Reports live CCTP fees in six-decimal USDC atomic units.
  * @property amountAtomic Total USDC burned on the source chain.
- * @property amountOutAtomic Estimated USDC delivered after fees.
+ * @property amountOutAtomic USDC after the full approved fee ceiling when forwarding; otherwise after the estimated protocol fee.
  * @property protocolFeeAtomic Live protocol fee, rounded up to an atomic unit.
  * @property forwardingFeeAtomic Live medium-priority forwarding fee, or zero for manual minting.
  * @property maxFeeAtomic Caller-approved fee ceiling committed by the burn.

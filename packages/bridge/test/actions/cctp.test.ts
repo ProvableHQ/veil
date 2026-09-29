@@ -235,3 +235,16 @@ describe.each([['ethereum', 1, 0], ['base', 8453, 6], ['arbitrum', 42161, 3]] as
     expect(f.source.walletClient!.sendTransaction).not.toHaveBeenCalled()
   })
 })
+
+
+it('quotes forwarded delivery after the full approved fee budget', async () => {
+  const f = fixture()
+  const priced = await quote(registry, f.clients, f.fetch, { plan: f.transfer })
+  expect(priced.amountOutAtomic).toBe(4_900_000n)
+  expect(priced.plan.amountOut).toBe('4.9')
+  // The separate fee fields retain the live service estimates; headroom is
+  // visible in maxFee and must not be promised back to the recipient.
+  expect(priced.protocolFeeAtomic + priced.forwardingFeeAtomic).toBe(1650n)
+  const manual = fixture(false)
+  expect((await quote(registry, manual.clients, manual.fetch, { plan: manual.transfer })).amountOutAtomic).toBe(4_999_350n)
+})
