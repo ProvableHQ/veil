@@ -55,3 +55,6 @@ with Arc gas and set `BRIDGE_LIVE_CCTP_MANUAL_MINT=1` alongside the execution
 acknowledgement. The SDK manually mints that existing message before proceeding;
 it does not submit another Ethereum burn. This validates manual recovery, not
 successful Circle forwarding.
+
+The Ethereum live-test signer sets an explicit 1-gwei priority fee per transaction.
+A chain-level default alone can be bypassed by RPC transaction filling.

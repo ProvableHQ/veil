@@ -29,7 +29,11 @@ const TRANSMITTER = parseAbi([
   'event MessageSent(bytes message)',
   'event MessageReceived(address indexed caller,uint32 sourceDomain,bytes32 indexed nonce,bytes32 sender,uint32 indexed finalityThresholdExecuted,bytes messageBody)',
 ])
-const FORWARD_HOOK = concat([stringToHex('cctp-forward', { size: 24 }), toHex(1, { size: 4 }), toHex(0, { size: 4 })])
+// Circle's transfer tutorial and successful Ethereum-to-Arc mainnet burns use v0.
+const FORWARD_HOOK = concat([stringToHex('cctp-forward', { size: 24 }), toHex(0, { size: 4 }), toHex(0, { size: 4 })])
+// Preserve recovery of already-submitted v1 burns; source/attestation equality
+// below prevents changing a hook after the irreversible source transaction.
+const COMPOSABLE_FORWARD_HOOK = concat([stringToHex('cctp-forward', { size: 24 }), toHex(1, { size: 4 }), toHex(0, { size: 4 })])
 const ZERO32 = pad(zeroAddress, { size: 32 })
 type Metadata = {
   sourceChainId: number; destinationChainId: number; sourceDomain: number; destinationDomain: number
@@ -237,7 +241,10 @@ function hookData(message: Hex): Hex { return message.length === 754 ? '0x' : sl
 function numberField(message: Hex, offset: number, length: number) { return BigInt(field(message, offset, length)) }
 function checkMessage(message: Hex, m: Metadata, plan: BridgePlan, sender: string) {
   if (message.length < 2 + 376 * 2) fail('CCTP message is truncated')
-  const expectedHook = plan.cctp?.forwarding === false ? '0x' : FORWARD_HOOK
+  const actualHook = hookData(message)
+  const matchesHook = plan.cctp?.forwarding === false
+    ? actualHook === '0x'
+    : [FORWARD_HOOK, COMPOSABLE_FORWARD_HOOK].some(hook => same(actualHook, hook))
   if (numberField(message, 0, 4) !== 1n || numberField(message, 148, 4) !== 1n
     || numberField(message, 4, 4) !== BigInt(m.sourceDomain) || numberField(message, 8, 4) !== BigInt(m.destinationDomain)
     || !same(field(message, 44, 32), pad(m.tokenMessenger, { size: 32 }))
@@ -249,7 +256,7 @@ function checkMessage(message: Hex, m: Metadata, plan: BridgePlan, sender: strin
     || numberField(message, 216, 32) !== parseDecimalAmount(plan.amountIn, 6)
     || !same(field(message, 248, 32), pad(sender as Address, { size: 32 }))
     || (plan.cctp?.maxFee !== undefined && numberField(message, 280, 32) !== parseDecimalAmount(plan.cctp.maxFee, 6))
-    || !same(hookData(message), expectedHook)) fail('CCTP source message does not match the transfer intent')
+    || !matchesHook) fail('CCTP source message does not match the transfer intent')
   if (numberField(message, 280, 32) >= parseDecimalAmount(plan.amountIn, 6)) fail('CCTP source message has an invalid fee cap')
 }
 function immutableMessage(message: Hex) {

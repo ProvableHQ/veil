@@ -171,6 +171,7 @@ type CompleteOptions = {
  */
 export type CompleteParameters = CompleteOptions & (
   | { progress: Extract<BridgeProgress, { next: 'complete' }>, plan?: never, receipt?: never }
+  | { progress: Extract<BridgeProgress, { next: 'wait' }>, cctp: { manualMint: true }, plan?: never, receipt?: never }
   | { progress?: never, plan: BridgePlan, receipt: BridgeReceipt }
 )
 

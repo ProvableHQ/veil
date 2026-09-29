@@ -20,15 +20,24 @@ export async function fundArcFromEthereum(): Promise<boolean> {
   const routeId = 'cctp:ethereum/usdc->arc/usdc'
   const path = liveStatePath('mainnet', 'ethereum-arc-aleo-funding')
   const state = loadLiveState(path, routeId)
-  const ethereum = createEvmClient({
-    transport: evmHttp(process.env.BRIDGE_LIVE_ETHEREUM_RPC_URL?.trim() || 'https://ethereum-rpc.publicnode.com'),
-    // A bounded 1-gwei tip avoids zero-tip public RPC estimates stalling this live test.
-    walletClient: createWalletClient({
-      account: privateKeyToAccount(requiredEvmPrivateKey('BRIDGE_EVM_PRIVATE_KEY')),
-      chain: { ...mainnet, fees: { maxPriorityFeePerGas: 1_000_000_000n } },
-      transport: http(process.env.BRIDGE_LIVE_ETHEREUM_RPC_URL?.trim() || 'https://ethereum-rpc.publicnode.com'),
-    }),
+  const ethereumRpc = process.env.BRIDGE_LIVE_ETHEREUM_RPC_URL?.trim() || 'https://ethereum-rpc.publicnode.com'
+  const wallet = createWalletClient({
+    account: privateKeyToAccount(requiredEvmPrivateKey('BRIDGE_EVM_PRIVATE_KEY')),
+    chain: mainnet,
+    transport: http(ethereumRpc),
   })
+  const ethereum = createEvmClient({ transport: evmHttp(ethereumRpc) })
+  // Explicit transaction fees survive RPC transaction-filling optimizations.
+  ethereum.walletClient = {
+    getAddress: async () => wallet.account.address,
+    sendTransaction: async ({ chainId, from, to, data, value }) => {
+      if (chainId !== mainnet.id || await wallet.getChainId() !== chainId
+        || (from && from.toLowerCase() !== wallet.account.address.toLowerCase())) {
+        throw new Error('Ethereum test signer does not match the requested chain or sender')
+      }
+      return wallet.sendTransaction({ to, data, value, maxPriorityFeePerGas: 1_000_000_000n })
+    },
+  }
   const arc = createEvmClient({
     transport: evmHttp(process.env.BRIDGE_LIVE_ARC_RPC_URL?.trim() || 'https://rpc.mainnet.arc.io'),
     account: evmPrivateKey(requiredEvmPrivateKey('BRIDGE_EVM_PRIVATE_KEY')),
