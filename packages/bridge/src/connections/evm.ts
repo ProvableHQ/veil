@@ -1,5 +1,6 @@
 import {
   createPublicClient,
+  toHex,
   createWalletClient,
   custom,
   defineChain,
@@ -144,10 +145,12 @@ export type EvmTransaction = {
  * Selects one contract and inclusive block range for a recovery event scan.
  *
  * @property address Contract whose events should be returned.
+ * @property topics Optional indexed event filters. Defaults to all contract events.
  * @property fromBlock First block included in the scan.
  * @property toBlock Last block included in the scan. Defaults to the latest block.
  */
 export type EvmGetLogsParameters = {
+  topics?: readonly (Hex | null)[] | undefined
   address: Address
   fromBlock: bigint
   toBlock?: bigint | undefined
@@ -156,6 +159,7 @@ export type EvmGetLogsParameters = {
 /**
  * Exposes account-free EVM operations used by bridge actions.
  *
+ * @property getBlockNumber Optionally reads the latest block for bounded destination recovery scans; omission disables automatic scans.
  * @property getChainId Reads the current EIP-155 chain id.
  * @property getBalance Reads one account's native-currency balance in atomic units.
  * @property call Executes a read-only EVM call.
@@ -164,6 +168,7 @@ export type EvmGetLogsParameters = {
  * @property getTransaction Reads a transaction or returns `null` while unavailable.
  */
 export type EvmPublicClient = {
+  getBlockNumber?: (() => Promise<bigint>) | undefined
   getChainId: () => Promise<number>
   getBalance: (address: Address) => Promise<bigint>
   call: (params: EvmCallParameters) => Promise<Hex>
@@ -307,6 +312,7 @@ function transportFor(transport: EvmTransport, defaultFetch: typeof globalThis.f
 
 function normalizePublicClient(client: PublicClient): EvmPublicClient {
   return {
+    getBlockNumber: () => client.getBlockNumber(),
     getChainId: () => client.getChainId(),
     getBalance: (address) => client.getBalance({ address }),
     call: async (params) => (await client.call(params)).data ?? '0x',
@@ -318,7 +324,16 @@ function normalizePublicClient(client: PublicClient): EvmPublicClient {
         throw error
       }
     },
-    getLogs: async (params) => client.getLogs(params) as unknown as EvmLog[],
+    getLogs: async (params) => {
+      if (!params.topics) return client.getLogs(params) as unknown as EvmLog[]
+      const logs = await client.request({ method: 'eth_getLogs', params: [{
+        address: params.address, topics: [...params.topics], fromBlock: toHex(params.fromBlock),
+        toBlock: params.toBlock === undefined ? 'latest' : toHex(params.toBlock),
+      }] })
+      return logs.map(log => ({ ...log, address: log.address, blockNumber: BigInt(log.blockNumber!),
+        transactionHash: log.transactionHash!, logIndex: Number(log.logIndex),
+      })) as EvmLog[]
+    },
     getTransaction: async (hash) => {
       try {
         return await client.getTransaction({ hash }) as unknown as EvmTransaction

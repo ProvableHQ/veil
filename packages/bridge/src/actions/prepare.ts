@@ -165,7 +165,8 @@ export function prepare(
   const fees: BridgePlan['fees'] = []
 
   return {
-    ...(route.protocol === 'cctp' ? { cctp: { speed: 'standard' as const, forwarding: true, ...params.cctp } } : {}),
+    ...(route.protocol === 'cctp' ? { cctp: { speed: params.cctp?.speed ?? 'standard', forwarding: params.cctp?.forwarding ?? true,
+      ...(params.cctp?.maxFee !== undefined ? { maxFee: params.cctp.maxFee } : {}) } } : {}),
     registryVersion: registry.version,
     protocol: route.protocol,
     route,

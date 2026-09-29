@@ -27,7 +27,7 @@ function validatedRoute(registry: BridgeRegistry, params: ExecuteXReserveBurnPar
   const bridgeProgram = route.metadata?.bridgeProgram
   const wrapperProgram = route.metadata?.wrapperProgram
   const tokenProgram = route.metadata?.remoteToken
-  const expectedDomain = destinationChain.protocolDomains?.xreserve ?? 0
+  const expectedDomain = destinationChain.protocolDomains?.xreserve
   const nativeDomain = expectedDomain === 26 ? route.metadata?.arcDestinationDomain : route.metadata?.ethereumDestinationDomain
   const withdrawalFee = route.metadata?.withdrawalFeeAtomic
   if (typeof bridgeProgram !== 'string' || !bridgeProgram.endsWith('.aleo')) throw new BridgeError(`xReserve bridge program is invalid: ${route.id}`)

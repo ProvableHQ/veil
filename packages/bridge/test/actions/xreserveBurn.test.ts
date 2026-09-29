@@ -172,3 +172,9 @@ it('rechecks the live Arc fee before asking the wallet to burn', async () => {
   }, fetcher)).rejects.toThrow(/fee/)
   expect(executeTransaction).not.toHaveBeenCalled()
 })
+
+it('rejects a missing destination domain instead of selecting Ethereum', () => {
+  const registry = { ...DEFAULT_BRIDGE_REGISTRY, chains: DEFAULT_BRIDGE_REGISTRY.chains.map(chain => chain.id === 'ethereum'
+    ? { ...chain, protocolDomains: { hyperlane: 1 } } : chain) }
+  expect(() => buildXReserveBurnCall(registry, { plan: plan(), mode: 'public-as-signer' })).toThrow('domain')
+})

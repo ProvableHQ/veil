@@ -179,9 +179,13 @@ export type CompleteParameters = CompleteOptions & (
  * Supplies saved public transfer information for recovery after an interruption.
  *
  * @property checkpoint Compact checkpoint emitted at a wallet submission boundary.
+ * @property cctp.approvalReplacement.originalTransactionId Saved approval hash that the caller has reconciled as superseded.
+ * @property cctp.approvalReplacement.replacementTransactionId Confirmed replacement approval hash matching the saved intent.
+ * @property cctp Optional explicit approval replacement for a missing original transaction; recovery verifies the confirmed replacement without signing. Defaults to no replacement.
  * @property signal Optional cancellation signal. Defaults to no cancellation.
  */
 export type RecoverParameters = {
+  cctp?: { approvalReplacement: { originalTransactionId: string; replacementTransactionId: string } } | undefined
   checkpoint: BridgeCheckpoint
   signal?: AbortSignal | undefined
 }

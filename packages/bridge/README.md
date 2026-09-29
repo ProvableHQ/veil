@@ -462,6 +462,37 @@ The application then handles `progress.next` by the same table above. A private
 mint nonce must be stored separately because it is intentionally absent from
 the checkpoint.
 
+For CCTP, an unavailable approval stays pending: an RPC returning `null` does
+not prove that a transaction was dropped. After reconciling the original in the
+wallet and confirming a replacement approval, explicitly select it:
+
+```ts
+const recovered = await bridge.recover({
+  checkpoint,
+  cctp: {
+    approvalReplacement: {
+      originalTransactionId: originalApprovalHash,
+      replacementTransactionId: confirmedApprovalHash,
+    },
+  },
+})
+const updated = createBridgeCheckpoint(recovered.plan, recovered.receipt)
+```
+
+Persist `updated` before resuming. Recovery verifies the replacement's successful
+receipt, signer, token, spender, and amount; it retains the original hash in
+`source.replacedApprovalTransactionIds`. It does not submit another approval and
+rejects replacement selection while the original transaction is visible or after
+the burn was submitted.
+
+If Circle omits the forwarding transaction hash for an already-minted CCTP
+transfer, status checks search the newest 10,000 destination blocks in batches of
+1,000 and verify the discovered receipt and USDC mint. Custom EVM clients need
+`getBlockNumber` and must honor `getLogs` topics for this fallback. If the mint is
+older or cannot be found, retain the checkpoint and supply its verified destination
+transaction hash in `checkpoint.destination.transactionId` before recovering.
+Terminal receipts return without provider polling.
+
 ## Use private assets on Aleo
 
 Hyperlane routes mint wrapped assets into public Aleo balances and spend public

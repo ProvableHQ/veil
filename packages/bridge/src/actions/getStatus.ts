@@ -48,12 +48,13 @@ export async function getStatus(
   if (receipt.protocol !== params.plan.protocol || receipt.protocolState.routeId !== params.plan.route.id) {
     throw new BridgeError('Bridge receipt does not match the prepared route')
   }
-  if (params.plan.protocol === 'cctp') return cctp.getStatus(registry, clients, client, params)
   // Terminal receipts are facts already established by an earlier chain read.
   // Checking them again must not route into a protocol-specific pending branch.
   if (receipt.status === 'COMPLETED' || receipt.status === 'FAILED' || receipt.status === 'EXPIRED') {
     return receipt
   }
+
+  if (params.plan.protocol === 'cctp') return cctp.getStatus(registry, clients, client, params)
 
   if (receipt.status === 'SOURCE_APPROVAL_PENDING' && route.sourceChain.family === 'evm') {
     // Approval does not move bridge funds. Once confirmed, stop at an explicit

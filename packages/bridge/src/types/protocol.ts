@@ -399,6 +399,7 @@ export type BridgeReceipt = {
  * @property source.blockhash Solana blockhash that bounded the submitted source transaction.
  * @property source.lastValidBlockHeight Final Solana block height at which the source transaction can land.
  * @property destination Caller-authorized destination transaction when submitted.
+ * @property source.replacedApprovalTransactionIds Original approval hashes explicitly superseded during CCTP recovery; retained for audit, not polled as active approvals.
  * @property destination.transactionId Destination-chain transaction identifier.
  * @property destination.preparedTransaction Fully proved Aleo destination transaction retained before broadcast for idempotent recovery.
  * @property deliveryVerification Destination balance snapshot used when the protocol explorer does not index Aleo origins.
@@ -412,6 +413,7 @@ export type BridgeCheckpoint = {
   }
   source?: {
     approvalTransactionIds?: readonly string[] | undefined
+    replacedApprovalTransactionIds?: readonly string[] | undefined
     transactionId?: string | undefined
     hookData?: string | undefined
     blockhash?: string | undefined

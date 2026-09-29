@@ -52,8 +52,11 @@ export function isRegistryVersionCompatible(registry: BridgeRegistry, version: s
   const sourceChain = registry.chains.find(entry => entry.id === sourceAsset?.chainId)
   const destinationChain = registry.chains.find(entry => entry.id === destinationAsset?.chainId)
   if (!sourceAsset || !destinationAsset || !sourceChain || !destinationChain) return false
+  // Sepolia's pre-Arc catalog omitted its reviewed xReserve domain 0.
+  // Normalize only that explicit correction when checking the legacy hash.
+  if (route.protocol === 'xreserve' && [sourceChain, destinationChain].some(entry => entry.id === 'sepolia' && entry.protocolDomains?.xreserve !== 0)) return false
   const chain = (entry: ProtocolBridgeChain) => ({
-    ...entry, protocolDomains: { [route.protocol]: entry.protocolDomains?.[route.protocol] ?? null },
+    ...entry, protocolDomains: { [route.protocol]: entry.id === 'sepolia' && route.protocol === 'xreserve' ? null : entry.protocolDomains?.[route.protocol] ?? null },
   })
   // Sort object keys recursively so serialization order cannot affect compatibility.
   const canonical = JSON.stringify({ route, sourceAsset, destinationAsset,

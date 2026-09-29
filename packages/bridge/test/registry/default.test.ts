@@ -346,3 +346,9 @@ describe('validateBridgeRegistry', () => {
     })).toThrow(/missing required Solana Hyperlane metadata/)
   })
 })
+
+it.each([undefined, 99])('rejects absent or mismatched CCTP chain domains (%s)', domain => {
+  const registry = { ...DEFAULT_BRIDGE_REGISTRY, chains: DEFAULT_BRIDGE_REGISTRY.chains.map(chain =>
+    chain.id === 'arc' ? { ...chain, protocolDomains: { ...chain.protocolDomains, cctp: domain } } : chain) }
+  expect(() => validateBridgeRegistry(registry)).toThrow('domain')
+})

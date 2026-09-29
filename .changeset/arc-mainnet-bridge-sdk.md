@@ -11,3 +11,5 @@ Use Circle’s version-0 forwarding frame for new CCTP burns, verified with Ethe
 Preserve saved pre-Arc plans and checkpoints for unchanged reviewed routes using pinned route fingerprints. Reject unknown versions and altered deployments. Document migration for the expanded protocol, quote, execution, destination-action, and quote-status unions.
 
 Add a preview-first, checkpointed Base/Arbitrum → Arc → Aleo → Arc → origin example with public USDCx, explicit per-leg execution, received-amount accounting, and documented provider delivery observation limits.
+
+Harden CCTP recovery with bounded destination-event discovery, stable terminal receipts, and explicit verified approval replacement with retained audit hashes. Normalize CCTP intent and validate route/chain domain agreement. Require explicit xReserve destination domains while preserving legacy Sepolia checkpoint recovery. Keep fee-ceiling defaults unchanged.

@@ -39,3 +39,13 @@ describe('CCTP planning and checkpoint intent', () => {
   })
 
 })
+
+it('normalizes only supported CCTP options into plans and checkpoints', () => {
+  const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+    source: { chain: 'base', asset: 'usdc' }, destination: { chain: 'arc', asset: 'usdc' }, amount: '5', recipient,
+    cctp: { speed: undefined, forwarding: undefined, foo: 'do-not-persist' } as never,
+  })
+  expect(plan.cctp).toEqual({ speed: 'standard', forwarding: true })
+  const checkpoint = createBridgeCheckpoint(plan, { id: 'test', protocol: 'cctp', status: 'SOURCE_CONFIRMING', protocolState: { routeId: plan.route.id } })
+  expect(checkpoint.intent.cctp).toEqual({ speed: 'standard', forwarding: true })
+})

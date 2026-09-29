@@ -32,6 +32,10 @@ export function createBridgeCheckpoint(
     throw new BridgeError('Bridge receipt contains invalid approval transaction identifiers')
   }
   const approvals = [...(rawApprovals ?? [])] as string[]
+  const replaced = receipt.protocolState.replacedApprovalTxIds
+  if (replaced !== undefined && (!Array.isArray(replaced) || replaced.some(value => typeof value !== 'string'))) {
+    throw new BridgeError('Bridge receipt contains invalid replaced approval identifiers')
+  }
   const sourceSender = receipt.protocolState.sourceSender
   if (sourceSender !== undefined && typeof sourceSender !== 'string') {
     throw new BridgeError('Bridge receipt contains an invalid source sender')
@@ -59,6 +63,7 @@ export function createBridgeCheckpoint(
   const source = approvals.length > 0 || receipt.sourceTxId || preparedTransaction
     ? {
         ...(approvals.length > 0 ? { approvalTransactionIds: approvals } : {}),
+        ...(Array.isArray(replaced) && replaced.length ? { replacedApprovalTransactionIds: [...replaced] as string[] } : {}),
         ...(receipt.sourceTxId ? { transactionId: receipt.sourceTxId } : {}),
         ...(typeof receipt.protocolState.hookData === 'string'
           ? { hookData: receipt.protocolState.hookData }

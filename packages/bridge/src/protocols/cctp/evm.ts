@@ -1,5 +1,5 @@
 import {
-  concat, decodeEventLog, decodeFunctionData, decodeFunctionResult, encodeFunctionData,
+  concat, encodeEventTopics, decodeEventLog, decodeFunctionData, decodeFunctionResult, encodeFunctionData,
   isAddress, isHash, pad, parseAbi, slice, stringToHex, toHex, zeroAddress,
   type Address, type Hash, type Hex,
 } from 'viem'
@@ -7,7 +7,7 @@ import { createBridgeCheckpoint } from '../../actions/createBridgeCheckpoint.js'
 import type { EvmClient, EvmReceipt } from '../../connections/evm.js'
 import { requireEvmClient, requireEvmClientWithWallet, type BridgeChainClients } from '../../connections/resolve.js'
 import { BridgeError } from '../../errors/bridgeErrors.js'
-import type { CompleteParameters, ExecuteParameters, GetStatusParameters } from '../../types/actions.js'
+import type { CompleteParameters, ExecuteParameters, GetStatusParameters, RecoverParameters } from '../../types/actions.js'
 import type { EvmCctpTransferExecution, EvmCctpTransferQuote } from '../../types/cctp.js'
 import type { XReserveHttpTransport } from '../../types/xreserve.js'
 import type { BridgeCheckpoint, BridgePlan, BridgeReceipt, BridgeRegistry } from '../../types/protocol.js'
@@ -68,6 +68,10 @@ function metadata(registry: BridgeRegistry, plan: BridgePlan): Metadata {
   if (plan.cctp?.speed !== undefined && !['fast', 'standard'].includes(plan.cctp.speed)) fail('Invalid CCTP speed')
   if (plan.cctp?.forwarding !== undefined && typeof plan.cctp.forwarding !== 'boolean') fail('Invalid CCTP forwarding option')
   if (plan.cctp?.maxFee !== undefined && parseDecimalAmount(plan.cctp.maxFee, 6) >= amount) fail('CCTP maxFee must be less than the burn amount')
+  const sourceDomain = registry.chains.find(chain => chain.id === source.chainId)?.protocolDomains?.cctp
+  const destinationDomain = registry.chains.find(chain => chain.id === destination.chainId)?.protocolDomains?.cctp
+  if (sourceDomain === undefined || destinationDomain === undefined
+    || route.metadata?.sourceDomain !== sourceDomain || route.metadata?.destinationDomain !== destinationDomain) fail('CCTP route domains must match configured chain domains')
   const m = route.metadata ?? {}
   const url = m.attestationBaseUrl
   if (typeof url !== 'string' || !/^https:\/\//.test(url)) fail('Invalid CCTP attestationBaseUrl')
@@ -146,9 +150,9 @@ export async function quote(registry: BridgeRegistry, clients: BridgeChainClient
   return { kind: 'evm-cctp', plan, amountAtomic, amountOutAtomic, protocolFeeAtomic, forwardingFeeAtomic, maxFeeAtomic, minFinalityThreshold, forwarding }
 }
 
-function baseReceipt(plan: BridgePlan, approvals: readonly string[], sender?: string): BridgeReceipt {
+function baseReceipt(plan: BridgePlan, approvals: readonly string[], sender?: string, replaced: readonly string[] = []): BridgeReceipt {
   return { id: approvals.at(-1) ?? plan.route.id, protocol: 'cctp', status: approvals.length ? 'SOURCE_APPROVAL_PENDING' : 'SOURCE_SUBMISSION_PENDING',
-    protocolState: { routeId: plan.route.id, approvalTxIds: [...approvals], sourceSender: sender ?? plan.sender } }
+    protocolState: { routeId: plan.route.id, approvalTxIds: [...approvals], ...(replaced.length ? { replacedApprovalTxIds: [...replaced] } : {}), sourceSender: sender ?? plan.sender } }
 }
 function result(receipt: BridgeReceipt): { kind: 'evm-cctp' } & EvmCctpTransferExecution {
   return { kind: 'evm-cctp', transactionId: receipt.destinationTxId ?? receipt.sourceTxId ?? receipt.id, receipt }
@@ -220,7 +224,7 @@ export async function execute(registry: BridgeRegistry, clients: BridgeChainClie
     const hash = validHash(await client.walletClient.sendTransaction({ chainId: m.sourceChainId, from: sender, to: m.sourceToken,
       data: encodeFunctionData({ abi: TOKEN, functionName: 'approve', args: [m.tokenMessenger, priced.amountAtomic] }) }))
     approvalTxIds.push(hash)
-    state = baseReceipt(priced.plan, approvalTxIds, sender)
+    state = baseReceipt(priced.plan, approvalTxIds, sender, state.protocolState.replacedApprovalTxIds as string[] | undefined)
     await persist(priced.plan, state, params.onCheckpoint)
     if (!await confirm(client, hash, params)) return result(state)
   }
@@ -231,7 +235,7 @@ export async function execute(registry: BridgeRegistry, clients: BridgeChainClie
     ? encodeFunctionData({ abi: MESSENGER, functionName: 'depositForBurnWithHook', args: [...args, FORWARD_HOOK] })
     : encodeFunctionData({ abi: MESSENGER, functionName: 'depositForBurn', args })
   const hash = validHash(await client.walletClient.sendTransaction({ chainId: m.sourceChainId, from: sender, to: m.tokenMessenger, data }))
-  state = { ...baseReceipt(priced.plan, approvalTxIds, sender), id: hash, sourceTxId: hash, status: 'SOURCE_CONFIRMING' }
+  state = { ...baseReceipt(priced.plan, approvalTxIds, sender, state.protocolState.replacedApprovalTxIds as string[] | undefined), id: hash, sourceTxId: hash, status: 'SOURCE_CONFIRMING' }
   await persist(priced.plan, state, params.onCheckpoint)
   if (!await confirm(client, hash, params)) return result(state)
   return result(await getStatus(registry, clients, fetch, { plan: priced.plan, receipt: state }))
@@ -345,7 +349,31 @@ export async function getStatus(registry: BridgeRegistry, clients: BridgeChainCl
   const used = decodeFunctionResult({ abi: TRANSMITTER, functionName: 'usedNonces', data: await destination.publicClient.call({ to: m.messageTransmitter, data: encodeFunctionData({ abi: TRANSMITTER, functionName: 'usedNonces', args: [nonce] }) }) }) !== 0n
   state = { ...state, messageId: nonce, protocolState: { ...state.protocolState, message, attestation: entry.attestation, nonce, nonceUsed: used, sourceSender: sender } }
   const forwarded = typeof entry.forwardTxHash === 'string' && isHash(entry.forwardTxHash) ? entry.forwardTxHash : undefined
-  const destinationHash = state.destinationTxId ?? forwarded
+  let destinationHash = state.destinationTxId ?? forwarded
+  if (used && !destinationHash && destination.publicClient.getBlockNumber) {
+    // Search at most 10,000 recent blocks in 1,000-block chunks. A consumed
+    // nonce alone is insufficient; the discovered receipt must still prove
+    // both the exact message and the USDC mint below.
+    const head = await destination.publicClient.getBlockNumber()
+    const floor = head >= 9999n ? head - 9999n : 0n
+    const topics = encodeEventTopics({ abi: TRANSMITTER, eventName: 'MessageReceived', args: { nonce } }) as (Hex | null)[]
+    for (let end = head; end >= floor;) {
+      const start = end - floor >= 999n ? end - 999n : floor
+      const logs = await destination.publicClient.getLogs({ address: m.messageTransmitter, topics, fromBlock: start, toBlock: end })
+      for (const log of logs) {
+        if (!same(log.address, m.messageTransmitter)) continue
+        try {
+          const event = decodeEventLog({ abi: TRANSMITTER, eventName: 'MessageReceived', data: log.data, topics: log.topics as [Hex, ...Hex[]] })
+          if (same(event.args.nonce, nonce) && event.args.sourceDomain === m.sourceDomain) {
+            destinationHash = validHash(log.transactionHash)
+            break
+          }
+        } catch { /* Ignore unrelated or malformed logs returned by a provider. */ }
+      }
+      if (destinationHash || start === floor) break
+      end = start - 1n
+    }
+  }
   let forwardingFailed = false
   if (destinationHash) {
     const delivered = await destination.publicClient.getTransactionReceipt(validHash(destinationHash))
@@ -374,11 +402,34 @@ export async function getStatus(registry: BridgeRegistry, clients: BridgeChainCl
  * @throws BridgeError When saved transactions do not match the reconstructed intent.
  * @example const receipt = await recover(registry, clients, fetch, { checkpoint, plan })
  */
-export async function recover(registry: BridgeRegistry, clients: BridgeChainClients, fetch: XReserveHttpTransport, params: { checkpoint: BridgeCheckpoint; plan: BridgePlan; signal?: AbortSignal }): Promise<BridgeReceipt> {
+export async function recover(registry: BridgeRegistry, clients: BridgeChainClients, fetch: XReserveHttpTransport, params: { checkpoint: BridgeCheckpoint; plan: BridgePlan; signal?: AbortSignal; cctp?: RecoverParameters['cctp'] }): Promise<BridgeReceipt> {
   const { checkpoint, plan } = params
   metadata(registry, plan)
   if (checkpoint.route.id !== plan.route.id || checkpoint.route.registryVersion !== registry.version) fail('CCTP checkpoint registry mismatch')
-  const receipt = baseReceipt(plan, checkpoint.source?.approvalTransactionIds ?? [], plan.sender)
+  const active = [...(checkpoint.source?.approvalTransactionIds ?? [])]
+  const replaced = [...(checkpoint.source?.replacedApprovalTransactionIds ?? [])]
+  replaced.forEach(validHash)
+  const replacement = params.cctp?.approvalReplacement
+  if (replacement) {
+    if (checkpoint.source?.transactionId) fail('Cannot replace approvals after a CCTP burn was submitted')
+    const original = validHash(replacement.originalTransactionId)
+    const confirmed = validHash(replacement.replacementTransactionId)
+    const index = active.findIndex(hash => same(hash, original))
+    if (index < 0 || same(original, confirmed) || active.some(hash => same(hash, confirmed))) fail('Replacement must identify one saved original approval and a different transaction')
+    const source = requireEvmClient(registry, clients, plan.sourceAsset.chainId)
+    const m = metadata(registry, plan)
+    await chain(source, m.sourceChainId)
+    const [originalTx, originalReceipt] = await Promise.all([
+      source.publicClient.getTransaction(original), source.publicClient.getTransactionReceipt(original),
+    ])
+    if (originalTx || originalReceipt) fail('The original approval is still visible; reconcile it before selecting a replacement')
+    // This explicit caller selection is not a claim that a missing transaction
+    // was dropped. Verify the new transaction and preserve the old hash.
+    if (!await approvalsConfirmed(source, m, plan, baseReceipt(plan, [confirmed], plan.sender))) fail('Replacement approval must be confirmed before recovery')
+    active[index] = confirmed
+    replaced.push(original)
+  }
+  const receipt = baseReceipt(plan, active, plan.sender, replaced)
   receipt.sourceTxId = checkpoint.source?.transactionId
   receipt.destinationTxId = checkpoint.destination?.transactionId
   receipt.id = receipt.sourceTxId ?? receipt.id

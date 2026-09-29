@@ -135,6 +135,14 @@ export function validateBridgeRegistry(registry: BridgeRegistry): BridgeRegistry
     if (sourceChain.environment !== route.environment || destinationChain.environment !== route.environment) {
       throw new BridgeError(`Bridge route ${route.id} crosses registry environments`)
     }
+    if (route.protocol === 'cctp') {
+      const sourceDomain = sourceChain.protocolDomains?.cctp
+      const destinationDomain = destinationChain.protocolDomains?.cctp
+      if (typeof sourceDomain !== 'number' || typeof destinationDomain !== 'number'
+        || route.metadata?.sourceDomain !== sourceDomain || route.metadata?.destinationDomain !== destinationDomain) {
+        throw new BridgeError(`CCTP route domains must match configured chain domains: ${route.id}`)
+      }
+    }
     if (
       route.protocol === 'hyperlane'
       && route.availability === 'active'

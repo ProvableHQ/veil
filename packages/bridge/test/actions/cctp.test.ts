@@ -248,3 +248,104 @@ it('quotes forwarded delivery after the full approved fee budget', async () => {
   const manual = fixture(false)
   expect((await quote(registry, manual.clients, manual.fetch, { plan: manual.transfer })).amountOutAtomic).toBe(4_999_350n)
 })
+
+it('finds an already-minted transfer without the optional forwarding hash', async () => {
+  const f = fixture(); f.noForwardHash()
+  Object.assign(f.destination.publicClient, { getBlockNumber: vi.fn(async () => 12000n) })
+  vi.mocked(f.destination.publicClient.getLogs).mockResolvedValue([{
+    ...f.destinationReceipt.logs[0]!, address: f.transfer.route.metadata!.messageTransmitter as Address,
+    blockNumber: 11900n, transactionHash: destinationHash, logIndex: 0,
+  }])
+  const status = await getStatus(registry, f.clients, f.fetch, { plan: f.transfer, receipt: f.receipt })
+  expect(status.status).toBe('COMPLETED')
+  expect(status.destinationTxId).toBe(destinationHash)
+})
+
+it('bounds an unsuccessful destination event search', async () => {
+  const f = fixture(); f.noForwardHash()
+  Object.assign(f.destination.publicClient, { getBlockNumber: vi.fn(async () => 100000n) })
+  expect((await getStatus(registry, f.clients, f.fetch, { plan: f.transfer, receipt: f.receipt })).status).toBe('DELIVERY_PENDING')
+  expect(f.destination.publicClient.getLogs).toHaveBeenCalledTimes(10)
+})
+
+it.each(['COMPLETED', 'FAILED', 'EXPIRED'] as const)('preserves terminal %s without network clients', async status => {
+  const { getStatus: action } = await import('../../src/actions/getStatus.js')
+  const f = fixture()
+  const receipt = { ...f.receipt, status }
+  expect(await action(registry, {}, f.fetch, { plan: f.transfer, receipt })).toBe(receipt)
+  expect(f.fetch).not.toHaveBeenCalled()
+})
+
+it('rejects CCTP domain disagreement before provider reads or signing', async () => {
+  const f = fixture()
+  const changed = { ...registry, chains: registry.chains.map(chain => chain.id === 'arc'
+    ? { ...chain, protocolDomains: { ...chain.protocolDomains, cctp: 99 } } : chain) }
+  await expect(quote(changed, f.clients, f.fetch, { plan: f.transfer })).rejects.toThrow('domain')
+  expect(f.fetch).not.toHaveBeenCalled()
+})
+
+it('keeps missing approval transactions pending without signing or discarding hashes', async () => {
+  const f = fixture()
+  vi.mocked(f.source.publicClient.getTransaction).mockResolvedValue(null)
+  vi.mocked(f.source.publicClient.getTransactionReceipt).mockResolvedValue(null)
+  const approval = { ...f.receipt, sourceTxId: undefined, protocolState: { ...f.receipt.protocolState, approvalTxIds: [approvalHash] } }
+  const status = await recover(registry, f.clients, f.fetch, { checkpoint: createBridgeCheckpoint(f.transfer, approval), plan: f.transfer })
+  expect(status.status).toBe('SOURCE_APPROVAL_PENDING')
+  expect(status.protocolState.approvalTxIds).toEqual([approvalHash])
+  expect(f.source.walletClient!.sendTransaction).not.toHaveBeenCalled()
+})
+
+it('explicitly adopts a confirmed replacement approval and preserves the original hash across recovery', async () => {
+  const f = fixture()
+  const replacement = toHex(42, { size: 32 })
+  const getTransaction = f.source.publicClient.getTransaction
+  vi.mocked(f.source.publicClient.getTransactionReceipt).mockImplementation(async hash => hash === approvalHash ? null : { transactionHash: hash, status: 'success', logs: [] })
+  f.source.publicClient.getTransaction = vi.fn(async hash => hash === approvalHash ? null : getTransaction(hash))
+  const approval = { ...f.receipt, sourceTxId: undefined, protocolState: { ...f.receipt.protocolState, approvalTxIds: [approvalHash] } }
+  const checkpoint = createBridgeCheckpoint(f.transfer, approval)
+  const status = await recover(registry, f.clients, f.fetch, { checkpoint, plan: f.transfer,
+    cctp: { approvalReplacement: { originalTransactionId: approvalHash, replacementTransactionId: replacement } } })
+  expect(status.status).toBe('SOURCE_SUBMISSION_PENDING')
+  const updated = createBridgeCheckpoint(f.transfer, status)
+  expect(updated.source?.approvalTransactionIds).toEqual([replacement])
+  expect(updated.source?.replacedApprovalTransactionIds).toEqual([approvalHash])
+  expect(checkpoint.source?.approvalTransactionIds).toEqual([approvalHash])
+  const again = await recover(registry, f.clients, f.fetch, { checkpoint: updated, plan: f.transfer })
+  expect(createBridgeCheckpoint(f.transfer, again).source?.replacedApprovalTransactionIds).toEqual([approvalHash])
+  expect(f.source.walletClient!.sendTransaction).not.toHaveBeenCalled()
+})
+
+it('refuses to adopt an approval replacement while the original is still visible', async () => {
+  const f = fixture()
+  const approval = { ...f.receipt, sourceTxId: undefined, protocolState: { ...f.receipt.protocolState, approvalTxIds: [approvalHash] } }
+  await expect(recover(registry, f.clients, f.fetch, { checkpoint: createBridgeCheckpoint(f.transfer, approval), plan: f.transfer,
+    cctp: { approvalReplacement: { originalTransactionId: approvalHash, replacementTransactionId: destinationHash } } })).rejects.toThrow('original approval')
+})
+
+it.each(['pending', 'reverted', 'wrong-sender'] as const)('rejects %s replacement approvals without signing', async failure => {
+  const f = fixture()
+  const replacement = toHex(42, { size: 32 })
+  const originalLookup = f.source.publicClient.getTransaction
+  f.source.publicClient.getTransaction = vi.fn(async hash => {
+    if (hash === approvalHash) return null
+    const transaction = await originalLookup(hash)
+    return transaction && failure === 'wrong-sender' ? { ...transaction, from: zeroAddress } : transaction
+  })
+  vi.mocked(f.source.publicClient.getTransactionReceipt).mockImplementation(async hash =>
+    hash === approvalHash || failure === 'pending' ? null : { transactionHash: hash, status: failure === 'reverted' ? 'reverted' : 'success', logs: [] })
+  const approval = { ...f.receipt, sourceTxId: undefined, protocolState: { ...f.receipt.protocolState, approvalTxIds: [approvalHash] } }
+  await expect(recover(registry, f.clients, f.fetch, { checkpoint: createBridgeCheckpoint(f.transfer, approval), plan: f.transfer,
+    cctp: { approvalReplacement: { originalTransactionId: approvalHash, replacementTransactionId: replacement } } })).rejects.toThrow()
+  expect(f.source.walletClient!.sendTransaction).not.toHaveBeenCalled()
+})
+
+it('requires exact USDC mint evidence after discovering a destination transaction', async () => {
+  const f = fixture(); f.noForwardHash()
+  Object.assign(f.destination.publicClient, { getBlockNumber: vi.fn(async () => 12000n) })
+  vi.mocked(f.destination.publicClient.getLogs).mockResolvedValue([{
+    ...f.destinationReceipt.logs[0]!, address: f.transfer.route.metadata!.messageTransmitter as Address,
+    blockNumber: 11900n, transactionHash: destinationHash, logIndex: 0,
+  }])
+  f.destinationReceipt.logs = f.destinationReceipt.logs.slice(0, 1)
+  await expect(getStatus(registry, f.clients, f.fetch, { plan: f.transfer, receipt: f.receipt })).rejects.toThrow('expected USDC mint')
+})
