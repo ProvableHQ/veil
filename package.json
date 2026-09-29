@@ -10,8 +10,7 @@
     "changeset": "changeset",
     "version-packages": "changeset version && node scripts/sync-versions.mjs",
     "release": "pnpm build && changeset publish",
-    "setup:first-swap": "node scripts/setup-first-swap.mjs",
-    "aleo-bridge": "tsx packages/bridge-cli/src/index.ts"
+    "setup:first-swap": "node scripts/setup-first-swap.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",

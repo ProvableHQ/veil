@@ -389,13 +389,6 @@ Testnet RPCs are rejected. Private delivery additionally requires
 `USDCX_MINT_MODE=private` and the recipient's `ALEO_PRIVATE_KEY`.
 Optional `USDCX_SECRET_NONCE` must be retained separately for recovery.
 
-The `aleo-bridge` CLI exposes these runners with amount and execution flags:
-
-```sh
-pnpm aleo-bridge transfer --route arc-to-aleo --amount 5 \
-  --recipient aleo1... --private-key-file ./arc.key
-```
-
 Aleo runners use credential-free delegated proving on the edge gateway by
 default. `ALEO_PROVING_MODE=local` selects local proving; an optional provisioned
 `EDGE_PROVABLE_API_KEY` authenticates with an API-key header. Legacy credentials
