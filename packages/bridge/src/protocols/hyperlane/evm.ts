@@ -1,3 +1,4 @@
+import { isRegistryVersionCompatible } from '../../registry/compatibility.js'
 import {
   decodeEventLog,
   decodeFunctionResult,
@@ -42,7 +43,7 @@ function routeMetadata(registry: BridgeRegistry, plan: BridgePlan): EvmHyperlane
   if (plan.protocol !== 'hyperlane' || plan.route.protocol !== 'hyperlane') {
     throw new BridgeError('Ethereum Hyperlane actions require a Hyperlane transfer plan')
   }
-  if (plan.registryVersion !== registry.version) {
+  if (!isRegistryVersionCompatible(registry, plan.registryVersion, plan.route.id)) {
     throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
   }
   // Resolve deployment addresses from the current reviewed registry rather

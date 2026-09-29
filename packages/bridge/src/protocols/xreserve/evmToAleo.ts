@@ -1,3 +1,4 @@
+import { isRegistryVersionCompatible } from '../../registry/compatibility.js'
 import {
   decodeEventLog,
   decodeFunctionResult,
@@ -52,7 +53,7 @@ const XRESERVE_ABI = parseAbi([
 
 function metadata(registry: BridgeRegistry, plan: BridgePlan): EvmXReserveRouteMetadata {
   if (plan.protocol !== 'xreserve' || plan.route.protocol !== 'xreserve') throw new BridgeError('xReserve actions require an xReserve transfer plan')
-  if (plan.registryVersion !== registry.version) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
+  if (!isRegistryVersionCompatible(registry, plan.registryVersion, plan.route.id)) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
   // Resolve contracts, domains, limits, and provider endpoints from the current
   // reviewed registry. A serialized plan identifies a route but is not trusted
   // as a source of deployment addresses after an application restart.
@@ -676,7 +677,7 @@ export async function complete(
   if (plan.protocol !== 'xreserve' || plan.route.protocol !== 'xreserve' || plan.mintMode !== 'private') {
     throw new BridgeError('private_mint requires a private xReserve transfer plan')
   }
-  if (plan.registryVersion !== registry.version) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
+  if (!isRegistryVersionCompatible(registry, plan.registryVersion, plan.route.id)) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
   const route = registry.routes.find((entry) => entry.id === plan.route.id)
   if (!route || route.protocol !== 'xreserve' || route.availability !== 'active') throw new BridgeError(`xReserve route is not executable: ${plan.route.id}`)
   const wrapperProgram = route.metadata?.wrapperProgram

@@ -1,3 +1,4 @@
+import { isRegistryVersionCompatible } from '../../registry/compatibility.js'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import type { BridgeRegistry, BridgePlan } from '../../types/protocol.js'
 import type { SolanaHyperlaneRouteMetadata } from '../../types/solana.js'
@@ -41,7 +42,7 @@ export function solanaRouteMetadata(
   if (plan.protocol !== 'hyperlane' || plan.route.protocol !== 'hyperlane') {
     throw new BridgeError('Solana Hyperlane actions require a Hyperlane transfer plan')
   }
-  if (plan.registryVersion !== registry.version) {
+  if (!isRegistryVersionCompatible(registry, plan.registryVersion, plan.route.id)) {
     throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
   }
   // Resolve the current registry entry rather than trusting metadata copied

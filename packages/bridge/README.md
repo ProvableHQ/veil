@@ -12,6 +12,43 @@ interruption without caller authorization.
 > `@provablehq/veil-*` packages, but its API is subject to breaking changes
 > between minor releases.
 
+## Upgrading existing bridge integrations
+
+Existing method signatures remain supported. Plans and checkpoints saved with
+registry `2026-08-31.solana-deposits.1` work with this release when the route,
+assets, and protocol-specific chain details match the reviewed previous
+snapshot. Recovery validates that match before reading a network or signing.
+It does not repeat a submitted source transaction. Unknown versions or changed
+deployments still require an explicit migration; do not rewrite a checkpoint's
+registry version to bypass validation.
+
+**TypeScript consumers with exhaustive switches or complete lookup tables must
+handle the new variants when upgrading this preview minor release:**
+
+| Public type | Additional value |
+| --- | --- |
+| `BridgeProtocol` | `cctp` |
+| `BridgeQuoteKind`, `BridgeQuote`, `BridgeExecutionKind`, `BridgeExecution` | `evm-cctp` discriminator |
+| `BridgeNextAction.kind` | `cctp-mint` |
+| `aleo-xreserve` quote `status` | `quoted` for routes with live fee estimates; fixed-fee routes retain `not-queried` |
+
+For example, extend a protocol label map rather than casting away the new type:
+
+```ts
+import type { BridgeProtocol } from '@provablehq/aleo-bridge-sdk'
+
+const protocolLabels = {
+  xreserve: 'Circle xReserve',
+  hyperlane: 'Hyperlane',
+  cctp: 'Circle CCTP',
+} satisfies Record<BridgeProtocol, string>
+```
+
+Add an `evm-cctp` case when branching on quotes or executions. Route discovery
+now includes additional chains and routes; filter by protocol or endpoints if
+an application only supports the existing integrations. Filtering limits
+runtime discovery but does not narrow the exported TypeScript unions.
+
 ## Supported transfers
 
 | Source | Destination | Asset received | Provider |

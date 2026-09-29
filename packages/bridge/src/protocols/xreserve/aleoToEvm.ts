@@ -1,3 +1,4 @@
+import { isRegistryVersionCompatible } from '../../registry/compatibility.js'
 import type { TransactionInput } from '@provablehq/veil-core'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import type {
@@ -13,7 +14,7 @@ import { evmAddressToXReserveBytes32, xReserveHexToAleoBytes } from '../../utils
 function validatedRoute(registry: BridgeRegistry, params: ExecuteXReserveBurnParameters) {
   const { plan } = params
   if (plan.protocol !== 'xreserve' || plan.route.protocol !== 'xreserve') throw new BridgeError('USDCx burn requires an xReserve transfer plan')
-  if (plan.registryVersion !== registry.version) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
+  if (!isRegistryVersionCompatible(registry, plan.registryVersion, plan.route.id)) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
   // Resolve programs, token metadata, domain, and fee from the current reviewed
   // registry. The saved transfer identifies the route but cannot replace a
   // current deployment review.

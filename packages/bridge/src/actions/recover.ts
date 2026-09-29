@@ -1,3 +1,4 @@
+import { isRegistryVersionCompatible } from '../registry/compatibility.js'
 import * as cctp from '../protocols/cctp/evm.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import { requireEvmClient, type BridgeChainClients } from '../connections/resolve.js'
@@ -46,7 +47,7 @@ export async function recover(
   const route = resolveTransferRoute(registry, plan)
   if (checkpoint.version !== 1
     || checkpoint.route.id !== plan.route.id
-    || checkpoint.route.registryVersion !== plan.registryVersion) {
+    || !isRegistryVersionCompatible(registry, checkpoint.route.registryVersion, checkpoint.route.id)) {
     throw new BridgeError('Bridge checkpoint does not match the prepared route')
   }
   if (plan.protocol === 'cctp') {
