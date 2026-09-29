@@ -394,3 +394,71 @@ default. `ALEO_PROVING_MODE=local` selects local proving; an optional provisione
 `EDGE_PROVABLE_API_KEY` authenticates with an API-key header. Legacy credentials
 use `ALEO_CONSUMER_ID` / `ALEO_DPS_API_KEY` and explicit `ALEO_PROVER_URL` /
 `ALEO_SCANNER_URL` gateway overrides.
+
+
+## Base or Arbitrum → Arc → Aleo and back
+
+`l2-arc-aleo-roundtrip.ts` runs four separately authorized mainnet legs using the
+SDK. Set `START_CHAIN=base` or `START_CHAIN=arbitrum`; the fourth leg returns to
+that same chain. Aleo receives **public USDCx**, then burns that public balance
+on the return leg. This example does not demonstrate private record handling.
+
+| LEG | Transfer | Protocol |
+| --- | --- | --- |
+| 1 | Base/Arbitrum → Arc | CCTP with forwarding |
+| 2 | Arc → Aleo | xReserve public mint |
+| 3 | Aleo → Arc | xReserve public burn |
+| 4 | Arc → Base/Arbitrum | CCTP with forwarding |
+
+Use dedicated, idle EVM and Aleo accounts throughout the journey. Fund the L2
+account with native USDC and ETH for approval/burn gas, and the Aleo account
+with public ALEO credits for proving/submission fees. The default starting
+amount is 5 USDC (minimum 3); each later leg spends only the previous leg's
+observed delivery. Leg 2 leaves 0.10 USDC on Arc for its source gas and the
+final CCTP burn. That reserve is an example budget, not a gas-price guarantee.
+Fees and reserved gas mean the returned amount is lower than the starting amount.
+
+```sh
+export START_CHAIN=base                 # or arbitrum
+export EVM_ADDRESS=0x...                # same address on the L2 and Arc
+export ALEO_RECIPIENT=aleo1...          # owns the public USDCx balance
+export AMOUNT=5
+export ROUNDTRIP_STATE_FILE="$HOME/.local/state/veil/examples/base-arc-aleo.json"
+
+# Preview leg 1 with read-only clients; no signing keys are needed.
+LEG=1 pnpm tsx packages/bridge/examples/l2-arc-aleo-roundtrip.ts
+```
+
+Supply `EVM_PRIVATE_KEY` and `ALEO_PRIVATE_KEY` securely through the environment.
+The example checks that each signing key matches the configured address.
+Run each command after the preceding leg reports destination receipt:
+
+```sh
+EXECUTE_BRIDGE=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS LEG=1 pnpm tsx packages/bridge/examples/l2-arc-aleo-roundtrip.ts
+EXECUTE_BRIDGE=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS LEG=2 pnpm tsx packages/bridge/examples/l2-arc-aleo-roundtrip.ts
+EXECUTE_BRIDGE=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS LEG=3 pnpm tsx packages/bridge/examples/l2-arc-aleo-roundtrip.ts
+EXECUTE_BRIDGE=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS LEG=4 pnpm tsx packages/bridge/examples/l2-arc-aleo-roundtrip.ts
+```
+
+Omit `EXECUTE_BRIDGE` to preview a fresh leg or inspect a saved checkpoint.
+RPC overrides are `BASE_RPC_URL`, `ARBITRUM_RPC_URL`, `ARC_RPC_URL`, and
+`ALEO_RPC_URL`. Aleo proving uses the same optional gateway/proving settings as
+the other examples. Published-package users can copy the shipped examples as
+described above and replace the repository path with `bridge-examples/`.
+
+Checkpoints are written atomically with owner-only permissions. After a timeout,
+rerun the **same LEG, state file, addresses, and starting amount**. Recovery never
+starts a new burn for a saved checkpoint. An attempted submission without a
+checkpoint stops for manual chain inspection. Do not delete state to retry.
+A process lock prevents concurrent writers; remove a stale `.lock` file only
+after confirming that no process is still running. Keep the state file private:
+prepared Aleo transaction bytes may be present, although signing keys are not.
+
+CCTP completion verifies the destination mint through the SDK. Public xReserve
+status stops at provider handoff; this example separately polls the public
+USDCx or Arc USDC balance and records the received amount. **Balance observation
+is not a cryptographic source-to-destination proof.** Unrelated activity can
+invalidate it, so keep these accounts idle and inspect transaction history if
+delivery is ambiguous. The withdrawal estimate is capped at 0.10 USDC before
+submission, but the deployed Aleo burn has no on-chain fee cap. Unexpected fees
+or partial delivery leave the leg pending rather than spending other balances.

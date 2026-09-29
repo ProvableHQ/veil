@@ -9,3 +9,5 @@ Add native USDC CCTP V2 routes from Ethereum, Base, and Arbitrum to Arc, with Fa
 Use Circle’s version-0 forwarding frame for new CCTP burns, verified with Ethereum-to-Arc mainnet delivery. Preserve recovery of already-submitted version-1 burns.
 
 Preserve saved pre-Arc plans and checkpoints for unchanged reviewed routes using pinned route fingerprints. Reject unknown versions and altered deployments. Document migration for the expanded protocol, quote, execution, destination-action, and quote-status unions.
+
+Add a preview-first, checkpointed Base/Arbitrum → Arc → Aleo → Arc → origin example with public USDCx, explicit per-leg execution, received-amount accounting, and documented provider delivery observation limits.
