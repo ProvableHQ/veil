@@ -1,3 +1,4 @@
+import * as cctp from '../protocols/cctp/evm.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import {
   requireAleoClient,
@@ -94,6 +95,7 @@ function xReserveBurnMode(mode: ExecuteParameters['mode']): XReserveBurnMode | u
  * @param registry Supported chains, assets, and bridge provider deployments.
  * @param clients Network and wallet access for the source and destination chains.
  * @param params Transfer details, source wallet preferences, and an optional callback for saving recovery information.
+ * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
  * @returns The submitted transaction identifier and the initial state of the in-progress transfer.
  * @throws BridgeError When the transfer is unsupported, the connected wallet cannot authorize it, current funds or fees are insufficient, or submission fails.
  * @example const execution = await execute(registry, clients, { plan, onCheckpoint: saveCheckpoint })
@@ -102,9 +104,11 @@ export async function execute(
   registry: BridgeRegistry,
   clients: BridgeChainClients,
   params: ExecuteParameters,
+  fetcher: typeof fetch = globalThis.fetch,
 ): Promise<BridgeExecution> {
   // The selected route, not caller-supplied chain branching, determines which
   // protocol implementation and wallet capability may commit the funds.
+  if (params.plan.protocol === 'cctp') return cctp.execute(registry, clients, fetcher, params)
   const chain = resolveTransferRoute(registry, params.plan).sourceChain
   const chainId = chain.id
   const onSubmitted = submissionCheckpoint(params)
@@ -198,7 +202,7 @@ export async function execute(
   }
   if (params.plan.protocol === 'xreserve' && chain.family === 'aleo') {
     // An Aleo burn is the only caller-authorized step in the outbound xReserve
-    // direction. The attestation service and Circle manage Ethereum delivery.
+    // direction. The attestation service and Circle manage EVM delivery.
     const execution = await aleoToEvmXReserve.execute(
       registry,
       requireAleoClientWithWallet(registry, clients, chainId, 'execute xReserve burn').walletClient,
@@ -212,6 +216,7 @@ export async function execute(
         onProgress: params.onProgress,
         onPrepared: preparedAleoCheckpoint(params),
       },
+      fetcher,
     )
     return { kind: 'aleo-xreserve', ...execution }
   }

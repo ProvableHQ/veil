@@ -1,3 +1,4 @@
+import * as cctp from '../protocols/cctp/evm.js'
 import { transactionStatus } from '@provablehq/veil-core'
 import { isHash } from 'viem'
 import { requireAleoClient, requireEvmClient, requireSolanaClient, type BridgeChainClients } from '../connections/resolve.js'
@@ -52,6 +53,8 @@ export async function getStatus(
   if (receipt.status === 'COMPLETED' || receipt.status === 'FAILED' || receipt.status === 'EXPIRED') {
     return receipt
   }
+
+  if (params.plan.protocol === 'cctp') return cctp.getStatus(registry, clients, client, params)
 
   if (receipt.status === 'SOURCE_APPROVAL_PENDING' && route.sourceChain.family === 'evm') {
     // Approval does not move bridge funds. Once confirmed, stop at an explicit

@@ -1,3 +1,4 @@
+import { aleoExampleOptions, type ExampleOptions } from './options.js'
 import {
   createAleoClient,
   createBridgeClient,
@@ -82,6 +83,7 @@ function formatAmount(value: bigint, decimals: number): string {
  * message; Hyperlane then releases the corresponding asset on the destination.
  *
  * @param asset ETH, SOL, WBTC, or USDT representation to burn on Aleo and release on its origin chain.
+ * @param options Overrides the amount and execution gate; defaults to the example amount and environment acknowledgement.
  * @returns After read-only inspection or verified destination delivery,
  * depending on the execution acknowledgement.
  * @throws Error When configuration is missing, the source balance or fee
@@ -90,7 +92,7 @@ function formatAmount(value: bigint, decimals: number): string {
  * @example
  * await runAleoHyperlaneExample('ETH')
  */
-export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promise<void> {
+export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset, options: ExampleOptions = {}): Promise<void> {
   const config = ASSETS[asset]
   const recipient = requiredEnvironmentVariable(config.recipientEnvironmentVariable)
   const privateKey = requiredEnvironmentVariable('ALEO_PRIVATE_KEY')
@@ -110,7 +112,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   const { publicClient, walletClient: nativeWalletClient, account } = aleo.createAleoClient({
     privateKey,
     networkUrl,
-    provingMode: 'delegated',
+    ...aleoExampleOptions(),
     useFeeMaster: false,
     confirmationTimeout: ALEO_CONFIRMATION_TIMEOUT_MS,
   })
@@ -118,7 +120,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
   // A destination client is unnecessary for the read-only source inspection.
   // Execution adds one so settlement can compare the recipient's destination
   // balance with the value recorded immediately before source submission.
-  const executionEnabled = process.env[EXECUTION_ENVIRONMENT_VARIABLE] === EXECUTION_ACKNOWLEDGEMENT
+  const executionEnabled = options.execute ?? (process.env[EXECUTION_ENVIRONMENT_VARIABLE] === EXECUTION_ACKNOWLEDGEMENT)
   const destinationClient = executionEnabled
     ? config.destination.chain === 'ethereum'
       ? createEvmClient({ transport: evmHttp(requiredEnvironmentVariable('ETHEREUM_RPC_URL')) })
@@ -146,7 +148,7 @@ export async function runAleoHyperlaneExample(asset: AleoHyperlaneAsset): Promis
     source: config.source,
     destination: config.destination,
     bridgeProtocol: 'hyperlane' as const,
-    amount: config.amount,
+    amount: options.amount ?? config.amount,
     recipient,
     sender: String(account.address),
   }

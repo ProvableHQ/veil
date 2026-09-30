@@ -18,9 +18,9 @@ export type XReserveHttpResponse = {
 export type XReserveHttpTransport = (url: string, init?: { signal?: AbortSignal }) => Promise<XReserveHttpResponse>
 
 /**
- * Captures reviewed Ethereum-to-Aleo xReserve deployment values.
+ * Captures reviewed EVM-to-Aleo xReserve deployment values.
  *
- * @property xReserveContract Ethereum contract receiving deposits.
+ * @property xReserveContract EVM contract receiving deposits.
  * @property sourceChainId Expected EIP-155 wallet chain id.
  * @property sourceDomain Circle domain included in the deposit nonce.
  * @property remoteDomain Aleo Circle domain passed to `depositToRemote`.
@@ -87,7 +87,7 @@ export type EvmXReserveTransferQuote = {
 }
 
 /**
- * Configures an Ethereum-to-Aleo xReserve deposit submission.
+ * Configures an EVM-to-Aleo xReserve deposit submission.
  *
  * @property plan Route, amount, Aleo recipient, and privacy preference selected for the transfer.
  * @property privateMintSecretNonce Secret Aleo scalar committed by private hook data. Defaults to `0scalar`.

@@ -53,12 +53,12 @@ export function bridgeActions(config: BridgeActionsConfig): BridgeActions {
   return {
     // Every closure injects the same validated route catalog and
     // registry-keyed clients, preventing per-action configuration drift.
-    quote: async (params) => quote(config.registry, config.clients, params),
-    execute: async (params) => execute(config.registry, config.clients, params),
+    quote: async (params) => quote(config.registry, config.clients, params, config.fetch),
+    execute: async (params) => execute(config.registry, config.clients, params, config.fetch),
     getStatus: async (params) => getStatus(config.registry, config.clients, config.fetch, params),
-    complete: async (params) => complete(config.registry, config.clients, params),
+    complete: async (params) => complete(config.registry, config.clients, params, config.fetch),
     recover: async (params) => recover(config.registry, config.clients, config.fetch, params),
-    resume: async (params) => resume(config.registry, config.clients, params),
+    resume: async (params) => resume(config.registry, config.clients, params, config.fetch),
     wait: async (params) => wait(config.registry, config.clients, config.fetch, params),
     shield: async (params) => shield(config.registry, config.clients, params),
     unshield: async (params) => unshield(config.registry, config.clients, params),

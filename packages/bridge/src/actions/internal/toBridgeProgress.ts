@@ -18,8 +18,8 @@ export function toBridgeProgress(plan: BridgePlan, receipt: BridgeReceipt): Brid
   // Source submission pending means approvals or pre-broadcast proving finished,
   // but the fund-moving source transaction still needs explicit authorization.
   if (receipt.status === 'SOURCE_SUBMISSION_PENDING') return { next: 'resume', plan, receipt }
-  // Destination action required is currently xReserve private mint: Circle has
-  // attested the deposit, but the Aleo recipient still must authorize delivery.
+  // Attested xReserve private delivery and manual CCTP minting require
+  // a destination wallet authorization.
   if (receipt.status === 'DESTINATION_ACTION_REQUIRED') return { next: 'complete', plan, receipt }
   if (receipt.status === 'COMPLETED') return { next: 'done', plan, receipt }
   if (receipt.status === 'FAILED' || receipt.status === 'EXPIRED') {

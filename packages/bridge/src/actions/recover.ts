@@ -1,3 +1,5 @@
+import { isRegistryVersionCompatible } from '../registry/compatibility.js'
+import * as cctp from '../protocols/cctp/evm.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import { requireEvmClient, type BridgeChainClients } from '../connections/resolve.js'
 import type { RecoverParameters } from '../types/actions.js'
@@ -45,9 +47,14 @@ export async function recover(
   const route = resolveTransferRoute(registry, plan)
   if (checkpoint.version !== 1
     || checkpoint.route.id !== plan.route.id
-    || checkpoint.route.registryVersion !== plan.registryVersion) {
+    || !isRegistryVersionCompatible(registry, checkpoint.route.registryVersion, checkpoint.route.id)) {
     throw new BridgeError('Bridge checkpoint does not match the prepared route')
   }
+  if (plan.protocol === 'cctp') {
+    const receipt = await cctp.recover(registry, clients, client, { checkpoint, plan, signal: params.signal, cctp: params.cctp })
+    return toBridgeProgress(plan, receipt)
+  }
+  if (params.cctp) throw new BridgeError('CCTP recovery options require a CCTP route')
   let receipt: BridgeReceipt
   if (route.sourceChain.family === 'aleo') {
     // Aleo can checkpoint after proving but before broadcast. This state needs

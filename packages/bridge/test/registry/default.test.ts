@@ -4,11 +4,59 @@ import { validateBridgeRegistry } from '../../src/registry/validate.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 
 describe('DEFAULT_BRIDGE_REGISTRY', () => {
+  it.each([
+    ['ethereum', 1, 0, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'],
+    ['base', 8453, 6, '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'],
+    ['arbitrum', 42161, 3, '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'],
+  ])('pins the %s native-USDC CCTP V2 deployment to Arc', (chain, chainId, domain, token) => {
+    expect(DEFAULT_BRIDGE_REGISTRY.chains.find((entry) => entry.id === chain))
+      .toMatchObject({ family: 'evm', environment: 'mainnet', protocolDomains: { cctp: domain } })
+    expect(DEFAULT_BRIDGE_REGISTRY.chains.find((entry) => entry.id === 'arc')?.protocolDomains?.cctp).toBe(26)
+    expect(DEFAULT_BRIDGE_REGISTRY.assets.find((entry) => entry.id === `${chain}/usdc`))
+      .toMatchObject({ decimals: 6, locator: { kind: 'evm-contract', value: token } })
+    expect(DEFAULT_BRIDGE_REGISTRY.routes.find((entry) => entry.id === `cctp:${chain}/usdc->arc/usdc`))
+      .toMatchObject({
+        protocol: 'cctp', environment: 'mainnet', availability: 'active',
+        source: 'https://developers.circle.com/cctp/references/contract-addresses',
+        metadata: {
+          sourceChainId: chainId, destinationChainId: 5042, sourceDomain: domain, destinationDomain: 26,
+          tokenMessenger: '0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d',
+          messageTransmitter: '0x81D40F21F12A8F0E3252Bccb954D722d4c464B64',
+          attestationBaseUrl: 'https://iris-api.circle.com',
+          deploymentReviewedAt: '2026-09-29',
+          tokenSource: 'https://developers.circle.com/stablecoins/usdc-contract-addresses',
+        },
+      })
+  })
+
   it('routes USDCx only through xReserve', () => {
     const usdcxRoutes = DEFAULT_BRIDGE_REGISTRY.routes.filter((route) =>
       route.sourceAssetId.includes('usdcx') || route.destinationAssetId.includes('usdcx'))
     expect(usdcxRoutes.length).toBeGreaterThan(0)
     expect(usdcxRoutes.every((route) => route.protocol === 'xreserve')).toBe(true)
+  })
+
+  it('pins the Arc mainnet public-mint route', () => {
+    const chain = DEFAULT_BRIDGE_REGISTRY.chains.find((entry) => entry.id === 'arc')
+    const asset = DEFAULT_BRIDGE_REGISTRY.assets.find((entry) => entry.id === 'arc/usdc')
+    const route = DEFAULT_BRIDGE_REGISTRY.routes.find((entry) =>
+      entry.id === 'xreserve:arc/usdc->aleo/usdcx')
+
+    expect(chain).toMatchObject({ family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'USDC', protocolDomains: { xreserve: 26 } })
+    expect(asset).toMatchObject({ decimals: 6, locator: { kind: 'evm-contract', value: '0x3600000000000000000000000000000000000000' } })
+    expect(route).toMatchObject({
+      availability: 'active',
+      sourceAssetId: 'arc/usdc',
+      destinationAssetId: 'aleo/usdcx',
+      metadata: {
+        xReserveContract: '0x8888888199b2Df864bf678259607d6D5EBb4e3Ce',
+        sourceChainId: 5042,
+        sourceDomain: 26,
+        remoteDomain: 10002,
+        maxFeeAtomic: '100000',
+        onchainReviewedAt: '2026-09-28',
+      },
+    })
   })
 
   it('routes the requested non-USDCx assets through Hyperlane', () => {
@@ -297,4 +345,10 @@ describe('validateBridgeRegistry', () => {
         entry.id === route.id ? { ...entry, metadata: incompleteMetadata } : entry),
     })).toThrow(/missing required Solana Hyperlane metadata/)
   })
+})
+
+it.each([undefined, 99])('rejects absent or mismatched CCTP chain domains (%s)', domain => {
+  const registry = { ...DEFAULT_BRIDGE_REGISTRY, chains: DEFAULT_BRIDGE_REGISTRY.chains.map(chain =>
+    chain.id === 'arc' ? { ...chain, protocolDomains: { ...chain.protocolDomains, cctp: domain } } : chain) }
+  expect(() => validateBridgeRegistry(registry)).toThrow('domain')
 })

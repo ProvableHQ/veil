@@ -1,10 +1,16 @@
+import { resolve } from 'node:path'
+import { homedir } from 'node:os'
+import type { Address, Hex } from 'viem'
+import { openWithdrawalState } from './withdrawal-state.js'
+import { pathToFileURL } from 'node:url'
+import { aleoExampleOptions, serviceAuth, type ExampleOptions } from './options.js'
 /**
- * Moves USDCx from Aleo back to USDC on Ethereum through Circle xReserve.
+ * Moves USDCx from Aleo back to USDC on Ethereum or Arc through Circle xReserve.
  *
  * The default run displays the route, fixed withdrawal boundary, and burn mode,
  * then exits before loading a signing key. Execution burns either a public
  * balance or one private record on Aleo. The bridge provider then attests the
- * burn, withdraws through Circle, and delivers USDC to the Ethereum recipient.
+ * burn, withdraws through Circle, and delivers USDC to the selected EVM recipient.
  */
 
 import {
@@ -132,35 +138,40 @@ async function createExclusionProof(address: string): Promise<string> {
   return sealance.formatMerkleProof([leftProof, rightProof])
 }
 
-async function main(): Promise<void> {
-  const recipient = requiredEnvironmentVariable('ETHEREUM_RECIPIENT')
+/**
+ * Runs the usdcx-to-usdc mainnet journey with a preview before submission.
+ * @param options Overrides destination, amount, and execution gate. Destination defaults to Ethereum; Arc uses a two-USDCx default amount. Execution defaults to the environment acknowledgement.
+ * @returns Resolves after preview or the selected transfer lifecycle.
+ * @throws When configuration, protocol validation, or delivery fails.
+ * @example
+ * await runUsdcxToUsdcExample({ amount: '5', execute: false })
+ */
+export async function runUsdcxToUsdcExample(options: ExampleOptions & { destination?: 'ethereum' | 'arc' } = {}): Promise<void> {
+  const destination = options.destination ?? 'ethereum'
+  if (destination !== 'ethereum' && destination !== 'arc') throw new Error('Destination must be ethereum or arc')
+  const recipient = requiredEnvironmentVariable(destination === 'arc' ? 'ARC_RECIPIENT' : 'ETHEREUM_RECIPIENT')
   const mode = burnModeFromEnvironment()
 
   // ── Price the intended transfer ─────────────────────────────────────
-  // The caller supplies familiar chain and asset names, the amount, and the
-  // Ethereum recipient. The bridge catalog supplies the reviewed Aleo programs,
-  // Circle domains, token identifiers, and fixed two-USDCx withdrawal fee.
-  // This direction has no live provider quote, so the returned result applies
-  // the reviewed fixed fee without loading a wallet or reading account state.
-  // This amount is one base unit above the fee, keeping the example minimal.
+  // Arc uses a live fee estimate; Ethereum retains its configured fee.
+  // Pass destination: 'arc' and set ARC_RECIPIENT for the reverse Arc route.
   const bridge = createBridgeClient({ environment: 'mainnet' })
   const quote = await bridge.quote({
     source: { chain: 'aleo', asset: 'usdcx' },
-    destination: { chain: 'ethereum', asset: 'usdc' },
+    destination: { chain: destination, asset: 'usdc' },
     bridgeProtocol: 'xreserve',
-    amount: AMOUNT,
+    amount: options.amount ?? (destination === 'arc' ? '2' : AMOUNT),
     recipient,
   })
   if (quote.kind !== 'aleo-xreserve') throw new Error(`Unexpected quote kind: ${quote.kind}`)
   const plan = quote.plan
 
   // ── Review the withdrawal before loading an account ─────────────────
-  // This direction has no live source-side market quote. The important caller
-  // choices are the amount, public or private custody being spent, and final
-  // Ethereum recipient. Display them before any key or private record is loaded.
+  // Display the amount, public or private custody being spent, and final
+  // EVM recipient before loading any key or private record.
   const amountAtomic = atomicAmount(plan.amountIn, plan.sourceAsset.decimals)
-  if (amountAtomic <= MINIMUM_BURN_AMOUNT_ATOMIC) {
-    throw new Error('USDCx burn amount must be greater than 2 USDCx')
+  if (amountAtomic < MINIMUM_BURN_AMOUNT_ATOMIC) {
+    throw new Error('USDCx burn amount must be at least 2 USDCx')
   }
 
   console.log('USDCx withdrawal preflight')
@@ -169,7 +180,7 @@ async function main(): Promise<void> {
     burnMode: mode,
     amount: `${plan.amountIn} USDCx`,
     amountAtomic: amountAtomic.toString(),
-    ethereumRecipient: plan.recipient,
+    evmRecipient: plan.recipient,
     sourceOperation: mode === 'private'
       ? 'shielded_usdcx_wrapper.aleo/private_burn'
       : 'usdcx_bridge_v2.aleo/burn_public_as_signer',
@@ -185,7 +196,7 @@ async function main(): Promise<void> {
   // The exact acknowledgement separates inspection from an irreversible Aleo
   // burn. A copied tutorial therefore cannot load private records, request a
   // proof, spend a fee, or destroy USDCx without an explicit operator decision.
-  if (process.env[EXECUTION_ENVIRONMENT_VARIABLE] !== EXECUTION_ACKNOWLEDGEMENT) {
+  if (!(options.execute ?? (process.env[EXECUTION_ENVIRONMENT_VARIABLE] === EXECUTION_ACKNOWLEDGEMENT))) {
     console.log('\nPreflight complete; no USDCx was burned.')
     console.log(`Set ${EXECUTION_ENVIRONMENT_VARIABLE}=${EXECUTION_ACKNOWLEDGEMENT} to submit the withdrawal.`)
     return
@@ -202,74 +213,82 @@ async function main(): Promise<void> {
   // Aleo private key.
   const { loadNetwork } = await import('@provablehq/veil-aleo-sdk')
   const aleo = await loadNetwork('mainnet')
-  const records = mode === 'private' ? aleo.createRemoteScanner() : undefined
+  const records = mode === 'private' ? aleo.createRemoteScanner({ ...serviceAuth(), url: process.env.ALEO_SCANNER_URL?.trim() || undefined }) : undefined
   const { publicClient, walletClient: nativeWalletClient, account } = aleo.createAleoClient({
     privateKey,
     networkUrl: process.env.ALEO_RPC_URL?.trim() || 'https://edge.provable.com/api/v2',
-    provingMode: 'delegated',
+    ...aleoExampleOptions(),
     ...(records ? { records } : {}),
     useFeeMaster: false,
     confirmationTimeout: ALEO_CONFIRMATION_TIMEOUT_MS,
   })
   console.log(`Aleo signer ready: ${account.address} (delegated proving)`)
 
-  // A private burn spends one concrete record and proves that the signer is not
-  // frozen. Record discovery and the freeze-list request happen before proving;
-  // failure here means no burn was submitted and no USDCx moved.
-  const userRecord = mode === 'private'
-    ? (await selectPrivateRecord(nativeWalletClient, amountAtomic)).recordPlaintext
-    : undefined
-  const merkleProof = mode === 'private'
-    ? await createExclusionProof(account.address)
-    : undefined
-  if (merkleProof) console.log(`Derived the USDCx freeze-list exclusion proof for ${account.address}.`)
+  const tracker = destination === 'ethereum' ? await openWithdrawalState(
+    resolve(process.env.WITHDRAWAL_STATE_FILE?.trim() || `${homedir()}/.local/state/veil/examples/usdcx-to-ethereum.json`),
+    JSON.stringify({ route: plan.route.id, sender: String(account.address), recipient: plan.recipient, amount: plan.amountIn, mode }),
+    requiredEnvironmentVariable('ETHEREUM_RPC_URL'),
+    { reserve: plan.route.metadata!.xReserveContract as Address, token: plan.destinationAsset.locator!.value as Address,
+      recipient: plan.recipient as Address, remoteDomain: plan.route.metadata!.remoteDomain as number,
+      remoteToken: plan.route.metadata!.remoteTokenBytes32 as Hex,
+      minimum: atomicAmount(quote.amountOut ?? '0.000001', 6), maximum: amountAtomic },
+  ) : undefined
+  try {
+    if (tracker?.delivered) { console.log('Previously observed Ethereum delivery:', tracker.delivered); return }
+    // A private burn spends one concrete record and proves that the signer is not
+    // frozen. Record discovery and the freeze-list request happen before proving;
+    // failure here means no burn was submitted and no USDCx moved.
+    const userRecord = !tracker?.checkpoint && mode === 'private'
+      ? (await selectPrivateRecord(nativeWalletClient, amountAtomic)).recordPlaintext
+      : undefined
+    const merkleProof = !tracker?.checkpoint && mode === 'private'
+      ? await createExclusionProof(account.address)
+      : undefined
+    if (merkleProof) console.log(`Derived the USDCx freeze-list exclusion proof for ${account.address}.`)
 
-  // xReserve can burn the selected USDCx record directly. Do not unshield it
-  // first: that would create a separate public balance and add an unnecessary
-  // Aleo transaction before the withdrawal.
+    // xReserve can burn the selected USDCx record directly. Do not unshield it
+    // first: that would create a separate public balance and add an unnecessary
+    // Aleo transaction before the withdrawal.
 
-  const burnMode: XReserveBurnMode = mode === 'private' ? 'private' : 'public-as-signer'
-  const executingBridge = createBridgeClient({
-    environment: 'mainnet',
-    clients: { aleo: createAleoClient({ publicClient, account: nativeWalletClient }) },
-  })
-  // This Aleo transaction is the irreversible source boundary. Acceptance means
-  // the chosen public balance or private record was burned and the withdrawal
-  // was committed for the Ethereum recipient. The provider and Circle continue
-  // from that accepted burn; never burn a second time because polling failed.
-  const result = await executingBridge.execute({
-    plan,
-    mode: burnMode,
-    ...(userRecord ? { userRecord } : {}),
-    ...(merkleProof ? { merkleProof } : {}),
-    privateFee: false,
-    onCheckpoint(checkpoint) {
-      // Aleo may emit a checkpoint after proof construction and another after
-      // broadcast. A durable application atomically replaces its saved value;
-      // this tutorial only prints it and does not choose or manage storage.
+    const burnMode: XReserveBurnMode = mode === 'private' ? 'private' : 'public-as-signer'
+    const executingBridge = createBridgeClient({
+      environment: 'mainnet',
+      clients: { aleo: createAleoClient({ publicClient, account: nativeWalletClient }) },
+    })
+    // This Aleo transaction is the irreversible source boundary. Acceptance means
+    // the chosen public balance or private record was burned and the withdrawal
+    // was committed for the EVM recipient. The provider and Circle continue
+    // from that accepted burn; never burn a second time because polling failed.
+    const persist = (checkpoint: import('@provablehq/aleo-bridge-sdk').BridgeCheckpoint) => {
+      tracker?.persist(checkpoint)
       console.log('Optional recovery checkpoint:', JSON.stringify(checkpoint))
-    },
-  })
-  if (result.kind !== 'aleo-xreserve') throw new Error(`Unexpected execution kind: ${result.kind}`)
-  console.log('\nUSDCx burn accepted:', result.transactionId)
-
-  // ── Verify the source burn and hand off provider settlement ─────────
-  // The toolkit can prove that Aleo accepted or rejected this burn. It cannot
-  // yet observe the later bridge-provider attestation, Circle withdrawal, or
-  // Ethereum delivery, so this script stops honestly at delivery pending. A
-  // timeout or RPC error leaves the burn outcome unknown; recover from the
-  // latest checkpoint and transaction id instead of authorizing another burn.
-  const progress = await executingBridge.wait({
-    progress: { next: 'wait', plan, receipt: result.receipt },
-    until: ['DELIVERY_PENDING', 'FAILED'],
-  })
-  if (progress.next === 'failed') {
-    throw new Error(progress.error)
-  }
-  console.log('The Aleo burn-attestation service will forward the withdrawal to Circle for Ethereum delivery.')
+    }
+    let progress
+    if (tracker?.checkpoint) {
+      progress = await executingBridge.recover({ checkpoint: tracker.checkpoint })
+      if (progress.next === 'resume') {
+        const resumed = await executingBridge.resume({ progress, onCheckpoint: persist })
+        progress = { next: 'wait' as const, plan: progress.plan, receipt: resumed.receipt }
+      }
+    } else {
+      tracker?.begin()
+      const result = await executingBridge.execute({ plan, mode: burnMode,
+        ...(userRecord ? { userRecord } : {}), ...(merkleProof ? { merkleProof } : {}),
+        privateFee: false, onCheckpoint: persist })
+      if (result.kind !== 'aleo-xreserve') throw new Error(`Unexpected execution kind: ${result.kind}`)
+      console.log('USDCx burn submitted:', result.transactionId)
+      progress = { next: 'wait' as const, plan, receipt: result.receipt }
+    }
+    progress = await executingBridge.wait({ progress, until: ['DELIVERY_PENDING', 'FAILED'] })
+    if (progress.next === 'failed') throw new Error(progress.error)
+    if (tracker) { await tracker.wait(); return }
+    console.log('The Aleo burn-attestation service will forward the withdrawal to Circle for delivery on the selected EVM chain.')
+  } finally { tracker?.release() }
 }
 
-main().catch((error: unknown) => {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+runUsdcxToUsdcExample().catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : error)
   process.exitCode = 1
 })
+}

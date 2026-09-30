@@ -1,5 +1,5 @@
 /** Identifies the protocol that carries a bridge transfer. */
-export type BridgeProtocol = 'xreserve' | 'hyperlane'
+export type BridgeProtocol = 'xreserve' | 'hyperlane' | 'cctp'
 
 /** Identifies the deployment environment selected by a bridge client. */
 export type BridgeEnvironment = 'mainnet' | 'testnet'
@@ -230,8 +230,23 @@ export type BridgeEndpoint = {
 }
 
 /**
+ * Selects CCTP attestation speed and destination mint execution.
+ * @property speed Attestation finality policy. Defaults to standard; fast incurs a live quoted protocol fee.
+ * @property forwarding Whether Circle submits the destination mint. Defaults to true; false requires a funded destination signer.
+ * @property maxFee Maximum total protocol and forwarding fee in decimal USDC. Quote resolves it when omitted and execution preserves that ceiling.
+ * @example
+ * const options: CctpOptions = { speed: 'fast', forwarding: true, maxFee: '0.10' }
+ */
+export type CctpOptions = {
+  speed?: 'fast' | 'standard' | undefined
+  forwarding?: boolean | undefined
+  maxFee?: string | undefined
+}
+
+/**
  * Parameters for preparing a protocol bridge transfer.
  *
+ * @property cctp Optional CCTP finality, forwarding, and fee ceiling; only valid for CCTP routes.
  * @property source Chain and asset debited by the transfer.
  * @property destination Chain and asset delivered by the transfer.
  * @property bridgeProtocol Optional protocol constraint. Omit when exactly one route matches the endpoints.
@@ -242,6 +257,7 @@ export type BridgeEndpoint = {
  * @property privateRecipient Deprecated alias for `mintMode: 'private'`. Defaults to false.
  */
 export type PrepareParameters = {
+  cctp?: CctpOptions | undefined
   source: BridgeEndpoint
   destination: BridgeEndpoint
   bridgeProtocol?: BridgeProtocol | undefined
@@ -259,6 +275,7 @@ export type PrepareParameters = {
  * This information can be quoted before any wallet authorization is requested
  * or funds move.
  *
+ * @property cctp Resolved CCTP options, retained for execution and recovery.
  * @property registryVersion Registry snapshot used to build the plan.
  * @property protocol Protocol responsible for delivery.
  * @property route Directional route selected by the caller.
@@ -274,6 +291,7 @@ export type PrepareParameters = {
  * @property steps Ordered operations required to complete the transfer.
  */
 export type BridgePlan = {
+  cctp?: CctpOptions | undefined
   registryVersion: string
   protocol: BridgeProtocol
   route: ProtocolBridgeRoute
@@ -295,6 +313,7 @@ export type BridgePlan = {
  * Private keys, records, proofs, and private-mint nonces are deliberately
  * excluded so this value can be stored with transaction identifiers.
  *
+ * @property cctp Optional CCTP finality, forwarding, and fee ceiling; only valid for CCTP routes.
  * @property source Chain and asset debited by the transfer.
  * @property destination Chain and asset delivered by the transfer.
  * @property bridgeProtocol Resolved protocol selected during preparation.
@@ -304,6 +323,7 @@ export type BridgePlan = {
  * @property mintMode Aleo destination transition selected by the caller.
  */
 export type BridgeIntent = {
+  cctp?: CctpOptions | undefined
   source: BridgeEndpoint
   destination: BridgeEndpoint
   bridgeProtocol: BridgeProtocol
@@ -334,7 +354,7 @@ export type BridgeStatus =
  * @property chainId Registry chain on which the wallet will submit it.
  */
 export type BridgeNextAction = {
-  kind: 'xreserve-private-mint'
+  kind: 'xreserve-private-mint' | 'cctp-mint'
   chainId: string
 }
 
@@ -379,6 +399,7 @@ export type BridgeReceipt = {
  * @property source.blockhash Solana blockhash that bounded the submitted source transaction.
  * @property source.lastValidBlockHeight Final Solana block height at which the source transaction can land.
  * @property destination Caller-authorized destination transaction when submitted.
+ * @property source.replacedApprovalTransactionIds Original approval hashes explicitly superseded during CCTP recovery; retained for audit, not polled as active approvals.
  * @property destination.transactionId Destination-chain transaction identifier.
  * @property destination.preparedTransaction Fully proved Aleo destination transaction retained before broadcast for idempotent recovery.
  * @property deliveryVerification Destination balance snapshot used when the protocol explorer does not index Aleo origins.
@@ -392,6 +413,7 @@ export type BridgeCheckpoint = {
   }
   source?: {
     approvalTransactionIds?: readonly string[] | undefined
+    replacedApprovalTransactionIds?: readonly string[] | undefined
     transactionId?: string | undefined
     hookData?: string | undefined
     blockhash?: string | undefined

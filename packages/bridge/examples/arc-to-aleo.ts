@@ -1,10 +1,10 @@
 import { pathToFileURL } from 'node:url'
 import { aleoExampleOptions, type ExampleOptions } from './options.js'
 /**
- * Moves USDC from Ethereum into USDCx on Aleo through Circle xReserve.
+ * Moves USDC from Arc into USDCx on Aleo through Circle xReserve.
  *
  * The default run reads the source balance, allowance, and route constraints,
- * then exits without requesting a signature. Public and record delivery is
+ * then exits without requesting a signature. Public delivery is
  * completed by the bridge provider. Private delivery stops after Circle signs
  * the deposit so the Aleo recipient can authorize its own private mint.
  */
@@ -38,12 +38,12 @@ function evmPrivateKeyFromEnvironment(): Hex {
 }
 
 function mintMode(): AleoMintMode {
-  // Public credits a visible account balance. Record creates an Aleo record
-  // through the provider. Private commits the recipient and an optional custom
-  // nonce on Ethereum, then requires that recipient's wallet to mint privately.
+  // Public credits a visible account balance. Private commits the recipient
+  // and an optional custom
+  // nonce on Arc, then requires that recipient's wallet to mint privately.
   const value = process.env.USDCX_MINT_MODE?.trim() || 'public'
-  if (value !== 'public' && value !== 'record' && value !== 'private') {
-    throw new Error('USDCX_MINT_MODE must be public, record, or private')
+  if (value !== 'public' && value !== 'private') {
+    throw new Error('USDCX_MINT_MODE must be public or private for Arc')
   }
   return value
 }
@@ -57,14 +57,14 @@ function checkpoint(label: string, value: BridgeCheckpoint): void {
 }
 
 /**
- * Runs the usdc-to-usdcx mainnet journey with a preview before submission.
+ * Runs the arc-to-aleo mainnet journey with a preview before submission.
  * @param options Overrides the example amount and execution gate; defaults to the visible example amount and environment acknowledgement.
  * @returns Resolves after preview or the selected transfer lifecycle.
  * @throws When configuration, protocol validation, or delivery fails.
  * @example
- * await runUsdcToUsdcxExample({ amount: '5', execute: false })
+ * await runArcToAleoExample({ amount: '5', execute: false })
  */
-export async function runUsdcToUsdcxExample(options: ExampleOptions = {}): Promise<void> {
+export async function runArcToAleoExample(options: ExampleOptions = {}): Promise<void> {
   const mode = mintMode()
   // The protocol defaults to 0scalar. A custom value adds caller-managed
   // entropy to the private commitment and must be stored separately because
@@ -77,8 +77,8 @@ export async function runUsdcToUsdcxExample(options: ExampleOptions = {}): Promi
   if (evmAccount.type !== 'local') throw new Error('Expected a private-key EVM account')
 
   // ── Connect the accounts that can authorize each fund movement ──────
-  // The Ethereum account signs the approval, when needed, and the xReserve
-  // deposit. Public and record modes need no Aleo account because the provider
+  // The Arc account signs the approval, when needed, and the xReserve
+  // deposit. Public mode needs no Aleo account because the provider
   // submits their destination delivery. Private mode adds the recipient's Aleo
   // account, which delegates proof construction and signs the final private mint.
   let aleoClient: ReturnType<typeof createAleoClient> | undefined
@@ -93,7 +93,7 @@ export async function runUsdcToUsdcxExample(options: ExampleOptions = {}): Promi
     })
     if (String(aleo.account.address) !== recipient) {
       // Only the committed recipient can complete a private mint. Catching a
-      // mismatch before the Ethereum deposit avoids stranding funds at the
+      // mismatch before the Arc deposit avoids stranding funds at the
       // destination authorization boundary.
       throw new Error(`ALEO_PRIVATE_KEY resolves to ${aleo.account.address}, but ALEO_RECIPIENT is ${recipient}`)
     }
@@ -103,8 +103,8 @@ export async function runUsdcToUsdcxExample(options: ExampleOptions = {}): Promi
   const bridge = createBridgeClient({
     environment: 'mainnet',
     clients: {
-      ethereum: createEvmClient({
-        transport: evmHttp(required('ETHEREUM_RPC_URL')),
+      arc: createEvmClient({
+        transport: evmHttp(process.env.ARC_RPC_URL?.trim() || 'https://rpc.mainnet.arc.io'),
         account: evmAccount,
       }),
       ...(aleoClient ? { aleo: aleoClient } : {}),
@@ -119,7 +119,7 @@ export async function runUsdcToUsdcxExample(options: ExampleOptions = {}): Promi
   // and returns the plan execution must use. It does not ask the wallet to sign
   // or move USDC.
   const transferQuote = await bridge.quote({
-    source: { chain: 'ethereum', asset: 'usdc' },
+    source: { chain: 'arc', asset: 'usdc' },
     destination: { chain: 'aleo', asset: 'usdcx' },
     bridgeProtocol: 'xreserve',
     amount: options.amount ?? AMOUNT,
@@ -193,10 +193,9 @@ export async function runUsdcToUsdcxExample(options: ExampleOptions = {}): Promi
       throw new Error(progress.error)
     }
     // Circle has authorized destination delivery. The provider now submits the
-    // public or record mint; this toolkit cannot yet verify that provider-owned
+    // public mint; this toolkit cannot yet verify that provider-owned
     // Aleo transaction, so the script reports the honest observable boundary.
     // Public mode creates a visible USDCx balance that can be shielded later.
-    // Record mode already delivers private value and needs no shield action.
     console.log(`Circle attested the deposit; the ${mode} Aleo mint is relayer-driven.`)
     return
   }
@@ -217,9 +216,9 @@ export async function runUsdcToUsdcxExample(options: ExampleOptions = {}): Promi
   if (progress.next !== 'complete') throw new Error(`Unexpected next operation: ${progress.next}`)
 
   // ── Authorize private delivery on Aleo ───────────────────────────────
-  // Circle's signature proves that xReserve accepted the Ethereum deposit, but
+  // Circle's signature proves that xReserve accepted the Arc deposit, but
   // it does not mint a private record. The recipient now supplies the same
-  // nonce committed on Ethereum and signs exactly one Aleo mint. The source
+  // nonce committed on Arc and signs exactly one Aleo mint. The source
   // deposit is never repeated, even if destination proving or confirmation fails.
   const destination = await bridge.complete({
     progress,
@@ -238,7 +237,7 @@ export async function runUsdcToUsdcxExample(options: ExampleOptions = {}): Promi
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-runUsdcToUsdcxExample().catch((error: unknown) => {
+runArcToAleoExample().catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : error)
   process.exitCode = 1
 })

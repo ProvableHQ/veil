@@ -1,3 +1,4 @@
+import { isRegistryVersionCompatible } from '../../registry/compatibility.js'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import type {
   BridgeRegistry,
@@ -25,7 +26,7 @@ export type ResolvedTransferRoute = {
 }
 
 /**
- * Resolves saved transfer details against the exact route catalog that created them.
+ * Resolves saved transfer details against the current or a reviewed compatible route catalog.
  *
  * Rejects stale or altered route, asset, and chain references using only the
  * supplied registry and transfer details, before any network access or wallet
@@ -41,7 +42,7 @@ export function resolveTransferRoute(
   registry: BridgeRegistry,
   plan: BridgePlan,
 ): ResolvedTransferRoute {
-  if (plan.registryVersion !== registry.version) {
+  if (!isRegistryVersionCompatible(registry, plan.registryVersion, plan.route.id)) {
     throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
   }
   const route = registry.routes.find((entry) => entry.id === plan.route.id)

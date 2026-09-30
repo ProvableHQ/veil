@@ -1,3 +1,5 @@
+import { readWithdrawalFee } from '../protocols/xreserve/aleoToEvm.js'
+import * as cctp from '../protocols/cctp/evm.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import {
   requireAleoClient,
@@ -32,6 +34,7 @@ import { prepare } from './prepare.js'
  * @param registry Supported chains, assets, and bridge provider deployments.
  * @param clients Network access for the chains involved in the transfer.
  * @param params Transfer details whose current cost and requirements are calculated.
+ * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
  * @returns The amount expected at the destination and the known bridge, network, and approval costs.
  * @throws BridgeError When the selected provider cannot quote the transfer or required network access is unavailable.
  * @example const result = await quote(registry, clients, { source, destination, amount: '1', recipient })
@@ -40,10 +43,12 @@ export async function quote(
   registry: BridgeRegistry,
   clients: BridgeChainClients,
   params: QuoteParameters,
+  fetcher: typeof fetch = globalThis.fetch,
 ): Promise<BridgeQuote> {
   // Build the canonical plan before reading live prices. The returned plan is
   // the exact value the caller passes to execution and stores in progress.
   const plan = prepare(registry, params)
+  if (plan.protocol === 'cctp') return cctp.quote(registry, clients, fetcher, { plan })
   const protocolParams = {
     plan,
     privateMintSecretNonce: params.privateMintSecretNonce,
@@ -86,14 +91,7 @@ export async function quote(
     return { kind: 'evm-xreserve', plan, ...quote }
   }
   if (plan.protocol === 'xreserve' && chain.family === 'aleo') {
-    // Aleo-origin xReserve has no provider quote endpoint. Its only known
-    // bridge charge is the configured withdrawal fee, so report that fixed
-    // deduction without pretending live state was queried.
-    const rawFee = plan.route.metadata?.withdrawalFeeAtomic
-    if (typeof rawFee !== 'string' || !/^\d+$/.test(rawFee)) {
-      throw new BridgeError(`xReserve withdrawal fee is missing or invalid: ${plan.route.id}`)
-    }
-    const feeAtomic = BigInt(rawFee)
+    const { feeAtomic, estimated: liveFee } = await readWithdrawalFee(registry, plan, fetcher)
     const amountAtomic = parseDecimalAmount(plan.amountIn, plan.sourceAsset.decimals)
     const formattedFee = formatDecimalAmount(feeAtomic, plan.sourceAsset.decimals)
     if (amountAtomic <= feeAtomic) {
@@ -117,10 +115,10 @@ export async function quote(
           chainId,
           assetId: plan.sourceAsset.id,
           amount: formattedFee,
-          estimated: false,
+          estimated: liveFee,
         },
       ],
-      status: 'not-queried',
+      status: liveFee ? 'quoted' : 'not-queried',
     }
   }
 

@@ -1,3 +1,4 @@
+import type { EvmCctpTransferQuote, EvmCctpTransferExecution } from './cctp.js'
 import type { ProvingProgressHandler, TransactionInput } from '@provablehq/veil-core'
 import type {
   AleoHyperlaneGasQuote,
@@ -35,22 +36,23 @@ export type BridgeQuoteKind =
   | 'aleo-hyperlane'
   | 'aleo-xreserve'
   | 'evm-hyperlane'
+  | 'evm-cctp'
   | 'evm-xreserve'
   | 'solana-hyperlane'
 
 /**
- * Reports the locally known values for an Aleo-origin xReserve burn.
+ * Reports configured or live-estimated fees for an Aleo-origin xReserve burn.
  *
- * The route has no separate source-chain quote call, so the result carries
- * the prepared amount and fees with a `not-queried` status.
+ * Routes with a configured fee endpoint return `quoted`; fixed-fee routes
+ * return `not-queried`. Live estimates do not impose an on-chain fee cap.
  *
  * @property kind Aleo-origin xReserve route discriminator.
  * @property routeId Directional route selected by the plan.
  * @property protocol Circle xReserve protocol discriminator.
  * @property amountIn Decimal source amount.
- * @property amountOut Decimal destination amount when locally determinable.
+ * @property amountOut Decimal expected destination amount after the withdrawal fee.
  * @property fees Fee categories known during preparation.
- * @property status Indicates that no live quote endpoint was queried.
+ * @property status Distinguishes live provider estimates from configured fees.
  */
 type AleoXReserveQuote = {
   kind: 'aleo-xreserve'
@@ -59,7 +61,7 @@ type AleoXReserveQuote = {
   amountIn: string
   amountOut?: string | undefined
   fees: BridgeFee[]
-  status: 'not-queried'
+  status: 'not-queried' | 'quoted'
 }
 
 /** Captures every quote returned by the protocol-neutral transfer action. */
@@ -67,6 +69,7 @@ export type BridgeQuote = ({ plan: BridgePlan }) & (
   | ({ kind: 'aleo-hyperlane' } & AleoHyperlaneGasQuote)
   | AleoXReserveQuote
   | ({ kind: 'evm-hyperlane' } & EvmHyperlaneTransferQuote)
+  | ({ kind: 'evm-cctp' } & EvmCctpTransferQuote)
   | ({ kind: 'evm-xreserve' } & EvmXReserveTransferQuote)
   | ({ kind: 'solana-hyperlane' } & SolanaHyperlaneTransferQuote)
 )
@@ -108,6 +111,7 @@ export type BridgeExecutionKind =
   | 'aleo-hyperlane'
   | 'aleo-xreserve'
   | 'evm-hyperlane'
+  | 'evm-cctp'
   | 'evm-xreserve'
   | 'solana-hyperlane'
 
@@ -116,6 +120,7 @@ export type BridgeExecution =
   | ({ kind: 'aleo-hyperlane' } & AleoHyperlaneTransferRemoteExecution)
   | ({ kind: 'aleo-xreserve' } & XReserveBurnExecution)
   | ({ kind: 'evm-hyperlane' } & EvmHyperlaneTransferExecution)
+  | ({ kind: 'evm-cctp' } & EvmCctpTransferExecution)
   | ({ kind: 'evm-xreserve' } & EvmXReserveTransferExecution)
   | ({ kind: 'solana-hyperlane' } & SolanaHyperlaneTransferExecution)
 
@@ -133,14 +138,16 @@ export type GetStatusParameters = {
 }
 
 /**
- * Controls the wallet transaction that privately delivers USDCx on Aleo.
+ * Controls the destination wallet transaction for xReserve private delivery or CCTP minting.
  *
+ * @property cctp Optional manual-mint override for an attested, unused CCTP message when forwarding stalls. Defaults to waiting for forwarding.
  * @property privateMintSecretNonce Secret Aleo scalar required by a private xReserve mint. Defaults to `0scalar`.
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
  * @property onCheckpoint Durable hook called before supported local Aleo broadcast and again after destination submission.
  * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
  */
 type CompleteOptions = {
+  cctp?: { manualMint: boolean } | undefined
   privateMintSecretNonce?: string | undefined
   privateFee?: boolean | undefined
   onCheckpoint?: ((checkpoint: BridgeCheckpoint) => void | Promise<void>) | undefined
@@ -148,7 +155,7 @@ type CompleteOptions = {
 }
 
 /**
- * Supplies the state and wallet preferences required to receive private USDCx on Aleo.
+ * Supplies transfer state and wallet preferences for destination completion.
  *
  * An application returning after an interruption passes recovered progress. An
  * application that stayed open passes the original transfer details and latest
@@ -157,12 +164,14 @@ type CompleteOptions = {
  * @property progress Recovered progress whose next operation is `complete`.
  * @property plan Route, assets, amount, and recipient retained while the application stayed open.
  * @property receipt Circle-attested transfer state retained while the application stayed open.
+ * @property cctp Optional manual-mint override for an attested, unused CCTP message when forwarding stalls. Defaults to waiting for forwarding.
  * @property privateMintSecretNonce Secret Aleo scalar required by a private xReserve mint. Defaults to `0scalar` and must match the source deposit.
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
  * @property onCheckpoint Optional durable hook called before supported local Aleo broadcast and again after destination submission.
  */
 export type CompleteParameters = CompleteOptions & (
   | { progress: Extract<BridgeProgress, { next: 'complete' }>, plan?: never, receipt?: never }
+  | { progress: Extract<BridgeProgress, { next: 'wait' }>, cctp: { manualMint: true }, plan?: never, receipt?: never }
   | { progress?: never, plan: BridgePlan, receipt: BridgeReceipt }
 )
 
@@ -170,9 +179,13 @@ export type CompleteParameters = CompleteOptions & (
  * Supplies saved public transfer information for recovery after an interruption.
  *
  * @property checkpoint Compact checkpoint emitted at a wallet submission boundary.
+ * @property cctp.approvalReplacement.originalTransactionId Saved approval hash that the caller has reconciled as superseded.
+ * @property cctp.approvalReplacement.replacementTransactionId Confirmed replacement approval hash matching the saved intent.
+ * @property cctp Optional explicit approval replacement for a missing original transaction; recovery verifies the confirmed replacement without signing. Defaults to no replacement.
  * @property signal Optional cancellation signal. Defaults to no cancellation.
  */
 export type RecoverParameters = {
+  cctp?: { approvalReplacement: { originalTransactionId: string; replacementTransactionId: string } } | undefined
   checkpoint: BridgeCheckpoint
   signal?: AbortSignal | undefined
 }

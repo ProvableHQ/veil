@@ -1,7 +1,8 @@
 # @provablehq/aleo-bridge-sdk
 
-Moves assets between Aleo, Ethereum, and Solana through reviewed Hyperlane and
-Circle xReserve deployments.
+Moves assets through reviewed Hyperlane, Circle xReserve, and Circle CCTP deployments.
+CCTP moves native USDC between Arc and Ethereum, Base, or Arbitrum; xReserve brings
+Arc USDC to Aleo as USDCx and redeems Aleo USDCx back to Arc USDC.
 
 The package supports browser wallets and local keys. It does not choose a
 wallet, store transfer progress, or submit a second transaction after an
@@ -10,6 +11,43 @@ interruption without caller authorization.
 > This package is published as a preview. It versions in lockstep with the
 > `@provablehq/veil-*` packages, but its API is subject to breaking changes
 > between minor releases.
+
+## Upgrading existing bridge integrations
+
+Existing method signatures remain supported. Plans and checkpoints saved with
+registry `2026-08-31.solana-deposits.1` work with this release when the route,
+assets, and protocol-specific chain details match the reviewed previous
+snapshot. Recovery validates that match before reading a network or signing.
+It does not repeat a submitted source transaction. Unknown versions or changed
+deployments still require an explicit migration; do not rewrite a checkpoint's
+registry version to bypass validation.
+
+**TypeScript consumers with exhaustive switches or complete lookup tables must
+handle the new variants when upgrading this preview minor release:**
+
+| Public type | Additional value |
+| --- | --- |
+| `BridgeProtocol` | `cctp` |
+| `BridgeQuoteKind`, `BridgeQuote`, `BridgeExecutionKind`, `BridgeExecution` | `evm-cctp` discriminator |
+| `BridgeNextAction.kind` | `cctp-mint` |
+| `aleo-xreserve` quote `status` | `quoted` for routes with live fee estimates; fixed-fee routes retain `not-queried` |
+
+For example, extend a protocol label map rather than casting away the new type:
+
+```ts
+import type { BridgeProtocol } from '@provablehq/aleo-bridge-sdk'
+
+const protocolLabels = {
+  xreserve: 'Circle xReserve',
+  hyperlane: 'Hyperlane',
+  cctp: 'Circle CCTP',
+} satisfies Record<BridgeProtocol, string>
+```
+
+Add an `evm-cctp` case when branching on quotes or executions. Route discovery
+now includes additional chains and routes; filter by protocol or endpoints if
+an application only supports the existing integrations. Filtering limits
+runtime discovery but does not narrow the exported TypeScript unions.
 
 ## Supported transfers
 
@@ -24,12 +62,120 @@ interruption without caller authorization.
 | Solana SOL | Aleo | SOL | Hyperlane |
 | Aleo SOL | Solana | SOL | Hyperlane |
 | Ethereum USDC | Aleo | USDCx | Circle xReserve |
-| Aleo USDCx | Ethereum | USDC | Circle xReserve |
+| Arc USDC | Aleo | USDCx | Circle xReserve |
+| Ethereum, Base, or Arbitrum USDC | Arc | USDC | Circle CCTP V2 |
+| Arc USDC | Ethereum, Base, or Arbitrum | USDC | Circle CCTP V2 |
+| Aleo USDCx | Ethereum or Arc | USDC | Circle xReserve |
 
 The registry also contains incomplete ALEO and USAD Hyperlane entries for
 deployment discovery. Those entries are marked `metadata-required` and cannot
 be quoted or executed. Solana routes currently support native SOL, not USDC or
 other SPL tokens.
+
+## Redeem Aleo USDCx on Arc
+
+Use the existing private or public burn flow with `destination: { chain: 'arc',
+asset: 'usdc' }`. The SDK targets xReserve domain `26` and enforces the deployed
+2-USDCx minimum. Arc quotes read the live withdrawal-fee endpoint and execution
+rechecks fee coverage before asking the Aleo wallet to prove and submit.
+The burn transition has no on-chain fee cap; quoted delivery is an estimate.
+The recipient receives USDC without signing or funding gas on Arc.
+
+```ts
+const quote = await bridge.quote({
+  source: { chain: 'aleo', asset: 'usdcx' },
+  destination: { chain: 'arc', asset: 'usdc' },
+  amount: '2',
+  recipient: arcAddress,
+})
+await bridge.execute({ plan: quote.plan, userRecord, merkleProof, onCheckpoint })
+```
+
+Persist checkpoints before submission and use `recover`/`resume` after an
+interruption. Outbound xReserve status tracks source acceptance; destination
+confirmation still requires an Arc receipt or balance check. Do not repeat a
+burn because provider delivery is pending.
+
+The opt-in `aleo-arc` mainnet test checks an accepted private burn, the Arc USDC
+transfer event, and the recipient balance increase. One live run delivered
+1.9836 USDC from a 2-USDCx burn in approximately 46 seconds including proving;
+this measurement is not a delivery guarantee.
+
+## Send Arc USDC to Ethereum, Base, or Arbitrum
+
+Connect an Arc EVM wallet and a public client for the destination. Select
+`ethereum` for Ethereum mainnet, `base`, or `arbitrum`:
+
+```ts
+const quote = await bridge.quote({
+  source: { chain: 'arc', asset: 'usdc' },
+  destination: { chain: 'base', asset: 'usdc' },
+  amount: '5',
+  sender: arcAddress,
+  recipient: destinationAddress,
+  cctp: { speed: 'standard', forwarding: true },
+})
+const execution = await bridge.execute({ plan: quote.plan, onCheckpoint })
+const progress = await bridge.wait({
+  progress: { next: 'wait', plan: quote.plan, receipt: execution.receipt },
+})
+```
+
+The quote includes the current destination forwarding cost and carries an
+approved fee ceiling into execution and checkpoint recovery. With forwarding,
+the displayed receive amount deducts that full ceiling: excess forwarding gas
+budget may be spent as a priority fee and is not promised as a refund. Forwarding pays
+for destination submission; the recipient needs no destination gas or signature.
+With `forwarding: false`, `complete` requires a destination wallet and its native
+gas. Arc requires USDC for the burn plus source gas in either mode.
+These routes transfer native USDC, including USDC received from an Aleo → Arc
+withdrawal. ETH and bridged USDC variants such as USDC.e are not supported.
+
+## Bring USDC to Arc
+
+Configure EVM clients for the source chain and Arc, then use the same bridge
+lifecycle as other routes:
+
+```ts
+const quote = await bridge.quote({
+  source: { chain: 'ethereum', asset: 'usdc' }, // also 'base' or 'arbitrum'
+  destination: { chain: 'arc', asset: 'usdc' },
+  bridgeProtocol: 'cctp',
+  amount: '5',
+  sender: evmAddress,
+  recipient: evmAddress,
+  cctp: { speed: 'fast', forwarding: true, maxFee: '0.25' },
+})
+const execution = await bridge.execute({
+  plan: quote.plan,
+  onCheckpoint: saveCheckpoint,
+})
+const progress = await bridge.wait({
+  progress: { next: 'wait', plan: quote.plan, receipt: execution.receipt },
+})
+```
+
+`speed` defaults to `standard`. `forwarding` defaults to `true`: Circle submits
+the destination mint and deducts its quoted fee, so the recipient need not
+already hold Arc gas. With forwarding disabled, `complete` requires an Arc
+signer with gas. `maxFee` is a decimal USDC ceiling; when omitted, the quote
+pins the current fee. Execute the returned `quote.plan` to retain that ceiling.
+A higher live fee requires a new quote. Source-chain gas is separate.
+
+These routes accept native USDC only. They do not swap ETH or bridge arbitrary
+ERC-20 tokens. After verified Arc delivery, a separate xReserve transfer can
+move Arc USDC to Aleo USDCx. Persist each leg's checkpoint independently and
+recover it before retrying; never repeat a submitted burn after a timeout.
+
+If forwarding stalls after attestation, an application can call
+`bridge.complete({ progress, cctp: { manualMint: true }, onCheckpoint })`
+with a funded Arc signer. The SDK verifies the original burn and checks that
+its nonce is unused; the original recipient and forwarding hook remain fixed.
+This never repeats the source burn. Normal `wait` polling does not trigger
+manual minting automatically.
+
+Consumers with exhaustive switches MUST handle the new `cctp` protocol and
+`evm-cctp` quote/execution variants.
 
 ## Create a browser client
 
@@ -316,6 +462,37 @@ The application then handles `progress.next` by the same table above. A private
 mint nonce must be stored separately because it is intentionally absent from
 the checkpoint.
 
+For CCTP, an unavailable approval stays pending: an RPC returning `null` does
+not prove that a transaction was dropped. After reconciling the original in the
+wallet and confirming a replacement approval, explicitly select it:
+
+```ts
+const recovered = await bridge.recover({
+  checkpoint,
+  cctp: {
+    approvalReplacement: {
+      originalTransactionId: originalApprovalHash,
+      replacementTransactionId: confirmedApprovalHash,
+    },
+  },
+})
+const updated = createBridgeCheckpoint(recovered.plan, recovered.receipt)
+```
+
+Persist `updated` before resuming. Recovery verifies the replacement's successful
+receipt, signer, token, spender, and amount; it retains the original hash in
+`source.replacedApprovalTransactionIds`. It does not submit another approval and
+rejects replacement selection while the original transaction is visible or after
+the burn was submitted.
+
+If Circle omits the forwarding transaction hash for an already-minted CCTP
+transfer, status checks search the newest 10,000 destination blocks in batches of
+1,000 and verify the discovered receipt and USDC mint. Custom EVM clients need
+`getBlockNumber` and must honor `getLogs` topics for this fallback. If the mint is
+older or cannot be found, retain the checkpoint and supply its verified destination
+transaction hash in `checkpoint.destination.transactionId` before recovering.
+Terminal receipts return without provider polling.
+
 ## Use private assets on Aleo
 
 Hyperlane routes mint wrapped assets into public Aleo balances and spend public
@@ -389,7 +566,7 @@ observable completion boundary.
 | Solana SOL → Aleo SOL | [`sol-to-aleo.ts`](./examples/sol-to-aleo.ts) |
 | Aleo SOL → Solana SOL | [`sol-to-solana.ts`](./examples/sol-to-solana.ts) |
 | Ethereum USDC → Aleo USDCx | [`usdc-to-usdcx.ts`](./examples/usdc-to-usdcx.ts) |
-| Aleo USDCx → Ethereum USDC | [`usdcx-to-usdc.ts`](./examples/usdcx-to-usdc.ts) |
+| Aleo USDCx → Ethereum or Arc USDC | [`usdcx-to-usdc.ts`](./examples/usdcx-to-usdc.ts) |
 
 Each script quotes mainnet state and exits without submitting by default. The
 script prints the exact acknowledgement required to authorize real funds.

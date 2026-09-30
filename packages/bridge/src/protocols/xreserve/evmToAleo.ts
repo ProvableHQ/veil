@@ -1,3 +1,4 @@
+import { isRegistryVersionCompatible } from '../../registry/compatibility.js'
 import {
   decodeEventLog,
   decodeFunctionResult,
@@ -52,7 +53,7 @@ const XRESERVE_ABI = parseAbi([
 
 function metadata(registry: BridgeRegistry, plan: BridgePlan): EvmXReserveRouteMetadata {
   if (plan.protocol !== 'xreserve' || plan.route.protocol !== 'xreserve') throw new BridgeError('xReserve actions require an xReserve transfer plan')
-  if (plan.registryVersion !== registry.version) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
+  if (!isRegistryVersionCompatible(registry, plan.registryVersion, plan.route.id)) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
   // Resolve contracts, domains, limits, and provider endpoints from the current
   // reviewed registry. A serialized plan identifies a route but is not trusted
   // as a source of deployment addresses after an application restart.
@@ -61,7 +62,7 @@ function metadata(registry: BridgeRegistry, plan: BridgePlan): EvmXReserveRouteM
   if (route.sourceAssetId !== plan.sourceAsset.id || route.destinationAssetId !== plan.destinationAsset.id) throw new BridgeError(`Transfer plan assets do not match configured route: ${route.id}`)
   const sourceChain = registry.chains.find((chain) => chain.id === plan.sourceAsset.chainId)
   if (sourceChain?.family !== 'evm' || plan.destinationAsset.chainId !== (route.environment === 'mainnet' ? 'aleo' : 'aleo-testnet')) {
-    throw new BridgeError('This action supports Ethereum-to-Aleo xReserve deposits only')
+    throw new BridgeError('This action supports EVM-to-Aleo xReserve deposits only')
   }
   const raw = route.metadata ?? {}
   const xReserveContract = raw.xReserveContract
@@ -141,7 +142,7 @@ function successful(receipt: EvmReceipt, hash: Hash): void {
 }
 
 /**
- * Calculates the USDC and approval required for an Ethereum-to-Aleo xReserve deposit.
+ * Calculates the USDC and approval required for an EVM-to-Aleo xReserve deposit.
  *
  * The result includes the source account's balance, current xReserve
  * allowance, maximum provider fee, and the Aleo delivery instruction committed
@@ -385,7 +386,7 @@ export async function getSourceStatus(
 }
 
 /**
- * Reconstructs an interrupted Ethereum-to-Aleo xReserve transfer from saved transaction identifiers.
+ * Reconstructs an interrupted EVM-to-Aleo xReserve transfer from saved transaction identifiers.
  *
  * The helper checks whether the last saved USDC approval or xReserve deposit was
  * accepted. It never requests a signature or repeats a transaction. A confirmed
@@ -676,7 +677,7 @@ export async function complete(
   if (plan.protocol !== 'xreserve' || plan.route.protocol !== 'xreserve' || plan.mintMode !== 'private') {
     throw new BridgeError('private_mint requires a private xReserve transfer plan')
   }
-  if (plan.registryVersion !== registry.version) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
+  if (!isRegistryVersionCompatible(registry, plan.registryVersion, plan.route.id)) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
   const route = registry.routes.find((entry) => entry.id === plan.route.id)
   if (!route || route.protocol !== 'xreserve' || route.availability !== 'active') throw new BridgeError(`xReserve route is not executable: ${plan.route.id}`)
   const wrapperProgram = route.metadata?.wrapperProgram

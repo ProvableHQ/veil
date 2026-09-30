@@ -1,5 +1,6 @@
 import type {
   BridgeEnvironment,
+  BridgeProtocol,
   BridgeRegistry,
   ProtocolBridgeAsset,
   ProtocolBridgeChain,
@@ -11,12 +12,14 @@ const ALEO_ADDRESS = '^aleo1[0-9a-z]{58}$'
 
 const chains: ProtocolBridgeChain[] = [
   { id: 'aleo', displayName: 'Aleo', family: 'aleo', environment: 'mainnet', nativeCurrencySymbol: 'ALEO', protocolDomains: { xreserve: 10002, hyperlane: 1634493807 } },
-  { id: 'ethereum', displayName: 'Ethereum', family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'ETH', protocolDomains: { xreserve: 0, hyperlane: 1 } },
+  { id: 'ethereum', displayName: 'Ethereum', family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'ETH', protocolDomains: { xreserve: 0, hyperlane: 1, cctp: 0 } },
+  { id: 'arc', displayName: 'Arc', family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'USDC', protocolDomains: { xreserve: 26, cctp: 26 } },
   { id: 'solana', displayName: 'Solana', family: 'solana', environment: 'mainnet', nativeCurrencySymbol: 'SOL', protocolDomains: { hyperlane: 1399811149 } },
-  { id: 'base', displayName: 'Base', family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'ETH' },
+  { id: 'base', displayName: 'Base', family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'ETH', protocolDomains: { cctp: 6 } },
+  { id: 'arbitrum', displayName: 'Arbitrum', family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'ETH', protocolDomains: { cctp: 3 } },
   { id: 'hyperevm', displayName: 'HyperEVM', family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'HYPE' },
   { id: 'aleo-testnet', displayName: 'Aleo Testnet', family: 'aleo', environment: 'testnet', nativeCurrencySymbol: 'ALEO', protocolDomains: { xreserve: 10002, hyperlane: 1617853565 } },
-  { id: 'sepolia', displayName: 'Ethereum Sepolia', family: 'evm', environment: 'testnet', nativeCurrencySymbol: 'ETH', protocolDomains: { hyperlane: 11155111 } },
+  { id: 'sepolia', displayName: 'Ethereum Sepolia', family: 'evm', environment: 'testnet', nativeCurrencySymbol: 'ETH', protocolDomains: { xreserve: 0, hyperlane: 11155111 } },
 ]
 
 const assets: ProtocolBridgeAsset[] = [
@@ -28,6 +31,9 @@ const assets: ProtocolBridgeAsset[] = [
   { id: 'aleo/sol', key: 'sol', chainId: 'aleo', symbol: 'SOL', name: 'Hyperlane SOL', decimals: 9, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_sol_v2.aleo', tokenId: 'aleo1aa0zt0vg9uwknekpqeefkvad55swp7833wc5crp2prv0lm4djuxs5r7k6v' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc20', program: 'arc20_sol.aleo' } },
   { id: 'aleo/usad', key: 'usad', chainId: 'aleo', symbol: 'USAD', name: 'USAD', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'usad_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS },
   { id: 'ethereum/usdc', key: 'usdc', chainId: 'ethereum', symbol: 'USDC', name: 'USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' }, addressValidationRegex: EVM_ADDRESS },
+  { id: 'base/usdc', key: 'usdc', chainId: 'base', symbol: 'USDC', name: 'USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' }, addressValidationRegex: EVM_ADDRESS },
+  { id: 'arbitrum/usdc', key: 'usdc', chainId: 'arbitrum', symbol: 'USDC', name: 'USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' }, addressValidationRegex: EVM_ADDRESS },
+  { id: 'arc/usdc', key: 'usdc', chainId: 'arc', symbol: 'USDC', name: 'USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0x3600000000000000000000000000000000000000' }, addressValidationRegex: EVM_ADDRESS },
   { id: 'ethereum/eth', key: 'eth', chainId: 'ethereum', symbol: 'ETH', name: 'Ether', decimals: 18, kind: 'native', locator: { kind: 'native', value: 'ETH' }, addressValidationRegex: EVM_ADDRESS },
   { id: 'ethereum/wbtc', key: 'wbtc', chainId: 'ethereum', symbol: 'WBTC', name: 'Wrapped Bitcoin', decimals: 8, kind: 'token', locator: { kind: 'evm-contract', value: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599' }, addressValidationRegex: EVM_ADDRESS },
   { id: 'ethereum/usdt', key: 'usdt', chainId: 'ethereum', symbol: 'USDT', name: 'Tether USD', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0xdAC17F958D2ee523a2206206994597C13D831ec7' }, addressValidationRegex: EVM_ADDRESS },
@@ -41,7 +47,19 @@ const assets: ProtocolBridgeAsset[] = [
   { id: 'sepolia/usdc', key: 'usdc', chainId: 'sepolia', symbol: 'USDC', name: 'Testnet USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' }, addressValidationRegex: EVM_ADDRESS },
 ]
 
+const CCTP_SOURCE = 'https://developers.circle.com/cctp/references/contract-addresses'
+const USDC_SOURCE = 'https://developers.circle.com/stablecoins/usdc-contract-addresses'
+// Pins the Circle CCTP V2 mainnet deployment table and remote messengers reviewed on 2026-09-29.
+const CCTP_MAINNET_METADATA = {
+  tokenMessenger: '0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d',
+  messageTransmitter: '0x81D40F21F12A8F0E3252Bccb954D722d4c464B64',
+  attestationBaseUrl: 'https://iris-api.circle.com',
+  deploymentReviewedAt: '2026-09-29',
+  tokenSource: USDC_SOURCE,
+} as const
+
 const XRESERVE_SOURCE = 'https://developers.circle.com/xreserve/references/supported-blockchains-and-domains'
+const ALEO_XRESERVE_SOURCE = 'https://docs.aleo.org/build/common-uses/usdcx_bridge'
 const HYPERLANE_REGISTRY_COMMIT = '2621c16f2db1ccb46643265c110dac5ca2c7c51a'
 const HYPERLANE_SOURCE = `https://github.com/hyperlane-xyz/hyperlane-registry/tree/${HYPERLANE_REGISTRY_COMMIT}/deployments/warp_routes`
 const ALEO_ETH_PROGRAM_SOURCE = 'https://explorer.provable.com/program/hyp_warp_token_eth_v2.aleo'
@@ -327,7 +345,7 @@ const SOLANA_SOL_DEPOSIT_METADATA = {
 
 function route(
   id: string,
-  protocol: 'xreserve' | 'hyperlane',
+  protocol: BridgeProtocol,
   environment: BridgeEnvironment,
   sourceAssetId: string,
   destinationAssetId: string,
@@ -343,13 +361,13 @@ function route(
     destinationAssetId,
     availability,
     deploymentId,
-    source: protocol === 'xreserve' ? XRESERVE_SOURCE : HYPERLANE_SOURCE,
+    source: protocol === 'xreserve' ? XRESERVE_SOURCE : protocol === 'cctp' ? CCTP_SOURCE : HYPERLANE_SOURCE,
     ...(metadata == null ? {} : { metadata }),
   }
 }
 
 function pair(
-  protocol: 'xreserve' | 'hyperlane',
+  protocol: BridgeProtocol,
   environment: BridgeEnvironment,
   left: string,
   right: string,
@@ -381,6 +399,34 @@ const routes: ProtocolBridgeRoute[] = [
     wrapperProgram: 'shielded_usdcx_wrapper.aleo',
     attestationBaseUrl: 'https://xreserve-api.circle.com/v1/attestations',
   }, 'active'),
+  ...pair('xreserve', 'mainnet', 'arc/usdc', 'aleo/usdcx', 'active', 'xreserve-usdcx-aleo-arc', {
+    xReserveContract: '0x8888888199b2Df864bf678259607d6D5EBb4e3Ce',
+    sourceChainId: 5042,
+    sourceDomain: 26,
+    minimumBurnAmountAtomic: '2000000',
+    withdrawalFeeAtomic: '16400',
+    withdrawalFeeUrl: 'https://api.usdcx.aleo.org/api/estimate-burn-fee',
+    withdrawalFeeChain: 'arc',
+    withdrawalFeeSource: 'https://usdcx.aleo.org/assets/index-C4YEghH3.js',
+    ethereumDestinationDomain: 0,
+    arcDestinationDomain: 26,
+    remoteDomain: 10002,
+    remoteToken: 'usdcx_stablecoin.aleo',
+    remoteTokenBytes32: '0x11ea7dab1d29d5f61500582c63e98c42e1165f9ba050ea9d0c6af9f871987711',
+    minimumAmountAtomic: '2000000',
+    maxFeeAtomic: '100000',
+    bridgeProgram: 'usdcx_bridge_v2.aleo',
+    wrapperProgram: 'shielded_usdcx_wrapper.aleo',
+    attestationBaseUrl: 'https://xreserve-api.circle.com/v1/attestations',
+    deploymentSource: ALEO_XRESERVE_SOURCE,
+    onchainReviewedAt: '2026-09-28',
+  }),
+  route('cctp:ethereum/usdc->arc/usdc', 'cctp', 'mainnet', 'ethereum/usdc', 'arc/usdc', 'active', 'cctp-v2-ethereum-arc', { ...CCTP_MAINNET_METADATA, destinationChainId: 5042, destinationDomain: 26, sourceChainId: 1, sourceDomain: 0 }),
+  route('cctp:base/usdc->arc/usdc', 'cctp', 'mainnet', 'base/usdc', 'arc/usdc', 'active', 'cctp-v2-base-arc', { ...CCTP_MAINNET_METADATA, destinationChainId: 5042, destinationDomain: 26, sourceChainId: 8453, sourceDomain: 6 }),
+  route('cctp:arbitrum/usdc->arc/usdc', 'cctp', 'mainnet', 'arbitrum/usdc', 'arc/usdc', 'active', 'cctp-v2-arbitrum-arc', { ...CCTP_MAINNET_METADATA, destinationChainId: 5042, destinationDomain: 26, sourceChainId: 42161, sourceDomain: 3 }),
+  route('cctp:arc/usdc->ethereum/usdc', 'cctp', 'mainnet', 'arc/usdc', 'ethereum/usdc', 'active', 'cctp-v2-arc-ethereum', { ...CCTP_MAINNET_METADATA, sourceChainId: 5042, sourceDomain: 26, destinationChainId: 1, destinationDomain: 0 }),
+  route('cctp:arc/usdc->base/usdc', 'cctp', 'mainnet', 'arc/usdc', 'base/usdc', 'active', 'cctp-v2-arc-base', { ...CCTP_MAINNET_METADATA, sourceChainId: 5042, sourceDomain: 26, destinationChainId: 8453, destinationDomain: 6 }),
+  route('cctp:arc/usdc->arbitrum/usdc', 'cctp', 'mainnet', 'arc/usdc', 'arbitrum/usdc', 'active', 'cctp-v2-arc-arbitrum', { ...CCTP_MAINNET_METADATA, sourceChainId: 5042, sourceDomain: 26, destinationChainId: 42161, destinationDomain: 3 }),
   ...pair('xreserve', 'testnet', 'sepolia/usdc', 'aleo-testnet/usdcx', 'active', 'xreserve-usdcx-aleo-testnet', {
     xReserveContract: '0x008888878f94C0d87defdf0B07f46B93C1934442',
     sourceChainId: 11155111,
@@ -426,11 +472,11 @@ const routes: ProtocolBridgeRoute[] = [
  * const bridge = createBridgeClient({ registry: DEFAULT_BRIDGE_REGISTRY })
  */
 export const DEFAULT_BRIDGE_REGISTRY: BridgeRegistry = Object.freeze({
-  version: '2026-08-31.solana-deposits.1',
+  version: '2026-09-28.cctp-arc.1',
   chains: Object.freeze(chains),
   assets: Object.freeze(assets),
   routes: Object.freeze(routes),
-  sources: Object.freeze([XRESERVE_SOURCE, HYPERLANE_SOURCE]),
+  sources: Object.freeze([XRESERVE_SOURCE, ALEO_XRESERVE_SOURCE, HYPERLANE_SOURCE, CCTP_SOURCE, USDC_SOURCE]),
   getAssets(this: BridgeRegistry, params = {}) {
     const chains = new Map(this.chains.map((chain) => [chain.id, chain]))
     const chainId = params.chainId?.toLowerCase()

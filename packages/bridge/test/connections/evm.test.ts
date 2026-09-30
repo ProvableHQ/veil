@@ -249,3 +249,16 @@ describe('EVM bridge clients', () => {
     expect(getTransaction).toHaveBeenCalledWith({ hash })
   })
 })
+
+it('passes indexed recovery filters to RPC and normalizes mined logs', async () => {
+  const address = '0x0000000000000000000000000000000000000001' as const
+  const topic = `0x${'ab'.repeat(32)}` as const
+  const request = vi.fn(async ({ method }: { method: string }) => method === 'eth_blockNumber' ? '0x20' : [{
+    address, topics: [topic], data: '0x', blockNumber: '0x1f', transactionHash: topic, logIndex: '0x2',
+  }])
+  const client = createEvmClient({ transport: evmCustom(request) })
+  expect(await client.publicClient.getBlockNumber!()).toBe(32n)
+  expect(await client.publicClient.getLogs({ address, topics: [topic, null], fromBlock: 16n, toBlock: 32n }))
+    .toEqual([{ address, topics: [topic], data: '0x', blockNumber: 31n, transactionHash: topic, logIndex: 2 }])
+  expect(request).toHaveBeenCalledWith({ method: 'eth_getLogs', params: [{ address, topics: [topic, null], fromBlock: '0x10', toBlock: '0x20' }] }, undefined)
+})

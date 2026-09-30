@@ -1,3 +1,4 @@
+import { isRegistryVersionCompatible } from '../../registry/compatibility.js'
 import { parsePlaintextValue, readContract, type Client } from '@provablehq/veil-core'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import type {
@@ -91,7 +92,7 @@ function optionalMetadataNumber(route: ProtocolBridgeRoute, key: string, fallbac
 function validatedRoute(registry: BridgeRegistry, params: ExecuteAleoHyperlaneTransferRemoteParameters) {
   const { plan } = params
   if (plan.protocol !== 'hyperlane' || plan.route.protocol !== 'hyperlane') throw new BridgeError('Aleo transfer_remote requires a Hyperlane transfer plan')
-  if (plan.registryVersion !== registry.version) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
+  if (!isRegistryVersionCompatible(registry, plan.registryVersion, plan.route.id)) throw new BridgeError(`Transfer plan uses registry ${plan.registryVersion}; expected ${registry.version}`)
   // Reload the deployed programs and remote-domain configuration from the
   // current reviewed registry before constructing wallet inputs.
   const route = registry.routes.find((entry) => entry.id === plan.route.id)
