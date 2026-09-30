@@ -59,6 +59,8 @@ runtime discovery but does not narrow the exported TypeScript unions.
 | Aleo WBTC | Ethereum | WBTC | Hyperlane |
 | Ethereum USDT | Aleo | USDT | Hyperlane |
 | Aleo USDT | Ethereum | USDT | Hyperlane |
+| Ethereum BAT | Aleo | BAT | Hyperlane |
+| Ethereum USDG | Aleo | USDG | Hyperlane |
 | Solana SOL | Aleo | SOL | Hyperlane |
 | Aleo SOL | Solana | SOL | Hyperlane |
 | Ethereum USDC | Aleo | USDCx | Circle xReserve |
@@ -67,10 +69,11 @@ runtime discovery but does not narrow the exported TypeScript unions.
 | Arc USDC | Ethereum, Base, or Arbitrum | USDC | Circle CCTP V2 |
 | Aleo USDCx | Ethereum or Arc | USDC | Circle xReserve |
 
-The registry also contains incomplete ALEO and USAD Hyperlane entries for
-deployment discovery. Those entries are marked `metadata-required` and cannot
-be quoted or executed. Solana routes currently support native SOL, not USDC or
-other SPL tokens.
+The registry also contains incomplete ALEO and USAD Hyperlane entries, the
+BAT/USDG return routes, and BAT/USDG/ZEC Solana routes for deployment
+discovery. Those entries are marked `metadata-required` and cannot be quoted or
+executed. Solana execution currently supports native SOL, not SPL-collateral
+tokens.
 
 ## Redeem Aleo USDCx on Arc
 

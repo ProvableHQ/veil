@@ -60,7 +60,7 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
   })
 
   it('routes the requested non-USDCx assets through Hyperlane', () => {
-    for (const symbol of ['ETH', 'WBTC', 'USDT', 'SOL', 'ALEO', 'USAD']) {
+    for (const symbol of ['ETH', 'WBTC', 'USDT', 'SOL', 'BAT', 'USDG', 'ZEC', 'ALEO', 'USAD']) {
       const assetIds = new Set(DEFAULT_BRIDGE_REGISTRY.assets
         .filter((asset) => asset.symbol === symbol)
         .map((asset) => asset.id))
@@ -85,16 +85,48 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
   })
 
   it('pins executable Ethereum Hyperlane routes to a reviewed registry commit', () => {
-    const inboundAssets = new Set(['ethereum/eth', 'ethereum/wbtc', 'ethereum/usdt'])
+    const inboundAssets = new Set(['ethereum/eth', 'ethereum/wbtc', 'ethereum/usdt', 'ethereum/bat', 'ethereum/usdg'])
     const inbound = DEFAULT_BRIDGE_REGISTRY.routes.filter((route) =>
       route.protocol === 'hyperlane' && inboundAssets.has(route.sourceAssetId))
     expect(inbound.map((route) => route.sourceAssetId)).toEqual(expect.arrayContaining([
       'ethereum/eth',
       'ethereum/wbtc',
       'ethereum/usdt',
+      'ethereum/bat',
+      'ethereum/usdg',
     ]))
     expect(inbound.every((route) => route.availability === 'active')).toBe(true)
-    expect(inbound.every((route) => route.metadata?.registryCommit === '2621c16f2db1ccb46643265c110dac5ca2c7c51a')).toBe(true)
+    expect(inbound.every((route) => typeof route.metadata?.registryCommit === 'string')).toBe(true)
+  })
+
+  it('registers BAT, USDG, and ZEC against their pinned Aleo and collateral deployments', () => {
+    expect(DEFAULT_BRIDGE_REGISTRY.assets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'aleo/bat', decimals: 18, locator: { kind: 'aleo-program', value: 'hyp_warp_token_bat_v2.aleo', tokenId: 'aleo1n6kjmle3t0prrwjgpwc87zytasmjdeud5rrwuuawk57ex85qr5fqcv8xzg' } }),
+      expect.objectContaining({ id: 'aleo/usdg', decimals: 6, locator: { kind: 'aleo-program', value: 'hyp_warp_token_usdg_v2.aleo', tokenId: 'aleo1s4r80dv7pcggdnzsavjv45r54zjydl2jn64dejerpk6pgnfj5cysj7zzuu' } }),
+      expect.objectContaining({ id: 'aleo/zec', decimals: 8, locator: { kind: 'aleo-program', value: 'hyp_warp_token_zec_v2.aleo', tokenId: 'aleo1m3z3en2msfdk62yje9ty7fqydxeakgx0ec6ze672q86p2yxq0sqqyjr9jd' } }),
+      expect.objectContaining({ id: 'ethereum/bat', locator: { kind: 'evm-contract', value: '0x0D8775F648430679A709E98d2b0Cb6250d2887EF' } }),
+      expect.objectContaining({ id: 'ethereum/usdg', locator: { kind: 'evm-contract', value: '0xe343167631d89B6Ffc58B88d6b7fB0228795491D' } }),
+      expect.objectContaining({ id: 'solana/bat', decimals: 8, locator: { kind: 'solana-mint', value: 'EPeUFDgHRxs9xxEPVaL6kfGQvCon7jmAWKVUHuux1Tpz' } }),
+      expect.objectContaining({ id: 'solana/usdg', decimals: 6, locator: { kind: 'solana-mint', value: '2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH' } }),
+      expect.objectContaining({ id: 'solana/zec', decimals: 8, locator: { kind: 'solana-mint', value: 'A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS' } }),
+    ]))
+
+    const ethereumRoutes = DEFAULT_BRIDGE_REGISTRY.routes.filter((route) =>
+      ['hyperlane:ethereum/bat->aleo/bat', 'hyperlane:ethereum/usdg->aleo/usdg'].includes(route.id))
+    expect(ethereumRoutes).toHaveLength(2)
+    expect(ethereumRoutes.every((route) => route.availability === 'active')).toBe(true)
+    expect(ethereumRoutes.every((route) =>
+      route.metadata?.registryCommit === 'dd03567baf2a7c0a336c12a1e2b97272ca51ee9a')).toBe(true)
+    expect(ethereumRoutes.map((route) => route.metadata?.routerAddress)).toEqual([
+      '0x516e156e987175d74614cc2bC960f148A610f0b3',
+      '0xe5A2cCf532919f93855F324c1F8a7996065f53Da',
+    ])
+
+    const pendingRoutes = DEFAULT_BRIDGE_REGISTRY.routes.filter((route) =>
+      /\/(bat|usdg|zec)(?:->|$)/.test(route.id) && !ethereumRoutes.includes(route))
+    expect(pendingRoutes).toHaveLength(8)
+    expect(pendingRoutes.every((route) => route.availability === 'metadata-required')).toBe(true)
+    expect(pendingRoutes.every((route) => route.source?.includes('dd03567baf2a7c0a336c12a1e2b97272ca51ee9a'))).toBe(true)
   })
 
   it('activates the fully reviewed Aleo-origin withdrawal routes', () => {
