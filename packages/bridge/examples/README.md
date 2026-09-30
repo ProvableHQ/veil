@@ -342,6 +342,28 @@ Set `USDCX_BURN_MODE=public` to spend the public USDCx balance. Private mode
 uses the configured record scanner to select the smallest unspent record that
 covers the transfer and derives the current freeze-list exclusion proof.
 
+Ethereum execution also requires `ETHEREUM_RPC_URL`. After Aleo acceptance,
+the example polls Ethereum for up to 30 minutes, checks a successful receipt
+with a matching xReserve withdrawal or Circle Gateway mint and canonical USDC
+transfer, and checks the recipient's balance increase. It prints the Ethereum
+transaction hash and net USDC received after two confirmations.
+
+Use a dedicated recipient and **keep it idle during observation**. The provider
+does not expose a destination hash tied to the Aleo burn; this is observed
+delivery, not cryptographic burn-to-mint attribution. Other matching transfers
+or balance activity cause ambiguity and require manual inspection.
+
+The checkpoint, starting block, and balance are saved before submission under
+`~/.local/state/veil/examples/usdcx-to-ethereum.json`. Set `WITHDRAWAL_STATE_FILE`
+to choose another path. After a timeout or RPC failure, rerun the same command
+with the same configuration and state file to follow the existing burn. **Do
+not delete pending state or select a new file to retry a transfer.** A new file
+starts a new withdrawal. If interrupted before a checkpoint is saved, the
+example refuses to reburn until the submission outcome is investigated. A
+crashed process may leave a `.lock` file; remove only that lock after confirming
+that the original process has stopped. Arc destination mode retains its
+provider-handoff behavior; the Arc journey examples verify delivery separately.
+
 The wrapper requires a `[MerkleProof; 2]` non-inclusion witness for its
 compliance list. The example fetches the live tree from
 `usdcx_freezelist.aleo/compliance/freeze-list` and uses the Provable SDK's
