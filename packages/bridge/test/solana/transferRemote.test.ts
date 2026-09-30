@@ -14,6 +14,18 @@ const fixture = JSON.parse(
   accounts: { address: string; signer: boolean; writable: boolean }[]
 }
 
+const splFixture = JSON.parse(
+  readFileSync(new URL('../fixtures/sealevel-spl-collateral-transfer-remote.json', import.meta.url), 'utf8'),
+) as {
+  warpProgramAddress: string
+  senderAddress: string
+  uniqueMessageAddress: string
+  recipientAleoAddress: string
+  amountAtomic: number
+  instructionDataBase64: string
+  accounts: { address: string; signer: boolean; writable: boolean }[]
+}
+
 // Warp program id is not itself a fixture field (it only appears in the raw
 // transaction's invoke logs), but it is a pinned fact in SEALEVEL_NOTES.md's
 // intro (the deployed SOL warp route program address).
@@ -78,5 +90,40 @@ describe('buildTransferRemoteInstruction', () => {
     // list with row 12 (the overhead account) removed.
     const expectedWithoutOverhead = fixture.accounts.filter((account) => account.address !== igpOverheadAccount)
     expect(built.accounts).toEqual(expectedWithoutOverhead)
+  })
+
+  it('reproduces the observed ZEC SPL-collateral instruction byte-for-byte', async () => {
+    const accounts = splFixture.accounts
+    const metadata: SolanaHyperlaneRouteMetadata = {
+      routerType: 'spl-collateral',
+      warpProgramAddress: splFixture.warpProgramAddress,
+      tokenPda: accounts[2]!.address,
+      dispatchAuthorityPda: accounts[5]!.address,
+      mailboxProgramAddress: accounts[3]!.address,
+      mailboxOutboxPda: accounts[4]!.address,
+      igpProgramAddress: accounts[9]!.address,
+      igpProgramDataPda: accounts[10]!.address,
+      igpOverheadAccount: accounts[12]!.address,
+      igpAccount: accounts[13]!.address,
+      splNoopProgramAddress: accounts[1]!.address,
+      splTokenProgramAddress: accounts[14]!.address,
+      collateralMintAddress: accounts[15]!.address,
+      escrowPda: accounts[17]!.address,
+      destinationDomain: 1634493807,
+      destinationGasAmount: '460000',
+      registryCommit: 'dd03567baf2a7c0a336c12a1e2b97272ca51ee9a',
+      solanaReviewedAt: '2026-09-30T00:00:00Z',
+      solanaConfigSource: 'hyperlane-registry@dd03567:deployments/warp_routes/ZEC/aleo-config.yaml',
+    }
+    const built = await buildTransferRemoteInstruction({
+      metadata,
+      senderAddress: splFixture.senderAddress,
+      uniqueMessageAddress: splFixture.uniqueMessageAddress,
+      recipientAleoAddress: splFixture.recipientAleoAddress,
+      amountLamports: BigInt(splFixture.amountAtomic),
+    })
+
+    expect(Buffer.from(built.data).toString('base64')).toBe(splFixture.instructionDataBase64)
+    expect(built.accounts).toEqual(accounts)
   })
 })

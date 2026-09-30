@@ -17,6 +17,7 @@ const TRANSFER_REMOTE_VARIANT_TAG = 1
 // twice in the account list — once for the Mailbox's rent/lamport transfer,
 // once again for the native-collateral plugin's `transfer_in` CPI.
 const SYSTEM_PROGRAM_ADDRESS = '11111111111111111111111111111111'
+const ASSOCIATED_TOKEN_PROGRAM_ADDRESS = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL'
 
 // SEALEVEL_NOTES.md §3: PDA seeds are UTF-8 string segments (auto-encoded by
 // `@solana/kit`'s `getProgramDerivedAddress`) interleaved with the raw
@@ -48,7 +49,7 @@ export type SolanaAccountMeta = {
  * @property uniqueMessageAddress Base58 address of a fresh, caller-supplied signer that seeds the
  * dispatched-message and gas-payment program-derived addresses and proves transaction uniqueness.
  * @property recipientAleoAddress Aleo `aleo1…` address receiving the transfer on the destination chain.
- * @property amountLamports Amount to transfer, in lamports.
+ * @property amountLamports Source amount in atomic units; lamports for native SOL and mint units for SPL collateral.
  */
 export type BuildTransferRemoteParameters = {
   metadata: SolanaHyperlaneRouteMetadata
@@ -56,6 +57,66 @@ export type BuildTransferRemoteParameters = {
   uniqueMessageAddress: string
   recipientAleoAddress: string
   amountLamports: bigint
+}
+
+/**
+ * Derives the associated token account for a wallet, mint, and SPL token program.
+ *
+ * The derivation is local and supports both the classic SPL Token program and
+ * Token-2022. It does not contact Solana or create the account.
+ *
+ * @param ownerAddress Wallet or program address that owns the token account.
+ * @param mintAddress Mint held by the associated token account.
+ * @param tokenProgramAddress SPL token program that owns the mint.
+ * @returns Base58 address of the canonical associated token account.
+ * @throws Error When an input is not a valid Solana public key.
+ *
+ * @example
+ * const ata = await deriveAssociatedTokenAddress(owner, mint, tokenProgram)
+ */
+export async function deriveAssociatedTokenAddress(
+  ownerAddress: string,
+  mintAddress: string,
+  tokenProgramAddress: string,
+): Promise<string> {
+  const kit = await loadKit()
+  const addressEncoder = kit.getAddressEncoder()
+  const [address] = await kit.getProgramDerivedAddress({
+    programAddress: kit.address(ASSOCIATED_TOKEN_PROGRAM_ADDRESS),
+    seeds: [
+      addressEncoder.encode(kit.address(ownerAddress)),
+      addressEncoder.encode(kit.address(tokenProgramAddress)),
+      addressEncoder.encode(kit.address(mintAddress)),
+    ],
+  })
+  return address
+}
+
+/**
+ * Reads the unsigned 64-bit balance stored in an SPL token account.
+ *
+ * Classic SPL Token and Token-2022 share the same base account layout, so
+ * extensions after the base data do not affect this field. A missing account
+ * is treated as a zero balance for delivery tracking.
+ *
+ * @param data Raw token-account bytes, or `null` when the account does not exist.
+ * @param address Address included in malformed-account errors.
+ * @returns Token balance in the mint's atomic units.
+ * @throws BridgeError When an existing account is shorter than the SPL base layout.
+ *
+ * @example
+ * const amount = decodeSplTokenAccountAmount(await rpc.getAccountData(ata), ata)
+ */
+export function decodeSplTokenAccountAmount(data: Uint8Array | null, address: string): bigint {
+  if (data === null) return 0n
+  if (data.length < 72) {
+    throw new BridgeError(`Solana SPL token account has invalid data: ${address}`)
+  }
+  let amount = 0n
+  for (let index = 7; index >= 0; index--) {
+    amount = (amount << 8n) | BigInt(data[64 + index]!)
+  }
+  return amount
 }
 
 function writeU32LE(bytes: Uint8Array, offset: number, value: number): void {
@@ -77,7 +138,7 @@ function writeU256LE(bytes: Uint8Array, offset: number, value: bigint): void {
 }
 
 /**
- * Builds the Solana instruction that commits SOL to a Hyperlane transfer bound for Aleo.
+ * Builds the Solana instruction that commits native SOL or SPL collateral to a Hyperlane transfer bound for Aleo.
  *
  * The result is unsigned and cannot move funds until the sender and unique
  * message account sign it and a client broadcasts it. Every program account is
@@ -85,7 +146,7 @@ function writeU256LE(bytes: Uint8Array, offset: number, value: bigint): void {
  * no network or wallet is contacted. The encoding is verified byte-for-byte
  * against `test/fixtures/sealevel-transfer-remote.json`.
  *
- * @param params Route metadata, transfer parties, and the lamport amount to move.
+ * @param params Route metadata, transfer parties, and the source amount in atomic units.
  * @returns The Warp Route program, ordered accounts, and raw 77-byte instruction data needed to assemble the transaction.
  * @throws BridgeError When `amountLamports` does not fit the instruction's 32-byte unsigned width,
  * or when `recipientAleoAddress` is not a valid Aleo address.
@@ -157,8 +218,25 @@ export async function buildTransferRemoteInstruction(
       ? [{ address: metadata.igpOverheadAccount, signer: false, writable: false }]
       : []),
     { address: metadata.igpAccount, signer: false, writable: true }, // row 13
-    { address: SYSTEM_PROGRAM_ADDRESS, signer: false, writable: false }, // row 14
-    { address: metadata.nativeCollateralPda, signer: false, writable: true }, // row 15
+    ...(metadata.routerType === 'spl-collateral'
+      ? [
+        { address: metadata.splTokenProgramAddress, signer: false, writable: false },
+        { address: metadata.collateralMintAddress, signer: false, writable: true },
+        {
+          address: await deriveAssociatedTokenAddress(
+            params.senderAddress,
+            metadata.collateralMintAddress,
+            metadata.splTokenProgramAddress,
+          ),
+          signer: false,
+          writable: true,
+        },
+        { address: metadata.escrowPda, signer: false, writable: true },
+      ]
+      : [
+        { address: SYSTEM_PROGRAM_ADDRESS, signer: false, writable: false },
+        { address: metadata.nativeCollateralPda, signer: false, writable: true },
+      ]),
   ]
 
   return { programAddress: metadata.warpProgramAddress, accounts, data }

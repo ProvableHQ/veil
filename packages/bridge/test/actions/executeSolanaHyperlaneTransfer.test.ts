@@ -8,6 +8,8 @@ import type { SolanaRpcClient } from '../../src/solana/rpc.js'
 import type { SolanaWalletClient } from '../../src/connections/solana.js'
 import type { SolanaClient } from '../../src/connections/solana.js'
 import type { BridgeReceipt } from '../../src/types/protocol.js'
+import { prepare } from '../../src/actions/prepare.js'
+import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import {
   WARP_PROGRAM_ADDRESS,
   igpAccountData,
@@ -22,6 +24,28 @@ const STUB_SIGNATURE = 'stub-signature'
 // nor any program or account the transfer instruction touches, so it is a
 // legal fee payer in its own right.
 const OTHER_SENDER = '11111111111111111111111111111112'
+const ZEC_SENDER = 'D4jZ2sNktKgTrhWVMnjZb5BXP7MMh9N3y5ZLwkyKfozb'
+
+function tokenAccountData(amount: bigint): Uint8Array {
+  const data = new Uint8Array(165)
+  let remaining = amount
+  for (let index = 0; index < 8; index++) {
+    data[64 + index] = Number(remaining & 0xffn)
+    remaining >>= 8n
+  }
+  return data
+}
+
+function zecPlan() {
+  return prepare(DEFAULT_BRIDGE_REGISTRY, {
+    source: { chain: 'solana', asset: 'zec' },
+    destination: { chain: 'aleo', asset: 'zec' },
+    bridgeProtocol: 'hyperlane',
+    amount: '0.0001',
+    sender: ZEC_SENDER,
+    recipient: 'aleo1mx0tldt5qsqymn5a3whnmf9rx2whp837jjn0tvqgxqf86zg6dvyqnc8spm',
+  })
+}
 
 function stubExecutor(
   options: { onSend?: (wireTransaction: Uint8Array) => void; address?: string } = {},
@@ -136,6 +160,23 @@ describe('executeSolanaHyperlaneTransfer', () => {
       expect(message).toContain('gas 2910000')
       expect(message).toContain('rent 5004240')
     }
+  })
+
+  it('checks the sender associated token account before submitting SPL collateral', async () => {
+    const executor = stubExecutor({ address: ZEC_SENDER })
+    const getAccountData = vi.fn(async (address: string) =>
+      address === 'JAvHW21tYXE9dtdG83DReqU2b4LUexFuCbtJT5tF8X6M'
+        ? igpAccountData()
+        : tokenAccountData(9_999n),
+    )
+    const rpc = executeRpc({ getAccountData })
+
+    await expect(executeSolanaHyperlaneTransfer(
+      DEFAULT_BRIDGE_REGISTRY,
+      client(executor, rpc),
+      { plan: zecPlan() },
+    )).rejects.toThrow(/Insufficient Solana token balance.*9999.*10000/)
+    expect(getAccountData).toHaveBeenCalledTimes(2)
   })
 
   it('throws a BridgeError naming the signature when the network reports failure', async () => {

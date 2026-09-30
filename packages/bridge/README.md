@@ -60,20 +60,29 @@ runtime discovery but does not narrow the exported TypeScript unions.
 | Ethereum USDT | Aleo | USDT | Hyperlane |
 | Aleo USDT | Ethereum | USDT | Hyperlane |
 | Ethereum BAT | Aleo | BAT | Hyperlane |
+| Aleo BAT | Ethereum | BAT | Hyperlane |
 | Ethereum USDG | Aleo | USDG | Hyperlane |
+| Aleo USDG | Ethereum | USDG | Hyperlane |
 | Solana SOL | Aleo | SOL | Hyperlane |
 | Aleo SOL | Solana | SOL | Hyperlane |
+| Solana BAT, USDG, or ZEC | Aleo | BAT, USDG, or ZEC | Hyperlane |
+| Aleo BAT, USDG, or ZEC | Solana | BAT, USDG, or ZEC | Hyperlane |
 | Ethereum USDC | Aleo | USDCx | Circle xReserve |
 | Arc USDC | Aleo | USDCx | Circle xReserve |
 | Ethereum, Base, or Arbitrum USDC | Arc | USDC | Circle CCTP V2 |
 | Arc USDC | Ethereum, Base, or Arbitrum | USDC | Circle CCTP V2 |
 | Aleo USDCx | Ethereum or Arc | USDC | Circle xReserve |
 
-The registry also contains incomplete ALEO and USAD Hyperlane entries, the
-BAT/USDG return routes, and BAT/USDG/ZEC Solana routes for deployment
-discovery. Those entries are marked `metadata-required` and cannot be quoted or
-executed. Solana execution currently supports native SOL, not SPL-collateral
-tokens.
+The registry also contains incomplete ALEO and USAD Hyperlane entries for
+deployment discovery. Those entries are marked `metadata-required` and cannot
+be quoted or executed.
+
+BAT, USDG, and ZEC use SPL-collateral warp routes on Solana. BAT and ZEC use
+the classic SPL Token program; USDG uses Token-2022. The SDK can build and
+submit both Solana-to-Aleo and Aleo-to-Solana transfers and tracks delivery by
+the recipient's associated token account. Aleo-to-Solana delivery currently
+depends on a pending relayer bug fix; source submission can succeed before a
+relayer is able to complete the destination transaction.
 
 ## Redeem Aleo USDCx on Arc
 

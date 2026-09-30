@@ -101,9 +101,9 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
 
   it('registers BAT, USDG, and ZEC against their pinned Aleo and collateral deployments', () => {
     expect(DEFAULT_BRIDGE_REGISTRY.assets).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'aleo/bat', decimals: 18, locator: { kind: 'aleo-program', value: 'hyp_warp_token_bat_v2.aleo', tokenId: 'aleo1n6kjmle3t0prrwjgpwc87zytasmjdeud5rrwuuawk57ex85qr5fqcv8xzg' } }),
-      expect.objectContaining({ id: 'aleo/usdg', decimals: 6, locator: { kind: 'aleo-program', value: 'hyp_warp_token_usdg_v2.aleo', tokenId: 'aleo1s4r80dv7pcggdnzsavjv45r54zjydl2jn64dejerpk6pgnfj5cysj7zzuu' } }),
-      expect.objectContaining({ id: 'aleo/zec', decimals: 8, locator: { kind: 'aleo-program', value: 'hyp_warp_token_zec_v2.aleo', tokenId: 'aleo1m3z3en2msfdk62yje9ty7fqydxeakgx0ec6ze672q86p2yxq0sqqyjr9jd' } }),
+      expect.objectContaining({ id: 'aleo/bat', decimals: 18, locator: { kind: 'aleo-program', value: 'hyp_warp_token_bat_v2.aleo', tokenId: 'aleo1n6kjmle3t0prrwjgpwc87zytasmjdeud5rrwuuawk57ex85qr5fqcv8xzg' }, privacy: { kind: 'arc22', program: 'shield_arc22_bat.aleo' } }),
+      expect.objectContaining({ id: 'aleo/usdg', decimals: 6, locator: { kind: 'aleo-program', value: 'hyp_warp_token_usdg_v2.aleo', tokenId: 'aleo1s4r80dv7pcggdnzsavjv45r54zjydl2jn64dejerpk6pgnfj5cysj7zzuu' }, privacy: { kind: 'arc22', program: 'shield_arc22_usdg.aleo' } }),
+      expect.objectContaining({ id: 'aleo/zec', decimals: 8, locator: { kind: 'aleo-program', value: 'hyp_warp_token_zec_v2.aleo', tokenId: 'aleo1m3z3en2msfdk62yje9ty7fqydxeakgx0ec6ze672q86p2yxq0sqqyjr9jd' }, privacy: { kind: 'arc22', program: 'shield_arc22_zec.aleo' } }),
       expect.objectContaining({ id: 'ethereum/bat', locator: { kind: 'evm-contract', value: '0x0D8775F648430679A709E98d2b0Cb6250d2887EF' } }),
       expect.objectContaining({ id: 'ethereum/usdg', locator: { kind: 'evm-contract', value: '0xe343167631d89B6Ffc58B88d6b7fB0228795491D' } }),
       expect.objectContaining({ id: 'solana/bat', decimals: 8, locator: { kind: 'solana-mint', value: 'EPeUFDgHRxs9xxEPVaL6kfGQvCon7jmAWKVUHuux1Tpz' } }),
@@ -122,11 +122,19 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
       '0xe5A2cCf532919f93855F324c1F8a7996065f53Da',
     ])
 
-    const pendingRoutes = DEFAULT_BRIDGE_REGISTRY.routes.filter((route) =>
+    const additionalRoutes = DEFAULT_BRIDGE_REGISTRY.routes.filter((route) =>
       /\/(bat|usdg|zec)(?:->|$)/.test(route.id) && !ethereumRoutes.includes(route))
-    expect(pendingRoutes).toHaveLength(8)
-    expect(pendingRoutes.every((route) => route.availability === 'metadata-required')).toBe(true)
-    expect(pendingRoutes.every((route) => route.source?.includes('dd03567baf2a7c0a336c12a1e2b97272ca51ee9a'))).toBe(true)
+    expect(additionalRoutes).toHaveLength(8)
+    expect(additionalRoutes.every((route) => route.availability === 'active')).toBe(true)
+    expect(additionalRoutes.every((route) => route.source?.includes('dd03567baf2a7c0a336c12a1e2b97272ca51ee9a'))).toBe(true)
+
+    const solanaSourceRoutes = additionalRoutes.filter((route) => route.sourceAssetId.startsWith('solana/'))
+    expect(solanaSourceRoutes).toHaveLength(3)
+    expect(solanaSourceRoutes.map((route) => route.metadata)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ routerType: 'spl-collateral', collateralMintAddress: 'EPeUFDgHRxs9xxEPVaL6kfGQvCon7jmAWKVUHuux1Tpz', splTokenProgramAddress: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' }),
+      expect.objectContaining({ routerType: 'spl-collateral', collateralMintAddress: '2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH', splTokenProgramAddress: 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb' }),
+      expect.objectContaining({ routerType: 'spl-collateral', collateralMintAddress: 'A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS', solanaSampleTransferSource: 'https://explorer.hyperlane.xyz/message/0x5f0236faa02b61ea3e8f4406bbd43b7b5b74cc4010574a1fcda47d1d092e3a3e' }),
+    ]))
   })
 
   it('activates the fully reviewed Aleo-origin withdrawal routes', () => {

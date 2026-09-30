@@ -68,8 +68,10 @@ lower-level `getStatus` remains available for one status read. Pass `until` to
 `wait` to stop at an additional protocol state.
 
 `onProgress` reports Aleo proving boundaries for UI and timing instrumentation.
-Solana quotes include the bridged amount, IGP payment, network fee, and required
-rent in `totalLamports`. Aleo xReserve withdrawals subtract the deployed 2
+Solana native-SOL quotes include the bridged amount, IGP payment, network fee,
+and required rent in `totalLamports`. SPL-collateral quotes report the token
+amount in `amountLamports` for backwards compatibility and exclude it from the
+SOL-denominated `totalLamports`. Aleo xReserve withdrawals subtract the deployed 2
 USDCx fee and require a positive net amount. Aleo Hyperlane quotes report the
 public hook payment; their account-specific execution fee and total remain
 `null` until transaction construction.
@@ -77,3 +79,9 @@ public hook payment; their account-specific execution fee and total remain
 Hyperlane routes marked `metadata-required` are known route families whose
 complete execution deployment has not been pinned yet. Applications MUST NOT
 execute them until a reviewed registry marks them active.
+
+BAT, USDG, and ZEC are active in both directions between Aleo and Solana. BAT
+and ZEC use classic SPL Token accounts, while USDG uses Token-2022. A known
+relayer bug currently prevents Aleo-to-Solana destination completion even
+though the SDK can build and submit the source transfer; applications should
+surface that delivery limitation until the relayer fix is deployed.

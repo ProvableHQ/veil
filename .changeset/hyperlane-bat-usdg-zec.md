@@ -2,4 +2,4 @@
 "@provablehq/aleo-bridge-sdk": minor
 ---
 
-Add pinned BAT, USDG, and ZEC Hyperlane Warp Route assets and route discovery, with executable Ethereum-to-Aleo BAT and USDG deposits.
+Add active BAT, USDG, and ZEC Hyperlane Warp Routes, including classic SPL Token and Token-2022 collateral transfers between Solana and Aleo, reviewed Aleo withdrawal metadata, and ARC-22 privacy wrappers.

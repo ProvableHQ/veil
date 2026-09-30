@@ -15,6 +15,11 @@ const ROUTES = [
   ['hyperlane:aleo/usdt->ethereum/usdt', 'hyp_warp_token_usdt_v2.aleo', '0x0000000000000000000000000000000000000001', false],
   ['hyperlane:aleo/sol->solana/sol', 'hyp_warp_token_sol_v2.aleo', '11111111111111111111111111111111', false],
   ['hyperlane:aleo/usad->ethereum/usad', 'hyp_warp_token_usad_v2.aleo', '0x0000000000000000000000000000000000000001', true],
+  ['hyperlane:aleo/bat->ethereum/bat', 'hyp_warp_token_bat_v2.aleo', '0x0000000000000000000000000000000000000001', false],
+  ['hyperlane:aleo/usdg->ethereum/usdg', 'hyp_warp_token_usdg_v2.aleo', '0x0000000000000000000000000000000000000001', false],
+  ['hyperlane:aleo/bat->solana/bat', 'hyp_warp_token_bat_v2.aleo', '11111111111111111111111111111111', false],
+  ['hyperlane:aleo/usdg->solana/usdg', 'hyp_warp_token_usdg_v2.aleo', '11111111111111111111111111111111', false],
+  ['hyperlane:aleo/zec->solana/zec', 'hyp_warp_token_zec_v2.aleo', '11111111111111111111111111111111', false],
 ] as const
 
 const ETH_GAS_CONFIG_LITERAL = '{\n  gas_overhead: 159337u128,\n  exchange_rate: 402u128,\n  gas_price: 1000000000u128\n}'
