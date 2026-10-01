@@ -2,6 +2,7 @@ import { buildAleoHyperlaneTransferRemoteCall } from '../../src/builders/buildAl
 import { solanaRouteMetadata } from '../../src/protocols/hyperlane/solanaMetadata.js'
 import { describe, expect, it, vi } from 'vitest'
 import snapshot from '../fixtures/registry-2026-08-31.json'
+import precedingSnapshot from '../fixtures/registry-2026-09-28.json'
 import { validateBridgeRegistry } from '../../src/registry/validate.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { prepare } from '../../src/actions/prepare.js'
@@ -15,8 +16,9 @@ import type { BridgeCheckpoint, BridgeRegistry } from '../../src/types/protocol.
 const legacy = validateBridgeRegistry({ ...DEFAULT_BRIDGE_REGISTRY, ...snapshot } as unknown as BridgeRegistry)
 const previous = validateBridgeRegistry({
   ...DEFAULT_BRIDGE_REGISTRY,
-  version: '2026-09-28.cctp-arc.1',
-})
+  // Captured from PR #169 base 17a2631; never derive old deployments from current data.
+  ...precedingSnapshot,
+} as unknown as BridgeRegistry)
 const recipient = '0x0000000000000000000000000000000000000001'
 const ALEO_RECIPIENT = 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n'
 const oldPlan = () => prepare(legacy, {
@@ -98,7 +100,7 @@ describe('BAT, USDG, and ZEC registry upgrade', () => {
   it.each([
     ['xreserve', 'ethereum', 'usdc', 'aleo', 'usdcx', '25', ALEO_RECIPIENT],
     ['cctp', 'ethereum', 'usdc', 'arc', 'usdc', '25', recipient],
-    ['hyperlane', 'ethereum', 'bat', 'aleo', 'bat', '1', ALEO_RECIPIENT],
+    ['hyperlane', 'ethereum', 'wbtc', 'aleo', 'wbtc', '1', ALEO_RECIPIENT],
   ] as const)('accepts an unchanged %s route from the preceding snapshot', (
     bridgeProtocol,
     sourceChain,
@@ -133,8 +135,8 @@ describe('BAT, USDG, and ZEC registry upgrade', () => {
 
   it('rejects an altered route even when its saved version was previously compatible', () => {
     const plan = prepare(previous, {
-      source: { chain: 'ethereum', asset: 'bat' },
-      destination: { chain: 'aleo', asset: 'bat' },
+      source: { chain: 'ethereum', asset: 'wbtc' },
+      destination: { chain: 'aleo', asset: 'wbtc' },
       amount: '1',
       recipient: ALEO_RECIPIENT,
     })
@@ -145,5 +147,32 @@ describe('BAT, USDG, and ZEC registry upgrade', () => {
         : route),
     }
     expect(() => resolveTransferRoute(registry, plan)).toThrow(/registry/i)
+  })
+})
+
+
+describe('actual pre-PR registry recovery coverage', () => {
+  it.each(previous.routes.filter(route => route.availability === 'active').map(route => [route.id] as const))(
+    'accepts every previously executable route: %s', id => {
+      const route = previous.routes.find(entry => entry.id === id)!
+      const sourceAsset = previous.assets.find(asset => asset.id === route.sourceAssetId)!
+      const destinationAsset = previous.assets.find(asset => asset.id === route.destinationAssetId)!
+      const plan = { ...oldPlan(), registryVersion: previous.version, protocol: route.protocol, route, sourceAsset, destinationAsset }
+      expect(resolveTransferRoute(DEFAULT_BRIDGE_REGISTRY, plan).route.id).toBe(id)
+    },
+  )
+
+  it('recovers a real preceding-registry prepared checkpoint without a wallet', async () => {
+    const saved = checkpoint()
+    saved.route.registryVersion = previous.version
+    const progress = await createBridgeClient().recover({ checkpoint: saved })
+    expect(progress.next).toBe('resume')
+    expect(saved.route.registryVersion).toBe(previous.version)
+  })
+
+  it('documents that an old registry rejects a new checkpoint even on unchanged routes', async () => {
+    const saved = checkpoint()
+    saved.route.registryVersion = DEFAULT_BRIDGE_REGISTRY.version
+    await expect(createBridgeClient({ registry: previous }).recover({ checkpoint: saved })).rejects.toThrow(/checkpoint.*route/i)
   })
 })

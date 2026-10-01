@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import type { SolanaHyperlaneRouteMetadata } from '../../src/types/solana.js'
+import type { SolanaHyperlaneRouteMetadata, SolanaHyperlaneSplRouteMetadata } from '../../src/types/solana.js'
 import { buildTransferRemoteInstruction } from '../../src/solana/transferRemote.js'
 
 const fixture = JSON.parse(
@@ -94,7 +94,7 @@ describe('buildTransferRemoteInstruction', () => {
 
   it('reproduces the observed ZEC SPL-collateral instruction byte-for-byte', async () => {
     const accounts = splFixture.accounts
-    const metadata: SolanaHyperlaneRouteMetadata = {
+    const metadata: SolanaHyperlaneSplRouteMetadata = {
       routerType: 'spl-collateral',
       warpProgramAddress: splFixture.warpProgramAddress,
       tokenPda: accounts[2]!.address,

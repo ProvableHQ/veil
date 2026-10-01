@@ -1,8 +1,8 @@
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type { BridgeRegistry } from '../types/protocol.js'
-import type { SolanaHyperlaneRouteMetadata } from '../types/solana.js'
+import type { SolanaHyperlaneTransferMetadata } from '../types/solana.js'
 
-// Common `SolanaHyperlaneRouteMetadata` fields an active Solana-source
+// Common `SolanaHyperlaneTransferMetadata` fields an active Solana-source
 // Hyperlane route must carry. Collateral-specific fields are checked below.
 // `igpOverheadAccount` is intentionally excluded:
 // it is optional on the type, present only when the reviewed deployment
@@ -22,11 +22,11 @@ const REQUIRED_SOLANA_HYPERLANE_METADATA_FIELDS = [
   'registryCommit',
   'solanaReviewedAt',
   'solanaConfigSource',
-] as const satisfies readonly (keyof SolanaHyperlaneRouteMetadata)[]
+] as const satisfies readonly (keyof SolanaHyperlaneTransferMetadata)[]
 
 /**
  * Reports whether route metadata carries every required
- * `SolanaHyperlaneRouteMetadata` field with the expected primitive type.
+ * `SolanaHyperlaneTransferMetadata` field with the expected primitive type.
  *
  * Checks only the supplied field names and primitive types; format-level
  * validation (address charset, digit strings, and commit hash format) is the
@@ -58,7 +58,7 @@ function hasCompleteSolanaHyperlaneMetadata(
  * Duplicate identifiers and dangling asset or chain references throw before a
  * client can describe a misleading transfer. An active Hyperlane route sourced
  * from a Solana-family chain additionally must carry a complete
- * `SolanaHyperlaneRouteMetadata` object, so a route cannot be made active ahead
+ * `SolanaHyperlaneTransferMetadata` object, so a route cannot be made active ahead
  * of its metadata being reviewed and filled in. Validation does not contact a
  * chain or bridge provider.
  *

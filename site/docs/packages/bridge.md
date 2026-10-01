@@ -81,7 +81,5 @@ complete execution deployment has not been pinned yet. Applications MUST NOT
 execute them until a reviewed registry marks them active.
 
 BAT, USDG, and ZEC are active in both directions between Aleo and Solana. BAT
-and ZEC use classic SPL Token accounts, while USDG uses Token-2022. A known
-relayer bug currently prevents Aleo-to-Solana destination completion even
-though the SDK can build and submit the source transfer; applications should
-surface that delivery limitation until the relayer fix is deployed.
+and ZEC use classic SPL Token accounts, while USDG uses Token-2022.
+The SDK tracks Aleo-to-Solana delivery through the recipient's associated token account.

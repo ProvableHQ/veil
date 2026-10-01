@@ -24,15 +24,14 @@ export type SolanaRpcConfig = {
 }
 
 /**
- * Captures the reviewed metadata required to dispatch a Solana Hyperlane Warp Route transfer.
+ * Captures the reviewed metadata required to dispatch a native SOL Hyperlane transfer.
+ *
+ * Preserves the native-only public contract. Transfers that can also use SPL
+ * collateral accept `SolanaHyperlaneTransferMetadata`.
  *
  * @property warpProgramAddress Deployed Solana Warp Route program handling the transfer instruction.
  * @property tokenPda Program-derived address holding the route's token configuration.
- * @property routerType Collateral mechanism used by the route. Omitted means `native` for backwards compatibility.
- * @property nativeCollateralPda Program-derived address holding locked native SOL collateral. Required for native routes.
- * @property splTokenProgramAddress SPL Token or Token-2022 program that owns the collateral mint. Required for SPL-collateral routes.
- * @property collateralMintAddress Mint whose tokens are locked by an SPL-collateral route.
- * @property escrowPda Token account controlled by the warp program that holds locked SPL collateral.
+ * @property nativeCollateralPda Program-derived address holding locked native SOL collateral.
  * @property dispatchAuthorityPda Program-derived address authorizing Mailbox dispatch on behalf of the Warp Route.
  * @property mailboxProgramAddress Solana Hyperlane Mailbox program used by the reviewed deployment.
  * @property mailboxOutboxPda Program-derived address holding the Mailbox's outbox state.
@@ -50,19 +49,54 @@ export type SolanaRpcConfig = {
  * @property registryCommit Hyperlane Registry commit containing the deployment snapshot.
  * @property solanaReviewedAt ISO 8601 timestamp of the last manual review of this deployment.
  * @property solanaConfigSource Identifies where the reviewed configuration values were sourced from.
+ * @example
+ * function nativeCollateral(metadata: SolanaHyperlaneRouteMetadata): string {
+ *   return metadata.nativeCollateralPda
+ * }
  */
-export type SolanaHyperlaneRouteMetadata = SolanaHyperlaneCommonRouteMetadata & (
-  | {
-    routerType?: 'native' | undefined
-    nativeCollateralPda: string
-  }
-  | {
-    routerType: 'spl-collateral'
-    splTokenProgramAddress: string
-    collateralMintAddress: string
-    escrowPda: string
-  }
-)
+export type SolanaHyperlaneRouteMetadata = SolanaHyperlaneCommonRouteMetadata & {
+  nativeCollateralPda: string
+}
+
+/**
+ * Captures the reviewed metadata required to dispatch SPL collateral through Hyperlane.
+ *
+ * Shares the Warp Route, Mailbox, and IGP accounts with native metadata and
+ * requires the SPL-specific accounts for classic SPL Token or Token-2022.
+ *
+ * @property routerType Identifies SPL collateral so transfer builders select token accounts.
+ * @property splTokenProgramAddress SPL Token or Token-2022 program that owns the collateral mint.
+ * @property collateralMintAddress Mint whose tokens are locked by the route.
+ * @property escrowPda Token account controlled by the warp program that holds locked collateral.
+ * @example
+ * function collateralMint(metadata: SolanaHyperlaneSplRouteMetadata): string {
+ *   return metadata.collateralMintAddress
+ * }
+ */
+export type SolanaHyperlaneSplRouteMetadata = SolanaHyperlaneCommonRouteMetadata & {
+  routerType: 'spl-collateral'
+  splTokenProgramAddress: string
+  collateralMintAddress: string
+  escrowPda: string
+}
+
+/**
+ * Selects native SOL or SPL collateral metadata for a Solana Hyperlane transfer.
+ *
+ * Accepts existing native metadata without a discriminator. Checking
+ * `routerType` narrows the required collateral accounts before building an instruction.
+ *
+ * @property routerType Identifies the collateral mechanism. Omitted means native SOL.
+ * @example
+ * function collateralAddress(metadata: SolanaHyperlaneTransferMetadata): string {
+ *   return metadata.routerType === 'spl-collateral'
+ *     ? metadata.collateralMintAddress
+ *     : metadata.nativeCollateralPda
+ * }
+ */
+export type SolanaHyperlaneTransferMetadata =
+  | (SolanaHyperlaneRouteMetadata & { routerType?: 'native' | undefined })
+  | SolanaHyperlaneSplRouteMetadata
 
 type SolanaHyperlaneCommonRouteMetadata = {
   warpProgramAddress: string

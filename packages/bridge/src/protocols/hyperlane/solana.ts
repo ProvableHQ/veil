@@ -13,7 +13,7 @@ import { extractSolanaHyperlaneMessageId } from '../../solana/extractHyperlaneMe
 import type { BridgeRegistry, BridgeReceipt } from '../../types/protocol.js'
 import type {
   ExecuteSolanaHyperlaneTransferParameters,
-  SolanaHyperlaneRouteMetadata,
+  SolanaHyperlaneTransferMetadata,
   SolanaHyperlaneTransferExecution,
   SolanaHyperlaneTransferQuote,
   QuoteSolanaHyperlaneTransferParameters,
@@ -174,7 +174,7 @@ function buildReceipt(
   status: Extract<BridgeReceipt['status'], 'SOURCE_CONFIRMING' | 'DELIVERY_PENDING'>,
   signature: string,
   routeId: string,
-  metadata: SolanaHyperlaneRouteMetadata,
+  metadata: SolanaHyperlaneTransferMetadata,
   uniqueMessageAddress: string,
   quote: SolanaHyperlaneTransferQuote,
   blockhash: string,

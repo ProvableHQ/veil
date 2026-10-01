@@ -80,9 +80,14 @@ be quoted or executed.
 BAT, USDG, and ZEC use SPL-collateral warp routes on Solana. BAT and ZEC use
 the classic SPL Token program; USDG uses Token-2022. The SDK can build and
 submit both Solana-to-Aleo and Aleo-to-Solana transfers and tracks delivery by
-the recipient's associated token account. Aleo-to-Solana delivery currently
-depends on a pending relayer bug fix; source submission can succeed before a
-relayer is able to complete the destination transaction.
+the recipient's associated token account.
+
+`SolanaHyperlaneRouteMetadata` retains its native SOL fields, including the
+required `nativeCollateralPda`. SPL integrations use `SolanaHyperlaneSplRouteMetadata`;
+code that accepts both kinds uses `SolanaHyperlaneTransferMetadata` and narrows
+on `routerType === 'spl-collateral'`. `BuildTransferRemoteParameters` defaults to
+native metadata; its optional type parameter accepts either new metadata type.
+Existing native callers do not need a discriminator or other changes.
 
 ## Redeem Aleo USDCx on Arc
 
@@ -460,6 +465,12 @@ await bridge.execute({
 
 After a restart, `recover` reconstructs the plan and checks existing network or
 provider state. It never signs, submits, or repeats a transaction.
+
+Upgrade recovery services before deploying applications that write checkpoints
+with a newer registry version. The current SDK accepts unchanged routes from
+reviewed prior registry snapshots; older SDKs reject checkpoints written with the
+new registry version. Keep saved checkpoints intact rather than rewriting their
+version labels.
 
 ```ts
 const checkpoint = JSON.parse(localStorage.getItem('bridge-checkpoint')!)

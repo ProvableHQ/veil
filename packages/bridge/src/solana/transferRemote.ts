@@ -1,6 +1,6 @@
 import { hexToBytes } from 'viem'
 import { BridgeError } from '../errors/bridgeErrors.js'
-import type { SolanaHyperlaneRouteMetadata } from '../types/solana.js'
+import type { SolanaHyperlaneRouteMetadata, SolanaHyperlaneTransferMetadata } from '../types/solana.js'
 import { aleoAddressToBytes32 } from '../utils/xreserve.js'
 import { loadKit } from './kit.js'
 
@@ -44,15 +44,22 @@ export type SolanaAccountMeta = {
 /**
  * Selects the route, parties, and amount for one Sealevel `TransferRemote` instruction.
  *
+ * @typeParam Metadata Reviewed collateral metadata. Defaults to native SOL metadata; use `SolanaHyperlaneSplRouteMetadata` for SPL collateral or `SolanaHyperlaneTransferMetadata` for either kind.
  * @property metadata Reviewed static accounts and domain for the Solana Hyperlane Warp Route.
  * @property senderAddress Base58 address of the wallet funding the transfer; signs and pays rent.
  * @property uniqueMessageAddress Base58 address of a fresh, caller-supplied signer that seeds the
  * dispatched-message and gas-payment program-derived addresses and proves transaction uniqueness.
  * @property recipientAleoAddress Aleo `aleo1…` address receiving the transfer on the destination chain.
  * @property amountLamports Source amount in atomic units; lamports for native SOL and mint units for SPL collateral.
+ * @example
+ * function nativeCollateral(params: BuildTransferRemoteParameters): string {
+ *   return params.metadata.nativeCollateralPda
+ * }
  */
-export type BuildTransferRemoteParameters = {
-  metadata: SolanaHyperlaneRouteMetadata
+export type BuildTransferRemoteParameters<
+  Metadata extends SolanaHyperlaneTransferMetadata = SolanaHyperlaneRouteMetadata,
+> = {
+  metadata: Metadata
   senderAddress: string
   uniqueMessageAddress: string
   recipientAleoAddress: string
@@ -160,8 +167,28 @@ function writeU256LE(bytes: Uint8Array, offset: number, value: bigint): void {
  *   amountLamports: 1_000_000_000n,
  * })
  */
-export async function buildTransferRemoteInstruction(
+export function buildTransferRemoteInstruction(
+  params: BuildTransferRemoteParameters<SolanaHyperlaneTransferMetadata>,
+): Promise<{ programAddress: string; accounts: SolanaAccountMeta[]; data: Uint8Array }>
+/**
+ * Builds an unsigned native SOL transfer instruction without network or wallet access.
+ *
+ * Keeps the native overload last so `Parameters<typeof buildTransferRemoteInstruction>`
+ * exposes the existing native parameter contract. SPL callers use the preceding overload.
+ *
+ * @param params Native collateral accounts, transfer parties, and the amount in lamports.
+ * @returns The Warp Route program, ordered accounts, and encoded instruction data.
+ * @throws BridgeError When the amount exceeds the unsigned 256-bit range or the recipient is invalid.
+ * @example
+ * function buildNative(params: BuildTransferRemoteParameters) {
+ *   return buildTransferRemoteInstruction(params)
+ * }
+ */
+export function buildTransferRemoteInstruction(
   params: BuildTransferRemoteParameters,
+): Promise<{ programAddress: string; accounts: SolanaAccountMeta[]; data: Uint8Array }>
+export async function buildTransferRemoteInstruction(
+  params: BuildTransferRemoteParameters<SolanaHyperlaneTransferMetadata>,
 ): Promise<{ programAddress: string; accounts: SolanaAccountMeta[]; data: Uint8Array }> {
   const { metadata } = params
   const kit = await loadKit()
