@@ -42,6 +42,6 @@
     "access": "public"
   },
   "devDependencies": {
-    "@provablehq/aleo-types": "1.0.0"
+    "@provablehq/aleo-types": "1.0.1"
   }
 }
