@@ -8,6 +8,8 @@
 
   Peer ranges on `@provablehq/veil-core` and `@provablehq/veil-aleo-devnode` now start at 0.12.0.
 
+  The wallet adapter dependencies move from the deprecated `@provablehq/aleo-wallet-adaptor-*` packages to their renamed successors `@provablehq/aleo-wallet-adapter-*` (core 1.1.1, react 1.3.0, shield 1.2.1, leo/puzzle/fox 1.1.1). Exported symbol names are unchanged; a consumer MUST replace every `aleo-wallet-adaptor-` import and dependency with `aleo-wallet-adapter-` in the same change, because a provider from one package name cannot supply context to hooks from the other. The optional peer on `@provablehq/veil-aleo-wallet-adapter` is now `@provablehq/aleo-wallet-adapter-core`. The renamed react adapter accepts React 19 as a peer.
+
 ### Patch Changes
 
 - Updated dependencies

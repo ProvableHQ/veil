@@ -1,6 +1,6 @@
 ---
 name: update-dependencies
-description: Check the four upstream Aleo dependency streams (@provablehq/sdk on npm, ProvableHQ/leo releases, @provablehq/aleo-devnode on npm, and the @provablehq/aleo-wallet-adaptor-* packages from aleo-dev-toolkit) for new versions, apply the updates, re-run the affected integration tests, and fix whatever the bumps break. Use when asked to update, bump, or check Aleo/Provable dependencies or toolchain versions.
+description: Check the four upstream Aleo dependency streams (@provablehq/sdk on npm, ProvableHQ/leo releases, @provablehq/aleo-devnode on npm, and the @provablehq/aleo-wallet-adapter-* packages from aleo-dev-toolkit) for new versions, apply the updates, re-run the affected integration tests, and fix whatever the bumps break. Use when asked to update, bump, or check Aleo/Provable dependencies or toolchain versions.
 ---
 
 # Update Aleo dependency streams
@@ -115,12 +115,12 @@ and the toolchain action does not install it. `pnpm install` puts it in
    devnode changes its `CONSENSUS_VERSION_HEIGHTS` default expectations,
    update both mirrored lists.
 
-## 4. aleo-dev-toolkit adaptor packages (npm)
+## 4. aleo-dev-toolkit adapter packages (npm)
 
 The ProvableHQ/aleo-dev-toolkit monorepo publishes the
-`@provablehq/aleo-wallet-adaptor-*` packages consumed here.
+`@provablehq/aleo-wallet-adapter-*` packages consumed here.
 
-1. `npm view @provablehq/aleo-wallet-adaptor-core version` (and `-react`,
+1. `npm view @provablehq/aleo-wallet-adapter-core version` (and `-react`,
    `-shield`, `-leo`, `-puzzle`, `-fox`) vs the pins in
    `packages/react/package.json` (exact versions) and the peer ranges in
    `packages/wallet-adapter/package.json`.

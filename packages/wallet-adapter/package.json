@@ -34,16 +34,16 @@
   },
   "peerDependencies": {
     "@provablehq/veil-core": "workspace:>=0.12.0 <1.0.0",
-    "@provablehq/aleo-wallet-adaptor-core": "*"
+    "@provablehq/aleo-wallet-adapter-core": "*"
   },
   "peerDependenciesMeta": {
-    "@provablehq/aleo-wallet-adaptor-core": {
+    "@provablehq/aleo-wallet-adapter-core": {
       "optional": true
     }
   },
   "devDependencies": {
     "@provablehq/aleo-types": "1.0.0",
-    "@provablehq/aleo-wallet-adaptor-core": "1.0.1",
+    "@provablehq/aleo-wallet-adapter-core": "1.1.1",
     "@provablehq/aleo-wallet-standard": "1.0.0"
   }
 }

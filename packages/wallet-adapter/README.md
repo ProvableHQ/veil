@@ -19,11 +19,11 @@ The concrete wallet adapter packages are optional peers — install only the one
 for the wallets a developer supports:
 
 ```sh
-pnpm add @provablehq/aleo-wallet-adaptor-core   # base adapter class
-pnpm add @provablehq/aleo-wallet-adaptor-leo    # e.g. Leo
+pnpm add @provablehq/aleo-wallet-adapter-core   # base adapter class
+pnpm add @provablehq/aleo-wallet-adapter-leo    # e.g. Leo
 ```
 
-`@provablehq/aleo-wallet-adaptor-core` is an optional peer, so nothing in this
+`@provablehq/aleo-wallet-adapter-core` is an optional peer, so nothing in this
 package statically imports it — `fromWalletAdapter` works on any object matching
 the adapter shape.
 
@@ -35,7 +35,7 @@ Connect a wallet adapter, then hand it to `fromWalletAdapter` to get a Veil
 through `fallback()` so read methods (`getBlock`, `getBalance`) still resolve.
 
 ```ts
-import { LeoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-leo'
+import { LeoWalletAdapter } from '@provablehq/aleo-wallet-adapter-leo'
 import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 import { createWalletClient, http, fallback } from '@provablehq/veil-core'
 

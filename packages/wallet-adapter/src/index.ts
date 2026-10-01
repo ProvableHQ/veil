@@ -1,12 +1,12 @@
 /**
  * @provablehq/veil-aleo-wallet-adapter
  *
- * Wraps @provablehq/aleo-wallet-adaptor-core into veil's
+ * Wraps @provablehq/aleo-wallet-adapter-core into veil's
  * Account and Transport interfaces.
  *
  * Usage with any wallet adapter (Leo, Puzzle, Fox, Shield):
  *
- *   import { LeoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-leo'
+ *   import { LeoWalletAdapter } from '@provablehq/aleo-wallet-adapter-leo'
  *   import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
  *   import { createWalletClient, http, fallback } from '@provablehq/veil-core'
  *
@@ -28,22 +28,22 @@ import type { Network, RpcAccount, Transport, TransactionStatusResponse, TxHisto
 import type { TransactionOptions, TransactionInput } from '@provablehq/aleo-types'
 import type { AleoDeployment } from '@provablehq/aleo-wallet-standard'
 import type { RecordStatusFilter } from '@provablehq/veil-core'
-import type { BaseAleoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-core'
+import type { BaseAleoWalletAdapter } from '@provablehq/aleo-wallet-adapter-core'
 
 // Re-export useful types so consumers don't need extra imports
 export type { TransactionOptions } from '@provablehq/aleo-types'
 export type { Network, TransactionStatusResponse, TxHistoryResult } from '@provablehq/veil-core'
-export type { BaseAleoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-core'
+export type { BaseAleoWalletAdapter } from '@provablehq/aleo-wallet-adapter-core'
 
 // Re-export the privacy-feature types (Veil mirrors) so consumers can import them
 // from the wallet-adapter boundary alongside fromWalletAdapter.
 //
 // The upstream error classes (WalletAddressWithheldError, etc.) are deliberately
-// NOT re-exported here: @provablehq/aleo-wallet-adaptor-core is an OPTIONAL peer
+// NOT re-exported here: @provablehq/aleo-wallet-adapter-core is an OPTIONAL peer
 // dependency, and a value re-export would compile to a static runtime import,
 // breaking consumers who use fromWalletAdapter without installing -core. Consumers
 // that need to catch those classes import them from
-// @provablehq/aleo-wallet-adaptor-core directly.
+// @provablehq/aleo-wallet-adapter-core directly.
 export type {
   TransactionInput,
   InputRequest,
@@ -56,7 +56,7 @@ export type {
 
 // --------------------------------------------------------------------------
 // Wallet adapter interface — matches BaseAleoWalletAdapter from
-// @provablehq/aleo-wallet-adaptor-core
+// @provablehq/aleo-wallet-adapter-core
 // --------------------------------------------------------------------------
 
 /**

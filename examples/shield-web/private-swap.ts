@@ -12,7 +12,7 @@
  * `claim` once the chain has computed the output.
  *
  * Wire `shieldPrivateSwap()` to a button in a dApp (it needs a user gesture to
- * open the wallet). Requires `@provablehq/aleo-wallet-adaptor-shield` and the
+ * open the wallet). Requires `@provablehq/aleo-wallet-adapter-shield` and the
  * Shield extension installed in the browser.
  */
 
@@ -25,7 +25,7 @@ import {
   type InputRequest,
 } from '@provablehq/veil-core'
 import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
-import { ShieldWalletAdapter } from '@provablehq/aleo-wallet-adaptor-shield'
+import { ShieldWalletAdapter } from '@provablehq/aleo-wallet-adapter-shield'
 import { Network } from '@provablehq/aleo-types'
 import { WalletDecryptPermission } from '@provablehq/aleo-wallet-standard'
 import { shieldSwapActions, SHIELD_SWAP_ALGORITHM_GRANTS } from '@provablehq/shield-swap-sdk'
