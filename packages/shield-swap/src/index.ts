@@ -361,3 +361,6 @@ export {
 } from './utils/detectTokenStandard.js'
 
 export { shieldSwapFreezelistGrants, type ShieldSwapFreezelistGrantsParameters } from './utils/freezelistGrants.js'
+
+export { planInventory, type PlanInventoryParameters } from './actions/inventory/planInventory.js'
+export { rebalanceInventory, type RebalanceInventoryParameters } from './actions/inventory/rebalanceInventory.js'

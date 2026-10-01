@@ -35,7 +35,8 @@
   },
   "dependencies": {
     "@provablehq/shield-swap-sdk": "workspace:^",
-    "@provablehq/veil-aleo-sdk": "workspace:^"
+    "@provablehq/veil-aleo-sdk": "workspace:^",
+    "@provablehq/veil-core": "workspace:^"
   },
   "keywords": [
     "aleo",
@@ -50,5 +51,8 @@
   ],
   "bugs": {
     "url": "https://github.com/ProvableHQ/veil/issues"
+  },
+  "optionalDependencies": {
+    "@provablehq/veil-cli": "workspace:^"
   }
 }

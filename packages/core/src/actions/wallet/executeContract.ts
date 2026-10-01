@@ -1,3 +1,6 @@
+import { management } from '../../inventory/internal.js'
+import { manageRecordSpend, withoutManagement } from '../../inventory/spending.js'
+import type { ProvingProgressHandler } from '../../types/proving.js'
 import { AccountNotFoundError, ProvingNotConfiguredError } from '../../errors/errors.js'
 import type { Client } from '../../clients/createClient.js'
 import type { RawExecuteResult } from '../../types/proving.js'
@@ -22,6 +25,7 @@ import { extractTransitions } from '../../utils/extractTransitions.js'
  *   client's record provider; callers do not supply one.
  * @property programSource Optional program source to prove against instead of
  *   fetching it from the chain. Local-proving path only.
+ * @property onProgress Optional awaited proving/submission checkpoints. Defaults to no reporting.
  * @property imports Program id → source for programs reached via dynamic dispatch
  *   that can't be discovered statically. Static imports are auto-discovered. The RPC
  *   path forwards only the ids; the wallet resolves the sources itself.
@@ -34,6 +38,7 @@ export type ExecuteContractParameters = {
   privateFee?: boolean
   programSource?: string
   imports?: Record<string, string>
+  onProgress?: ProvingProgressHandler
 }
 
 /** Transaction id plus per-transition outputs of the confirmed execution. */
@@ -75,6 +80,11 @@ export async function executeContract(
   client: Client,
   params: ExecuteContractParameters,
 ): Promise<ExecuteContractReturnType> {
+  if (management(client)) {
+    const snapshot = { ...params, inputs: params.inputs.map((input) => typeof input === 'string' ? input : { ...input }) }
+    return manageRecordSpend(client, snapshot, (onProgress) =>
+      executeContract(withoutManagement(client), { ...snapshot, onProgress }))
+  }
   const account = client.account
   if (!account || !('sign' in account)) {
     throw new AccountNotFoundError()
@@ -95,8 +105,12 @@ export async function executeContract(
       },
     }) as string
 
+    await params.onProgress?.({ type: 'transaction-submitted', transactionId: txId })
+
     // 2. Wait for chain confirmation via the same transport.
     const confirmedTx = await waitForConfirmation(client, txId)
+
+    await params.onProgress?.({ type: 'transaction-confirmed', transactionId: txId })
 
     // 3. Walk transitions; no decryptor (see docstring).
     const { transitions, outputs } = extractTransitions(confirmedTx)
@@ -117,6 +131,7 @@ export async function executeContract(
         privateFee: params.privateFee,
         programSource: params.programSource,
         programImports: params.imports,
+        ...(params.onProgress ? { onProgress: params.onProgress } : {}),
       })
     }
 

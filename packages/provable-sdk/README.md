@@ -160,3 +160,14 @@ const proof = await sdk.generateFreezelistProof({ address, tree, root })
 The resulting string can be passed to an ARC-22 transfer or bridge proof input.
 SDK-created proving configs expose the same generator to Shield Swap, which
 resolves and caches witnesses automatically for local and delegated proving.
+
+## Inventory scanning and proving
+
+Use `createRemoteScanner({ waitForSync: true })` with core's `recordActions` for
+inventory maintenance. Synchronization polling uses the existing SDK scanner;
+`syncTimeoutMs` defaults to 300000 milliseconds and `waitForSync` defaults to false
+for existing consumers. Both local and delegated execution honor an awaited
+`transaction-prepared` callback before submission, allowing an application to
+checkpoint a proved transaction. Storage is supplied by the application; SQLite
+belongs only to the separate Veil CLI. See the
+[inventory guide](../../site/docs/guides/record-inventory.md).

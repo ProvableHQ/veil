@@ -82,8 +82,12 @@ export type SimulateOptions = {
  *   the public credits balance. Defaults to false.
  * @property programSource Program source, when the caller already has it; fetched otherwise.
  * @property programImports Import program name → source, for imports the prover cannot fetch.
+ * @property onProgress Optional awaited checkpoint callback, absent by default. Implementations MUST
+ *   emit transaction-prepared with the full proved transaction before broadcasting when supplied.
  */
 export type ExecuteOptions = {
+  onProgress?: ProvingProgressHandler
+
   programName: string
   functionName: string
   inputs: string[]

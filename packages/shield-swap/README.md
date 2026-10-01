@@ -1347,3 +1347,12 @@ await client.collect({
 The CLI and agent/MCP write handlers use the SDK default generator. Existing
 providers remain compatible, including explicit legacy empty-witness providers
 for deployments that accept them. Omission now checks the actual current list.
+
+## Record inventory
+
+Apply core's `recordActions` before `shieldSwapActions` to coordinate maintenance
+with trading. `planInventory({ token, target })` and
+`rebalanceInventory({ token, target })` resolve the DEX token's underlying program
+and delegate to core's ARC20/ARC22/credits helpers. Participating clients must
+share the same store and chain identity. No database dependency is added to the
+SDK. See the [inventory guide](../../site/docs/guides/record-inventory.md).

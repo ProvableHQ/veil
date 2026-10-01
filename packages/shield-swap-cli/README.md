@@ -232,3 +232,12 @@ Existing CLI commands keep literal proof behavior. Populated compliance lists
 require a concrete proof provider in a customized SDK client; the all-zero
 legacy witness is not a general exclusion proof. Collection forwards the
 position's withdrawal address as the proof subject.
+
+## Share record reservations with inventory maintenance
+
+Set `VEIL_INVENTORY_DB` to the same journal path used by `veil inventory run`.
+The session applies core's `recordActions` before Shield Swap actions so trading
+and maintenance cannot reserve the same explicit record inputs. This optional
+CLI integration loads `@provablehq/veil-cli/storage` and requires Node 22.13+.
+Without the environment variable, the existing runtime path is unchanged.
+See the [Veil CLI reference](../cli/README.md) for policy configuration and recovery.

@@ -1,3 +1,5 @@
+import { management } from '../../inventory/internal.js'
+import { manageRecordSpend, withoutManagement } from '../../inventory/spending.js'
 import { AccountNotFoundError, ProvingNotConfiguredError } from '../../errors/errors.js'
 import type { Client } from '../../clients/createClient.js'
 import { assertNoInputRequests } from '../../types/inputRequest.js'
@@ -67,6 +69,11 @@ export async function writeContract(
   client: Client,
   params: WriteContractParameters,
 ): Promise<WriteContractReturnType> {
+  if (management(client)) {
+    const snapshot = { ...params, inputs: params.inputs.map((input) => typeof input === 'string' ? input : { ...input }) }
+    return manageRecordSpend(client, snapshot, (onProgress) =>
+      writeContract(withoutManagement(client), { ...snapshot, onProgress }))
+  }
   const account = client.account
   if (!account || !('sign' in account)) {
     throw new AccountNotFoundError()

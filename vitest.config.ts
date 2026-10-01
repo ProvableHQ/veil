@@ -26,6 +26,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@provablehq/veil-cli/storage': path.resolve(__dirname, 'packages/cli/src/storage.ts'),
       '@provablehq/veil-core/agent': path.resolve(__dirname, 'packages/core/src/agent/index.ts'),
       '@provablehq/veil-core/mcp': path.resolve(__dirname, 'packages/core/src/mcp/index.ts'),
       '@provablehq/veil-core': path.resolve(__dirname, 'packages/core/src/index.ts'),
