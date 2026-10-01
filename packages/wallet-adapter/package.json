@@ -43,7 +43,7 @@
   },
   "devDependencies": {
     "@provablehq/aleo-types": "1.0.0",
-    "@provablehq/aleo-wallet-adaptor-core": "1.0.0",
+    "@provablehq/aleo-wallet-adaptor-core": "1.0.1",
     "@provablehq/aleo-wallet-standard": "1.0.0"
   }
 }
