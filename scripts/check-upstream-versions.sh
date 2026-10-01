@@ -41,16 +41,16 @@ report 'aleo-devnode (root package.json)' "$devnode_pinned" "$devnode_latest"
 devnode_installed=$("$ROOT/node_modules/.bin/aleo-devnode" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo 'not installed')
 report 'aleo-devnode (installed)' "$devnode_installed" "$devnode_latest"
 
-# --- 4. aleo-dev-toolkit adaptor packages (npm) ---
+# --- 4. aleo-dev-toolkit adapter packages (npm) ---
 # Exact pins live in packages/react (wallet UIs) and packages/wallet-adapter
 # (-core dev dependency); wallet-adapter's "*" peer range is not a pin.
 for pkg in core react shield leo puzzle fox; do
-  latest=$(npm view "@provablehq/aleo-wallet-adaptor-$pkg" version 2>/dev/null || echo '?')
-  current=$(grep -ho "\"@provablehq/aleo-wallet-adaptor-$pkg\": \"[0-9][^\"]*\"" \
+  latest=$(npm view "@provablehq/aleo-wallet-adapter-$pkg" version 2>/dev/null || echo '?')
+  current=$(grep -ho "\"@provablehq/aleo-wallet-adapter-$pkg\": \"[0-9][^\"]*\"" \
     "$ROOT/packages/react/package.json" "$ROOT/packages/wallet-adapter/package.json" 2>/dev/null \
     | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo '')
   [ -z "$current" ] && current='unpinned'
-  report "aleo-wallet-adaptor-$pkg" "$current" "$latest"
+  report "aleo-wallet-adapter-$pkg" "$current" "$latest"
 done
 
 exit $STALE

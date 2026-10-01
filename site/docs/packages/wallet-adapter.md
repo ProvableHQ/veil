@@ -25,7 +25,7 @@ npm install @provablehq/veil-core @provablehq/veil-aleo-wallet-adapter
 ## Example
 
 ```ts
-import { LeoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-leo'
+import { LeoWalletAdapter } from '@provablehq/aleo-wallet-adapter-leo'
 import { fromWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 import { createWalletClient, http, fallback } from '@provablehq/veil-core'
 

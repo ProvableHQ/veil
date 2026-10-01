@@ -359,7 +359,7 @@ Core has zero hard dependencies. Adapter packages (`@provablehq/veil-aleo-wallet
 
 veil wraps these existing tools through its adapter packages:
 
-- **[Aleo Wallet Adapter](https://github.com/ProvableHQ/aleo-dev-toolkit/tree/master/packages/aleo-wallet-adaptor)** — Leo Wallet, Puzzle Wallet, Fox Wallet, Shield Mobile Wallet
+- **[Aleo Wallet Adapter](https://github.com/ProvableHQ/aleo-dev-toolkit/tree/master/packages/aleo-wallet-adapter)** — Leo Wallet, Puzzle Wallet, Fox Wallet, Shield Mobile Wallet
 - **[@provablehq/sdk](https://www.npmjs.com/package/@provablehq/sdk)** — WASM-based SDK for browser/node
 
 ## Actions Reference

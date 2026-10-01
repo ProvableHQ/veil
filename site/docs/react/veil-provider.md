@@ -97,7 +97,7 @@ one wallet:
 
 ```tsx
 import { VeilProvider } from '@provablehq/veil-aleo-react-hooks'
-import { ShieldWalletAdapter } from '@provablehq/aleo-wallet-adaptor-shield'
+import { ShieldWalletAdapter } from '@provablehq/aleo-wallet-adapter-shield'
 
 <VeilProvider wallets={[new ShieldWalletAdapter()]}>
   <App />

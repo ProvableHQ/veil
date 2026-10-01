@@ -8,7 +8,7 @@ import {
 
 /**
  * Creates a mock that matches the real BaseAleoWalletAdapter interface
- * from @provablehq/aleo-wallet-adaptor-core
+ * from @provablehq/aleo-wallet-adapter-core
  */
 function createMockAdapter(overrides?: Partial<AleoWalletAdapter>): AleoWalletAdapter {
   return {

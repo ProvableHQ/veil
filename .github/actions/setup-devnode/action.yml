@@ -31,11 +31,23 @@ runs:
     - name: Install leo
       if: steps.toolchain.outputs.cache-hit != 'true'
       shell: bash
+      env:
+        LEO_RELEASE: ${{ inputs.leo-release }}
       run: |
         mkdir -p ~/.aleo-tools
-        curl -fsSL -o /tmp/leo.zip \
-          "https://github.com/ProvableHQ/leo/releases/download/${{ inputs.leo-release }}/${{ inputs.leo-release }}-x86_64-unknown-linux-gnu.zip"
-        unzip -o /tmp/leo.zip -d ~/.aleo-tools
+        # Prefer the prebuilt release zip. The leo repo publishes the crate and
+        # the binaries from separate workflows, so a tag can be on crates.io
+        # while its GitHub release is missing or still building; fall back to
+        # building that exact version from crates.io so the pin stays usable.
+        asset="https://github.com/ProvableHQ/leo/releases/download/${LEO_RELEASE}/${LEO_RELEASE}-x86_64-unknown-linux-gnu.zip"
+        if curl -fsSL -o /tmp/leo.zip "$asset"; then
+          unzip -o /tmp/leo.zip -d ~/.aleo-tools
+        else
+          version="${LEO_RELEASE#leo-lang-v}"
+          echo "::warning::No prebuilt binary at ${asset}; building leo-lang ${version} from crates.io"
+          cargo install leo-lang --version "$version" --locked --root /tmp/leo-cargo
+          cp /tmp/leo-cargo/bin/leo ~/.aleo-tools/leo
+        fi
         chmod +x ~/.aleo-tools/leo
     - name: Add leo to PATH
       shell: bash

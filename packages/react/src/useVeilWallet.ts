@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useWallet } from '@provablehq/aleo-wallet-adaptor-react'
+import { useWallet } from '@provablehq/aleo-wallet-adapter-react'
 import {
   createPublicClient,
   createWalletClient,

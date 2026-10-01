@@ -1,6 +1,6 @@
 ---
 name: update-dependencies
-description: Check the four upstream Aleo dependency streams (@provablehq/sdk on npm, ProvableHQ/leo releases, @provablehq/aleo-devnode on npm, and the @provablehq/aleo-wallet-adaptor-* packages from aleo-dev-toolkit) for new versions, apply the updates, re-run the affected integration tests, and fix whatever the bumps break. Use when asked to update, bump, or check Aleo/Provable dependencies or toolchain versions.
+description: Check the four upstream Aleo dependency streams (@provablehq/sdk on npm, ProvableHQ/leo releases, @provablehq/aleo-devnode on npm, and the @provablehq/aleo-wallet-adapter-* packages from aleo-dev-toolkit) for new versions, apply the updates, re-run the affected integration tests, and fix whatever the bumps break. Use when asked to update, bump, or check Aleo/Provable dependencies or toolchain versions.
 ---
 
 # Update Aleo dependency streams
@@ -45,8 +45,7 @@ VEIL_INTEGRATION=1 pnpm vitest run --retry=2 \
   packages/core/test/integration/realApi.test.ts \
   packages/shield-swap/test/integration/reads.integration.test.ts \
   packages/shield-swap/test/integration/api.integration.test.ts \
-  packages/shield-swap/test/integration/traders.integration.test.ts \
-  packages/bridge/test/integration/api.integration.test.ts
+  packages/shield-swap/test/integration/traders.integration.test.ts
 ```
 
 ## 1. @provablehq/sdk (npm)
@@ -72,7 +71,11 @@ VEIL_INTEGRATION=1 pnpm vitest run --retry=2 \
 1. `gh release list -R ProvableHQ/leo --limit 1` vs `leo --version`.
 2. Install the new binary locally (release asset zip or
    `cargo install leo-lang`), then update the pinned `LEO_RELEASE` env in
-   `.github/workflows/ci.yml` to the new tag.
+   `.github/workflows/ci.yml` and `.github/workflows/claude-update-deps.yml`
+   to the new tag. The crate and the GitHub release publish from separate
+   workflows, so a version can be on crates.io before (or without) its
+   `leo-lang-v*` release; `.github/actions/setup-devnode` falls back to
+   `cargo install leo-lang --version <x.y.z>` when the release zip is missing.
 3. Run the devnode verification command.
 4. Known breakage patterns (all bit at 4.2→4.3):
    - Language syntax changes break the inline Leo sources in
@@ -112,12 +115,12 @@ and the toolchain action does not install it. `pnpm install` puts it in
    devnode changes its `CONSENSUS_VERSION_HEIGHTS` default expectations,
    update both mirrored lists.
 
-## 4. aleo-dev-toolkit adaptor packages (npm)
+## 4. aleo-dev-toolkit adapter packages (npm)
 
 The ProvableHQ/aleo-dev-toolkit monorepo publishes the
-`@provablehq/aleo-wallet-adaptor-*` packages consumed here.
+`@provablehq/aleo-wallet-adapter-*` packages consumed here.
 
-1. `npm view @provablehq/aleo-wallet-adaptor-core version` (and `-react`,
+1. `npm view @provablehq/aleo-wallet-adapter-core version` (and `-react`,
    `-shield`, `-leo`, `-puzzle`, `-fox`) vs the pins in
    `packages/react/package.json` (exact versions) and the peer ranges in
    `packages/wallet-adapter/package.json`.

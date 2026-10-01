@@ -5,7 +5,7 @@
  * (Leo Wallet, Puzzle, Fox, Shield). The wallet handles proving and signing —
  * the dApp just sends intents.
  *
- * In a real app, the wallet adapter comes from @provablehq/aleo-wallet-adaptor-leo
+ * In a real app, the wallet adapter comes from @provablehq/aleo-wallet-adapter-leo
  * or similar. Here we mock it to show the pattern without a browser.
  */
 
