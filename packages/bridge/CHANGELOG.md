@@ -1,5 +1,34 @@
 # @provablehq/aleo-bridge-sdk
 
+## 0.12.0
+
+### Minor Changes
+
+- 17a2631: Add Arc mainnet USDC-to-USDCx bridging using the current quote, execute, wait, resume, and complete lifecycle. Align example runners with network-loaded Aleo accounts, optional edge API-key authentication, and explicit preview/execution controls.
+
+  Add native USDC CCTP V2 routes from Ethereum, Base, and Arbitrum to Arc, with Fast/Standard fees, forwarding, and checkpoint recovery. Exhaustive protocol and result switches must handle `cctp` and `evm-cctp`. Add SDK-only Ethereum → Arc → Aleo and Arc → Aleo mainnet tests.
+
+  Use Circle’s version-0 forwarding frame for new CCTP burns, verified with Ethereum-to-Arc mainnet delivery. Preserve recovery of already-submitted version-1 burns.
+
+  Preserve saved pre-Arc plans and checkpoints for unchanged reviewed routes using pinned route fingerprints. Reject unknown versions and altered deployments. Document migration for the expanded protocol, quote, execution, destination-action, and quote-status unions.
+
+  Add a preview-first, checkpointed Base/Arbitrum → Arc → Aleo → Arc → origin example with public USDCx, explicit per-leg execution, received-amount accounting, and documented provider delivery observation limits.
+
+  Harden CCTP recovery with bounded destination-event discovery, stable terminal receipts, and explicit verified approval replacement with retained audit hashes. Normalize CCTP intent and validate route/chain domain agreement. Require explicit xReserve destination domains while preserving legacy Sepolia checkpoint recovery. Keep fee-ceiling defaults unchanged.
+
+- Move to the snarkVM 4.11.0 toolchain: `@provablehq/sdk` 0.12.0, `@provablehq/aleo-devnode` 0.3.0, and Leo 4.4.5. The default devnode consensus-heights list now has twenty-two entries and activates every live consensus version at genesis, so a devnode runs V21 (Varuna V3) from its first block; the SDK builds every deployment and execution against the latest Varuna version, and a node still on an earlier version rejects them. `ConsensusVersion::V22` stays a placeholder pinned to `u32::MAX`. A caller who passes an explicit `CONSENSUS_VERSION_HEIGHTS` MUST pass twenty-two heights or the WASM transaction builder panics, and MUST activate V21 by the first block that carries a transaction.
+
+  Peer ranges on `@provablehq/veil-core` and `@provablehq/veil-aleo-devnode` now start at 0.12.0.
+
+- 8678f0e: Add active BAT, USDG, and ZEC Hyperlane Warp Routes, including classic SPL Token and Token-2022 collateral transfers between Solana and Aleo, reviewed Aleo withdrawal metadata, and ARC-22 privacy wrappers.
+
+  Preserve the existing native Solana metadata and builder parameter types while adding named SPL and combined transfer metadata types.
+
+### Patch Changes
+
+- Updated dependencies
+  - @provablehq/veil-core@0.12.0
+
 ## 0.11.1
 
 ### Patch Changes
