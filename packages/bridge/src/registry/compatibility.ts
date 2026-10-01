@@ -98,8 +98,11 @@ function routeFingerprint(
  */
 export function isRegistryVersionCompatible(registry: BridgeRegistry, version: string, routeId: string): boolean {
   if (version === registry.version) return true
-  if (registry.version !== CURRENT_REGISTRY_VERSION) return false
   const legacy = version === LEGACY_REGISTRY_VERSION
+  // Preserve the previously supported legacy-to-September path for callers
+  // that pin that reviewed registry instead of adopting the latest snapshot.
+  if (registry.version !== CURRENT_REGISTRY_VERSION
+    && !(legacy && registry.version === PREVIOUS_REGISTRY_VERSION)) return false
   const expected = legacy
     ? LEGACY_ROUTE_HASHES[routeId]
     : version === PREVIOUS_REGISTRY_VERSION
