@@ -30,33 +30,12 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      # Repo deps plus the current toolchain, so the skill can run the devnode
+      # suites before and after any bump. When the skill bumps a binary, it
+      # installs the new release itself and updates the pins in ci.yml.
+      - uses: ./.github/actions/setup-devnode
         with:
-          version: 10
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      # The current toolchain, so the skill can run the devnode suites before
-      # and after any bump. When the skill bumps a binary, it installs the new
-      # release itself and updates the pins in ci.yml.
-      - name: Cache Aleo toolchain
-        id: toolchain
-        uses: actions/cache@v4
-        with:
-          path: ~/.aleo-tools
-          key: aleo-tools-${{ env.LEO_RELEASE }}
-      - name: Install leo
-        if: steps.toolchain.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ~/.aleo-tools
-          curl -fsSL -o /tmp/leo.zip \
-            "https://github.com/ProvableHQ/leo/releases/download/${LEO_RELEASE}/${LEO_RELEASE}-x86_64-unknown-linux-gnu.zip"
-          unzip -o /tmp/leo.zip -d ~/.aleo-tools
-          chmod +x ~/.aleo-tools/leo
-      - name: Add leo to PATH
-        run: echo "$HOME/.aleo-tools" >> "$GITHUB_PATH"
+          leo-release: ${{ env.LEO_RELEASE }}
       - name: Run the update-dependencies skill
         uses: anthropics/claude-code-action@v1
         with:

@@ -120,7 +120,9 @@ jobs:
   # Core devnode plumbing (deploy / execute / records / snapshots / codegen).
   devnode:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Headroom for a cold leo build when no prebuilt release asset exists; the
+    # cached binary makes later runs fast.
+    timeout-minutes: 60
     env:
       VEIL_DEVNODE_INTEGRATION: '1'
     steps:
@@ -142,7 +144,7 @@ jobs:
   # as its own job, in parallel with the core devnode job on a separate runner.
   devnode-shield-swap:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       VEIL_DEVNODE_INTEGRATION: '1'
     steps:

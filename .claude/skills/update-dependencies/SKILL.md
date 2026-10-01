@@ -71,7 +71,11 @@ VEIL_INTEGRATION=1 pnpm vitest run --retry=2 \
 1. `gh release list -R ProvableHQ/leo --limit 1` vs `leo --version`.
 2. Install the new binary locally (release asset zip or
    `cargo install leo-lang`), then update the pinned `LEO_RELEASE` env in
-   `.github/workflows/ci.yml` to the new tag.
+   `.github/workflows/ci.yml` and `.github/workflows/claude-update-deps.yml`
+   to the new tag. The crate and the GitHub release publish from separate
+   workflows, so a version can be on crates.io before (or without) its
+   `leo-lang-v*` release; `.github/actions/setup-devnode` falls back to
+   `cargo install leo-lang --version <x.y.z>` when the release zip is missing.
 3. Run the devnode verification command.
 4. Known breakage patterns (all bit at 4.2→4.3):
    - Language syntax changes break the inline Leo sources in
