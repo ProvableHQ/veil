@@ -142,8 +142,8 @@ importers:
   packages/core:
     devDependencies:
       '@provablehq/aleo-types':
-        specifier: 1.0.0
-        version: 1.0.0
+        specifier: 1.0.1
+        version: 1.0.1
 
   packages/devnode:
     dependencies:
@@ -178,8 +178,8 @@ importers:
   packages/react:
     dependencies:
       '@provablehq/aleo-types':
-        specifier: 1.0.0
-        version: 1.0.0
+        specifier: 1.0.1
+        version: 1.0.1
       '@provablehq/aleo-wallet-adapter-fox':
         specifier: 1.1.1
         version: 1.1.1
@@ -196,8 +196,8 @@ importers:
         specifier: 1.2.1
         version: 1.2.1
       '@provablehq/aleo-wallet-standard':
-        specifier: 1.0.0
-        version: 1.0.0
+        specifier: 1.3.0
+        version: 1.3.0
       '@provablehq/veil-aleo-wallet-adapter':
         specifier: workspace:*
         version: link:../wallet-adapter
@@ -250,14 +250,14 @@ importers:
         version: link:../core
     devDependencies:
       '@provablehq/aleo-types':
-        specifier: 1.0.0
-        version: 1.0.0
+        specifier: 1.0.1
+        version: 1.0.1
       '@provablehq/aleo-wallet-adapter-core':
         specifier: 1.1.1
         version: 1.1.1
       '@provablehq/aleo-wallet-standard':
-        specifier: 1.0.0
-        version: 1.0.0
+        specifier: 1.3.0
+        version: 1.3.0
 
 packages:
 
@@ -856,9 +856,6 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-  '@provablehq/aleo-types@1.0.0':
-    resolution: {integrity: sha512-r7yMj8q2EO74JrTXDUTcWiFP/wWJMUDBlkTuEN2dSJ3wDdrL/ys5JAMvCcAmOMYKDUIq+9NXQulQ56P+6KNIVg==}
-
   '@provablehq/aleo-types@1.0.1':
     resolution: {integrity: sha512-2IX2H01iTUBdSzPxQhSBsTYmmqB4emL0UBV+okRRstVe78q5spT6WGP6M0Z3V5wEtg2usH10JhF7z5/wdXsVxw==}
 
@@ -882,9 +879,6 @@ packages:
 
   '@provablehq/aleo-wallet-adapter-shield@1.2.1':
     resolution: {integrity: sha512-mgSHjuOIRqAetskDxYn2oeyNUqqql3kVll+TUiPmnc7xgJ90eNJwHsPzoMJ3XsZxpwsPOed7CRv03aGP9YIygg==}
-
-  '@provablehq/aleo-wallet-standard@1.0.0':
-    resolution: {integrity: sha512-3QVgBd9Mq0y769VRj6a5FIzWEI5TPQ2CzwgpMurq8JwHxKLRry9Zze0XF92dWAqE6ILvvPCew3pwapC8gerYQA==}
 
   '@provablehq/aleo-wallet-standard@1.3.0':
     resolution: {integrity: sha512-AcDtvKB4Iy1XvylYPmE8tW3e2WMkhbHfCegxoJ52cAvh2sW9KfbPKQRUytmHOOBU30l8Mj1houbpZkPAl37IDg==}
@@ -3168,8 +3162,6 @@ snapshots:
       '@provablehq/aleo-devnode-linux-x64': 0.3.0
       '@provablehq/aleo-devnode-win32-x64': 0.3.0
 
-  '@provablehq/aleo-types@1.0.0': {}
-
   '@provablehq/aleo-types@1.0.1': {}
 
   '@provablehq/aleo-wallet-adapter-core@1.1.1':
@@ -3219,11 +3211,6 @@ snapshots:
       '@provablehq/aleo-wallet-standard': 1.3.0
       centrifuge: 5.7.4
       eciesjs: 0.4.18
-
-  '@provablehq/aleo-wallet-standard@1.0.0':
-    dependencies:
-      '@provablehq/aleo-types': 1.0.0
-      eventemitter3: 5.0.4
 
   '@provablehq/aleo-wallet-standard@1.3.0':
     dependencies:
