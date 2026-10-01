@@ -11,7 +11,7 @@ import { loadLiveState, saveLiveState } from '../helpers.js'
 
 const ABI = parseAbi(['function balanceOf(address owner) view returns (uint256)'])
 const networks = {
-  ethereum: { chain: mainnet, rpc: 'https://ethereum-rpc.publicnode.com', amount: '2.75', maxFee: '2.5' },
+  ethereum: { chain: mainnet, rpc: 'https://ethereum-rpc.publicnode.com', amount: '2.75', maxFee: '2.7' },
   base: { chain: base, rpc: 'https://mainnet.base.org', amount: '0.25', maxFee: '0.1' },
   arbitrum: { chain: arbitrum, rpc: 'https://arb1.arbitrum.io/rpc', amount: '0.25', maxFee: '0.15' },
 } as const

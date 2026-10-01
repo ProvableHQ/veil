@@ -88,6 +88,8 @@ and any of `cctp-roundtrip-ethereum`, `cctp-roundtrip-base`, or
 out and returns only the attested net amount received. Both legs use forwarding
 and verify the exact mint plus recipient balance increase through the SDK.
 
+The Ethereum outbound fee cap is 2.70 USDC; execution still tightens the fee to
+the live quote plus 5% and 0.001 USDC, within that cap.
 The configured outbound amounts are 2.75 USDC for Ethereum and 0.25 USDC each
 for Base and Arbitrum. Every new leg chooses a ceiling close to the live fee
 estimate, within the scenario's absolute budget. Forwarding may spend the full
