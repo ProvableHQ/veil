@@ -122,7 +122,7 @@ describe('prepare', () => {
     })).toThrow(/conflicts/)
   })
 
-  it('prepares Hyperlane token approval only on non-Aleo token sources', () => {
+  it('prepares Hyperlane token approval only on EVM token sources', () => {
     const inbound = prepare(DEFAULT_BRIDGE_REGISTRY, {
       source: { chain: 'ethereum', asset: 'wbtc' },
       destination: { chain: 'aleo', asset: 'wbtc' },
@@ -143,6 +143,17 @@ describe('prepare', () => {
     expect(outbound.steps.map((step) => step.kind)).toEqual([
       'dispatch', 'wait-delivery', 'confirm-delivery',
     ])
+
+    const solana = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'solana', asset: 'zec' },
+      destination: { chain: 'aleo', asset: 'zec' },
+      amount: '0.0001',
+      recipient: ALEO_RECIPIENT,
+    })
+    expect(solana.steps.map((step) => step.kind)).toEqual([
+      'dispatch', 'wait-delivery', 'confirm-delivery',
+    ])
+    expect(solana.steps[0]?.executor).toBe('solana-wallet')
   })
 
   it('rejects invalid amounts and recipients', () => {

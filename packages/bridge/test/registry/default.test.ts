@@ -4,6 +4,10 @@ import { validateBridgeRegistry } from '../../src/registry/validate.js'
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 
 describe('DEFAULT_BRIDGE_REGISTRY', () => {
+  it('uses a distinct version for the BAT, USDG, and ZEC topology', () => {
+    expect(DEFAULT_BRIDGE_REGISTRY.version).toBe('2026-09-30.hyperlane-bat-usdg-zec.1')
+  })
+
   it.each([
     ['ethereum', 1, 0, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'],
     ['base', 8453, 6, '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'],
@@ -85,18 +89,17 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
   })
 
   it('pins executable Ethereum Hyperlane routes to a reviewed registry commit', () => {
-    const inboundAssets = new Set(['ethereum/eth', 'ethereum/wbtc', 'ethereum/usdt', 'ethereum/bat', 'ethereum/usdg'])
+    const inboundAssets = new Set(['ethereum/eth', 'ethereum/wbtc', 'ethereum/usdt'])
     const inbound = DEFAULT_BRIDGE_REGISTRY.routes.filter((route) =>
       route.protocol === 'hyperlane' && inboundAssets.has(route.sourceAssetId))
     expect(inbound.map((route) => route.sourceAssetId)).toEqual(expect.arrayContaining([
       'ethereum/eth',
       'ethereum/wbtc',
       'ethereum/usdt',
-      'ethereum/bat',
-      'ethereum/usdg',
     ]))
     expect(inbound.every((route) => route.availability === 'active')).toBe(true)
-    expect(inbound.every((route) => typeof route.metadata?.registryCommit === 'string')).toBe(true)
+    expect(inbound.every((route) =>
+      route.metadata?.registryCommit === '2621c16f2db1ccb46643265c110dac5ca2c7c51a')).toBe(true)
   })
 
   it('registers BAT, USDG, and ZEC against their pinned Aleo and collateral deployments', () => {

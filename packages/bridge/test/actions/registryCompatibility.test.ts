@@ -13,7 +13,12 @@ import type { BridgeCheckpoint, BridgeRegistry } from '../../src/types/protocol.
 // Captured from main at 044fdcdede0adc53ef4d49836707bbbf9f12cd82,
 // before Arc/CCTP were added. Do not regenerate from the current registry.
 const legacy = validateBridgeRegistry({ ...DEFAULT_BRIDGE_REGISTRY, ...snapshot } as unknown as BridgeRegistry)
+const previous = validateBridgeRegistry({
+  ...DEFAULT_BRIDGE_REGISTRY,
+  version: '2026-09-28.cctp-arc.1',
+})
 const recipient = '0x0000000000000000000000000000000000000001'
+const ALEO_RECIPIENT = 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n'
 const oldPlan = () => prepare(legacy, {
   source: { chain: 'aleo', asset: 'usdcx' }, destination: { chain: 'ethereum', asset: 'usdc' },
   amount: '2.5', recipient,
@@ -86,5 +91,59 @@ describe('pre-Arc registry upgrades', () => {
     expect(() => resolveTransferRoute(DEFAULT_BRIDGE_REGISTRY, { ...oldPlan(), registryVersion: 'unknown' })).toThrow()
     const plan = prepare(DEFAULT_BRIDGE_REGISTRY, { source: { chain: 'arc', asset: 'usdc' }, destination: { chain: 'ethereum', asset: 'usdc' }, amount: '2', recipient })
     expect(() => resolveTransferRoute(DEFAULT_BRIDGE_REGISTRY, { ...plan, registryVersion: legacy.version })).toThrow()
+  })
+})
+
+describe('BAT, USDG, and ZEC registry upgrade', () => {
+  it.each([
+    ['xreserve', 'ethereum', 'usdc', 'aleo', 'usdcx', '25', ALEO_RECIPIENT],
+    ['cctp', 'ethereum', 'usdc', 'arc', 'usdc', '25', recipient],
+    ['hyperlane', 'ethereum', 'bat', 'aleo', 'bat', '1', ALEO_RECIPIENT],
+  ] as const)('accepts an unchanged %s route from the preceding snapshot', (
+    bridgeProtocol,
+    sourceChain,
+    sourceAsset,
+    destinationChain,
+    destinationAsset,
+    amount,
+    destinationRecipient,
+  ) => {
+    const plan = prepare(previous, {
+      source: { chain: sourceChain, asset: sourceAsset },
+      destination: { chain: destinationChain, asset: destinationAsset },
+      bridgeProtocol,
+      amount,
+      recipient: destinationRecipient,
+    })
+    expect(resolveTransferRoute(DEFAULT_BRIDGE_REGISTRY, plan).route.id).toBe(plan.route.id)
+  })
+
+  it('rejects a preceding-version plan for a route activated by this snapshot', () => {
+    const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'aleo', asset: 'zec' },
+      destination: { chain: 'solana', asset: 'zec' },
+      amount: '0.0001',
+      recipient: '11111111111111111111111111111111',
+    })
+    expect(() => resolveTransferRoute(DEFAULT_BRIDGE_REGISTRY, {
+      ...plan,
+      registryVersion: previous.version,
+    })).toThrow(/registry/i)
+  })
+
+  it('rejects an altered route even when its saved version was previously compatible', () => {
+    const plan = prepare(previous, {
+      source: { chain: 'ethereum', asset: 'bat' },
+      destination: { chain: 'aleo', asset: 'bat' },
+      amount: '1',
+      recipient: ALEO_RECIPIENT,
+    })
+    const registry = {
+      ...DEFAULT_BRIDGE_REGISTRY,
+      routes: DEFAULT_BRIDGE_REGISTRY.routes.map(route => route.id === plan.route.id
+        ? { ...route, metadata: { ...route.metadata, routerAddress: '0x0000000000000000000000000000000000000001' } }
+        : route),
+    }
+    expect(() => resolveTransferRoute(registry, plan)).toThrow(/registry/i)
   })
 })
