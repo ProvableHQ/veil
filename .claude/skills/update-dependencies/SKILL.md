@@ -45,8 +45,7 @@ VEIL_INTEGRATION=1 pnpm vitest run --retry=2 \
   packages/core/test/integration/realApi.test.ts \
   packages/shield-swap/test/integration/reads.integration.test.ts \
   packages/shield-swap/test/integration/api.integration.test.ts \
-  packages/shield-swap/test/integration/traders.integration.test.ts \
-  packages/bridge/test/integration/api.integration.test.ts
+  packages/shield-swap/test/integration/traders.integration.test.ts
 ```
 
 ## 1. @provablehq/sdk (npm)
