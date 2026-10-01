@@ -29,7 +29,9 @@
       "@provablehq/aleo-bridge-sdk": ["./packages/bridge/src/index.ts"],
       "@provablehq/aleo-bridge-sdk/agent": ["./packages/bridge/src/agent/index.ts"],
       "@provablehq/aleo-bridge-sdk/mcp": ["./packages/bridge/src/mcp/index.ts"],
-      "@provablehq/aleo-bridge-sdk/solana": ["./packages/bridge/src/solana/index.ts"]
+      "@provablehq/aleo-bridge-sdk/solana": ["./packages/bridge/src/solana/index.ts"],
+      "@provablehq/aleo-bridge-sdk/privy": ["./packages/bridge/src/privy/index.ts"],
+      "@provablehq/aleo-bridge-sdk/dynamic": ["./packages/bridge/src/dynamic/index.ts"]
     },
     "types": ["node"]
   },

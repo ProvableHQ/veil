@@ -77,6 +77,8 @@ jobs:
         run: npx tsc --noEmit -p examples/shield-swap/tsconfig.json
       - name: Typecheck bridge example
         run: npx tsc --noEmit -p packages/bridge/examples/tsconfig.json
+      - name: Typecheck remote wallet examples
+        run: pnpm exec tsc --noEmit -p packages/bridge/examples/remote-wallets/tsconfig.json
       - name: Verify installed bridge examples
         run: node .github/scripts/check-bridge-package.mjs
       - name: Typecheck reference dApp

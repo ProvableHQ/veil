@@ -37,7 +37,15 @@
       "types": "./dist/solana/index.d.ts"
     },
     "./skills/*": "./skills/*",
-    "./examples/*": "./examples/*"
+    "./examples/*": "./examples/*",
+    "./privy": {
+      "types": "./dist/privy/index.d.ts",
+      "import": "./dist/privy/index.js"
+    },
+    "./dynamic": {
+      "types": "./dist/dynamic/index.d.ts",
+      "import": "./dist/dynamic/index.js"
+    }
   },
   "scripts": {
     "build": "tsup",
@@ -53,7 +61,8 @@
     "examples/*.ts",
     "examples/README.md",
     "examples/tsconfig.json",
-    "skills/*.md"
+    "skills/*.md",
+    "examples/remote-wallets"
   ],
   "dependencies": {
     "@provablehq/veil-core": "workspace:*",
@@ -62,7 +71,10 @@
   },
   "peerDependencies": {
     "@provablehq/sdk": "^0.12.0",
-    "@solana/kit": "^8.0.0"
+    "@solana/kit": "^8.0.0",
+    "@privy-io/node": "^0.35.0",
+    "@dynamic-labs-wallet/node-evm": "^1.1.24",
+    "@dynamic-labs-wallet/node-svm": "^1.1.24"
   },
   "peerDependenciesMeta": {
     "@provablehq/sdk": {
@@ -70,12 +82,24 @@
     },
     "@solana/kit": {
       "optional": true
+    },
+    "@privy-io/node": {
+      "optional": true
+    },
+    "@dynamic-labs-wallet/node-evm": {
+      "optional": true
+    },
+    "@dynamic-labs-wallet/node-svm": {
+      "optional": true
     }
   },
   "devDependencies": {
+    "@dynamic-labs-wallet/node-evm": "1.1.24",
+    "@dynamic-labs-wallet/node-svm": "1.1.24",
+    "@privy-io/node": "0.35.0",
     "@provablehq/sdk": "^0.12.0",
+    "@provablehq/veil-aleo-sdk": "workspace:*",
     "@solana/kit": "^8.0.0",
-    "tsx": "^4.21.0",
-    "@provablehq/veil-aleo-sdk": "workspace:*"
+    "tsx": "^4.21.0"
   }
 }

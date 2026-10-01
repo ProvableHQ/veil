@@ -13,6 +13,10 @@ The scripts in this directory run against mainnet. They use minimum transfer
 amounts and remain read-only unless `EXECUTE_BRIDGE` contains the exact
 acknowledgement shown below.
 
+For Privy or Dynamic server wallets, start with the
+[server-wallet configuration guide](./remote-wallets/README.md). Its examples
+configure EVM and Solana clients without signing or submitting.
+
 ## Routes covered by the examples
 
 | Script | Route | Protocol | Default amount |
