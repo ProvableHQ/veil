@@ -1,3 +1,6 @@
+import { planInventory, type PlanInventoryParameters } from '../actions/inventory/planInventory.js'
+import { rebalanceInventory, type RebalanceInventoryParameters } from '../actions/inventory/rebalanceInventory.js'
+import type { InventoryPlan, InventoryResult } from '@provablehq/veil-core'
 import { waitForSwapOutput, type WaitForSwapOutputParameters, type WaitForSwapOutputReturnType } from '../actions/reads/waitForSwapOutput.js'
 import type { Client } from '@provablehq/veil-core'
 import { getPool, type GetPoolParameters, type GetPoolReturnType } from '../actions/reads/getPool.js'
@@ -146,7 +149,10 @@ export type ShieldSwapActionsConfig = {
 }
 
 /**
- * The action surface {@link shieldSwapActions} adds to a client.
+ * Defines the action surface {@link shieldSwapActions} adds to a client.
+ *
+ * @property planInventory Plans the underlying token's inventory without submitting.
+ * @property rebalanceInventory Rebalances underlying records using shared core coordination.
  *
  * @property resolveDexImports Builds the `imports` map a write needs — the
  *   given token programs plus the DEX program's own declared imports. Every
@@ -201,6 +207,8 @@ export type ShieldSwapActionsConfig = {
  *   `api` was configured.
  */
 export type ShieldSwapActions = {
+  planInventory: (params: Omit<PlanInventoryParameters, 'api'>) => Promise<InventoryPlan>
+  rebalanceInventory: (params: Omit<RebalanceInventoryParameters, 'api'>) => Promise<InventoryResult>
   waitForSwapOutput: (params: WaitForSwapOutputParameters) => Promise<WaitForSwapOutputReturnType>
   getPool: (params: GetPoolParameters) => Promise<GetPoolReturnType>
   getSlot: (params: GetSlotParameters) => Promise<GetSlotReturnType>
@@ -365,6 +373,8 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       }
     }
     return {
+      planInventory: (p) => planInventory(client, { ...p, api: api ?? missingApi }),
+      rebalanceInventory: (p) => rebalanceInventory(client, { ...p, api: api ?? missingApi }),
       getPool: (p) => getPool(client, withProgram(p)),
       getSlot: (p) => getSlot(client, withProgram(p)),
       waitForSwapOutput: (p) => waitForSwapOutput(client, p),

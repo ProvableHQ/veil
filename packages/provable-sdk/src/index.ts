@@ -314,6 +314,8 @@ export interface AleoSdk {
    *   shared with delegated proving. `createAleoClient` supplies its own
    *   session through `setSession` on the returned provider, so a caller who
    *   passes the scanner to that factory does not need this.
+   * @param options.waitForSync Waits for scanner synchronization before each page. Defaults to false.
+   * @param options.syncTimeoutMs Synchronization timeout in milliseconds. Defaults to 300000.
    * @param options.startBlock Optional block height to begin scanning from at
    *   registration. Defaults to 0 (full history).
    * @param options.auth Optional provisioned-key auth for the edge gateway.
@@ -326,6 +328,8 @@ export interface AleoSdk {
    *   can tell whether a legacy gateway is in play.
    */
   createRemoteScanner(options?: {
+    waitForSync?: boolean
+    syncTimeoutMs?: number
     url?: string
     consumerId?: string
     apiKey?: string
@@ -855,7 +859,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               inputs: execOptions.inputs,
               priorityFee,
               privateFee: execOptions.privateFee ?? false,
-              broadcast: true,
+              broadcast: !execOptions.onProgress,
               useFeeMaster: options.useFeeMaster ?? false,
             })
 
@@ -902,7 +906,14 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           const txId = response.transaction?.id
           if (!txId) throw new ConfigurationError('DPS response did not contain a transaction ID — check prover service configuration.')
 
-          const broadcastResult = response.broadcast_result
+          // A journalled execution must return the proved transaction before any
+          // broadcast, including delegated proving. The awaited callback persists it.
+          if (execOptions.onProgress) {
+            await execOptions.onProgress({ type: 'transaction-prepared', transactionId: txId, transaction: response.transaction })
+            const submitted = await buildPollingClient().request({ method: 'sendTransaction', params: { transaction: JSON.stringify(response.transaction) } })
+            if (submitted !== txId) throw new ConfigurationError('Broadcast returned an unexpected transaction id')
+          }
+          const broadcastResult = execOptions.onProgress ? { status: 'Accepted' } : response.broadcast_result
           if (!broadcastResult || broadcastResult.status !== 'Accepted') {
             const message = broadcastResult?.status === 'Skipped'
               ? 'Delegated prover skipped transaction broadcast'
@@ -914,7 +925,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             throw classifyBroadcastError(error, txId)
           }
 
+          await execOptions.onProgress?.({ type: 'transaction-submitted', transactionId: txId })
           const confirmedTx = await waitForConfirmation(buildPollingClient(), txId, options.confirmationTimeout)
+          await execOptions.onProgress?.({ type: 'transaction-confirmed', transactionId: txId })
           const { transitions, outputs } = extractTransitions(confirmedTx, decryptor)
           return { transactionId: txId, transitions, outputs }
 
@@ -935,6 +948,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             throw new ProvingError({ message: e instanceof Error ? e.message : String(e), cause: e as Error })
           }
 
+          const prepared = JSON.parse(tx.toString()) as Transaction
+          await execOptions.onProgress?.({ type: 'transaction-prepared', transactionId: prepared.id, transaction: prepared })
           let txId: string
           try {
             const submitClient = new AleoNetworkClient(networkUrl)
@@ -945,7 +960,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             throw classifyBroadcastError(e)
           }
 
+          await execOptions.onProgress?.({ type: 'transaction-submitted', transactionId: txId })
           const confirmedTx = await waitForConfirmation(buildPollingClient(), txId, options.confirmationTimeout)
+          await execOptions.onProgress?.({ type: 'transaction-confirmed', transactionId: txId })
           const { transitions, outputs } = extractTransitions(confirmedTx, decryptor)
           return { transactionId: txId, transitions, outputs }
         }
@@ -1117,6 +1134,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
   }
 
   function createRemoteScanner(options: {
+    waitForSync?: boolean
+    syncTimeoutMs?: number
     url?: string
     consumerId?: string
     apiKey?: string
@@ -1128,6 +1147,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     setSession: (session: ProvableSession) => void
     setAuth: (auth: ProvableKeyedAuth) => void
   } {
+    if (options.syncTimeoutMs !== undefined && (!Number.isSafeInteger(options.syncTimeoutMs) || options.syncTimeoutMs < 1)) {
+      throw new ConfigurationError('syncTimeoutMs must be a positive integer in milliseconds')
+    }
     assertKeyedAuthAlone(options.auth, {
       session: options.session,
       apiKey: options.apiKey,
@@ -1243,6 +1265,24 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         // rides in the scanner, so there is no token to apply.
         if (activeSession) activeScanner.setJwtData(await activeSession.getJwt())
         await activeRegistration.ensure(activeScanner, activeViewKey)
+        if (options.waitForSync) {
+          const deadline = Date.now() + (options.syncTimeoutMs ?? 300_000)
+          let reregistered = false
+          while (true) {
+            const status = await activeScanner.status()
+            // status() does not use the SDK's owned() auto-registration recovery.
+            if (!status.ok && status.status === 422 && !reregistered) {
+              const registration = await activeScanner.registerEncrypted(activeViewKey, options.startBlock ?? 0)
+              if (!registration.ok) throw new Error(`Record scanner registration failed (HTTP ${registration.status})`)
+              reregistered = true
+              continue
+            }
+            if (!status.ok) throw new Error(`Record scanner status failed (HTTP ${status.status})`)
+            if (status.data.synced) break
+            if (Date.now() >= deadline) throw new Error('Record scanner synchronization timed out')
+            await new Promise((resolve) => setTimeout(resolve, 1000))
+          }
+        }
         return scanOwned(activeScanner, params, activeSession)
       },
 
@@ -1609,15 +1649,22 @@ export function createDevnodeClient(options?: {
         imports: execOptions.programImports,
       })
 
+      const prepared = JSON.parse(tx.toString()) as Transaction
+      await execOptions.onProgress?.({ type: 'transaction-prepared', transactionId: prepared.id, transaction: prepared })
+
       // Broadcast through the same transport-backed request writeContract uses.
       const txId = (await publicClient.request({
         method: 'sendTransaction',
         params: { transaction: tx.toString() },
       })) as string
 
+      await execOptions.onProgress?.({ type: 'transaction-submitted', transactionId: txId })
+
       // The devnode auto-produces a block after broadcast by default; under
       // manualBlockCreation the caller must advance blocks for this to resolve.
       const confirmedTx = await waitForConfirmation(publicClient, txId)
+
+      await execOptions.onProgress?.({ type: 'transaction-confirmed', transactionId: txId })
 
       // Self-custody decryptor: records owned by the devnode account surface
       // as plaintext; records owned by someone else (e.g. a compliance record

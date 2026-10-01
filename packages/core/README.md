@@ -181,3 +181,12 @@ const client = createPublicClient({
   },
 }))
 ```
+
+## Record inventory
+
+Extend a wallet client with `recordActions({ store?, chainId?, maxFeeMicrocredits? })`
+for scanner-backed `joinRecords`, `splitRecord`, `autoJoin`,
+`planRecordInventory`, `rebalanceRecordInventory`, and reconciliation. Supports
+ARC20, ARC22, and native credits. Core supplies a storage interface and in-memory
+default; it has no SQLite or Node dependency. See the
+[record inventory guide](../../site/docs/guides/record-inventory.md).
