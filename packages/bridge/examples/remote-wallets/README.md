@@ -112,10 +112,31 @@ operation and MUST NOT run automatically on each service restart.
 The [Dynamic example](./dynamic.ts) reads:
 
 - `DYNAMIC_ENVIRONMENT_ID` and `DYNAMIC_API_TOKEN` for provider authentication.
-- `DYNAMIC_EVM_METADATA_FILE` and `DYNAMIC_SOLANA_METADATA_FILE`, paths to JSON
-  containing the respective full `walletMetadata` objects.
+- `DYNAMIC_EVM_ADDRESS` and `DYNAMIC_SOLANA_ADDRESS` to select existing wallets
+  through `getWalletByAddress()` at startup.
 - `DYNAMIC_EVM_WALLET_PASSWORD` and `DYNAMIC_SOLANA_WALLET_PASSWORD` for wallets
   created with encrypted shares backed up to Dynamic (`backUpToDynamic: true`).
+
+The example fetches wallet identity from Dynamic by address. In SDK 1.1.24,
+that lookup can omit `externalServerKeySharesBackupInfo`, which encrypted backup
+recovery requires. Preserve the full creation metadata in these automatic cache
+locations (JSON containing the `walletMetadata` object):
+
+- `~/.config/veil/dynamic/<environment-id>/evm-<lowercase-address>.json`
+- `~/.config/veil/dynamic/<environment-id>/solana-<case-sensitive-address>.json`
+
+No metadata-file environment variable is required. Optional
+`DYNAMIC_EVM_METADATA_FILE` and `DYNAMIC_SOLANA_METADATA_FILE` override those
+paths for existing storage layouts. The loader verifies the cached identity
+against the provider before restoring backup pointers, and rejects missing or
+mismatched metadata. The live API can also return a `SOL` chain alias with a
+lowercased Solana address. In that case the loader requires matching creation
+metadata and wallet ID, then preserves the original case-sensitive address;
+a lowercased Solana address alone is never accepted. The loader never creates a
+replacement wallet on startup.
+Production applications can use a database or cache with the same identity
+checks instead of local files. Passwords and raw key shares do not belong in
+these metadata JSON files.
 
 For caller-managed shares, load `externalServerKeyShares` from a secrets store
 and pass them with the full metadata. Passwords and key shares MUST NOT enter

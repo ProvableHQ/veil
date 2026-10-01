@@ -1,12 +1,11 @@
 /** Authenticates Dynamic server clients and prints existing wallet addresses without signing or submitting. */
-import { readFile } from 'node:fs/promises'
 import { DynamicEvmWalletClient } from '@dynamic-labs-wallet/node-evm'
 import { DynamicSvmWalletClient } from '@dynamic-labs-wallet/node-svm'
 import { createBridgeClient, evmHttp, solanaHttp } from '@provablehq/aleo-bridge-sdk'
 import {
   createDynamicEvmClient, createDynamicSolanaClient,
-  type DynamicEvmClientConfig, type DynamicSolanaClientConfig,
 } from '@provablehq/aleo-bridge-sdk/dynamic'
+import { loadDynamicWalletMetadata } from './dynamic-metadata.js'
 
 function required(name: string): string {
   const value = process.env[name]
@@ -14,20 +13,23 @@ function required(name: string): string {
   return value
 }
 
-// These JSON files hold the complete metadata returned by wallet creation/import.
-// Production services can load metadata from their own database instead.
-const evmMetadata: DynamicEvmClientConfig['walletMetadata'] = JSON.parse(
-  await readFile(required('DYNAMIC_EVM_METADATA_FILE'), 'utf8'),
-)
-const solanaMetadata: DynamicSolanaClientConfig['walletMetadata'] = JSON.parse(
-  await readFile(required('DYNAMIC_SOLANA_METADATA_FILE'), 'utf8'),
-)
 const environmentId = required('DYNAMIC_ENVIRONMENT_ID')
 const apiToken = required('DYNAMIC_API_TOKEN')
 const dynamicEvm = new DynamicEvmWalletClient({ environmentId })
 const dynamicSolana = new DynamicSvmWalletClient({ environmentId })
 await dynamicEvm.authenticateApiToken(apiToken)
 await dynamicSolana.authenticateApiToken(apiToken)
+
+// Resolve identity from configured addresses. The local cache supplies backup
+// pointers when Dynamic's address lookup returns identity fields only.
+const evmMetadata = await loadDynamicWalletMetadata({
+  client: dynamicEvm, chain: 'evm', address: required('DYNAMIC_EVM_ADDRESS'), environmentId,
+  metadataFile: process.env.DYNAMIC_EVM_METADATA_FILE,
+})
+const solanaMetadata = await loadDynamicWalletMetadata({
+  client: dynamicSolana, chain: 'solana', address: required('DYNAMIC_SOLANA_ADDRESS'), environmentId,
+  metadataFile: process.env.DYNAMIC_SOLANA_METADATA_FILE,
+})
 
 // This example assumes encrypted shares were backed up to Dynamic when the wallets were created.
 const ethereum = await createDynamicEvmClient({
