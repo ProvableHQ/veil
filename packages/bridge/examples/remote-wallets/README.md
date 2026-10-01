@@ -53,7 +53,10 @@ resolve. This setting affects type checking; the examples run under Node via tsx
 
 Both examples print public wallet addresses. They do not request signatures or
 submit transactions. The Dynamic example authenticates the two provider clients.
-Set `ETHEREUM_RPC_URL` and `SOLANA_RPC_URL` to the intended mainnet endpoints.
+Ethereum defaults to the public mainnet RPC at `https://ethereum-rpc.publicnode.com`.
+Set `ETHEREUM_RPC_URL` to override it with another Ethereum mainnet endpoint;
+unset, empty, or whitespace-only values use the default. Set `SOLANA_RPC_URL`
+to the intended Solana mainnet endpoint.
 
 ## Privy
 

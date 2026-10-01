@@ -24,7 +24,7 @@ const ethereum = await createPrivyEvmClient({
   walletId: required('PRIVY_EVM_WALLET_ID'),
   address: getAddress(required('PRIVY_EVM_ADDRESS')),
   authorizationContext,
-  transport: evmHttp(required('ETHEREUM_RPC_URL')),
+  transport: evmHttp(process.env.ETHEREUM_RPC_URL?.trim() || 'https://ethereum-rpc.publicnode.com'),
 })
 const solana = await createPrivySolanaClient({
   client: privy,

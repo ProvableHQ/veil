@@ -34,7 +34,7 @@ const ethereum = await createDynamicEvmClient({
   client: dynamicEvm,
   walletMetadata: evmMetadata,
   password: required('DYNAMIC_EVM_WALLET_PASSWORD'),
-  transport: evmHttp(required('ETHEREUM_RPC_URL')),
+  transport: evmHttp(process.env.ETHEREUM_RPC_URL?.trim() || 'https://ethereum-rpc.publicnode.com'),
 })
 const solana = await createDynamicSolanaClient({
   client: dynamicSolana,
