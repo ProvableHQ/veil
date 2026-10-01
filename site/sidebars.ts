@@ -25,6 +25,7 @@ const sidebars: SidebarsConfig = {
         'guides/reading-chain-state',
         'guides/executing-transactions',
         'guides/working-with-records',
+        'guides/record-inventory',
         'guides/transaction-lifecycle',
         'guides/contract-instances',
         'guides/devnode',
@@ -39,6 +40,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'packages/overview',
         'packages/core',
+        'packages/cli',
         'packages/provable-sdk',
         'packages/wallet-adapter',
         'packages/react',

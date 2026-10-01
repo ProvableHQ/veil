@@ -11,6 +11,7 @@ describe('delegated transaction building', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('asks the prover not to broadcast and reports each proving boundary', async () => {
@@ -47,6 +48,25 @@ describe('delegated transaction building', () => {
       { type: 'prover-submitted' },
       { type: 'prover-returned', transactionId: 'at1proved' },
     ])
+  })
+
+  it('awaits the durable checkpoint and never broadcasts when it fails', async () => {
+    const transaction = { type: 'execute', id: 'at1prepared', fee: {} }
+    const request = vi.spyOn(testnetSdk.ProgramManager.prototype, 'provingRequest')
+      .mockResolvedValue({ encrypted: true } as never)
+    vi.spyOn(testnetSdk.AleoNetworkClient.prototype, 'submitProvingRequestSafe')
+      .mockResolvedValue({ ok: true, data: { transaction, broadcast_result: { status: 'Skipped' } } } as never)
+    const fetch = vi.fn(() => { throw new Error('must not broadcast') })
+    vi.stubGlobal('fetch', fetch)
+    const config = aleo.createProvingConfig({ mode: 'delegated', networkUrl: 'https://node.example',
+      proverUrl: 'https://prover.example', account: aleo.generateAccount() })
+    const events: unknown[] = []
+    await expect(config.execute!({ programName: 'credits.aleo', functionName: 'join', inputs: [], fee: 0n,
+      async onProgress(event) { events.push(event); throw new Error('disk full') },
+    })).rejects.toThrow('disk full')
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ broadcast: false }))
+    expect(events).toEqual([{ type: 'transaction-prepared', transactionId: transaction.id, transaction }])
+    expect(fetch).not.toHaveBeenCalled()
   })
 
   it('reports a failed delegated broadcast without polling for confirmation', async () => {

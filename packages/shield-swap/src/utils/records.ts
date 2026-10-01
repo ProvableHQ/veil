@@ -1,4 +1,4 @@
-import { requestRecords, parseRecord, type Client, type InputRequest, type OwnedRecord } from '@provablehq/veil-core'
+import { requestRecords, parseRecord, reservedRecordIds, inventoryRecordId, type Client, type InputRequest, type OwnedRecord } from '@provablehq/veil-core'
 import { toPositionNFT } from '../generated/shield_swap.js'
 
 /**
@@ -104,9 +104,11 @@ export async function selectTokenRecord(client: Client, params: SelectTokenRecor
     statusFilter: 'unspent',
   })) as OwnedRecord[]
 
+  const reserved = await reservedRecordIds(client)
   let best: TokenRecordInfo | undefined
   for (const record of records) {
     if (!record.recordPlaintext) continue
+    if (reserved.size && reserved.has(inventoryRecordId(record))) continue
     const info = parseTokenRecordInfo(record.recordPlaintext)
     if (!info) continue
     // Recipient-bound wrapper records are single-purpose (unwrap to the bound

@@ -14,6 +14,7 @@
     "isolatedModules": true,
     "noUncheckedIndexedAccess": true,
     "paths": {
+      "@provablehq/veil-cli/storage": ["./packages/cli/src/storage.ts"],
       "@provablehq/veil-core": ["./packages/core/src/index.ts"],
       "@provablehq/veil-core/agent": ["./packages/core/src/agent/index.ts"],
       "@provablehq/veil-core/mcp": ["./packages/core/src/mcp/index.ts"],
