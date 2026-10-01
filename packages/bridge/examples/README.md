@@ -484,3 +484,60 @@ invalidate it, so keep these accounts idle and inspect transaction history if
 delivery is ambiguous. The withdrawal estimate is capped at 0.10 USDC before
 submission, but the deployed Aleo burn has no on-chain fee cap. Unexpected fees
 or partial delivery leave the leg pending rather than spending other balances.
+
+## BAT, USDG, and ZEC: live quotes, transfers, and recovery
+
+`arc22-hyperlane.ts` runs one selected mainnet route. A normal invocation reads
+live fees with public addresses and needs no private key. Execution uses public
+Aleo balances; private records MUST be unshielded separately first.
+
+| Asset | Supported directed route IDs |
+| --- | --- |
+| BAT | `hyperlane:ethereum/bat->aleo/bat`, `hyperlane:aleo/bat->ethereum/bat` |
+| BAT | `hyperlane:solana/bat->aleo/bat`, `hyperlane:aleo/bat->solana/bat` |
+| USDG | `hyperlane:ethereum/usdg->aleo/usdg`, `hyperlane:aleo/usdg->ethereum/usdg` |
+| USDG | `hyperlane:solana/usdg->aleo/usdg`, `hyperlane:aleo/usdg->solana/usdg` |
+| ZEC | `hyperlane:solana/zec->aleo/zec`, `hyperlane:aleo/zec->solana/zec` |
+
+From the repository root after building the workspace packages:
+
+```sh
+export BRIDGE_ARC22_ROUTE_ID='hyperlane:solana/zec->aleo/zec'
+export BRIDGE_ARC22_AMOUNT='0.0001'
+export BRIDGE_ARC22_SENDER='<source address>'
+export BRIDGE_ARC22_RECIPIENT='<destination address>'
+pnpm exec tsx packages/bridge/examples/arc22-hyperlane.ts
+```
+
+Change the route and addresses to use any row above. `0.0001` is representable on
+both ends of every route. BAT has 18 decimals on Ethereum/Aleo but 8 on Solana:
+amounts involving Solana MUST fit 8 decimals. For SPL quotes, `amountLamports` is
+historically named but contains token atomic units; `totalLamports` contains only
+SOL for fees and rent, excluding the tokens.
+
+RPC overrides are `BRIDGE_LIVE_ETHEREUM_RPC_URL`, `BRIDGE_LIVE_SOLANA_RPC_URL`,
+and `ALEO_RPC_URL`. Defaults target public mainnet RPCs. To execute, supply only
+the source key through an existing secure environment: `BRIDGE_EVM_PRIVATE_KEY`
+(hex), `BRIDGE_SOLANA_PRIVATE_KEY` (64-byte base58 keypair or JSON byte array), or
+`BRIDGE_PRIVATE_KEY` (Aleo). Aleo proving uses the existing `ALEO_PROVING_MODE`,
+`ALEO_PROVER_URL`, and optional gateway authentication settings.
+
+```sh
+export BRIDGE_ARC22_STATE_PATH='/absolute/private/path/zec-deposit.json'
+EXECUTE_BRIDGE=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
+  pnpm exec tsx packages/bridge/examples/arc22-hyperlane.ts
+```
+
+Execution saves a checkpoint before waiting, then recovers with a fresh client
+that has no signing capabilities. Keep the same state path, route, amount, sender,
+and recipient on restart. Omit `EXECUTE_BRIDGE` to recover without authorizing a
+remaining source submission. A timeout retains state and MUST NOT be treated as
+permission to start a second transfer. A saved attempted submission without a
+checkpoint refuses automatic retries. A `.lock` file prevents concurrent runs;
+after a killed process, inspect its chain outcome before removing a stale lock.
+Checkpoint files can contain prepared transaction data; keep them private.
+
+The example reports completion only when SDK delivery verification succeeds.
+Aleo-to-EVM/Solana currently uses the SDK's recipient
+balance-increase fallback, which can be confused by unrelated incoming transfers;
+use an isolated recipient for a live probe.

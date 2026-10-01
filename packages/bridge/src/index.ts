@@ -149,6 +149,8 @@ export type {
 } from './types/aleo.js'
 export type {
   SolanaHyperlaneRouteMetadata,
+  SolanaHyperlaneSplRouteMetadata,
+  SolanaHyperlaneTransferMetadata,
   SolanaHyperlaneTransferExecution,
   SolanaHyperlaneTransferQuote,
 } from './types/solana.js'

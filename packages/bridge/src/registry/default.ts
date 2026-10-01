@@ -29,6 +29,9 @@ const assets: ProtocolBridgeAsset[] = [
   { id: 'aleo/wbtc', key: 'wbtc', chainId: 'aleo', symbol: 'WBTC', name: 'Hyperlane WBTC', decimals: 8, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_wbtc_v2.aleo', tokenId: 'aleo1240fsvz2dhmj0cdtt8mc0yc8um9fmu236rqcl2qnlj9703hd2vpsdwyrtf' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc20', program: 'arc20_wbtc.aleo' } },
   { id: 'aleo/usdt', key: 'usdt', chainId: 'aleo', symbol: 'USDT', name: 'Hyperlane USDT', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_usdt_v2.aleo', tokenId: 'aleo18yynfz0lrfx0tund540vy2z7gju7ekgqsueg5jgu28mpm2z42ufq7qua8y' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc20', program: 'arc20_usdt.aleo' } },
   { id: 'aleo/sol', key: 'sol', chainId: 'aleo', symbol: 'SOL', name: 'Hyperlane SOL', decimals: 9, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_sol_v2.aleo', tokenId: 'aleo1aa0zt0vg9uwknekpqeefkvad55swp7833wc5crp2prv0lm4djuxs5r7k6v' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc20', program: 'arc20_sol.aleo' } },
+  { id: 'aleo/bat', key: 'bat', chainId: 'aleo', symbol: 'BAT', name: 'Hyperlane BAT', decimals: 18, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_bat_v2.aleo', tokenId: 'aleo1n6kjmle3t0prrwjgpwc87zytasmjdeud5rrwuuawk57ex85qr5fqcv8xzg' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc22', program: 'shield_arc22_bat.aleo' } },
+  { id: 'aleo/usdg', key: 'usdg', chainId: 'aleo', symbol: 'USDG', name: 'Hyperlane USDG', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_usdg_v2.aleo', tokenId: 'aleo1s4r80dv7pcggdnzsavjv45r54zjydl2jn64dejerpk6pgnfj5cysj7zzuu' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc22', program: 'shield_arc22_usdg.aleo' } },
+  { id: 'aleo/zec', key: 'zec', chainId: 'aleo', symbol: 'ZEC', name: 'Hyperlane ZEC', decimals: 8, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_zec_v2.aleo', tokenId: 'aleo1m3z3en2msfdk62yje9ty7fqydxeakgx0ec6ze672q86p2yxq0sqqyjr9jd' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc22', program: 'shield_arc22_zec.aleo' } },
   { id: 'aleo/usad', key: 'usad', chainId: 'aleo', symbol: 'USAD', name: 'USAD', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'usad_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS },
   { id: 'ethereum/usdc', key: 'usdc', chainId: 'ethereum', symbol: 'USDC', name: 'USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' }, addressValidationRegex: EVM_ADDRESS },
   { id: 'base/usdc', key: 'usdc', chainId: 'base', symbol: 'USDC', name: 'USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' }, addressValidationRegex: EVM_ADDRESS },
@@ -37,9 +40,14 @@ const assets: ProtocolBridgeAsset[] = [
   { id: 'ethereum/eth', key: 'eth', chainId: 'ethereum', symbol: 'ETH', name: 'Ether', decimals: 18, kind: 'native', locator: { kind: 'native', value: 'ETH' }, addressValidationRegex: EVM_ADDRESS },
   { id: 'ethereum/wbtc', key: 'wbtc', chainId: 'ethereum', symbol: 'WBTC', name: 'Wrapped Bitcoin', decimals: 8, kind: 'token', locator: { kind: 'evm-contract', value: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599' }, addressValidationRegex: EVM_ADDRESS },
   { id: 'ethereum/usdt', key: 'usdt', chainId: 'ethereum', symbol: 'USDT', name: 'Tether USD', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0xdAC17F958D2ee523a2206206994597C13D831ec7' }, addressValidationRegex: EVM_ADDRESS },
+  { id: 'ethereum/bat', key: 'bat', chainId: 'ethereum', symbol: 'BAT', name: 'Basic Attention Token', decimals: 18, kind: 'token', locator: { kind: 'evm-contract', value: '0x0D8775F648430679A709E98d2b0Cb6250d2887EF' }, addressValidationRegex: EVM_ADDRESS },
+  { id: 'ethereum/usdg', key: 'usdg', chainId: 'ethereum', symbol: 'USDG', name: 'Global Dollar', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0xe343167631d89B6Ffc58B88d6b7fB0228795491D' }, addressValidationRegex: EVM_ADDRESS },
   { id: 'ethereum/aleo', key: 'aleo', chainId: 'ethereum', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
   { id: 'ethereum/usad', key: 'usad', chainId: 'ethereum', symbol: 'USAD', name: 'USAD route collateral', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
   { id: 'solana/sol', key: 'sol', chainId: 'solana', symbol: 'SOL', name: 'Solana', decimals: 9, kind: 'native', locator: { kind: 'native', value: 'SOL' }, addressValidationRegex: SOLANA_ADDRESS },
+  { id: 'solana/bat', key: 'bat', chainId: 'solana', symbol: 'BAT', name: 'Basic Attention Token', decimals: 8, kind: 'token', locator: { kind: 'solana-mint', value: 'EPeUFDgHRxs9xxEPVaL6kfGQvCon7jmAWKVUHuux1Tpz' }, addressValidationRegex: SOLANA_ADDRESS },
+  { id: 'solana/usdg', key: 'usdg', chainId: 'solana', symbol: 'USDG', name: 'Global Dollar', decimals: 6, kind: 'token', locator: { kind: 'solana-mint', value: '2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH' }, addressValidationRegex: SOLANA_ADDRESS },
+  { id: 'solana/zec', key: 'zec', chainId: 'solana', symbol: 'ZEC', name: 'Zcash', decimals: 8, kind: 'token', locator: { kind: 'solana-mint', value: 'A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS' }, addressValidationRegex: SOLANA_ADDRESS },
   { id: 'solana/aleo', key: 'aleo', chainId: 'solana', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: SOLANA_ADDRESS },
   { id: 'base/aleo', key: 'aleo', chainId: 'base', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
   { id: 'hyperevm/aleo', key: 'aleo', chainId: 'hyperevm', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
@@ -62,6 +70,11 @@ const XRESERVE_SOURCE = 'https://developers.circle.com/xreserve/references/suppo
 const ALEO_XRESERVE_SOURCE = 'https://docs.aleo.org/build/common-uses/usdcx_bridge'
 const HYPERLANE_REGISTRY_COMMIT = '2621c16f2db1ccb46643265c110dac5ca2c7c51a'
 const HYPERLANE_SOURCE = `https://github.com/hyperlane-xyz/hyperlane-registry/tree/${HYPERLANE_REGISTRY_COMMIT}/deployments/warp_routes`
+const NEW_WARP_ROUTES_REGISTRY_COMMIT = 'dd03567baf2a7c0a336c12a1e2b97272ca51ee9a'
+const BAT_HYPERLANE_CONFIG_SOURCE = `https://github.com/hyperlane-xyz/hyperlane-registry/blob/${NEW_WARP_ROUTES_REGISTRY_COMMIT}/deployments/warp_routes/BAT/aleo-config.yaml`
+const USDG_HYPERLANE_CONFIG_SOURCE = `https://github.com/hyperlane-xyz/hyperlane-registry/blob/${NEW_WARP_ROUTES_REGISTRY_COMMIT}/deployments/warp_routes/USDG/aleo-config.yaml`
+const ZEC_HYPERLANE_CONFIG_SOURCE = `https://github.com/hyperlane-xyz/hyperlane-registry/blob/${NEW_WARP_ROUTES_REGISTRY_COMMIT}/deployments/warp_routes/ZEC/aleo-config.yaml`
+const ZEC_SOLANA_SAMPLE_TRANSFER_SOURCE = 'https://explorer.hyperlane.xyz/message/0x5f0236faa02b61ea3e8f4406bbd43b7b5b74cc4010574a1fcda47d1d092e3a3e'
 const ALEO_ETH_PROGRAM_SOURCE = 'https://explorer.provable.com/program/hyp_warp_token_eth_v2.aleo'
 const ALEO_ETH_APP_METADATA_SOURCE = 'https://api.explorer.provable.com/v2/mainnet/program/hyp_warp_token_eth_v2.aleo/mapping/app_metadata/true'
 const ALEO_ETH_REMOTE_ROUTER_SOURCE = 'https://api.explorer.provable.com/v2/mainnet/program/hyp_warp_token_eth_v2.aleo/mapping/remote_routers/1u32'
@@ -112,6 +125,110 @@ const USDT_HYPERLANE_METADATA = {
   tokenAddress: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
   destinationRouter: 'hyp_warp_token_usdt_v2.aleo/aleo18yynfz0lrfx0tund540vy2z7gju7ekgqsueg5jgu28mpm2z42ufq7qua8y',
   requiresApprovalReset: true,
+} as const
+
+function evmCollateralHyperlaneMetadata(
+  routerAddress: string,
+  tokenAddress: string,
+  destinationRouter: string,
+  hyperlaneConfigSource: string,
+) {
+  return {
+    ...ETHEREUM_HYPERLANE_COMMON,
+    routerAddress,
+    routerType: 'collateral',
+    tokenAddress,
+    destinationRouter,
+    registryCommit: NEW_WARP_ROUTES_REGISTRY_COMMIT,
+    hyperlaneConfigSource,
+  } as const
+}
+
+const BAT_HYPERLANE_METADATA = evmCollateralHyperlaneMetadata(
+  '0x516e156e987175d74614cc2bC960f148A610f0b3',
+  '0x0D8775F648430679A709E98d2b0Cb6250d2887EF',
+  'hyp_warp_token_bat_v2.aleo/aleo1n6kjmle3t0prrwjgpwc87zytasmjdeud5rrwuuawk57ex85qr5fqcv8xzg',
+  BAT_HYPERLANE_CONFIG_SOURCE,
+)
+
+const USDG_HYPERLANE_METADATA = evmCollateralHyperlaneMetadata(
+  '0xe5A2cCf532919f93855F324c1F8a7996065f53Da',
+  '0xe343167631d89B6Ffc58B88d6b7fB0228795491D',
+  'hyp_warp_token_usdg_v2.aleo/aleo1s4r80dv7pcggdnzsavjv45r54zjydl2jn64dejerpk6pgnfj5cysj7zzuu',
+  USDG_HYPERLANE_CONFIG_SOURCE,
+)
+
+function solanaCollateralHyperlaneMetadata(
+  warpProgramAddress: string,
+  tokenPda: string,
+  dispatchAuthorityPda: string,
+  collateralMintAddress: string,
+  splTokenProgramAddress: string,
+  escrowPda: string,
+  destinationRouter: string,
+  hyperlaneConfigSource: string,
+) {
+  return {
+    routerType: 'spl-collateral',
+    warpProgramAddress,
+    tokenPda,
+    dispatchAuthorityPda,
+    splTokenProgramAddress,
+    collateralMintAddress,
+    escrowPda,
+    mailboxProgramAddress: 'E588QtVUvresuXq2KoNEwAmoifCzYGpRBdHByN9KQMbi',
+    mailboxOutboxPda: 'BvZpTuYLAR77mPhH4GtvwEWUTs53GQqkgBNuXpCePVNk',
+    igpProgramAddress: 'BhNcatUDC2D5JTyeaqrdSukiVFsEHK7e3hVmKMztwefv',
+    igpProgramDataPda: '8Cv4PHJ6Cf3xY7dse7wYeZKtuQv9SAN6ujt5w22a2uho',
+    igpAccount: 'JAvHW21tYXE9dtdG83DReqU2b4LUexFuCbtJT5tF8X6M',
+    igpOverheadAccount: 'AkeHBbE5JkwVppujCQQ6WuxsVsJtruBAjUo6fDCFp6fF',
+    splNoopProgramAddress: 'noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV',
+    destinationRouter,
+    destinationDomain: 1634493807,
+    // The deployed OverheadIgp adds 160,000 to the route's 300,000 base gas.
+    // The resulting 460,000 payment was observed in the ZEC fixture.
+    destinationGasAmount: '460000',
+    registryCommit: NEW_WARP_ROUTES_REGISTRY_COMMIT,
+    solanaReviewedAt: '2026-09-30T00:00:00Z',
+    hyperlaneConfigSource,
+    solanaConfigSource: hyperlaneConfigSource,
+  } as const
+}
+
+const SOLANA_BAT_METADATA = solanaCollateralHyperlaneMetadata(
+  '7CJFBsNC49upnVfMga2gj53deAjuuVchdceJQrJg5oA5',
+  'DLMYtaKyG5w7djyib9XhrbkiSvMfV4AmniQHFnAetsZB',
+  '7qDkiG7uwrQkyRKEQ85t65ZgrQoJjH3uh71xaUion4Su',
+  'EPeUFDgHRxs9xxEPVaL6kfGQvCon7jmAWKVUHuux1Tpz',
+  'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+  'NdEwkjA2w7cJ3EREVDPATJfqnEotdSMhJAJicv4Qni5',
+  'hyp_warp_token_bat_v2.aleo/aleo1n6kjmle3t0prrwjgpwc87zytasmjdeud5rrwuuawk57ex85qr5fqcv8xzg',
+  BAT_HYPERLANE_CONFIG_SOURCE,
+)
+
+const SOLANA_USDG_METADATA = solanaCollateralHyperlaneMetadata(
+  'AhNVa6VpZwDwgD3U66CGUwCMRcFSFiTfBse2D495SPxW',
+  'A94vqMwQQkZJ7maG9CwRrn2FFJTGcr6yqCeSP6oerc1R',
+  '217ERg8p47w9DDLwETCasSpe5Rw1CTguFQYAsmjMVpdy',
+  '2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH',
+  'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',
+  'AijEjuEXnmgEWsBT9kyxosWG7iiFkU1dkeF6WEX5dZDg',
+  'hyp_warp_token_usdg_v2.aleo/aleo1s4r80dv7pcggdnzsavjv45r54zjydl2jn64dejerpk6pgnfj5cysj7zzuu',
+  USDG_HYPERLANE_CONFIG_SOURCE,
+)
+
+const SOLANA_ZEC_METADATA = {
+  ...solanaCollateralHyperlaneMetadata(
+    '2RBzic8nUNJ8KngRRbsCEjkeM9CtpQN2CCqU1cs1n2y5',
+    'F3r7dPXQbCCEsgt7rz8WzPx9eGtiyoNWxtjyeYRdKDuR',
+    'AHyE4g448qfMPXACBkmMkknAtMeWF8CB1Nh9ycUzii4H',
+    'A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS',
+    'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+    '8oir78sC2Xej3gfb57wfthTUPPYkAmGRnWYZ8k9DudiS',
+    'hyp_warp_token_zec_v2.aleo/aleo1m3z3en2msfdk62yje9ty7fqydxeakgx0ec6ze672q86p2yxq0sqqyjr9jd',
+    ZEC_HYPERLANE_CONFIG_SOURCE,
+  ),
+  solanaSampleTransferSource: ZEC_SOLANA_SAMPLE_TRANSFER_SOURCE,
 } as const
 
 // Intentionally non-live values used only to expose the Aleo transfer_remote ABI.
@@ -226,6 +343,130 @@ const ALEO_SOL_APP_METADATA = {
   aleoHyperlaneConfigSource: ALEO_SOL_HYPERLANE_CONFIG_SOURCE,
 } as const
 
+function newWarpRouteAleoAppMetadata(
+  program: string,
+  tokenId: string,
+  localDecimals: number,
+  remoteDecimals: number,
+  hyperlaneConfigSource: string,
+) {
+  return {
+    aleoAppMetadataVerified: true,
+    aleoProgramSource: `https://explorer.provable.com/program/${program}`,
+    aleoAppMetadataSource: `https://api.explorer.provable.com/v2/mainnet/program/${program}/mapping/app_metadata/true`,
+    aleoAppMetadataReviewedAt: '2026-09-30',
+    aleoProgramEdition: 0,
+    aleoTokenType: '1',
+    aleoTokenOwner: 'aleo1mx0tldt5qsqymn5a3whnmf9rx2whp837jjn0tvqgxqf86zg6dvyqnc8spm',
+    aleoIsm: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
+    aleoHook: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
+    aleoTokenId: tokenId,
+    aleoLocalDecimals: localDecimals,
+    aleoRemoteDecimals: remoteDecimals,
+    aleoHyperlaneConfigSource: hyperlaneConfigSource,
+  } as const
+}
+
+const ALEO_BAT_APP_METADATA = newWarpRouteAleoAppMetadata(
+  'hyp_warp_token_bat_v2.aleo',
+  '8193754087214450113583165652573869677861364321518267024225788045720787201438field',
+  18,
+  18,
+  BAT_HYPERLANE_CONFIG_SOURCE,
+)
+
+const ALEO_USDG_APP_METADATA = newWarpRouteAleoAppMetadata(
+  'hyp_warp_token_usdg_v2.aleo',
+  '4364459415416156846201796031612641041087412365006702457109915656601258641029field',
+  6,
+  6,
+  USDG_HYPERLANE_CONFIG_SOURCE,
+)
+
+const ALEO_ZEC_APP_METADATA = newWarpRouteAleoAppMetadata(
+  'hyp_warp_token_zec_v2.aleo',
+  '220414605002186903241059728372192608429362177759171998609092499027319866844field',
+  8,
+  8,
+  ZEC_HYPERLANE_CONFIG_SOURCE,
+)
+
+function newWarpRouteAleoRemoteRouter(
+  program: string,
+  destinationDomain: number,
+  recipient: string,
+  gas: string,
+) {
+  return {
+    aleoRemoteRouterVerified: true,
+    aleoRemoteRouterSource: `https://api.explorer.provable.com/v2/mainnet/program/${program}/mapping/remote_routers/${destinationDomain}u32`,
+    aleoRemoteRouterReviewedAt: '2026-09-30',
+    aleoDestinationDomain: destinationDomain,
+    aleoRemoteRouterRecipient: recipient,
+    aleoRemoteRouterGas: gas,
+    aleoAllowanceSpendersVerified: true,
+    aleoUnusedAllowancesVerified: true,
+    aleoAllowanceSpender0: 'aleo194tz0jmyq8rd9htvnqppqw4jqerk2p2zd8plzn3sxl06wcgsm5pq9fka74',
+    aleoAllowanceSpender1: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
+    aleoAllowanceSpender2: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
+    aleoAllowanceSpender3: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
+    aleoAllowanceAmount1: '0',
+    aleoAllowanceAmount2: '0',
+    aleoAllowanceAmount3: '0',
+  } as const
+}
+
+const ALEO_BAT_ETHEREUM_REMOTE_ROUTER = {
+  ...newWarpRouteAleoRemoteRouter(
+    'hyp_warp_token_bat_v2.aleo',
+    1,
+    '[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 81u8, 110u8, 21u8, 110u8, 152u8, 113u8, 117u8, 215u8, 70u8, 20u8, 204u8, 43u8, 201u8, 96u8, 241u8, 72u8, 166u8, 16u8, 240u8, 179u8]',
+    '68000',
+  ),
+  aleoRemoteRouterEvmAddress: '0x516e156e987175d74614cc2bC960f148A610f0b3',
+} as const
+
+const ALEO_USDG_ETHEREUM_REMOTE_ROUTER = {
+  ...newWarpRouteAleoRemoteRouter(
+    'hyp_warp_token_usdg_v2.aleo',
+    1,
+    '[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 229u8, 162u8, 204u8, 245u8, 50u8, 145u8, 159u8, 147u8, 133u8, 95u8, 50u8, 76u8, 31u8, 138u8, 121u8, 150u8, 6u8, 95u8, 83u8, 218u8]',
+    '68000',
+  ),
+  aleoRemoteRouterEvmAddress: '0xe5A2cCf532919f93855F324c1F8a7996065f53Da',
+} as const
+
+const ALEO_BAT_SOLANA_REMOTE_ROUTER = {
+  ...newWarpRouteAleoRemoteRouter(
+    'hyp_warp_token_bat_v2.aleo',
+    1399811149,
+    '[92u8, 11u8, 2u8, 77u8, 223u8, 89u8, 80u8, 93u8, 96u8, 156u8, 172u8, 143u8, 8u8, 61u8, 198u8, 142u8, 152u8, 199u8, 250u8, 130u8, 173u8, 140u8, 154u8, 209u8, 175u8, 222u8, 50u8, 100u8, 145u8, 47u8, 150u8, 246u8]',
+    '300000',
+  ),
+  aleoRemoteRouterSolanaAddress: '7CJFBsNC49upnVfMga2gj53deAjuuVchdceJQrJg5oA5',
+} as const
+
+const ALEO_USDG_SOLANA_REMOTE_ROUTER = {
+  ...newWarpRouteAleoRemoteRouter(
+    'hyp_warp_token_usdg_v2.aleo',
+    1399811149,
+    '[144u8, 16u8, 183u8, 105u8, 178u8, 120u8, 227u8, 39u8, 114u8, 178u8, 9u8, 147u8, 182u8, 124u8, 20u8, 110u8, 203u8, 85u8, 53u8, 210u8, 96u8, 74u8, 233u8, 86u8, 22u8, 175u8, 37u8, 94u8, 7u8, 159u8, 40u8, 147u8]',
+    '300000',
+  ),
+  aleoRemoteRouterSolanaAddress: 'AhNVa6VpZwDwgD3U66CGUwCMRcFSFiTfBse2D495SPxW',
+} as const
+
+const ALEO_ZEC_SOLANA_REMOTE_ROUTER = {
+  ...newWarpRouteAleoRemoteRouter(
+    'hyp_warp_token_zec_v2.aleo',
+    1399811149,
+    '[21u8, 14u8, 14u8, 254u8, 170u8, 124u8, 94u8, 246u8, 229u8, 126u8, 105u8, 153u8, 117u8, 17u8, 66u8, 177u8, 20u8, 170u8, 61u8, 231u8, 51u8, 53u8, 114u8, 116u8, 158u8, 102u8, 137u8, 29u8, 53u8, 21u8, 213u8, 224u8]',
+    '300000',
+  ),
+  aleoRemoteRouterSolanaAddress: '2RBzic8nUNJ8KngRRbsCEjkeM9CtpQN2CCqU1cs1n2y5',
+  aleoSampleTransferSource: ZEC_SOLANA_SAMPLE_TRANSFER_SOURCE,
+} as const
+
 const ALEO_ETH_REMOTE_ROUTER = {
   aleoRemoteRouterVerified: true,
   aleoRemoteRouterSource: ALEO_ETH_REMOTE_ROUTER_SOURCE,
@@ -311,6 +552,11 @@ const ALEO_WITHDRAWAL_ACTIVATION = {
   aleoWithdrawalReviewedAt: '2026-08-26',
 } as const
 
+const NEW_WARP_ROUTE_ALEO_ACTIVATION = {
+  aleoPlaceholderConfiguration: false,
+  aleoWithdrawalReviewedAt: '2026-09-30',
+} as const
+
 // Reviewed Sealevel deployment for the Solana-origin SOL deposit route
 // (`hyperlane:solana/sol->aleo/sol`). Cross-verified against two independent
 // sources per account, per packages/bridge/src/solana/SEALEVEL_NOTES.md §2:
@@ -352,6 +598,7 @@ function route(
   availability: 'active' | 'metadata-required',
   deploymentId: string,
   metadata?: Readonly<Record<string, string | number | boolean>>,
+  source?: string,
 ): ProtocolBridgeRoute {
   return {
     id,
@@ -361,7 +608,7 @@ function route(
     destinationAssetId,
     availability,
     deploymentId,
-    source: protocol === 'xreserve' ? XRESERVE_SOURCE : protocol === 'cctp' ? CCTP_SOURCE : HYPERLANE_SOURCE,
+    source: source ?? (protocol === 'xreserve' ? XRESERVE_SOURCE : protocol === 'cctp' ? CCTP_SOURCE : HYPERLANE_SOURCE),
     ...(metadata == null ? {} : { metadata }),
   }
 }
@@ -449,8 +696,18 @@ const routes: ProtocolBridgeRoute[] = [
   route('hyperlane:aleo/wbtc->ethereum/wbtc', 'hyperlane', 'mainnet', 'aleo/wbtc', 'ethereum/wbtc', 'active', 'WBTC/aleo', { ...WBTC_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_wbtc_v2.aleo', 1), ...ALEO_WBTC_APP_METADATA, ...ALEO_WBTC_REMOTE_ROUTER, ...ALEO_WITHDRAWAL_ACTIVATION }),
   route('hyperlane:ethereum/usdt->aleo/usdt', 'hyperlane', 'mainnet', 'ethereum/usdt', 'aleo/usdt', 'active', 'USDT/aleo', { ...USDT_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }),
   route('hyperlane:aleo/usdt->ethereum/usdt', 'hyperlane', 'mainnet', 'aleo/usdt', 'ethereum/usdt', 'active', 'USDT/aleo', { ...USDT_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_usdt_v2.aleo', 1), ...ALEO_USDT_APP_METADATA, ...ALEO_USDT_ETHEREUM_REMOTE_ROUTER, ...ALEO_WITHDRAWAL_ACTIVATION }),
+  route('hyperlane:ethereum/bat->aleo/bat', 'hyperlane', 'mainnet', 'ethereum/bat', 'aleo/bat', 'active', 'BAT/aleo', { ...BAT_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }, BAT_HYPERLANE_CONFIG_SOURCE),
+  route('hyperlane:aleo/bat->ethereum/bat', 'hyperlane', 'mainnet', 'aleo/bat', 'ethereum/bat', 'active', 'BAT/aleo', { ...BAT_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_bat_v2.aleo', 1), ...ALEO_BAT_APP_METADATA, ...ALEO_BAT_ETHEREUM_REMOTE_ROUTER, ...NEW_WARP_ROUTE_ALEO_ACTIVATION, hyperlaneConfigSource: BAT_HYPERLANE_CONFIG_SOURCE }, BAT_HYPERLANE_CONFIG_SOURCE),
+  route('hyperlane:ethereum/usdg->aleo/usdg', 'hyperlane', 'mainnet', 'ethereum/usdg', 'aleo/usdg', 'active', 'USDG/aleo', { ...USDG_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }, USDG_HYPERLANE_CONFIG_SOURCE),
+  route('hyperlane:aleo/usdg->ethereum/usdg', 'hyperlane', 'mainnet', 'aleo/usdg', 'ethereum/usdg', 'active', 'USDG/aleo', { ...USDG_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_usdg_v2.aleo', 1), ...ALEO_USDG_APP_METADATA, ...ALEO_USDG_ETHEREUM_REMOTE_ROUTER, ...NEW_WARP_ROUTE_ALEO_ACTIVATION, hyperlaneConfigSource: USDG_HYPERLANE_CONFIG_SOURCE }, USDG_HYPERLANE_CONFIG_SOURCE),
   route('hyperlane:solana/sol->aleo/sol', 'hyperlane', 'mainnet', 'solana/sol', 'aleo/sol', 'active', 'SOL/aleo', { ...SOLANA_SOL_DEPOSIT_METADATA, ...ALEO_MAILBOX_METADATA }),
   route('hyperlane:aleo/sol->solana/sol', 'hyperlane', 'mainnet', 'aleo/sol', 'solana/sol', 'active', 'SOL/aleo', { ...aleoHyperlanePlaceholders('hyp_warp_token_sol_v2.aleo', 1399811149), ...ALEO_SOL_APP_METADATA, ...ALEO_SOL_REMOTE_ROUTER, ...ALEO_WITHDRAWAL_ACTIVATION }),
+  route('hyperlane:solana/bat->aleo/bat', 'hyperlane', 'mainnet', 'solana/bat', 'aleo/bat', 'active', 'BAT/aleo', { ...SOLANA_BAT_METADATA, ...ALEO_MAILBOX_METADATA }, BAT_HYPERLANE_CONFIG_SOURCE),
+  route('hyperlane:aleo/bat->solana/bat', 'hyperlane', 'mainnet', 'aleo/bat', 'solana/bat', 'active', 'BAT/aleo', { ...SOLANA_BAT_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_bat_v2.aleo', 1399811149), ...ALEO_BAT_APP_METADATA, ...ALEO_BAT_SOLANA_REMOTE_ROUTER, ...NEW_WARP_ROUTE_ALEO_ACTIVATION, hyperlaneConfigSource: BAT_HYPERLANE_CONFIG_SOURCE }, BAT_HYPERLANE_CONFIG_SOURCE),
+  route('hyperlane:solana/usdg->aleo/usdg', 'hyperlane', 'mainnet', 'solana/usdg', 'aleo/usdg', 'active', 'USDG/aleo', { ...SOLANA_USDG_METADATA, ...ALEO_MAILBOX_METADATA }, USDG_HYPERLANE_CONFIG_SOURCE),
+  route('hyperlane:aleo/usdg->solana/usdg', 'hyperlane', 'mainnet', 'aleo/usdg', 'solana/usdg', 'active', 'USDG/aleo', { ...SOLANA_USDG_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_usdg_v2.aleo', 1399811149), ...ALEO_USDG_APP_METADATA, ...ALEO_USDG_SOLANA_REMOTE_ROUTER, ...NEW_WARP_ROUTE_ALEO_ACTIVATION, hyperlaneConfigSource: USDG_HYPERLANE_CONFIG_SOURCE }, USDG_HYPERLANE_CONFIG_SOURCE),
+  route('hyperlane:solana/zec->aleo/zec', 'hyperlane', 'mainnet', 'solana/zec', 'aleo/zec', 'active', 'ZEC/aleo', { ...SOLANA_ZEC_METADATA, ...ALEO_MAILBOX_METADATA }, ZEC_HYPERLANE_CONFIG_SOURCE),
+  route('hyperlane:aleo/zec->solana/zec', 'hyperlane', 'mainnet', 'aleo/zec', 'solana/zec', 'active', 'ZEC/aleo', { ...SOLANA_ZEC_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_zec_v2.aleo', 1399811149), ...ALEO_ZEC_APP_METADATA, ...ALEO_ZEC_SOLANA_REMOTE_ROUTER, ...NEW_WARP_ROUTE_ALEO_ACTIVATION, hyperlaneConfigSource: ZEC_HYPERLANE_CONFIG_SOURCE }, ZEC_HYPERLANE_CONFIG_SOURCE),
   ...pair('hyperlane', 'mainnet', 'aleo/aleo', 'ethereum/aleo', 'metadata-required', 'ALEO/aleo', ALEO_MAILBOX_METADATA),
   ...pair('hyperlane', 'mainnet', 'aleo/aleo', 'solana/aleo', 'metadata-required', 'ALEO/aleo', ALEO_MAILBOX_METADATA),
   ...pair('hyperlane', 'mainnet', 'aleo/aleo', 'base/aleo', 'metadata-required', 'ALEO/aleo', ALEO_MAILBOX_METADATA),
@@ -463,16 +720,16 @@ const routes: ProtocolBridgeRoute[] = [
  * Supplies the initial reviewed protocol-route snapshot.
  *
  * xReserve contract identifiers are populated from Circle's published
- * mainnet and testnet tables. Hyperlane routes intentionally remain
- * `metadata-required` until their router, domain, ISM, and token identifiers
- * are pinned from one reviewed registry commit. Reading this snapshot does not
- * contact any chain or bridge provider.
+ * mainnet and testnet tables. Incomplete Hyperlane routes remain
+ * `metadata-required` until every execution identifier is pinned from a
+ * reviewed deployment snapshot. Reading this registry does not contact any
+ * chain or bridge provider.
  *
  * @example
  * const bridge = createBridgeClient({ registry: DEFAULT_BRIDGE_REGISTRY })
  */
 export const DEFAULT_BRIDGE_REGISTRY: BridgeRegistry = Object.freeze({
-  version: '2026-09-28.cctp-arc.1',
+  version: '2026-09-30.hyperlane-bat-usdg-zec.1',
   chains: Object.freeze(chains),
   assets: Object.freeze(assets),
   routes: Object.freeze(routes),

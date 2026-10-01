@@ -3,6 +3,8 @@ import { quote as quoteSolanaHyperlaneTransfer } from '../../src/protocols/hyper
 import { BridgeError } from '../../src/errors/bridgeErrors.js'
 import type { SolanaRpcClient } from '../../src/solana/rpc.js'
 import type { SolanaClient } from '../../src/connections/solana.js'
+import { prepare } from '../../src/actions/prepare.js'
+import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import {
   EXPECTED_IGP_PAYMENT_LAMPORTS,
   NETWORK_FEE_LAMPORTS,
@@ -70,6 +72,25 @@ describe('quoteSolanaHyperlaneTransfer', () => {
     const rpc = rpcReturning(null)
 
     await expect(quoteSolanaHyperlaneTransfer(registry, client(rpc), { plan })).rejects.toThrow(BridgeError)
+  })
+
+  it('quotes SPL collateral in token atomic units without adding it to the SOL requirement', async () => {
+    const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'solana', asset: 'zec' },
+      destination: { chain: 'aleo', asset: 'zec' },
+      bridgeProtocol: 'hyperlane',
+      amount: '0.0001',
+      sender: 'D4jZ2sNktKgTrhWVMnjZb5BXP7MMh9N3y5ZLwkyKfozb',
+      recipient: 'aleo1mx0tldt5qsqymn5a3whnmf9rx2whp837jjn0tvqgxqf86zg6dvyqnc8spm',
+    })
+    const rpc = rpcReturning(igpAccountData())
+
+    const quote = await quoteSolanaHyperlaneTransfer(DEFAULT_BRIDGE_REGISTRY, client(rpc), { plan })
+
+    expect(quote.amountLamports).toBe(10_000n)
+    expect(quote.totalLamports).toBe(
+      quote.igpPaymentLamports + quote.networkFeeLamports + quote.rentLamports,
+    )
   })
 
   it('propagates route validation failures without touching the network', async () => {

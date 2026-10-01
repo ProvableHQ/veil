@@ -50,7 +50,7 @@ function hyperlaneSteps(
   destinationChain: ProtocolBridgeChain,
 ): BridgeExecutionStep[] {
   const steps: BridgeExecutionStep[] = []
-  if (source.kind === 'token' && sourceChain.family !== 'aleo') {
+  if (source.kind === 'token' && sourceChain.family === 'evm') {
     steps.push({
       key: 'source-approval',
       kind: 'approve',

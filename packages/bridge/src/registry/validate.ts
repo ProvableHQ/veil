@@ -1,18 +1,15 @@
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type { BridgeRegistry } from '../types/protocol.js'
-import type { SolanaHyperlaneRouteMetadata } from '../types/solana.js'
+import type { SolanaHyperlaneTransferMetadata } from '../types/solana.js'
 
-// Required `SolanaHyperlaneRouteMetadata` fields an active Solana-source
-// Hyperlane route must carry. `igpOverheadAccount` is intentionally excluded:
+// Common `SolanaHyperlaneTransferMetadata` fields an active Solana-source
+// Hyperlane route must carry. Collateral-specific fields are checked below.
+// `igpOverheadAccount` is intentionally excluded:
 // it is optional on the type, present only when the reviewed deployment
 // wraps its IGP in an `OverheadIgp` layer (see the type's docblock).
-const REQUIRED_SOLANA_HYPERLANE_METADATA_FIELDS: readonly Exclude<
-  keyof SolanaHyperlaneRouteMetadata,
-  'igpOverheadAccount'
->[] = [
+const REQUIRED_SOLANA_HYPERLANE_METADATA_FIELDS = [
   'warpProgramAddress',
   'tokenPda',
-  'nativeCollateralPda',
   'dispatchAuthorityPda',
   'mailboxProgramAddress',
   'mailboxOutboxPda',
@@ -25,11 +22,11 @@ const REQUIRED_SOLANA_HYPERLANE_METADATA_FIELDS: readonly Exclude<
   'registryCommit',
   'solanaReviewedAt',
   'solanaConfigSource',
-]
+] as const satisfies readonly (keyof SolanaHyperlaneTransferMetadata)[]
 
 /**
  * Reports whether route metadata carries every required
- * `SolanaHyperlaneRouteMetadata` field with the expected primitive type.
+ * `SolanaHyperlaneTransferMetadata` field with the expected primitive type.
  *
  * Checks only the supplied field names and primitive types; format-level
  * validation (address charset, digit strings, and commit hash format) is the
@@ -40,10 +37,19 @@ function hasCompleteSolanaHyperlaneMetadata(
   metadata: Readonly<Record<string, string | number | boolean>> | undefined,
 ): boolean {
   if (!metadata) return false
-  return REQUIRED_SOLANA_HYPERLANE_METADATA_FIELDS.every((field) => {
+  const hasCommonFields = REQUIRED_SOLANA_HYPERLANE_METADATA_FIELDS.every((field) => {
     const value = metadata[field]
     return field === 'destinationDomain' ? typeof value === 'number' : typeof value === 'string' && value.length > 0
   })
+  if (!hasCommonFields) return false
+  if (metadata.routerType === 'spl-collateral') {
+    return ['splTokenProgramAddress', 'collateralMintAddress', 'escrowPda'].every((field) =>
+      typeof metadata[field] === 'string' && metadata[field].length > 0,
+    )
+  }
+  return (metadata.routerType === undefined || metadata.routerType === 'native')
+    && typeof metadata.nativeCollateralPda === 'string'
+    && metadata.nativeCollateralPda.length > 0
 }
 
 /**
@@ -52,7 +58,7 @@ function hasCompleteSolanaHyperlaneMetadata(
  * Duplicate identifiers and dangling asset or chain references throw before a
  * client can describe a misleading transfer. An active Hyperlane route sourced
  * from a Solana-family chain additionally must carry a complete
- * `SolanaHyperlaneRouteMetadata` object, so a route cannot be made active ahead
+ * `SolanaHyperlaneTransferMetadata` object, so a route cannot be made active ahead
  * of its metadata being reviewed and filled in. Validation does not contact a
  * chain or bridge provider.
  *

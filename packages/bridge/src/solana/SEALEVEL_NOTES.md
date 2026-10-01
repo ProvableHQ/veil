@@ -25,7 +25,13 @@ This route's registry config is the same file already cited in
 It confirms: warp program `8YGT2pZwyZe94qBpGzWfY2TMEVcwaQ1bXAE7YAgpUaM7` on
 `chainName: solanamainnet`, `standard: SealevelHypNative`, `tokenType: native`,
 `decimals: 9` — i.e. this is the **native-collateral** (`SealevelHypNativeAdapter`)
-program family, not an SPL-collateral or synthetic one. All facts below are
+program family, not an SPL-collateral or synthetic one. The SPL-collateral
+extension is independently pinned by
+`test/fixtures/sealevel-spl-collateral-transfer-remote.json`, captured from the
+successful ZEC transfer
+`0x5f0236faa02b61ea3e8f4406bbd43b7b5b74cc4010574a1fcda47d1d092e3a3e`.
+It replaces the native plugin's final two accounts with the token program,
+mint, sender associated token account, and escrow PDA. All facts below are
 for that family.
 
 The primary sources used are the current locations of the files the task

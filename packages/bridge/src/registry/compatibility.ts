@@ -30,8 +30,64 @@ const LEGACY_ROUTE_HASHES: Readonly<Record<string, string>> = {
   'hyperlane:aleo/usad->ethereum/usad': '0x7ca2bf58c99ea3a9528b4aad047e2fc47e17bae1453c3acf8f1a7ded7f682d02',
 }
 
+const CURRENT_REGISTRY_VERSION = '2026-09-30.hyperlane-bat-usdg-zec.1'
+const PREVIOUS_REGISTRY_VERSION = '2026-09-28.cctp-arc.1'
+const LEGACY_REGISTRY_VERSION = '2026-08-31.solana-deposits.1'
+
+// Fingerprints from the immediately preceding registry. Routes whose
+// availability or execution metadata changed in the BAT/USDG/ZEC rollout are
+// deliberately absent, so a saved discovery-only plan cannot become
+// executable merely by being loaded against the new snapshot.
+const PREVIOUS_ROUTE_HASHES: Readonly<Record<string, string>> = {
+  ...LEGACY_ROUTE_HASHES,
+  'xreserve:arc/usdc->aleo/usdcx': '0xe2a37bbdde3b7262ed87d18b1b6fcb520c07fcb4da0d216dcd332e1ef9f81c41',
+  'xreserve:aleo/usdcx->arc/usdc': '0x78dd0baaced8f33a084a4ea19768c1771f668ae2599ae7665b4292d1a032a1db',
+  'cctp:ethereum/usdc->arc/usdc': '0xf69fa7970f64756124f0da2e3b47a4b424a14b1748ac1a9146c25fb0d7966ad0',
+  'cctp:base/usdc->arc/usdc': '0xdb2e91ace6eee39f726f0a929384dd5f0968eccdb69f975eeeee5f4ad564f4de',
+  'cctp:arbitrum/usdc->arc/usdc': '0x00403b53205fdd343683e252ec794d686c0d3315a218763d6124f62d208bd8af',
+  'cctp:arc/usdc->ethereum/usdc': '0xf8e6691b4d72fba2aeb084fcbf635487d7c46f2c1dd74d043b7425fdd2be3a75',
+  'cctp:arc/usdc->base/usdc': '0x38ccaa7ec19aa858c066750577ce1eb5c5277de2019ad6fd29c4f231b870acd0',
+  'cctp:arc/usdc->arbitrum/usdc': '0x84af98eec91a26c7458c22fa874b84396c51c91af25c4bd55188b488fcc05932',
+  'xreserve:sepolia/usdc->aleo-testnet/usdcx': '0xdc223b4d3415692948d238ec30592174009612be1d803ef6137e0fc865d73c0a',
+  'xreserve:aleo-testnet/usdcx->sepolia/usdc': '0x12545bf00d3cbd40f58e9d260f7a4e33abf786fb278e738872f0f9de6ba5860c',
+  'hyperlane:ethereum/bat->aleo/bat': '0x2f4f3cc67134f77acf0fe302103d7275b28e2ef57f56b6bde1318493c48770d3',
+  'hyperlane:ethereum/usdg->aleo/usdg': '0xca773e6381538fada99de9a10e9459e55329cadc17e4a2c9061c5835f9da4c77',
+}
+
+function routeFingerprint(
+  registry: BridgeRegistry,
+  routeId: string,
+  normalizeLegacySepolia: boolean,
+): string | undefined {
+  const route = registry.routes.find(entry => entry.id === routeId)
+  if (!route) return undefined
+  const sourceAsset = registry.assets.find(entry => entry.id === route.sourceAssetId)
+  const destinationAsset = registry.assets.find(entry => entry.id === route.destinationAssetId)
+  const sourceChain = registry.chains.find(entry => entry.id === sourceAsset?.chainId)
+  const destinationChain = registry.chains.find(entry => entry.id === destinationAsset?.chainId)
+  if (!sourceAsset || !destinationAsset || !sourceChain || !destinationChain) return undefined
+  // Sepolia's pre-Arc catalog omitted its reviewed xReserve domain 0.
+  // Normalize only that explicit correction when checking the legacy hash.
+  if (normalizeLegacySepolia && route.protocol === 'xreserve'
+    && [sourceChain, destinationChain].some(entry => entry.id === 'sepolia' && entry.protocolDomains?.xreserve !== 0)) return undefined
+  const chain = (entry: ProtocolBridgeChain) => ({
+    ...entry,
+    protocolDomains: {
+      [route.protocol]: normalizeLegacySepolia && entry.id === 'sepolia' && route.protocol === 'xreserve'
+        ? null
+        : entry.protocolDomains?.[route.protocol] ?? null,
+    },
+  })
+  // Sort object keys recursively so serialization order cannot affect compatibility.
+  const canonical = JSON.stringify({ route, sourceAsset, destinationAsset,
+    sourceChain: chain(sourceChain), destinationChain: chain(destinationChain),
+  }, (_key, value) => value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) : value)
+  return sha256(stringToHex(canonical))
+}
+
 /**
- * Accepts an exact registry version or an unchanged, reviewed pre-Arc route.
+ * Accepts an exact registry version or an unchanged route from a reviewed prior snapshot.
  * Checks pinned deployment fingerprints locally; unknown versions and changed
  * routes remain incompatible, including injected registries with reused labels.
  * @param registry Current assets, chains, and deployments used for execution.
@@ -42,26 +98,16 @@ const LEGACY_ROUTE_HASHES: Readonly<Record<string, string>> = {
  */
 export function isRegistryVersionCompatible(registry: BridgeRegistry, version: string, routeId: string): boolean {
   if (version === registry.version) return true
-  if (version !== '2026-08-31.solana-deposits.1' || registry.version !== '2026-09-28.cctp-arc.1') return false
-  const expected = LEGACY_ROUTE_HASHES[routeId]
+  const legacy = version === LEGACY_REGISTRY_VERSION
+  // Preserve the previously supported legacy-to-September path for callers
+  // that pin that reviewed registry instead of adopting the latest snapshot.
+  if (registry.version !== CURRENT_REGISTRY_VERSION
+    && !(legacy && registry.version === PREVIOUS_REGISTRY_VERSION)) return false
+  const expected = legacy
+    ? LEGACY_ROUTE_HASHES[routeId]
+    : version === PREVIOUS_REGISTRY_VERSION
+      ? PREVIOUS_ROUTE_HASHES[routeId]
+      : undefined
   if (!expected) return false
-  const route = registry.routes.find(entry => entry.id === routeId)
-  if (!route) return false
-  const sourceAsset = registry.assets.find(entry => entry.id === route.sourceAssetId)
-  const destinationAsset = registry.assets.find(entry => entry.id === route.destinationAssetId)
-  const sourceChain = registry.chains.find(entry => entry.id === sourceAsset?.chainId)
-  const destinationChain = registry.chains.find(entry => entry.id === destinationAsset?.chainId)
-  if (!sourceAsset || !destinationAsset || !sourceChain || !destinationChain) return false
-  // Sepolia's pre-Arc catalog omitted its reviewed xReserve domain 0.
-  // Normalize only that explicit correction when checking the legacy hash.
-  if (route.protocol === 'xreserve' && [sourceChain, destinationChain].some(entry => entry.id === 'sepolia' && entry.protocolDomains?.xreserve !== 0)) return false
-  const chain = (entry: ProtocolBridgeChain) => ({
-    ...entry, protocolDomains: { [route.protocol]: entry.id === 'sepolia' && route.protocol === 'xreserve' ? null : entry.protocolDomains?.[route.protocol] ?? null },
-  })
-  // Sort object keys recursively so serialization order cannot affect compatibility.
-  const canonical = JSON.stringify({ route, sourceAsset, destinationAsset,
-    sourceChain: chain(sourceChain), destinationChain: chain(destinationChain),
-  }, (_key, value) => value && typeof value === 'object' && !Array.isArray(value)
-    ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) : value)
-  return sha256(stringToHex(canonical)) === expected
+  return routeFingerprint(registry, routeId, legacy) === expected
 }

@@ -12,6 +12,7 @@ import type { EvmCctpTransferExecution, EvmCctpTransferQuote } from '../../types
 import type { XReserveHttpTransport } from '../../types/xreserve.js'
 import type { BridgeCheckpoint, BridgePlan, BridgeReceipt, BridgeRegistry } from '../../types/protocol.js'
 import { formatDecimalAmount, parseDecimalAmount } from '../../utils/units.js'
+import { isRegistryVersionCompatible } from '../../registry/compatibility.js'
 
 const TOKEN = parseAbi([
   'function allowance(address owner,address spender) view returns (uint256)',
@@ -54,7 +55,8 @@ function uint(value: unknown, field: string): number {
 function metadata(registry: BridgeRegistry, plan: BridgePlan): Metadata {
   const route = registry.routes.find(r => r.id === plan.route.id)
   if (plan.protocol !== 'cctp' || route?.protocol !== 'cctp' || route.availability !== 'active'
-    || plan.registryVersion !== registry.version || route.sourceAssetId !== plan.sourceAsset.id
+    || !isRegistryVersionCompatible(registry, plan.registryVersion, plan.route.id)
+    || route.sourceAssetId !== plan.sourceAsset.id
     || route.destinationAssetId !== plan.destinationAsset.id) fail('CCTP plan does not match an active registry route')
   const source = registry.assets.find(a => a.id === route.sourceAssetId)
   const destination = registry.assets.find(a => a.id === route.destinationAssetId)
@@ -405,7 +407,10 @@ export async function getStatus(registry: BridgeRegistry, clients: BridgeChainCl
 export async function recover(registry: BridgeRegistry, clients: BridgeChainClients, fetch: XReserveHttpTransport, params: { checkpoint: BridgeCheckpoint; plan: BridgePlan; signal?: AbortSignal; cctp?: RecoverParameters['cctp'] }): Promise<BridgeReceipt> {
   const { checkpoint, plan } = params
   metadata(registry, plan)
-  if (checkpoint.route.id !== plan.route.id || checkpoint.route.registryVersion !== registry.version) fail('CCTP checkpoint registry mismatch')
+  if (checkpoint.route.id !== plan.route.id
+    || !isRegistryVersionCompatible(registry, checkpoint.route.registryVersion, checkpoint.route.id)) {
+    fail('CCTP checkpoint registry mismatch')
+  }
   const active = [...(checkpoint.source?.approvalTransactionIds ?? [])]
   const replaced = [...(checkpoint.source?.replacedApprovalTransactionIds ?? [])]
   replaced.forEach(validHash)

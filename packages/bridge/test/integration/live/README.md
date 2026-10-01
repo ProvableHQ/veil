@@ -88,6 +88,8 @@ and any of `cctp-roundtrip-ethereum`, `cctp-roundtrip-base`, or
 out and returns only the attested net amount received. Both legs use forwarding
 and verify the exact mint plus recipient balance increase through the SDK.
 
+The Ethereum outbound fee cap is 2.70 USDC; execution still tightens the fee to
+the live quote plus 5% and 0.001 USDC, within that cap.
 The configured outbound amounts are 2.75 USDC for Ethereum and 0.25 USDC each
 for Base and Arbitrum. Every new leg chooses a ceiling close to the live fee
 estimate, within the scenario's absolute budget. Forwarding may spend the full
@@ -102,3 +104,48 @@ Reuse those files after an interruption. Completed legs are reverified rather
 than repeated, and submitted legs remain recoverable without fresh gas. Keep
 the recipient idle during each roundtrip so unrelated transfers cannot distort
 the exact balance assertions.
+
+## PR #169: BAT, USDG, and ZEC
+
+Run mainnet reads without keys or transaction submission:
+
+```sh
+BRIDGE_ARC22_READ_ONLY=1 pnpm vitest run \
+  packages/bridge/test/integration/live/mainnet/arc22-hyperlane.live.test.ts
+```
+
+This runs 16 real-network checks: ten directional quotes, two Ethereum collateral
+checks, three Solana mint/program/escrow checks, and recovery of the historical
+ZEC Solana deposit in the PR fixture through canonical Aleo Mailbox delivery.
+It does not create a new transfer. HTTP/RPC failures fail the checks; there is no
+mock or silent fallback. Public endpoints can rate-limit; override
+`BRIDGE_LIVE_ETHEREUM_RPC_URL`, `BRIDGE_LIVE_SOLANA_RPC_URL`, or `ALEO_RPC_URL`.
+
+The same file has ten independently selectable fund-moving cases. Select exactly
+one route and configure its source key using the
+[example instructions](../../../examples/README.md#bat-usdg-and-zec-live-quotes-transfers-and-recovery).
+Amounts are explicit, never inferred from a wallet balance. For example:
+
+```sh
+export BRIDGE_LIVE_FUNDS=1
+export BRIDGE_LIVE_MAINNET_ACK=I_ACKNOWLEDGE_BRIDGE_MAINNET_FUNDS
+export BRIDGE_LIVE_MAINNET_CASES=arc22-hyperlane
+export BRIDGE_LIVE_STATE_DIR='/absolute/private/path/bridge-live'
+export BRIDGE_ARC22_ROUTE_ID='hyperlane:solana/zec->aleo/zec'
+export BRIDGE_ARC22_AMOUNT='0.0001'
+export BRIDGE_ARC22_SENDER='<source address>'
+export BRIDGE_ARC22_RECIPIENT='<destination address>'
+BRIDGE_LIVE_MAINNET_EXECUTE=I_ACKNOWLEDGE_THIS_SUBMITS_MAINNET_TRANSACTIONS \
+  pnpm vitest run packages/bridge/test/integration/live/mainnet/arc22-hyperlane.live.test.ts
+```
+
+Only the selected transfer runs; the other nine are skipped. Without the execution
+acknowledgement all ten are skipped, so a quote-only run cannot be mistaken for a
+passing end-to-end transfer test.
+State filenames are route-specific, and restart uses the saved checkpoint instead
+of repeating the transfer. Delivery, not source acceptance, is the pass condition.
+
+Validation on 2026-10-01 against PR head `ac7f718` plus these tests: **16 read-only
+live checks passed**, including historical ZEC recovery. **No new fund-moving
+transfer was run**; the ten new execution cases were skipped. The original PR's
+reported 403 passing tests/16 skipped live tests is distinct from this validation.

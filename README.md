@@ -201,7 +201,7 @@ const account = viewOnlyAccount({
 
 `@provablehq/aleo-bridge-sdk` assigns each supported asset family to a
 protocol: Circle xReserve for USDCx, and Hyperlane Warp Routes for ETH, WBTC,
-SOL, ALEO, and USAD. The package is in preview. Its current foundation exposes
+USDT, SOL, BAT, USDG, ZEC, ALEO, and USAD. The package is in preview. Its current foundation exposes
 a versioned route registry and non-fund-moving transfer plans; transaction
 execution is under development.
 

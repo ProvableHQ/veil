@@ -3,12 +3,17 @@ import type { SolanaClient, SolanaWalletClient } from '../../connections/solana.
 import { quoteIgpGasPayment } from '../../solana/igp.js'
 import { loadKit } from '../../solana/kit.js'
 import type { SolanaRpcClient } from '../../solana/rpc.js'
-import { buildTransferRemoteInstruction, type SolanaAccountMeta } from '../../solana/transferRemote.js'
+import {
+  buildTransferRemoteInstruction,
+  decodeSplTokenAccountAmount,
+  deriveAssociatedTokenAddress,
+  type SolanaAccountMeta,
+} from '../../solana/transferRemote.js'
 import { extractSolanaHyperlaneMessageId } from '../../solana/extractHyperlaneMessageId.js'
 import type { BridgeRegistry, BridgeReceipt } from '../../types/protocol.js'
 import type {
   ExecuteSolanaHyperlaneTransferParameters,
-  SolanaHyperlaneRouteMetadata,
+  SolanaHyperlaneTransferMetadata,
   SolanaHyperlaneTransferExecution,
   SolanaHyperlaneTransferQuote,
   QuoteSolanaHyperlaneTransferParameters,
@@ -34,16 +39,17 @@ function accountRole(kit: Awaited<ReturnType<typeof loadKit>>, account: SolanaAc
 }
 
 /**
- * Calculates the SOL required for a Solana-to-Aleo Hyperlane transfer.
+ * Calculates the SOL and source-asset amounts required for a Solana-to-Aleo Hyperlane transfer.
  *
- * The total includes the transferred amount, relayer payment, current network
- * fee, and rent for accounts created by the dispatch. The action reads Solana
- * without requesting a signature or moving funds.
+ * The total includes the transferred amount for native SOL routes plus the
+ * relayer payment, current network fee, and dispatch-account rent. SPL routes
+ * report their token amount separately and exclude it from the SOL total. The
+ * action reads Solana without requesting a signature or moving funds.
  *
  * @param registry Supported assets and reviewed Hyperlane deployments.
  * @param client Solana network access used to read route accounts, fees, and rent.
  * @param params Route, amount, recipient, and source account used to compile the fee quote.
- * @returns Transfer amount, relayer payment, network fee, rent, and total in lamports.
+ * @returns Source amount in atomic units plus relayer payment, network fee, rent, and executable SOL total in lamports.
  * @throws BridgeError When the route is unavailable, no source account is supplied, or Solana returns invalid account or fee data.
  * @example const result = await quote(registry, client, { plan })
  */
@@ -106,7 +112,8 @@ export async function quote(
     igpPaymentLamports,
     networkFeeLamports,
     rentLamports,
-    totalLamports: amountLamports + igpPaymentLamports + networkFeeLamports + rentLamports,
+    totalLamports: (metadata.routerType === 'spl-collateral' ? 0n : amountLamports)
+      + igpPaymentLamports + networkFeeLamports + rentLamports,
   }
 }
 
@@ -167,7 +174,7 @@ function buildReceipt(
   status: Extract<BridgeReceipt['status'], 'SOURCE_CONFIRMING' | 'DELIVERY_PENDING'>,
   signature: string,
   routeId: string,
-  metadata: SolanaHyperlaneRouteMetadata,
+  metadata: SolanaHyperlaneTransferMetadata,
   uniqueMessageAddress: string,
   quote: SolanaHyperlaneTransferQuote,
   blockhash: string,
@@ -260,11 +267,12 @@ export async function getSourceStatus(
 }
 
 /**
- * Begins a Solana-to-Aleo Hyperlane transfer by committing SOL on Solana.
+ * Begins a Solana-to-Aleo Hyperlane transfer by committing native SOL or SPL collateral on Solana.
  *
- * The source account must cover the transfer, relayer payment, network fee, and
- * account rent while retaining its own rent-exempt floor. The connected wallet
- * MUST match any sender chosen earlier. After broadcast, a confirmation timeout
+ * The source account must cover the relayer payment, network fee, and account
+ * rent; native routes also pay the transfer amount from that SOL balance, while
+ * SPL routes require sufficient tokens in the sender's associated account. The
+ * connected wallet MUST match any sender chosen earlier. After broadcast, a confirmation timeout
  * remains pending because the transaction may still land; it is not reported as
  * a failed transfer.
  *
@@ -363,18 +371,35 @@ export async function execute(
   // 3. Quote the live IGP payment through the shared oracle-reading action.
   const transferQuote = await quote(registry, client, { plan: { ...params.plan, sender: senderAddress } })
 
-  // 4. Preflight: the sender must cover the amount, gas, and the rent for
+  // 4. Preflight: the sender must cover gas and the rent for
   // the two accounts (gas-payment PDA, dispatched-message PDA) the
   // instruction creates fresh, and must still clear its own rent-exempt
   // floor once every one of those lamports has left it.
   const requiredLamports = transferQuote.totalLamports
   const balance = await rpc.getBalance(senderAddress)
   if (balance < requiredLamports) {
+    const amountBreakdown = metadata.routerType === 'spl-collateral'
+      ? ''
+      : `amount ${transferQuote.amountLamports} + `
     throw new BridgeError(
       `Insufficient Solana balance for this Hyperlane transfer: balance ${balance} lamports, `
-      + `required ${requiredLamports} lamports (amount ${transferQuote.amountLamports} `
-      + `+ gas ${transferQuote.igpPaymentLamports + transferQuote.networkFeeLamports} + rent ${transferQuote.rentLamports})`,
+      + `required ${requiredLamports} lamports (${amountBreakdown}`
+      + `gas ${transferQuote.igpPaymentLamports + transferQuote.networkFeeLamports} + rent ${transferQuote.rentLamports})`,
     )
+  }
+  if (metadata.routerType === 'spl-collateral') {
+    const senderAta = await deriveAssociatedTokenAddress(
+      senderAddress,
+      metadata.collateralMintAddress,
+      metadata.splTokenProgramAddress,
+    )
+    const tokenBalance = decodeSplTokenAccountAmount(await rpc.getAccountData(senderAta), senderAta)
+    if (tokenBalance < transferQuote.amountLamports) {
+      throw new BridgeError(
+        `Insufficient Solana token balance for this Hyperlane transfer: balance ${tokenBalance}, `
+        + `required ${transferQuote.amountLamports} atomic units`,
+      )
+    }
   }
 
   // 5. Generate the ephemeral unique-message signer that seeds the

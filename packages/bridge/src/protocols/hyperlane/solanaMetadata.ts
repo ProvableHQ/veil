@@ -1,7 +1,7 @@
 import { isRegistryVersionCompatible } from '../../registry/compatibility.js'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import type { BridgeRegistry, BridgePlan } from '../../types/protocol.js'
-import type { SolanaHyperlaneRouteMetadata } from '../../types/solana.js'
+import type { SolanaHyperlaneTransferMetadata } from '../../types/solana.js'
 
 // Base58, excluding the visually ambiguous 0/O/I/l — matches how Solana
 // encodes a 32-byte account or program public key.
@@ -38,7 +38,7 @@ function requirePubkey(value: unknown, field: string, routeId: string): string {
 export function solanaRouteMetadata(
   registry: BridgeRegistry,
   plan: BridgePlan,
-): SolanaHyperlaneRouteMetadata {
+): SolanaHyperlaneTransferMetadata {
   if (plan.protocol !== 'hyperlane' || plan.route.protocol !== 'hyperlane') {
     throw new BridgeError('Solana Hyperlane actions require a Hyperlane transfer plan')
   }
@@ -65,7 +65,6 @@ export function solanaRouteMetadata(
   const routeId = plan.route.id
   const warpProgramAddress = requirePubkey(metadata.warpProgramAddress, 'warpProgramAddress', routeId)
   const tokenPda = requirePubkey(metadata.tokenPda, 'tokenPda', routeId)
-  const nativeCollateralPda = requirePubkey(metadata.nativeCollateralPda, 'nativeCollateralPda', routeId)
   const dispatchAuthorityPda = requirePubkey(metadata.dispatchAuthorityPda, 'dispatchAuthorityPda', routeId)
   const mailboxProgramAddress = requirePubkey(metadata.mailboxProgramAddress, 'mailboxProgramAddress', routeId)
   const mailboxOutboxPda = requirePubkey(metadata.mailboxOutboxPda, 'mailboxOutboxPda', routeId)
@@ -111,10 +110,9 @@ export function solanaRouteMetadata(
     throw new BridgeError(`Solana Hyperlane route has an invalid solanaConfigSource: ${routeId}`)
   }
 
-  return {
+  const common = {
     warpProgramAddress,
     tokenPda,
-    nativeCollateralPda,
     dispatchAuthorityPda,
     mailboxProgramAddress,
     mailboxOutboxPda,
@@ -128,5 +126,23 @@ export function solanaRouteMetadata(
     registryCommit,
     solanaReviewedAt,
     solanaConfigSource,
+  }
+
+  if (metadata.routerType === 'spl-collateral') {
+    return {
+      ...common,
+      routerType: 'spl-collateral',
+      splTokenProgramAddress: requirePubkey(metadata.splTokenProgramAddress, 'splTokenProgramAddress', routeId),
+      collateralMintAddress: requirePubkey(metadata.collateralMintAddress, 'collateralMintAddress', routeId),
+      escrowPda: requirePubkey(metadata.escrowPda, 'escrowPda', routeId),
+    }
+  }
+  if (metadata.routerType !== undefined && metadata.routerType !== 'native') {
+    throw new BridgeError(`Solana Hyperlane route has an invalid routerType: ${routeId}`)
+  }
+  return {
+    ...common,
+    ...(metadata.routerType === 'native' ? { routerType: 'native' as const } : {}),
+    nativeCollateralPda: requirePubkey(metadata.nativeCollateralPda, 'nativeCollateralPda', routeId),
   }
 }

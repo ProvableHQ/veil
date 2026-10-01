@@ -89,6 +89,18 @@ function fixture(forwarding = true, hookVersion: 0 | 1 = 0, sourceChain = 'ether
 }
 
 describe('CCTP V2 adapter', () => {
+  it('accepts unchanged plans and checkpoints from the preceding registry snapshot', async () => {
+    const f = fixture()
+    const previousPlan = { ...f.transfer, registryVersion: '2026-09-28.cctp-arc.1' }
+    await expect(quote(registry, f.clients, f.fetch, { plan: previousPlan })).resolves.toMatchObject({
+      plan: { route: { id: previousPlan.route.id }, registryVersion: previousPlan.registryVersion },
+    })
+    await expect(recover(registry, f.clients, f.fetch, {
+      plan: previousPlan,
+      checkpoint: createBridgeCheckpoint(previousPlan, f.receipt),
+    })).resolves.toMatchObject({ status: 'COMPLETED' })
+  })
+
   it('quotes decimal basis points, forwarding atomic fees, and defaults to Standard', async () => {
     const f = fixture()
     const q = await quote(registry, f.clients, f.fetch, { plan: f.transfer })

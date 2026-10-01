@@ -59,8 +59,14 @@ runtime discovery but does not narrow the exported TypeScript unions.
 | Aleo WBTC | Ethereum | WBTC | Hyperlane |
 | Ethereum USDT | Aleo | USDT | Hyperlane |
 | Aleo USDT | Ethereum | USDT | Hyperlane |
+| Ethereum BAT | Aleo | BAT | Hyperlane |
+| Aleo BAT | Ethereum | BAT | Hyperlane |
+| Ethereum USDG | Aleo | USDG | Hyperlane |
+| Aleo USDG | Ethereum | USDG | Hyperlane |
 | Solana SOL | Aleo | SOL | Hyperlane |
 | Aleo SOL | Solana | SOL | Hyperlane |
+| Solana BAT, USDG, or ZEC | Aleo | BAT, USDG, or ZEC | Hyperlane |
+| Aleo BAT, USDG, or ZEC | Solana | BAT, USDG, or ZEC | Hyperlane |
 | Ethereum USDC | Aleo | USDCx | Circle xReserve |
 | Arc USDC | Aleo | USDCx | Circle xReserve |
 | Ethereum, Base, or Arbitrum USDC | Arc | USDC | Circle CCTP V2 |
@@ -69,8 +75,19 @@ runtime discovery but does not narrow the exported TypeScript unions.
 
 The registry also contains incomplete ALEO and USAD Hyperlane entries for
 deployment discovery. Those entries are marked `metadata-required` and cannot
-be quoted or executed. Solana routes currently support native SOL, not USDC or
-other SPL tokens.
+be quoted or executed.
+
+BAT, USDG, and ZEC use SPL-collateral warp routes on Solana. BAT and ZEC use
+the classic SPL Token program; USDG uses Token-2022. The SDK can build and
+submit both Solana-to-Aleo and Aleo-to-Solana transfers and tracks delivery by
+the recipient's associated token account.
+
+`SolanaHyperlaneRouteMetadata` retains its native SOL fields, including the
+required `nativeCollateralPda`. SPL integrations use `SolanaHyperlaneSplRouteMetadata`;
+code that accepts both kinds uses `SolanaHyperlaneTransferMetadata` and narrows
+on `routerType === 'spl-collateral'`. `BuildTransferRemoteParameters` defaults to
+native metadata; its optional type parameter accepts either new metadata type.
+Existing native callers do not need a discriminator or other changes.
 
 ## Redeem Aleo USDCx on Arc
 
@@ -448,6 +465,12 @@ await bridge.execute({
 
 After a restart, `recover` reconstructs the plan and checks existing network or
 provider state. It never signs, submits, or repeats a transaction.
+
+Upgrade recovery services before deploying applications that write checkpoints
+with a newer registry version. The current SDK accepts unchanged routes from
+reviewed prior registry snapshots; older SDKs reject checkpoints written with the
+new registry version. Keep saved checkpoints intact rather than rewriting their
+version labels.
 
 ```ts
 const checkpoint = JSON.parse(localStorage.getItem('bridge-checkpoint')!)

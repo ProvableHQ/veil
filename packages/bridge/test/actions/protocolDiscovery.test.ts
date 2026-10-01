@@ -69,6 +69,9 @@ describe('getRoutes', () => {
     })
     expect(routes.map((route) => route.id)).toEqual([
       'hyperlane:aleo/sol->solana/sol',
+      'hyperlane:aleo/bat->solana/bat',
+      'hyperlane:aleo/usdg->solana/usdg',
+      'hyperlane:aleo/zec->solana/zec',
       'hyperlane:aleo/aleo->solana/aleo',
     ])
   })

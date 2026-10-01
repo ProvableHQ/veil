@@ -1,5 +1,9 @@
 export { loadKit } from './kit.js'
-export { buildTransferRemoteInstruction } from './transferRemote.js'
+export {
+  buildTransferRemoteInstruction,
+  decodeSplTokenAccountAmount,
+  deriveAssociatedTokenAddress,
+} from './transferRemote.js'
 export type { BuildTransferRemoteParameters, SolanaAccountMeta } from './transferRemote.js'
 export { createSolanaRpcClient } from './rpc.js'
 export type { SolanaRpcClient } from './rpc.js'

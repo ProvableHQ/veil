@@ -24,7 +24,10 @@ export type SolanaRpcConfig = {
 }
 
 /**
- * Captures the reviewed metadata required to dispatch a Solana Hyperlane Warp Route transfer.
+ * Captures the reviewed metadata required to dispatch a native SOL Hyperlane transfer.
+ *
+ * Preserves the native-only public contract. Transfers that can also use SPL
+ * collateral accept `SolanaHyperlaneTransferMetadata`.
  *
  * @property warpProgramAddress Deployed Solana Warp Route program handling the transfer instruction.
  * @property tokenPda Program-derived address holding the route's token configuration.
@@ -46,11 +49,58 @@ export type SolanaRpcConfig = {
  * @property registryCommit Hyperlane Registry commit containing the deployment snapshot.
  * @property solanaReviewedAt ISO 8601 timestamp of the last manual review of this deployment.
  * @property solanaConfigSource Identifies where the reviewed configuration values were sourced from.
+ * @example
+ * function nativeCollateral(metadata: SolanaHyperlaneRouteMetadata): string {
+ *   return metadata.nativeCollateralPda
+ * }
  */
-export type SolanaHyperlaneRouteMetadata = {
+export type SolanaHyperlaneRouteMetadata = SolanaHyperlaneCommonRouteMetadata & {
+  nativeCollateralPda: string
+}
+
+/**
+ * Captures the reviewed metadata required to dispatch SPL collateral through Hyperlane.
+ *
+ * Shares the Warp Route, Mailbox, and IGP accounts with native metadata and
+ * requires the SPL-specific accounts for classic SPL Token or Token-2022.
+ *
+ * @property routerType Identifies SPL collateral so transfer builders select token accounts.
+ * @property splTokenProgramAddress SPL Token or Token-2022 program that owns the collateral mint.
+ * @property collateralMintAddress Mint whose tokens are locked by the route.
+ * @property escrowPda Token account controlled by the warp program that holds locked collateral.
+ * @example
+ * function collateralMint(metadata: SolanaHyperlaneSplRouteMetadata): string {
+ *   return metadata.collateralMintAddress
+ * }
+ */
+export type SolanaHyperlaneSplRouteMetadata = SolanaHyperlaneCommonRouteMetadata & {
+  routerType: 'spl-collateral'
+  splTokenProgramAddress: string
+  collateralMintAddress: string
+  escrowPda: string
+}
+
+/**
+ * Selects native SOL or SPL collateral metadata for a Solana Hyperlane transfer.
+ *
+ * Accepts existing native metadata without a discriminator. Checking
+ * `routerType` narrows the required collateral accounts before building an instruction.
+ *
+ * @property routerType Identifies the collateral mechanism. Omitted means native SOL.
+ * @example
+ * function collateralAddress(metadata: SolanaHyperlaneTransferMetadata): string {
+ *   return metadata.routerType === 'spl-collateral'
+ *     ? metadata.collateralMintAddress
+ *     : metadata.nativeCollateralPda
+ * }
+ */
+export type SolanaHyperlaneTransferMetadata =
+  | (SolanaHyperlaneRouteMetadata & { routerType?: 'native' | undefined })
+  | SolanaHyperlaneSplRouteMetadata
+
+type SolanaHyperlaneCommonRouteMetadata = {
   warpProgramAddress: string
   tokenPda: string
-  nativeCollateralPda: string
   dispatchAuthorityPda: string
   mailboxProgramAddress: string
   mailboxOutboxPda: string
@@ -78,14 +128,15 @@ export type QuoteSolanaHyperlaneTransferParameters = {
 /**
  * Captures one live fee quote for a Solana-to-Aleo Hyperlane transfer.
  *
- * All amounts are denominated in lamports.
+ * Native costs are denominated in lamports. The source amount uses the source
+ * asset's atomic unit, which is also lamports only for native SOL.
  *
  * @property routeId Route the quote applies to.
- * @property amountLamports Amount to be transferred, in lamports.
+ * @property amountLamports Source amount in atomic units. The historical field name is retained for compatibility.
  * @property igpPaymentLamports Interchain gas paymaster payment required for destination delivery, in lamports.
  * @property networkFeeLamports Solana network fee estimated for the transaction, in lamports.
  * @property rentLamports Rent-exempt funding for the gas-payment account, dispatched-message account, and fee payer, in lamports.
- * @property totalLamports Executable balance requirement: amount, gas payment, network fee, and rent, in lamports.
+ * @property totalLamports Executable SOL balance requirement. Includes the amount for native SOL routes and excludes it for SPL-collateral routes.
  */
 export type SolanaHyperlaneTransferQuote = {
   routeId: string

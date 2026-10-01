@@ -2,6 +2,7 @@ import { decodeFunctionResult, encodeFunctionData, getAddress, parseAbi } from '
 import type { BridgeChainClients } from '../../connections/resolve.js'
 import { requireEvmClient, requireSolanaClient } from '../../connections/resolve.js'
 import { BridgeError } from '../../errors/bridgeErrors.js'
+import { decodeSplTokenAccountAmount, deriveAssociatedTokenAddress } from '../../solana/transferRemote.js'
 import type { BridgePlan, BridgeRegistry } from '../../types/protocol.js'
 
 const ERC20_BALANCE_ABI = parseAbi(['function balanceOf(address owner) view returns (uint256)'])
@@ -9,8 +10,9 @@ const ERC20_BALANCE_ABI = parseAbi(['function balanceOf(address owner) view retu
 /**
  * Reads a recipient balance that can serve as a fallback delivery signal.
  *
- * Native EVM and Solana balances and EVM ERC-20 balances are supported. The
- * helper returns `undefined` when the destination client or asset reader is not
+ * Native EVM and Solana balances, EVM ERC-20 balances, and reviewed Solana SPL
+ * collateral balances are supported. The helper returns `undefined` when the
+ * destination client or asset reader is not
  * configured, allowing status tracking to report that canonical verification
  * is unavailable rather than claim delivery. It never requests a signature or
  * moves funds.
@@ -40,8 +42,21 @@ export async function readDestinationBalance(
     return decodeFunctionResult({ abi: ERC20_BALANCE_ABI, functionName: 'balanceOf', data: result })
   }
 
-  if (chain.family === 'solana' && plan.destinationAsset.locator?.kind === 'native') {
-    return requireSolanaClient(registry, clients, chain.id).publicClient.getBalance(plan.recipient)
+  if (chain.family === 'solana') {
+    const rpc = requireSolanaClient(registry, clients, chain.id).publicClient
+    if (plan.destinationAsset.locator?.kind === 'native') return rpc.getBalance(plan.recipient)
+    if (plan.destinationAsset.locator?.kind !== 'solana-mint') return undefined
+    const route = registry.routes.find((candidate) => candidate.id === plan.route.id)
+    const metadata = route?.metadata
+    if (metadata?.routerType !== 'spl-collateral'
+      || typeof metadata.splTokenProgramAddress !== 'string'
+      || typeof metadata.collateralMintAddress !== 'string') return undefined
+    const ata = await deriveAssociatedTokenAddress(
+      plan.recipient,
+      metadata.collateralMintAddress,
+      metadata.splTokenProgramAddress,
+    )
+    return decodeSplTokenAccountAmount(await rpc.getAccountData(ata), ata)
   }
 
   // Aleo private records and unsupported token standards cannot be verified by
