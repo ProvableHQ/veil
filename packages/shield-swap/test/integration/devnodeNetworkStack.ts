@@ -77,7 +77,7 @@ const AUTHORITIES: Record<string, ReadonlyArray<readonly [string, number]>> = {
 
 const CACHE_DIR = join(tmpdir(), 'veil-network-programs', NETWORK_API.replace(/[^a-z0-9]+/gi, '_'))
 
-/** True when the deployed bytecode is cached or the network is reachable. */
+/** True when the devnode integration suites that require the network stack should run. */
 export function networkStackAvailable(): boolean {
   return process.env.VEIL_DEVNODE_INTEGRATION === '1'
 }
