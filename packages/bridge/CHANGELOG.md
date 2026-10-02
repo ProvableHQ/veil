@@ -24,6 +24,8 @@
 
   Preserve the existing native Solana metadata and builder parameter types while adding named SPL and combined transfer metadata types.
 
+- 559a3ce: Add optional Privy and Dynamic server-wallet helpers for EVM and Solana bridge clients, with remote signature validation, preserved Solana bridge signatures, and documented configuration examples.
+
 ### Patch Changes
 
 - Updated dependencies
