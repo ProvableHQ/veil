@@ -177,6 +177,10 @@ function buildUrl(
     case 'getProgramMetricsByRange':
       return { url: `${base}/metrics/program/${enc(params?.programId)}/range/${enc(params?.days)}`, httpMethod: 'GET' }
 
+    // --- Compliance ---
+    case 'getFreezeList':
+      return { url: `${base}/programs/${enc(params?.programId)}/compliance/freeze-list`, httpMethod: 'GET' }
+
     // --- Account ---
     case 'getBalance':
       return { url: `${base}/program/credits.aleo/mapping/account/${enc(params?.address)}`, httpMethod: 'GET' }
