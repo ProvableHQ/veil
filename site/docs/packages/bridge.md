@@ -83,3 +83,51 @@ execute them until a reviewed registry marks them active.
 BAT, USDG, and ZEC are active in both directions between Aleo and Solana. BAT
 and ZEC use classic SPL Token accounts, while USDG uses Token-2022.
 The SDK tracks Aleo-to-Solana delivery through the recipient's associated token account.
+
+## Privy and Dynamic server wallets
+
+A backend can authorize bridge transfers with existing Privy or Dynamic server
+wallets. Import the helpers from the provider entry point:
+
+| Provider | Import | Helpers |
+| --- | --- | --- |
+| Privy | `@provablehq/aleo-bridge-sdk/privy` | `createPrivyEvmClient`, `createPrivySolanaClient` |
+| Dynamic | `@provablehq/aleo-bridge-sdk/dynamic` | `createDynamicEvmClient`, `createDynamicSolanaClient` |
+
+Each helper takes an authenticated provider client, wallet identity, and public
+RPC transport, returning the bridge's existing EVM or Solana client. Construction
+does not sign or submit. Provider SDKs are optional peers and are not loaded by
+the bridge's root entry point.
+
+```ts
+import { createBridgeClient, evmHttp, solanaHttp } from '@provablehq/aleo-bridge-sdk'
+import { createPrivyEvmClient, createPrivySolanaClient } from '@provablehq/aleo-bridge-sdk/privy'
+
+const ethereum = await createPrivyEvmClient({
+  client: privy,
+  walletId: evmWallet.id,
+  address: evmWallet.address,
+  transport: evmHttp(ethereumRpcUrl),
+})
+const solana = await createPrivySolanaClient({
+  client: privy,
+  walletId: solanaWallet.id,
+  address: solanaWallet.address,
+  transport: solanaHttp(solanaRpcUrl),
+})
+const bridge = createBridgeClient({
+  environment: 'mainnet',
+  clients: { ethereum, solana, aleo },
+})
+```
+
+Privy helpers accept an optional `authorizationContext`. Dynamic helpers take the
+full persisted `walletMetadata`, optional `password` and `externalServerKeyShares`,
+and, for Solana, a required policy `chainId` such as `'101'` for mainnet. That
+identifier MUST match the configured Solana RPC. Solana sponsorship is disabled
+to preserve the bridge's existing signatures.
+
+See the [server-wallet setup guide and runnable examples](https://github.com/ProvableHQ/veil/tree/main/packages/bridge/examples/remote-wallets)
+for installation, tested dependency versions, provisioning, and credential
+configuration. Use the regular quote, execute, wait, and recovery lifecycle after
+creating the clients.

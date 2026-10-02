@@ -4,7 +4,7 @@ Moves assets through reviewed Hyperlane, Circle xReserve, and Circle CCTP deploy
 CCTP moves native USDC between Arc and Ethereum, Base, or Arbitrum; xReserve brings
 Arc USDC to Aleo as USDCx and redeems Aleo USDCx back to Arc USDC.
 
-The package supports browser wallets and local keys. It does not choose a
+The package supports browser wallets, local keys, and Privy or Dynamic server wallets. It does not choose a
 wallet, store transfer progress, or submit a second transaction after an
 interruption without caller authorization.
 
@@ -296,6 +296,37 @@ const bridge = createBridgeClient({
 Local EVM and Solana accounts sign inside the caller's process and broadcast
 through their configured transports. The bridge client never receives the raw
 key after the account adapter is created.
+
+## Create a server-wallet client
+
+Bots and backend services can sign through Privy or Dynamic using optional
+provider entry points. The helpers return the same chain clients used by the
+bridge lifecycle, with public RPC access supplied independently.
+
+| Import | Helpers |
+| --- | --- |
+| `@provablehq/aleo-bridge-sdk/privy` | `createPrivyEvmClient`, `createPrivySolanaClient` |
+| `@provablehq/aleo-bridge-sdk/dynamic` | `createDynamicEvmClient`, `createDynamicSolanaClient` |
+
+```ts
+import { createPrivyEvmClient } from '@provablehq/aleo-bridge-sdk/privy'
+
+const ethereum = await createPrivyEvmClient({
+  client: privy,
+  walletId: evmWallet.id,
+  address: evmWallet.address,
+  transport: evmHttp(ethereumRpcUrl),
+})
+```
+
+The caller supplies an authenticated provider client and an existing wallet.
+Construction does not sign or submit. EVM uses the provider's viem signer;
+Solana retains the bridge's existing signatures and validates the remote
+signature before broadcasting through the caller's RPC.
+
+The [server-wallet guide](./examples/remote-wallets/README.md) covers provider
+setup, optional dependencies and tested versions, wallet metadata, authorization,
+and runnable configuration examples for both chains and providers.
 
 ## Find supported assets and routes
 

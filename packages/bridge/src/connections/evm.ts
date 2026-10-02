@@ -262,10 +262,11 @@ export function evmPrivateKey(privateKey: Hex): EvmAccount {
 }
 
 /**
- * Selects an existing viem local account for unattended bridge transactions.
+ * Selects an existing viem signing account for unattended bridge transactions.
  *
- * The account signs on the caller's device or server. This helper does not
- * contact a chain, request an external wallet approval, or submit a transaction.
+ * Viem LocalAccount describes a signing interface; its implementation may sign
+ * locally or call a remote wallet service. This helper does not request a
+ * signature, contact a chain, or submit a transaction.
  *
  * @param account Viem account whose signer and address remain owned by the application.
  * @returns Deferred local signing configuration accepted by `createEvmClient`.

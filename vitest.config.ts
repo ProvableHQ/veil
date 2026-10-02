@@ -35,6 +35,8 @@ export default defineConfig({
       '@provablehq/shield-swap-sdk/mcp': path.resolve(__dirname, 'packages/shield-swap/src/mcp/index.ts'),
       '@provablehq/shield-swap-sdk/node': path.resolve(__dirname, 'packages/shield-swap/src/node.ts'),
       '@provablehq/shield-swap-sdk': path.resolve(__dirname, 'packages/shield-swap/src/index.ts'),
+      '@provablehq/aleo-bridge-sdk/privy': path.resolve(__dirname, 'packages/bridge/src/privy/index.ts'),
+      '@provablehq/aleo-bridge-sdk/dynamic': path.resolve(__dirname, 'packages/bridge/src/dynamic/index.ts'),
       '@provablehq/aleo-bridge-sdk/agent': path.resolve(__dirname, 'packages/bridge/src/agent/index.ts'),
       '@provablehq/aleo-bridge-sdk/mcp': path.resolve(__dirname, 'packages/bridge/src/mcp/index.ts'),
       '@provablehq/aleo-bridge-sdk': path.resolve(__dirname, 'packages/bridge/src/index.ts'),

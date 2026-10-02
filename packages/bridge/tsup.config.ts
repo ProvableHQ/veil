@@ -6,6 +6,8 @@ export default defineConfig({
     'src/agent/index.ts',
     'src/mcp/index.ts',
     'src/solana/index.ts',
+    'src/privy/index.ts',
+    'src/dynamic/index.ts',
   ],
   format: ['esm'],
   dts: true,
