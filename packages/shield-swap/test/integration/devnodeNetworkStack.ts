@@ -75,7 +75,7 @@ const AUTHORITIES: Record<string, ReadonlyArray<readonly [string, number]>> = {
   [TOKEN_B]: [['aleo1axurgcdhztu8m23ttzju38qzchtzs8kyk7nga9n58zyrmnxzmuqqf6wqdc', 1]],
 }
 
-const CACHE_DIR = join(tmpdir(), 'veil-network-programs')
+const CACHE_DIR = join(tmpdir(), 'veil-network-programs', NETWORK_API.replace(/[^a-z0-9]+/gi, '_'))
 
 /** True when the deployed bytecode is cached or the network is reachable. */
 export function networkStackAvailable(): boolean {
