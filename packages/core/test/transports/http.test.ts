@@ -31,14 +31,14 @@ describe('http transport', () => {
       json: () => Promise.resolve(['0', '0', '3642222252059314292809609689035560016959342421640560347114299934615987159853']),
     })
 
-    const transport = http('https://api.provable.com/v2', { fetchFn: mockFetch, network: 'testnet' })
+    const transport = http('https://edge.provable.com/api/v2', { fetchFn: mockFetch, network: 'testnet' })
     await transport.request({
       method: 'getFreezeList',
       params: { programId: 'shield_swap_freezelist.aleo' },
     })
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://api.provable.com/v2/testnet/programs/shield_swap_freezelist.aleo/compliance/freeze-list',
+      'https://edge.provable.com/api/v2/testnet/programs/shield_swap_freezelist.aleo/compliance/freeze-list',
       expect.objectContaining({ method: 'GET' }),
     )
   })

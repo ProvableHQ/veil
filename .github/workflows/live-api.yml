@@ -34,6 +34,7 @@ jobs:
         run: >
           pnpm vitest run --retry=2
           packages/core/test/integration/realApi.test.ts
+          packages/provable-sdk/test/integration/freezelistProof.integration.test.ts
           packages/shield-swap/test/integration/reads.integration.test.ts
           packages/shield-swap/test/integration/api.integration.test.ts
           packages/shield-swap/test/integration/traders.integration.test.ts

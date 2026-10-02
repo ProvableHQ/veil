@@ -42,6 +42,8 @@ const API_URL = process.env.VEIL_API_URL ?? 'https://edge.provable.com/api/v2'
 const NETWORK = (process.env.VEIL_NETWORK as 'mainnet' | 'testnet' | undefined) ?? 'mainnet'
 const PROGRAM_ID = process.env.VEIL_TEST_PROGRAM_ID ?? 'credits.aleo'
 const DEPLOYED_PROGRAM = process.env.VEIL_TEST_DEPLOYED_PROGRAM ?? 'puzzle_arcade_coin_v002.aleo'
+const EDGE_API_URL = 'https://edge.provable.com/api/v2'
+const POPULATED_FREEZELIST_PROGRAM = 'testnet_freezelist.aleo'
 
 // State-path vectors per network — a commitment only resolves on the chain it
 // was created on, and the API 502s (rather than 404s) on unresolvable inputs.
@@ -158,10 +160,27 @@ const tokenDetailsShape: ShapeSpec = {
 
 describe.runIf(RUN)('integration: real Provable API', () => {
   const client = createPublicClient({ transport: http(API_URL, { network: NETWORK }) })
+  const edgeTestnetClient = createPublicClient({ transport: http(EDGE_API_URL, { network: 'testnet' }) })
 
   // ===== Tier 1 =====
 
   describe('Tier 1: hardcoded safe vectors', () => {
+    it('getFreezeList reads a populated freezelist from the edge testnet API', async () => {
+      const tree = await edgeTestnetClient.getFreezeList({ programId: POPULATED_FREEZELIST_PROGRAM })
+
+      expect(tree.length).toBeGreaterThan(3)
+      expect(tree.every((value) => /^\d+$/.test(value))).toBe(true)
+
+      // A complete binary tree with n leaves has 2n - 1 nodes, and this API
+      // serves the power-of-two leaf row first followed by each parent row.
+      const leafCount = (tree.length + 1) / 2
+      expect(Number.isInteger(Math.log2(leafCount))).toBe(true)
+
+      const leaves = tree.slice(0, leafCount).map(BigInt)
+      expect(leaves.some((leaf) => leaf > 0n)).toBe(true)
+      expect(leaves).toEqual([...leaves].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)))
+    }, 15_000)
+
     it('getLatestEdition for credits.aleo returns a non-negative integer', async () => {
       const edition = await client.getLatestEdition({ programId: PROGRAM_ID })
       assertShape(edition, 'number')
