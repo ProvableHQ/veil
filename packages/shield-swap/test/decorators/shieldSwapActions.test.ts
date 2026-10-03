@@ -221,3 +221,21 @@ describe('insert hints and the API', () => {
     expect(paths.filter((p) => p.includes('initialized-ticks'))).toEqual([])
   })
 })
+
+
+describe('free Apigee network selection', () => {
+  it('uses the selected network and follows network changes', async () => {
+    const paths: string[] = []
+    const fetchImpl: typeof fetch = async (input, init) => {
+      paths.push(new URL(String(input)).pathname)
+      expect(new Headers(init?.headers).has('x-api-key')).toBe(false)
+      return new Response(JSON.stringify({ data: [] }))
+    }
+    const transport = http('https://api.provable.com/v2', { network: 'testnet' })
+    const client = createClient({ transport }).extend(shieldSwapActions({ api: { apiInterface: 'apigee', fetch: fetchImpl } }))
+    await client.api.getPools()
+    transport.config.network = 'mainnet'
+    await client.api.getPools()
+    expect(paths).toEqual(['/api/swap/testnet/pools', '/api/swap/mainnet/pools'])
+  })
+})

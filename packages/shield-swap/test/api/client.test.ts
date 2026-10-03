@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { ApiClient, ApiError, DEFAULT_API_URL } from '../../src/api/client.js'
+import { ApiClient, ApiError, DEFAULT_API_URL, apigeeApiUrl } from '../../src/api/client.js'
 
 function fetchMock(responses: Array<{ status?: number; json: unknown; headers?: Record<string, string> }>) {
   const calls: Array<{ url: string; init: RequestInit }> = []
@@ -265,5 +265,40 @@ describe('ApiClient', () => {
     const client = new ApiClient({ fetch: impl })
     await expect(client.getPool('9field')).rejects.toThrow(ApiError)
     await expect(client.getPool('9field')).rejects.toThrow(/404/)
+  })
+})
+
+
+describe('free Apigee access', () => {
+  it('reads public routes without a credential', async () => {
+    const { impl, calls } = fetchMock([{ json: { data: [] } }])
+    const client = new ApiClient({ apiInterface: 'apigee', baseUrl: apigeeApiUrl('mainnet'), fetch: impl })
+    await client.getPools()
+    await client.getRoute({ token_in: '1field', token_out: '2field', amount_in: 1n })
+    await client.getFeeTiers()
+    expect(calls).toHaveLength(3)
+    for (const { url, init } of calls) {
+      expect(url).toContain('https://api.shield.fi/api/swap/mainnet/')
+      expect(init.headers).not.toHaveProperty('x-api-key')
+      expect(init.headers).not.toHaveProperty('authorization')
+      expect(init.credentials).toBe('omit')
+      expect(init.redirect).toBe('error')
+    }
+  })
+
+  it('rejects private and account routes before a request', async () => {
+    const { impl } = fetchMock([{ json: {} }])
+    const client = new ApiClient({ apiInterface: 'apigee', baseUrl: apigeeApiUrl('testnet'), fetch: impl })
+    await expect(client.getPositions({ user: 'aleo1owner' })).rejects.toThrow('free public routes only')
+    await expect(client.authenticate('aleo1owner', vi.fn())).rejects.toThrow('free public routes only')
+    await expect(client.createApiToken({ name: 'key' })).rejects.toThrow('free public routes only')
+    expect(impl).not.toHaveBeenCalled()
+  })
+
+  it('requires an explicit URL and rejects token configuration', () => {
+    expect(() => new ApiClient({ apiInterface: 'apigee' })).toThrow()
+    expect(() => new ApiClient({ apiInterface: 'apigee', baseUrl: apigeeApiUrl('testnet'), apiToken: 'ss_old' })).toThrow()
+    expect(() => apigeeApiUrl('devnet')).toThrow()
+    expect(apigeeApiUrl('mainnet')).toBe('https://api.shield.fi/api/swap/mainnet')
   })
 })
