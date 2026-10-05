@@ -18,6 +18,7 @@ import { execute } from '../../src/actions/execute.js'
 import { wait } from '../../src/actions/wait.js'
 import { createBridgeCheckpoint } from '../../src/actions/createBridgeCheckpoint.js'
 import { createBridgeClient } from '../../src/clients/createBridgeClient.js'
+import { bridgeActions } from '../../src/clients/decorators/bridge.js'
 import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'
@@ -167,6 +168,44 @@ describe('Ethereum xReserve actions', () => {
     expect(identities[0]).toMatchObject({ counter: 0, recipient: RECIPIENT })
     expect(quote.kind === 'evm-xreserve' && quote.hookData)
       .toBe(`0x02${identities[0]!.addressCommitment}${'00'.repeat(32)}`)
+  })
+
+  it('shares one memory identity store for legacy bridgeActions callers', async () => {
+    const { executor } = mockExecutor()
+    const bridge = bridgeActions({
+      registry: DEFAULT_BRIDGE_REGISTRY,
+      clients: {
+        sepolia: { family: 'evm', publicClient: executor.publicClient },
+        'aleo-testnet': createAleoClient({
+          publicClient: {} as never,
+          account: {
+            executeTransaction: async () => 'at1unused',
+            account: {
+              type: 'local',
+              address: RECIPIENT,
+              viewKey: 'AViewKey1sqm952gJj1tmAWySYDQvSv2NmfnyEMvU6a9ZBCuyG7PN',
+            },
+          } as never,
+        }),
+      },
+      fetch: globalThis.fetch,
+    })
+    const intent = {
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+      amount: '2',
+      recipient: RECIPIENT,
+      sender: ACCOUNT,
+      mintMode: 'private' as const,
+    }
+
+    const first = await bridge.quote(intent)
+    const second = await bridge.quote(intent)
+
+    expect(first).toMatchObject({ kind: 'evm-xreserve', privateMintAddressCommitment: expect.any(String) })
+    expect(second).toMatchObject({ kind: 'evm-xreserve', privateMintAddressCommitment: expect.any(String) })
+    expect(first.kind === 'evm-xreserve' && first.privateMintAddressCommitment)
+      .not.toBe(second.kind === 'evm-xreserve' && second.privateMintAddressCommitment)
   })
 
   it('approves USDC, deposits without msg.value, and returns resumable attestation state', async () => {

@@ -53,7 +53,7 @@
   },
   "scripts": {
     "build": "tsup",
-    "test": "vitest run --root ../.. packages/bridge/test",
+    "test": "vitest run --root ../.. packages/bridge/test --exclude 'packages/bridge/test/integration/live/**/*.live.test.ts'",
     "test:integration": "vitest run --root ../.. packages/bridge/test/integration/lifecycle",
     "test:live": "vitest run --root ../.. packages/bridge/test/integration/live",
     "test:live:mainnet": "vitest run --root ../.. packages/bridge/test/integration/live/mainnet",

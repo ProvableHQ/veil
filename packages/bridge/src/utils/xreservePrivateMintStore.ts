@@ -128,11 +128,16 @@ export async function findXReservePrivateMintIdentity(
   return identities.find((identity) => identity.addressCommitment === addressCommitment)
 }
 
-function validateIdentity(identity: XReservePrivateMintIdentity): void {
-  if (!Number.isSafeInteger(identity.counter) || identity.counter < 0 || identity.counter > 0xffffffff
-    || typeof identity.recipient !== 'string' || !identity.recipient.startsWith('aleo1')
-    || typeof identity.secretNonce !== 'string' || !identity.secretNonce.endsWith('scalar')
-    || !/^[0-9a-f]{64}$/.test(identity.addressCommitment)) {
+function validateIdentity(identity: unknown): asserts identity is XReservePrivateMintIdentity {
+  if (typeof identity !== 'object' || identity === null || Array.isArray(identity)) {
+    throw new BridgeError('Private mint identity store contains an invalid record')
+  }
+  const record = identity as Record<string, unknown>
+  const counter = record.counter
+  if (typeof counter !== 'number' || !Number.isSafeInteger(counter) || counter < 0 || counter > 0xffffffff
+    || typeof record.recipient !== 'string' || !record.recipient.startsWith('aleo1')
+    || typeof record.secretNonce !== 'string' || !record.secretNonce.endsWith('scalar')
+    || typeof record.addressCommitment !== 'string' || !/^[0-9a-f]{64}$/.test(record.addressCommitment)) {
     throw new BridgeError('Private mint identity store contains an invalid record')
   }
 }

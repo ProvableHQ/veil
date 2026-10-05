@@ -17,8 +17,11 @@ import {
   xReserveViewKeyToScalar,
 } from '../../src/utils/xreserve.js'
 import {
+  findXReservePrivateMintIdentity,
   memoryXReservePrivateMintIdentityStore,
   reserveXReservePrivateMintIdentity,
+  type XReservePrivateMintIdentity,
+  type XReservePrivateMintIdentityStore,
 } from '../../src/utils/xreservePrivateMintStore.js'
 
 const RECIPIENT = 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n'
@@ -101,6 +104,23 @@ describe('xReserve wire utilities', () => {
     expect(identities.map((identity) => identity.counter)).toEqual([0, 1])
     expect(new Set(identities.map((identity) => identity.addressCommitment)).size).toBe(2)
     expect(await store.load()).toEqual(identities)
+  })
+
+  it.each([
+    null,
+    7,
+    'identity',
+    [],
+    {},
+    { counter: 0 },
+  ])('rejects malformed stored identity records with BridgeError: %j', async (record) => {
+    const store: XReservePrivateMintIdentityStore = {
+      load: async () => [record as unknown as XReservePrivateMintIdentity],
+      save: async () => {},
+    }
+
+    await expect(findXReservePrivateMintIdentity(store, 'ab'.repeat(32)))
+      .rejects.toMatchObject({ name: 'BridgeError' })
   })
 
   it('builds and hashes the canonical 305-byte payload', async () => {
