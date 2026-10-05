@@ -95,6 +95,23 @@ export {
   type AleoDerivationId,
 } from './mnemonic.js'
 
+export {
+  buildExclusionProof,
+  prepareFreezeList,
+  FrozenAddressError,
+  type BuildExclusionProofParameters,
+  type BuildExclusionProofReturnType,
+  type MerkleProofInput,
+  type PreparedFreezeList,
+} from './actions/buildExclusionProof.js'
+
+export {
+  freezelistActions,
+  type FreezelistActions,
+  type GetFreezeListTreeParameters,
+  type GetExclusionProofParameters,
+} from './decorators/freezelistActions.js'
+
 /** Networks supported by `@provablehq/sdk/dynamic.js`. */
 export type SupportedNetwork = 'mainnet' | 'testnet'
 
