@@ -24,6 +24,19 @@ export const publicClient = createPublicClient({
   transport: http(API_URL, { network: 'mainnet' }),
 })
 
+/**
+ * Reads the Merkle tree used by a compliance-gated program's freezelist.
+ *
+ * Hits the configured Aleo network through the dApp's public client.
+ *
+ * @param programId Program that owns the compliance freezelist.
+ * @returns The flat Merkle tree with its root as the final entry.
+ * @example const tree = await getComplianceFreezeList('shield_swap_freezelist.aleo')
+ */
+export function getComplianceFreezeList(programId: string) {
+  return publicClient.getFreezeList({ programId })
+}
+
 // ---------------------------------------------------------------------------
 // Wallet client — created when a wallet connects
 // ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@ import {
   buildExclusionProof,
   prepareFreezeList,
   type MerkleProofInput,
-} from '../../src/actions/buildExclusionProof.js'
+} from '@provablehq/veil-aleo-sdk'
 
 /**
  * Live proof construction against the populated edge testnet freezelist.

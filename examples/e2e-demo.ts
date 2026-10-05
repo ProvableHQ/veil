@@ -16,7 +16,12 @@ import {
   isAddress,
 } from '../packages/core/src/index.js'
 import { aleoAgentTools } from '../packages/core/src/agent/index.js'
-import { loadNetwork, type AleoSdk } from '../packages/provable-sdk/src/index.js'
+import {
+  buildExclusionProof,
+  freezelistActions,
+  loadNetwork,
+  type AleoSdk,
+} from '../packages/provable-sdk/src/index.js'
 
 const API_URL = 'https://edge.provable.com/api/v2'
 
@@ -25,10 +30,25 @@ describe('E2E: veil against live Aleo mainnet', () => {
   const publicClient = createPublicClient({
     transport: http(API_URL, { network: 'mainnet' }),
   })
+  const freezelistClient = createPublicClient({
+    transport: http(API_URL, { network: 'testnet' }),
+  }).extend(freezelistActions)
 
   let aleo: AleoSdk
   beforeAll(async () => {
     aleo = await loadNetwork('mainnet')
+  })
+
+  it('builds an exclusion proof from a populated freezelist through the public SDK API', async () => {
+    const tree = await freezelistClient.getFreezeListTree({ program: 'testnet_freezelist.aleo' })
+    const proofs = buildExclusionProof({
+      tree,
+      address: 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n',
+    })
+
+    expect(tree.leafCount).toBeGreaterThan(2)
+    expect(proofs).toHaveLength(2)
+    expect(proofs.every((proof) => proof.siblings.length === 16)).toBe(true)
   })
 
   it('getBlockNumber() returns the current chain height', async () => {
