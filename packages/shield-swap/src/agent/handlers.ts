@@ -1,5 +1,6 @@
 import type { Client } from '@provablehq/veil-core'
 import type { AgentToolHandler } from '@provablehq/veil-core/agent'
+import { createAdditionalApiHandlers } from './api-handlers.js'
 import { authenticateWithAccount, type ApiClient } from '../api/client.js'
 import { resolveDexImports } from '../utils/imports.js'
 import { getPool } from '../actions/reads/getPool.js'
@@ -113,7 +114,10 @@ function stripRecord({ record: _record, ...position }: OwnedPosition): Omit<Owne
 export function createApiHandlers(api: ApiClient): Record<string, AgentToolHandler> {
   return {
     shield_swap_list_pools: async (i) =>
-      api.getPools({ limit: i.limit as number | undefined, offset: i.offset as number | undefined }),
+      api.getPools({
+        limit: i.limit as number | undefined, offset: i.offset as number | undefined,
+        ...(i.includeValuation !== undefined ? { include_valuation: i.includeValuation as boolean } : {}),
+      }),
     shield_swap_get_route: async (i) =>
       api.getRoute({
         token_in: i.tokenIn as string,
@@ -121,8 +125,10 @@ export function createApiHandlers(api: ApiClient): Record<string, AgentToolHandl
         // Passed through as the decimal string the endpoint expects; BigInt here
         // would reject '0.5' and mis-quote base units.
         ...(i.amountIn !== undefined ? { amount_in: String(i.amountIn) } : {}),
+        ...(i.poolKey !== undefined ? { pool_key: i.poolKey as string } : {}),
       }),
     shield_swap_list_tokens: async () => api.getTokens(),
+    ...createAdditionalApiHandlers(api),
   }
 }
 

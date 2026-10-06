@@ -1,5 +1,5 @@
 import { requestRecords, type AnyAccount, type Client, type RecordProvider } from '@provablehq/veil-core'
-import type { components } from './openapi.js'
+import type { components, operations } from './openapi.js'
 
 type Schemas = components['schemas']
 
@@ -50,6 +50,9 @@ export const DEFAULT_API_URL = SHIELD_SWAP_API_URLS.testnet
  *   derives it from the client's network via {@link defaultApiUrl}.
  * @property fetch Custom fetch implementation (tests, polyfills). Defaults
  *   to the global fetch.
+ * @property credentials Fetch cookie policy. Defaults to the fetch implementation's
+ *   policy. Set `'include'` for browser sessions; cookies stay in the browser and
+ *   {@link ApiClient.verifyAuthChallenge} returns their public session metadata.
  * @property apiToken Long-lived API token (`ss_…`) minted via
  *   {@link ApiClient.createApiToken}. Covers data and trading endpoints
  *   without a signature handshake — suited to bots, CI, and servers holding a
@@ -57,7 +60,7 @@ export const DEFAULT_API_URL = SHIELD_SWAP_API_URLS.testnet
  *   {@link ApiClient.authenticate}.
  * @property autoReauthenticate Re-run the challenge/verify handshake and
  *   retry once when a gated call fails with 401 after
- *   {@link ApiClient.authenticate} — session JWTs expire after ~24h, so
+ *   {@link ApiClient.authenticate} — session JWTs expire after 15 minutes, so
  *   long-running processes heal without wiring their own retry. Defaults to
  *   true; set false to surface the 401 instead. Only applies when the client
  *   has authenticated (it needs the signer); apiToken-only clients cannot
@@ -66,6 +69,7 @@ export const DEFAULT_API_URL = SHIELD_SWAP_API_URLS.testnet
 export type ApiClientOptions = {
   baseUrl?: string | (() => string)
   fetch?: typeof fetch
+  credentials?: RequestCredentials
   apiToken?: string
   autoReauthenticate?: boolean
 }
@@ -97,18 +101,30 @@ export class ApiError extends Error {
   }
 }
 
-// Extracts the session credential from a verify response. Current servers
-// deliver the session JWT as the `ss_access` httpOnly cookie (the middleware
-// also accepts it as a Bearer); a body token, returned by older servers, is
-// the fallback.
-function sessionTokenFrom(res: Response, body: unknown): string | undefined {
+// Reads only named session cookies. Browsers hide Set-Cookie; Node exposes it.
+function responseCookie(res: Response, name: string): string | undefined {
   const cookies: string[] =
     res.headers.getSetCookie?.() ?? (res.headers.get('set-cookie') ? [res.headers.get('set-cookie')!] : [])
   for (const cookie of cookies) {
-    const match = cookie.match(/^ss_access=([^;]+)/)
+    const match = cookie.match(new RegExp(`(?:^|,\\s*)${name}=([^;,\\s]*)`))
     if (match) return decodeURIComponent(match[1]!)
   }
-  return (body as { data?: { token?: string } } | undefined)?.data?.token
+  return undefined
+}
+
+// Keeps legacy bearer credentials internal instead of leaking them in metadata.
+function sessionMetadata(body: unknown): Schemas['SessionPayload'] | undefined {
+  const data = (body as { data?: Partial<Schemas['SessionPayload']> } | undefined)?.data
+  if (!data || typeof data.address !== 'string' || typeof data.csrf_token !== 'string' ||
+    typeof data.expires_at !== 'number' || typeof data.session_version !== 'number') return undefined
+  return {
+    address: data.address,
+    csrf_token: data.csrf_token,
+    expires_at: data.expires_at,
+    session_version: data.session_version,
+    ...(data.session_id !== undefined ? { session_id: data.session_id } : {}),
+    ...(data.server_time !== undefined ? { server_time: data.server_time } : {}),
+  } as Schemas['SessionPayload']
 }
 
 /**
@@ -122,7 +138,7 @@ function sessionTokenFrom(res: Response, body: unknown): string | undefined {
  * runtime surprise.
  *
  * Auth: most endpoints beyond pool/token discovery are bearer-gated. Two
- * credentials work: a 24h session JWT from `authenticate()` (challenge/verify
+ * credentials work: a 15-minute session JWT from `authenticate()` (challenge/verify
  * signature handshake), or a long-lived API token (`ss_…`) passed as
  * `apiToken` at construction and minted once via `createApiToken()`. Gated
  * calls attach whichever is available (session JWT first); API-token
@@ -150,9 +166,15 @@ export class ApiClient {
     return this.resolveBaseUrl()
   }
   private readonly fetchImpl: typeof fetch
+  private readonly credentials: RequestCredentials | undefined
   private readonly apiToken: string | undefined
   private readonly autoReauthenticate: boolean
   private token: string | undefined
+  private refreshToken: string | undefined
+  private session: Schemas['SessionPayload'] | undefined
+  private sessionOrigin: string | undefined
+  private sessionGeneration = 0
+  private refreshInFlight: { origin: string; generation: number; promise: Promise<Schemas['SessionPayload']> } | undefined
   // Kept from the last authenticate() call so an expired session can be
   // renewed transparently; shared promise dedupes concurrent renewals.
   private signer: { address: string; sign: (message: string) => Promise<string> } | undefined
@@ -165,6 +187,7 @@ export class ApiClient {
         ? () => configured().replace(/\/$/, '')
         : () => configured.replace(/\/$/, '')
     this.fetchImpl = options.fetch ?? fetch
+    this.credentials = options.credentials
     this.apiToken = options.apiToken
     this.autoReauthenticate = options.autoReauthenticate ?? true
   }
@@ -185,34 +208,56 @@ export class ApiClient {
     method: 'GET' | 'POST' | 'DELETE',
     path: string,
     opts: {
-      query?: Record<string, string | number | undefined>
+      query?: Record<string, string | number | boolean | undefined>
       body?: unknown
       // true: any credential (session JWT preferred, then API token).
       // 'session': session JWT only — the server rejects API tokens here.
-      auth?: boolean | 'session'
+      auth?: boolean | 'session' | 'optional-session'
+      // Cookie-only refresh and idempotent logout can run without an access JWT.
+      refresh?: boolean
+      // Explicit session operations must never sign in again implicitly.
+      reauthenticate?: boolean
+      // Keeps a multi-request handshake on the deployment where it started.
+      baseUrl?: string
       // Set internally on the post-re-auth retry so one 401 never loops.
       isRetry?: boolean
     } = {},
   ): Promise<Response> {
-    const url = new URL(this.baseUrl + path)
+    const baseUrl = opts.baseUrl ?? this.baseUrl
+    const url = new URL(baseUrl + path)
     for (const [k, v] of Object.entries(opts.query ?? {})) {
       if (v !== undefined) url.searchParams.set(k, String(v))
     }
     const headers: Record<string, string> = { accept: 'application/json' }
+    const generation = this.sessionGeneration
+    const sameOrigin = this.sessionOrigin === url.origin
+    const token = sameOrigin ? this.token : undefined
+    const session = sameOrigin ? this.session : undefined
+    const cookieAuth = this.credentials === 'include' || this.credentials === 'same-origin'
     if (opts.body !== undefined) headers['content-type'] = 'application/json'
-    if (opts.auth === 'session') {
-      if (!this.token) {
+    if (opts.auth === 'session' || opts.auth === 'optional-session') {
+      if (!token && !cookieAuth && opts.auth === 'session') {
         throw new Error(`${path} requires a session JWT — call authenticate() first (API tokens are not accepted here)`)
       }
-      headers.authorization = `Bearer ${this.token}`
+      if (token) headers.authorization = `Bearer ${token}`
     } else if (opts.auth) {
-      const bearer = this.token ?? this.apiToken
-      if (!bearer) throw new Error(`${path} requires auth — call authenticate() or pass apiToken at construction`)
-      headers.authorization = `Bearer ${bearer}`
+      const bearer = token ?? this.apiToken
+      if (!bearer && !cookieAuth) throw new Error(`${path} requires auth — call authenticate() or pass apiToken at construction`)
+      if (bearer) headers.authorization = `Bearer ${bearer}`
+    }
+    if ((opts.auth || opts.refresh) && session && (token || cookieAuth || opts.refresh)) {
+      headers['x-shield-wallet-address'] = session.address
+      if (session.session_id) headers['x-shield-session-id'] = session.session_id
+      if (method !== 'GET') headers['x-csrf-token'] = session.csrf_token
+    }
+    if (opts.refresh && sameOrigin && this.refreshToken) {
+      headers.cookie = `ss_refresh=${encodeURIComponent(this.refreshToken)}`
+      if (session) headers.cookie += `; ss_csrf=${encodeURIComponent(session.csrf_token)}`
     }
     const res = await this.fetchImpl(url, {
       method,
       headers,
+      ...(this.credentials !== undefined ? { credentials: this.credentials } : {}),
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     })
     if (!res.ok) {
@@ -221,13 +266,15 @@ export class ApiClient {
       // authenticate() is on hand, renew the session once and retry. A
       // failed renewal surfaces the original error — the caller asked for
       // this endpoint, not for the handshake.
-      if (res.status === 401 && opts.auth && !opts.isRetry && this.autoReauthenticate && this.signer) {
+      if (res.status === 401 && opts.auth && opts.reauthenticate !== false && !opts.isRetry &&
+        sameOrigin && generation === this.sessionGeneration && new URL(this.baseUrl).origin === url.origin &&
+        this.autoReauthenticate && this.signer) {
         try {
           await this.reauthenticate()
         } catch {
           throw error
         }
-        return this.send(method, path, { ...opts, isRetry: true })
+        return this.send(method, path, { ...opts, baseUrl, isRetry: true })
       }
       throw error
     }
@@ -243,7 +290,227 @@ export class ApiClient {
     await this.reauthInFlight
   }
 
+  // Invalidates pending credential adoption as well as the active session.
+  private clearSession(): void {
+    this.sessionGeneration++
+    this.token = undefined
+    this.refreshToken = undefined
+    this.session = undefined
+    this.sessionOrigin = undefined
+    this.signer = undefined
+  }
+
+  private async readSessionResponse(res: Response, baseUrl: string, generation: number, replace = false) {
+    const body: unknown = await res.json()
+    const token = responseCookie(res, 'ss_access') ??
+      (body as { data?: { token?: string } } | undefined)?.data?.token
+    const metadata = sessionMetadata(body)
+    const origin = new URL(baseUrl).origin
+    const adopted = generation === this.sessionGeneration
+    if (adopted) {
+      if (replace || this.sessionOrigin !== origin) this.clearSession()
+      this.sessionOrigin = origin
+      if (token !== undefined) this.token = token || undefined
+      const refresh = responseCookie(res, 'ss_refresh')
+      if (refresh !== undefined) this.refreshToken = refresh || undefined
+      if (metadata) this.session = metadata
+    }
+    return { token, metadata, adopted }
+  }
+
+  private async verifySession(body: Schemas['VerifyRequestDoc'], baseUrl: string, generation: number) {
+    const res = await this.send('POST', '/auth/verify', { body, baseUrl })
+    return this.readSessionResponse(res, baseUrl, generation, true)
+  }
+
   // ── auth ─────────────────────────────────────────────────────────────
+
+  /**
+   * Requests the wallet message and nonce for a signature-based API login.
+   *
+   * Contacts the API without signing or replacing the active session.
+   *
+   * @param body Wallet address that will sign the returned message.
+   * @returns The challenge identifier, nonce, and complete message to sign.
+   * @throws If the API rejects the address or rate-limits challenge creation.
+   * @example
+   * const api = new ApiClient()
+   * const challenge = await api.getAuthChallenge({ address: 'aleo1…' })
+   */
+  async getAuthChallenge(body: Schemas['ChallengeRequestDoc']): Promise<Schemas['ChallengePayload']> {
+    const res = await this.request<Schemas['ChallengeResponseDoc']>('POST', '/auth/challenge', { body })
+    return res.data
+  }
+
+  /**
+   * Exchanges a signed challenge for a session and retains its credentials.
+   *
+   * Contacts the API and returns public session metadata. Browser callers MUST
+   * configure `credentials: 'include'`; HttpOnly cookies remain browser-managed.
+   * Node callers retain the access and refresh cookies on this instance.
+   *
+   * @param body Wallet address, challenge identifier, and signed challenge message.
+   * @returns Session identity, CSRF token, and expiry in Unix seconds; never JWTs or refresh tokens.
+   * @throws If verification fails or a legacy server returns no session metadata.
+   * @example
+   * const api = new ApiClient({ credentials: 'include' })
+   * await api.verifyAuthChallenge({ address: 'aleo1…', challenge_id: 'challenge', signature: 'sign1…' })
+   */
+  async verifyAuthChallenge(body: Schemas['VerifyRequestDoc']): Promise<Schemas['SessionPayload']> {
+    const result = await this.verifySession(body, this.baseUrl, this.sessionGeneration)
+    if (!result.metadata) throw new ApiError(200, '/auth/verify', 'verify returned no session metadata; use authenticate() with legacy servers')
+    return result.metadata
+  }
+
+  /**
+   * Reads the current session and restores its CSRF and identity metadata.
+   *
+   * Contacts the API using a retained JWT or browser cookies, without signing.
+   *
+   * @returns Session identity and expiry in Unix seconds, without credential secrets.
+   * @throws If no session exists, its JWT has expired, or the API cannot validate it.
+   * @example
+   * const api = new ApiClient({ credentials: 'include' })
+   * const session = await api.getSession()
+   */
+  async getSession(): Promise<Schemas['SessionPayload']> {
+    const baseUrl = this.baseUrl
+    const generation = this.sessionGeneration
+    const res = await this.send('GET', '/auth/session', { auth: 'session', reauthenticate: false, baseUrl })
+    const result = await this.readSessionResponse(res, baseUrl, generation)
+    if (!result.metadata) throw new ApiError(res.status, '/auth/session', 'session response contained no session metadata')
+    return result.metadata
+  }
+
+  /**
+   * Rotates the refresh cookie and retains the replacement session credentials.
+   *
+   * Contacts the API without signing; concurrent calls share one refresh request.
+   * Requires a cookie from verification or a browser-managed cookie session.
+   *
+   * @returns Session identity and renewed access expiry in Unix seconds.
+   * @throws If the refresh cookie is absent, expired, revoked, or concurrently rotated (409).
+   * @example
+   * const api = new ApiClient({ credentials: 'include' })
+   * const session = await api.refreshSession()
+   */
+  async refreshSession(): Promise<Schemas['SessionPayload']> {
+    const baseUrl = this.baseUrl
+    const origin = new URL(baseUrl).origin
+    const generation = this.sessionGeneration
+    if (this.refreshInFlight?.origin === origin && this.refreshInFlight.generation === generation) {
+      return this.refreshInFlight.promise
+    }
+    const cookieAuth = this.credentials === 'include' || this.credentials === 'same-origin'
+    if (!(this.sessionOrigin === origin && this.refreshToken) && !cookieAuth) {
+      throw new Error('/auth/refresh requires a refresh cookie — authenticate() first or enable browser credentials')
+    }
+    const promise = (async () => {
+      const res = await this.send('POST', '/auth/refresh', { refresh: true, reauthenticate: false, baseUrl })
+      const result = await this.readSessionResponse(res, baseUrl, generation)
+      if (!result.metadata) throw new ApiError(res.status, '/auth/refresh', 'refresh response contained no session metadata')
+      return result.metadata
+    })().finally(() => {
+      if (this.refreshInFlight?.promise === promise) this.refreshInFlight = undefined
+    })
+    this.refreshInFlight = { origin, generation, promise }
+    return promise
+  }
+
+  /**
+   * Ends the presented session family and clears local credentials when confirmed.
+   *
+   * Contacts the API without signing. An identity mismatch returns `ended: false`
+   * and preserves the current session; a refresh-cookie logout requires metadata
+   * previously read through verification or {@link getSession}.
+   *
+   * @returns Whether the API ended the expected session family.
+   * @throws If the API rejects the session binding or CSRF token.
+   * @example
+   * const api = new ApiClient({ credentials: 'include' })
+   * await api.getSession()
+   * const result = await api.logout()
+   */
+  async logout(): Promise<Schemas['LogoutResponse']> {
+    const baseUrl = this.baseUrl
+    const generation = this.sessionGeneration
+    const res = await this.request<Schemas['LogoutResponseDoc']>('POST', '/auth/logout', {
+      auth: 'optional-session', refresh: true, reauthenticate: false, baseUrl,
+    })
+    if (res.data.ended && generation === this.sessionGeneration && this.sessionOrigin === new URL(baseUrl).origin) {
+      this.clearSession()
+    }
+    return res.data
+  }
+
+  /**
+   * Revokes every session for the authenticated wallet and forgets its local signer.
+   *
+   * Contacts the API without signing. Provisioned API tokens remain valid.
+   *
+   * @returns The affected wallet and its new session version.
+   * @throws If session authentication or CSRF validation fails.
+   * @example
+   * const api = new ApiClient({ credentials: 'include' })
+   * await api.getSession()
+   * await api.logoutAll()
+   */
+  async logoutAll(): Promise<Schemas['LogoutAllResponse']> {
+    const baseUrl = this.baseUrl
+    const generation = this.sessionGeneration
+    const res = await this.request<Schemas['LogoutAllResponseDoc']>('POST', '/auth/logout-all', {
+      auth: 'session', reauthenticate: false, baseUrl,
+    })
+    if (res.data.ended && generation === this.sessionGeneration && this.sessionOrigin === new URL(baseUrl).origin) {
+      this.clearSession()
+    }
+    return res.data
+  }
+
+  /**
+   * Lists the authenticated wallet's active session families.
+   *
+   * Contacts the API using a session JWT or browser cookies; API tokens are rejected.
+   *
+   * @returns Session identifiers, activity times in Unix seconds, and the current-session marker.
+   * @throws If session authentication fails or the API rate-limits session management.
+   * @example
+   * const api = new ApiClient({ credentials: 'include' })
+   * const sessions = await api.listSessions()
+   */
+  async listSessions(): Promise<Schemas['ActiveSessionPayload'][]> {
+    const res = await this.request<Schemas['ActiveSessionsResponseDoc']>('GET', '/auth/sessions', {
+      auth: 'session', reauthenticate: false,
+    })
+    return res.data
+  }
+
+  /**
+   * Revokes one session family belonging to the authenticated wallet.
+   *
+   * Contacts the API without signing and clears local credentials and the signer
+   * when the revoked family is the current session.
+   *
+   * @param sessionId Session UUID returned by {@link listSessions}.
+   * @returns Whether a family was revoked and whether it was the caller's session.
+   * @throws If session authentication, CSRF validation, or session management fails.
+   * @example
+   * const api = new ApiClient({ credentials: 'include' })
+   * await api.getSession()
+   * await api.revokeSession('00000000-0000-4000-8000-000000000001')
+   */
+  async revokeSession(sessionId: string): Promise<Schemas['RevokeSessionPayload']> {
+    const baseUrl = this.baseUrl
+    const generation = this.sessionGeneration
+    const res = await this.request<Schemas['RevokeSessionResponseDoc']>(
+      'POST', `/auth/sessions/${encodeURIComponent(sessionId)}/revoke`,
+      { auth: 'session', reauthenticate: false, baseUrl },
+    )
+    if (res.data.current && generation === this.sessionGeneration && this.sessionOrigin === new URL(baseUrl).origin) {
+      this.clearSession()
+    }
+    return res.data
+  }
 
   /**
    * Runs the challenge/verify handshake and stores the bearer token.
@@ -271,32 +538,39 @@ export class ApiClient {
     // 401s. A fresh handshake heals that race — retry it a bounded number
     // of times; other failures (bad request, server error) surface at once.
     const attempts = 3
+    const baseUrl = this.baseUrl
+    const generation = this.sessionGeneration
     for (let attempt = 1; ; attempt++) {
       try {
         const challenge = await this.request<Schemas['ChallengeResponseDoc']>('POST', '/auth/challenge', {
-          body: { address },
+          body: { address }, baseUrl,
         })
         const signature = await sign(challenge.data.message)
         // The session arrives as httpOnly cookies on the verify response, so
         // this call needs the raw Response headers — not just the JSON body.
-        const res = await this.send('POST', '/auth/verify', {
-          body: { address, signature, challenge_id: challenge.data.challenge_id },
-        })
-        const token = sessionTokenFrom(res, await res.json())
-        if (!token) {
-          throw new ApiError(res.status, '/auth/verify', 'verify succeeded but carried no session credential (ss_access cookie or body token)')
+        const result = await this.verifySession(
+          { address, signature, challenge_id: challenge.data.challenge_id }, baseUrl, generation,
+        )
+        if (!result.token) {
+          throw new ApiError(200, '/auth/verify', 'verify succeeded but carried no session credential (ss_access cookie or body token); browser callers use verifyAuthChallenge()')
         }
+        if (!result.adopted) throw new ApiError(409, '/auth/verify', 'local session changed during authentication')
         this.signer = { address, sign }
-        this.token = token
-        return this.token
+        return result.token
       } catch (err) {
         if (!(err instanceof ApiError) || err.status !== 401 || attempt >= attempts) throw err
       }
     }
   }
 
-  /** Adopts a previously issued session JWT (e.g. persisted from a prior session). */
+  /**
+   * Adopts a previously issued session JWT (e.g. persisted from a prior session).
+   * Discards the previous session's refresh cookie, metadata, and retained signer.
+   */
   setToken(token: string): void {
+    const origin = new URL(this.baseUrl).origin
+    this.clearSession()
+    this.sessionOrigin = origin
     this.token = token
   }
 
@@ -390,6 +664,25 @@ export class ApiClient {
   }
 
   /**
+   * Gets the authenticated wallet's shareable referral code, creating one when allowed.
+   *
+   * Contacts the DEX API with a session JWT. The server returns the existing
+   * personal code or issues one if the wallet has none and issuance is enabled;
+   * this request can create a code even though the endpoint uses GET.
+   *
+   * @returns The personal code, or a null/absent code when none can be issued.
+   * @throws When no session JWT is held or the server rejects the request.
+   * @example
+   * const api = new ApiClient()
+   * api.setToken(sessionJwt)
+   * const { code } = await api.getMyReferralCode()
+   */
+  async getMyReferralCode(): Promise<Schemas['ReferralMyCodeResponse']> {
+    const res = await this.request<Schemas['ReferralMyCodeResponseDoc']>('GET', '/referral/my-code', { auth: 'session' })
+    return res.data
+  }
+
+  /**
    * Redeems a referral code, unlocking the gated endpoints for the account.
    *
    * The access grant is recorded server-side against the session — no new
@@ -416,10 +709,301 @@ export class ApiClient {
     return res.data
   }
 
+  /**
+   * Records a pool-creation activity claim for the authenticated wallet.
+   *
+   * Posts to the API using a session JWT or API token. This records attribution
+   * metadata; it does not sign or submit an on-chain transaction.
+   *
+   * @param body Activity with `action: 'create_pool'`, a nonblank `tx_id` of at
+   *   most 128 bytes, and optional JSON-object `metadata` of at most 1024 bytes.
+   *   Omitted metadata defaults to an empty object on the server.
+   * @returns Whether the server recorded the activity.
+   * @throws When authentication is missing or the server rejects the activity.
+   * @example
+   * const api = new ApiClient({ apiToken: 'ss_token' })
+   * await api.recordReferralActivity({ action: 'create_pool', tx_id: 'at1transaction' })
+   */
+  async recordReferralActivity(body: Schemas['ReferralActivityRequest']): Promise<Schemas['ReferralActivityResponse']> {
+    const res = await this.request<Schemas['ReferralActivityResponseDoc']>('POST', '/referral/activity', { body, auth: true })
+    return res.data
+  }
+
+  /**
+   * Records referral links for a batch of blinded addresses.
+   *
+   * Posts attribution records using a session JWT or API token. The links are
+   * unverified: authentication does not prove control of the blinded addresses.
+   * This call does not sign, prove, or submit a transaction.
+   *
+   * @param body Redeemed referral `code` and `blinded_addresses` as Aleo address
+   *   literals; the server accepts at most 250 unique addresses per batch.
+   * @returns Counts of recorded, duplicate, and conflicting links.
+   * @throws When authentication is missing or the server rejects the batch.
+   * @example
+   * const api = new ApiClient({ apiToken: 'ss_token' })
+   * await api.recordReferralAddressBatch({ code: 'REF123', blinded_addresses: ['aleo1…'] })
+   */
+  async recordReferralAddressBatch(body: Schemas['ReferralAddressBatchRequest']): Promise<Schemas['ReferralAddressBatchResponse']> {
+    const res = await this.request<Schemas['ReferralAddressBatchResponseDoc']>('POST', '/referral/address-batches', { body, auth: true })
+    return res.data
+  }
+
+  /**
+   * Reads whether the authenticated wallet has the referral administrator role.
+   *
+   * Contacts the API using a session JWT. Ordinary wallets may read this flag;
+   * the call does not grant privileges or perform an administrator operation.
+   *
+   * @returns The wallet's `is_admin` flag.
+   * @throws When no session JWT is held or the server rejects the request.
+   * @example
+   * const api = new ApiClient()
+   * api.setToken('session-jwt')
+   * const { is_admin } = await api.getReferralAdminStatus()
+   */
+  async getReferralAdminStatus(): Promise<Schemas['ReferralAdminCheckResponse']> {
+    const res = await this.request<Schemas['ReferralAdminResponseDoc']>('GET', '/referral/admin', { auth: 'session' })
+    return res.data
+  }
+
+  /**
+   * Records an unverified referral link for one blinded address.
+   *
+   * Posts attribution using a session JWT or API token. Authentication does
+   * not prove control of the address, and this does not claim swap funds or
+   * sign, prove, or submit an on-chain transaction.
+   *
+   * @param body Redeemed referral `code` and the `blinded_address` Aleo literal.
+   * @returns Whether the server inserted a new link; duplicates return false.
+   * @throws When authentication is missing or the address conflicts or is invalid.
+   * @example
+   * const api = new ApiClient({ apiToken: 'ss_token' })
+   * await api.recordReferralSwapClaim({ code: 'REF123', blinded_address: 'aleo1…' })
+   */
+  async recordReferralSwapClaim(body: Schemas['ReferralSwapClaimRequest']): Promise<Schemas['ReferralSwapClaimResponse']> {
+    const res = await this.request<Schemas['ReferralSwapClaimResponseDoc']>('POST', '/referral/swap-claims', { body, auth: true })
+    return res.data
+  }
+
+  // ── compliance ───────────────────────────────────────────────────────
+
+  /**
+   * Reads the indexed global compliance and pool-creation controls.
+   *
+   * Contacts the public API without authentication. The indexed response may
+   * lag chain state; transaction decisions must use chain-backed reads.
+   *
+   * @returns The global controls in their API response envelope.
+   * @throws When the API cannot supply the controls.
+   * @example
+   * const config = await new ApiClient().getComplianceConfig()
+   */
+  async getComplianceConfig(): Promise<Schemas['GlobalConfigResponseDoc']> {
+    return this.request('GET', '/compliance')
+  }
+
+  /**
+   * Reads a token's indexed allowlist and pause status.
+   *
+   * Contacts the public API without authentication; it does not alter controls.
+   *
+   * @param tokenId On-chain token identifier as an Aleo field literal.
+   * @returns The token's compliance status in the API response envelope.
+   * @throws When the API rejects the token or cannot supply its status.
+   * @example
+   * const status = await new ApiClient().getTokenCompliance('1field')
+   */
+  async getTokenCompliance(tokenId: string): Promise<Schemas['TokenComplianceResponseDoc']> {
+    return this.request('GET', `/compliance/tokens/${encodeURIComponent(tokenId)}`)
+  }
+
+  /**
+   * Reads a token pair's indexed compliance status.
+   *
+   * Contacts the public API without authentication; it does not alter controls.
+   *
+   * @param token0 First on-chain token identifier as an Aleo field literal.
+   * @param token1 Second on-chain token identifier as an Aleo field literal.
+   * @returns The pair's compliance status in the API response envelope.
+   * @throws When the API rejects the pair or cannot supply its status.
+   * @example
+   * const status = await new ApiClient().getPairCompliance('1field', '2field')
+   */
+  async getPairCompliance(token0: string, token1: string): Promise<Schemas['PairComplianceResponseDoc']> {
+    return this.request('GET', `/compliance/pairs/${encodeURIComponent(token0)}/${encodeURIComponent(token1)}`)
+  }
+
+  // ── market discovery ─────────────────────────────────────────────────
+
+  /**
+   * Lists indexed pool market metrics with search, sorting, and pagination.
+   *
+   * Contacts the public API without authentication. Omitted options are left
+   * to the service's defaults rather than fixed by the SDK.
+   *
+   * @param query Optional `window` (1h, 1d, 1w, or 1m), `sort` field, `order`
+   *   (asc or desc), `limit` (1–100 rows), `offset` (row count), and `search`
+   *   text matching a symbol, name, token address, or pool key.
+   * @returns Market rows, metric window, and pagination in the API envelope.
+   * @throws When the server rejects the filters or cannot supply market data.
+   * @example
+   * const pools = await new ApiClient().getExplorePools({ window: '1d', limit: 10 })
+   */
+  async getExplorePools(query?: operations['explore_list_pools']['parameters']['query']): Promise<Schemas['ExplorePoolListResponseDoc']> {
+    return this.request('GET', '/explore/pools', { query })
+  }
+
+  /**
+   * Lists indexed token market metrics with search, sorting, and pagination.
+   *
+   * Contacts the public API without authentication. Omitted options retain
+   * the service's defaults.
+   *
+   * @param query Optional `window` (1h, 1d, 1w, or 1m), `sort` field, `order`
+   *   (asc or desc), `limit` (1–100 rows), `offset` (row count), and `search`
+   *   text matching a symbol, name, or token address.
+   * @returns Token market rows and pagination in the API response envelope.
+   * @throws When the server rejects the filters or cannot supply market data.
+   * @example
+   * const tokens = await new ApiClient().getExploreTokens({ search: 'USDC', limit: 10 })
+   */
+  async getExploreTokens(query?: operations['explore_list_tokens']['parameters']['query']): Promise<Schemas['ExploreTokenListResponseDoc']> {
+    return this.request('GET', '/explore/tokens', { query })
+  }
+
+  /**
+   * Reads one indexed token's market metrics and associated pools.
+   *
+   * Contacts the public API without authentication.
+   *
+   * @param tokenId Indexed token address.
+   * @param query Optional `window` (1h, 1d, 1w, or 1m); omission retains the
+   *   service's default metric window.
+   * @returns Token market detail in the API response envelope.
+   * @throws When the token is unknown or the server rejects the window.
+   * @example
+   * const token = await new ApiClient().getExploreToken('1field', { window: '1w' })
+   */
+  async getExploreToken(tokenId: string, query?: operations['explore_get_token']['parameters']['query']): Promise<Schemas['ExploreTokenDetailResponseDoc']> {
+    return this.request('GET', `/explore/tokens/${encodeURIComponent(tokenId)}`, { query })
+  }
+
+  /**
+   * Lists the indexed market transaction feed with cursor pagination.
+   *
+   * Contacts the public API without authentication. Omitted options retain
+   * the service's defaults; omitting the cursor starts the first page.
+   *
+   * @param query Optional `window` (1h, 1d, 1w, or 1m), `type` (swap, mint,
+   *   or burn), `token` symbol/name/address, `pool` key, prior response
+   *   `cursor`, and `limit` (1–100 rows). Omitted filters include all matches.
+   * @returns Feed rows and the next cursor in the API response envelope.
+   * @throws When the server rejects the filters or cannot supply the feed.
+   * @example
+   * const trades = await new ApiClient().getExploreTransactions({ type: 'swap', limit: 20 })
+   */
+  async getExploreTransactions(query?: operations['explore_list_transactions']['parameters']['query']): Promise<Schemas['ExploreTransactionListResponseDoc']> {
+    return this.request('GET', '/explore/transactions', { query })
+  }
+
+  /**
+   * Reads stored hourly USDC/USD prices over a Unix-second range.
+   *
+   * Contacts the public API without authentication. Hours without an accepted
+   * price are absent; this method does not fill gaps or interpolate prices.
+   *
+   * @param query Inclusive `from` and exclusive `to` Unix timestamps in seconds
+   *   (i64 numbers), with a positive span no greater than 31 days.
+   * @returns Hourly prices ordered oldest first in the API response envelope.
+   * @throws When the server rejects the range or cannot supply history.
+   * @example
+   * const prices = await new ApiClient().getUsdcUsdHistory({ from: 1_750_000_000, to: 1_750_003_600 })
+   */
+  async getUsdcUsdHistory(query: operations['prices_usdc_usd_history']['parameters']['query']): Promise<Schemas['UsdcUsdHistoryResponseDoc']> {
+    return this.request('GET', '/prices/usdc-usd/history', { query })
+  }
+
+  // ── GeckoTerminal integration ────────────────────────────────────────
+
+  /**
+   * Reads public asset metadata in GeckoTerminal's response format.
+   *
+   * Contacts the API without authentication.
+   *
+   * @param id Indexed asset identifier.
+   * @returns The complete response containing `asset`.
+   * @throws When the asset is unknown or the API cannot supply metadata.
+   * @example
+   * const asset = await new ApiClient().getGeckoTerminalAsset('1field')
+   */
+  async getGeckoTerminalAsset(id: string): Promise<Schemas['AssetResponse']> {
+    return this.request('GET', '/geckoterminal/asset', { query: { id } })
+  }
+
+  /**
+   * Reads public pair metadata in GeckoTerminal's response format.
+   *
+   * Contacts the API without authentication.
+   *
+   * @param id Indexed pool identifier.
+   * @returns The complete response containing `pair`.
+   * @throws When the pair is unknown or the API cannot supply metadata.
+   * @example
+   * const pair = await new ApiClient().getGeckoTerminalPair('1field')
+   */
+  async getGeckoTerminalPair(id: string): Promise<Schemas['PairResponse']> {
+    return this.request('GET', '/geckoterminal/pair', { query: { id } })
+  }
+
+  /**
+   * Reads public swap events within an inclusive block-height range.
+   *
+   * Contacts the API without authentication. The service bounds the range and
+   * event count; use smaller consecutive ranges when it rejects a large span.
+   *
+   * @param query Nonnegative `fromBlock` and `toBlock` heights as numbers,
+   *   inclusive and ordered, within the service's indexed history.
+   * @returns The complete GeckoTerminal response containing `events`.
+   * @throws When the range is invalid, too large, or outside indexed history.
+   * @example
+   * const events = await new ApiClient().getGeckoTerminalEvents({ fromBlock: 100, toBlock: 110 })
+   */
+  async getGeckoTerminalEvents(query: operations['events']['parameters']['query']): Promise<Schemas['EventsResponse']> {
+    return this.request('GET', '/geckoterminal/events', { query })
+  }
+
+  /**
+   * Reads the latest block available to the public GeckoTerminal feed.
+   *
+   * Contacts the API without authentication. This checkpoint bounds event
+   * history and can lag the live chain head.
+   *
+   * @returns The complete response containing the indexed `block` checkpoint.
+   * @throws When the service cannot supply a checkpoint.
+   * @example
+   * const checkpoint = await new ApiClient().getGeckoTerminalLatestBlock()
+   */
+  async getGeckoTerminalLatestBlock(): Promise<Schemas['LatestBlockResponse']> {
+    return this.request('GET', '/geckoterminal/latest-block')
+  }
+
   // ── pools & markets ──────────────────────────────────────────────────
 
-  /** Lists pools with token metadata (paginated). */
-  async getPools(query?: { limit?: number; offset?: number }): Promise<Schemas['PoolListResponseDoc']> {
+  /**
+   * Lists pools and token metadata through the public API.
+   *
+   * Contacts the API without authentication.
+   *
+   * @param query Optional `limit` (1–100 rows, server default 20), `offset`
+   *   (row count, default 0), and `include_valuation` (default false), which
+   *   includes the server's USDC/USD valuation when requested.
+   * @returns Pool rows and pagination in the API response envelope.
+   * @throws When the API rejects pagination or cannot supply pools.
+   * @example
+   * const pools = await new ApiClient().getPools({ limit: 10, include_valuation: true })
+   */
+  async getPools(query?: operations['list_pools']['parameters']['query']): Promise<Schemas['PoolListResponseDoc']> {
     return this.request('GET', '/pools', { query })
   }
 
@@ -428,25 +1012,162 @@ export class ApiClient {
     return this.request('GET', `/pools/${encodeURIComponent(key)}`)
   }
 
-  /** Reads a pool's rolling 24h price/volume summary. */
+  /**
+   * Reads a pool's rolling 24-hour price and volume summary.
+   *
+   * Contacts the public API without authentication.
+   *
+   * @param key Pool key as an Aleo field literal.
+   * @returns The server's rolling price and volume statistics.
+   * @throws When the pool is unknown or the API cannot supply statistics.
+   * @deprecated Use getPool24hStats for the correct response envelope type.
+   *   This legacy signature is retained until the next major release.
+   * @example
+   * const stats = await new ApiClient().getPoolStats('1field')
+   */
   async getPoolStats(key: string): Promise<Schemas['PoolStatsDoc']> {
-    return this.request('GET', `/pools/${encodeURIComponent(key)}/stats`, { auth: true })
+    return this.request('GET', `/pools/${encodeURIComponent(key)}/stats`)
   }
 
-  /** Lists a pool's trades, optionally filtered by kind (paginated). */
+  /**
+   * Reads a pool's public 24-hour statistics with the API response envelope.
+   *
+   * Contacts the API without requiring credentials. Missing price history can
+   * leave interval-open prices null; current indexed statistics may lag chain state.
+   *
+   * @param key Pool key field literal to query.
+   * @returns The generated response with rolling statistics under `data`.
+   * @throws When the server cannot find the pool or rejects the request.
+   * @example
+   * const api = new ApiClient()
+   * const { data } = await api.getPool24hStats('1field')
+   */
+  async getPool24hStats(key: string): Promise<Schemas['PoolStats24hResponseDoc']> {
+    return this.request('GET', `/pools/${encodeURIComponent(key)}/stats`)
+  }
+
+  /**
+   * Reads rolling 24-hour statistics for multiple pools in one public request.
+   *
+   * Contacts the API without authentication.
+   *
+   * @param query Comma-separated pool field literals in `keys`, at most 100
+   *   unique keys; the service deduplicates them.
+   * @returns Pool statistics in the API response envelope.
+   * @throws When the API rejects the keys or cannot supply statistics.
+   * @example
+   * const stats = await new ApiClient().getPoolStatsBatch({ keys: '1field,2field' })
+   */
+  async getPoolStatsBatch(query: operations['get_pool_24h_stats_batch']['parameters']['query']): Promise<Schemas['PoolStats24hBatchResponseDoc']> {
+    return this.request('GET', '/pools/stats', { query })
+  }
+
+  /**
+   * Lists a pool's indexed trades with optional filtering and pagination.
+   *
+   * Contacts the public API without authentication.
+   *
+   * @param key Pool key as an Aleo field literal.
+   * @param query Optional `limit` (1–100 rows, server default 20), `offset`
+   *   (row count, default 0), and `trade_type` (omitted for all trade kinds).
+   * @returns Trade rows and pagination in the API response envelope.
+   * @throws When the pool or filter is invalid or trade data is unavailable.
+   * @example
+   * const trades = await new ApiClient().getPoolTrades('1field', { limit: 10 })
+   */
   async getPoolTrades(
     key: string,
     query?: { limit?: number; offset?: number; trade_type?: string },
   ): Promise<Schemas['PoolTradesResponseDoc']> {
-    return this.request('GET', `/pools/${encodeURIComponent(key)}/trades`, { query, auth: true })
+    return this.request('GET', `/pools/${encodeURIComponent(key)}/trades`, { query })
   }
 
-  /** Reads OHLCV candles for a pool over a unix-seconds time range. */
+  /**
+   * Reads public OHLCV candles over a Unix-second time range.
+   *
+   * Contacts the API without authentication. The legacy `4h` granularity
+   * remains accepted by the SDK for compatibility but current servers may
+   * reject it; use a bucket from the generated `GranularityDoc` schema.
+   *
+   * @param key Pool key as an Aleo field literal.
+   * @param query Candle `granularity`, inclusive `from` and exclusive `to`
+   *   timestamps in Unix seconds (i64 numbers), and optional `orientation`:
+   *   `raw` (default) reports token1 per token0; `display` uses the pool's
+   *   canonical display direction and inverts candles when needed. Optional
+   *   `summary_from` sets an exact summary start in Unix seconds, at or after
+   *   `from` and before `to`; omission uses the requested candle range.
+   * @returns Candle rows in the API response envelope.
+   * @throws When the server rejects the pool, bucket, or time range.
+   * @example
+   * const candles = await new ApiClient().getPoolOhlcv('1field', {
+   *   granularity: '1h', from: 1_750_000_000, to: 1_750_003_600, orientation: 'display',
+   * })
+   */
   async getPoolOhlcv(
     key: string,
-    query: { granularity: '1m' | '5m' | '15m' | '1h' | '4h' | '1d'; from: number; to: number },
+    query: { granularity: Schemas['GranularityDoc'] | '4h'; from: number; to: number; summary_from?: number; orientation?: 'raw' | 'display' },
   ): Promise<Schemas['OhlcvResponseDoc']> {
-    return this.request('GET', `/pools/${encodeURIComponent(key)}/ohlcv`, { query, auth: true })
+    return this.request('GET', `/pools/${encodeURIComponent(key)}/ohlcv`, { query })
+  }
+
+  /**
+   * Reads the indexed distribution of liquidity across a pool's ticks.
+   *
+   * Contacts the public API without authentication. Indexed data may lag chain
+   * state and must not replace chain checks before moving funds.
+   *
+   * @param key Pool key as an Aleo field literal.
+   * @returns Tick liquidity entries in the API response envelope; exact
+   *   liquidity values remain decimal strings to preserve integer precision.
+   * @throws When the pool is unknown or the service cannot supply its ticks.
+   * @example
+   * const liquidity = await new ApiClient().getPoolLiquidityDistribution('1field')
+   */
+  async getPoolLiquidityDistribution(key: string): Promise<Schemas['LiquidityDistributionResponseDoc']> {
+    return this.request('GET', `/pools/${encodeURIComponent(key)}/liquidity-distribution`)
+  }
+
+  /**
+   * Reads an indexed pool oracle snapshot for a time window.
+   *
+   * Contacts the public API without authentication; it does not update the
+   * oracle or prove a transaction.
+   *
+   * @param key Pool key as an Aleo field literal.
+   * @param query Optional `window_seconds` as a nonnegative u32 number;
+   *   omission retains the service's default oracle window.
+   * @returns The oracle snapshot in the API response envelope.
+   * @throws When the window is invalid, history is unavailable (409), or the
+   *   oracle is undeployed or unavailable (503).
+   * @example
+   * const oracle = await new ApiClient().getPoolOracle('1field', { window_seconds: 3600 })
+   */
+  async getPoolOracle(key: string, query?: operations['get_pool_oracle']['parameters']['query']): Promise<Schemas['PoolOracleResponseDoc']> {
+    return this.request('GET', `/pools/${encodeURIComponent(key)}/oracle`, { query })
+  }
+
+  /**
+   * Reads a pool snapshot and insertion hints for planning a rebalance.
+   *
+   * Contacts the API using a session JWT or API token. It does not sign,
+   * prove, or submit a rebalance transaction.
+   *
+   * @param key Pool key as an Aleo field literal.
+   * @param query Current `tick_lower`/`tick_upper`, proposed
+   *   `mint_tick_lower`/`mint_tick_upper` (i32 numbers in [-400000, 400000],
+   *   lower strictly below upper), and `old_liquidity` as an exact unsigned
+   *   u128 decimal integer string. Ticks must respect the pool's spacing.
+   * @returns Observed state and proposed mint hints in the API envelope.
+   * @throws When credentials are missing or the server rejects the range or state.
+   * @example
+   * const api = new ApiClient({ apiToken: 'ss_token' })
+   * const snapshot = await api.getRebalanceState('1field', {
+   *   tick_lower: -100, tick_upper: 100, old_liquidity: '1000',
+   *   mint_tick_lower: -200, mint_tick_upper: 200,
+   * })
+   */
+  async getRebalanceState(key: string, query: operations['get_rebalance_state']['parameters']['query']): Promise<Schemas['RebalanceStateResponseDoc']> {
+    return this.request('GET', `/pools/${encodeURIComponent(key)}/rebalance-state`, { query, auth: true })
   }
 
   // ── routing ──────────────────────────────────────────────────────────
@@ -465,43 +1186,113 @@ export class ApiClient {
    * the pool, and a slippage floor built on that reverts on finalize.
    * `formatUnits` and `parseUnits` convert either way.
    *
-   * @param query Token ids as field literals, and the optional decimal amount.
+   * Contacts the API using a session JWT or API token; it does not sign or
+   * submit a swap.
+   *
+   * @param query Token ids as field literals, optional positive decimal
+   *   `amount_in` (omitted for an unquoted route), and optional `pool_key` to
+   *   constrain the route to one pool with no fallback. Omitting `pool_key`
+   *   permits automatic routing across available pools.
    * @returns The route's hops and its quote, both in decimal units.
+   * @throws When credentials are missing or the API rejects the route request.
+   * @example
+   * const api = new ApiClient({ apiToken: 'ss_token' })
+   * const route = await api.getRoute({ token_in: '1field', token_out: '2field', amount_in: '0.5' })
    */
   async getRoute(query: {
     token_in: string
     token_out: string
     amount_in?: string
+    pool_key?: string
   }): Promise<Schemas['RouteResponseDoc']> {
     return this.request('GET', '/route', {
-      query: { token_in: query.token_in, token_out: query.token_out, amount_in: query.amount_in },
+      query: { token_in: query.token_in, token_out: query.token_out, amount_in: query.amount_in, pool_key: query.pool_key },
       auth: true,
     })
+  }
+
+  /**
+   * Reads the current routing graph and maximum supported hop count.
+   *
+   * Contacts the API using a session JWT or API token. The graph describes
+   * available token connections and does not itself quote or submit a swap.
+   *
+   * @returns Topology edges and hop limit in the API response envelope.
+   * @throws When credentials are missing or routing data is unavailable.
+   * @example
+   * const topology = await new ApiClient({ apiToken: 'ss_token' }).getRouteTopology()
+   */
+  async getRouteTopology(): Promise<Schemas['RouteTopologyResponseDoc']> {
+    return this.request('GET', '/route/topology', { auth: true })
   }
 
   // ── positions & tokens ───────────────────────────────────────────────
 
   /**
-   * Lists a user's liquidity positions (paginated).
+   * Lists the authenticated wallet's indexed liquidity positions.
    *
-   * The API has no per-position detail route; read one position's live
-   * state from chain with the `getPosition` action instead.
+   * Contacts the API using a session JWT or API token. The server derives the
+   * wallet from that credential. Read live per-position state from chain
+   * with the `getPosition` action.
+   *
+   * @param query Optional `limit` (1–100 rows, server default 20) and `offset`
+   *   (row count, default 0). The legacy `user` field is forwarded for backward
+   *   compatibility but does not override the credential's wallet identity.
+   * @returns Position rows and pagination in the API response envelope.
+   * @throws When credentials are missing or the API cannot supply positions.
+   * @example
+   * const positions = await new ApiClient({ apiToken: 'ss_token' }).getPositions({ limit: 10 })
    */
-  async getPositions(query: { user: string; limit?: number; offset?: number }): Promise<Schemas['PositionListResponseDoc']> {
+  async getPositions(query?: { user?: string; limit?: number; offset?: number }): Promise<Schemas['PositionListResponseDoc']> {
     return this.request('GET', '/positions', { query, auth: true })
+  }
+
+  /**
+   * Reads pending swap outputs and liquidity fees for the authenticated wallet.
+   *
+   * Contacts the API using a session JWT or API token. The server derives the
+   * wallet from the credential. This read does not claim funds or submit a
+   * transaction, and indexed results may lag chain state.
+   *
+   * @returns Pending swaps and positions with owed amounts in the API envelope;
+   *   exact financial amounts remain decimal strings.
+   * @throws When credentials are missing or the API cannot supply the wallet's data.
+   * @example
+   * const unclaimed = await new ApiClient({ apiToken: 'ss_token' }).getUnclaimed()
+   */
+  async getUnclaimed(): Promise<Schemas['UnclaimedResponseDoc']> {
+    return this.request('GET', '/unclaimed', { auth: true })
   }
 
   /**
    * Lists all registered tokens with metadata.
    *
-   * The API has no per-token detail route; resolve one token by filtering
-   * this list on its field address.
+   * For one token's market metrics and associated pools, use
+   * {@link getExploreToken} with its indexed address.
    */
   async getTokens(): Promise<Schemas['TokenListResponseDoc']> {
     return this.request('GET', '/tokens')
   }
 
   // ── protocol config ──────────────────────────────────────────────────
+
+  /**
+   * Reads the revisioned protocol deployment, controls, fees, and capabilities.
+   *
+   * Contacts the public API without authentication. Use the revision from a
+   * protocol-config invalidation as the minimum to avoid accepting stale state.
+   *
+   * @param query Optional `minimum_revision` as a nonnegative i64 number;
+   *   defaults to 0 on the server, allowing any available revision.
+   * @returns The complete protocol-state response, without an added envelope.
+   * @throws When the server cannot satisfy the requested revision (503), the
+   *   revision is invalid, or the state cannot be loaded.
+   * @example
+   * const state = await new ApiClient().getProtocolState({ minimum_revision: 42 })
+   */
+  async getProtocolState(query?: { minimum_revision?: number }): Promise<Schemas['ProtocolStateResponse']> {
+    return this.request('GET', '/protocol/state', { query })
+  }
 
   /**
    * Lists registered fee tiers with their tick spacings.

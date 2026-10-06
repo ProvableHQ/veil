@@ -12,8 +12,8 @@ export type { AgentToolSchema, AgentTool, AgentToolHandler } from '@provablehq/v
  * @property client A Veil client (public or wallet) for chain-direct reads and
  *   record-derived balances. Chain and private-balance tools are available
  *   only when this is set.
- * @property api The DEX API client for off-chain reads (pools, routes, tokens,
- *   public balances). API tools are available only when this is set. Most API
+ * @property api The DEX API client for off-chain reads and session/referral
+ *   operations. API tools are available only when this is set. Most API
  *   endpoints are bearer-gated: construct the client with an `apiToken`, or
  *   set `client` too so the auth tools (`shield_swap_authenticate`,
  *   invite-code status/redeem, API-token mint/list/revoke) let the agent
@@ -22,8 +22,9 @@ export type { AgentToolSchema, AgentTool, AgentToolHandler } from '@provablehq/v
  *   Defaults to `DEFAULT_PROGRAM`.
  * @property includeWrites Include the money-moving write tools (create pool,
  *   swap, claim, mint, increase/decrease liquidity, collect, burn). Off by
- *   default — an agent gets
- *   read-only tools unless the caller opts in. Requires `client`. Write tools target
+ *   default. Chain transactions require `client`; the server-funded faucet
+ *   requires `api`. Session and referral metadata mutations remain available
+ *   without this flag because they do not move funds. Chain write tools target
  *   the local-signer path: they auto-select records and auto-fetch the
  *   dynamic-dispatch program sources, so the agent supplies only amounts and
  *   token programs.
