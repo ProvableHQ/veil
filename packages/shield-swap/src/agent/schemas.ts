@@ -1,4 +1,5 @@
 import type { AgentToolSchema } from '@provablehq/veil-core/agent'
+import { additionalApiToolSchemas } from './api-schemas.js'
 
 // ---------------------------------------------------------------------------
 // Chain-direct read tools (backed by a Veil client). Trust-critical values —
@@ -233,8 +234,9 @@ export const listPoolsSchema: AgentToolSchema = {
   inputSchema: {
     type: 'object',
     properties: {
-      limit: { type: 'number', description: 'Max pools to return.' },
-      offset: { type: 'number', description: 'Pagination offset.' },
+      limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Max pools to return (1–100). Omitted uses the server default.' },
+      offset: { type: 'integer', minimum: 0, description: 'Pagination offset. Omitted uses the server default.' },
+      includeValuation: { type: 'boolean', description: 'Include server USDC/USD valuation. Omitted uses the server default.' },
     },
     required: [],
   },
@@ -252,6 +254,7 @@ export const getRouteSchema: AgentToolSchema = {
     properties: {
       tokenIn: { type: 'string', description: 'Input token id (field literal).' },
       tokenOut: { type: 'string', description: 'Output token id (field literal).' },
+      poolKey: { type: 'string', description: 'Optional pool key. Restricts the route to this single pool with no fallback; omitted searches the routing graph.' },
       amountIn: {
         type: 'string',
         description:
@@ -303,12 +306,12 @@ export const getBalancesSchema: AgentToolSchema = {
 // per session, or mints a long-lived API token to reuse across sessions.
 // ---------------------------------------------------------------------------
 
-/** Declares the `shield_swap_authenticate` tool — the challenge/verify handshake with the client's account (backed by `ApiClient.authenticate`); unlocks the gated DEX API tools for ~24h. */
+/** Declares the `shield_swap_authenticate` tool — the challenge/verify handshake with the client's account (backed by `ApiClient.authenticate`); unlocks gated DEX API tools with automatic renewal. */
 export const authenticateSchema: AgentToolSchema = {
   name: 'shield_swap_authenticate',
   description:
     'Authenticate with the DEX API by signing its challenge with the client account. Stores a ' +
-    '~24h session credential internally and unlocks the gated API tools (routes, swaps, ' +
+    '15-minute access credential internally, renews it automatically when needed, and unlocks the gated API tools (routes, swaps, ' +
     'positions, balances, fee tiers). Call this once if API tools fail with an auth error.',
   inputSchema: { type: 'object', properties: {}, required: [] },
 }
@@ -735,6 +738,7 @@ export const apiToolSchemas: AgentToolSchema[] = [
   listPoolsSchema,
   getRouteSchema,
   listTokensSchema,
+  ...additionalApiToolSchemas,
 ]
 
 /** Composed tools — require both a client and an ApiClient. */

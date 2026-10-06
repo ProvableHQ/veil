@@ -235,11 +235,29 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
   }, 60_000)
 
   it('auto re-auth: a poisoned session heals on the next gated call', async () => {
-    // Simulates JWT expiry: the stale token 401s, the stored signer renews
-    // the session, and the call retries transparently.
-    api.setToken('expired-garbage')
-    const tiers = await api.getFeeTiers()
-    expect(tiers.data.length).toBeGreaterThan(0)
+    // Send one invalid bearer to the real API. setToken() explicitly adopts
+    // another session and must discard the previous account's signer.
+    let poison = true
+    const recoveringApi = new ApiClient({
+      ...API_OPTS,
+      fetch: async (input, init) => {
+        if (poison && String(input).endsWith('/fee-tiers')) {
+          poison = false
+          const headers = new Headers(init?.headers)
+          headers.set('authorization', 'Bearer expired-garbage')
+          return fetch(input, { ...init, headers })
+        }
+        return fetch(input, init)
+      },
+    })
+    await authenticateWithAccount(recoveringApi, account)
+    try {
+      const tiers = await recoveringApi.getFeeTiers()
+      expect(tiers.data.length).toBeGreaterThan(0)
+      expect(poison).toBe(false)
+    } finally {
+      await recoveringApi.logout()
+    }
   }, 30_000)
 
   it('agent auth tools drive the full token lifecycle end-to-end', async () => {

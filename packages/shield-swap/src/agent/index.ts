@@ -1,5 +1,7 @@
 import type { AgentTool, AgentToolSchema } from '@provablehq/veil-core/agent'
 import type { ShieldSwapAgentToolsConfig } from './types.js'
+import { apiWriteToolSchemas } from './api-schemas.js'
+import { createApiWriteHandlers } from './api-handlers.js'
 import {
   chainToolSchemas,
   apiToolSchemas,
@@ -18,6 +20,7 @@ import {
 } from './handlers.js'
 
 export type { ShieldSwapAgentToolsConfig, AgentTool, AgentToolSchema, AgentToolHandler } from './types.js'
+export * from './api-schemas.js'
 export {
   chainToolSchemas,
   apiToolSchemas,
@@ -84,6 +87,7 @@ export function shieldSwapAgentToolSchemas(config?: ShieldSwapAgentToolsConfig):
   if (all || (config.client && config.api)) schemas.push(...composedToolSchemas, ...authToolSchemas)
   // Writes are money-moving — included only when explicitly opted in.
   if (all || (config.includeWrites && config.client)) schemas.push(...writeToolSchemas)
+  if (all || (config.includeWrites && config.api)) schemas.push(...apiWriteToolSchemas)
   return schemas
 }
 
@@ -122,5 +126,6 @@ export function createShieldSwapAgentTools(config: ShieldSwapAgentToolsConfig): 
     add(authToolSchemas, createAuthHandlers(config.client, config.api))
   }
   if (config.includeWrites && config.client) add(writeToolSchemas, createWriteHandlers(config.client, config.program))
+  if (config.includeWrites && config.api) add(apiWriteToolSchemas, createApiWriteHandlers(config.api))
   return tools
 }

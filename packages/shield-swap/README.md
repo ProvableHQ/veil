@@ -190,10 +190,14 @@ Provable dev API; override either with
 
 ### Authenticating with the DEX API
 
-Most API endpoints beyond pool and token discovery — routes, swaps, positions,
-balances, fee tiers, candles — are bearer-gated. Two credentials work:
+The [API action reference](./API.md) maps every non-admin application endpoint
+to its SDK method, including session management, referrals, analytics, and
+discovery. These methods are also exposed through agent tools and MCP.
 
-- **A session JWT** (about 24 hours), issued by a challenge/verify handshake:
+Public market data needs no credential. Account data, routing, and referral
+activity require authentication. Two credentials work:
+
+- **A session JWT** (about 15 minutes), issued by a challenge/verify handshake:
   the API sends a nonce message, the account signs it, and the signature is
   exchanged for the token. On a composed client this is one call:
 
@@ -206,8 +210,8 @@ balances, fee tiers, candles — are bearer-gated. Two credentials work:
   renews it and retries automatically (disable with
   `api: { autoReauthenticate: false }`). Outside the decorator, use
   `authenticateWithAccount(api, account)` or `api.authenticate(address, sign)`
-  directly — the latter is what a wallet-backed frontend wires to its own
-  signing prompt.
+  directly. A browser using HTTP-only cookies can use the separate challenge
+  and verification methods with `credentials: 'include'`; see the API reference.
 
   This action was called `authenticateApi` before. That name survives as a
   deprecated alias and will be removed in the next major: a client can also carry
@@ -245,6 +249,11 @@ if (!(await client.api.getReferralStatus()).has_access) {
 
 The access grant is recorded server-side against the session, so no second
 handshake is needed.
+
+To obtain the account's own code to share, call `client.api.getMyReferralCode()`
+after authentication. The server returns an existing personal code or creates
+one when issuance is enabled; the returned `code` may be null or absent when
+none is available. This call can create a code and does not redeem one.
 
 Calling a gated method with no credential fails fast client-side with the
 remedy in the message, rather than surfacing a bare 401.
