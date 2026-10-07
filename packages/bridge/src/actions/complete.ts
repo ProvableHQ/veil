@@ -8,6 +8,11 @@ import type { BridgeReceipt, BridgeRegistry } from '../types/protocol.js'
 import { complete as completePrivateMint } from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
+import {
+  findXReservePrivateMintIdentity,
+  memoryXReservePrivateMintIdentityStore,
+  type XReservePrivateMintIdentityStore,
+} from '../utils/xreservePrivateMintStore.js'
 
 /**
  * Submits the destination-chain transaction required to receive bridged funds.
@@ -23,6 +28,7 @@ import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
  * @param clients Network and wallet access for the destination chain.
  * @param params Transfer state ready for private delivery, fee preference, secret nonce, and optional callback for saving recovery information.
  * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
+ * @param privateMintIdentities Store used to resolve a checkpointed public commitment to its local scalar.
  * @returns The destination transaction identifier and its confirmation state.
  * @throws BridgeError When no destination transaction is required, the Circle attestation is invalid, required wallet access is unavailable, or submission fails.
  * @example const execution = await complete(registry, clients, { plan, receipt: ready, onCheckpoint: save })
@@ -32,6 +38,7 @@ export async function complete(
   clients: BridgeChainClients,
   params: CompleteParameters,
   fetcher: typeof fetch = globalThis.fetch,
+  privateMintIdentities: XReservePrivateMintIdentityStore = memoryXReservePrivateMintIdentityStore(),
 ): Promise<BridgeExecution> {
   let plan: import('../types/protocol.js').BridgePlan
   let receipt: BridgeReceipt
@@ -122,6 +129,23 @@ export async function complete(
     return { kind: 'aleo-xreserve', transactionId, receipt: submitted }
   }
   const { nextAction: _nextAction, ...deposit } = receipt
+  const storedCommitment = deposit.protocolState.privateMintAddressCommitment
+  let privateMintSecretNonce = params.privateMintSecretNonce
+  if (storedCommitment !== undefined && privateMintSecretNonce === undefined) {
+    if (typeof storedCommitment !== 'string' || !/^[0-9a-f]{64}$/.test(storedCommitment)) {
+      throw new BridgeError('Ready xReserve receipt contains an invalid private mint address commitment')
+    }
+    const identity = await findXReservePrivateMintIdentity(privateMintIdentities, storedCommitment)
+    if (!identity) {
+      throw new BridgeError(
+        'Private mint identity is not present in the configured store. Restore the original store before completing the mint.',
+      )
+    }
+    if (identity.recipient !== plan.recipient) {
+      throw new BridgeError('Stored private mint identity does not match the transfer recipient')
+    }
+    privateMintSecretNonce = identity.secretNonce
+  }
   // No proved transaction was recovered, so this is the only point where the
   // destination wallet may be asked to prove and authorize the private mint.
   const result = await completePrivateMint(
@@ -143,7 +167,7 @@ export async function complete(
             },
           }))
         : undefined,
-      privateMintSecretNonce: params.privateMintSecretNonce,
+      privateMintSecretNonce,
       onSubmitted: params.onCheckpoint
         ? async (submitted) => params.onCheckpoint?.(createBridgeCheckpoint(plan, submitted))
         : undefined,
