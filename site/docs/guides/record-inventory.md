@@ -15,7 +15,10 @@ const { walletClient } = aleo.createAleoClient({
   privateKey, // supplied by the application
   records: aleo.createRemoteScanner({ waitForSync: true }),
 })
-const client = walletClient.extend(recordActions({ chainId: 'aleo:testnet' }))
+const client = walletClient.extend(recordActions({
+  chainId: 'aleo:testnet',
+  tokenJoin: { program: 'test_aj_arc20_2_15.aleo' },
+}))
 const asset = { program: 'credits.aleo', standard: 'credits' } as const
 const plan = await client.planRecordInventory({
   asset,
@@ -37,7 +40,7 @@ from the separate `@provablehq/veil-cli/storage` application package.
 | Action | Behavior |
 | --- | --- |
 | `getRecordInventory({ asset })` | Reads all scanner pages; separates available and reserved records. |
-| `joinRecords({ asset, records: [a, b] })` | Joins two eligible records and returns the transaction id. |
+| `joinRecords({ asset, records })` | Joins two native records, or 2–15 token records with a configured router; returns the transaction id. |
 | `splitRecord({ asset, record, amount })` | Creates two outputs; `amount` is the first output's base-unit amount. |
 | `autoJoin({ asset, minAmount? })` | Consolidates enough records to cover an amount, or all records when omitted. |
 | `planRecordInventory({ asset, target, maxTransactions? })` | Produces a read-only plan bound to its account and chain. |
@@ -58,6 +61,31 @@ records and direct balanced splits where possible, otherwise consolidates and
 splits. It is a bounded deterministic strategy, not an optimal transaction
 solver; it rejects layouts whose required intermediate joins overflow the token
 width. `maxTransactions` defaults to 100.
+
+### Batch token consolidation
+
+Configure `recordActions({ tokenJoin: { program, maxRecords? } })` to route ARC20
+and ARC22 joins through a dedicated dynamic join program. Mainnet uses
+`main_aj_arc20_2_15.aleo`; testnet uses `test_aj_arc20_2_15.aleo`. `maxRecords`
+defaults to 15 and accepts 2–15. Core has no network-specific router default;
+omitting `tokenJoin` preserves native pairwise joins. Credits remain native.
+
+The planner batches only as many inputs as the target count requires and bounds
+each summed amount to u128. Sixteen token records consolidate through `join_15`
+and `join_2`, rather than fifteen separate transactions. `maxTransactions` counts
+submitted transactions, including batch joins and native splits. Plans capture
+their router; existing native plans retain their original execution path.
+
+Each router call prepends the underlying program's identifier (for example,
+`'test_usdcx_stablecoin'`) and supplies the token as a dynamic import. The Aleo SDK
+resolves its transitive imports for both local and delegated proving. Wallet
+adapters must support dynamic calls and pinned underlying-token records.
+
+All batch inputs are reserved atomically. Fees, durable proof checkpoints, and
+exact-transaction recovery use the same inventory journal. Confirmed router
+outputs carry dynamic ids; execution resolves each id to the matching nested
+token join's record commitment before waiting for the scanner. Intermediate
+records and unrelated deposits cannot satisfy a dependent step.
 
 ## Coordinate with Shield Swap
 

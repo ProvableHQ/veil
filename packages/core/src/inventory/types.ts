@@ -11,6 +11,15 @@ import type { Transaction } from '../types/transaction.js'
 export type RecordAsset = { program: string; standard: 'credits' | 'arc20' | 'arc22' }
 
 /**
+ * Configures a dynamic token join router with join_2 through join_15 functions.
+ * @property program Deployed router program id on the client's chain.
+ * @property maxRecords Maximum inputs per transaction, from 2 to 15. Defaults to 15.
+ * @example
+ * const router: TokenJoinRouter = { program: 'main_aj_arc20_2_15.aleo' }
+ */
+export type TokenJoinRouter = { program: string; maxRecords?: number }
+
+/**
  * Describes a spendable record without requiring plaintext from a wallet.
  * @property id Record nonce, stable across scanners and wallet connections.
  * @property amount Integer base units, bounded by u64 for credits or u128 for tokens.
@@ -35,7 +44,7 @@ export type InventoryTarget = {
 /**
  * Describes one join or split, with references to earlier planned outputs.
  * @property kind Transition to invoke.
- * @property inputs Input nonces or previous step output references.
+ * @property inputs Input nonces or previous step output references; joins consume two native records or 2–15 routed token records.
  * @property outputs Predicted output references and amounts; never spendable until confirmed.
  * @property amount Split's first output amount; absent for joins.
  * @property deduction Intrinsic credits deduction, separate from transaction fees.
@@ -57,6 +66,7 @@ export type InventoryStep = {
  * @property steps Ordered dependencies with predicted base-unit amounts.
  * @property deduction Total intrinsic credits deduction; network fees are additional.
  * @property maxTransactions Maximum operations allowed; defaults to 100.
+ * @property tokenJoin Optional token router captured at planning time; absent uses native pairwise joins.
  */
 export type InventoryPlan = {
   scope: string
@@ -66,6 +76,7 @@ export type InventoryPlan = {
   steps: InventoryStep[]
   deduction: bigint
   maxTransactions: number
+  tokenJoin?: TokenJoinRouter
 }
 
 /** Tracks reservation and transaction recovery states. */
@@ -78,6 +89,7 @@ export type RecordSpendStatus = 'reserved' | 'prepared' | 'submitted' | 'confirm
  * @property records Reserved record nonces.
  * @property program Target transaction program.
  * @property function Transition name.
+ * @property assetProgram Underlying token program for a routed join; absent for native operations.
  * @property status Last persisted lifecycle boundary.
  * @property createdAt Unix time in milliseconds.
  * @property accountType Distinguishes local prepare-before-broadcast from opaque wallet submission.
@@ -91,6 +103,7 @@ export type RecordSpend = {
   records: string[]
   program: string
   function: string
+  assetProgram?: string
   status: RecordSpendStatus
   createdAt: number
   accountType: 'local' | 'rpc'
@@ -122,11 +135,13 @@ export type RecordInventoryStore = {
  * @property chainId Stable chain identity shared by all participants. Defaults to transport network;
  *   custom/local chains MUST supply a distinct identity.
  * @property maxFeeMicrocredits Maximum proved transaction fee, before broadcast. Optional, no limit by default.
+ * @property tokenJoin Optional dynamic router for ARC20/ARC22 joins. Defaults to native pairwise joins; credits are unaffected.
  */
 export type RecordActionsConfig = {
   store?: RecordInventoryStore
   chainId?: string
   maxFeeMicrocredits?: bigint
+  tokenJoin?: TokenJoinRouter
 }
 
 /**

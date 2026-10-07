@@ -14,6 +14,25 @@ describe('delegated transaction building', () => {
     vi.unstubAllGlobals()
   })
 
+  it('includes the dynamic token and its transitive imports when proving a router join', async () => {
+    const router = 'program test_aj_arc20_2_15.aleo;'
+    const token = 'import helper.aleo; program test_usdcx_stablecoin.aleo;'
+    const helper = 'program helper.aleo;'
+    vi.spyOn(testnetSdk.AleoNetworkClient.prototype, 'getProgram').mockImplementation(async (name) =>
+      name === 'test_aj_arc20_2_15.aleo' ? router : token)
+    vi.spyOn(testnetSdk.AleoNetworkClient.prototype, 'getProgramImports').mockImplementation(async (source) =>
+      source === token ? { 'helper.aleo': helper } : {})
+    const request = vi.spyOn(testnetSdk.ProgramManager.prototype, 'provingRequest').mockResolvedValue({ encrypted: true } as never)
+    vi.spyOn(testnetSdk.AleoNetworkClient.prototype, 'submitProvingRequestSafe').mockResolvedValue({ ok: true,
+      data: { transaction: { id: 'at1batch' }, broadcast_result: { status: 'Skipped' } } } as never)
+    const config = aleo.createProvingConfig({ mode: 'delegated', networkUrl: 'https://node.example',
+      proverUrl: 'https://prover.example', account: aleo.generateAccount() })
+    await config.buildTransaction!({ programName: 'test_aj_arc20_2_15.aleo', functionName: 'join_3',
+      inputs: ["'test_usdcx_stablecoin'", 'record-a', 'record-b', 'record-c'], imports: ['test_usdcx_stablecoin.aleo'] })
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ broadcast: false,
+      programImports: { 'test_usdcx_stablecoin.aleo': token, 'helper.aleo': helper } }))
+  })
+
   it('asks the prover not to broadcast and reports each proving boundary', async () => {
     const transaction = { type: 'execute', id: 'at1proved', fee: {} }
     const provingRequest = vi.spyOn(testnetSdk.ProgramManager.prototype, 'provingRequest')

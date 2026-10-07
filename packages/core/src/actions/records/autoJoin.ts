@@ -1,6 +1,6 @@
 import type { Client } from '../../clients/createClient.js'
 import type { InventoryResult, RecordAsset } from '../../inventory/types.js'
-import { scopeOf } from '../../inventory/internal.js'
+import { management, scopeOf } from '../../inventory/internal.js'
 import { buildInventoryPlan } from '../../inventory/planner.js'
 import { getRecordInventory } from './getRecordInventory.js'
 import { rebalanceRecordInventory, type RebalanceRecordInventoryParameters } from './rebalanceRecordInventory.js'
@@ -37,7 +37,7 @@ export async function autoJoin(client: Client, params: AutoJoinParameters): Prom
     if (sum < params.minAmount) throw new Error('Insufficient available balance for autoJoin')
   }
   if (records.length <= 1) return { status: 'complete', transactionIds: [], completedSteps: 0 }
-  const plan = buildInventoryPlan({ scope: scopeOf(client), asset: params.asset, target: { records: 1 },
+  const plan = buildInventoryPlan({ scope: scopeOf(client), asset: params.asset, tokenJoin: management(client)?.tokenJoin, target: { records: 1 },
     inputs: records.map(({ id, amount }) => ({ id, amount })), maxTransactions: params.maxTransactions })
   return rebalanceRecordInventory(client, { ...params, plan })
 }

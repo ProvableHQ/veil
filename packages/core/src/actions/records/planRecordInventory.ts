@@ -1,6 +1,6 @@
 import type { Client } from '../../clients/createClient.js'
 import type { InventoryPlan, InventoryTarget, RecordAsset } from '../../inventory/types.js'
-import { scopeOf } from '../../inventory/internal.js'
+import { management, scopeOf } from '../../inventory/internal.js'
 import { buildInventoryPlan } from '../../inventory/planner.js'
 import { getRecordInventory } from './getRecordInventory.js'
 
@@ -24,5 +24,6 @@ export type PlanRecordInventoryParameters = { asset: RecordAsset; target: Invent
  */
 export async function planRecordInventory(client: Client, params: PlanRecordInventoryParameters): Promise<InventoryPlan> {
   const inventory = await getRecordInventory(client, { asset: params.asset })
-  return buildInventoryPlan({ ...params, scope: scopeOf(client), inputs: inventory.available.map(({ id, amount }) => ({ id, amount })) })
+  return buildInventoryPlan({ ...params, tokenJoin: management(client)?.tokenJoin,
+    scope: scopeOf(client), inputs: inventory.available.map(({ id, amount }) => ({ id, amount })) })
 }

@@ -11,6 +11,7 @@ import { splitRecord, type SplitRecordParameters } from '../actions/records/spli
 import { autoJoin, type AutoJoinParameters } from '../actions/records/autoJoin.js'
 import { writeContract, type WriteContractParameters } from '../actions/wallet/writeContract.js'
 import { executeContract, type ExecuteContractParameters } from '../actions/wallet/executeContract.js'
+import { validateTokenJoinRouter } from './tokenJoin.js'
 
 /**
  * Adds record inventory actions and shared spending coordination to an account client.
@@ -27,7 +28,9 @@ export function recordActions(config: RecordActionsConfig = {}) {
     const chainId = config.chainId ?? client.transport.config.network
     if (!chainId) throw new Error('recordActions requires chainId on a transport without a network')
     if (config.maxFeeMicrocredits !== undefined && config.maxFeeMicrocredits < 0n) throw new Error('Fee limit cannot be negative')
-    const recordManagement: RecordManagement = { store, chainId, network: client.transport.config.network, maxFeeMicrocredits: config.maxFeeMicrocredits }
+    const tokenJoin = config.tokenJoin && { ...config.tokenJoin }
+    if (tokenJoin) validateTokenJoinRouter(tokenJoin)
+    const recordManagement: RecordManagement = { store, chainId, network: client.transport.config.network, maxFeeMicrocredits: config.maxFeeMicrocredits, tokenJoin }
     const scoped = Object.assign(Object.create(client), { recordManagement }) as Client
     return {
       recordManagement,

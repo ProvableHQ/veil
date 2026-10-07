@@ -46,7 +46,7 @@ async function main(): Promise<void> {
   const { walletClient, account } = aleo.createAleoClient({ privateKey, networkUrl: config.networkUrl, useFeeMaster: config.useFeeMaster,
     records: aleo.createRemoteScanner({ waitForSync: true }) })
   const store = await sqliteRecordInventoryStore(config.database)
-  const client = walletClient.extend(recordActions({ store, chainId: config.chainId, maxFeeMicrocredits: config.maxFeeMicrocredits }))
+  const client = walletClient.extend(recordActions({ store, chainId: config.chainId, maxFeeMicrocredits: config.maxFeeMicrocredits, tokenJoin: config.tokenJoin }))
   const scope = JSON.stringify([config.chainId, account.address])
   let lease: string | undefined
   const controller = new AbortController()

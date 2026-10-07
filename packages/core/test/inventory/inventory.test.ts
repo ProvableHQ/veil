@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { createWalletClient, recordActions, memoryRecordInventoryStore, parseRecord, type OwnedRecord, type RecordAsset } from '../../src/index.js'
+import { createWalletClient, recordActions, memoryRecordInventoryStore, parseRecord, type OwnedRecord, type RecordAsset, type TokenJoinRouter } from '../../src/index.js'
 import { buildInventoryPlan } from '../../src/inventory/planner.js'
 
 const credits: RecordAsset = { program: 'credits.aleo', standard: 'credits' }
@@ -8,13 +8,16 @@ const arc20: RecordAsset = { program: 'test_arc20_eth.aleo', standard: 'arc20' }
 const arc22: RecordAsset = { program: 'test_usdcx_stablecoin.aleo', standard: 'arc22' }
 const source = (asset: RecordAsset) => readFileSync(new URL(`../fixtures/programs/${asset.program}`, import.meta.url), 'utf8')
 const scope = JSON.stringify(['testnet', 'aleo1owner'])
+const router: TokenJoinRouter = { program: 'test_aj_arc20_2_15.aleo' }
+const routerSource = readFileSync(new URL('../fixtures/programs/main_aj_arc20_2_15.aleo', import.meta.url), 'utf8')
+  .replace('main_aj_arc20_2_15.aleo', router.program)
 const makeRecord = (amount: bigint, nonce: number, asset = credits, extra = ''): OwnedRecord => ({
   programName: asset.program, recordName: asset.standard === 'credits' ? 'credits' : 'Token',
   tag: `${nonce}field`, commitment: `${nonce}field`, spent: false,
   recordPlaintext: `{ owner: aleo1owner.private, ${asset.standard === 'credits' ? 'microcredits' : 'amount'}: ${amount}${asset.standard === 'credits' ? 'u64' : 'u128'}.private, ${extra}_nonce: ${nonce}group.public }`,
 })
 
-function world(amounts: bigint[], asset = credits) {
+function world(amounts: bigint[], asset = credits, tokenJoin?: TokenJoinRouter) {
   let records = amounts.map((amount, index) => makeRecord(amount, index + 1, asset))
   let next = 2000
   let sequence = 0
@@ -26,7 +29,7 @@ function world(amounts: bigint[], asset = credits) {
     return found.slice((params.filter?.page ?? 0) * 1000, ((params.filter?.page ?? 0) + 1) * 1000)
   })
   const send = vi.fn(async ({ method, params }: any) => {
-    if (method === 'getProgram') return source(asset)
+    if (method === 'getProgram') return params.programId === tokenJoin?.program ? routerSource : source(asset)
     if (method === 'getConfirmedTransaction') {
       const transaction = transactions.get(params.id)
       if (!transaction) throw Object.assign(new Error('Not found'), { status: 404 })
@@ -46,12 +49,19 @@ function world(amounts: bigint[], asset = credits) {
   const build = vi.fn(async (params: any) => {
     const inputs = params.inputs.filter((input: string) => input.startsWith('{')).map((input: string) => parseRecord(input))
     const value = (record: any) => record.fields[asset.standard === 'credits' ? 'microcredits' : 'amount'].value as bigint
-    const amounts = params.functionName === 'join' ? [value(inputs[0]) + value(inputs[1])] :
+    const amounts = params.functionName.startsWith('join') ? [inputs.reduce((sum: bigint, record: any) => sum + value(record), 0n)] :
       [BigInt(params.inputs[1].replace(/u(64|128)$/, '')), value(inputs[0]) - BigInt(params.inputs[1].replace(/u(64|128)$/, '')) - (asset.standard === 'credits' ? 10_000n : 0n)]
     const outputs = amounts.map((amount) => makeRecord(amount, next++, asset))
     const transaction = { id: `at1tx${++sequence}`, type: 'execute',
       fee: { transition: { inputs: [{ value: '100u64' }, { value: '0u64' }] } },
-      execution: { transitions: [{ id: `au1${sequence}`, program: asset.program, function: params.functionName,
+      execution: { transitions: params.functionName.startsWith('join_') ? [
+        { id: 'au1intermediate', program: asset.program, function: 'join', outputs: [
+          { id: 'intermediatefield', type: 'record_with_dynamic_id', dynamic_id: 'intermediatedynamicfield' }] },
+        { id: `au1nested${sequence}`, program: asset.program, function: 'join', outputs: outputs.map((record) =>
+          ({ id: record.commitment, type: 'record_with_dynamic_id', dynamic_id: `dynamic${sequence}field`, value: 'record1ciphertext' })) },
+        { id: `au1outer${sequence}`, program: params.programName, function: params.functionName,
+          outputs: [{ id: `dynamic${sequence}field`, type: 'record_dynamic' }] },
+      ] : [{ id: `au1${sequence}`, program: asset.program, function: params.functionName,
         outputs: outputs.map((record) => ({ id: record.commitment, type: 'record', value: 'record1ciphertext' })) }] },
       testInputs: inputs.map((record: any) => record.nonce), testOutputs: outputs }
     return transaction as any
@@ -59,7 +69,7 @@ function world(amounts: bigint[], asset = credits) {
   const account = { type: 'local' as const, address: 'aleo1owner', source: 'test', privateKey: 'test', viewKey: 'test', sign: vi.fn(), signMessage: vi.fn() }
   const transport = { config: { type: 'custom', key: 'test', name: 'Test', network: 'testnet' as const, request: send }, request: send }
   const client = createWalletClient({ account, transport, proving: { mode: 'local', buildTransaction: build },
-    recordProvider: { requestRecords: scan, setAccount() {} } }).extend(recordActions({ store }))
+    recordProvider: { requestRecords: scan, setAccount() {} } }).extend(recordActions({ store, tokenJoin }))
   return { client, store, build, send, scan, transactions, records, setRecords: (value: OwnedRecord[]) => { records = value } }
 }
 
@@ -249,5 +259,131 @@ describe('inventory execution and recovery', () => {
     expect((await w.client.rebalanceRecordInventory({ plan })).reason).toContain('changed')
     await expect(w.client.writeContract({ program: credits.program, function: 'join', inputs: [], privateFee: true })).rejects.toThrow('public fees')
     expect(w.build).not.toHaveBeenCalled()
+  })
+})
+
+describe('configured token batch joins', () => {
+  it('pins underlying wallet records and forwards the public identifier and dynamic import', async () => {
+    const w = world([], arc22, router)
+    const records = [1, 2, 3].map((nonce) => ({ programName: arc22.program, recordName: 'Token', uid: `wallet-${nonce}`,
+      recordView: { fields: { $nonce: `${nonce}group`, amount: '100u128' } } }))
+    const request = vi.fn(async ({ method, params }: any) => {
+      if (method === 'getProgram') return params.programId === router.program ? routerSource : source(arc22)
+      if (method === 'requestRecords') return records
+      if (method === 'executeTransaction') return 'at1walletbatch'
+      throw new Error(method)
+    })
+    const wallet = createWalletClient({ account: { ...w.client.account!, type: 'rpc' } as any,
+      transport: { ...w.client.transport, request } as any }).extend(recordActions({ store: w.store, tokenJoin: router }))
+    await wallet.joinRecords({ asset: arc22, records: (await wallet.getRecordInventory({ asset: arc22 })).available })
+    expect(request).toHaveBeenLastCalledWith(expect.objectContaining({ method: 'executeTransaction', params: expect.objectContaining({
+      programName: router.program, functionName: 'join_3', imports: [arc22.program],
+      inputs: ["'test_usdcx_stablecoin'", ...records.map((record) => ({ type: 'record', program: arc22.program, recordname: 'Token', uid: record.uid }))],
+    }) }))
+    expect((await w.store.list(scope))[0]).toMatchObject({ records: ['1group', '2group', '3group'],
+      assetProgram: arc22.program, status: 'submitted', transactionId: 'at1walletbatch' })
+  })
+  it.each([2, 15, 16, 30])('consolidates %i records in bounded router transactions', async (count) => {
+    const w = world(Array.from({ length: count }, () => 100n), arc20, router)
+    const plan = await w.client.planRecordInventory({ asset: arc20, target: { records: 1 }, maxTransactions: 3 })
+    expect(plan.tokenJoin).toEqual(router)
+    expect(plan.steps).toHaveLength(Math.ceil((count - 1) / 14))
+    expect(plan.steps.every((step) => step.inputs.length >= 2 && step.inputs.length <= 15)).toBe(true)
+    const result = await w.client.rebalanceRecordInventory({ plan })
+    expect(result).toMatchObject({ status: 'complete', completedSteps: plan.steps.length })
+    const firstCount = Math.min(count, 15)
+    const selected = plan.steps[0]!.inputs.map((id) => w.records.find((record) => parseRecord(record.recordPlaintext).nonce === id)!)
+    expect(w.build.mock.calls[0]![0]).toMatchObject({ programName: router.program, functionName: `join_${firstCount}`,
+      imports: [arc20.program], inputs: ["'test_arc20_eth'", ...selected.map((record) => record.recordPlaintext)] })
+    expect((await w.client.getRecordInventory({ asset: arc20 })).balance).toBe(BigInt(count) * 100n)
+    expect((await w.store.list(scope))[0]).toMatchObject({ program: router.program, assetProgram: arc20.program,
+      function: `join_${firstCount}`, status: 'confirmed', records: plan.steps[0]!.inputs })
+  })
+  it.each([arc20, arc22])('preserves $standard target lots and executes batch joins followed by native splits', async (asset) => {
+    const w = world(Array.from({ length: 16 }, () => 100n), asset, router)
+    const preserve = await w.client.planRecordInventory({ asset, target: { records: 4 } })
+    expect(preserve.steps).toHaveLength(1)
+    expect(preserve.steps[0]?.inputs).toHaveLength(13)
+    const plan = await w.client.planRecordInventory({ asset, target: { records: 4, distribution: 'balanced' } })
+    expect(plan.steps.map((step) => step.kind)).toEqual(['join', 'join', 'split', 'split', 'split'])
+    expect(await w.client.rebalanceRecordInventory({ plan })).toMatchObject({ status: 'complete', completedSteps: 5 })
+    expect((await w.client.getRecordInventory({ asset })).available.map((record) => record.amount)).toEqual([400n, 400n, 400n, 400n])
+    expect((await w.client.planRecordInventory({ asset, target: plan.target })).steps).toEqual([])
+  })
+  it('retains sufficient-record selection and native credits joins', async () => {
+    const w = world([40n, 30n, 20n, 10n], arc20, router)
+    expect(await w.client.autoJoin({ asset: arc20, minAmount: 80n })).toMatchObject({ status: 'complete', completedSteps: 1 })
+    expect(w.build.mock.calls[0]![0].functionName).toBe('join_3')
+    expect((await w.client.getRecordInventory({ asset: arc20 })).available.map((record) => record.amount)).toEqual([10n, 90n])
+    const native = world([100n, 100n, 100n], credits, router)
+    const plan = await native.client.planRecordInventory({ asset: credits, target: { records: 1 } })
+    expect(plan.tokenJoin).toBeUndefined()
+    expect(plan.steps.map((step) => step.inputs.length)).toEqual([2, 2])
+    expect(await native.client.rebalanceRecordInventory({ plan })).toMatchObject({ status: 'complete' })
+    expect(native.build.mock.calls.every(([params]) => params.programName === credits.program && params.functionName === 'join')).toBe(true)
+  })
+  it('keeps batch reservations atomic and enforces the proved fee limit', async () => {
+    const w = world([100n, 100n, 100n], arc20, router)
+    const records = (await w.client.getRecordInventory({ asset: arc20 })).available
+    const results = await Promise.allSettled([w.client.joinRecords({ asset: arc20, records }), w.client.joinRecords({ asset: arc20, records: records.slice(0, 2) })])
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
+    expect(w.build).toHaveBeenCalledTimes(1)
+    const limited = world([100n, 100n, 100n], arc20, router)
+    const plan = await limited.client.planRecordInventory({ asset: arc20, target: { records: 1 } })
+    expect(await limited.client.rebalanceRecordInventory({ plan, maxFeeMicrocredits: 99n })).toMatchObject({ status: 'interrupted', reason: expect.stringContaining('maxFeeMicrocredits') })
+    expect(limited.send.mock.calls.some(([request]) => request.method === 'sendTransaction')).toBe(false)
+    expect((await limited.store.list(scope))[0]).toMatchObject({ status: 'cancelled', records: ['1group', '2group', '3group'] })
+  })
+  it('rebroadcasts an interrupted batch proof and replans dependent inventory', async () => {
+    const w = world(Array.from({ length: 16 }, () => 100n), arc22, router)
+    const original = w.send.getMockImplementation()!
+    w.send.mockImplementation(async (request) => { if (request.method === 'sendTransaction') throw new Error('offline'); return original(request) })
+    const plan = await w.client.planRecordInventory({ asset: arc22, target: { records: 1 } })
+    expect(await w.client.rebalanceRecordInventory({ plan })).toMatchObject({ status: 'interrupted', completedSteps: 0 })
+    const saved = (await w.store.list(scope))[0]!
+    expect(saved.records).toHaveLength(15)
+    w.send.mockImplementation(original)
+    await w.client.reconcileRecordInventory({ rebroadcast: true })
+    expect(w.send).toHaveBeenLastCalledWith({ method: 'sendTransaction', params: { transaction: JSON.stringify(saved.transaction) } })
+    await w.client.reconcileRecordInventory()
+    expect(await w.client.autoJoin({ asset: arc22 })).toMatchObject({ status: 'complete', completedSteps: 1 })
+    expect(w.build).toHaveBeenCalledTimes(2)
+    expect((await w.client.getRecordInventory({ asset: arc22 })).balance).toBe(1600n)
+  })
+  it('rejects incompatible router code, duplicate inputs, overflow and excessive batch sizes before proving', async () => {
+    const w = world(Array.from({ length: 16 }, () => 100n), arc20, router)
+    const records = (await w.client.getRecordInventory({ asset: arc20 })).available
+    await expect(w.client.joinRecords({ asset: arc20, records })).rejects.toThrow('2 to 15')
+    await expect(w.client.joinRecords({ asset: arc20, records: [records[0]!, records[0]!] })).rejects.toThrow('distinct')
+    const huge = world([(1n << 128n) - 1n, 1n], arc20, router)
+    await expect(huge.client.joinRecords({ asset: arc20, records: (await huge.client.getRecordInventory({ asset: arc20 })).available })).rejects.toThrow('overflows')
+    const original = w.send.getMockImplementation()!
+    w.send.mockImplementation(async (request) => request.method === 'getProgram' && request.params.programId === router.program
+      ? routerSource.replace('identifier.public', 'identifier.private') : original(request))
+    await expect(w.client.joinRecords({ asset: arc20, records: records.slice(0, 2) })).rejects.toThrow('incompatible')
+    expect(w.build).not.toHaveBeenCalled()
+    expect(huge.build).not.toHaveBeenCalled()
+  })
+  it('rejects an unrelated or mismatched dynamic output instead of selecting intermediate records', async () => {
+    const w = world([100n, 100n, 100n], arc20, router)
+    const original = w.send.getMockImplementation()!
+    w.send.mockImplementation(async (request) => {
+      const result = await original(request)
+      if (request.method === 'getConfirmedTransaction') result.transaction.execution.transitions.at(-1).outputs[0].id = 'unrelatedfield'
+      return result
+    })
+    const plan = await w.client.planRecordInventory({ asset: arc20, target: { records: 1 } })
+    expect(await w.client.rebalanceRecordInventory({ plan })).toMatchObject({ status: 'interrupted', reason: expect.stringContaining('underlying token commitment') })
+    expect((await w.store.list(scope))[0]?.status).toBe('confirmed')
+    expect(w.build).toHaveBeenCalledTimes(1)
+  })
+  it('honors custom batch ceilings and retains native plans created without a router', async () => {
+    const w = world([100n, 100n, 100n, 100n], arc20, { ...router, maxRecords: 3 })
+    const plan = await w.client.planRecordInventory({ asset: arc20, target: { records: 1 } })
+    expect(plan.steps.map((step) => step.inputs.length)).toEqual([3, 2])
+    expect(() => recordActions({ tokenJoin: { ...router, maxRecords: 16 } })(w.client)).toThrow('2 to 15')
+    const native = buildInventoryPlan({ scope, asset: arc20, inputs: plan.inputs, target: plan.target })
+    expect(await w.client.rebalanceRecordInventory({ plan: native })).toMatchObject({ status: 'complete', completedSteps: 3 })
+    expect(w.build.mock.calls.every(([params]) => params.programName === arc20.program)).toBe(true)
   })
 })

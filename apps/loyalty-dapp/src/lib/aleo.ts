@@ -74,5 +74,5 @@ export async function getLoyaltyContract(walletClient?: ReturnType<typeof create
  * })
  */
 export function createInventoryClient(walletClient: ReturnType<typeof createAleoWalletClient>) {
-  return walletClient.extend(recordActions({ chainId: 'aleo:mainnet' }))
+  return walletClient.extend(recordActions({ chainId: 'aleo:mainnet', tokenJoin: { program: 'main_aj_arc20_2_15.aleo' } }))
 }

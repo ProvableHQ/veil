@@ -38,7 +38,7 @@ export async function runInventoryCycle(client: Client, config: InventoryConfig,
     const now = Date.now()
     const entries = await store.list(scope)
     const spent = entries.filter((entry) => entry.createdAt > now - 86_400_000 && entry.status !== 'cancelled').reduce((sum, entry) => sum + feeCost(entry), 0n)
-    const latest = entries.filter((entry) => entry.program === policy.asset.program && entry.status !== 'cancelled').reduce((last, entry) => Math.max(last, entry.createdAt), 0)
+    const latest = entries.filter((entry) => (entry.assetProgram ?? entry.program) === policy.asset.program && entry.status !== 'cancelled').reduce((last, entry) => Math.max(last, entry.createdAt), 0)
     if (now - latest < config.cooldownMs) { results.push({ program: policy.asset.program, status: 'cooldown' }); continue }
     if (transactions >= config.maxTransactions || spent >= config.maxDailyFeeMicrocredits) {
       results.push({ program: policy.asset.program, status: 'budget', reason: 'Maintenance budget exhausted' }); continue
