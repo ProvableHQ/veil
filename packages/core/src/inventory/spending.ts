@@ -24,6 +24,7 @@ export function transactionFee(tx: Transaction): bigint {
 /** Reserves explicit inputs and persists each awaited proving boundary before allowing submission. @internal */
 export async function manageRecordSpend<T>(client: Client, params: {
   program: string; function: string; inputs: TransactionInput[]; privateFee?: boolean
+  imports?: string[] | Record<string, string>
   onProgress?: ProvingProgressHandler
 }, submit: (onProgress: ProvingProgressHandler) => Promise<T>): Promise<T> {
   const config = management(client)!
@@ -47,7 +48,9 @@ export async function manageRecordSpend<T>(client: Client, params: {
     }
   }
   if (new Set(ids).size !== ids.length) throw new Error('A transaction cannot spend the same record twice')
-  const entry = await config.store.acquire({ scope, records: ids, program: params.program,
+  const assetProgram = config.tokenJoin?.program === params.program && /^join_\d+$/.test(params.function) && Array.isArray(params.imports)
+    ? params.imports[0] : undefined
+  const entry = await config.store.acquire({ scope, records: ids, program: params.program, ...(assetProgram ? { assetProgram } : {}),
     function: params.function, status: 'reserved', createdAt: Date.now(), accountType: client.account?.type === 'local' ? 'local' : 'rpc' })
   if (!entry) throw new Error('Record inventory changed: an input is already reserved or spent')
   let prepared = false

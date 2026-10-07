@@ -196,7 +196,7 @@ describe('Record inventory consumer example', () => {
         programName: 'credits.aleo', recordName: 'credits', tag: '1field', spent: false,
         recordPlaintext: `{ owner: ${account.address}.private, microcredits: 4030000u64.private, _nonce: 1group.public }`,
       }] },
-    }).extend(recordActions({ chainId: 'aleo:testnet' }))
+    }).extend(recordActions({ chainId: 'aleo:testnet', tokenJoin: { program: 'test_aj_arc20_2_15.aleo' } }))
     const plan = await client.planRecordInventory({
       asset: { program: 'credits.aleo', standard: 'credits' },
       target: { records: 4, distribution: 'balanced', minRecordAmount: 1_000_000n },

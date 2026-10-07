@@ -9,12 +9,14 @@ import { holdsRecords } from './store.js'
  * @property chainId Stable chain identity for reservation scopes.
  * @property store Shared atomic journal.
  * @property maxFeeMicrocredits Optional proved fee ceiling; absent means no limit.
+ * @property tokenJoin Optional router used for token consolidation; absent uses native joins.
  * @property network Original transport network, checked against later network switches.
  * @internal
  */
 export type RecordManagement = Required<Pick<RecordActionsConfig, 'chainId'>> & {
   store: RecordInventoryStore
   maxFeeMicrocredits?: bigint
+  tokenJoin?: RecordActionsConfig['tokenJoin']
   network: string | null | undefined
 }
 

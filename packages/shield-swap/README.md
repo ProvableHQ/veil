@@ -1158,6 +1158,11 @@ fixture topology; the test fails rather than silently skipping that coverage.
 
 ## Record inventory
 
+Configure `recordActions({ tokenJoin: { program: 'main_aj_arc20_2_15.aleo' } })`
+before the DEX decorator to batch underlying ARC20/ARC22 joins on mainnet. Use
+`test_aj_arc20_2_15.aleo` on testnet. The DEX inventory wrappers preserve this
+configuration, target counts, shared reservations, and exact-output recovery.
+
 Apply core's `recordActions` before `shieldSwapActions` to coordinate maintenance
 with trading. `planInventory({ token, target })` and
 `rebalanceInventory({ token, target })` resolve the DEX token's underlying program

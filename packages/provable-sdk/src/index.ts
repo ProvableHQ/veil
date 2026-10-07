@@ -667,7 +667,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           const staticImports = await programManager.networkClient.getProgramImports(programSource)
           const merged: SdkProgramImports = { ...staticImports }
           for (const name of txOptions.imports) {
-            merged[name] = await programManager.networkClient.getProgram(name)
+            const dynamicSource = await programManager.networkClient.getProgram(name)
+            Object.assign(merged, await programManager.networkClient.getProgramImports(dynamicSource))
+            merged[name] = dynamicSource
           }
           resolvedImports = merged
         }

@@ -8,6 +8,23 @@ const policy = { asset: { program: 'credits.aleo', standard: 'credits' }, target
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(reconcileRecordInventory).mockResolvedValue([]) })
 
 describe('inventory application policies', () => {
+  it('selects network routers and supports native or bounded custom joins', () => {
+    expect(parseInventoryConfig({}).tokenJoin).toEqual({ program: 'test_aj_arc20_2_15.aleo', maxRecords: 15 })
+    expect(parseInventoryConfig({ network: 'mainnet' }).tokenJoin).toEqual({ program: 'main_aj_arc20_2_15.aleo', maxRecords: 15 })
+    expect(parseInventoryConfig({ tokenJoin: false }).tokenJoin).toBeUndefined()
+    expect(parseInventoryConfig({ tokenJoin: { program: 'custom_router.aleo', maxRecords: 4 } }).tokenJoin?.maxRecords).toBe(4)
+    for (const tokenJoin of [true, { program: 'bad' }, { program: 'router.aleo', maxRecords: 1 }, { program: 'router.aleo', maxRecords: 16 }]) {
+      expect(() => parseInventoryConfig({ tokenJoin })).toThrow()
+    }
+  })
+  it('applies cooldowns to the underlying token of a routed join', async () => {
+    const store = memoryRecordInventoryStore()
+    await store.acquire({ scope: 'scope', records: ['1group'], program: 'main_aj_arc20_2_15.aleo',
+      assetProgram: 'token.aleo', function: 'join_3', status: 'confirmed', accountType: 'local', createdAt: Date.now() })
+    const config = parseInventoryConfig({ policies: [{ asset: { program: 'token.aleo', standard: 'arc20' }, target: { records: 1 } }] })
+    expect(await runInventoryCycle({} as any, config, store, 'scope')).toEqual([{ program: 'token.aleo', status: 'cooldown' }])
+    expect(getRecordInventory).not.toHaveBeenCalled()
+  })
   it('validates precision, networks, duplicates, intervals, and hysteresis', () => {
     expect(parseInventoryConfig({ policies: [policy] }).policies[0]?.target.minRecordAmount).toBe(100n)
     expect(() => parseInventoryConfig({ policies: [{ ...policy, target: { records: 4, minRecordAmount: 100 } }] })).toThrow('decimal strings')

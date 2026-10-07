@@ -11,6 +11,7 @@ import { decodeRecord } from './internal.js'
 import type { ProvingProgressHandler } from '../../types/proving.js'
 import type { Transaction } from '../../types/transaction.js'
 import type { ConfirmedTransaction } from '../../types/block.js'
+import { inventoryOutputCommitments } from '../../inventory/tokenJoin.js'
 
 /**
  * Configures bounded execution of a previously inspected plan.
@@ -69,12 +70,12 @@ export async function rebalanceRecordInventory(client: Client, params: Rebalance
       const remaining = params.maxFeeMicrocredits === undefined ? undefined : params.maxFeeMicrocredits - fees
       const perTransaction = config.maxFeeMicrocredits
       const limit = remaining === undefined ? perTransaction : perTransaction === undefined || remaining < perTransaction ? remaining : perTransaction
-      const executionClient = Object.assign(Object.create(client), { recordManagement: { ...config, maxFeeMicrocredits: limit } }) as Client
+      const executionClient = Object.assign(Object.create(client), { recordManagement: { ...config, tokenJoin: plan.tokenJoin, maxFeeMicrocredits: limit } }) as Client
       const onProgress: ProvingProgressHandler = (event) => {
         if ('transactionId' in event && !result.transactionIds.includes(event.transactionId)) result.transactionIds.push(event.transactionId)
       }
       const transactionId = step.kind === 'join'
-        ? await joinRecords(executionClient, { asset: plan.asset, records: inputs as [InventoryRecord, InventoryRecord], onProgress })
+        ? await joinRecords(executionClient, { asset: plan.asset, records: inputs, onProgress })
         : await splitRecord(executionClient, { asset: plan.asset, record: inputs[0]!, amount: step.amount!, onProgress })
       if (!result.transactionIds.includes(transactionId)) result.transactionIds.push(transactionId)
       const journal = await config.store.list(plan.scope)
@@ -95,9 +96,7 @@ export async function rebalanceRecordInventory(client: Client, params: Rebalance
         throw new Error(`Transaction ${transactionId} was not accepted`)
       }
       await config.store.update(plan.scope, entry.id, { status: 'confirmed', transaction: undefined })
-      const transition = (confirmed.transaction as Transaction).execution?.transitions.at(-1)
-      if (transition?.program !== plan.asset.program || transition.function !== step.kind) throw new Error('Confirmed transition does not match the inventory plan')
-      const commitments = (transition.outputs ?? []).filter((output) => output.type === 'record' || output.type === 'record_with_dynamic_id').map((output) => output.id)
+      const commitments = inventoryOutputCommitments(confirmed.transaction as Transaction, plan.asset, step, plan.tokenJoin)
       if (commitments.length !== step.outputs.length) throw new Error('Unexpected confirmed inventory output count')
       // The scanner must return these exact outputs, not an unrelated new deposit.
       let outputs: InventoryRecord[] = []

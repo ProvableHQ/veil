@@ -148,3 +148,7 @@ for existing consumers. Both local and delegated execution honor an awaited
 checkpoint a proved transaction. Storage is supplied by the application; SQLite
 belongs only to the separate Veil CLI. See the
 [inventory guide](../../site/docs/guides/record-inventory.md).
+
+Configured token join routers supply the underlying token as a dynamic import;
+the proving adapter includes that program and its transitive static imports for
+both local and delegated proofs.

@@ -184,9 +184,13 @@ const client = createPublicClient({
 
 ## Record inventory
 
-Extend a wallet client with `recordActions({ store?, chainId?, maxFeeMicrocredits? })`
+Extend a wallet client with `recordActions({ store?, chainId?, maxFeeMicrocredits?, tokenJoin? })`
 for scanner-backed `joinRecords`, `splitRecord`, `autoJoin`,
 `planRecordInventory`, `rebalanceRecordInventory`, and reconciliation. Supports
 ARC20, ARC22, and native credits. Core supplies a storage interface and in-memory
-default; it has no SQLite or Node dependency. See the
+default; it has no SQLite or Node dependency. Configure
+`tokenJoin: { program: 'main_aj_arc20_2_15.aleo' }` on mainnet (or
+`test_aj_arc20_2_15.aleo` on testnet) to batch 2–15 token records per join
+transaction while preserving reservations and recovery. Omission retains native
+pairwise joins; credits are unaffected. See the
 [record inventory guide](../../site/docs/guides/record-inventory.md).

@@ -32,4 +32,20 @@ describe('Shield Swap inventory', () => {
     const client = Object.assign(base, recordActions({ store })(base))
     expect((await selectTokenRecord(client, { program, minAmount: 400n })).amount).toBe(700n)
   })
+  it('uses the configured router for the resolved underlying token inventory', async () => {
+    const program = 'test_arc20_eth.aleo'
+    const api = { getTokens: async () => ({ data: [{ address: '1field', symbol: 'ASSET', decimals: 6,
+      amm_token_program: 'wrapper.aleo', underlying_program: program }] }) } as unknown as ApiClient
+    const base = { account, transport: { config: { network: 'testnet' } }, request: async ({ method }: any) => {
+      if (method === 'getProgram') return readFileSync(new URL(`../../../core/test/fixtures/programs/${program}`, import.meta.url), 'utf8')
+      if (method === 'requestRecords') return Array.from({ length: 16 }, (_, i) => record(program, 100n, i + 1))
+      throw new Error('Planning must not submit')
+    } } as unknown as Client
+    const tokenJoin = { program: 'test_aj_arc20_2_15.aleo' }
+    const client = Object.assign(base, recordActions({ tokenJoin })(base))
+    const plan = await planInventory(client, { api, token: 'ASSET', target: { records: 1 }, maxTransactions: 2 })
+    expect(plan.asset.program).toBe(program)
+    expect(plan.tokenJoin).toEqual(tokenJoin)
+    expect(plan.steps.map((step) => step.inputs.length)).toEqual([15, 2])
+  })
 })

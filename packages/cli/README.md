@@ -36,6 +36,7 @@ Within this repository, use `pnpm veil inventory ...`.
   "maxFeeMicrocredits": "1000000",
   "maxDailyFeeMicrocredits": "10000000",
   "useFeeMaster": false,
+  "tokenJoin": { "program": "test_aj_arc20_2_15.aleo", "maxRecords": 15 },
   "policies": [
     {
       "asset": { "program": "credits.aleo", "standard": "credits" },
@@ -60,6 +61,12 @@ reuse the default identity across independent local chains.
   is in range and every record meets the minimum, maintenance does nothing,
   including for a balanced policy. Omit it to enforce the target distribution.
 - `maxTransactions`: total planned transitions per maintenance pass.
+- `tokenJoin`: dynamic ARC20/ARC22 join router. Defaults to
+  `test_aj_arc20_2_15.aleo` on testnet or `main_aj_arc20_2_15.aleo` on mainnet.
+  Set `{ "program": "custom_router.aleo", "maxRecords": 15 }` for another
+  deployment, or `false` for native pairwise joins. The batch ceiling is 2–15.
+  Sixteen token records require two transactions; credits keep native joins.
+  Transaction limits count batch submissions, not their nested token calls.
 - `maxFeeMicrocredits`: maximum fee for one transaction and total network-fee
   budget for one asset's rebalance. Fees are checked on the proved transaction
   before broadcast. `useFeeMaster: true` requests sponsored delegated proving.
@@ -79,6 +86,7 @@ its reported synchronization before planning.
 The scanner owns record discovery. The SQLite journal stores account/chain scope,
 input nonces, operation state, transaction ids, fees, and the **proved encrypted
 transaction** while it is pending. It stores neither keys nor record plaintext.
+Routed joins also record the underlying asset program so cooldowns remain per asset.
 It creates the database with mode 0600 and new parent directories with mode 0700.
 
 Each operation reserves inputs atomically, proves, saves the complete proved
@@ -106,7 +114,8 @@ import { recordActions } from '@provablehq/veil-core'
 import { sqliteRecordInventoryStore } from '@provablehq/veil-cli/storage'
 
 const store = await sqliteRecordInventoryStore('.veil/inventory.sqlite')
-const managed = walletClient.extend(recordActions({ store, chainId: 'aleo:testnet' }))
+const managed = walletClient.extend(recordActions({ store, chainId: 'aleo:testnet',
+  tokenJoin: { program: 'test_aj_arc20_2_15.aleo' } }))
 // Extend managed with shieldSwapActions(...) when trading.
 // Close the store when the application shuts down.
 ```

@@ -1,4 +1,4 @@
-import type { InventoryTarget, RecordAsset } from '@provablehq/veil-core'
+import type { InventoryTarget, RecordAsset, TokenJoinRouter } from '@provablehq/veil-core'
 
 /**
  * Defines one asset's maintenance policy in base units.
@@ -27,6 +27,7 @@ export type InventoryPolicy = {
  * @property maxFeeMicrocredits Transaction/asset-pass network-fee ceiling; defaults to 1000000.
  * @property maxDailyFeeMicrocredits Rolling 24-hour maintenance ceiling; defaults to 10000000.
  * @property useFeeMaster Requests delegated sponsorship; defaults to false.
+ * @property tokenJoin Token join router; defaults to the network's ARC router. Set false to use native pairwise joins.
  * @internal
  */
 export type InventoryConfig = {
@@ -42,6 +43,7 @@ export type InventoryConfig = {
   maxFeeMicrocredits: bigint
   maxDailyFeeMicrocredits: bigint
   useFeeMaster: boolean
+  tokenJoin?: TokenJoinRouter
 }
 
 /**
@@ -72,6 +74,16 @@ export function parseInventoryConfig(value: unknown): InventoryConfig {
   }
   const network = raw.network ?? 'testnet'
   if (network !== 'testnet' && network !== 'mainnet') throw new Error('Network must be testnet or mainnet')
+  const router = raw.tokenJoin ?? { program: network === 'mainnet' ? 'main_aj_arc20_2_15.aleo' : 'test_aj_arc20_2_15.aleo' }
+  let tokenJoin: TokenJoinRouter | undefined
+  if (router !== false) {
+    if (!router || typeof router !== 'object' || Array.isArray(router)) throw new Error('Invalid tokenJoin router')
+    const configured = router as Record<string, unknown>
+    if (typeof configured.program !== 'string' || !/^[a-z][a-z0-9_]*\.aleo$/.test(configured.program)) throw new Error('Invalid tokenJoin program')
+    const maxRecords = integer(configured.maxRecords, 15, 15)
+    if (maxRecords < 2) throw new Error('tokenJoin maxRecords must be from 2 to 15')
+    tokenJoin = { program: configured.program, maxRecords }
+  }
   if (raw.privateKey !== undefined) throw new Error('Use privateKeyEnv instead of storing a private key in inventory configuration')
   if (raw.useFeeMaster !== undefined && typeof raw.useFeeMaster !== 'boolean') throw new Error('useFeeMaster must be boolean')
   if (!Array.isArray(raw.policies ?? [])) throw new Error('policies must be an array')
@@ -99,5 +111,5 @@ export function parseInventoryConfig(value: unknown): InventoryConfig {
     privateKeyEnv: string(raw.privateKeyEnv, 'ALEO_PRIVATE_KEY'), database: string(raw.database, '.veil/inventory.sqlite'), policies,
     intervalMs: integer(raw.intervalMs, 30_000, 2_147_483_647), cooldownMs: integer(raw.cooldownMs, 60_000, 2_147_483_647, true),
     maxTransactions: integer(raw.maxTransactions, 10, 1000), maxFeeMicrocredits: amount(raw.maxFeeMicrocredits, 1_000_000n),
-    maxDailyFeeMicrocredits: amount(raw.maxDailyFeeMicrocredits, 10_000_000n), useFeeMaster: raw.useFeeMaster === true }
+    maxDailyFeeMicrocredits: amount(raw.maxDailyFeeMicrocredits, 10_000_000n), useFeeMaster: raw.useFeeMaster === true, tokenJoin }
 }

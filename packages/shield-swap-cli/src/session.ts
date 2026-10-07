@@ -264,7 +264,8 @@ export async function loadSession(options: { network?: string } = {}) {
   // Opt in to the same durable record journal as `veil inventory run`.
   const inventoryPath = process.env.VEIL_INVENTORY_DB
   const coordinated = inventoryPath
-    ? walletClient.extend(recordActions({ store: await (await import('@provablehq/veil-cli/storage')).sqliteRecordInventoryStore(inventoryPath), chainId: `aleo:${network}` }))
+    ? walletClient.extend(recordActions({ store: await (await import('@provablehq/veil-cli/storage')).sqliteRecordInventoryStore(inventoryPath), chainId: `aleo:${network}`,
+      tokenJoin: { program: network === 'mainnet' ? 'main_aj_arc20_2_15.aleo' : 'test_aj_arc20_2_15.aleo' } }))
     : walletClient
   const client = coordinated.extend(
     shieldSwapActions({ api: { baseUrl: apiUrl }, blindedIdentities }),
