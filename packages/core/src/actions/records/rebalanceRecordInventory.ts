@@ -28,6 +28,7 @@ export type RebalanceRecordInventoryParameters = {
 /**
  * Executes a plan one confirmed transition at a time through existing write actions.
  * Revalidates each input and matches scanner outputs to confirmed commitments.
+ * RPC execution requires commitment metadata on consumed records before submission.
  * @param client Client extended with recordActions for reservation and durable progress.
  * @param params Reviewed plan, timeouts, cancellation and optional fee budget.
  * @returns Completion or interruption with all submitted transaction ids; never rolls back accepted steps.
@@ -50,6 +51,7 @@ export async function rebalanceRecordInventory(client: Client, params: Rebalance
   if (params.maxFeeMicrocredits !== undefined && params.maxFeeMicrocredits < 0n) throw new Error('Fee budget cannot be negative')
   const result: InventoryResult = { status: 'complete', transactionIds: [], completedSteps: 0 }
   const references = new Map(plan.inputs.map((input) => [input.id, input.id]))
+  const consumedInputs = new Set(plan.steps.flatMap((step) => step.inputs))
   let fees = 0n
   const check = () => {
     params.signal?.throwIfAborted()
@@ -57,7 +59,7 @@ export async function rebalanceRecordInventory(client: Client, params: Rebalance
   }
   const pause = () => new Promise<void>((resolve) => setTimeout(resolve, interval))
   try {
-    for (const step of plan.steps) {
+    for (const [index, step] of plan.steps.entries()) {
       check()
       const inventory = await getRecordInventory(client, { asset: plan.asset })
       const inputs = step.inputs.map((id) => {
@@ -66,6 +68,14 @@ export async function rebalanceRecordInventory(client: Client, params: Rebalance
         if (!record || record.amount !== expected?.amount) throw new Error('Inventory changed; reconcile and plan again')
         return record
       })
+      if (client.account?.type === 'rpc') {
+        // Check all initial records used by the plan before its first submission,
+        // then recheck each step's inputs if wallet grants change during execution.
+        const records = index === 0 ? inventory.available.filter((record) => consumedInputs.has(record.id)) : inputs
+        if (records.some(({ record }) => !(record.commitment ?? record.recordView?.fields['$commitment']))) {
+          throw new Error('Inventory rebalance requires a commitment or $commitment grant to identify confirmed outputs')
+        }
+      }
       check()
       const remaining = params.maxFeeMicrocredits === undefined ? undefined : params.maxFeeMicrocredits - fees
       const perTransaction = config.maxFeeMicrocredits

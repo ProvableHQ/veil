@@ -122,7 +122,9 @@ ceiling. Custom `ProvingConfig.execute` adapters must follow this same contract.
 Wallet clients need granted plaintext or record fields (`$nonce`, amount,
 record name, and `recipient_bound` when applicable), plus a pinned record uid
 for spending without plaintext. Dependent execution also needs output commitment
-metadata. Missing grants produce an error rather than a partial inventory.
+metadata (`commitment` or a `$commitment` grant). Rebalance checks consumed
+records for this metadata before submitting its first step; missing metadata
+returns an interrupted result with no submitted transactions.
 Opaque wallet submission cannot enforce a fee ceiling before broadcast, so
 wallet execution rejects configured fee budgets. A lost wallet response without
 a transaction id retains its reservation for external reconciliation.
