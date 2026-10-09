@@ -1,0 +1,39 @@
+{
+  "name": "@provablehq/veil-cli",
+  "version": "0.11.1",
+  "description": "Record inventory management for Aleo.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ProvableHQ/veil.git",
+    "directory": "packages/cli"
+  },
+  "type": "module",
+  "bin": {
+    "veil": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@provablehq/veil-core": "workspace:^",
+    "@provablehq/veil-aleo-sdk": "workspace:^"
+  },
+  "exports": {
+    "./storage": {
+      "types": "./dist/storage.d.ts",
+      "import": "./dist/storage.js"
+    }
+  }
+}

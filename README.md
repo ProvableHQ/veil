@@ -446,6 +446,14 @@ pnpm build
 pnpm typecheck
 ```
 
+## Record inventory management
+
+Core provides scanner-backed join, split, and inventory-rebalance actions for
+ARC20, ARC22, and native credits. Shield Swap resolves DEX tokens to their
+underlying programs. The separate [`@provablehq/veil-cli`](packages/cli/README.md)
+application supplies background maintenance and a CLI-only SQLite journal.
+Start with the [inventory guide](site/docs/guides/record-inventory.md).
+
 ## License
 
 MIT

@@ -10,6 +10,8 @@
 import { beforeAll, describe, it, expect } from 'vitest'
 import {
   createPublicClient,
+  createWalletClient,
+  recordActions,
   http,
   parseProgram,
   getContract,
@@ -180,3 +182,27 @@ describe('E2E: veil against live Aleo mainnet', () => {
     console.log('  aleo_describe_program: found', descResult.functions.length, 'functions,', descResult.mappings.length, 'mappings')
   })
 }, { timeout: 30_000 })
+
+// Inventory planning consumes the account's provider and performs no writes.
+// A live application supplies createRemoteScanner({ waitForSync: true }) instead.
+describe('Record inventory consumer example', () => {
+  it('plans four credits records while keeping the source record private', async () => {
+    const aleo = await loadNetwork('testnet')
+    const account = aleo.generateAccount()
+    const client = createWalletClient({
+      account,
+      transport: http(API_URL, { network: 'testnet' }),
+      recordProvider: { requestRecords: async () => [{
+        programName: 'credits.aleo', recordName: 'credits', tag: '1field', spent: false,
+        recordPlaintext: `{ owner: ${account.address}.private, microcredits: 4030000u64.private, _nonce: 1group.public }`,
+      }] },
+    }).extend(recordActions({ chainId: 'aleo:testnet', tokenJoin: { program: 'test_aj_arc20_2_15.aleo' } }))
+    const plan = await client.planRecordInventory({
+      asset: { program: 'credits.aleo', standard: 'credits' },
+      target: { records: 4, distribution: 'balanced', minRecordAmount: 1_000_000n },
+    })
+    expect(plan.steps).toHaveLength(3)
+    expect(plan.deduction).toBe(30_000n)
+    expect(plan.inputs).toEqual([{ id: '1group', amount: 4_030_000n }])
+  })
+})

@@ -214,3 +214,12 @@ meaningful against the chain they were checked on.
 execution. The printed minimum is the submitted minimum, for 1–3-hop routes.
 Missing output estimates and expired quotes fail before submission; rerun to
 obtain fresh terms. Quote lifetime is 60 seconds from the request start.
+
+## Share record reservations with inventory maintenance
+
+Set `VEIL_INVENTORY_DB` to the same journal path used by `veil inventory run`.
+The session applies core's `recordActions` before Shield Swap actions so trading
+and maintenance cannot reserve the same explicit record inputs. This optional
+CLI integration loads `@provablehq/veil-cli/storage` and requires Node 22.13+.
+Without the environment variable, the existing runtime path is unchanged.
+See the [Veil CLI reference](../cli/README.md) for policy configuration and recovery.

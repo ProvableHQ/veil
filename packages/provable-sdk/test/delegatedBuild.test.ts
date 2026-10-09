@@ -11,6 +11,26 @@ describe('delegated transaction building', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('includes the dynamic token and its transitive imports when proving a router join', async () => {
+    const router = 'program test_aj_arc20_2_15.aleo;'
+    const token = 'import helper.aleo; program test_usdcx_stablecoin.aleo;'
+    const helper = 'program helper.aleo;'
+    vi.spyOn(testnetSdk.AleoNetworkClient.prototype, 'getProgram').mockImplementation(async (name) =>
+      name === 'test_aj_arc20_2_15.aleo' ? router : token)
+    vi.spyOn(testnetSdk.AleoNetworkClient.prototype, 'getProgramImports').mockImplementation(async (source) =>
+      source === token ? { 'helper.aleo': helper } : {})
+    const request = vi.spyOn(testnetSdk.ProgramManager.prototype, 'provingRequest').mockResolvedValue({ encrypted: true } as never)
+    vi.spyOn(testnetSdk.AleoNetworkClient.prototype, 'submitProvingRequestSafe').mockResolvedValue({ ok: true,
+      data: { transaction: { id: 'at1batch' }, broadcast_result: { status: 'Skipped' } } } as never)
+    const config = aleo.createProvingConfig({ mode: 'delegated', networkUrl: 'https://node.example',
+      proverUrl: 'https://prover.example', account: aleo.generateAccount() })
+    await config.buildTransaction!({ programName: 'test_aj_arc20_2_15.aleo', functionName: 'join_3',
+      inputs: ["'test_usdcx_stablecoin'", 'record-a', 'record-b', 'record-c'], imports: ['test_usdcx_stablecoin.aleo'] })
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ broadcast: false,
+      programImports: { 'test_usdcx_stablecoin.aleo': token, 'helper.aleo': helper } }))
   })
 
   it('asks the prover not to broadcast and reports each proving boundary', async () => {
@@ -47,6 +67,25 @@ describe('delegated transaction building', () => {
       { type: 'prover-submitted' },
       { type: 'prover-returned', transactionId: 'at1proved' },
     ])
+  })
+
+  it('awaits the durable checkpoint and never broadcasts when it fails', async () => {
+    const transaction = { type: 'execute', id: 'at1prepared', fee: {} }
+    const request = vi.spyOn(testnetSdk.ProgramManager.prototype, 'provingRequest')
+      .mockResolvedValue({ encrypted: true } as never)
+    vi.spyOn(testnetSdk.AleoNetworkClient.prototype, 'submitProvingRequestSafe')
+      .mockResolvedValue({ ok: true, data: { transaction, broadcast_result: { status: 'Skipped' } } } as never)
+    const fetch = vi.fn(() => { throw new Error('must not broadcast') })
+    vi.stubGlobal('fetch', fetch)
+    const config = aleo.createProvingConfig({ mode: 'delegated', networkUrl: 'https://node.example',
+      proverUrl: 'https://prover.example', account: aleo.generateAccount() })
+    const events: unknown[] = []
+    await expect(config.execute!({ programName: 'credits.aleo', functionName: 'join', inputs: [], fee: 0n,
+      async onProgress(event) { events.push(event); throw new Error('disk full') },
+    })).rejects.toThrow('disk full')
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ broadcast: false }))
+    expect(events).toEqual([{ type: 'transaction-prepared', transactionId: transaction.id, transaction }])
+    expect(fetch).not.toHaveBeenCalled()
   })
 
   it('reports a failed delegated broadcast without polling for confirmation', async () => {

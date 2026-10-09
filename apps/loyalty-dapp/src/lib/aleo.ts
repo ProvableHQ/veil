@@ -12,6 +12,7 @@ import {
   fallback,
   getContract,
   parseProgram,
+  recordActions,
 } from '@provablehq/veil-core'
 import { fromWalletAdapter, type AleoWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 
@@ -59,4 +60,19 @@ export async function getLoyaltyContract(walletClient?: ReturnType<typeof create
       ? { public: publicClient, wallet: walletClient }
       : publicClient,
   })
+}
+
+/**
+ * Adds optional browser inventory planning and record coordination to a connected wallet.
+ * Uses an in-memory store; requires wallet grants for record identities and amounts.
+ * @param walletClient Connected wallet client on Aleo mainnet.
+ * @returns An extended client; construction performs no scan or transaction.
+ * @example
+ * const inventory = createInventoryClient(createAleoWalletClient(adapter))
+ * const plan = await inventory.planRecordInventory({
+ *   asset: { program: 'credits.aleo', standard: 'credits' }, target: { records: 4 },
+ * })
+ */
+export function createInventoryClient(walletClient: ReturnType<typeof createAleoWalletClient>) {
+  return walletClient.extend(recordActions({ chainId: 'aleo:mainnet', tokenJoin: { program: 'main_aj_arc20_2_15.aleo' } }))
 }

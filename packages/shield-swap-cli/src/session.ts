@@ -23,6 +23,7 @@
  * version control (`.shield-swap/` belongs in .gitignore) and treat it like
  * a wallet file.
  */
+import { recordActions } from '@provablehq/veil-core'
 import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -260,7 +261,13 @@ export async function loadSession(options: { network?: string } = {}) {
   // meaningful against the chain it was checked on. Every swap through this
   // client reserves and records automatically.
   const blindedIdentities = fileBlindedIdentityStore(blindedStorePath(network))
-  const client = walletClient.extend(
+  // Opt in to the same durable record journal as `veil inventory run`.
+  const inventoryPath = process.env.VEIL_INVENTORY_DB
+  const coordinated = inventoryPath
+    ? walletClient.extend(recordActions({ store: await (await import('@provablehq/veil-cli/storage')).sqliteRecordInventoryStore(inventoryPath), chainId: `aleo:${network}`,
+      tokenJoin: { program: network === 'mainnet' ? 'main_aj_arc20_2_15.aleo' : 'test_aj_arc20_2_15.aleo' } }))
+    : walletClient
+  const client = coordinated.extend(
     shieldSwapActions({ api: { baseUrl: apiUrl }, blindedIdentities }),
   )
   try {

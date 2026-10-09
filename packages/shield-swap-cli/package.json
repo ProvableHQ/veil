@@ -35,6 +35,10 @@
   },
   "dependencies": {
     "@provablehq/shield-swap-sdk": "workspace:^",
-    "@provablehq/veil-aleo-sdk": "workspace:^"
+    "@provablehq/veil-aleo-sdk": "workspace:^",
+    "@provablehq/veil-core": "workspace:^"
+  },
+  "optionalDependencies": {
+    "@provablehq/veil-cli": "workspace:^"
   }
 }

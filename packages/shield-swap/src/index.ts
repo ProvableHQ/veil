@@ -346,3 +346,6 @@ export {
   type TokenStandard,
   type DetectTokenStandardParameters,
 } from './utils/detectTokenStandard.js'
+
+export { planInventory, type PlanInventoryParameters } from './actions/inventory/planInventory.js'
+export { rebalanceInventory, type RebalanceInventoryParameters } from './actions/inventory/rebalanceInventory.js'
