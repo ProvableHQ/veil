@@ -153,6 +153,82 @@ describe('scanner-backed inventory', () => {
 })
 
 describe('inventory execution and recovery', () => {
+  it.each([credits, arc20, arc22].flatMap((asset) => ['join', 'split'].map((kind) => ({ asset, kind }))))(
+    'refuses RPC $kind for $asset.standard without commitment metadata before submission', async ({ asset, kind }) => {
+      const w = world([], asset)
+      const records = (kind === 'join' ? [500_000n, 500_000n] : [1_030_000n]).map((amount, index) => ({
+        programName: asset.program, recordName: asset.standard === 'credits' ? 'credits' : 'Token', uid: `wallet-${index}`,
+        recordView: { fields: { $nonce: `${index + 1}group`, [asset.standard === 'credits' ? 'microcredits' : 'amount']: `${amount}${asset.standard === 'credits' ? 'u64' : 'u128'}` } },
+      }))
+      const request = vi.fn(async (params: any) => params.method === 'requestRecords' ? records : w.send(params))
+      const client = createWalletClient({ account: { ...w.client.account!, type: 'rpc' } as any,
+        transport: { ...w.client.transport, request } as any }).extend(recordActions({ store: w.store }))
+      const plan = await client.planRecordInventory({ asset, target: { records: kind === 'join' ? 1 : 3 } })
+      expect(plan.steps.length).toBeGreaterThan(0)
+      expect(await client.rebalanceRecordInventory({ plan })).toMatchObject({
+        status: 'interrupted', completedSteps: 0, transactionIds: [], reason: expect.stringContaining('$commitment grant'),
+      })
+      expect(request.mock.calls.some(([params]) => params.method === 'executeTransaction')).toBe(false)
+      expect(await w.store.list(scope)).toEqual([])
+    },
+  )
+  it.each(['commitment', '$commitment'])('completes dependent RPC splits with %s metadata', async (metadata) => {
+    const w = world([])
+    let nonce = 1
+    const row = (amount: bigint): any => {
+      const id = nonce++
+      return { programName: credits.program, recordName: 'credits', uid: `wallet-${id}`,
+        ...(metadata === 'commitment' ? { commitment: `${id}field` } : {}),
+        recordView: { fields: { $nonce: `${id}group`, microcredits: `${amount}u64`,
+          ...(metadata === '$commitment' ? { $commitment: `${id}field` } : {}) } } }
+    }
+    let records = [row(1_030_000n)]
+    let transaction: any
+    let sequence = 0
+    const request = vi.fn(async ({ method, params }: any) => {
+      if (method === 'requestRecords') return records
+      if (method === 'executeTransaction') {
+        const input = records.find((record) => record.uid === params.inputs[0].uid)
+        const amount = BigInt(params.inputs[1].replace(/u64$/, ''))
+        const outputs = [row(amount), row(BigInt(input.recordView.fields.microcredits.replace(/u64$/, '')) - amount - 10_000n)]
+        records = records.filter((record) => record !== input).concat(outputs)
+        transaction = { id: `at1wallet${++sequence}`, type: 'execute', execution: { transitions: [{
+          program: credits.program, function: 'split', outputs: outputs.map((record) => ({
+            id: record.commitment ?? record.recordView.fields.$commitment, type: 'record',
+          })),
+        }] } }
+        return transaction.id
+      }
+      if (method === 'getConfirmedTransaction') return { status: 'accepted', transaction }
+      throw new Error(method)
+    })
+    const client = createWalletClient({ account: { ...w.client.account!, type: 'rpc' } as any,
+      transport: { ...w.client.transport, request } as any }).extend(recordActions({ store: w.store }))
+    const plan = await client.planRecordInventory({ asset: credits, target: { records: 3 } })
+    expect(await client.rebalanceRecordInventory({ plan, pollIntervalMs: 1 })).toMatchObject({
+      status: 'complete', completedSteps: 2, transactionIds: ['at1wallet1', 'at1wallet2'],
+    })
+    expect((await client.planRecordInventory({ asset: credits, target: { records: 3 } })).steps).toEqual([])
+  })
+  it('preflights later RPC inputs and permits no-op plans without commitment metadata', async () => {
+    const w = world([])
+    const records = [10n, 20n, 30n].map((amount, index) => ({
+      programName: credits.program, recordName: 'credits', uid: `wallet-${index}`,
+      ...(index < 2 ? { commitment: `${index + 1}field` } : {}),
+      recordView: { fields: { $nonce: `${index + 1}group`, microcredits: `${amount}u64` } },
+    }))
+    const request = vi.fn(async (params: any) => params.method === 'requestRecords' ? records : w.send(params))
+    const client = createWalletClient({ account: { ...w.client.account!, type: 'rpc' } as any,
+      transport: { ...w.client.transport, request } as any }).extend(recordActions({ store: w.store }))
+    const plan = await client.planRecordInventory({ asset: credits, target: { records: 1 } })
+    expect(plan.steps[0]!.inputs).not.toContain('3group')
+    expect(await client.rebalanceRecordInventory({ plan })).toMatchObject({ status: 'interrupted', transactionIds: [] })
+    expect(request.mock.calls.some(([params]) => params.method === 'executeTransaction')).toBe(false)
+    expect(await w.store.list(scope)).toEqual([])
+    const noOp = await client.planRecordInventory({ asset: credits, target: { records: 3 } })
+    expect(noOp.steps).toEqual([])
+    expect(await client.rebalanceRecordInventory({ plan: noOp })).toEqual({ status: 'complete', completedSteps: 0, transactionIds: [] })
+  })
   it.each([credits, arc20, arc22])('executes a dependent split plan for $standard and reaches an idempotent target', async (asset) => {
     const w = world([1_030_000n], asset)
     const target = { records: 4, distribution: 'balanced' as const }
