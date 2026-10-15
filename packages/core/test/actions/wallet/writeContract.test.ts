@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { writeContract, executeTransaction } from '../../../src/actions/wallet/writeContract.js'
 import { AccountNotFoundError, ProvingNotConfiguredError } from '../../../src/errors/errors.js'
+import { freezelistProofRequest } from '../../../src/utils/freezelistProof.js'
 
 describe('writeContract', () => {
   const baseParams = {
@@ -118,5 +119,22 @@ describe('writeContract', () => {
 
   it('executeTransaction is an alias for writeContract', () => {
     expect(executeTransaction).toBe(writeContract)
+  })
+
+  it('preserves an array-valued freezelist request on direct execution', async () => {
+    const proof = freezelistProofRequest({ freezelistProgram: 'compliance.aleo' })
+    const request = vi.fn().mockResolvedValue('at1tx')
+    const client = { account: { type: 'rpc', sign: vi.fn() }, request } as any
+    await executeTransaction(client, { program: 'token.aleo', function: 'transfer_private', inputs: ['aleo1dest', '100u128', 'record1...', proof] })
+    expect(request.mock.calls[0]![0].params.inputs[3]).toBe(proof)
+  })
+
+  it('rejects freezelist requests before local proving or broadcasting', async () => {
+    const buildTransaction = vi.fn()
+    const request = vi.fn()
+    const client = { account: { type: 'local', sign: vi.fn() }, proving: { buildTransaction }, request } as any
+    await expect(writeContract(client, { ...baseParams, inputs: [freezelistProofRequest({ freezelistProgram: 'compliance.aleo' })] })).rejects.toThrow(/require a wallet account/)
+    expect(buildTransaction).not.toHaveBeenCalled()
+    expect(request).not.toHaveBeenCalled()
   })
 })

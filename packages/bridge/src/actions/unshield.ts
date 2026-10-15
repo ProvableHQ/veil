@@ -4,6 +4,7 @@ import { BridgeError } from '../errors/bridgeErrors.js'
 import type { AleoPrivacyExecution, UnshieldParameters } from '../types/aleo.js'
 import type { BridgeRegistry } from '../types/protocol.js'
 import { EMPTY_MERKLE_PROOF_PAIR, privacyAmount, privacyRecord, resolvePrivacyAsset } from './internal/aleoPrivacy.js'
+import { validateBridgeFreezelistProof } from '../utils/freezelist.js'
 
 /**
  * Converts an Aleo private record into a token balance visible on the public ledger.
@@ -30,14 +31,14 @@ export async function unshield(registry: BridgeRegistry, clients: BridgeChainCli
   // application state when the wallet supports structured record requests.
   const record: TransactionInput = params.record ?? privacyRecord(asset.privacy.program, literal)
   // ARC-22 additionally names the public recipient and proves the token is not
-  // frozen. The empty-tree proof is the currently supported default; callers
-  // can replace it when a token publishes a populated freeze list.
+  // frozen. Preserve the legacy placeholder default; callers can opt in to a
+  // current literal or a signer proof resolved privately inside the wallet.
   const inputs: TransactionInput[] = asset.privacy.kind === 'arc22'
     ? [
         params.recipient ?? { type: 'address', label: `${asset.symbol} public recipient` },
         literal,
         record,
-        params.merkleProof ?? EMPTY_MERKLE_PROOF_PAIR,
+        validateBridgeFreezelistProof(params.merkleProof ?? EMPTY_MERKLE_PROOF_PAIR, asset),
       ]
     : [record, literal]
   // The wallet performs proving, signing, and broadcast. A prepared-transaction

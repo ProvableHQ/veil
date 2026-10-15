@@ -1,5 +1,6 @@
 import type { AlgorithmGrant, InputRequest } from '@provablehq/veil-core'
 import { SHIELD_SWAP, SHIELD_SWAP_ROUTER } from '../../constants.js'
+import { shieldSwapFreezelistGrants, type ShieldSwapFreezelistGrantsParameters } from '../freezelistGrants.js'
 
 // Wallet-signer path only: these build the `derived` InputRequests a
 // Shield-like wallet fulfils from its own view key. Local signers cannot use
@@ -30,12 +31,16 @@ export const BLINDING_MEMBERSHIP_MAPPING = 'used_blinded_addresses'
  *
  * @property program Core AMM program carrying the direct swap/claim
  *   transitions. Defaults to `shield_swap.aleo`.
+ * @property freezelists Optional list configuration that appends constrained
+ *   freezelist grants; omission preserves the blinding-only default. Top-level
+ *   program overrides apply to the appended core/swap-router grants.
  * @property routerProgram Swap router carrying the wrapped-input and
  *   wrapped-claim transitions. Defaults to `shield_swap_router.aleo`.
  */
 export interface ShieldSwapAlgorithmGrantsParameters {
   program?: string
   routerProgram?: string
+  freezelists?: ShieldSwapFreezelistGrantsParameters
 }
 
 /**
@@ -76,6 +81,7 @@ export function shieldSwapAlgorithmGrants(params: ShieldSwapAlgorithmGrantsParam
     ...pair(program, 'claim_swap_output_no_refund', 0),
     ...pair(router, 'claim_to_arc20_no_refund', 0),
     ...pair(router, 'claim_to_wrapped_no_refund', 0),
+    ...(params.freezelists ? shieldSwapFreezelistGrants({ ...params.freezelists, program, routerProgram: router }) : []),
   ]
 }
 

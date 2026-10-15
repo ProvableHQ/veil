@@ -20,10 +20,11 @@ import { pickInsertHint, type PickInsertHintParameters } from '../../utils/tick-
 import { getPosition } from '../reads/getPosition.js'
 import { getTick } from '../reads/getTick.js'
 import type { TokenRoute } from '../../utils/routing.js'
-import type { ProofProvider } from '../../utils/proofs.js'
+import { proofProviderForAccount, type ProofInputProvider } from '../../utils/proofs.js'
 import { SHIELD_SWAP, SHIELD_SWAP_REBALANCE_ROUTER } from '../../constants.js'
 import {
   ammProofPair,
+  resolveWithdrawalSubject,
   autoSelectSideRecord,
   resolveSideRoutes,
   wrapperSenderProof,
@@ -103,8 +104,12 @@ const REBALANCE_DEADLINE_OFFSET_BLOCKS = 20
  * @property token1Program Program holding the caller's token1 funding records.
  * @property token0Route Pre-resolved route override for token0.
  * @property token1Route Pre-resolved route override for token1.
- * @property proofs Freezelist proof provider for populated freezelists.
- *   Defaults to the empty-tree witness on every proof slot (owner and
+ * @property withdrawalAddress Explicit payout subject for proofs when the position
+ *   record is opaque. Defaults to the plaintext record's withdrawal field.
+ *   Required with a proof provider if that field is unavailable; must match it
+ *   when both are supplied. Does not change the contract's payout address.
+ * @property proofs Freezelist proof provider returning pairs, literals, or wallet-derived requests.
+ *   Defaults to the legacy all-zero witness on every proof slot (owner and
  *   withdrawal against the AMM list, plus wrapper sender proofs on funded
  *   wrapped sides and receiver proofs on every wrapped side).
  * @property tickLowerHint Explicit insert hint. Defaults to `pickInsertHint`.
@@ -153,7 +158,8 @@ export type RebalancePositionParameters = {
   token1Program?: string
   token0Route?: TokenRoute
   token1Route?: TokenRoute
-  proofs?: ProofProvider
+  withdrawalAddress?: string
+  proofs?: ProofInputProvider
   tickLowerHint?: number
   tickUpperHint?: number
   initializedTicks?: PickInsertHintParameters['initializedTicks']
@@ -254,6 +260,7 @@ export async function rebalancePosition(
   const pool = await requirePool(client, poolKey, program)
   const account = requireAccount(client, 'rebalancePosition')
   const isLocal = account.type === 'local'
+  const proofs = proofProviderForAccount(params.proofs, account.type)
 
   // Resolve the position input first: the token id keys the state reads and
   // the withdrawal address inside the record is a proof subject below.
@@ -392,20 +399,19 @@ export async function rebalancePosition(
     underlying1Id: route1.wrapped ? route1.underlyingId : pool.token1,
   })
 
-  // Refunds and the reminted range pay the NFT's withdrawal address; opaque
-  // wallet records degrade the proof subject to the signer — irrelevant while
-  // proofs default to the empty witness.
-  const receiver =
-    (typeof positionInput === 'string' ? fieldFromPlaintext(positionInput, 'withdrawal') : undefined) ??
-    account.address
+  const receiver = resolveWithdrawalSubject({
+    positionInput, withdrawalAddress: params.withdrawalAddress,
+    signer: account.address, requiresSubject: params.proofs !== undefined,
+  })
+
   const [ownerProofs, withdrawalProofs, senderProof0, senderProof1, receiverProof0, receiverProof1] =
     await Promise.all([
-      ammProofPair(params.proofs, account.address),
-      ammProofPair(params.proofs, receiver),
-      wrapperSenderProof(params.proofs, route0, account.address),
-      wrapperSenderProof(params.proofs, route1, account.address),
-      wrapperSenderProof(params.proofs, route0, receiver),
-      wrapperSenderProof(params.proofs, route1, receiver),
+      ammProofPair(proofs, account.address, true),
+      ammProofPair(proofs, receiver),
+      plan.funded0 > 0n ? wrapperSenderProof(proofs, route0, account.address) : undefined,
+      plan.funded1 > 0n ? wrapperSenderProof(proofs, route1, account.address) : undefined,
+      wrapperSenderProof(proofs, route0, receiver, false),
+      wrapperSenderProof(proofs, route1, receiver, false),
     ])
 
   const sides = [
@@ -431,7 +437,7 @@ export async function rebalancePosition(
     fundingInputs.push(record)
     if (side.route.wrapped) fundingInputs.push(side.senderProof!)
   }
-  const receiverProofInputs: string[] = sides
+  const receiverProofInputs: TransactionInput[] = sides
     .filter((side) => side.route.wrapped)
     .map((side) => side.receiverProof!)
 

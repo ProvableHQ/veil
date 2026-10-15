@@ -24,7 +24,9 @@ const chains: ProtocolBridgeChain[] = [
 
 const assets: ProtocolBridgeAsset[] = [
   { id: 'aleo/aleo', key: 'aleo', chainId: 'aleo', symbol: 'ALEO', name: 'Aleo', decimals: 6, kind: 'native', locator: { kind: 'aleo-program', value: 'credits.aleo' }, addressValidationRegex: ALEO_ADDRESS },
-  { id: 'aleo/usdcx', key: 'usdcx', chainId: 'aleo', symbol: 'USDCx', name: 'USDCx', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'usdcx_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc22', program: 'usdcx_stablecoin.aleo' } },
+  // Reviewed against packages/bridge/examples/usdcx-to-usdc.ts at
+  // 2851e8bb97c8821bee016eb33a25608e1a1b9753; other ARC-22 lists remain unspecified.
+  { id: 'aleo/usdcx', key: 'usdcx', chainId: 'aleo', symbol: 'USDCx', name: 'USDCx', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'usdcx_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc22', program: 'usdcx_stablecoin.aleo', freezelistProgram: 'usdcx_freezelist.aleo' } },
   { id: 'aleo/eth', key: 'eth', chainId: 'aleo', symbol: 'ETH', name: 'Hyperlane ETH', decimals: 18, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_eth_v2.aleo', tokenId: 'aleo1t7f29tq9qng2lfvrkpcuvu59jn24hrmzqdyqfn6p0u5p80npfvqqecmkj8' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc20', program: 'arc20_eth.aleo' } },
   { id: 'aleo/wbtc', key: 'wbtc', chainId: 'aleo', symbol: 'WBTC', name: 'Hyperlane WBTC', decimals: 8, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_wbtc_v2.aleo', tokenId: 'aleo1240fsvz2dhmj0cdtt8mc0yc8um9fmu236rqcl2qnlj9703hd2vpsdwyrtf' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc20', program: 'arc20_wbtc.aleo' } },
   { id: 'aleo/usdt', key: 'usdt', chainId: 'aleo', symbol: 'USDT', name: 'Hyperlane USDT', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_usdt_v2.aleo', tokenId: 'aleo18yynfz0lrfx0tund540vy2z7gju7ekgqsueg5jgu28mpm2z42ufq7qua8y' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc20', program: 'arc20_usdt.aleo' } },
@@ -51,7 +53,9 @@ const assets: ProtocolBridgeAsset[] = [
   { id: 'solana/aleo', key: 'aleo', chainId: 'solana', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: SOLANA_ADDRESS },
   { id: 'base/aleo', key: 'aleo', chainId: 'base', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
   { id: 'hyperevm/aleo', key: 'aleo', chainId: 'hyperevm', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
-  { id: 'aleo-testnet/usdcx', key: 'usdcx', chainId: 'aleo-testnet', symbol: 'USDCx', name: 'Testnet USDCx', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'test_usdcx_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc22', program: 'test_usdcx_stablecoin.aleo' } },
+  // Reviewed import and root reads in packages/core/test/fixtures/programs/test_usdcx_stablecoin.aleo
+  // at 2851e8bb97c8821bee016eb33a25608e1a1b9753.
+  { id: 'aleo-testnet/usdcx', key: 'usdcx', chainId: 'aleo-testnet', symbol: 'USDCx', name: 'Testnet USDCx', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'test_usdcx_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc22', program: 'test_usdcx_stablecoin.aleo', freezelistProgram: 'test_usdcx_freezelist.aleo' } },
   { id: 'sepolia/usdc', key: 'usdc', chainId: 'sepolia', symbol: 'USDC', name: 'Testnet USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' }, addressValidationRegex: EVM_ADDRESS },
 ]
 

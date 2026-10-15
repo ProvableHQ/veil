@@ -597,8 +597,56 @@ conversion does not repeat or reverse the completed cross-chain transfer.
 
 The default registry supports these conversions for wrapped ETH, WBTC, USDT,
 and SOL through their ARC-20 programs, and for USDCx through its ARC-22
-transfers. The current USDCx default uses the empty freeze-list proof. Supply a
-current proof after the deployed freeze-list tree is populated.
+transfers. The default unshield proof remains the legacy zero-filled placeholder;
+it is not a constructed empty-list exclusion proof. Supply a valid literal proof
+or opt in to wallet derivation when the deployed program checks a freezelist root.
+
+### Resolve freezelist proofs inside a connected wallet
+
+`merkleProof` accepts either a literal proof pair or a
+`program-freezelist-exclusion-proof` request in ARC-22 unshielding and private
+xReserve burns. A request requires a wallet that implements the algorithm and a
+connect-time grant for its exact program, function, and zero-based input slot.
+The wallet resolves the current list and proof during execution. Local-key
+accounts continue to require literal proofs.
+
+```ts
+import {
+  bridgeFreezelistProofRequest,
+  DEFAULT_BRIDGE_REGISTRY,
+  unshieldFreezelistProofGrant,
+} from '@provablehq/aleo-bridge-sdk'
+
+const registry = DEFAULT_BRIDGE_REGISTRY
+const asset = { chain: 'aleo', asset: 'usdcx' }
+const algorithmsAllowed = [unshieldFreezelistProofGrant({ registry, asset })]
+// Supply algorithmsAllowed when connecting the compatible wallet, then:
+await bridge.unshield({
+  asset,
+  amount: '2.5',
+  merkleProof: bridgeFreezelistProofRequest({ registry, asset }),
+})
+```
+
+For private xReserve burns, use
+`xReserveBurnFreezelistProofGrant({ registry, plan: quote.plan })` and pass the
+request as `merkleProof` to `bridge.execute`. The grant targets the current
+registry's wrapper `private_burn` input 4; unshield grants target the token's
+`transfer_private_to_public` input 3. Public burns and shielding need no derived
+proof slot. The [wallet example](./examples/wallet-freezelist.ts) prepares the
+private-burn request and grant together without submitting a transaction.
+
+Bridge proof requests MUST omit `args.address`: these operations prove the
+wallet signer, and the public unshield recipient is not the proof subject.
+Derived requests naming another algorithm or list are rejected before proving.
+
+The default registry identifies `usdcx_freezelist.aleo` on mainnet and
+`test_usdcx_freezelist.aleo` on testnet. For other ARC-22 assets, provide the
+reviewed `asset.privacy.freezelistProgram` in the injected registry before using
+derived proofs. Neither token nor wrapper names are used to infer a list.
+Adding this metadata does not enable derivation automatically; selecting a
+request in `merkleProof` is the opt-in. The same registry MUST be supplied to
+the helpers and bridge client.
 
 ## Complete examples
 

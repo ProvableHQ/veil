@@ -17,6 +17,16 @@ For Privy or Dynamic server wallets, start with the
 [server-wallet configuration guide](./remote-wallets/README.md). Its examples
 configure EVM and Solana clients without signing or submitting.
 
+For a connected Aleo wallet that implements
+`program-freezelist-exclusion-proof`, use
+[`wallet-freezelist.ts`](./wallet-freezelist.ts) to prepare the private USDCx burn
+inputs and exact connect-time algorithm grant from a quoted plan. This helper
+performs no network access and submits nothing. Pass its `algorithmsAllowed`
+when connecting the wallet, then pass its `parameters` to `bridge.execute` after
+authorization. The wallet selects a token record and derives the signer proof
+without exposing either value. The existing local-key withdrawal script still
+derives a literal proof through the Provable SDK.
+
 ## Routes covered by the examples
 
 | Script | Route | Protocol | Default amount |

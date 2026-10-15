@@ -6,9 +6,10 @@ import { parseDecimalAmount } from '../../utils/units.js'
 const EMPTY_PROOF = `{ siblings: [${Array(16).fill('0field').join(', ')}], leaf_index: 1u32 }`
 
 /**
- * Supplies the canonical proof pair accepted while an ARC-22 freeze list is empty.
+ * Supplies the legacy zero-filled placeholder used by default for ARC-22 unshielding.
  *
  * The value is computed in memory and does not read Aleo or reveal a record.
+ * It is not a constructed exclusion proof; acceptance depends on the deployment.
  *
  * @example
  * const proof = EMPTY_MERKLE_PROOF_PAIR

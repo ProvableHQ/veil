@@ -7,7 +7,7 @@ import { requireFieldOutput } from '../../utils/outputs.js'
 import { roundTickToSpacing } from '../../utils/tick-math.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../../utils/tick-hints.js'
 import type { TokenRoute } from '../../utils/routing.js'
-import type { ProofProvider } from '../../utils/proofs.js'
+import { proofProviderForAccount, type ProofInputProvider } from '../../utils/proofs.js'
 import { SHIELD_SWAP } from '../../constants.js'
 import {
   ammProofPair,
@@ -49,8 +49,8 @@ import {
  * @property token0Route Pre-resolved route override for token0 — skips the
  *   on-chain wrapped-ness read (offline/advanced use).
  * @property token1Route Pre-resolved route override for token1.
- * @property proofs Freezelist proof provider for populated freezelists.
- *   Defaults to the empty-tree witness on every proof slot.
+ * @property proofs Freezelist proof provider returning pairs, literals, or wallet-derived requests.
+ *   Defaults to the legacy all-zero witness on every proof slot.
  * @property tickLowerHint Explicit insert hint. Defaults to
  *   `pickInsertHint` (best-effort — see its limitation).
  * @property tickUpperHint Explicit insert hint for the upper bound.
@@ -83,7 +83,7 @@ export type MintParameters = {
   token1Record?: string | InputRequest
   token0Route?: TokenRoute
   token1Route?: TokenRoute
-  proofs?: ProofProvider
+  proofs?: ProofInputProvider
   tickLowerHint?: number
   tickUpperHint?: number
   initializedTicks?: PickInsertHintParameters['initializedTicks']
@@ -193,6 +193,7 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
 
   const account = requireAccount(client, 'mint')
   const isLocal = account.type === 'local'
+  const proofs = proofProviderForAccount(params.proofs, account.type)
   const nonce = params.nonce ?? generateFieldNonce()
 
   // Wrapped-ness decides the target transition and which program each
@@ -208,15 +209,15 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
   // Wrapper freezelist proofs prove the SENDER; AMM proofs prove the three
   // mint parties. All default to the empty-tree witness.
   const [senderProof0, senderProof1, signerProofs, recipientProofs, withdrawalProofs] = await Promise.all([
-    wrapperSenderProof(params.proofs, route0, account.address),
-    wrapperSenderProof(params.proofs, route1, account.address),
-    ammProofPair(params.proofs, account.address),
-    ammProofPair(params.proofs, params.recipient),
-    ammProofPair(params.proofs, params.withdrawal),
+    wrapperSenderProof(proofs, route0, account.address),
+    wrapperSenderProof(proofs, route1, account.address),
+    ammProofPair(proofs, account.address, true),
+    ammProofPair(proofs, params.recipient),
+    ammProofPair(proofs, params.withdrawal),
   ])
 
   // Everything after the record slots is identical across all four variants.
-  const tail: string[] = [
+  const tail: TransactionInput[] = [
     params.recipient,
     params.withdrawal,
     request,

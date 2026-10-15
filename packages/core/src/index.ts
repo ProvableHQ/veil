@@ -96,6 +96,8 @@ export type {
   ConnectOptions, RecordAccessGrant, ProgramGrant, RecordGrant, FieldGrant, AlgorithmGrant,
 } from './types/inputRequest.js'
 export { KNOWN_ALGORITHMS, isInputRequest, assertNoInputRequests } from './types/inputRequest.js'
+export { FREEZELIST_PROOF_ALGORITHM, freezelistProofRequest, freezelistProofGrant, isFreezelistProofRequest } from './utils/freezelistProof.js'
+export type { FreezelistProofRequest, FreezelistProofInput, FreezelistProofRequestParameters, FreezelistProofGrantParameters } from './utils/freezelistProof.js'
 export type {
   FunctionNames, MappingNames,
   TypedContractInstance,

@@ -76,7 +76,7 @@ describe('Aleo asset privacy actions', () => {
     }))
   })
 
-  it('unshields USDCx with a wallet-selected record and the empty-tree proof', async () => {
+  it('unshields USDCx with a wallet-selected record and the legacy placeholder proof', async () => {
     const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
       .mockResolvedValue('at1usdcxunshield')
 

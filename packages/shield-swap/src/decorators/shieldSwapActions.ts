@@ -1,5 +1,6 @@
 import { waitForSwapOutput, type WaitForSwapOutputParameters, type WaitForSwapOutputReturnType } from '../actions/reads/waitForSwapOutput.js'
 import type { Client } from '@provablehq/veil-core'
+import type { ProofInputProvider } from '../utils/proofs.js'
 import { getPool, type GetPoolParameters, type GetPoolReturnType } from '../actions/reads/getPool.js'
 import { getSlot, type GetSlotParameters, type GetSlotReturnType } from '../actions/reads/getSlot.js'
 import {
@@ -129,6 +130,9 @@ import { ApiClient, authenticateWithAccount, defaultApiUrl, type ApiClientOption
  * @property program shield_swap program id every action defaults to. Set it
  *   once to point the whole surface at another deployment; per-call
  *   `program` still overrides.
+ * @property proofs Default proof provider for swaps, claims, and liquidity.
+ *   Omitted by default, retaining legacy placeholders. Per-call providers
+ *   override it; an explicit `proofs: undefined` opts out for that call.
  * @property blindedIdentities Where identities are reserved and swaps recorded,
  *   used by `reserveBlindedIdentity` and by `swap`, `swapMultiHop`, and
  *   `claimSwapOutput`. Defaults to a per-client in-memory store, so concurrent
@@ -143,6 +147,7 @@ export type ShieldSwapActionsConfig = {
   api?: ApiClientOptions | ApiClient
   program?: string
   blindedIdentities?: BlindedIdentityStore
+  proofs?: ProofInputProvider
 }
 
 /**
@@ -348,6 +353,10 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     // `blindedIdentities: undefined` is opting out of tracking for that call, and
     // a truthy test would inject the default over the top of that intent. Absent
     // key means "not specified", which is what takes the default.
+    // Preserve explicit per-call opt-outs as with the identity store.
+    const withProofs = <P extends { proofs?: ProofInputProvider }>(p: P): P =>
+      'proofs' in p ? p : { ...p, proofs: config.proofs }
+
     const withStore = <P extends { blindedIdentities?: BlindedIdentityStore }>(p: P): P =>
       'blindedIdentities' in p ? p : { ...p, blindedIdentities }
 
@@ -411,19 +420,19 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
           if (config.program && p.quote.program !== config.program) {
             return Promise.reject(new Error('Quote program does not match the configured client program'))
           }
-          return swap(client, withStore(p))
+          return swap(client, withProofs(withStore(p)))
         }
-        return swap(client, withStore(withProgram(p)))
+        return swap(client, withProofs(withStore(withProgram(p))))
       }) as ShieldSwapActions['swap'],
-      claimSwapOutput: (p) => claimSwapOutput(client, withStore(p)),
-      swapMultiHop: (p) => swapMultiHop(client, withStore(withProgram(p))),
+      claimSwapOutput: (p) => claimSwapOutput(client, withProofs(withStore(p))),
+      swapMultiHop: (p) => swapMultiHop(client, withProofs(withStore(withProgram(p)))),
       createPool: (p) => createPool(client, withProgram(p)),
-      mint: (p) => mint(client, withTicks(withProgram(p))),
-      increaseLiquidity: (p) => increaseLiquidity(client, withTicks(withProgram(p))),
+      mint: (p) => mint(client, withProofs(withTicks(withProgram(p)))),
+      increaseLiquidity: (p) => increaseLiquidity(client, withProofs(withTicks(withProgram(p)))),
       decreaseLiquidity: (p) => decreaseLiquidity(client, withProgram(p)),
-      collect: (p) => collect(client, withProgram(p)),
+      collect: (p) => collect(client, withProofs(withProgram(p))),
       planRebalance: (p) => planRebalance(client, withProgram(p)),
-      rebalancePosition: (p) => rebalancePosition(client, withTicks(withProgram(p))),
+      rebalancePosition: (p) => rebalancePosition(client, withProofs(withTicks(withProgram(p)))),
       burn: (p) => burn(client, withProgram(p)),
       authenticateShieldSwap: () => authenticateWithAccount(api ?? missingApi, client.account),
       // Same function, not a wrapper: the two names must not drift while the

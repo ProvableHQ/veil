@@ -1,7 +1,6 @@
 import {
   executeContract,
   writeContract,
-  parseRecord,
   type Client,
   type InputRequest,
   type TransactionInput,
@@ -9,9 +8,9 @@ import {
 import { resolvePositionRecord } from '../../utils/records.js'
 import { requireAccount, requirePool } from '../../utils/guards.js'
 import type { TokenRoute } from '../../utils/routing.js'
-import type { ProofProvider } from '../../utils/proofs.js'
+import { proofProviderForAccount, type ProofInputProvider } from '../../utils/proofs.js'
 import { SHIELD_SWAP, SHIELD_SWAP_LP_ROUTER } from '../../constants.js'
-import { ammProofPair, resolveSideRoutes, wrapperSenderProof } from './internal.js'
+import { ammProofPair, resolveSideRoutes, wrapperSenderProof, resolveWithdrawalSubject } from './internal.js'
 
 /**
  * Parameters for {@link collect}.
@@ -30,8 +29,12 @@ import { ammProofPair, resolveSideRoutes, wrapperSenderProof } from './internal.
  * @property token0Route Pre-resolved route override for token0 — skips the
  *   on-chain wrapped-ness read (offline/advanced use).
  * @property token1Route Pre-resolved route override for token1.
- * @property proofs Freezelist proof provider for populated freezelists.
- *   Defaults to the empty-tree witness on every proof slot (the AMM's
+ * @property withdrawalAddress Explicit payout subject for proofs when the position
+ *   record is opaque. Defaults to the plaintext record's withdrawal field.
+ *   Required with a proof provider if that field is unavailable; must match it
+ *   when both are supplied. Does not change the contract's payout address.
+ * @property proofs Freezelist proof provider returning pairs, literals, or wallet-derived requests.
+ *   Defaults to the legacy all-zero witness on every proof slot (the AMM's
  *   owner/withdrawal proofs, plus a receiver proof per wrapped side).
  * @property imports Program sources for dynamic-dispatch dependencies
  *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
@@ -49,7 +52,8 @@ export type CollectParameters = {
   positionRecord?: string | InputRequest
   token0Route?: TokenRoute
   token1Route?: TokenRoute
-  proofs?: ProofProvider
+  withdrawalAddress?: string
+  proofs?: ProofInputProvider
   imports?: Record<string, string>
   program?: string
 }
@@ -106,6 +110,7 @@ export async function collect(client: Client, params: CollectParameters): Promis
 
   const account = requireAccount(client, 'collect')
   const isLocal = account.type === 'local'
+  const proofs = proofProviderForAccount(params.proofs, account.type)
 
   const [route0, route1] = await resolveSideRoutes(client, {
     token0Id: pool.token0,
@@ -133,27 +138,25 @@ export async function collect(client: Client, params: CollectParameters): Promis
     positionInput = params.positionRecord
   }
 
-  // The receiver of the payout is the NFT's withdrawal address. It is only
-  // knowable client-side from a record plaintext; an opaque wallet request
-  // degrades the proof subject to the signer — irrelevant while proofs
-  // default to the empty witness.
-  const receiver =
-    (typeof positionInput === 'string' ? withdrawalFromPlaintext(positionInput) : undefined) ?? account.address
+  const receiver = resolveWithdrawalSubject({
+    positionInput, withdrawalAddress: params.withdrawalAddress,
+    signer: account.address, requiresSubject: params.proofs !== undefined,
+  })
 
   // Core collect proves the owner and the withdrawal address against the
   // AMM freezelist; each wrapped side adds a wrapper receiver proof.
   const [ownerProofs, withdrawalProofs, receiverProof0, receiverProof1] = await Promise.all([
-    ammProofPair(params.proofs, account.address),
-    ammProofPair(params.proofs, receiver),
-    wrapperSenderProof(params.proofs, route0, receiver),
-    wrapperSenderProof(params.proofs, route1, receiver),
+    ammProofPair(proofs, account.address, true),
+    ammProofPair(proofs, receiver),
+    wrapperSenderProof(proofs, route0, receiver, false),
+    wrapperSenderProof(proofs, route1, receiver, false),
   ])
 
   // Dispatch table: any wrapped side moves the call to the LP router, which
   // appends the wrapped sides' receiver proofs (side 0 before side 1).
   let target = program
   let functionName = 'collect'
-  const receiverProofInputs: string[] = []
+  const receiverProofInputs: TransactionInput[] = []
   if (route0.wrapped || route1.wrapped) {
     target = SHIELD_SWAP_LP_ROUTER
     if (route0.wrapped && !route1.wrapped) {
@@ -198,14 +201,4 @@ export async function collect(client: Client, params: CollectParameters): Promis
     inputs,
   })
   return { transactionId }
-}
-
-/** Extracts the `withdrawal` address from a PositionNFT plaintext, if parseable. */
-function withdrawalFromPlaintext(plaintext: string): string | undefined {
-  try {
-    const raw = parseRecord(plaintext).fields.withdrawal?.value
-    return typeof raw === 'string' && raw.startsWith('aleo1') ? raw : undefined
-  } catch {
-    return undefined
-  }
 }

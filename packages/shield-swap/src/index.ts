@@ -336,6 +336,10 @@ export {
   EMPTY_MERKLE_PROOF,
   EMPTY_MERKLE_PROOFS,
   resolveProofPair,
+  resolveProofInput,
+  walletFreezelistProofProvider,
+  type ProofInputProvider,
+  type WalletFreezelistProofParameters,
   formatMerkleProofPair,
   type MerkleProofInput,
   type ProofContext,
@@ -346,3 +350,5 @@ export {
   type TokenStandard,
   type DetectTokenStandardParameters,
 } from './utils/detectTokenStandard.js'
+
+export { shieldSwapFreezelistGrants, type ShieldSwapFreezelistGrantsParameters } from './utils/freezelistGrants.js'
