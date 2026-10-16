@@ -8,7 +8,7 @@
     "url": "git+https://github.com/ProvableHQ/veil.git",
     "directory": "packages/shield-swap"
   },
-  "homepage": "https://github.com/ProvableHQ/veil#readme",
+  "homepage": "https://github.com/ProvableHQ/veil/tree/main/packages/shield-swap#readme",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -66,5 +66,20 @@
     "@provablehq/veil-codegen": "workspace:*",
     "@provablehq/veil-aleo-sdk": "workspace:*",
     "openapi-typescript": "^7.13.0"
+  },
+  "keywords": [
+    "aleo",
+    "veil",
+    "typescript",
+    "privacy",
+    "defi",
+    "dex",
+    "amm",
+    "shield-swap",
+    "private-swaps",
+    "liquidity"
+  ],
+  "bugs": {
+    "url": "https://github.com/ProvableHQ/veil/issues"
   }
 }

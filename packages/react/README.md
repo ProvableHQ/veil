@@ -1,5 +1,7 @@
 # @provablehq/veil-aleo-react-hooks
 
+[All Veil packages](../../README.md#packages) · [Documentation](https://provablehq.github.io/veil/packages/react) · [npm](https://www.npmjs.com/package/@provablehq/veil-aleo-react-hooks) · [LLM index](../../llms.txt)
+
 React bindings for the Veil Aleo SDK.
 
 Provides a `VeilProvider` context provider and a `useVeilWallet` hook that wrap

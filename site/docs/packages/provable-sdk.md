@@ -1,4 +1,6 @@
 ---
+title: "@provablehq/veil-aleo-sdk"
+description: Local accounts, signing, and delegated or local proving for the Veil Aleo TypeScript SDK.
 sidebar_position: 3
 ---
 

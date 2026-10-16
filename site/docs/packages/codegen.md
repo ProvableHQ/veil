@@ -1,4 +1,6 @@
 ---
+title: "@provablehq/veil-codegen"
+description: Generate typed TypeScript contract bindings from Aleo program ABIs with the veil-codegen CLI.
 sidebar_position: 7
 ---
 

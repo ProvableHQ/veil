@@ -1,4 +1,6 @@
 ---
+title: "@provablehq/veil-aleo-react-hooks"
+description: React hooks and providers for Aleo wallet connections and Veil public and wallet clients.
 sidebar_position: 5
 ---
 

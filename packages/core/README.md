@@ -1,5 +1,7 @@
 # @provablehq/veil-core
 
+[All Veil packages](../../README.md#packages) · [Documentation](https://provablehq.github.io/veil/packages/core) · [npm](https://www.npmjs.com/package/@provablehq/veil-core) · [LLM index](../../llms.txt)
+
 The foundation of the Veil Aleo SDK: viem-style clients, transports, an
 abstract account interface, and actions for reading the chain and writing to
 contracts.

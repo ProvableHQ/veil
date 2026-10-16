@@ -1,5 +1,7 @@
 # @provablehq/shield-swap-cli
 
+[All Veil packages](../../README.md#packages) · [Documentation](https://provablehq.github.io/veil/packages/shield-swap-cli) · [npm](https://www.npmjs.com/package/@provablehq/shield-swap-cli) · [LLM index](../../llms.txt)
+
 The `shield-swap` command: trade on Shield Swap from a terminal. Each subcommand
 does one job against a live deployment — builds a session, plans the work,
 prints what happened.

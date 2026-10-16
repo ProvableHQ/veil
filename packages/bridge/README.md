@@ -1,5 +1,7 @@
 # @provablehq/aleo-bridge-sdk
 
+[All Veil packages](../../README.md#packages) · [Documentation](https://provablehq.github.io/veil/packages/bridge) · [npm](https://www.npmjs.com/package/@provablehq/aleo-bridge-sdk) · [LLM index](../../llms.txt)
+
 Moves assets through reviewed Hyperlane, Circle xReserve, and Circle CCTP deployments.
 CCTP moves native USDC between Arc and Ethereum, Base, or Arbitrum; xReserve brings
 Arc USDC to Aleo as USDCx and redeems Aleo USDCx back to Arc USDC.

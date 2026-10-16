@@ -43,6 +43,7 @@ const sidebars: SidebarsConfig = {
         'packages/wallet-adapter',
         'packages/react',
         'packages/shield-swap',
+        'packages/shield-swap-cli',
         'packages/codegen',
         'packages/devnode',
         'packages/leo',
