@@ -53,7 +53,6 @@ const txId = await wallet.writeContract({
 | 📈 **Private DeFi** | Private swaps of Ethereum and Solana assets, private market making, private lending (`@provablehq/shield-swap-sdk`) |
 | 🤖 **AI agents that use Aleo** | expose Aleo as MCP tools or drop tool schemas into any agent framework; agents can also write viem-style code directly. (`@provablehq/veil-core/agent`, `@provablehq/veil-core/mcp`) |
 | 🖥️ **Servers, CLIs, and custodial services** | hold a private key and sign and prove locally, unattended. (`@provablehq/veil-aleo-sdk`) |
-| 📜 **Typed clients for your own contracts** | generate bindings from a program ABI and call it with typed reads and writes. (`@provablehq/veil-codegen`, `getContract`) |
 | 🦁 **Leo program pipelines** | build, deploy, and test programs against a local node, including in CI. (`@provablehq/veil-leo`, `@provablehq/veil-aleo-devnode`) |
 
 ## Features
