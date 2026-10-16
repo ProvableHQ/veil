@@ -1,7 +1,7 @@
 {
   "name": "@provablehq/veil-aleo-devnode",
   "version": "0.12.1",
-  "description": "Start and control local Aleo devnodes from TypeScript for development and integration testing.",
+  "description": "TypeScript interface for orchestrating local Aleo test networks for testing & developing Aleo programs.",
   "license": "MIT",
   "repository": {
     "type": "git",

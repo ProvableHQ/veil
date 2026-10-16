@@ -1,7 +1,7 @@
 {
   "name": "@provablehq/veil-aleo-sdk",
   "version": "0.12.1",
-  "description": "Local accounts, signing, and delegated or local proving for the Veil Aleo TypeScript SDK.",
+  "description": "Local signing and proving for the Veil Aleo SDK, backed by the Provable SDK.",
   "license": "MIT",
   "repository": {
     "type": "git",

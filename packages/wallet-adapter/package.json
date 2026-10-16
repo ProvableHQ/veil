@@ -1,7 +1,7 @@
 {
   "name": "@provablehq/veil-aleo-wallet-adapter",
   "version": "0.12.1",
-  "description": "Aleo wallet adapter bindings for Veil clients with Shield, Leo, Puzzle, and Fox wallets.",
+  "description": "Aleo wallet adapter bindings for the Veil Aleo SDK.",
   "license": "MIT",
   "repository": {
     "type": "git",

@@ -1,7 +1,7 @@
 {
   "name": "@provablehq/shield-swap-sdk",
   "version": "0.12.1",
-  "description": "TypeScript SDK for Shield Swap private token swaps, concentrated liquidity, and pool data on Aleo.",
+  "description": "TypeScript SDK for the Shield Swap AMM DEX on Aleo.",
   "license": "MIT",
   "repository": {
     "type": "git",

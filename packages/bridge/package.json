@@ -1,7 +1,7 @@
 {
   "name": "@provablehq/aleo-bridge-sdk",
   "version": "0.12.1",
-  "description": "Cross-chain bridge SDK for Aleo, EVM, and Solana using Circle xReserve, Circle CCTP, and Hyperlane.",
+  "description": "Protocol bridge client for Circle xReserve and Hyperlane routes connected to Aleo.",
   "license": "MIT",
   "repository": {
     "type": "git",

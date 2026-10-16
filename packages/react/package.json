@@ -1,7 +1,7 @@
 {
   "name": "@provablehq/veil-aleo-react-hooks",
   "version": "0.12.1",
-  "description": "React hooks and providers for Aleo wallet connections and Veil public and wallet clients.",
+  "description": "React hooks and providers for the building web apps.",
   "license": "MIT",
   "repository": {
     "type": "git",

@@ -1,7 +1,7 @@
 {
   "name": "@provablehq/veil-core",
   "version": "0.12.1",
-  "description": "Viem-style TypeScript SDK for Aleo clients, contract calls, transports, and MCP agent tools.",
+  "description": "Viem-style TypeScript interface for Aleo.",
   "license": "MIT",
   "repository": {
     "type": "git",

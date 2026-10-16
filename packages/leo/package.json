@@ -1,7 +1,7 @@
 {
   "name": "@provablehq/veil-leo",
   "version": "0.12.1",
-  "description": "TypeScript wrapper for the Leo CLI to build, deploy, run, and test Aleo programs.",
+  "description": "TypeScript interface for using the Leo CLI from TS/JS.",
   "license": "MIT",
   "repository": {
     "type": "git",
