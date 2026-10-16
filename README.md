@@ -74,7 +74,7 @@ const txId = await wallet.writeContract({
 `@provablehq/veil-core` is the base — every other package builds on its client, action,
 and transport interfaces.
 
-| Package | What it's for | When to reach for it |
+| Package | What it's for | When to use it |
 |---------|---------------|----------------------|
 | 🧩 [`@provablehq/veil-core`](./packages/core/README.md) | Clients, actions, transports, types — the base SDK. Also ships LLM agent (`/agent`) and MCP (`/mcp`) bindings. | Every Veil project — reading or writing Aleo, or as the base you extend. |
 | 🔑 [`@provablehq/veil-aleo-sdk`](./packages/provable-sdk/README.md) | Local accounts, signing, and proving via `@provablehq/sdk`. Build a client from a private key. | Your code holds a private key and must sign and prove itself — bots, servers, CLIs, tests. |
@@ -85,7 +85,7 @@ and transport interfaces.
 | 📜 [`@provablehq/veil-codegen`](./packages/codegen/README.md) | Generate typed bindings from an Aleo program ABI (library + `veil-codegen` CLI). | You want typed reads and writes for a specific program's ABI. |
 | 🧪 [`@provablehq/veil-aleo-devnode`](./packages/devnode/README.md) | Run and drive a local Aleo devnode for tests. | You need a local Aleo node in tests or local development. |
 | 🦁 [`@provablehq/veil-leo`](./packages/leo/README.md) | Typed wrapper around the `leo` CLI (build, deploy, …). | You compile or deploy Leo programs — including during testing, where it pairs with `@provablehq/veil-aleo-devnode`. |
-| 💸 [`@provablehq/aleo-bridge-sdk`](./packages/bridge/README.md) | Cross-chain bridge client (preview). Versions in lockstep with the Veil packages; expect breaking changes between minor releases. | You move assets across Aleo, EVM chains, or Solana using Circle xReserve, Circle CCTP, or Hyperlane. |
+| 💸 [`@provablehq/aleo-bridge-sdk`](./packages/bridge/README.md) | Cross-chain bridge client (preview). Versions in lockstep with the Veil packages; expect breaking changes between minor releases. | Bridging tokens to and from Aleo via EVM Chains (Circle ARC, Base, Arbitrum, etc.)  or Solana |
 
 ## Quick Start
 
