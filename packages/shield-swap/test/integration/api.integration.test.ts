@@ -88,8 +88,9 @@ describe.runIf(RUN)('ApiClient against the live DEX API (public surface)', () =>
 
   it('gated endpoints reject a bad credential (server-side 401)', async () => {
     // An invalid token passes the client-side fail-fast, proving the server
-    // itself gates — one request, both assertions on the captured error.
-    const err = await new ApiClient({ ...API_OPTS, apiToken: 'ss_invalid' }).getFeeTiers().catch((e: unknown) => e)
+    // itself gates. Fee tiers are public; faucet job status remains protected.
+    const err = await new ApiClient({ ...API_OPTS, apiToken: 'ss_invalid' })
+      .getAirdropStatus('00000000-0000-0000-0000-000000000000').catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ApiError)
     expect((err as ApiError).status).toBe(401)
   }, 30_000)
@@ -187,7 +188,7 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
 
     // The revoked secret stops authenticating immediately.
     const revokedClient = new ApiClient({ ...API_OPTS, apiToken: created.token })
-    const err = await revokedClient.getFeeTiers().catch((e: unknown) => e)
+    const err = await revokedClient.getPositions({ user: address, limit: 1 }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ApiError)
     expect((err as ApiError).status).toBe(401)
   }, 60_000)
@@ -220,7 +221,7 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     await authenticateWithAccount(freshApi, fresh)
 
     const status = await freshApi.getReferralStatus()
-    const gated = await freshApi.getFeeTiers().catch((e: unknown) => e)
+    const gated = await freshApi.getPositions({ user: fresh.address, limit: 1 }).catch((e: unknown) => e)
     if (status.has_access) {
       expect(gated).not.toBeInstanceOf(ApiError)
     } else {
@@ -241,7 +242,7 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     const recoveringApi = new ApiClient({
       ...API_OPTS,
       fetch: async (input, init) => {
-        if (poison && String(input).endsWith('/fee-tiers')) {
+        if (poison && new URL(String(input)).pathname === '/positions') {
           poison = false
           const headers = new Headers(init?.headers)
           headers.set('authorization', 'Bearer expired-garbage')
@@ -252,8 +253,8 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     })
     await authenticateWithAccount(recoveringApi, account)
     try {
-      const tiers = await recoveringApi.getFeeTiers()
-      expect(tiers.data.length).toBeGreaterThan(0)
+      const positions = await recoveringApi.getPositions({ user: address, limit: 1 })
+      expect(Array.isArray(positions.data)).toBe(true)
       expect(poison).toBe(false)
     } finally {
       await recoveringApi.logout()

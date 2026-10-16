@@ -4,7 +4,10 @@ import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import type { AleoWalletClient } from '../../src/types/aleo.js'
 import type { BridgeReceipt } from '../../src/types/protocol.js'
-import { buildXReserveHookData, calculateXReserveMessageHash } from '../../src/utils/xreserve.js'
+import {
+  buildXReserveHookData,
+  calculateXReserveMessageHash,
+} from '../../src/utils/xreserve.js'
 
 const RECIPIENT = 'aleo1kypwp5m7qtk9mwazgcpg0tq8aal23mnrvwfvug65qgcg9xvsrqgspyjm6n'
 const PAYLOAD = `0x${'00'.repeat(305)}` as const
@@ -55,7 +58,47 @@ describe('xReserve private mint', () => {
     expect(call.inputs[4]).toBe(RECIPIENT)
     expect(result.receipt.status).toBe('DESTINATION_CONFIRMING')
     expect(result.receipt.destinationTxId).toBe('at1private')
-    expect(result.receipt.protocolState.secretNonce).toBe('7scalar')
+    expect(result.receipt.protocolState.secretNonce).toBeUndefined()
+  })
+
+  it('submits the locally stored scalar for a checkpointed address commitment', async () => {
+    const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+      amount: '2',
+      recipient: RECIPIENT,
+      mintMode: 'private',
+    })
+    const secretNonce = '7scalar'
+    const hookData = await buildXReserveHookData('private', RECIPIENT, 'testnet', secretNonce)
+    const commitment = hookData.slice(4, 68)
+    const payload = `0x${'00'.repeat(240)}${hookData.slice(2)}` as const
+    const messageHash = calculateXReserveMessageHash(payload)
+    const deposit: BridgeReceipt = {
+      id: messageHash,
+      protocol: 'xreserve',
+      status: 'ATTESTATION_PENDING',
+      sourceTxId: `0x${'22'.repeat(32)}`,
+      protocolState: {
+        routeId: plan.route.id,
+        mintMode: 'private',
+        intendedRecipient: RECIPIENT,
+        privateMintAddressCommitment: commitment,
+        payload,
+        messageHash,
+      },
+    }
+    const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
+      .mockResolvedValue('at1private')
+
+    await executeXReservePrivateMint(DEFAULT_BRIDGE_REGISTRY, { executeTransaction }, {
+      plan,
+      deposit,
+      attestation: { status: 'complete', messageHash, payload, attestation: SIGNATURE },
+      privateMintSecretNonce: secretNonce,
+    })
+
+    expect(executeTransaction.mock.calls[0]![0].inputs[3]).toBe(secretNonce)
   })
 
   it('rejects public and record plans before prompting the wallet', async () => {

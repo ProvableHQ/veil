@@ -21,6 +21,11 @@ import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
 import type { Transaction } from '@provablehq/veil-core'
 import { readDestinationBalance } from './internal/readDestinationBalance.js'
 import { parseDecimalAmount } from '../utils/units.js'
+import {
+  memoryXReservePrivateMintIdentityStore,
+  type XReservePrivateMintIdentityStore,
+} from '../utils/xreservePrivateMintStore.js'
+import { resolvePrivateMintAddressCommitment } from './internal/privateMintIdentity.js'
 
 type DeliveryVerification = {
   destinationBalanceBeforeAtomic: string
@@ -96,6 +101,7 @@ function xReserveBurnMode(mode: ExecuteParameters['mode']): XReserveBurnMode | u
  * @param clients Network and wallet access for the source and destination chains.
  * @param params Transfer details, source wallet preferences, and an optional callback for saving recovery information.
  * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
+ * @param privateMintIdentities Counter and scalar persistence for locally derived private mints.
  * @returns The submitted transaction identifier and the initial state of the in-progress transfer.
  * @throws BridgeError When the transfer is unsupported, the connected wallet cannot authorize it, current funds or fees are insufficient, or submission fails.
  * @example const execution = await execute(registry, clients, { plan, onCheckpoint: saveCheckpoint })
@@ -105,6 +111,7 @@ export async function execute(
   clients: BridgeChainClients,
   params: ExecuteParameters,
   fetcher: typeof fetch = globalThis.fetch,
+  privateMintIdentities: XReservePrivateMintIdentityStore = memoryXReservePrivateMintIdentityStore(),
 ): Promise<BridgeExecution> {
   // The selected route, not caller-supplied chain branching, determines which
   // protocol implementation and wallet capability may commit the funds.
@@ -187,6 +194,14 @@ export async function execute(
     }
   }
   if (params.plan.protocol === 'xreserve' && chain.family === 'evm') {
+    const privateMintAddressCommitment = await resolvePrivateMintAddressCommitment(
+      registry,
+      clients,
+      privateMintIdentities,
+      params.plan,
+      params.privateMintAddressCommitment,
+      params.privateMintSecretNonce,
+    )
     const execution = await evmToAleoXReserve.execute(
       registry,
       requireEvmClientWithWallet(registry, clients, chainId, 'execute xReserve transfer'),
@@ -195,6 +210,7 @@ export async function execute(
         pollingIntervalMs: params.pollingIntervalMs,
         confirmationTimeoutMs: params.confirmationTimeoutMs,
         onSubmitted,
+        privateMintAddressCommitment,
         privateMintSecretNonce: params.privateMintSecretNonce,
       },
     )

@@ -161,12 +161,27 @@ export {
   aleoProgramAddress,
   buildXReserveDepositPayload,
   buildXReserveHookData,
+  buildXReservePrivateMintHookData,
   calculateXReserveDepositNonce,
   calculateXReserveMessageHash,
+  deriveXReservePrivateMintAddressCommitment,
+  deriveXReservePrivateMintSecretNonce,
   evmAddressToXReserveBytes32,
+  SHIELDED_USDCX_DOMAIN,
+  SHIELDED_USDCX_DOMAIN_MAINNET,
+  SHIELDED_USDCX_DOMAIN_TESTNET,
+  xReserveViewKeyToScalar,
   xReserveDepositNonceFromPayload,
   xReserveHexToAleoBytes,
+  xReservePrivateMintCommitmentFromHookData,
 } from './utils/xreserve.js'
+export {
+  findXReservePrivateMintIdentity,
+  memoryXReservePrivateMintIdentityStore,
+  reserveXReservePrivateMintIdentity,
+  type XReservePrivateMintIdentity,
+  type XReservePrivateMintIdentityStore,
+} from './utils/xreservePrivateMintStore.js'
 export {
   evmAddressToAleoHyperlaneRecipient,
   solanaAddressToAleoHyperlaneRecipient,
