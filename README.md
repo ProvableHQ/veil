@@ -77,14 +77,14 @@ and transport interfaces.
 | Package | What it's for | When to use it |
 |---------|---------------|----------------------|
 | 🧩 [`@provablehq/veil-core`](./packages/core/README.md) | Clients, actions, transports, types — the base SDK. Also ships LLM agent (`/agent`) and MCP (`/mcp`) bindings. | Every Veil project — reading or writing Aleo, or as the base you extend. |
-| 🔑 [`@provablehq/veil-aleo-sdk`](./packages/provable-sdk/README.md) | Local accounts, signing, and proving via `@provablehq/sdk`. Build a client from a private key. | Your code holds a private key and must sign and prove itself — bots, servers, CLIs, tests. |
-| 👛 [`@provablehq/veil-aleo-wallet-adapter`](./packages/wallet-adapter/README.md) | Bridge any Provable-standard wallet (Shield, Leo, Puzzle, Fox) into a Veil client. | You need wallet signing outside React, or a custom (non-React) wallet integration. |
-| ⚛️ [`@provablehq/veil-aleo-react-hooks`](./packages/react/README.md) | `VeilProvider` + `useVeilWallet()` — wallet connection and clients for React apps. | You're building a React dApp with wallet connection. |
-| 📈 [`@provablehq/shield-swap-sdk`](./packages/shield-swap/README.md) | Client for the `shield_swap` AMM/DEX — private swaps, liquidity, and the DEX API. | You're integrating the Shield Swap DEX — swaps, liquidity, or pool/price data. |
-| 🖥️ [`@provablehq/shield-swap-cli`](./packages/shield-swap-cli/README.md) | The `shield-swap` command — setup, pools, balances, swaps, and liquidity from a terminal. | You want to trade or script against the DEX rather than build a client into an app. |
-| 📜 [`@provablehq/veil-codegen`](./packages/codegen/README.md) | Generate typed bindings from an Aleo program ABI (library + `veil-codegen` CLI). | You want typed reads and writes for a specific program's ABI. |
-| 🧪 [`@provablehq/veil-aleo-devnode`](./packages/devnode/README.md) | Run and drive a local Aleo devnode for tests. | You need a local Aleo node in tests or local development. |
-| 🦁 [`@provablehq/veil-leo`](./packages/leo/README.md) | Typed wrapper around the `leo` CLI (build, deploy, …). | You compile or deploy Leo programs — including during testing, where it pairs with `@provablehq/veil-aleo-devnode`. |
+| 🔑 [`@provablehq/veil-aleo-sdk`](./packages/provable-sdk/README.md) | Local accounts, signing, and proving via `@provablehq/sdk`. Build a client from a private key. | Developing scripts, clis, server-side apps, or AI Agents using a locally custodied keys or server wallets |
+| 🌐 [`@provablehq/veil-aleo-wallet-adapter`](./packages/wallet-adapter/README.md) | Bridge any Provable-standard wallet (Shield, Leo, Puzzle, Fox) into a Veil client. | Building Aleo browser or mobile dapps and integrations |
+| ⚛️ [`@provablehq/veil-aleo-react-hooks`](./packages/react/README.md) | `VeilProvider` + `useVeilWallet()` — wallet connection and clients for React apps. | Building Aleo dapps with React |
+| 📈 [`@provablehq/shield-swap-sdk`](./packages/shield-swap/README.md) | Client for the `shield_swap` AMM/DEX — private swaps, liquidity, and the DEX API. | Integrating with Shield Swap for private token swaps |
+| 🖥️ [`@provablehq/shield-swap-cli`](./packages/shield-swap-cli/README.md) | The `shield-swap` command — setup, pools, balances, swaps, and liquidity from a terminal. | CLI for for private swaps on Shield Swap for humans or Agents |
+| 📜 [`@provablehq/veil-codegen`](./packages/codegen/README.md) | Generate typed bindings from an Aleo program ABI (library + `veil-codegen` CLI). | Generating JS/TS contracts from Aleo smart contract ABIs |
+| 🧪 [`@provablehq/veil-aleo-devnode`](./packages/devnode/README.md) | Run and drive a local Aleo devnode for tests. | Testing and local development with a local Aleo node |
+| 🦁 [`@provablehq/veil-leo`](./packages/leo/README.md) | Typed wrapper around the `leo` CLI (build, deploy, …). | Compiling or deploying Leo programs — including during testing with Aleo Devnode (`@provablehq/veil-aleo-devnode`) |
 | 💸 [`@provablehq/aleo-bridge-sdk`](./packages/bridge/README.md) | Cross-chain bridge client (preview). Versions in lockstep with the Veil packages; expect breaking changes between minor releases. | Bridging tokens to and from Aleo via EVM Chains (Circle ARC, Base, Arbitrum, etc.)  or Solana |
 
 ## Quick Start
