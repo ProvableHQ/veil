@@ -51,7 +51,7 @@ const txId = await wallet.writeContract({
 | 👛 **Private Browser and Mobile dApps** | browser apps where a user's wallet (Shield, Leo, Puzzle, Fox) holds the keys and proves. (`@provablehq/veil-aleo-react-hooks`) |
 | 🔭 **Explorers, dashboards, and indexers** | read blocks, transactions, mappings, staking, and network metrics with no keys and no proving. (`@provablehq/veil-core`) |
 | 💸 **Payments and token flows** | public or private credit transfers and ARC-0020 tokens, including confidential transfers. |
-| 📈 **Shield Swap trading** | private swaps, liquidity, and pool/price reads, from a frontend, a programmatic bot, or an agent. (`@provablehq/shield-swap-sdk`) |
+| 📈 **Private DeFi** | private swaps, liquidity, and pool/price reads, from a frontend, a programmatic bot, or an agent. (`@provablehq/shield-swap-sdk`) |
 | 🤖 **AI agents that use Aleo** | expose Aleo as MCP tools or drop tool schemas into any agent framework; agents can also write viem-style code directly. (`@provablehq/veil-core/agent`, `@provablehq/veil-core/mcp`) |
 | 🖥️ **Servers, CLIs, and custodial services** | hold a private key and sign and prove locally, unattended. (`@provablehq/veil-aleo-sdk`) |
 | 📜 **Typed clients for your own contracts** | generate bindings from a program ABI and call it with typed reads and writes. (`@provablehq/veil-codegen`, `getContract`) |
