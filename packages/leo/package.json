@@ -1,14 +1,14 @@
 {
   "name": "@provablehq/veil-leo",
   "version": "0.12.1",
-  "description": "TypeScript interface for using the Leo CLI from TS/JS.",
+  "description": "TypeScript wrapper for the Leo CLI to build, deploy, run, and test Aleo programs.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ProvableHQ/veil.git",
     "directory": "packages/leo"
   },
-  "homepage": "https://github.com/ProvableHQ/veil#readme",
+  "homepage": "https://github.com/ProvableHQ/veil/tree/main/packages/leo#readme",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -32,5 +32,19 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "keywords": [
+    "aleo",
+    "veil",
+    "typescript",
+    "privacy",
+    "leo",
+    "cli",
+    "compiler",
+    "smart-contracts",
+    "developer-tools"
+  ],
+  "bugs": {
+    "url": "https://github.com/ProvableHQ/veil/issues"
   }
 }

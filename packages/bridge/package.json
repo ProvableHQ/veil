@@ -1,14 +1,14 @@
 {
   "name": "@provablehq/aleo-bridge-sdk",
   "version": "0.12.1",
-  "description": "Protocol bridge client for Circle xReserve and Hyperlane routes connected to Aleo.",
+  "description": "Cross-chain bridge SDK for Aleo, EVM, and Solana using Circle xReserve, Circle CCTP, and Hyperlane.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ProvableHQ/veil.git",
     "directory": "packages/bridge"
   },
-  "homepage": "https://github.com/ProvableHQ/veil#readme",
+  "homepage": "https://github.com/ProvableHQ/veil/tree/main/packages/bridge#readme",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -101,5 +101,22 @@
     "@provablehq/veil-aleo-sdk": "workspace:*",
     "@solana/kit": "^8.0.0",
     "tsx": "^4.21.0"
+  },
+  "keywords": [
+    "aleo",
+    "veil",
+    "typescript",
+    "privacy",
+    "bridge",
+    "cross-chain",
+    "hyperlane",
+    "circle",
+    "xreserve",
+    "cctp",
+    "solana",
+    "ethereum"
+  ],
+  "bugs": {
+    "url": "https://github.com/ProvableHQ/veil/issues"
   }
 }

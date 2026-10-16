@@ -1,14 +1,14 @@
 {
   "name": "@provablehq/veil-aleo-sdk",
   "version": "0.12.1",
-  "description": "Local signing and proving for the Veil Aleo SDK, backed by the Provable SDK.",
+  "description": "Local accounts, signing, and delegated or local proving for the Veil Aleo TypeScript SDK.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ProvableHQ/veil.git",
     "directory": "packages/provable-sdk"
   },
-  "homepage": "https://github.com/ProvableHQ/veil#readme",
+  "homepage": "https://github.com/ProvableHQ/veil/tree/main/packages/provable-sdk#readme",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -47,5 +47,19 @@
   },
   "devDependencies": {
     "@provablehq/veil-leo": "workspace:*"
+  },
+  "keywords": [
+    "aleo",
+    "veil",
+    "typescript",
+    "privacy",
+    "sdk",
+    "private-key",
+    "signing",
+    "zero-knowledge",
+    "proving"
+  ],
+  "bugs": {
+    "url": "https://github.com/ProvableHQ/veil/issues"
   }
 }

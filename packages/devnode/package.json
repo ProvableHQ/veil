@@ -1,14 +1,14 @@
 {
   "name": "@provablehq/veil-aleo-devnode",
   "version": "0.12.1",
-  "description": "TypeScript interface for orchestrating local Aleo test networks for testing & developing Aleo programs.",
+  "description": "Start and control local Aleo devnodes from TypeScript for development and integration testing.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ProvableHQ/veil.git",
     "directory": "packages/devnode"
   },
-  "homepage": "https://github.com/ProvableHQ/veil#readme",
+  "homepage": "https://github.com/ProvableHQ/veil/tree/main/packages/devnode#readme",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -35,5 +35,18 @@
   },
   "peerDependencies": {
     "@provablehq/veil-core": "workspace:>=0.12.1 <1.0.0"
+  },
+  "keywords": [
+    "aleo",
+    "veil",
+    "typescript",
+    "privacy",
+    "devnode",
+    "testing",
+    "local-development",
+    "integration-testing"
+  ],
+  "bugs": {
+    "url": "https://github.com/ProvableHQ/veil/issues"
   }
 }

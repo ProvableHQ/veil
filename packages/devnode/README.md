@@ -1,5 +1,7 @@
 # @provablehq/veil-aleo-devnode
 
+[All Veil packages](../../README.md#packages) · [Documentation](https://provablehq.github.io/veil/packages/devnode) · [npm](https://www.npmjs.com/package/@provablehq/veil-aleo-devnode) · [LLM index](../../llms.txt)
+
 Runs and drives a local Aleo development node from TypeScript. Reach for it in
 tests, CI, and local development when you need a real node to broadcast against
 without touching testnet — start one, mine blocks on demand, and tear it down.

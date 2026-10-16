@@ -1,4 +1,6 @@
 ---
+title: "@provablehq/veil-aleo-devnode"
+description: Start and control local Aleo devnodes from TypeScript for development and integration testing.
 sidebar_position: 8
 ---
 

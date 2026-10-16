@@ -5,6 +5,13 @@ on:
     branches: [main]
     paths:
       - 'site/**'
+      - 'llms.txt'
+      - 'README.md'
+      - 'packages/*/README.md'
+      - 'packages/*/package.json'
+      - 'packages/*/skills/**'
+      - 'AGENTS.md'
+      - '.agents/contributors.md'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 

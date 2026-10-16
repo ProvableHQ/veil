@@ -1,4 +1,6 @@
 ---
+title: "@provablehq/aleo-bridge-sdk"
+description: Cross-chain bridge SDK for Aleo, EVM, and Solana using Circle xReserve, Circle CCTP, and Hyperlane.
 sidebar_position: 10
 ---
 
@@ -11,7 +13,8 @@ The package is published to npm as a preview. It versions in lockstep with the `
 The bridge client assigns each asset family to its canonical protocol:
 
 - Circle xReserve moves USDC into and out of Aleo as USDCx.
-- Hyperlane Warp Routes move ETH, WBTC, USDT, SOL, BAT, USDG, ZEC (Omnibridge), ALEO, and USAD.
+- Circle CCTP moves native USDC between Arc and Ethereum, Base, or Arbitrum.
+- Hyperlane Warp Routes move ETH, WBTC, USDT, SOL, BAT, USDG, and ZEC. ALEO and USAD entries remain available for deployment discovery and require complete metadata before quoting or execution.
 
 The current API provides a versioned route registry, discovery, and transfer
 quotes that return the validated execution plan:

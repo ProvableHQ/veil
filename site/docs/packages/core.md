@@ -1,4 +1,6 @@
 ---
+title: "@provablehq/veil-core"
+description: Viem-style TypeScript SDK for Aleo clients, contract calls, transports, and MCP agent tools.
 sidebar_position: 2
 ---
 

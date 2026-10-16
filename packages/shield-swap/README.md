@@ -1,5 +1,7 @@
 # @provablehq/shield-swap-sdk
 
+[All Veil packages](../../README.md#packages) · [Documentation](https://provablehq.github.io/veil/packages/shield-swap) · [npm](https://www.npmjs.com/package/@provablehq/shield-swap-sdk) · [LLM index](../../llms.txt)
+
 A viem-shaped TS/JS client for the `shield_swap` AMM on Aleo. The client provides 
 viem-style actions for the following:
 

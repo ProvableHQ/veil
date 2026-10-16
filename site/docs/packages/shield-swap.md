@@ -1,4 +1,6 @@
 ---
+title: "@provablehq/shield-swap-sdk"
+description: TypeScript SDK for Shield Swap private token swaps, concentrated liquidity, and pool data on Aleo.
 sidebar_position: 6
 ---
 

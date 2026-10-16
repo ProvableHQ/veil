@@ -1,4 +1,6 @@
 ---
+title: "@provablehq/veil-aleo-wallet-adapter"
+description: Aleo wallet adapter bindings for Veil clients with Shield, Leo, Puzzle, and Fox wallets.
 sidebar_position: 4
 ---
 

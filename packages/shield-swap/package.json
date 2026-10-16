@@ -1,14 +1,14 @@
 {
   "name": "@provablehq/shield-swap-sdk",
   "version": "0.12.1",
-  "description": "TypeScript SDK for the Shield Swap AMM DEX on Aleo.",
+  "description": "TypeScript SDK for Shield Swap private token swaps, concentrated liquidity, and pool data on Aleo.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ProvableHQ/veil.git",
     "directory": "packages/shield-swap"
   },
-  "homepage": "https://github.com/ProvableHQ/veil#readme",
+  "homepage": "https://github.com/ProvableHQ/veil/tree/main/packages/shield-swap#readme",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -66,5 +66,20 @@
     "@provablehq/veil-codegen": "workspace:*",
     "@provablehq/veil-aleo-sdk": "workspace:*",
     "openapi-typescript": "^7.13.0"
+  },
+  "keywords": [
+    "aleo",
+    "veil",
+    "typescript",
+    "privacy",
+    "defi",
+    "dex",
+    "amm",
+    "shield-swap",
+    "private-swaps",
+    "liquidity"
+  ],
+  "bugs": {
+    "url": "https://github.com/ProvableHQ/veil/issues"
   }
 }
