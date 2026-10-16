@@ -52,8 +52,7 @@ const txId = await wallet.writeContract({
 | 💸 **Private Token Bridging & Shielding** | Shield public assets from Ethereum and Solana. Privately hold and transfer them |
 | 📈 **Private DeFi** | Private swaps of Ethereum and Solana assets, private market making, private lending (`@provablehq/shield-swap-sdk`) |
 | 🤖 **AI agents that use Aleo** | expose Aleo as MCP tools or drop tool schemas into any agent framework; agents can also write viem-style code directly. (`@provablehq/veil-core/agent`, `@provablehq/veil-core/mcp`) |
-| 🖥️ **Servers, CLIs, and custodial services** | hold a private key and sign and prove locally, unattended. (`@provablehq/veil-aleo-sdk`) |
-| 🦁 **Leo program pipelines** | build, deploy, and test programs against a local node, including in CI. (`@provablehq/veil-leo`, `@provablehq/veil-aleo-devnode`) |
+| **Aleo program development & testing** | build, deploy, and test Aleo programs and dapps against a local Aleo node (`@provablehq/veil-leo`, `@provablehq/veil-aleo-devnode`) |
 
 ## Features
 
