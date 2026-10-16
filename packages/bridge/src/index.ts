@@ -168,6 +168,8 @@ export {
   deriveXReservePrivateMintSecretNonce,
   evmAddressToXReserveBytes32,
   SHIELDED_USDCX_DOMAIN,
+  SHIELDED_USDCX_DOMAIN_MAINNET,
+  SHIELDED_USDCX_DOMAIN_TESTNET,
   xReserveViewKeyToScalar,
   xReserveDepositNonceFromPayload,
   xReserveHexToAleoBytes,

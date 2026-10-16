@@ -394,7 +394,13 @@ deployment that produced the quote. Keep this value unchanged for execution.
 
 For a private USDCx mint with a local Aleo account, the bridge client reserves a
 counter and derives the scalar and address commitment itself. The derivation is
-compatible with Shield, but neither quoting nor completion connects to Shield.
+compatible with Shield's network-specific derivation, but neither quoting nor
+completion connects to Shield. The nonce is
+`Poseidon8.hashToScalar([wrapper_address_field, network_domain, view_key_field, counter_field])`;
+the domain is the little-endian ASCII field for `shielded_usdcx_mainnet` or
+`shielded_usdcx_testnet`. The hook contains selector `2`, the 32 little-endian
+BHP256 commitment bytes, and 32 reserved zero bytes. This follows
+[shield-core master at cc29a60](https://github.com/ProvableHQ/shield-core/blob/cc29a60dad12bbd31fea4552ba01f9606dc6f53f/src/domains/dapp/fulfillment/derivedInput/algorithms.ts).
 Persist the identity store for any long-running process:
 
 ```ts
@@ -421,8 +427,22 @@ before the quote returns. The default in-memory store serializes concurrent
 deposits but does not survive a restart. Treat a durable store like a view key:
 its scalars can link and authorize the corresponding private mints. The supplied
 Node file store uses atomic `0600` replacements and locks reservations across
-processes sharing the same path. Custom stores shared by multiple workers should
-implement `runExclusive` with a transaction or distributed lock.
+processes sharing the same path. A companion `.counter` file consumes each
+allocation before derivation; failed derivation, failed identity persistence,
+cancelled transfers, and rejected transactions never recycle that counter.
+Back up and restore both files together before issuing further identities.
+Use a dedicated store per signing account, network, and wrapper deployment.
+Custom production stores MUST implement `allocateCounter` with a durable
+watermark and `runExclusive` with a transaction or distributed lock when shared
+by multiple workers. Legacy stores without `allocateCounter` infer the next
+counter from saved identities and cannot retain allocations after a failed save.
+
+Shield's wallet store persists public counter associations and derives secrets
+inside the wallet. This programmatic store retains derived scalars for completion
+without a wallet connection. Existing stored identities remain usable after a
+derivation update because completion uses their original scalar. The older
+network-independent `shielded_usdcx` domain is retained as an exported constant
+for compatibility; new identities use the network-specific domains above.
 
 ### 2. Authorize the source transfer
 

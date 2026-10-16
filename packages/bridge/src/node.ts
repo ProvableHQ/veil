@@ -2,6 +2,7 @@ import { mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { BridgeError } from './errors/bridgeErrors.js'
 import type {
   XReservePrivateMintIdentity,
   XReservePrivateMintIdentityStore,
@@ -13,7 +14,9 @@ import type {
  * The file contains view-key-derived scalars and should be protected like the
  * account's view key. Parent directories are created on first save. Each save
  * atomically replaces the destination with a `0600` file, and reservations use
- * a filesystem lock across store instances and Node processes.
+ * a filesystem lock across store instances and Node processes. A companion
+ * `.counter` file permanently consumes allocations before derivation. Both files
+ * MUST be backed up and restored together before issuing further identities.
  *
  * @param path File that persists the monotonically allocated identities.
  * @returns A store suitable for `createBridgeClient({ privateMintIdentities })`.
@@ -24,6 +27,24 @@ export function fileXReservePrivateMintIdentityStore(
   const directory = dirname(path)
   const lockPath = `${path}.lock`
   const store: XReservePrivateMintIdentityStore = {
+    allocateCounter: async (minimum) => {
+      let nextCounter = minimum
+      try {
+        const persisted: unknown = JSON.parse(await readFile(`${path}.counter`, 'utf8'))
+        if (typeof persisted !== 'number' || !Number.isSafeInteger(persisted)
+          || persisted < 0 || persisted > 0x1_0000_0000) {
+          throw new BridgeError('Private mint identity counter watermark is invalid')
+        }
+        nextCounter = Math.max(minimum, persisted)
+      } catch (cause) {
+        if ((cause as { code?: string } | undefined)?.code !== 'ENOENT') throw cause
+      }
+      if (nextCounter > 0xffffffff) throw new BridgeError('Private mint identity counter space is exhausted')
+      // The caller holds the file lock throughout allocation, derivation, and
+      // identity persistence. A failed mint never lowers this watermark.
+      await atomicWrite(`${path}.counter`, `${nextCounter + 1}\n`)
+      return nextCounter
+    },
     load: async () => {
       let raw: string
       try {
@@ -45,21 +66,11 @@ export function fileXReservePrivateMintIdentityStore(
     },
     save: async (identities) => {
       const serialized = `${JSON.stringify(identities, null, 2)}\n`
-      await mkdir(directory, { recursive: true })
-      const temporary = join(directory, `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`)
-      let handle: Awaited<ReturnType<typeof open>> | undefined
       try {
-        handle = await open(temporary, 'wx', 0o600)
-        await handle.writeFile(serialized, 'utf8')
-        await handle.sync()
-        await handle.close()
-        handle = undefined
         // Replacing rather than overwriting guarantees that an existing file
         // with broader permissions becomes a newly created 0600 inode.
-        await rename(temporary, path)
+        await atomicWrite(path, serialized)
       } catch (cause) {
-        await handle?.close().catch(() => {})
-        await rm(temporary, { force: true }).catch(() => {})
         throw new Error(`Private mint identity store ${path} could not be saved.`, { cause })
       }
     },
@@ -117,6 +128,29 @@ export function fileXReservePrivateMintIdentityStore(
     }
   }
   return store
+}
+
+async function atomicWrite(path: string, serialized: string): Promise<void> {
+  const directory = dirname(path)
+  await mkdir(directory, { recursive: true })
+  const temporary = join(directory, `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`)
+  let handle: Awaited<ReturnType<typeof open>> | undefined
+  try {
+    handle = await open(temporary, 'wx', 0o600)
+    await handle.writeFile(serialized, 'utf8')
+    await handle.sync()
+    await handle.close()
+    handle = undefined
+    await rename(temporary, path)
+    // Persist the rename before returning a consumed counter to the caller.
+    handle = await open(directory, 'r')
+    await handle.sync()
+    await handle.close()
+    handle = undefined
+  } finally {
+    await handle?.close().catch(() => {})
+    await rm(temporary, { force: true })
+  }
 }
 
 const STALE_LOCK_MS = 5 * 60_000

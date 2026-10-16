@@ -9,3 +9,9 @@ scalar from its identity store when submitting `private_mint`.
 
 The Node identity store atomically replaces files with `0600` permissions and
 locks reservations across processes sharing the same path.
+
+Align new nonce derivations with shield-core cc29a60's mainnet/testnet domain
+separation, release temporary WASM handles, and persist allocation watermarks
+before derivation so failed reservations cannot recycle counters. Back up the
+Node identity file and its `.counter` companion together. Existing identities
+continue to complete with their originally stored scalars.

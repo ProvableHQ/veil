@@ -20,6 +20,42 @@ const BECH32_ALPHABET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
 /** Field equivalent to `Identifier("shielded_usdcx")`. */
 export const SHIELDED_USDCX_DOMAIN = '2441763828608840563966202633349235field'
 
+/**
+ * Separates mainnet private-mint nonces using Shield's `shielded_usdcx_mainnet` label.
+ *
+ * Encodes the fixed ASCII label as a little-endian Aleo field literal.
+ * @example
+ * const mainnetDomain = SHIELDED_USDCX_DOMAIN_MAINNET
+ */
+export const SHIELDED_USDCX_DOMAIN_MAINNET = '43548994738795619508419071049301721479887331556681843field'
+
+/**
+ * Separates testnet private-mint nonces using Shield's `shielded_usdcx_testnet` label.
+ *
+ * Encodes the fixed ASCII label as a little-endian Aleo field literal.
+ * @example
+ * const testnetDomain = SHIELDED_USDCX_DOMAIN_TESTNET
+ */
+export const SHIELDED_USDCX_DOMAIN_TESTNET = '43548994873472583992984066613247233935881976249149555field'
+
+function withSdkObjects<T>(run: (own: <V>(value: V) => V) => T): T {
+  const objects = new Set<{ free: () => void }>()
+  const own = <V>(value: V): V => {
+    if (value && typeof (value as { free?: unknown }).free === 'function') {
+      objects.add(value as unknown as { free: () => void })
+    }
+    return value
+  }
+  try {
+    return run(own)
+  } finally {
+    for (const object of [...objects].reverse()) {
+      // Poseidon consumes some WASM inputs; their zero pointers are already freed.
+      if ((object as { __wbg_ptr?: number }).__wbg_ptr !== 0) object.free()
+    }
+  }
+}
+
 function bech32Polymod(values: readonly number[]): number {
   const generators = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3]
   let checksum = 1
@@ -143,7 +179,7 @@ async function loadAleoSdk(environment: BridgeEnvironment) {
  */
 export async function aleoProgramAddress(programId: string, environment: BridgeEnvironment): Promise<string> {
   const sdk = await loadAleoSdk(environment)
-  return sdk.Address.fromProgramId(programId).to_string()
+  return withSdkObjects((own) => own(sdk.Address.fromProgramId(programId)).to_string())
 }
 
 /**
@@ -160,7 +196,7 @@ export async function xReserveViewKeyToScalar(
 ): Promise<string> {
   const sdk = await loadAleoSdk(environment)
   try {
-    return sdk.ViewKey.from_string(viewKey).to_scalar().toString()
+    return withSdkObjects((own) => own(own(sdk.ViewKey.from_string(viewKey)).to_scalar()).toString())
   } catch (cause) {
     throw new BridgeError('Invalid Aleo view key for private xReserve mint derivation', { cause })
   }
@@ -170,13 +206,13 @@ export async function xReserveViewKeyToScalar(
  * Derives the secret scalar for one shielded USDCx deposit identity.
  *
  * This is the local-key counterpart of the Shield implementation:
- * `Poseidon8::hash_to_scalar([program, domain, view_key, counter])`.
+ * `Poseidon8::hash_to_scalar([program, network_domain, view_key, counter])`.
  * The view key and resulting scalar never leave the caller's process.
  *
  * @param viewKeyScalar Account view key serialized as an Aleo scalar literal.
  * @param counter Monotonic unsigned 32-bit identity counter.
  * @param environment Consensus environment used to load the matching SDK.
- * @param program Wrapper program whose address scopes the derivation.
+ * @param program Wrapper program whose address scopes the derivation. Defaults to `shielded_usdcx_wrapper.aleo`.
  * @returns The derived Aleo scalar literal.
  * @throws BridgeError When an input is invalid or the optional SDK is unavailable.
  */
@@ -186,22 +222,28 @@ export async function deriveXReservePrivateMintSecretNonce(
   environment: BridgeEnvironment,
   program = 'shielded_usdcx_wrapper.aleo',
 ): Promise<string> {
+  if (environment !== 'mainnet' && environment !== 'testnet') {
+    throw new BridgeError('Unsupported private xReserve mint derivation network')
+  }
   if (!Number.isSafeInteger(counter) || counter < 0 || counter > 0xffffffff) {
     throw new BridgeError('Private mint identity counter must be an unsigned 32-bit integer')
   }
   const sdk = await loadAleoSdk(environment)
   try {
-    const programAddress = sdk.Address.fromProgramId(program).to_string()
-    const programField = sdk.Address.from_string(programAddress).toGroup().toXCoordinate()
-    const viewKeyField = sdk.Scalar.fromString(viewKeyScalar).toField()
-    const counterField = sdk.U32.fromString(`${counter}u32`).toField()
-    const derived = new sdk.Poseidon8().hashToScalar([
-      programField,
-      sdk.Field.fromString(SHIELDED_USDCX_DOMAIN),
-      viewKeyField,
-      counterField,
-    ])
-    return derived.toString()
+    return withSdkObjects((own) => {
+      const programAddress = own(sdk.Address.fromProgramId(program))
+      const programField = own(own(programAddress.toGroup()).toXCoordinate())
+      const viewKeyField = own(own(sdk.Scalar.fromString(viewKeyScalar)).toField())
+      const counterField = own(own(sdk.U32.fromString(`${counter}u32`)).toField())
+      const domain = environment === 'mainnet' ? SHIELDED_USDCX_DOMAIN_MAINNET : SHIELDED_USDCX_DOMAIN_TESTNET
+      const derived = own(own(new sdk.Poseidon8()).hashToScalar([
+        programField,
+        own(sdk.Field.fromString(domain)),
+        viewKeyField,
+        counterField,
+      ]))
+      return derived.toString()
+    })
   } catch (cause) {
     throw new BridgeError('Could not derive the private xReserve mint scalar', { cause })
   }
@@ -223,13 +265,15 @@ export async function deriveXReservePrivateMintAddressCommitment(
 ): Promise<string> {
   const sdk = await loadAleoSdk(environment)
   try {
-    const bits = sdk.Plaintext.fromString(recipient).toBitsLe()
-    const scalar = sdk.Scalar.fromString(secretNonce)
-    const committed = new sdk.BHP256().commit(bits, scalar)
-    const field = typeof committed === 'string' ? sdk.Field.fromString(committed) : committed
-    const bytes = field.toBytesLe()
-    if (bytes.length !== 32) throw new Error('commitment did not contain 32 bytes')
-    return toHex(bytes).slice(2)
+    return withSdkObjects((own) => {
+      const bits = own(sdk.Plaintext.fromString(recipient)).toBitsLe()
+      const scalar = own(sdk.Scalar.fromString(secretNonce))
+      const committed = own(own(new sdk.BHP256()).commit(bits, scalar))
+      const field = typeof committed === 'string' ? own(sdk.Field.fromString(committed)) : committed
+      const bytes = field.toBytesLe()
+      if (bytes.length !== 32) throw new Error('commitment did not contain 32 bytes')
+      return toHex(bytes).slice(2)
+    })
   } catch (cause) {
     throw new BridgeError('Could not derive the private xReserve address commitment', { cause })
   }
@@ -311,23 +355,9 @@ export async function buildXReserveHookData(
   // recipient commitment in bytes 1..32 for wrapper-managed private minting.
   bytes[0] = mode === 'public' ? 0 : mode === 'record' ? 1 : 2
   if (mode === 'private') {
-    const sdk = await loadAleoSdk(environment)
-    const bits = sdk.Plaintext.fromString(recipient).toBitsLe()
-    let scalar
-    try {
-      scalar = sdk.Scalar.fromString(secretNonce)
-    } catch (cause) {
-      throw new BridgeError(`Invalid private mint secret nonce: ${secretNonce}`, { cause })
-    }
-    // BHP256 binds the intended Aleo address to the secret nonce. Revealing the
-    // same pair later proves who may complete the private destination mint.
-    const committed = new sdk.BHP256().commit(bits, scalar)
-    // The web SDK returns a Field object while Shield's mobile SDK returns its
-    // literal string. Normalize both forms before serializing the field.
-    const commitmentField = typeof committed === 'string' ? sdk.Field.fromString(committed) : committed
-    const commitment = commitmentField.toBytesLe()
-    if (commitment.length !== 32) throw new BridgeError('Private mint commitment must contain 32 bytes')
-    return buildXReservePrivateMintHookData(toHex(commitment).slice(2))
+    return buildXReservePrivateMintHookData(
+      await deriveXReservePrivateMintAddressCommitment(recipient, secretNonce, environment),
+    )
   }
   return toHex(bytes)
 }

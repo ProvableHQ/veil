@@ -1,5 +1,6 @@
 import { hexToBytes } from 'viem'
 import { describe, expect, it } from 'vitest'
+import shieldCoreVectors from '../fixtures/shield-core-private-mint.json'
 import {
   aleoAddressToBytes32,
   aleoProgramAddress,
@@ -12,6 +13,8 @@ import {
   deriveXReservePrivateMintAddressCommitment,
   deriveXReservePrivateMintSecretNonce,
   evmAddressToXReserveBytes32,
+  SHIELDED_USDCX_DOMAIN_MAINNET,
+  SHIELDED_USDCX_DOMAIN_TESTNET,
   xReserveHexToAleoBytes,
   xReservePrivateMintCommitmentFromHookData,
   xReserveViewKeyToScalar,
@@ -72,18 +75,50 @@ describe('xReserve wire utilities', () => {
       .toThrow(/canonical private mint commitment/)
   })
 
-  it('derives the Shield-compatible scalar and commitment locally from a counter', async () => {
+  it.each(shieldCoreVectors.vectors)('matches shield-core master for $network counter $counter', async (vector) => {
+    const network = vector.network as 'mainnet' | 'testnet'
     const viewKey = 'AViewKey1sqm952gJj1tmAWySYDQvSv2NmfnyEMvU6a9ZBCuyG7PN'
-    const viewKeyScalar = await xReserveViewKeyToScalar(viewKey, 'testnet')
-    const secretNonce = await deriveXReservePrivateMintSecretNonce(viewKeyScalar, 0, 'testnet')
-    const commitment = await deriveXReservePrivateMintAddressCommitment(RECIPIENT, secretNonce, 'testnet')
+    const viewKeyScalar = await xReserveViewKeyToScalar(viewKey, network)
+    const secretNonce = await deriveXReservePrivateMintSecretNonce(viewKeyScalar, vector.counter, network)
+    const commitment = await deriveXReservePrivateMintAddressCommitment(RECIPIENT, secretNonce, network)
 
-    expect(secretNonce).toBe(
-      '759048307583563651306472865962102220302349709738148140987801089381236393352scalar',
-    )
-    expect(commitment).toBe('31698f7afad09821157df054368ae01c7966a189a9f672148d8eadd56b442f0b')
-    expect(await buildXReserveHookData('private', RECIPIENT, 'testnet', secretNonce))
+    expect(secretNonce).toBe(vector.nonce)
+    expect(commitment).toBe(vector.commitment)
+    expect(await buildXReserveHookData('private', RECIPIENT, network, secretNonce))
       .toBe(buildXReservePrivateMintHookData(commitment))
+  })
+
+  it('pins network domains to Shield\'s little-endian ASCII labels', () => {
+    const domain = (label: string) => `${BigInt(`0x${Buffer.from(label).reverse().toString('hex')}`)}field`
+    expect(SHIELDED_USDCX_DOMAIN_MAINNET).toBe(domain('shielded_usdcx_mainnet'))
+    expect(SHIELDED_USDCX_DOMAIN_TESTNET).toBe(domain('shielded_usdcx_testnet'))
+    expect(SHIELDED_USDCX_DOMAIN_MAINNET).not.toBe(SHIELDED_USDCX_DOMAIN_TESTNET)
+  })
+
+  it.each([-1, 1.5, 0x1_0000_0000, Number.NaN])('rejects invalid u32 counters: %s', async (counter) => {
+    await expect(deriveXReservePrivateMintSecretNonce('42scalar', counter, 'testnet'))
+      .rejects.toThrow(/unsigned 32-bit/)
+  })
+
+  it.each([undefined, 'devnet', ''])('rejects unsupported derivation networks: %s', async (network) => {
+    await expect(deriveXReservePrivateMintSecretNonce('42scalar', 0, network as 'testnet'))
+      .rejects.toThrow(/Unsupported.*network/)
+  })
+
+  it('never recycles an allocation after failed derivation or identity persistence', async () => {
+    const store = memoryXReservePrivateMintIdentityStore()
+    const viewKeyScalar = await xReserveViewKeyToScalar(
+      'AViewKey1sqm952gJj1tmAWySYDQvSv2NmfnyEMvU6a9ZBCuyG7PN', 'testnet',
+    )
+    const reserve = (recipient = RECIPIENT) => reserveXReservePrivateMintIdentity({
+      store, viewKeyScalar, recipient, environment: 'testnet',
+    })
+    await expect(reserve('invalid')).rejects.toThrow(/commitment/)
+    const save = store.save
+    store.save = async () => { throw new Error('Storage write failed') }
+    await expect(reserve()).rejects.toThrow('Storage write failed')
+    store.save = save
+    expect((await reserve()).counter).toBe(2)
   })
 
   it('persists distinct counters before concurrent private-mint reservations return', async () => {

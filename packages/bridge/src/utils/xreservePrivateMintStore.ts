@@ -26,11 +26,13 @@ export type XReservePrivateMintIdentity = {
  * @property load Returns all identities reserved for the configured account and deployment.
  * @property save Replaces the persisted identities after a reservation.
  * @property runExclusive Optional transaction boundary spanning a reservation's load and save operations. Required when separate store instances can share one backing resource.
+ * @property allocateCounter Optional durable watermark allocator called inside `runExclusive`. Consumes a u32 counter at or above its minimum argument before derivation, even if later derivation or saving fails. Custom production stores MUST implement this method; legacy stores fall back to the highest saved identity.
  */
 export interface XReservePrivateMintIdentityStore {
   load: () => Promise<XReservePrivateMintIdentity[]>
   save: (identities: XReservePrivateMintIdentity[]) => Promise<void>
   runExclusive?: (<T>(action: () => Promise<T>) => Promise<T>) | undefined
+  allocateCounter?: ((minimum: number) => Promise<number>) | undefined
 }
 
 /**
@@ -47,7 +49,13 @@ export function memoryXReservePrivateMintIdentityStore(
   initial: XReservePrivateMintIdentity[] = [],
 ): XReservePrivateMintIdentityStore {
   let identities = [...initial]
+  let nextCounter = 0
   return {
+    allocateCounter: async (minimum) => {
+      nextCounter = Math.max(nextCounter, minimum)
+      if (nextCounter > 0xffffffff) throw new BridgeError('Private mint identity counter space is exhausted')
+      return nextCounter++
+    },
     load: async () => [...identities],
     save: async (next) => {
       identities = [...next]
@@ -70,7 +78,7 @@ function withStoreLock<T>(
 /**
  * Reserves the next local identity for a private USDCx deposit.
  *
- * The counter advances monotonically from the highest persisted value. The
+ * The counter advances monotonically from the store's allocation watermark. The
  * reservation is saved before it is returned. The process lock closes races on
  * one store object; a store's optional `runExclusive` closes races across
  * instances or processes that share its backing resource. No Shield connection
@@ -90,9 +98,12 @@ export async function reserveXReservePrivateMintIdentity(params: {
   return withStoreLock(params.store, async () => {
     const identities = await params.store.load()
     for (const identity of identities) validateIdentity(identity)
-    const counter = identities.length === 0
-      ? 0
-      : Math.max(...identities.map((identity) => identity.counter)) + 1
+    const minimum = identities.reduce((next, identity) => Math.max(next, identity.counter + 1), 0)
+    if (minimum > 0xffffffff) throw new BridgeError('Private mint identity counter space is exhausted')
+    const counter = params.store.allocateCounter ? await params.store.allocateCounter(minimum) : minimum
+    if (!Number.isSafeInteger(counter) || counter < minimum) {
+      throw new BridgeError('Private mint identity store returned an invalid allocation')
+    }
     if (counter > 0xffffffff) throw new BridgeError('Private mint identity counter space is exhausted')
     const secretNonce = await deriveXReservePrivateMintSecretNonce(
       params.viewKeyScalar,
