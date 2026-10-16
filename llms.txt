@@ -8,7 +8,7 @@ Core and Shield Swap expose `/agent` tool schemas and `/mcp` tools. Before opera
 
 ## Start here
 
-- [Repository README](https://raw.githubusercontent.com/ProvableHQ/veil/main/README.md): Use cases, quick starts, architecture, and action reference.
+- [Repository README](https://raw.githubusercontent.com/ProvableHQ/veil/main/README.md): Use cases, quick starts, packages, and agent integrations.
 - [Getting started](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/getting-started.md): Installation and first client.
 - [Package guide](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/packages/overview.md): Choose packages for a dApp, service, agent, or local testing.
 
