@@ -180,6 +180,82 @@ Wallet accounts also pass token records differently at call time — the
 per-action "local vs wallet" notes under [Swapping](#swapping) and
 [Liquidity](#liquidity) cover it.
 
+### Wallet-derived freezelist proofs
+
+`walletFreezelistProofProvider` opts swaps, claims, mint, increase, collect, and
+rebalance into `program-freezelist-exclusion-proof`. Configure the actual
+freezelist program for each wrapper the application uses. A wrapper program is
+not its freezelist program. The mapping below illustrates the configuration;
+verify the names against the deployment before connecting.
+
+```ts
+import {
+  shieldSwapActions, shieldSwapAlgorithmGrants, walletFreezelistProofProvider,
+} from '@provablehq/shield-swap-sdk'
+
+const freezelists = {
+  ammFreezelistProgram: 'shield_swap_freezelist.aleo', // also the default
+  wrapperFreezelists: {
+    'usdcx_wrapper.aleo': 'usdcx_freezelist.aleo',
+    'credits_wrapper.aleo': null, // only for a wrapper that ignores the proof
+  },
+}
+const proofs = walletFreezelistProofProvider(freezelists)
+
+await adapter.connect(network, decryptPermission, {
+  algorithmsAllowed: shieldSwapAlgorithmGrants({ freezelists }),
+})
+const { account, transport } = fromWalletAdapter(adapter)
+const client = createWalletClient({ account, transport }).extend(
+  shieldSwapActions({ api: {}, proofs }),
+)
+```
+
+`shieldSwapAlgorithmGrants()` remains the blinding-only grant set unless
+`freezelists` is supplied. `shieldSwapFreezelistGrants(freezelists)` returns only
+the proof grants for applications that compose grants themselves. Each grant
+restricts its exact call site and freezelist argument; router slots permit the
+lists in the configured wrapper map. Missing wrapper mappings fail before
+submission. Program overrides are available for deployments with the same ABIs.
+
+The wallet MUST implement the algorithm and accept the grants. Capability
+advertisement is a discovery hint; it does not verify the wallet's proof resolver.
+The wallet obtains the list and constructs proofs for its current accepted root,
+including rejecting frozen subjects. The SDK passes each derived input through
+without constructing the proof. Signer slots omit `address`, selecting the
+connected wallet signer. Mint recipient and withdrawal slots use explicit
+addresses. Each list and subject gets a separate proof request.
+
+`collect` and `rebalancePosition` need the position's actual withdrawal address
+when a proof provider is configured. Granted plaintext supplies it automatically;
+for an opaque wallet-selected PositionNFT, pass `withdrawalAddress`. If both are
+available they MUST match. The parameter identifies a proof subject and cannot
+change the payout address fixed in the NFT.
+
+```ts
+await client.collect({
+  poolKey,
+  positionRecord: { type: 'record', program: 'shield_swap.aleo', recordname: 'PositionNFT' },
+  withdrawalAddress: positionWithdrawalAddress,
+  amount0Requested: 100n,
+  amount1Requested: 100n,
+})
+```
+
+Standalone actions also accept `proofs` per call. Existing `ProofProvider`
+callbacks returning concrete pairs continue to work. `ProofInputProvider` also
+accepts encoded strings and the typed wallet request. A per-call provider
+overrides the client default; `proofs: undefined` explicitly opts out. Local
+accounts require concrete proofs and reject wallet-derived requests before
+submission. The CLI and existing agent/MCP write handlers use local signing;
+configure a literal provider on their client for populated lists, rather than a
+wallet provider. Their tool schemas do not transport wallet record grants.
+
+With no provider, existing calls retain `EMPTY_MERKLE_PROOFS`. This is the legacy
+all-zero witness used by the pinned deployments and a placeholder for wrappers
+that ignore proofs. Acceptance depends on the deployed verifier and accepted
+root; it is not a general empty-tree proof or a witness for a populated list.
+
 ### The composed client
 
 Either way, `shieldSwapActions` adds the DEX methods to the client. On-chain

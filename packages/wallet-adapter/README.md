@@ -63,6 +63,28 @@ upstream `BaseAleoWalletAdapter`), and the privacy-feature types
 (`InputRequest`, `RecordFilters`, `ConnectOptions`, `RecordAccessGrant`,
 `AlgorithmGrant`, …) so a call site can import them alongside `fromWalletAdapter`.
 
+## Freezelist proofs inside the wallet
+
+The adapter forwards `freezelistProofRequest(...)` inputs from `veil-core`
+unchanged, including proofs that fill an array slot. The connected wallet must
+implement `program-freezelist-exclusion-proof` and authorize each proof slot
+through its connection's `algorithmsAllowed` grants. Build those grants with
+`freezelistProofGrant({ program, function, inputPosition, freezelistProgram })`.
+The grant restricts the list to the program whose root the target contract checks.
+
+Check `await wallet.algorithmsSupported()` for `FREEZELIST_PROOF_ALGORITHM`
+before enabling wallet proof selection. Capability responses come from the
+adapter and still depend on the installed wallet implementing the resolver.
+An unsupported algorithm, missing grant, or frozen subject rejects execution;
+Veil preserves the wallet error. Do not replace such a failure with an empty proof.
+
+The optional request `address` selects an explicit proof subject; omitting it
+uses the wallet signer. For a hidden withdrawal address inside a wallet-owned
+record, the caller must obtain the actual subject or use a flow that can resolve
+it; substituting the signer is not sufficient. Local-key clients continue to
+use encoded proofs. See the [core example](../core/README.md#wallet-generated-freezelist-proofs)
+for an explicit record and proof transfer.
+
 ## Where this fits
 
 Most React apps use `@provablehq/veil-aleo-react-hooks` and its `VeilProvider`, which wraps this

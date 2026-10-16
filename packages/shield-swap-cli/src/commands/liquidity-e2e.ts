@@ -379,6 +379,7 @@ export async function main(argv: string[]): Promise<void> {
     const collected = await client.collect({
       positionTokenId: progress.positionTokenId,
       poolKey,
+      withdrawalAddress: account.address,
       amount0Requested: drained!.tokens_owed0,
       amount1Requested: drained!.tokens_owed1,
       imports,

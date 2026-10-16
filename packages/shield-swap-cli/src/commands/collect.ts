@@ -249,6 +249,7 @@ export async function main(argv: string[]): Promise<void> {
         const result = await client.collect({
           positionTokenId: id,
           poolKey: entry.position.poolKey,
+          withdrawalAddress: entry.position.withdrawal,
           amount0Requested: entry.request0,
           amount1Requested: entry.request1,
           imports: await importsFor(entry),

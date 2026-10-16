@@ -1,5 +1,5 @@
 import { isRegistryVersionCompatible } from '../../registry/compatibility.js'
-import type { TransactionInput } from '@provablehq/veil-core'
+import type { FreezelistProofInput, TransactionInput } from '@provablehq/veil-core'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import type {
   AleoWalletClient,
@@ -10,6 +10,7 @@ import type {
 import type { BridgeRegistry, BridgeReceipt, BridgePlan } from '../../types/protocol.js'
 import { formatDecimalAmount, parseDecimalAmount } from '../../utils/units.js'
 import { evmAddressToXReserveBytes32, xReserveHexToAleoBytes } from '../../utils/xreserve.js'
+import { validateBridgeFreezelistProof } from '../../utils/freezelist.js'
 
 function validatedRoute(registry: BridgeRegistry, params: ExecuteXReserveBurnParameters) {
   const { plan } = params
@@ -38,7 +39,7 @@ function validatedRoute(registry: BridgeRegistry, params: ExecuteXReserveBurnPar
   return { route, bridgeProgram, wrapperProgram, tokenProgram, nativeDomain, withdrawalFeeAtomic: BigInt(withdrawalFee) }
 }
 
-function assertPrivateInputs(userRecord: TransactionInput | undefined, merkleProof: string | undefined, tokenProgram: string): asserts userRecord is TransactionInput {
+function assertPrivateInputs(userRecord: TransactionInput | undefined, merkleProof: FreezelistProofInput | undefined, tokenProgram: string): asserts userRecord is TransactionInput {
   // A structured request lets a compatible wallet select the record without
   // exposing plaintext to the application. A literal record remains supported
   // for local accounts and wallets that do not implement record selection.
@@ -48,7 +49,7 @@ function assertPrivateInputs(userRecord: TransactionInput | undefined, merklePro
       throw new BridgeError(`private_burn record requests must select ${tokenProgram}/Token`)
     }
   }
-  if (typeof merkleProof !== 'string' || !merkleProof.startsWith('[') || !merkleProof.endsWith(']')) {
+  if (merkleProof === undefined || (typeof merkleProof === 'string' && (!merkleProof.startsWith('[') || !merkleProof.endsWith(']')))) {
     throw new BridgeError('private_burn requires an encoded [MerkleProof; 2] Aleo literal')
   }
 }
@@ -97,12 +98,18 @@ export function buildBurnCall(
     // Private USDCx lives in the wrapper's Token record and requires the
     // freeze-list witness expected by private_burn.
     assertPrivateInputs(params.userRecord, params.merkleProof, deployment.tokenProgram)
+    const sourceAsset = registry.assets.find(asset => asset.id === deployment.route.sourceAssetId)
+    if (!sourceAsset) throw new BridgeError('private_burn source asset is missing from the registry')
+    if (typeof params.merkleProof !== 'string' && sourceAsset.privacy?.program !== deployment.tokenProgram) {
+      throw new BridgeError('private_burn freezelist metadata must describe the route token program')
+    }
+    const merkleProof = validateBridgeFreezelistProof(params.merkleProof, sourceAsset)
     return {
       routeId: deployment.route.id,
       mode,
       program: deployment.wrapperProgram,
       function: 'private_burn',
-      inputs: [params.userRecord, amount, nativeDomain, nativeRecipient, params.merkleProof!],
+      inputs: [params.userRecord, amount, nativeDomain, nativeRecipient, merkleProof],
       amountAtomic,
       nativeDomain: deployment.nativeDomain,
       nativeRecipientBytes32,

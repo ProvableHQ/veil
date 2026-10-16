@@ -1,4 +1,6 @@
 import type { Client } from '../../clients/createClient.js'
+import type { TransactionInput } from '../../types/inputRequest.js'
+import type { FreezelistProofInput } from '../../utils/freezelistProof.js'
 import { writeContract } from './writeContract.js'
 
 /**
@@ -24,9 +26,11 @@ export type TransferVisibility = 'public' | 'private' | 'shield' | 'unshield'
  * @property merkleProof Optional compliance proof appended as the final input
  *   on `private`/`unshield` transfers, for programs whose transfer functions
  *   require one (e.g. usdcx_stablecoin.aleo, usad_stablecoin.aleo take a
- *   `[MerkleProof; 2u32]`). Pass it pre-formatted as a single Aleo input
- *   string. Ignored for `public`/`shield` visibility, where those programs do
- *   not take a proof.
+ *   `[MerkleProof; 2u32]`). Accepts an encoded string or a wallet-derived
+ *   freezelist request; defaults to no proof. Ignored for `public`/`shield`.
+ * @property record Optional literal or wallet-selected ARC-22 token record inserted
+ *   after recipient and amount on `private`/`unshield` transfers. Defaults to no explicit record, preserving
+ *   the existing recipient/amount shape. Ignored for `public`/`shield`.
  */
 export type TransferParameters = {
   to: string
@@ -34,7 +38,8 @@ export type TransferParameters = {
   visibility?: TransferVisibility
   asset?: string
   amountWidth?: 'u64' | 'u128'
-  merkleProof?: string
+  merkleProof?: FreezelistProofInput
+  record?: TransactionInput
 }
 
 /** Transaction id (`at1...`) of the broadcast transfer. */
@@ -73,15 +78,17 @@ function getFunctionName(visibility: TransferVisibility): string {
  * that. `private` and `unshield` transfers spend a private record, so the fee
  * is paid privately too.
  *
- * Assumes the credits.aleo `(recipient, amount)` transfer shape. Token
+ * Starts with the `(recipient, amount)` transfer shape. Set `record` to
+ * insert an explicit private record after the amount, as ARC-22 transfers require. Token
  * programs that share it but take wider amounts set `amountWidth: 'u128'`;
  * compliance programs that additionally require a merkle proof on the private
  * side pass `merkleProof`. For a program whose function names or input shapes
- * differ — e.g. token_registry.aleo's PUBLIC transfers, which take a leading
- * `token_id` field — call `writeContract` directly.
+ * differ — e.g. ARC-20 private transfers with a leading record or
+ * token_registry.aleo's public transfers with a leading `token_id` — call
+ * `writeContract` directly.
  *
  * @param client Wallet client with an account attached.
- * @param params Recipient, amount, and optional visibility/asset/width/proof.
+ * @param params Recipient, amount, and optional visibility, asset, width, proof, and record.
  * @returns The transaction id to poll with `transactionStatus`.
  * @throws AccountNotFoundError if the client has no signing account.
  * @throws ProvingNotConfiguredError if the account is local and the client has no proving config.
@@ -105,7 +112,8 @@ export async function transfer(
   // The proof rides only on the private side — public-side functions of the
   // compliance programs do not take one.
   const isPrivateSide = visibility === 'private' || visibility === 'unshield'
-  const inputs = [params.to, `${params.amount}${width}`]
+  const inputs: TransactionInput[] = [params.to, `${params.amount}${width}`]
+  if (isPrivateSide && params.record !== undefined) inputs.push(params.record)
   if (isPrivateSide && params.merkleProof) inputs.push(params.merkleProof)
 
   return writeContract(client, {

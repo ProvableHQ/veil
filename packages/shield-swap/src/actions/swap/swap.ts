@@ -17,7 +17,7 @@ import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
 import { resolveSwapParams, getDeadline, generateSwapNonce } from '../../utils/params.js'
 import { blindingFactorIssueRequest, blindedAddressIssueRequest } from '../../utils/blinding/requests.js'
 import { resolveTokenRoute, tokenIdToProgram, type TokenRoute } from '../../utils/routing.js'
-import { resolveProofPair, formatMerkleProofPair, type ProofProvider } from '../../utils/proofs.js'
+import { resolveProofInput, proofProviderForAccount, type ProofInputProvider } from '../../utils/proofs.js'
 import { formatU256Literal } from '../../utils/q128.js'
 import { tryLoadSdk } from '../../utils/sdk.js'
 import { deriveSwapId } from '../../utils/keys.js'
@@ -56,8 +56,8 @@ import { SHIELD_SWAP, SHIELD_SWAP_ROUTER } from '../../constants.js'
  * @property route Pre-resolved input-token route — the offline/override
  *   escape hatch. Defaults to reading `from_wrapper_token_id` on chain
  *   (cached per process).
- * @property proofs Freezelist witness provider for populated freezelists.
- *   Defaults to the empty-tree witness, which the contracts accept while
+ * @property proofs Freezelist provider returning pairs, literals, or wallet-derived requests.
+ *   Defaults to the legacy all-zero witness, which the contracts accept while
  *   the lists are empty.
  * @property imports Program sources for dynamic-dispatch dependencies
  *   (`{ 'token.aleo': source }`). The prover cannot discover dynamic callees
@@ -89,7 +89,7 @@ export type SwapParameters = {
   blindedIdentity?: { blindingFactor: string; blindedAddress: string }
   blindedIdentities?: BlindedIdentityStore
   route?: TokenRoute
-  proofs?: ProofProvider
+  proofs?: ProofInputProvider
   imports?: Record<string, string>
   program?: string
   routerProgram?: string
@@ -298,6 +298,7 @@ export async function swap(client: Client, params: SwapParameters | SwapFromQuot
 
   const account = requireAccount(client, 'swap')
   const isLocal = account.type === 'local'
+  const proofs = proofProviderForAccount(params.proofs, account.type)
 
   // Shared tail of the positional input list (everything after the
   // signer-dependent slots) — identical for `swap` and `swap_from_wrapped`.
@@ -316,13 +317,12 @@ export async function swap(client: Client, params: SwapParameters | SwapFromQuot
   // Wrapped input: the deposit rides the wrapper's freezelist check, so the
   // sender proves non-inclusion (empty-tree witness while lists are empty).
   const senderProof = route.wrapped
-    ? formatMerkleProofPair(
-        await resolveProofPair(params.proofs, {
-          list: 'wrapper',
-          program: route.wrapperProgram,
-          subject: account.address,
-        }),
-      )
+    ? await resolveProofInput(proofs, {
+        list: 'wrapper',
+        program: route.wrapperProgram,
+        subject: account.address,
+        subjectIsSigner: true,
+      })
     : undefined
 
   const handleBase = {

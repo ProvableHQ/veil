@@ -4,7 +4,7 @@ import { requireAccount, requirePool } from '../../utils/guards.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../../utils/tick-hints.js'
 import { requireFieldOutput } from '../../utils/outputs.js'
 import type { TokenRoute } from '../../utils/routing.js'
-import type { ProofProvider } from '../../utils/proofs.js'
+import { proofProviderForAccount, type ProofInputProvider } from '../../utils/proofs.js'
 import { SHIELD_SWAP } from '../../constants.js'
 import { autoSelectSideRecord, dispatchLiquidityCall, resolveSideRoutes, wrapperSenderProof } from './internal.js'
 
@@ -32,8 +32,8 @@ import { autoSelectSideRecord, dispatchLiquidityCall, resolveSideRoutes, wrapper
  * @property token0Route Pre-resolved route override for token0 — skips the
  *   on-chain wrapped-ness read (offline/advanced use).
  * @property token1Route Pre-resolved route override for token1.
- * @property proofs Freezelist proof provider for populated freezelists.
- *   Defaults to the empty-tree witness on the wrapped sides' sender-proof
+ * @property proofs Freezelist proof provider returning pairs, literals, or wallet-derived requests.
+ *   Defaults to the legacy all-zero witness on the wrapped sides' sender-proof
  *   slots (the only proof slots this transition has).
  * @property tickLowerHint Explicit hint override; defaults to
  *   `pickInsertHint` for the position's own bounds.
@@ -63,7 +63,7 @@ export type IncreaseLiquidityParameters = {
   token1Record?: string | InputRequest
   token0Route?: TokenRoute
   token1Route?: TokenRoute
-  proofs?: ProofProvider
+  proofs?: ProofInputProvider
   tickLowerHint?: number
   tickUpperHint?: number
   initializedTicks?: PickInsertHintParameters['initializedTicks']
@@ -128,6 +128,7 @@ export async function increaseLiquidity(
 
   const account = requireAccount(client, 'increaseLiquidity')
   const isLocal = account.type === 'local'
+  const proofs = proofProviderForAccount(params.proofs, account.type)
 
   const [route0, route1] = await resolveSideRoutes(client, {
     token0Id: pool.token0,
@@ -139,8 +140,8 @@ export async function increaseLiquidity(
 
   // The only proof slots on increase are the wrapped sides' sender proofs.
   const [senderProof0, senderProof1] = await Promise.all([
-    wrapperSenderProof(params.proofs, route0, account.address),
-    wrapperSenderProof(params.proofs, route1, account.address),
+    wrapperSenderProof(proofs, route0, account.address),
+    wrapperSenderProof(proofs, route1, account.address),
   ])
 
   // Everything after the record slots is identical across all four variants.

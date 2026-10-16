@@ -21,7 +21,7 @@ import {
 } from '../../utils/params.js'
 import { blindingFactorIssueRequest, blindedAddressIssueRequest } from '../../utils/blinding/requests.js'
 import { resolveTokenRoute, tokenIdToProgram, type TokenRoute } from '../../utils/routing.js'
-import { resolveProofPair, formatMerkleProofPair, type ProofProvider } from '../../utils/proofs.js'
+import { resolveProofInput, proofProviderForAccount, type ProofInputProvider } from '../../utils/proofs.js'
 import { tryLoadSdk } from '../../utils/sdk.js'
 import { deriveMultiHopSwapId } from '../../utils/keys.js'
 import { requireFieldOutput } from '../../utils/outputs.js'
@@ -63,8 +63,8 @@ import { SHIELD_SWAP, SHIELD_SWAP_ROUTER } from '../../constants.js'
  * @property route Pre-resolved input-token route — the offline/override
  *   escape hatch. Defaults to reading `from_wrapper_token_id` on chain
  *   (cached per process).
- * @property proofs Freezelist witness provider for populated freezelists.
- *   Defaults to the empty-tree witness.
+ * @property proofs Freezelist provider returning pairs, literals, or wallet-derived requests.
+ *   Defaults to the legacy all-zero witness.
  * @property imports Program sources for dynamic-dispatch dependencies
  *   (`{ 'token.aleo': source }`) — pass the involved token programs' sources
  *   when proving locally or via a service that requires them.
@@ -86,7 +86,7 @@ export type SwapMultiHopParameters = {
   blindedIdentity?: { blindingFactor: string; blindedAddress: string }
   blindedIdentities?: BlindedIdentityStore
   route?: TokenRoute
-  proofs?: ProofProvider
+  proofs?: ProofInputProvider
   imports?: Record<string, string>
   program?: string
   routerProgram?: string
@@ -230,6 +230,7 @@ export async function swapMultiHop(client: Client, params: SwapMultiHopParameter
 
   const account = requireAccount(client, 'swapMultiHop')
   const isLocal = account.type === 'local'
+  const proofs = proofProviderForAccount(params.proofs, account.type)
 
   // Shared tail after the signer-dependent slots: tokens, amounts, the
   // three hop structs (zero-padded), hop count, nonce, deadline — the
@@ -249,13 +250,12 @@ export async function swapMultiHop(client: Client, params: SwapMultiHopParameter
   // Wrapped input: the deposit rides the wrapper's freezelist check, so the
   // sender proves non-inclusion (empty-tree witness while lists are empty).
   const senderProof = route.wrapped
-    ? formatMerkleProofPair(
-        await resolveProofPair(params.proofs, {
-          list: 'wrapper',
-          program: route.wrapperProgram,
-          subject: account.address,
-        }),
-      )
+    ? await resolveProofInput(proofs, {
+        list: 'wrapper',
+        program: route.wrapperProgram,
+        subject: account.address,
+        subjectIsSigner: true,
+      })
     : undefined
 
   const handleBase = {

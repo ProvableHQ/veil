@@ -14,11 +14,29 @@ import {
   parseProgram,
   getContract,
   isAddress,
+  freezelistProofRequest,
+  freezelistProofGrant,
 } from '../packages/core/src/index.js'
 import { aleoAgentTools } from '../packages/core/src/agent/index.js'
 import { loadNetwork, type AleoSdk } from '../packages/provable-sdk/src/index.js'
 
 const API_URL = 'https://edge.provable.com/api/v2'
+
+// Wallet-only helpers are deterministic; actual proof resolution happens in
+// a connected wallet after the matching connect-time grant is approved.
+describe('Wallet freezelist proof setup', () => {
+  it('prepares a signer proof and grant for a private token transfer', () => {
+    const proof = freezelistProofRequest({ freezelistProgram: 'compliance.aleo' })
+    const grant = freezelistProofGrant({
+      program: 'token.aleo', function: 'transfer_private', inputPosition: 3,
+      freezelistProgram: 'compliance.aleo',
+    })
+    expect(proof.args).toEqual({ freezelistProgram: { type: 'string', value: 'compliance.aleo' } })
+    expect(grant.argConstraints).toEqual({ freezelistProgram: ['compliance.aleo'] })
+    // An ARC-22 wallet transfer passes recipient, amount, record, then `proof`.
+    // These illustrative program names must match the deployed token and list.
+  })
+})
 
 describe('E2E: veil against live Aleo mainnet', () => {
   // Create a shared public client for all tests

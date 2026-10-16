@@ -1,5 +1,5 @@
 import { sha256, stringToHex } from 'viem'
-import type { BridgeRegistry, ProtocolBridgeChain } from '../types/protocol.js'
+import type { BridgeRegistry, ProtocolBridgeAsset, ProtocolBridgeChain } from '../types/protocol.js'
 
 // SHA-256 of canonical route, asset, and chain data from main commit
 // 044fdcdede0adc53ef4d49836707bbbf9f12cd82 (2026-08-31.solana-deposits.1).
@@ -78,8 +78,15 @@ function routeFingerprint(
         : entry.protocolDomains?.[route.protocol] ?? null,
     },
   })
+  // Old snapshots predate the optional wallet-proof list association. Exclude
+  // only that additive field; token programs and all route metadata still match.
+  const asset = (entry: ProtocolBridgeAsset) => {
+    if (!entry.privacy) return entry
+    const { freezelistProgram: _freezelistProgram, ...privacy } = entry.privacy
+    return { ...entry, privacy }
+  }
   // Sort object keys recursively so serialization order cannot affect compatibility.
-  const canonical = JSON.stringify({ route, sourceAsset, destinationAsset,
+  const canonical = JSON.stringify({ route, sourceAsset: asset(sourceAsset), destinationAsset: asset(destinationAsset),
     sourceChain: chain(sourceChain), destinationChain: chain(destinationChain),
   }, (_key, value) => value && typeof value === 'object' && !Array.isArray(value)
     ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) : value)

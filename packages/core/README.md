@@ -150,6 +150,58 @@ Wallet clients also carry `simulateContract`, `deployContract`, `transfer`,
 write action is available standalone (tree-shakeable) or as a method on the
 client via the `extend()` pattern.
 
+### Wallet-generated freezelist proofs
+
+`freezelistProofRequest` asks a connected wallet to fill one `[MerkleProof; 2]`
+input using `program-freezelist-exclusion-proof`. Omit `address` to prove the
+signer, or set it for a recipient or withdrawal address. `freezelistProgram`
+MUST identify the program owning the root checked by the contract; it is not
+necessarily the token program. The helpers construct inputs without network
+access. The wallet fetches the list and computes the proof during execution.
+
+```ts
+import { freezelistProofRequest, freezelistProofGrant } from '@provablehq/veil-core'
+
+// Supply this grant in the wallet connection's algorithmsAllowed array.
+// Position 3 applies to the ARC-22 (recipient, amount, record, proof) shape.
+const grant = freezelistProofGrant({
+  program: 'token.aleo',
+  function: 'transfer_private',
+  inputPosition: 3,
+  freezelistProgram: 'compliance.aleo',
+})
+
+const transactionId = await walletClient.transfer({
+  asset: 'token.aleo',
+  to: 'aleo1...',
+  amount: 100n,
+  amountWidth: 'u128',
+  visibility: 'private',
+  record: { type: 'record', program: 'token.aleo', recordname: 'Token', uid: 'token-record-id' },
+  merkleProof: freezelistProofRequest({ freezelistProgram: 'compliance.aleo' }),
+})
+```
+
+The program names above are illustrative; use the deployed token's actual
+freezelist. Create a grant for each executed program, function, and zero-based
+proof position. Check the connected wallet's `algorithmsSupported()` before
+enabling this flow, and surface wallet rejection errors. The known-algorithm
+catalog describes the protocol and does not establish a wallet's support.
+
+`writeContract`, `executeTransaction`, and ABI-backed `getContract` also accept
+the request as one complete array input. `transfer` accepts an optional `record`
+input after the recipient and amount for ARC-22 private and unshield transfers;
+omitting it retains the previous input shape. Local accounts MUST supply encoded
+proof strings. Existing encoded proofs remain supported on both account paths.
+Use `writeContract` for ARC-20 transfers whose record precedes the recipient.
+
+The agent and MCP `aleo_execute` tool schemas accept encoded strings, wallet
+record requests, and freezelist requests. `aleo_transfer` exposes `asset`,
+`visibility`, `amountWidth`, `record`, and `merkleProof` with the same behavior
+as the client action. Supply amounts above the JavaScript safe-integer limit
+as decimal strings to retain every base unit. Wallet grants must already be
+configured by the host application; tools do not change connection permissions.
+
 ## What's in the box
 
 - **Clients** — `createPublicClient`, `createWalletClient`, `createTestClient`,
