@@ -6,7 +6,7 @@ A TypeScript interface for Aleo, inspired by [viem](https://github.com/wevm/viem
 
 ## Why
 
-### Private Apps and Assets Using EVM-Style semantics
+### Private Apps and Assets Using Viem-Like Semantics
 Aleo allows users privacy in their assets and data and allows developers to build privacy into their Dapps. 
 
 Veil provides semantics familiar to what EVM developers and agents expect. If you've built on Ethereum with `viem`, you already know how to use `veil` — same patterns, same method names, applied to Aleo.
