@@ -54,18 +54,6 @@ const txId = await wallet.writeContract({
 | 🤖 **AI agents that use Aleo** | expose Aleo as MCP tools or drop tool schemas into any agent framework; agents can also write viem-style code directly. (`@provablehq/veil-core/agent`, `@provablehq/veil-core/mcp`) |
 | **Aleo Program Development & Testing** | build, deploy, and test Aleo programs and dapps against a local Aleo node (`@provablehq/veil-leo`, `@provablehq/veil-aleo-devnode`) |
 
-## Features
-
-| Feature | Details |
-| --- | --- |
-| ⚡ **Viem-style API** | `getBalance`, `readContract`, `writeContract`, `deployContract`, `sendTransaction`, `signMessage`, and more |
-| 🧩 **Interface-first** | core has zero hard dependencies on any SDK. Wallets and SDKs plug in via adapter packages. |
-| 🔑 **Multiple account types** | RPC accounts (wallet adapters), local accounts (private key, mnemonic), view-only accounts |
-| 🔌 **Pluggable transports** | `http()` for Aleo REST API, `custom()` for injected providers, `fallback()` for chaining |
-| 📜 **Contract instances** | `getContract()` parses Aleo program source and provides typed `read`/`write` methods |
-| 🔏 **Proving as configuration** | proving strategy is a client config concern (`delegated` or `local`), not a separate abstraction |
-| 🤖 **Agent-first** | Core and Shield Swap expose MCP tools and agent tool schemas with structured JSON output. AI agents can call Aleo directly via tool use or write code against the library using viem patterns they already know. |
-
 ## Packages
 
 `@provablehq/veil-core` is the base — every other package builds on its client, action,
