@@ -31,6 +31,10 @@ export const COMMANDS: Record<string, Command> = {
     summary: 'Set up all credentials required for Shield Swap.',
     load: () => import('./commands/setup.js'),
   },
+  redeem: {
+    summary: 'Redeem a referral code or generate a shareable code.',
+    load: () => import('./commands/redeem.js'),
+  },
   pools: {
     summary: 'List pools with their on-chain depth and whether they are tradeable.',
     load: () => import('./commands/pools.js'),

@@ -1,5 +1,7 @@
 # @provablehq/shield-swap-cli
 
+[All Veil packages](../../README.md#packages) · [Documentation](https://provablehq.github.io/veil/packages/shield-swap-cli) · [npm](https://www.npmjs.com/package/@provablehq/shield-swap-cli) · [LLM index](../../llms.txt)
+
 The `shield-swap` command: trade on Shield Swap from a terminal. Each subcommand
 does one job against a live deployment — builds a session, plans the work,
 prints what happened.
@@ -107,6 +109,7 @@ FeeMaster account by default, so a faucet-funded account needs no public credits
 | Command | What it does | Needs |
 | --- | --- | --- |
 | `setup` | Sets up all credentials Shield Swap requires, idempotently: key material, DEX authentication, Provable API credentials, invite-code redemption, API token, testnet airdrop. | Nothing (an invite code when access is locked; a key file for a returning account) |
+| `redeem` | Redeems a referral code, or gets/creates the account's shareable code with `--generate`. | Session; referral code when redeeming |
 | `pools` | Lists pools from the API and joins each with chain state, so the tradeable flag and the depth come from the mappings rather than the index. | Session |
 | `balances` | Private and public holdings per token, reconciled against the registry. | Session, record access |
 | `positions` | Every liquidity position the account holds, with its range, its backing amounts, and the fees earned that a collect would pay. | Session, record access |
@@ -121,6 +124,38 @@ FeeMaster account by default, so a faucet-funded account needs no public credits
 "Record access" means the hosted record scanner, which `setup` configures with
 the Provable API credentials it registers. Reads that touch only mappings
 (`pools`) work without it.
+
+## Redeeming or generating a referral code
+
+For an account already saved by `setup`, preview and redeem a referral code:
+
+```sh
+shield-swap redeem --code REF123
+shield-swap redeem --code REF123 --execute
+shield-swap redeem --network mainnet --code REF123 --execute --json
+```
+
+`--code` is required for redemption. Redemption authenticates with the saved account, unlocks
+the gated DEX API endpoints, and records access in that network's state file.
+It spends no funds and requests no airdrop. The API reports invalid or already-used
+codes as errors. Without `--execute`, the command only previews the account and
+code; it does not check whether the code is valid.
+
+If `setup` stopped because an invite code was missing, it has already saved the
+account. Run `redeem` to unlock access, then re-run `setup` to finish the remaining
+setup steps.
+
+To generate a code to share, use `--generate` instead of `--code`:
+
+```sh
+shield-swap redeem --generate
+shield-swap redeem --generate --execute --json
+```
+
+The server creates a personal code when issuance is enabled, or returns the
+account's existing code. Generation requires `--execute` and does not redeem a
+code or change the account's access grant. `--generate` and `--code` MUST NOT be
+combined. If no code can be issued, the command reports an error.
 
 ## A suggested order
 

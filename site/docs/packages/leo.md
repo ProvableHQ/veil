@@ -1,4 +1,6 @@
 ---
+title: "@provablehq/veil-leo"
+description: TypeScript wrapper for the Leo CLI to build, deploy, run, and test Aleo programs.
 sidebar_position: 9
 ---
 

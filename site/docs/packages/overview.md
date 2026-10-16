@@ -1,5 +1,7 @@
 ---
 sidebar_position: 1
+title: Veil Aleo SDK packages
+description: Choose Aleo TypeScript packages for wallets, React, local signing, private swaps, bridges, code generation, and testing.
 ---
 
 # Packages
@@ -12,15 +14,16 @@ top of it.
 
 | Package | What it's for |
 | --- | --- |
-| [`@provablehq/veil-core`](./core) | Clients, actions, transports, and types — the base SDK. Ships LLM agent (`/agent`) and MCP (`/mcp`) bindings for the base Aleo actions. |
-| [`@provablehq/veil-aleo-sdk`](./provable-sdk) | Local accounts, signing, and proving via `@provablehq/sdk`. Builds a client from a private key or mnemonic. |
-| [`@provablehq/veil-aleo-wallet-adapter`](./wallet-adapter) | Adapts a connected Provable-standard wallet (Shield, Leo, Puzzle, Fox) into a Veil account and transport. |
-| [`@provablehq/veil-aleo-react-hooks`](./react) | `VeilProvider` and `useVeilWallet()` for React apps — wallet connection and clients with no adapter wiring. |
-| [`@provablehq/shield-swap-sdk`](./shield-swap) | Client for the `shield_swap_v3.aleo` concentrated-liquidity AMM — private swaps, liquidity, and the DEX API. |
-| [`@provablehq/veil-codegen`](./codegen) | Generates typed TypeScript bindings from an Aleo program ABI (library and `veil-codegen` CLI). |
-| [`@provablehq/veil-aleo-devnode`](./devnode) | Starts and drives a local Aleo devnode process for integration tests. |
-| [`@provablehq/veil-leo`](./leo) | Typed wrapper around the `leo` CLI — build, deploy, run, synthesize. |
-| [`@provablehq/aleo-bridge-sdk`](./bridge) | Cross-chain bridge client (preview; its API may break between minor releases). |
+| 🧩 [`@provablehq/veil-core`](./core) | Clients, actions, transports, and types — the base SDK. Ships LLM agent (`/agent`) and MCP (`/mcp`) bindings for the base Aleo actions. |
+| 🔑 [`@provablehq/veil-aleo-sdk`](./provable-sdk) | Local accounts, signing, and proving via `@provablehq/sdk`. Builds a client from a private key or mnemonic. |
+| 🌐 [`@provablehq/veil-aleo-wallet-adapter`](./wallet-adapter) | Adapts a connected Provable-standard wallet (Shield, Leo, Puzzle, Fox) into a Veil account and transport. |
+| ⚛️ [`@provablehq/veil-aleo-react-hooks`](./react) | `VeilProvider` and `useVeilWallet()` for React apps — wallet connection and clients with no adapter wiring. |
+| 📈 [`@provablehq/shield-swap-sdk`](./shield-swap) | Client for the `shield_swap_v3.aleo` concentrated-liquidity AMM — private swaps, liquidity, and the DEX API. |
+| 🖥️ [`@provablehq/shield-swap-cli`](./shield-swap-cli) | Trade on Shield Swap from a terminal: account setup, pools, balances, private swaps, and liquidity. |
+| 📜 [`@provablehq/veil-codegen`](./codegen) | Generates typed TypeScript bindings from an Aleo program ABI (library and `veil-codegen` CLI). |
+| 🧪 [`@provablehq/veil-aleo-devnode`](./devnode) | Starts and drives a local Aleo devnode process for integration tests. |
+| 🦁 [`@provablehq/veil-leo`](./leo) | Typed wrapper around the `leo` CLI — build, deploy, run, synthesize. |
+| 💸 [`@provablehq/aleo-bridge-sdk`](./bridge) | Cross-chain bridge client (preview; its API may break between minor releases). |
 
 ## Choosing packages
 

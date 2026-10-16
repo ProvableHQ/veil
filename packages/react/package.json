@@ -1,6 +1,6 @@
 {
   "name": "@provablehq/veil-aleo-react-hooks",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "React hooks and providers for the building web apps.",
   "license": "MIT",
   "repository": {
@@ -8,7 +8,7 @@
     "url": "git+https://github.com/ProvableHQ/veil.git",
     "directory": "packages/react"
   },
-  "homepage": "https://github.com/ProvableHQ/veil#readme",
+  "homepage": "https://github.com/ProvableHQ/veil/tree/main/packages/react#readme",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -49,5 +49,18 @@
   "devDependencies": {
     "@types/react": "^19.0.0",
     "typescript": "^5.7.0"
+  },
+  "keywords": [
+    "aleo",
+    "veil",
+    "typescript",
+    "privacy",
+    "react",
+    "react-hooks",
+    "wallet",
+    "dapp"
+  ],
+  "bugs": {
+    "url": "https://github.com/ProvableHQ/veil/issues"
   }
 }

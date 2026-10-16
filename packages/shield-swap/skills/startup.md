@@ -89,7 +89,7 @@ the flag to switch deployments, the env var to peek at one.
 2. **Provable gateway** — delegated proving and the record scanner run on
    `edge.provable.com/api`, which needs no credentials. Nothing registers.
 3. **DEX session** — challenge/verify handshake; the account signs, the
-   session lasts ~24h and auto-renews on expiry.
+   session lasts about 15 minutes and auto-renews on expiry.
 4. **Invite code** — checks `getReferralStatus()`; redeems the code through
    `redeemReferralCode()` when one is provided. One-time per account. Without access every gated endpoint
    returns 403.

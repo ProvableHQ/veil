@@ -335,6 +335,66 @@ too specific for a developer or agent beginning with Shield Swap. State the
 tutorial's focus first, then introduce each implementation detail when it
 becomes relevant.
 
+### Introduce context before instructions
+
+A tutorial explains enough of the product and task for the reader to
+understand why each step is necessary. Concision must not remove that context.
+
+Open the tutorial by explaining what the product does, what the guide helps
+accomplish, and which tools or approaches are available. If several stacks
+are supported, make clear that the reader can choose one.
+
+Introduce each major section with the context needed to understand its
+instructions. Explain the relevant components and their purpose before
+describing how to configure or use them. A compressed list of steps is not
+a substitute for an introduction.
+
+Do not assume product knowledge merely because the reader understands
+programming. Conversely, do not define familiar terms such as SDK or CLI
+unless the intended audience needs those definitions.
+
+### Explain why an option matters
+
+Explain optional configuration through its practical benefit and the
+consequence of omitting it. State what saved data enables, what an account
+authorizes, or what an API provides.
+
+Avoid broad claims such as “faster trading” when the actual benefit is
+retaining history or recovering an unfinished swap after a restart.
+Name the specific benefit.
+
+### Use headings, tables, and prose for distinct purposes
+
+- Use task headings such as “Configure the trading stack” rather than
+  generic labels such as “Configuration.”
+- Use tables to compare available tools and when to choose each.
+- Introduce a table briefly; do not repeat its contents in the preceding
+  paragraph.
+- Link tool names to their package, application, or relevant documentation.
+- Introduce only the mechanics needed for the current task. Explain
+  additional details when they become relevant.
+
+### Example: introducing configuration
+
+Avoid:
+
+> Initialize the clients, choose whether to retain recovery data, and
+> authenticate with the Shield Swap API. CLI setup handles these steps
+> together; the SDK examples configure each separately.
+
+This assumes the reader already understands the clients, the API’s purpose,
+and why recovery data matters.
+
+Prefer:
+
+> Shield Swap runs on the Aleo network and provides an API for quotes and
+> trading data. This section shows how to configure an Aleo account,
+> authenticate with the API, and optionally store trading data locally to
+> preserve swap history and recover unfinished swaps after a restart.
+
+The introduction establishes the network and API’s role before describing
+the setup, and gives a concrete reason for optional storage.
+
 ### Good
 
 > All value transfers on the Aleo Network are done by calling functions in the
@@ -355,6 +415,10 @@ hard rule is emphasized with MUST.
 Why it fails: hype (C: "powerful", "seamless"), filler ("easily", "simply",
 "just"), and hedging (D: "worth noting", "probably") — and it never says what a
 record actually is.
+
+### Tutorial review
+
+- Does each section explain why its steps are needed before introducing the mechanics?
 
 ## Quick reference
 

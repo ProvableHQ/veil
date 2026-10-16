@@ -650,6 +650,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/prices/usdc-usd/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["prices_usdc_usd_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/protocol/state": {
         parameters: {
             query?: never;
@@ -1253,6 +1269,17 @@ export interface components {
         };
         OhlcvResponseDoc: {
             data: components["schemas"]["OhlcvDoc"][];
+            summary?: null | components["schemas"]["OhlcvSummaryDoc"];
+        };
+        OhlcvSummaryDoc: {
+            close?: string | null;
+            high?: string | null;
+            low?: string | null;
+            open?: string | null;
+            /** @description Raw token0 units, independent of price orientation. */
+            volume: string;
+            /** @description Raw token1 units, independent of price orientation. */
+            volume1: string;
         };
         PaginationMeta: {
             /** Format: int64 */
@@ -1380,7 +1407,7 @@ export interface components {
             };
         };
         PoolStats24hDoc: {
-            /** @description The value compares the earliest execution price with the current spot price. */
+            /** @description The value compares the last price before the window with the current spot price. */
             change_24h_pct?: string | null;
             /** @description The value compares the display open with the current spot price. */
             display_change_24h_pct?: string | null;
@@ -1389,7 +1416,7 @@ export interface components {
             /** @description Inverted windows swap extremes: display_high = 1 / low_24h. */
             display_high_24h: string;
             display_low_24h: string;
-            display_open_24h: string;
+            display_open_24h: string | null;
             /** @description The current spot price uses the canonical display orientation. */
             display_price: string;
             /** @description Net LP fees in raw token0 units. */
@@ -1401,8 +1428,8 @@ export interface components {
             liquidity: string;
             /** @description The value is the lower of the execution low and the current spot price. */
             low_24h: string;
-            /** @description Earliest raw atomic execution price. */
-            open_24h: string;
+            /** @description The interval baseline is null when price history is unavailable. */
+            open_24h: string | null;
             /** @description The current spot price is token1 per token0 in raw atomic units. */
             price: string;
             price_reversed: string;
@@ -1779,10 +1806,6 @@ export interface components {
         };
         ReferralSettingsResponse: {
             /** Format: int32 */
-            codes_per_user: number;
-            /** Format: int32 */
-            codes_per_user_limit: number;
-            /** Format: int32 */
             max_users?: number | null;
         };
         ReferralSettingsResponseDoc: {
@@ -1814,8 +1837,6 @@ export interface components {
             data: components["schemas"]["ReferralSwapClaimResponse"];
         };
         ReferralUpdateSettingsRequest: {
-            /** Format: int32 */
-            codes_per_user: number;
             /** Format: int32 */
             max_users?: number | null;
         };
@@ -1982,6 +2003,24 @@ export interface components {
         };
         UnclaimedResponseDoc: {
             data: components["schemas"]["UnclaimedPayloadDoc"];
+        };
+        UsdcUsdHistoryResponseDoc: {
+            data: components["schemas"]["UsdcUsdHourlyQuote"][];
+        };
+        UsdcUsdHourlyQuote: {
+            corroborated: boolean;
+            /** Format: int32 */
+            decimals: number;
+            /**
+             * Format: int64
+             * @description The unix-second start of the UTC hour.
+             */
+            hour: number;
+            /** @description The USD price of one USDC in atomic units with `decimals` places. */
+            price: string;
+            /** Format: int64 */
+            publishTime: number;
+            source: string;
         };
         UsdcUsdQuote: {
             corroborated: boolean;
@@ -3880,7 +3919,9 @@ export interface operations {
                 from: number;
                 /** @description Exclusive unix-second end */
                 to: number;
-                /** @description `raw` (default) keeps stored token1-per-token0 prices; `display` inverts candles when the pool's canonical display orientation is flipped */
+                /** @description Optional exact summary start, at or after from and before to */
+                summary_from?: number;
+                /** @description `raw` (default) keeps stored token1-per-token0 prices; `display` inverts candle and summary prices when the pool's canonical display orientation is flipped */
                 orientation?: string;
             };
             header?: never;
@@ -3901,7 +3942,7 @@ export interface operations {
                     "application/json": components["schemas"]["OhlcvResponseDoc"];
                 };
             };
-            /** @description Invalid granularity */
+            /** @description Invalid granularity or summary range */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4176,6 +4217,49 @@ export interface operations {
             };
             /** @description Authentication required */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDoc"];
+                };
+            };
+        };
+    };
+    prices_usdc_usd_history: {
+        parameters: {
+            query: {
+                /** @description Inclusive unix-second start */
+                from: number;
+                /** @description Exclusive unix-second end, at most 31 days after `from` */
+                to: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stored hourly USDC/USD prices in the range, oldest first. An hour without an accepted price is absent. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsdcUsdHistoryResponseDoc"];
+                };
+            };
+            /** @description Invalid range */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

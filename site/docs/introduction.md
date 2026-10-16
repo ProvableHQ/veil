@@ -1,5 +1,7 @@
 ---
 sidebar_position: 1
+title: Veil — TypeScript SDK for Aleo
+description: Build Aleo apps with viem-style TypeScript clients, wallet adapters, React hooks, private swaps, cross-chain bridges, and MCP agent tools.
 ---
 
 # Introduction

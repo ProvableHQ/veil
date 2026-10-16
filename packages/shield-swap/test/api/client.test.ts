@@ -260,6 +260,35 @@ describe('ApiClient', () => {
     expect((calls[1]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt-session')
   })
 
+  it('getMyReferralCode requests the wallet shareable code with a session JWT', async () => {
+    const { impl, calls } = fetchMock([{ json: { data: { code: 'SHARE123' } } }])
+    const client = new ApiClient({ fetch: impl })
+    client.setToken('jwt-session')
+
+    await expect(client.getMyReferralCode()).resolves.toEqual({ code: 'SHARE123' })
+    expect(calls[0]!.url).toBe(`${DEFAULT_API_URL}/referral/my-code`)
+    expect(calls[0]!.init.method).toBe('GET')
+    expect((calls[0]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt-session')
+  })
+
+  it('getMyReferralCode requires session authentication before issuing a code', async () => {
+    const { impl, calls } = fetchMock([{ json: {} }])
+    const client = new ApiClient({ fetch: impl, apiToken: 'ss_test_token' })
+
+    await expect(client.getMyReferralCode()).rejects.toThrow(/session JWT/)
+    expect(calls).toEqual([])
+  })
+
+  it('getPool24hStats returns the public response envelope without authentication', async () => {
+    const response = { data: { pool: 'pool/key', price: '1.25', open_24h: null } }
+    const { impl, calls } = fetchMock([{ json: response }])
+    const client = new ApiClient({ fetch: impl })
+
+    await expect(client.getPool24hStats('pool/key')).resolves.toEqual(response)
+    expect(calls[0]!.url).toBe(`${DEFAULT_API_URL}/pools/pool%2Fkey/stats`)
+    expect((calls[0]!.init.headers as Record<string, string>).authorization).toBeUndefined()
+  })
+
   it('non-2xx surfaces as ApiError with status and body', async () => {
     const { impl } = fetchMock([{ status: 404, json: { error: 'no such pool' } }])
     const client = new ApiClient({ fetch: impl })

@@ -1,0 +1,41 @@
+# Veil
+
+> Veil is a TypeScript SDK for Aleo with viem-style clients, wallet adapters, local signing and proving, React hooks, agent tools, private trading, and cross-chain bridges.
+
+Start with the package guide and the README for the relevant package. All links below point to Markdown sources. Packages compose around `@provablehq/veil-core`; choose a signing adapter based on where the keys live. Read-only chain queries need no signing key. Programs use names such as `credits.aleo`, and transition inputs use Aleo-encoded values such as `100u64`.
+
+Core and Shield Swap expose `/agent` tool schemas and `/mcp` tools. Before operating Shield Swap, read its trading runbooks. The bridge SDK is a preview; consult its package README for supported routes and execution capabilities.
+
+## Start here
+
+- [Repository README](https://raw.githubusercontent.com/ProvableHQ/veil/main/README.md): Use cases, quick starts, packages, and agent integrations.
+- [Getting started](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/getting-started.md): Installation and first client.
+- [Package guide](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/packages/overview.md): Choose packages for a dApp, service, agent, or local testing.
+
+## Packages
+
+- [@provablehq/veil-core](https://raw.githubusercontent.com/ProvableHQ/veil/main/packages/core/README.md): Viem-style TypeScript SDK for Aleo clients, contract calls, transports, and MCP agent tools.
+- [@provablehq/veil-aleo-sdk](https://raw.githubusercontent.com/ProvableHQ/veil/main/packages/provable-sdk/README.md): Local accounts, signing, and delegated or local proving for the Veil Aleo TypeScript SDK.
+- [@provablehq/veil-aleo-wallet-adapter](https://raw.githubusercontent.com/ProvableHQ/veil/main/packages/wallet-adapter/README.md): Aleo wallet adapter bindings for Veil clients with Shield, Leo, Puzzle, and Fox wallets.
+- [@provablehq/veil-aleo-react-hooks](https://raw.githubusercontent.com/ProvableHQ/veil/main/packages/react/README.md): React hooks and providers for Aleo wallet connections and Veil public and wallet clients.
+- [@provablehq/shield-swap-sdk](https://raw.githubusercontent.com/ProvableHQ/veil/main/packages/shield-swap/README.md): TypeScript SDK for Shield Swap private token swaps, concentrated liquidity, and pool data on Aleo.
+- [@provablehq/shield-swap-cli](https://raw.githubusercontent.com/ProvableHQ/veil/main/packages/shield-swap-cli/README.md): Command line interface for Shield Swap account setup, token swaps, balances, and liquidity on Aleo.
+- [@provablehq/veil-codegen](https://raw.githubusercontent.com/ProvableHQ/veil/main/packages/codegen/README.md): Generate typed TypeScript contract bindings from Aleo program ABIs with the veil-codegen CLI.
+- [@provablehq/veil-aleo-devnode](https://raw.githubusercontent.com/ProvableHQ/veil/main/packages/devnode/README.md): Start and control local Aleo devnodes from TypeScript for development and integration testing.
+- [@provablehq/veil-leo](https://raw.githubusercontent.com/ProvableHQ/veil/main/packages/leo/README.md): TypeScript wrapper for the Leo CLI to build, deploy, run, and test Aleo programs.
+- [@provablehq/aleo-bridge-sdk](https://raw.githubusercontent.com/ProvableHQ/veil/main/packages/bridge/README.md): Cross-chain bridge SDK for Aleo, EVM, and Solana using Circle xReserve, Circle CCTP, and Hyperlane.
+
+## Guides and agents
+
+- [Agent integrations](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/agents.md): MCP and framework-independent tool calling.
+- [Reading chain state](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/reading-chain-state.md): Public clients and mapping reads.
+- [Executing transactions](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/executing-transactions.md): Wallet clients and program transitions.
+- [Working with records](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/working-with-records.md): Private state, scanning, and decryption.
+- [Transaction lifecycle](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/transaction-lifecycle.md): Submission, status, and settlement.
+- [Shield Swap trading runbooks](https://raw.githubusercontent.com/ProvableHQ/veil/main/packages/shield-swap/skills/SKILL.md): Required starting point for account setup, swaps, and liquidity.
+
+## Optional
+
+- [Contributor instructions](https://raw.githubusercontent.com/ProvableHQ/veil/main/AGENTS.md): Repository navigation and contributor constraints.
+- [Contributor constraints](https://raw.githubusercontent.com/ProvableHQ/veil/main/.agents/contributors.md): Required rules for repository changes.
+- [Local testing](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/devnode.md): Compile, deploy, and test against a local Aleo node.

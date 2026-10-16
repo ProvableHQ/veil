@@ -1,5 +1,7 @@
 # @provablehq/veil-leo
 
+## 0.12.1
+
 ## 0.12.0
 
 ### Minor Changes

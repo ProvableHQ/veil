@@ -1,6 +1,6 @@
 {
   "name": "@provablehq/veil-core",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "Viem-style TypeScript interface for Aleo.",
   "license": "MIT",
   "repository": {
@@ -8,7 +8,7 @@
     "url": "git+https://github.com/ProvableHQ/veil.git",
     "directory": "packages/core"
   },
-  "homepage": "https://github.com/ProvableHQ/veil#readme",
+  "homepage": "https://github.com/ProvableHQ/veil/tree/main/packages/core#readme",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -43,5 +43,19 @@
   },
   "devDependencies": {
     "@provablehq/aleo-types": "1.0.1"
+  },
+  "keywords": [
+    "aleo",
+    "veil",
+    "typescript",
+    "privacy",
+    "sdk",
+    "viem",
+    "mcp",
+    "ai-agents",
+    "smart-contracts"
+  ],
+  "bugs": {
+    "url": "https://github.com/ProvableHQ/veil/issues"
   }
 }
