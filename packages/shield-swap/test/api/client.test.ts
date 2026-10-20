@@ -53,7 +53,7 @@ describe('ApiClient', () => {
       challenge_id: 'ch1',
     })
 
-    await client.getFeeTiers()
+    await client.getWebSocketTicket()
     expect((calls[2]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt123')
   })
 
@@ -85,7 +85,7 @@ describe('ApiClient', () => {
   it('apiToken from construction is attached to gated data endpoints', async () => {
     const { impl, calls } = fetchMock([{ json: { data: [] } }])
     const client = new ApiClient({ fetch: impl, apiToken: 'ss_live_abc' })
-    await client.getFeeTiers()
+    await client.getWebSocketTicket()
     expect((calls[0]!.init.headers as Record<string, string>).authorization).toBe('Bearer ss_live_abc')
   })
 
@@ -112,7 +112,7 @@ describe('ApiClient', () => {
     const { impl, calls } = fetchMock([{ json: { data: [] } }])
     const client = new ApiClient({ fetch: impl, apiToken: 'ss_live_abc' })
     client.setToken('jwt456')
-    await client.getFeeTiers()
+    await client.getWebSocketTicket()
     expect((calls[0]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt456')
   })
 
@@ -182,14 +182,14 @@ describe('ApiClient', () => {
       { status: 401, json: { error: 'missing or invalid token' } }, // expired
       { json: { data: { message: 'sign me again', nonce: 'n2' } } }, // re-challenge
       { json: { data: { token: 'jwt-new' } } }, // re-verify
-      { json: { data: [] } }, // retried call
+      { json: { data: { token: 'ws-ticket', expires_at: 1_753_500_060 } } }, // retried call
     ])
     const client = new ApiClient({ fetch: impl })
     const sign = vi.fn(async (m: string) => `sign1-over-${m}`)
     await client.authenticate('aleo1me', sign)
 
-    const tiers = await client.getFeeTiers()
-    expect(tiers).toEqual({ data: [] })
+    const ticket = await client.getWebSocketTicket()
+    expect(ticket).toEqual({ token: 'ws-ticket', expires_at: 1_753_500_060 })
     expect(sign).toHaveBeenCalledTimes(2)
     expect((calls[5]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt-new')
   })
@@ -205,7 +205,7 @@ describe('ApiClient', () => {
     ])
     const client = new ApiClient({ fetch: impl })
     await client.authenticate('aleo1me', async (m) => `sign1-over-${m}`)
-    await expect(client.getFeeTiers()).rejects.toThrow(/401/)
+    await expect(client.getWebSocketTicket()).rejects.toThrow(/401/)
     expect(calls).toHaveLength(6)
   })
 
@@ -217,14 +217,14 @@ describe('ApiClient', () => {
     ])
     const client = new ApiClient({ fetch: impl, autoReauthenticate: false })
     await client.authenticate('aleo1me', async (m) => `sign1-over-${m}`)
-    await expect(client.getFeeTiers()).rejects.toThrow(/401/)
+    await expect(client.getWebSocketTicket()).rejects.toThrow(/401/)
     expect(calls).toHaveLength(3)
   })
 
   it('apiToken-only clients have no signer to re-auth with — 401 surfaces directly', async () => {
     const { impl, calls } = fetchMock([{ status: 401, json: { error: 'revoked' } }])
     const client = new ApiClient({ fetch: impl, apiToken: 'ss_live_dead' })
-    await expect(client.getFeeTiers()).rejects.toThrow(/401/)
+    await expect(client.getWebSocketTicket()).rejects.toThrow(/401/)
     expect(calls).toHaveLength(1)
   })
 
@@ -256,7 +256,7 @@ describe('ApiClient', () => {
     expect(calls[0]!.url).toBe(`${DEFAULT_API_URL}/referral/redeem`)
     expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ code: 'REF1' })
 
-    await client.getFeeTiers()
+    await client.getWebSocketTicket()
     expect((calls[1]!.init.headers as Record<string, string>).authorization).toBe('Bearer jwt-session')
   })
 

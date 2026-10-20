@@ -24,6 +24,9 @@ grants in `shieldSwapAlgorithmGrants()` by default. Custom wrapper deployments
 must pass matching `freezelists` configuration to the grant helper and
 `shieldSwapActions`. See [Shield Swap proofs](../../packages/shield-swap/README.md#freezelist-proofs).
 
+Fee-tier discovery through `client.api.getFeeTiers()` is public and requires no
+wallet authentication or API token.
+
 Bridge ARC-22 unshielding and private xReserve burns also resolve compliance
 proofs automatically. Omit `merkleProof` and supply the matching
 `unshieldFreezelistProofGrant` or `xReserveBurnFreezelistProofGrant` when connecting

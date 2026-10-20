@@ -85,8 +85,8 @@ jobs:
         run: pnpm --filter @provablehq/veil-loyalty-dapp exec tsc --noEmit
 
   # Shape-parity check against the live testnet DEX API: the unkeyed read + auth
-  # subset (public pool/token discovery, on-chain decode + Q128 tick bracketing,
-  # the challenge/verify handshake with a generated account). Its job is to catch
+  # subset (public pool/token/fee-tier discovery, on-chain decode + Q128 tick
+  # bracketing, invalid-credential rejection on WebSocket tickets). Its job is to catch
   # drift between this client and the deployment it targets. No funded key, so
   # write/keyed assertions inside these files self-skip.
   #

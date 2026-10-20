@@ -38,6 +38,7 @@ describe('public API endpoint contracts', () => {
     query?: Record<string, string>
     response?: unknown
   }> = [
+    { name: 'fee tiers', call: api => api.getFeeTiers(), path: '/fee-tiers' },
     { name: 'global compliance', call: api => api.getComplianceConfig(), path: '/compliance' },
     { name: 'token compliance', call: api => api.getTokenCompliance('token/id'), path: '/compliance/tokens/token%2Fid' },
     { name: 'pair compliance', call: api => api.getPairCompliance('token/0', 'token?1'), path: '/compliance/pairs/token%2F0/token%3F1' },

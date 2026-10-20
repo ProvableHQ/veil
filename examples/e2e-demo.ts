@@ -19,10 +19,18 @@ import {
 } from '../packages/core/src/index.js'
 import { aleoAgentTools } from '../packages/core/src/agent/index.js'
 import { loadNetwork, type AleoSdk } from '../packages/provable-sdk/src/index.js'
-import { shieldSwapAlgorithmGrants } from '../packages/shield-swap/src/index.js'
+import { ApiClient, shieldSwapAlgorithmGrants } from '../packages/shield-swap/src/index.js'
 import { createAleoClient as createBridgeAleoClient, createBridgeClient, unshieldFreezelistProofGrant, DEFAULT_BRIDGE_REGISTRY } from '../packages/bridge/src/index.js'
 
 const API_URL = 'https://edge.provable.com/api/v2'
+
+describe.runIf(process.env.VEIL_INTEGRATION === '1')('Public Shield Swap market data', () => {
+  it('discovers fee tiers without an account or API token', async () => {
+    const api = new ApiClient()
+    const tiers = await api.getFeeTiers()
+    expect(tiers.data.length).toBeGreaterThan(0)
+  }, 30_000)
+})
 
 // Wallet-only helpers are deterministic; actual proof resolution happens in
 // a connected wallet after the matching connect-time grant is approved.

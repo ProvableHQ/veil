@@ -287,7 +287,7 @@ The [API action reference](./API.md) maps every non-admin application endpoint
 to its SDK method, including session management, referrals, analytics, and
 discovery. These methods are also exposed through agent tools and MCP.
 
-Public market data needs no credential. Account data, routing, and referral
+Public market data, including `getFeeTiers()`, needs no credential. Account data, routing, and referral
 activity require authentication. Two credentials work:
 
 - **A session JWT** (about 15 minutes), issued by a challenge/verify handshake:
@@ -1225,7 +1225,7 @@ VEIL_E2E_PRIVATE_KEY=...    # testnet account — signs DEX API auth; write tier
 | --- | --- | --- |
 | [`traders.integration.test.ts`](./test/integration/traders.integration.test.ts) | read-only | The analyses a trader runs before trading — spot price, price impact and output size from live liquidity, route quoting with slippage sizing, in-range LP position selection, and fee-APR from OHLCV volume. Asserts math invariants, not exact live figures. The OHLCV test needs `VEIL_E2E_PRIVATE_KEY` (bearer-gated endpoint). |
 | [`reads.integration.test.ts`](./test/integration/reads.integration.test.ts) | read-only | Chain-direct reads (pools, slots, fee tiers, validation) against live state. |
-| [`api.integration.test.ts`](./test/integration/api.integration.test.ts) | read-only | The off-chain `ApiClient` — the public surface credential-less, then with `VEIL_E2E_PRIVATE_KEY` both auth flows end-to-end: the session handshake over the gated reads (routes, balances, OHLCV, fee tiers), auto re-auth after expiry, and the API-token lifecycle (mint, use, list, revoke — self-cleaning). |
+| [`api.integration.test.ts`](./test/integration/api.integration.test.ts) | read-only | The off-chain `ApiClient` — public pool, token, and fee-tier discovery without credentials, plus invalid-credential rejection on WebSocket tickets. With `VEIL_E2E_PRIVATE_KEY`, exercises authenticated reads, auto re-auth after expiry, and the API-token lifecycle (mint, use, list, revoke — self-cleaning). |
 | [`balances.integration.test.ts`](./test/integration/balances.integration.test.ts) | write | The composed balance view — public balances from the API joined with private balances decoded from the account's records. Needs the account because private balances live in its records. |
 | [`e2e.test.ts`](./test/integration/e2e.test.ts) | write | The full private-swap lifecycle — airdrop, privatize records, ensure a pool, `swap`, read the output, `claimSwapOutput`. |
 
