@@ -64,14 +64,14 @@ export interface ProofContext {
  * @property address Identifies the address proved by this witness.
  * @property proof Contains the encoded `[MerkleProof; 2]` Aleo literal.
  */
-export type ProvidedProof = { freezelistProgram: string; address: string; proof: string }
+export type SuppliedComplianceProof = { freezelistProgram: string; address: string; proof: string }
 
 /**
  * Accepts compliance Merkle proof literals in ABI order, annotated proofs, or a provider; null selects automatic generation.
  * @example
  * const proofs: ComplianceProofs<readonly [string]> = null
  */
-export type ComplianceProofs<T extends readonly string[]> = T | (readonly [string] extends T ? string : never) | readonly ProvidedProof[] | ProofInputProvider | null
+export type ComplianceProofs<T extends readonly string[]> = T | (readonly [string] extends T ? string : never) | readonly SuppliedComplianceProof[] | ProofInputProvider | null
 
 /** Bounds a swap's literals to its optional wrapped-input sender proof. */
 export type SwapProofs = ComplianceProofs<readonly [] | readonly [sender: string]>

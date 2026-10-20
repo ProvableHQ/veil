@@ -344,7 +344,7 @@ export {
   type MerkleProofInput,
   type ProofContext,
   type ProofProvider,
-  type ProvidedProof,
+  type SuppliedComplianceProof,
   type ComplianceProofs,
   type FreezelistConfig,
   type SwapProofs,

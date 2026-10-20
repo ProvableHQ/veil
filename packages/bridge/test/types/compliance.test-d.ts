@@ -1,11 +1,11 @@
 import { expectTypeOf, test } from 'vitest'
 import type { FreezelistProofInput } from '@provablehq/veil-core'
-import type { ComplianceProofProvider, ComplianceProofs, ExecuteParameters, ExecuteXReserveBurnParameters, ProvidedProof, UnshieldParameters } from '../../src/index.js'
+import type { ComplianceProofProvider, ComplianceProofs, ExecuteParameters, ExecuteXReserveBurnParameters, SuppliedComplianceProof, UnshieldParameters } from '../../src/index.js'
 
 test('bridge compliance inputs accept one bundle and retain existing wallet requests', () => {
   expectTypeOf<string>().toMatchTypeOf<ComplianceProofs>()
   expectTypeOf<readonly [string]>().toMatchTypeOf<ComplianceProofs>()
-  expectTypeOf<readonly ProvidedProof[]>().toMatchTypeOf<ComplianceProofs>()
+  expectTypeOf<readonly SuppliedComplianceProof[]>().toMatchTypeOf<ComplianceProofs>()
   expectTypeOf<ComplianceProofProvider>().toMatchTypeOf<ComplianceProofs>()
   expectTypeOf<FreezelistProofInput>().toMatchTypeOf<ComplianceProofs>()
   expectTypeOf<null>().toMatchTypeOf<ComplianceProofs>()

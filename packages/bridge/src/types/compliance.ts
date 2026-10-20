@@ -21,9 +21,9 @@ export type ComplianceProofContext = { freezelistProgram: string; address: strin
  * @property freezelistProgram Names the compliance list, not the token or wrapper.
  * @property address Identifies the signer proved by this witness.
  * @property proof Contains an encoded `[MerkleProof; 2]` Aleo literal.
- * @example const proof: ProvidedProof = { freezelistProgram: 'usdcx_freezelist.aleo', address: 'aleo1...', proof: '[...]' }
+ * @example const proof: SuppliedComplianceProof = { freezelistProgram: 'usdcx_freezelist.aleo', address: 'aleo1...', proof: '[...]' }
  */
-export type ProvidedProof = ComplianceProofContext & { proof: string }
+export type SuppliedComplianceProof = ComplianceProofContext & { proof: string }
 
 /**
  * Supplies one compliance bundle as a literal, Merkle pair, or wallet request.
@@ -42,4 +42,4 @@ export type ComplianceProofProvider = (context: ComplianceProofContext) => Promi
  * Null or omission enables automatic generation for local accounts and derivation for wallets.
  * @example const proofs: ComplianceProofs = ['[...]']
  */
-export type ComplianceProofs = string | readonly [string] | readonly ProvidedProof[] | ComplianceProofProvider | FreezelistProofRequest | null
+export type ComplianceProofs = string | readonly [string] | readonly SuppliedComplianceProof[] | ComplianceProofProvider | FreezelistProofRequest | null
