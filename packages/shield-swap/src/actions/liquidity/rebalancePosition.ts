@@ -105,8 +105,10 @@ const REBALANCE_DEADLINE_OFFSET_BLOCKS = 20
  * @property token1Route Pre-resolved route override for token1.
  * @property withdrawalAddress Explicit payout subject for proofs when the position
  *   record is opaque. Defaults to the plaintext record's withdrawal field.
- *   Required if that field is unavailable; must match it
- *   when both are supplied. Does not change the contract's payout address.
+ *   Required when that field is unavailable for automatic generation or a
+ *   provider declaring requiresSubject. Supplied proofs and custom providers
+ *   otherwise own subject selection. Must match plaintext when both are supplied.
+ *   Does not change the contract's payout address.
  * @property proofs Supplies a {@link RebalanceProofs} literal tuple in ABI order, an annotated
  *   collection, or a provider. Omission or null enables automatic resolution.
  * @property freezelists Overrides deployment lists for automatic or annotated proofs;
@@ -400,6 +402,7 @@ export async function rebalancePosition(
 
   const receiver = resolveWithdrawalSubject({
     positionInput, withdrawalAddress: params.withdrawalAddress,
+    proofs: params.proofs, signerAddress: account.address,
   })
 
   const [senderProof0, senderProof1, receiverProof0, receiverProof1, ownerProofs, withdrawalProofs] =

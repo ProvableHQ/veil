@@ -17,7 +17,7 @@ import { increaseLiquidity } from '../../src/actions/liquidity/increaseLiquidity
 import { collect } from '../../src/actions/liquidity/collect.js'
 import { rebalancePosition } from '../../src/actions/liquidity/rebalancePosition.js'
 import { clearRouteCache, programToTokenId } from '../../src/utils/routing.js'
-import { walletFreezelistProofProvider, EMPTY_MERKLE_PROOFS } from '../../src/utils/proofs.js'
+import { walletFreezelistProofProvider, EMPTY_MERKLE_PROOFS, formatMerkleProofPair } from '../../src/utils/proofs.js'
 import { shieldSwapActions } from '../../src/decorators/shieldSwapActions.js'
 import { shieldSwapFreezelistGrants } from '../../src/utils/freezelistGrants.js'
 import type { SwapHandle } from '../../src/actions/swap/swap.js'
@@ -113,7 +113,7 @@ describe('automatic and literal action inputs', () => {
       const expected = write.mock.calls[0]![1]
       const literals = expected.inputs!.filter(isFreezelistProofRequest).map((_, i) => `proof-${i}`)
       write.mockClear()
-      await run({ proofs: literals })
+      await run({ proofs: literals, withdrawalAddress: undefined })
       let i = 0
       expect(write.mock.calls[0]![1].inputs).toEqual(expected.inputs!.map(value => isFreezelistProofRequest(value) ? literals[i++] : value))
       write.mockClear()
@@ -189,9 +189,61 @@ describe('wallet freezelist requests in action inputs', () => {
     assertProofSlots([['amm_list.aleo', signer], ['amm_list.aleo', withdrawal]])
     write.mockClear()
     await expect(collect(client(false, false), { ...collectParams, withdrawalAddress: undefined, proofs: undefined })).rejects.toThrow('withdrawalAddress')
-    await expect(collect(client(false, false), { ...collectParams, withdrawalAddress: undefined, proofs: async () => EMPTY_MERKLE_PROOFS })).rejects.toThrow('withdrawalAddress')
     expect(write).not.toHaveBeenCalled()
   })
+
+  for (const [name, run] of [
+    ['collect', (override: object) => collect(client(true, true), { ...collectParams, ...override })],
+    ['rebalance', (override: object) => rebalancePosition(client(true, true), { ...rebalanceParams, ...override })],
+  ] as const) {
+    it.each([position, 'record1opaque'])(`${name} retains custom providers without a withdrawal address for %j`, async positionRecord => {
+      const provider = vi.fn(async (_context: { subject: string }) => EMPTY_MERKLE_PROOFS)
+      await run({ positionRecord, withdrawalAddress: undefined, proofs: provider })
+      expect(provider).toHaveBeenCalledTimes(4)
+      expect(provider.mock.calls.every(([context]) => context.subject === signer)).toBe(true)
+      const inputs = write.mock.calls[0]![1].inputs!
+      expect(inputs.filter(input => input === formatMerkleProofPair(EMPTY_MERKLE_PROOFS))).toHaveLength(4)
+    })
+
+    it(`${name} uses supplied annotations to identify the withdrawal subject`, async () => {
+      const supplied = [
+        { freezelistProgram: 'b_list.aleo', address: withdrawal, proof: '[b-withdrawal]' },
+        { freezelistProgram: 'amm_list.aleo', address: signer, proof: '[owner]' },
+        { freezelistProgram: 'amm_list.aleo', address: withdrawal, proof: '[withdrawal]' },
+        { freezelistProgram: 'a_list.aleo', address: withdrawal, proof: '[a-withdrawal]' },
+      ]
+      await run({ withdrawalAddress: undefined, proofs: supplied, freezelists: config })
+      const inputs = write.mock.calls[0]![1].inputs!
+      expect(inputs.filter(input => typeof input === 'string' && input.startsWith('['))).toEqual(
+        name === 'collect'
+          ? ['[owner]', '[withdrawal]', '[a-withdrawal]', '[b-withdrawal]']
+          : ['[a-withdrawal]', '[b-withdrawal]', '[owner]', '[withdrawal]'],
+      )
+    })
+
+    it(`${name} rejects ambiguous annotations without guessing a withdrawal subject`, async () => {
+      await expect(run({ withdrawalAddress: undefined, freezelists: config, proofs: [
+        { freezelistProgram: 'amm_list.aleo', address: signer, proof: '[owner]' },
+        { freezelistProgram: 'amm_list.aleo', address: withdrawal, proof: '[withdrawal]' },
+        { freezelistProgram: 'amm_list.aleo', address: 'aleo1other', proof: '[other]' },
+      ] })).rejects.toThrow('multiple withdrawal addresses')
+      expect(write).not.toHaveBeenCalled()
+    })
+
+    it.each([undefined, null])(`${name} explains the missing address for automatic proofs (%s)`, async proofs => {
+      await expect(run({ withdrawalAddress: undefined, proofs })).rejects.toThrow(
+        'withdrawalAddress must be provided to construct compliance proofs',
+      )
+      expect(write).not.toHaveBeenCalled()
+    })
+
+    it(`${name} enforces the address for providers that require the subject`, async () => {
+      const provider = Object.assign(vi.fn(async () => EMPTY_MERKLE_PROOFS), { requiresSubject: true })
+      await expect(run({ withdrawalAddress: undefined, proofs: provider })).rejects.toThrow('withdrawalAddress')
+      expect(provider).not.toHaveBeenCalled()
+      expect(write).not.toHaveBeenCalled()
+    })
+  }
 
   it('threads a client-level provider through actions while honoring per-call overrides', async () => {
     const actions = shieldSwapActions({ proofs })(client(false, false))
@@ -207,6 +259,17 @@ describe('wallet freezelist requests in action inputs', () => {
     write.mockClear()
     await actions.collect({ ...params, proofs: null })
     assertProofSlots([['shield_swap_freezelist.aleo', signer], ['shield_swap_freezelist.aleo', withdrawal]], { ...config, ammFreezelistProgram: 'shield_swap_freezelist.aleo' })
+  })
+
+  it('uses a client-level custom provider without a withdrawal address but honors automatic overrides', async () => {
+    const provider = vi.fn(async () => EMPTY_MERKLE_PROOFS)
+    const actions = shieldSwapActions({ proofs: provider })(client(false, false))
+    const { proofs: _proofs, ...params } = collectParams
+    await actions.collect({ ...params, withdrawalAddress: undefined })
+    expect(write).toHaveBeenCalledOnce()
+    write.mockClear()
+    await expect(actions.collect({ ...params, withdrawalAddress: undefined, proofs: null })).rejects.toThrow('withdrawalAddress')
+    expect(write).not.toHaveBeenCalled()
   })
 
   it('rejects wallet proofs on local signing paths before submitting', async () => {

@@ -9,6 +9,7 @@
 // stay positional-input-exact without repeating the table.
 
 import { parseRecord, type Client, type TransactionInput, type FreezelistProofInput } from '@provablehq/veil-core'
+import type { ComplianceProofs } from '../../utils/proofs.js'
 import { resolveTokenRoute, tokenIdToProgram, type TokenRoute } from '../../utils/routing.js'
 import { selectTokenRecord } from '../../utils/records.js'
 import { ROUTER_ADDRESSES, SHIELD_SWAP_LP_ROUTER } from '../../constants.js'
@@ -200,24 +201,28 @@ export function dispatchLiquidityCall(params: {
  * Resolves the position's withdrawal subject before requesting real proofs.
  *
  * Reads granted plaintext locally and verifies any explicit address against it.
- * An opaque record requires an explicit subject.
+ * Automatic generation and providers declaring requiresSubject need a known
+ * address. Supplied proofs and other providers own their subject selection.
  *
  * @property positionInput Plaintext or wallet-selected position record.
  * @property withdrawalAddress Optional explicit proof subject; defaults to the
  *   plaintext withdrawal field.
- * @param params The position record and optional explicit withdrawal address.
- * @returns The address whose freezelist exclusion must be proved.
- * @throws When the explicit address disagrees with plaintext or is missing for
- *   an opaque position.
+ * @property proofs Optional supplied proofs or provider; omission enables automatic generation.
+ * @property signerAddress Legacy provider fallback when the withdrawal subject is unknown.
+ * @param params The record, explicit address, proof source, and signer fallback.
+ * @returns The known or annotated withdrawal subject, or the legacy signer fallback for caller-owned proofs.
+ * @throws When addresses conflict, supplied annotations are ambiguous, or proof construction needs an unavailable subject.
  *
  * @example
  * const subject = resolveWithdrawalSubject({
- *   positionInput: '{ ... }', withdrawalAddress: 'aleo1...',
+ *   positionInput: '{ ... }', withdrawalAddress: 'aleo1...', signerAddress: 'aleo1...',
  * })
  */
 export function resolveWithdrawalSubject(params: {
   positionInput: TransactionInput
   withdrawalAddress?: string | undefined
+  proofs?: ComplianceProofs<readonly string[]> | undefined
+  signerAddress: string
 }): string {
   let fromRecord: string | undefined
   if (typeof params.positionInput === 'string') {
@@ -233,5 +238,20 @@ export function resolveWithdrawalSubject(params: {
   }
   const subject = fromRecord ?? params.withdrawalAddress
   if (subject) return subject
-  throw new Error('withdrawalAddress is required for freezelist proofs when the position record is opaque')
+  const { proofs, signerAddress } = params
+  if (proofs == null || (typeof proofs === 'function' && proofs.requiresSubject)) {
+    throw new Error('withdrawalAddress must be provided to construct compliance proofs when the position record is opaque')
+  }
+  // Annotated proofs name the payout subject themselves; literals need no lookup.
+  if (Array.isArray(proofs)) {
+    const addresses = new Set(proofs.flatMap(proof =>
+      typeof proof === 'string' || proof.address === signerAddress ? [] : [proof.address],
+    ))
+    if (addresses.size > 1) {
+      throw new Error('Supplied compliance proofs name multiple withdrawal addresses; supply an ABI-ordered proof tuple or a provider')
+    }
+    if (addresses.size === 1) return addresses.values().next().value!
+  }
+  // Preserve the context passed to custom providers before automatic generation.
+  return signerAddress
 }
