@@ -10,7 +10,7 @@ import type { ProtocolBridgeAsset } from '../types/protocol.js'
  * @example const program = bridgeFreezelistProgram(asset)
  */
 export function bridgeFreezelistProgram(asset: ProtocolBridgeAsset): string {
-  if (asset.privacy?.kind !== 'arc22') throw new BridgeError(`Wallet freezelist proofs require an ARC-22 asset: ${asset.id}`)
+  if (asset.privacy?.kind !== 'arc22') throw new BridgeError(`Compliance proofs require an ARC-22 asset: ${asset.id}`)
   const program = asset.privacy.freezelistProgram
   if (typeof program !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_]*\.aleo$/.test(program)) {
     throw new BridgeError(`Reviewed freezelist program metadata is required for ${asset.id}`)

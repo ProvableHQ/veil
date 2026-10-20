@@ -3,8 +3,8 @@ import { requireAleoClientWithWallet, type BridgeChainClients } from '../connect
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type { AleoPrivacyExecution, UnshieldParameters } from '../types/aleo.js'
 import type { BridgeRegistry } from '../types/protocol.js'
-import { EMPTY_MERKLE_PROOF_PAIR, privacyAmount, privacyRecord, resolvePrivacyAsset } from './internal/aleoPrivacy.js'
-import { validateBridgeFreezelistProof } from '../utils/freezelist.js'
+import { privacyAmount, privacyRecord, resolvePrivacyAsset } from './internal/aleoPrivacy.js'
+import { resolveComplianceProof } from '../utils/resolveComplianceProof.js'
 
 /**
  * Converts an Aleo private record into a token balance visible on the public ledger.
@@ -30,15 +30,14 @@ export async function unshield(registry: BridgeRegistry, clients: BridgeChainCli
   // plaintext record. This keeps private ownership data out of browser and bot
   // application state when the wallet supports structured record requests.
   const record: TransactionInput = params.record ?? privacyRecord(asset.privacy.program, literal)
-  // ARC-22 additionally names the public recipient and proves the token is not
-  // frozen. Preserve the legacy placeholder default; callers can opt in to a
-  // current literal or a signer proof resolved privately inside the wallet.
+  // ARC-22 proves the signer's exclusion, independently of the public recipient.
+  // Local clients generate a current witness; wallets receive a derived request.
   const inputs: TransactionInput[] = asset.privacy.kind === 'arc22'
     ? [
-        params.recipient ?? { type: 'address', label: `${asset.symbol} public recipient` },
+        params.recipient ?? walletClient.account?.address ?? { type: 'address', label: `${asset.symbol} public recipient` },
         literal,
         record,
-        validateBridgeFreezelistProof(params.merkleProof ?? EMPTY_MERKLE_PROOF_PAIR, asset),
+        await resolveComplianceProof(walletClient, asset, params.merkleProof),
       ]
     : [record, literal]
   // The wallet performs proving, signing, and broadcast. A prepared-transaction

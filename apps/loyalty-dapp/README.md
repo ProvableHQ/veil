@@ -23,3 +23,9 @@ Shield Swap integrations use automatic proof resolution and include freezelist
 grants in `shieldSwapAlgorithmGrants()` by default. Custom wrapper deployments
 must pass matching `freezelists` configuration to the grant helper and
 `shieldSwapActions`. See [Shield Swap proofs](../../packages/shield-swap/README.md#freezelist-proofs).
+
+Bridge ARC-22 unshielding and private xReserve burns also resolve compliance
+proofs automatically. Omit `merkleProof` and supply the matching
+`unshieldFreezelistProofGrant` or `xReserveBurnFreezelistProofGrant` when connecting
+the wallet. Local SDK clients generate and cache the witness instead. See
+[Bridge compliance proofs](../../packages/bridge/README.md#automatic-compliance-proofs).

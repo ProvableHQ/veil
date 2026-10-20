@@ -17,7 +17,7 @@ export type BridgeFreezelistParameters = {
 
 /**
  * Builds a signer-only wallet proof request from reviewed bridge asset metadata.
- * Pass the result as `merkleProof` to opt in; the wallet resolves it during execution.
+ * Pass the result as `merkleProof` to select wallet derivation explicitly; omission resolves proofs automatically.
  * This builder performs no network access and requires no account address.
  * @param options Selects the registry and ARC-22 asset whose freezelist root is checked.
  * @returns A request requiring a compatible wallet and a grant for the executed proof slot.

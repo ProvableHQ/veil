@@ -20,6 +20,7 @@ import {
 import { aleoAgentTools } from '../packages/core/src/agent/index.js'
 import { loadNetwork, type AleoSdk } from '../packages/provable-sdk/src/index.js'
 import { shieldSwapAlgorithmGrants } from '../packages/shield-swap/src/index.js'
+import { createAleoClient as createBridgeAleoClient, createBridgeClient, unshieldFreezelistProofGrant, DEFAULT_BRIDGE_REGISTRY } from '../packages/bridge/src/index.js'
 
 const API_URL = 'https://edge.provable.com/api/v2'
 
@@ -44,6 +45,25 @@ describe('Wallet freezelist proof setup', () => {
     expect(grant.argConstraints).toEqual({ freezelistProgram: ['compliance.aleo'] })
     // An ARC-22 wallet transfer passes recipient, amount, record, then `proof`.
     // These illustrative program names must match the deployed token and list.
+  })
+  it('inserts the Bridge unshield compliance request matching the connected wallet grant', async () => {
+    const asset = { chain: 'aleo', asset: 'usdcx' }
+    const grant = unshieldFreezelistProofGrant({ registry: DEFAULT_BRIDGE_REGISTRY, asset })
+    const bridge = createBridgeClient({
+      clients: { aleo: createBridgeAleoClient({
+        publicClient: createPublicClient({ transport: http(API_URL, { network: 'mainnet' }) }),
+        account: { executeTransaction: async (call) => {
+          // Inspect the call without signing, proving, or submitting a transaction.
+          expect(call).toMatchObject({ program: grant.program, function: grant.function })
+          expect(call.inputs?.[grant.inputPosition]).toEqual({
+            type: 'derived', algorithm: 'program-freezelist-exclusion-proof',
+            args: { freezelistProgram: { type: 'string', value: 'usdcx_freezelist.aleo' } },
+          })
+          return 'at1example'
+        } },
+      }) },
+    })
+    await bridge.unshield({ asset, amount: '2.5' })
   })
 })
 
