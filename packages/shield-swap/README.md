@@ -178,57 +178,84 @@ Wallet accounts also pass token records differently at call time — the
 per-action "local vs wallet" notes under [Swapping](#swapping) and
 [Liquidity](#liquidity) cover it.
 
-### Wallet-derived freezelist proofs
+### Freezelist proofs
 
-`walletFreezelistProofProvider` opts swaps, claims, mint, increase, collect, and
-rebalance into `program-freezelist-exclusion-proof`. Configure the actual
-freezelist program for each wrapper the application uses. A wrapper program is
-not its freezelist program. The mapping below illustrates the configuration;
-verify the names against the deployment before connecting.
+Proofs are generated automatically when `proofs` is omitted or `null`. Local
+accounts use the generator supplied by `@provablehq/veil-aleo-sdk`, including
+when transaction proving is delegated. Wallet accounts emit
+`program-freezelist-exclusion-proof` requests; connect with
+`shieldSwapAlgorithmGrants()` to grant both blinding and freezelist slots.
+The wallet must implement the algorithm. Older wallets can use caller-supplied
+literal proofs or an existing provider.
+
+Automatic local resolution reads `freeze_list_root[1u8]` once per list per
+action. It downloads `/programs/:programID/compliance/freeze-list` when the
+current tree is missing, checks each witness against the chain root, and caches
+trees and proofs in memory per client, network, list, root and subject. Each
+later action checks the root again; unchanged roots reuse cached proofs, changed
+roots cause a fresh download. Concurrent subjects share the download. The known
+empty root uses a verified empty witness without downloading a tree. Frozen
+subjects, missing roots and stale indexer trees fail before execution; errors do
+not fall back to empty proofs. A root change during transaction proving may
+still require retrying the action. Caches disappear on restart and retain at most
+16 lists and 256 subjects per list.
+
+Defaults recognize `shield_swap_freezelist.aleo`, credits (no compliance proof),
+and the mainnet/testnet USDCx underlying programs. Custom deployments supply a
+complete wrapper-to-list map on the client or action. Wrapper and freezelist
+program names are distinct:
 
 ```ts
-import {
-  shieldSwapActions, shieldSwapAlgorithmGrants, walletFreezelistProofProvider,
-} from '@provablehq/shield-swap-sdk'
-
 const freezelists = {
-  ammFreezelistProgram: 'shield_swap_freezelist.aleo', // also the default
+  ammFreezelistProgram: 'shield_swap_freezelist.aleo',
   wrapperFreezelists: {
-    'usdcx_wrapper.aleo': 'usdcx_freezelist.aleo',
-    'credits_wrapper.aleo': null, // only for a wrapper that ignores the proof
+    'custom_usdcx_wrapper.aleo': 'usdcx_freezelist.aleo',
+    'custom_credits_wrapper.aleo': null,
   },
 }
-const proofs = walletFreezelistProofProvider(freezelists)
-
-await adapter.connect(network, decryptPermission, {
-  algorithmsAllowed: shieldSwapAlgorithmGrants({ freezelists }),
-})
-const { account, transport } = fromWalletAdapter(adapter)
-const client = createWalletClient({ account, transport }).extend(
-  shieldSwapActions({ api: {}, proofs }),
-)
+const client = walletClient.extend(shieldSwapActions({ freezelists }))
+// Wallet connection: algorithmsAllowed: shieldSwapAlgorithmGrants({ freezelists })
 ```
 
-`shieldSwapAlgorithmGrants()` remains the blinding-only grant set unless
-`freezelists` is supplied. `shieldSwapFreezelistGrants(freezelists)` returns only
-the proof grants for applications that compose grants themselves. Each grant
-restricts its exact call site and freezelist argument; router slots permit the
-lists in the configured wrapper map. Missing wrapper mappings fail before
-submission. Program overrides are available for deployments with the same ABIs.
+Each grant restricts its call site and allowed freezelists.
+`shieldSwapFreezelistGrants()` returns only freezelist grants for callers that
+compose their own grant set. Unknown wrapper mappings fail before submission.
 
-The wallet MUST implement the algorithm and accept the grants. Capability
-advertisement is a discovery hint; it does not verify the wallet's proof resolver.
-The wallet obtains the list and constructs proofs for its current accepted root,
-including rejecting frozen subjects. The SDK passes each derived input through
-without constructing the proof. Signer slots omit `address`, selecting the
-connected wallet signer. Mint recipient and withdrawal slots use explicit
-addresses. Each list and subject gets a separate proof request.
+`proofs` also accepts existing `ProofProvider`/`ProofInputProvider` callbacks,
+raw Aleo strings, or `{ freezelistProgram, address, proof }[]` for lookup by subject.
+A string represents one `[MerkleProof; 2]` bundle. Multiple literal bundles use
+fixed-length tuples in transaction input order; the selected route's exact count
+is checked before execution. The same literal may fill several slots when the
+list and address match.
 
-`collect` and `rebalancePosition` need the position's actual withdrawal address
-when a proof provider is configured. Granted plaintext supplies it automatically;
-for an opaque wallet-selected PositionNFT, pass `withdrawalAddress`. If both are
-available they MUST match. The parameter identifies a proof subject and cannot
-change the payout address fixed in the NFT.
+| Action | Literal bundle count | Order |
+| --- | --- | --- |
+| `swap`, `swapMultiHop` | 0–1 | Wrapped input sender |
+| `claimSwapOutput` | 1–3 | AMM signer, wrapped output receiver, wrapped refund receiver if refunded |
+| `mint` | 3–5 | Wrapped senders, then AMM signer, recipient, withdrawal |
+| `increaseLiquidity` | 0–2 | Wrapped senders |
+| `collect` | 2–4 | AMM owner, withdrawal, then wrapped receivers |
+| `rebalancePosition` | 2–6 | Funded wrapped senders, wrapped receivers, then AMM owner, withdrawal |
+
+Within each wrapper group, side 0 precedes side 1. Plain sides consume no wrapper
+proof slot. A credits wrapper still has a placeholder slot in positional tuples.
+
+```ts
+await client.swap({ ...swapParams, proofs: cachedSenderProof }) // one wrapped input
+await client.mint({ ...plainMintParams, proofs: [signerProof, recipientProof, withdrawalProof] })
+await client.collect({ ...collectParams, proofs: null }) // force automatic resolution
+```
+
+`shieldSwapActions({ proofs: provider })` sets a client default. Per-call
+literals or callbacks override it; `undefined` inherits it and `null` selects
+automatic resolution. Caller-supplied proofs bypass automatic freshness checks;
+the caller is responsible for their subjects, roots and validity. Local accounts
+reject wallet-derived requests returned by providers.
+
+`collect` and `rebalancePosition` need the actual withdrawal address. Granted
+plaintext supplies it; for an opaque wallet-selected PositionNFT, pass
+`withdrawalAddress`. If both are available they must match. This parameter
+identifies a proof subject and cannot change the payout fixed in the NFT.
 
 ```ts
 await client.collect({
@@ -240,19 +267,9 @@ await client.collect({
 })
 ```
 
-Standalone actions also accept `proofs` per call. Existing `ProofProvider`
-callbacks returning concrete pairs continue to work. `ProofInputProvider` also
-accepts encoded strings and the typed wallet request. A per-call provider
-overrides the client default; `proofs: undefined` explicitly opts out. Local
-accounts require concrete proofs and reject wallet-derived requests before
-submission. The CLI and existing agent/MCP write handlers use local signing;
-configure a literal provider on their client for populated lists, rather than a
-wallet provider. Their tool schemas do not transport wallet record grants.
-
-With no provider, existing calls retain `EMPTY_MERKLE_PROOFS`. This is the legacy
-all-zero witness used by the pinned deployments and a placeholder for wrappers
-that ignore proofs. Acceptance depends on the deployed verifier and accepted
-root; it is not a general empty-tree proof or a witness for a populated list.
+The CLI and agent/MCP write handlers use the SDK default generator. Existing
+providers remain compatible, including explicit legacy empty-witness providers
+for deployments that accept them. Omission now checks the actual current list.
 
 ### The composed client
 

@@ -1,3 +1,4 @@
+import { EMPTY_MERKLE_PROOFS as FIXTURE_PROOFS } from '../../../src/utils/proofs.js'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
 
@@ -87,6 +88,7 @@ describe('swapMultiHop — local signer, plain input', () => {
     executeMock.mockResolvedValue({ transactionId: 'at1mh', transitions: [], outputs: ['888field', 'record...', 'compliance...'] })
 
     const handle = await swapMultiHop(fakeClient('local'), {
+      proofs: async () => FIXTURE_PROOFS,
       poolKeys: [POOL_1, POOL_2],
       tokenInId: TOKEN_A,
       amountIn: 1_000_000n,
@@ -130,6 +132,7 @@ describe('swapMultiHop — local signer, plain input', () => {
   it('throws when a pool on the route does not exist', async () => {
     await expect(
       swapMultiHop(fakeClient('local', { pools: null }), {
+      proofs: async () => FIXTURE_PROOFS,
         poolKeys: [POOL_1, POOL_2], tokenInId: TOKEN_A, amountIn: 1n,
         blindedIdentity: IDENTITY, tokenRecord: RECORD,
       }),
@@ -152,6 +155,7 @@ describe('swapMultiHop — wrapped input (router dispatch)', () => {
     })
 
     const handle = await swapMultiHop(fakeClient('local', wrappedPools), {
+      proofs: async () => FIXTURE_PROOFS,
       poolKeys: [POOL_1, POOL_2],
       tokenInId: WRAPPED_A,
       amountIn: 1_000_000n,
@@ -175,6 +179,7 @@ describe('swapMultiHop — wrapped input (router dispatch)', () => {
   it('refuses a routed swap whose amount_out_min resolves to zero', async () => {
     await expect(
       swapMultiHop(fakeClient('local', wrappedPools), {
+      proofs: async () => FIXTURE_PROOFS,
         poolKeys: [POOL_1, POOL_2],
         tokenInId: WRAPPED_A,
         amountIn: 1_000_000n,
@@ -190,13 +195,14 @@ describe('swapMultiHop — wrapped input (router dispatch)', () => {
 describe('swapMultiHop — wallet signer', () => {
   it('requires tokenRecord', async () => {
     await expect(
-      swapMultiHop(fakeClient('rpc'), { poolKeys: [POOL_1, POOL_2], tokenInId: TOKEN_A, amountIn: 1n }),
+      swapMultiHop(fakeClient('rpc'), { proofs: async () => FIXTURE_PROOFS, poolKeys: [POOL_1, POOL_2], tokenInId: TOKEN_A, amountIn: 1n }),
     ).rejects.toThrow(/must provide tokenRecord/)
   })
 
   it('derives swapId when the caller supplied the blinded identity', async () => {
     writeMock.mockResolvedValue('at1walletMh')
     const handle = await swapMultiHop(fakeClient('rpc'), {
+      proofs: async () => FIXTURE_PROOFS,
       poolKeys: [POOL_1, POOL_2],
       tokenInId: TOKEN_A,
       amountIn: 1_000_000n,
@@ -229,6 +235,7 @@ describe('swapMultiHop — wallet signer', () => {
   it('leaves swapId undefined without a supplied identity', async () => {
     writeMock.mockResolvedValue('at1walletMh')
     const handle = await swapMultiHop(fakeClient('rpc'), {
+      proofs: async () => FIXTURE_PROOFS,
       poolKeys: [POOL_1, POOL_2],
       tokenInId: TOKEN_A,
       amountIn: 1_000_000n,
@@ -260,7 +267,7 @@ describe('claimSwapOutput on a multi-hop handle (unified claim)', () => {
 
   it('local: mirrors the SwapOutput entry into the unified 7-slot no-refund claim inputs', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1claimMh', transitions: [], outputs: [] })
-    const res = await claimSwapOutput(fakeClient('local'), { handle })
+    const res = await claimSwapOutput(fakeClient('local'), { proofs: async () => FIXTURE_PROOFS, handle })
 
     const call = executeMock.mock.calls[0]![1]
     expect(call.program).toBe('shield_swap.aleo')
@@ -281,7 +288,7 @@ describe('claimSwapOutput on a multi-hop handle (unified claim)', () => {
 
   it('wallet: resolve-mode derived requests target the handle blindedAddress', async () => {
     writeMock.mockResolvedValue('at1walletClaimMh')
-    await claimSwapOutput(fakeClient('rpc'), { handle })
+    await claimSwapOutput(fakeClient('rpc'), { proofs: async () => FIXTURE_PROOFS, handle })
     const inputs = writeMock.mock.calls[0]![1].inputs
     expect(inputs[0]).toMatchObject({
       type: 'derived',
@@ -293,13 +300,13 @@ describe('claimSwapOutput on a multi-hop handle (unified claim)', () => {
 
   it('throws SwapOutputNotFinalizedError when the output is absent', async () => {
     await expect(
-      claimSwapOutput(fakeClient('local', { swap_outputs: null }), { handle }),
+      claimSwapOutput(fakeClient('local', { swap_outputs: null }), { proofs: async () => FIXTURE_PROOFS, handle }),
     ).rejects.toThrow(SwapOutputNotFinalizedError)
   })
 
   it('demands swapId before claiming', async () => {
     await expect(
-      claimSwapOutput(fakeClient('local'), { handle: { ...handle, swapId: undefined } }),
+      claimSwapOutput(fakeClient('local'), { proofs: async () => FIXTURE_PROOFS, handle: { ...handle, swapId: undefined } }),
     ).rejects.toThrow(/resolve it from the confirmed/)
   })
 })

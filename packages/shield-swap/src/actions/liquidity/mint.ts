@@ -7,15 +7,14 @@ import { requireFieldOutput } from '../../utils/outputs.js'
 import { roundTickToSpacing } from '../../utils/tick-math.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../../utils/tick-hints.js'
 import type { TokenRoute } from '../../utils/routing.js'
-import { proofProviderForAccount, type ProofInputProvider } from '../../utils/proofs.js'
+import type { MintProofs, FreezelistConfig } from '../../utils/proofs.js'
+import { resolveActionProofs, ammProofContext, wrapperProofContext } from '../../utils/resolveProofs.js'
 import { SHIELD_SWAP } from '../../constants.js'
 import {
-  ammProofPair,
   assertPayoutAddress,
   autoSelectSideRecord,
   dispatchLiquidityCall,
   resolveSideRoutes,
-  wrapperSenderProof,
 } from './internal.js'
 
 /**
@@ -49,8 +48,10 @@ import {
  * @property token0Route Pre-resolved route override for token0 — skips the
  *   on-chain wrapped-ness read (offline/advanced use).
  * @property token1Route Pre-resolved route override for token1.
- * @property proofs Freezelist proof provider returning pairs, literals, or wallet-derived requests.
- *   Defaults to the legacy all-zero witness on every proof slot.
+ * @property proofs Supplies a {@link MintProofs} literal tuple in ABI order, an annotated
+ *   collection, or a provider. Omission or null enables automatic resolution.
+ * @property freezelists Overrides deployment lists for automatic or annotated proofs;
+ *   defaults to the known AMM, USDCx and credits lists.
  * @property tickLowerHint Explicit insert hint. Defaults to
  *   `pickInsertHint` (best-effort — see its limitation).
  * @property tickUpperHint Explicit insert hint for the upper bound.
@@ -83,7 +84,8 @@ export type MintParameters = {
   token1Record?: string | InputRequest
   token0Route?: TokenRoute
   token1Route?: TokenRoute
-  proofs?: ProofInputProvider
+  proofs?: MintProofs
+  freezelists?: FreezelistConfig
   tickLowerHint?: number
   tickUpperHint?: number
   initializedTicks?: PickInsertHintParameters['initializedTicks']
@@ -119,7 +121,7 @@ export type MintReturnType = {
  * `mint_from_wrapped_wrapped`), where the wrapped side's record slot takes
  * the caller's UNDERLYING record and is followed by that wrapper's
  * freezelist sender proof. The three AMM freezelist proof slots (signer,
- * recipient, withdrawal) default to the empty-tree witness.
+ * recipient, withdrawal) resolve automatically against the current list.
  *
  * Signer paths mirror `swap`: local accounts auto-select records and
  * pass literals; wallet accounts must supply both `tokenNRecord` inputs.
@@ -193,7 +195,6 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
 
   const account = requireAccount(client, 'mint')
   const isLocal = account.type === 'local'
-  const proofs = proofProviderForAccount(params.proofs, account.type)
   const nonce = params.nonce ?? generateFieldNonce()
 
   // Wrapped-ness decides the target transition and which program each
@@ -207,14 +208,14 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
   })
 
   // Wrapper freezelist proofs prove the SENDER; AMM proofs prove the three
-  // mint parties. All default to the empty-tree witness.
-  const [senderProof0, senderProof1, signerProofs, recipientProofs, withdrawalProofs] = await Promise.all([
-    wrapperSenderProof(proofs, route0, account.address),
-    wrapperSenderProof(proofs, route1, account.address),
-    ammProofPair(proofs, account.address, true),
-    ammProofPair(proofs, params.recipient),
-    ammProofPair(proofs, params.withdrawal),
-  ])
+  // mint parties. Automatic proofs use the current root.
+  const [senderProof0, senderProof1, signerProofs, recipientProofs, withdrawalProofs] = await resolveActionProofs(client, params.proofs, [
+    wrapperProofContext(route0, account.address),
+    wrapperProofContext(route1, account.address),
+    ammProofContext(account.address, true),
+    ammProofContext(params.recipient),
+    ammProofContext(params.withdrawal),
+  ], params.freezelists)
 
   // Everything after the record slots is identical across all four variants.
   const tail: TransactionInput[] = [

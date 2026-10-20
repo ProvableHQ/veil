@@ -344,6 +344,15 @@ export {
   type MerkleProofInput,
   type ProofContext,
   type ProofProvider,
+  type ProvidedProof,
+  type ActionProofs,
+  type FreezelistConfig,
+  type SwapProofs,
+  type ClaimProofs,
+  type MintProofs,
+  type IncreaseProofs,
+  type CollectProofs,
+  type RebalanceProofs,
 } from './utils/proofs.js'
 export {
   detectTokenStandard,

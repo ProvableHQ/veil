@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { FREEZELIST_PROOF_ALGORITHM } from '@provablehq/veil-core'
 import {
   shieldSwapAlgorithmGrants,
   SHIELD_SWAP_ALGORITHM_GRANTS,
@@ -27,7 +28,7 @@ const EXPECTED_POSITIONS: Array<[string, string, number, number]> = [
 
 describe('shieldSwapAlgorithmGrants', () => {
   it('grants the blinding pair at the deployed input positions for every transition', () => {
-    const grants = shieldSwapAlgorithmGrants()
+    const grants = shieldSwapAlgorithmGrants().filter(g => g.algorithm !== FREEZELIST_PROOF_ALGORITHM)
     expect(grants).toHaveLength(EXPECTED_POSITIONS.length * 2)
     for (const [program, fn, factorPos, addressPos] of EXPECTED_POSITIONS) {
       expect(grants).toContainEqual({
@@ -46,7 +47,7 @@ describe('shieldSwapAlgorithmGrants', () => {
   })
 
   it('applies program overrides to core and router grants separately', () => {
-    const grants = shieldSwapAlgorithmGrants({ program: 'core_x.aleo', routerProgram: 'router_x.aleo' })
+    const grants = shieldSwapAlgorithmGrants({ program: 'core_x.aleo', routerProgram: 'router_x.aleo' }).filter(g => g.algorithm !== FREEZELIST_PROOF_ALGORITHM)
     expect(grants.filter((g) => g.program === 'core_x.aleo')).toHaveLength(8)
     expect(grants.filter((g) => g.program === 'router_x.aleo')).toHaveLength(14)
   })

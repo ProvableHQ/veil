@@ -1,3 +1,4 @@
+import { EMPTY_MERKLE_PROOFS as FIXTURE_PROOFS } from '../../../src/utils/proofs.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
 import type { SwapHandle } from '../../../src/actions/swap/swap.js'
@@ -35,7 +36,7 @@ beforeEach(() => { vi.clearAllMocks(); clearRouteCache() })
 describe('claim import resolution', () => {
   it('uses chain token identities and the core override rather than stale handle token metadata', async () => {
     const { client, request } = fixture(false)
-    await claimSwapOutput(client, { handle })
+    await claimSwapOutput(client, { proofs: async () => FIXTURE_PROOFS, handle })
     expect(vi.mocked(executeContract).mock.calls[0]![1].imports).toEqual({
       'input.aleo': 'program input.aleo;', 'output.aleo': 'program output.aleo;',
       'dependency.aleo': 'program dependency.aleo;',
@@ -45,7 +46,7 @@ describe('claim import resolution', () => {
   })
   it.each([0n, 2n])('resolves wrapper, underlying, and custom router dependencies for remainder %s', async (remaining) => {
     const { client } = fixture(true, false, remaining)
-    await claimSwapOutput(client, { handle, routerProgram: 'custom_router.aleo' })
+    await claimSwapOutput(client, { proofs: async () => FIXTURE_PROOFS, handle, routerProgram: 'custom_router.aleo' })
     expect(vi.mocked(executeContract).mock.calls[0]![1]).toMatchObject({
       program: 'custom_router.aleo',
       imports: { 'input.aleo': 'program input.aleo;', 'output.aleo': 'program output.aleo;',
@@ -54,13 +55,13 @@ describe('claim import resolution', () => {
   })
   it('passes resolved program names to wallet signers', async () => {
     const { client } = fixture(false, true)
-    await claimSwapOutput(client, { handle })
+    await claimSwapOutput(client, { proofs: async () => FIXTURE_PROOFS, handle })
     expect(vi.mocked(writeContract).mock.calls[0]![1].imports).toEqual(['output.aleo', 'input.aleo', 'dependency.aleo'])
   })
   it('honors explicit imports without fetching any program sources', async () => {
     const { client, request } = fixture(false)
     const imports = { 'cached.aleo': 'program cached.aleo;' }
-    await claimSwapOutput(client, { handle, imports })
+    await claimSwapOutput(client, { proofs: async () => FIXTURE_PROOFS, handle, imports })
     expect(vi.mocked(executeContract).mock.calls[0]![1].imports).toBe(imports)
     expect(request.mock.calls.some(([r]) => r.method === 'getProgram')).toBe(false)
   })
@@ -71,7 +72,7 @@ describe('claim import resolution', () => {
       if (req.method === 'getProgram') throw new Error('source unavailable')
       return original(req)
     })
-    await expect(claimSwapOutput(client, { handle })).rejects.toThrow('source unavailable')
+    await expect(claimSwapOutput(client, { proofs: async () => FIXTURE_PROOFS, handle })).rejects.toThrow('source unavailable')
     expect(executeContract).not.toHaveBeenCalled()
   })
 })

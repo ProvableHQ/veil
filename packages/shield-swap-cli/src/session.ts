@@ -260,6 +260,8 @@ export async function loadSession(options: { network?: string } = {}) {
   // meaningful against the chain it was checked on. Every swap through this
   // client reserves and records automatically.
   const blindedIdentities = fileBlindedIdentityStore(blindedStorePath(network))
+  // SDK proving supplies automatic freezelist witnesses for every write command;
+  // shieldSwapActions checks current roots and caches witnesses for this session.
   const client = walletClient.extend(
     shieldSwapActions({ api: { baseUrl: apiUrl }, blindedIdentities }),
   )

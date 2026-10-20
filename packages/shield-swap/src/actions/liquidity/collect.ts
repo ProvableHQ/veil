@@ -8,9 +8,10 @@ import {
 import { resolvePositionRecord } from '../../utils/records.js'
 import { requireAccount, requirePool } from '../../utils/guards.js'
 import type { TokenRoute } from '../../utils/routing.js'
-import { proofProviderForAccount, type ProofInputProvider } from '../../utils/proofs.js'
+import type { CollectProofs, FreezelistConfig } from '../../utils/proofs.js'
+import { resolveActionProofs, ammProofContext, wrapperProofContext } from '../../utils/resolveProofs.js'
 import { SHIELD_SWAP, SHIELD_SWAP_LP_ROUTER } from '../../constants.js'
-import { ammProofPair, resolveSideRoutes, wrapperSenderProof, resolveWithdrawalSubject } from './internal.js'
+import { resolveSideRoutes, resolveWithdrawalSubject } from './internal.js'
 
 /**
  * Parameters for {@link collect}.
@@ -31,11 +32,12 @@ import { ammProofPair, resolveSideRoutes, wrapperSenderProof, resolveWithdrawalS
  * @property token1Route Pre-resolved route override for token1.
  * @property withdrawalAddress Explicit payout subject for proofs when the position
  *   record is opaque. Defaults to the plaintext record's withdrawal field.
- *   Required with a proof provider if that field is unavailable; must match it
+ *   Required if that field is unavailable; must match it
  *   when both are supplied. Does not change the contract's payout address.
- * @property proofs Freezelist proof provider returning pairs, literals, or wallet-derived requests.
- *   Defaults to the legacy all-zero witness on every proof slot (the AMM's
- *   owner/withdrawal proofs, plus a receiver proof per wrapped side).
+ * @property proofs Supplies a {@link CollectProofs} literal tuple in ABI order, an annotated
+ *   collection, or a provider. Omission or null enables automatic resolution.
+ * @property freezelists Overrides deployment lists for automatic or annotated proofs;
+ *   defaults to the known AMM, USDCx and credits lists.
  * @property imports Program sources for dynamic-dispatch dependencies
  *   (`{ 'token.aleo': source }`). The prover cannot discover `IARC20@(...)`
  *   callees statically — pass the involved token programs' sources when
@@ -53,7 +55,8 @@ export type CollectParameters = {
   token0Route?: TokenRoute
   token1Route?: TokenRoute
   withdrawalAddress?: string
-  proofs?: ProofInputProvider
+  proofs?: CollectProofs
+  freezelists?: FreezelistConfig
   imports?: Record<string, string>
   program?: string
 }
@@ -110,7 +113,6 @@ export async function collect(client: Client, params: CollectParameters): Promis
 
   const account = requireAccount(client, 'collect')
   const isLocal = account.type === 'local'
-  const proofs = proofProviderForAccount(params.proofs, account.type)
 
   const [route0, route1] = await resolveSideRoutes(client, {
     token0Id: pool.token0,
@@ -140,17 +142,16 @@ export async function collect(client: Client, params: CollectParameters): Promis
 
   const receiver = resolveWithdrawalSubject({
     positionInput, withdrawalAddress: params.withdrawalAddress,
-    signer: account.address, requiresSubject: params.proofs !== undefined,
   })
 
   // Core collect proves the owner and the withdrawal address against the
   // AMM freezelist; each wrapped side adds a wrapper receiver proof.
-  const [ownerProofs, withdrawalProofs, receiverProof0, receiverProof1] = await Promise.all([
-    ammProofPair(proofs, account.address, true),
-    ammProofPair(proofs, receiver),
-    wrapperSenderProof(proofs, route0, receiver, false),
-    wrapperSenderProof(proofs, route1, receiver, false),
-  ])
+  const [ownerProofs, withdrawalProofs, receiverProof0, receiverProof1] = await resolveActionProofs(client, params.proofs, [
+    ammProofContext(account.address, true),
+    ammProofContext(receiver),
+    wrapperProofContext(route0, receiver, false),
+    wrapperProofContext(route1, receiver, false),
+  ], params.freezelists)
 
   // Dispatch table: any wrapped side moves the call to the LP router, which
   // appends the wrapped sides' receiver proofs (side 0 before side 1).

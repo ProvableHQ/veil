@@ -64,7 +64,7 @@ const abis = Object.fromEntries(['shield_swap', 'shield_swap_router', 'shield_sw
   const abi = JSON.parse(readFileSync(new URL(`../../codegen/abi/${name}.json`, import.meta.url), 'utf8'))
   return [abi.program, abi]
 }))
-function assertProofSlots(expected: [string, string][]) {
+function assertProofSlots(expected: [string, string][], deployment = config) {
   expect(write).toHaveBeenCalledOnce()
   const call = write.mock.calls[0]![1]
   const fn = abis[call.program].functions.find((f: { name: string }) => f.name === call.function)
@@ -76,7 +76,7 @@ function assertProofSlots(expected: [string, string][]) {
   expect(call.inputs!.flatMap((value, i) => isFreezelistProofRequest(value) ? [i] : [])).toEqual(proofPositions)
   // Signer slots use the wallet default; explicit recipient/withdrawal slots retain addresses.
   actual.forEach((value, i) => expect(value.args.address?.value).toBe(expected[i]![1] === signer ? undefined : expected[i]![1]))
-  const grants = shieldSwapFreezelistGrants(config)
+  const grants = shieldSwapFreezelistGrants(deployment)
   for (const inputPosition of proofPositions) {
     const input = call.inputs![inputPosition]
     expect(isFreezelistProofRequest(input)).toBe(true)
@@ -87,6 +87,44 @@ function assertProofSlots(expected: [string, string][]) {
 }
 
 beforeEach(() => { clearRouteCache(); write.mockReset(); execute.mockReset(); write.mockResolvedValue('at1tx') })
+
+// Compare positional literals and automatic requests against the independently
+// checked provider path for every end-user route, including funded rebalance.
+describe('automatic and literal action inputs', () => {
+  for (const w0 of [false, true]) for (const w1 of [false, true]) {
+    const routes = [
+      ['mint', (override: object) => mint(client(w0, w1), { ...mintParams, ...override })],
+      ['increase', (override: object) => increaseLiquidity(client(w0, w1), { ...increaseParams, ...override })],
+      ['collect', (override: object) => collect(client(w0, w1), { ...collectParams, ...override })],
+      ...[0n, 5n].flatMap(funded0 => [0n, 5n].map(funded1 => [
+        `rebalance ${funded0}/${funded1}`,
+        (override: object) => rebalancePosition(client(w0, w1), { ...rebalanceParams, funded0, funded1, ...override }),
+      ] as const)),
+      ...[0n, 5n].map(remainder => [
+        `claim ${remainder}`,
+        (override: object) => claimSwapOutput(client(w0, w1, remainder), {
+          handle: { swapId: '1field', tokenInId: id(0, w0), tokenOutId: id(1, w1), poolKey: '1field', amountIn: 100n, program: 'shield_swap.aleo', transactionId: 'at1swap', blindedAddress: 'aleo1blind' },
+          imports: {}, proofs, ...override,
+        }),
+      ] as const),
+    ] as const
+    for (const [name, run] of routes) it(`${name}, wrapped ${w0}/${w1}: automatic requests and literal order match the ABI`, async () => {
+      await run({})
+      const expected = write.mock.calls[0]![1]
+      const literals = expected.inputs!.filter(isFreezelistProofRequest).map((_, i) => `proof-${i}`)
+      write.mockClear()
+      await run({ proofs: literals })
+      let i = 0
+      expect(write.mock.calls[0]![1].inputs).toEqual(expected.inputs!.map(value => isFreezelistProofRequest(value) ? literals[i++] : value))
+      write.mockClear()
+      await run({ proofs: null, freezelists: config })
+      expect(write.mock.calls[0]![1].inputs).toEqual(expected.inputs)
+      write.mockClear()
+      await expect(run({ proofs: [...literals, 'extra'] })).rejects.toThrow(`requires ${literals.length}`)
+      expect(write).not.toHaveBeenCalled()
+    })
+  }
+})
 
 describe('wallet freezelist requests in action inputs', () => {
   for (const w0 of [false, true]) for (const w1 of [false, true]) {
@@ -145,14 +183,12 @@ describe('wallet freezelist requests in action inputs', () => {
     expect(write).not.toHaveBeenCalled()
   })
 
-  it('reads withdrawal from granted plaintext and retains default placeholder compatibility', async () => {
+  it('reads withdrawal from granted plaintext and requires the subject for automatic proofs', async () => {
     const plaintext = `{ owner: ${signer}.private, withdrawal: ${withdrawal}.private, _nonce: 1group.public }`
     await collect(client(false, false), { ...collectParams, positionRecord: plaintext, withdrawalAddress: undefined })
     assertProofSlots([['amm_list.aleo', signer], ['amm_list.aleo', withdrawal]])
     write.mockClear()
-    await collect(client(false, false), { ...collectParams, withdrawalAddress: undefined, proofs: undefined })
-    expect(write).toHaveBeenCalledOnce()
-    write.mockClear()
+    await expect(collect(client(false, false), { ...collectParams, withdrawalAddress: undefined, proofs: undefined })).rejects.toThrow('withdrawalAddress')
     await expect(collect(client(false, false), { ...collectParams, withdrawalAddress: undefined, proofs: async () => EMPTY_MERKLE_PROOFS })).rejects.toThrow('withdrawalAddress')
     expect(write).not.toHaveBeenCalled()
   })
@@ -166,8 +202,11 @@ describe('wallet freezelist requests in action inputs', () => {
     await actions.collect({ ...params, proofs: async () => EMPTY_MERKLE_PROOFS })
     expect(write.mock.calls[0]![1].inputs!.filter(isFreezelistProofRequest)).toHaveLength(0)
     write.mockClear()
-    await actions.collect({ ...params, proofs: undefined, withdrawalAddress: undefined })
-    expect(write.mock.calls[0]![1].inputs!.filter(isFreezelistProofRequest)).toHaveLength(0)
+    await actions.collect({ ...params, proofs: undefined })
+    assertProofSlots([['amm_list.aleo', signer], ['amm_list.aleo', withdrawal]])
+    write.mockClear()
+    await actions.collect({ ...params, proofs: null })
+    assertProofSlots([['shield_swap_freezelist.aleo', signer], ['shield_swap_freezelist.aleo', withdrawal]], { ...config, ammFreezelistProgram: 'shield_swap_freezelist.aleo' })
   })
 
   it('rejects wallet proofs on local signing paths before submitting', async () => {

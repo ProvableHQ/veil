@@ -10,12 +10,8 @@
 
 import { parseRecord, type Client, type TransactionInput, type FreezelistProofInput } from '@provablehq/veil-core'
 import { resolveTokenRoute, tokenIdToProgram, type TokenRoute } from '../../utils/routing.js'
-import {
-  resolveProofInput,
-  type ProofInputProvider,
-} from '../../utils/proofs.js'
 import { selectTokenRecord } from '../../utils/records.js'
-import { ROUTER_ADDRESSES, SHIELD_SWAP_FREEZELIST, SHIELD_SWAP_LP_ROUTER } from '../../constants.js'
+import { ROUTER_ADDRESSES, SHIELD_SWAP_LP_ROUTER } from '../../constants.js'
 
 /** The Aleo zero address — the burn sink no payout slot may name. */
 const ZERO_ADDRESS = 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc'
@@ -126,56 +122,6 @@ export async function autoSelectSideRecord(
 }
 
 /**
- * Resolves and formats a wrapped side's freezelist sender proof.
- *
- * Returns the proof input that must immediately follow the
- * side's underlying record in a router call, or `undefined` for a plain
- * side (no proof slot exists). Pure unless a provider is configured.
- *
- * @param provider The configured proof provider, or undefined to retain the
- *   legacy all-zero witness.
- * @param route The side's resolved route.
- * @param subject The address whose non-inclusion is proved (the sender).
- * @param subjectIsSigner Defaults to true for deposits; pass false for withdrawal receivers.
- */
-export async function wrapperSenderProof(
-  provider: ProofInputProvider | undefined,
-  route: TokenRoute,
-  subject: string,
-  subjectIsSigner = true,
-): Promise<FreezelistProofInput | undefined> {
-  if (!route.wrapped) return undefined
-  return resolveProofInput(provider, {
-    list: 'wrapper', program: route.wrapperProgram, subject,
-    ...(subjectIsSigner ? { subjectIsSigner: true } : {}),
-  })
-}
-
-/**
- * Resolves and formats one AMM-freezelist proof pair for a subject.
- *
- * Applies to `mint`'s signer/recipient/withdrawal proofs and `collect`'s
- * owner/withdrawal proofs, all proved against the AMM's own freezelist.
- * Pure unless a provider is configured.
- *
- * @param provider The configured proof provider, or undefined to retain the
- *   legacy all-zero witness.
- * @param subject The address whose non-inclusion is proved.
- * @param subjectIsSigner Defaults to false; true uses the wallet signer for signer slots.
- * @returns The `[MerkleProof; 2]` literal or wallet-derived input.
- */
-export async function ammProofPair(
-  provider: ProofInputProvider | undefined,
-  subject: string,
-  subjectIsSigner = false,
-): Promise<FreezelistProofInput> {
-  return resolveProofInput(provider, {
-    list: 'amm', program: SHIELD_SWAP_FREEZELIST, subject,
-    ...(subjectIsSigner ? { subjectIsSigner: true } : {}),
-  })
-}
-
-/**
  * A resolved liquidity dispatch: which program and transition to call and the
  * record slots (with wrapper sender proofs interleaved).
  *
@@ -254,31 +200,24 @@ export function dispatchLiquidityCall(params: {
  * Resolves the position's withdrawal subject before requesting real proofs.
  *
  * Reads granted plaintext locally and verifies any explicit address against it.
- * An opaque record requires an explicit subject when a provider is configured;
- * legacy placeholder-only calls preserve their previous signer fallback.
+ * An opaque record requires an explicit subject.
  *
  * @property positionInput Plaintext or wallet-selected position record.
  * @property withdrawalAddress Optional explicit proof subject; defaults to the
  *   plaintext withdrawal field.
- * @property signer Legacy fallback used only without a proof provider.
- * @property requiresSubject Requires a known withdrawal address for real proofs.
- * @param params The record, optional explicit address, signer fallback, and
- *   whether a provider requires the actual contract subject.
+ * @param params The position record and optional explicit withdrawal address.
  * @returns The address whose freezelist exclusion must be proved.
  * @throws When the explicit address disagrees with plaintext or is missing for
- *   an opaque position used with a proof provider.
+ *   an opaque position.
  *
  * @example
  * const subject = resolveWithdrawalSubject({
  *   positionInput: '{ ... }', withdrawalAddress: 'aleo1...',
- *   signer: 'aleo1...', requiresSubject: true,
  * })
  */
 export function resolveWithdrawalSubject(params: {
   positionInput: TransactionInput
   withdrawalAddress?: string | undefined
-  signer: string
-  requiresSubject: boolean
 }): string {
   let fromRecord: string | undefined
   if (typeof params.positionInput === 'string') {
@@ -294,8 +233,5 @@ export function resolveWithdrawalSubject(params: {
   }
   const subject = fromRecord ?? params.withdrawalAddress
   if (subject) return subject
-  if (params.requiresSubject) {
-    throw new Error('withdrawalAddress is required for freezelist proofs when the position record is opaque')
-  }
-  return params.signer
+  throw new Error('withdrawalAddress is required for freezelist proofs when the position record is opaque')
 }

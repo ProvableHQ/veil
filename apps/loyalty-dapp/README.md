@@ -18,3 +18,8 @@ signer proof; provide the actual subject for recipient or withdrawal proofs.
 The wallet resolves these inputs during execution, and failures should remain
 visible to the caller. See the [core example](../../packages/core/README.md#wallet-generated-freezelist-proofs)
 for the complete input and grant shape.
+
+Shield Swap integrations use automatic proof resolution and include freezelist
+grants in `shieldSwapAlgorithmGrants()` by default. Custom wrapper deployments
+must pass matching `freezelists` configuration to the grant helper and
+`shieldSwapActions`. See [Shield Swap proofs](../../packages/shield-swap/README.md#freezelist-proofs).

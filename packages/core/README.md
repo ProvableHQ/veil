@@ -148,6 +148,16 @@ Wallet clients also carry `simulateContract`, `deployContract`, `transfer`,
 write action is available standalone (tree-shakeable) or as a method on the
 client via the `extend()` pattern.
 
+### Reading freezelists
+
+`publicClient.getComplianceFreezeList({ programId })` reads the published
+compliance tree as decimal node strings through the configured transport. Pair
+it with `readContract({ programId, mapping: 'freeze_list_root', key: '1u8' })`
+to validate witnesses against the current root. Core does not load WASM;
+`@provablehq/veil-aleo-sdk` supplies `sdk.generateFreezelistProof({ address, tree, root })`
+for Node and browser callers. Shield Swap uses this generator automatically on
+SDK-backed clients and caches witnesses while the current root is unchanged.
+
 ### Wallet-generated freezelist proofs
 
 `freezelistProofRequest` asks a connected wallet to fill one `[MerkleProof; 2]`

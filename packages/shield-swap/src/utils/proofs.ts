@@ -47,12 +47,51 @@ export const EMPTY_MERKLE_PROOFS: readonly [MerkleProofInput, MerkleProofInput] 
  * @property subject The address whose non-inclusion is proved.
  * @property subjectIsSigner Identifies a signer slot; wallet providers omit the
  *   address argument so the wallet selects its connected signer. Defaults to false.
+ * @property underlyingProgram Identifies a wrapped token's underlying program
+ *   for automatic compliance-list lookup. Omitted for AMM slots.
  */
 export interface ProofContext {
   list: 'amm' | 'wrapper'
   program: string
   subject: string
   subjectIsSigner?: boolean
+  underlyingProgram?: string
+}
+
+/**
+ * Associates an externally computed proof with its list and subject.
+ * @property freezelistProgram Names the compliance list, not the wrapper.
+ * @property address Identifies the address proved by this witness.
+ * @property proof Contains the encoded `[MerkleProof; 2]` Aleo literal.
+ */
+export type ProvidedProof = { freezelistProgram: string; address: string; proof: string }
+
+/** Accepts literals in ABI order, annotated proofs, or an existing provider; null selects automatic resolution. */
+export type ActionProofs<T extends readonly string[]> = T | (readonly [string] extends T ? string : never) | readonly ProvidedProof[] | ProofInputProvider | null
+
+/** Bounds a swap's literals to its optional wrapped-input sender proof. */
+export type SwapProofs = ActionProofs<readonly [] | readonly [sender: string]>
+/** Bounds claim literals to AMM signer, wrapped output receiver, then wrapped refund receiver. */
+export type ClaimProofs = ActionProofs<readonly [amm: string] | readonly [amm: string, receiver: string] | readonly [amm: string, output: string, refund: string]>
+/** Bounds mint literals to wrapped senders (side 0 then 1), then AMM signer, recipient and withdrawal. */
+export type MintProofs = ActionProofs<readonly [string, string, string] | readonly [string, string, string, string] | readonly [string, string, string, string, string]>
+/** Bounds increase literals to wrapped senders, side 0 before side 1. */
+export type IncreaseProofs = ActionProofs<readonly [] | readonly [sender: string] | readonly [sender0: string, sender1: string]>
+/** Bounds collect literals to AMM owner and withdrawal, then wrapped receivers, side 0 before side 1. */
+export type CollectProofs = ActionProofs<readonly [string, string] | readonly [string, string, string] | readonly [string, string, string, string]>
+/** Bounds rebalance literals to funded wrapped senders, wrapped receivers, then AMM owner and withdrawal. */
+export type RebalanceProofs = ActionProofs<readonly [string, string] | readonly [string, string, string] | readonly [string, string, string, string] | readonly [string, string, string, string, string] | readonly [string, string, string, string, string, string]>
+
+/**
+ * Configures automatic proof resolution for another deployment.
+ * @property ammFreezelistProgram Overrides `shield_swap_freezelist.aleo`.
+ * @property wrapperFreezelists Supplies the complete mapping for custom wrappers;
+ *   null marks a wrapper that ignores proofs. When omitted, lookup recognizes
+ *   credits and the mainnet/testnet USDCx underlying programs.
+ */
+export type FreezelistConfig = {
+  ammFreezelistProgram?: string
+  wrapperFreezelists?: Readonly<Record<string, string | null>>
 }
 
 /**

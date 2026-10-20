@@ -19,12 +19,21 @@ import {
 } from '../packages/core/src/index.js'
 import { aleoAgentTools } from '../packages/core/src/agent/index.js'
 import { loadNetwork, type AleoSdk } from '../packages/provable-sdk/src/index.js'
+import { shieldSwapAlgorithmGrants } from '../packages/shield-swap/src/index.js'
 
 const API_URL = 'https://edge.provable.com/api/v2'
 
 // Wallet-only helpers are deterministic; actual proof resolution happens in
 // a connected wallet after the matching connect-time grant is approved.
 describe('Wallet freezelist proof setup', () => {
+  it('includes constrained freezelist grants for automatic Shield Swap proofs', () => {
+    const grants = shieldSwapAlgorithmGrants()
+    expect(grants).toContainEqual(expect.objectContaining({
+      algorithm: 'program-freezelist-exclusion-proof', program: 'shield_swap.aleo',
+      function: 'mint', inputPosition: 8,
+      argConstraints: { freezelistProgram: ['shield_swap_freezelist.aleo'] },
+    }))
+  })
   it('prepares a signer proof and grant for a private token transfer', () => {
     const proof = freezelistProofRequest({ freezelistProgram: 'compliance.aleo' })
     const grant = freezelistProofGrant({
