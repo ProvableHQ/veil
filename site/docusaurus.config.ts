@@ -4,8 +4,22 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'Veil',
-  tagline: 'Use viem-style calls to use any Aleo wallet or SDK.',
+  tagline: 'TypeScript SDK for Aleo: viem-style clients, wallets, private DeFi, and agent tools.',
   favicon: 'img/favicon.ico',
+
+  headTags: [
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'describedby',
+        type: 'text/plain',
+        href: new URL(
+          `${process.env.DOCS_BASE_URL ?? '/veil/'}llms.txt`,
+          process.env.DOCS_URL ?? 'https://provablehq.github.io',
+        ).href,
+      },
+    },
+  ],
 
   future: {
     v4: true,
@@ -94,6 +108,7 @@ const config: Config = {
           title: 'Community',
           items: [
             { label: 'GitHub', href: 'https://github.com/ProvableHQ/veil' },
+            { label: 'LLM documentation index', to: 'pathname:///llms.txt' },
             { label: 'Aleo Discord', href: 'https://discord.gg/aleo' },
           ],
         },

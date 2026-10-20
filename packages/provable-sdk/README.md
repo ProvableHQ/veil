@@ -1,5 +1,7 @@
 # @provablehq/veil-aleo-sdk
 
+[All Veil packages](../../README.md#packages) · [Documentation](https://provablehq.github.io/veil/packages/provable-sdk) · [npm](https://www.npmjs.com/package/@provablehq/veil-aleo-sdk) · [LLM index](../../llms.txt)
+
 Local signing and proving for the Veil Aleo SDK, backed by the Provable WASM SDK
 (`@provablehq/sdk`).
 

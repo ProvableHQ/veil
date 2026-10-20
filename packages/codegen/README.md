@@ -1,5 +1,7 @@
 # @provablehq/veil-codegen
 
+[All Veil packages](../../README.md#packages) · [Documentation](https://provablehq.github.io/veil/packages/codegen) · [npm](https://www.npmjs.com/package/@provablehq/veil-codegen) · [LLM index](../../llms.txt)
+
 Generates TypeScript bindings from an Aleo program's ABI, and ships the
 `veil-codegen` CLI that drives it.
 

@@ -1,5 +1,7 @@
 # @provablehq/veil-leo
 
+[All Veil packages](../../README.md#packages) · [Documentation](https://provablehq.github.io/veil/packages/leo) · [npm](https://www.npmjs.com/package/@provablehq/veil-leo) · [LLM index](../../llms.txt)
+
 Wraps the Leo CLI in a typed TS/JS client. The client shells out to the `leo`
 binary and exposes its `build`, `abi`, `deploy`, and `synthesize` commands as
 async methods, with the CLI flags surfaced as typed options objects instead of

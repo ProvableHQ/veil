@@ -8,7 +8,7 @@
     "url": "git+https://github.com/ProvableHQ/veil.git",
     "directory": "packages/codegen"
   },
-  "homepage": "https://github.com/ProvableHQ/veil#readme",
+  "homepage": "https://github.com/ProvableHQ/veil/tree/main/packages/codegen#readme",
   "type": "module",
   "bin": {
     "veil-codegen": "./dist/cli.js"
@@ -44,5 +44,19 @@
     "@provablehq/veil-aleo-sdk": "workspace:*",
     "tsup": "^8.0.0",
     "typescript": "^5.7.0"
+  },
+  "keywords": [
+    "aleo",
+    "veil",
+    "typescript",
+    "privacy",
+    "codegen",
+    "abi",
+    "cli",
+    "smart-contracts",
+    "type-generation"
+  ],
+  "bugs": {
+    "url": "https://github.com/ProvableHQ/veil/issues"
   }
 }

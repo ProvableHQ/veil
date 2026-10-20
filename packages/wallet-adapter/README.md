@@ -1,5 +1,7 @@
 # @provablehq/veil-aleo-wallet-adapter
 
+[All Veil packages](../../README.md#packages) · [Documentation](https://provablehq.github.io/veil/packages/wallet-adapter) · [npm](https://www.npmjs.com/package/@provablehq/veil-aleo-wallet-adapter) · [LLM index](../../llms.txt)
+
 Adapts a Provable/Aleo wallet-standard adapter (Shield, Leo, Puzzle, Fox, …) into
 the abstract `@provablehq/veil-core` account and transport interfaces.
 
