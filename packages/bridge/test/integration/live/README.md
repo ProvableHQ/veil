@@ -67,7 +67,8 @@ A chain-level default alone can be bypassed by RPC transaction filling.
 Use the same mainnet acknowledgement variables with
 `BRIDGE_LIVE_MAINNET_CASES=aleo-arc` and run
 `packages/bridge/test/integration/live/mainnet/aleo-arc.live.test.ts`.
-The test spends one unspent 2-USDCx record plus the Aleo proving fee. It derives
+The test burns 2 USDCx from an unspent record, returns any change, and pays the
+Aleo proving fee. It derives
 fresh freeze-list proofs, checks the live fee estimate against a 0.10-USDC
 budget at quote and execution, and persists checkpoints to `mainnet/aleo-arc.json`.
 The deployed burn has no on-chain fee cap; actual provider fees may change.

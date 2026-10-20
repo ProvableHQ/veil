@@ -12,7 +12,8 @@ export function quoteParametersFromPlan(plan: BridgePlan): QuoteParameters {
     amount: plan.amountIn,
     recipient: plan.recipient,
     ...(plan.sender ? { sender: plan.sender } : {}),
-    mintMode: plan.mintMode,
+    // Public is the default; an explicit Aleo mint mode is invalid for EVM delivery.
+    ...(plan.mintMode !== 'public' ? { mintMode: plan.mintMode } : {}),
   }
 }
 

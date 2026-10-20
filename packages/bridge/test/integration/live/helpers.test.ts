@@ -2,12 +2,37 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { prepare } from '../../../src/actions/prepare.js'
+import { DEFAULT_BRIDGE_REGISTRY } from '../../../src/registry/default.js'
 import { mainnetCaseEnabled, mainnetExecutionEnabled, oneAtomicUnit, requiredEvmPrivateKey } from './config.js'
-import { createLiveBenchmark, loadLiveState, saveLiveState, waitForAleoTransaction, waitForHyperlaneDelivery } from './helpers.js'
+import { createLiveBenchmark, loadLiveState, quoteParametersFromPlan, saveLiveState, waitForAleoTransaction, waitForHyperlaneDelivery } from './helpers.js'
 
 afterEach(() => {
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
+})
+
+describe('live bridge quote parameters', () => {
+  it('round-trips an outbound plan without an Aleo mint option', () => {
+    const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'aleo', asset: 'usdcx' },
+      destination: { chain: 'ethereum', asset: 'usdc' },
+      amount: '2.000001',
+      recipient: '0x0000000000000000000000000000000000000001',
+    })
+    expect(prepare(DEFAULT_BRIDGE_REGISTRY, quoteParametersFromPlan(plan))).toEqual(plan)
+  })
+
+  it.each(['public', 'record', 'private'] as const)('preserves %s Aleo mint selection', mintMode => {
+    const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'ethereum', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
+      amount: '2',
+      recipient: `aleo1${'a'.repeat(58)}`,
+      mintMode,
+    })
+    expect(prepare(DEFAULT_BRIDGE_REGISTRY, quoteParametersFromPlan(plan))).toEqual(plan)
+  })
 })
 
 describe('live bridge checkpoints', () => {
