@@ -36,7 +36,7 @@ function listFor(context: ProofContext, config: FreezelistConfig): string | null
 }
 
 /**
- * Resolves an action's proof slots in ABI order, preserving absent wrapper slots.
+ * Resolves an action's compliance proof slots in ABI order, preserving absent wrapper slots.
  *
  * Literal inputs bypass network reads. Automatic local proofs pin one root per
  * list per call, reuse verified witnesses while that root is current, and bound
