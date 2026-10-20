@@ -5,6 +5,7 @@ import { unshield } from '../../src/actions/unshield.js'
 import { execute } from '../../src/actions/execute.js'
 import { prepare } from '../../src/actions/prepare.js'
 import { buildXReserveBurnCall } from '../../src/builders/buildXReserveBurnCall.js'
+import { xreserve } from '../../src/protocols/index.js'
 import { DEFAULT_BRIDGE_REGISTRY as registry } from '../../src/registry/default.js'
 import type { AleoWalletClient, UnshieldParameters } from '../../src/types/aleo.js'
 
@@ -26,14 +27,16 @@ function local() {
   const request = vi.fn(async ({ method }: { method: string }) =>
     method === 'getMappingValue' ? root : ['0', '1', root.slice(0, -5)])
   const generate = vi.fn(async ({ address, root }: { address: string; root: string }) => `[${address}:${root}]`)
-  const base = createClient({
-    account: { type: 'local', address: signer } as Client['account'],
+  const publicClient = createClient({
     transport: { request, config: { key: 'test', name: 'test', type: 'test', request, network: 'mainnet' } },
-    proving: { generateFreezelistProof: generate } as unknown as Client['proving'],
   })
   const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>().mockResolvedValue('at1test')
-  const wallet = Object.assign(base, { executeTransaction })
-  const clients = { aleo: createAleoClient({ publicClient: base, account: wallet }) }
+  const wallet: AleoWalletClient = {
+    account: { type: 'local', address: signer } as Client['account'],
+    proving: { generateFreezelistProof: generate } as unknown as Client['proving'],
+    executeTransaction,
+  }
+  const clients = { aleo: createAleoClient({ publicClient, account: wallet }) }
   const convert = (merkleProof?: UnshieldParameters['merkleProof']) => unshield(registry, clients, {
     asset, amount: '2.5', record, recipient: signer, merkleProof,
   })
@@ -74,6 +77,31 @@ describe('automatic bridge compliance proofs', () => {
     expect(generate).toHaveBeenCalledWith({ address: signer, tree: ['0', '1', '123'], root: '123field' })
   })
 
+  it('uses the configured public client when the wallet also exposes chain reads', async () => {
+    const { wallet, clients, convert, executeTransaction } = local()
+    const request = vi.fn(async () => '999field')
+    Object.assign(wallet, { request, transport: { config: { network: 'testnet' } } })
+    await convert()
+    await execute(registry, clients, { plan: plan(), userRecord: record })
+    expect(executeTransaction.mock.calls[0]?.[0].inputs?.[3]).toBe('[aleo1signer:123field]')
+    expect(executeTransaction.mock.calls[1]?.[0].inputs?.[4]).toBe('[aleo1signer:123field]')
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('generates proofs in the standalone burn helper with an explicit public client', async () => {
+    const { wallet, clients, executeTransaction } = local()
+    await xreserve.aleoToEvm.execute(wallet, { plan: plan(), userRecord: record, publicClient: clients.aleo.publicClient })
+    expect(executeTransaction.mock.calls[0]?.[0].inputs?.[4]).toBe('[aleo1signer:123field]')
+  })
+
+  it('requires a public client only for automatic local proofs in the standalone helper', async () => {
+    const { wallet, executeTransaction } = local()
+    await expect(xreserve.aleoToEvm.execute(wallet, { plan: plan(), userRecord: record })).rejects.toThrow(/public client/i)
+    expect(executeTransaction).not.toHaveBeenCalled()
+    await xreserve.aleoToEvm.execute(wallet, { plan: plan(), userRecord: record, merkleProof: '[cached]' })
+    expect(executeTransaction.mock.calls[0]?.[0].inputs?.[4]).toBe('[cached]')
+  })
+
   it('constructs a verified empty-tree witness without downloading a tree', async () => {
     const { convert, setRoot, generate, request } = local()
     const root = '3642222252059314292809609689035560016959342421640560347114299934615987159853field'
@@ -84,13 +112,13 @@ describe('automatic bridge compliance proofs', () => {
   })
 
   it('shares concurrent generation and separates client, signer, and network caches', async () => {
-    const { convert, wallet, generate } = local()
+    const { convert, wallet, clients, generate } = local()
     await Promise.all([convert(), convert()])
     expect(generate).toHaveBeenCalledTimes(1)
     wallet.account = { ...wallet.account!, address: 'aleo1other' }
     await convert()
     expect(generate).toHaveBeenCalledTimes(2)
-    wallet.transport.config.network = 'testnet'
+    clients.aleo.publicClient.transport.config.network = 'testnet'
     await convert()
     expect(generate).toHaveBeenCalledTimes(3)
     const other = local()

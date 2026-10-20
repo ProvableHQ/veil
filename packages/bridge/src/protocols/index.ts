@@ -246,7 +246,7 @@ export const xreserve = {
      * without another wallet authorization.
      *
      * @param client Aleo wallet that authorizes and submits the USDCx burn.
-     * @param params Route, amount, Ethereum recipient, public or private funding preference, and optional replacement bridge deployments.
+     * @param params Route, amount, Ethereum recipient, funding preference, public client for automatic local compliance reads, and optional replacement bridge deployments.
      * @returns The Aleo transaction identifier and state needed to follow provider-managed delivery.
      * @throws BridgeError When the route or private funding inputs are invalid, wallet authorization fails, or submission fails.
      * @example const result = await xreserve.aleoToEvm.execute(client, { plan, mode: 'public' })
