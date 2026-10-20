@@ -345,7 +345,7 @@ export {
   type ProofContext,
   type ProofProvider,
   type ProvidedProof,
-  type ActionProofs,
+  type ComplianceProofs,
   type FreezelistConfig,
   type SwapProofs,
   type ClaimProofs,

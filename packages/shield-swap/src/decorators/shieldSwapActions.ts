@@ -1,6 +1,6 @@
 import { waitForSwapOutput, type WaitForSwapOutputParameters, type WaitForSwapOutputReturnType } from '../actions/reads/waitForSwapOutput.js'
 import type { Client } from '@provablehq/veil-core'
-import type { ActionProofs, FreezelistConfig, ProofInputProvider } from '../utils/proofs.js'
+import type { ComplianceProofs, FreezelistConfig, ProofInputProvider } from '../utils/proofs.js'
 import { getPool, type GetPoolParameters, type GetPoolReturnType } from '../actions/reads/getPool.js'
 import { getSlot, type GetSlotParameters, type GetSlotReturnType } from '../actions/reads/getSlot.js'
 import {
@@ -357,7 +357,7 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     // a truthy test would inject the default over the top of that intent. Absent
     // key means "not specified", which is what takes the default.
     // Preserve explicit per-call opt-outs as with the identity store.
-    const withProofs = <P extends { proofs?: ActionProofs<readonly string[]>; freezelists?: FreezelistConfig }>(p: P): P =>
+    const withProofs = <P extends { proofs?: ComplianceProofs<readonly string[]>; freezelists?: FreezelistConfig }>(p: P): P =>
       ({ ...p, proofs: p.proofs === undefined ? config.proofs : p.proofs, freezelists: p.freezelists ?? config.freezelists })
 
     const withStore = <P extends { blindedIdentities?: BlindedIdentityStore }>(p: P): P =>

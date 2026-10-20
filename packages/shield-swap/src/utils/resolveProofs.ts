@@ -1,6 +1,6 @@
 import { getComplianceFreezeList, freezelistProofRequest, type Client, type FreezelistProofInput } from '@provablehq/veil-core'
 import { SHIELD_SWAP_FREEZELIST } from '../constants.js'
-import { EMPTY_MERKLE_PROOFS, formatMerkleProofPair, proofProviderForAccount, resolveProofInput, type ActionProofs, type FreezelistConfig, type ProofContext } from './proofs.js'
+import { EMPTY_MERKLE_PROOFS, formatMerkleProofPair, proofProviderForAccount, resolveProofInput, type ComplianceProofs, type FreezelistConfig, type ProofContext } from './proofs.js'
 import type { TokenRoute } from './routing.js'
 
 /** Maps known underlying token deployments to their compliance lists; credits ignores proofs. */
@@ -53,7 +53,7 @@ function listFor(context: ProofContext, config: FreezelistConfig): string | null
  */
 export async function resolveActionProofs<const C extends readonly (ProofContext | undefined)[]>(
   client: Client,
-  source: ActionProofs<readonly string[]> | undefined,
+  source: ComplianceProofs<readonly string[]> | undefined,
   contexts: C,
   config: FreezelistConfig = {},
 ): Promise<{ [K in keyof C]: FreezelistProofInput }> {

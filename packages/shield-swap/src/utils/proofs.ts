@@ -66,21 +66,25 @@ export interface ProofContext {
  */
 export type ProvidedProof = { freezelistProgram: string; address: string; proof: string }
 
-/** Accepts literals in ABI order, annotated proofs, or an existing provider; null selects automatic resolution. */
-export type ActionProofs<T extends readonly string[]> = T | (readonly [string] extends T ? string : never) | readonly ProvidedProof[] | ProofInputProvider | null
+/**
+ * Accepts compliance Merkle proof literals in ABI order, annotated proofs, or a provider; null selects automatic generation.
+ * @example
+ * const proofs: ComplianceProofs<readonly [string]> = null
+ */
+export type ComplianceProofs<T extends readonly string[]> = T | (readonly [string] extends T ? string : never) | readonly ProvidedProof[] | ProofInputProvider | null
 
 /** Bounds a swap's literals to its optional wrapped-input sender proof. */
-export type SwapProofs = ActionProofs<readonly [] | readonly [sender: string]>
+export type SwapProofs = ComplianceProofs<readonly [] | readonly [sender: string]>
 /** Bounds claim literals to AMM signer, wrapped output receiver, then wrapped refund receiver. */
-export type ClaimProofs = ActionProofs<readonly [amm: string] | readonly [amm: string, receiver: string] | readonly [amm: string, output: string, refund: string]>
+export type ClaimProofs = ComplianceProofs<readonly [amm: string] | readonly [amm: string, receiver: string] | readonly [amm: string, output: string, refund: string]>
 /** Bounds mint literals to wrapped senders (side 0 then 1), then AMM signer, recipient and withdrawal. */
-export type MintProofs = ActionProofs<readonly [string, string, string] | readonly [string, string, string, string] | readonly [string, string, string, string, string]>
+export type MintProofs = ComplianceProofs<readonly [string, string, string] | readonly [string, string, string, string] | readonly [string, string, string, string, string]>
 /** Bounds increase literals to wrapped senders, side 0 before side 1. */
-export type IncreaseProofs = ActionProofs<readonly [] | readonly [sender: string] | readonly [sender0: string, sender1: string]>
+export type IncreaseProofs = ComplianceProofs<readonly [] | readonly [sender: string] | readonly [sender0: string, sender1: string]>
 /** Bounds collect literals to AMM owner and withdrawal, then wrapped receivers, side 0 before side 1. */
-export type CollectProofs = ActionProofs<readonly [string, string] | readonly [string, string, string] | readonly [string, string, string, string]>
+export type CollectProofs = ComplianceProofs<readonly [string, string] | readonly [string, string, string] | readonly [string, string, string, string]>
 /** Bounds rebalance literals to funded wrapped senders, wrapped receivers, then AMM owner and withdrawal. */
-export type RebalanceProofs = ActionProofs<readonly [string, string] | readonly [string, string, string] | readonly [string, string, string, string] | readonly [string, string, string, string, string] | readonly [string, string, string, string, string, string]>
+export type RebalanceProofs = ComplianceProofs<readonly [string, string] | readonly [string, string, string] | readonly [string, string, string, string] | readonly [string, string, string, string, string] | readonly [string, string, string, string, string, string]>
 
 /**
  * Configures automatic proof resolution for another deployment.
