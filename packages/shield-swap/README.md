@@ -1257,6 +1257,41 @@ write tier spends real testnet funds on each run. Optional overrides:
 `VEIL_DEX_PROGRAM` (defaults to `shield_swap.aleo`), `ALEO_DPS_URL`, and
 `ALEO_RSS_URL`.
 
+## Frozen-signer tests
+
+The offline [`frozenSigners.test.ts`](./test/actions/frozenSigners.test.ts) uses
+real SDK Merkle proofs against populated fixture trees. It checks rejection in
+single-hop and multi-hop wrapped swaps, AMM claims, wrapped outputs, and wrapped
+refunds, plus an unfrozen-signer control. Chain state and transaction submission
+are fixtures in this file.
+
+The live [`frozenSigners.integration.test.ts`](./test/integration/frozenSigners.integration.test.ts)
+reads the current **testnet** lists and discovers pools from the DEX API. Export
+`FROZEN_ADDRESS_1` and `FROZEN_ADDRESS_2`, then run:
+
+```sh
+VEIL_FROZEN_TESTS=1 pnpm exec vitest run packages/shield-swap/test/integration/frozenSigners.integration.test.ts
+```
+
+Each variable accepts an Aleo address or its private key. For a private key, the
+test derives the address locally and discards the signing account; it never logs
+the key or installs a transaction prover. These tests make real SDK swap calls
+through automatic proof generation, but do not sign, broadcast, or spend funds.
+
+Each account MUST be frozen on `test_usdcx_freezelist.aleo` or
+`shield_swap_freezelist.aleo`; otherwise its fixture check fails. Token-list
+membership enables the wrapped single-hop and two-hop rejection checks. AMM-list
+membership enables rejection of the claim's signer proof against the current
+root, without opening an unclaimable swap. Checks for lists that do not contain
+the account report as skipped. The swap checks use omitted and `null` proofs;
+only `Address is frozen` counts as the expected rejection. RPC failures, stale
+trees, or invalid roots fail the test.
+
+Core swap submission has no AMM freezelist check: that check occurs when claiming.
+These tests verify SDK proof rejection, not consensus rejection of a submitted
+transaction or wallet-side proof generation. `VEIL_FROZEN_TESTS` is separate from
+`VEIL_INTEGRATION`, so the ordinary live suites do not require frozen accounts.
+
 ## Quote integration test
 
 `test/integration/quote.e2e.test.ts` verifies quotes, successful swap finalization,
