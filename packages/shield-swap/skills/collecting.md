@@ -128,7 +128,7 @@ for (const owned of await client.getOwnedPositions()) {
   const { transactionId } = await client.collect({
     poolKey: owned.poolKey,
     positionTokenId: owned.positionTokenId, // REQUIRED with several positions in one pool
-    withdrawalAddress: owned.withdrawal, // the subject for automatic freezelist proofs
+    withdrawalAddress: owned.withdrawal, // required for automatic proofs when the record is opaque; supplied proofs/providers can omit it
     amount0Requested: amount0,
     amount1Requested: amount1,
     imports,

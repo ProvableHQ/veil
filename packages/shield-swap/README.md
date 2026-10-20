@@ -252,10 +252,20 @@ automatic resolution. Caller-supplied proofs bypass automatic freshness checks;
 the caller is responsible for their subjects, roots and validity. Local accounts
 reject wallet-derived requests returned by providers.
 
-`collect` and `rebalancePosition` need the actual withdrawal address. Granted
-plaintext supplies it; for an opaque wallet-selected PositionNFT, pass
-`withdrawalAddress`. If both are available they must match. This parameter
+Automatic proofs for `collect` and `rebalancePosition` need the actual withdrawal
+address. Granted plaintext supplies it; for an opaque wallet-selected PositionNFT,
+pass `withdrawalAddress`. The built-in wallet provider also requires it. If both
+plaintext and an explicit address are available, they must match. This parameter
 identifies a proof subject and cannot change the payout fixed in the NFT.
+
+Supplied proof tuples and custom providers do not require `withdrawalAddress`.
+Custom providers retain the legacy signer fallback in their context when the
+withdrawal address is unknown, and own responsibility for selecting the correct
+subject. A provider can declare `requiresSubject: true` to reject that fallback;
+the built-in wallet provider does so. Annotated proofs can identify a single
+withdrawal address distinct from the signer, or reuse the signer when no distinct
+address is supplied. Collections naming multiple possible withdrawal addresses
+must use an ABI-ordered tuple or a provider instead.
 
 ```ts
 await client.collect({
