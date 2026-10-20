@@ -9,7 +9,7 @@ import { blindingFactorResolveRequest, blindedAddressResolveRequest } from '../.
 import { resolveDexImports } from '../../utils/imports.js'
 import { resolveTokenRoute, tokenIdToProgram } from '../../utils/routing.js'
 import type { ClaimProofs, FreezelistConfig } from '../../utils/proofs.js'
-import { resolveActionProofs, ammProofContext, wrapperProofContext } from '../../utils/resolveProofs.js'
+import { resolveComplianceProofs, ammProofContext, wrapperProofContext } from '../../utils/resolveProofs.js'
 import { SHIELD_SWAP_ROUTER } from '../../constants.js'
 
 /**
@@ -151,7 +151,7 @@ export async function claimSwapOutput(
   // transitions — no amount_remaining input, no refund record in the result.
   // The chain re-checks the stored remainder and rejects a nonzero one.
   const noRefund = out.amount_remaining === 0n
-  const [ammProof, outputProof, refundProof] = await resolveActionProofs(client, params.proofs, [
+  const [ammProof, outputProof, refundProof] = await resolveComplianceProofs(client, params.proofs, [
     ammProofContext(account.address, true),
     wrapperProofContext(outRoute, account.address),
     noRefund ? undefined : wrapperProofContext(refundRoute, account.address),

@@ -9,7 +9,7 @@ import { resolvePositionRecord } from '../../utils/records.js'
 import { requireAccount, requirePool } from '../../utils/guards.js'
 import type { TokenRoute } from '../../utils/routing.js'
 import type { CollectProofs, FreezelistConfig } from '../../utils/proofs.js'
-import { resolveActionProofs, ammProofContext, wrapperProofContext } from '../../utils/resolveProofs.js'
+import { resolveComplianceProofs, ammProofContext, wrapperProofContext } from '../../utils/resolveProofs.js'
 import { SHIELD_SWAP, SHIELD_SWAP_LP_ROUTER } from '../../constants.js'
 import { resolveSideRoutes, resolveWithdrawalSubject } from './internal.js'
 
@@ -146,7 +146,7 @@ export async function collect(client: Client, params: CollectParameters): Promis
 
   // Core collect proves the owner and the withdrawal address against the
   // AMM freezelist; each wrapped side adds a wrapper receiver proof.
-  const [ownerProofs, withdrawalProofs, receiverProof0, receiverProof1] = await resolveActionProofs(client, params.proofs, [
+  const [ownerProofs, withdrawalProofs, receiverProof0, receiverProof1] = await resolveComplianceProofs(client, params.proofs, [
     ammProofContext(account.address, true),
     ammProofContext(receiver),
     wrapperProofContext(route0, receiver, false),

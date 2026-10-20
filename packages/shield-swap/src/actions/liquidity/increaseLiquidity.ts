@@ -5,7 +5,7 @@ import { pickInsertHint, type PickInsertHintParameters } from '../../utils/tick-
 import { requireFieldOutput } from '../../utils/outputs.js'
 import type { TokenRoute } from '../../utils/routing.js'
 import type { IncreaseProofs, FreezelistConfig } from '../../utils/proofs.js'
-import { resolveActionProofs, ammProofContext, wrapperProofContext } from '../../utils/resolveProofs.js'
+import { resolveComplianceProofs, ammProofContext, wrapperProofContext } from '../../utils/resolveProofs.js'
 import { SHIELD_SWAP } from '../../constants.js'
 import { autoSelectSideRecord, dispatchLiquidityCall, resolveSideRoutes } from './internal.js'
 
@@ -141,7 +141,7 @@ export async function increaseLiquidity(
   })
 
   // The only proof slots on increase are the wrapped sides' sender proofs.
-  const [senderProof0, senderProof1] = await resolveActionProofs(client, params.proofs, [
+  const [senderProof0, senderProof1] = await resolveComplianceProofs(client, params.proofs, [
     wrapperProofContext(route0, account.address),
     wrapperProofContext(route1, account.address),
   ], params.freezelists)

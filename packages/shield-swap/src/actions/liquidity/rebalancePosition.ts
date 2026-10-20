@@ -21,7 +21,7 @@ import { getPosition } from '../reads/getPosition.js'
 import { getTick } from '../reads/getTick.js'
 import type { TokenRoute } from '../../utils/routing.js'
 import type { RebalanceProofs, FreezelistConfig } from '../../utils/proofs.js'
-import { resolveActionProofs, ammProofContext, wrapperProofContext } from '../../utils/resolveProofs.js'
+import { resolveComplianceProofs, ammProofContext, wrapperProofContext } from '../../utils/resolveProofs.js'
 import { SHIELD_SWAP, SHIELD_SWAP_REBALANCE_ROUTER } from '../../constants.js'
 import {
   resolveWithdrawalSubject,
@@ -403,7 +403,7 @@ export async function rebalancePosition(
   })
 
   const [senderProof0, senderProof1, receiverProof0, receiverProof1, ownerProofs, withdrawalProofs] =
-    await resolveActionProofs(client, params.proofs, [
+    await resolveComplianceProofs(client, params.proofs, [
       plan.funded0 > 0n ? wrapperProofContext(route0, account.address) : undefined,
       plan.funded1 > 0n ? wrapperProofContext(route1, account.address) : undefined,
       wrapperProofContext(route0, receiver, false),

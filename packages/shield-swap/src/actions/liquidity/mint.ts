@@ -8,7 +8,7 @@ import { roundTickToSpacing } from '../../utils/tick-math.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../../utils/tick-hints.js'
 import type { TokenRoute } from '../../utils/routing.js'
 import type { MintProofs, FreezelistConfig } from '../../utils/proofs.js'
-import { resolveActionProofs, ammProofContext, wrapperProofContext } from '../../utils/resolveProofs.js'
+import { resolveComplianceProofs, ammProofContext, wrapperProofContext } from '../../utils/resolveProofs.js'
 import { SHIELD_SWAP } from '../../constants.js'
 import {
   assertPayoutAddress,
@@ -209,7 +209,7 @@ export async function mint(client: Client, params: MintParameters): Promise<Mint
 
   // Wrapper freezelist proofs prove the SENDER; AMM proofs prove the three
   // mint parties. Automatic proofs use the current root.
-  const [senderProof0, senderProof1, signerProofs, recipientProofs, withdrawalProofs] = await resolveActionProofs(client, params.proofs, [
+  const [senderProof0, senderProof1, signerProofs, recipientProofs, withdrawalProofs] = await resolveComplianceProofs(client, params.proofs, [
     wrapperProofContext(route0, account.address),
     wrapperProofContext(route1, account.address),
     ammProofContext(account.address, true),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createClient, createPublicClient, http, type Client } from '@provablehq/veil-core'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
-import { resolveActionProofs, ammProofContext } from '../../src/utils/resolveProofs.js'
+import { resolveComplianceProofs, ammProofContext } from '../../src/utils/resolveProofs.js'
 
 // Read-only: uses a public test-vector address; no private key or transaction.
 describe.runIf(process.env.VEIL_INTEGRATION === '1')('live compliance trees', () => {
@@ -20,7 +20,7 @@ describe.runIf(process.env.VEIL_INTEGRATION === '1')('live compliance trees', ()
       proving: { mode: 'local', generateFreezelistProof: sdk.generateFreezelistProof },
     })
     const config = { ammFreezelistProgram: programId }
-    expect(await resolveActionProofs(client, undefined, [ammProofContext(address)], config)).toEqual([expected])
-    expect(await resolveActionProofs(client, null, [ammProofContext(address)], config)).toEqual([expected])
+    expect(await resolveComplianceProofs(client, undefined, [ammProofContext(address)], config)).toEqual([expected])
+    expect(await resolveComplianceProofs(client, null, [ammProofContext(address)], config)).toEqual([expected])
   }, 30_000)
 })

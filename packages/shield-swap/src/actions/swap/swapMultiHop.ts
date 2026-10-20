@@ -22,7 +22,7 @@ import {
 import { blindingFactorIssueRequest, blindedAddressIssueRequest } from '../../utils/blinding/requests.js'
 import { resolveTokenRoute, tokenIdToProgram, type TokenRoute } from '../../utils/routing.js'
 import type { SwapProofs, FreezelistConfig } from '../../utils/proofs.js'
-import { resolveActionProofs, wrapperProofContext } from '../../utils/resolveProofs.js'
+import { resolveComplianceProofs, wrapperProofContext } from '../../utils/resolveProofs.js'
 import { tryLoadSdk } from '../../utils/sdk.js'
 import { deriveMultiHopSwapId } from '../../utils/keys.js'
 import { requireFieldOutput } from '../../utils/outputs.js'
@@ -252,7 +252,7 @@ export async function swapMultiHop(client: Client, params: SwapMultiHopParameter
 
   // Wrapped input: the deposit rides the wrapper's freezelist check, so the
   // sender proves non-inclusion against its current freezelist.
-  const [senderProof] = await resolveActionProofs(client, params.proofs, [
+  const [senderProof] = await resolveComplianceProofs(client, params.proofs, [
     wrapperProofContext(route, account.address),
   ], params.freezelists)
 

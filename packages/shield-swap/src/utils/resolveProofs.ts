@@ -49,9 +49,9 @@ function listFor(context: ProofContext, config: FreezelistConfig): string | null
  * @returns One input per context, including unused placeholders for absent slots.
  * @throws When literals have the wrong count, a list is unknown, or generation fails.
  * @example
- * const [proof] = await resolveActionProofs(client, undefined, [ammProofContext(address)])
+ * const [proof] = await resolveComplianceProofs(client, undefined, [ammProofContext(address)])
  */
-export async function resolveActionProofs<const C extends readonly (ProofContext | undefined)[]>(
+export async function resolveComplianceProofs<const C extends readonly (ProofContext | undefined)[]>(
   client: Client,
   source: ComplianceProofs<readonly string[]> | undefined,
   contexts: C,
