@@ -31,8 +31,8 @@ export const BLINDING_MEMBERSHIP_MAPPING = 'used_blinded_addresses'
  *
  * @property program Core AMM program carrying the direct swap/claim
  *   transitions. Defaults to `shield_swap.aleo`.
- * @property freezelists Optional list configuration that appends constrained
- *   freezelist grants; omission preserves the blinding-only default. Top-level
+ * @property freezelists Optional list configuration for constrained freezelist
+ *   grants; defaults to the AMM and known USDCx lists. Top-level
  *   program overrides apply to the appended core/swap-router grants.
  * @property routerProgram Swap router carrying the wrapped-input and
  *   wrapped-claim transitions. Defaults to `shield_swap_router.aleo`.
@@ -57,7 +57,7 @@ export interface ShieldSwapAlgorithmGrantsParameters {
  * refund-bearing and no-refund alike — at 0–1.
  *
  * @param params Optional program overrides for non-default deployments.
- * @returns The grant tuples for every blinding slot in the stack.
+ * @returns The grant tuples for every blinding and freezelist slot in the stack.
  *
  * @example
  * connect({ algorithmsAllowed: shieldSwapAlgorithmGrants() })
@@ -81,7 +81,7 @@ export function shieldSwapAlgorithmGrants(params: ShieldSwapAlgorithmGrantsParam
     ...pair(program, 'claim_swap_output_no_refund', 0),
     ...pair(router, 'claim_to_arc20_no_refund', 0),
     ...pair(router, 'claim_to_wrapped_no_refund', 0),
-    ...(params.freezelists ? shieldSwapFreezelistGrants({ ...params.freezelists, program, routerProgram: router }) : []),
+    ...shieldSwapFreezelistGrants({ ...params.freezelists, program, routerProgram: router }),
   ]
 }
 

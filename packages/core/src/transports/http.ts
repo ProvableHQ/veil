@@ -164,6 +164,8 @@ function buildUrl(
       return { url: `${base}/height/${enc(params?.hash)}`, httpMethod: 'GET' }
     case 'getBlockTransactionsByHash':
       return { url: `${base}/transactions/block/${enc(params?.hash)}`, httpMethod: 'GET' }
+    case 'getComplianceFreezeList':
+      return { url: `${base}/programs/${enc(params?.programId)}/compliance/freeze-list`, httpMethod: 'GET' }
     case 'getTokenDetails': {
       const q = new URLSearchParams()
       if (params?.programId != null) q.set('program_id', String(params.programId))

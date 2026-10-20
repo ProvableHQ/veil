@@ -4,9 +4,10 @@ import { requireAccount, requirePool } from '../../utils/guards.js'
 import { pickInsertHint, type PickInsertHintParameters } from '../../utils/tick-hints.js'
 import { requireFieldOutput } from '../../utils/outputs.js'
 import type { TokenRoute } from '../../utils/routing.js'
-import { proofProviderForAccount, type ProofInputProvider } from '../../utils/proofs.js'
+import type { IncreaseProofs, FreezelistConfig } from '../../utils/proofs.js'
+import { resolveComplianceProofs, ammProofContext, wrapperProofContext } from '../../utils/resolveProofs.js'
 import { SHIELD_SWAP } from '../../constants.js'
-import { autoSelectSideRecord, dispatchLiquidityCall, resolveSideRoutes, wrapperSenderProof } from './internal.js'
+import { autoSelectSideRecord, dispatchLiquidityCall, resolveSideRoutes } from './internal.js'
 
 /**
  * Parameters for {@link increaseLiquidity}.
@@ -32,9 +33,10 @@ import { autoSelectSideRecord, dispatchLiquidityCall, resolveSideRoutes, wrapper
  * @property token0Route Pre-resolved route override for token0 — skips the
  *   on-chain wrapped-ness read (offline/advanced use).
  * @property token1Route Pre-resolved route override for token1.
- * @property proofs Freezelist proof provider returning pairs, literals, or wallet-derived requests.
- *   Defaults to the legacy all-zero witness on the wrapped sides' sender-proof
- *   slots (the only proof slots this transition has).
+ * @property proofs Supplies a {@link IncreaseProofs} literal tuple in ABI order, an annotated
+ *   collection, or a provider. Omission or null enables automatic resolution.
+ * @property freezelists Overrides deployment lists for automatic or annotated proofs;
+ *   defaults to the known AMM, USDCx and credits lists.
  * @property tickLowerHint Explicit hint override; defaults to
  *   `pickInsertHint` for the position's own bounds.
  * @property tickUpperHint Explicit hint override.
@@ -63,7 +65,8 @@ export type IncreaseLiquidityParameters = {
   token1Record?: string | InputRequest
   token0Route?: TokenRoute
   token1Route?: TokenRoute
-  proofs?: ProofInputProvider
+  proofs?: IncreaseProofs
+  freezelists?: FreezelistConfig
   tickLowerHint?: number
   tickUpperHint?: number
   initializedTicks?: PickInsertHintParameters['initializedTicks']
@@ -128,7 +131,6 @@ export async function increaseLiquidity(
 
   const account = requireAccount(client, 'increaseLiquidity')
   const isLocal = account.type === 'local'
-  const proofs = proofProviderForAccount(params.proofs, account.type)
 
   const [route0, route1] = await resolveSideRoutes(client, {
     token0Id: pool.token0,
@@ -139,10 +141,10 @@ export async function increaseLiquidity(
   })
 
   // The only proof slots on increase are the wrapped sides' sender proofs.
-  const [senderProof0, senderProof1] = await Promise.all([
-    wrapperSenderProof(proofs, route0, account.address),
-    wrapperSenderProof(proofs, route1, account.address),
-  ])
+  const [senderProof0, senderProof1] = await resolveComplianceProofs(client, params.proofs, [
+    wrapperProofContext(route0, account.address),
+    wrapperProofContext(route1, account.address),
+  ], params.freezelists)
 
   // Everything after the record slots is identical across all four variants.
   const tail = (tickLowerHint: number, tickUpperHint: number): string[] => [

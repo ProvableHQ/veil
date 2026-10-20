@@ -66,6 +66,7 @@ export { unshield } from './actions/unshield.js'
 export { createBridgeCheckpoint } from './actions/createBridgeCheckpoint.js'
 export { hyperlane, xreserve, type ProtocolHelperRegistry } from './protocols/index.js'
 export { buildXReserveBurnCall } from './builders/buildXReserveBurnCall.js'
+export type { ComplianceProofs, ComplianceProofProvider, ComplianceProofContext, SuppliedComplianceProof, MerkleProofInput } from './types/compliance.js'
 export {
   bridgeFreezelistProofRequest,
   unshieldFreezelistProofGrant,

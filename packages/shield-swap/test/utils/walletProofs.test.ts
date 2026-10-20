@@ -78,9 +78,10 @@ describe('freezelist grants', () => {
     expect(grants.map(g => `${g.program}/${g.function}/${g.inputPosition}`).sort()).toEqual(expected.sort())
   })
 
-  it('composes with blinding grants only when explicitly requested', () => {
-    const blinding = shieldSwapAlgorithmGrants()
-    expect(blinding.every(g => g.algorithm !== FREEZELIST_PROOF_ALGORITHM)).toBe(true)
+  it('includes constrained freezelist grants by default and accepts deployment overrides', () => {
+    const defaults = shieldSwapAlgorithmGrants()
+    const blinding = defaults.filter(g => g.algorithm !== FREEZELIST_PROOF_ALGORITHM)
+    expect(defaults).toEqual([...blinding, ...shieldSwapFreezelistGrants()])
     expect(shieldSwapAlgorithmGrants({ freezelists: config })).toEqual([...blinding, ...shieldSwapFreezelistGrants(config)])
   })
 

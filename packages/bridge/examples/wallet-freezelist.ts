@@ -1,5 +1,4 @@
 import {
-  bridgeFreezelistProofRequest,
   DEFAULT_BRIDGE_REGISTRY,
   parseDecimalAmount,
   xReserveBurnFreezelistProofGrant,
@@ -15,7 +14,7 @@ import type { AlgorithmGrant } from '@provablehq/veil-core'
  * `algorithmsAllowed`, then submit `parameters` through `bridge.execute` only
  * after authorization. The wallet must support the freezelist algorithm.
  * @param options Supplies the quoted plan and optional reviewed registry, defaulting to the packaged registry.
- * @returns Signer-only proof and record requests plus the exact private-burn proof grant.
+ * @returns A record request and exact private-burn proof grant; execution inserts the signer proof request automatically.
  * @throws BridgeError When the plan or reviewed freezelist deployment is unavailable.
  * @example
  * const { parameters, algorithmsAllowed } = createWalletBurnInputs({ plan: quote.plan })
@@ -28,7 +27,7 @@ export function createWalletBurnInputs(options: { plan: BridgePlan; registry?: B
   const algorithmsAllowed = [xReserveBurnFreezelistProofGrant({ registry, plan: options.plan })]
   const source = registry.assets.find(asset => asset.id === options.plan.sourceAsset.id)!
   // Grant construction above validates this source asset against the route.
-  // Both requests are resolved by the wallet; no address or record is disclosed.
+  // Execution inserts the compliance request; the wallet resolves both inputs.
   return {
     algorithmsAllowed,
     parameters: {
@@ -38,7 +37,6 @@ export function createWalletBurnInputs(options: { plan: BridgePlan; registry?: B
         type: 'record', program: source.privacy!.program, recordname: 'Token',
         filters: { amount: { gte: `${parseDecimalAmount(options.plan.amountIn, source.decimals)}u128` } },
       },
-      merkleProof: bridgeFreezelistProofRequest({ registry, asset: { chain: source.chainId, asset: source.key } }),
     },
   }
 }

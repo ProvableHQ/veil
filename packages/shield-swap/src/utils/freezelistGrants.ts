@@ -1,12 +1,14 @@
 import { freezelistProofGrant, type AlgorithmGrant } from '@provablehq/veil-core'
 import { SHIELD_SWAP, SHIELD_SWAP_FREEZELIST, SHIELD_SWAP_ROUTER, SHIELD_SWAP_LP_ROUTER, SHIELD_SWAP_REBALANCE_ROUTER } from '../constants.js'
-import type { WalletFreezelistProofParameters } from './proofs.js'
+import type { FreezelistConfig } from './proofs.js'
+import { KNOWN_TOKEN_FREEZELISTS } from './resolveProofs.js'
 
 /**
  * Configures grants for the deployment used by wallet-derived proofs.
  *
  * @property wrapperFreezelists Maps wrappers to actual lists; `null` omits
  *   grants for no-compliance wrappers, and an empty map permits AMM proofs only.
+ *   Omission permits the known mainnet/testnet USDCx lists.
  * @property ammFreezelistProgram AMM compliance list, defaulting to
  *   `shield_swap_freezelist.aleo`.
  * @property program Core AMM target, defaulting to `shield_swap.aleo`.
@@ -17,7 +19,7 @@ import type { WalletFreezelistProofParameters } from './proofs.js'
  * @example
  * const params: ShieldSwapFreezelistGrantsParameters = { wrapperFreezelists: {} }
  */
-export interface ShieldSwapFreezelistGrantsParameters extends WalletFreezelistProofParameters {
+export interface ShieldSwapFreezelistGrantsParameters extends FreezelistConfig {
   program?: string
   routerProgram?: string
   lpRouterProgram?: string
@@ -77,7 +79,8 @@ const REBALANCE: typeof CORE = [
  * wrapper slots allow the distinct compliance lists in the supplied deployment
  * map. Does not grant unrelated algorithms or access records and makes no calls.
  *
- * @param params The deployment's wrapper mappings and optional program overrides.
+ * @param params The deployment's wrapper mappings and optional program overrides;
+ *   omission grants the known deployment lists.
  * @returns Grants to combine with blinding grants in `algorithmsAllowed`.
  *
  * @example
@@ -85,9 +88,9 @@ const REBALANCE: typeof CORE = [
  *   wrapperFreezelists: { 'usdcx_wrapper.aleo': 'usdcx_freezelist.aleo' },
  * })
  */
-export function shieldSwapFreezelistGrants(params: ShieldSwapFreezelistGrantsParameters): AlgorithmGrant[] {
+export function shieldSwapFreezelistGrants(params: ShieldSwapFreezelistGrantsParameters = {}): AlgorithmGrant[] {
   const amm = params.ammFreezelistProgram ?? SHIELD_SWAP_FREEZELIST
-  const wrappers = [...new Set(Object.values(params.wrapperFreezelists).filter((value): value is string => value !== null))]
+  const wrappers = [...new Set(Object.values(params.wrapperFreezelists ?? KNOWN_TOKEN_FREEZELISTS).filter((value): value is string => value !== null))]
   const grants: AlgorithmGrant[] = []
   for (const [program, matrix] of [
     [params.program ?? SHIELD_SWAP, CORE],

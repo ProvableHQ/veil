@@ -76,6 +76,12 @@ writes, import the session helpers:
 import { loadSession, formatAmount } from '@provablehq/shield-swap-cli/session'
 ```
 
+Freezelist witnesses are generated automatically when a write executes. The
+session's SDK generator checks the current on-chain root and reuses witnesses
+while that root is unchanged. Dry runs do not generate proofs or submit. Custom
+deployments can configure `shieldSwapActions({ freezelists })` in the session;
+see the [proof configuration](../shield-swap/README.md#freezelist-proofs).
+
 ## Two rules that hold everywhere
 
 **Nothing spends until you pass `--execute`.** Every write command plans the

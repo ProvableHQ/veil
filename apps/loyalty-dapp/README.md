@@ -18,3 +18,17 @@ signer proof; provide the actual subject for recipient or withdrawal proofs.
 The wallet resolves these inputs during execution, and failures should remain
 visible to the caller. See the [core example](../../packages/core/README.md#wallet-generated-freezelist-proofs)
 for the complete input and grant shape.
+
+Shield Swap integrations use automatic proof resolution and include freezelist
+grants in `shieldSwapAlgorithmGrants()` by default. Custom wrapper deployments
+must pass matching `freezelists` configuration to the grant helper and
+`shieldSwapActions`. See [Shield Swap proofs](../../packages/shield-swap/README.md#freezelist-proofs).
+
+Fee-tier discovery through `client.api.getFeeTiers()` is public and requires no
+wallet authentication or API token.
+
+Bridge ARC-22 unshielding and private xReserve burns also resolve compliance
+proofs automatically. Omit `merkleProof` and supply the matching
+`unshieldFreezelistProofGrant` or `xReserveBurnFreezelistProofGrant` when connecting
+the wallet. Local SDK clients generate and cache the witness instead. See
+[Bridge compliance proofs](../../packages/bridge/README.md#automatic-compliance-proofs).

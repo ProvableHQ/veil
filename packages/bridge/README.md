@@ -597,22 +597,56 @@ conversion does not repeat or reverse the completed cross-chain transfer.
 
 The default registry supports these conversions for wrapped ETH, WBTC, USDT,
 and SOL through their ARC-20 programs, and for USDCx through its ARC-22
-transfers. The default unshield proof remains the legacy zero-filled placeholder;
-it is not a constructed empty-list exclusion proof. Supply a valid literal proof
-or opt in to wallet derivation when the deployed program checks a freezelist root.
+transfers. ARC-22 unshielding and private xReserve burns resolve compliance
+proofs automatically when `merkleProof` is omitted or `null`.
+
+### Automatic compliance proofs
+
+For local accounts, pass the full Veil wallet client created by
+`@provablehq/veil-aleo-sdk` to `createAleoClient({ publicClient, account: walletClient })`.
+Bridge reads the current freezelist root and tree through `publicClient` and
+uses the wallet client's SDK generator to construct and verify the signer's witness. It reuses
+cached trees and proofs while the root is unchanged, checking the root before
+each operation. The in-memory cache is bounded to 16 lists and 256 subjects per
+list per client. An empty list uses a constructed witness; frozen subjects,
+invalid roots, and stale indexer trees fail before submission.
+
+`merkleProof` accepts `ComplianceProofs`, with exactly one bundle for either
+operation:
+
+| Input | Meaning |
+| --- | --- |
+| Omitted or `null` | Generate locally or insert a wallet-derived request. |
+| `proof` or `[proof]` | Use one encoded `[MerkleProof; 2]` string. |
+| `[{ freezelistProgram, address, proof }]` | Find the encoded bundle for the reviewed list and signer. |
+| `async ({ freezelistProgram, address }) => proof` | Invoke a provider for the signer's bundle. |
+| `bridgeFreezelistProofRequest({ registry, asset })` | Explicitly request wallet derivation. |
+
+A provider may also return a pair of `{ siblings, leaf_index }` Merkle paths
+or a signer-only wallet request. Providers and annotated proofs require the
+wallet client's `account.address`. Supplied proofs retain responsibility for
+freshness and bypass automatic root reads. Local accounts reject wallet
+requests. Existing literal strings and wallet requests remain supported.
+
+`buildXReserveBurnCall` stays synchronous and makes no network requests. It
+accepts a literal or one-element tuple, or inserts a wallet request when omitted.
+Use `bridge.execute` or `xreserve.aleoToEvm.execute` for providers, annotated
+proofs, or automatic local generation.
+
+The standalone burn helper takes the public client explicitly for automatic
+local proofs: `xreserve.aleoToEvm.execute(walletClient, { plan, userRecord, publicClient })`.
+`bridge.execute` uses its configured Aleo public client. Supplied proofs and
+wallet-derived requests do not require network capabilities on the wallet client.
 
 ### Resolve freezelist proofs inside a connected wallet
 
-`merkleProof` accepts either a literal proof pair or a
-`program-freezelist-exclusion-proof` request in ARC-22 unshielding and private
-xReserve burns. A request requires a wallet that implements the algorithm and a
+Wallet accounts receive a `program-freezelist-exclusion-proof` request by default
+in ARC-22 unshielding and private xReserve burns. A request requires a wallet that implements the algorithm and a
 connect-time grant for its exact program, function, and zero-based input slot.
-The wallet resolves the current list and proof during execution. Local-key
-accounts continue to require literal proofs.
+The wallet resolves the current list and proof during execution and owns its cache.
 
 ```ts
 import {
-  bridgeFreezelistProofRequest,
   DEFAULT_BRIDGE_REGISTRY,
   unshieldFreezelistProofGrant,
 } from '@provablehq/aleo-bridge-sdk'
@@ -624,17 +658,16 @@ const algorithmsAllowed = [unshieldFreezelistProofGrant({ registry, asset })]
 await bridge.unshield({
   asset,
   amount: '2.5',
-  merkleProof: bridgeFreezelistProofRequest({ registry, asset }),
 })
 ```
 
 For private xReserve burns, use
-`xReserveBurnFreezelistProofGrant({ registry, plan: quote.plan })` and pass the
-request as `merkleProof` to `bridge.execute`. The grant targets the current
+`xReserveBurnFreezelistProofGrant({ registry, plan: quote.plan })` when connecting
+the wallet, then omit `merkleProof` from `bridge.execute`. The grant targets the current
 registry's wrapper `private_burn` input 4; unshield grants target the token's
 `transfer_private_to_public` input 3. Public burns and shielding need no derived
 proof slot. The [wallet example](./examples/wallet-freezelist.ts) prepares the
-private-burn request and grant together without submitting a transaction.
+private-burn record request and grant together without submitting a transaction.
 
 Bridge proof requests MUST omit `args.address`: these operations prove the
 wallet signer, and the public unshield recipient is not the proof subject.
@@ -643,9 +676,8 @@ Derived requests naming another algorithm or list are rejected before proving.
 The default registry identifies `usdcx_freezelist.aleo` on mainnet and
 `test_usdcx_freezelist.aleo` on testnet. For other ARC-22 assets, provide the
 reviewed `asset.privacy.freezelistProgram` in the injected registry before using
-derived proofs. Neither token nor wrapper names are used to infer a list.
-Adding this metadata does not enable derivation automatically; selecting a
-request in `merkleProof` is the opt-in. The same registry MUST be supplied to
+automatic, annotated, provider, or wallet-derived proofs. Neither token nor
+wrapper names are used to infer a list. The same registry MUST be supplied to
 the helpers and bridge client.
 
 ## Complete examples

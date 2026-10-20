@@ -1,6 +1,6 @@
 import { waitForSwapOutput, type WaitForSwapOutputParameters, type WaitForSwapOutputReturnType } from '../actions/reads/waitForSwapOutput.js'
 import type { Client } from '@provablehq/veil-core'
-import type { ProofInputProvider } from '../utils/proofs.js'
+import type { ComplianceProofs, FreezelistConfig, ProofInputProvider } from '../utils/proofs.js'
 import { getPool, type GetPoolParameters, type GetPoolReturnType } from '../actions/reads/getPool.js'
 import { getSlot, type GetSlotParameters, type GetSlotReturnType } from '../actions/reads/getSlot.js'
 import {
@@ -131,8 +131,10 @@ import { ApiClient, authenticateWithAccount, defaultApiUrl, type ApiClientOption
  *   once to point the whole surface at another deployment; per-call
  *   `program` still overrides.
  * @property proofs Default proof provider for swaps, claims, and liquidity.
- *   Omitted by default, retaining legacy placeholders. Per-call providers
- *   override it; an explicit `proofs: undefined` opts out for that call.
+ *   Defaults to automatic generation. Per-call literals or providers override
+ *   it; `proofs: null` selects automatic generation for that call.
+ * @property freezelists Overrides deployment lists; defaults to the known AMM,
+ *   credits and USDCx lists. Per-call configuration overrides it.
  * @property blindedIdentities Where identities are reserved and swaps recorded,
  *   used by `reserveBlindedIdentity` and by `swap`, `swapMultiHop`, and
  *   `claimSwapOutput`. Defaults to a per-client in-memory store, so concurrent
@@ -147,7 +149,8 @@ export type ShieldSwapActionsConfig = {
   api?: ApiClientOptions | ApiClient
   program?: string
   blindedIdentities?: BlindedIdentityStore
-  proofs?: ProofInputProvider
+  proofs?: ProofInputProvider | null
+  freezelists?: FreezelistConfig
 }
 
 /**
@@ -354,8 +357,8 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
     // a truthy test would inject the default over the top of that intent. Absent
     // key means "not specified", which is what takes the default.
     // Preserve explicit per-call opt-outs as with the identity store.
-    const withProofs = <P extends { proofs?: ProofInputProvider }>(p: P): P =>
-      'proofs' in p ? p : { ...p, proofs: config.proofs }
+    const withProofs = <P extends { proofs?: ComplianceProofs<readonly string[]>; freezelists?: FreezelistConfig }>(p: P): P =>
+      ({ ...p, proofs: p.proofs === undefined ? config.proofs : p.proofs, freezelists: p.freezelists ?? config.freezelists })
 
     const withStore = <P extends { blindedIdentities?: BlindedIdentityStore }>(p: P): P =>
       'blindedIdentities' in p ? p : { ...p, blindedIdentities }

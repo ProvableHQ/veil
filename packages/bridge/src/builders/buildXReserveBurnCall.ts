@@ -7,6 +7,9 @@ import { buildBurnCall } from '../protocols/xreserve/aleoToEvm.js'
  *
  * Selects the reviewed entrypoint and validates mode-specific inputs without
  * contacting Aleo or prompting a wallet.
+ * Null or omitted private-burn proofs become signer-only wallet requests.
+ * Use execution for local automatic generation, annotated proofs, or a provider;
+ * these require a client and cannot be resolved by this offline builder.
  *
  * @param registry Supported assets and reviewed xReserve deployments.
  * @param params Route, amount, Ethereum recipient, funding mode, and private inputs when applicable.

@@ -1,5 +1,5 @@
 import { isRegistryVersionCompatible } from '../../registry/compatibility.js'
-import type { FreezelistProofInput, TransactionInput } from '@provablehq/veil-core'
+import { freezelistProofRequest, type TransactionInput } from '@provablehq/veil-core'
 import { BridgeError } from '../../errors/bridgeErrors.js'
 import type {
   AleoWalletClient,
@@ -10,7 +10,8 @@ import type {
 import type { BridgeRegistry, BridgeReceipt, BridgePlan } from '../../types/protocol.js'
 import { formatDecimalAmount, parseDecimalAmount } from '../../utils/units.js'
 import { evmAddressToXReserveBytes32, xReserveHexToAleoBytes } from '../../utils/xreserve.js'
-import { validateBridgeFreezelistProof } from '../../utils/freezelist.js'
+import { bridgeFreezelistProgram, validateBridgeFreezelistProof } from '../../utils/freezelist.js'
+import { literalComplianceProof, resolveComplianceProof } from '../../utils/resolveComplianceProof.js'
 
 function validatedRoute(registry: BridgeRegistry, params: ExecuteXReserveBurnParameters) {
   const { plan } = params
@@ -39,7 +40,7 @@ function validatedRoute(registry: BridgeRegistry, params: ExecuteXReserveBurnPar
   return { route, bridgeProgram, wrapperProgram, tokenProgram, nativeDomain, withdrawalFeeAtomic: BigInt(withdrawalFee) }
 }
 
-function assertPrivateInputs(userRecord: TransactionInput | undefined, merkleProof: FreezelistProofInput | undefined, tokenProgram: string): asserts userRecord is TransactionInput {
+function assertPrivateInputs(userRecord: TransactionInput | undefined, tokenProgram: string): asserts userRecord is TransactionInput {
   // A structured request lets a compatible wallet select the record without
   // exposing plaintext to the application. A literal record remains supported
   // for local accounts and wallets that do not implement record selection.
@@ -48,9 +49,6 @@ function assertPrivateInputs(userRecord: TransactionInput | undefined, merklePro
     if (userRecord.type !== 'record' || userRecord.program !== tokenProgram || userRecord.recordname !== 'Token') {
       throw new BridgeError(`private_burn record requests must select ${tokenProgram}/Token`)
     }
-  }
-  if (merkleProof === undefined || (typeof merkleProof === 'string' && (!merkleProof.startsWith('[') || !merkleProof.endsWith(']')))) {
-    throw new BridgeError('private_burn requires an encoded [MerkleProof; 2] Aleo literal')
   }
 }
 
@@ -62,6 +60,8 @@ function assertPrivateInputs(userRecord: TransactionInput | undefined, merklePro
  * is involved. It does not contact Aleo, request a signature, or move funds.
  * Pauses, frozen accounts, and burn limits remain enforced by the source program
  * when the call is eventually submitted.
+ * An omitted private-burn proof becomes a signer-only wallet request. Local
+ * proof generation and providers are resolved by execution with a client.
  *
  * @param registry Supported assets and reviewed xReserve deployments.
  * @param params Route, amount, EVM recipient, public or private funding preference, and private record proof when applicable.
@@ -97,13 +97,20 @@ export function buildBurnCall(
   if (mode === 'private') {
     // Private USDCx lives in the wrapper's Token record and requires the
     // freeze-list witness expected by private_burn.
-    assertPrivateInputs(params.userRecord, params.merkleProof, deployment.tokenProgram)
+    assertPrivateInputs(params.userRecord, deployment.tokenProgram)
     const sourceAsset = registry.assets.find(asset => asset.id === deployment.route.sourceAssetId)
     if (!sourceAsset) throw new BridgeError('private_burn source asset is missing from the registry')
-    if (typeof params.merkleProof !== 'string' && sourceAsset.privacy?.program !== deployment.tokenProgram) {
+    const literal = literalComplianceProof(params.merkleProof)
+    if (literal === undefined && params.merkleProof != null) {
+      throw new BridgeError('Providers and annotated compliance proofs require execution with a client; pass a literal or wallet request to the offline builder')
+    }
+    if (typeof literal !== 'string' && sourceAsset.privacy?.program !== deployment.tokenProgram) {
       throw new BridgeError('private_burn freezelist metadata must describe the route token program')
     }
-    const merkleProof = validateBridgeFreezelistProof(params.merkleProof, sourceAsset)
+    const merkleProof = validateBridgeFreezelistProof(literal ?? freezelistProofRequest({ freezelistProgram: bridgeFreezelistProgram(sourceAsset) }), sourceAsset)
+    if (typeof merkleProof === 'string' && (!merkleProof.startsWith('[') || !merkleProof.endsWith(']'))) {
+      throw new BridgeError('private_burn requires an encoded [MerkleProof; 2] Aleo literal')
+    }
     return {
       routeId: deployment.route.id,
       mode,
@@ -169,7 +176,7 @@ export async function readWithdrawalFee(registry: BridgeRegistry, plan: BridgePl
  *
  * @param registry Supported assets and reviewed xReserve deployments.
  * @param client Aleo wallet that proves, signs, and broadcasts the source burn.
- * @param params Route, amount, EVM recipient, public or private funding preference, fee preference, and recovery callbacks.
+ * @param params Route, amount, EVM recipient, funding preference, public client for automatic local compliance reads, fee preference, and recovery callbacks.
  * @param fetcher Optional provider HTTP implementation. Defaults to global fetch; rechecks live withdrawal fees before submission.
  * @returns The Aleo transaction identifier and state needed to follow provider-managed delivery.
  * @throws BridgeError When the burn inputs are invalid or wallet submission fails.
@@ -187,8 +194,19 @@ export async function execute(
   params: ExecuteXReserveBurnParameters,
   fetcher: typeof fetch = globalThis.fetch,
 ): Promise<XReserveBurnExecution> {
-  const call = buildBurnCall(registry, params)
+  // Validate the complete burn before invoking a provider or reading a tree.
+  // The offline builder uses a wallet request for inputs that need resolution.
+  const privateBurn = params.mode === undefined || params.mode === 'private'
+  const call = buildBurnCall(registry, { ...params, merkleProof: privateBurn ? literalComplianceProof(params.merkleProof) : undefined })
   await readWithdrawalFee(registry, params.plan, fetcher)
+  if (call.mode === 'private') {
+    const asset = registry.assets.find(asset => asset.id === params.plan.sourceAsset.id)!
+    const proof = await resolveComplianceProof({ walletClient: client, publicClient: params.publicClient }, asset, params.merkleProof)
+    if (typeof proof === 'string' && (!proof.startsWith('[') || !proof.endsWith(']'))) {
+      throw new BridgeError('private_burn requires an encoded [MerkleProof; 2] Aleo literal')
+    }
+    call.inputs[4] = proof
+  }
   // Aleo wallets may finish proving before broadcasting. Forward that prepared
   // transaction so an application can persist the exact bytes and recover the
   // crash window without proving or burning again.

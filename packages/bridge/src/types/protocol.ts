@@ -50,7 +50,7 @@ export type AleoPrivacyKind = 'arc20' | 'arc22'
  *
  * @property kind ABI family that determines the transition names and input order.
  * @property program Program containing the public balance and private `Token` record.
- * @property freezelistProgram Optional reviewed program owning the ARC-22 freeze-list root. Omitted when unverified; required for wallet-derived proofs. Does not enable wallet derivation automatically.
+ * @property freezelistProgram Optional reviewed program owning the ARC-22 freeze-list root. Omitted when unverified; required for automatic, annotated, provider, and wallet-derived compliance proofs.
  */
 export type AleoPrivacyCapability = {
   kind: AleoPrivacyKind

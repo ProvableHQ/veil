@@ -9,6 +9,11 @@ returns a `SwapHandle`; `claimSwapOutput()` later withdraws the output to a
 private record. Claims are covered in [collecting.md](./collecting.md) —
 this runbook ends with persisted handles.
 
+The session generates required freezelist witnesses automatically at execution
+and reuses them while the on-chain root is unchanged. No proof provider is needed
+for the known deployments. See the SDK's [proof configuration](../README.md#freezelist-proofs)
+for custom wrapper mappings or externally computed witnesses.
+
 ## Quote handoff
 
 For new SDK integrations, use the configured API estimate through `client.quote`

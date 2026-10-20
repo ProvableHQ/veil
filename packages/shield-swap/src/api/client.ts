@@ -137,8 +137,8 @@ function sessionMetadata(body: unknown): Schemas['SessionPayload'] | undefined {
  * spec (`pnpm regen-openapi`), so drift shows up as a type change, not a
  * runtime surprise.
  *
- * Auth: most endpoints beyond pool/token discovery are bearer-gated. Two
- * credentials work: a 15-minute session JWT from `authenticate()` (challenge/verify
+ * Auth: fee-tier and pool/token discovery calls need no credentials. Gated
+ * calls accept a 15-minute session JWT from `authenticate()` (challenge/verify
  * signature handshake), or a long-lived API token (`ss_…`) passed as
  * `apiToken` at construction and minted once via `createApiToken()`. Gated
  * calls attach whichever is available (session JWT first); API-token
@@ -1299,10 +1299,15 @@ export class ApiClient {
    *
    * Each tier carries its tick spacing, so this also serves as the list of
    * registered spacings; the chain's `getFeeToTickSpacing` action reads one
-   * tier's spacing directly.
+   * tier's spacing directly. Contacts the public API without credentials.
+   *
+   * @returns Registered fee tiers in the API response envelope.
+   * @throws When the API cannot supply fee tiers.
+   * @example
+   * const tiers = await new ApiClient().getFeeTiers()
    */
   async getFeeTiers(): Promise<Schemas['FeeTierListResponseDoc']> {
-    return this.request('GET', '/fee-tiers', { auth: true })
+    return this.request('GET', '/fee-tiers')
   }
 
   /**
@@ -1497,7 +1502,7 @@ export class ApiClient {
  *
  * @example
  * await authenticateWithAccount(client.api, client.account)
- * const tiers = await client.api.getFeeTiers()
+ * const ticket = await client.api.getWebSocketTicket()
  */
 export async function authenticateWithAccount(api: ApiClient, account: AnyAccount | undefined): Promise<string> {
   if (!account) {

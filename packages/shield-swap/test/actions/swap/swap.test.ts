@@ -1,3 +1,4 @@
+import { EMPTY_MERKLE_PROOFS as FIXTURE_PROOFS } from '../../../src/utils/proofs.js'
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
 
@@ -83,6 +84,7 @@ describe('swap — local signer, plain input (direct core dispatch)', () => {
     executeMock.mockResolvedValue({ transactionId: 'at1tx', transitions: [], outputs: ['777field', 'record1...', 'compliance...'] })
 
     const handle = await swap(fakeClient('local'), {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY,
       tokenInId: TOKEN0,
       amountIn: 10n ** 18n,
@@ -125,6 +127,7 @@ describe('swap — local signer, plain input (direct core dispatch)', () => {
   it('rejects InputRequests on the local path', async () => {
     await expect(
       swap(fakeClient('local'), {
+      proofs: async () => FIXTURE_PROOFS,
         poolKey: POOL_KEY,
         tokenInId: TOKEN0,
         amountIn: 10n ** 18n,
@@ -138,6 +141,7 @@ describe('swap — local signer, plain input (direct core dispatch)', () => {
   it('throws when the pool does not exist', async () => {
     await expect(
       swap(fakeClient('local', { pools: null }), {
+      proofs: async () => FIXTURE_PROOFS,
         poolKey: POOL_KEY, tokenInId: TOKEN0, amountIn: 1n, blindedIdentity: IDENTITY, tokenRecord: RECORD,
       }),
     ).rejects.toThrow(/does not exist/)
@@ -155,6 +159,7 @@ describe('swap — wrapped input (router dispatch, wrappers invisible)', () => {
     })
 
     const handle = await swap(fakeClient('local', wrappedPools), {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY,
       tokenInId: WRAPPED_IN,
       amountIn: 1_000_000n,
@@ -179,6 +184,7 @@ describe('swap — wrapped input (router dispatch, wrappers invisible)', () => {
   it('refuses a routed swap whose amount_out_min resolves to zero', async () => {
     await expect(
       swap(fakeClient('local', wrappedPools), {
+      proofs: async () => FIXTURE_PROOFS,
         poolKey: POOL_KEY,
         tokenInId: WRAPPED_IN,
         amountIn: 1_000_000n,
@@ -197,6 +203,7 @@ describe('swap — wallet signer', () => {
     const recordRequest = { type: 'record' as const, program: 'ethx.aleo', recordname: 'Token', filters: { amount: { gte: '1000000000000000000u128' } } }
 
     const handle = await swap(fakeClient('rpc'), {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY, tokenInId: TOKEN0, amountIn: 10n ** 18n, expectedOut: 2_000_000n, nonce: 42n,
       tokenRecord: recordRequest,
     })
@@ -222,13 +229,14 @@ describe('swap — wallet signer', () => {
 
   it('demands tokenRecord with an actionable message', async () => {
     await expect(
-      swap(fakeClient('rpc'), { poolKey: POOL_KEY, tokenInId: TOKEN0, amountIn: 10n ** 18n }),
+      swap(fakeClient('rpc'), { proofs: async () => FIXTURE_PROOFS, poolKey: POOL_KEY, tokenInId: TOKEN0, amountIn: 10n ** 18n }),
     ).rejects.toThrow(/must provide tokenRecord/)
   })
 
   it('derives swapId when the caller supplied the blinded identity', async () => {
     writeMock.mockResolvedValue('at1walletTx')
     const handle = await swap(fakeClient('rpc'), {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY, tokenInId: TOKEN0, amountIn: 10n ** 18n, expectedOut: 2_000_000n, nonce: 42n,
       blindedIdentity: IDENTITY,
       tokenRecord: RECORD,
@@ -253,6 +261,7 @@ describe('swap — wallet signer', () => {
   it('routes a wrapped input through the router on the wallet path too', async () => {
     writeMock.mockResolvedValue('at1walletRouted')
     await swap(fakeClient('rpc', { pools: poolPlaintext(WRAPPED_IN, TOKEN1) }), {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY,
       tokenInId: WRAPPED_IN,
       amountIn: 1_000_000n,
@@ -282,7 +291,7 @@ describe('claimSwapOutput — unified dispatch', () => {
     executeMock.mockResolvedValue({ transactionId: 'at1claim', transitions: [], outputs: [] })
     const res = await claimSwapOutput(
       fakeClient('local', { swap_outputs: swapOutputPlaintext(TOKEN0, TOKEN1, 25n) }),
-      { handle },
+      { proofs: async () => FIXTURE_PROOFS, handle },
     )
 
     const call = executeMock.mock.calls[0]![1]
@@ -308,7 +317,7 @@ describe('claimSwapOutput — unified dispatch', () => {
     executeMock.mockResolvedValue({ transactionId: 'at1claimW', transitions: [], outputs: [] })
     await claimSwapOutput(
       fakeClient('local', { swap_outputs: swapOutputPlaintext(TOKEN0, WRAPPED_IN, 25n) }),
-      { handle },
+      { proofs: async () => FIXTURE_PROOFS, handle },
     )
 
     const call = executeMock.mock.calls[0]![1]
@@ -323,7 +332,7 @@ describe('claimSwapOutput — unified dispatch', () => {
     executeMock.mockResolvedValue({ transactionId: 'at1claimR', transitions: [], outputs: [] })
     await claimSwapOutput(
       fakeClient('local', { swap_outputs: swapOutputPlaintext(WRAPPED_IN, TOKEN1, 25n) }),
-      { handle },
+      { proofs: async () => FIXTURE_PROOFS, handle },
     )
 
     const call = executeMock.mock.calls[0]![1]
@@ -336,7 +345,7 @@ describe('claimSwapOutput — unified dispatch', () => {
     executeMock.mockResolvedValue({ transactionId: 'at1claimWW', transitions: [], outputs: [] })
     await claimSwapOutput(
       fakeClient('local', { swap_outputs: swapOutputPlaintext(WRAPPED_IN, WRAPPED_IN, 25n) }),
-      { handle },
+      { proofs: async () => FIXTURE_PROOFS, handle },
     )
 
     const call = executeMock.mock.calls[0]![1]
@@ -346,7 +355,7 @@ describe('claimSwapOutput — unified dispatch', () => {
 
   it('plain/plain, zero remainder: dispatches core claim_swap_output_no_refund without amount_remaining', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1nr', transitions: [], outputs: [] })
-    const res = await claimSwapOutput(fakeClient('local'), { handle })
+    const res = await claimSwapOutput(fakeClient('local'), { proofs: async () => FIXTURE_PROOFS, handle })
     const call = executeMock.mock.calls[0]![1]
     expect(call.program).toBe('shield_swap.aleo')
     expect(call.function).toBe('claim_swap_output_no_refund')
@@ -364,7 +373,7 @@ describe('claimSwapOutput — unified dispatch', () => {
 
   it('wrapped output, zero remainder: dispatches claim_to_wrapped_no_refund with the receiver proof', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1nrW', transitions: [], outputs: [] })
-    await claimSwapOutput(fakeClient('local', { swap_outputs: swapOutputPlaintext(TOKEN0, WRAPPED_IN) }), { handle })
+    await claimSwapOutput(fakeClient('local', { swap_outputs: swapOutputPlaintext(TOKEN0, WRAPPED_IN) }), { proofs: async () => FIXTURE_PROOFS, handle })
     const call = executeMock.mock.calls[0]![1]
     expect(call.program).toBe('shield_swap_router.aleo')
     expect(call.function).toBe('claim_to_wrapped_no_refund')
@@ -382,7 +391,7 @@ describe('claimSwapOutput — unified dispatch', () => {
 
   it('wrapped input, plain output, zero remainder: dispatches claim_to_arc20_no_refund with only the AMM proof', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1nrA', transitions: [], outputs: [] })
-    await claimSwapOutput(fakeClient('local', { swap_outputs: swapOutputPlaintext(WRAPPED_IN, TOKEN1) }), { handle })
+    await claimSwapOutput(fakeClient('local', { swap_outputs: swapOutputPlaintext(WRAPPED_IN, TOKEN1) }), { proofs: async () => FIXTURE_PROOFS, handle })
     const call = executeMock.mock.calls[0]![1]
     expect(call.program).toBe('shield_swap_router.aleo')
     expect(call.function).toBe('claim_to_arc20_no_refund')
@@ -399,7 +408,7 @@ describe('claimSwapOutput — unified dispatch', () => {
 
   it('both wrapped, zero remainder: dispatches claim_to_wrapped_no_refund regardless of refund-side wrapped-ness', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1nrWW', transitions: [], outputs: [] })
-    await claimSwapOutput(fakeClient('local', { swap_outputs: swapOutputPlaintext(WRAPPED_IN, WRAPPED_IN) }), { handle })
+    await claimSwapOutput(fakeClient('local', { swap_outputs: swapOutputPlaintext(WRAPPED_IN, WRAPPED_IN) }), { proofs: async () => FIXTURE_PROOFS, handle })
     const call = executeMock.mock.calls[0]![1]
     expect(call.program).toBe('shield_swap_router.aleo')
     expect(call.function).toBe('claim_to_wrapped_no_refund')
@@ -417,7 +426,7 @@ describe('claimSwapOutput — unified dispatch', () => {
 
   it('wallet: resolve-mode derived requests target the handle blindedAddress', async () => {
     writeMock.mockResolvedValue('at1walletClaim')
-    await claimSwapOutput(fakeClient('rpc'), { handle })
+    await claimSwapOutput(fakeClient('rpc'), { proofs: async () => FIXTURE_PROOFS, handle })
 
     const inputs = writeMock.mock.calls[0]![1].inputs
     expect(inputs[0]).toMatchObject({
@@ -433,7 +442,7 @@ describe('claimSwapOutput — unified dispatch', () => {
 
   it('wallet, wrapped output zero remainder: targets the router while deriving against the core program', async () => {
     writeMock.mockResolvedValue('at1walletClaimNr')
-    await claimSwapOutput(fakeClient('rpc', { swap_outputs: swapOutputPlaintext(TOKEN0, WRAPPED_IN) }), { handle })
+    await claimSwapOutput(fakeClient('rpc', { swap_outputs: swapOutputPlaintext(TOKEN0, WRAPPED_IN) }), { proofs: async () => FIXTURE_PROOFS, handle })
 
     const call = writeMock.mock.calls[0]![1]
     expect(call.program).toBe('shield_swap_router.aleo')
@@ -457,13 +466,13 @@ describe('claimSwapOutput — unified dispatch', () => {
 
   it('throws SwapOutputNotFinalizedError when the output is absent', async () => {
     await expect(
-      claimSwapOutput(fakeClient('local', { swap_outputs: null }), { handle }),
+      claimSwapOutput(fakeClient('local', { swap_outputs: null }), { proofs: async () => FIXTURE_PROOFS, handle }),
     ).rejects.toThrow(SwapOutputNotFinalizedError)
   })
 
   it('demands swapId (wallet-path resolution) before claiming', async () => {
     await expect(
-      claimSwapOutput(fakeClient('local'), { handle: { ...handle, swapId: undefined } }),
+      claimSwapOutput(fakeClient('local'), { proofs: async () => FIXTURE_PROOFS, handle: { ...handle, swapId: undefined } }),
     ).rejects.toThrow(/resolve it from the confirmed/)
   })
 })
@@ -497,6 +506,7 @@ describe('swap — identity tracking through a store', () => {
     const store = memoryBlindedIdentityStore()
 
     const handle = await swap(tracked, {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY,
       tokenInId: TOKEN0,
       amountIn: 1_000_000n,
@@ -529,6 +539,7 @@ describe('swap — identity tracking through a store', () => {
     const store = memoryBlindedIdentityStore()
 
     await swap(tracked, {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY,
       tokenInId: TOKEN0,
       amountIn: 1_000_000n,
@@ -561,6 +572,7 @@ describe('swap — identity tracking through a store', () => {
     }
 
     const error = await swap(tracked, {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY,
       tokenInId: TOKEN0,
       amountIn: 1_000_000n,
