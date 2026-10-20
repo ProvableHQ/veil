@@ -1,5 +1,6 @@
 import type { EvmCctpTransferQuote, EvmCctpTransferExecution } from './cctp.js'
 import type { ProvingProgressHandler, TransactionInput } from '@provablehq/veil-core'
+import type { ComplianceProofs } from './compliance.js'
 import type {
   AleoHyperlaneGasQuote,
   AleoHyperlaneTransferRemoteExecution,
@@ -86,7 +87,7 @@ export type BridgeQuote = ({ plan: BridgePlan }) & (
  * @property onCheckpoint Optional durable hook receiving compact recovery state before supported local Aleo broadcasts and after every submission.
  * @property mode Aleo Hyperlane caller mode or xReserve burn mode. Defaults to `caller` for Hyperlane and `private` for xReserve.
  * @property userRecord Wallet record request or encoded USDCx record required by a private Aleo xReserve burn.
- * @property merkleProof Encoded `[MerkleProof; 2]` literal required by a private Aleo xReserve burn.
+ * @property merkleProof Optional single compliance bundle, annotated proofs, provider, or signer-only wallet request for a private Aleo xReserve burn. Null or omission enables local generation or wallet derivation; wallets require a matching grant.
  * @property privateFee Whether an Aleo wallet pays its execution fee privately. Defaults to false.
  * @property gasPaymentMicrocredits Optional exact Aleo Hyperlane hook payment override. Defaults to a fresh live quote.
  * @property privateMintSecretNonce Secret Aleo scalar committed by a private xReserve deposit. Defaults to `0scalar` and is never persisted in a checkpoint.
@@ -99,7 +100,7 @@ export type ExecuteParameters = {
   onCheckpoint?: ((checkpoint: BridgeCheckpoint) => void | Promise<void>) | undefined
   mode?: 'caller' | 'signer' | XReserveBurnMode | undefined
   userRecord?: TransactionInput | undefined
-  merkleProof?: string | undefined
+  merkleProof?: ComplianceProofs | undefined
   privateFee?: boolean | undefined
   gasPaymentMicrocredits?: bigint | undefined
   privateMintSecretNonce?: string | undefined

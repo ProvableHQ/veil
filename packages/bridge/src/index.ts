@@ -66,6 +66,13 @@ export { unshield } from './actions/unshield.js'
 export { createBridgeCheckpoint } from './actions/createBridgeCheckpoint.js'
 export { hyperlane, xreserve, type ProtocolHelperRegistry } from './protocols/index.js'
 export { buildXReserveBurnCall } from './builders/buildXReserveBurnCall.js'
+export type { ComplianceProofs, ComplianceProofProvider, ComplianceProofContext, SuppliedComplianceProof, MerkleProofInput } from './types/compliance.js'
+export {
+  bridgeFreezelistProofRequest,
+  unshieldFreezelistProofGrant,
+  xReserveBurnFreezelistProofGrant,
+  type BridgeFreezelistParameters,
+} from './builders/freezelist.js'
 export { buildAleoHyperlaneTransferRemoteCall } from './builders/buildAleoHyperlaneTransferRemoteCall.js'
 
 export { DEFAULT_BRIDGE_REGISTRY } from './registry/default.js'

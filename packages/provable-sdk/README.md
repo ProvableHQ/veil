@@ -139,3 +139,24 @@ loads it. That is the cost of holding keys and proving locally. An app that
 connects a wallet — Shield, Leo — should build its client from the wallet adapter
 instead (see `@provablehq/veil-aleo-wallet-adapter`) and skip `@provablehq/veil-aleo-sdk`, keeping the
 WASM out of the bundle.
+
+## Freezelist witnesses
+
+The Node/browser SDK handle supplies `generateFreezelistProof` for ARC-22
+non-inclusion witnesses. It computes a `[MerkleProof; 2]` Aleo string locally,
+rejects frozen subjects and validates both paths against the supplied on-chain
+root. It does not sign, fetch or broadcast. Read the root and tree through a Veil
+public client:
+
+```ts
+const sdk = await loadNetwork('testnet')
+const programId = 'test_usdcx_freezelist.aleo'
+const root = await publicClient.readContract({ programId, mapping: 'freeze_list_root', key: '1u8' })
+if (!root) throw new Error('Missing freezelist root')
+const tree = await publicClient.getComplianceFreezeList({ programId })
+const proof = await sdk.generateFreezelistProof({ address, tree, root })
+```
+
+The resulting string can be passed to an ARC-22 transfer or bridge proof input.
+SDK-created proving configs expose the same generator to Shield Swap, which
+resolves and caches witnesses automatically for local and delegated proving.

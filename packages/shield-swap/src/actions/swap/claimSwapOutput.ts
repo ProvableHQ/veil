@@ -8,8 +8,9 @@ import type { BlindedIdentityStore } from '../../utils/blinding/store.js'
 import { blindingFactorResolveRequest, blindedAddressResolveRequest } from '../../utils/blinding/requests.js'
 import { resolveDexImports } from '../../utils/imports.js'
 import { resolveTokenRoute, tokenIdToProgram } from '../../utils/routing.js'
-import { resolveProofPair, formatMerkleProofPair, type ProofProvider } from '../../utils/proofs.js'
-import { SHIELD_SWAP_ROUTER, SHIELD_SWAP_FREEZELIST } from '../../constants.js'
+import type { ClaimProofs, FreezelistConfig } from '../../utils/proofs.js'
+import { resolveComplianceProofs, ammProofContext, wrapperProofContext } from '../../utils/resolveProofs.js'
+import { SHIELD_SWAP_ROUTER } from '../../constants.js'
 
 /**
  * The swap output is not in the mapping yet (request not finalized) —
@@ -41,10 +42,10 @@ export class SwapOutputNotFinalizedError extends Error {
  *   across both. Local-signer handles are complete; wallet-path handles need
  *   `swapId` and `blindedAddress` resolved from the confirmed request
  *   transaction first.
- * @property proofs Freezelist witness provider for populated freezelists —
- *   the claim proves the signer against the AMM freezelist, and against each
- *   wrapped token's wrapper list when unwrapping. Defaults to the empty-tree
- *   witness, which the contracts accept while the lists are empty.
+ * @property proofs Supplies a {@link ClaimProofs} literal tuple in ABI order, an annotated
+ *   collection, or a provider. Omission or null enables automatic resolution.
+ * @property freezelists Overrides deployment lists for automatic or annotated proofs;
+ *   defaults to the known AMM, USDCx and credits lists.
  * @property imports Optional program-source override for proving. Defaults to
  *   fetching the output/refund token programs and the selected claim program
  *   dependencies from chain. Supply a complete map to reuse cached sources.
@@ -56,7 +57,8 @@ export class SwapOutputNotFinalizedError extends Error {
 export type ClaimSwapOutputParameters = {
   handle: SwapHandle | MultiHopSwapHandle
   blindedIdentities?: BlindedIdentityStore
-  proofs?: ProofProvider
+  proofs?: ClaimProofs
+  freezelists?: FreezelistConfig
   imports?: Record<string, string>
   program?: string
   routerProgram?: string
@@ -144,36 +146,25 @@ export async function claimSwapOutput(
 
   // Every claim path proves the signer against the AMM freezelist; wrapped
   // sides additionally prove the receiver against the wrapper's list.
-  const ammProof = formatMerkleProofPair(
-    await resolveProofPair(params.proofs, {
-      list: 'amm',
-      program: SHIELD_SWAP_FREEZELIST,
-      subject: account.address,
-    }),
-  )
-  const receiverProof = async (wrapperProgram: string): Promise<string> =>
-    formatMerkleProofPair(
-      await resolveProofPair(params.proofs, {
-        list: 'wrapper',
-        program: wrapperProgram,
-        subject: account.address,
-      }),
-    )
-
   // Dispatch on two axes: whether the swap left an input remainder, then the
   // (output, refund) wrapped-ness. A zero remainder selects the no-refund
   // transitions — no amount_remaining input, no refund record in the result.
   // The chain re-checks the stored remainder and rejects a nonzero one.
   const noRefund = out.amount_remaining === 0n
+  const [ammProof, outputProof, refundProof] = await resolveComplianceProofs(client, params.proofs, [
+    ammProofContext(account.address, true),
+    wrapperProofContext(outRoute, account.address),
+    noRefund ? undefined : wrapperProofContext(refundRoute, account.address),
+  ], params.freezelists)
   let targetProgram: string
   let fn: string
-  const proofTail: string[] = [ammProof]
+  const proofTail: TransactionInput[] = [ammProof]
   if (noRefund) {
     if (outRoute.wrapped) {
       // Output unwraps via the router regardless of the input's wrapped-ness.
       targetProgram = routerProgram
       fn = 'claim_to_wrapped_no_refund'
-      proofTail.push(await receiverProof(outRoute.wrapperProgram))
+      proofTail.push(outputProof!)
     } else if (refundRoute.wrapped) {
       // Plain output but wrapped input: the router variant asserts the pairing.
       targetProgram = routerProgram
@@ -185,15 +176,15 @@ export async function claimSwapOutput(
   } else if (outRoute.wrapped && refundRoute.wrapped) {
     targetProgram = routerProgram
     fn = 'claim_to_wrapped_refund_wrapped'
-    proofTail.push(await receiverProof(outRoute.wrapperProgram), await receiverProof(refundRoute.wrapperProgram))
+    proofTail.push(outputProof!, refundProof!)
   } else if (outRoute.wrapped) {
     targetProgram = routerProgram
     fn = 'claim_to_wrapped_refund_arc20'
-    proofTail.push(await receiverProof(outRoute.wrapperProgram))
+    proofTail.push(outputProof!)
   } else if (refundRoute.wrapped) {
     targetProgram = routerProgram
     fn = 'claim_to_arc20_refund_wrapped'
-    proofTail.push(await receiverProof(refundRoute.wrapperProgram))
+    proofTail.push(refundProof!)
   } else {
     targetProgram = program
     fn = 'claim_swap_output'
@@ -213,7 +204,7 @@ export async function claimSwapOutput(
 
   // Everything after the two blinding slots, verbatim from chain state, then
   // the proof arrays. The no-refund transitions take no amount_remaining slot.
-  const tail: string[] = [
+  const tail: TransactionInput[] = [
     handle.swapId,
     out.token_in,
     out.token_out,

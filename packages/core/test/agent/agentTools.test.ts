@@ -5,6 +5,7 @@ import { aleoAgentTools, aleoAgentToolSchemas, createAgentTools } from '../../sr
 import { createPublicClient } from '../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../src/clients/createWalletClient.js'
 import { custom } from '../../src/transports/custom.js'
+import { freezelistProofRequest } from '../../src/utils/freezelistProof.js'
 
 const arc20Vector = readFileSync(join(__dirname, '../fixtures/programs/test_arc20_eth.aleo'), 'utf8')
 
@@ -194,6 +195,39 @@ describe('aleoAgentTools', () => {
       const walletClient = createWalletClient({ account, transport: custom({ request }) })
       return { walletClient, request }
     }
+
+    it('assembles private ARC-22 tool transfers without losing u128 precision or wallet inputs', async () => {
+      const { walletClient, request } = createMockWallet()
+      const tool = aleoAgentTools({ walletClient }).find((t) => t.name === 'aleo_transfer')!
+      const proof = freezelistProofRequest({ freezelistProgram: 'compliance.aleo' })
+      const record = { type: 'record', program: 'token.aleo', recordname: 'Token', uid: 'token-1' }
+      await tool.handler({ to: 'aleo1recipient', amount: '9007199254740993', asset: 'token.aleo', visibility: 'private', amountWidth: 'u128', record, merkleProof: proof })
+      expect(request).toHaveBeenCalledWith({ method: 'executeTransaction', params: expect.objectContaining({ programName: 'token.aleo', functionName: 'transfer_private', inputs: ['aleo1recipient', '9007199254740993u128', record, proof] }) })
+    })
+
+    it('rejects unrelated or malformed proof requests before transfer execution', async () => {
+      const { walletClient, request } = createMockWallet()
+      const tool = aleoAgentTools({ walletClient }).find((t) => t.name === 'aleo_transfer')!
+      await expect(tool.handler({ to: 'aleo1recipient', amount: 1, merkleProof: { type: 'derived', algorithm: 'other', args: {} } })).rejects.toThrow(/freezelist proof/)
+      expect(request).not.toHaveBeenCalled()
+    })
+
+    it('rejects unsafe numeric transfer amounts before losing token precision', async () => {
+      const { walletClient, request } = createMockWallet()
+      const tool = aleoAgentTools({ walletClient }).find((t) => t.name === 'aleo_transfer')!
+      await expect(tool.handler({ to: 'aleo1recipient', amount: 9007199254740992 })).rejects.toThrow(/decimal string/)
+      expect(request).not.toHaveBeenCalled()
+    })
+
+    it('advertises wallet freezelist proof and record inputs for generic execution', () => {
+      const { walletClient } = createMockWallet()
+      const tool = aleoAgentTools({ walletClient }).find((t) => t.name === 'aleo_execute')!
+      const items = ((tool.inputSchema.properties as any).inputs.items as any).anyOf
+      expect(items).toEqual(expect.arrayContaining([
+        expect.objectContaining({ properties: expect.objectContaining({ algorithm: { const: 'program-freezelist-exclusion-proof' } }) }),
+        expect.objectContaining({ properties: expect.objectContaining({ type: { const: 'record' } }) }),
+      ]))
+    })
 
     it('returns write-only tools', () => {
       const { walletClient } = createMockWallet()

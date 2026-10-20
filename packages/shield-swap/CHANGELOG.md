@@ -1,5 +1,43 @@
 # @provablehq/shield-swap-sdk
 
+## 0.13.0
+
+### Minor Changes
+
+- 9a98a2f: Generate Shield Swap freezelist witnesses automatically by default, validate local witnesses against current chain roots, and cache them while roots remain unchanged. Add a compliance-tree read action and SDK witness generator. Accept per-action literal tuples and annotated proofs alongside existing provider callbacks. Include wallet freezelist grants by default.
+
+  Omitted proofs now resolve automatically instead of using unchecked empty witnesses. Undefined per-call proofs inherit a configured provider; null selects automatic resolution. Custom wrappers need explicit freezelist mappings. For opaque collect and rebalance records, automatic proofs and providers marked `requiresSubject` require `withdrawalAddress`. Supplied proof tuples and existing custom providers can omit it.
+
+  Resolve Bridge ARC-22 unshield and private xReserve burn compliance proofs automatically. Local accounts generate and cache verified witnesses against current roots; wallet accounts receive signer-only derived requests. Preserve `merkleProof` strings and wallet requests, and accept single-element tuples, annotated proofs, and providers. Public burns remain independent of compliance proofs.
+
+- 1b3e5c0: Add opt-in wallet-derived freezelist exclusion proofs, typed request and grant builders, and proof input support for private token transfers, bridge actions, and Shield Swap swaps and liquidity. Preserve existing encoded proofs and providers, and require explicit freezelist configuration and subjects when wallet-held records hide them.
+
+### Patch Changes
+
+- 9a0e6eb: Allow fee-tier discovery without authentication, matching the public DEX API. Check credential rejection and session recovery against the authenticated WebSocket-ticket endpoint instead of the public fee-tier registry.
+- Updated dependencies [9a98a2f]
+- Updated dependencies [1b3e5c0]
+  - @provablehq/veil-core@0.13.0
+
+## 0.13.0-rc.0
+
+### Minor Changes
+
+- 9a98a2f: Generate Shield Swap freezelist witnesses automatically by default, validate local witnesses against current chain roots, and cache them while roots remain unchanged. Add a compliance-tree read action and SDK witness generator. Accept per-action literal tuples and annotated proofs alongside existing provider callbacks. Include wallet freezelist grants by default.
+
+  Omitted proofs now resolve automatically instead of using unchecked empty witnesses. Undefined per-call proofs inherit a configured provider; null selects automatic resolution. Custom wrappers need explicit freezelist mappings. For opaque collect and rebalance records, automatic proofs and providers marked `requiresSubject` require `withdrawalAddress`. Supplied proof tuples and existing custom providers can omit it.
+
+  Resolve Bridge ARC-22 unshield and private xReserve burn compliance proofs automatically. Local accounts generate and cache verified witnesses against current roots; wallet accounts receive signer-only derived requests. Preserve `merkleProof` strings and wallet requests, and accept single-element tuples, annotated proofs, and providers. Public burns remain independent of compliance proofs.
+
+- 1b3e5c0: Add opt-in wallet-derived freezelist exclusion proofs, typed request and grant builders, and proof input support for private token transfers, bridge actions, and Shield Swap swaps and liquidity. Preserve existing encoded proofs and providers, and require explicit freezelist configuration and subjects when wallet-held records hide them.
+
+### Patch Changes
+
+- 9a0e6eb: Allow fee-tier discovery without authentication, matching the public DEX API. Check credential rejection and session recovery against the authenticated WebSocket-ticket endpoint instead of the public fee-tier registry.
+- Updated dependencies [9a98a2f]
+- Updated dependencies [1b3e5c0]
+  - @provablehq/veil-core@0.13.0-rc.0
+
 ## 0.12.1
 
 ### Patch Changes

@@ -17,6 +17,16 @@ For Privy or Dynamic server wallets, start with the
 [server-wallet configuration guide](./remote-wallets/README.md). Its examples
 configure EVM and Solana clients without signing or submitting.
 
+For a connected Aleo wallet that implements
+`program-freezelist-exclusion-proof`, use
+[`wallet-freezelist.ts`](./wallet-freezelist.ts) to prepare the private USDCx burn
+inputs and exact connect-time algorithm grant from a quoted plan. This helper
+performs no network access and submits nothing. Pass its `algorithmsAllowed`
+when connecting the wallet, then pass its `parameters` to `bridge.execute` after
+authorization. The wallet selects a token record and derives the signer proof
+without exposing either value. The local-key withdrawal script uses Bridge's
+automatic proof generation through the configured Provable SDK client.
+
 ## Routes covered by the examples
 
 | Script | Route | Protocol | Default amount |
@@ -369,12 +379,10 @@ that the original process has stopped. Arc destination mode retains its
 provider-handoff behavior; the Arc journey examples verify delivery separately.
 
 The wrapper requires a `[MerkleProof; 2]` non-inclusion witness for its
-compliance list. The example fetches the live tree from
-`usdcx_freezelist.aleo/compliance/freeze-list` and uses the Provable SDK's
-`SealanceMerkleTree` to derive the witness for the Aleo signer immediately
-before submission. The depth-15 tree is encoded as the wrapper contract's
-required 16-field path because the SDK includes the selected leaf as the first
-path element.
+compliance list. The example omits `merkleProof`: Bridge checks the current
+on-chain root and uses the local client's Provable SDK generator to construct
+the signer's witness. Trees and verified proofs are cached while that root
+remains unchanged; invalid or stale data fails before burn submission.
 
 ## Submit a reviewed example
 

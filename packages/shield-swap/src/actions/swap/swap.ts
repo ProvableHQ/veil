@@ -17,7 +17,8 @@ import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
 import { resolveSwapParams, getDeadline, generateSwapNonce } from '../../utils/params.js'
 import { blindingFactorIssueRequest, blindedAddressIssueRequest } from '../../utils/blinding/requests.js'
 import { resolveTokenRoute, tokenIdToProgram, type TokenRoute } from '../../utils/routing.js'
-import { resolveProofPair, formatMerkleProofPair, type ProofProvider } from '../../utils/proofs.js'
+import type { SwapProofs, FreezelistConfig } from '../../utils/proofs.js'
+import { resolveComplianceProofs, wrapperProofContext } from '../../utils/resolveProofs.js'
 import { formatU256Literal } from '../../utils/q128.js'
 import { tryLoadSdk } from '../../utils/sdk.js'
 import { deriveSwapId } from '../../utils/keys.js'
@@ -56,9 +57,10 @@ import { SHIELD_SWAP, SHIELD_SWAP_ROUTER } from '../../constants.js'
  * @property route Pre-resolved input-token route — the offline/override
  *   escape hatch. Defaults to reading `from_wrapper_token_id` on chain
  *   (cached per process).
- * @property proofs Freezelist witness provider for populated freezelists.
- *   Defaults to the empty-tree witness, which the contracts accept while
- *   the lists are empty.
+ * @property proofs Supplies a {@link SwapProofs} literal tuple in ABI order, an annotated
+ *   collection, or a provider. Omission or null enables automatic resolution.
+ * @property freezelists Overrides deployment lists for automatic or annotated proofs;
+ *   defaults to the known AMM, USDCx and credits lists.
  * @property imports Program sources for dynamic-dispatch dependencies
  *   (`{ 'token.aleo': source }`). The prover cannot discover dynamic callees
  *   statically — pass the involved token programs' sources when proving
@@ -89,7 +91,8 @@ export type SwapParameters = {
   blindedIdentity?: { blindingFactor: string; blindedAddress: string }
   blindedIdentities?: BlindedIdentityStore
   route?: TokenRoute
-  proofs?: ProofProvider
+  proofs?: SwapProofs
+  freezelists?: FreezelistConfig
   imports?: Record<string, string>
   program?: string
   routerProgram?: string
@@ -99,7 +102,8 @@ export type SwapParameters = {
  * Executes a quote with account-specific inputs while preserving its trade terms.
  * @property quote Quote returned by quote; fixes amount, route, network, program and output floor.
  * @property tokenRecord Optional record override; required for wallet accounts, selected automatically for local accounts.
- * @property proofs Optional freezelist proof provider; defaults to the empty-tree witness.
+ * @property proofs Optional literals or provider; defaults to automatic resolution.
+ * @property freezelists Optional deployment lists; defaults to the known lists.
  * @property imports Optional program-source map; defaults to resolving all route token programs and DEX imports.
  * @property blindedIdentity Optional explicit identity; otherwise derived by the existing signer path.
  * @property blindedIdentities Optional tracking store; defaults to the decorator's store when configured.
@@ -108,7 +112,7 @@ export type SwapParameters = {
  * @property routerProgram Wrapped-input router override; defaults to shield_swap_router.aleo.
  */
 export type SwapFromQuoteParameters = Pick<SwapParameters,
-  'tokenRecord' | 'proofs' | 'imports' | 'blindedIdentity' | 'blindedIdentities' |
+  'tokenRecord' | 'proofs' | 'freezelists' | 'imports' | 'blindedIdentity' | 'blindedIdentities' |
   'deadlineOffsetBlocks' | 'nonce' | 'routerProgram'
 > & {
   quote: SwapQuote
@@ -314,16 +318,10 @@ export async function swap(client: Client, params: SwapParameters | SwapFromQuot
   ]
 
   // Wrapped input: the deposit rides the wrapper's freezelist check, so the
-  // sender proves non-inclusion (empty-tree witness while lists are empty).
-  const senderProof = route.wrapped
-    ? formatMerkleProofPair(
-        await resolveProofPair(params.proofs, {
-          list: 'wrapper',
-          program: route.wrapperProgram,
-          subject: account.address,
-        }),
-      )
-    : undefined
+  // sender proves non-inclusion against its current freezelist.
+  const [senderProof] = await resolveComplianceProofs(client, params.proofs, [
+    wrapperProofContext(route, account.address),
+  ], params.freezelists)
 
   const handleBase = {
     tokenInId: params.tokenInId,

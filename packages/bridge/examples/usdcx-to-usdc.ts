@@ -24,9 +24,6 @@ import {
 } from '@provablehq/aleo-bridge-sdk'
 
 const USDCX_PROGRAM = 'usdcx_stablecoin.aleo'
-const FREEZE_LIST_URL = 'https://edge.provable.com/api/v2/mainnet/programs/usdcx_freezelist.aleo/compliance/freeze-list'
-const FREEZE_LIST_TREE_DEPTH = 15
-const FREEZE_LIST_PROOF_LENGTH = FREEZE_LIST_TREE_DEPTH + 1
 const MINIMUM_BURN_AMOUNT_ATOMIC = 2_000_000n
 const EXECUTION_ACKNOWLEDGEMENT = 'I_UNDERSTAND_THIS_MOVES_REAL_FUNDS'
 const EXECUTION_ENVIRONMENT_VARIABLE = 'EXECUTE_BRIDGE'
@@ -101,41 +98,6 @@ async function selectPrivateRecord(
   }
   console.log(`Selected a private USDCx record containing ${selected.amount} base units.`)
   return selected.record
-}
-
-async function createExclusionProof(address: string): Promise<string> {
-  // Private USDCx must prove the signer is absent from the current freeze list.
-  // Refuse missing or malformed provider data before proving, because an old or
-  // invented list is not a valid statement about current compliance state.
-  const response = await fetch(FREEZE_LIST_URL)
-  if (!response.ok) {
-    throw new Error(`USDCx freeze-list request failed with HTTP ${response.status}`)
-  }
-  const payload: unknown = await response.json()
-  if (!Array.isArray(payload) || payload.length === 0 || payload.some((value) => typeof value !== 'string' || !/^[0-9]+$/.test(value))) {
-    throw new Error('USDCx freeze-list response must be a non-empty array of decimal strings')
-  }
-
-  const { SealanceMerkleTree } = await import('@provablehq/sdk/mainnet.js')
-  const sealance = new SealanceMerkleTree()
-  const tree = sealance.convertTreeToBigInt(payload as string[])
-  // The neighboring leaves on both sides of the address prove its absence from
-  // the ordered tree. The Aleo program checks these sibling paths during burn.
-  const [leftIndex, rightIndex] = sealance.getLeafIndices(tree, address)
-  // The SDK includes the selected leaf as the first path element, so a
-  // depth-15 tree produces the contract's required [field; 16u32] array.
-  const leftProof = sealance.getSiblingPath(tree, leftIndex, FREEZE_LIST_PROOF_LENGTH)
-  const rightProof = sealance.getSiblingPath(tree, rightIndex, FREEZE_LIST_PROOF_LENGTH)
-  if (
-    leftProof.siblings.length !== FREEZE_LIST_PROOF_LENGTH ||
-    rightProof.siblings.length !== FREEZE_LIST_PROOF_LENGTH
-  ) {
-    throw new Error(
-      `USDCx exclusion proof paths must contain ${FREEZE_LIST_PROOF_LENGTH} fields; ` +
-      `received ${leftProof.siblings.length} and ${rightProof.siblings.length}`,
-    )
-  }
-  return sealance.formatMerkleProof([leftProof, rightProof])
 }
 
 /**
@@ -236,15 +198,11 @@ export async function runUsdcxToUsdcExample(options: ExampleOptions & { destinat
   try {
     if (tracker?.delivered) { console.log('Previously observed Ethereum delivery:', tracker.delivered); return }
     // A private burn spends one concrete record and proves that the signer is not
-    // frozen. Record discovery and the freeze-list request happen before proving;
-    // failure here means no burn was submitted and no USDCx moved.
+    // frozen. Bridge constructs and verifies the compliance proof automatically
+    // before submission; the caller only selects the spendable record.
     const userRecord = !tracker?.checkpoint && mode === 'private'
       ? (await selectPrivateRecord(nativeWalletClient, amountAtomic)).recordPlaintext
       : undefined
-    const merkleProof = !tracker?.checkpoint && mode === 'private'
-      ? await createExclusionProof(account.address)
-      : undefined
-    if (merkleProof) console.log(`Derived the USDCx freeze-list exclusion proof for ${account.address}.`)
 
     // xReserve can burn the selected USDCx record directly. Do not unshield it
     // first: that would create a separate public balance and add an unnecessary
@@ -273,7 +231,7 @@ export async function runUsdcxToUsdcExample(options: ExampleOptions & { destinat
     } else {
       tracker?.begin()
       const result = await executingBridge.execute({ plan, mode: burnMode,
-        ...(userRecord ? { userRecord } : {}), ...(merkleProof ? { merkleProof } : {}),
+        ...(userRecord ? { userRecord } : {}),
         privateFee: false, onCheckpoint: persist })
       if (result.kind !== 'aleo-xreserve') throw new Error(`Unexpected execution kind: ${result.kind}`)
       console.log('USDCx burn submitted:', result.transactionId)

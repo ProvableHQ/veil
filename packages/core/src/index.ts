@@ -15,6 +15,7 @@ export type {
 
 export type {
   ProvingConfig,
+  GenerateFreezelistProofParameters,
   BuildTransactionOptions,
   BuildDeploymentOptions,
   SimulateOptions,
@@ -96,6 +97,8 @@ export type {
   ConnectOptions, RecordAccessGrant, ProgramGrant, RecordGrant, FieldGrant, AlgorithmGrant,
 } from './types/inputRequest.js'
 export { KNOWN_ALGORITHMS, isInputRequest, assertNoInputRequests } from './types/inputRequest.js'
+export { FREEZELIST_PROOF_ALGORITHM, freezelistProofRequest, freezelistProofGrant, isFreezelistProofRequest } from './utils/freezelistProof.js'
+export type { FreezelistProofRequest, FreezelistProofInput, FreezelistProofRequestParameters, FreezelistProofGrantParameters } from './utils/freezelistProof.js'
 export type {
   FunctionNames, MappingNames,
   TypedContractInstance,
@@ -210,6 +213,7 @@ export { getStatePaths } from './actions/public/getStatePaths.js'
 export { getBlockHeightByHash } from './actions/public/getBlockHeightByHash.js'
 export { getBlockTransactionsByHash } from './actions/public/getBlockTransactionsByHash.js'
 export { getTokenDetails } from './actions/public/getTokenDetails.js'
+export { getComplianceFreezeList, type GetComplianceFreezeListParameters, type GetComplianceFreezeListReturnType } from './actions/public/getComplianceFreezeList.js'
 export { getProgramMetricsByRange } from './actions/public/getProgramMetricsByRange.js'
 export { getCommittee } from './actions/public/getCommittee.js'
 export { getDelegators } from './actions/public/getDelegators.js'

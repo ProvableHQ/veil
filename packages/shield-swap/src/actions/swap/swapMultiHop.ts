@@ -21,7 +21,8 @@ import {
 } from '../../utils/params.js'
 import { blindingFactorIssueRequest, blindedAddressIssueRequest } from '../../utils/blinding/requests.js'
 import { resolveTokenRoute, tokenIdToProgram, type TokenRoute } from '../../utils/routing.js'
-import { resolveProofPair, formatMerkleProofPair, type ProofProvider } from '../../utils/proofs.js'
+import type { SwapProofs, FreezelistConfig } from '../../utils/proofs.js'
+import { resolveComplianceProofs, wrapperProofContext } from '../../utils/resolveProofs.js'
 import { tryLoadSdk } from '../../utils/sdk.js'
 import { deriveMultiHopSwapId } from '../../utils/keys.js'
 import { requireFieldOutput } from '../../utils/outputs.js'
@@ -63,8 +64,10 @@ import { SHIELD_SWAP, SHIELD_SWAP_ROUTER } from '../../constants.js'
  * @property route Pre-resolved input-token route — the offline/override
  *   escape hatch. Defaults to reading `from_wrapper_token_id` on chain
  *   (cached per process).
- * @property proofs Freezelist witness provider for populated freezelists.
- *   Defaults to the empty-tree witness.
+ * @property proofs Supplies a {@link SwapProofs} literal tuple in ABI order, an annotated
+ *   collection, or a provider. Omission or null enables automatic resolution.
+ * @property freezelists Overrides deployment lists for automatic or annotated proofs;
+ *   defaults to the known AMM, USDCx and credits lists.
  * @property imports Program sources for dynamic-dispatch dependencies
  *   (`{ 'token.aleo': source }`) — pass the involved token programs' sources
  *   when proving locally or via a service that requires them.
@@ -86,7 +89,8 @@ export type SwapMultiHopParameters = {
   blindedIdentity?: { blindingFactor: string; blindedAddress: string }
   blindedIdentities?: BlindedIdentityStore
   route?: TokenRoute
-  proofs?: ProofProvider
+  proofs?: SwapProofs
+  freezelists?: FreezelistConfig
   imports?: Record<string, string>
   program?: string
   routerProgram?: string
@@ -247,16 +251,10 @@ export async function swapMultiHop(client: Client, params: SwapMultiHopParameter
   ]
 
   // Wrapped input: the deposit rides the wrapper's freezelist check, so the
-  // sender proves non-inclusion (empty-tree witness while lists are empty).
-  const senderProof = route.wrapped
-    ? formatMerkleProofPair(
-        await resolveProofPair(params.proofs, {
-          list: 'wrapper',
-          program: route.wrapperProgram,
-          subject: account.address,
-        }),
-      )
-    : undefined
+  // sender proves non-inclusion against its current freezelist.
+  const [senderProof] = await resolveComplianceProofs(client, params.proofs, [
+    wrapperProofContext(route, account.address),
+  ], params.freezelists)
 
   const handleBase = {
     tokenInId: params.tokenInId,

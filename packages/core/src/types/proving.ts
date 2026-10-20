@@ -148,12 +148,15 @@ export type BuildDeploymentOptions = {
  * @property {string} [url] - Prover service URL. Required for `mode: 'delegated'`, ignored otherwise.
  * @property {string} [apiKey] - API key for the prover service, if it requires one.
  * @property {boolean} [useFeeMaster] - If true, requests that the delegated prover pay transaction fees from its FeeMaster account. Defaults to `false`; enable only when the prover service has granted that capability.
+ * @property generateFreezelistProof Generates and validates an exclusion witness
+ *   without signing or network access. Optional; SDK-backed configs supply it.
  */
 export type ProvingConfig = {
   mode: 'delegated' | 'local' | 'devnode'
   url?: string | undefined
   apiKey?: string | undefined
   useFeeMaster?: boolean | undefined
+  generateFreezelistProof?: (options: GenerateFreezelistProofParameters) => Promise<string>
   buildTransaction?: (options: BuildTransactionOptions) => Promise<Transaction>
   buildDeployment?: (options: BuildDeploymentOptions) => Promise<Transaction>
   decrypt?: (
@@ -168,4 +171,16 @@ export type ProvingConfig = {
   simulate?: (options: SimulateOptions) => Promise<RawSimulateResult>
   /** Build, broadcast, wait for confirmation, and return raw output strings */
   execute?: (options: ExecuteOptions) => Promise<RawExecuteResult>
+}
+
+/**
+ * Supplies the data needed to generate a freezelist exclusion witness.
+ * @property address Address whose exclusion is proved.
+ * @property tree Published decimal tree nodes; an empty array selects the canonical empty tree.
+ * @property root Expected on-chain root as an Aleo field literal.
+ */
+export type GenerateFreezelistProofParameters = {
+  address: string
+  tree: readonly string[]
+  root: string
 }

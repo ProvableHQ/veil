@@ -33,8 +33,6 @@ async function delegatedAleo(privateKey: string, apiKey: string) {
   })
 }
 
-const EMPTY_MERKLE_PROOF = `{ siblings: [${Array(16).fill('0field').join(', ')}], leaf_index: 1u32 }`
-const EMPTY_MERKLE_PROOFS = `[${EMPTY_MERKLE_PROOF}, ${EMPTY_MERKLE_PROOF}]`
 const BURN_AMOUNT_ATOMIC = 2_000_001n
 const EXPECTED_DELIVERY_ATOMIC = 1n
 
@@ -116,7 +114,7 @@ describe.skipIf(!enabled)('mainnet Aleo xReserve bridge', () => {
         plan,
         mode: 'private',
         userRecord,
-        merkleProof: EMPTY_MERKLE_PROOFS,
+        // Omit the proof to exercise automatic generation against the live root.
         onProgress(event) {
           benchmark.mark(event.type)
         },
@@ -150,8 +148,8 @@ describe.skipIf(!enabled)('mainnet Aleo xReserve bridge', () => {
     })
     benchmark.mark('destination-delivered')
 
+    expect(delivered - before).toBe(EXPECTED_DELIVERY_ATOMIC)
     state.completed = true
     saveLiveState(path, state)
-    expect(delivered - before).toBe(EXPECTED_DELIVERY_ATOMIC)
   }, 30 * 60_000)
 })

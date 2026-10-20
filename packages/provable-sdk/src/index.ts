@@ -33,7 +33,8 @@ import {
 import { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR } from '@provablehq/veil-aleo-devnode'
 export { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR }
 import type { LocalAccount } from '@provablehq/veil-core'
-import type { ProvingConfig, BuildTransactionOptions, BuildDeploymentOptions, SimulateOptions, ExecuteOptions, RawSimulateResult, RawExecuteResult, Transaction } from '@provablehq/veil-core'
+import type { ProvingConfig, GenerateFreezelistProofParameters, BuildTransactionOptions, BuildDeploymentOptions, SimulateOptions, ExecuteOptions, RawSimulateResult, RawExecuteResult, Transaction } from '@provablehq/veil-core'
+import { generateFreezelistProof } from './freezelist.js'
 import type { OwnedRecord, RecordProvider, StandaloneRecordScanner, RequestRecordsParameters } from '@provablehq/veil-core'
 import type { Network, PublicClient, WalletClient } from '@provablehq/veil-core'
 import {
@@ -197,6 +198,15 @@ type SdkModule = Awaited<ReturnType<typeof loadSdk<'testnet'>>>
  * scanners) are network-bound.
  */
 export interface AleoSdk {
+  /**
+   * Generates and validates an exclusion witness without network access or signing.
+   * @param options Subject, published tree, and expected on-chain root.
+   * @returns An encoded `[MerkleProof; 2]` transaction input.
+   * @throws When the subject is frozen or the tree does not prove the expected root.
+   * @example
+   * const proof = await sdk.generateFreezelistProof({ address, tree, root })
+   */
+  generateFreezelistProof(options: GenerateFreezelistProofParameters): Promise<string>
   /** The network this handle is bound to. */
   readonly network: SupportedNetwork
 
@@ -635,6 +645,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       // already travel the same way.
       session,
       keyedAuth: options.auth,
+      generateFreezelistProof: (params) => generateFreezelistProof(currentSdk, params),
 
       buildTransaction: async (txOptions: BuildTransactionOptions) => {
         const programManager = new currentSdk.ProgramManager(
@@ -1434,6 +1445,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     decryptRecord,
     verifySignature,
     createNetworkClient,
+    generateFreezelistProof: (params) => generateFreezelistProof(currentSdk, params),
     createProvingConfig,
     createRemoteScanner,
     createStandaloneScanner,
@@ -1562,6 +1574,7 @@ export function createDevnodeClient(options?: {
 
   const proving: ProvingConfig = {
     mode: 'devnode',
+    generateFreezelistProof: async (params) => generateFreezelistProof(await loadSdk('testnet'), params),
     buildDeployment: async (deployOptions: BuildDeploymentOptions) => {
       const programManager = new ProgramManager(url, keyProvider, undefined)
       programManager.setAccount(sdkAccount)

@@ -78,6 +78,12 @@ writes, import the session helpers:
 import { loadSession, formatAmount } from '@provablehq/shield-swap-cli/session'
 ```
 
+Freezelist witnesses are generated automatically when a write executes. The
+session's SDK generator checks the current on-chain root and reuses witnesses
+while that root is unchanged. Dry runs do not generate proofs or submit. Custom
+deployments can configure `shieldSwapActions({ freezelists })` in the session;
+see the [proof configuration](../shield-swap/README.md#freezelist-proofs).
+
 ## Two rules that hold everywhere
 
 **Nothing spends until you pass `--execute`.** Every write command plans the
@@ -216,3 +222,13 @@ meaningful against the chain they were checked on.
 execution. The printed minimum is the submitted minimum, for 1–3-hop routes.
 Missing output estimates and expired quotes fail before submission; rerun to
 obtain fresh terms. Quote lifetime is 60 seconds from the request start.
+
+### Freezelist proofs
+
+The CLI signs locally and cannot resolve wallet-derived freezelist requests.
+SDK applications using a connected wallet can opt in with
+[`walletFreezelistProofProvider`](../shield-swap/README.md#wallet-derived-freezelist-proofs).
+Existing CLI commands keep literal proof behavior. Populated compliance lists
+require a concrete proof provider in a customized SDK client; the all-zero
+legacy witness is not a general exclusion proof. Collection forwards the
+position's withdrawal address as the proof subject.
