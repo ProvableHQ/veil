@@ -176,7 +176,7 @@ export async function readWithdrawalFee(registry: BridgeRegistry, plan: BridgePl
  *
  * @param registry Supported assets and reviewed xReserve deployments.
  * @param client Aleo wallet that proves, signs, and broadcasts the source burn.
- * @param params Route, amount, EVM recipient, public or private funding preference, fee preference, and recovery callbacks.
+ * @param params Route, amount, EVM recipient, funding preference, public client for automatic local compliance reads, fee preference, and recovery callbacks.
  * @param fetcher Optional provider HTTP implementation. Defaults to global fetch; rechecks live withdrawal fees before submission.
  * @returns The Aleo transaction identifier and state needed to follow provider-managed delivery.
  * @throws BridgeError When the burn inputs are invalid or wallet submission fails.
@@ -201,7 +201,7 @@ export async function execute(
   await readWithdrawalFee(registry, params.plan, fetcher)
   if (call.mode === 'private') {
     const asset = registry.assets.find(asset => asset.id === params.plan.sourceAsset.id)!
-    const proof = await resolveComplianceProof(client, asset, params.merkleProof)
+    const proof = await resolveComplianceProof({ walletClient: client, publicClient: params.publicClient }, asset, params.merkleProof)
     if (typeof proof === 'string' && (!proof.startsWith('[') || !proof.endsWith(']'))) {
       throw new BridgeError('private_burn requires an encoded [MerkleProof; 2] Aleo literal')
     }

@@ -604,8 +604,8 @@ proofs automatically when `merkleProof` is omitted or `null`.
 
 For local accounts, pass the full Veil wallet client created by
 `@provablehq/veil-aleo-sdk` to `createAleoClient({ publicClient, account: walletClient })`.
-Bridge reads the current freezelist root through that client's transport and
-uses its SDK generator to construct and verify the signer's witness. It reuses
+Bridge reads the current freezelist root and tree through `publicClient` and
+uses the wallet client's SDK generator to construct and verify the signer's witness. It reuses
 cached trees and proofs while the root is unchanged, checking the root before
 each operation. The in-memory cache is bounded to 16 lists and 256 subjects per
 list per client. An empty list uses a constructed witness; frozen subjects,
@@ -632,6 +632,11 @@ requests. Existing literal strings and wallet requests remain supported.
 accepts a literal or one-element tuple, or inserts a wallet request when omitted.
 Use `bridge.execute` or `xreserve.aleoToEvm.execute` for providers, annotated
 proofs, or automatic local generation.
+
+The standalone burn helper takes the public client explicitly for automatic
+local proofs: `xreserve.aleoToEvm.execute(walletClient, { plan, userRecord, publicClient })`.
+`bridge.execute` uses its configured Aleo public client. Supplied proofs and
+wallet-derived requests do not require network capabilities on the wallet client.
 
 ### Resolve freezelist proofs inside a connected wallet
 

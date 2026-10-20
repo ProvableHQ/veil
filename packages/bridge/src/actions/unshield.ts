@@ -25,7 +25,7 @@ import { resolveComplianceProof } from '../utils/resolveComplianceProof.js'
 export async function unshield(registry: BridgeRegistry, clients: BridgeChainClients, params: UnshieldParameters): Promise<AleoPrivacyExecution> {
   const asset = resolvePrivacyAsset(registry, params.asset, 'unshielding')
   const { amountAtomic, literal } = privacyAmount(asset, params.amount, 'Unshielding')
-  const { walletClient } = requireAleoClientWithWallet(registry, clients, asset.chainId, `unshield ${asset.symbol}`)
+  const { publicClient, walletClient } = requireAleoClientWithWallet(registry, clients, asset.chainId, `unshield ${asset.symbol}`)
   // Leave record selection inside the wallet unless the caller supplies a
   // plaintext record. This keeps private ownership data out of browser and bot
   // application state when the wallet supports structured record requests.
@@ -37,7 +37,7 @@ export async function unshield(registry: BridgeRegistry, clients: BridgeChainCli
         params.recipient ?? walletClient.account?.address ?? { type: 'address', label: `${asset.symbol} public recipient` },
         literal,
         record,
-        await resolveComplianceProof(walletClient, asset, params.merkleProof),
+        await resolveComplianceProof({ publicClient, walletClient }, asset, params.merkleProof),
       ]
     : [record, literal]
   // The wallet performs proving, signing, and broadcast. A prepared-transaction

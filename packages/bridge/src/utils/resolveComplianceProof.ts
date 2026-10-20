@@ -1,4 +1,4 @@
-import { freezelistProofRequest, type FreezelistProofInput } from '@provablehq/veil-core'
+import { freezelistProofRequest, type Client, type FreezelistProofInput } from '@provablehq/veil-core'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import type { AleoWalletClient } from '../types/aleo.js'
 import type { ComplianceProofs, MerkleProofInput } from '../types/compliance.js'
@@ -40,21 +40,22 @@ function formatPair(pair: readonly [MerkleProofInput, MerkleProofInput]): string
  * Local accounts read the current root and reuse verified witnesses while it is
  * unchanged. The per-client cache holds at most 16 lists and 256 subjects per list.
  * Wallets receive signer-only derived requests and own generation and caching.
- * @param client Supplies execution, optional signer metadata, and local proving capabilities.
+ * @param client Supplies the wallet's signer and proving capabilities, plus the public client required for automatic local compliance reads.
  * @param asset Supplies the reviewed freezelist and chain identifier.
  * @param source Supplies a bundle or provider; null and omission enable automatic resolution.
  * @returns One encoded bundle or wallet request without signing or submitting a transaction.
  * @throws BridgeError When inputs, metadata, or local generation capabilities are missing or invalid.
- * @example const proof = await resolveComplianceProof(walletClient, asset)
+ * @example const proof = await resolveComplianceProof({ publicClient, walletClient }, asset)
  */
 export async function resolveComplianceProof(
-  client: AleoWalletClient,
+  client: { walletClient: AleoWalletClient; publicClient?: Client | undefined },
   asset: ProtocolBridgeAsset,
   source?: ComplianceProofs,
 ): Promise<FreezelistProofInput> {
+  const { walletClient, publicClient } = client
   const checked = (value: unknown): FreezelistProofInput => {
     const proof = validateBridgeFreezelistProof(value, asset)
-    if (client.account?.type === 'local' && typeof proof !== 'string') {
+    if (walletClient.account?.type === 'local' && typeof proof !== 'string') {
       throw new BridgeError('Local accounts cannot resolve wallet-derived compliance proofs; supply a literal or use automatic generation')
     }
     return proof
@@ -62,7 +63,7 @@ export async function resolveComplianceProof(
   const literal = literalComplianceProof(source)
   if (literal !== undefined) return checked(literal)
   const freezelistProgram = bridgeFreezelistProgram(asset)
-  const address = client.account?.address
+  const address = walletClient.account?.address
   if (typeof source === 'function' || Array.isArray(source)) {
     if (!address) throw new BridgeError('Aleo account address is required for a compliance provider or annotated proofs')
     if (typeof source === 'function') {
@@ -73,20 +74,20 @@ export async function resolveComplianceProof(
     if (!supplied) throw new BridgeError(`Missing proof for ${address} on ${freezelistProgram}`)
     return checked(supplied.proof)
   }
-  if (client.account?.type !== 'local') return freezelistProofRequest({ freezelistProgram })
-  const generate = client.proving?.generateFreezelistProof
-  const request = client.request
-  if (!generate || !request || !address) {
-    throw new BridgeError('Automatic compliance proofs require an Aleo SDK client with a signer, transport, and generateFreezelistProof')
+  if (walletClient.account?.type !== 'local') return freezelistProofRequest({ freezelistProgram })
+  const generate = walletClient.proving?.generateFreezelistProof
+  if (!generate || !address) {
+    throw new BridgeError('Automatic compliance proofs require an Aleo SDK wallet with a signer and generateFreezelistProof')
   }
-  const root = await request({ method: 'getMappingValue', params: { programId: freezelistProgram, mapping: 'freeze_list_root', key: '1u8' } })
+  if (!publicClient) throw new BridgeError('Automatic local compliance proofs require an Aleo public client')
+  const root = await publicClient.request({ method: 'getMappingValue', params: { programId: freezelistProgram, mapping: 'freeze_list_root', key: '1u8' } })
   if (typeof root !== 'string' || !/^\d+field$/.test(root)) throw new BridgeError(`Invalid current freezelist root for ${freezelistProgram}`)
-  let cache = caches.get(client)
-  if (!cache) { cache = new Map(); caches.set(client, cache) }
-  const key = `${asset.chainId}:${client.transport?.config.network ?? ''}:${freezelistProgram}`
+  let cache = caches.get(walletClient)
+  if (!cache) { cache = new Map(); caches.set(walletClient, cache) }
+  const key = `${asset.chainId}:${publicClient.transport.config.network ?? ''}:${freezelistProgram}`
   let entry = cache.get(key)
   if (!entry || entry.root !== root) {
-    const tree = root === EMPTY_ROOT ? Promise.resolve([]) : request({ method: 'getComplianceFreezeList', params: { programId: freezelistProgram } }).then(value => {
+    const tree = root === EMPTY_ROOT ? Promise.resolve([]) : publicClient.request({ method: 'getComplianceFreezeList', params: { programId: freezelistProgram } }).then(value => {
       if (!Array.isArray(value) || !value.every(node => typeof node === 'string' && /^\d+$/.test(node))) {
         throw new BridgeError('Invalid compliance tree: expected decimal field strings')
       }

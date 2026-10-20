@@ -1,4 +1,4 @@
-import type { ProvingProgressHandler, Transaction, TransactionInput, WalletClient } from '@provablehq/veil-core'
+import type { Client, ProvingProgressHandler, Transaction, TransactionInput, WalletClient } from '@provablehq/veil-core'
 import type { BridgeEndpoint, BridgePlan, BridgeReceipt } from './protocol.js'
 import type { XReserveAttestationResult } from './xreserve.js'
 import type { ComplianceProofs } from './compliance.js'
@@ -12,10 +12,8 @@ import type { ComplianceProofs } from './compliance.js'
  * @property executeTransaction Prompts the wallet to prove, sign, and broadcast a program call.
  * @property account Optional signer metadata. Required for local automatic proofs, providers, and annotated proofs.
  * @property proving Optional Veil proving configuration with the local compliance generator.
- * @property request Optional Veil transport request function. Required for local automatic proofs.
- * @property transport Optional transport metadata used to isolate cached proofs by network.
  */
-export type AleoWalletClient = Pick<WalletClient, 'executeTransaction'> & Partial<Pick<WalletClient, 'account' | 'proving' | 'request' | 'transport'>>
+export type AleoWalletClient = Pick<WalletClient, 'executeTransaction'> & Partial<Pick<WalletClient, 'account' | 'proving'>>
 
 /**
  * Controls conversion of a public Aleo token balance into a private record.
@@ -141,6 +139,7 @@ export type XReserveBurnCall = {
  * @property mode Burn transition to submit. Defaults to `private`.
  * @property userRecord Wallet record request or encoded USDCx token record. Required only for `private`.
  * @property merkleProof Optional single compliance bundle, annotated proofs, provider, or signer-only wallet request for private burns. Null or omission generates and caches a local proof or inserts a wallet request. Wallets need a matching grant; public burns ignore this field.
+ * @property publicClient Optional Aleo public client for compliance reads. Required for automatic local proofs in the standalone burn helper; Bridge supplies its configured public client automatically.
  * @property privateFee Whether the Aleo wallet should pay its fee privately. Defaults to false.
  * @property onSubmitted Durable checkpoint hook called immediately after the wallet returns a transaction id.
  * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
@@ -151,6 +150,7 @@ export type ExecuteXReserveBurnParameters = {
   mode?: XReserveBurnMode | undefined
   userRecord?: TransactionInput | undefined
   merkleProof?: ComplianceProofs | undefined
+  publicClient?: Client | undefined
   privateFee?: boolean | undefined
   onSubmitted?: ((receipt: BridgeReceipt) => void | Promise<void>) | undefined
   onProgress?: ProvingProgressHandler | undefined

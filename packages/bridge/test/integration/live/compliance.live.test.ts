@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createClient, createPublicClient, http, type Client } from '@provablehq/veil-core'
+import { createPublicClient, http } from '@provablehq/veil-core'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { createAleoClient, createBridgeClient, DEFAULT_BRIDGE_REGISTRY, type AleoWalletClient } from '../../../src/index.js'
 import { prepare } from '../../../src/actions/prepare.js'
@@ -16,13 +16,13 @@ describe.runIf(process.env.VEIL_INTEGRATION === '1')('live Bridge compliance wit
     const root = await publicClient.readContract({ programId, mapping: 'freeze_list_root', key: '1u8' })
     const tree = await publicClient.getComplianceFreezeList({ programId })
     const expected = await sdk.generateFreezelistProof({ address, tree, root: root! })
-    const base = createClient({
-      transport: publicClient.transport,
-      account: { type: 'local', address } as Client['account'],
-      proving: { mode: 'local', generateFreezelistProof: sdk.generateFreezelistProof },
-    })
     const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>().mockResolvedValue('at1read-only')
-    const bridge = createBridgeClient({ clients: { [chain]: createAleoClient({ publicClient, account: Object.assign(base, { executeTransaction }) }) } })
+    const walletClient: AleoWalletClient = {
+      account: { type: 'local', address } as AleoWalletClient['account'],
+      proving: { mode: 'local', generateFreezelistProof: sdk.generateFreezelistProof },
+      executeTransaction,
+    }
+    const bridge = createBridgeClient({ clients: { [chain]: createAleoClient({ publicClient, account: walletClient }) } })
     const asset = { chain, asset: 'usdcx' }
     const record = `{ owner: ${address}.private, amount: 2500000u128.private }`
     await bridge.unshield({ asset, amount: '2.5', record, recipient: address })

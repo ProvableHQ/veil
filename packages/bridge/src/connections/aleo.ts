@@ -31,7 +31,7 @@ export type AleoClient = {
  * helper does not connect to Aleo, request approval, or move funds.
  *
  * @param client Veil wallet client or compatible wallet adapter supplied by the application.
- * @returns The same wallet, preserving optional signer, transport, and proving capabilities for automatic compliance proofs.
+ * @returns The same wallet, preserving optional signer and proving capabilities for automatic compliance proofs.
  * @example const account = aleoWallet(aleoWalletClient)
  */
 export function aleoWallet(client: AleoWalletClient): AleoWalletClient {

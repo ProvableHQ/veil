@@ -1,6 +1,6 @@
 import { expectTypeOf, test } from 'vitest'
-import type { FreezelistProofInput } from '@provablehq/veil-core'
-import type { ComplianceProofProvider, ComplianceProofs, ExecuteParameters, ExecuteXReserveBurnParameters, SuppliedComplianceProof, UnshieldParameters } from '../../src/index.js'
+import type { Client, FreezelistProofInput, WalletClient } from '@provablehq/veil-core'
+import type { AleoWalletClient, ComplianceProofProvider, ComplianceProofs, ExecuteParameters, ExecuteXReserveBurnParameters, SuppliedComplianceProof, UnshieldParameters } from '../../src/index.js'
 
 test('bridge compliance inputs accept one bundle and retain existing wallet requests', () => {
   expectTypeOf<string>().toMatchTypeOf<ComplianceProofs>()
@@ -14,4 +14,11 @@ test('bridge compliance inputs accept one bundle and retain existing wallet requ
   expectTypeOf<UnshieldParameters['merkleProof']>().toEqualTypeOf<ComplianceProofs | undefined>()
   expectTypeOf<ExecuteParameters['merkleProof']>().toEqualTypeOf<ComplianceProofs | undefined>()
   expectTypeOf<ExecuteXReserveBurnParameters['merkleProof']>().toEqualTypeOf<ComplianceProofs | undefined>()
+})
+
+test('bridge wallets accept minimal adapters and local proving without network capabilities', () => {
+  expectTypeOf<Pick<WalletClient, 'executeTransaction'>>().toMatchTypeOf<AleoWalletClient>()
+  expectTypeOf<Pick<WalletClient, 'executeTransaction' | 'account' | 'proving'>>().toMatchTypeOf<AleoWalletClient>()
+  expectTypeOf<WalletClient>().toMatchTypeOf<AleoWalletClient>()
+  expectTypeOf<ExecuteXReserveBurnParameters['publicClient']>().toEqualTypeOf<Client | undefined>()
 })
