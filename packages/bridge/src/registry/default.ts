@@ -358,10 +358,9 @@ function newWarpRouteAleoAppMetadata(
     aleoAppMetadataVerified: true,
     aleoProgramSource: `https://explorer.provable.com/program/${program}`,
     aleoAppMetadataSource: `https://api.explorer.provable.com/v2/mainnet/program/${program}/mapping/app_metadata/true`,
-    aleoAppMetadataReviewedAt: '2026-09-30',
+    aleoAppMetadataReviewedAt: '2026-10-21',
     aleoProgramEdition: 0,
     aleoTokenType: '1',
-    aleoTokenOwner: 'aleo1mx0tldt5qsqymn5a3whnmf9rx2whp837jjn0tvqgxqf86zg6dvyqnc8spm',
     aleoIsm: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
     aleoHook: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
     aleoTokenId: tokenId,
@@ -371,29 +370,38 @@ function newWarpRouteAleoAppMetadata(
   } as const
 }
 
-const ALEO_BAT_APP_METADATA = newWarpRouteAleoAppMetadata(
-  'hyp_warp_token_bat_v2.aleo',
-  '8193754087214450113583165652573869677861364321518267024225788045720787201438field',
-  18,
-  18,
-  BAT_HYPERLANE_CONFIG_SOURCE,
-)
+const ALEO_BAT_APP_METADATA = {
+  ...newWarpRouteAleoAppMetadata(
+    'hyp_warp_token_bat_v2.aleo',
+    '8193754087214450113583165652573869677861364321518267024225788045720787201438field',
+    18,
+    18,
+    BAT_HYPERLANE_CONFIG_SOURCE,
+  ),
+  aleoTokenOwner: 'aleo1x7gswtgsj4hj9ntckt39wmfrnvr60eje5feyak2pnpfghuxh8v9qmxv5da',
+} as const
 
-const ALEO_USDG_APP_METADATA = newWarpRouteAleoAppMetadata(
-  'hyp_warp_token_usdg_v2.aleo',
-  '4364459415416156846201796031612641041087412365006702457109915656601258641029field',
-  6,
-  6,
-  USDG_HYPERLANE_CONFIG_SOURCE,
-)
+const ALEO_USDG_APP_METADATA = {
+  ...newWarpRouteAleoAppMetadata(
+    'hyp_warp_token_usdg_v2.aleo',
+    '4364459415416156846201796031612641041087412365006702457109915656601258641029field',
+    6,
+    6,
+    USDG_HYPERLANE_CONFIG_SOURCE,
+  ),
+  aleoTokenOwner: 'aleo1lad36r82wn80fs9vzmyykfgkne6045auy9dy50rppck98rvuk58s70xyfh',
+} as const
 
-const ALEO_ZEC_APP_METADATA = newWarpRouteAleoAppMetadata(
-  'hyp_warp_token_zec_v2.aleo',
-  '220414605002186903241059728372192608429362177759171998609092499027319866844field',
-  8,
-  8,
-  ZEC_HYPERLANE_CONFIG_SOURCE,
-)
+const ALEO_ZEC_APP_METADATA = {
+  ...newWarpRouteAleoAppMetadata(
+    'hyp_warp_token_zec_v2.aleo',
+    '220414605002186903241059728372192608429362177759171998609092499027319866844field',
+    8,
+    8,
+    ZEC_HYPERLANE_CONFIG_SOURCE,
+  ),
+  aleoTokenOwner: 'aleo1yv5gy4l5g82dcu47260t6lpls4xvg29zpg2m06jdwvdtm8m06gzsysx6dy',
+} as const
 
 function newWarpRouteAleoRemoteRouter(
   program: string,
