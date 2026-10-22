@@ -107,7 +107,7 @@ const quote = await bridge.quote({
   amount: '2',
   recipient: arcAddress,
 })
-await bridge.execute({ plan: quote.plan, userRecord, merkleProof, onCheckpoint })
+await bridge.execute({ plan: quote.plan, userRecord, onCheckpoint })
 ```
 
 Persist checkpoints before submission and use `recover`/`resume` after an
@@ -602,7 +602,31 @@ and SOL through their ARC-20 programs, and for USDCx through its ARC-22
 transfers. ARC-22 unshielding and private xReserve burns resolve compliance
 proofs automatically when `merkleProof` is omitted or `null`.
 
-### Automatic compliance proofs
+<a id="automatic-compliance-proofs"></a>
+
+## Compliance
+
+Compliance proofs are automatic by default. With a local SDK client or a
+compatible wallet connected with the grants below, no additional proof-generation
+configuration, provider, or cache is needed. Omit `merkleProof` or pass `null`;
+explicit proof inputs are only needed to override that behavior.
+
+### Functions that use proofs
+
+Each operation below takes one `[MerkleProof; 2]` bundle: two Merkle paths
+proving that the signer is absent from the asset's freezelist.
+
+| Public function | When a proof is required | Program function |
+| --- | --- | --- |
+| `bridge.unshield()` (also exported as `unshield()`) | Unshielding an ARC-22 asset such as USDCx | `transfer_private_to_public` |
+| `bridge.execute()` | An outbound Aleo USDCx xReserve burn with `mode: 'private'`, which is the default | `private_burn` |
+| `xreserve.aleoToEvm.execute()` | The standalone helper for the same private xReserve burn | `private_burn` |
+
+The proof subject is always the signer, including when the public unshield
+recipient differs. ARC-20 unshielding, `bridge.shield()`, and xReserve burns with
+`mode: 'public'` or `mode: 'public-as-signer'` take no Merkle exclusion proof.
+
+### Automatic generation
 
 For local accounts, pass the full Veil wallet client created by
 `@provablehq/veil-aleo-sdk` to `createAleoClient({ publicClient, account: walletClient })`.
@@ -612,6 +636,8 @@ cached trees and proofs while the root is unchanged, checking the root before
 each operation. The in-memory cache is bounded to 16 lists and 256 subjects per
 list per client. An empty list uses a constructed witness; frozen subjects,
 invalid roots, and stale indexer trees fail before submission.
+
+### Optional proof inputs
 
 `merkleProof` accepts `ComplianceProofs`, with exactly one bundle for either
 operation:
