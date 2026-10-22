@@ -157,9 +157,10 @@ selected helper's inputs and pinned records from the underlying program.
 
 With management enabled, a batch reserves all inputs together. The journal
 attributes the call to the source asset and retains fees and proved transactions
-for recovery. Static helper outputs expose record commitments directly. For a
-dynamic helper, execution matches its output id to the nested token join's
-commitment. Dependent steps wait for that exact record to appear in the scanner.
+for recovery. Helper execution reads the record commitment from the final nested
+join, whose output contains the encrypted record. The outer helper's external
+or dynamic return id is a separate commitment. Dependent steps wait for the
+nested join's exact record to appear in the scanner.
 
 ## Coordinate with Shield Swap
 
@@ -229,3 +230,46 @@ take precedence.
 Existing assets with `standard` remain valid. New callers can supply only the
 program or add record/field overrides. To keep native pairwise joins after
 upgrading, set `tokenJoin: false`; omitting it now selects available helpers.
+
+
+## Run the integration checks
+
+The deployed-interface check reads the testnet credits, USDCx, and ETH programs
+and their join helpers. It needs no account and submits no transactions:
+
+```sh
+VEIL_INTEGRATION=1 pnpm vitest run packages/core/test/integration/recordInventory.integration.test.ts
+```
+
+The inventory lifecycle suite uses a funded testnet account to join and split
+USDCx and ETH records. It checks asset defaults and overrides, shared
+reservations, reviewed plans, and recovery of a prepared transaction after
+reopening its SQLite journal. Both tokens finish with six balanced records.
+Run it from the repository root:
+
+```sh
+VEIL_INVENTORY_E2E=1 \
+VEIL_E2E_STATE_FILE=/absolute/path/to/testnet/state.json \
+VEIL_BLINDED_STORE=/absolute/path/to/testnet/blinded.json \
+pnpm vitest run packages/shield-swap/test/integration/recordInventory.e2e.test.ts --bail=1
+```
+
+`VEIL_E2E_STATE_FILE` accepts an existing Shield Swap testnet session containing
+`network: "testnet"` and `privateKey`. `VEIL_E2E_PRIVATE_KEY` can supply the key
+instead. The suites use delegated proving and FeeMaster. They do not create or
+fund an account.
+
+`VEIL_INVENTORY_RECORDS` sets the count per token (default 6, range 3 to 16).
+`VEIL_INVENTORY_MIN_USDCX` defaults to `0.1` USDCx and
+`VEIL_INVENTORY_MIN_ETH` to `0.000001` ETH. The account must hold at least the
+minimum multiplied by `(record count + 1)` for each token. Amount settings use
+human-readable token units. The tests rebalance the account's full available
+inventory for both tokens; use a dedicated test account.
+
+The journal defaults to `.veil/inventory-e2e/testnet/<address>/inventory.sqlite`.
+Set `VEIL_INVENTORY_E2E_DIR` to move that directory. `VEIL_BLINDED_STORE` selects
+the swap recovery file; its default is `blinded.json` in the journal directory.
+Run suites sequentially for a given account and retain both stores after a
+failure. The next run reconciles the journal and refuses to proceed while an
+operation remains unresolved. If a process was terminated, verify it has stopped
+before removing its `run.lock` file.
