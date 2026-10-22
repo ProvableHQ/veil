@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
-import { createWalletClient, memoryRecordInventoryStore, type RecordAsset, type RecordManagementConfig } from '../../src/index.js'
+import { createWalletClient, memoryRecordInventoryStore, type RecordAsset, type RecordManagementConfig, type Transaction } from '../../src/index.js'
+import { inventoryOutputCommitments } from '../../src/inventory/tokenJoin.js'
 
 // These ABI fixtures use the external-record signature of the deployed credits
 // helpers and the dynamic signature of the checked-in ARC helper program.
@@ -51,10 +52,16 @@ function world(program = 'credits.aleo', options: { network?: 'mainnet' | 'testn
     selected.forEach((record: any) => { record.spent = true })
     records.push(...outputs)
     const dynamic = typeof params.inputs[0] === 'string'
+    const external = !dynamic && params.programName !== program
     const transaction = { id: `at1tx${calls.length}`, type: 'execute', execution: { transitions: [
+      ...(external ? Array.from({ length: selected.length - 1 }, (_, i) => ({
+        id: `au1nested${i}`, program, function: 'join',
+        outputs: [{ type: 'record', id: i === selected.length - 2 ? outputs[0]!.commitment : `intermediate-${i}field` }],
+      })) : []),
       ...(dynamic ? [{ id: 'au1inner', program, function: 'join', outputs: [{ type: 'record_with_dynamic_id', id: outputs[0]!.commitment, dynamic_id: 'dynamicfield' }] }] : []),
       { id: 'au1outer', program: params.programName, function: params.functionName,
-        outputs: dynamic ? [{ type: 'record_dynamic', id: 'dynamicfield' }] : outputs.map(record => ({ type: 'record', id: record.commitment, value: 'record1ciphertext' })) },
+        outputs: dynamic ? [{ type: 'record_dynamic', id: 'dynamicfield' }]
+          : external ? [{ type: 'external_record', id: 'externalfield' }] : outputs.map(record => ({ type: 'record', id: record.commitment, value: 'record1ciphertext' })) },
     ] } }
     transactions.set(transaction.id, transaction)
     return transaction.id
@@ -146,5 +153,27 @@ describe('automatic join helper selection', () => {
     await w.client.joinRecords({ asset, records: (await w.client.getRecordInventory({ asset })).available })
     expect(w.calls[0].functionName).toBe('join_3')
     expect(await w.store.list(JSON.stringify(['testnet', 'aleo1owner']))).toEqual([])
+  })
+})
+
+// Static helper return ids are external commitments, not the record commitments
+// supplied by the scanner. These fixtures mirror accepted testnet transactions.
+describe('confirmed static helper outputs', () => {
+  const asset = { program: 'test_usdcx_stablecoin.aleo' }
+  const step = { kind: 'join' as const, inputs: ['a', 'b', 'c'], outputs: [{ id: 'joined', amount: 6n }],
+    joinProgram: { program: 'aj_test_usdcx_stablecoin_2_10.aleo', minRecords: 2, maxRecords: 10, inputMode: 'records' as const } }
+  const nested = (program: string, id: string) => ({ program, function: 'join', outputs: [{ type: 'record', id }] })
+  const outer = { program: step.joinProgram.program, function: 'join_3', outputs: [{ type: 'external_record', id: 'externalfield' }] }
+  const transaction = (transitions: unknown[]) => ({ execution: { transitions } }) as Transaction
+
+  it('selects the final native join and excludes consumed intermediate records', () => {
+    expect(inventoryOutputCommitments(transaction([nested(asset.program, 'intermediatefield'),
+      nested(asset.program, 'finalfield'), outer]), asset, step)).toEqual(['finalfield'])
+  })
+
+  it.each([[], [nested('other.aleo', 'wrongfield')],
+    [{ ...nested(asset.program, 'wrongfield'), function: 'split' }],
+    [{ program: asset.program, function: 'join', outputs: [] }]].map(calls => ({ calls })))('rejects a missing or mismatched final native join: %j', ({ calls }) => {
+    expect(() => inventoryOutputCommitments(transaction([...calls, outer]), asset, step)).toThrow()
   })
 })

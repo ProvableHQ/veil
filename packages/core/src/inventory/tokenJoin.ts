@@ -56,7 +56,7 @@ export async function validateTokenJoinFunction(client: Client, router: TokenJoi
  * @param step Planned join or split whose outputs must be matched.
  * @param router Optional captured dynamic router; omission uses the step helper or native transition.
  * @returns Record commitments in planned output order.
- * @throws When the outer call or dynamic output cannot be matched unambiguously.
+ * @throws When the outer call or nested output cannot be matched unambiguously.
  * @example
  * const commitments = inventoryOutputCommitments(transaction, plan.asset, plan.steps[0]!, plan.tokenJoin)
  * @internal
@@ -73,8 +73,22 @@ export function inventoryOutputCommitments(transaction: Transaction, asset: Reco
     outer.function !== (helper || routed ? `join_${step.inputs.length}` : step.kind)) {
     throw new Error('Confirmed transition does not match the inventory plan')
   }
-  // Native and static helper outputs expose the commitments that scanners index.
-  if (helper ? helper.inputMode === 'records' : !routed) return (outer.outputs ?? []).filter((output) => output.type === 'record' || output.type === 'record_with_dynamic_id').map((output) => output.id)
+  // Static helpers return an external commitment. The final nested native join
+  // produces the encrypted record that scanners index; earlier joins produce
+  // intermediate records consumed within the same transaction.
+  if (helper?.inputMode === 'records') {
+    const outputs = outer.outputs ?? []
+    const finalJoin = transitions.at(-2)
+    const joined = finalJoin?.outputs ?? []
+    if (outputs.length !== 1 || outputs[0]?.type !== 'external_record' ||
+      finalJoin?.program !== asset.program || finalJoin.function !== 'join' ||
+      joined.length !== 1 || (joined[0]?.type !== 'record' && joined[0]?.type !== 'record_with_dynamic_id')) {
+      throw new Error('Cannot resolve confirmed helper output to the underlying record commitment')
+    }
+    return [joined[0]!.id]
+  }
+  // Native joins and splits expose scanner commitments directly.
+  if (!helper && !routed) return (outer.outputs ?? []).filter((output) => output.type === 'record' || output.type === 'record_with_dynamic_id').map((output) => output.id)
   const outputs = outer.outputs ?? []
   if (outputs.length !== 1 || outputs[0]?.type !== 'record_dynamic') throw new Error('Unexpected confirmed router output')
   // A router returns a dynamic id, not a scanner commitment. Only the matching
