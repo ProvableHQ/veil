@@ -107,7 +107,7 @@ const quote = await bridge.quote({
   amount: '2',
   recipient: arcAddress,
 })
-await bridge.execute({ plan: quote.plan, userRecord, merkleProof, onCheckpoint })
+await bridge.execute({ plan: quote.plan, userRecord, onCheckpoint })
 ```
 
 Persist checkpoints before submission and use `recover`/`resume` after an
@@ -602,7 +602,69 @@ and SOL through their ARC-20 programs, and for USDCx through its ARC-22
 transfers. ARC-22 unshielding and private xReserve burns resolve compliance
 proofs automatically when `merkleProof` is omitted or `null`.
 
-### Automatic compliance proofs
+## Complete examples
+
+The packaged [agent guide](./skills/SKILL.md) explains how to discover and run
+examples from an installed SDK. Resolve it with
+`require.resolve('@provablehq/aleo-bridge-sdk/skills/SKILL.md')`.
+
+The [bridge tutorial](./examples/README.md) explains configuration,
+safe read-only runs, mainnet authorization, checkpoints, and each provider's
+observable completion boundary.
+
+| Transfer | Example |
+| --- | --- |
+| Ethereum ETH → Aleo ETH | [`eth-to-aleo.ts`](./examples/eth-to-aleo.ts) |
+| Ethereum WBTC → Aleo WBTC | [`wbtc-to-aleo.ts`](./examples/wbtc-to-aleo.ts) |
+| Aleo ETH → Ethereum ETH | [`eth-to-ethereum.ts`](./examples/eth-to-ethereum.ts) |
+| Aleo WBTC → Ethereum WBTC | [`wbtc-to-ethereum.ts`](./examples/wbtc-to-ethereum.ts) |
+| Aleo USDT → Ethereum USDT | [`usdt-to-ethereum.ts`](./examples/usdt-to-ethereum.ts) |
+| Solana SOL → Aleo SOL | [`sol-to-aleo.ts`](./examples/sol-to-aleo.ts) |
+| Aleo SOL → Solana SOL | [`sol-to-solana.ts`](./examples/sol-to-solana.ts) |
+| Ethereum USDC → Aleo USDCx | [`usdc-to-usdcx.ts`](./examples/usdc-to-usdcx.ts) |
+| Aleo USDCx → Ethereum or Arc USDC | [`usdcx-to-usdc.ts`](./examples/usdcx-to-usdc.ts) |
+
+Each script quotes mainnet state and exits without submitting by default. The
+script prints the exact acknowledgement required to authorize real funds.
+
+<a id="automatic-compliance-proofs"></a>
+
+## Compliance
+
+ARC-22 unshielding and private xReserve burns use Merkle exclusion proofs to
+prove in zero knowledge that the signer's private address is not on the asset's
+freezelist.
+
+Callers construct these Merkle exclusion proofs locally, through the SDK or
+connected wallet, and supply them as private inputs to Aleo's zk-SNARKs. The
+Merkle checks run during transaction proving; the network verifies the resulting
+zero-knowledge proof. This establishes that the signer is absent from the
+freezelist without publicly revealing the signer or the Merkle paths. These
+compliance checks preserve the signer's privacy; the recipient of an unshield
+operation remains public.
+
+Compliance proof generation is enabled by default in the Bridge SDK.
+With a local SDK client or a compatible wallet connected with the required
+algorithm grants, callers need no manual proof generation, provider, or cache.
+Omit `merkleProof` or pass `null` to use the default; explicit proof inputs are
+only needed to override that behavior.
+
+### Functions that require compliance proof inputs
+
+Each operation below takes one `[MerkleProof; 2]` bundle: two Merkle paths
+proving that the signer is absent from the asset's freezelist.
+
+| Public function | When a proof is required | Program function |
+| --- | --- | --- |
+| `bridge.unshield()` (also exported as `unshield()`) | Unshielding an ARC-22 asset such as USDCx | `transfer_private_to_public` |
+| `bridge.execute()` | An outbound Aleo USDCx xReserve burn with `mode: 'private'`, which is the default | `private_burn` |
+| `xreserve.aleoToEvm.execute()` | The standalone helper for the same private xReserve burn | `private_burn` |
+
+The proof subject is always the signer, including when the public unshield
+recipient differs. ARC-20 unshielding, `bridge.shield()`, and xReserve burns with
+`mode: 'public'` or `mode: 'public-as-signer'` take no Merkle exclusion proof.
+
+### Automatic generation
 
 For local accounts, pass the full Veil wallet client created by
 `@provablehq/veil-aleo-sdk` to `createAleoClient({ publicClient, account: walletClient })`.
@@ -612,6 +674,8 @@ cached trees and proofs while the root is unchanged, checking the root before
 each operation. The in-memory cache is bounded to 16 lists and 256 subjects per
 list per client. An empty list uses a constructed witness; frozen subjects,
 invalid roots, and stale indexer trees fail before submission.
+
+### Optional proof inputs
 
 `merkleProof` accepts `ComplianceProofs`, with exactly one bundle for either
 operation:
@@ -681,28 +745,3 @@ reviewed `asset.privacy.freezelistProgram` in the injected registry before using
 automatic, annotated, provider, or wallet-derived proofs. Neither token nor
 wrapper names are used to infer a list. The same registry MUST be supplied to
 the helpers and bridge client.
-
-## Complete examples
-
-The packaged [agent guide](./skills/SKILL.md) explains how to discover and run
-examples from an installed SDK. Resolve it with
-`require.resolve('@provablehq/aleo-bridge-sdk/skills/SKILL.md')`.
-
-The [bridge tutorial](./examples/README.md) explains configuration,
-safe read-only runs, mainnet authorization, checkpoints, and each provider's
-observable completion boundary.
-
-| Transfer | Example |
-| --- | --- |
-| Ethereum ETH → Aleo ETH | [`eth-to-aleo.ts`](./examples/eth-to-aleo.ts) |
-| Ethereum WBTC → Aleo WBTC | [`wbtc-to-aleo.ts`](./examples/wbtc-to-aleo.ts) |
-| Aleo ETH → Ethereum ETH | [`eth-to-ethereum.ts`](./examples/eth-to-ethereum.ts) |
-| Aleo WBTC → Ethereum WBTC | [`wbtc-to-ethereum.ts`](./examples/wbtc-to-ethereum.ts) |
-| Aleo USDT → Ethereum USDT | [`usdt-to-ethereum.ts`](./examples/usdt-to-ethereum.ts) |
-| Solana SOL → Aleo SOL | [`sol-to-aleo.ts`](./examples/sol-to-aleo.ts) |
-| Aleo SOL → Solana SOL | [`sol-to-solana.ts`](./examples/sol-to-solana.ts) |
-| Ethereum USDC → Aleo USDCx | [`usdc-to-usdcx.ts`](./examples/usdc-to-usdcx.ts) |
-| Aleo USDCx → Ethereum or Arc USDC | [`usdcx-to-usdc.ts`](./examples/usdcx-to-usdc.ts) |
-
-Each script quotes mainnet state and exits without submitting by default. The
-script prints the exact acknowledgement required to authorize real funds.
