@@ -12,7 +12,10 @@ import type { RecordInventoryStore, RecordSpend } from '@provablehq/veil-core'
  * @throws On unsupported Node versions, corrupt data, non-regular files, or database errors.
  * @example
  * const store = await sqliteRecordInventoryStore('.veil/inventory.sqlite')
- * const client = walletClient.extend(recordActions({ store, chainId: 'aleo:testnet' }))
+ * const client = createWalletClient({
+ *   account, transport, proving,
+ *   recordManagement: { enabled: true, store, chainId: 'aleo:testnet' },
+ * })
  */
 export async function sqliteRecordInventoryStore(path: string): Promise<RecordInventoryStore & { close(): void }> {
   // Load SQLite only when opening the CLI journal, keeping SDK imports free of

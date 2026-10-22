@@ -4,21 +4,27 @@ A private token balance can span many records. A swap may need one record large
 enough to spend, while concurrent trades benefit from several independent
 records. Inventory actions join and split existing records to shape that balance.
 
-## Add inventory actions
+## Enable record coordination
+
+Wallet clients already expose record inventory methods. Reservations and recovery
+are **off by default**, including after `.extend(recordActions())`. Reads,
+planning, and individual joins or splits remain available without coordination.
+Set `recordManagement.enabled: true` when constructing a client to coordinate
+writes, execute inventory plans, and recover interrupted operations.
 
 ```ts
-import { recordActions } from '@provablehq/veil-core'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 
 const aleo = await loadNetwork('testnet')
-const { walletClient } = aleo.createAleoClient({
+const { walletClient: client } = aleo.createAleoClient({
   privateKey, // supplied by the application
   records: aleo.createRemoteScanner({ waitForSync: true }),
+  recordManagement: {
+    enabled: true,
+    chainId: 'aleo:testnet',
+    tokenJoin: { program: 'test_aj_arc20_2_15.aleo' },
+  },
 })
-const client = walletClient.extend(recordActions({
-  chainId: 'aleo:testnet',
-  tokenJoin: { program: 'test_aj_arc20_2_15.aleo' },
-}))
 const asset = { program: 'credits.aleo', standard: 'credits' } as const
 const plan = await client.planRecordInventory({
   asset,
@@ -33,8 +39,9 @@ const result = await client.rebalanceRecordInventory({
 
 Core provides runtime-independent planning, execution, and storage interfaces.
 The Aleo SDK supplies the existing record scanner and local/delegated proving.
-The default reservation store is in memory. Long-running services MUST supply
-an appropriate durable `RecordInventoryStore`; SQLite is available exclusively
+An enabled client defaults to an in-memory reservation store; an omitted or
+disabled configuration allocates none. Long-running services MUST supply
+an appropriate durable `RecordInventoryStore` through `recordManagement.store`; SQLite is available exclusively
 from the separate `@provablehq/veil-cli/storage` application package.
 
 | Action | Behavior |
@@ -42,10 +49,10 @@ from the separate `@provablehq/veil-cli/storage` application package.
 | `getRecordInventory({ asset })` | Reads all scanner pages; separates available and reserved records. |
 | `joinRecords({ asset, records })` | Joins two native records, or 2–15 token records with a configured router; returns the transaction id. |
 | `splitRecord({ asset, record, amount })` | Creates two outputs; `amount` is the first output's base-unit amount. |
-| `autoJoin({ asset, minAmount? })` | Consolidates enough records to cover an amount, or all records when omitted. |
+| `autoJoin({ asset, minAmount? })` | Consolidates enough records to cover an amount, or all records when omitted; execution requires enabled management. |
 | `planRecordInventory({ asset, target, maxTransactions? })` | Produces a read-only plan bound to its account and chain. |
-| `rebalanceRecordInventory({ plan, ... })` | Executes sequentially and waits for confirmed scanner outputs. |
-| `reconcileRecordInventory({ rebroadcast? })` | Resolves pending journal entries; optional exact-transaction rebroadcast. |
+| `rebalanceRecordInventory({ plan, ... })` | Requires enabled management; executes sequentially and waits for confirmed scanner outputs. |
+| `reconcileRecordInventory({ rebroadcast? })` | Requires enabled management; resolves pending journal entries with optional exact-transaction rebroadcast. |
 
 Assets use `standard: 'credits'`, `'arc20'`, or `'arc22'`. Credits MUST use
 `credits.aleo`. ARC tokens are checked against their deployed Token and join/split
@@ -64,11 +71,14 @@ width. `maxTransactions` defaults to 100.
 
 ### Batch token consolidation
 
-Configure `recordActions({ tokenJoin: { program, maxRecords? } })` to route ARC20
+Configure `recordManagement.tokenJoin: { program, maxRecords? }` to route ARC20
 and ARC22 joins through a dedicated dynamic join program. Mainnet uses
 `main_aj_arc20_2_15.aleo`; testnet uses `test_aj_arc20_2_15.aleo`. `maxRecords`
 defaults to 15 and accepts 2–15. Core has no network-specific router default;
 omitting `tokenJoin` preserves native pairwise joins. Credits remain native.
+Routing also works with `enabled: false` for planning or individual joins; it
+does not enable reservations. The optional `recordActions({ tokenJoin })`
+decorator remains available for custom clients without constructor settings.
 
 The planner batches only as many inputs as the target count requires and bounds
 each summed amount to u128. Sixteen token records consolidate through `join_15`
@@ -81,7 +91,7 @@ Each router call prepends the underlying program's identifier (for example,
 resolves its transitive imports for both local and delegated proving. Wallet
 adapters must support dynamic calls and pinned underlying-token records.
 
-All batch inputs are reserved atomically. Fees, durable proof checkpoints, and
+With management enabled, all batch inputs are reserved atomically. Fees, durable proof checkpoints, and
 exact-transaction recovery use the same inventory journal. Confirmed router
 outputs carry dynamic ids; execution resolves each id to the matching nested
 token join's record commitment before waiting for the scanner. Intermediate
@@ -97,7 +107,8 @@ const result = await dex.rebalanceInventory({ token: 'USDCx', target: { records:
 
 Import `shieldSwapActions` from `@provablehq/shield-swap-sdk`. The wrapper resolves
 token metadata to `underlyingProgram`, then uses the same core actions.
-Apply `recordActions` first. Token selection skips shared reservations and
+Construct the wallet with `recordManagement: { enabled: true, store, chainId }`
+before applying `shieldSwapActions`. Token selection then skips shared reservations and
 `writeContract`/`executeTransaction`/`executeContract` reserve explicit record
 inputs atomically before proving. Independent clients MUST share the same store
 and chain identity. This coordination does not cover raw submissions or other
@@ -134,3 +145,16 @@ selected outside this reservation mechanism. Use public fees or FeeMaster.
 
 For a supervised background process with policies, cooldowns, budgets, and a
 restart journal, use the [inventory CLI](../packages/cli.md).
+
+## Migrate a recordActions configuration
+
+Move `store`, `chainId`, `maxFeeMicrocredits`, and `tokenJoin` into the client's
+`recordManagement` configuration and add `enabled: true` to retain coordination.
+The same option is accepted by `createClient`, `createWalletClient`,
+`aleo.createAleoClient`, and `createDevnodeClient`. Wallet clients need no
+`recordActions` extension to expose the methods.
+
+`recordActions({ store, maxFeeMicrocredits })` alone does not reserve records,
+limit fees, or enable recovery. These legacy options remain accepted but are
+unused. Its `chainId` and `tokenJoin` options still configure record actions when
+constructor settings are absent; constructor settings take precedence.

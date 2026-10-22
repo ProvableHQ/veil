@@ -69,7 +69,7 @@ function world(amounts: bigint[], asset = credits, tokenJoin?: TokenJoinRouter) 
   const account = { type: 'local' as const, address: 'aleo1owner', source: 'test', privateKey: 'test', viewKey: 'test', sign: vi.fn(), signMessage: vi.fn() }
   const transport = { config: { type: 'custom', key: 'test', name: 'Test', network: 'testnet' as const, request: send }, request: send }
   const client = createWalletClient({ account, transport, proving: { mode: 'local', buildTransaction: build },
-    recordProvider: { requestRecords: scan, setAccount() {} } }).extend(recordActions({ store, tokenJoin }))
+    recordProvider: { requestRecords: scan, setAccount() {} }, recordManagement: { enabled: true, store, tokenJoin } })
   return { client, store, build, send, scan, transactions, records, setRecords: (value: OwnedRecord[]) => { records = value } }
 }
 
@@ -136,7 +136,7 @@ describe('scanner-backed inventory', () => {
       throw new Error(method)
     })
     const client = createWalletClient({ account: { ...w.client.account!, type: 'rpc' } as any,
-      transport: { ...w.client.transport, request } as any }).extend(recordActions({ store: w.store }))
+      transport: { ...w.client.transport, request } as any, recordManagement: { enabled: true, store: w.store } })
     await expect(client.getRecordInventory({ asset: credits })).rejects.toThrow('recordName grant')
     records = [{ ...records[0], recordName: 'credits', recordView: { fields: { $nonce: '1group', microcredits: '1000000u64' } } }]
     const inventory = await client.getRecordInventory({ asset: credits })
@@ -162,7 +162,7 @@ describe('inventory execution and recovery', () => {
       }))
       const request = vi.fn(async (params: any) => params.method === 'requestRecords' ? records : w.send(params))
       const client = createWalletClient({ account: { ...w.client.account!, type: 'rpc' } as any,
-        transport: { ...w.client.transport, request } as any }).extend(recordActions({ store: w.store }))
+        transport: { ...w.client.transport, request } as any, recordManagement: { enabled: true, store: w.store } })
       const plan = await client.planRecordInventory({ asset, target: { records: kind === 'join' ? 1 : 3 } })
       expect(plan.steps.length).toBeGreaterThan(0)
       expect(await client.rebalanceRecordInventory({ plan })).toMatchObject({
@@ -203,7 +203,7 @@ describe('inventory execution and recovery', () => {
       throw new Error(method)
     })
     const client = createWalletClient({ account: { ...w.client.account!, type: 'rpc' } as any,
-      transport: { ...w.client.transport, request } as any }).extend(recordActions({ store: w.store }))
+      transport: { ...w.client.transport, request } as any, recordManagement: { enabled: true, store: w.store } })
     const plan = await client.planRecordInventory({ asset: credits, target: { records: 3 } })
     expect(await client.rebalanceRecordInventory({ plan, pollIntervalMs: 1 })).toMatchObject({
       status: 'complete', completedSteps: 2, transactionIds: ['at1wallet1', 'at1wallet2'],
@@ -219,7 +219,7 @@ describe('inventory execution and recovery', () => {
     }))
     const request = vi.fn(async (params: any) => params.method === 'requestRecords' ? records : w.send(params))
     const client = createWalletClient({ account: { ...w.client.account!, type: 'rpc' } as any,
-      transport: { ...w.client.transport, request } as any }).extend(recordActions({ store: w.store }))
+      transport: { ...w.client.transport, request } as any, recordManagement: { enabled: true, store: w.store } })
     const plan = await client.planRecordInventory({ asset: credits, target: { records: 1 } })
     expect(plan.steps[0]!.inputs).not.toContain('3group')
     expect(await client.rebalanceRecordInventory({ plan })).toMatchObject({ status: 'interrupted', transactionIds: [] })
@@ -350,7 +350,7 @@ describe('configured token batch joins', () => {
       throw new Error(method)
     })
     const wallet = createWalletClient({ account: { ...w.client.account!, type: 'rpc' } as any,
-      transport: { ...w.client.transport, request } as any }).extend(recordActions({ store: w.store, tokenJoin: router }))
+      transport: { ...w.client.transport, request } as any, recordManagement: { enabled: true, store: w.store, tokenJoin: router } })
     await wallet.joinRecords({ asset: arc22, records: (await wallet.getRecordInventory({ asset: arc22 })).available })
     expect(request).toHaveBeenLastCalledWith(expect.objectContaining({ method: 'executeTransaction', params: expect.objectContaining({
       programName: router.program, functionName: 'join_3', imports: [arc22.program],

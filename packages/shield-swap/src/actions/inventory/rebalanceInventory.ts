@@ -7,7 +7,7 @@ export type RebalanceInventoryParameters = PlanInventoryParameters & Omit<Rebala
 /**
  * Rebalances a DEX token's underlying private inventory through core join/split actions.
  * Scans, plans, signs and waits for each dependent transition using shared reservations.
- * @param client Account client extended with recordActions before shieldSwapActions.
+ * @param client Account client with recordManagement.enabled for coordinated inventory execution.
  * @param params Token, target, API, and bounded execution options.
  * @returns Completed progress or a resumable interruption.
  * @throws On unsupported assets or invalid targets before submission.

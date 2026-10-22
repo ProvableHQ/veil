@@ -3,7 +3,7 @@ import type { InventoryRecord, RecordAsset } from '../../inventory/types.js'
 import type { ProvingProgressHandler } from '../../types/proving.js'
 import { writeContract } from '../wallet/writeContract.js'
 import { decodeRecord, maxAmount, recordInput, validateAsset } from './internal.js'
-import { management } from '../../inventory/internal.js'
+import { recordSettings } from '../../inventory/internal.js'
 import { validateTokenJoinFunction } from '../../inventory/tokenJoin.js'
 
 /**
@@ -17,7 +17,7 @@ export type JoinRecordsParameters = { asset: RecordAsset; records: InventoryReco
 /**
  * Joins records through a native transition or the configured token router.
  * Signs, proves and submits using the existing account and proving configuration.
- * @param client Wallet client; recordActions enables shared reservations.
+ * @param client Wallet client; recordManagement.enabled opts into shared reservations.
  * @param params Distinct, same-owner records from getRecordInventory, within the configured batch limit.
  * @returns Submitted transaction id; acceptance is asynchronous.
  * @throws On incompatible records, overflow, contention or proving failure.
@@ -26,7 +26,7 @@ export type JoinRecordsParameters = { asset: RecordAsset; records: InventoryReco
  */
 export async function joinRecords(client: Client, params: JoinRecordsParameters): Promise<string> {
   const capabilities = await validateAsset(client, params.asset)
-  const router = params.asset.standard !== 'credits' ? management(client)?.tokenJoin : undefined
+  const router = params.asset.standard !== 'credits' ? recordSettings(client).tokenJoin : undefined
   if (router) await validateTokenJoinFunction(client, router, params.records.length)
   else if (params.records.length !== 2) throw new Error('joinRecords requires two records without a token router')
   // Re-decode the supplied records before proving; cached inventory amounts are

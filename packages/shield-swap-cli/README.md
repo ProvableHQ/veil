@@ -236,8 +236,10 @@ position's withdrawal address as the proof subject.
 ## Share record reservations with inventory maintenance
 
 Set `VEIL_INVENTORY_DB` to the same journal path used by `veil inventory run`.
-The session applies core's `recordActions` before Shield Swap actions so trading
-and maintenance cannot reserve the same explicit record inputs. This optional
+The session sets `recordManagement: { enabled: true, store, chainId }` during
+client construction so trading and maintenance cannot reserve the same explicit
+record inputs. This optional
 CLI integration loads `@provablehq/veil-cli/storage` and requires Node 22.13+.
-Without the environment variable, the existing runtime path is unchanged.
+Without the environment variable, record coordination remains disabled and no
+inventory journal is opened. Exposing record methods does not enable it.
 See the [Veil CLI reference](../cli/README.md) for policy configuration and recovery.

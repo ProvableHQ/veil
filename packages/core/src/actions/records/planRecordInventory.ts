@@ -1,6 +1,6 @@
 import type { Client } from '../../clients/createClient.js'
 import type { InventoryPlan, InventoryTarget, RecordAsset } from '../../inventory/types.js'
-import { management, scopeOf } from '../../inventory/internal.js'
+import { recordSettings, scopeOf } from '../../inventory/internal.js'
 import { buildInventoryPlan } from '../../inventory/planner.js'
 import { getRecordInventory } from './getRecordInventory.js'
 
@@ -26,6 +26,6 @@ export async function planRecordInventory(client: Client, params: PlanRecordInve
   const inventory = await getRecordInventory(client, { asset: params.asset })
   // Retain only nonces and amounts in the plan; record plaintext stays in the
   // scanner result and is fetched again when each step is executed.
-  return buildInventoryPlan({ ...params, tokenJoin: management(client)?.tokenJoin,
+  return buildInventoryPlan({ ...params, tokenJoin: recordSettings(client).tokenJoin,
     scope: scopeOf(client), inputs: inventory.available.map(({ id, amount }) => ({ id, amount })) })
 }

@@ -12,7 +12,6 @@ import {
   fallback,
   getContract,
   parseProgram,
-  recordActions,
 } from '@provablehq/veil-core'
 import { fromWalletAdapter, type AleoWalletAdapter } from '@provablehq/veil-aleo-wallet-adapter'
 
@@ -35,6 +34,8 @@ export function createAleoWalletClient(adapter: AleoWalletAdapter) {
     account,
     // Wallet transport handles executions; http handles reads as fallback
     transport: fallback([walletTransport, http(API_URL, { network: 'mainnet' })]),
+    // Configure record planning without enabling reservations on wallet writes.
+    recordManagement: { enabled: false, chainId: 'aleo:mainnet', tokenJoin: { program: 'main_aj_arc20_2_15.aleo' } },
   })
 }
 
@@ -63,10 +64,10 @@ export async function getLoyaltyContract(walletClient?: ReturnType<typeof create
 }
 
 /**
- * Adds optional browser inventory planning and record coordination to a connected wallet.
- * Uses an in-memory store; requires wallet grants for record identities and amounts.
+ * Returns the connected wallet with its built-in inventory methods.
+ * Planning requires wallet grants for record identities and amounts; coordination stays disabled.
  * @param walletClient Connected wallet client on Aleo mainnet.
- * @returns An extended client; construction performs no scan or transaction.
+ * @returns The same wallet client; the helper performs no scan or transaction.
  * @example
  * const inventory = createInventoryClient(createAleoWalletClient(adapter))
  * const plan = await inventory.planRecordInventory({
@@ -74,5 +75,5 @@ export async function getLoyaltyContract(walletClient?: ReturnType<typeof create
  * })
  */
 export function createInventoryClient(walletClient: ReturnType<typeof createAleoWalletClient>) {
-  return walletClient.extend(recordActions({ chainId: 'aleo:mainnet', tokenJoin: { program: 'main_aj_arc20_2_15.aleo' } }))
+  return walletClient
 }

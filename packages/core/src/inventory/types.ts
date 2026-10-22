@@ -130,12 +130,13 @@ export type RecordInventoryStore = {
 }
 
 /**
- * Configures opt-in coordination for inventory and ordinary writes.
- * @property store Shared reservation/journal store. Defaults to an in-memory store per decorator.
- * @property chainId Stable chain identity shared by all participants. Defaults to transport network;
- *   custom/local chains MUST supply a distinct identity.
- * @property maxFeeMicrocredits Maximum proved transaction fee, before broadcast. Optional, no limit by default.
- * @property tokenJoin Optional dynamic router for ARC20/ARC22 joins. Defaults to native pairwise joins; credits are unaffected.
+ * Configures record action routing without enabling spending coordination.
+ * @property chainId Optional chain identity for plans. Defaults to the transport network.
+ * @property tokenJoin Optional dynamic router for ARC20/ARC22 joins. Defaults to native pairwise joins.
+ * @property store Legacy option accepted for compatibility but unused by recordActions.
+ *   Configure recordManagement with enabled: true on the client to share a journal.
+ * @property maxFeeMicrocredits Legacy option accepted for compatibility but unused by recordActions.
+ *   Configure recordManagement with enabled: true on the client to enforce a fee ceiling.
  */
 export type RecordActionsConfig = {
   store?: RecordInventoryStore
@@ -143,6 +144,25 @@ export type RecordActionsConfig = {
   maxFeeMicrocredits?: bigint
   tokenJoin?: TokenJoinRouter
 }
+
+/**
+ * Enables shared record reservations and transaction recovery on a client.
+ * Management is off unless enabled is true; merely exposing record actions does
+ * not allocate a journal or change ordinary writes. Disabled settings may still
+ * supply a chain identity and token router for explicit record actions.
+ * @property enabled Explicit opt-in for reservation and recovery. Defaults to false when omitted from client configuration.
+ * @property store Shared atomic journal. Defaults to one in-memory store per enabled client; unused when disabled.
+ * @property chainId Stable chain identity shared by participants. Defaults to the transport network;
+ *   custom/local chains MUST supply a distinct identity.
+ * @property maxFeeMicrocredits Maximum proved transaction fee in microcredits (u64), before broadcast.
+ *   Optional, with no limit by default; ignored when disabled.
+ * @property tokenJoin Optional ARC20/ARC22 join router. Defaults to native pairwise joins; credits are unaffected.
+ * @example
+ * const recordManagement: RecordManagementConfig = {
+ *   enabled: true, store: memoryRecordInventoryStore(), chainId: 'aleo:testnet',
+ * }
+ */
+export type RecordManagementConfig = RecordActionsConfig & { enabled: boolean }
 
 /**
  * Reports completed operations or a resumable interruption.

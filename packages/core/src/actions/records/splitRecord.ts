@@ -16,7 +16,7 @@ export type SplitRecordParameters = { asset: RecordAsset; record: InventoryRecor
 /**
  * Splits a token record into two positive records through its native transition.
  * Credits subtract 10,000 microcredits from the second output; signs and broadcasts.
- * @param client Wallet client; recordActions enables shared reservations.
+ * @param client Wallet client; recordManagement.enabled opts into shared reservations.
  * @param params Source record and positive first output amount (u64 credits, u128 tokens).
  * @returns Submitted transaction id, before confirmation.
  * @throws When either output would be empty or inputs are incompatible.

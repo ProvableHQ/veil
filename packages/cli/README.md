@@ -107,22 +107,29 @@ requires operator reconciliation; no force-unlock command is included.
 
 Only one manager can run for an account/chain against a shared journal. Pending
 trading operations take priority over maintenance. Participating trading clients
-must open the same file and apply `recordActions` before `shieldSwapActions`:
+must open the same file and explicitly enable coordination at client construction:
 
 ```ts
-import { recordActions } from '@provablehq/veil-core'
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { sqliteRecordInventoryStore } from '@provablehq/veil-cli/storage'
 
 const store = await sqliteRecordInventoryStore('.veil/inventory.sqlite')
-const managed = walletClient.extend(recordActions({ store, chainId: 'aleo:testnet',
-  tokenJoin: { program: 'test_aj_arc20_2_15.aleo' } }))
-// Extend managed with shieldSwapActions(...) when trading.
+const aleo = await loadNetwork('testnet')
+const { walletClient } = aleo.createAleoClient({
+  privateKey, // supplied by the application
+  recordManagement: {
+    enabled: true, store, chainId: 'aleo:testnet',
+    tokenJoin: { program: 'test_aj_arc20_2_15.aleo' },
+  },
+})
+// Extend walletClient with shieldSwapActions(...) when trading.
 // Close the store when the application shuts down.
 ```
 
 For the Shield Swap CLI, set `VEIL_INVENTORY_DB` to this same database path and
 select the same network. That opt-in integration also requires Node 22.13+.
-Other SDK applications can implement `RecordInventoryStore` using their own
+Record management is otherwise off, including on clients extended with
+`recordActions()`. Other SDK applications can implement `RecordInventoryStore` using their own
 storage without depending on this package. Unmanaged wallets, raw transaction
 submission, and other database files cannot participate in these reservations.
 Managed writes use public fees or FeeMaster; private fee-record selection is

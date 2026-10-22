@@ -21,7 +21,7 @@ export type GetRecordInventoryReturnType = { available: InventoryRecord[]; reser
 /**
  * Scans all pages through the client's existing record provider or wallet.
  * Verifies the asset interface and excludes non-token, bound and reserved records.
- * @param client Account client, optionally extended with recordActions.
+ * @param client Account client; enabled record management excludes shared reservations.
  * @param params Token program and standard to inspect.
  * @returns Eligible records and their available balance; hits the network.
  * @throws On missing wallet grants, unsupported assets, or a non-terminating scan.

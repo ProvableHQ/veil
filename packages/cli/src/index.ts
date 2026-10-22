@@ -2,7 +2,6 @@
 import { parseArgs } from 'node:util'
 import { readFile } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
-import { recordActions } from '@provablehq/veil-core'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { sqliteRecordInventoryStore } from './storage.js'
 import { parseInventoryConfig } from './config.js'
@@ -44,10 +43,12 @@ async function main(): Promise<void> {
   const privateKey = process.env[config.privateKeyEnv]
   if (!privateKey) throw new Error(`Set ${config.privateKeyEnv} to the signing account private key`)
   const aleo = await loadNetwork(config.network)
-  const { walletClient, account } = aleo.createAleoClient({ privateKey, networkUrl: config.networkUrl, useFeeMaster: config.useFeeMaster,
-    records: aleo.createRemoteScanner({ waitForSync: true }) })
   const store = await sqliteRecordInventoryStore(config.database)
-  const client = walletClient.extend(recordActions({ store, chainId: config.chainId, maxFeeMicrocredits: config.maxFeeMicrocredits, tokenJoin: config.tokenJoin }))
+  // This maintenance application explicitly enables its shared journal. Merely
+  // exposing record methods never opts other SDK clients into coordinated writes.
+  const { walletClient: client, account } = aleo.createAleoClient({ privateKey, networkUrl: config.networkUrl, useFeeMaster: config.useFeeMaster,
+    records: aleo.createRemoteScanner({ waitForSync: true }),
+    recordManagement: { enabled: true, store, chainId: config.chainId, maxFeeMicrocredits: config.maxFeeMicrocredits, tokenJoin: config.tokenJoin } })
   const scope = JSON.stringify([config.chainId, account.address])
   let lease: string | undefined
   const controller = new AbortController()

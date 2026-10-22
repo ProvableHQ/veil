@@ -1,7 +1,5 @@
 import type { Client } from '../clients/createClient.js'
 import type { RecordActionsConfig } from './types.js'
-import type { RecordManagement } from './internal.js'
-import { memoryRecordInventoryStore } from './store.js'
 import { getRecordInventory, type GetRecordInventoryParameters } from '../actions/records/getRecordInventory.js'
 import { planRecordInventory, type PlanRecordInventoryParameters } from '../actions/records/planRecordInventory.js'
 import { rebalanceRecordInventory, type RebalanceRecordInventoryParameters } from '../actions/records/rebalanceRecordInventory.js'
@@ -9,41 +7,43 @@ import { reconcileRecordInventory, type ReconcileRecordInventoryParameters } fro
 import { joinRecords, type JoinRecordsParameters } from '../actions/records/joinRecords.js'
 import { splitRecord, type SplitRecordParameters } from '../actions/records/splitRecord.js'
 import { autoJoin, type AutoJoinParameters } from '../actions/records/autoJoin.js'
-import { writeContract, type WriteContractParameters } from '../actions/wallet/writeContract.js'
-import { executeContract, type ExecuteContractParameters } from '../actions/wallet/executeContract.js'
 import { validateTokenJoinRouter } from './tokenJoin.js'
 
 /**
- * Adds record inventory actions and shared spending coordination to an account client.
- * Configuration is opt-in; apply before protocol decorators such as shieldSwapActions.
- * @param config Shared store, chain identity, and optional per-transaction fee limit.
- * @returns An extend decorator; construction performs no network calls.
- * @throws When chain identity is absent or the fee limit is negative.
+ * Binds account-dependent record methods without changing spending configuration.
+ * Shared by walletActions and the optional compatibility decorator.
+ * @internal
+ */
+export function recordActionMethods(client: Client) {
+  return {
+    getRecordInventory: (params: GetRecordInventoryParameters) => getRecordInventory(client, params),
+    planRecordInventory: (params: PlanRecordInventoryParameters) => planRecordInventory(client, params),
+    rebalanceRecordInventory: (params: RebalanceRecordInventoryParameters) => rebalanceRecordInventory(client, params),
+    reconcileRecordInventory: (params?: ReconcileRecordInventoryParameters) => reconcileRecordInventory(client, params),
+    joinRecords: (params: JoinRecordsParameters) => joinRecords(client, params),
+    splitRecord: (params: SplitRecordParameters) => splitRecord(client, params),
+    autoJoin: (params: AutoJoinParameters) => autoJoin(client, params),
+  }
+}
+
+/**
+ * Adds record methods to a custom client without enabling reservation or recovery.
+ * Wallet clients already expose these methods. Configure recordManagement with
+ * enabled: true at client construction to coordinate ordinary writes and execute
+ * inventory plans. Legacy store and maxFeeMicrocredits options here are unused.
+ * @param config Optional chain identity and token join router for record actions.
+ *   Omission uses the transport network and native joins. Constructor settings take precedence.
+ * @returns An extend decorator; construction performs no network calls and allocates no journal.
+ * @throws When the optional token join router is invalid.
  * @example
- * const client = walletClient.extend(recordActions({ store, chainId: 'aleo:testnet' }))
+ * const client = walletClient.extend(recordActions({ tokenJoin: { program: 'test_aj_arc20_2_15.aleo' } }))
  */
 export function recordActions(config: RecordActionsConfig = {}) {
-  const store = config.store ?? memoryRecordInventoryStore()
+  // Keep only action-routing options: exposing methods must never opt into writes.
+  const recordActionConfig = { chainId: config.chainId, tokenJoin: config.tokenJoin && { ...config.tokenJoin } }
+  if (recordActionConfig.tokenJoin) validateTokenJoinRouter(recordActionConfig.tokenJoin)
   return (client: Client) => {
-    const chainId = config.chainId ?? client.transport.config.network
-    if (!chainId) throw new Error('recordActions requires chainId on a transport without a network')
-    if (config.maxFeeMicrocredits !== undefined && config.maxFeeMicrocredits < 0n) throw new Error('Fee limit cannot be negative')
-    const tokenJoin = config.tokenJoin && { ...config.tokenJoin }
-    if (tokenJoin) validateTokenJoinRouter(tokenJoin)
-    const recordManagement: RecordManagement = { store, chainId, network: client.transport.config.network, maxFeeMicrocredits: config.maxFeeMicrocredits, tokenJoin }
-    const scoped = Object.assign(Object.create(client), { recordManagement }) as Client
-    return {
-      recordManagement,
-      getRecordInventory: (params: GetRecordInventoryParameters) => getRecordInventory(scoped, params),
-      planRecordInventory: (params: PlanRecordInventoryParameters) => planRecordInventory(scoped, params),
-      rebalanceRecordInventory: (params: RebalanceRecordInventoryParameters) => rebalanceRecordInventory(scoped, params),
-      reconcileRecordInventory: (params?: ReconcileRecordInventoryParameters) => reconcileRecordInventory(scoped, params),
-      joinRecords: (params: JoinRecordsParameters) => joinRecords(scoped, params),
-      splitRecord: (params: SplitRecordParameters) => splitRecord(scoped, params),
-      autoJoin: (params: AutoJoinParameters) => autoJoin(scoped, params),
-      writeContract: (params: WriteContractParameters) => writeContract(scoped, params),
-      executeTransaction: (params: WriteContractParameters) => writeContract(scoped, params),
-      executeContract: (params: ExecuteContractParameters) => executeContract(scoped, params),
-    }
+    const scoped = Object.assign(Object.create(client), { recordActionConfig }) as Client
+    return { recordActionConfig, ...recordActionMethods(scoped) }
   }
 }

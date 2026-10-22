@@ -21,7 +21,7 @@ export type ReconcileRecordInventoryParameters = { rebroadcast?: boolean }
  */
 export async function reconcileRecordInventory(client: Client, params: ReconcileRecordInventoryParameters = {}): Promise<RecordSpend[]> {
   const config = management(client)
-  if (!config) throw new Error('Reconciliation requires recordActions with a shared store')
+  if (!config) throw new Error('Reconciliation requires recordManagement.enabled with a shared store')
   const scope = scopeOf(client)
   for (const entry of await config.store.list(scope)) {
     if (entry.status === 'confirmed' || entry.status === 'rejected' || entry.status === 'cancelled') continue

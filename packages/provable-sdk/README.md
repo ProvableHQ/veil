@@ -163,8 +163,12 @@ resolves and caches witnesses automatically for local and delegated proving.
 
 ## Inventory scanning and proving
 
-Use `createRemoteScanner({ waitForSync: true })` with core's `recordActions` for
-inventory maintenance. Synchronization polling uses the existing SDK scanner;
+Wallet clients already expose inventory methods. Pass
+`recordManagement: { enabled: true, store, chainId: 'aleo:testnet' }` to
+`createAleoClient` to opt into shared reservations and recovery. The same option
+is accepted by `createDevnodeClient`; a local chain should use a distinct
+`chainId`. Omission or `enabled: false` leaves ordinary writes unchanged.
+Use `createRemoteScanner({ waitForSync: true })` for inventory maintenance. Synchronization polling uses the existing SDK scanner;
 `syncTimeoutMs` defaults to 300000 milliseconds and `waitForSync` defaults to false
 for existing consumers. Both local and delegated execution honor an awaited
 `transaction-prepared` callback before submission, allowing an application to

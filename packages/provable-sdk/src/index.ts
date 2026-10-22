@@ -33,7 +33,7 @@ import {
 import { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR } from '@provablehq/veil-aleo-devnode'
 export { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR }
 import type { LocalAccount } from '@provablehq/veil-core'
-import type { ProvingConfig, GenerateFreezelistProofParameters, BuildTransactionOptions, BuildDeploymentOptions, SimulateOptions, ExecuteOptions, RawSimulateResult, RawExecuteResult, Transaction } from '@provablehq/veil-core'
+import type { RecordManagementConfig, ProvingConfig, GenerateFreezelistProofParameters, BuildTransactionOptions, BuildDeploymentOptions, SimulateOptions, ExecuteOptions, RawSimulateResult, RawExecuteResult, Transaction } from '@provablehq/veil-core'
 import { generateFreezelistProof } from './freezelist.js'
 import type { OwnedRecord, RecordProvider, StandaloneRecordScanner, RequestRecordsParameters } from '@provablehq/veil-core'
 import type { Network, PublicClient, WalletClient } from '@provablehq/veil-core'
@@ -410,6 +410,8 @@ export interface AleoSdk {
    *   to true, so a faucet-funded account with no public credits can write.
    *   Pass false when the account funds its own fees. Only meaningful under
    *   delegated proving.
+   * @param options.recordManagement Optional shared record reservations and recovery.
+   *   Defaults to disabled; enabled: true opts in before wallet actions are bound.
    * @param options.records Record provider behind `requestRecords`. Defaults
    *   to `createRemoteScanner()` against the hosted scanner; pass a scanner
    *   built with a custom `url` or any `RecordProvider` to override.
@@ -451,6 +453,7 @@ export interface AleoSdk {
    * const txId = await walletClient.writeContract({ program, function: 'transfer_public', inputs })
    */
   createAleoClient(options: {
+    recordManagement?: RecordManagementConfig
     privateKey: string
     networkUrl?: string
     provingMode?: 'delegated' | 'local'
@@ -677,6 +680,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           const programSource = await programManager.networkClient.getProgram(txOptions.programName)
           const staticImports = await programManager.networkClient.getProgramImports(programSource)
           const merged: SdkProgramImports = { ...staticImports }
+          // Dynamic token programs can import other programs themselves; include
+          // those transitive sources so routed joins can be proved completely.
           for (const name of txOptions.imports) {
             const dynamicSource = await programManager.networkClient.getProgram(name)
             Object.assign(merged, await programManager.networkClient.getProgramImports(dynamicSource))
@@ -872,6 +877,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               inputs: execOptions.inputs,
               priorityFee,
               privateFee: execOptions.privateFee ?? false,
+              // An awaited checkpoint requires control of broadcast to stay with
+              // this client until the proved transaction has been saved.
               broadcast: !execOptions.onProgress,
               useFeeMaster: options.useFeeMaster ?? false,
             })
@@ -961,6 +968,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             throw new ProvingError({ message: e instanceof Error ? e.message : String(e), cause: e as Error })
           }
 
+          // Convert the WASM transaction into the serializable value stored by
+          // recovery before the network can observe this execution.
           const prepared = JSON.parse(tx.toString()) as Transaction
           await execOptions.onProgress?.({ type: 'transaction-prepared', transactionId: prepared.id, transaction: prepared })
           let txId: string
@@ -1279,11 +1288,14 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         if (activeSession) activeScanner.setJwtData(await activeSession.getJwt())
         await activeRegistration.ensure(activeScanner, activeViewKey)
         if (options.waitForSync) {
+          // An incomplete scan could trigger needless joins or splits. Wait for
+          // the existing scanner registration to catch up before reading a page.
           const deadline = Date.now() + (options.syncTimeoutMs ?? 300_000)
           let reregistered = false
           while (true) {
             const status = await activeScanner.status()
-            // status() does not use the SDK's owned() auto-registration recovery.
+            // status() does not use owned()'s registration recovery. Retry one
+            // expired registration explicitly, then surface any further failure.
             if (!status.ok && status.status === 422 && !reregistered) {
               const registration = await activeScanner.registerEncrypted(activeViewKey, options.startBlock ?? 0)
               if (!registration.ok) throw new Error(`Record scanner registration failed (HTTP ${registration.status})`)
@@ -1367,6 +1379,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
   }
 
   function createAleoClient(options: {
+    recordManagement?: RecordManagementConfig
     privateKey: string
     networkUrl?: string
     provingMode?: 'delegated' | 'local'
@@ -1473,6 +1486,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       transport,
       proving,
       recordProvider: records,
+      // Forward opt-in before wallet methods close over their client.
+      recordManagement: options.recordManagement,
     }).extend(provableApiActions())
 
     return { publicClient, walletClient, account }
@@ -1556,6 +1571,8 @@ export function generateAccount(): LocalAccount<'privateKey'> {
  * pending. Record outputs owned by the client's account are decrypted to
  * plaintext in the result; foreign records are dropped.
  *
+ * @param options.recordManagement Optional shared record reservations and recovery.
+ *   Defaults to disabled; local chains should supply a distinct chainId when enabled.
  * @example
  * ```ts
  * // Zero-config — uses seeded key and localhost:3030
@@ -1569,6 +1586,7 @@ export function generateAccount(): LocalAccount<'privateKey'> {
  * ```
  */
 export function createDevnodeClient(options?: {
+  recordManagement?: RecordManagementConfig
   privateKey?: string
   /** Socket address of the devnode, e.g. "127.0.0.1:3030" */
   socketAddr?: string
@@ -1669,6 +1687,8 @@ export function createDevnodeClient(options?: {
         imports: execOptions.programImports,
       })
 
+      // Preserve the same prepare-before-broadcast checkpoint used by hosted
+      // execution so recovery behavior also holds against the local devnode.
       const prepared = JSON.parse(tx.toString()) as Transaction
       await execOptions.onProgress?.({ type: 'transaction-prepared', transactionId: prepared.id, transaction: prepared })
 
@@ -1701,7 +1721,7 @@ export function createDevnodeClient(options?: {
     },
   }
 
-  const walletClient = createWalletClient({ account, transport, proving })
+  const walletClient = createWalletClient({ account, transport, proving, recordManagement: options?.recordManagement })
 
   return { publicClient, walletClient, account }
 }

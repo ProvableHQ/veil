@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { memoryRecordInventoryStore, recordActions, type Client } from '@provablehq/veil-core'
+import { createClient, memoryRecordInventoryStore, recordActions, type Client } from '@provablehq/veil-core'
 import { planInventory } from '../../src/actions/inventory/planInventory.js'
 import { selectTokenRecord } from '../../src/utils/records.js'
 import type { ApiClient } from '../../src/api/client.js'
@@ -29,7 +29,8 @@ describe('Shield Swap inventory', () => {
     const store = memoryRecordInventoryStore()
     await store.acquire({ scope, program, function: 'join', records: ['1group'], status: 'reserved', accountType: 'local', createdAt: Date.now() })
     const base = { account, transport: { config: { network: 'testnet' } }, request: async () => [record(program, 500n, 1), record(program, 700n, 2)] } as unknown as Client
-    const client = Object.assign(base, recordActions({ store })(base))
+    const client = createClient({ account: base.account, transport: { ...base.transport, request: base.request },
+      recordManagement: { enabled: true, store } })
     expect((await selectTokenRecord(client, { program, minAmount: 400n })).amount).toBe(700n)
   })
   it('uses the configured router for the resolved underlying token inventory', async () => {

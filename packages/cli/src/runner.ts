@@ -18,7 +18,7 @@ export type InventoryCycleResult = { program: string; status: string; result?: I
  * @param client Coordinated account client using the supplied store.
  * @param config Validated application limits and policies.
  * @param store Journal shared with participating trading clients.
- * @param scope Chain/account namespace, matching recordActions.
+ * @param scope Chain/account namespace, matching the enabled record management configuration.
  * @param signal Optional shutdown signal, absent by default; stops subsequent work.
  * @returns Per-asset progress; never logs key material or record plaintext.
  * @throws When reconciliation or storage is unavailable; callers must retry before planning.

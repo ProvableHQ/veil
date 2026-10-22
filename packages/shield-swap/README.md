@@ -1350,13 +1350,16 @@ for deployments that accept them. Omission now checks the actual current list.
 
 ## Record inventory
 
-Configure `recordActions({ tokenJoin: { program: 'main_aj_arc20_2_15.aleo' } })`
-before the DEX decorator to batch underlying ARC20/ARC22 joins on mainnet. Use
+Configure `recordManagement.tokenJoin` with
+`{ program: 'main_aj_arc20_2_15.aleo' }` at client construction to batch
+underlying ARC20/ARC22 joins on mainnet. Use
 `test_aj_arc20_2_15.aleo` on testnet. The DEX inventory wrappers preserve this
 configuration, target counts, shared reservations, and exact-output recovery.
 
-Apply core's `recordActions` before `shieldSwapActions` to coordinate maintenance
-with trading. `planInventory({ token, target })` and
+Reservations and recovery are off by default. Set
+`recordManagement: { enabled: true, store, chainId }` when constructing the
+wallet client, then apply `shieldSwapActions` to coordinate maintenance with
+trading. Adding `recordActions()` alone never enables coordination. `planInventory({ token, target })` and
 `rebalanceInventory({ token, target })` resolve the DEX token's underlying program
 and delegate to core's ARC20/ARC22/credits helpers. Participating clients must
 share the same store and chain identity. No database dependency is added to the

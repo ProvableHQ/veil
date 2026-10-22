@@ -11,7 +11,7 @@ import { publicActions, type PublicActions } from './decorators/public.js'
  * @property key Optional identifier for the client's type. Defaults to `"public"`.
  * @property name Optional human-readable name. Defaults to `"Public Client"`.
  */
-export type PublicClientConfig = Omit<ClientConfig, 'account' | 'key' | 'name' | 'proving'> & {
+export type PublicClientConfig = Omit<ClientConfig, 'account' | 'key' | 'name' | 'proving' | 'recordManagement'> & {
   key?: string | undefined
   name?: string | undefined
 }

@@ -29,7 +29,7 @@ export type RebalanceRecordInventoryParameters = {
  * Executes a plan one confirmed transition at a time through existing write actions.
  * Revalidates each input and matches scanner outputs to confirmed commitments.
  * RPC execution requires commitment metadata on consumed records before submission.
- * @param client Client extended with recordActions for reservation and durable progress.
+ * @param client Client with recordManagement.enabled for reservations and progress checkpoints.
  * @param params Reviewed plan, timeouts, cancellation and optional fee budget.
  * @returns Completion or interruption with all submitted transaction ids; never rolls back accepted steps.
  * @throws On invalid/tampered plans or missing coordination, before submission.
@@ -38,7 +38,7 @@ export type RebalanceRecordInventoryParameters = {
  */
 export async function rebalanceRecordInventory(client: Client, params: RebalanceRecordInventoryParameters): Promise<InventoryResult> {
   const config = management(client)
-  if (!config) throw new Error('Inventory execution requires recordActions')
+  if (!config) throw new Error('Inventory execution requires recordManagement.enabled')
   // Rebuild instead of trusting caller-supplied transition amounts or dependencies.
   const plan = buildInventoryPlan(params.plan)
   const encode = (value: unknown) => JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item)

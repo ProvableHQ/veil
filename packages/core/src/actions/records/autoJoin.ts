@@ -1,6 +1,6 @@
 import type { Client } from '../../clients/createClient.js'
 import type { InventoryResult, RecordAsset } from '../../inventory/types.js'
-import { management, scopeOf } from '../../inventory/internal.js'
+import { recordSettings, scopeOf } from '../../inventory/internal.js'
 import { buildInventoryPlan } from '../../inventory/planner.js'
 import { getRecordInventory } from './getRecordInventory.js'
 import { rebalanceRecordInventory, type RebalanceRecordInventoryParameters } from './rebalanceRecordInventory.js'
@@ -18,7 +18,7 @@ export type AutoJoinParameters = Omit<RebalanceRecordInventoryParameters, 'plan'
 /**
  * Consolidates records to one record or joins only enough to cover a requested amount.
  * Scans, signs and submits through the configured scanner and prover; existing sufficient records are preserved.
- * @param client Client extended with recordActions.
+ * @param client Account client with recordManagement.enabled for coordinated execution.
  * @param params Asset, optional positive amount threshold and execution bounds.
  * @returns Confirmed progress or a resumable interruption.
  * @throws Before submission when available funds cannot cover the threshold.
@@ -41,7 +41,7 @@ export async function autoJoin(client: Client, params: AutoJoinParameters): Prom
   if (records.length <= 1) return { status: 'complete', transactionIds: [], completedSteps: 0 }
   // Use the same planner and sequential executor as a rebalance so consolidation
   // also waits for each dependent output and retains interrupted progress.
-  const plan = buildInventoryPlan({ scope: scopeOf(client), asset: params.asset, tokenJoin: management(client)?.tokenJoin, target: { records: 1 },
+  const plan = buildInventoryPlan({ scope: scopeOf(client), asset: params.asset, tokenJoin: recordSettings(client).tokenJoin, target: { records: 1 },
     inputs: records.map(({ id, amount }) => ({ id, amount })), maxTransactions: params.maxTransactions })
   return rebalanceRecordInventory(client, { ...params, plan })
 }

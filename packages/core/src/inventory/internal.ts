@@ -1,11 +1,14 @@
 import type { Client } from '../clients/createClient.js'
 import type { OwnedRecordEncrypted, OwnedRecord } from '../types/records.js'
 import { parseRecord } from '../utils/records.js'
-import type { RecordActionsConfig, RecordInventoryStore } from './types.js'
-import { holdsRecords } from './store.js'
+import type { RecordActionsConfig, RecordManagementConfig, RecordInventoryStore } from './types.js'
+import { holdsRecords, memoryRecordInventoryStore } from './store.js'
+import { validateTokenJoinRouter } from './tokenJoin.js'
+import type { Transport } from '../types/transport.js'
 
 /**
- * Carries the coordination context attached by recordActions.
+ * Carries the enabled coordination context resolved during client construction.
+ * @property enabled Confirms that the caller explicitly opted into coordination.
  * @property chainId Stable chain identity for reservation scopes.
  * @property store Shared atomic journal.
  * @property maxFeeMicrocredits Optional proved fee ceiling; absent means no limit.
@@ -14,24 +17,56 @@ import { holdsRecords } from './store.js'
  * @internal
  */
 export type RecordManagement = Required<Pick<RecordActionsConfig, 'chainId'>> & {
+  enabled: true
   store: RecordInventoryStore
   maxFeeMicrocredits?: bigint
   tokenJoin?: RecordActionsConfig['tokenJoin']
   network: string | null | undefined
 }
 
-/** Reads coordination settings and rejects a transport that switched networks. @internal */
+/**
+ * Resolves opt-in settings before any wallet action captures the base client.
+ * Disabled configuration never allocates a store or validates write restrictions.
+ * @internal
+ */
+export function configureRecordManagement(config: RecordManagementConfig | undefined, transport: Transport): RecordManagementConfig | undefined {
+  if (!config) return undefined
+  // Copy caller-owned options so later mutation cannot switch a live client's scope.
+  const tokenJoin = config.tokenJoin && { ...config.tokenJoin }
+  if (config.enabled !== true) return { ...config, tokenJoin }
+  const chainId = config.chainId ?? transport.config.network
+  if (!chainId) throw new Error('recordManagement requires chainId on a transport without a network')
+  if (config.maxFeeMicrocredits !== undefined && config.maxFeeMicrocredits < 0n) throw new Error('Fee limit cannot be negative')
+  if (tokenJoin) validateTokenJoinRouter(tokenJoin)
+  const resolved: RecordManagement = {
+    ...config, enabled: true, chainId, tokenJoin,
+    store: config.store ?? memoryRecordInventoryStore(), network: transport.config.network,
+  }
+  return resolved
+}
+
+/** Reads only explicitly enabled coordination and rejects a changed transport network. @internal */
 export function management(client: Client): RecordManagement | undefined {
-  const config = (client as Client & { recordManagement?: RecordManagement }).recordManagement
-  if (config && config.network !== client.transport.config.network) {
-    throw new Error('Record management network changed; rebuild recordActions for the new chain')
+  const config = client.recordManagement as RecordManagement | undefined
+  if (config?.enabled !== true) return undefined
+  if (config.network !== client.transport.config.network) {
+    throw new Error('Record management network changed; rebuild the client for the new chain')
   }
   return config
 }
 
+/** Reads routing settings independently of whether spending coordination is enabled. @internal */
+export function recordSettings(client: Client): Pick<RecordActionsConfig, 'chainId' | 'tokenJoin'> {
+  // Constructor settings take precedence over compatibility-decorator options.
+  // A decorator must never redirect the journal namespace of managed writes.
+  const settings = client.recordManagement ?? (client as Client & { recordActionConfig?: RecordActionsConfig }).recordActionConfig ?? {}
+  if (settings.tokenJoin) validateTokenJoinRouter(settings.tokenJoin)
+  return settings
+}
+
 /** Derives the reservation namespace from the active chain and account address. @internal */
 export function scopeOf(client: Client): string {
-  const chain = management(client)?.chainId ?? client.transport.config.network
+  const chain = management(client)?.chainId ?? recordSettings(client).chainId ?? client.transport.config.network
   if (!chain || !client.account?.address) throw new Error('Inventory requires an account address and chain identity')
   return JSON.stringify([chain, client.account.address])
 }
@@ -53,7 +88,7 @@ export function inventoryRecordId(record: OwnedRecordEncrypted): string {
 
 /**
  * Lists nonces held by pending or confirmed operations, including stale scanner inputs.
- * @param client Client extended with recordActions; returns an empty set otherwise.
+ * @param client Client with enabled recordManagement; returns an empty set when disabled or omitted.
  * @returns Nonces excluded from selection. Reads the configured journal.
  * @example
  * const excluded = await reservedRecordIds(client)
@@ -61,6 +96,7 @@ export function inventoryRecordId(record: OwnedRecordEncrypted): string {
 export async function reservedRecordIds(client: Client): Promise<Set<string>> {
   const config = management(client)
   if (!config) return new Set()
+  // Confirmed inputs remain excluded while a scanner still returns stale records.
   return new Set((await config.store.list(scopeOf(client))).filter(holdsRecords).flatMap((entry) => entry.records))
 }
 

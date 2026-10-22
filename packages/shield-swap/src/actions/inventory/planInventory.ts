@@ -15,7 +15,7 @@ export type PlanInventoryParameters = { token: string; target: InventoryTarget; 
 /**
  * Plans inventory for a DEX token's underlying asset, using core record tooling.
  * Resolves metadata and validates the deployed token interface; never signs.
- * @param client Account client, optionally extended with recordActions.
+ * @param client Account client; enabled record management excludes shared reservations.
  * @param params Token, target, API and optional operation limit.
  * @returns A core inventory plan for the underlying program, not the AMM wrapper.
  * @throws When token metadata or its supported underlying program cannot be resolved.
