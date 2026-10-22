@@ -14,6 +14,10 @@
     "./session": {
       "types": "./dist/session.d.ts",
       "import": "./dist/session.js"
+    },
+    "./storage": {
+      "types": "./dist/storage.d.ts",
+      "import": "./dist/storage.js"
     }
   },
   "bin": {
@@ -22,7 +26,8 @@
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:package": "pnpm build && node --test test/package-smoke.mjs"
   },
   "files": [
     "dist"
@@ -51,8 +56,5 @@
   ],
   "bugs": {
     "url": "https://github.com/ProvableHQ/veil/issues"
-  },
-  "optionalDependencies": {
-    "@provablehq/veil-cli": "workspace:^"
   }
 }

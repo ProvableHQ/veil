@@ -25,3 +25,9 @@ follow the runbook's execution and persistence requirements.
 See the [CLI reference and examples](https://github.com/ProvableHQ/veil/blob/main/packages/shield-swap-cli/README.md)
 for commands and configuration. For an application that embeds trading,
 use the [Shield Swap SDK](./shield-swap) instead.
+
+## Record inventory
+
+Use `shield-swap inventory` to inspect, plan, rebalance, and maintain spendable
+records. It uses the configured account and requires Node 22.13+. See the
+[inventory commands](./cli.md) for configuration, shared reservations, and recovery.

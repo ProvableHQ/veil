@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { parseInventoryConfig } from '../src/config.js'
-import { runInventoryCycle } from '../src/runner.js'
+import { parseInventoryConfig } from '../src/inventory/config.js'
+import { runInventoryCycle } from '../src/inventory/runner.js'
 import { memoryRecordInventoryStore, getRecordInventory, planRecordInventory, rebalanceRecordInventory, reconcileRecordInventory } from '@provablehq/veil-core'
 vi.mock('@provablehq/veil-core', async (load) => ({ ...await load<object>(),
   getRecordInventory: vi.fn(), planRecordInventory: vi.fn(), rebalanceRecordInventory: vi.fn(), reconcileRecordInventory: vi.fn() }))

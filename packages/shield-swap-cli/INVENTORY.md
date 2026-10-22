@@ -1,27 +1,38 @@
-# @provablehq/veil-cli
+# Record inventory management
 
-Run scanner-backed record inventory management for native `credits.aleo`, ARC20,
-ARC22, and compatible custom records. Requires Node **22.13+** for built-in SQLite. SDK consumers do
-not install this application or SQLite.
+`shield-swap inventory` manages spendable records for native `credits.aleo`,
+ARC20, ARC22, and compatible custom assets. It reads records from the scanner,
+plans joins and splits, and keeps a journal for recovery after interruptions.
+Requires Node **22.13+** for built-in SQLite. SDK packages retain their existing
+runtime requirements.
 
 ## Start
 
-Install `@provablehq/veil-cli`, then supply the signing key through
-`ALEO_PRIVATE_KEY` using the environment or a service manager's secret facility.
-Amounts are integer token base units; credits use microcredits.
+Install `@provablehq/shield-swap-cli`. Inventory commands use the account saved
+by `shield-swap setup` for the selected network. To select another account, set
+`ALEO_PRIVATE_KEY` through the environment or a service manager's secret facility;
+`privateKeyEnv` changes the variable name. Inventory does not require DEX
+authentication. Amounts are integer token base units; credits use microcredits.
 
 ```sh
-veil inventory inspect --asset credits.aleo
-veil inventory plan --asset credits.aleo --records 4
-veil inventory rebalance --asset credits.aleo --records 4 --execute
-veil inventory run --config inventory.json --execute
-veil inventory status --config inventory.json
+shield-swap inventory inspect --asset credits.aleo
+shield-swap inventory plan --asset credits.aleo --records 4
+shield-swap inventory rebalance --asset credits.aleo --records 4 --execute
+shield-swap inventory run --config inventory.json --execute
+shield-swap inventory status --config inventory.json
 ```
 
 `plan` never signs. `rebalance` and `run` also only print a plan unless
 `--execute` is supplied. `run --execute` stays in the foreground; run it under
 systemd, launchd, or another process supervisor for background operation.
-Within this repository, use `pnpm veil inventory ...`.
+Within this repository, use `pnpm shield-swap inventory ...`. Add `-s` to pnpm
+when parsing JSON: `pnpm -s shield-swap inventory status --json`.
+
+`inspect`, `plan`, `rebalance`, and `status` accept `--json` and return one
+object with the network, account address, and results. For `run --execute`,
+`--json` prints one summary when the process receives SIGINT or SIGTERM; it
+includes the cycle count and the last cycle's results. Without `--json`, the
+loop prints actionable results as they occur.
 
 ## Policy configuration
 
@@ -48,7 +59,10 @@ Within this repository, use `pnpm veil inventory ...`.
 
 These settings show the defaults for application limits. The default network is
 testnet, the default gateway is `https://edge.provable.com/api/v2`, and the default
-journal is `.veil/inventory.sqlite`, relative to the working directory. Set
+journal is `.veil/inventory.sqlite`, relative to the working directory.
+`--network` overrides the config file, then `SHIELD_SWAP_NETWORK`, then testnet.
+`--database` overrides `VEIL_INVENTORY_DB`, which overrides the config file.
+Account files follow `SHIELD_SWAP_STATE_DIR`, as with trading commands. Set
 `networkUrl` for another node and `chainId` for a distinct chain; participants
 MUST use the same identity (default `aleo:testnet` or `aleo:mainnet`). Do not
 reuse the default identity across independent local chains.
@@ -82,7 +96,7 @@ credits to `credits.microcredits`. Custom records use `amount`, then
 `microcredits`, unless a field is supplied. For a custom record:
 
 ```sh
-veil inventory plan --asset points.aleo --record-name Balance --amount-field points --records 4
+shield-swap inventory plan --asset points.aleo --record-name Balance --amount-field points --records 4
 ```
 
 The same names work in JSON: `"asset": { "program": "points.aleo",
@@ -122,7 +136,7 @@ open the same file and enable record coordination when creating the client:
 
 ```ts
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
-import { sqliteRecordInventoryStore } from '@provablehq/veil-cli/storage'
+import { sqliteRecordInventoryStore } from '@provablehq/shield-swap-cli/storage'
 
 const store = await sqliteRecordInventoryStore('.veil/inventory.sqlite')
 const aleo = await loadNetwork('testnet')
@@ -136,9 +150,10 @@ const { walletClient } = aleo.createAleoClient({
 // Close the store when the application shuts down.
 ```
 
-For the Shield Swap CLI, set `VEIL_INVENTORY_DB` to this database path and
-select the same network. This option requires Node 22.13+. Record management is
-off by default, including on clients extended with `recordActions()`.
+For trading commands in the same CLI, set `VEIL_INVENTORY_DB` to this database
+path and select the same network. This option requires Node 22.13+. Inventory
+commands enable coordination for their own client. Trading commands and SDK
+clients leave it off by default, including clients extended with `recordActions()`.
 
 Applications can implement `RecordInventoryStore` with their own storage
 without depending on this package. Reservations cover only clients that use the

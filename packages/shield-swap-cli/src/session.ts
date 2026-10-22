@@ -245,7 +245,7 @@ export async function loadSession(options: { network?: string } = {}) {
   // Open the shared journal only when the caller explicitly selects a database.
   const inventoryPath = process.env.VEIL_INVENTORY_DB
   const inventoryStore = inventoryPath
-    ? await (await import('@provablehq/veil-cli/storage')).sqliteRecordInventoryStore(inventoryPath)
+    ? await (await import('./storage.js')).sqliteRecordInventoryStore(inventoryPath)
     : undefined
   // No prover or scanner URL: both default to the Provable gateway and take the
   // network from the client, so naming them here would only risk drift.

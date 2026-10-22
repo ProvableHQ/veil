@@ -13,8 +13,7 @@
       "@provablehq/shield-swap-sdk",
       "@provablehq/shield-swap-cli",
       "@provablehq/veil-codegen",
-      "@provablehq/aleo-bridge-sdk",
-      "@provablehq/veil-cli"
+      "@provablehq/aleo-bridge-sdk"
     ]
   ],
   "linked": [],

@@ -3,10 +3,9 @@
 "@provablehq/veil-aleo-sdk": minor
 "@provablehq/shield-swap-sdk": minor
 "@provablehq/shield-swap-cli": minor
-"@provablehq/veil-cli": minor
 ---
 
-Add scanner-backed ARC20, ARC22, and native credits inventory actions, shared record reservations, and Shield Swap inventory wrappers. Add the separate Veil inventory CLI with bounded maintenance policies and a CLI-only SQLite recovery journal. SDK packages retain their existing runtime requirements.
+Add scanner-backed ARC20, ARC22, and native credits inventory actions, shared record reservations, and Shield Swap inventory wrappers. Add shield-swap inventory commands with bounded maintenance policies and a CLI-only SQLite recovery journal exported from @provablehq/shield-swap-cli/storage. SDK packages retain their existing runtime requirements.
 
 Allow inventory assets to specify only a program, with optional record-name and amount-field overrides. Resolve amount before microcredits for custom records and use the deployed unsigned integer width.
 

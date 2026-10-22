@@ -175,7 +175,8 @@ catch up before planning inventory changes. `syncTimeoutMs` defaults to
 300000 milliseconds; `waitForSync` defaults to false. Local and delegated
 execution both await the `transaction-prepared` callback before submission,
 so an application can save the proved transaction for recovery. The application
-supplies storage; SQLite is available only through the separate Veil CLI. See
+supplies storage; SQLite is available through
+`@provablehq/shield-swap-cli/storage` (Node 22.13+). See
 the [inventory guide](../../site/docs/guides/record-inventory.md).
 
 Dynamic ARC join helpers supply the underlying token as a dynamic import;

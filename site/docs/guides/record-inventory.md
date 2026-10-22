@@ -48,7 +48,7 @@ An enabled client uses an in-memory store unless the caller supplies one.
 Disabled clients create no store. To recover unfinished operations after a
 restart, long-running services MUST supply a durable `RecordInventoryStore`
 through `recordManagement.store`. SQLite storage is available only from the
-separate `@provablehq/veil-cli/storage` application package.
+`@provablehq/shield-swap-cli/storage` entry point (Node 22.13+).
 
 | Action | Behavior |
 | --- | --- |
@@ -211,7 +211,7 @@ Private fee selection is rejected on managed writes because its inputs are
 selected outside this reservation mechanism. Use public fees or FeeMaster.
 
 For a supervised background process with policies, cooldowns, budgets, and a
-restart journal, use the [inventory CLI](../packages/cli.md).
+restart journal, use the [Shield Swap inventory commands](../packages/cli.md).
 
 ## Migrate a recordActions configuration
 
