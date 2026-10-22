@@ -273,3 +273,33 @@ Run suites sequentially for a given account and retain both stores after a
 failure. The next run reconciles the journal and refuses to proceed while an
 operation remains unresolved. If a process was terminated, verify it has stopped
 before removing its `run.lock` file.
+
+
+### Exercise inventory during repeated swaps
+
+The strategy suite starts with six balanced records per token and makes three
+USDCx-to-ETH-to-USDCx round trips through a live Shield Swap pool. Each forward
+swap spends `0.1` USDCx by default. The return swap spends the entire claimed ETH
+record, preserving the six existing ETH records. Every leg is claimed before
+the next swap begins.
+
+After each round, the suite restores the USDCx target with a batch join followed
+by splits. It checks record counts, minimum amounts, exact balance changes, and
+confirmed reservations. The final check reopens the journal and verifies that
+no input record was consumed by two confirmed transactions.
+
+Run this after the lifecycle suite, using the same account and stores:
+
+```sh
+VEIL_INVENTORY_E2E=1 \
+VEIL_E2E_STATE_FILE=/absolute/path/to/testnet/state.json \
+VEIL_BLINDED_STORE=/absolute/path/to/testnet/blinded.json \
+pnpm vitest run packages/shield-swap/test/integration/recordInventoryStrategy.e2e.test.ts --bail=1
+```
+
+`VEIL_INVENTORY_ROUNDS` sets the number of round trips (default 3, range 1 to 5).
+`VEIL_INVENTORY_SWAP_USDCX` sets the amount spent on each forward swap in USDCx
+units (default `0.1`). Each source record must remain above its configured
+minimum after that spend. These swaps pay the pool's trading fees; the return
+amount can differ from the forward amount. The tests use the confirmed claim
+amount for accounting and stop subsequent writes if a check fails.
