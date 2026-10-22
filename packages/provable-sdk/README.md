@@ -163,18 +163,20 @@ resolves and caches witnesses automatically for local and delegated proving.
 
 ## Inventory scanning and proving
 
-Wallet clients already expose inventory methods. Pass
+Wallet clients include inventory methods. Pass
 `recordManagement: { enabled: true, store, chainId: 'aleo:testnet' }` to
-`createAleoClient` to opt into shared reservations and recovery. The same option
-is accepted by `createDevnodeClient`; a local chain should use a distinct
-`chainId`. Omission or `enabled: false` leaves ordinary writes unchanged.
-Use `createRemoteScanner({ waitForSync: true })` for inventory maintenance. Synchronization polling uses the existing SDK scanner;
-`syncTimeoutMs` defaults to 300000 milliseconds and `waitForSync` defaults to false
-for existing consumers. Both local and delegated execution honor an awaited
-`transaction-prepared` callback before submission, allowing an application to
-checkpoint a proved transaction. Storage is supplied by the application; SQLite
-belongs only to the separate Veil CLI. See the
-[inventory guide](../../site/docs/guides/record-inventory.md).
+`createAleoClient` to reserve records during writes and track unfinished
+transactions. `createDevnodeClient` accepts the same option; use a distinct
+`chainId` for each local chain. Omission or `enabled: false` leaves ordinary
+writes unchanged.
+
+Use `createRemoteScanner({ waitForSync: true })` to wait for the scanner to
+catch up before planning inventory changes. `syncTimeoutMs` defaults to
+300000 milliseconds; `waitForSync` defaults to false. Local and delegated
+execution both await the `transaction-prepared` callback before submission,
+so an application can save the proved transaction for recovery. The application
+supplies storage; SQLite is available only through the separate Veil CLI. See
+the [inventory guide](../../site/docs/guides/record-inventory.md).
 
 Configured token join routers supply the underlying token as a dynamic import;
 the proving adapter includes that program and its transitive static imports for

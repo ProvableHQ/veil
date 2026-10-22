@@ -70,8 +70,8 @@ export async function writeContract(
   params: WriteContractParameters,
 ): Promise<WriteContractReturnType> {
   if (management(client)) {
-    // Copy the inputs before asynchronous reservation checks, then run the usual
-    // execution path with journaling callbacks and without acquiring twice.
+    // Copy the input list and its request objects before awaiting reservations.
+    // The inner call journals progress without reserving the inputs again.
     const snapshot = { ...params, inputs: params.inputs.map((input) => typeof input === 'string' ? input : { ...input }) }
     return manageRecordSpend(client, snapshot, (onProgress) =>
       writeContract(withoutManagement(client), { ...snapshot, onProgress }))

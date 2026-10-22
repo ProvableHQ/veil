@@ -133,10 +133,10 @@ export type RecordInventoryStore = {
  * Configures record action routing without enabling spending coordination.
  * @property chainId Optional chain identity for plans. Defaults to the transport network.
  * @property tokenJoin Optional dynamic router for ARC20/ARC22 joins. Defaults to native pairwise joins.
- * @property store Legacy option accepted for compatibility but unused by recordActions.
- *   Configure recordManagement with enabled: true on the client to share a journal.
- * @property maxFeeMicrocredits Legacy option accepted for compatibility but unused by recordActions.
- *   Configure recordManagement with enabled: true on the client to enforce a fee ceiling.
+ * @property store Accepted but ignored by recordActions. Set recordManagement.store
+ *   with enabled: true on the client to share a journal.
+ * @property maxFeeMicrocredits Accepted but ignored by recordActions. Set
+ *   recordManagement.maxFeeMicrocredits with enabled: true on the client to limit fees.
  */
 export type RecordActionsConfig = {
   store?: RecordInventoryStore
@@ -146,16 +146,19 @@ export type RecordActionsConfig = {
 }
 
 /**
- * Enables shared record reservations and transaction recovery on a client.
- * Management is off unless enabled is true; merely exposing record actions does
- * not allocate a journal or change ordinary writes. Disabled settings may still
- * supply a chain identity and token router for explicit record actions.
- * @property enabled Explicit opt-in for reservation and recovery. Defaults to false when omitted from client configuration.
- * @property store Shared atomic journal. Defaults to one in-memory store per enabled client; unused when disabled.
+ * Configures shared record reservations and transaction recovery on a client.
+ * Set enabled to true to prevent participating clients from spending the same
+ * record and to track unfinished transactions. Disabled settings can still
+ * supply a chain identity and token router for calls to record actions.
+ * Adding record methods alone creates no journal and leaves writes unchanged.
+ * @property enabled Enables reservations and recovery. Omitting recordManagement
+ *   from the client configuration leaves both disabled.
+ * @property store Journal shared by participating clients. Defaults to one
+ *   in-memory store per enabled client; unused when disabled.
  * @property chainId Stable chain identity shared by participants. Defaults to the transport network;
  *   custom/local chains MUST supply a distinct identity.
- * @property maxFeeMicrocredits Maximum proved transaction fee in microcredits (u64), before broadcast.
- *   Optional, with no limit by default; ignored when disabled.
+ * @property maxFeeMicrocredits Maximum fee in microcredits (u64), checked on the
+ *   proved transaction before broadcast. Defaults to no limit; ignored when disabled.
  * @property tokenJoin Optional ARC20/ARC22 join router. Defaults to native pairwise joins; credits are unaffected.
  * @example
  * const recordManagement: RecordManagementConfig = {

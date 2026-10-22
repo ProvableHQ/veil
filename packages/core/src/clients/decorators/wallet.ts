@@ -69,7 +69,7 @@ export type WalletActions = ReturnType<typeof recordActionMethods> & {
  */
 export function walletActions(client: Client): WalletActions {
   return {
-    // Record methods are always available; reservations require constructor opt-in.
+    // Include record methods on every wallet; client configuration controls reservations.
     ...recordActionMethods(client),
     sendTransaction: (params) => sendTransaction(client, params),
     writeContract: (params) => writeContract(client, params),

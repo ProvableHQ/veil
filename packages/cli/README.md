@@ -105,9 +105,9 @@ Keep the journal across restarts and **do not delete it to clear a pending spend
 Recovery after indefinite dropped/rejected-without-chain-evidence transactions
 requires operator reconciliation; no force-unlock command is included.
 
-Only one manager can run for an account/chain against a shared journal. Pending
-trading operations take priority over maintenance. Participating trading clients
-must open the same file and explicitly enable coordination at client construction:
+Only one manager can run for an account and chain using the same journal.
+Pending trading operations take priority over maintenance. Trading clients MUST
+open the same file and enable record coordination when creating the client:
 
 ```ts
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
@@ -126,14 +126,15 @@ const { walletClient } = aleo.createAleoClient({
 // Close the store when the application shuts down.
 ```
 
-For the Shield Swap CLI, set `VEIL_INVENTORY_DB` to this same database path and
-select the same network. That opt-in integration also requires Node 22.13+.
-Record management is otherwise off, including on clients extended with
-`recordActions()`. Other SDK applications can implement `RecordInventoryStore` using their own
-storage without depending on this package. Unmanaged wallets, raw transaction
-submission, and other database files cannot participate in these reservations.
-Managed writes use public fees or FeeMaster; private fee-record selection is
-not coordinated and is rejected.
+For the Shield Swap CLI, set `VEIL_INVENTORY_DB` to this database path and
+select the same network. This option requires Node 22.13+. Record management is
+off by default, including on clients extended with `recordActions()`.
+
+Applications can implement `RecordInventoryStore` with their own storage
+without depending on this package. Reservations cover only clients that use the
+same journal; unmanaged wallets and raw submissions bypass them. Managed writes
+require public fees or FeeMaster because private fee selection can spend records
+outside the shared reservations.
 
 SIGINT/SIGTERM stops new work after the current operation returns. Proving or
 an in-flight request may delay shutdown; durable checkpoints survive forced

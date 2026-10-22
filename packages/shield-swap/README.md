@@ -1351,16 +1351,20 @@ for deployments that accept them. Omission now checks the actual current list.
 ## Record inventory
 
 Configure `recordManagement.tokenJoin` with
-`{ program: 'main_aj_arc20_2_15.aleo' }` at client construction to batch
-underlying ARC20/ARC22 joins on mainnet. Use
-`test_aj_arc20_2_15.aleo` on testnet. The DEX inventory wrappers preserve this
-configuration, target counts, shared reservations, and exact-output recovery.
+`{ program: 'main_aj_arc20_2_15.aleo' }` when creating the client to join several
+underlying ARC20/ARC22 records in one transaction on mainnet. Use
+`test_aj_arc20_2_15.aleo` on testnet. The inventory wrappers use this router and
+the requested record count. When reservations and recovery are enabled, they
+also reserve inputs and match confirmed outputs before continuing a plan.
 
 Reservations and recovery are off by default. Set
-`recordManagement: { enabled: true, store, chainId }` when constructing the
-wallet client, then apply `shieldSwapActions` to coordinate maintenance with
-trading. Adding `recordActions()` alone never enables coordination. `planInventory({ token, target })` and
-`rebalanceInventory({ token, target })` resolve the DEX token's underlying program
-and delegate to core's ARC20/ARC22/credits helpers. Participating clients must
-share the same store and chain identity. No database dependency is added to the
-SDK. See the [inventory guide](../../site/docs/guides/record-inventory.md).
+`recordManagement: { enabled: true, store, chainId }` when creating the wallet
+client, then apply `shieldSwapActions` to prevent maintenance and trading from
+spending the same records. Adding `recordActions()` alone leaves these features
+disabled. `planInventory({ token, target })` and
+`rebalanceInventory({ token, target })` use the DEX token's underlying program
+with core's ARC20/ARC22/credits actions. Participating clients MUST share the
+same store and chain identity. The SDK has no database dependency.
+
+Follow the [record inventory guide](../../site/docs/guides/record-inventory.md)
+for configuration, shared storage, and recovery after an interruption.

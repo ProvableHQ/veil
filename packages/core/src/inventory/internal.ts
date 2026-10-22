@@ -7,8 +7,8 @@ import { validateTokenJoinRouter } from './tokenJoin.js'
 import type { Transport } from '../types/transport.js'
 
 /**
- * Carries the enabled coordination context resolved during client construction.
- * @property enabled Confirms that the caller explicitly opted into coordination.
+ * Holds the enabled client's journal, limits, and chain settings.
+ * @property enabled Records that the caller enabled reservations and recovery.
  * @property chainId Stable chain identity for reservation scopes.
  * @property store Shared atomic journal.
  * @property maxFeeMicrocredits Optional proved fee ceiling; absent means no limit.
@@ -25,8 +25,8 @@ export type RecordManagement = Required<Pick<RecordActionsConfig, 'chainId'>> & 
 }
 
 /**
- * Resolves opt-in settings before any wallet action captures the base client.
- * Disabled configuration never allocates a store or validates write restrictions.
+ * Resolves record settings before wallet actions capture the client.
+ * Disabled configuration creates no store and skips validation of write restrictions.
  * @internal
  */
 export function configureRecordManagement(config: RecordManagementConfig | undefined, transport: Transport): RecordManagementConfig | undefined {
@@ -57,8 +57,8 @@ export function management(client: Client): RecordManagement | undefined {
 
 /** Reads routing settings independently of whether spending coordination is enabled. @internal */
 export function recordSettings(client: Client): Pick<RecordActionsConfig, 'chainId' | 'tokenJoin'> {
-  // Constructor settings take precedence over compatibility-decorator options.
-  // A decorator must never redirect the journal namespace of managed writes.
+  // Client settings take precedence over recordActions options so a decorator
+  // cannot change the chain used to look up reservations.
   const settings = client.recordManagement ?? (client as Client & { recordActionConfig?: RecordActionsConfig }).recordActionConfig ?? {}
   if (settings.tokenJoin) validateTokenJoinRouter(settings.tokenJoin)
   return settings

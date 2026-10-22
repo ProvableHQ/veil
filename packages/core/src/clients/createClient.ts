@@ -14,7 +14,8 @@ import { uid as createUid } from '../utils/uid.js'
  * @property name Optional human-readable name for the client. Defaults to `"Client"`.
  * @property proving Optional proving configuration selecting where zero-knowledge
  *   proofs are generated (wallet, local, or devnode). Omit for read-only clients.
- * @property recordManagement Optional record coordination; omitted or enabled: false leaves writes unchanged.
+ * @property recordManagement Optional record reservations and recovery. Defaults to disabled;
+ *   omission or enabled: false leaves writes unchanged.
  * @property transport Transport that carries requests to the network.
  */
 export type ClientConfig = {
@@ -38,7 +39,7 @@ export type ClientConfig = {
  * @property name Human-readable name for the client.
  * @property proving Proving configuration, or `undefined` when the client cannot
  *   produce transactions.
- * @property recordManagement Explicit record coordination configuration, or undefined when omitted.
+ * @property recordManagement Record reservation and recovery settings, or undefined when omitted.
  * @property request Transport request function, called to reach the network.
  * @property transport The transport backing `request`.
  * @property uid Unique identifier for this client instance.
@@ -140,7 +141,7 @@ export function createClient(config: ClientConfig): Client {
     key,
     name,
     proving,
-    // Bind normalized opt-in before decorators capture the base client.
+    // Resolve record settings before action closures capture the client.
     recordManagement: configureRecordManagement(recordManagement, transport),
     request: transport.request,
     transport,

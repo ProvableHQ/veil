@@ -51,8 +51,8 @@ export async function runInventoryCycle(client: Client, config: InventoryConfig,
     }
     try {
       const inventory = await getRecordInventory(client, { asset: policy.asset })
-      // A count range deliberately tolerates inventory drift; preserve usable
-      // records instead of repeatedly reshaping them to the exact target.
+      // Skip maintenance while the count is within the configured range and
+      // every record meets the minimum amount.
       const [min, max] = policy.countRange ?? [policy.target.records, policy.target.records]
       if (policy.countRange && inventory.available.length >= min && inventory.available.length <= max &&
         inventory.available.every((record) => record.amount >= (policy.target.minRecordAmount ?? 1n))) {

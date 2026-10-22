@@ -252,7 +252,7 @@ export async function loadSession(options: { network?: string } = {}) {
   const { walletClient, account } = aleo.createAleoClient({
     privateKey: state.privateKey,
     networkUrl: NETWORK_URL,
-    // Constructor opt-in reaches both ordinary writes and Shield Swap actions.
+    // Apply the shared reservations to wallet writes and Shield Swap actions.
     recordManagement: inventoryStore ? {
       enabled: true, store: inventoryStore, chainId: `aleo:${network}`,
       tokenJoin: { program: network === 'mainnet' ? 'main_aj_arc20_2_15.aleo' : 'test_aj_arc20_2_15.aleo' },

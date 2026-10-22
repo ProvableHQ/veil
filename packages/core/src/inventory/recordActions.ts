@@ -10,8 +10,8 @@ import { autoJoin, type AutoJoinParameters } from '../actions/records/autoJoin.j
 import { validateTokenJoinRouter } from './tokenJoin.js'
 
 /**
- * Binds account-dependent record methods without changing spending configuration.
- * Shared by walletActions and the optional compatibility decorator.
+ * Binds record methods to an account client without changing its spending settings.
+ * Used by walletActions and recordActions.
  * @internal
  */
 export function recordActionMethods(client: Client) {
@@ -27,19 +27,22 @@ export function recordActionMethods(client: Client) {
 }
 
 /**
- * Adds record methods to a custom client without enabling reservation or recovery.
- * Wallet clients already expose these methods. Configure recordManagement with
- * enabled: true at client construction to coordinate ordinary writes and execute
- * inventory plans. Legacy store and maxFeeMicrocredits options here are unused.
- * @param config Optional chain identity and token join router for record actions.
- *   Omission uses the transport network and native joins. Constructor settings take precedence.
- * @returns An extend decorator; construction performs no network calls and allocates no journal.
+ * Adds inventory methods to a custom client.
+ * Wallet clients already include these methods. This decorator leaves reservations
+ * and recovery disabled unless the client was created with recordManagement
+ * enabled: true. Its store and maxFeeMicrocredits options are ignored; supply
+ * them in the client's recordManagement configuration to reserve records during
+ * writes and execute inventory plans.
+ * @param config Optional chain identity and token join router. Defaults to the
+ *   transport network and native joins. The client's recordManagement settings
+ *   take precedence when present.
+ * @returns A decorator for client.extend(). Creates no journal and makes no network requests.
  * @throws When the optional token join router is invalid.
  * @example
  * const client = walletClient.extend(recordActions({ tokenJoin: { program: 'test_aj_arc20_2_15.aleo' } }))
  */
 export function recordActions(config: RecordActionsConfig = {}) {
-  // Keep only action-routing options: exposing methods must never opt into writes.
+  // Keep chain and router settings here; the client configuration controls reservations.
   const recordActionConfig = { chainId: config.chainId, tokenJoin: config.tokenJoin && { ...config.tokenJoin } }
   if (recordActionConfig.tokenJoin) validateTokenJoinRouter(recordActionConfig.tokenJoin)
   return (client: Client) => {

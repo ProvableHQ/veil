@@ -10,7 +10,7 @@ import { walletActions, type WalletActions } from './decorators/wallet.js'
  * Configures an RPC wallet that handles proving and records.
  * @property account Connected wallet account.
  * @property transport Transport used for wallet requests and chain reads.
- * @property recordManagement Optional record coordination. Defaults to disabled.
+ * @property recordManagement Optional shared record reservations and recovery. Defaults to disabled.
  * @property key Optional client identifier. Defaults to wallet.
  * @property name Optional display name. Defaults to Wallet Client.
  */
@@ -29,7 +29,7 @@ export type RpcWalletClientConfig = {
  * @property transport Transport used for chain reads and submission.
  * @property proving Prover configuration; use mode: devnode for a local node.
  * @property recordProvider Optional record source, required for requestRecords.
- * @property recordManagement Optional record coordination. Defaults to disabled.
+ * @property recordManagement Optional shared record reservations and recovery. Defaults to disabled.
  * @property key Optional client identifier. Defaults to wallet.
  * @property name Optional display name. Defaults to Wallet Client.
  */

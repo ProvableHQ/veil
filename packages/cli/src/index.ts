@@ -44,8 +44,8 @@ async function main(): Promise<void> {
   if (!privateKey) throw new Error(`Set ${config.privateKeyEnv} to the signing account private key`)
   const aleo = await loadNetwork(config.network)
   const store = await sqliteRecordInventoryStore(config.database)
-  // This maintenance application explicitly enables its shared journal. Merely
-  // exposing record methods never opts other SDK clients into coordinated writes.
+  // Enable the shared journal so maintenance and participating trading clients
+  // cannot reserve the same records. Execution still requires --execute.
   const { walletClient: client, account } = aleo.createAleoClient({ privateKey, networkUrl: config.networkUrl, useFeeMaster: config.useFeeMaster,
     records: aleo.createRemoteScanner({ waitForSync: true }),
     recordManagement: { enabled: true, store, chainId: config.chainId, maxFeeMicrocredits: config.maxFeeMicrocredits, tokenJoin: config.tokenJoin } })

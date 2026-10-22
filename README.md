@@ -248,11 +248,15 @@ const tools = aleoAgentTools({
 
 ## Record inventory management
 
-Core provides scanner-backed join, split, and inventory-rebalance actions for
-ARC20, ARC22, and native credits. Shield Swap resolves DEX tokens to their
-underlying programs. The separate [`@provablehq/veil-cli`](packages/cli/README.md)
-application supplies background maintenance and a CLI-only SQLite journal.
-Start with the [inventory guide](site/docs/guides/record-inventory.md).
+Core reads records from a scanner and joins or splits them to prepare an
+ARC20, ARC22, or native credits balance for spending. Shield Swap applies these
+operations to each DEX token's underlying program. The separate
+[`@provablehq/veil-cli`](packages/cli/README.md) runs background maintenance and
+stores recovery data in SQLite.
+
+Record reservations and recovery are off by default. Follow the
+[record inventory guide](site/docs/guides/record-inventory.md) to enable them,
+configure storage, and coordinate maintenance with trading.
 
 ## License
 

@@ -250,18 +250,23 @@ const client = createPublicClient({
 
 Wallet clients expose `getRecordInventory`, `joinRecords`, `splitRecord`,
 `autoJoin`, `planRecordInventory`, `rebalanceRecordInventory`, and reconciliation.
-Reservations and recovery are off by default. Reads, plans, and individual joins
-or splits do not require them. To coordinate writes and execute dependent plans,
-pass `recordManagement: { enabled: true, store?, chainId?, maxFeeMicrocredits?, tokenJoin? }`
-to `createWalletClient` or `createClient`. Enabling management creates an in-memory
-store when no store is supplied; disabled clients allocate none. Core has no
-SQLite or Node dependency.
+Reservations keep participating clients from spending the same record;
+recovery tracks unfinished transactions. Both are off by default. Reads, plans,
+and individual joins or splits remain available while they are disabled.
+
+To reserve records during writes and execute plans with dependent steps, pass
+`recordManagement: { enabled: true, store?, chainId?, maxFeeMicrocredits?, tokenJoin? }`
+to `createWalletClient` or `createClient`. An enabled client creates an in-memory
+store if none is supplied. Disabled clients create no store. Core has no SQLite
+or Node dependency.
 
 Configure `tokenJoin: { program: 'main_aj_arc20_2_15.aleo' }` on mainnet (or
-`test_aj_arc20_2_15.aleo` on testnet) to batch 2–15 ARC20/ARC22 records per join.
-Routing also works with `enabled: false`; omitted routing retains native
-pairwise joins, and credits are unaffected. `recordActions()` remains an optional
-method decorator for custom clients and never enables coordination. Move legacy
-`recordActions({ store, maxFeeMicrocredits })` settings into explicitly enabled
-client configuration to retain reservation and fee-limit behavior. See the
-[record inventory guide](../../site/docs/guides/record-inventory.md).
+`test_aj_arc20_2_15.aleo` on testnet) to join 2 to 15 ARC20/ARC22 records in one
+transaction. Routing also works with `enabled: false`. Without a router, token
+joins combine two records at a time. Credits always use native joins.
+
+`recordActions()` adds these methods to custom clients without enabling
+reservations or recovery. Move `recordActions({ store, maxFeeMicrocredits })`
+settings into the enabled client configuration to reserve records and enforce
+fee limits. The [record inventory guide](../../site/docs/guides/record-inventory.md)
+covers configuration, shared storage, and recovery after an interruption.

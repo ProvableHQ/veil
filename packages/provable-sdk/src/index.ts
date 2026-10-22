@@ -411,7 +411,8 @@ export interface AleoSdk {
    *   Pass false when the account funds its own fees. Only meaningful under
    *   delegated proving.
    * @param options.recordManagement Optional shared record reservations and recovery.
-   *   Defaults to disabled; enabled: true opts in before wallet actions are bound.
+   *   Defaults to disabled. Set enabled: true to reserve inputs during writes
+   *   and track unfinished transactions.
    * @param options.records Record provider behind `requestRecords`. Defaults
    *   to `createRemoteScanner()` against the hosted scanner; pass a scanner
    *   built with a custom `url` or any `RecordProvider` to override.
@@ -680,8 +681,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           const programSource = await programManager.networkClient.getProgram(txOptions.programName)
           const staticImports = await programManager.networkClient.getProgramImports(programSource)
           const merged: SdkProgramImports = { ...staticImports }
-          // Dynamic token programs can import other programs themselves; include
-          // those transitive sources so routed joins can be proved completely.
+          // Include the token program's own imports as well as its source;
+          // routed joins need both to produce a proof.
           for (const name of txOptions.imports) {
             const dynamicSource = await programManager.networkClient.getProgram(name)
             Object.assign(merged, await programManager.networkClient.getProgramImports(dynamicSource))
@@ -877,8 +878,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               inputs: execOptions.inputs,
               priorityFee,
               privateFee: execOptions.privateFee ?? false,
-              // An awaited checkpoint requires control of broadcast to stay with
-              // this client until the proved transaction has been saved.
+              // Submit from this client when a progress callback is present,
+              // so it can save the proved transaction before broadcast.
               broadcast: !execOptions.onProgress,
               useFeeMaster: options.useFeeMaster ?? false,
             })
@@ -968,8 +969,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             throw new ProvingError({ message: e instanceof Error ? e.message : String(e), cause: e as Error })
           }
 
-          // Convert the WASM transaction into the serializable value stored by
-          // recovery before the network can observe this execution.
+          // Serialize the proved transaction so the callback can save it for
+          // recovery before it is submitted to the network.
           const prepared = JSON.parse(tx.toString()) as Transaction
           await execOptions.onProgress?.({ type: 'transaction-prepared', transactionId: prepared.id, transaction: prepared })
           let txId: string
@@ -1486,7 +1487,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       transport,
       proving,
       recordProvider: records,
-      // Forward opt-in before wallet methods close over their client.
+      // Pass record settings when creating the client so every wallet action uses them.
       recordManagement: options.recordManagement,
     }).extend(provableApiActions())
 
@@ -1687,8 +1688,8 @@ export function createDevnodeClient(options?: {
         imports: execOptions.programImports,
       })
 
-      // Preserve the same prepare-before-broadcast checkpoint used by hosted
-      // execution so recovery behavior also holds against the local devnode.
+      // Save the proved transaction through the progress callback before
+      // broadcasting to the devnode, as with local and delegated proving.
       const prepared = JSON.parse(tx.toString()) as Transaction
       await execOptions.onProgress?.({ type: 'transaction-prepared', transactionId: prepared.id, transaction: prepared })
 

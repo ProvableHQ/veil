@@ -81,8 +81,8 @@ export async function executeContract(
   params: ExecuteContractParameters,
 ): Promise<ExecuteContractReturnType> {
   if (management(client)) {
-    // Copy the inputs before asynchronous reservation checks, then run the usual
-    // execution path with journaling callbacks and without acquiring twice.
+    // Copy the input list and its request objects before awaiting reservations.
+    // The inner call journals progress without reserving the inputs again.
     const snapshot = { ...params, inputs: params.inputs.map((input) => typeof input === 'string' ? input : { ...input }) }
     return manageRecordSpend(client, snapshot, (onProgress) =>
       executeContract(withoutManagement(client), { ...snapshot, onProgress }))
@@ -124,8 +124,8 @@ export async function executeContract(
     // Local proving resolves no wallet-side inputs — only encoded strings.
     assertNoInputRequests(params.inputs)
 
-    // The prover owns build, broadcast, and confirmation on this path; forward
-    // the awaited callback so it can checkpoint before crossing each boundary.
+    // The prover builds, submits, and confirms this transaction. Forward the
+    // callback so it can save progress before continuing to the next stage.
     if (client.proving?.execute) {
       return client.proving.execute({
         programName: params.program,

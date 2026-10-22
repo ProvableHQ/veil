@@ -15,8 +15,8 @@ export type RebalanceInventoryParameters = PlanInventoryParameters & Omit<Rebala
  * const result = await rebalanceInventory(client, { token: 'ALEO', target: { records: 4 }, api })
  */
 export async function rebalanceInventory(client: Client, params: RebalanceInventoryParameters): Promise<InventoryResult> {
-  // Resolve the DEX token and build its underlying-asset plan before handing
-  // execution, reservations, and dependent-output checks to the core actions.
+  // Plan joins and splits for the DEX token's underlying asset. Core reserves
+  // the inputs and waits for confirmed outputs before executing dependent steps.
   const plan = await planInventory(client, params)
   return rebalanceRecordInventory(client, { ...params, plan })
 }
