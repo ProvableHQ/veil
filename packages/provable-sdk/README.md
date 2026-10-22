@@ -170,6 +170,13 @@ transactions. `createDevnodeClient` accepts the same option; use a distinct
 `chainId` for each local chain. Omission or `enabled: false` leaves ordinary
 writes unchanged.
 
+Managed private fees select a credits record from the configured scanner.
+`writeContract` and `executeContract` accept `privateFee: true` and optional
+`feeRecord` plaintext. A reserved supplied record is replaced with an available
+one that covers the estimated fee; no eligible record means an error. Local,
+delegated, and devnode proving use the selected record. A pinned private fee
+also overrides FeeMaster sponsorship for that call.
+
 Use `createRemoteScanner({ waitForSync: true })` to wait for the scanner to
 catch up before planning inventory changes. `syncTimeoutMs` defaults to
 300000 milliseconds; `waitForSync` defaults to false. Local and delegated

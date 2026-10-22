@@ -76,8 +76,10 @@ export async function sqliteRecordInventoryStore(path: string): Promise<RecordIn
       // requested nonces together or leave the journal unchanged on contention.
       recover(entry.scope)
       if (new Set(entry.records).size !== entry.records.length) throw new Error('Duplicate record inputs')
-      if (read(entry.scope).some((old) => old.status !== 'cancelled' && old.status !== 'rejected' &&
-        old.records.some((id) => entry.records.includes(id)))) return undefined
+      // Rejected executions release their inputs, but their private fee was spent.
+      if (read(entry.scope).some((old) => old.status !== 'cancelled' &&
+        (old.status === 'rejected' ? (old.feeRecordId ? [old.feeRecordId] : []) : old.records)
+          .some((id) => entry.records.includes(id)))) return undefined
       const inserted = db.prepare('INSERT INTO record_spends(scope, data, pid, host) VALUES (?, ?, ?, ?)').run(
         entry.scope, JSON.stringify(entry), process.pid, host)
       const saved = { ...entry, id: String(inserted.lastInsertRowid) }

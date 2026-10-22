@@ -120,7 +120,8 @@ for those exact output commitments to appear in the scanner. An interrupted run
 keeps completed chain operations; the next pass reconciles and plans from fresh
 inventory. It never attempts to undo accepted joins or splits.
 
-A timeout or 404 does not release inputs. Recovery can resubmit the saved
+Rejected executions release their inputs but keep any charged private fee
+record reserved. A timeout or 404 does not release inputs. Recovery can resubmit the saved
 transaction with the same proof and id. Confirmed inputs remain excluded to
 protect against stale scans. A local process that died before saving a proved
 transaction can release its reservation; an uncertain wallet submission cannot.
@@ -157,9 +158,11 @@ clients leave it off by default, including clients extended with `recordActions(
 
 Applications can implement `RecordInventoryStore` with their own storage
 without depending on this package. Reservations cover only clients that use the
-same journal; unmanaged wallets and raw submissions bypass them. Managed writes
-require public fees or FeeMaster because private fee selection can spend records
-outside the shared reservations.
+same journal; unmanaged wallets and raw submissions bypass them. Managed local SDK writes can pay privately: fee selection excludes reserved
+credits and execution inputs, and reserves the selected fee record with the
+transaction. Wallet RPC writes require public fees or FeeMaster until the wallet
+protocol can pin a fee record. The maintenance CLI uses public fees by default
+or FeeMaster when `useFeeMaster` is true.
 
 SIGINT/SIGTERM stops new work after the current operation returns. Proving or
 an in-flight request may delay shutdown; durable checkpoints survive forced

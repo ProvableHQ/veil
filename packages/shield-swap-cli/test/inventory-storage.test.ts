@@ -50,6 +50,18 @@ describe('CLI-only durable inventory store', () => {
       expect(await store.acquire(entry)).toBeUndefined()
     } finally { store.close() }
   })
+  it('retains only the private fee record after rejected execution across restart', async () => {
+    const database = await path()
+    let store = await sqliteRecordInventoryStore(database)
+    const reserved = await store.acquire({ ...entry, records: ['1group', '2group'], feeRecordId: '2group' })
+    await store.update(entry.scope, reserved!.id, { status: 'rejected' })
+    store.close()
+    store = await sqliteRecordInventoryStore(database)
+    try {
+      expect(await store.acquire({ ...entry, records: ['2group'] })).toBeUndefined()
+      expect(await store.acquire(entry)).toBeDefined()
+    } finally { store.close() }
+  })
   it('retains an opaque wallet reservation after its process exits', async () => {
     const database = await path()
     await child(database, `await store.acquire(${JSON.stringify({ ...entry, accountType: 'rpc' })})`)

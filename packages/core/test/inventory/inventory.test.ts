@@ -330,7 +330,7 @@ describe('inventory execution and recovery', () => {
     await expect(w.client.reconcileRecordInventory()).rejects.toThrow('network offline')
     expect((await w.store.list(scope))[0]?.status).toBe('submitted')
   })
-  it('rejects stale inputs, modified plans, cancellation and private fees', async () => {
+  it('rejects stale inputs, modified plans, cancellation and unsupported private-fee adapters', async () => {
     const w = world([1_000_000n])
     const plan = await w.client.planRecordInventory({ asset: credits, target: { records: 2 } })
     const altered = { ...plan, steps: plan.steps.map((step) => ({ ...step, amount: 1n })) }
@@ -339,7 +339,7 @@ describe('inventory execution and recovery', () => {
     expect(cancelled.status).toBe('interrupted')
     w.setRecords([])
     expect((await w.client.rebalanceRecordInventory({ plan })).reason).toContain('changed')
-    await expect(w.client.writeContract({ program: credits.program, function: 'join', inputs: [], privateFee: true })).rejects.toThrow('public fees')
+    await expect(w.client.writeContract({ program: credits.program, function: 'join', inputs: [], privateFee: true })).rejects.toThrow('estimateExecutionFee')
     expect(w.build).not.toHaveBeenCalled()
   })
 })

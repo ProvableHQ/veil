@@ -2,7 +2,7 @@ import type { Client } from '../clients/createClient.js'
 import type { OwnedRecordEncrypted, OwnedRecord } from '../types/records.js'
 import { parseRecord } from '../utils/records.js'
 import type { RecordActionsConfig, RecordManagementConfig, RecordInventoryStore } from './types.js'
-import { holdsRecords, memoryRecordInventoryStore } from './store.js'
+import { heldRecordIds, memoryRecordInventoryStore } from './store.js'
 import { validateTokenJoinRouter } from './tokenJoin.js'
 import type { Transport } from '../types/transport.js'
 
@@ -99,7 +99,7 @@ export async function reservedRecordIds(client: Client): Promise<Set<string>> {
   const config = management(client)
   if (!config) return new Set()
   // Confirmed inputs remain excluded while a scanner still returns stale records.
-  return new Set((await config.store.list(scopeOf(client))).filter(holdsRecords).flatMap((entry) => entry.records))
+  return new Set((await config.store.list(scopeOf(client))).flatMap(heldRecordIds))
 }
 
 /** Enforces positive bounded integers; the default upper bound is 1000. @internal */

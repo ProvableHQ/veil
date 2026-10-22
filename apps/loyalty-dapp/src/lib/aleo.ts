@@ -35,6 +35,8 @@ export function createAleoWalletClient(adapter: AleoWalletAdapter) {
     // Wallet transport handles executions; http handles reads as fallback
     transport: fallback([walletTransport, http(API_URL, { network: 'mainnet' })]),
     // Configure record planning without enabling reservations on wallet writes.
+    // Managed private fees need a pinned fee record, which the current wallet
+    // protocol cannot request. Local SDK signers support that selection.
     recordManagement: { enabled: false, chainId: 'aleo:mainnet' },
   })
 }

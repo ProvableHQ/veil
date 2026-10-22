@@ -239,6 +239,9 @@ describe('E2E: veil against live Aleo mainnet', () => {
 
 // Inventory planning consumes the account's provider and performs no writes.
 // A live application supplies createRemoteScanner({ waitForSync: true }) instead.
+// With management enabled, privateFee: true also reserves a separate credits
+// record. An optional feeRecord is preferred only while it remains available;
+// the client replaces reserved candidates before building the transaction.
 describe('Record inventory consumer example', () => {
   it('plans four credits records while keeping the source record private', async () => {
     const aleo = await loadNetwork('testnet')

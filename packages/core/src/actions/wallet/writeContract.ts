@@ -16,7 +16,9 @@ import type { ProvingProgressHandler } from '../../types/proving.js'
  *   InputRequests require a wallet (RPC) account — the local-proving path rejects them.
  * @property privateFee Pay the fee from a private record instead of the public credits
  *   balance. Defaults to `false`. The fee record is resolved via the wallet client's
- *   record provider; callers do not supply one.
+ *   record provider unless feeRecord is supplied.
+ * @property feeRecord Optional private credits record plaintext; used only with privateFee.
+ *   Managed local writes replace reserved, insufficient, or unavailable records with an eligible one.
  * @property imports Names of programs reached via dynamic dispatch that the prover or
  *   wallet can't discover statically. Static imports in the program's `import` block are
  *   auto-discovered.
@@ -27,6 +29,7 @@ export type WriteContractParameters = {
   function: string
   inputs: TransactionInput[]
   privateFee?: boolean
+  feeRecord?: string
   imports?: string[]
   onProgress?: ProvingProgressHandler | undefined
 }
@@ -73,8 +76,8 @@ export async function writeContract(
     // Copy the input list and its request objects before awaiting reservations.
     // The inner call journals progress without reserving the inputs again.
     const snapshot = { ...params, inputs: params.inputs.map((input) => typeof input === 'string' ? input : { ...input }) }
-    return manageRecordSpend(client, snapshot, (onProgress) =>
-      writeContract(withoutManagement(client), { ...snapshot, onProgress }))
+    return manageRecordSpend(client, snapshot, (onProgress, feeRecord) =>
+      writeContract(withoutManagement(client, feeRecord), { ...snapshot, onProgress }))
   }
   const account = client.account
   if (!account || !('sign' in account)) {
@@ -82,6 +85,7 @@ export async function writeContract(
   }
 
   if (account.type === 'rpc') {
+    if (params.feeRecord) throw new Error('This wallet protocol cannot pin a supplied fee record')
     // RPC account — wallet handles proving, signing, and broadcasting
     const transactionId = await client.request({
       method: 'executeTransaction',
@@ -111,6 +115,7 @@ export async function writeContract(
       functionName: params.function,
       inputs: params.inputs,
       privateFee: params.privateFee,
+      ...(params.feeRecord ? { feeRecord: params.feeRecord } : {}),
       imports: params.imports,
       ...(params.onProgress ? { onProgress: params.onProgress } : {}),
     })

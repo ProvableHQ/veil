@@ -17,6 +17,7 @@ export type {
   ProvingConfig,
   GenerateFreezelistProofParameters,
   BuildTransactionOptions,
+  EstimateExecutionFeeOptions,
   BuildDeploymentOptions,
   SimulateOptions,
   ExecuteOptions,

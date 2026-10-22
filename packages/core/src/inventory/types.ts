@@ -124,7 +124,8 @@ export type RecordSpendStatus = 'reserved' | 'prepared' | 'submitted' | 'confirm
  * Stores an operation's durable checkpoint, without record plaintext or keys.
  * @property id Store-assigned identifier, unique within the store.
  * @property scope Chain/account namespace.
- * @property records Reserved record nonces.
+ * @property records Reserved record nonces, including the private fee record when present.
+ * @property feeRecordId Optional private fee record nonce; remains spent even when execution is rejected.
  * @property program Target transaction program.
  * @property function Transition name.
  * @property assetProgram Underlying token program for a routed join; absent for native operations.
@@ -139,6 +140,7 @@ export type RecordSpend = {
   id: string
   scope: string
   records: string[]
+  feeRecordId?: string
   program: string
   function: string
   assetProgram?: string
@@ -154,6 +156,7 @@ export type RecordSpend = {
  * Coordinates record spending across participating clients.
  * Implementations MUST atomically acquire all inputs or none, and durably finish
  * each mutation before resolving. Confirmed inputs stay excluded from stale scans.
+ * Rejected executions release their inputs except feeRecordId, whose fee was charged.
  * @property list Reads the journal for one chain/account namespace.
  * @property acquire Allocates an id and reserves inputs, or returns undefined on contention.
  * @property update Persists a checkpoint for an existing operation.

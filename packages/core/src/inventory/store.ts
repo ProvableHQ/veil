@@ -18,7 +18,7 @@ export function memoryRecordInventoryStore(): RecordInventoryStore {
       // process cannot reserve an input between the check and the insertion.
       if (new Set(entry.records).size !== entry.records.length) throw new Error('Duplicate record inputs')
       if (entries.some((old) => old.scope === entry.scope && holdsRecords(old) &&
-        old.records.some((id) => entry.records.includes(id)))) return undefined
+        heldRecordIds(old).some((id) => entry.records.includes(id)))) return undefined
       const saved = copy({ ...entry, id: String(entries.length + 1) })
       entries.push(saved)
       return copy(saved)
@@ -37,5 +37,11 @@ export function memoryRecordInventoryStore(): RecordInventoryStore {
 /** Returns whether a journal entry excludes its inputs from record selection. */
 export function holdsRecords(entry: RecordSpend): boolean {
   // Confirmed inputs remain excluded while a scanner still reports them unspent.
-  return entry.status !== 'cancelled' && entry.status !== 'rejected'
+  return entry.status !== 'cancelled' && (entry.status !== 'rejected' || !!entry.feeRecordId)
+}
+
+/** Returns the consumed fee record alone after rejection; other held states retain every input. @internal */
+export function heldRecordIds(entry: RecordSpend): string[] {
+  if (!holdsRecords(entry)) return []
+  return entry.status === 'rejected' ? [entry.feeRecordId!] : entry.records
 }

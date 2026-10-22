@@ -33,7 +33,7 @@ import {
 import { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR } from '@provablehq/veil-aleo-devnode'
 export { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR }
 import type { LocalAccount } from '@provablehq/veil-core'
-import type { RecordManagementConfig, ProvingConfig, GenerateFreezelistProofParameters, BuildTransactionOptions, BuildDeploymentOptions, SimulateOptions, ExecuteOptions, RawSimulateResult, RawExecuteResult, Transaction } from '@provablehq/veil-core'
+import type { RecordManagementConfig, ProvingConfig, EstimateExecutionFeeOptions, GenerateFreezelistProofParameters, BuildTransactionOptions, BuildDeploymentOptions, SimulateOptions, ExecuteOptions, RawSimulateResult, RawExecuteResult, Transaction } from '@provablehq/veil-core'
 import { generateFreezelistProof } from './freezelist.js'
 import type { OwnedRecord, RecordProvider, StandaloneRecordScanner, RequestRecordsParameters } from '@provablehq/veil-core'
 import type { Network, PublicClient, WalletClient } from '@provablehq/veil-core'
@@ -515,6 +515,31 @@ function silenceSdkLogs(sdk: SdkModule): void {
   setLogLevel?.('silent')
 }
 
+/**
+ * Estimates an execution's base fee after resolving dynamic program imports.
+ * Reads program sources through the configured SDK network client without proving or submitting.
+ * @param manager SDK manager bound to the selected network.
+ * @param params Function and optional sources or dynamic import names.
+ * @returns Base fee in microcredits, excluding the caller's priority fee.
+ * @throws When program discovery or fee estimation fails.
+ * @example
+ * const fee = await estimateBaseFee(manager, { programName: 'credits.aleo', functionName: 'join' })
+ */
+async function estimateBaseFee(manager: InstanceType<SdkModule['ProgramManager']>, params: EstimateExecutionFeeOptions): Promise<bigint> {
+  let imports: Awaited<ReturnType<typeof manager.networkClient.getProgramImports>> | undefined
+  if (Array.isArray(params.imports)) {
+    imports = {}
+    // Include each dynamic target and its static dependencies in the estimate,
+    // matching the sources later handed to execution or delegated proving.
+    for (const name of params.imports) {
+      const source = await manager.networkClient.getProgram(name)
+      Object.assign(imports, await manager.networkClient.getProgramImports(source), { [name]: source })
+    }
+  } else imports = params.imports
+  return manager.estimateExecutionFee({ programName: params.programName, functionName: params.functionName,
+    program: params.programSource, imports })
+}
+
 function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): AleoSdk {
   // Mutable handle so `createProvingConfig().switchNetwork()` can swap the
   // underlying binary set without rebuilding the wallet client.
@@ -655,6 +680,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       keyedAuth: options.auth,
       generateFreezelistProof: (params) => generateFreezelistProof(currentSdk, params),
 
+      estimateExecutionFee: (params) => estimateBaseFee(new currentSdk.ProgramManager(networkUrl, keyProvider, undefined), params),
+
       buildTransaction: async (txOptions: BuildTransactionOptions) => {
         const programManager = new currentSdk.ProgramManager(
           networkUrl,
@@ -705,10 +732,11 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               functionName: txOptions.functionName,
               priorityFee: 0,
               privateFee: txOptions.privateFee ?? false,
+              ...(txOptions.feeRecord ? { feeRecord: txOptions.feeRecord } : {}),
               inputs: txOptions.inputs,
               ...(resolvedImports ? { programImports: resolvedImports } : {}),
               broadcast: false,
-              useFeeMaster: options.useFeeMaster ?? false,
+              useFeeMaster: txOptions.feeRecord ? false : options.useFeeMaster ?? false,
             })
             await txOptions.onProgress?.({ type: 'request-built' })
 
@@ -762,6 +790,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           functionName: txOptions.functionName,
           priorityFee: 0,
           privateFee: txOptions.privateFee ?? false,
+          ...(txOptions.feeRecord ? { feeRecord: txOptions.feeRecord } : {}),
           inputs: txOptions.inputs,
           ...(resolvedImports ? { imports: resolvedImports } : {}),
         })
@@ -878,10 +907,11 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               inputs: execOptions.inputs,
               priorityFee,
               privateFee: execOptions.privateFee ?? false,
+              ...(execOptions.feeRecord ? { feeRecord: execOptions.feeRecord } : {}),
               // Submit from this client when a progress callback is present,
               // so it can save the proved transaction before broadcast.
               broadcast: !execOptions.onProgress,
-              useFeeMaster: options.useFeeMaster ?? false,
+              useFeeMaster: execOptions.feeRecord ? false : options.useFeeMaster ?? false,
             })
 
             const dpsClient = new AleoNetworkClient(proverUrl)
@@ -961,6 +991,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               inputs: execOptions.inputs,
               priorityFee,
               privateFee: execOptions.privateFee ?? false,
+              ...(execOptions.feeRecord ? { feeRecord: execOptions.feeRecord } : {}),
               program: execOptions.programSource,
               imports: execOptions.programImports,
             })
@@ -1619,6 +1650,7 @@ export function createDevnodeClient(options?: {
     functionName: string
     inputs: string[]
     privateFee?: boolean | undefined
+    feeRecord?: string | undefined
     imports?: Record<string, string> | undefined
   }) => {
     const programManager = new ProgramManager(url, keyProvider, undefined)
@@ -1628,6 +1660,7 @@ export function createDevnodeClient(options?: {
       functionName: opts.functionName,
       priorityFee: 0,
       privateFee: opts.privateFee ?? false,
+      ...(opts.feeRecord ? { feeRecord: opts.feeRecord } : {}),
       inputs: opts.inputs,
       ...(opts.imports ? { imports: opts.imports } : {}),
     })
@@ -1635,6 +1668,7 @@ export function createDevnodeClient(options?: {
 
   const proving: ProvingConfig = {
     mode: 'devnode',
+    estimateExecutionFee: (params) => estimateBaseFee(new ProgramManager(url, keyProvider, undefined), params),
     generateFreezelistProof: async (params) => generateFreezelistProof(await loadSdk('testnet'), params),
     buildDeployment: async (deployOptions: BuildDeploymentOptions) => {
       const programManager = new ProgramManager(url, keyProvider, undefined)
@@ -1675,6 +1709,7 @@ export function createDevnodeClient(options?: {
         functionName: txOptions.functionName,
         inputs: txOptions.inputs,
         privateFee: txOptions.privateFee,
+        ...(txOptions.feeRecord ? { feeRecord: txOptions.feeRecord } : {}),
         imports,
       })
       return JSON.parse(tx.toString())
@@ -1685,6 +1720,7 @@ export function createDevnodeClient(options?: {
         functionName: execOptions.functionName,
         inputs: execOptions.inputs,
         privateFee: execOptions.privateFee,
+        ...(execOptions.feeRecord ? { feeRecord: execOptions.feeRecord } : {}),
         imports: execOptions.programImports,
       })
 

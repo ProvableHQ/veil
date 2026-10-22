@@ -207,8 +207,40 @@ Opaque wallet submission cannot enforce a fee ceiling before broadcast, so
 wallet execution rejects configured fee budgets. A lost wallet response without
 a transaction id retains its reservation for external reconciliation.
 
-Private fee selection is rejected on managed writes because its inputs are
-selected outside this reservation mechanism. Use public fees or FeeMaster.
+### Private fees
+
+Managed local-account writes support `privateFee: true`. If `feeRecord` is
+supplied, the client uses it when the current scan reports it as available and
+it covers the estimated base fee plus priority fee. Otherwise the client selects
+the smallest sufficient credits record. Selection excludes existing reservations
+and the transaction's own inputs. If none is available, the call fails before
+proving; it does not automatically join records or change the fee payment mode.
+
+```ts
+await client.writeContract({
+  program: 'credits.aleo',
+  function: 'transfer_public',
+  inputs: [recipient, '1000000u64'],
+  privateFee: true,
+  // Optional: feeRecord: preferredCreditsRecord.recordPlaintext,
+})
+```
+
+The fee record and execution inputs are reserved together. Local, delegated,
+and devnode adapters receive the selected plaintext through `feeRecord`; the
+journal stores only its nonce, alongside the encrypted proved transaction.
+Before broadcast, the manager checks the fee transition's record tag and fee
+amounts. Explicit private payment takes precedence over FeeMaster sponsorship.
+
+On a rejected execution, Aleo can still charge the private fee. The journal
+releases the execution inputs but keeps `feeRecordId` excluded from stale scans.
+Custom stores MUST preserve that exclusion for rejected entries. A timeout or
+missing confirmation retains every reservation until reconciliation resolves it.
+
+Custom local provers need `estimateExecutionFee`, must honor `feeRecord`, and
+must await the prepared-transaction callback before broadcasting. Wallet RPC
+writes still require public fees or FeeMaster: the current wallet protocol
+cannot pin a selected fee record.
 
 For a supervised background process with policies, cooldowns, budgets, and a
 restart journal, use the [Shield Swap inventory commands](../packages/cli.md).

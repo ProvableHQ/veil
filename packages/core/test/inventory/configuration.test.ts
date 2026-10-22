@@ -98,7 +98,7 @@ describe('explicit record management configuration', () => {
 
   it('enforces managed private-fee and uid restrictions only after explicit opt-in', async () => {
     const client = createWalletClient({ account, transport: transport(), recordManagement: { enabled: true } })
-    await expect(client.writeContract({ ...pinned, privateFee: true })).rejects.toThrow('public fees')
+    await expect(client.writeContract({ ...pinned, privateFee: true })).rejects.toThrow('wallet protocol cannot pin')
     await expect(client.writeContract({ ...pinned, inputs: [{ type: 'record', program: asset.program, recordname: 'credits' }] })).rejects.toThrow('pinned record uid')
   })
 

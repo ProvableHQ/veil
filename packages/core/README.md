@@ -260,6 +260,12 @@ to `createWalletClient` or `createClient`. An enabled client creates an in-memor
 store if none is supplied. Disabled clients create no store. Core has no SQLite
 or Node dependency.
 
+With a local signer, `writeContract` and `executeContract` accept `privateFee: true`
+and an optional `feeRecord` plaintext. Managed writes replace a reserved or
+unavailable fee record with a sufficient unreserved credits record, excluding
+execution inputs. No eligible record means an error before proving. Wallet RPC
+writes cannot use managed private fees until the wallet can pin the fee record.
+
 An asset needs only its program: `{ program: 'credits.aleo' }`. Optional
 `recordName` and `amountField` select a custom record balance. Core reads the
 program's join/split interface and defaults to `amount`, then `microcredits`;
