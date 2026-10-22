@@ -611,7 +611,13 @@ compatible wallet connected with the grants below, no additional proof-generatio
 configuration, provider, or cache is needed. Omit `merkleProof` or pass `null`;
 explicit proof inputs are only needed to override that behavior.
 
-### Functions that use proofs
+Compliance is proven by the Aleo transaction's zero-knowledge proof. The Merkle
+exclusion bundle is a private input, so verification establishes that the signer
+is absent from the freezelist without publicly revealing the signer or Merkle
+paths. The compliance check preserves the signer's privacy; the recipient of
+an unshield operation remains public.
+
+### Functions that require compliance proof inputs
 
 Each operation below takes one `[MerkleProof; 2]` bundle: two Merkle paths
 proving that the signer is absent from the asset's freezelist.

@@ -271,7 +271,13 @@ override it. Wallets need the algorithm support and connection grants described
 below, and opaque position records need the withdrawal address for automatic
 proofs.
 
-### Functions that use proofs
+Compliance is proven by the Aleo transaction's zero-knowledge proof. The Merkle
+exclusion bundles are private inputs, so verification establishes that the
+relevant addresses are absent from the freezelist without publicly revealing
+those addresses or the Merkle paths. These compliance checks preserve the
+privacy of the addresses making swaps or managing liquidity.
+
+### Functions that require compliance proof inputs
 
 The following public SDK functions resolve Merkle exclusion proofs. Each bundle
 is an encoded `[MerkleProof; 2]`: two Merkle paths proving that one address is
