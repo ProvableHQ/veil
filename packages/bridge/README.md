@@ -602,20 +602,52 @@ and SOL through their ARC-20 programs, and for USDCx through its ARC-22
 transfers. ARC-22 unshielding and private xReserve burns resolve compliance
 proofs automatically when `merkleProof` is omitted or `null`.
 
+## Complete examples
+
+The packaged [agent guide](./skills/SKILL.md) explains how to discover and run
+examples from an installed SDK. Resolve it with
+`require.resolve('@provablehq/aleo-bridge-sdk/skills/SKILL.md')`.
+
+The [bridge tutorial](./examples/README.md) explains configuration,
+safe read-only runs, mainnet authorization, checkpoints, and each provider's
+observable completion boundary.
+
+| Transfer | Example |
+| --- | --- |
+| Ethereum ETH → Aleo ETH | [`eth-to-aleo.ts`](./examples/eth-to-aleo.ts) |
+| Ethereum WBTC → Aleo WBTC | [`wbtc-to-aleo.ts`](./examples/wbtc-to-aleo.ts) |
+| Aleo ETH → Ethereum ETH | [`eth-to-ethereum.ts`](./examples/eth-to-ethereum.ts) |
+| Aleo WBTC → Ethereum WBTC | [`wbtc-to-ethereum.ts`](./examples/wbtc-to-ethereum.ts) |
+| Aleo USDT → Ethereum USDT | [`usdt-to-ethereum.ts`](./examples/usdt-to-ethereum.ts) |
+| Solana SOL → Aleo SOL | [`sol-to-aleo.ts`](./examples/sol-to-aleo.ts) |
+| Aleo SOL → Solana SOL | [`sol-to-solana.ts`](./examples/sol-to-solana.ts) |
+| Ethereum USDC → Aleo USDCx | [`usdc-to-usdcx.ts`](./examples/usdc-to-usdcx.ts) |
+| Aleo USDCx → Ethereum or Arc USDC | [`usdcx-to-usdc.ts`](./examples/usdcx-to-usdc.ts) |
+
+Each script quotes mainnet state and exits without submitting by default. The
+script prints the exact acknowledgement required to authorize real funds.
+
 <a id="automatic-compliance-proofs"></a>
 
 ## Compliance
 
-Compliance proofs are automatic by default. With a local SDK client or a
-compatible wallet connected with the grants below, no additional proof-generation
-configuration, provider, or cache is needed. Omit `merkleProof` or pass `null`;
-explicit proof inputs are only needed to override that behavior.
+ARC-22 unshielding and private xReserve burns use Merkle exclusion proofs to
+prove in zero knowledge that the signer's private address is not on the asset's
+freezelist.
 
-Compliance is proven by the Aleo transaction's zero-knowledge proof. The Merkle
-exclusion bundle is a private input, so verification establishes that the signer
-is absent from the freezelist without publicly revealing the signer or Merkle
-paths. The compliance check preserves the signer's privacy; the recipient of
-an unshield operation remains public.
+Callers construct these Merkle exclusion proofs locally, through the SDK or
+connected wallet, and supply them as private inputs to Aleo's zk-SNARKs. The
+Merkle checks run during transaction proving; the network verifies the resulting
+zero-knowledge proof. This establishes that the signer is absent from the
+freezelist without publicly revealing the signer or the Merkle paths. These
+compliance checks preserve the signer's privacy; the recipient of an unshield
+operation remains public.
+
+Compliance proof generation is enabled by default in the Bridge SDK.
+With a local SDK client or a compatible wallet connected with the required
+algorithm grants, callers need no manual proof generation, provider, or cache.
+Omit `merkleProof` or pass `null` to use the default; explicit proof inputs are
+only needed to override that behavior.
 
 ### Functions that require compliance proof inputs
 
@@ -713,28 +745,3 @@ reviewed `asset.privacy.freezelistProgram` in the injected registry before using
 automatic, annotated, provider, or wallet-derived proofs. Neither token nor
 wrapper names are used to infer a list. The same registry MUST be supplied to
 the helpers and bridge client.
-
-## Complete examples
-
-The packaged [agent guide](./skills/SKILL.md) explains how to discover and run
-examples from an installed SDK. Resolve it with
-`require.resolve('@provablehq/aleo-bridge-sdk/skills/SKILL.md')`.
-
-The [bridge tutorial](./examples/README.md) explains configuration,
-safe read-only runs, mainnet authorization, checkpoints, and each provider's
-observable completion boundary.
-
-| Transfer | Example |
-| --- | --- |
-| Ethereum ETH → Aleo ETH | [`eth-to-aleo.ts`](./examples/eth-to-aleo.ts) |
-| Ethereum WBTC → Aleo WBTC | [`wbtc-to-aleo.ts`](./examples/wbtc-to-aleo.ts) |
-| Aleo ETH → Ethereum ETH | [`eth-to-ethereum.ts`](./examples/eth-to-ethereum.ts) |
-| Aleo WBTC → Ethereum WBTC | [`wbtc-to-ethereum.ts`](./examples/wbtc-to-ethereum.ts) |
-| Aleo USDT → Ethereum USDT | [`usdt-to-ethereum.ts`](./examples/usdt-to-ethereum.ts) |
-| Solana SOL → Aleo SOL | [`sol-to-aleo.ts`](./examples/sol-to-aleo.ts) |
-| Aleo SOL → Solana SOL | [`sol-to-solana.ts`](./examples/sol-to-solana.ts) |
-| Ethereum USDC → Aleo USDCx | [`usdc-to-usdcx.ts`](./examples/usdc-to-usdcx.ts) |
-| Aleo USDCx → Ethereum or Arc USDC | [`usdcx-to-usdc.ts`](./examples/usdcx-to-usdc.ts) |
-
-Each script quotes mainnet state and exits without submitting by default. The
-script prints the exact acknowledgement required to authorize real funds.
