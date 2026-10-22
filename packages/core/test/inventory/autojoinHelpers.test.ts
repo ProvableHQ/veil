@@ -60,7 +60,7 @@ function world(program = 'credits.aleo', options: { network?: 'mainnet' | 'testn
       })) : []),
       ...(dynamic ? [{ id: 'au1inner', program, function: 'join', outputs: [{ type: 'record_with_dynamic_id', id: outputs[0]!.commitment, dynamic_id: 'dynamicfield' }] }] : []),
       { id: 'au1outer', program: params.programName, function: params.functionName,
-        outputs: dynamic ? [{ type: 'record_dynamic', id: 'dynamicfield' }]
+        outputs: dynamic ? [{ type: 'record_dynamic', id: 'outerdynamicfield' }]
           : external ? [{ type: 'external_record', id: 'externalfield' }] : outputs.map(record => ({ type: 'record', id: record.commitment, value: 'record1ciphertext' })) },
     ] } }
     transactions.set(transaction.id, transaction)
@@ -160,8 +160,8 @@ describe('automatic join helper selection', () => {
 // supplied by the scanner. These fixtures mirror accepted testnet transactions.
 describe('confirmed static helper outputs', () => {
   const asset = { program: 'test_usdcx_stablecoin.aleo' }
-  const step = { kind: 'join' as const, inputs: ['a', 'b', 'c'], outputs: [{ id: 'joined', amount: 6n }],
-    joinProgram: { program: 'aj_test_usdcx_stablecoin_2_10.aleo', minRecords: 2, maxRecords: 10, inputMode: 'records' as const } }
+  const step = { kind: 'join' as const, deduction: 0n, inputs: ['a', 'b', 'c'], outputs: [{ id: 'joined', amount: 6n }],
+    joinProgram: { program: 'aj_test_usdcx_stablecoin_2_10.aleo', counts: [3], inputMode: 'records' as const } }
   const nested = (program: string, id: string) => ({ program, function: 'join', outputs: [{ type: 'record', id }] })
   const outer = { program: step.joinProgram.program, function: 'join_3', outputs: [{ type: 'external_record', id: 'externalfield' }] }
   const transaction = (transitions: unknown[]) => ({ execution: { transitions } }) as Transaction
@@ -175,5 +175,32 @@ describe('confirmed static helper outputs', () => {
     [{ ...nested(asset.program, 'wrongfield'), function: 'split' }],
     [{ program: asset.program, function: 'join', outputs: [] }]].map(calls => ({ calls })))('rejects a missing or mismatched final native join: %j', ({ calls }) => {
     expect(() => inventoryOutputCommitments(transaction([...calls, outer]), asset, step)).toThrow()
+  })
+})
+
+
+// Each transition commits its dynamic return separately. The outer helper id
+// therefore differs from the dynamic_id attached to the native record output.
+describe('confirmed dynamic helper outputs', () => {
+  const asset = { program: 'test_arc20_eth.aleo' }
+  const router = { program: 'test_aj_arc20_2_15.aleo' }
+  const base = { kind: 'join' as const, deduction: 0n, inputs: ['a', 'b', 'c'], outputs: [{ id: 'joined', amount: 6n }] }
+  const helper = { ...router, counts: [3], inputMode: 'programIdentifierThenRecords' as const }
+  const native = (id: string) => ({ program: asset.program, function: 'join',
+    outputs: [{ type: 'record_with_dynamic_id', id, dynamic_id: `native-${id}` }] })
+  const outer = { program: router.program, function: 'join_3', outputs: [{ type: 'record_dynamic', id: 'outerfield' }] }
+  const transaction = (transitions: unknown[]) => ({ execution: { transitions } }) as Transaction
+
+  it.each([true, false])('resolves distinct outer and nested dynamic ids (automatic helper: %s)', automatic => {
+    const step = automatic ? { ...base, joinProgram: helper } : base
+    expect(inventoryOutputCommitments(transaction([native('intermediatefield'), native('finalfield'), outer]),
+      asset, step, automatic ? undefined : router)).toEqual(['finalfield'])
+  })
+
+  it('rejects a final call from a different token even when its dynamic id matches the helper', () => {
+    const wrong = { ...native('wrongfield'), program: 'other.aleo',
+      outputs: [{ type: 'record_with_dynamic_id', id: 'wrongfield', dynamic_id: 'outerfield' }] }
+    expect(() => inventoryOutputCommitments(transaction([native('intermediatefield'), wrong, outer]),
+      asset, { ...base, joinProgram: helper })).toThrow()
   })
 })

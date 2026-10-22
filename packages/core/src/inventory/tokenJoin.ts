@@ -91,11 +91,14 @@ export function inventoryOutputCommitments(transaction: Transaction, asset: Reco
   if (!helper && !routed) return (outer.outputs ?? []).filter((output) => output.type === 'record' || output.type === 'record_with_dynamic_id').map((output) => output.id)
   const outputs = outer.outputs ?? []
   if (outputs.length !== 1 || outputs[0]?.type !== 'record_dynamic') throw new Error('Unexpected confirmed router output')
-  // A router returns a dynamic id, not a scanner commitment. Only the matching
-  // nested token join exposes the encrypted record and its actual commitment.
-  const matches = transitions.filter((transition) => transition.program === asset.program && transition.function === 'join')
-    .flatMap((transition) => transition.outputs ?? [])
-    .filter((output) => output.type === 'record_with_dynamic_id' && output.dynamic_id === outputs[0]!.id)
-  if (matches.length !== 1) throw new Error('Cannot resolve confirmed router output to the underlying token commitment')
-  return [matches[0]!.id]
+  // The outer dynamic id is a commitment for the router's own return slot. It
+  // need not equal the nested output's dynamic_id. The final native join holds
+  // the encrypted result and the record commitment used by the scanner.
+  const finalJoin = transitions.at(-2)
+  const joined = finalJoin?.outputs ?? []
+  if (finalJoin?.program !== asset.program || finalJoin.function !== 'join' ||
+    joined.length !== 1 || joined[0]?.type !== 'record_with_dynamic_id') {
+    throw new Error('Cannot resolve confirmed router output to the underlying token commitment')
+  }
+  return [joined[0]!.id]
 }

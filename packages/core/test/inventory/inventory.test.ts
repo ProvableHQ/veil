@@ -64,7 +64,7 @@ function world(amounts: bigint[], asset = credits, tokenJoin?: TokenJoinRouter) 
         { id: `au1nested${sequence}`, program: asset.program, function: 'join', outputs: outputs.map((record) =>
           ({ id: record.commitment, type: 'record_with_dynamic_id', dynamic_id: `dynamic${sequence}field`, value: 'record1ciphertext' })) },
         { id: `au1outer${sequence}`, program: params.programName, function: params.functionName,
-          outputs: [{ id: `dynamic${sequence}field`, type: 'record_dynamic' }] },
+          outputs: [{ id: `outerdynamic${sequence}field`, type: 'record_dynamic' }] },
       ] : [{ id: `au1${sequence}`, program: asset.program, function: params.functionName,
         outputs: outputs.map((record) => ({ id: record.commitment, type: 'record', value: 'record1ciphertext' })) }] },
       testInputs: inputs.map((record: any) => record.nonce), testOutputs: outputs }
@@ -447,12 +447,12 @@ describe('configured token batch joins', () => {
     expect(w.build).not.toHaveBeenCalled()
     expect(huge.build).not.toHaveBeenCalled()
   })
-  it('rejects an unrelated or mismatched dynamic output instead of selecting intermediate records', async () => {
+  it('rejects a different token in the final nested join instead of selecting an intermediate record', async () => {
     const w = world([100n, 100n, 100n], arc20, router)
     const original = w.send.getMockImplementation()!
     w.send.mockImplementation(async (request) => {
       const result = await original(request)
-      if (request.method === 'getConfirmedTransaction') result.transaction.execution.transitions.at(-1).outputs[0].id = 'unrelatedfield'
+      if (request.method === 'getConfirmedTransaction') result.transaction.execution.transitions.at(-2).program = 'unrelated.aleo'
       return result
     })
     const plan = await w.client.planRecordInventory({ asset: arc20, target: { records: 1 } })
