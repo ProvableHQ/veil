@@ -21,7 +21,9 @@ describe('Shield Swap inventory', () => {
     })
     const client = { account, transport: { config: { network: 'testnet' } }, request } as unknown as Client
     const plan = await planInventory(client, { api, token: 'ASSET', target: { records: 4, distribution: 'balanced' } })
-    expect(plan.asset).toEqual({ program, standard: program === 'credits.aleo' ? 'credits' : 'arc22' })
+    expect(plan.asset).toEqual({ program, standard: program === 'credits.aleo' ? 'credits' : 'arc22',
+      recordName: program === 'credits.aleo' ? 'credits' : 'Token', amountField: program === 'credits.aleo' ? 'microcredits' : 'amount',
+      amountType: program === 'credits.aleo' ? 'u64' : 'u128' })
     expect(plan.steps).toHaveLength(3)
   })
   it('keeps reserved inventory out of trading record selection', async () => {

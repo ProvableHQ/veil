@@ -1,3 +1,4 @@
+import { getRecordJoinPrograms } from '../../inventory/joinPrograms.js'
 import type { Client } from '../../clients/createClient.js'
 import type { InventoryResult, RecordAsset } from '../../inventory/types.js'
 import { recordSettings, scopeOf } from '../../inventory/internal.js'
@@ -41,7 +42,8 @@ export async function autoJoin(client: Client, params: AutoJoinParameters): Prom
   if (records.length <= 1) return { status: 'complete', transactionIds: [], completedSteps: 0 }
   // Use the same planner and sequential executor as a rebalance so consolidation
   // also waits for each dependent output and retains interrupted progress.
-  const plan = buildInventoryPlan({ scope: scopeOf(client), asset: params.asset, tokenJoin: recordSettings(client).tokenJoin, target: { records: 1 },
+  const joinPrograms = records.length > 2 ? await getRecordJoinPrograms(client, inventory.asset) : []
+  const plan = buildInventoryPlan({ scope: scopeOf(client), asset: inventory.asset, joinPrograms, tokenJoin: recordSettings(client).tokenJoin, target: { records: 1 },
     inputs: records.map(({ id, amount }) => ({ id, amount })), maxTransactions: params.maxTransactions })
   return rebalanceRecordInventory(client, { ...params, plan })
 }

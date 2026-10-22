@@ -255,7 +255,6 @@ export async function loadSession(options: { network?: string } = {}) {
     // Apply the shared reservations to wallet writes and Shield Swap actions.
     recordManagement: inventoryStore ? {
       enabled: true, store: inventoryStore, chainId: `aleo:${network}`,
-      tokenJoin: { program: network === 'mainnet' ? 'main_aj_arc20_2_15.aleo' : 'test_aj_arc20_2_15.aleo' },
     } : undefined,
     // Faucet-funded accounts hold no public credits; the delegated prover
     // pays fees from its FeeMaster account. Opt out with

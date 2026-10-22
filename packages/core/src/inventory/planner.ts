@@ -1,25 +1,29 @@
-import type { InventoryPlan, InventoryStep, InventoryTarget, RecordAsset, TokenJoinRouter } from './types.js'
+import type { InventoryPlan, InventoryStep, InventoryTarget, RecordAsset, TokenJoinRouter, RecordJoinProgram } from './types.js'
 import { positiveInteger } from './internal.js'
 import { maxAmount, splitDeduction } from '../actions/records/internal.js'
 import { validateTokenJoinRouter } from './tokenJoin.js'
+import { validateRecordJoinProgram } from './joinPrograms.js'
 
 /**
  * Computes a deterministic join/split dependency plan without network calls.
- * @param params Scoped record amounts, target shape and optional operation ceiling (default 100).
+ * @param params Scoped record amounts, target count/distribution and optional operation ceiling (default 100).
  * @returns A plaintext-free plan with intrinsic credits split deductions.
  * @throws On invalid bounds, infeasible targets, intermediate overflow or too many operations.
  * @internal
  */
 export function buildInventoryPlan(params: {
   scope: string; asset: RecordAsset; target: InventoryTarget
-  inputs: { id: string; amount: bigint }[]; maxTransactions?: number; tokenJoin?: TokenJoinRouter
+  inputs: { id: string; amount: bigint }[]; maxTransactions?: number; tokenJoin?: TokenJoinRouter | false; joinPrograms?: RecordJoinProgram[]
 }): InventoryPlan {
   // Capture the requested policy and validate bounds before simulating any steps.
-  // Credits always use native pairwise joins, even when a token router is configured.
   const { asset } = params
   if (params.tokenJoin) validateTokenJoinRouter(params.tokenJoin)
-  const tokenJoin = asset.standard !== 'credits' && params.tokenJoin ? { ...params.tokenJoin } : undefined
-  const routing = tokenJoin ? { tokenJoin } : {}
+  const tokenJoin = asset.program !== 'credits.aleo' && params.tokenJoin ? { ...params.tokenJoin } : undefined
+  const joinPrograms = params.joinPrograms?.map(helper => {
+    validateRecordJoinProgram(helper)
+    return { ...helper, counts: [...helper.counts] }
+  })
+  const routing = { ...(tokenJoin ? { tokenJoin } : {}), ...(joinPrograms?.length ? { joinPrograms } : {}) }
   const maxJoinRecords = tokenJoin ? validateTokenJoinRouter(tokenJoin) : 2
   const target = { ...params.target }
   positiveInteger(target.records, 'records')
@@ -88,16 +92,23 @@ export function buildInventoryPlan(params: {
     // ties so rebuilding the same plan produces the same dependency sequence.
     while (working.length > reduceTo) {
       working.sort((a, b) => a.amount < b.amount ? -1 : a.amount > b.amount ? 1 : a.id.localeCompare(b.id))
-      let count = Math.min(maxJoinRecords, working.length - reduceTo + 1)
+      const needed = working.length - reduceTo + 1
+      // Prefer the largest available helper that preserves the requested count.
+      // A final pair uses the native join unless tokenJoin was explicitly set.
+      const helperCount = Math.max(2, ...(joinPrograms ?? []).flatMap(helper => helper.counts.filter(count => count <= needed)))
+      let count = Math.min(tokenJoin ? maxJoinRecords : helperCount, needed)
       let amount = working.slice(0, count).reduce((sum, record) => sum + record.amount, 0n)
-      // Keep the batch within u128 and leave the requested number of records.
-      while (count > 2 && amount > maxAmount(asset)) amount -= working[--count]!.amount
+      // Reduce the batch if its amount would overflow or its exact arity is unavailable.
+      while (count > 2 && (amount > maxAmount(asset) || (!tokenJoin && !joinPrograms?.some(helper => helper.counts.includes(count))))) {
+        amount -= working[--count]!.amount
+      }
+      const helper = !tokenJoin && count > 2 ? joinPrograms?.find(helper => helper.counts.includes(count)) : undefined
       const consumed = working.slice(0, count)
       // Intermediate joins can be below the output minimum while accumulating dust.
       if (amount > maxAmount(asset)) throw new Error('Join would overflow the asset amount width')
       const output = { id: `step:${steps.length}:0`, amount }
       if (steps.length >= maxTransactions) throw new Error('Inventory plan exceeds maxTransactions')
-      steps.push({ kind: 'join', inputs: consumed.map((record) => record.id), outputs: [output], deduction: 0n })
+      steps.push({ kind: 'join', ...(helper ? { joinProgram: { ...helper, counts: [...helper.counts] } } : {}), inputs: consumed.map((record) => record.id), outputs: [output], deduction: 0n })
       working = working.slice(count).concat(output)
     }
     // Split the largest remaining record and leave enough value in its remainder

@@ -248,14 +248,14 @@ describe('Record inventory consumer example', () => {
       transport: http(API_URL, { network: 'testnet' }),
       proving: aleo.createProvingConfig({ mode: 'delegated', networkUrl: API_URL, account }),
       // Routing and planning remain available without enabling reservations.
-      recordManagement: { enabled: false, chainId: 'aleo:testnet', tokenJoin: { program: 'test_aj_arc20_2_15.aleo' } },
+      recordManagement: { enabled: false, chainId: 'aleo:testnet' },
       recordProvider: { requestRecords: async () => [{
         programName: 'credits.aleo', recordName: 'credits', tag: '1field', spent: false,
         recordPlaintext: `{ owner: ${account.address}.private, microcredits: 4030000u64.private, _nonce: 1group.public }`,
       }] },
     })
     const plan = await client.planRecordInventory({
-      asset: { program: 'credits.aleo', standard: 'credits' },
+      asset: { program: 'credits.aleo' },
       target: { records: 4, distribution: 'balanced', minRecordAmount: 1_000_000n },
     })
     expect(client.recordManagement?.enabled).toBe(false)

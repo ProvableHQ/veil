@@ -1,48 +1,91 @@
 import type { Client } from '../../clients/createClient.js'
 import type { OwnedRecord, OwnedRecordEncrypted } from '../../types/records.js'
 import type { TransactionInput } from '../../types/inputRequest.js'
-import type { InventoryRecord, RecordAsset } from '../../inventory/types.js'
+import type { InventoryRecord, RecordAsset, ResolvedRecordAsset } from '../../inventory/types.js'
 import { inventoryRecordId } from '../../inventory/internal.js'
 import { parseProgram } from '../../contract/parseProgram.js'
 import { checkProgramConformance } from '../../contract/arcConformance.js'
 import { getCode } from '../public/getCode.js'
 import { parseRecord } from '../../utils/records.js'
 
-/** Returns the intrinsic split deduction in base units, independently of network fees. @internal */
-export const splitDeduction = (asset: RecordAsset): bigint => asset.standard === 'credits' ? 10_000n : 0n
-/** Selects the native amount width for record parsing and encoded inputs. @internal */
-export const amountWidth = (asset: RecordAsset): 'u64' | 'u128' => asset.standard === 'credits' ? 'u64' : 'u128'
-/** Selects the native record type for the scanner filter. @internal */
-export const recordName = (asset: RecordAsset): string => asset.standard === 'credits' ? 'credits' : 'Token'
-/** Returns the largest representable record amount for this asset. @internal */
-export const maxAmount = (asset: RecordAsset): bigint => (1n << (asset.standard === 'credits' ? 64n : 128n)) - 1n
+/** Returns the credits split deduction, independently of network fees. @internal */
+export const splitDeduction = (asset: RecordAsset): bigint => asset.program === 'credits.aleo' ? 10_000n : 0n
+/** Selects the resolved amount width, with native defaults for older plans. @internal */
+export const amountWidth = (asset: RecordAsset): ResolvedRecordAsset['amountType'] =>
+  (asset as Partial<ResolvedRecordAsset>).amountType ?? (asset.program === 'credits.aleo' || asset.amountField === 'microcredits' ? 'u64' : 'u128')
+/** Selects the configured record name or the native token default. @internal */
+export const recordName = (asset: RecordAsset): string => asset.recordName ?? (asset.program === 'credits.aleo' ? 'credits' : 'Token')
+/** Returns the largest representable amount for the selected record field. @internal */
+export const maxAmount = (asset: RecordAsset): bigint => (1n << BigInt(amountWidth(asset).slice(1))) - 1n
 
-/** Verifies the deployed join/split interface and reports required field grants. @internal */
-export async function validateAsset(client: Client, asset: RecordAsset): Promise<{ recipientBound: boolean }> {
+/** Holds field metadata needed to reject incomplete wallet grants. @internal */
+export type AssetCapabilities = { asset: ResolvedRecordAsset; recipientBound: boolean; excluded: boolean }
+
+/** Resolves record defaults and verifies the deployed join/split interface. @internal */
+export async function validateAsset(client: Client, asset: RecordAsset): Promise<AssetCapabilities> {
   if (!asset || !/^[a-z][a-z0-9_]*\.aleo$/.test(asset.program)) throw new Error('Invalid asset program')
-  if (asset.standard === 'credits') {
-    if (asset.program !== 'credits.aleo') throw new Error('Native credits require credits.aleo')
-    return { recipientBound: false }
+  for (const name of [asset.recordName, asset.amountField]) {
+    if (name !== undefined && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error('Invalid record or amount field name')
   }
-  if (asset.standard !== 'arc20' && asset.standard !== 'arc22') throw new Error('Unsupported token standard')
+  if (asset.standard !== undefined && !['credits', 'arc20', 'arc22'].includes(asset.standard)) throw new Error('Unsupported token standard')
+  if (asset.standard === 'credits' && asset.program !== 'credits.aleo') throw new Error('Native credits require credits.aleo')
+  if (asset.program === 'credits.aleo' && asset.standard && asset.standard !== 'credits') throw new Error('credits.aleo requires the credits standard')
+  // Native credits have a fixed record interface. Overrides still need to match it.
+  if (asset.program === 'credits.aleo') {
+    if ((asset.recordName && asset.recordName !== 'credits') || (asset.amountField && asset.amountField !== 'microcredits')) {
+      throw new Error('credits.aleo requires the credits record and microcredits amount field')
+    }
+    return { asset: { ...asset, standard: 'credits', recordName: 'credits', amountField: 'microcredits', amountType: 'u64' }, recipientBound: false, excluded: false }
+  }
   const source = await getCode(client, { programId: asset.program })
-  const report = checkProgramConformance(source, asset.standard)
-  // Inventory depends on the Token and join/split interface, not transfer views.
-  // Deployed stablecoins can expose these capabilities without newer read accessors.
-  const violations = report.violations.filter((violation) =>
-    ('fn' in violation && ['join', 'split'].includes(violation.fn)) ||
-    ('name' in violation && ['join', 'split', 'Token'].includes(violation.name)) ||
-    ('record' in violation && violation.record === 'Token'))
-  if (report.programId !== asset.program || violations.length) throw new Error(`${asset.program} has an incompatible token join/split interface`)
-  return { recipientBound: parseProgram(source).records.find((record) => record.name === 'Token')?.fields.some((field) => field.name === 'recipient_bound') ?? false }
+  const program = parseProgram(source)
+  const join = program.functions.find(fn => fn.name === 'join')
+  const split = program.functions.find(fn => fn.name === 'split')
+  const joinInput = join?.inputs[0]
+  // An explicit record wins. Otherwise follow the native join input, which is
+  // Token for ARC programs and can have another name for custom programs.
+  const name = asset.recordName ?? (joinInput?.kind === 'record' ? joinInput.type : 'Token')
+  const record = program.records.find(record => record.name === name)
+  if (!record || program.id !== asset.program) throw new Error(`${asset.program} has an incompatible record join/split interface`)
+  const fieldName = asset.amountField ?? ['amount', 'microcredits'].find(name => record.fields.some(field => field.name === name))
+  const field = record.fields.find(field => field.name === fieldName)
+  if (!field || !/^u(8|16|32|64|128)$/.test(field.type)) throw new Error('Record amount field must be a declared unsigned integer')
+  const sameRecord = (input: { kind: string; type?: string }) => input.kind === 'record' && input.type === name
+  if (record.fields.find(field => field.name === 'owner')?.type !== 'address' ||
+    !join || join.inputs.length !== 2 || !join.inputs.every(sameRecord) || join.outputs.length !== 1 || !join.outputs.every(sameRecord) ||
+    !split || split.inputs.length !== 2 || !sameRecord(split.inputs[0]!) || split.inputs[1]?.kind !== 'plaintext' || split.inputs[1].type !== field.type ||
+    split.outputs.length !== 2 || !split.outputs.every(sameRecord)) {
+    throw new Error(`${asset.program} has an incompatible token join/split interface`)
+  }
+  // Detect standards only for their default Token balance. A custom field must
+  // never inherit eligibility for a helper that sums Token.amount instead.
+  let standard = asset.standard
+  if (!asset.recordName && !asset.amountField && standard) {
+    const report = checkProgramConformance(source, standard as 'arc20' | 'arc22')
+    const violations = report.violations.filter(violation =>
+      ('fn' in violation && ['join', 'split'].includes(violation.fn)) ||
+      ('name' in violation && ['join', 'split', 'Token'].includes(violation.name)) ||
+      ('record' in violation && violation.record === 'Token'))
+    if (violations.length) throw new Error(`${asset.program} has an incompatible token join/split interface`)
+  }
+  if (!standard && name === 'Token' && fieldName === 'amount' && field.type === 'u128') {
+    standard = (['arc22', 'arc20'] as const).find(candidate =>
+      checkProgramConformance(source, candidate).violations.every(violation => violation.kind === 'missing_view'))
+  }
+  return { asset: { ...asset, ...(standard ? { standard } : {}), recordName: name!, amountField: fieldName!, amountType: field.type as ResolvedRecordAsset['amountType'] },
+    recipientBound: record.fields.some(field => field.name === 'recipient_bound'),
+    excluded: record.fields.some(field => ['token_id', 'sender', 'recipient'].includes(field.name)) }
 }
 
 /** Extracts an eligible owned amount or rejects incomplete wallet grants. @internal */
-export function decodeRecord(client: Client, asset: RecordAsset, record: OwnedRecordEncrypted, capabilities?: { recipientBound: boolean }): InventoryRecord | undefined {
-  if (record.programName !== asset.program || record.spent === true) return undefined
+export function decodeRecord(client: Client, asset: RecordAsset, record: OwnedRecordEncrypted, capabilities?: AssetCapabilities): InventoryRecord | undefined {
+  asset = capabilities?.asset ?? asset
+  // Declared non-fungible/compliance fields remain excluded even when a wallet
+  // omits those fields from its grants. Plaintext checks below cover older plans.
+  if (capabilities?.excluded || record.programName !== asset.program || record.spent === true) return undefined
   if (record.recordName && record.recordName !== recordName(asset)) return undefined
   const plaintext = (record as Partial<OwnedRecord>).recordPlaintext
-  const field = asset.standard === 'credits' ? 'microcredits' : 'amount'
+  const field = asset.amountField ?? (asset.program === 'credits.aleo' ? 'microcredits' : 'amount')
   let amount: bigint
   if (plaintext) {
     // Decode the authoritative record body when available; metadata alone must

@@ -10,8 +10,10 @@ import { runInventoryCycle } from './runner.js'
 const HELP = `veil inventory <inspect|plan|rebalance|run|status>
 
   --config <file>       JSON policy configuration
-  --asset <program>     One-off asset program (credits.aleo or an ARC token)
-  --standard <type>     credits, arc20 or arc22 (required for non-credits assets)
+  --asset <program>     One-off asset program (credits, ARC, or custom records)
+  --standard <type>     Optional credits, arc20 or arc22 interface hint
+  --record-name <name>  Override the record type selected for inventory
+  --amount-field <name> Override the record field used for amounts
   --records <count>     One-off target count, default 1
   --network <network>   testnet (default) or mainnet
   --database <file>     Shared SQLite journal; also VEIL_INVENTORY_DB
@@ -27,7 +29,7 @@ const print = (value: unknown) => console.log(JSON.stringify(value, (_, item) =>
 
 async function main(): Promise<void> {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: {
-    config: { type: 'string' }, asset: { type: 'string' }, standard: { type: 'string' }, records: { type: 'string' },
+    config: { type: 'string' }, asset: { type: 'string' }, standard: { type: 'string' }, 'record-name': { type: 'string' }, 'amount-field': { type: 'string' }, records: { type: 'string' },
     network: { type: 'string' }, database: { type: 'string' }, execute: { type: 'boolean' }, help: { type: 'boolean' },
   } })
   if (values.help || !positionals.length) { console.log(HELP); return }
@@ -37,7 +39,7 @@ async function main(): Promise<void> {
   const raw = values.config ? JSON.parse(await readFile(values.config, 'utf8')) : {}
   if (values.network) raw.network = values.network
   if (values.database || process.env.VEIL_INVENTORY_DB) raw.database = values.database ?? process.env.VEIL_INVENTORY_DB
-  if (values.asset) raw.policies = [{ asset: { program: values.asset, standard: values.standard ?? (values.asset === 'credits.aleo' ? 'credits' : undefined) }, target: { records: Number(values.records ?? '1') } }]
+  if (values.asset) raw.policies = [{ asset: { program: values.asset, standard: values.standard, recordName: values['record-name'], amountField: values['amount-field'] }, target: { records: Number(values.records ?? '1') } }]
   const config = parseInventoryConfig(raw)
   if (command !== 'status' && !config.policies.length) throw new Error('Supply --asset or configure at least one inventory policy')
   const privateKey = process.env[config.privateKeyEnv]

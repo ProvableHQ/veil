@@ -1350,12 +1350,12 @@ for deployments that accept them. Omission now checks the actual current list.
 
 ## Record inventory
 
-Configure `recordManagement.tokenJoin` with
-`{ program: 'main_aj_arc20_2_15.aleo' }` when creating the client to join several
-underlying ARC20/ARC22 records in one transaction on mainnet. Use
-`test_aj_arc20_2_15.aleo` on testnet. The inventory wrappers use this router and
-the requested record count. When reservations and recovery are enabled, they
-also reserve inputs and match confirmed outputs before continuing a plan.
+The inventory wrappers pass each token's underlying program to core, which
+resolves its record and amount field. For more than two records, core prefers
+available batch helpers: dedicated credits and stablecoin helpers accept up to
+16 records; dynamic ARC helpers accept up to 15. Set
+`recordManagement.tokenJoin: false` for native pairwise joins, or supply
+`{ program, maxRecords? }` to override the dynamic ARC router.
 
 Reservations and recovery are off by default. Set
 `recordManagement: { enabled: true, store, chainId }` when creating the wallet

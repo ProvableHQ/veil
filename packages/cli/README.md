@@ -1,7 +1,7 @@
 # @provablehq/veil-cli
 
 Run scanner-backed record inventory management for native `credits.aleo`, ARC20,
-and ARC22 tokens. Requires Node **22.13+** for built-in SQLite. SDK consumers do
+ARC22, and compatible custom records. Requires Node **22.13+** for built-in SQLite. SDK consumers do
 not install this application or SQLite.
 
 ## Start
@@ -36,10 +36,9 @@ Within this repository, use `pnpm veil inventory ...`.
   "maxFeeMicrocredits": "1000000",
   "maxDailyFeeMicrocredits": "10000000",
   "useFeeMaster": false,
-  "tokenJoin": { "program": "test_aj_arc20_2_15.aleo", "maxRecords": 15 },
   "policies": [
     {
-      "asset": { "program": "credits.aleo", "standard": "credits" },
+      "asset": { "program": "credits.aleo" },
       "target": { "records": 4, "minRecordAmount": "1000000", "distribution": "preserve" },
       "countRange": [3, 6]
     }
@@ -61,11 +60,11 @@ reuse the default identity across independent local chains.
   is in range and every record meets the minimum, maintenance does nothing,
   including for a balanced policy. Omit it to enforce the target distribution.
 - `maxTransactions`: total planned transitions per maintenance pass.
-- `tokenJoin`: dynamic ARC20/ARC22 join router. Defaults to
-  `test_aj_arc20_2_15.aleo` on testnet or `main_aj_arc20_2_15.aleo` on mainnet.
-  Set `{ "program": "custom_router.aleo", "maxRecords": 15 }` for another
-  deployment, or `false` for native pairwise joins. The batch ceiling is 2–15.
-  Sixteen token records require two transactions; credits keep native joins.
+- `tokenJoin`: optional dynamic ARC router override. By default, core selects
+  available helpers for the asset and network. Credits and dedicated stablecoin
+  helpers accept up to 16 records; dynamic ARC helpers accept up to 15.
+  Set `{ "program": "custom_router.aleo", "maxRecords": 15 }` for a custom
+  dynamic router, or `false` for native pairwise joins on every asset.
   Transaction limits count batch submissions, not their nested token calls.
 - `maxFeeMicrocredits`: maximum fee for one transaction and total network-fee
   budget for one asset's rebalance. Fees are checked on the proved transaction
@@ -76,10 +75,22 @@ reuse the default identity across independent local chains.
   to recorded spend, but this setting does not impose a global trading budget.
 - `cooldownMs`: delay after an operation on an asset; defaults to one minute.
 
-For tokens, set `standard` to `arc20` or `arc22` and use the underlying program,
-not an AMM wrapper or `token_registry.aleo`. Bound ARC22 records and compliance
-records are excluded. The application reuses `createRemoteScanner` and waits for
-its reported synchronization before planning.
+An asset requires only `program`. Use the token's underlying program.
+`recordName` and `amountField` override the detected record and balance field;
+`standard` remains an optional hint. ARC tokens default to `Token.amount` and
+credits to `credits.microcredits`. Custom records use `amount`, then
+`microcredits`, unless a field is supplied. For a custom record:
+
+```sh
+veil inventory plan --asset points.aleo --record-name Balance --amount-field points --records 4
+```
+
+The same names work in JSON: `"asset": { "program": "points.aleo",
+"recordName": "Balance", "amountField": "points" }`. Bound, compliance, and
+registry records are excluded. The application reuses `createRemoteScanner`
+and waits for its reported synchronization before planning. See the
+[record inventory guide](../../site/docs/guides/record-inventory.md) for helper
+programs, field defaults, and execution requirements.
 
 ## Recovery and shared trading
 
@@ -119,7 +130,6 @@ const { walletClient } = aleo.createAleoClient({
   privateKey, // supplied by the application
   recordManagement: {
     enabled: true, store, chainId: 'aleo:testnet',
-    tokenJoin: { program: 'test_aj_arc20_2_15.aleo' },
   },
 })
 // Extend walletClient with shieldSwapActions(...) when trading.

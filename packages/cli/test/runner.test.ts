@@ -8,13 +8,21 @@ const policy = { asset: { program: 'credits.aleo', standard: 'credits' }, target
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(reconcileRecordInventory).mockResolvedValue([]) })
 
 describe('inventory application policies', () => {
-  it('selects network routers and supports native or bounded custom joins', () => {
-    expect(parseInventoryConfig({}).tokenJoin).toEqual({ program: 'test_aj_arc20_2_15.aleo', maxRecords: 15 })
-    expect(parseInventoryConfig({ network: 'mainnet' }).tokenJoin).toEqual({ program: 'main_aj_arc20_2_15.aleo', maxRecords: 15 })
-    expect(parseInventoryConfig({ tokenJoin: false }).tokenJoin).toBeUndefined()
-    expect(parseInventoryConfig({ tokenJoin: { program: 'custom_router.aleo', maxRecords: 4 } }).tokenJoin?.maxRecords).toBe(4)
+  it('uses automatic helper selection and supports native or bounded custom joins', () => {
+    expect(parseInventoryConfig({}).tokenJoin).toBeUndefined()
+    expect(parseInventoryConfig({ network: 'mainnet' }).tokenJoin).toBeUndefined()
+    expect(parseInventoryConfig({ tokenJoin: false }).tokenJoin).toBe(false)
+    expect(parseInventoryConfig({ tokenJoin: { program: 'custom_router.aleo', maxRecords: 4 } }).tokenJoin).toMatchObject({ maxRecords: 4 })
     for (const tokenJoin of [true, { program: 'bad' }, { program: 'router.aleo', maxRecords: 1 }, { program: 'router.aleo', maxRecords: 16 }]) {
       expect(() => parseInventoryConfig({ tokenJoin })).toThrow()
+    }
+  })
+  it('accepts program-only assets and explicit record/field overrides', () => {
+    for (const asset of [{ program: 'custom.aleo' }, { program: 'custom.aleo', recordName: 'Balance', amountField: 'quantity' }]) {
+      expect(parseInventoryConfig({ policies: [{ asset, target: { records: 2 } }] }).policies[0]?.asset).toEqual(asset)
+    }
+    for (const asset of [{ program: 'custom.aleo', recordName: 'bad-name' }, { program: 'custom.aleo', amountField: 'bad field' }]) {
+      expect(() => parseInventoryConfig({ policies: [{ asset, target: { records: 2 } }] })).toThrow()
     }
   })
   it('applies cooldowns to the underlying token of a routed join', async () => {
@@ -47,14 +55,14 @@ describe('inventory application policies', () => {
     expect(planRecordInventory).not.toHaveBeenCalled()
   })
   it('includes intrinsic credits deductions in the rolling fee budget', async () => {
-    vi.mocked(getRecordInventory).mockResolvedValue({ available: [], reserved: [], balance: 100n })
+    vi.mocked(getRecordInventory).mockResolvedValue({ asset: { program: 'credits.aleo', recordName: 'credits', amountField: 'microcredits', amountType: 'u64' }, available: [], reserved: [], balance: 100n })
     vi.mocked(planRecordInventory).mockResolvedValue({ steps: [{}], deduction: 30_000n } as any)
     const result = await runInventoryCycle({} as any, parseInventoryConfig({ policies: [policy], maxDailyFeeMicrocredits: '29999' }), memoryRecordInventoryStore(), 'scope')
     expect(result[0]?.status).toBe('budget')
     expect(rebalanceRecordInventory).not.toHaveBeenCalled()
   })
   it('stops the cycle after an uncertain submission', async () => {
-    vi.mocked(getRecordInventory).mockResolvedValue({ available: [], reserved: [], balance: 100n })
+    vi.mocked(getRecordInventory).mockResolvedValue({ asset: { program: 'credits.aleo', recordName: 'credits', amountField: 'microcredits', amountType: 'u64' }, available: [], reserved: [], balance: 100n })
     vi.mocked(planRecordInventory).mockResolvedValue({ steps: [{}], deduction: 0n } as any)
     vi.mocked(rebalanceRecordInventory).mockResolvedValue({ status: 'interrupted', completedSteps: 0, transactionIds: ['at1unknown'] })
     const config = parseInventoryConfig({ policies: [policy, { ...policy, asset: { program: 'token.aleo', standard: 'arc20' } }] })

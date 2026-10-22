@@ -2,7 +2,7 @@ import type { InventoryTarget, RecordAsset, TokenJoinRouter } from '@provablehq/
 
 /**
  * Defines one asset's maintenance policy in base units.
- * @property asset Native credits, ARC20 or ARC22 program.
+ * @property asset Program with optional record-name and amount-field overrides.
  * @property target Desired record count, distribution and minimum in base units.
  * @property countRange Optional inclusive range suppressing reshaping while the minimum holds.
  * @internal
@@ -27,7 +27,7 @@ export type InventoryPolicy = {
  * @property maxFeeMicrocredits Transaction/asset-pass network-fee ceiling; defaults to 1000000.
  * @property maxDailyFeeMicrocredits Rolling 24-hour maintenance ceiling; defaults to 10000000.
  * @property useFeeMaster Requests delegated sponsorship; defaults to false.
- * @property tokenJoin Token join router; defaults to the network's ARC router. Set false to use native pairwise joins.
+ * @property tokenJoin Optional dynamic ARC router override. Omission selects available helpers by asset and network; false uses native pairwise joins.
  * @internal
  */
 export type InventoryConfig = {
@@ -43,7 +43,7 @@ export type InventoryConfig = {
   maxFeeMicrocredits: bigint
   maxDailyFeeMicrocredits: bigint
   useFeeMaster: boolean
-  tokenJoin?: TokenJoinRouter
+  tokenJoin?: TokenJoinRouter | false
 }
 
 /**
@@ -76,11 +76,11 @@ export function parseInventoryConfig(value: unknown): InventoryConfig {
   }
   const network = raw.network ?? 'testnet'
   if (network !== 'testnet' && network !== 'mainnet') throw new Error('Network must be testnet or mainnet')
-  // CLI policies choose the deployed router for their network by default; an
-  // explicit false keeps native pairwise joins available for other deployments.
-  const router = raw.tokenJoin ?? { program: network === 'mainnet' ? 'main_aj_arc20_2_15.aleo' : 'test_aj_arc20_2_15.aleo' }
-  let tokenJoin: TokenJoinRouter | undefined
-  if (router !== false) {
+  // Let core select a deployed helper for each asset. False explicitly keeps
+  // native pairwise joins; an object overrides dynamic token routing.
+  const router = raw.tokenJoin
+  let tokenJoin: TokenJoinRouter | false | undefined = router === false ? false : undefined
+  if (router !== undefined && router !== false) {
     if (!router || typeof router !== 'object' || Array.isArray(router)) throw new Error('Invalid tokenJoin router')
     const configured = router as Record<string, unknown>
     if (typeof configured.program !== 'string' || !/^[a-z][a-z0-9_]*\.aleo$/.test(configured.program)) throw new Error('Invalid tokenJoin program')
@@ -95,8 +95,9 @@ export function parseInventoryConfig(value: unknown): InventoryConfig {
   // range that suppresses unnecessary maintenance while inventory is usable.
   const policies = ((raw.policies ?? []) as Record<string, unknown>[]).map((policy): InventoryPolicy => {
     const asset = policy.asset as RecordAsset
-    if (!asset || !/^[a-z][a-z0-9_]*\.aleo$/.test(asset.program) || !['credits', 'arc20', 'arc22'].includes(asset.standard)) throw new Error('Invalid inventory asset')
-    if ((asset.standard === 'credits') !== (asset.program === 'credits.aleo')) throw new Error('credits.aleo requires the credits standard')
+    if (!asset || !/^[a-z][a-z0-9_]*\.aleo$/.test(asset.program) || (asset.standard !== undefined && !['credits', 'arc20', 'arc22'].includes(asset.standard))) throw new Error('Invalid inventory asset')
+    if (asset.standard !== undefined && (asset.standard === 'credits') !== (asset.program === 'credits.aleo')) throw new Error('credits.aleo requires the credits standard')
+    if ([asset.recordName, asset.amountField].some(name => name !== undefined && (typeof name !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)))) throw new Error('Invalid record or amount field name')
     const target = policy.target as Record<string, unknown> | undefined
     if (!target) throw new Error('Each policy requires a target')
     const records = integer(target.records, 1, 1000)

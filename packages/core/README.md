@@ -260,10 +260,16 @@ to `createWalletClient` or `createClient`. An enabled client creates an in-memor
 store if none is supplied. Disabled clients create no store. Core has no SQLite
 or Node dependency.
 
-Configure `tokenJoin: { program: 'main_aj_arc20_2_15.aleo' }` on mainnet (or
-`test_aj_arc20_2_15.aleo` on testnet) to join 2 to 15 ARC20/ARC22 records in one
-transaction. Routing also works with `enabled: false`. Without a router, token
-joins combine two records at a time. Credits always use native joins.
+An asset needs only its program: `{ program: 'credits.aleo' }`. Optional
+`recordName` and `amountField` select a custom record balance. Core reads the
+program's join/split interface and defaults to `amount`, then `microcredits`;
+native credits use `credits.microcredits`.
+
+When more than two records need joining, core prefers a compatible deployed
+helper: up to 16 credits or dedicated stablecoin records, or 15 ARC records per
+transaction. Set `tokenJoin: false` to use native pairwise joins, or supply
+`{ program, maxRecords? }` to override the dynamic ARC router. Helper selection
+also works with `enabled: false`; it does not enable reservations or recovery.
 
 `recordActions()` adds these methods to custom clients without enabling
 reservations or recovery. Move `recordActions({ store, maxFeeMicrocredits })`

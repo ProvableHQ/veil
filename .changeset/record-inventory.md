@@ -8,4 +8,6 @@
 
 Add scanner-backed ARC20, ARC22, and native credits inventory actions, shared record reservations, and Shield Swap inventory wrappers. Add the separate Veil inventory CLI with bounded maintenance policies and a CLI-only SQLite recovery journal. SDK packages retain their existing runtime requirements.
 
-Add configurable dynamic token join routing with batches of 2–15 records. Inventory plans preserve target counts, reservations, proved fee limits, and recovery while resolving dynamic router outputs to underlying token commitments. The CLI selects the network's deployed ARC router by default; native pairwise joins remain available.
+Allow inventory assets to specify only a program, with optional record-name and amount-field overrides. Resolve amount before microcredits for custom records and use the deployed unsigned integer width.
+
+Prefer available batch join helpers for more than two records: up to 16 credits or dedicated stablecoin records, and 15 dynamic ARC records. Validate helper interfaces, capture them in plans, and match their confirmed outputs before dependent steps. Explicit dynamic routers remain supported; tokenJoin: false selects native pairwise joins. Reservations and recovery remain off unless recordManagement.enabled is true.

@@ -178,6 +178,6 @@ so an application can save the proved transaction for recovery. The application
 supplies storage; SQLite is available only through the separate Veil CLI. See
 the [inventory guide](../../site/docs/guides/record-inventory.md).
 
-Configured token join routers supply the underlying token as a dynamic import;
+Dynamic ARC join helpers supply the underlying token as a dynamic import;
 the proving adapter includes that program and its transitive static imports for
 both local and delegated proofs.

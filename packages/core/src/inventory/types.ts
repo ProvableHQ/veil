@@ -2,13 +2,35 @@ import type { OwnedRecordEncrypted } from '../types/records.js'
 import type { Transaction } from '../types/transaction.js'
 
 /**
- * Describes the program whose fungible records are managed.
- * @property program Deployed program id; native credits MUST use credits.aleo.
- * @property standard Record and transition shape, verified against deployed code.
+ * Selects the program and fungible record balance to manage.
+ * @property program Deployed program id. This is the only required field.
+ * @property standard Optional interface hint, verified against deployed code.
+ * @property recordName Optional record name. Defaults to credits for credits.aleo,
+ *   Token for ARC tokens, or the record accepted by the program's join function.
+ * @property amountField Optional balance field. Defaults to amount, then microcredits;
+ *   credits.aleo uses microcredits. An override must exist in the selected record.
  * @example
- * const asset: RecordAsset = { program: 'credits.aleo', standard: 'credits' }
+ * const asset: RecordAsset = { program: 'credits.aleo' }
+ * const custom: RecordAsset = { program: 'points.aleo', recordName: 'Balance', amountField: 'points' }
  */
-export type RecordAsset = { program: string; standard: 'credits' | 'arc20' | 'arc22' }
+export type RecordAsset = {
+  program: string
+  standard?: 'credits' | 'arc20' | 'arc22'
+  recordName?: string
+  amountField?: string
+}
+
+/**
+ * Captures the record fields and integer width resolved from a program.
+ * @property recordName Record selected for scans and wallet input requests.
+ * @property amountField Field used to read balances and plan outputs.
+ * @property amountType Unsigned integer type declared for the amount field.
+ */
+export type ResolvedRecordAsset = RecordAsset & {
+  recordName: string
+  amountField: string
+  amountType: 'u8' | 'u16' | 'u32' | 'u64' | 'u128'
+}
 
 /**
  * Configures a dynamic token join router with join_2 through join_15 functions.
@@ -20,9 +42,21 @@ export type RecordAsset = { program: string; standard: 'credits' | 'arc20' | 'ar
 export type TokenJoinRouter = { program: string; maxRecords?: number }
 
 /**
+ * Describes a helper that joins several records in one transaction.
+ * @property program Helper program id on the selected network.
+ * @property inputMode Whether inputs are records alone or a program identifier followed by records.
+ * @property counts Supported input counts, from 2 through 16 (at most 15 for dynamic ARC helpers).
+ */
+export type RecordJoinProgram = {
+  program: string
+  inputMode: 'records' | 'programIdentifierThenRecords'
+  counts: readonly number[]
+}
+
+/**
  * Describes a spendable record without requiring plaintext from a wallet.
  * @property id Record nonce, stable across scanners and wallet connections.
- * @property amount Integer base units, bounded by u64 for credits or u128 for tokens.
+ * @property amount Integer base units, bounded by the declared field width: u64 for credits, u128 for ARC tokens.
  * @property record Scanner or wallet record; plaintext remains in memory only.
  */
 export type InventoryRecord = { id: string; amount: bigint; record: OwnedRecordEncrypted }
@@ -44,13 +78,15 @@ export type InventoryTarget = {
 /**
  * Describes one join or split, with references to earlier planned outputs.
  * @property kind Transition to invoke.
- * @property inputs Input nonces or previous step output references; joins consume two native records or 2–15 routed token records.
+ * @property inputs Input nonces or previous step output references; joins consume two records natively, up to 16 with static helpers, or 15 with dynamic ARC helpers.
  * @property outputs Predicted output references and amounts; never spendable until confirmed.
  * @property amount Split's first output amount; absent for joins.
  * @property deduction Intrinsic credits deduction, separate from transaction fees.
+ * @property joinProgram Helper captured for this join; omission uses the native join or plan.tokenJoin.
  */
 export type InventoryStep = {
   kind: 'join' | 'split'
+  joinProgram?: RecordJoinProgram
   inputs: string[]
   outputs: { id: string; amount: bigint }[]
   amount?: bigint
@@ -60,23 +96,25 @@ export type InventoryStep = {
 /**
  * Captures a read-only inventory plan bound to an account and chain.
  * @property scope Chain/account reservation namespace.
- * @property asset Verified token program and standard.
- * @property target Requested inventory shape.
+ * @property asset Program with its resolved record name, amount field, and integer width.
+ * @property target Requested record count, minimum amount, and distribution.
  * @property inputs Eligible snapshot, containing no plaintext.
  * @property steps Ordered dependencies with predicted base-unit amounts.
  * @property deduction Total intrinsic credits deduction; network fees are additional.
  * @property maxTransactions Maximum operations allowed; defaults to 100.
- * @property tokenJoin Optional token router captured at planning time; absent uses native pairwise joins.
+ * @property tokenJoin Optional explicitly configured dynamic token router.
+ * @property joinPrograms Available helper ABIs captured when planning; omission uses native pairwise joins.
  */
 export type InventoryPlan = {
   scope: string
-  asset: RecordAsset
+  asset: RecordAsset & Partial<Pick<ResolvedRecordAsset, 'amountType'>>
   target: InventoryTarget
   inputs: { id: string; amount: bigint }[]
   steps: InventoryStep[]
   deduction: bigint
   maxTransactions: number
   tokenJoin?: TokenJoinRouter
+  joinPrograms?: RecordJoinProgram[]
 }
 
 /** Tracks reservation and transaction recovery states. */
@@ -132,7 +170,7 @@ export type RecordInventoryStore = {
 /**
  * Configures record action routing without enabling spending coordination.
  * @property chainId Optional chain identity for plans. Defaults to the transport network.
- * @property tokenJoin Optional dynamic router for ARC20/ARC22 joins. Defaults to native pairwise joins.
+ * @property tokenJoin Optional dynamic ARC router override. Omission selects available helpers by asset and network; false disables all helpers.
  * @property store Accepted but ignored by recordActions. Set recordManagement.store
  *   with enabled: true on the client to share a journal.
  * @property maxFeeMicrocredits Accepted but ignored by recordActions. Set
@@ -142,7 +180,7 @@ export type RecordActionsConfig = {
   store?: RecordInventoryStore
   chainId?: string
   maxFeeMicrocredits?: bigint
-  tokenJoin?: TokenJoinRouter
+  tokenJoin?: TokenJoinRouter | false
 }
 
 /**
@@ -159,7 +197,7 @@ export type RecordActionsConfig = {
  *   custom/local chains MUST supply a distinct identity.
  * @property maxFeeMicrocredits Maximum fee in microcredits (u64), checked on the
  *   proved transaction before broadcast. Defaults to no limit; ignored when disabled.
- * @property tokenJoin Optional ARC20/ARC22 join router. Defaults to native pairwise joins; credits are unaffected.
+ * @property tokenJoin Optional dynamic ARC router override. Omission selects available helpers by asset and network; false uses native pairwise joins for all assets.
  * @example
  * const recordManagement: RecordManagementConfig = {
  *   enabled: true, store: memoryRecordInventoryStore(), chainId: 'aleo:testnet',

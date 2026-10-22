@@ -267,6 +267,7 @@ export { isArc22, type IsArc22Parameters, type IsArc22ReturnType } from './actio
 // Record inventory management.
 export type * from './inventory/types.js'
 export { recordActions } from './inventory/recordActions.js'
+export { recordJoinPrograms } from './inventory/joinPrograms.js'
 export { memoryRecordInventoryStore } from './inventory/store.js'
 export { inventoryRecordId, reservedRecordIds } from './inventory/internal.js'
 export { getRecordInventory, type GetRecordInventoryParameters, type GetRecordInventoryReturnType } from './actions/records/getRecordInventory.js'

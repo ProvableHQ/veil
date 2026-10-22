@@ -12,7 +12,8 @@ import type { Transport } from '../types/transport.js'
  * @property chainId Stable chain identity for reservation scopes.
  * @property store Shared atomic journal.
  * @property maxFeeMicrocredits Optional proved fee ceiling; absent means no limit.
- * @property tokenJoin Optional router used for token consolidation; absent uses native joins.
+ * @property tokenJoin Optional dynamic ARC router override; omission selects available helpers and false disables helpers.
+ * @property joinAsset Internal source-asset attribution for a validated helper call.
  * @property network Original transport network, checked against later network switches.
  * @internal
  */
@@ -21,6 +22,7 @@ export type RecordManagement = Required<Pick<RecordActionsConfig, 'chainId'>> & 
   store: RecordInventoryStore
   maxFeeMicrocredits?: bigint
   tokenJoin?: RecordActionsConfig['tokenJoin']
+  joinAsset?: { program: string; assetProgram: string }
   network: string | null | undefined
 }
 

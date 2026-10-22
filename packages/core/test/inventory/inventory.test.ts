@@ -29,7 +29,11 @@ function world(amounts: bigint[], asset = credits, tokenJoin?: TokenJoinRouter) 
     return found.slice((params.filter?.page ?? 0) * 1000, ((params.filter?.page ?? 0) + 1) * 1000)
   })
   const send = vi.fn(async ({ method, params }: any) => {
-    if (method === 'getProgram') return params.programId === tokenJoin?.program ? routerSource : source(asset)
+    if (method === 'getProgram') {
+      if (params.programId === tokenJoin?.program) return routerSource
+      if (params.programId === asset.program) return source(asset)
+      throw Object.assign(new Error('Program not found'), { status: 404 })
+    }
     if (method === 'getConfirmedTransaction') {
       const transaction = transactions.get(params.id)
       if (!transaction) throw Object.assign(new Error('Not found'), { status: 404 })
@@ -133,6 +137,7 @@ describe('scanner-backed inventory', () => {
     const request = vi.fn(async ({ method }: any) => {
       if (method === 'requestRecords') return records
       if (method === 'executeTransaction') return 'at1wallet'
+      if (method === 'getProgram') throw Object.assign(new Error('Program not found'), { status: 404 })
       throw new Error(method)
     })
     const client = createWalletClient({ account: { ...w.client.account!, type: 'rpc' } as any,
@@ -200,6 +205,7 @@ describe('inventory execution and recovery', () => {
         return transaction.id
       }
       if (method === 'getConfirmedTransaction') return { status: 'accepted', transaction }
+      if (method === 'getProgram') throw Object.assign(new Error('Program not found'), { status: 404 })
       throw new Error(method)
     })
     const client = createWalletClient({ account: { ...w.client.account!, type: 'rpc' } as any,
@@ -347,6 +353,7 @@ describe('configured token batch joins', () => {
       if (method === 'getProgram') return params.programId === router.program ? routerSource : source(arc22)
       if (method === 'requestRecords') return records
       if (method === 'executeTransaction') return 'at1walletbatch'
+      if (method === 'getProgram') throw Object.assign(new Error('Program not found'), { status: 404 })
       throw new Error(method)
     })
     const wallet = createWalletClient({ account: { ...w.client.account!, type: 'rpc' } as any,

@@ -7,7 +7,7 @@ import { requestRecords } from '../wallet/requestRecords.js'
 import { getRecordInventory } from './getRecordInventory.js'
 import { joinRecords } from './joinRecords.js'
 import { splitRecord } from './splitRecord.js'
-import { decodeRecord } from './internal.js'
+import { decodeRecord, validateAsset } from './internal.js'
 import type { ProvingProgressHandler } from '../../types/proving.js'
 import type { Transaction } from '../../types/transaction.js'
 import type { ConfirmedTransaction } from '../../types/block.js'
@@ -61,6 +61,9 @@ export async function rebalanceRecordInventory(client: Client, params: Rebalance
   }
   const pause = () => new Promise<void>((resolve) => setTimeout(resolve, interval))
   try {
+    // Apply the same declared-field eligibility checks to confirmed outputs as
+    // to scanned inputs, including wallet grants on recipient-bound records.
+    const capabilities = plan.steps.length ? await validateAsset(client, plan.asset) : undefined
     for (const [index, step] of plan.steps.entries()) {
       check()
       // Rescan before every step so a competing spend or changed amount stops
@@ -93,7 +96,7 @@ export async function rebalanceRecordInventory(client: Client, params: Rebalance
         if ('transactionId' in event && !result.transactionIds.includes(event.transactionId)) result.transactionIds.push(event.transactionId)
       }
       const transactionId = step.kind === 'join'
-        ? await joinRecords(executionClient, { asset: plan.asset, records: inputs, onProgress })
+        ? await joinRecords(executionClient, { asset: plan.asset, records: inputs, joinProgram: step.joinProgram ?? (plan.tokenJoin ? undefined : false), onProgress })
         : await splitRecord(executionClient, { asset: plan.asset, record: inputs[0]!, amount: step.amount!, onProgress })
       if (!result.transactionIds.includes(transactionId)) result.transactionIds.push(transactionId)
       const journal = await config.store.list(plan.scope)
@@ -127,7 +130,7 @@ export async function rebalanceRecordInventory(client: Client, params: Rebalance
           ...(client.account?.type === 'rpc' ? {} : { filter: { commitments } }) })
         outputs = commitments.flatMap((commitment) => {
           const record = records.find((item) => (item.commitment ?? item.recordView?.fields['$commitment']) === commitment)
-          const decoded = record && decodeRecord(client, plan.asset, record)
+          const decoded = record && decodeRecord(client, plan.asset, record, capabilities)
           return decoded ? [decoded] : []
         })
         if (outputs.length !== commitments.length) await pause()

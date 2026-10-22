@@ -58,7 +58,7 @@ export async function manageRecordSpend<T>(client: Client, params: {
   if (new Set(ids).size !== ids.length) throw new Error('A transaction cannot spend the same record twice')
   // Attribute routed joins to the underlying token for per-asset maintenance
   // cooldowns; the journal still records the actual router call separately.
-  const assetProgram = config.tokenJoin?.program === params.program && /^join_\d+$/.test(params.function) && Array.isArray(params.imports)
+  const assetProgram = config.joinAsset?.program === params.program ? config.joinAsset.assetProgram : config.tokenJoin && config.tokenJoin.program === params.program && /^join_\d+$/.test(params.function) && Array.isArray(params.imports)
     ? params.imports[0] : undefined
   // Acquire all input nonces together before invoking any proving or wallet call.
   const entry = await config.store.acquire({ scope, records: ids, program: params.program, ...(assetProgram ? { assetProgram } : {}),

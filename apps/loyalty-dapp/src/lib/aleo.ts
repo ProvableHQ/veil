@@ -35,7 +35,7 @@ export function createAleoWalletClient(adapter: AleoWalletAdapter) {
     // Wallet transport handles executions; http handles reads as fallback
     transport: fallback([walletTransport, http(API_URL, { network: 'mainnet' })]),
     // Configure record planning without enabling reservations on wallet writes.
-    recordManagement: { enabled: false, chainId: 'aleo:mainnet', tokenJoin: { program: 'main_aj_arc20_2_15.aleo' } },
+    recordManagement: { enabled: false, chainId: 'aleo:mainnet' },
   })
 }
 
@@ -71,7 +71,7 @@ export async function getLoyaltyContract(walletClient?: ReturnType<typeof create
  * @example
  * const inventory = createInventoryClient(createAleoWalletClient(adapter))
  * const plan = await inventory.planRecordInventory({
- *   asset: { program: 'credits.aleo', standard: 'credits' }, target: { records: 4 },
+ *   asset: { program: 'credits.aleo' }, target: { records: 4 },
  * })
  */
 export function createInventoryClient(walletClient: ReturnType<typeof createAleoWalletClient>) {
