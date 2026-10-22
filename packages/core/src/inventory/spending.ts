@@ -8,12 +8,16 @@ import { inventoryRecordId, management, scopeOf } from './internal.js'
 
 /** Builds an internal client view that avoids recursive reservation acquisition. @internal */
 export function withoutManagement(client: Client): Client {
+  // Preserve the original account, transport, and prover without mutating the
+  // caller's client; only the nested action skips reservation acquisition.
   return Object.assign(Object.create(client), { recordManagement: undefined }) as Client
 }
 
 /** Reads the public base and priority fees in microcredits; rejects an unverifiable fee. @internal */
 export function transactionFee(tx: Transaction): bigint {
   if (!tx.fee) return 0n
+  // Public fee inputs carry the base and priority fees. An opaque or malformed
+  // fee cannot be compared safely with a pre-broadcast spending limit.
   const values = tx.fee.transition.inputs?.slice(0, 2).map((input) => input.value)
   if (values?.length !== 2 || values.some((value) => !/^\d+u64$/.test(value ?? ''))) {
     throw new Error('Cannot verify transaction fee before broadcast')
@@ -31,10 +35,14 @@ export async function manageRecordSpend<T>(client: Client, params: {
   if (params.privateFee) throw new Error('Managed records require public fees or FeeMaster; private fee selection is not coordinated')
   const scope = scopeOf(client)
   if (client.account?.type === 'rpc' && config.maxFeeMicrocredits !== undefined) throw new Error('Wallet accounts cannot enforce a fee ceiling before submission')
+  // Normalize wallet-selected and plaintext inputs to stable record nonces so
+  // clients using different scanner or wallet representations share reservations.
   const ids: string[] = []
   for (const input of params.inputs) {
     if (typeof input === 'object' && input.type === 'record') {
       if (!input.uid) throw new Error('Managed wallet spending requires a pinned record uid')
+      // Resolve the pinned uid again rather than letting the wallet select a
+      // different record after the reservation has been acquired.
       const records = await requestRecords(client, { program: input.program, statusFilter: 'unspent' })
       const record = records.find((record) => record.uid === input.uid)
       if (!record) throw new Error('Pinned wallet record is no longer available')
@@ -48,8 +56,11 @@ export async function manageRecordSpend<T>(client: Client, params: {
     }
   }
   if (new Set(ids).size !== ids.length) throw new Error('A transaction cannot spend the same record twice')
+  // Attribute routed joins to the underlying token for per-asset maintenance
+  // cooldowns; the journal still records the actual router call separately.
   const assetProgram = config.tokenJoin?.program === params.program && /^join_\d+$/.test(params.function) && Array.isArray(params.imports)
     ? params.imports[0] : undefined
+  // Acquire all input nonces together before invoking any proving or wallet call.
   const entry = await config.store.acquire({ scope, records: ids, program: params.program, ...(assetProgram ? { assetProgram } : {}),
     function: params.function, status: 'reserved', createdAt: Date.now(), accountType: client.account?.type === 'local' ? 'local' : 'rpc' })
   if (!entry) throw new Error('Record inventory changed: an input is already reserved or spent')
@@ -60,6 +71,8 @@ export async function manageRecordSpend<T>(client: Client, params: {
       // A changed account/network invalidates the reservation namespace.
       if (scopeOf(client) !== scope) throw new Error('Account or chain changed during record spending')
       if (event.type === 'transaction-prepared') {
+        // Enforce the proved fee and save the exact transaction before allowing
+        // broadcast, so recovery can resend it without constructing a second spend.
         const fee = transactionFee(event.transaction)
         if (config.maxFeeMicrocredits !== undefined && fee > config.maxFeeMicrocredits) {
           throw new Error('Proved transaction exceeds maxFeeMicrocredits')
@@ -68,11 +81,14 @@ export async function manageRecordSpend<T>(client: Client, params: {
           transaction: event.transaction, feeMicrocredits: fee.toString() })
         prepared = true
       } else if (event.type === 'transaction-submitted') {
+        // Mark submission before awaiting storage; a storage failure must not
+        // release inputs that may already have been accepted by the network.
         submitted = true
         await config.store.update(scope, entry.id, { status: 'submitted', transactionId: event.transactionId })
       } else if (event.type === 'transaction-confirmed') {
         await config.store.update(scope, entry.id, { status: 'confirmed', transactionId: event.transactionId, transaction: undefined })
       }
+      // Update the journal first, then await the caller's own checkpoint handler.
       await params.onProgress?.(event)
     })
   } catch (error) {

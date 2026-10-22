@@ -14,6 +14,8 @@ export function memoryRecordInventoryStore(): RecordInventoryStore {
   return {
     list: async (scope) => copy(entries.filter((entry) => entry.scope === scope)),
     acquire: async (entry) => {
+      // Check contention and insert without awaiting so another caller in this
+      // process cannot reserve an input between the check and the insertion.
       if (new Set(entry.records).size !== entry.records.length) throw new Error('Duplicate record inputs')
       if (entries.some((old) => old.scope === entry.scope && holdsRecords(old) &&
         old.records.some((id) => entry.records.includes(id)))) return undefined
@@ -25,6 +27,8 @@ export function memoryRecordInventoryStore(): RecordInventoryStore {
       const entry = entries.find((item) => item.scope === scope && item.id === id)
       if (!entry) throw new Error('Unknown record reservation')
       Object.assign(entry, copy(patch))
+      // JSON cloning omits undefined; explicitly clear a completed proof instead
+      // of retaining the old transaction when the patch requests its removal.
       if ('transaction' in patch && patch.transaction === undefined) delete entry.transaction
     },
   }
@@ -32,5 +36,6 @@ export function memoryRecordInventoryStore(): RecordInventoryStore {
 
 /** Returns whether a journal entry excludes its inputs from record selection. */
 export function holdsRecords(entry: RecordSpend): boolean {
+  // Confirmed inputs remain excluded while a scanner still reports them unspent.
   return entry.status !== 'cancelled' && entry.status !== 'rejected'
 }

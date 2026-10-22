@@ -14,6 +14,8 @@ export function buildInventoryPlan(params: {
   scope: string; asset: RecordAsset; target: InventoryTarget
   inputs: { id: string; amount: bigint }[]; maxTransactions?: number; tokenJoin?: TokenJoinRouter
 }): InventoryPlan {
+  // Capture the requested policy and validate bounds before simulating any steps.
+  // Credits always use native pairwise joins, even when a token router is configured.
   const { asset } = params
   if (params.tokenJoin) validateTokenJoinRouter(params.tokenJoin)
   const tokenJoin = asset.standard !== 'credits' && params.tokenJoin ? { ...params.tokenJoin } : undefined
@@ -34,6 +36,8 @@ export function buildInventoryPlan(params: {
   let working = inputs.map((record) => ({ ...record }))
   const steps: InventoryStep[] = []
   const total = working.reduce((sum, record) => sum + record.amount, 0n)
+  // Compare against the ideal equal share using integer arithmetic so fractional
+  // base units cannot introduce rounding drift into the tolerance check.
   const balanced = () => working.every((record) => {
     const difference = record.amount * BigInt(target.records) - total
     const absolute = difference < 0n ? -difference : difference
@@ -42,6 +46,8 @@ export function buildInventoryPlan(params: {
   })
   const satisfied = working.length === target.records && working.every((record) => record.amount >= min) &&
     (target.distribution !== 'balanced' || balanced())
+  // Replace consumed records with symbolic outputs that later steps can reference.
+  // These ids describe dependencies; execution resolves them to confirmed records.
   const push = (kind: 'join' | 'split', consumed: typeof working, amounts: bigint[], amount?: bigint) => {
     if (steps.length >= maxTransactions) throw new Error('Inventory plan exceeds maxTransactions')
     if (amounts.some((value) => value < min || value > maxAmount(asset))) throw new Error('Inventory target is infeasible within token amount bounds')
@@ -54,6 +60,8 @@ export function buildInventoryPlan(params: {
   // missing lots. This avoids a consolidate-and-split round trip for [25,25,50].
   if (!satisfied && target.distribution === 'balanced' && working.length < target.records) {
     const deduction = splitDeduction(asset)
+    // Each split adds one record and may deduct credits; compute the final lot size
+    // after all required deductions before deciding whether existing lots can stay.
     const finalTotal = total - deduction * BigInt(target.records - working.length)
     const unit = finalTotal / BigInt(target.records)
     if (unit >= min && finalTotal % BigInt(target.records) === 0n &&
@@ -76,6 +84,8 @@ export function buildInventoryPlan(params: {
     const capacity = working.reduce((sum, record) => sum + (record.amount + splitDeduction(asset)) / (min + splitDeduction(asset)), 0n)
     const repack = target.distribution === 'balanced' || working.some((record) => record.amount < min) || capacity < BigInt(target.records)
     const reduceTo = repack ? 1 : target.records
+    // Join the smallest records first, with record ids breaking equal-amount
+    // ties so rebuilding the same plan produces the same dependency sequence.
     while (working.length > reduceTo) {
       working.sort((a, b) => a.amount < b.amount ? -1 : a.amount > b.amount ? 1 : a.id.localeCompare(b.id))
       let count = Math.min(maxJoinRecords, working.length - reduceTo + 1)
@@ -90,6 +100,8 @@ export function buildInventoryPlan(params: {
       steps.push({ kind: 'join', inputs: consumed.map((record) => record.id), outputs: [output], deduction: 0n })
       working = working.slice(count).concat(output)
     }
+    // Split the largest remaining record and leave enough value in its remainder
+    // for any dependent splits, including their intrinsic credits deductions.
     while (working.length < target.records) {
       working.sort((a, b) => a.amount > b.amount ? -1 : a.amount < b.amount ? 1 : a.id.localeCompare(b.id))
       const record = working[0]!

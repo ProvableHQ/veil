@@ -26,6 +26,8 @@ export type SplitRecordParameters = { asset: RecordAsset; record: InventoryRecor
 export async function splitRecord(client: Client, params: SplitRecordParameters): Promise<string> {
   const capabilities = await validateAsset(client, params.asset)
   const record = decodeRecord(client, params.asset, params.record.record, capabilities)
+  // Account for the intrinsic credits deduction when checking the second output;
+  // both outputs must remain positive after the native split executes.
   if (!record || typeof params.amount !== 'bigint' || params.amount <= 0n ||
     params.amount + splitDeduction(params.asset) >= record.amount) throw new Error('Split must produce two positive eligible records')
   return writeContract(client, { program: params.asset.program, function: 'split',

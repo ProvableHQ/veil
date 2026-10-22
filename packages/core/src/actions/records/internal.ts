@@ -45,6 +45,8 @@ export function decodeRecord(client: Client, asset: RecordAsset, record: OwnedRe
   const field = asset.standard === 'credits' ? 'microcredits' : 'amount'
   let amount: bigint
   if (plaintext) {
+    // Decode the authoritative record body when available; metadata alone must
+    // not make another owner's record or a non-fungible record spendable.
     const parsed = parseRecord(plaintext)
     if (parsed.owner !== client.account?.address) return undefined
     // Compliance records and registry records are not fungible ARC Token inventory.
@@ -54,6 +56,8 @@ export function decodeRecord(client: Client, asset: RecordAsset, record: OwnedRe
     if (!value || value.type.kind !== 'primitive' || value.type.primitive !== amountWidth(asset) || typeof value.value !== 'bigint') return undefined
     amount = value.value
   } else {
+    // Opaque wallet records need explicit grants for every eligibility check.
+    // Missing fields must fail instead of making an incomplete balance look empty.
     if (record.recordName !== recordName(asset)) throw new Error('Inventory requires a recordName grant')
     const fields = record.recordView?.fields
     if (capabilities?.recipientBound && fields?.recipient_bound === undefined) throw new Error('Inventory requires a recipient_bound grant for this token')
@@ -69,6 +73,8 @@ export function decodeRecord(client: Client, asset: RecordAsset, record: OwnedRe
 
 /** Pins a wallet record by uid or supplies local plaintext to the prover. @internal */
 export function recordInput(client: Client, asset: RecordAsset, record: InventoryRecord): TransactionInput {
+  // Wallet inputs identify a granted record by uid; local proving instead needs
+  // the plaintext literal and must never receive a wallet-only input request.
   if (client.account?.type === 'rpc' && record.record.uid) {
     return { type: 'record', program: asset.program, recordname: recordName(asset), uid: record.record.uid }
   }

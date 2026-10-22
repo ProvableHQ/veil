@@ -50,6 +50,8 @@ export async function rebalanceRecordInventory(client: Client, params: Rebalance
   positiveInteger(interval, 'pollIntervalMs', 2_147_483_647)
   if (params.maxFeeMicrocredits !== undefined && params.maxFeeMicrocredits < 0n) throw new Error('Fee budget cannot be negative')
   const result: InventoryResult = { status: 'complete', transactionIds: [], completedSteps: 0 }
+  // Initial inputs already use nonces; symbolic step outputs acquire their real
+  // nonces only after confirmation and scanner visibility.
   const references = new Map(plan.inputs.map((input) => [input.id, input.id]))
   const consumedInputs = new Set(plan.steps.flatMap((step) => step.inputs))
   let fees = 0n
@@ -61,6 +63,8 @@ export async function rebalanceRecordInventory(client: Client, params: Rebalance
   try {
     for (const [index, step] of plan.steps.entries()) {
       check()
+      // Rescan before every step so a competing spend or changed amount stops
+      // execution before any dependent transaction is proved.
       const inventory = await getRecordInventory(client, { asset: plan.asset })
       const inputs = step.inputs.map((id) => {
         const record = inventory.available.find((item) => item.id === references.get(id))
@@ -77,10 +81,14 @@ export async function rebalanceRecordInventory(client: Client, params: Rebalance
         }
       }
       check()
+      // Apply the stricter of the remaining run budget and the per-transaction
+      // limit without changing the caller's client configuration.
       const remaining = params.maxFeeMicrocredits === undefined ? undefined : params.maxFeeMicrocredits - fees
       const perTransaction = config.maxFeeMicrocredits
       const limit = remaining === undefined ? perTransaction : perTransaction === undefined || remaining < perTransaction ? remaining : perTransaction
       const executionClient = Object.assign(Object.create(client), { recordManagement: { ...config, tokenJoin: plan.tokenJoin, maxFeeMicrocredits: limit } }) as Client
+      // Capture the id as soon as the transaction is prepared so an interrupted
+      // broadcast still returns enough information to reconcile the journal.
       const onProgress: ProvingProgressHandler = (event) => {
         if ('transactionId' in event && !result.transactionIds.includes(event.transactionId)) result.transactionIds.push(event.transactionId)
       }
@@ -94,6 +102,8 @@ export async function rebalanceRecordInventory(client: Client, params: Rebalance
       fees += BigInt(entry.feeMicrocredits ?? '0')
       const deadline = Date.now() + timeout
       let confirmed: ConfirmedTransaction | undefined
+      // A missing transaction may still be propagating. Retain its reservation
+      // while polling and stop the plan if acceptance cannot be established.
       while (!confirmed) {
         check()
         if (Date.now() >= deadline) throw new Error(`Timed out confirming ${transactionId}; reservation retained`)
@@ -122,6 +132,8 @@ export async function rebalanceRecordInventory(client: Client, params: Rebalance
         })
         if (outputs.length !== commitments.length) await pause()
       }
+      // Bind each planned output to the exact scanned nonce and amount before
+      // making it available to the next dependent step.
       outputs.forEach((output, index) => {
         if (output.amount !== step.outputs[index]!.amount) throw new Error('Confirmed output amount differs from the plan')
         references.set(step.outputs[index]!.id, output.id)
@@ -129,6 +141,8 @@ export async function rebalanceRecordInventory(client: Client, params: Rebalance
       result.completedSteps++
     }
   } catch (error) {
+    // Earlier accepted steps remain on-chain; return their progress and let
+    // reconciliation resolve any pending spend before a fresh plan is built.
     return { ...result, status: 'interrupted', reason: error instanceof Error ? error.message : String(error) }
   }
   return result

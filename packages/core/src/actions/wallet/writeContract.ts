@@ -70,6 +70,8 @@ export async function writeContract(
   params: WriteContractParameters,
 ): Promise<WriteContractReturnType> {
   if (management(client)) {
+    // Copy the inputs before asynchronous reservation checks, then run the usual
+    // execution path with journaling callbacks and without acquiring twice.
     const snapshot = { ...params, inputs: params.inputs.map((input) => typeof input === 'string' ? input : { ...input }) }
     return manageRecordSpend(client, snapshot, (onProgress) =>
       writeContract(withoutManagement(client), { ...snapshot, onProgress }))
@@ -113,6 +115,8 @@ export async function writeContract(
       ...(params.onProgress ? { onProgress: params.onProgress } : {}),
     })
 
+    // Await the checkpoint before broadcast so a persistent store can save the
+    // proved transaction, or reject the write if its fee exceeds the limit.
     await params.onProgress?.({ type: 'transaction-prepared', transactionId: tx.id, transaction: tx })
 
     const transactionId = await client.request({

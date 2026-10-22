@@ -104,6 +104,8 @@ export async function selectTokenRecord(client: Client, params: SelectTokenRecor
     statusFilter: 'unspent',
   })) as OwnedRecord[]
 
+  // Exclude inputs held by participating inventory or trading operations even
+  // if the scanner still reports those records as unspent.
   const reserved = await reservedRecordIds(client)
   let best: TokenRecordInfo | undefined
   for (const record of records) {

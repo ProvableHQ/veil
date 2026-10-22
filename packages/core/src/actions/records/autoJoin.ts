@@ -30,6 +30,8 @@ export async function autoJoin(client: Client, params: AutoJoinParameters): Prom
   if (params.minAmount !== undefined && params.minAmount <= 0n) throw new Error('minAmount must be positive')
   let records = inventory.available
   if (params.minAmount !== undefined) {
+    // Keep a sufficient existing record; otherwise select the largest records
+    // until their total covers the requested spend, leaving the rest untouched.
     if (records.some((record) => record.amount >= params.minAmount!)) return { status: 'complete', transactionIds: [], completedSteps: 0 }
     records = [...records].sort((a, b) => a.amount > b.amount ? -1 : a.amount < b.amount ? 1 : a.id.localeCompare(b.id))
     let sum = 0n
@@ -37,6 +39,8 @@ export async function autoJoin(client: Client, params: AutoJoinParameters): Prom
     if (sum < params.minAmount) throw new Error('Insufficient available balance for autoJoin')
   }
   if (records.length <= 1) return { status: 'complete', transactionIds: [], completedSteps: 0 }
+  // Use the same planner and sequential executor as a rebalance so consolidation
+  // also waits for each dependent output and retains interrupted progress.
   const plan = buildInventoryPlan({ scope: scopeOf(client), asset: params.asset, tokenJoin: management(client)?.tokenJoin, target: { records: 1 },
     inputs: records.map(({ id, amount }) => ({ id, amount })), maxTransactions: params.maxTransactions })
   return rebalanceRecordInventory(client, { ...params, plan })

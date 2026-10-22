@@ -26,16 +26,22 @@ export type InventoryCycleResult = { program: string; status: string; result?: I
  * const results = await runInventoryCycle(client, config, store, scope)
  */
 export async function runInventoryCycle(client: Client, config: InventoryConfig, store: RecordInventoryStore, scope: string, signal?: AbortSignal): Promise<InventoryCycleResult[]> {
+  // Resolve earlier submissions before planning new work; any unresolved spend
+  // takes precedence over maintenance, including another client's trade.
   const journal = await reconcileRecordInventory(client, { rebroadcast: true })
   const pending = journal.filter((entry) => entry.program !== '__inventory_manager__' && ['reserved', 'prepared', 'submitted'].includes(entry.status))
   if (pending.length) return [{ program: '*', status: 'waiting', reason: 'Unresolved transactions retain their reservations' }]
   const results: InventoryCycleResult[] = []
   let transactions = 0
+  // Count native split deductions as well as public transaction fees against
+  // the application's rolling maintenance budget.
   const feeCost = (entry: RecordSpend) => BigInt(entry.feeMicrocredits ?? '0') +
     (entry.program === 'credits.aleo' && entry.function === 'split' ? 10_000n : 0n)
   for (const policy of config.policies) {
     if (signal?.aborted) break
     const now = Date.now()
+    // Refresh the shared journal for each asset so earlier steps in this pass
+    // and other participating clients contribute to the budget and cooldown.
     const entries = await store.list(scope)
     const spent = entries.filter((entry) => entry.createdAt > now - 86_400_000 && entry.status !== 'cancelled').reduce((sum, entry) => sum + feeCost(entry), 0n)
     const latest = entries.filter((entry) => (entry.assetProgram ?? entry.program) === policy.asset.program && entry.status !== 'cancelled').reduce((last, entry) => Math.max(last, entry.createdAt), 0)
@@ -45,6 +51,8 @@ export async function runInventoryCycle(client: Client, config: InventoryConfig,
     }
     try {
       const inventory = await getRecordInventory(client, { asset: policy.asset })
+      // A count range deliberately tolerates inventory drift; preserve usable
+      // records instead of repeatedly reshaping them to the exact target.
       const [min, max] = policy.countRange ?? [policy.target.records, policy.target.records]
       if (policy.countRange && inventory.available.length >= min && inventory.available.length <= max &&
         inventory.available.every((record) => record.amount >= (policy.target.minRecordAmount ?? 1n))) {
@@ -52,6 +60,8 @@ export async function runInventoryCycle(client: Client, config: InventoryConfig,
       }
       const plan = await planRecordInventory(client, { ...policy, maxTransactions: config.maxTransactions - transactions })
       if (!plan.steps.length) { results.push({ program: policy.asset.program, status: 'satisfied' }); continue }
+      // Reserve the plan's intrinsic deductions first; only the remaining daily
+      // allowance may be spent on network fees by the sequential executor.
       const remaining = config.maxDailyFeeMicrocredits - spent - plan.deduction
       if (remaining < 0n) { results.push({ program: policy.asset.program, status: 'budget' }); continue }
       const budget = remaining < config.maxFeeMicrocredits ? remaining : config.maxFeeMicrocredits

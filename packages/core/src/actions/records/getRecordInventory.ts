@@ -29,6 +29,8 @@ export type GetRecordInventoryReturnType = { available: InventoryRecord[]; reser
  * const inventory = await getRecordInventory(client, { asset: { program: 'credits.aleo', standard: 'credits' } })
  */
 export async function getRecordInventory(client: Client, params: GetRecordInventoryParameters): Promise<GetRecordInventoryReturnType> {
+  // Verify the token interface before interpreting record fields, then read the
+  // shared reservations that must be excluded from available balances.
   const capabilities = await validateAsset(client, params.asset)
   const excluded = await reservedRecordIds(client)
   const seen = new Map<string, InventoryRecord>()
@@ -42,15 +44,21 @@ export async function getRecordInventory(client: Client, params: GetRecordInvent
       ...(client.account?.type === 'rpc' ? {} : { filter: { records: [recordName(params.asset)], resultsPerPage: 1000, page } }),
     })
     if (client.account?.type !== 'rpc' && records.length > 1000) throw new Error('Record provider ignored pagination; inventory is incomplete')
+    // Detect providers that repeat a full page instead of advancing; silently
+    // stopping would make a partial inventory look complete.
     const pageKey = JSON.stringify(records.map((record) => record.commitment ?? record.tag ?? record.uid))
     if (records.length === 1000 && pageKey === previousPage) throw new Error('Record provider did not advance pagination; inventory is incomplete')
     previousPage = pageKey
+    // Pages can overlap while the scanner advances. Deduplicate by nonce after
+    // checking ownership, amount, and whether the record can be used as a token.
     for (const record of records) {
       const parsed = decodeRecord(client, params.asset, record, capabilities)
       if (parsed && !seen.has(parsed.id)) { seen.set(parsed.id, parsed) }
     }
     if (client.account?.type === 'rpc' || records.length < 1000) break
   }
+  // Report held records separately so callers can distinguish a low available
+  // balance from funds already committed to another participating operation.
   const available = [...seen.values()].filter((record) => !excluded.has(record.id))
   const reserved = [...seen.values()].filter((record) => excluded.has(record.id))
   return { available, reserved, balance: available.reduce((sum, record) => sum + record.amount, 0n) }

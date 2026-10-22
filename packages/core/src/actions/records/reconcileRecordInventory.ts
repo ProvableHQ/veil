@@ -28,6 +28,8 @@ export async function reconcileRecordInventory(client: Client, params: Reconcile
     if (!entry.transactionId) continue // An uncertain wallet response needs external reconciliation.
     let missing = false
     try {
+      // Only a definitive chain result changes the reservation state. A 404
+      // does not prove that a prepared or submitted transaction was rejected.
       const result = await getConfirmedTransaction(client, { id: entry.transactionId })
       if (result.status === 'accepted' || result.status === 'rejected') {
         await config.store.update(scope, entry.id, { status: result.status === 'accepted' ? 'confirmed' : 'rejected', transaction: undefined })
@@ -38,6 +40,8 @@ export async function reconcileRecordInventory(client: Client, params: Reconcile
       if ((error as { status?: number }).status !== 404) throw error
       missing = true
     }
+    // Recovery reuses the saved proof and id; rebuilding could create a second
+    // transaction while the original submission is still unresolved.
     if (missing && params.rebroadcast && entry.transaction) {
       const id = await client.request({ method: 'sendTransaction', params: { transaction: JSON.stringify(entry.transaction) } })
       if (id !== entry.transactionId) throw new Error('Rebroadcast returned a different transaction id')

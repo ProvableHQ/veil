@@ -35,6 +35,8 @@ export function validateTokenJoinRouter(router: TokenJoinRouter): number {
 export async function validateTokenJoinFunction(client: Client, router: TokenJoinRouter, count: number): Promise<void> {
   const max = validateTokenJoinRouter(router)
   if (!Number.isInteger(count) || count < 2 || count > max) throw new Error(`Token join requires 2 to ${max} records`)
+  // Validate the deployed join_N entrypoint, including the public token identifier
+  // and dynamic record slots, before sending records to a caller-selected router.
   const program = parseProgram(await getCode(client, { programId: router.program }))
   const fn = program.functions.find((item) => item.name === `join_${count}`)
   const identifier = fn?.inputs[0]
@@ -61,12 +63,15 @@ export async function validateTokenJoinFunction(client: Client, router: TokenJoi
  */
 export function inventoryOutputCommitments(transaction: Transaction, asset: RecordAsset, step: InventoryStep, router?: TokenJoinRouter): string[] {
   const transitions = transaction.execution?.transitions ?? []
+  // Nested token calls precede the outer call. Check the outer program and function
+  // against the plan before accepting any nested output as this step's result.
   const outer = transitions.at(-1)
   const routed = step.kind === 'join' && asset.standard !== 'credits' && router
   if (outer?.program !== (routed ? router.program : asset.program) ||
     outer.function !== (routed ? `join_${step.inputs.length}` : step.kind)) {
     throw new Error('Confirmed transition does not match the inventory plan')
   }
+  // Native transitions already expose the commitments that scanners index.
   if (!routed) return (outer.outputs ?? []).filter((output) => output.type === 'record' || output.type === 'record_with_dynamic_id').map((output) => output.id)
   const outputs = outer.outputs ?? []
   if (outputs.length !== 1 || outputs[0]?.type !== 'record_dynamic') throw new Error('Unexpected confirmed router output')

@@ -57,6 +57,8 @@ export type InventoryConfig = {
 export function parseInventoryConfig(value: unknown): InventoryConfig {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Inventory config must be an object')
   const raw = value as Record<string, unknown>
+  // Normalize JSON fields once so counts remain bounded numbers and monetary
+  // amounts retain their full precision as bigint throughout planning.
   const integer = (value: unknown, fallback: number, max: number, zero = false) => {
     const n = value === undefined ? fallback : value
     if (typeof n !== 'number' || !Number.isSafeInteger(n) || n < (zero ? 0 : 1) || n > max) throw new Error('Invalid inventory count or interval')
@@ -74,6 +76,8 @@ export function parseInventoryConfig(value: unknown): InventoryConfig {
   }
   const network = raw.network ?? 'testnet'
   if (network !== 'testnet' && network !== 'mainnet') throw new Error('Network must be testnet or mainnet')
+  // CLI policies choose the deployed router for their network by default; an
+  // explicit false keeps native pairwise joins available for other deployments.
   const router = raw.tokenJoin ?? { program: network === 'mainnet' ? 'main_aj_arc20_2_15.aleo' : 'test_aj_arc20_2_15.aleo' }
   let tokenJoin: TokenJoinRouter | undefined
   if (router !== false) {
@@ -87,6 +91,8 @@ export function parseInventoryConfig(value: unknown): InventoryConfig {
   if (raw.privateKey !== undefined) throw new Error('Use privateKeyEnv instead of storing a private key in inventory configuration')
   if (raw.useFeeMaster !== undefined && typeof raw.useFeeMaster !== 'boolean') throw new Error('useFeeMaster must be boolean')
   if (!Array.isArray(raw.policies ?? [])) throw new Error('policies must be an array')
+  // Validate each asset and its target together, including the optional count
+  // range that suppresses unnecessary maintenance while inventory is usable.
   const policies = ((raw.policies ?? []) as Record<string, unknown>[]).map((policy): InventoryPolicy => {
     const asset = policy.asset as RecordAsset
     if (!asset || !/^[a-z][a-z0-9_]*\.aleo$/.test(asset.program) || !['credits', 'arc20', 'arc22'].includes(asset.standard)) throw new Error('Invalid inventory asset')
@@ -103,6 +109,8 @@ export function parseInventoryConfig(value: unknown): InventoryConfig {
     return { asset: { ...asset }, target: { records, minRecordAmount, distribution,
       toleranceBps: integer(target.toleranceBps, 1000, 10_000, true) }, countRange: range as [number, number] | undefined }
   })
+  // Reject duplicate policies so one asset cannot be assigned competing targets
+  // within a single maintenance cycle.
   if (new Set(policies.map((policy) => policy.asset.program)).size !== policies.length) throw new Error('Duplicate inventory asset policy')
   const networkUrl = string(raw.networkUrl, 'https://edge.provable.com/api/v2')
   const url = new URL(networkUrl)

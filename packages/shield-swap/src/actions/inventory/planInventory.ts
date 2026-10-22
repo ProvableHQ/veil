@@ -24,10 +24,14 @@ export type PlanInventoryParameters = { token: string; target: InventoryTarget; 
  */
 export async function planInventory(client: Client, params: PlanInventoryParameters): Promise<InventoryPlan> {
   const token = await tokenData(params.api, params.token)
+  // Maintenance operates on the spendable underlying token, not the AMM
+  // wrapper program used when routing a swap.
   const program = token.underlyingProgram
   if (!program) throw new Error(`Token ${token.symbol} has no underlying record program`)
   let standard: RecordAsset['standard'] | 'none' = program === 'credits.aleo' ? 'credits' : await detectTokenStandard(client, { programId: program, engine: 'pure' })
   if (standard === 'none') {
+    // Some deployed tokens omit newer read views but retain the required token
+    // interface; tolerate only those missing views, not other conformance errors.
     const source = await getCode(client, { programId: program })
     for (const candidate of ['arc22', 'arc20'] as const) {
       if (checkProgramConformance(source, candidate).violations.every((violation) => violation.kind === 'missing_view')) { standard = candidate; break }

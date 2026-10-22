@@ -34,6 +34,7 @@ async function main(): Promise<void> {
   if (values.help || !positionals.length) { console.log(HELP); return }
   const [group, command] = positionals
   if (group !== 'inventory' || !command || !['inspect', 'plan', 'rebalance', 'run', 'status'].includes(command) || positionals.length !== 2) throw new Error(HELP)
+  // Apply explicit command-line overrides before validating the combined policy.
   const raw = values.config ? JSON.parse(await readFile(values.config, 'utf8')) : {}
   if (values.network) raw.network = values.network
   if (values.database || process.env.VEIL_INVENTORY_DB) raw.database = values.database ?? process.env.VEIL_INVENTORY_DB
@@ -55,6 +56,7 @@ async function main(): Promise<void> {
   process.once('SIGTERM', stop)
   try {
     if (command === 'status') {
+      // Print operation metadata without the stored proved transaction payload.
       print((await store.list(scope)).map(({ transaction: _transaction, ...entry }) => entry)); return
     }
     if (command === 'inspect') {
@@ -66,10 +68,13 @@ async function main(): Promise<void> {
       }
       return
     }
+    // All write commands stop at planning unless --execute was supplied.
     if (command === 'plan' || !values.execute) {
       for (const policy of config.policies) print(await client.planRecordInventory({ ...policy, maxTransactions: config.maxTransactions }))
       return
     }
+    // Reserve a synthetic record id to allow only one maintenance loop per
+    // account and chain, while ordinary trading uses the real record nonces.
     const lock = await store.acquire({ scope, records: ['__inventory_manager__'], program: '__inventory_manager__', function: 'run',
       status: 'reserved', createdAt: Date.now(), accountType: 'local' })
     if (!lock) throw new Error('Another inventory manager is already running for this account and chain')
@@ -88,6 +93,8 @@ async function main(): Promise<void> {
       await delay(config.intervalMs, undefined, { signal: controller.signal }).catch((error) => { if (!controller.signal.aborted) throw error })
     } while (!controller.signal.aborted)
   } finally {
+    // Release only the manager lease on shutdown; pending transaction entries
+    // remain in the journal for the next process to reconcile.
     try { if (lease) await store.update(scope, lease, { status: 'cancelled' }) }
     finally {
       store.close()

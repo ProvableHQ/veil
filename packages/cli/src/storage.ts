@@ -15,15 +15,21 @@ import type { RecordInventoryStore, RecordSpend } from '@provablehq/veil-core'
  * const client = walletClient.extend(recordActions({ store, chainId: 'aleo:testnet' }))
  */
 export async function sqliteRecordInventoryStore(path: string): Promise<RecordInventoryStore & { close(): void }> {
+  // Load SQLite only when opening the CLI journal, keeping SDK imports free of
+  // this Node-specific dependency and its minimum runtime version.
   const { DatabaseSync } = await import('node:sqlite')
   await mkdir(dirname(path), { recursive: true, mode: 0o700 })
   try { const file = await open(path, 'wx', 0o600); await file.close() }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
+  // Validate existing files as well as newly created ones; a symlink or broadly
+  // readable journal must not be accepted as a private transaction store.
   const metadata = await lstat(path)
   if (!metadata.isFile() || metadata.isSymbolicLink() || (metadata.mode & 0o077) !== 0) {
     throw new Error('Inventory database must be a regular file with mode 0600')
   }
   const db = new DatabaseSync(path)
+  // Wait briefly for competing writers and flush committed checkpoints before
+  // returning to an execution path that may broadcast immediately afterward.
   db.exec('PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;')
   db.exec(`CREATE TABLE IF NOT EXISTS record_spends (
     id INTEGER PRIMARY KEY AUTOINCREMENT, scope TEXT NOT NULL, data TEXT NOT NULL,
@@ -36,6 +42,8 @@ export async function sqliteRecordInventoryStore(path: string): Promise<RecordIn
     return entry
   })
   const transaction = <T>(fn: () => T): T => {
+    // Take the SQLite write lock before reading reservations so contention
+    // checks and their inserts remain atomic across CLI processes.
     db.exec('BEGIN IMMEDIATE')
     try { const result = fn(); db.exec('COMMIT'); return result }
     catch (error) { db.exec('ROLLBACK'); throw error }
@@ -61,6 +69,8 @@ export async function sqliteRecordInventoryStore(path: string): Promise<RecordIn
   return {
     list: async (scope) => transaction(() => { recover(scope); return read(scope) }),
     acquire: async (entry) => transaction(() => {
+      // Reclaim only provably unsubmitted local reservations, then acquire all
+      // requested nonces together or leave the journal unchanged on contention.
       recover(entry.scope)
       if (new Set(entry.records).size !== entry.records.length) throw new Error('Duplicate record inputs')
       if (read(entry.scope).some((old) => old.status !== 'cancelled' && old.status !== 'rejected' &&

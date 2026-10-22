@@ -24,6 +24,8 @@ export type PlanRecordInventoryParameters = { asset: RecordAsset; target: Invent
  */
 export async function planRecordInventory(client: Client, params: PlanRecordInventoryParameters): Promise<InventoryPlan> {
   const inventory = await getRecordInventory(client, { asset: params.asset })
+  // Retain only nonces and amounts in the plan; record plaintext stays in the
+  // scanner result and is fetched again when each step is executed.
   return buildInventoryPlan({ ...params, tokenJoin: management(client)?.tokenJoin,
     scope: scopeOf(client), inputs: inventory.available.map(({ id, amount }) => ({ id, amount })) })
 }
