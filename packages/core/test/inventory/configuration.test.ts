@@ -45,6 +45,38 @@ describe('explicit record management configuration', () => {
     expect(await reservedRecordIds(client)).toEqual(new Set())
   })
 
+  it.each(['run', 'client'] as const)('rejects an RPC %s fee ceiling before scanning a nonempty plan', async (source) => {
+    const rpc = transport()
+    const store = memoryRecordInventoryStore()
+    const client = createWalletClient({ account, transport: rpc,
+      recordManagement: { enabled: true, store, chainId: 'aleo:testnet',
+        ...(source === 'client' ? { maxFeeMicrocredits: 0n } : {}) } })
+    const plan = await client.planRecordInventory({ asset, target: { records: 1 } })
+    expect(plan.steps).not.toHaveLength(0)
+    rpc.request.mockClear()
+    await expect(client.rebalanceRecordInventory({ plan,
+      ...(source === 'run' ? { maxFeeMicrocredits: 0n } : {}) }))
+      .rejects.toThrow('Wallet accounts cannot enforce a fee ceiling before submission')
+    expect(rpc.request).not.toHaveBeenCalled()
+    expect(await store.list(scope)).toEqual([])
+  })
+
+  it.each(['run', 'client'] as const)('allows an RPC no-op plan with a %s fee ceiling', async (source) => {
+    const rpc = transport()
+    const store = memoryRecordInventoryStore()
+    const client = createWalletClient({ account, transport: rpc,
+      recordManagement: { enabled: true, store, chainId: 'aleo:testnet',
+        ...(source === 'client' ? { maxFeeMicrocredits: 0n } : {}) } })
+    const plan = await client.planRecordInventory({ asset, target: { records: 2 } })
+    expect(plan.steps).toEqual([])
+    rpc.request.mockClear()
+    await expect(client.rebalanceRecordInventory({ plan,
+      ...(source === 'run' ? { maxFeeMicrocredits: 0n } : {}) }))
+      .resolves.toEqual({ status: 'complete', completedSteps: 0, transactionIds: [] })
+    expect(rpc.request).not.toHaveBeenCalled()
+    expect(await store.list(scope)).toEqual([])
+  })
+
   it('adds methods without needing a chain or creating a journal', async () => {
     const rpc = transport()
     rpc.config.network = undefined

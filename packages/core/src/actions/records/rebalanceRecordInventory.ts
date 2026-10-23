@@ -20,6 +20,7 @@ import { inventoryOutputCommitments } from '../../inventory/tokenJoin.js'
  * @property pollIntervalMs Poll interval, defaults to 1000 milliseconds.
  * @property signal Optional cancellation signal; cancellation preserves submitted reservations.
  * @property maxFeeMicrocredits Optional total network-fee budget for this run, excluding intrinsic split deductions.
+ *   Wallet RPC accounts cannot enforce this limit; nonempty plans reject it before scanning.
  */
 export type RebalanceRecordInventoryParameters = {
   plan: InventoryPlan; timeoutMs?: number; pollIntervalMs?: number; signal?: AbortSignal; maxFeeMicrocredits?: bigint
@@ -32,7 +33,7 @@ export type RebalanceRecordInventoryParameters = {
  * @param client Client with recordManagement.enabled for reservations and progress checkpoints.
  * @param params Reviewed plan, timeouts, cancellation and optional fee budget.
  * @returns Completion or interruption with all submitted transaction ids; never rolls back accepted steps.
- * @throws On invalid/tampered plans or missing coordination, before submission.
+ * @throws On invalid/tampered plans, missing coordination, or a wallet fee ceiling on a nonempty plan, before submission.
  * @example
  * import type { WalletClient, InventoryPlan } from '@provablehq/veil-core'
  *
@@ -70,6 +71,12 @@ export async function rebalanceRecordInventory(client: Client, params: Rebalance
   positiveInteger(timeout, 'timeoutMs', 2_147_483_647)
   positiveInteger(interval, 'pollIntervalMs', 2_147_483_647)
   if (params.maxFeeMicrocredits !== undefined && params.maxFeeMicrocredits < 0n) throw new Error('Fee budget cannot be negative')
+  // Wallets submit before exposing the proved fee. Reject unsupported ceilings
+  // before scanning; an already satisfied plan has no fees to constrain.
+  if (plan.steps.length && client.account?.type === 'rpc' &&
+    (params.maxFeeMicrocredits !== undefined || config.maxFeeMicrocredits !== undefined)) {
+    throw new Error('Wallet accounts cannot enforce a fee ceiling before submission')
+  }
   const result: InventoryResult = { status: 'complete', transactionIds: [], completedSteps: 0 }
   // Initial inputs already use nonces; symbolic step outputs acquire their real
   // nonces only after confirmation and scanner visibility.
