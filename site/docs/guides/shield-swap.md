@@ -247,6 +247,166 @@ blinding factor from the blinded address, so the dApp never holds it. See
 [`claimSwapOutput`](/api/shield-swap/claimSwapOutput) for the full recovery
 flow.
 
+## Concurrent swaps
+
+Several private swaps can run at once when each has its own input record and
+blinded identity. Record management coordinates the inputs; the identity store
+retains the information needed to claim each output. Both are needed when a
+process may stop before all claims finish.
+
+### Configure a shared client
+
+This Node example uses a funded testnet account with Shield Swap access. Install
+`@provablehq/shield-swap-cli` alongside the SDK packages to use its optional
+SQLite storage adapter; it requires Node 22.13 or newer. The SDK itself does not
+require SQLite. For a different storage backend, supply a
+[`RecordInventoryStore`](./record-inventory.md#share-a-store-and-retain-it-across-restarts).
+Run only one trader process for the account with the bundled identity store.
+
+```ts
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+import { shieldSwapActions, parseUnits } from '@provablehq/shield-swap-sdk'
+import { swapFileStore } from '@provablehq/shield-swap-sdk/node'
+import { sqliteRecordInventoryStore } from '@provablehq/shield-swap-cli/storage'
+
+const privateKey = process.env.ALEO_PRIVATE_KEY
+if (!privateKey) throw new Error('Set ALEO_PRIVATE_KEY')
+const aleo = await loadNetwork('testnet')
+const address = aleo.privateKeyToAccount(privateKey).address
+const directory = `.veil/testnet/${address}`
+const store = await sqliteRecordInventoryStore(`${directory}/inventory.sqlite`)
+const identities = swapFileStore(`${directory}/blinded.json`)
+const { walletClient } = aleo.createAleoClient({
+  privateKey,
+  records: aleo.createRemoteScanner({ waitForSync: true }),
+  provingMode: 'delegated', useFeeMaster: true, confirmationTimeout: 600_000,
+  recordManagement: { enabled: true, store, chainId: 'aleo:testnet' },
+})
+const client = walletClient.extend(shieldSwapActions({
+  api: {}, blindedIdentities: identities,
+}))
+await client.authenticateShieldSwap()
+```
+
+`recordManagement.enabled` opts into reservations and recovery; attaching
+`shieldSwapActions()` alone leaves them disabled. `store` records spent inputs
+and prepared transactions. `identities` stores blinded addresses and swap handles
+for claims. Keep both files private and reuse them after restarting. This setup
+uses FeeMaster for network fees; managed private-fee selection is described in
+the [record management guide](./record-inventory.md#private-fees).
+
+### Prepare one record per trade
+
+Reconcile earlier work before planning. Six swaps of 0.1 USDCx need at least
+six available records holding 0.1 USDCx each. A single 0.6 USDCx record cannot
+fund all six at once. Preparing a balanced inventory can join and split the
+account's entire available USDCx balance; reserved records are excluded.
+
+```ts
+const journal = await client.reconcileRecordInventory()
+if (journal.some((entry) => !['confirmed', 'rejected', 'cancelled'].includes(entry.status))) {
+  throw new Error('Resolve pending transactions before starting another batch')
+}
+const pending = await client.getUnclaimedSwaps()
+if (pending.swaps.length || pending.unresolvable.length) {
+  throw new Error('Recover previous swaps before starting another batch')
+}
+const token = await client.tokenData('USDCx')
+const plan = await client.planInventory({
+  token: token.id,
+  target: {
+    records: 6, minRecordAmount: parseUnits('0.1', token.decimals),
+    distribution: 'balanced', toleranceBps: 0,
+  },
+  maxTransactions: 24,
+})
+console.table(plan.steps) // Inspect the joins and splits before execution.
+```
+
+Planning makes no reservation and submits nothing. After reviewing `plan.steps`,
+execute that same plan with `client.rebalanceRecordInventory({ plan })`.
+`client.rebalanceInventory({ token, target })` instead creates a fresh plan at
+call time. If preparation is interrupted, stop before submitting any swaps.
+
+### Submit swaps and claim their outputs
+
+The following calls spend funds. A new quote is fetched after maintenance so
+the time spent joining and splitting does not consume its 60-second lifetime.
+All six swaps use the same terms and independently select their input records.
+
+```ts
+const maintenance = await client.rebalanceRecordInventory({
+  plan, timeoutMs: 600_000, pollIntervalMs: 3_000,
+})
+if (maintenance.status !== 'complete') {
+  throw new Error(`Inventory preparation interrupted: ${maintenance.reason}`)
+}
+
+// Fetch a fresh quote after the maintenance transactions have finished.
+const quote = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: '0.1', slippageBps: 50 })
+const swaps = await Promise.allSettled(
+  Array.from({ length: 6 }, () => client.swap({ quote })),
+)
+const handles = swaps.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+
+// Attempt every successful swap's claim even when another trade failed.
+const claims = await Promise.allSettled(handles.map(async (handle) => {
+  await client.waitForSwapOutput({ handle, timeout: 600_000, pollingInterval: 3_000 })
+  return client.claimSwapOutput({ handle })
+}))
+console.log('Swap results:', swaps.map((result) => result.status))
+console.table(claims.map((result, index) => ({
+  swap: handles[index]!.transactionId,
+  status: result.status,
+  amountOut: result.status === 'fulfilled' ? result.value.amountOut.toString() : undefined,
+  refund: result.status === 'fulfilled' ? result.value.amountRemaining.toString() : undefined,
+})))
+// Retain both stores after failures. Close SQLite after all calls have settled.
+store.close()
+```
+
+### Selection, failures, and recovery
+
+Each swap needs a distinct record large enough for its input amount. With
+record management enabled and `tokenRecord` omitted, local `swap` and
+`swapMultiHop` calls try available records from smallest to largest. If another
+operation reserves the first choice, selection tries the next candidate before
+proving. It scans once per call and tries each nonce at most once. Exhausting
+that list fails; it does not wait for a new deposit or automatically join records.
+
+Selection preserves the quote's amount, output floor, blinded identity, and
+nonce, and checks quote expiry and account/network consistency before another
+attempt. Explicit `tokenRecord` inputs remain fixed. Proving, submission, and
+confirmation errors never trigger another swap. Wallet accounts require pinned
+token records; this automatic reselection flow applies to local signers.
+
+A quote reserves no pool liquidity. Concurrent trades can move the price against
+each other, and each trade independently enforces its minimum output. A batch
+is not atomic: some swaps can succeed while others fail. Check every result and
+claim each successful output. A claim can return both output tokens and unspent
+input; `amountRemaining` is the refund in input-token base units.
+
+For several clients in one process, share the same record store, `chainId`, and
+blinded identity store object. SQLite coordinates record reservations across
+processes, but the bundled blinded identity store does not coordinate counters
+across processes. Run one process for the account with this setup. A shared
+JSON path alone is insufficient; a multi-process application must separately
+coordinate identity allocation or supply distinct explicit identities.
+
+A timeout does not prove failure. Keep `inventory.sqlite` and `blinded.json`,
+reconcile pending transactions, and use `client.getUnclaimedSwaps()` to recover
+known handles. Do not launch a replacement batch until uncertain submissions
+are resolved. The runnable example also retains a pending-batch marker and
+uses a lock file to stop overlapping runs against its directory.
+
+Run [concurrent-swaps.ts](https://github.com/ProvableHQ/veil/blob/main/examples/shield-swap/concurrent-swaps.ts)
+for the complete example with preview and execution modes. Its
+[README](https://github.com/ProvableHQ/veil/blob/main/examples/shield-swap/README.md)
+covers commands and recovery. The CLI's `swap-concurrent` command retains a
+one-input-token-per-leg restriction; use the SDK example for several simultaneous
+swaps selling the same token. See [record management](./record-inventory.md)
+for configuration defaults, fee limits, wallet grants, and join helper selection.
+
 ## Liquidity
 
 Positions are concentrated-liquidity ranges, held as private records.

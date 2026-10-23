@@ -1,70 +1,167 @@
-# Record inventory
+---
+title: Record management
+description: Configure private record inventory, shared reservations, fee selection, and recovery in Veil.
+---
 
-A private token balance can span many records. A swap may need one record large
-enough to spend, while concurrent trades benefit from several independent
-records. Inventory actions join or split these records to prepare the balance
-for spending.
+# Record management
+
+Aleo stores private balances in records. Spending a record consumes it and can
+produce new records, much like spending a Bitcoin UTXO. A swap needs one record
+that covers its input amount; several concurrent swaps need several such
+records. A sufficient total balance alone does not guarantee either layout.
+
+Veil's record methods inspect that inventory and prepare it with joins and
+splits. Optional record management reserves inputs during execution and saves
+transaction progress so participating clients can recover after an interruption.
+This guide covers configuration, storage, maintenance, fees, and recovery.
+For a trading example, see [concurrent Shield Swap swaps](./shield-swap.md#concurrent-swaps).
 
 ## Enable record coordination
 
-Wallet clients include record inventory methods. Reads, planning, and individual
-joins or splits work without enabling reservations or recovery.
-
-Reservations keep participating clients from spending the same record. Recovery
-tracks unfinished transactions so an interrupted operation can be reconciled
-before more records are spent. Both are off by default, including after
-`.extend(recordActions())`. Set `recordManagement.enabled: true` when creating
-the client to enable them and execute plans with dependent steps.
+Wallet clients already include the inventory methods. Reservations and recovery
+are **off by default**, including after `.extend(recordActions())` or
+`.extend(shieldSwapActions())`. Enable them when creating the client:
 
 ```ts
+import { memoryRecordInventoryStore } from '@provablehq/veil-core'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 
+const privateKey = process.env.ALEO_PRIVATE_KEY
+if (!privateKey) throw new Error('Set ALEO_PRIVATE_KEY')
+
 const aleo = await loadNetwork('testnet')
+const store = memoryRecordInventoryStore()
 const { walletClient: client } = aleo.createAleoClient({
-  privateKey, // supplied by the application
+  privateKey,
   records: aleo.createRemoteScanner({ waitForSync: true }),
-  recordManagement: {
-    enabled: true,
-    chainId: 'aleo:testnet',
-  },
+  recordManagement: { enabled: true, store, chainId: 'aleo:testnet' },
 })
-const asset = { program: 'credits.aleo' }
-const plan = await client.planRecordInventory({
-  asset,
-  target: { records: 4, distribution: 'balanced', minRecordAmount: 1_000_000n },
-  maxTransactions: 10,
-})
-// Review plan.steps and plan.deduction before explicitly executing.
-const result = await client.rebalanceRecordInventory({
-  plan, maxFeeMicrocredits: 1_000_000n,
-})
+
+// Read the available balance without signing or submitting a transaction.
+const inventory = await client.getRecordInventory({ asset: { program: 'credits.aleo' } })
+console.log('Available microcredits:', inventory.balance.toString())
+console.log('Available records:', inventory.available.length)
+console.log('Reserved records:', inventory.reserved.length)
 ```
 
-Core defines the planning, execution, and storage interfaces without requiring
-a specific runtime. The Aleo SDK supplies the scanner and local or delegated
-proving.
+This Node example keeps reservations in memory. Use a durable store for a
+service that must recover after restarting. The key remains in the account;
+record journals do not store private keys or record plaintext.
 
-An enabled client uses an in-memory store unless the caller supplies one.
-Disabled clients create no store. To recover unfinished operations after a
-restart, long-running services MUST supply a durable `RecordInventoryStore`
-through `recordManagement.store`. SQLite storage is available only from the
-`@provablehq/shield-swap-cli/storage` entry point (Node 22.13+).
+`createClient`, `createWalletClient`, `aleo.createAleoClient`, and
+`createDevnodeClient` accept `recordManagement`. Core provides the interfaces
+without requiring Node, a database, or a particular wallet. The Aleo SDK supplies
+the scanner and local or delegated prover. A connected wallet supplies its own
+records and proving; see [wallet requirements](#interrupted-work-and-wallets).
 
-| Action | Behavior |
+### Configuration and defaults
+
+| Setting | Default | When to set it |
+| --- | --- | --- |
+| `enabled` | Disabled when `recordManagement` is omitted | Set `true` to reserve inputs and retain transaction checkpoints. It does not start background maintenance. |
+| `store` | A separate in-memory journal for each enabled client | Pass one shared store to every client using the same inventory. Use durable storage for restart recovery. |
+| `chainId` | The transport's network | Use the same identity for participants on one chain. Give each custom or local chain a distinct identity. Required if the transport has no network. |
+| `maxFeeMicrocredits` | No limit | Bound the total network fee of each transaction before broadcast. Requires a local signer and a prover that supports checkpoints. |
+| `tokenJoin` | Helpers selected by asset and network | Set `false` for native pairwise joins, or configure a reviewed dynamic ARC helper. See [batch joins](#batch-joins). |
+
+With `enabled: false`, no journal is created and fee limits are ignored. Chain
+identity and join-routing options can still affect read-only plans and explicit
+joins. Enabling coordination does not automatically join records during a swap,
+split balances, or launch a worker. Call the maintenance methods when needed.
+
+Configure the client before attaching action decorators. Rebuild a managed
+client when changing networks; in-flight work checks that its account and chain
+remain unchanged. Use the same explicit `chainId` across participants:
+`'testnet'` and `'aleo:testnet'` are different reservation namespaces even if
+both clients contact the same testnet node.
+
+### Share a store and retain it across restarts
+
+The store holds its lock only while acquiring inputs. It acquires every input
+for one transaction together or rejects the acquisition. Other calls can then reserve different records and
+prove concurrently. The journal keeps acquired nonces excluded from selection.
+A scanner read or an inventory plan alone does not reserve anything.
+
+| Store | Coordination | Restart behavior |
+| --- | --- | --- |
+| `memoryRecordInventoryStore()` | Clients sharing the same object in one process | Entries disappear when the process exits. |
+| `sqliteRecordInventoryStore(path)` | Participating processes opening the same SQLite database | Reservations and prepared transactions remain on disk. Node 22.13+ only. |
+| Custom `RecordInventoryStore` | Determined by its implementation | The implementation must persist mutations before resolving them if recovery is required. |
+
+The Node SQLite adapter is an optional export of
+`@provablehq/shield-swap-cli/storage`; install that package to use it. It is not
+a dependency of core or the Shield Swap SDK. Replace the memory store above
+with a stable path scoped to the account and network:
+
+```ts
+import { sqliteRecordInventoryStore } from '@provablehq/shield-swap-cli/storage'
+
+const store = await sqliteRecordInventoryStore('.veil/testnet/trading-account/inventory.sqlite')
+// Pass store in recordManagement when constructing every participating client.
+// Call store.close() only after all of those clients have finished their work.
+```
+
+Custom stores MUST atomically check and acquire all record nonces within the
+chain/account scope. Implementing `list()` followed by an independent insert
+allows two callers to acquire the same record. Persist each `acquire` and
+`update` before resolving its promise. Keep confirmed inputs excluded while a
+scanner still reports them as unspent, and retain a rejected transaction's
+consumed private fee record. Do not release uncertain submissions on a timer.
+
+Coordination applies only to clients using this store and scope. Raw submissions,
+other wallets, or traders using a different database can still spend the same
+records. Shield Swap also needs a separate store for blinded identities and
+claim handles; its [concurrent setup](./shield-swap.md#concurrent-swaps) covers both.
+
+## Use the inventory methods
+
+| Method | Effect |
 | --- | --- |
-| `getRecordInventory({ asset })` | Reads all scanner pages; separates available and reserved records. |
-| `joinRecords({ asset, records })` | Joins two records natively, or up to 16 with an available helper (15 for dynamic ARC helpers); returns the transaction id. |
-| `splitRecord({ asset, record, amount })` | Creates two outputs; `amount` is the first output's base-unit amount. |
-| `autoJoin({ asset, minAmount? })` | Joins enough records to cover the amount, or all records if the amount is omitted. Execution requires record management to be enabled. |
-| `planRecordInventory({ asset, target, maxTransactions? })` | Produces a read-only plan bound to its account and chain. |
-| `rebalanceRecordInventory({ plan, ... })` | Runs each step and waits for its confirmed outputs to appear in the scanner. Requires record management to be enabled. |
-| `reconcileRecordInventory({ rebroadcast? })` | Resolves pending journal entries and can rebroadcast the saved transaction. Requires record management to be enabled. |
+| `client.getRecordInventory({ asset })` | Scans all pages and reports available records, reserved records, and available balance. |
+| `client.joinRecords({ asset, records })` | Submits one native or helper join using the exact supplied records. Returns a transaction id before confirmation. |
+| `client.splitRecord({ asset, record, amount })` | Submits a native split. The first output holds `amount` in base units. Returns before confirmation. |
+| `client.autoJoin({ asset, minAmount? })` | Selects records and runs as many joins as needed to obtain a sufficient record, or one consolidated record if no threshold is supplied. |
+| `client.planRecordInventory({ asset, target, maxTransactions? })` | Reads the inventory and returns an account/chain-bound plan without signing or reserving inputs. |
+| `client.rebalanceRecordInventory({ plan, ... })` | Executes the reviewed plan, waiting for confirmation and scanner visibility before each dependent step. |
+| `client.reconcileRecordInventory({ rebroadcast? })` | Checks pending transactions on chain; optionally rebroadcasts their saved proofs without rebuilding them. |
+
+Reading, planning, and individual joins or splits remain available with
+coordination disabled. Rebalance and reconciliation require it. `autoJoin`
+requires it when joins are needed; an existing sufficient record returns
+`complete` with zero transactions.
+
+### Join only enough for a spend
+
+Use `joinRecords` when the caller has already selected the exact inputs for one
+transaction. Use `autoJoin` to obtain one record large enough for an upcoming
+spend. This example requests one credit, expressed as 1,000,000 microcredits:
+
+```ts
+const result = await client.autoJoin({
+  asset: { program: 'credits.aleo' },
+  minAmount: 1_000_000n,
+  maxTransactions: 8,
+  timeoutMs: 120_000,
+  pollIntervalMs: 2_000,
+  maxFeeMicrocredits: 10_000_000n,
+})
+if (result.status === 'interrupted') {
+  console.error(result.reason, result.transactionIds)
+  throw new Error('Resolve the interrupted joins before spending')
+}
+```
+
+The action preserves an existing sufficient record. Otherwise it selects the
+largest records until their sum covers `minAmount`, prefers a compatible batch
+helper, and waits for dependent outputs. Omitting `minAmount` consolidates all
+eligible, unreserved records. It never chooses a different fee payment mode to
+make the operation succeed.
 
 ## Select the record and amount field
 
 `RecordAsset` requires only `program`. Core reads the deployed program's
 join/split interface to select the record and its unsigned amount width.
-ARC20/ARC22 tokens use `Token.amount`; native credits use
+ARC-20/ARC-22 tokens use `Token.amount`; native credits use
 `credits.microcredits`. For other records, the default field is `amount`,
 then `microcredits`. `standard` is an optional hint checked against the program.
 
@@ -82,7 +179,8 @@ const inventory = await client.getRecordInventory({ asset })
 The override applies to scans, wallet input requests, joins, splits, and plan
 amounts. The record MUST match the native `join`/`split` inputs and outputs, and
 the field MUST be an unsigned integer matching the split amount argument.
-A missing override is an error; core does not substitute another balance field.
+An override naming an undeclared record or field is an error; core does not
+substitute another balance field.
 `getRecordInventory` returns the resolved selection in `inventory.asset`.
 Compliance, registry, and recipient-bound records are excluded.
 
@@ -101,6 +199,56 @@ splits. It is a bounded deterministic strategy, not an optimal transaction
 solver; it rejects layouts whose required intermediate joins overflow the token
 width. `maxTransactions` defaults to 100.
 
+### Review and execute a plan
+
+Prepare six records with at least one credit each, and inspect the required
+operations before spending:
+
+```ts
+const plan = await client.planRecordInventory({
+  asset: { program: 'credits.aleo' },
+  target: {
+    records: 6, minRecordAmount: 1_000_000n,
+    distribution: 'balanced', toleranceBps: 0,
+  },
+  maxTransactions: 24,
+})
+console.table(plan.steps.map((step) => ({
+  operation: step.kind, inputs: step.inputs.length, outputs: step.outputs.length,
+  helper: step.joinProgram?.program ?? 'native',
+})))
+console.log('Intrinsic split deductions:', plan.deduction.toString())
+```
+
+The target applies to the entire available asset inventory. Reserved records
+remain outside it. Equal records can differ by one base unit because amounts
+are integers. A plan is a snapshot, so execution rechecks its inputs and stops
+if another operation has consumed or reserved them.
+
+After reviewing the plan, execute that same object without modifying its steps:
+
+```ts
+const result = await client.rebalanceRecordInventory({
+  plan,
+  timeoutMs: 120_000,
+  pollIntervalMs: 2_000,
+  maxFeeMicrocredits: 10_000_000n,
+})
+if (result.status === 'interrupted') {
+  console.error(result.reason, result.transactionIds)
+  // Inspect confirmations before creating another plan. Accepted steps remain.
+  await client.reconcileRecordInventory()
+}
+```
+
+`maxTransactions` limits the number of joins and splits in the plan (default
+100, maximum 10,000). The action's `maxFeeMicrocredits` limits total network fees
+for the run; the client setting limits each transaction. Both apply when set.
+Intrinsic credits split deductions are separate from these fee limits.
+`timeoutMs` covers confirmation and scanner visibility per step; proving time
+is additional. An optional `signal` stops further work but does not cancel a
+transaction already submitted.
+
 ### Batch joins
 
 When more than two records need joining, core prefers available helper programs
@@ -113,7 +261,7 @@ precedence over ARC defaults.
 | `credits.aleo` | `autojoin_credits_*` | `autojoin_credits_*` | 2 to 16 |
 | USAD | `aj_usad_stablecoin_*` | `aj_test_usad_stablecoin_*` | 2 to 16 |
 | USDCx | `aj_usdcx_stablecoin_*` | `aj_test_usdcx_stablecoin_*` | 2 to 16 |
-| Other ARC20/ARC22 tokens | `main_aj_arc20_2_15.aleo` | `test_aj_arc20_2_15.aleo` | 2 to 15 |
+| Other ARC-20/ARC-22 tokens | `main_aj_arc20_2_15.aleo` | `test_aj_arc20_2_15.aleo` | 2 to 15 |
 
 For each `*`, the helper suffixes are `2_10.aleo`, `11_14.aleo`, and
 `15_16.aleo`. Dedicated stablecoin entries apply to `usad_stablecoin.aleo` and
@@ -164,22 +312,33 @@ nested join's exact record to appear in the scanner.
 
 ## Coordinate with Shield Swap
 
+Attach `shieldSwapActions()` to the managed wallet client. The DEX methods
+resolve symbols and token ids to the underlying asset that holds spendable
+records. Maintenance operates on that program even when swaps use an AMM wrapper.
+
 ```ts
+import { shieldSwapActions, parseUnits } from '@provablehq/shield-swap-sdk'
+
 const dex = client.extend(shieldSwapActions({ api: {} }))
-const plan = await dex.planInventory({ token: 'USDCx', target: { records: 4 } })
-const result = await dex.rebalanceInventory({ token: 'USDCx', target: { records: 4 } })
+await dex.authenticateShieldSwap()
+const token = await dex.tokenData('USDCx')
+const plan = await dex.planInventory({
+  token: token.id,
+  target: { records: 6, minRecordAmount: parseUnits('0.1', token.decimals), distribution: 'balanced' },
+  maxTransactions: 24,
+})
+// Inspect plan.steps. When approved, execute this exact plan:
+// await dex.rebalanceRecordInventory({ plan })
 ```
 
-Import `shieldSwapActions` from `@provablehq/shield-swap-sdk`. The wrapper reads
-`underlyingProgram` from the token metadata and uses core's inventory actions.
-Create the wallet with `recordManagement: { enabled: true, store, chainId }`
-before applying `shieldSwapActions`. Token selection then skips reserved records.
-`writeContract`/`executeTransaction`/`executeContract` reserve all explicit record
-inputs together before proving.
+`dex.rebalanceInventory({ token, target })` is a convenience method that creates
+and executes a fresh plan. Use `dex.rebalanceRecordInventory({ plan })` when
+executing a plan already inspected. Neither extending the client nor calling a
+planner starts automatic maintenance.
 
-Independent clients MUST share the same store and chain identity to avoid
-spending each other's reserved inputs. Raw submissions and wallets outside this
-configuration bypass the reservations.
+Managed `writeContract`, `executeTransaction`, and `executeContract` calls
+reserve their explicit record inputs before proving. Trading and maintenance
+must use the same store and chain identity to see each other's reservations.
 
 ### Concurrent swaps
 
@@ -203,15 +362,49 @@ explicit identities. The bundled blinded identity stores coordinate within one
 process only. A shared SQLite record journal does not make blinded identity
 allocation safe across processes.
 
-## Interrupted work and wallets
+Follow the [concurrent swaps walkthrough](./shield-swap.md#concurrent-swaps)
+for client setup, six-record preparation, and separate swap/claim results. The
+[runnable example](https://github.com/ProvableHQ/veil/blob/main/examples/shield-swap/concurrent-swaps.ts)
+adds a preview mode and restart guards.
 
-Execution returns `complete` or `interrupted`, with known transaction ids and
-completed steps. No accepted transaction is rolled back. Reconcile, scan, and
-plan again after interruption; do not blindly replay an old plan. The executor
-checks each input and only feeds confirmed output commitments into later steps.
-Defaults are a 120-second confirmation/output-visibility deadline per step and
-one-second polling; proving time is additional. Cancellation stops subsequent
-work and retains unresolved reservations.
+## Recover interrupted work
+
+Reopen the same journal with the same account and `chainId`, then inspect the
+pending entries before submitting anything new:
+
+```ts
+const journal = await client.reconcileRecordInventory()
+const unresolved = journal.filter((entry) =>
+  !['confirmed', 'rejected', 'cancelled'].includes(entry.status),
+)
+console.table(unresolved.map((entry) => ({
+  operation: entry.id, transactionId: entry.transactionId, status: entry.status,
+})))
+```
+
+Reconciliation reads the chain and updates known outcomes. A 404 does not prove
+rejection. If a prepared transaction is still missing and rebroadcast is the
+chosen recovery action, explicitly pass `rebroadcast: true`:
+
+```ts
+await client.reconcileRecordInventory({ rebroadcast: true })
+// Check confirmations again later; rebroadcast acceptance is not settlement.
+```
+
+Rebroadcast sends the exact saved transaction with its existing proof and id.
+It does not repeat joins, create a new transaction, or automatically resume a
+partially completed plan. Resolve uncertain submissions first, then scan and
+plan against the remaining inventory.
+
+| Journal status | Record treatment |
+| --- | --- |
+| `reserved` | Inputs are held before proving. A local failure known to precede submission can cancel the reservation. |
+| `prepared` / `submitted` | Inputs remain held until the chain outcome is known. |
+| `confirmed` | Consumed inputs remain excluded from stale scanner results. |
+| `rejected` | Execution inputs are released; a charged private fee record stays excluded. |
+| `cancelled` | Inputs are available again because the local operation did not submit. |
+
+## Interrupted work and wallets
 
 A local prover MUST honor the awaited `transaction-prepared` progress callback
 before broadcasting. Bundled SDK adapters do this for local and delegated
@@ -229,7 +422,7 @@ Opaque wallet submission cannot enforce a fee ceiling before broadcast, so
 wallet execution rejects configured fee budgets. A lost wallet response without
 a transaction id retains its reservation for external reconciliation.
 
-### Private fees
+## Private fees
 
 Managed local-account writes support `privateFee: true`. If `feeRecord` is
 supplied, the client uses it when the current scan reports it as available and

@@ -111,6 +111,19 @@ discovery, quoting, the `imports` map — and the wallet-signer variants.
   `shieldSwapAlgorithmGrants` — the connect-time algorithm allowlist a
   wallet-signer setup passes so the wallet may derive blinded identities.
 
+## Concurrent swaps and record management
+
+Enable `recordManagement` when creating the wallet client, then attach
+`shieldSwapActions()`. Local swaps can select different records from shared
+inventory when several trades sell the same token. A separate persistent blinded
+identity store retains the handles needed to claim their outputs.
+
+The [concurrent swaps walkthrough](/guides/shield-swap#concurrent-swaps) covers
+client configuration, six-record preparation, submission, claims, and partial
+failures. The [record management guide](/guides/record-inventory) documents
+storage, defaults, fee limits, helper programs, and recovery. Coordination is
+off by default and does not start automatic maintenance.
+
 ## Subpaths
 
 - **`@provablehq/shield-swap-sdk/agent`** — `createShieldSwapAgentTools({ client, api, includeWrites? })` and `shieldSwapAgentToolSchemas()`. Read tools are included by default; money-moving write tools are opt-in via `includeWrites`.

@@ -31,6 +31,8 @@ Core and Shield Swap expose `/agent` tool schemas and `/mcp` tools. Before opera
 - [Reading chain state](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/reading-chain-state.md): Public clients and mapping reads.
 - [Executing transactions](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/executing-transactions.md): Wallet clients and program transitions.
 - [Working with records](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/working-with-records.md): Private state, scanning, and decryption.
+- [Record management](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/record-inventory.md): Shared record reservations, joins/splits, configuration, fees, and recovery.
+- [Concurrent swaps](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/shield-swap.md#concurrent-swaps): Client setup, inventory preparation, simultaneous trades, and claims after partial failures.
 - [Transaction lifecycle](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/transaction-lifecycle.md): Submission, status, and settlement.
 - [Shield Swap trading runbooks](https://raw.githubusercontent.com/ProvableHQ/veil/main/packages/shield-swap/skills/SKILL.md): Required starting point for account setup, swaps, and liquidity.
 

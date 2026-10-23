@@ -257,8 +257,11 @@ Shield Swap applies these operations to each DEX token's underlying program.
 maintenance and stores recovery data in SQLite.
 
 Record reservations and recovery are off by default. Follow the
-[record inventory guide](site/docs/guides/record-inventory.md) to enable them,
-configure storage, and coordinate maintenance with trading.
+[record management guide](site/docs/guides/record-inventory.md) to enable them,
+configure storage, select private fee records, and recover interrupted work.
+The [concurrent swaps walkthrough](site/docs/guides/shield-swap.md#concurrent-swaps)
+shows how to prepare records, share both stores, and claim successful swaps
+when another trade fails.
 
 ## License
 

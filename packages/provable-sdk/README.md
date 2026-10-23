@@ -161,31 +161,49 @@ The resulting string can be passed to an ARC-22 transfer or bridge proof input.
 SDK-created proving configs expose the same generator to Shield Swap, which
 resolves and caches witnesses automatically for local and delegated proving.
 
-## Inventory scanning and proving
+## Record management
 
-Wallet clients include inventory methods. Pass
-`recordManagement: { enabled: true, store, chainId: 'aleo:testnet' }` to
-`createAleoClient` to reserve records during writes and track unfinished
-transactions. `createDevnodeClient` accepts the same option; use a distinct
-`chainId` for each local chain. Omission or `enabled: false` leaves ordinary
-writes unchanged.
+`createAleoClient` returns a wallet client with record inventory methods.
+Enable `recordManagement` to reserve inputs during writes and retain transaction
+progress. The SDK supplies the scanner and proving; the application chooses
+where to store the reservation journal.
 
-Managed private fees select a credits record from the configured scanner.
-`writeContract` and `executeContract` accept `privateFee: true` and optional
-`feeRecord` plaintext. A reserved supplied record is replaced with an available
-one that covers the estimated fee; no eligible record means an error. Local,
-delegated, and devnode proving use the selected record. A pinned private fee
-also overrides FeeMaster sponsorship for that call.
+```ts
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+import type { RecordInventoryStore } from '@provablehq/veil-core'
 
-Use `createRemoteScanner({ waitForSync: true })` to wait for the scanner to
-catch up before planning inventory changes. `syncTimeoutMs` defaults to
-300000 milliseconds; `waitForSync` defaults to false. Local and delegated
-execution both await the `transaction-prepared` callback before submission,
-so an application can save the proved transaction for recovery. The application
-supplies storage; SQLite is available through
-`@provablehq/shield-swap-cli/storage` (Node 22.13+). See
-the [inventory guide](../../site/docs/guides/record-inventory.md).
+async function previewInventory(privateKey: string, store: RecordInventoryStore) {
+  const aleo = await loadNetwork('testnet')
+  const { walletClient: client } = aleo.createAleoClient({
+    privateKey,
+    records: aleo.createRemoteScanner({ waitForSync: true }),
+    recordManagement: { enabled: true, store, chainId: 'aleo:testnet' },
+  })
+  const plan = await client.planRecordInventory({
+    asset: { program: 'credits.aleo' },
+    target: { records: 6, minRecordAmount: 1_000_000n, distribution: 'balanced' },
+    maxTransactions: 24,
+  })
+  return { client, plan } // Inspect the plan before executing it.
+}
+// After review: await client.rebalanceRecordInventory({ plan })
+```
 
-Dynamic ARC join helpers supply the underlying token as a dynamic import;
-the proving adapter includes that program and its transitive static imports for
-both local and delegated proofs.
+Omitting `recordManagement` or setting `enabled: false` leaves coordination off.
+An enabled client without `store` creates its own in-memory journal. Share one
+store and chain identity across clients using the same account, and use durable
+storage to recover after a restart. `createDevnodeClient` accepts the same
+configuration; give each local chain a distinct `chainId`.
+
+`waitForSync: true` waits for scanner synchronization before each page
+(default `false`, with a 300,000 ms sync timeout). It does not reserve records;
+reservations are acquired when the client executes a write. Local and delegated
+proving both save the prepared transaction before broadcasting when management
+is enabled. Managed local writes can use `privateFee: true` and an optional
+preferred `feeRecord`; the client selects another credits record if needed.
+Explicit private fees take precedence over FeeMaster for that call.
+
+See the [record management guide](../../site/docs/guides/record-inventory.md)
+for memory and SQLite setup, configuration defaults, fees, joins/splits, and
+recovery. The [concurrent swaps example](../../examples/shield-swap/concurrent-swaps.ts)
+composes this client with Shield Swap and persists both reservation and claim data.

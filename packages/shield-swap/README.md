@@ -565,47 +565,126 @@ node never had from one it simply had not confirmed yet.
 
 ### Concurrent swaps
 
-Concurrent swaps need separate input records and separate blinded identities.
-Enable `recordManagement: { enabled: true, store, chainId }` when creating the
-wallet client to coordinate records. If two automatic selections choose the same
-record, `swap` and `swapMultiHop` retry with another eligible record before
-proving. Candidates are tried from smallest to largest, once per nonce. Explicit
-`tokenRecord` inputs remain fixed, and execution errors are not retried.
+Private swaps can sell the same token concurrently when each trade has a
+separate sufficient input record and a separate blinded identity. Enable record
+management on the wallet client, then attach `shieldSwapActions`. Use persistent
+stores to retain reservations and claim handles after a restart.
 
-Each swap also needs a single-use blinded identity. `shieldSwapActions` supplies
-an in-memory identity store by default, shared by calls through that client. Use
-a durable store to retain identities and claim handles after a restart:
+The following setup is for one Node process and a funded testnet account with
+DEX access. The optional SQLite adapter comes from `@provablehq/shield-swap-cli`
+and requires Node 22.13+. Install it separately from the SDK, or provide a custom
+`RecordInventoryStore` as described in the
+[record management guide](../../site/docs/guides/record-inventory.md).
 
 ```ts
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+import { shieldSwapActions, parseUnits } from '@provablehq/shield-swap-sdk'
 import { swapFileStore } from '@provablehq/shield-swap-sdk/node'
+import { sqliteRecordInventoryStore } from '@provablehq/shield-swap-cli/storage'
 
-// walletClient was created with recordManagement.enabled: true.
-const client = walletClient.extend(
-  shieldSwapActions({ api: {}, blindedIdentities: swapFileStore('.veil/blinded.json') }),
-)
-
-// Requires at least two available USDCx records, each covering amountIn.
-const results = await Promise.allSettled([
-  client.swap({ poolKey: poolA, tokenInId: usdc, amountIn, imports }),
-  client.swap({ poolKey: poolA, tokenInId: usdc, amountIn, imports }),
-])
-// Claim every fulfilled result, even if another swap failed.
+const privateKey = process.env.ALEO_PRIVATE_KEY
+if (!privateKey) throw new Error('Set ALEO_PRIVATE_KEY')
+const aleo = await loadNetwork('testnet')
+const address = aleo.privateKeyToAccount(privateKey).address
+const directory = `.veil/testnet/${address}`
+const store = await sqliteRecordInventoryStore(`${directory}/inventory.sqlite`)
+const identities = swapFileStore(`${directory}/blinded.json`)
+const { walletClient } = aleo.createAleoClient({
+  privateKey,
+  records: aleo.createRemoteScanner({ waitForSync: true }),
+  provingMode: 'delegated', useFeeMaster: true, confirmationTimeout: 600_000,
+  recordManagement: { enabled: true, store, chainId: 'aleo:testnet' },
+})
+const client = walletClient.extend(shieldSwapActions({
+  api: {}, blindedIdentities: identities,
+}))
+await client.authenticateShieldSwap()
 ```
 
-`swapFileStore` is an alias of `fileBlindedIdentityStore`. Each swap reserves its
-identity before submission and saves its handle after confirmation;
-`claimSwapOutput` marks it claimed. Concurrent clients in one process MUST share
-the same identity store instance as well as the record store and chain identity.
+Before each batch, reconcile unfinished transactions and prepare enough records:
 
-The bundled identity stores do not coordinate counters across processes. SQLite
-can coordinate record reservations across processes, but a shared identity file
-alone cannot prevent two processes from deriving the same blinded address.
-Use distinct explicit identities when managing concurrent swaps across processes.
+```ts
+const journal = await client.reconcileRecordInventory()
+if (journal.some((entry) => !['confirmed', 'rejected', 'cancelled'].includes(entry.status))) {
+  throw new Error('Resolve pending transactions before starting another batch')
+}
+const pending = await client.getUnclaimedSwaps()
+if (pending.swaps.length || pending.unresolvable.length) {
+  throw new Error('Recover previous swaps before starting another batch')
+}
+const token = await client.tokenData('USDCx')
+const plan = await client.planInventory({
+  token: token.id,
+  target: {
+    records: 6, minRecordAmount: parseUnits('0.1', token.decimals),
+    distribution: 'balanced', toleranceBps: 0,
+  },
+  maxTransactions: 24,
+})
+console.table(plan.steps) // Inspect the joins and splits before execution.
+```
 
-Record coordination remains off by default. Without it, callers MUST supply
-disjoint input records or trade sequentially. See the
-[record inventory guide](../../site/docs/guides/record-inventory.md#concurrent-swaps)
-for retry boundaries and storage configuration.
+The plan covers the entire available USDCx inventory. Inspect it before running
+the following writes. `rebalanceRecordInventory` waits for each confirmed output
+to appear in the scanner; an interruption stops the batch before trading.
+
+```ts
+const maintenance = await client.rebalanceRecordInventory({
+  plan, timeoutMs: 600_000, pollIntervalMs: 3_000,
+})
+if (maintenance.status !== 'complete') {
+  throw new Error(`Inventory preparation interrupted: ${maintenance.reason}`)
+}
+
+// Fetch a fresh quote after the maintenance transactions have finished.
+const quote = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: '0.1', slippageBps: 50 })
+const swaps = await Promise.allSettled(
+  Array.from({ length: 6 }, () => client.swap({ quote })),
+)
+const handles = swaps.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+
+// Attempt every successful swap's claim even when another trade failed.
+const claims = await Promise.allSettled(handles.map(async (handle) => {
+  await client.waitForSwapOutput({ handle, timeout: 600_000, pollingInterval: 3_000 })
+  return client.claimSwapOutput({ handle })
+}))
+console.log('Swap results:', swaps.map((result) => result.status))
+console.table(claims.map((result, index) => ({
+  swap: handles[index]!.transactionId,
+  status: result.status,
+  amountOut: result.status === 'fulfilled' ? result.value.amountOut.toString() : undefined,
+  refund: result.status === 'fulfilled' ? result.value.amountRemaining.toString() : undefined,
+})))
+// Retain both stores after failures. Close SQLite after all calls have settled.
+store.close()
+```
+
+The main constraints are:
+
+- With enabled coordination, local automatic selection tries another sufficient
+  record after a reservation conflict, once per candidate. It preserves the
+  quote and never retries proving or an uncertain submission. An explicit
+  `tokenRecord` stays fixed; swaps do not auto-join insufficient records.
+- Every participating client must share the record store and chain identity.
+  Blinded identities need the same store object within one process. SQLite
+  reservations are safe across processes, but sharing `blinded.json` does not
+  coordinate identity counters. Use one process with the bundled identity store.
+- Each trade enforces its own output floor. Pool prices can move during the
+  batch, so inspect every swap and claim result. `claims[i]` corresponds to
+  `handles[i]`; keep failed claims for recovery and account for input refunds.
+- A timeout does not prove rejection. Reopen both stores, call
+  `client.reconcileRecordInventory()` and `client.getUnclaimedSwaps()`, and resolve
+  uncertain work before starting another batch. Wallet signers must supply
+  pinned token records; automatic reselection applies to local signers.
+
+The [concurrent swaps walkthrough](../../site/docs/guides/shield-swap.md#concurrent-swaps)
+explains setup and failure handling in detail. The
+[runnable example](../../examples/shield-swap/concurrent-swaps.ts) defaults to a
+preview and adds restart guards; see its [usage guide](../../examples/shield-swap/README.md).
+The CLI's `swap-concurrent` command still requires a different input token in
+each leg. The SDK example supports repeated trades of the same token.
+
+#### Track and recover swap identities
 
 To opt a single call out of tracking, pass `blindedIdentities: undefined`; the
 identity is then derived by scanning the chain and nothing is written. The
@@ -1209,6 +1288,27 @@ fixture format. Both route shapes are validated before any funds are spent.
 A deployment whose API always selects direct routes needs a separate multi-hop
 fixture topology; the test fails rather than silently skipping that coverage.
 
+## Record management
+
+The inventory wrappers pass each token's underlying program to core, which
+resolves its record and amount field. For more than two records, core prefers
+available batch helpers: dedicated credits and stablecoin helpers accept up to
+16 records; dynamic ARC helpers accept up to 15. Set
+`recordManagement.tokenJoin: false` for native pairwise joins, or supply
+`{ program, maxRecords? }` to override the dynamic ARC router.
+
+Reservations and recovery are off by default. Set
+`recordManagement: { enabled: true, store, chainId }` when creating the wallet
+client, then apply `shieldSwapActions` to prevent maintenance and trading from
+spending the same records. Adding `recordActions()` alone leaves these features
+disabled. `planInventory({ token, target })` and
+`rebalanceInventory({ token, target })` use the DEX token's underlying program
+with core's ARC-20/ARC-22/credits actions. Participating clients MUST share the
+same store and chain identity. The SDK has no database dependency.
+
+Follow the [record management guide](../../site/docs/guides/record-inventory.md)
+for configuration, shared storage, and recovery after an interruption.
+
 <a id="freezelist-proofs"></a>
 
 ## Compliance
@@ -1354,24 +1454,3 @@ await client.collect({
 The CLI and agent/MCP write handlers use the SDK default generator. Existing
 providers remain compatible, including explicit legacy empty-witness providers
 for deployments that accept them. Omission now checks the actual current list.
-
-## Record inventory
-
-The inventory wrappers pass each token's underlying program to core, which
-resolves its record and amount field. For more than two records, core prefers
-available batch helpers: dedicated credits and stablecoin helpers accept up to
-16 records; dynamic ARC helpers accept up to 15. Set
-`recordManagement.tokenJoin: false` for native pairwise joins, or supply
-`{ program, maxRecords? }` to override the dynamic ARC router.
-
-Reservations and recovery are off by default. Set
-`recordManagement: { enabled: true, store, chainId }` when creating the wallet
-client, then apply `shieldSwapActions` to prevent maintenance and trading from
-spending the same records. Adding `recordActions()` alone leaves these features
-disabled. `planInventory({ token, target })` and
-`rebalanceInventory({ token, target })` use the DEX token's underlying program
-with core's ARC20/ARC22/credits actions. Participating clients MUST share the
-same store and chain identity. The SDK has no database dependency.
-
-Follow the [record inventory guide](../../site/docs/guides/record-inventory.md)
-for configuration, shared storage, and recovery after an interruption.

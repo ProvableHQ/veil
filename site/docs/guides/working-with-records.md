@@ -17,6 +17,10 @@ Veil hides that scan behind [`requestRecords`](/api/wallet/requestRecords).
 Which mechanism actually performs the scan depends on where the account's
 signing key lives.
 
+For joins, splits, and shared reservations during spending, see
+[record management](./record-inventory.md). It covers preparing inventory and
+recovering interrupted writes using the records returned by a scanner or wallet.
+
 ## Records from a connected wallet
 
 An RPC account — one built with `fromWalletAdapter` or `useVeilWallet` —
