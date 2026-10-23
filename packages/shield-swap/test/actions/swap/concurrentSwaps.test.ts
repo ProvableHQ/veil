@@ -15,7 +15,7 @@ const tokenC = programToTokenId('token_c')
 const wrappedA = programToTokenId('wrapped_a')
 const plaintext = (nonce: number, amount = 100n) => `{ owner: ${owner}.private, amount: ${amount}u128.private, _nonce: ${nonce}group.public }`
 const records = (count: number): OwnedRecord[] => Array.from({ length: count }, (_, index) => ({
-  programName: 'token_a.aleo', recordName: 'Token', spent: false, recordPlaintext: plaintext(index + 1),
+  programName: 'token_a.aleo', recordName: 'Token', spent: false, tag: `${index + 1}field`, recordPlaintext: plaintext(index + 1),
 }))
 
 /** Forces every first attempt to reach acquisition before any writer can win. */

@@ -357,3 +357,29 @@ units (default `0.1`). Each source record must remain above its configured
 minimum after that spend. These swaps pay the pool's trading fees; the return
 amount can differ from the forward amount. The tests use the confirmed claim
 amount for accounting and stop subsequent writes if a check fails.
+
+### Exercise concurrent swaps
+
+The concurrent suite starts with the same balanced inventories, then submits
+six USDCx-to-ETH swaps together. It holds the first reservations until every
+swap has selected its input, forcing contention. Each swap must reach proving
+with a different record, and at least two executions must overlap. All
+successful outputs are claimed before the suite reports any batch failures.
+
+The next batch returns the claimed ETH amounts through six concurrent swaps,
+also using automatic record selection. The suite restores both balanced
+inventories, checks exact debits and credits, and reopens the journal to verify
+confirmed spends and the absence of duplicate inputs.
+
+```sh
+VEIL_INVENTORY_E2E=1 \
+VEIL_E2E_STATE_FILE=/absolute/path/to/testnet/state.json \
+VEIL_BLINDED_STORE=/absolute/path/to/testnet/blinded.json \
+pnpm vitest run packages/shield-swap/test/integration/concurrentInventory.e2e.test.ts --bail=1
+```
+
+`VEIL_INVENTORY_RECORDS` also controls the batch size (default 6).
+`VEIL_INVENTORY_SWAP_USDCX` controls each forward swap (default `0.1` USDCx),
+so the default batch sells `0.6` USDCx in total. Run this suite separately from
+the other funded suites so they do not compete for the account's records or
+blinded identity counters.

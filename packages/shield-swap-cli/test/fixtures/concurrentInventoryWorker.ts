@@ -18,10 +18,10 @@ store.acquire = async entry => {
 }
 const request = async () => { throw new Error('Unexpected network call') }
 const client = createWalletClient({
-  account: { type: 'local', source: 'test', address: 'aleo1owner', privateKey: 'test', viewKey: 'test', sign: async () => '', signMessage: async () => '' },
+  account: { type: 'local', source: 'test', address: 'aleo1owner', privateKey: 'test', viewKey: 'test', sign: async () => new Uint8Array(), signMessage: async () => new Uint8Array() },
   transport: { config: { key: 'test', name: 'test', type: 'custom', network: 'testnet', request }, request },
   recordManagement: { enabled: true, store },
-  recordProvider: { requestRecords: async () => [1, 2].map(nonce => ({ programName: 'token.aleo', recordName: 'Token', spent: false,
+  recordProvider: { requestRecords: async () => [1, 2].map(nonce => ({ programName: 'token.aleo', recordName: 'Token', spent: false, tag: `${nonce}field`,
     recordPlaintext: `{ owner: aleo1owner.private, amount: 100u128.private, _nonce: ${nonce}group.public }` })), setAccount() {} },
   proving: { mode: 'local', execute: async options => {
     const transactionId = `at1${process.pid}`
@@ -35,5 +35,5 @@ try {
   process.send!({ nonce: result.outputs[0], attempts })
 } finally {
   store.close()
-  process.disconnect()
+  process.disconnect!()
 }
