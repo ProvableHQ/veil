@@ -1,5 +1,7 @@
 # @provablehq/veil-aleo-devnode
 
+## 0.14.0
+
 ## 0.13.0
 
 ## 0.13.0-rc.0
