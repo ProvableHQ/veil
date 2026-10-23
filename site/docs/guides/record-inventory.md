@@ -482,7 +482,9 @@ upgrading, set `tokenJoin: false`; omitting it now selects available helpers.
 ## Run the integration checks
 
 The deployed-interface check reads the testnet credits, USDCx, and ETH programs
-and their join helpers. It needs no account and submits no transactions:
+and their join helpers. It validates every supported record count, disabled
+helper routing, and rejection of a static helper for another asset. It needs no
+account and submits no transactions:
 
 ```sh
 VEIL_INTEGRATION=1 pnpm vitest run packages/core/test/integration/recordInventory.integration.test.ts
@@ -521,6 +523,31 @@ failure. The next run reconciles the journal and refuses to proceed while an
 operation remains unresolved. If a process was terminated, verify it has stopped
 before removing its `run.lock` file.
 
+
+### Check execution guards and native joins
+
+The execution-guard suite uses the real scanner, delegated prover, and testnet
+ledger. It checks modified plans, cancellation before submission, and inputs
+reserved after planning. Both `writeContract` and `executeContract` must reject
+a proved transaction above the configured fee ceiling and release its input.
+
+With helpers disabled, each token consolidates three records through two native
+joins, then restores the original amounts through two splits. A separate case
+cancels a dependent join sequence after its first submission, confirms that
+transaction, and restores its inputs' amounts. The final check reopens SQLite
+and verifies that every submitted transaction is confirmed and no work remains
+unresolved.
+
+```sh
+VEIL_INVENTORY_E2E=1 \
+VEIL_E2E_STATE_FILE=/absolute/path/to/testnet/state.json \
+pnpm vitest run packages/shield-swap/test/integration/recordInventoryGuards.e2e.test.ts --bail=1
+```
+
+After initial inventory preparation, this suite submits ten joins/splits and
+builds two additional transactions that the fee ceiling prevents from being
+broadcast. FeeMaster pays network fees; token balances remain unchanged.
+Run it separately from other funded suites using the same account.
 
 ### Exercise inventory during repeated swaps
 

@@ -4,7 +4,7 @@ import { expect } from 'vitest'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { sqliteRecordInventoryStore } from '@provablehq/shield-swap-cli/storage'
 import { getConfirmedTransaction } from '@provablehq/veil-core'
-import type { InventoryRecord, InventoryTarget, OwnedRecord, RecordAsset, RecordInventoryStore, Transaction } from '@provablehq/veil-core'
+import type { InventoryRecord, InventoryTarget, OwnedRecord, RecordAsset, RecordInventoryStore, RecordManagementConfig, Transaction } from '@provablehq/veil-core'
 import { shieldSwapActions, tokenData, parseUnits, formatUnits, type TokenInfo } from '../../src/index.js'
 import { fileBlindedIdentityStore } from '../../src/node.js'
 
@@ -89,12 +89,12 @@ export async function createInventoryHarness() {
   await lock.writeFile(`${process.pid}\n`)
   let store: Awaited<ReturnType<typeof sqliteRecordInventoryStore>> | undefined
   const identities = fileBlindedIdentityStore(process.env.VEIL_BLINDED_STORE ?? join(directory, 'blinded.json'))
-  const connect = (journal?: RecordInventoryStore) => aleo.createAleoClient({
+  const connect = (journal?: RecordInventoryStore, options: Pick<RecordManagementConfig, 'tokenJoin' | 'maxFeeMicrocredits'> = {}) => aleo.createAleoClient({
     privateKey,
     networkUrl: 'https://edge.provable.com/api/v2',
     records: aleo.createRemoteScanner({ waitForSync: true, syncTimeoutMs: WRITE_TIMEOUT }),
     provingMode: 'delegated', useFeeMaster: true, confirmationTimeout: WRITE_TIMEOUT,
-    ...(journal ? { recordManagement: { enabled: true, store: journal, chainId: 'aleo:testnet' } } : {}),
+    ...(journal ? { recordManagement: { enabled: true, store: journal, chainId: 'aleo:testnet', ...options } } : {}),
   }).walletClient.extend(shieldSwapActions({
     api: { baseUrl: process.env.VEIL_E2E_API_URL ?? state?.apiUrl }, blindedIdentities: identities,
   }))
@@ -163,7 +163,7 @@ export async function createInventoryHarness() {
     return {
       get client() { return client }, get store() { return store! }, identities, scope, tokens, count, directory,
       scan, confirm, outputRecords, assertBalanced, rebalance,
-      peer: () => connect(store), unmanaged: () => connect(),
+      peer: (options?: Pick<RecordManagementConfig, 'tokenJoin' | 'maxFeeMicrocredits'>) => connect(store, options), unmanaged: () => connect(),
       // Reopen the actual SQLite file to test recovery across client/store lifetimes.
       restart: async () => {
         store!.close()
