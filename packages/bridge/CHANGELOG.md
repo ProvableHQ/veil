@@ -1,5 +1,14 @@
 # @provablehq/aleo-bridge-sdk
 
+## 0.14.0
+
+### Patch Changes
+
+- afc5601: Correct BAT, USDG, and ZEC warp-route owners after ownership rotation, restoring
+  all five outbound routes from Aleo to Ethereum and Solana.
+- Updated dependencies [a978150]
+  - @provablehq/veil-core@0.14.0
+
 ## 0.13.0
 
 ### Minor Changes
