@@ -13,8 +13,8 @@ Each trade spends 0.1 USDCx by default. Preparing the records can join and split
 out of the plan. At least 0.6 USDCx must be available.
 
 Run from the repository root with Node 22.13 or newer and dependencies installed
-(`pnpm install`). Set `VEIL_E2E_PRIVATE_KEY` through a local secret environment
-to an existing funded **testnet** account with DEX access. The example neither
+(`pnpm install`). Set `VEIL_E2E_PRIVATE_KEY` in the local environment to the private key of an
+existing funded testnet account with DEX access. The example neither
 creates nor funds an account. For setup, follow the
 [Shield Swap runbook](../../packages/shield-swap/skills/SKILL.md).
 
@@ -27,7 +27,9 @@ pnpm exec tsx examples/shield-swap/concurrent-swaps.ts --execute
 ```
 
 Execution uses delegated proving with FeeMaster paying network fees. It
-explicitly sets `recordManagement: { enabled: true, store, chainId: 'aleo:testnet' }`.
+sets `recordManagement: { enabled: true, store, chainId: 'aleo:testnet' }`
+on the wallet client. The client already includes record methods;
+`shieldSwapActions()` adds the trading methods.
 Record management remains disabled for clients that omit that configuration.
 
 To change the trade terms, import the example from another local script:
@@ -52,8 +54,9 @@ trades can still fail as pool prices change.
 `submitConcurrentSwaps` uses `Promise.allSettled` so one failed submission does
 not discard successful handles. It then waits for every successful swap's
 output and attempts its claim. A failed claim does not prevent other claims.
-The result for each confirmed claim includes output and any unspent input
-refund; a partial fill is not reported as a full fill.
+The helper returns `swaps`, `handles`, and `claims`. Each `claims[i]` belongs to
+`handles[i]`, including failed claims that need recovery. Successful claims
+report both the output and any unspent input refund.
 
 ## Keep recovery data
 
@@ -78,7 +81,7 @@ After an interruption:
 1. Stop the previous process. Remove a stale `run.lock` only after confirming
    that process has exited.
 2. Recreate the client with the same account, network, `inventory.sqlite`, and
-   `blinded.json` paths shown in the example. Call `reconcileRecordInventory(client)`
+   `blinded.json` paths shown in the example. Call `client.reconcileRecordInventory()`
    to inspect pending transactions. A missing confirmation or a timeout does not
    prove failure; keep its reservation. The record guide describes
    [exact-transaction rebroadcast](../../site/docs/guides/record-inventory.md).

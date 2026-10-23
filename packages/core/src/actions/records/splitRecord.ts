@@ -21,19 +21,19 @@ export type SplitRecordParameters = { asset: RecordAsset; record: InventoryRecor
  * @returns Submitted transaction id, before confirmation.
  * @throws When either output would be empty or inputs are incompatible.
  * @example
- * import { getRecordInventory, splitRecord, waitForConfirmation, type Client } from '@provablehq/veil-core'
+ * import { waitForConfirmation, type WalletClient } from '@provablehq/veil-core'
  *
- * async function splitOneCredit(client: Client) {
+ * async function splitOneCredit(client: WalletClient) {
  *   const asset = { program: 'credits.aleo' }
  *   const amount = 1_000_000n // One credit, expressed in microcredits.
  *   const deduction = 10_000n // Native credits split deduction, separate from fees.
- *   const inventory = await getRecordInventory(client, { asset })
+ *   const inventory = await client.getRecordInventory({ asset })
  *   const record = inventory.available.find((item) => item.amount > amount + deduction)
  *   if (!record) throw new Error('No record can produce two positive outputs')
  *
  *   // The first output holds amount; the second holds this remainder.
  *   console.log('Second output in microcredits:', (record.amount - amount - deduction).toString())
- *   const transactionId = await splitRecord(client, { asset, record, amount })
+ *   const transactionId = await client.splitRecord({ asset, record, amount })
  *   await waitForConfirmation(client, transactionId, 120_000)
  *   // Rescan after the scanner indexes the outputs before selecting either.
  *   return transactionId

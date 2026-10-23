@@ -20,7 +20,7 @@ const handle = (id: number) => ({ transactionId: `swap-${id}`, swapId: `${id}fie
 it('starts every swap before awaiting results and claims successes despite a failed submission', async () => {
   const releases: Array<(value: Handle) => void> = []
   const failed = new Error('submission outcome uncertain')
-  const swap = vi.fn<(params: { quote: SwapQuote }) => Promise<Handle>>()
+  const swap = vi.fn()
     .mockImplementationOnce(() => new Promise((resolve) => releases.push(resolve)))
     .mockRejectedValueOnce(failed)
     .mockImplementationOnce(() => new Promise((resolve) => releases.push(resolve)))
@@ -36,8 +36,10 @@ it('starts every swap before awaiting results and claims successes despite a fai
   releases[1]!(handle(3))
   const results = await pending
 
-  expect(results.map((result) => result.status)).toEqual(['claimed', 'swap-failed', 'claimed'])
-  expect(results[1]).toMatchObject({ error: failed })
+  expect(results.swaps.map((result) => result.status)).toEqual(['fulfilled', 'rejected', 'fulfilled'])
+  expect(results.swaps[1]).toMatchObject({ reason: failed })
+  expect(results.handles).toEqual([handle(1), handle(3)])
+  expect(results.claims.map((result) => result.status)).toEqual(['fulfilled', 'fulfilled'])
   expect(claimSwapOutput).toHaveBeenCalledTimes(2)
   expect(swap.mock.calls).toEqual([[{ quote: offer }], [{ quote: offer }], [{ quote: offer }]])
 })
@@ -57,8 +59,9 @@ describe('claim recovery', () => {
     })
 
     const results = await submitConcurrentSwaps({ swap, waitForSwapOutput, claimSwapOutput }, [offer, offer])
-    expect(results[0]).toMatchObject({ status: 'claim-failed', handle: handle(1), error: failure })
-    expect(results[1]).toMatchObject({ status: 'claimed', claim: { amountOut: 80n, amountRemaining: 20n } })
+    expect(results.handles).toEqual([handle(1), handle(2)])
+    expect(results.claims[0]).toMatchObject({ status: 'rejected', reason: failure })
+    expect(results.claims[1]).toMatchObject({ status: 'fulfilled', value: { amountOut: 80n, amountRemaining: 20n } })
     expect(swap).toHaveBeenCalledTimes(2)
     expect(waitForSwapOutput).toHaveBeenCalledWith({ handle: handle(1), timeout: 600_000, pollingInterval: 3_000 })
     expect(claimSwapOutput).toHaveBeenCalledTimes(phase === 'wait' ? 1 : 2)

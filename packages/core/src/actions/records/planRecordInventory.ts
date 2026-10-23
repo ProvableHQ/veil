@@ -21,10 +21,10 @@ export type PlanRecordInventoryParameters = { asset: RecordAsset; target: Invent
  * @returns Plaintext-free dependency plan with intrinsic credits deductions.
  * @throws When the target is impossible or exceeds the transaction limit.
  * @example
- * import { planRecordInventory, type Client } from '@provablehq/veil-core'
+ * import type { WalletClient } from '@provablehq/veil-core'
  *
- * async function previewSixCreditsRecords(client: Client) {
- *   const plan = await planRecordInventory(client, {
+ * async function previewSixCreditsRecords(client: WalletClient) {
+ *   const plan = await client.planRecordInventory({
  *     asset: { program: 'credits.aleo' },
  *     target: {
  *       records: 6,

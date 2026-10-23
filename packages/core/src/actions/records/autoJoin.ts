@@ -24,13 +24,13 @@ export type AutoJoinParameters = Omit<RebalanceRecordInventoryParameters, 'plan'
  * @returns Confirmed progress or a resumable interruption.
  * @throws Before submission when available funds cannot cover the threshold.
  * @example
- * import { autoJoin, getRecordInventory, reconcileRecordInventory, type Client } from '@provablehq/veil-core'
+ * import type { WalletClient } from '@provablehq/veil-core'
  *
- * async function prepareOneCredit(client: Client) {
+ * async function prepareOneCredit(client: WalletClient) {
  *   // The client must explicitly enable recordManagement with a shared store.
  *   const asset = { program: 'credits.aleo' }
  *   const minAmount = 1_000_000n // Microcredits; omission consolidates all records.
- *   const result = await autoJoin(client, {
+ *   const result = await client.autoJoin({
  *     asset, minAmount,
  *     maxTransactions: 8,
  *     timeoutMs: 120_000,
@@ -41,11 +41,11 @@ export type AutoJoinParameters = Omit<RebalanceRecordInventoryParameters, 'plan'
  *   if (result.status === 'interrupted') {
  *     // An accepted step is not rolled back. Reconcile before deciding whether
  *     // a fresh scan and plan are safe; never blindly repeat an uncertain spend.
- *     await reconcileRecordInventory(client)
+ *     await client.reconcileRecordInventory()
  *     throw new Error(result.reason ?? 'Consolidation interrupted')
  *   }
  *   // A sufficient existing record returns complete with zero steps.
- *   const inventory = await getRecordInventory(client, { asset })
+ *   const inventory = await client.getRecordInventory({ asset })
  *   return inventory.available.find((record) => record.amount >= minAmount)
  * }
  */

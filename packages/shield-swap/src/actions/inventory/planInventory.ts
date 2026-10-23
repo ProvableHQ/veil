@@ -19,13 +19,13 @@ export type PlanInventoryParameters = { token: string; target: InventoryTarget; 
  * @returns A core inventory plan for the underlying program, not the AMM wrapper.
  * @throws When token metadata or its supported underlying program cannot be resolved.
  * @example
- * import type { Client } from '@provablehq/veil-core'
- * import { planInventory, tokenData, parseUnits, type ApiClient } from '@provablehq/shield-swap-sdk'
+ * import type { WalletClient } from '@provablehq/veil-core'
+ * import { parseUnits, type ShieldSwapActions } from '@provablehq/shield-swap-sdk'
  *
- * async function previewUsdcxInventory(client: Client, api: ApiClient) {
- *   const token = await tokenData(api, 'USDCx')
- *   const plan = await planInventory(client, {
- *     api,
+ * async function previewUsdcxInventory(client: WalletClient & ShieldSwapActions) {
+ *   // Extend a wallet client with shieldSwapActions({ api: {} }) first.
+ *   const token = await client.tokenData('USDCx')
+ *   const plan = await client.planInventory({
  *     token: token.id,
  *     target: {
  *       records: 6,
@@ -37,9 +37,7 @@ export type PlanInventoryParameters = { token: string; target: InventoryTarget; 
  *   })
  *   // The plan names the spendable underlying program, not its AMM wrapper.
  *   console.log('Asset:', plan.asset.program, 'Operations:', plan.steps.length)
- *   // Keep this plan for review; execute it with core rebalanceRecordInventory.
- *   // A client extended with shieldSwapActions supplies api automatically:
- *   // await client.planInventory({ token: 'USDCx', target, maxTransactions: 24 })
+ *   // After review, call client.rebalanceRecordInventory({ plan }).
  *   return plan
  * }
  */

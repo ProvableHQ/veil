@@ -27,12 +27,12 @@ export type GetRecordInventoryReturnType = { asset: ResolvedRecordAsset; availab
  * @returns Eligible records and their available balance; hits the network.
  * @throws On missing wallet grants, unsupported assets, or a non-terminating scan.
  * @example
- * import { getRecordInventory, type Client, type RecordAsset } from '@provablehq/veil-core'
+ * import type { WalletClient, RecordAsset } from '@provablehq/veil-core'
  *
- * async function inspectCredits(client: Client) {
+ * async function inspectCredits(client: WalletClient) {
  *   // Amounts are integer microcredits. An enabled shared journal excludes
  *   // records held by concurrent operations from available and balance.
- *   const inventory = await getRecordInventory(client, {
+ *   const inventory = await client.getRecordInventory({
  *     asset: { program: 'credits.aleo' },
  *   })
  *   console.log('Available microcredits:', inventory.balance.toString())

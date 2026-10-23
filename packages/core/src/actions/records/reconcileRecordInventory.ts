@@ -17,12 +17,12 @@ export type ReconcileRecordInventoryParameters = { rebroadcast?: boolean }
  * @returns Current scoped journal. Reads the chain and optionally resubmits transactions.
  * @throws On storage/network errors other than transaction-not-found (HTTP 404).
  * @example
- * import { reconcileRecordInventory, type Client } from '@provablehq/veil-core'
+ * import type { WalletClient } from '@provablehq/veil-core'
  *
- * async function inspectRecovery(client: Client) {
+ * async function inspectRecovery(client: WalletClient) {
  *   // Reopen the original store and enable recordManagement on the same account
  *   // and chain. The default only reads confirmations; it never rebroadcasts.
- *   const journal = await reconcileRecordInventory(client)
+ *   const journal = await client.reconcileRecordInventory()
  *   const unresolved = journal.filter((entry) =>
  *     entry.status !== 'confirmed' && entry.status !== 'rejected' && entry.status !== 'cancelled',
  *   )
@@ -32,10 +32,10 @@ export type ReconcileRecordInventoryParameters = { rebroadcast?: boolean }
  *   return unresolved // Missing transactions remain reserved.
  * }
  *
- * async function rebroadcastSavedTransactions(client: Client) {
+ * async function rebroadcastSavedTransactions(client: WalletClient) {
  *   // Choose this explicitly after inspection. Only saved, proved transactions
  *   // are rebroadcast, with their original proof and id; nothing is rebuilt.
- *   await reconcileRecordInventory(client, { rebroadcast: true })
+ *   await client.reconcileRecordInventory({ rebroadcast: true })
  *   // Broadcast acceptance is not confirmation. Inspect again on a later poll.
  *   return inspectRecovery(client)
  * }

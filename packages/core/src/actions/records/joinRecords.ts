@@ -24,17 +24,17 @@ export type JoinRecordsParameters = { asset: RecordAsset; records: InventoryReco
  * @returns Submitted transaction id; acceptance is asynchronous.
  * @throws On incompatible records, overflow, contention or proving failure.
  * @example
- * import { getRecordInventory, joinRecords, waitForConfirmation, type Client } from '@provablehq/veil-core'
+ * import { waitForConfirmation, type WalletClient } from '@provablehq/veil-core'
  *
- * async function joinTwoCreditsRecords(client: Client) {
+ * async function joinTwoCreditsRecords(client: WalletClient) {
  *   // Configure recordManagement.enabled with a shared store before calling
  *   // this from concurrent workers; the scan itself does not reserve inputs.
  *   const asset = { program: 'credits.aleo' }
- *   const inventory = await getRecordInventory(client, { asset })
+ *   const inventory = await client.getRecordInventory({ asset })
  *   const records = inventory.available.slice(0, 2)
  *   if (records.length !== 2) throw new Error('Two available credits records are required')
  *
- *   const transactionId = await joinRecords(client, {
+ *   const transactionId = await client.joinRecords({
  *     asset, records, joinProgram: false, // Force the native two-record join.
  *   })
  *   await waitForConfirmation(client, transactionId, 120_000)

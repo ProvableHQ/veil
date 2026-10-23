@@ -11,60 +11,41 @@
 import { mkdir, open, unlink } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { rebalanceRecordInventory, reconcileRecordInventory } from '@provablehq/veil-core'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { formatUnits, parseUnits, shieldSwapActions, type ShieldSwapActions, type SwapQuote } from '@provablehq/shield-swap-sdk'
 import { swapFileStore } from '@provablehq/shield-swap-sdk/node'
 import { sqliteRecordInventoryStore } from '@provablehq/shield-swap-cli/storage'
 
-type Handle = Awaited<ReturnType<ShieldSwapActions['swap']>>
-type Claim = Awaited<ReturnType<ShieldSwapActions['claimSwapOutput']>>
-type BatchClient = Pick<ShieldSwapActions, 'waitForSwapOutput' | 'claimSwapOutput'> & {
-  swap: (params: { quote: SwapQuote }) => Promise<Handle>
-}
-
 /**
- * Reports each swap independently, preserving handles when claiming is interrupted.
- * @property status Separates failed submissions, unresolved claims and confirmed claims.
- * @property quote Original terms for this trade, including output floor and decimals.
- * @property handle Returned swap handle, present once submission succeeds.
- * @property claim Confirmed claim and output/refund amounts, present on success.
- * @property error Original failure for recovery, present when a swap or claim fails.
- */
-export type ConcurrentSwapResult =
-  | { status: 'swap-failed'; quote: SwapQuote; error: unknown }
-  | { status: 'claim-failed'; quote: SwapQuote; handle: Handle; error: unknown }
-  | { status: 'claimed'; quote: SwapQuote; handle: Handle; claim: Claim }
-
-/**
- * Submits a batch concurrently and attempts every successful swap's claim.
- * Requires explicit record management with one shared journal and identity store.
- * @param client Configured local signer; all calls share its reservation stores.
- * @param offers Fresh quotes, one per intended trade. An empty list does nothing.
- * @returns Ordered results, including unresolved handles; never retries submissions.
+ * Submits swaps together and claims every successful output.
+ *
+ * All calls use the client's record journal and blinded identity store. A failed
+ * swap or claim leaves the other trades running, and no submission is retried.
+ *
+ * @param client Local signer configured with record management and persistent swap identities.
+ * @param offers Fresh quotes, one per trade. An empty list submits nothing.
+ * @returns Swap results, successful handles, and claim results. `claims[i]` belongs to `handles[i]`.
  * @example
  * const offer = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: '0.1' })
- * const results = await submitConcurrentSwaps(client, Array.from({ length: 6 }, () => offer))
+ * const batch = await submitConcurrentSwaps(client, Array(6).fill(offer))
+ * console.log(batch.swaps.map((result) => result.status))
  */
-export async function submitConcurrentSwaps(client: BatchClient, offers: readonly SwapQuote[]): Promise<ConcurrentSwapResult[]> {
-  // Leave tokenRecord unset. Each call selects from the inventory, atomically
-  // reserves an input and reselects if another call acquired that record first.
-  // allSettled keeps successful handles available when a sibling call fails.
-  const submissions = await Promise.allSettled(offers.map((quote) => client.swap({ quote })))
-  return Promise.all(submissions.map(async (submission, index): Promise<ConcurrentSwapResult> => {
-    const quote = offers[index]!
-    if (submission.status === 'rejected') return { status: 'swap-failed', quote, error: submission.reason }
-    const handle = submission.value
-    try {
-      // A swap and its claim are separate transactions. Observe the finalized
-      // output first; a timeout preserves this handle instead of starting over.
-      await client.waitForSwapOutput({ handle, timeout: 600_000, pollingInterval: 3_000 })
-      const claim = await client.claimSwapOutput({ handle })
-      return { status: 'claimed', quote, handle, claim }
-    } catch (error) {
-      return { status: 'claim-failed', quote, handle, error }
-    }
+export async function submitConcurrentSwaps(
+  client: Pick<ShieldSwapActions, 'swap' | 'waitForSwapOutput' | 'claimSwapOutput'>,
+  offers: readonly SwapQuote[],
+) {
+  // Leave tokenRecord unset so the client can select another record if a
+  // concurrent swap reserves its first choice. Keep every submission result.
+  const swaps = await Promise.allSettled(offers.map((quote) => client.swap({ quote })))
+  const handles = swaps.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+
+  // Each successful swap needs a separate claim. Waiting for all claim attempts
+  // ensures that one failure does not prevent the remaining payouts.
+  const claims = await Promise.allSettled(handles.map(async (handle) => {
+    await client.waitForSwapOutput({ handle, timeout: 600_000, pollingInterval: 3_000 })
+    return client.claimSwapOutput({ handle })
   }))
+  return { swaps, handles, claims }
 }
 
 /**
@@ -88,10 +69,11 @@ export type ConcurrentSwapsOptions = {
 }
 
 /**
- * Previews or executes inventory maintenance followed by a concurrent swap batch.
- * Uses delegated proving with FeeMaster payment and account-scoped disk stores.
+ * Prepares private records and runs several swaps at once.
+ * Defaults to a preview. Execution uses delegated proving with FeeMaster payment
+ * and saves record reservations and swap handles for recovery after a restart.
  * @param options Testnet account, trade terms and explicit execution opt-in.
- * @returns The inspected plan and ordered batch results; preview returns no results.
+ * @returns The inventory plan and, after execution, the swap and claim results.
  * @throws On invalid configuration, unresolved prior work, maintenance interruption or any failed trade.
  * @example
  * await concurrentSwaps() // Preview with VEIL_E2E_PRIVATE_KEY; submits nothing.
@@ -113,9 +95,7 @@ export async function concurrentSwaps(options: ConcurrentSwapsOptions = {}) {
   // store coordinates only calls in this process, so hold a separate run lock.
   // Run no other trader for this account while this example owns its stores.
   const lockPath = resolve(directory, 'run.lock')
-  const lock = await open(lockPath, 'wx', 0o600).catch((cause: unknown) => {
-    throw new Error(`Cannot acquire ${lockPath}; stop other runs before inspecting a stale lock`, { cause })
-  })
+  await createMarker(lockPath, 'Stop other runs before inspecting a stale lock')
   let store: Awaited<ReturnType<typeof sqliteRecordInventoryStore>> | undefined
   try {
     store = await sqliteRecordInventoryStore(resolve(directory, 'inventory.sqlite'))
@@ -124,7 +104,7 @@ export async function concurrentSwaps(options: ConcurrentSwapsOptions = {}) {
       networkUrl: 'https://edge.provable.com/api/v2',
       provingMode: 'delegated', useFeeMaster: true, confirmationTimeout: 600_000,
       records: aleo.createRemoteScanner({ waitForSync: true }),
-      // Extending recordActions alone does not enable coordination.
+      // All calls through this client share the same record reservations.
       recordManagement: { enabled: true, store, chainId: 'aleo:testnet' },
     })
     const client = walletClient.extend(shieldSwapActions({
@@ -134,7 +114,7 @@ export async function concurrentSwaps(options: ConcurrentSwapsOptions = {}) {
 
     // Resolve known submissions before planning. Missing confirmations remain
     // reserved; they are not evidence that a previous transaction failed.
-    const journal = await reconcileRecordInventory(client)
+    const journal = await client.reconcileRecordInventory()
     const unresolved = journal.filter((entry) => !['confirmed', 'rejected', 'cancelled'].includes(entry.status))
     if (unresolved.length) throw new Error(`Reconcile ${unresolved.length} unresolved operations in ${directory} before starting another batch`)
     const unclaimed = await client.getUnclaimedSwaps()
@@ -156,42 +136,49 @@ export async function concurrentSwaps(options: ConcurrentSwapsOptions = {}) {
     console.log(`Per swap: estimated ${formatUnits(preview.expectedOut, preview.to.decimals)} ${preview.to.symbol}; minimum ${formatUnits(preview.minOut, preview.to.decimals)} ${preview.to.symbol}`)
     if (!options.execute) {
       console.log('Preview only. Pass --execute to prepare records, submit swaps and claim outputs.')
-      return { plan, results: [] as ConcurrentSwapResult[] }
+      return { plan }
     }
 
     // Retain a marker on any failure or crash. A later invocation must not
     // silently repeat an interrupted batch; recovery is described in README.md.
     const pendingPath = resolve(directory, 'batch.pending')
-    const pending = await open(pendingPath, 'wx', 0o600).catch((cause: unknown) => {
-      throw new Error(`Resolve the previous batch before removing ${pendingPath}`, { cause })
-    })
-    await pending.close()
-    const maintenance = await rebalanceRecordInventory(client, { plan, timeoutMs: 600_000, pollIntervalMs: 3_000 })
+    await createMarker(pendingPath, 'Resolve the previous batch before removing this file')
+    const maintenance = await client.rebalanceRecordInventory({ plan, timeoutMs: 600_000, pollIntervalMs: 3_000 })
     if (maintenance.status !== 'complete') throw new Error(`Maintenance interrupted: ${maintenance.reason}; retain ${directory}`)
 
     // Quote after maintenance so joins and splits do not consume its lifetime.
     // Sharing an immutable quote preserves the same output floor on every call;
     // a quote does not reserve pool liquidity, so a trade can still fail.
     const offer = await client.quote({ from, to, amountIn, slippageBps: 50 })
-    const results = await submitConcurrentSwaps(client, Array.from({ length: count }, () => offer))
-    for (const [index, result] of results.entries()) {
-      if (result.status === 'claimed') {
-        console.log(`${index + 1}: ${result.handle.transactionId} -> ${result.claim.transactionId}; received ${formatUnits(result.claim.amountOut, offer.to.decimals)} ${offer.to.symbol}; refunded ${formatUnits(result.claim.amountRemaining, offer.from.decimals)} ${offer.from.symbol}`)
+    const batch = await submitConcurrentSwaps(client, Array(count).fill(offer))
+    for (const [index, result] of batch.claims.entries()) {
+      const handle = batch.handles[index]!
+      if (result.status === 'fulfilled') {
+        const claim = result.value
+        console.log(`Swap ${handle.transactionId}: received ${formatUnits(claim.amountOut, offer.to.decimals)} ${offer.to.symbol}; refunded ${formatUnits(claim.amountRemaining, offer.from.decimals)} ${offer.from.symbol}`)
       } else {
-        console.error(`${index + 1}: ${result.status}; ${'handle' in result ? result.handle.transactionId : 'inspect the reservation journal'}`)
+        console.error(`Recover the claim for ${handle.transactionId} from ${directory}`)
       }
     }
-    // All claims have settled before reporting failures. Keep recovery files,
-    // including the pending marker, if any submission or claim was uncertain.
-    const failures = results.filter((result) => result.status !== 'claimed')
-    if (failures.length) throw new AggregateError(failures.map((result) => result.error), `${failures.length} trades need recovery in ${directory}; do not repeat the batch`)
+    // Keep the pending marker until every swap and claim has succeeded. A later
+    // run must resolve an uncertain transaction before starting another batch.
+    const failures = [...batch.swaps, ...batch.claims].filter((result) => result.status === 'rejected')
+    if (failures.length) throw new AggregateError(failures.map((result) => result.reason), `${failures.length} operations need recovery in ${directory}; do not repeat the batch`)
     await unlink(pendingPath)
-    return { plan, results }
+    return { plan, ...batch }
   } finally {
     store?.close()
-    await lock.close()
     await unlink(lockPath)
   }
+}
+
+// Exclusive creation prevents a second run from replacing a lock or a pending
+// batch marker. Only the caller that finishes the associated work removes it.
+async function createMarker(path: string, instruction: string) {
+  const file = await open(path, 'wx', 0o600).catch((cause: unknown) => {
+    throw new Error(`Cannot create ${path}. ${instruction}.`, { cause })
+  })
+  await file.close()
 }
 
 // Keep imports side-effect free for tests and callers that supply their own terms.

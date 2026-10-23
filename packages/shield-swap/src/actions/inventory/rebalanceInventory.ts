@@ -12,16 +12,16 @@ export type RebalanceInventoryParameters = PlanInventoryParameters & Omit<Rebala
  * @returns Completed progress or a resumable interruption.
  * @throws On unsupported assets or invalid targets before submission.
  * @example
- * import type { Client } from '@provablehq/veil-core'
- * import { rebalanceInventory, tokenData, parseUnits, type ApiClient } from '@provablehq/shield-swap-sdk'
+ * import type { WalletClient } from '@provablehq/veil-core'
+ * import { parseUnits, type ShieldSwapActions } from '@provablehq/shield-swap-sdk'
  *
- * async function prepareUsdcxInventory(client: Client, api: ApiClient) {
+ * async function prepareUsdcxInventory(client: WalletClient & ShieldSwapActions) {
  *   // Enable recordManagement on the client before executing maintenance.
  *   // This convenience action creates a fresh plan from the current inventory.
- *   // To execute a previously reviewed plan, use core rebalanceRecordInventory.
- *   const token = await tokenData(api, 'USDCx')
- *   const result = await rebalanceInventory(client, {
- *     api,
+ *   // For a reviewed plan, call client.rebalanceRecordInventory({ plan }).
+ *   // Extend a wallet client with shieldSwapActions({ api: {} }) first.
+ *   const token = await client.tokenData('USDCx')
+ *   const result = await client.rebalanceInventory({
  *     token: token.id,
  *     target: {
  *       records: 6,
