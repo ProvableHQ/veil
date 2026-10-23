@@ -36,6 +36,22 @@ Core and Shield Swap expose `/agent` tool schemas and `/mcp` tools. Before opera
 - [Transaction lifecycle](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/transaction-lifecycle.md): Submission, status, and settlement.
 - [Shield Swap trading runbooks](https://raw.githubusercontent.com/ProvableHQ/veil/main/packages/shield-swap/skills/SKILL.md): Required starting point for account setup, swaps, and liquidity.
 
+## Concurrent swaps and high-frequency trading
+
+For a trading loop that submits swaps concurrently, start with the [concurrent swaps walkthrough](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/shield-swap.md#concurrent-swaps) and the [example commands](https://raw.githubusercontent.com/ProvableHQ/veil/main/examples/shield-swap/README.md). The examples use client-attached actions and a local signer.
+
+1. Enable `recordManagement` explicitly. Share the record store, `chainId`, and one blinded identity store instance across clients trading for the same account. Use persistent stores for recovery. Run one process per account with the bundled identity store; SQLite alone does not coordinate blinded identity counters across processes.
+2. Prepare one sufficient input record per simultaneous trade. Use `client.planInventory()` to review joins and splits, then `client.rebalanceRecordInventory({ plan })` to execute that plan. For example, six simultaneous sales of 0.1 USDCx need six available records holding at least 0.1 USDCx each.
+3. Fetch fresh quotes after inventory preparation. Quotes expire after 60 seconds. Submit the batch with `Promise.allSettled` and `client.swap({ quote })`. Omit `tokenRecord` for automatic local selection: a reservation conflict tries another available record before proving; it does not join records or retry a submitted swap.
+4. Keep every successful handle. Call `client.waitForSwapOutput({ handle })`, then `client.claimSwapOutput({ handle })` for each trade. Inspect every swap and claim result; a batch can partially succeed, and claims can return both output tokens and unspent input.
+5. Before the next batch, account for confirmed claims, refresh the inventory, and prepare replacement input records as needed. Bound concurrent work by available records and proving capacity. Reconcile uncertain transactions before submitting replacement trades.
+
+For high-frequency trading, concurrency lets independent trades progress while others await proofs or confirmation. The SDK does not guarantee a trading rate: proving, chain confirmation, scanner visibility, and API limits constrain throughput. A quote does not reserve liquidity, and trades in the same batch can affect one another's execution price. Stop submitting new work when inventory, claims, or transaction outcomes cannot be reconciled.
+
+- [Record management](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/record-inventory.md): Store configuration, maintenance plans, private fee records, and restart recovery.
+- [Selection and recovery](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/shield-swap.md#selection-failures-and-recovery): Reservation diagram, partial batch results, and code to recover existing claims.
+- [Shield Swap API](https://raw.githubusercontent.com/ProvableHQ/veil/main/site/docs/guides/shield-swap.md#the-shield-swap-api): API access, quoting, and the role of on-chain reads and transactions.
+
 ## Optional
 
 - [Contributor instructions](https://raw.githubusercontent.com/ProvableHQ/veil/main/AGENTS.md): Repository navigation and contributor constraints.
