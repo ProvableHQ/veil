@@ -27,7 +27,25 @@ export type GetRecordInventoryReturnType = { asset: ResolvedRecordAsset; availab
  * @returns Eligible records and their available balance; hits the network.
  * @throws On missing wallet grants, unsupported assets, or a non-terminating scan.
  * @example
- * const inventory = await getRecordInventory(client, { asset: { program: 'credits.aleo' } })
+ * import { getRecordInventory, type Client, type RecordAsset } from '@provablehq/veil-core'
+ *
+ * async function inspectCredits(client: Client) {
+ *   // Amounts are integer microcredits. An enabled shared journal excludes
+ *   // records held by concurrent operations from available and balance.
+ *   const inventory = await getRecordInventory(client, {
+ *     asset: { program: 'credits.aleo' },
+ *   })
+ *   console.log('Available microcredits:', inventory.balance.toString())
+ *   console.log('Available records:', inventory.available.length)
+ *   console.log('Reserved records:', inventory.reserved.length)
+ *   return inventory.available
+ * }
+ *
+ * // For a custom token, override the record and numeric field explicitly.
+ * // The deployed interface still has to support the selected record.
+ * const customAsset: RecordAsset = {
+ *   program: 'custom_token.aleo', recordName: 'Balance', amountField: 'value',
+ * }
  */
 export async function getRecordInventory(client: Client, params: GetRecordInventoryParameters): Promise<GetRecordInventoryReturnType> {
   // Verify the token interface before interpreting record fields, then read the

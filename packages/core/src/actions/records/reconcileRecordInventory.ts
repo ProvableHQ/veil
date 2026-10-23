@@ -12,12 +12,33 @@ export type ReconcileRecordInventoryParameters = { rebroadcast?: boolean }
 /**
  * Reconciles journal entries against chain acceptance after an interruption.
  * Missing transactions remain reserved; optional rebroadcast reuses the same proof/id.
- * @param client Client extended with recordActions and the original durable store.
+ * @param client Client with recordManagement.enabled and the original durable store.
  * @param params Optional exact-transaction rebroadcast, disabled by default.
  * @returns Current scoped journal. Reads the chain and optionally resubmits transactions.
  * @throws On storage/network errors other than transaction-not-found (HTTP 404).
  * @example
- * const journal = await reconcileRecordInventory(client, { rebroadcast: true })
+ * import { reconcileRecordInventory, type Client } from '@provablehq/veil-core'
+ *
+ * async function inspectRecovery(client: Client) {
+ *   // Reopen the original store and enable recordManagement on the same account
+ *   // and chain. The default only reads confirmations; it never rebroadcasts.
+ *   const journal = await reconcileRecordInventory(client)
+ *   const unresolved = journal.filter((entry) =>
+ *     entry.status !== 'confirmed' && entry.status !== 'rejected' && entry.status !== 'cancelled',
+ *   )
+ *   console.table(unresolved.map((entry) => ({
+ *     operation: entry.id, transactionId: entry.transactionId, status: entry.status,
+ *   })))
+ *   return unresolved // Missing transactions remain reserved.
+ * }
+ *
+ * async function rebroadcastSavedTransactions(client: Client) {
+ *   // Choose this explicitly after inspection. Only saved, proved transactions
+ *   // are rebroadcast, with their original proof and id; nothing is rebuilt.
+ *   await reconcileRecordInventory(client, { rebroadcast: true })
+ *   // Broadcast acceptance is not confirmation. Inspect again on a later poll.
+ *   return inspectRecovery(client)
+ * }
  */
 export async function reconcileRecordInventory(client: Client, params: ReconcileRecordInventoryParameters = {}): Promise<RecordSpend[]> {
   const config = management(client)

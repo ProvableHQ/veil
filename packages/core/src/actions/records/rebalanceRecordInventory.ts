@@ -34,7 +34,28 @@ export type RebalanceRecordInventoryParameters = {
  * @returns Completion or interruption with all submitted transaction ids; never rolls back accepted steps.
  * @throws On invalid/tampered plans or missing coordination, before submission.
  * @example
- * const result = await rebalanceRecordInventory(client, { plan, maxFeeMicrocredits: 1_000_000n })
+ * import { rebalanceRecordInventory, reconcileRecordInventory, type Client, type InventoryPlan } from '@provablehq/veil-core'
+ *
+ * async function executeReviewedPlan(client: Client, plan: InventoryPlan, signal?: AbortSignal) {
+ *   // Use the same account, chain, and shared store that produced the plan.
+ *   // Execution requires explicit recordManagement.enabled configuration.
+ *   const result = await rebalanceRecordInventory(client, {
+ *     plan,
+ *     timeoutMs: 120_000, // Per step: confirmation plus scanner visibility.
+ *     pollIntervalMs: 2_000,
+ *     maxFeeMicrocredits: 10_000_000n, // Total network fees, excluding split deductions.
+ *     signal,
+ *   })
+ *   console.log('Confirmed steps:', result.completedSteps)
+ *   console.log('Submitted transactions:', result.transactionIds)
+ *   if (result.status === 'interrupted') {
+ *     await reconcileRecordInventory(client)
+ *     // Retain the journal: a timeout or cancellation does not release an
+ *     // uncertain submission. Resolve it before scanning and planning again.
+ *     console.error(result.reason)
+ *   }
+ *   return result
+ * }
  */
 export async function rebalanceRecordInventory(client: Client, params: RebalanceRecordInventoryParameters): Promise<InventoryResult> {
   const config = management(client)

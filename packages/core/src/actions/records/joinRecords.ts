@@ -24,7 +24,28 @@ export type JoinRecordsParameters = { asset: RecordAsset; records: InventoryReco
  * @returns Submitted transaction id; acceptance is asynchronous.
  * @throws On incompatible records, overflow, contention or proving failure.
  * @example
- * const transactionId = await joinRecords(client, { asset, records: [a, b] })
+ * import { getRecordInventory, joinRecords, waitForConfirmation, type Client } from '@provablehq/veil-core'
+ *
+ * async function joinTwoCreditsRecords(client: Client) {
+ *   // Configure recordManagement.enabled with a shared store before calling
+ *   // this from concurrent workers; the scan itself does not reserve inputs.
+ *   const asset = { program: 'credits.aleo' }
+ *   const inventory = await getRecordInventory(client, { asset })
+ *   const records = inventory.available.slice(0, 2)
+ *   if (records.length !== 2) throw new Error('Two available credits records are required')
+ *
+ *   const transactionId = await joinRecords(client, {
+ *     asset, records, joinProgram: false, // Force the native two-record join.
+ *   })
+ *   await waitForConfirmation(client, transactionId, 120_000)
+ *   // Confirmation can precede scanner visibility. Use autoJoin when a
+ *   // dependent operation needs the exact joined output to become readable.
+ *   return transactionId
+ * }
+ *
+ * // To join more than two records in one transaction, omit joinProgram and
+ * // supply a count supported by an available helper. Use autoJoin when the
+ * // inventory needs several helper calls or native two-record joins.
  */
 export async function joinRecords(client: Client, params: JoinRecordsParameters): Promise<string> {
   const capabilities = await validateAsset(client, params.asset)

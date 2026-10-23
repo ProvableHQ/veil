@@ -19,7 +19,29 @@ export type PlanInventoryParameters = { token: string; target: InventoryTarget; 
  * @returns A core inventory plan for the underlying program, not the AMM wrapper.
  * @throws When token metadata or its supported underlying program cannot be resolved.
  * @example
- * const plan = await planInventory(client, { token: 'ALEO', target: { records: 4 }, api })
+ * import type { Client } from '@provablehq/veil-core'
+ * import { planInventory, tokenData, parseUnits, type ApiClient } from '@provablehq/shield-swap-sdk'
+ *
+ * async function previewUsdcxInventory(client: Client, api: ApiClient) {
+ *   const token = await tokenData(api, 'USDCx')
+ *   const plan = await planInventory(client, {
+ *     api,
+ *     token: token.id,
+ *     target: {
+ *       records: 6,
+ *       minRecordAmount: parseUnits('0.1', token.decimals),
+ *       distribution: 'balanced',
+ *       toleranceBps: 0,
+ *     },
+ *     maxTransactions: 24,
+ *   })
+ *   // The plan names the spendable underlying program, not its AMM wrapper.
+ *   console.log('Asset:', plan.asset.program, 'Operations:', plan.steps.length)
+ *   // Keep this plan for review; execute it with core rebalanceRecordInventory.
+ *   // A client extended with shieldSwapActions supplies api automatically:
+ *   // await client.planInventory({ token: 'USDCx', target, maxTransactions: 24 })
+ *   return plan
+ * }
  */
 export async function planInventory(client: Client, params: PlanInventoryParameters): Promise<InventoryPlan> {
   const token = await tokenData(params.api, params.token)
