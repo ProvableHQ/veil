@@ -5,22 +5,46 @@ description: Configure private record inventory, shared reservations, fee select
 
 # Record management
 
-Aleo stores private balances in records. Spending a record consumes it and can
-produce new records, much like spending a Bitcoin UTXO. A swap needs one record
-that covers its input amount; several concurrent swaps need several such
-records. A sufficient total balance alone does not guarantee either layout.
+This guide shows how to inspect private balances, prepare records for upcoming
+transactions, and recover unfinished work in Veil. The examples use a local
+signer on testnet. Connected wallets can also use record management when they
+provide the [required record information](#interrupted-work-and-wallets).
 
-Veil's record methods inspect that inventory and prepare it with joins and
-splits. Optional record management reserves inputs during execution and saves
-transaction progress so participating clients can recover after an interruption.
-This guide covers configuration, storage, maintenance, fees, and recovery.
-For a trading example, see [concurrent Shield Swap swaps](./shield-swap.md#concurrent-swaps).
+Aleo holds private tokens in **records**, each containing an individually
+spendable amount. Spending a record consumes it; any change arrives in a new
+record. An account's private balance is the sum of its unspent records, much
+like a Bitcoin wallet's unspent outputs.
+
+A Shield Swap trade needs one record large enough for its input. Two trades
+running at once need different records. These hypothetical USDCx inventories
+all total 1 USDCx, but support different trades:
+
+| Available records | One 1 USDCx swap | Two simultaneous 0.5 USDCx swaps |
+| --- | --- | --- |
+| One record holding 1 USDCx | Ready | Split the record first. |
+| Two records holding 0.5 USDCx each | Join the records first. | Ready |
+| Records holding 0.4 and 0.6 USDCx | Join the records first. | Redistribute the amounts first. |
+
+A **join** consumes several records and produces one larger record. A **split**
+consumes one record and produces two smaller ones. Both are on-chain
+transactions. Veil can plan these operations before submitting them.
+
+Record management also reserves inputs while a transaction is in progress.
+A reservation tells other clients sharing the store that a record is already
+in use. The store's **journal** tracks those reservations and transaction
+outcomes, so unfinished work can be checked after an interruption.
 
 ## Enable record coordination
 
+Start with a client that can sign transactions and read the account's records.
+This example reads an existing testnet key from `ALEO_PRIVATE_KEY`; it does not
+create or fund an account. The remote scanner finds unspent records, while the
+inventory store tracks which of those records are in use by this application.
+
 Wallet clients already include the inventory methods. Reservations and recovery
 are **off by default**, including after `.extend(recordActions())` or
-`.extend(shieldSwapActions())`. Enable them when creating the client:
+`.extend(shieldSwapActions())`. Set `recordManagement.enabled` when creating the
+client to enable them:
 
 ```ts
 import { memoryRecordInventoryStore } from '@provablehq/veil-core'
@@ -44,9 +68,15 @@ console.log('Available records:', inventory.available.length)
 console.log('Reserved records:', inventory.reserved.length)
 ```
 
-This Node example keeps reservations in memory. Use a durable store for a
-service that must recover after restarting. The key remains in the account;
-record journals do not store private keys or record plaintext.
+`inventory.available` contains records that can be selected now;
+`inventory.reserved` contains records held by journal entries, including spent
+inputs still reported by the scanner. `inventory.balance` sums only the
+available records. Reading this inventory does not reserve them.
+
+The example keeps its journal in memory. Follow the [storage setup](#share-a-store-and-retain-it-across-restarts)
+below before submitting transactions that must remain recoverable after a
+restart. Journals store record identifiers and transaction progress, not private
+keys or decrypted record contents.
 
 `createClient`, `createWalletClient`, `aleo.createAleoClient`, and
 `createDevnodeClient` accept `recordManagement`. Core provides the interfaces
@@ -69,18 +99,34 @@ identity and join-routing options can still affect read-only plans and explicit
 joins. Enabling coordination does not automatically join records during a swap,
 split balances, or launch a worker. Call the maintenance methods when needed.
 
-Configure the client before attaching action decorators. Rebuild a managed
-client when changing networks; in-flight work checks that its account and chain
-remain unchanged. Use the same explicit `chainId` across participants:
-`'testnet'` and `'aleo:testnet'` are different reservation namespaces even if
-both clients contact the same testnet node.
+Configure record management before attaching action decorators. Rebuild the
+client when changing networks; an in-progress operation checks that its account
+and chain remain unchanged. Clients sharing reservations MUST use the same
+`chainId`. For example, `'testnet'` and `'aleo:testnet'` create separate groups
+of reservations even when both clients contact the same testnet node.
 
 ### Share a store and retain it across restarts
 
-The store holds its lock only while acquiring inputs. It acquires every input
-for one transaction together or rejects the acquisition. Other calls can then reserve different records and
-prove concurrently. The journal keeps acquired nonces excluded from selection.
-A scanner read or an inventory plan alone does not reserve anything.
+Two calls can scan the same record before either starts proving. The store
+resolves that race by acquiring all inputs for one transaction in a single
+operation. If any input is already reserved, it acquires none of them.
+
+The lock covers that acquisition only. Once two calls have reserved different
+inputs, they can prove concurrently:
+
+```text
+Call A: scan -> reserve record 1 -> prove ---------> submit -> confirm
+Call B: scan -> reserve record 2 -> prove -> submit ---------> confirm
+                    |
+             shared inventory store
+```
+
+The journal retains the reservations after the lock is released. A record's
+nonce identifies it across scanner and wallet responses. Reads and plans do
+not acquire nonces; execution does.
+
+Choose storage according to which clients must coordinate and whether the
+journal must survive a restart:
 
 | Store | Coordination | Restart behavior |
 | --- | --- | --- |
@@ -101,12 +147,31 @@ const store = await sqliteRecordInventoryStore('.veil/testnet/trading-account/in
 // Call store.close() only after all of those clients have finished their work.
 ```
 
-Custom stores MUST atomically check and acquire all record nonces within the
-chain/account scope. Implementing `list()` followed by an independent insert
-allows two callers to acquire the same record. Persist each `acquire` and
-`update` before resolving its promise. Keep confirmed inputs excluded while a
-scanner still reports them as unspent, and retain a rejected transaction's
-consumed private fee record. Do not release uncertain submissions on a timer.
+For two local signers in the same process, pass that same `store` object to
+both client configurations. Both sign for the same account and share its
+reservations:
+
+```ts
+const createParticipant = () => aleo.createAleoClient({
+  privateKey,
+  records: aleo.createRemoteScanner({ waitForSync: true }),
+  recordManagement: { enabled: true, store, chainId: 'aleo:testnet' },
+}).walletClient
+
+const firstClient = createParticipant()
+const secondClient = createParticipant()
+// Writes through either client see reservations made through the other.
+```
+
+For a custom backend, implement `RecordInventoryStore` with these guarantees:
+
+| Operation | Required behavior |
+| --- | --- |
+| `acquire` | Atomically check and acquire every requested nonce within the account/chain scope, or acquire none. A separate `list()` followed by an insert leaves a race. |
+| `acquire` and `update` | Persist the change before resolving the promise when recovery must survive a restart. |
+| Selection after confirmation | Continue excluding consumed inputs even if a scanner still reports them as unspent. |
+| Selection after rejection | Release execution inputs, but keep a consumed private fee record excluded. |
+| Uncertain submission | Keep reservations until the outcome is resolved. Do not release them on a timer. |
 
 Coordination applies only to clients using this store and scope. Raw submissions,
 other wallets, or traders using a different database can still spend the same
@@ -114,6 +179,10 @@ records. Shield Swap also needs a separate store for blinded identities and
 claim handles; its [concurrent setup](./shield-swap.md#concurrent-swaps) covers both.
 
 ## Use the inventory methods
+
+Choose an action based on the next spend. For example, a single transfer may
+need one larger record, while a concurrent trading batch needs several records.
+The methods below operate on `client`, configured above:
 
 | Method | Effect |
 | --- | --- |
@@ -132,9 +201,13 @@ requires it when joins are needed; an existing sufficient record returns
 
 ### Join only enough for a spend
 
-Use `joinRecords` when the caller has already selected the exact inputs for one
-transaction. Use `autoJoin` to obtain one record large enough for an upcoming
-spend. This example requests one credit, expressed as 1,000,000 microcredits:
+Suppose a transfer needs one credit, but the account holds separate 0.4 and
+0.6 credit records. `autoJoin` selects records and waits for the joined output
+to become available. If a record already holds at least one credit, it returns
+without submitting a join.
+
+Amounts use integer base units: one credit is 1,000,000 microcredits. Request
+that minimum explicitly:
 
 ```ts
 const result = await client.autoJoin({
@@ -151,21 +224,83 @@ if (result.status === 'interrupted') {
 }
 ```
 
-The action preserves an existing sufficient record. Otherwise it selects the
-largest records until their sum covers `minAmount`, prefers a compatible batch
-helper, and waits for dependent outputs. Omitting `minAmount` consolidates all
-eligible, unreserved records. It never chooses a different fee payment mode to
-make the operation succeed.
+When a join is needed, `autoJoin` selects the largest records until their sum
+covers `minAmount`. It prefers a compatible [batch helper](#batch-joins) and
+waits for each output needed by a later step. Omitting `minAmount` consolidates
+all eligible, unreserved records. The configured fee payment mode stays unchanged.
+
+### Join or split exact records
+
+Use `joinRecords` when the caller has already selected the inputs. This example
+joins exactly two available credits records through the native program:
+
+```ts
+const credits = { program: 'credits.aleo' }
+const beforeJoin = await client.getRecordInventory({ asset: credits })
+const inputs = beforeJoin.available.slice(0, 2)
+if (inputs.length !== 2) throw new Error('Two available credits records are required')
+
+const joinId = await client.joinRecords({
+  asset: credits, records: inputs, joinProgram: false,
+})
+console.log('Submitted join:', joinId)
+```
+
+`joinRecords` returns a transaction id before confirmation. Use `autoJoin` when
+the next operation must wait for the exact joined record to appear in the scanner.
+For more than two records in one transaction, omit `joinProgram` and supply a
+count supported by an available helper; `autoJoin` handles larger sequences.
+
+A split creates two positive outputs. For native credits, splitting a 1-credit
+record with `amount: 400_000n` produces 0.4 and 0.59 credits. The split itself
+deducts 10,000 microcredits, separately from the transaction fee:
+
+```text
+1,000,000 microcredits
+          |
+     native split
+          |
+          +--- 400,000 microcredits (requested first output)
+          +--- 590,000 microcredits (remaining output)
+          +---  10,000 microcredits (split deduction)
+```
+
+To make that first output from any sufficiently large available record:
+
+```ts
+const beforeSplit = await client.getRecordInventory({ asset: { program: 'credits.aleo' } })
+const amount = 400_000n
+const deduction = 10_000n
+const source = beforeSplit.available.find((record) => record.amount > amount + deduction)
+if (!source) throw new Error('No record can produce two positive outputs')
+
+const splitId = await client.splitRecord({
+  asset: { program: 'credits.aleo' }, record: source, amount,
+})
+console.log('Submitted split:', splitId)
+```
+
+This also returns before confirmation. Wait for confirmation and scanner
+visibility before spending either output. The [planner](#plan-joins-and-splits)
+handles those dependencies when preparing several records.
 
 ## Select the record and amount field
 
-`RecordAsset` requires only `program`. Core reads the deployed program's
-join/split interface to select the record and its unsigned amount width.
-ARC-20/ARC-22 tokens use `Token.amount`; native credits use
-`credits.microcredits`. For other records, the default field is `amount`,
-then `microcredits`. `standard` is an optional hint checked against the program.
+The `asset` argument identifies which program's records to manage. Most callers
+need only `{ program: 'credits.aleo' }` or a token's program id. Core reads the
+deployed `join` and `split` signatures to find the spendable record and its
+amount type:
 
-Supply `recordName` or `amountField` to override either default:
+| Asset | Default record | Default amount field |
+| --- | --- | --- |
+| `credits.aleo` | `credits` | `microcredits` |
+| ARC-20 or ARC-22 token | `Token` | `amount` |
+| Another compatible program | Record accepted by its native join | `amount`, then `microcredits` |
+
+`standard` is optional. When supplied, it is checked against the program.
+For a custom program with different names, supply `recordName` or `amountField`.
+For example, a deployed `points.aleo` program might join `Balance` records whose
+balance is stored in `points`:
 
 ```ts
 const asset = {
@@ -181,23 +316,36 @@ amounts. The record MUST match the native `join`/`split` inputs and outputs, and
 the field MUST be an unsigned integer matching the split amount argument.
 An override naming an undeclared record or field is an error; core does not
 substitute another balance field.
-`getRecordInventory` returns the resolved selection in `inventory.asset`.
-Compliance, registry, and recipient-bound records are excluded.
 
-Amounts use `bigint` in base units. Credits are bounded by u64 and ARC tokens by
-u128; custom fields use their declared width (u8, u16, u32, u64, or u128).
-A native credits split deducts 10,000 microcredits from its outputs, separately
-from any transaction fee. Plans report the total intrinsic deduction.
+Inspect `inventory.asset` to see the resolved record name, amount field, and
+integer type. Only eligible fungible records are included: compliance records,
+registry records, and records restricted to a particular recipient are excluded.
+
+All inventory amounts use `bigint` in base units. Credits use u64; ARC tokens
+use u128. Custom fields use their declared unsigned width: u8, u16, u32, u64,
+or u128. Joins that overflow that width are invalid.
 
 ## Plan joins and splits
 
-`target.records` is 1–1000. `minRecordAmount` defaults to `1n`;
-`distribution` defaults to `preserve`. `balanced` aims for equal amounts with
-`toleranceBps` defaulting to 1000 (10%). The planner preserves already suitable
-records and direct balanced splits where possible, otherwise consolidates and
-splits. It is a bounded deterministic strategy, not an optimal transaction
-solver; it rejects layouts whose required intermediate joins overflow the token
-width. `maxTransactions` defaults to 100.
+Use a plan when several operations must run in order. For example, preparing
+six records may require a join followed by splits, with each split waiting for
+the preceding transaction's output. Planning shows that sequence without signing,
+reserving inputs, or submitting transactions.
+
+The target describes the desired inventory after those operations:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `target.records` | Required | Desired count, from 1 to 1,000. |
+| `target.minRecordAmount` | `1n` | Minimum base-unit amount in each record. |
+| `target.distribution` | `'preserve'` | Retain suitable existing records. Choose `'balanced'` to aim for equal amounts. |
+| `target.toleranceBps` | `1000` (10%) | Allowed deviation from equal amounts when balancing, from 0 to 10,000. Use 0 for equal amounts, allowing integer rounding. |
+| `maxTransactions` | `100` | Maximum joins and splits in the plan, up to 10,000. |
+
+The planner keeps suitable records and splits directly where possible; otherwise
+it consolidates before splitting. It does not guarantee the fewest possible
+transactions. A required intermediate join that would overflow the asset's
+amount type causes planning to fail.
 
 ### Review and execute a plan
 
@@ -241,20 +389,38 @@ if (result.status === 'interrupted') {
 }
 ```
 
-`maxTransactions` limits the number of joins and splits in the plan (default
-100, maximum 10,000). The action's `maxFeeMicrocredits` limits total network fees
-for the run; the client setting limits each transaction. Both apply when set.
-Intrinsic credits split deductions are separate from these fee limits.
-`timeoutMs` covers confirmation and scanner visibility per step; proving time
-is additional. An optional `signal` stops further work but does not cancel a
-transaction already submitted.
+Execution submits real transactions. Limits apply at different points:
+
+| Limit | What it controls |
+| --- | --- |
+| Client `recordManagement.maxFeeMicrocredits` | Maximum network fee for each transaction. |
+| Action `maxFeeMicrocredits` | Total network fees across the maintenance run. Both fee limits apply when set. |
+| Plan `maxTransactions` | Number of joins and splits, including batch joins. |
+| Action `timeoutMs` | Confirmation and scanner visibility for each step. Proving time is additional. |
+| Action `signal` | Stops further work after cancellation; it cannot cancel a transaction already submitted. |
+
+Native credits split deductions are separate from network fees. Review
+`plan.deduction` as well as the fee budget. If execution is interrupted, accepted
+steps remain on chain; follow [recovery](#recover-interrupted-work) before
+creating a replacement plan.
 
 ### Batch joins
 
-When more than two records need joining, core prefers available helper programs
-that combine them in one transaction. The exported `recordJoinPrograms` map
-lists candidates by network and source asset. Exact program entries take
-precedence over ARC defaults.
+A native join takes two records. Joining sixteen records that way needs fifteen
+transactions. A batch helper calls the native joins within one transaction, so
+Veil prefers a compatible helper when more than two records need joining.
+
+For example, consolidating credits uses these sequences when the helper is
+available:
+
+| Starting inventory | Transactions |
+| --- | --- |
+| 2 records | One native `credits.aleo/join`. |
+| 16 records | One helper `join_16`. |
+| 17 records | One helper `join_16`, then a native join of its confirmed output and the remaining record. |
+
+The exported `recordJoinPrograms` map lists helpers by network and source asset.
+An entry for a specific program takes precedence over an ARC default:
 
 | Asset | Mainnet helpers | Testnet helpers | Records per call |
 | --- | --- | --- | --- |
@@ -274,20 +440,28 @@ pairwise joins. Lookup errors other than a missing program are reported to the
 caller. Custom record or field selections use native joins unless they match
 the helper's record and amount interface.
 
-The planner picks the largest compatible batch that preserves the target count
-and fits the amount width. Sixteen credits records use one `join_16` call;
-seventeen use `join_16`, then a native join with its confirmed output.
-Two-record joins use the native program by default. `maxTransactions` counts
-submitted transactions, including batch joins and native splits. Plans retain
-the selected helpers so execution follows the reviewed plan.
+The planner selects the largest compatible batch that preserves the target
+count and fits the amount width. It saves that choice in the plan so execution
+uses the reviewed helper.
 
-`recordManagement.tokenJoin` controls overrides:
+Keep the default helper lookup, disable it, or select a dynamic ARC router at
+client creation:
 
-- Omit it to select helpers by asset and network.
-- Set `false` to use native pairwise joins for every asset.
-- Set `{ program, maxRecords? }` to select a dynamic ARC router explicitly.
-  `maxRecords` defaults to 15 and accepts 2 to 15. This router also handles
-  two-record token joins; credits still use their automatically selected helpers.
+| `recordManagement.tokenJoin` | Behavior |
+| --- | --- |
+| Omitted | Select helpers by asset and network; use native joins for two records. |
+| `false` | Use native pairwise joins for every asset. |
+| `{ program, maxRecords? }` | Use that dynamic ARC router for token joins, including two-record joins. `maxRecords` defaults to 15 and accepts 2 to 15. Credits keep their automatic helper selection. |
+
+For example, to force native joins on testnet:
+
+```ts
+const { walletClient: nativeJoinClient } = aleo.createAleoClient({
+  privateKey,
+  records: aleo.createRemoteScanner({ waitForSync: true }),
+  recordManagement: { enabled: true, store, chainId: 'aleo:testnet', tokenJoin: false },
+})
+```
 
 Helper selection works with `enabled: false` for planning and individual joins.
 It does not enable coordination or execute a plan. Custom clients can also use
@@ -297,18 +471,22 @@ select a helper directly using its program, supported counts, and input mode;
 `joinProgram: false` uses a native join for that call. Use `autoJoin` when the
 records require more than one transaction.
 
-Credits and dedicated stablecoin helpers take only records. Dynamic ARC helpers
-prepend the underlying program identifier, such as `'test_arc20_eth'`, and
-supply the token as a dynamic import. The Aleo SDK resolves its transitive
-imports for local and delegated proving. Wallet adapters must support the
-selected helper's inputs and pinned records from the underlying program.
+The helper determines how join inputs are constructed:
 
-With management enabled, a batch reserves all inputs together. The journal
-attributes the call to the source asset and retains fees and proved transactions
-for recovery. Helper execution reads the record commitment from the final nested
-join, whose output contains the encrypted record. The outer helper's external
-or dynamic return id is a separate commitment. Dependent steps wait for the
-nested join's exact record to appear in the scanner.
+| Helper | Inputs passed by Veil |
+| --- | --- |
+| Credits or dedicated stablecoin helper | The selected records. |
+| Dynamic ARC helper | The underlying program identifier, such as `'test_arc20_eth'`, followed by the selected records. The token program is also supplied as a dynamic import. |
+
+The Aleo SDK resolves transitive imports for local and delegated proving.
+Wallet adapters must support these inputs and pin records from the underlying
+token program.
+
+A managed batch reserves every input together. Recovery entries retain the
+source asset, fees, and proved transaction. Before a dependent step proceeds,
+Veil waits for the encrypted record produced by the final native join inside
+the helper. It uses that record's commitment, rather than the separate id of
+the helper's external or dynamic return.
 
 ## Coordinate with Shield Swap
 
@@ -342,35 +520,48 @@ must use the same store and chain identity to see each other's reservations.
 
 ### Concurrent swaps
 
-With coordination enabled, local `swap` and `swapMultiHop` calls can sell the
-same token concurrently when enough separate records cover the trades. Automatic
-selection scans once and tries eligible records from smallest to largest. If
-another operation reserves a candidate first, the swap tries the next one. Each
-record nonce is tried at most once; exhaustion fails before proving.
+Six simultaneous USDCx sales need six input records and six distinct blinded
+identities. A blinded identity receives a swap's proceeds until a claim collects
+them. The two stores therefore have different responsibilities:
 
-Retries preserve the amount, slippage floor, blinded identity and nonce. The
-client checks the account, network and quote expiry before each attempt.
-Explicit `tokenRecord` inputs stay fixed. Proving, submission and confirmation
-errors are never retried by record selection. Core reports failed execution-input
-acquisition as `RecordReservationConflictError`; unavailable private fee records
-produce a separate error.
+| Shared state | Purpose |
+| --- | --- |
+| Record inventory store and matching `chainId` | Prevent two participating calls from acquiring the same input record. |
+| One blinded identity store instance | Allocate a separate identity to each swap and retain its claim information. |
 
-Use `Promise.allSettled` to keep track of every result, then claim each successful
-swap. Record coordination is separate from blinded identity tracking: concurrent
-calls MUST also share one blinded identity store instance, or provide distinct
-explicit identities. The bundled blinded identity stores coordinate within one
-process only. A shared SQLite record journal does not make blinded identity
-allocation safe across processes.
+With local signers and no explicit `tokenRecord`, `swap` and `swapMultiHop` scan
+once for sufficient records, smallest first. A reservation conflict advances to
+the next candidate before proving. Each record nonce is tried once; exhausting
+the candidates fails the call. Fixed `tokenRecord` inputs stay fixed.
 
-Follow the [concurrent swaps walkthrough](./shield-swap.md#concurrent-swaps)
-for client setup, six-record preparation, and separate swap/claim results. The
-[runnable example](https://github.com/ProvableHQ/veil/blob/main/examples/shield-swap/concurrent-swaps.ts)
-adds a preview mode and restart guards.
+The trade amount, minimum output, blinded identity, and swap nonce stay unchanged
+during selection. Each attempt checks the account, network, and quote expiry.
+Proving, submission, and confirmation errors do not trigger another swap.
+A failed execution-input reservation produces `RecordReservationConflictError`;
+a missing private fee record produces a separate error.
+
+Follow the [concurrent swaps walkthrough](./shield-swap.md#concurrent-swaps) for
+a complete client setup, a reservation diagram, and code that inspects every
+swap and claim. Its [runnable example](https://github.com/ProvableHQ/veil/blob/main/examples/shield-swap/concurrent-swaps.ts)
+prepares six records and includes preview and recovery steps.
+
+Run one process for an account with the bundled blinded identity stores. They
+coordinate counters only within a process. Several clients in that process must
+share the same store instance or supply distinct explicit identities. SQLite can
+coordinate record reservations across processes, but it does not coordinate
+blinded identity allocation.
 
 ## Recover interrupted work
 
-Reopen the same journal with the same account and `chainId`, then inspect the
-pending entries before submitting anything new:
+A timeout can occur after a transaction has reached the network. Repeating the
+original call at that point can submit a second operation. Recovery starts by
+checking what happened to the saved transaction.
+
+### 1. Reopen the journal and inspect outcomes
+
+Recreate the client with its original durable store, account, and `chainId`.
+An in-memory journal cannot recover entries lost when the process exited.
+Then reconcile before submitting anything new:
 
 ```ts
 const journal = await client.reconcileRecordInventory()
@@ -382,9 +573,14 @@ console.table(unresolved.map((entry) => ({
 })))
 ```
 
-Reconciliation reads the chain and updates known outcomes. A 404 does not prove
-rejection. If a prepared transaction is still missing and rebroadcast is the
-chosen recovery action, explicitly pass `rebroadcast: true`:
+Reconciliation reads the chain and updates the journal. It does not submit
+transactions by default. Any entries shown in `unresolved` still need attention;
+a missing transaction or HTTP 404 does not prove rejection.
+
+### 2. Resend a saved transaction when needed
+
+If a prepared transaction is still missing and inspection calls for resending
+it, explicitly enable rebroadcast:
 
 ```ts
 await client.reconcileRecordInventory({ rebroadcast: true })
@@ -392,9 +588,18 @@ await client.reconcileRecordInventory({ rebroadcast: true })
 ```
 
 Rebroadcast sends the exact saved transaction with its existing proof and id.
-It does not repeat joins, create a new transaction, or automatically resume a
-partially completed plan. Resolve uncertain submissions first, then scan and
-plan against the remaining inventory.
+It neither rebuilds it nor resumes a partially completed plan. Check again on
+a later poll; accepting a broadcast is not confirmation. Entries without a
+saved transaction cannot be recovered by this option.
+
+### 3. Plan against the confirmed inventory
+
+Once uncertain submissions are resolved, read the inventory again and make a
+new plan for the remaining work. Completed joins and splits have already changed
+the available records. For Shield Swap, also [recover unfinished claims](./shield-swap.md#selection-failures-and-recovery)
+before starting another batch.
+
+The journal status explains why an input remains unavailable:
 
 | Journal status | Record treatment |
 | --- | --- |
@@ -406,56 +611,86 @@ plan against the remaining inventory.
 
 ## Interrupted work and wallets
 
-A local prover MUST honor the awaited `transaction-prepared` progress callback
-before broadcasting. Bundled SDK adapters do this for local and delegated
-proving; delegated proving requests `broadcast: false` when checkpoints are
-needed. The callback persists the transaction and checks the configured fee
-ceiling. Custom `ProvingConfig.execute` adapters must follow this same contract.
+The bundled Aleo SDK adapters save a local or delegated transaction before
+broadcasting it. This gives the journal a proof and transaction id to recover.
+For delegated proving, they request `broadcast: false` and submit only after
+the checkpoint has been saved.
 
-Wallet clients need granted plaintext or record fields (`$nonce`, the selected amount field,
-record name, and `recipient_bound` when applicable), plus a pinned record uid
-for spending without plaintext. Dependent execution also needs output commitment
-metadata (`commitment` or a `$commitment` grant). Rebalance checks consumed
-records for this metadata before submitting its first step; missing metadata
-returns an interrupted result with no submitted transactions.
-Opaque wallet submission cannot enforce a fee ceiling before broadcast, so
-wallet execution rejects configured fee budgets. A lost wallet response without
-a transaction id retains its reservation for external reconciliation.
+A custom `ProvingConfig.execute` adapter MUST await the `transaction-prepared`
+progress callback before broadcasting. That callback persists the transaction
+and checks the fee ceiling. Broadcasting first defeats both checks.
+
+Connected wallets control their own records and submission. Record management
+therefore needs enough information from the wallet to identify the exact inputs
+and follow their outputs:
+
+| Wallet capability | Why it is needed |
+| --- | --- |
+| Granted plaintext, or fields including `$nonce`, the amount, record name, and `recipient_bound` where applicable | Identify and validate records without relying on ciphertext alone. |
+| A pinned record `uid` when plaintext is unavailable | Spend the record already reserved, rather than let the wallet select another. |
+| Output `commitment` metadata or a `$commitment` grant | Find the exact new record needed by the next join or split. |
+
+Rebalance checks commitment metadata before its first submission. Missing
+metadata returns an interrupted result with no transactions submitted. A lost
+wallet response without a transaction id leaves the reservation held for
+external reconciliation.
+
+Wallet submission cannot currently enforce a fee ceiling before broadcast or
+pin a private fee record. Managed wallet execution therefore rejects fee budgets
+and requires public fees or FeeMaster. Local signers support the private fee
+selection below.
 
 ## Private fees
 
-Managed local-account writes support `privateFee: true`. If `feeRecord` is
-supplied, the client uses it when the current scan reports it as available and
-it covers the estimated base fee plus priority fee. Otherwise the client selects
-the smallest sufficient credits record. Selection excludes existing reservations
-and the transaction's own inputs. If none is available, the call fails before
-proving; it does not automatically join records or change the fee payment mode.
+A private fee spends a `credits.aleo` record separately from the transaction's
+execution inputs. Even when the transaction itself spends credits, its fee needs
+a different record. Set `privateFee: true` on a managed local-account write to
+have the client select and reserve that fee record.
+
+Selection uses the estimated base fee plus any priority fee:
+
+| Available credits records | Selection |
+| --- | --- |
+| A supplied `feeRecord` is unreserved, sufficient, and separate from the execution inputs | Use the supplied record. |
+| The supplied record is reserved, insufficient, or already an execution input | Select the smallest other available record that covers the fee. |
+| No `feeRecord` is supplied | Select the smallest available record that covers the fee. |
+| All sufficient records are reserved or being spent by this transaction | Fail before proving. Records are not automatically joined and payment does not switch to public fees or FeeMaster. |
+
+For example, this transfer sends one credit from the account's **public**
+balance and pays its network fee from a separate private record. Set
+`ALEO_RECIPIENT` to the recipient's address:
 
 ```ts
-await client.writeContract({
+const recipient = process.env.ALEO_RECIPIENT
+if (!recipient) throw new Error('Set ALEO_RECIPIENT')
+
+const transferId = await client.writeContract({
   program: 'credits.aleo',
   function: 'transfer_public',
   inputs: [recipient, '1000000u64'],
   privateFee: true,
-  // Optional: feeRecord: preferredCreditsRecord.recordPlaintext,
+  // Omit feeRecord to select an available credits record automatically.
 })
+console.log('Submitted transfer:', transferId)
 ```
 
-The fee record and execution inputs are reserved together. Local, delegated,
-and devnode adapters receive the selected plaintext through `feeRecord`; the
-journal stores only its nonce, alongside the encrypted proved transaction.
-Before broadcast, the manager checks the fee transition's record tag and fee
-amounts. Explicit private payment takes precedence over FeeMaster sponsorship.
+To prefer a particular record, pass its plaintext as `feeRecord`. An unavailable
+preferred record is replaced according to the table above. The client reserves
+the fee record and execution inputs together. If another call takes the fee
+record first, selection tries the next candidate.
 
-On a rejected execution, Aleo can still charge the private fee. The journal
-releases the execution inputs but keeps `feeRecordId` excluded from stale scans.
-Custom stores MUST preserve that exclusion for rejected entries. A timeout or
-missing confirmation retains every reservation until reconciliation resolves it.
+Before broadcast, the manager checks that the proved transaction spends the
+reserved fee record and that its fee fits the balance and configured ceiling.
+The journal stores the record's nonce and the proved transaction, without saving
+record plaintext. Explicit private payment takes precedence over FeeMaster.
 
-Custom local provers need `estimateExecutionFee`, must honor `feeRecord`, and
-must await the prepared-transaction callback before broadcasting. Wallet RPC
-writes still require public fees or FeeMaster: the current wallet protocol
-cannot pin a selected fee record.
+A rejected execution can still consume its private fee. Reconciliation releases
+the execution inputs while retaining the spent `feeRecordId`. Timeouts retain
+all reservations until the outcome is known.
+
+The bundled local and delegated adapters honor the selected `feeRecord`.
+Custom local provers also need `estimateExecutionFee` and MUST await the
+prepared-transaction callback before broadcasting.
 
 For a supervised background process with policies, cooldowns, budgets, and a
 restart journal, use the [Shield Swap inventory commands](../packages/cli.md).
@@ -468,138 +703,30 @@ and recovery enabled. `createClient`, `createWalletClient`,
 `aleo.createAleoClient`, and `createDevnodeClient` accept this option. Wallet
 clients include the inventory methods without a `recordActions` extension.
 
-`recordActions({ store, maxFeeMicrocredits })` accepts these options but ignores
-them: they do not reserve records, enforce fee limits, or enable recovery.
-Its `chainId` and `tokenJoin` options apply only when the client was created
-without record management settings. Settings supplied during client creation
-take precedence.
+For example, configure a fee ceiling and native joins on the client itself:
+
+```ts
+const { walletClient: managedClient } = aleo.createAleoClient({
+  privateKey,
+  records: aleo.createRemoteScanner({ waitForSync: true }),
+  recordManagement: {
+    enabled: true,
+    store,
+    chainId: 'aleo:testnet',
+    maxFeeMicrocredits: 10_000_000n,
+    tokenJoin: false,
+  },
+})
+// managedClient already has getRecordInventory, autoJoin, and the other actions.
+```
+
+For an application still passing settings to the decorator:
+
+| Option passed to `recordActions()` | Effect |
+| --- | --- |
+| `store`, `maxFeeMicrocredits` | Accepted but ignored. Configure them on the client to reserve records, enforce fees, and retain recovery entries. |
+| `chainId`, `tokenJoin` | Apply only when the client has no record management configuration. Client settings take precedence. |
 
 Existing assets with `standard` remain valid. New callers can supply only the
 program or add record/field overrides. To keep native pairwise joins after
 upgrading, set `tokenJoin: false`; omitting it now selects available helpers.
-
-
-## Run the integration checks
-
-The deployed-interface check reads the testnet credits, USDCx, and ETH programs
-and their join helpers. It validates every supported record count, disabled
-helper routing, and rejection of a static helper for another asset. It needs no
-account and submits no transactions:
-
-```sh
-VEIL_INTEGRATION=1 pnpm vitest run packages/core/test/integration/recordInventory.integration.test.ts
-```
-
-The inventory lifecycle suite uses a funded testnet account to join and split
-USDCx and ETH records. It checks asset defaults and overrides, shared
-reservations, reviewed plans, and recovery of a prepared transaction after
-reopening its SQLite journal. Both tokens finish with six balanced records.
-Run it from the repository root:
-
-```sh
-VEIL_INVENTORY_E2E=1 \
-VEIL_E2E_STATE_FILE=/absolute/path/to/testnet/state.json \
-VEIL_BLINDED_STORE=/absolute/path/to/testnet/blinded.json \
-pnpm vitest run packages/shield-swap/test/integration/recordInventory.e2e.test.ts --bail=1
-```
-
-`VEIL_E2E_STATE_FILE` accepts an existing Shield Swap testnet session containing
-`network: "testnet"` and `privateKey`. `VEIL_E2E_PRIVATE_KEY` can supply the key
-instead. The suites use delegated proving and FeeMaster. They do not create or
-fund an account.
-
-`VEIL_INVENTORY_RECORDS` sets the count per token (default 6, range 3 to 16).
-`VEIL_INVENTORY_MIN_USDCX` defaults to `0.1` USDCx and
-`VEIL_INVENTORY_MIN_ETH` to `0.000001` ETH. The account must hold at least the
-minimum multiplied by `(record count + 1)` for each token. Amount settings use
-human-readable token units. The tests rebalance the account's full available
-inventory for both tokens; use a dedicated test account.
-
-The journal defaults to `.veil/inventory-e2e/testnet/<address>/inventory.sqlite`.
-Set `VEIL_INVENTORY_E2E_DIR` to move that directory. `VEIL_BLINDED_STORE` selects
-the swap recovery file; its default is `blinded.json` in the journal directory.
-Run suites sequentially for a given account and retain both stores after a
-failure. The next run reconciles the journal and refuses to proceed while an
-operation remains unresolved. If a process was terminated, verify it has stopped
-before removing its `run.lock` file.
-
-
-### Check execution guards and native joins
-
-The execution-guard suite uses the real scanner, delegated prover, and testnet
-ledger. It checks modified plans, cancellation before submission, and inputs
-reserved after planning. Both `writeContract` and `executeContract` must reject
-a proved transaction above the configured fee ceiling and release its input.
-
-With helpers disabled, each token consolidates three records through two native
-joins, then restores the original amounts through two splits. A separate case
-cancels a dependent join sequence after its first submission, confirms that
-transaction, and restores its inputs' amounts. The final check reopens SQLite
-and verifies that every submitted transaction is confirmed and no work remains
-unresolved.
-
-```sh
-VEIL_INVENTORY_E2E=1 \
-VEIL_E2E_STATE_FILE=/absolute/path/to/testnet/state.json \
-pnpm vitest run packages/shield-swap/test/integration/recordInventoryGuards.e2e.test.ts --bail=1
-```
-
-After initial inventory preparation, this suite submits ten joins/splits and
-builds two additional transactions that the fee ceiling prevents from being
-broadcast. FeeMaster pays network fees; token balances remain unchanged.
-Run it separately from other funded suites using the same account.
-
-### Exercise inventory during repeated swaps
-
-The strategy suite starts with six balanced records per token and makes three
-USDCx-to-ETH-to-USDCx round trips through a live Shield Swap pool. Each forward
-swap spends `0.1` USDCx by default. The return swap spends the entire claimed ETH
-record, preserving the six existing ETH records. Every leg is claimed before
-the next swap begins.
-
-After each round, the suite restores the USDCx target with a batch join followed
-by splits. It checks record counts, minimum amounts, exact balance changes, and
-confirmed reservations. The final check reopens the journal and verifies that
-no input record was consumed by two confirmed transactions.
-
-Run this after the lifecycle suite, using the same account and stores:
-
-```sh
-VEIL_INVENTORY_E2E=1 \
-VEIL_E2E_STATE_FILE=/absolute/path/to/testnet/state.json \
-VEIL_BLINDED_STORE=/absolute/path/to/testnet/blinded.json \
-pnpm vitest run packages/shield-swap/test/integration/recordInventoryStrategy.e2e.test.ts --bail=1
-```
-
-`VEIL_INVENTORY_ROUNDS` sets the number of round trips (default 3, range 1 to 5).
-`VEIL_INVENTORY_SWAP_USDCX` sets the amount spent on each forward swap in USDCx
-units (default `0.1`). Each source record must remain above its configured
-minimum after that spend. These swaps pay the pool's trading fees; the return
-amount can differ from the forward amount. The tests use the confirmed claim
-amount for accounting and stop subsequent writes if a check fails.
-
-### Exercise concurrent swaps
-
-The concurrent suite starts with the same balanced inventories, then submits
-six USDCx-to-ETH swaps together. It holds the first reservations until every
-swap has selected its input, forcing contention. Each swap must reach proving
-with a different record, and at least two executions must overlap. All
-successful outputs are claimed before the suite reports any batch failures.
-
-The next batch returns the claimed ETH amounts through six concurrent swaps,
-also using automatic record selection. The suite restores both balanced
-inventories, checks exact debits and credits, and reopens the journal to verify
-confirmed spends and the absence of duplicate inputs.
-
-```sh
-VEIL_INVENTORY_E2E=1 \
-VEIL_E2E_STATE_FILE=/absolute/path/to/testnet/state.json \
-VEIL_BLINDED_STORE=/absolute/path/to/testnet/blinded.json \
-pnpm vitest run packages/shield-swap/test/integration/concurrentInventory.e2e.test.ts --bail=1
-```
-
-`VEIL_INVENTORY_RECORDS` also controls the batch size (default 6).
-`VEIL_INVENTORY_SWAP_USDCX` controls each forward swap (default `0.1` USDCx),
-so the default batch sells `0.6` USDCx in total. Run this suite separately from
-the other funded suites so they do not compete for the account's records or
-blinded identity counters.
