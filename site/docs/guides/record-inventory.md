@@ -693,7 +693,7 @@ Custom local provers also need `estimateExecutionFee` and MUST await the
 prepared-transaction callback before broadcasting.
 
 For a supervised background process with policies, cooldowns, budgets, and a
-restart journal, use the [Shield Swap inventory commands](../packages/cli.md).
+restart journal, use the [Shield Swap inventory commands](../packages/shield-swap-cli.md#record-inventory).
 
 ## Migrate a recordActions configuration
 

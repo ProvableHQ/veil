@@ -40,7 +40,6 @@ const sidebars: SidebarsConfig = {
       items: [
         'packages/overview',
         'packages/core',
-        'packages/cli',
         'packages/provable-sdk',
         'packages/wallet-adapter',
         'packages/react',
