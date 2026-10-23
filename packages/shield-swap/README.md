@@ -63,6 +63,11 @@ account bootstrap, pool reads, quoting, balances, swap history, swaps, minting a
 position, rebalancing it to a new range, and taking liquidity back out. Each one
 is a single file that reads top to bottom.
 
+For concurrent trades, run the [concurrent-swaps example](../../examples/shield-swap/concurrent-swaps.ts).
+It previews a six-record inventory, then submits six swaps and claims their
+outputs when called with `--execute`. The [example guide](../../examples/shield-swap/README.md)
+covers setup, shared reservations, and recovery after an interruption.
+
 [Open them in StackBlitz](https://stackblitz.com/github/ProvableHQ/veil/tree/main/examples/shield-swap)
 to browse the set in an editor. The pool and token reads run there as they are;
 anything that signs needs credentials, and a private key does not belong in a

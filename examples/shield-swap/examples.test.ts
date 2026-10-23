@@ -4,6 +4,7 @@ import { quote } from './quote.js'
 import { balances } from './balances.js'
 import { swapHistory } from './swap-history.js'
 import { swap } from './swap.js'
+import { concurrentSwaps } from './concurrent-swaps.js'
 import { mint } from './mint.js'
 import { liquidity } from './liquidity.js'
 import { rebalance } from './rebalance.js'
@@ -38,6 +39,7 @@ describe.runIf(KEYED)('examples: reads that need an account', () => {
   it('quote', () => quote(), MINUTES)
   it('balances', () => balances(), MINUTES)
   it('swap-history', () => swapHistory(), MINUTES)
+  it('concurrent-swaps preview', () => concurrentSwaps(), MINUTES)
 })
 
 describe.runIf(POSITION)('examples: reads that need a position', () => {
@@ -54,4 +56,12 @@ describe.runIf(SPENDS)('examples: these move funds', () => {
   it('mint', () => mint(), MINUTES)
   it('liquidity', () => liquidity(), MINUTES)
   it('rebalance', () => rebalance(), MINUTES)
+})
+
+// This batch reshapes the whole available input inventory; opt in separately
+// from the single-swap examples to avoid incidental maintenance and six trades.
+describe.runIf(SPENDS && process.env.VEIL_CONCURRENT_EXAMPLE === '1')('examples: concurrent swaps', () => {
+  it('prepares six records and claims six concurrent swaps', async () => {
+    await concurrentSwaps({ execute: true })
+  }, 3 * MINUTES)
 })
