@@ -12,3 +12,5 @@ Allow inventory assets to specify only a program, with optional record-name and 
 Prefer available batch join helpers for more than two records: up to 16 credits or dedicated stablecoin records, and 15 dynamic ARC records. Validate helper interfaces, capture them in plans, and match their confirmed outputs before dependent steps. Explicit dynamic routers remain supported; tokenJoin: false selects native pairwise joins. Reservations and recovery remain off unless recordManagement.enabled is true.
 
 Support private fees on managed local-account writes. Prefer an eligible supplied fee record, otherwise reserve a sufficient unreserved credits record alongside the execution inputs. Pass that record through local, delegated, and devnode proving, verify it before broadcast, and retain charged private fee records after rejected executions.
+
+Retry automatic local Shield Swap record selection on pre-proving reservation conflicts. Keep swap terms fixed, bound retries to one scan, and preserve explicit inputs and execution errors. Export RecordReservationConflictError for input acquisition failures.

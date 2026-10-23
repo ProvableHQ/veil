@@ -242,6 +242,9 @@ describe('E2E: veil against live Aleo mainnet', () => {
 // With management enabled, privateFee: true also reserves a separate credits
 // record. An optional feeRecord is preferred only while it remains available;
 // the client replaces reserved candidates before building the transaction.
+// Managed swaps can reselect automatically before proving. Direct writes and
+// explicit tokenRecord inputs instead surface RecordReservationConflictError;
+// proving/submission failures must be reconciled before any new spend.
 describe('Record inventory consumer example', () => {
   it('plans four credits records while keeping the source record private', async () => {
     const aleo = await loadNetwork('testnet')

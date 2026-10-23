@@ -68,6 +68,7 @@ export type ExecuteContractReturnType = RawExecuteResult
  * @param client Wallet client with an account attached.
  * @param params Program, function, inputs, and fee/source/import options.
  * @returns The transaction id with the outputs of every transition, once the transaction is accepted.
+ * @throws RecordReservationConflictError if enabled management cannot acquire an execution input before proving.
  * @throws AccountNotFoundError if the client has no signing account.
  * @throws ProvingNotConfiguredError if the account is local and the proving config lacks `execute`.
  * @throws If confirmation polling times out or the transaction is rejected.

@@ -1,16 +1,11 @@
 /**
  * Concurrent swaps — several trades in flight at once.
  *
- * Two things contend when swaps run in parallel, and only one is handled for you:
- *
- *   Blinded identities are safe. Each swap reserves its own from the store the
- *   session configures, and reservations serialize, so two swaps cannot derive
- *   the same address and have the second revert on the uniqueness assert.
- *
- *   Records are not. Selection picks ONE private record big enough for the
- *   amount, so two swaps selling the same token can pick the same record and one
- *   fails as a double-spend. This script therefore refuses to run two swaps that
- *   sell the same token, rather than letting the chain reject them.
+ * The session reserves blinded identities. Record coordination is enabled only
+ * when VEIL_INVENTORY_DB selects a journal; otherwise automatic selection can
+ * choose the same input twice. This command keeps its one-leg-per-input-token
+ * policy in either mode. SDK callers with enabled coordination can also run
+ * same-token swaps against separate covering records.
  *
  * Every swap is planned before any is submitted, so a bad leg is caught while
  * nothing has been spent.
@@ -85,7 +80,7 @@ export async function main(argv: string[]): Promise<void> {
       legs.push(plan)
     }
 
-    // The one hazard the store does not cover.
+    // Keep the CLI batch policy independent of optional record coordination.
     const sellers = legs.map((leg) => leg.from.id)
     const duplicated = sellers.filter((id, index) => sellers.indexOf(id) !== index)
     if (duplicated.length) {

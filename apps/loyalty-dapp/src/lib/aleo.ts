@@ -68,6 +68,8 @@ export async function getLoyaltyContract(walletClient?: ReturnType<typeof create
 /**
  * Returns the connected wallet with its built-in inventory methods.
  * Planning requires wallet grants for record identities and amounts; coordination stays disabled.
+ * Enabling coordination makes competing explicit inputs throw RecordReservationConflictError;
+ * wallet input requests remain fixed and are never automatically replaced.
  * @param walletClient Connected wallet client on Aleo mainnet.
  * @returns The same wallet client; the helper performs no scan or transaction.
  * @example

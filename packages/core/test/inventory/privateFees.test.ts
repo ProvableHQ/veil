@@ -57,6 +57,20 @@ describe('managed private fees', () => {
       feeRecordId: action === 'executeContract' ? '3group' : '2group', feeMicrocredits: action === 'executeContract' ? '120' : '100', status: 'submitted' })
     expect(JSON.stringify(entry)).not.toContain('microcredits:')
   })
+  it.each(['writeContract', 'executeContract'] as const)('%s reports input contention separately from private-fee exhaustion', async action => {
+    const w = world()
+    await w.store.acquire({ scope, records: ['1group'], program: 'credits.aleo', function: 'join', status: 'prepared', createdAt: 1, accountType: 'local' })
+    await expect(w.client[action](w.params)).rejects.toMatchObject({ name: 'RecordReservationConflictError', recordIds: ['1group'] })
+    expect(w.build).not.toHaveBeenCalled()
+    expect(await w.store.list(scope)).toHaveLength(1)
+  })
+  it('does not classify unavailable private fees as an input reservation conflict', async () => {
+    const w = world([record(1, 500n)])
+    const error = await w.client.executeContract(w.params).catch(error => error)
+    expect(error.message).toContain('private fee')
+    expect(error.name).not.toBe('RecordReservationConflictError')
+    expect(await w.store.list(scope)).toHaveLength(0)
+  })
   it('uses a supplied fee record when it is eligible even if another is smaller', async () => {
     const w = world()
     await w.client.writeContract({ ...w.params, feeRecord: w.records[2]!.recordPlaintext } as any)

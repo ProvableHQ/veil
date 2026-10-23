@@ -57,6 +57,7 @@ export type WriteContractReturnType = string
  * @param client Wallet client with an account attached.
  * @param params Program, function, inputs, and fee/import options.
  * @returns The transaction id to poll with `transactionStatus`.
+ * @throws RecordReservationConflictError if enabled management cannot acquire an execution input before proving.
  * @throws AccountNotFoundError if the client has no signing account.
  * @throws ProvingNotConfiguredError if the account is local and the client has no proving config.
  * @throws If `inputs` contains InputRequest objects on the local-proving path.

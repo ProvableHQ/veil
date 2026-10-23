@@ -560,45 +560,47 @@ node never had from one it simply had not confirmed yet.
 
 ### Concurrent swaps
 
-Every swap is bound to a blinded identity — a one-time address derived from your
-view key and a counter — and the program asserts each blinded address is used only
-once. Derived on demand, that is safe in sequence and unsafe in parallel: two
-swaps started together scan the chain, both see the same counter unused, and the
-second reverts on finalize after the first consumes it. Nothing surfaces locally,
-because at proving time the address genuinely was unused.
+Concurrent swaps need separate input records and separate blinded identities.
+Enable `recordManagement: { enabled: true, store, chainId }` when creating the
+wallet client to coordinate records. If two automatic selections choose the same
+record, `swap` and `swapMultiHop` retry with another eligible record before
+proving. Candidates are tried from smallest to largest, once per nonce. Explicit
+`tokenRecord` inputs remain fixed, and execution errors are not retried.
 
-The swap actions handle this for you. `swap` and `swapMultiHop` reserve the
-identity before submitting and record the resulting handle after, and
-`claimSwapOutput` marks it claimed. A composed client gets an in-memory store by
-default, so the two swaps below cannot collide even with no configuration — but
-that store dies with the process, so name a file one for anything long-running:
+Each swap also needs a single-use blinded identity. `shieldSwapActions` supplies
+an in-memory identity store by default, shared by calls through that client. Use
+a durable store to retain identities and claim handles after a restart:
 
 ```ts
 import { swapFileStore } from '@provablehq/shield-swap-sdk/node'
 
+// walletClient was created with recordManagement.enabled: true.
 const client = walletClient.extend(
   shieldSwapActions({ api: {}, blindedIdentities: swapFileStore('.veil/blinded.json') }),
 )
 
-// Nothing else to do — these two cannot collide on an identity.
-const [a, b] = await Promise.all([
+// Requires at least two available USDCx records, each covering amountIn.
+const results = await Promise.allSettled([
   client.swap({ poolKey: poolA, tokenInId: usdc, amountIn, imports }),
-  client.swap({ poolKey: poolB, tokenInId: eth, amountIn, imports }),
+  client.swap({ poolKey: poolA, tokenInId: usdc, amountIn, imports }),
 ])
+// Claim every fulfilled result, even if another swap failed.
 ```
 
-`swapFileStore` is an alias of `fileBlindedIdentityStore`; the existing export
-and saved file format remain supported.
+`swapFileStore` is an alias of `fileBlindedIdentityStore`. Each swap reserves its
+identity before submission and saves its handle after confirmation;
+`claimSwapOutput` marks it claimed. Concurrent clients in one process MUST share
+the same identity store instance as well as the record store and chain identity.
 
-Reservations serialize, so each swap gets its own counter, and each is written
-before its transaction is submitted — which is what keeps an unconfirmed swap from
-having its counter handed out again.
+The bundled identity stores do not coordinate counters across processes. SQLite
+can coordinate record reservations across processes, but a shared identity file
+alone cannot prevent two processes from deriving the same blinded address.
+Use distinct explicit identities when managing concurrent swaps across processes.
 
-What the default in-memory store does not give you is persistence: a restart
-rescans the chain for its next counter, and forgets any swap it had not yet
-claimed. The on-disk store keeps both. Two processes sharing one account need one
-store between them either way — the chain read alone cannot close that window,
-because the check and the submission are not atomic.
+Record coordination remains off by default. Without it, callers MUST supply
+disjoint input records or trade sequentially. See the
+[record inventory guide](../../site/docs/guides/record-inventory.md#concurrent-swaps)
+for retry boundaries and storage configuration.
 
 To opt a single call out of tracking, pass `blindedIdentities: undefined`; the
 identity is then derived by scanning the chain and nothing is written. The

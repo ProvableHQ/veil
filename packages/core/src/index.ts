@@ -118,6 +118,7 @@ export {
   InvalidTransactionError,
   DuplicateTransactionError,
   RecordSpentError,
+  RecordReservationConflictError,
   OutputIdCollisionError,
   BroadcastError,
   TransactionTimeoutError,

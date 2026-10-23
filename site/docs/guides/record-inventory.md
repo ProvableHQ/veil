@@ -181,6 +181,28 @@ Independent clients MUST share the same store and chain identity to avoid
 spending each other's reserved inputs. Raw submissions and wallets outside this
 configuration bypass the reservations.
 
+### Concurrent swaps
+
+With coordination enabled, local `swap` and `swapMultiHop` calls can sell the
+same token concurrently when enough separate records cover the trades. Automatic
+selection scans once and tries eligible records from smallest to largest. If
+another operation reserves a candidate first, the swap tries the next one. Each
+record nonce is tried at most once; exhaustion fails before proving.
+
+Retries preserve the amount, slippage floor, blinded identity and nonce. The
+client checks the account, network and quote expiry before each attempt.
+Explicit `tokenRecord` inputs stay fixed. Proving, submission and confirmation
+errors are never retried by record selection. Core reports failed execution-input
+acquisition as `RecordReservationConflictError`; unavailable private fee records
+produce a separate error.
+
+Use `Promise.allSettled` to keep track of every result, then claim each successful
+swap. Record coordination is separate from blinded identity tracking: concurrent
+calls MUST also share one blinded identity store instance, or provide distinct
+explicit identities. The bundled blinded identity stores coordinate within one
+process only. A shared SQLite record journal does not make blinded identity
+allocation safe across processes.
+
 ## Interrupted work and wallets
 
 Execution returns `complete` or `interrupted`, with known transaction ids and

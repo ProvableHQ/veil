@@ -99,6 +99,11 @@ export type SelectTokenRecordParameters = {
  * const { record } = await selectTokenRecord(client, { program: 'ethx_5a095e.aleo', minAmount: 10n ** 18n })
  */
 export async function selectTokenRecord(client: Client, params: SelectTokenRecordParameters): Promise<TokenRecordInfo> {
+  return (await tokenRecordCandidates(client, params))[0]!
+}
+
+/** Scans eligible records once, ordered smallest first, for bounded swap selection retries. @internal */
+export async function tokenRecordCandidates(client: Client, params: SelectTokenRecordParameters): Promise<TokenRecordInfo[]> {
   const records = (await requestRecords(client, {
     program: params.program,
     statusFilter: 'unspent',
@@ -107,7 +112,7 @@ export async function selectTokenRecord(client: Client, params: SelectTokenRecor
   // Exclude inputs held by participating inventory or trading operations even
   // if the scanner still reports those records as unspent.
   const reserved = await reservedRecordIds(client)
-  let best: TokenRecordInfo | undefined
+  const candidates: TokenRecordInfo[] = []
   for (const record of records) {
     if (!record.recordPlaintext) continue
     if (reserved.size && reserved.has(inventoryRecordId(record))) continue
@@ -118,17 +123,17 @@ export async function selectTokenRecord(client: Client, params: SelectTokenRecor
     if (info.recipientBound) continue
     if (params.tokenId !== undefined && info.tokenId !== undefined && info.tokenId !== params.tokenId) continue
     if (info.amount < params.minAmount) continue
-    if (!best || info.amount < best.amount) best = { ...info, record }
+    candidates.push({ ...info, record })
   }
 
-  if (!best) {
+  if (!candidates.length) {
     throw new Error(
       `No unspent ${params.program} record covers ${params.minAmount}` +
         (params.tokenId ? ` for token ${params.tokenId}` : '') +
         ' — balance too low, or funds are public rather than in records.',
     )
   }
-  return best
+  return candidates.sort((a, b) => a.amount < b.amount ? -1 : a.amount > b.amount ? 1 : 0)
 }
 
 /**

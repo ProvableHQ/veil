@@ -261,7 +261,11 @@ Set `VEIL_INVENTORY_DB` to the journal path used by `shield-swap inventory run`
 so trading and maintenance cannot reserve the same explicit record inputs.
 The trading session enables `recordManagement: { enabled: true, store, chainId }`
 when it creates the client. The SQLite store is also available to applications
-from `@provablehq/shield-swap-cli/storage`.
+from `@provablehq/shield-swap-cli/storage`. Automatic swap selection then tries
+another covering record if maintenance reserves its first choice before proving.
+The `swap-concurrent` command retains its one-leg-per-input-token limit; SDK
+scripts can submit same-token swaps with enough covering records and a shared
+blinded identity store.
 
 Without the environment variable, trading commands keep record coordination
 disabled and open no inventory journal. Inventory commands explicitly enable

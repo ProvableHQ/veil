@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { execFile } from 'node:child_process'
+import { execFile, fork } from 'node:child_process'
 import { promisify } from 'node:util'
 import { sqliteRecordInventoryStore } from '../src/storage.js'
 import type { RecordSpend } from '@provablehq/veil-core'
@@ -37,6 +37,36 @@ describe('CLI-only durable inventory store', () => {
     const results = await Promise.all([child(database, body), child(database, body)])
     expect(results.map((result) => result.stdout.trim()).sort()).toEqual(['acquired', 'busy'])
   })
+  it('reselects distinct swap inputs after contention between separate processes', async () => {
+    const database = await path()
+    const store = await sqliteRecordInventoryStore(database)
+    const workers = [0, 1].map(() => fork(new URL('./fixtures/concurrentInventoryWorker.ts', import.meta.url), [database], {
+      execArgv: ['--import', 'tsx'], stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    }))
+    const exits = workers.map(worker => new Promise<void>(resolve => worker.once('exit', () => resolve())))
+    try {
+      let ready = 0
+      const results = await Promise.all(workers.map(worker => new Promise<{ nonce: string; attempts: string[][] }>((resolve, reject) => {
+        let stderr = ''
+        worker.stderr!.on('data', chunk => { stderr += String(chunk) })
+        worker.once('error', reject)
+        worker.once('exit', code => { if (code !== 0) reject(new Error(`Inventory worker exited ${code}: ${stderr}`)) })
+        worker.on('message', (message: any) => {
+          if (message.ready) {
+            if (++ready === workers.length) for (const peer of workers) peer.send('acquire')
+          } else resolve(message)
+        })
+      })))
+      expect(results.map(result => result.nonce).sort()).toEqual(['1group', '2group'])
+      expect(results.map(result => result.attempts[0])).toEqual([['1group'], ['1group']])
+      expect(results.map(result => result.attempts.length).sort()).toEqual([1, 2])
+      expect((await store.list(JSON.stringify(['testnet', 'aleo1owner']))).map(entry => entry.status)).toEqual(['confirmed', 'confirmed'])
+    } finally {
+      for (const worker of workers) if (worker.exitCode === null) worker.kill()
+      await Promise.all(exits)
+      store.close()
+    }
+  }, 15_000)
   it('releases abandoned local pre-proving reservations but retains prepared transactions', async () => {
     const database = await path()
     await child(database, `await store.acquire(${JSON.stringify(entry)})`)

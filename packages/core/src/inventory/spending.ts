@@ -1,3 +1,4 @@
+import { RecordReservationConflictError } from '../errors/errors.js'
 import type { Client } from '../clients/createClient.js'
 import type { TransactionInput } from '../types/inputRequest.js'
 import type { ProvingProgressHandler } from '../types/proving.js'
@@ -7,7 +8,7 @@ import { getRecordInventory } from '../actions/records/getRecordInventory.js'
 import type { Transaction } from '../types/transaction.js'
 import { requestRecords } from '../actions/wallet/requestRecords.js'
 import { parseRecord } from '../utils/records.js'
-import { inventoryRecordId, management, scopeOf } from './internal.js'
+import { inventoryRecordId, management, reservedRecordIds, scopeOf } from './internal.js'
 
 /** Builds an internal client view that avoids recursive reservation acquisition. @internal */
 export function withoutManagement(client: Client, feeRecord?: string): Client {
@@ -96,12 +97,18 @@ export async function manageRecordSpend<T>(client: Client, params: {
     for (const candidate of candidates) {
       entry = await acquire(candidate)
       if (entry) { feeRecord = candidate; break }
+      // A fixed execution input can also lose this atomic acquisition. Report
+      // that separately so callers never treat exhausted fee records as a reason
+      // to rebuild an execution with another token record.
+      const held = await reservedRecordIds(client)
+      const conflicting = ids.filter(id => held.has(id))
+      if (conflicting.length) throw new RecordReservationConflictError(conflicting)
     }
     if (!entry) throw new Error('No available credits record covers the private fee separately from the transaction inputs; refresh records or fund private credits')
   } else {
     entry = await acquire()
   }
-  if (!entry) throw new Error('Record inventory changed: an input is already reserved or spent')
+  if (!entry) throw new RecordReservationConflictError(ids)
   let prepared = false
   let submitted = false
   try {
@@ -142,6 +149,11 @@ export async function manageRecordSpend<T>(client: Client, params: {
     // have submitted even if their response was lost, so their reservations remain.
     if (!prepared && !submitted && client.account?.type === 'local') {
       await config.store.update(scope, entry.id, { status: 'cancelled' })
+    }
+    // A nested action or caller checkpoint may throw its own conflict after
+    // this execution acquired inputs. It must not authorize retrying this spend.
+    if (error instanceof RecordReservationConflictError) {
+      throw new Error('Record spending failed after acquiring inputs', { cause: error })
     }
     throw error
   }
