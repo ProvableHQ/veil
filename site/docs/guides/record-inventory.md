@@ -59,7 +59,7 @@ records and proving; see [wallet requirements](#interrupted-work-and-wallets).
 | Setting | Default | When to set it |
 | --- | --- | --- |
 | `enabled` | Disabled when `recordManagement` is omitted | Set `true` to reserve inputs and retain transaction checkpoints. It does not start background maintenance. |
-| `store` | A separate in-memory journal for each enabled client | Pass one shared store to every client using the same inventory. Use durable storage for restart recovery. |
+| `store` | A separate `memoryRecordInventoryStore()` for each enabled client when omitted | Configurable through any `RecordInventoryStore` implementation, including the optional SQLite adapter or a custom backend. Share one store across clients using the same inventory. See [storage setup](#share-a-store-and-retain-it-across-restarts) for persistence and recovery. |
 | `chainId` | The transport's network | Use the same identity for participants on one chain. Give each custom or local chain a distinct identity. Required if the transport has no network. |
 | `maxFeeMicrocredits` | No limit | Bound the total network fee of each transaction before broadcast. Requires a local signer and a prover that supports checkpoints. |
 | `tokenJoin` | Helpers selected by asset and network | Set `false` for native pairwise joins, or configure a reviewed dynamic ARC helper. See [batch joins](#batch-joins). |
