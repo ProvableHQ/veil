@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createPublicClient, http, type RecordAsset } from '../../src/index.js'
+import { createClient, createPublicClient, http, type RecordAsset } from '../../src/index.js'
 import { validateAsset } from '../../src/actions/records/internal.js'
 import { getRecordJoinPrograms, validateRecordJoinFunction } from '../../src/inventory/joinPrograms.js'
 
@@ -32,12 +32,29 @@ describe.runIf(RUN)('live inventory program interfaces', () => {
     expect(helpers.map(helper => helper.program)).toEqual(expected.helpers)
     expect([...new Set(helpers.flatMap(helper => helper.counts))].sort((a, b) => a - b))
       .toEqual(Array.from({ length: expected.max - 1 }, (_, index) => index + 2))
-    // Check both ends of each deployment's range through the spending validator,
-    // including the 10/11 and 14/15 boundaries between static helper programs.
+    // Validate every supported arity through the spending validator. Interior
+    // functions must be compatible too, not only the deployment boundaries.
     for (const helper of helpers) {
-      await validateRecordJoinFunction(client, resolved.asset, helper, helper.counts[0]!)
-      await validateRecordJoinFunction(client, resolved.asset, helper, helper.counts.at(-1)!)
+      for (const count of helper.counts) await validateRecordJoinFunction(client, resolved.asset, helper, count)
     }
+  }, 120_000)
+
+  it.each(assets)('disables deployed helpers for $program when native joins are configured', async expected => {
+    const native = createClient({
+      transport: http('https://edge.provable.com/api/v2', { network: 'testnet' }),
+      recordManagement: { enabled: false, tokenJoin: false },
+    })
+    const resolved = await validateAsset(native, { program: expected.program })
+    expect(await getRecordJoinPrograms(native, resolved.asset)).toEqual([])
+  }, 120_000)
+
+  it('rejects a static helper for another asset and a count outside its deployed range', async () => {
+    const usdcx = await validateAsset(client, { program: 'test_usdcx_stablecoin.aleo' })
+    const eth = await validateAsset(client, { program: 'test_arc20_eth.aleo' })
+    const [helper] = await getRecordJoinPrograms(client, usdcx.asset)
+    expect(helper).toBeDefined()
+    await expect(validateRecordJoinFunction(client, eth.asset, helper!, 3)).rejects.toThrow('incompatible function signature')
+    await expect(validateRecordJoinFunction(client, usdcx.asset, helper!, 11)).rejects.toThrow('outside the join helper limits')
   }, 120_000)
 
   it('accepts explicit record/field overrides and rejects an undeclared balance', async () => {
