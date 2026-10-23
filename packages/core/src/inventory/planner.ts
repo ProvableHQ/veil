@@ -116,10 +116,21 @@ export function buildInventoryPlan(params: {
     while (working.length < target.records) {
       working.sort((a, b) => a.amount > b.amount ? -1 : a.amount < b.amount ? 1 : a.id.localeCompare(b.id))
       const record = working[0]!
-      const outputsNeeded = repack ? target.records - working.length + 1 : 2
       const deduction = splitDeduction(asset)
-      const usable = record.amount - deduction * BigInt(outputsNeeded - 1)
-      const amount = usable / BigInt(outputsNeeded)
+      let outputsNeeded = BigInt(target.records - working.length + 1)
+      if (!repack) {
+        // Keep halving when its outputs can still reach the target. Otherwise,
+        // leave enough in the remainder for later splits: 9 needs 3 + 6, not 4 + 5,
+        // to produce three records of at least 3.
+        const capacity = (record.amount + deduction) / (min + deduction)
+        const half = (record.amount - deduction) / 2n
+        const splitCapacity = (half + deduction) / (min + deduction) + (record.amount - half) / (min + deduction)
+        const otherCapacity = working.slice(1).reduce((sum, item) => sum + (item.amount + deduction) / (min + deduction), 0n)
+        if (otherCapacity + splitCapacity >= BigInt(target.records)) outputsNeeded = 2n
+        else if (capacity < outputsNeeded) outputsNeeded = capacity
+      }
+      const usable = record.amount - deduction * (outputsNeeded - 1n)
+      const amount = usable / outputsNeeded
       push('split', [record], [amount, record.amount - amount - deduction], amount)
     }
     if (working.some((record) => record.amount < min)) throw new Error('Insufficient balance after split deductions')

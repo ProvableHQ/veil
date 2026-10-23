@@ -101,6 +101,39 @@ describe('inventory planning', () => {
     expect(result.steps).toHaveLength(1)
     expect(result.steps[0]?.inputs).toEqual(['0group', '1group'])
   })
+  it.each([undefined, 'preserve'] as const)('preserves feasible minimum amounts with distribution %s', (distribution) => {
+    const cases = [
+      { asset: arc20, amounts: [9n], records: 3, min: 3n, expected: [3n, 3n, 3n], deduction: 0n },
+      { asset: arc20, amounts: [10n, 10n], records: 6, min: 3n, expected: [3n, 3n, 3n, 3n, 4n, 4n], deduction: 0n },
+      { asset: arc22, amounts: [3n, 9n], records: 4, min: 3n, expected: [3n, 3n, 3n, 3n], deduction: 0n },
+      { asset: credits, amounts: [3_020_000n], records: 3, min: 1_000_000n,
+        expected: [1_000_000n, 1_000_000n, 1_000_000n], deduction: 20_000n },
+    ]
+    for (const { asset, amounts, records, min, expected, deduction } of cases) {
+      const result = buildInventoryPlan({ scope, asset,
+        inputs: amounts.map((amount, index) => ({ id: `${index}group`, amount })),
+        target: { records, minRecordAmount: min, distribution } })
+      // Replay the plan to check the final lots and every intermediate split.
+      const remaining = new Map(result.inputs.map(record => [record.id, record.amount]))
+      for (const step of result.steps) {
+        expect(step.kind).toBe('split')
+        for (const input of step.inputs) remaining.delete(input)
+        for (const output of step.outputs) {
+          expect(output.amount).toBeGreaterThanOrEqual(min)
+          remaining.set(output.id, output.amount)
+        }
+      }
+      expect(result.steps).toHaveLength(records - amounts.length)
+      expect([...remaining.values()].sort((a, b) => a < b ? -1 : a > b ? 1 : 0)).toEqual(expected)
+      expect(result.deduction).toBe(deduction)
+      // The existing minimum-sized record never needs to be joined or spent.
+      if (amounts[0] === min) expect(remaining.get('0group')).toBe(min)
+    }
+  })
+  it('keeps existing halved amounts when they can meet the target', () => {
+    expect(plan([100n], 3, arc20, 'preserve').steps.map(step => step.amount)).toEqual([50n, 25n])
+    expect(plan([100n, 100n], 4, arc20, 'preserve').steps.map(step => step.amount)).toEqual([50n, 50n])
+  })
   it('preserves exact balanced lots and repacks when separate small records cannot split', () => {
     expect(plan([25n, 25n, 50n], 4).steps).toHaveLength(1)
     expect(plan([250_000n, 250_000n, 510_000n], 4, credits).steps).toHaveLength(1)
