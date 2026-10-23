@@ -48,6 +48,18 @@ describe('inventory application policies', () => {
     expect(results[0]?.status).toBe('waiting')
     expect(getRecordInventory).not.toHaveBeenCalled()
   })
+  it('reports a failed rebroadcast as waiting without planning any asset', async () => {
+    vi.mocked(reconcileRecordInventory).mockResolvedValue([{ program: 'token.aleo', status: 'prepared',
+      transactionId: 'at1stuck', rebroadcastAttempts: 2, lastRebroadcastError: 'Serial number already spent' }] as any)
+    const config = parseInventoryConfig({ policies: [policy, { ...policy, asset: { program: 'token.aleo' } }] })
+    expect(await runInventoryCycle({} as any, config, memoryRecordInventoryStore(), 'scope')).toEqual([{
+      program: '*', status: 'waiting',
+      reason: 'Unresolved transactions retain their reservations; rebroadcast of at1stuck failed: Serial number already spent',
+    }])
+    expect(getRecordInventory).not.toHaveBeenCalled()
+    expect(planRecordInventory).not.toHaveBeenCalled()
+    expect(rebalanceRecordInventory).not.toHaveBeenCalled()
+  })
   it('uses the acceptable count range without reshaping every trade', async () => {
     vi.mocked(getRecordInventory).mockResolvedValue({ available: Array.from({ length: 3 }, () => ({ amount: 100n })), reserved: [], balance: 300n } as any)
     const result = await runInventoryCycle({} as any, parseInventoryConfig({ policies: [{ ...policy, countRange: [3, 6] }] }), memoryRecordInventoryStore(), 'scope')

@@ -135,6 +135,8 @@ export type RecordSpendStatus = 'reserved' | 'prepared' | 'submitted' | 'confirm
  * @property transactionId Known transaction id, retained on ambiguous submission.
  * @property transaction Fully proved transaction retained before broadcast for safe resubmission.
  * @property feeMicrocredits Total network fee in microcredits, as a decimal string.
+ * @property rebroadcastAttempts Recovery rebroadcast attempts recorded in the journal; absent before the first attempt.
+ * @property lastRebroadcastError Most recent failed rebroadcast message; cleared after a successful rebroadcast or confirmed outcome.
  */
 export type RecordSpend = {
   id: string
@@ -150,6 +152,8 @@ export type RecordSpend = {
   transactionId?: string
   transaction?: Transaction
   feeMicrocredits?: string
+  rebroadcastAttempts?: number
+  lastRebroadcastError?: string
 }
 
 /**
@@ -159,7 +163,8 @@ export type RecordSpend = {
  * Rejected executions release their inputs except feeRecordId, whose fee was charged.
  * @property list Reads the journal for one chain/account namespace.
  * @property acquire Allocates an id and reserves inputs, or returns undefined on contention.
- * @property update Persists a checkpoint for an existing operation.
+ * @property update Persists a checkpoint and optional rebroadcast diagnostics for an existing operation.
+ *   An explicit undefined clears the transaction or lastRebroadcastError field.
  * @example
  * const store: RecordInventoryStore = memoryRecordInventoryStore()
  */
@@ -167,7 +172,7 @@ export type RecordInventoryStore = {
   list(scope: string): Promise<RecordSpend[]>
   acquire(entry: Omit<RecordSpend, 'id'>): Promise<RecordSpend | undefined>
   update(scope: string, id: string, patch: Partial<Pick<RecordSpend,
-    'status' | 'transactionId' | 'transaction' | 'feeMicrocredits'>>): Promise<void>
+    'status' | 'transactionId' | 'transaction' | 'feeMicrocredits' | 'rebroadcastAttempts' | 'lastRebroadcastError'>>): Promise<void>
 }
 
 /**

@@ -92,6 +92,29 @@ describe('CLI-only durable inventory store', () => {
       expect(await store.acquire(entry)).toBeDefined()
     } finally { store.close() }
   })
+  it('persists recovery diagnostics across restarts and clears a resolved error', async () => {
+    const database = await path()
+    let store = await sqliteRecordInventoryStore(database)
+    const saved = (await store.acquire({ ...entry, status: 'prepared', transactionId: 'at1saved',
+      transaction: { id: 'at1saved', type: 'execute' } as any }))!
+    expect(saved.rebroadcastAttempts).toBeUndefined() // Existing journal rows need no migration.
+    await store.update(entry.scope, saved.id, { rebroadcastAttempts: 1, lastRebroadcastError: 'Network unavailable' })
+    store.close()
+    store = await sqliteRecordInventoryStore(database)
+    try {
+      expect((await store.list(entry.scope))[0]).toMatchObject({ status: 'prepared', transactionId: 'at1saved',
+        rebroadcastAttempts: 1, lastRebroadcastError: 'Network unavailable' })
+      expect(await store.acquire(entry)).toBeUndefined()
+      await store.update(entry.scope, saved.id, { status: 'submitted', rebroadcastAttempts: 2, lastRebroadcastError: undefined })
+    } finally { store.close() }
+    store = await sqliteRecordInventoryStore(database)
+    try {
+      const [recovered] = await store.list(entry.scope)
+      expect(recovered).toMatchObject({ status: 'submitted', rebroadcastAttempts: 2, transaction: saved.transaction })
+      expect(recovered!.lastRebroadcastError).toBeUndefined()
+      expect(await store.acquire(entry)).toBeUndefined()
+    } finally { store.close() }
+  })
   it('retains an opaque wallet reservation after its process exits', async () => {
     const database = await path()
     await child(database, `await store.acquire(${JSON.stringify({ ...entry, accountType: 'rpc' })})`)

@@ -30,7 +30,15 @@ export async function runInventoryCycle(client: Client, config: InventoryConfig,
   // takes precedence over maintenance, including another client's trade.
   const journal = await reconcileRecordInventory(client, { rebroadcast: true })
   const pending = journal.filter((entry) => entry.program !== '__inventory_manager__' && ['reserved', 'prepared', 'submitted'].includes(entry.status))
-  if (pending.length) return [{ program: '*', status: 'waiting', reason: 'Unresolved transactions retain their reservations' }]
+  if (pending.length) {
+    // Report the first failed rebroadcast; status lists diagnostics for every
+    // entry. Maintenance still waits while any transaction remains unresolved.
+    const failed = pending.find(entry => entry.lastRebroadcastError !== undefined)
+    const reason = failed
+      ? `Unresolved transactions retain their reservations; rebroadcast of ${failed.transactionId ?? failed.id} failed: ${failed.lastRebroadcastError}`
+      : 'Unresolved transactions retain their reservations'
+    return [{ program: '*', status: 'waiting', reason }]
+  }
   const results: InventoryCycleResult[] = []
   let transactions = 0
   // Count native split deductions as well as public transaction fees against

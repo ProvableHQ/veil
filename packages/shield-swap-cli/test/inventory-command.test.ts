@@ -115,10 +115,12 @@ describe('shield-swap inventory command', () => {
   it('reports status without exposing saved transaction payloads', async () => {
     const { sqliteRecordInventoryStore } = await import('../src/storage.js')
     const store = await sqliteRecordInventoryStore(database)
-    await store.acquire({ scope: JSON.stringify(['aleo:testnet', 'aleo1fixture']), records: ['heldgroup'], program: 'token.aleo', function: 'join', status: 'prepared', createdAt: Date.now(), accountType: 'local', transactionId: 'at1saved', transaction: { id: 'at1saved', proof: 'stored-transaction-body' } as any })
+    await store.acquire({ scope: JSON.stringify(['aleo:testnet', 'aleo1fixture']), records: ['heldgroup'], program: 'token.aleo', function: 'join', status: 'prepared', createdAt: Date.now(), accountType: 'local', transactionId: 'at1saved', rebroadcastAttempts: 2, lastRebroadcastError: 'Serial number already spent',
+      transaction: { id: 'at1saved', proof: 'stored-transaction-body' } as any })
     store.close()
     await inventory(['status', '--json'])
-    expect(JSON.parse(stdout.join('\n')).operations[0]).toMatchObject({ status: 'prepared', transactionId: 'at1saved' })
+    expect(JSON.parse(stdout.join('\n')).operations[0]).toMatchObject({ status: 'prepared', transactionId: 'at1saved',
+      rebroadcastAttempts: 2, lastRebroadcastError: 'Serial number already spent' })
     expect(stdout.join('\n')).not.toContain('stored-transaction-body')
     expect(executions).toBe(0)
   })

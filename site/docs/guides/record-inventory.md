@@ -570,6 +570,7 @@ const unresolved = journal.filter((entry) =>
 )
 console.table(unresolved.map((entry) => ({
   operation: entry.id, transactionId: entry.transactionId, status: entry.status,
+  attempts: entry.rebroadcastAttempts ?? 0, error: entry.lastRebroadcastError,
 })))
 ```
 
@@ -591,6 +592,27 @@ Rebroadcast sends the exact saved transaction with its existing proof and id.
 It neither rebuilds it nor resumes a partially completed plan. Check again on
 a later poll; accepting a broadcast is not confirmation. Entries without a
 saved transaction cannot be recovered by this option.
+
+A failed rebroadcast leaves the transaction pending and records its error in
+`lastRebroadcastError`. `rebroadcastAttempts` counts recovery attempts; it is
+absent until the first attempt. Reconciliation continues checking later entries,
+so one failed broadcast does not hide confirmations for other transactions.
+A successful rebroadcast or confirmed outcome clears the last error.
+
+Inspect failures before deciding whether to retry:
+
+```ts
+const entries = await client.reconcileRecordInventory({ rebroadcast: true })
+for (const entry of entries) {
+  if (entry.lastRebroadcastError !== undefined) {
+    console.error(entry.transactionId, entry.lastRebroadcastError)
+  }
+}
+```
+
+Errors from confirmation lookups, except a transaction-not-found response, and
+storage failures still throw. A broadcast error does not release execution or
+private-fee records. Keep the journal until the chain outcome is known.
 
 ### 3. Plan against the confirmed inventory
 
@@ -638,7 +660,9 @@ external reconciliation.
 Wallet submission cannot currently enforce a fee ceiling before broadcast or
 pin a private fee record. Managed wallet execution therefore rejects fee budgets
 and requires public fees or FeeMaster. Local signers support the private fee
-selection below.
+selection below. A wallet rebalance with a run-level or client-level fee ceiling
+throws before scanning if the plan contains transactions. An already satisfied
+plan still completes without a scan or submission.
 
 ## Private fees
 

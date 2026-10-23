@@ -131,6 +131,19 @@ Keep the journal across restarts and **do not delete it to clear a pending spend
 Recovery after indefinite dropped/rejected-without-chain-evidence transactions
 requires operator reconciliation; no force-unlock command is included.
 
+If a saved transaction fails to rebroadcast, reconciliation records
+`lastRebroadcastError` and increments `rebroadcastAttempts`, then checks the
+remaining entries. Maintenance reports `waiting` while any spend is unresolved.
+Inspect all entries, including their last errors, with:
+
+```sh
+shield-swap inventory status --config inventory.json --json
+```
+
+These fields survive a restart. A successful rebroadcast or confirmed outcome
+clears the error; the attempt count remains. A broadcast failure does not mark
+an entry rejected or release its execution or fee records.
+
 Only one manager can run for an account and chain using the same journal.
 Pending trading operations take priority over maintenance. Trading clients MUST
 open the same file and enable record coordination when creating the client:

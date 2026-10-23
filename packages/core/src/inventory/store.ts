@@ -27,9 +27,11 @@ export function memoryRecordInventoryStore(): RecordInventoryStore {
       const entry = entries.find((item) => item.scope === scope && item.id === id)
       if (!entry) throw new Error('Unknown record reservation')
       Object.assign(entry, copy(patch))
-      // JSON cloning omits undefined; explicitly clear a completed proof instead
-      // of retaining the old transaction when the patch requests its removal.
-      if ('transaction' in patch && patch.transaction === undefined) delete entry.transaction
+      // JSON cloning omits undefined; explicitly remove fields cleared after
+      // a successful rebroadcast or confirmed transaction.
+      for (const key of ['transaction', 'lastRebroadcastError'] as const) {
+        if (key in patch && patch[key] === undefined) delete entry[key]
+      }
     },
   }
 }

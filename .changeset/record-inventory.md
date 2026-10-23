@@ -14,3 +14,5 @@ Prefer available batch join helpers for more than two records: up to 16 credits 
 Support private fees on managed local-account writes. Prefer an eligible supplied fee record, otherwise reserve a sufficient unreserved credits record alongside the execution inputs. Pass that record through local, delegated, and devnode proving, verify it before broadcast, and retain charged private fee records after rejected executions.
 
 Retry automatic local Shield Swap record selection on pre-proving reservation conflicts. Keep swap terms fixed, bound retries to one scan, and preserve explicit inputs and execution errors. Export RecordReservationConflictError for input acquisition failures.
+
+Record per-entry rebroadcast attempts and errors without releasing uncertain inputs or preventing later entries from being reconciled. Show recovery diagnostics in CLI status and waiting results. Reject unsupported wallet fee ceilings before scanning nonempty inventory plans while allowing no-op plans.

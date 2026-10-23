@@ -289,6 +289,11 @@ use `client.joinRecords` or `client.splitRecord`; these return before confirmati
 `client.autoJoin({ asset, minAmount })` selects and joins enough records for one
 spend. `client.reconcileRecordInventory()` checks pending transactions after an
 interruption without rebuilding them.
+With `{ rebroadcast: true }`, a failed resubmission records
+`lastRebroadcastError` and `rebroadcastAttempts` on its journal entry while
+reconciliation continues for other entries. Uncertain spends keep their
+reservations. See [recovery examples](../../site/docs/guides/record-inventory.md#recover-interrupted-work)
+for inspection and retry steps.
 
 Every participating client must share the same store and `chainId`. The memory
 store lasts for one process; pass a durable `RecordInventoryStore` for restart

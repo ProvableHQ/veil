@@ -11,6 +11,9 @@ import { beforeAll, describe, it, expect } from 'vitest'
 import {
   createPublicClient,
   createWalletClient,
+  custom,
+  memoryRecordInventoryStore,
+  TransportError,
   http,
   parseProgram,
   getContract,
@@ -246,6 +249,33 @@ describe('E2E: veil against live Aleo mainnet', () => {
 // explicit tokenRecord inputs instead surface RecordReservationConflictError;
 // proving/submission failures must be reconciled before any new spend.
 describe('Record inventory consumer example', () => {
+  it('inspects failed rebroadcasts while keeping uncertain records reserved', async () => {
+    const aleo = await loadNetwork('testnet')
+    const account = aleo.generateAccount()
+    const store = memoryRecordInventoryStore()
+    const scope = JSON.stringify(['aleo:testnet', account.address])
+    // Model a saved proof and an unavailable node without sending a transaction.
+    await store.acquire({ scope, records: ['1group'], program: 'credits.aleo', function: 'split',
+      status: 'prepared', accountType: 'local', createdAt: Date.now(), transactionId: 'at1example',
+      transaction: { id: 'at1example', type: 'execute' } as any })
+    const client = createWalletClient({ account,
+      transport: custom({ request: async ({ method }) => {
+        if (method === 'getConfirmedTransaction') throw new TransportError('Not found', { status: 404 })
+        throw new TransportError('Node unavailable')
+      } }),
+      recordManagement: { enabled: true, store, chainId: 'aleo:testnet' },
+    })
+    const journal = await client.reconcileRecordInventory({ rebroadcast: true })
+    const pending = journal.filter(entry => ['reserved', 'prepared', 'submitted'].includes(entry.status))
+    const failures = pending.map(entry => ({
+      transactionId: entry.transactionId,
+      attempts: entry.rebroadcastAttempts ?? 0,
+      error: entry.lastRebroadcastError,
+    }))
+    expect(failures).toEqual([{ transactionId: 'at1example', attempts: 1, error: 'Node unavailable' }])
+    expect(pending[0]!.records).toEqual(['1group'])
+    expect(pending[0]!.status).toBe('prepared')
+  })
   it('plans four credits records while keeping the source record private', async () => {
     const aleo = await loadNetwork('testnet')
     const account = aleo.generateAccount()

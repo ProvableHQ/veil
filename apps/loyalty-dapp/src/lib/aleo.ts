@@ -70,6 +70,9 @@ export async function getLoyaltyContract(walletClient?: ReturnType<typeof create
  * Planning requires wallet grants for record identities and amounts; coordination stays disabled.
  * Enabling coordination makes competing explicit inputs throw RecordReservationConflictError;
  * wallet input requests remain fixed and are never automatically replaced.
+ * After enabling coordination, inspect lastRebroadcastError and rebroadcastAttempts
+ * on entries returned by client.reconcileRecordInventory({ rebroadcast: true }).
+ * A failed rebroadcast keeps its inputs reserved while other entries are reconciled.
  * @param walletClient Connected wallet client on Aleo mainnet.
  * @returns The same wallet client; the helper performs no scan or transaction.
  * @example
