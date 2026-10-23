@@ -249,10 +249,16 @@ flow.
 
 ## Concurrent swaps
 
-Several private swaps can run at once when each has its own input record and
-blinded identity. Record management coordinates the inputs; the identity store
-retains the information needed to claim each output. Both are needed when a
-process may stop before all claims finish.
+This walkthrough prepares six private USDCx records, submits six swaps for ETH,
+and claims their outputs. A record holds an individually spendable amount of a
+token. Spending it consumes that record, so each simultaneous swap needs a
+different input even when the account has enough total USDCx.
+
+Each swap also uses a blinded identity: a temporary address derived from the
+account's key that receives the swap's proceeds. A separate claim transaction
+collects those proceeds as private records. The setup below saves both the
+record reservations and the identity information needed to finish claims after
+a restart.
 
 ### Configure a shared client
 
@@ -262,6 +268,14 @@ SQLite storage adapter; it requires Node 22.13 or newer. The SDK itself does not
 require SQLite. For a different storage backend, supply a
 [`RecordInventoryStore`](./record-inventory.md#share-a-store-and-retain-it-across-restarts).
 Run only one trader process for the account with the bundled identity store.
+SQLite can coordinate record reservations across processes, but the identity
+store allocates its counters within one process. Two processes opening the same
+`blinded.json` can allocate the same identity.
+
+For several clients in one process, pass the same `store` and `identities`
+objects to each client and use the same `chainId`. Several processes require
+separate coordination of identity allocation or distinct explicit identities;
+sharing the two file paths alone is insufficient.
 
 ```ts
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
@@ -333,6 +347,9 @@ call time. If preparation is interrupted, stop before submitting any swaps.
 The following calls spend funds. A new quote is fetched after maintenance so
 the time spent joining and splitting does not consume its 60-second lifetime.
 All six swaps use the same terms and independently select their input records.
+A successful `swap` call returns a **handle** containing the transaction and
+claim information. `waitForSwapOutput` waits for the on-chain result;
+`claimSwapOutput` submits the transaction that collects it.
 
 ```ts
 const maintenance = await client.rebalanceRecordInventory({
@@ -367,45 +384,154 @@ store.close()
 
 ### Selection, failures, and recovery
 
-Each swap needs a distinct record large enough for its input amount. With
-record management enabled and `tokenRecord` omitted, local `swap` and
-`swapMultiHop` calls try available records from smallest to largest. If another
-operation reserves the first choice, selection tries the next candidate before
-proving. It scans once per call and tries each nonce at most once. Exhausting
-that list fails; it does not wait for a new deposit or automatically join records.
+The six calls above can finish with different outcomes. Follow the input
+selection first, then inspect each swap and claim before starting another batch.
 
-Selection preserves the quote's amount, output floor, blinded identity, and
-nonce, and checks quote expiry and account/network consistency before another
-attempt. Explicit `tokenRecord` inputs remain fixed. Proving, submission, and
-confirmation errors never trigger another swap. Wallet accounts require pinned
-token records; this automatic reselection flow applies to local signers.
+#### 1. Follow two swaps competing for an input
 
-A quote reserves no pool liquidity. Concurrent trades can move the price against
-each other, and each trade independently enforces its minimum output. A batch
-is not atomic: some swaps can succeed while others fail. Check every result and
-claim each successful output. A claim can return both output tokens and unspent
-input; `amountRemaining` is the refund in input-token base units.
+Consider two swaps selling 0.1 USDCx each, with two available records holding
+0.1 USDCx apiece. Both calls can read the same scanner result before either has
+reserved a record. A reservation marks a record as in use in the shared store,
+so another participating call cannot spend it.
 
-For several clients in one process, share the same record store, `chainId`, and
-blinded identity store object. SQLite coordinates record reservations across
-processes, but the bundled blinded identity store does not coordinate counters
-across processes. Run one process for the account with this setup. A shared
-JSON path alone is insufficient; a multi-process application must separately
-coordinate identity allocation or supply distinct explicit identities.
+One possible ordering is:
 
-A timeout does not prove failure. Keep `inventory.sqlite` and `blinded.json`,
-reconcile pending transactions, and use `client.getUnclaimedSwaps()` to recover
-known handles. Do not launch a replacement batch until uncertain submissions
-are resolved. The runnable example also retains a pending-batch marker and
-uses a lock file to stop overlapping runs against its directory.
+```text
+Swap A                         Shared record store                 Swap B
+  |                                    |                             |
+  |--- reserve record 1 --------------->|                             |
+  |<-- acquired -----------------------|<--- reserve record 1 --------|
+  |                                    |---- already reserved ------>|
+  |                                    |<--- reserve record 2 --------|
+  |                                    |---- acquired -------------->|
+  |                                    |                             |
+  +--- prove and submit                |          prove and submit ---+
+```
 
-Run [concurrent-swaps.ts](https://github.com/ProvableHQ/veil/blob/main/examples/shield-swap/concurrent-swaps.ts)
-for the complete example with preview and execution modes. Its
+This selection happens automatically for local `swap` and `swapMultiHop` calls
+when record management is enabled and `tokenRecord` is omitted:
+
+1. Scan once for unreserved records large enough to cover the input amount,
+   ordered from smallest to largest.
+2. Try to reserve the first candidate. If another call acquired it first, try
+   the next candidate. Each record nonce, which identifies a record, is tried
+   at most once.
+3. Prove and submit after acquiring an input. If every candidate is taken, fail
+   before proving. The call does not wait for a deposit or join smaller records.
+
+Choosing record 2 leaves the trade unchanged: the input amount, minimum output,
+blinded identity, and swap nonce remain fixed. Before trying another record,
+the client checks that the quote has not expired and the account and network
+still match. Proving, submission, and confirmation errors do not restart this
+selection loop.
+
+An explicit `tokenRecord` fixes the input, so a reservation conflict fails that
+call. Wallet accounts require a pinned record supplied by the caller; automatic
+reselection applies to local signers.
+
+#### 2. Inspect swaps and claims separately
+
+Each call is a separate transaction. A quote reserves no pool liquidity, so one
+trade can change the price seen by the next. Each trade still enforces its own
+minimum output. If one fails, other swaps in the batch can succeed.
+
+For example, a six-swap batch could leave this work:
+
+| Result | Next action |
+| --- | --- |
+| Swaps 1 through 4 and their claims succeed | Record the received amounts. These trades are finished. |
+| Swap 5 fails before proving because no input is available | Inspect the inventory before planning another trade. |
+| Swap 6 succeeds, but waiting for its output times out | Retain its handle and recover that swap. Do not submit swap 6 again. |
+
+`Promise.allSettled` retains each result even when another call fails. Inspect
+both arrays from the submission example; `claims[index]` corresponds to
+`handles[index]`, not necessarily `swaps[index]`, because failed swaps have no
+returned handle:
+
+```ts
+for (const [index, result] of swaps.entries()) {
+  if (result.status === 'rejected') {
+    console.error(`Swap ${index + 1} needs inspection:`, result.reason)
+  }
+}
+for (const [index, result] of claims.entries()) {
+  if (result.status === 'rejected') {
+    console.error('Unfinished claim:', handles[index]!.transactionId, result.reason)
+  }
+}
+```
+
+A successful claim can return both ETH and unspent USDCx. `amountOut` is the ETH
+received; `amountRemaining` is the USDCx refund, each in its token's base units.
+For example, if a 0.1 USDCx trade spends only 0.08 USDCx at the price limit, the
+same claim collects its ETH proceeds and refunds the remaining 0.02 USDCx.
+
+#### 3. Recover the existing batch after a restart
+
+A timeout means the client stopped waiting; the transaction may still reach the
+chain. Keep `inventory.sqlite` and `blinded.json`. Repeat
+[Configure a shared client](#configure-a-shared-client) with the same account,
+network, and paths, then run the recovery code below **instead of submitting
+another batch**. Stop other traders for that account while recovering.
+
+First, check the saved transactions against the chain. The journal records both
+swaps and claims, so an uncertain claim must also be resolved before claiming
+again:
+
+```ts
+const recoveryJournal = await client.reconcileRecordInventory()
+const unresolved = recoveryJournal.filter((entry) =>
+  !['confirmed', 'rejected', 'cancelled'].includes(entry.status),
+)
+console.table(unresolved.map((entry) => ({
+  transaction: entry.transactionId, status: entry.status,
+})))
+if (unresolved.length) {
+  throw new Error('Resolve these transactions before retrying claims or swaps')
+}
+```
+
+Reconciliation does not submit anything by default. If a saved transaction needs
+to be sent again, follow [Recover interrupted work](./record-inventory.md#recover-interrupted-work)
+to rebroadcast that exact transaction. A missing confirmation does not release
+its records.
+
+Once transaction outcomes are known, find outputs that still need claiming.
+`getUnclaimedSwaps()` checks the identities in `blinded.json` against the chain
+and returns saved handles for outputs that remain available:
+
+```ts
+const unclaimed = await client.getUnclaimedSwaps()
+if (unclaimed.unresolvable.length || unclaimed.swaps.some((swap) => !swap.handle)) {
+  throw new Error('Restore missing swap information before automatic recovery')
+}
+
+// These calls collect existing outputs; they do not submit replacement swaps.
+const recoveredClaims = await Promise.allSettled(unclaimed.swaps.map(async (swap) => {
+  await client.waitForSwapOutput({ handle: swap.handle!, timeout: 600_000 })
+  return client.claimSwapOutput({ handle: swap.handle! })
+}))
+for (const [index, result] of recoveredClaims.entries()) {
+  if (result.status === 'rejected') {
+    console.error('Claim still needs recovery:', unclaimed.swaps[index]!.swapId, result.reason)
+  }
+}
+store.close() // Close only after all recovery calls have settled.
+```
+
+An identity without saved swap information needs inspection of the original
+transaction; the lookup cannot reconstruct every lost response. Keep both stores
+until all transactions and claims are accounted for. Resolve failed claim
+attempts before submitting another batch.
+
+The runnable [concurrent-swaps.ts](https://github.com/ProvableHQ/veil/blob/main/examples/shield-swap/concurrent-swaps.ts)
+adds a preview mode, a pending-batch marker, and a lock file that prevents
+overlapping runs against its directory. Its
 [README](https://github.com/ProvableHQ/veil/blob/main/examples/shield-swap/README.md)
-covers commands and recovery. The CLI's `swap-concurrent` command retains a
-one-input-token-per-leg restriction; use the SDK example for several simultaneous
-swaps selling the same token. See [record management](./record-inventory.md)
-for configuration defaults, fee limits, wallet grants, and join helper selection.
+covers commands and recovery. The CLI's `swap-concurrent` command allows only
+one trade per input token in a batch; use the SDK example for several simultaneous
+USDCx sales. See [record management](./record-inventory.md) for storage options,
+fee limits, wallet requirements, and join helpers.
 
 ## Liquidity
 
