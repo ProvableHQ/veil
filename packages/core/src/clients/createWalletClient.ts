@@ -1,25 +1,43 @@
 import type { RpcAccount, LocalAccount } from '../types/account.js'
 import type { ProvingConfig } from '../types/proving.js'
 import type { RecordProvider } from '../types/records.js'
+import type { RecordManagementConfig } from '../inventory/types.js'
 import type { Transport } from '../types/transport.js'
 import { createClient, type Client } from './createClient.js'
 import { walletActions, type WalletActions } from './decorators/wallet.js'
 
-/** Config for RPC account — wallet handles proving and records */
+/**
+ * Configures an RPC wallet that handles proving and records.
+ * @property account Connected wallet account.
+ * @property transport Transport used for wallet requests and chain reads.
+ * @property recordManagement Optional shared record reservations and recovery. Defaults to disabled.
+ * @property key Optional client identifier. Defaults to wallet.
+ * @property name Optional display name. Defaults to Wallet Client.
+ */
 export type RpcWalletClientConfig = {
   account: RpcAccount
+  recordManagement?: RecordManagementConfig
   transport: Transport
   key?: string | undefined
   name?: string | undefined
   // No recordProvider — RPC wallets handle records via the wallet adapter
 }
 
-/** Config for local account — must provide a proving config (use mode: 'devnode' for devnode clients) */
+/**
+ * Configures a local signing account with an explicit prover.
+ * @property account Account holding the local signing key.
+ * @property transport Transport used for chain reads and submission.
+ * @property proving Prover configuration; use mode: devnode for a local node.
+ * @property recordProvider Optional record source, required for requestRecords.
+ * @property recordManagement Optional shared record reservations and recovery. Defaults to disabled.
+ * @property key Optional client identifier. Defaults to wallet.
+ * @property name Optional display name. Defaults to Wallet Client.
+ */
 export type LocalWalletClientConfig = {
   account: LocalAccount
+  recordManagement?: RecordManagementConfig
   transport: Transport
   proving: ProvingConfig
-  /** Record provider for fetching records. Required for requestRecords with a local account. */
   recordProvider?: RecordProvider
   key?: string | undefined
   name?: string | undefined

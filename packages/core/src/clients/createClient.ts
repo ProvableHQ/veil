@@ -1,6 +1,7 @@
 import type { AnyAccount } from '../types/account.js'
 import type { ProvingConfig } from '../types/proving.js'
-import type { RecordProvider } from '../types/records.js'
+import type { RecordManagementConfig } from '../inventory/types.js'
+import { configureRecordManagement } from '../inventory/internal.js'
 import type { Transport } from '../types/transport.js'
 import { uid as createUid } from '../utils/uid.js'
 
@@ -13,6 +14,8 @@ import { uid as createUid } from '../utils/uid.js'
  * @property name Optional human-readable name for the client. Defaults to `"Client"`.
  * @property proving Optional proving configuration selecting where zero-knowledge
  *   proofs are generated (wallet, local, or devnode). Omit for read-only clients.
+ * @property recordManagement Optional record reservations and recovery. Defaults to disabled;
+ *   omission or enabled: false leaves writes unchanged.
  * @property transport Transport that carries requests to the network.
  */
 export type ClientConfig = {
@@ -20,6 +23,7 @@ export type ClientConfig = {
   key?: string | undefined
   name?: string | undefined
   proving?: ProvingConfig | undefined
+  recordManagement?: RecordManagementConfig | undefined
   transport: Transport
 }
 
@@ -35,6 +39,7 @@ export type ClientConfig = {
  * @property name Human-readable name for the client.
  * @property proving Proving configuration, or `undefined` when the client cannot
  *   produce transactions.
+ * @property recordManagement Record reservation and recovery settings, or undefined when omitted.
  * @property request Transport request function, called to reach the network.
  * @property transport The transport backing `request`.
  * @property uid Unique identifier for this client instance.
@@ -44,6 +49,7 @@ type ClientBase = {
   key: string
   name: string
   proving: ProvingConfig | undefined
+  recordManagement?: RecordManagementConfig | undefined
   request: Transport['request']
   transport: Transport
   uid: string
@@ -124,6 +130,7 @@ export function createClient(config: ClientConfig): Client {
     key = 'base',
     name = 'Client',
     proving,
+    recordManagement,
     transport,
   } = config
 
@@ -134,6 +141,8 @@ export function createClient(config: ClientConfig): Client {
     key,
     name,
     proving,
+    // Resolve record settings before action closures capture the client.
+    recordManagement: configureRecordManagement(recordManagement, transport),
     request: transport.request,
     transport,
     uid,

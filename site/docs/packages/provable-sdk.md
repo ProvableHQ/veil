@@ -56,3 +56,31 @@ See the [`/api/provable-sdk`](/api/provable-sdk/loadNetwork) pages for every
 method's parameters and defaults, and
 [Executing transactions](/guides/executing-transactions) for the proving
 config in context.
+
+## Record management
+
+`createAleoClient` accepts `recordManagement` and returns a wallet client with
+inventory methods already attached. Configure its scanner and shared store
+when constructing the client:
+
+```ts
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+import type { RecordInventoryStore } from '@provablehq/veil-core'
+
+async function createManagedClient(privateKey: string, store: RecordInventoryStore) {
+  const aleo = await loadNetwork('testnet')
+  return aleo.createAleoClient({
+    privateKey,
+    records: aleo.createRemoteScanner({ waitForSync: true }),
+    recordManagement: { enabled: true, store, chainId: 'aleo:testnet' },
+  }).walletClient
+}
+// Call client.getRecordInventory(), client.planRecordInventory(), and
+// client.rebalanceRecordInventory() on the returned client.
+```
+
+Coordination defaults to disabled. Share the store across clients, and use
+durable storage when operations must survive a restart. Local and delegated
+proving both persist prepared transactions before managed submission. See
+[record management](/guides/record-inventory) for a complete setup and
+[concurrent swaps](/guides/shield-swap#concurrent-swaps) for the trading flow.

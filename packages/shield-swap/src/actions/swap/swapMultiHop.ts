@@ -1,4 +1,4 @@
-import { assertExecutionQuote } from './internal.js'
+import { assertExecutionQuote, swapContextGuard, executeWithTokenRecord } from './internal.js'
 import {
   executeContract,
   writeContract,
@@ -10,7 +10,6 @@ import { reserveBlindedIdentity } from '../blinding/reserveBlindedIdentity.js'
 import { recordSwapOrThrow } from '../../utils/blinding/tracking.js'
 import type { BlindedIdentityStore } from '../../utils/blinding/store.js'
 import { nextBlindedIdentity, viewKeyToScalar } from '../../utils/blinding/identity.js'
-import { resolveTokenRecord } from '../../utils/records.js'
 import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
 import {
   resolveMultiHopParams,
@@ -178,6 +177,10 @@ export type SwapMultiHopReturnType = MultiHopSwapHandle
  * deadline read, a record scan (local), and the transaction itself. Signs,
  * and on the local path proves locally.
  *
+ * Enabled record management retries automatic local record selection when
+ * another operation reserves the selected input before proving. Each candidate
+ * is tried once; explicit tokenRecord inputs and execution failures are not retried.
+ *
  * @param client A Veil wallet client (local or wallet account).
  * @param params The route intent and optional overrides.
  * @returns The multi-hop handle — persist it; the claim consumes it.
@@ -198,6 +201,10 @@ export type SwapMultiHopReturnType = MultiHopSwapHandle
  * // const res = await claimSwapOutput(client, { handle })
  */
 export async function swapMultiHop(client: Client, params: SwapMultiHopParameters): Promise<SwapMultiHopReturnType> {
+  // Snapshot caller-owned terms before asynchronous preparation or retries.
+  params = { ...params, imports: params.imports && { ...params.imports },
+    blindedIdentity: params.blindedIdentity && { ...params.blindedIdentity }, poolKeys: [...params.poolKeys] }
+  const assertContext = swapContextGuard(client)
   const program = params.program ?? SHIELD_SWAP
   const routerProgram = params.routerProgram ?? SHIELD_SWAP_ROUTER
 
@@ -288,27 +295,28 @@ export async function swapMultiHop(client: Client, params: SwapMultiHopParameter
 
     // Wrapped inputs spend the UNDERLYING asset's records; plain inputs
     // spend the token program's own records (the id decodes to the program).
-    const recordInput = await resolveTokenRecord(client, {
+    const result = await executeWithTokenRecord(client, {
       tokenRecord: params.tokenRecord,
       tokenInProgram: route.wrapped ? route.underlyingProgram : tokenIdToProgram(route.tokenId),
       tokenId: route.wrapped ? route.underlyingId : params.tokenInId,
       minAmount: params.amountIn,
+    }, recordInput => {
+      assertContext()
+      assertExecutionQuote(client, params)
+      return route.wrapped
+        ? executeContract(client, {
+            program: routerProgram,
+            function: 'swap_mh_from_wrapped',
+            imports: params.imports,
+            inputs: [recordInput, senderProof!, identity.blindingFactor, identity.blindedAddress, ...tail],
+          })
+        : executeContract(client, {
+            program,
+            function: 'swap_multi_hop',
+            imports: params.imports,
+            inputs: [identity.blindingFactor, identity.blindedAddress, recordInput, ...tail],
+          })
     })
-
-    assertExecutionQuote(client, params)
-    const result = route.wrapped
-      ? await executeContract(client, {
-          program: routerProgram,
-          function: 'swap_mh_from_wrapped',
-          imports: params.imports,
-          inputs: [recordInput, senderProof!, identity.blindingFactor, identity.blindedAddress, ...tail],
-        })
-      : await executeContract(client, {
-          program,
-          function: 'swap_multi_hop',
-          imports: params.imports,
-          inputs: [identity.blindingFactor, identity.blindedAddress, recordInput, ...tail],
-        })
 
     const swapId = requireFieldOutput(result.outputs, 'swap_multi_hop')
     const handle = {
@@ -353,6 +361,7 @@ export async function swapMultiHop(client: Client, params: SwapMultiHopParameter
     }).catch(() => undefined)
   }
 
+  assertContext()
   assertExecutionQuote(client, params)
   const transactionId = await writeContract(client, {
     program: route.wrapped ? routerProgram : program,

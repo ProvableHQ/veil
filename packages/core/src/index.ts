@@ -17,6 +17,7 @@ export type {
   ProvingConfig,
   GenerateFreezelistProofParameters,
   BuildTransactionOptions,
+  EstimateExecutionFeeOptions,
   BuildDeploymentOptions,
   SimulateOptions,
   ExecuteOptions,
@@ -117,6 +118,7 @@ export {
   InvalidTransactionError,
   DuplicateTransactionError,
   RecordSpentError,
+  RecordReservationConflictError,
   OutputIdCollisionError,
   BroadcastError,
   TransactionTimeoutError,
@@ -263,3 +265,17 @@ export {
 } from './actions/public/checkArcConformance.js'
 export { isArc20, type IsArc20Parameters, type IsArc20ReturnType } from './actions/public/isArc20.js'
 export { isArc22, type IsArc22Parameters, type IsArc22ReturnType } from './actions/public/isArc22.js'
+
+// Record inventory management.
+export type * from './inventory/types.js'
+export { recordActions } from './inventory/recordActions.js'
+export { recordJoinPrograms } from './inventory/joinPrograms.js'
+export { memoryRecordInventoryStore } from './inventory/store.js'
+export { inventoryRecordId, reservedRecordIds } from './inventory/internal.js'
+export { getRecordInventory, type GetRecordInventoryParameters, type GetRecordInventoryReturnType } from './actions/records/getRecordInventory.js'
+export { planRecordInventory, type PlanRecordInventoryParameters } from './actions/records/planRecordInventory.js'
+export { rebalanceRecordInventory, type RebalanceRecordInventoryParameters } from './actions/records/rebalanceRecordInventory.js'
+export { reconcileRecordInventory, type ReconcileRecordInventoryParameters } from './actions/records/reconcileRecordInventory.js'
+export { joinRecords, type JoinRecordsParameters } from './actions/records/joinRecords.js'
+export { splitRecord, type SplitRecordParameters } from './actions/records/splitRecord.js'
+export { autoJoin, type AutoJoinParameters } from './actions/records/autoJoin.js'

@@ -172,6 +172,26 @@ export class DuplicateTransactionError extends BaseError {
   }
 }
 
+/**
+ * Reports an input reservation conflict before signing or proving starts.
+ * The rejected attempt owns no reservation and has submitted no transaction.
+ * Callers may select different inputs; proving and broadcast failures never use this error.
+ * @property recordIds Execution input nonces involved in the failed acquisition, excluding fee-only contention.
+ * @example
+ * if (error instanceof RecordReservationConflictError) {
+ *   console.log('Select another available input record')
+ * }
+ */
+export class RecordReservationConflictError extends BaseError {
+  readonly recordIds: readonly string[]
+
+  constructor(recordIds: readonly string[]) {
+    super('Record inventory changed: an input is already reserved or spent')
+    this.name = 'RecordReservationConflictError'
+    this.recordIds = [...recordIds]
+  }
+}
+
 /** A record was double-spent — the serial number has already been consumed */
 export class RecordSpentError extends BaseError {
   constructor(message: string, options?: ErrorOptions) {

@@ -242,11 +242,20 @@ export async function loadSession(options: { network?: string } = {}) {
   }
 
   const aleo = await loadNetwork(network)
+  // Open the shared journal only when the caller explicitly selects a database.
+  const inventoryPath = process.env.VEIL_INVENTORY_DB
+  const inventoryStore = inventoryPath
+    ? await (await import('./storage.js')).sqliteRecordInventoryStore(inventoryPath)
+    : undefined
   // No prover or scanner URL: both default to the Provable gateway and take the
   // network from the client, so naming them here would only risk drift.
   const { walletClient, account } = aleo.createAleoClient({
     privateKey: state.privateKey,
     networkUrl: NETWORK_URL,
+    // Apply the shared reservations to wallet writes and Shield Swap actions.
+    recordManagement: inventoryStore ? {
+      enabled: true, store: inventoryStore, chainId: `aleo:${network}`,
+    } : undefined,
     // Faucet-funded accounts hold no public credits; the delegated prover
     // pays fees from its FeeMaster account. Opt out with
     // SHIELD_SWAP_FEE_MASTER=0 when the account funds its own fees.

@@ -44,6 +44,20 @@ See the [Clients](/clients/public-client) pages for the full action surface,
 [Guides](/guides/reading-chain-state) for common flows, and
 [API](/api/types) for the type and transport reference.
 
+## Record management
+
+Wallet clients include inventory reads, joins/splits, planning, and reconciliation.
+Set `recordManagement: { enabled: true, store, chainId }` when constructing the
+client to reserve inputs during writes. `.extend(recordActions())` only adds
+methods; it does not enable coordination.
+
+Participating clients share one store and chain identity. The default store is
+in memory; use a durable `RecordInventoryStore` for restart recovery. Core keeps
+storage and signing behind interfaces and imports no database or Node runtime.
+See [record management](/guides/record-inventory) for configuration defaults,
+client examples, private fees, and recovery, or
+[concurrent swaps](/guides/shield-swap#concurrent-swaps) for trading setup.
+
 ## Subpaths
 
 - **`@provablehq/veil-core/agent`** — framework-agnostic LLM tool bindings: `createAgentTools`, `aleoAgentTools`, `aleoAgentToolSchemas`, and the `AgentTool` / `AgentToolSchema` types.

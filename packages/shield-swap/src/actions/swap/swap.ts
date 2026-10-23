@@ -1,5 +1,5 @@
 import type { SwapQuote } from './quote.js'
-import { assertQuote, prepareQuote, executionQuote, assertExecutionQuote } from './internal.js'
+import { assertQuote, prepareQuote, executionQuote, assertExecutionQuote, swapContextGuard, executeWithTokenRecord } from './internal.js'
 import { swapMultiHop, type MultiHopSwapHandle } from './swapMultiHop.js'
 import {
   executeContract,
@@ -12,7 +12,6 @@ import { reserveBlindedIdentity } from '../blinding/reserveBlindedIdentity.js'
 import { recordSwapOrThrow } from '../../utils/blinding/tracking.js'
 import type { BlindedIdentityStore } from '../../utils/blinding/store.js'
 import { nextBlindedIdentity, viewKeyToScalar } from '../../utils/blinding/identity.js'
-import { resolveTokenRecord } from '../../utils/records.js'
 import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
 import { resolveSwapParams, getDeadline, generateSwapNonce } from '../../utils/params.js'
 import { blindingFactorIssueRequest, blindedAddressIssueRequest } from '../../utils/blinding/requests.js'
@@ -217,6 +216,10 @@ export type SwapReturnType = SwapHandle
  * scan, and the transaction itself. Signs, and on the local path proves
  * locally.
  *
+ * Enabled record management retries automatic local record selection when
+ * another operation reserves the selected input before proving. Each candidate
+ * is tried once; explicit tokenRecord inputs and execution failures are not retried.
+ *
  * @param client A Veil wallet client (local or wallet account).
  * @param params The swap intent and optional overrides.
  * @returns The swap handle — persist it; the claim consumes it.
@@ -265,6 +268,10 @@ export async function swap(client: Client, params: SwapParameters | SwapFromQuot
       ? swap(client, { ...execution, poolKey: q.hops[0]!.poolKey })
       : swapMultiHop(client, { ...execution, poolKeys: q.hops.map((hop) => hop.poolKey) })
   }
+  // Snapshot caller-owned terms before asynchronous preparation or retries.
+  params = { ...params, imports: params.imports && { ...params.imports },
+    blindedIdentity: params.blindedIdentity && { ...params.blindedIdentity } }
+  const assertContext = swapContextGuard(client)
   const program = params.program ?? SHIELD_SWAP
   const routerProgram = params.routerProgram ?? SHIELD_SWAP_ROUTER
 
@@ -355,27 +362,28 @@ export async function swap(client: Client, params: SwapParameters | SwapFromQuot
 
     // Wrapped inputs spend the UNDERLYING asset's records; plain inputs
     // spend the token program's own records (the id decodes to the program).
-    const recordInput = await resolveTokenRecord(client, {
+    const result = await executeWithTokenRecord(client, {
       tokenRecord: params.tokenRecord,
       tokenInProgram: route.wrapped ? route.underlyingProgram : tokenIdToProgram(route.tokenId),
       tokenId: route.wrapped ? route.underlyingId : params.tokenInId,
       minAmount: params.amountIn,
+    }, recordInput => {
+      assertContext()
+      assertExecutionQuote(client, params)
+      return route.wrapped
+        ? executeContract(client, {
+            program: routerProgram,
+            function: 'swap_from_wrapped',
+            imports: params.imports,
+            inputs: [recordInput, senderProof!, identity.blindingFactor, identity.blindedAddress, ...tail],
+          })
+        : executeContract(client, {
+            program,
+            function: 'swap',
+            imports: params.imports,
+            inputs: [recordInput, identity.blindingFactor, identity.blindedAddress, ...tail],
+          })
     })
-
-    assertExecutionQuote(client, params)
-    const result = route.wrapped
-      ? await executeContract(client, {
-          program: routerProgram,
-          function: 'swap_from_wrapped',
-          imports: params.imports,
-          inputs: [recordInput, senderProof!, identity.blindingFactor, identity.blindedAddress, ...tail],
-        })
-      : await executeContract(client, {
-          program,
-          function: 'swap',
-          imports: params.imports,
-          inputs: [recordInput, identity.blindingFactor, identity.blindedAddress, ...tail],
-        })
 
     const swapId = requireFieldOutput(result.outputs, 'swap')
 
@@ -422,6 +430,7 @@ export async function swap(client: Client, params: SwapParameters | SwapFromQuot
     }).catch(() => undefined)
   }
 
+  assertContext()
   assertExecutionQuote(client, params)
   const transactionId = await writeContract(client, {
     program: route.wrapped ? routerProgram : program,

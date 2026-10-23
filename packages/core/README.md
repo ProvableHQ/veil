@@ -245,3 +245,78 @@ const client = createPublicClient({
   },
 }))
 ```
+
+## Record management
+
+Wallet clients include methods to inspect private records, join or split them,
+and prepare a target inventory. Record management also coordinates spends:
+it reserves explicit inputs before proving and records transaction progress
+for recovery. Reservations and recovery are off by default.
+
+Configure the wallet client once, then call its methods. The application
+supplies the account, transport, and any local prover/scanner bindings:
+
+```ts
+import {
+  createWalletClient, memoryRecordInventoryStore,
+  type WalletClientConfig, type RecordInventoryStore,
+} from '@provablehq/veil-core'
+
+const sharedStore = memoryRecordInventoryStore()
+
+function createManagedWallet(config: WalletClientConfig, store: RecordInventoryStore = sharedStore) {
+  return createWalletClient({
+    ...config,
+    recordManagement: { enabled: true, store, chainId: 'aleo:testnet' },
+  })
+}
+
+async function previewCredits(config: WalletClientConfig) {
+  const client = createManagedWallet(config)
+  const inventory = await client.getRecordInventory({ asset: { program: 'credits.aleo' } })
+  const plan = await client.planRecordInventory({
+    asset: inventory.asset,
+    target: { records: 6, minRecordAmount: 1_000_000n, distribution: 'balanced' },
+    maxTransactions: 24,
+  })
+  return { client, inventory, plan } // Read-only; no transaction submitted.
+}
+```
+
+After inspecting the plan, call `client.rebalanceRecordInventory({ plan })` and
+check whether the result is `complete` or `interrupted`. For one join or split,
+use `client.joinRecords` or `client.splitRecord`; these return before confirmation.
+`client.autoJoin({ asset, minAmount })` selects and joins enough records for one
+spend. `client.reconcileRecordInventory()` checks pending transactions after an
+interruption without rebuilding them.
+With `{ rebroadcast: true }`, a failed resubmission records
+`lastRebroadcastError` and `rebroadcastAttempts` on its journal entry while
+reconciliation continues for other entries. Uncertain spends keep their
+reservations. See [recovery examples](../../site/docs/guides/record-inventory.md#recover-interrupted-work)
+for inspection and retry steps.
+
+Every participating client must share the same store and `chainId`. The memory
+store lasts for one process; pass a durable `RecordInventoryStore` for restart
+recovery. Core has no database or Node dependency. A read or plan does not lock
+records, and coordination does not start background maintenance.
+
+An asset requires only `program`. Optional `recordName` and `amountField`
+override the selected record balance. Native credits use `credits.microcredits`;
+other compatible records default to `amount`, then `microcredits`. More than two
+records use a compatible batch join helper when available. Set `tokenJoin: false`
+for native pairwise joins.
+
+Local managed writes support `privateFee: true`: an available credits record is
+reserved with the execution inputs. A supplied reserved or insufficient fee
+record is replaced when another eligible record exists. Failure to find one
+stops the call before proving. The current wallet RPC protocol cannot pin a
+managed private fee record.
+
+`recordActions()` adds these methods to custom clients. It does not enable
+coordination, and its `store` and `maxFeeMicrocredits` options are ignored; put
+those settings in the client's enabled `recordManagement` configuration.
+
+See the [record management guide](../../site/docs/guides/record-inventory.md)
+for all defaults, durable storage, fee limits, helper selection, wallet grants,
+and recovery examples. For concurrent trades, see
+[Shield Swap setup](../shield-swap/README.md#concurrent-swaps).

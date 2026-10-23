@@ -251,6 +251,9 @@ importers:
       '@provablehq/veil-aleo-sdk':
         specifier: workspace:^
         version: link:../provable-sdk
+      '@provablehq/veil-core':
+        specifier: workspace:^
+        version: link:../core
 
   packages/wallet-adapter:
     dependencies:

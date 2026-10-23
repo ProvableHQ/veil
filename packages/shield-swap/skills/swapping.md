@@ -169,32 +169,22 @@ per distinct held token that has a live pool. Before running anything:
 3. Ask how many — and which — swaps they want, up to that maximum. Only
    then execute.
 
-Two per-account resources collide under concurrency; both must be
-partitioned explicitly:
+The CLI keeps its one-trade-per-input-token limit. An SDK script can submit
+several trades selling the same token when `recordManagement.enabled` is true
+and enough separate records cover the trades. In a CLI session, setting
+`VEIL_INVENTORY_DB` enables coordination with the selected SQLite journal.
 
-1. **Blinded-identity counters.** Each swap consumes a single-use blinded
-   address derived from a counter. `swap()` discovers the next unused
-   counter by scanning the chain — concurrent swaps see the same chain and
-   pick the SAME counter, and all but one gets rejected. Fix: reserve a
-   counter block up front and pass each swap its own explicit identity.
-2. **Input records.** Record selection picks the one covering record per
-   token — concurrent swaps selling the SAME token grab the same record and
-   all but one fails as a double-spend. Fix: give each concurrent swap a
-   different input token. (Same-token bursts require record splitting;
-   prefer different tokens or sequential submission instead.)
+Each swap reserves a blinded identity from the session's shared store. Record
+selection tries the next eligible candidate if another operation reserves the
+first one before proving. Each candidate is tried once; explicit records and
+execution failures are not retried. Keep concurrent calls in one process: the
+bundled identity store does not coordinate counters between processes.
 
 ```ts
-// swaps[] entries MUST each sell a different token (disjoint records).
-// Identities need no handling here: each call reserves its own from the store,
-// and reservations serialize, so two swaps cannot derive the same blinded
-// address and have the second revert on the uniqueness assert.
+// With coordination enabled, same-token trades need one covering record each.
+// Otherwise every entry must use a different input token or explicit record.
 const results = await Promise.allSettled(swaps.map((s) => client.swap(s)))
 ```
-
-Without a configured store this is the one flow that breaks: both calls would
-scan the chain, find the same free counter, and the second would revert on
-finalize having paid its fee. `loadSession` configures one, so this is safe by
-default — see the SDK README's "Concurrent swaps" section for the mechanism.
 
 `Promise.all` rejects on the first failure but the other swaps keep
 running server-side — always sweep with
@@ -242,8 +232,8 @@ handles carry `poolKeys`) and claims each with the right action.
 | `requires auth` / 401 | Session missing or expired | `loadSession()` authenticates; it auto-renews. Re-run the script. |
 | 403 `redeem an invite code` | Access gate | Back to [startup.md](./startup.md) — redeem a code. |
 | No covering record for `amountIn` | Fragmented/small records | Lower `amountIn`, or airdrop again if truly empty. |
-| Duplicate blinded address rejection | Concurrent swaps raced the counter scan | Use the explicit-identity recipe above. |
-| Double-spend rejection | Two swaps selected the same record | Different input tokens per concurrent swap. |
+| Duplicate blinded address rejection | Concurrent swaps raced the counter scan | Share one identity store instance within the process, or supply distinct explicit identities. |
+| Double-spend rejection | Swaps bypassed record coordination and selected the same record | Enable coordination with a shared store, or supply disjoint records. |
 | `/route` 404 `no executable route … for the requested amount` | Quote unavailable at that size | Proceed without `expectedOut` (spot floor applies), or resize the trade. |
 | `amount_out_min` revert | Price moved past slippage | Re-quote, widen `slippageBps` modestly, retry. |
 | Swap confirmed but output missing | Not finalized yet | Normal — claim with the retry loop in [collecting.md](./collecting.md). |

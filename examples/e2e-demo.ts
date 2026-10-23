@@ -10,6 +10,10 @@
 import { beforeAll, describe, it, expect } from 'vitest'
 import {
   createPublicClient,
+  createWalletClient,
+  custom,
+  memoryRecordInventoryStore,
+  TransportError,
   http,
   parseProgram,
   getContract,
@@ -235,3 +239,65 @@ describe('E2E: veil against live Aleo mainnet', () => {
     console.log('  aleo_describe_program: found', descResult.functions.length, 'functions,', descResult.mappings.length, 'mappings')
   })
 }, { timeout: 30_000 })
+
+// Inventory planning consumes the account's provider and performs no writes.
+// A live application supplies createRemoteScanner({ waitForSync: true }) instead.
+// With management enabled, privateFee: true also reserves a separate credits
+// record. An optional feeRecord is preferred only while it remains available;
+// the client replaces reserved candidates before building the transaction.
+// Managed swaps can reselect automatically before proving. Direct writes and
+// explicit tokenRecord inputs instead surface RecordReservationConflictError;
+// proving/submission failures must be reconciled before any new spend.
+describe('Record inventory consumer example', () => {
+  it('inspects failed rebroadcasts while keeping uncertain records reserved', async () => {
+    const aleo = await loadNetwork('testnet')
+    const account = aleo.generateAccount()
+    const store = memoryRecordInventoryStore()
+    const scope = JSON.stringify(['aleo:testnet', account.address])
+    // Model a saved proof and an unavailable node without sending a transaction.
+    await store.acquire({ scope, records: ['1group'], program: 'credits.aleo', function: 'split',
+      status: 'prepared', accountType: 'local', createdAt: Date.now(), transactionId: 'at1example',
+      transaction: { id: 'at1example', type: 'execute' } as any })
+    const client = createWalletClient({ account,
+      transport: custom({ request: async ({ method }) => {
+        if (method === 'getConfirmedTransaction') throw new TransportError('Not found', { status: 404 })
+        throw new TransportError('Node unavailable')
+      } }),
+      recordManagement: { enabled: true, store, chainId: 'aleo:testnet' },
+    })
+    const journal = await client.reconcileRecordInventory({ rebroadcast: true })
+    const pending = journal.filter(entry => ['reserved', 'prepared', 'submitted'].includes(entry.status))
+    const failures = pending.map(entry => ({
+      transactionId: entry.transactionId,
+      attempts: entry.rebroadcastAttempts ?? 0,
+      error: entry.lastRebroadcastError,
+    }))
+    expect(failures).toEqual([{ transactionId: 'at1example', attempts: 1, error: 'Node unavailable' }])
+    expect(pending[0]!.records).toEqual(['1group'])
+    expect(pending[0]!.status).toBe('prepared')
+  })
+  it('plans four credits records while keeping the source record private', async () => {
+    const aleo = await loadNetwork('testnet')
+    const account = aleo.generateAccount()
+    const client = createWalletClient({
+      account,
+      transport: http(API_URL, { network: 'testnet' }),
+      proving: aleo.createProvingConfig({ mode: 'delegated', networkUrl: API_URL, account }),
+      // Routing and planning remain available without enabling reservations.
+      recordManagement: { enabled: false, chainId: 'aleo:testnet' },
+      recordProvider: { requestRecords: async () => [{
+        programName: 'credits.aleo', recordName: 'credits', tag: '1field', spent: false,
+        recordPlaintext: `{ owner: ${account.address}.private, microcredits: 4030000u64.private, _nonce: 1group.public }`,
+      }] },
+    })
+    const plan = await client.planRecordInventory({
+      asset: { program: 'credits.aleo' },
+      target: { records: 4, distribution: 'balanced', minRecordAmount: 1_000_000n },
+    })
+    expect(client.recordManagement?.enabled).toBe(false)
+    expect(client.recordManagement?.store).toBeUndefined()
+    expect(plan.steps).toHaveLength(3)
+    expect(plan.deduction).toBe(30_000n)
+    expect(plan.inputs).toEqual([{ id: '1group', amount: 4_030_000n }])
+  })
+})

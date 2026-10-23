@@ -160,3 +160,50 @@ const proof = await sdk.generateFreezelistProof({ address, tree, root })
 The resulting string can be passed to an ARC-22 transfer or bridge proof input.
 SDK-created proving configs expose the same generator to Shield Swap, which
 resolves and caches witnesses automatically for local and delegated proving.
+
+## Record management
+
+`createAleoClient` returns a wallet client with record inventory methods.
+Enable `recordManagement` to reserve inputs during writes and retain transaction
+progress. The SDK supplies the scanner and proving; the application chooses
+where to store the reservation journal.
+
+```ts
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+import type { RecordInventoryStore } from '@provablehq/veil-core'
+
+async function previewInventory(privateKey: string, store: RecordInventoryStore) {
+  const aleo = await loadNetwork('testnet')
+  const { walletClient: client } = aleo.createAleoClient({
+    privateKey,
+    records: aleo.createRemoteScanner({ waitForSync: true }),
+    recordManagement: { enabled: true, store, chainId: 'aleo:testnet' },
+  })
+  const plan = await client.planRecordInventory({
+    asset: { program: 'credits.aleo' },
+    target: { records: 6, minRecordAmount: 1_000_000n, distribution: 'balanced' },
+    maxTransactions: 24,
+  })
+  return { client, plan } // Inspect the plan before executing it.
+}
+// After review: await client.rebalanceRecordInventory({ plan })
+```
+
+Omitting `recordManagement` or setting `enabled: false` leaves coordination off.
+An enabled client without `store` creates its own in-memory journal. Share one
+store and chain identity across clients using the same account, and use durable
+storage to recover after a restart. `createDevnodeClient` accepts the same
+configuration; give each local chain a distinct `chainId`.
+
+`waitForSync: true` waits for scanner synchronization before each page
+(default `false`, with a 300,000 ms sync timeout). It does not reserve records;
+reservations are acquired when the client executes a write. Local and delegated
+proving both save the prepared transaction before broadcasting when management
+is enabled. Managed local writes can use `privateFee: true` and an optional
+preferred `feeRecord`; the client selects another credits record if needed.
+Explicit private fees take precedence over FeeMaster for that call.
+
+See the [record management guide](../../site/docs/guides/record-inventory.md)
+for memory and SQLite setup, configuration defaults, fees, joins/splits, and
+recovery. The [concurrent swaps example](../../examples/shield-swap/concurrent-swaps.ts)
+composes this client with Shield Swap and persists both reservation and claim data.
