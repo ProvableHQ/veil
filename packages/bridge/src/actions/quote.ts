@@ -56,16 +56,17 @@ export async function quote(
   // the exact value the caller passes to execution and stores in progress.
   const plan = prepare(registry, params)
   if (plan.protocol === 'cctp') return cctp.quote(registry, clients, fetcher, { plan })
-  const privateMintAddressCommitment = await resolvePrivateMintAddressCommitment(
-    registry,
-    clients,
-    privateMintIdentities,
-    plan,
-    params.privateMintAddressCommitment,
-    params.privateMintSecretNonce,
-  )
+  // Wallet preparations already reserve their nonce inside the wallet.
+  const privateMintAddressCommitment = params.walletPreparedDeposit === undefined
+    ? await resolvePrivateMintAddressCommitment(
+        registry, clients, privateMintIdentities, plan,
+        params.privateMintAddressCommitment, params.privateMintSecretNonce,
+      )
+    : params.privateMintAddressCommitment
   const protocolParams = {
     plan,
+    walletPreparedDeposit: params.walletPreparedDeposit,
+    privateMintNonceInput: params.privateMintNonceInput,
     privateMintAddressCommitment,
     privateMintSecretNonce: params.privateMintSecretNonce,
   }

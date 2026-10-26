@@ -15,3 +15,10 @@ separation, release temporary WASM handles, and persist allocation watermarks
 before derivation so failed reservations cannot recycle counters. Back up the
 Node identity file and its `.counter` companion together. Existing identities
 continue to complete with their originally stored scalars.
+
+Support wallet-prepared private mints without the application patch from AMM
+PR #920. Quote, execute, and resume accept `walletPreparedDeposit`; completion
+accepts the matching `privateMintNonceInput` derived request while the wallet
+retains the scalar. Validate the reviewed wrapper, canonical hook, attested
+commitment, recipient, and nonce-source exclusivity before submission, and
+preserve the original hook when an approval confirms after a timeout.

@@ -227,7 +227,7 @@ export const xreserve = {
      * an Aleo network fee. The source deposit is not repeated.
      *
      * @param client Aleo wallet that authorizes and submits the private mint.
-     * @param params Transfer details, attested deposit, optional legacy private mint secret, and recovery callbacks.
+     * @param params Transfer details, attested deposit, local scalar or saved wallet preparation with a derived nonce request, and recovery callbacks.
      * @returns The Aleo transaction identifier and state needed to confirm private delivery.
      * @throws BridgeError When the attestation or private mint commitment is invalid, wallet authorization fails, or submission fails.
      * @example const result = await xreserve.evmToAleo.complete(client, { plan, deposit, attestation })

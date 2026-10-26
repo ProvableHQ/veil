@@ -121,6 +121,8 @@ export async function resume(
         pollingIntervalMs: params.pollingIntervalMs,
         confirmationTimeoutMs: params.confirmationTimeoutMs,
         onSubmitted,
+        walletPreparedDeposit: params.walletPreparedDeposit,
+        privateMintNonceInput: params.privateMintNonceInput,
         privateMintSecretNonce: params.privateMintSecretNonce,
       },
     )

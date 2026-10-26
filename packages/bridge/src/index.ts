@@ -133,6 +133,7 @@ export type {
   EvmXReserveRouteMetadata,
   EvmXReserveTransferExecution,
   EvmXReserveTransferQuote,
+  WalletPreparedXReserveDeposit,
   GetXReserveAttestationParameters,
   XReserveAttestationResult,
   XReserveHttpResponse,

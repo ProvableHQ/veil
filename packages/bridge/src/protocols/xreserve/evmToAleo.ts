@@ -1,4 +1,5 @@
 import { isRegistryVersionCompatible } from '../../registry/compatibility.js'
+import type { TransactionInput } from '@provablehq/veil-core'
 import {
   decodeEventLog,
   decodeFunctionResult,
@@ -29,6 +30,7 @@ import type {
   QuoteEvmXReserveTransferParameters,
   XReserveAttestationResult,
   XReserveHttpTransport,
+  WalletPreparedXReserveDeposit,
 } from '../../types/xreserve.js'
 import { parseDecimalAmount } from '../../utils/units.js'
 import {
@@ -143,6 +145,30 @@ function successful(receipt: EvmReceipt, hash: Hash): void {
   if (receipt.status === 'reverted') throw new BridgeError(`EVM transaction reverted: ${hash}`)
 }
 
+/** Binds a wallet's public hook to the reviewed private-mint wrapper. */
+function walletPreparedHook(plan: BridgePlan, prepared: WalletPreparedXReserveDeposit, expectedRecipient: Hex): Hex {
+  if (plan.mintMode !== 'private' || !prepared
+    || typeof prepared.hookData !== 'string' || !/^0x02[0-9a-f]{64}0{64}$/.test(prepared.hookData)
+    || typeof prepared.remoteRecipientBytes32 !== 'string' || !/^0x[0-9a-f]{64}$/i.test(prepared.remoteRecipientBytes32)
+    || prepared.remoteRecipientBytes32.toLowerCase() !== expectedRecipient.toLowerCase()) {
+    throw new BridgeError('The wallet deposit does not match the private mint route')
+  }
+  return prepared.hookData
+}
+
+/** Checks that a derived request asks the wallet for this deposit's nonce only. */
+function validateWalletNonceInput(plan: BridgePlan, prepared: WalletPreparedXReserveDeposit | undefined, input: TransactionInput | undefined): void {
+  if (input === undefined) return
+  if (!prepared) throw new BridgeError('A wallet nonce input requires a prepared deposit')
+  if (typeof input !== 'object' || input === null || input.type !== 'derived'
+    || input.algorithm !== 'shielded-usdcx-secret-nonce'
+    || input.args?.commitment?.type !== 'string'
+    || input.args.commitment.value !== prepared.hookData.slice(4, 68)
+    || input.args?.recipient?.type !== 'address' || input.args.recipient.value !== plan.recipient) {
+    throw new BridgeError('The wallet nonce input does not match the prepared deposit')
+  }
+}
+
 /**
  * Calculates the USDC and approval required for an EVM-to-Aleo xReserve deposit.
  *
@@ -180,14 +206,6 @@ export async function quote(
   const privateMintAddressCommitment = params.plan.mintMode === 'private'
     ? params.privateMintAddressCommitment
     : undefined
-  const hookData = privateMintAddressCommitment === undefined
-    ? await buildXReserveHookData(
-        params.plan.mintMode,
-        params.plan.recipient,
-        environment,
-        params.privateMintSecretNonce ?? '0scalar',
-      )
-    : buildXReservePrivateMintHookData(privateMintAddressCommitment)
   const recipient = params.plan.mintMode === 'private'
     ? await aleoProgramAddress(route.wrapperProgram, environment)
     : params.plan.recipient
@@ -195,6 +213,17 @@ export async function quote(
   // until the intended recipient supplies the secret. Public deposits target
   // the recipient address directly.
   const remoteRecipientBytes32 = aleoAddressToBytes32(recipient)
+  const prepared = params.walletPreparedDeposit
+  if (prepared !== undefined
+    && (params.privateMintSecretNonce !== undefined || params.privateMintAddressCommitment !== undefined)) {
+    throw new BridgeError('Use one private mint nonce source')
+  }
+  const hookData = prepared !== undefined
+    ? walletPreparedHook(params.plan, prepared, remoteRecipientBytes32)
+    : privateMintAddressCommitment === undefined
+      ? await buildXReserveHookData(params.plan.mintMode, params.plan.recipient, environment, params.privateMintSecretNonce ?? '0scalar')
+      : buildXReservePrivateMintHookData(privateMintAddressCommitment)
+  validateWalletNonceInput(params.plan, prepared, params.privateMintNonceInput)
   const balanceData = encodeFunctionData({ abi: ERC20_ABI, functionName: 'balanceOf', args: [owner] })
   const allowanceData = encodeFunctionData({ abi: ERC20_ABI, functionName: 'allowance', args: [owner, route.xReserveContract] })
   // Balance and allowance describe the same account at approximately the same
@@ -616,6 +645,9 @@ export async function execute(
       privateMintAddressCommitment: params.privateMintAddressCommitment
         ?? checkpointQuote.privateMintAddressCommitment,
     })
+    if (transferQuote.hookData.toLowerCase() !== checkpointQuote.hookData.toLowerCase()) {
+      throw new BridgeError('Private mint commitment or legacy secret nonce does not match the checkpointed approval')
+    }
   } else if (params.resume) {
     throw new BridgeError(`Unsupported xReserve resume status: ${params.resume.status}`)
   } else {
@@ -690,14 +722,14 @@ export async function getAttestation(
 /**
  * Delivers a private USDCx record after Circle attests an Ethereum deposit.
  *
- * The bridge identity store derives the private mint scalar locally and binds it
- * to the public address commitment embedded in the source deposit. The Aleo
+ * The caller supplies a local scalar or a wallet-derived nonce request bound
+ * to the saved preparation and the attested source commitment. The Aleo
  * client proves, signs, and submits the mint, which incurs an Aleo transaction
  * fee. The source deposit is never repeated.
  *
  * @param registry Supported assets and reviewed xReserve deployments.
  * @param client Aleo wallet that proves, signs, and broadcasts the private mint.
- * @param params Route, recipient, confirmed deposit, Circle attestation, private mint secret, fee preference, and recovery callbacks.
+ * @param params Route, recipient, confirmed deposit, Circle attestation, scalar or wallet nonce source, fee preference, and recovery callbacks.
  * @returns The Aleo transaction identifier and state needed to confirm private delivery.
  * @throws BridgeError When the transfer is not a private mint, the attestation or commitment does not match the deposit, or wallet submission fails.
  * @example const mint = await complete(registry, client, { plan, deposit, attestation })
@@ -730,7 +762,19 @@ export async function complete(
   if (calculateXReserveMessageHash(attestation.payload) !== attestation.messageHash) throw new BridgeError('Circle attestation payload has an invalid message hash')
   const attestedHookData = `0x${attestation.payload.slice(-130)}` as Hex
   const secretNonce = params.privateMintSecretNonce ?? '0scalar'
-  const expectedHookData = await buildXReserveHookData('private', plan.recipient, route.environment, secretNonce)
+  const prepared = params.walletPreparedDeposit
+  const nonceInput = params.privateMintNonceInput
+  if (prepared !== undefined && (params.privateMintSecretNonce !== undefined || nonceInput === undefined)) {
+    throw new BridgeError('A prepared wallet deposit requires a wallet nonce input and no scalar nonce')
+  }
+  const expectedHookData = prepared !== undefined
+    ? walletPreparedHook(plan, prepared, aleoAddressToBytes32(await aleoProgramAddress(wrapperProgram, route.environment)))
+    : await buildXReserveHookData('private', plan.recipient, route.environment, secretNonce)
+  validateWalletNonceInput(plan, prepared, nonceInput)
+  if (prepared !== undefined && (client.account?.type === 'local'
+    || (client.account?.address !== undefined && client.account.address !== plan.recipient))) {
+    throw new BridgeError('The wallet nonce input requires the recipient wallet account')
+  }
   if (attestedHookData.toLowerCase() !== expectedHookData.toLowerCase()) {
     throw new BridgeError('Private mint secret nonce and recipient do not match the attested hook data')
   }
@@ -744,7 +788,7 @@ export async function complete(
       xReserveHexToAleoBytes(attestation.payload, 305),
       xReserveHexToAleoBytes(attestation.attestation, 65),
       xReserveHexToAleoBytes(attestation.messageHash, 32),
-      secretNonce,
+      nonceInput ?? secretNonce,
       plan.recipient,
     ],
     privateFee: params.privateFee ?? false,

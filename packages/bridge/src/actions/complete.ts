@@ -131,7 +131,8 @@ export async function complete(
   const { nextAction: _nextAction, ...deposit } = receipt
   const storedCommitment = deposit.protocolState.privateMintAddressCommitment
   let privateMintSecretNonce = params.privateMintSecretNonce
-  if (storedCommitment !== undefined && privateMintSecretNonce === undefined) {
+  if (storedCommitment !== undefined && privateMintSecretNonce === undefined
+    && params.walletPreparedDeposit === undefined && params.privateMintNonceInput === undefined) {
     if (typeof storedCommitment !== 'string' || !/^[0-9a-f]{64}$/.test(storedCommitment)) {
       throw new BridgeError('Ready xReserve receipt contains an invalid private mint address commitment')
     }
@@ -168,6 +169,8 @@ export async function complete(
           }))
         : undefined,
       privateMintSecretNonce,
+      walletPreparedDeposit: params.walletPreparedDeposit,
+      privateMintNonceInput: params.privateMintNonceInput,
       onSubmitted: params.onCheckpoint
         ? async (submitted) => params.onCheckpoint?.(createBridgeCheckpoint(plan, submitted))
         : undefined,

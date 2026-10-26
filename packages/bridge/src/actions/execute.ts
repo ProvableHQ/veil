@@ -194,14 +194,13 @@ export async function execute(
     }
   }
   if (params.plan.protocol === 'xreserve' && chain.family === 'evm') {
-    const privateMintAddressCommitment = await resolvePrivateMintAddressCommitment(
-      registry,
-      clients,
-      privateMintIdentities,
-      params.plan,
-      params.privateMintAddressCommitment,
-      params.privateMintSecretNonce,
-    )
+    // Preserve the wallet's saved identity without allocating a local nonce.
+    const privateMintAddressCommitment = params.walletPreparedDeposit === undefined
+      ? await resolvePrivateMintAddressCommitment(
+          registry, clients, privateMintIdentities, params.plan,
+          params.privateMintAddressCommitment, params.privateMintSecretNonce,
+        )
+      : params.privateMintAddressCommitment
     const execution = await evmToAleoXReserve.execute(
       registry,
       requireEvmClientWithWallet(registry, clients, chainId, 'execute xReserve transfer'),
@@ -210,6 +209,8 @@ export async function execute(
         pollingIntervalMs: params.pollingIntervalMs,
         confirmationTimeoutMs: params.confirmationTimeoutMs,
         onSubmitted,
+        walletPreparedDeposit: params.walletPreparedDeposit,
+        privateMintNonceInput: params.privateMintNonceInput,
         privateMintAddressCommitment,
         privateMintSecretNonce: params.privateMintSecretNonce,
       },

@@ -18,7 +18,7 @@ import type {
   PrepareParameters,
 } from './protocol.js'
 import type { SolanaHyperlaneTransferExecution, SolanaHyperlaneTransferQuote } from './solana.js'
-import type { EvmXReserveTransferExecution, EvmXReserveTransferQuote } from './xreserve.js'
+import type { EvmXReserveTransferExecution, EvmXReserveTransferQuote, WalletPreparedXReserveDeposit } from './xreserve.js'
 
 /**
  * Describes the cross-chain transfer whose current cost is calculated.
@@ -28,8 +28,12 @@ import type { EvmXReserveTransferExecution, EvmXReserveTransferQuote } from './x
  *
  * @property privateMintAddressCommitment Public 32-byte recipient commitment reserved by the bridge identity store. Safe to checkpoint.
  * @property privateMintSecretNonce Legacy secret Aleo scalar committed by a private xReserve deposit. Defaults to `0scalar` and is never persisted in a checkpoint.
+ * @property walletPreparedDeposit Optional saved public wallet preparation. Replaces local commitment derivation; do not combine with a commitment or scalar nonce.
+ * @property privateMintNonceInput Optional wallet-derived nonce request bound to the preparation. Omit until completion when quoting.
  */
 export type QuoteParameters = PrepareParameters & {
+  walletPreparedDeposit?: WalletPreparedXReserveDeposit | undefined
+  privateMintNonceInput?: TransactionInput | undefined
   privateMintAddressCommitment?: string | undefined
   privateMintSecretNonce?: string | undefined
 }
@@ -94,9 +98,13 @@ export type BridgeQuote = ({ plan: BridgePlan }) & (
  * @property gasPaymentMicrocredits Optional exact Aleo Hyperlane hook payment override. Defaults to a fresh live quote.
  * @property privateMintAddressCommitment Public 32-byte recipient commitment reserved by the bridge identity store. Safe to checkpoint.
  * @property privateMintSecretNonce Legacy secret Aleo scalar committed by a private xReserve deposit. Defaults to `0scalar` and is never persisted in a checkpoint.
+ * @property walletPreparedDeposit Optional durably saved public wallet preparation. Replaces local commitment derivation; do not combine with a commitment or scalar nonce.
+ * @property privateMintNonceInput Optional wallet-derived nonce request bound to the preparation. Omit until completion when depositing.
  * @property onProgress Optional awaited callback for Aleo proving and submission boundaries. Non-Aleo routes emit no events.
  */
 export type ExecuteParameters = {
+  walletPreparedDeposit?: WalletPreparedXReserveDeposit | undefined
+  privateMintNonceInput?: TransactionInput | undefined
   plan: BridgePlan
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined
@@ -147,11 +155,15 @@ export type GetStatusParameters = {
  *
  * @property cctp Optional manual-mint override for an attested, unused CCTP message when forwarding stalls. Defaults to waiting for forwarding.
  * @property privateMintSecretNonce Caller-managed secret Aleo scalar required when the bridge identity store did not derive the commitment.
+ * @property walletPreparedDeposit Optional saved public wallet preparation matching the attested deposit. Do not combine with a scalar nonce.
+ * @property privateMintNonceInput Wallet-derived nonce request bound to the preparation commitment and recipient. Required with `walletPreparedDeposit`.
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
  * @property onCheckpoint Durable hook called before supported local Aleo broadcast and again after destination submission.
  * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
  */
 type CompleteOptions = {
+  walletPreparedDeposit?: WalletPreparedXReserveDeposit | undefined
+  privateMintNonceInput?: TransactionInput | undefined
   cctp?: { manualMint: boolean } | undefined
   privateMintSecretNonce?: string | undefined
   privateFee?: boolean | undefined
@@ -171,6 +183,8 @@ type CompleteOptions = {
  * @property receipt Circle-attested transfer state retained while the application stayed open.
  * @property cctp Optional manual-mint override for an attested, unused CCTP message when forwarding stalls. Defaults to waiting for forwarding.
  * @property privateMintSecretNonce Caller-managed secret Aleo scalar required when the bridge identity store did not derive the commitment.
+ * @property walletPreparedDeposit Optional saved public wallet preparation matching the attested deposit. Do not combine with a scalar nonce.
+ * @property privateMintNonceInput Wallet-derived nonce request bound to the preparation commitment and recipient. Required with `walletPreparedDeposit`.
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
  * @property onCheckpoint Optional durable hook called before supported local Aleo broadcast and again after destination submission.
  */
@@ -200,11 +214,15 @@ export type RecoverParameters = {
  *
  * @property progress Recovery result whose next operation is `resume`.
  * @property privateMintSecretNonce Caller-managed Aleo scalar required to resume a legacy private xReserve deposit. Store-derived commitments resume from the checkpoint without it.
+ * @property walletPreparedDeposit Saved public wallet preparation used by the original wallet-prepared deposit. Required to resume its approval without replacing the committed hook.
+ * @property privateMintNonceInput Optional wallet-derived nonce request bound to the preparation. Omit until completion when resuming a deposit.
  * @property pollingIntervalMs Delay between source confirmation reads. Defaults to 1,000 milliseconds.
  * @property confirmationTimeoutMs Maximum source confirmation wait. Defaults to 120,000 milliseconds.
  * @property onCheckpoint Optional durable hook called immediately after a new transaction is broadcast.
  */
 export type ResumeParameters = {
+  walletPreparedDeposit?: WalletPreparedXReserveDeposit | undefined
+  privateMintNonceInput?: TransactionInput | undefined
   progress: Extract<BridgeProgress, { next: 'resume' }>
   privateMintSecretNonce?: string | undefined
   pollingIntervalMs?: number | undefined

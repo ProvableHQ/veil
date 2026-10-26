@@ -9,7 +9,7 @@ import {
   type Hash,
   type Hex,
 } from 'viem'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   execute as executeEvmXReserveTransfer,
   getAttestation as getXReserveAttestation,
@@ -24,7 +24,7 @@ import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'
 import { createAleoClient } from '../../src/connections/aleo.js'
 import type { BridgeReceipt } from '../../src/types/protocol.js'
-import { aleoAddressToBytes32 } from '../../src/utils/xreserve.js'
+import { aleoAddressToBytes32, aleoProgramAddress } from '../../src/utils/xreserve.js'
 import { memoryXReservePrivateMintIdentityStore } from '../../src/utils/xreservePrivateMintStore.js'
 
 const ACCOUNT = getAddress('0x0000000000000000000000000000000000000001')
@@ -107,6 +107,122 @@ function mockExecutor(
 }
 
 describe('Ethereum xReserve actions', () => {
+  it('quotes and executes the AMM wallet preparation without allocating a local identity', async () => {
+    const { executor, sent } = mockExecutor()
+    const load = vi.fn(async () => { throw new Error('A wallet deposit must not load local identities') })
+    const save = vi.fn()
+    const bridge = createBridgeClient({
+      environment: 'testnet',
+      clients: {
+        sepolia: executor,
+        'aleo-testnet': createAleoClient({
+          publicClient: {} as never,
+          account: {
+            executeTransaction: vi.fn(),
+            account: { type: 'local', address: RECIPIENT, viewKey: 'AViewKey1sqm952gJj1tmAWySYDQvSv2NmfnyEMvU6a9ZBCuyG7PN' },
+          } as never,
+        }),
+      },
+      privateMintIdentities: { load, save },
+    })
+    const prepared = {
+      remoteRecipientBytes32: aleoAddressToBytes32(await aleoProgramAddress('shielded_usdcx_wrapper.aleo', 'testnet')),
+      hookData: `0x02${'33'.repeat(32)}${'00'.repeat(32)}` as Hex,
+    }
+    const quote = await bridge.quote({
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+      amount: '2', recipient: RECIPIENT, sender: ACCOUNT, mintMode: 'private',
+      walletPreparedDeposit: prepared,
+    })
+    expect(quote).toMatchObject({ kind: 'evm-xreserve', ...prepared })
+    const checkpoints: unknown[] = []
+    const result = await bridge.execute({
+      plan: quote.plan,
+      walletPreparedDeposit: prepared,
+      onCheckpoint(checkpoint) { checkpoints.push(checkpoint) },
+    })
+    expect(result.receipt.status).toBe('ATTESTATION_PENDING')
+    expect(decodeFunctionData({ abi: ABI, data: sent[1]!.data })).toMatchObject({
+      functionName: 'depositToRemote',
+      args: [2_000_000n, 10_002, prepared.remoteRecipientBytes32, TOKEN, 100_000n, prepared.hookData],
+    })
+    expect(checkpoints).toHaveLength(2)
+    expect(checkpoints[0]).toMatchObject({ source: { hookData: prepared.hookData } })
+    expect(JSON.stringify(checkpoints)).not.toContain('privateMintNonceInput')
+    expect(JSON.stringify(checkpoints)).not.toContain('secretNonce')
+    expect(load).not.toHaveBeenCalled()
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it('recovers and resumes a wallet-prepared approval with its original commitment', async () => {
+    const confirmApproval = { value: false }
+    const { executor, sent } = mockExecutor({ value: true }, confirmApproval)
+    const bridge = createBridgeClient({ environment: 'testnet', clients: { sepolia: executor } })
+    const plan = transferPlan('private')
+    const prepared = {
+      remoteRecipientBytes32: aleoAddressToBytes32(await aleoProgramAddress('shielded_usdcx_wrapper.aleo', 'testnet')),
+      hookData: `0x02${'33'.repeat(32)}${'00'.repeat(32)}` as Hex,
+    }
+    const execution = await bridge.execute({ plan, walletPreparedDeposit: prepared, confirmationTimeoutMs: 0 })
+    expect(execution.receipt.status).toBe('SOURCE_APPROVAL_PENDING')
+    confirmApproval.value = true
+    const progress = await bridge.recover({ checkpoint: createBridgeCheckpoint(plan, execution.receipt) })
+    expect(progress.next).toBe('resume')
+    if (progress.next !== 'resume') throw new Error('Expected the approval to be resumable')
+    await expect(bridge.resume({
+      progress,
+      walletPreparedDeposit: { ...prepared, hookData: `0x02${'44'.repeat(32)}${'00'.repeat(32)}` },
+    })).rejects.toThrow(/checkpointed approval/)
+    expect(sent).toHaveLength(1)
+    const result = await bridge.resume({ progress, walletPreparedDeposit: prepared })
+    expect(result.receipt.status).toBe('ATTESTATION_PENDING')
+    expect(sent).toHaveLength(2)
+    expect(result.receipt.protocolState.hookData).toBe(prepared.hookData)
+  })
+
+  it('rejects a changed wallet commitment while waiting for an approval to confirm', async () => {
+    const confirmApproval = { value: false }
+    const { executor, sent } = mockExecutor({ value: true }, confirmApproval)
+    const plan = transferPlan('private')
+    const prepared = {
+      remoteRecipientBytes32: aleoAddressToBytes32(await aleoProgramAddress('shielded_usdcx_wrapper.aleo', 'testnet')),
+      hookData: `0x02${'33'.repeat(32)}${'00'.repeat(32)}` as Hex,
+    }
+    const pending = await executeEvmXReserveTransfer(DEFAULT_BRIDGE_REGISTRY, executor, {
+      plan, walletPreparedDeposit: prepared, confirmationTimeoutMs: 0,
+    })
+    confirmApproval.value = true
+    await expect(executeEvmXReserveTransfer(DEFAULT_BRIDGE_REGISTRY, executor, {
+      plan, resume: pending.receipt,
+      walletPreparedDeposit: { ...prepared, hookData: `0x02${'44'.repeat(32)}${'00'.repeat(32)}` },
+    })).rejects.toThrow(/checkpointed approval/)
+    expect(sent).toHaveLength(1)
+  })
+
+  it.each(['wrapper', 'selector', 'padding', 'record', 'scalar', 'commitment', 'nonce-without-preparation'])(
+    'rejects an invalid wallet deposit (%s) before any approval or deposit', async (invalid) => {
+      const { executor, sent } = mockExecutor()
+      const prepared = {
+        remoteRecipientBytes32: aleoAddressToBytes32(await aleoProgramAddress('shielded_usdcx_wrapper.aleo', 'testnet')),
+        hookData: `0x02${'33'.repeat(32)}${'00'.repeat(32)}` as Hex,
+      }
+      const params = {
+        plan: transferPlan(invalid === 'record' ? 'record' : 'private'),
+        walletPreparedDeposit: prepared,
+        ...(invalid === 'scalar' ? { privateMintSecretNonce: '7scalar' } : {}),
+        ...(invalid === 'commitment' ? { privateMintAddressCommitment: '33'.repeat(32) } : {}),
+      }
+      if (invalid === 'wrapper') prepared.remoteRecipientBytes32 = `0x${'22'.repeat(32)}`
+      if (invalid === 'selector') prepared.hookData = `0x01${'33'.repeat(32)}${'00'.repeat(32)}`
+      if (invalid === 'padding') prepared.hookData = `0x02${'33'.repeat(32)}${'00'.repeat(31)}01`
+      await expect(executeEvmXReserveTransfer(DEFAULT_BRIDGE_REGISTRY, executor, invalid === 'nonce-without-preparation'
+        ? { plan: params.plan, privateMintNonceInput: '7scalar' }
+        : params)).rejects.toThrow(/wallet|nonce source/i)
+      expect(sent).toHaveLength(0)
+    },
+  )
+
   it('quotes a prepared sender through read-only EVM network access', async () => {
     const { executor } = mockExecutor()
     const bridge = createBridgeClient({

@@ -446,6 +446,70 @@ derivation update because completion uses their original scalar. The older
 network-independent `shielded_usdcx` domain is retained as an exported constant
 for compatibility; new identities use the network-specific domains above.
 
+#### Wallet-prepared private USDCx mints
+
+A connected wallet can prepare the public deposit commitment and retain the
+secret nonce. The SDK accepts the same `walletPreparedDeposit` and
+`privateMintNonceInput` options used by the bridge SDK patch in
+[AMM PR #920](https://github.com/ProvableHQ/amm-v3-monorepo/pull/920).
+This path does not allocate or read a local private-mint identity.
+
+Before depositing, the application MUST validate the wallet's full preparation
+against the reviewed route, amount, source account, recipient, and network, and
+durably save it. A failed save MUST stop execution. The SDK accepts only the
+public hook and wrapper recipient; it cannot check fields excluded from that
+pair. It validates the canonical private hook and the reviewed wrapper address,
+and builds the actual EVM deposit from the transfer plan and registry.
+
+```ts
+import type { WalletPreparedXReserveDeposit } from '@provablehq/aleo-bridge-sdk'
+import type { TransactionInput } from '@provablehq/veil-core'
+
+// `preparation` has been validated and durably saved by the application.
+const walletPreparedDeposit: WalletPreparedXReserveDeposit = {
+  remoteRecipientBytes32: preparation.deposit.remoteRecipient,
+  hookData: preparation.deposit.hookData,
+}
+const quote = await bridge.quote({
+  source: { chain: 'ethereum', asset: 'usdc' },
+  destination: { chain: 'aleo', asset: 'usdcx' },
+  amount: '10', sender: ethereumAddress, recipient: aleoAddress,
+  mintMode: 'private', walletPreparedDeposit,
+})
+const execution = await bridge.execute({
+  plan: quote.plan, walletPreparedDeposit, onCheckpoint: saveCheckpoint,
+})
+let progress = await bridge.wait({
+  progress: { next: 'wait', plan: quote.plan, receipt: execution.receipt },
+})
+if (progress.next === 'complete') {
+  const privateMintNonceInput: TransactionInput = {
+    type: 'derived',
+    algorithm: 'shielded-usdcx-secret-nonce',
+    args: {
+      commitment: { type: 'string', value: preparation.commitmentHex },
+      recipient: { type: 'address', value: quote.plan.recipient },
+    },
+  }
+  await bridge.complete({ progress, walletPreparedDeposit, privateMintNonceInput })
+}
+```
+
+The wallet must support `shielded-usdcx-secret-nonce` and authorize that
+algorithm for input position 3 of the reviewed wrapper's `private_mint` call.
+The SDK rejects a derived request with a different algorithm, commitment, or
+recipient, and rejects local accounts on this path. Do not combine a wallet
+preparation with `privateMintSecretNonce` or `privateMintAddressCommitment`.
+
+After a reload, recover the bridge checkpoint and restore the saved wallet
+preparation. Pass that preparation to `resume` if an approval remains unfinished,
+or pass it together with the derived nonce request to `complete` after Circle
+attestation. The SDK checks the preparation against the checkpointed approval
+hook or attested deposit hook before submission. Checkpoints retain the public
+hook; the application retains the full preparation, and the wallet retains its
+secret. The [wallet example](./examples/wallet-private-mint.ts) builds the two
+options without requesting a signature or contacting a network.
+
 ### 2. Authorize the source transfer
 
 Execution may request more than one wallet transaction. An ERC-20 route can
