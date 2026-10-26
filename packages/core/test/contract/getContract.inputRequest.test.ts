@@ -3,6 +3,7 @@ import { getContract } from '../../src/contract/getContract.js'
 import { parseProgram } from '../../src/contract/parseProgram.js'
 import type { ABI } from '../../src/types/abi.js'
 import type { InputRequest } from '../../src/types/inputRequest.js'
+import { freezelistProofRequest } from '../../src/utils/freezelistProof.js'
 
 function mockWalletClient() {
   const writeContract = vi.fn().mockResolvedValue('at1tx')
@@ -12,6 +13,21 @@ function mockWalletClient() {
 // ── Rich ABI path (resolvedAbi → encodeInputs per-position) ────────────
 
 describe('getContract resolveInputs — rich ABI mixed path', () => {
+  it('preserves a derived proof in a composite array slot while encoding the adjacent amount', async () => {
+    const { client, writeContract } = mockWalletClient()
+    const proofAbi: ABI = {
+      program: 'token.aleo', structs: [], records: [], mappings: [], storageVariables: [],
+      functions: [{ name: 'prove', isFinal: false, inputs: [
+        { name: 'proofs', type: { kind: 'plaintext', type: { kind: 'array', element: { kind: 'struct', path: ['MerkleProof'] }, length: 2 } }, mode: 'private' },
+        { name: 'amount', type: { kind: 'plaintext', type: { kind: 'primitive', primitive: 'u128' } }, mode: 'private' },
+      ], outputs: [] }],
+    }
+    const contract = getContract({ program: 'token.aleo', abi: proofAbi, client })
+    const proof = freezelistProofRequest({ freezelistProgram: 'compliance.aleo' })
+    await contract.write.prove!({ inputs: [proof, 10n] })
+    expect(writeContract.mock.calls[0]![0].inputs).toEqual([proof, '10u128'])
+    expect(writeContract.mock.calls[0]![0].inputs[0]).toBe(proof)
+  })
   // Minimal rich ABI: a record input, a field input, and a u128 input.
   const abi: ABI = {
     program: 'amm.aleo',
@@ -64,6 +80,15 @@ describe('getContract resolveInputs — rich ABI mixed path', () => {
 // program blob. Exercises the parsed-Program encode branch of resolveInputs.
 
 describe('getContract resolveInputs — parsed Program path, private-swap shape', () => {
+  it('preserves a derived proof in an array slot parsed from Aleo source', async () => {
+    const { client, writeContract } = mockWalletClient()
+    const abi = parseProgram(`program token.aleo;\n\nstruct MerkleProof:\n    root as field;\n\nfunction prove:\n    input r0 as [MerkleProof; 2u32].private;\n    input r1 as u128.private;\n`)
+    const contract = getContract({ program: 'token.aleo', abi, client })
+    const proof = freezelistProofRequest({ freezelistProgram: 'compliance.aleo' })
+    await contract.write.prove!({ inputs: [proof, 10n] })
+    expect(writeContract.mock.calls[0]![0].inputs).toEqual([proof, '10u128'])
+    expect(writeContract.mock.calls[0]![0].inputs[0]).toBe(proof)
+  })
   const source = `program amm_demo.aleo;
 
 record Position:

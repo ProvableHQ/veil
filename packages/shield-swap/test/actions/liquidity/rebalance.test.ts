@@ -1,3 +1,4 @@
+import { EMPTY_MERKLE_PROOFS as FIXTURE_PROOFS } from '../../../src/utils/proofs.js'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
 
@@ -314,6 +315,7 @@ describe('rebalancePosition', () => {
     executeMock.mockResolvedValue({ transactionId: 'at1tx', outputs: ['777field'] } as never)
     const client = fakeClient('local')
     const result = await rebalancePosition(client, {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY, positionTokenId: POSITION_ID,
       tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: OLD_LIQUIDITY / 2n,
       nonce: '9field',
@@ -342,6 +344,7 @@ describe('rebalancePosition', () => {
     executeMock.mockResolvedValue({ transactionId: 'at1tx', outputs: ['888field'] } as never)
     const client = fakeClient('local', { token0: W0, wrapped: { [W0]: U0 } })
     const result = await rebalancePosition(client, {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY, positionTokenId: POSITION_ID,
       tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: OLD_LIQUIDITY * 2n,
       token1Record: TOKEN0_RECORD,
@@ -362,6 +365,7 @@ describe('rebalancePosition', () => {
 
   it('rejects a partial derived set instead of half-recomputing', async () => {
     await expect(rebalancePosition(fakeClient('local'), {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY, positionTokenId: POSITION_ID,
       tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: OLD_LIQUIDITY / 2n,
       oldLiquidity: OLD_LIQUIDITY, recovered0: 1n,
@@ -390,7 +394,7 @@ describe('rebalancePosition', () => {
       refund1: q.recovered1 - q.required1,
       liquidityTarget: OLD_LIQUIDITY / 2n,
     }
-    const result = await rebalancePosition(fakeClient('local'), { ...plan, nonce: '9field' })
+    const result = await rebalancePosition(fakeClient('local'), { proofs: async () => FIXTURE_PROOFS, ...plan, nonce: '9field' })
     expect(result.plan.functionName).toBe('rebalance_plain_plain_none')
 
     const call = executeMock.mock.calls[0]![1]
@@ -402,13 +406,15 @@ describe('rebalancePosition', () => {
   it('requires the position identity and funding records on the wallet path', async () => {
     const client = fakeClient('rpc')
     await expect(rebalancePosition(client, {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY,
       tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: 1n,
     })).rejects.toThrow(/must provide positionRecord and positionTokenId/)
 
     await expect(rebalancePosition(client, {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY, positionTokenId: POSITION_ID,
-      positionRecord: { type: 'record', program: 'shield_swap.aleo' } as never,
+      withdrawalAddress: 'aleo1payout', positionRecord: { type: 'record', program: 'shield_swap.aleo' } as never,
       tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: OLD_LIQUIDITY * 2n,
     })).rejects.toThrow(/must provide token0Record/)
     expect(writeMock).not.toHaveBeenCalled()

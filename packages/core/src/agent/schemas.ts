@@ -1,4 +1,47 @@
 import type { AgentToolSchema } from './types.js'
+import { FREEZELIST_PROOF_ALGORITHM } from '../utils/freezelistProof.js'
+
+// Wallet requests remain structured until the connected wallet resolves them.
+const freezelistProofRequestSchema = {
+  type: 'object',
+  properties: {
+    type: { const: 'derived' },
+    algorithm: { const: FREEZELIST_PROOF_ALGORITHM },
+    args: {
+      type: 'object',
+      properties: {
+        freezelistProgram: { type: 'object', properties: { type: { const: 'string' }, value: { type: 'string' } }, required: ['type', 'value'], additionalProperties: false },
+        address: { type: 'object', properties: { type: { const: 'address' }, value: { type: 'string' } }, required: ['type', 'value'], additionalProperties: false },
+      },
+      required: ['freezelistProgram'],
+      additionalProperties: false,
+    },
+    label: { type: 'string' },
+  },
+  required: ['type', 'algorithm', 'args'],
+  additionalProperties: false,
+}
+
+const recordRequestSchema = {
+  type: 'object',
+  properties: {
+    type: { const: 'record' },
+    program: { type: 'string' },
+    recordname: { type: 'string' },
+    uid: { type: 'string' },
+    filters: {
+      type: 'object',
+      additionalProperties: {
+        type: 'object',
+        properties: { eq: { type: 'string' }, neq: { type: 'string' }, gte: { type: 'string' }, lte: { type: 'string' } },
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['type', 'program', 'recordname'],
+  not: { required: ['uid', 'filters'] },
+  additionalProperties: false,
+}
 
 // ---------------------------------------------------------------------------
 // Public (read-only) tool schemas
@@ -195,8 +238,8 @@ export const executeSchema: AgentToolSchema = {
       function: { type: 'string', description: "Function name, e.g. 'mint'" },
       inputs: {
         type: 'array',
-        items: { type: 'string' },
-        description: "Array of input arguments as strings, e.g. ['aleo1...', '100u64']",
+        items: { anyOf: [{ type: 'string' }, freezelistProofRequestSchema, recordRequestSchema] },
+        description: 'Encoded Aleo inputs, wallet-selected records, or freezelist proof requests. Structured requests require a wallet account; each derived proof slot requires an existing algorithm grant.',
       },
       privateFee: {
         type: 'boolean',
@@ -218,22 +261,27 @@ export const executeSchema: AgentToolSchema = {
 }
 
 /**
- * Describes the `aleo_transfer` tool: sends public credits to another address.
+ * Describes the `aleo_transfer` tool: transfers credits or compatible token programs.
  *
  * The paired handler calls `transfer` on the wallet client (a wrapper around
- * `credits.aleo/transfer_public`) — which signs, proves, and submits to the
- * network — and returns `{ transactionId }`. Amount is in microcredits (u64).
+ * `credits.aleo/transfer_public` by default) — which signs, proves, and submits to the
+ * network — and returns `{ transactionId }`. Amount is in asset base units.
  */
 export const transferSchema: AgentToolSchema = {
   name: 'aleo_transfer',
   description:
-    'Transfer Aleo credits to another address. ' +
-    'Convenience wrapper around credits.aleo/transfer_public. Amount is in microcredits.',
+    'Transfer credits or tokens; defaults to a public credits.aleo transfer. ' +
+    'ARC-22 private transfers can supply an explicit record and encoded or wallet-derived freezelist proof.',
   inputSchema: {
     type: 'object',
     properties: {
       to: { type: 'string', description: 'Recipient Aleo address' },
-      amount: { type: 'number', description: 'Amount in microcredits' },
+      amount: { anyOf: [{ type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER }, { type: 'string', pattern: '^[0-9]+$' }], description: 'Amount in asset base units (microcredits for credits.aleo). Use a decimal string above the safe-integer limit.' },
+      asset: { type: 'string', description: 'Token program; defaults to credits.aleo.' },
+      visibility: { type: 'string', enum: ['public', 'private', 'shield', 'unshield'], description: 'Defaults to public.' },
+      amountWidth: { type: 'string', enum: ['u64', 'u128'], description: 'Defaults to u64; ARC-22 tokens use u128.' },
+      record: { anyOf: [{ type: 'string' }, recordRequestSchema], description: 'ARC-22 private record inserted after recipient and amount; omitted by default.' },
+      merkleProof: { anyOf: [{ type: 'string' }, freezelistProofRequestSchema], description: 'Proof for private/unshield transfers; omitted by default. Wallet requests require an existing grant for the proof slot.' },
     },
     required: ['to', 'amount'],
   },

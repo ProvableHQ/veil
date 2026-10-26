@@ -15,7 +15,9 @@ export type {
 
 export type {
   ProvingConfig,
+  GenerateFreezelistProofParameters,
   BuildTransactionOptions,
+  EstimateExecutionFeeOptions,
   BuildDeploymentOptions,
   SimulateOptions,
   ExecuteOptions,
@@ -96,6 +98,8 @@ export type {
   ConnectOptions, RecordAccessGrant, ProgramGrant, RecordGrant, FieldGrant, AlgorithmGrant,
 } from './types/inputRequest.js'
 export { KNOWN_ALGORITHMS, isInputRequest, assertNoInputRequests } from './types/inputRequest.js'
+export { FREEZELIST_PROOF_ALGORITHM, freezelistProofRequest, freezelistProofGrant, isFreezelistProofRequest } from './utils/freezelistProof.js'
+export type { FreezelistProofRequest, FreezelistProofInput, FreezelistProofRequestParameters, FreezelistProofGrantParameters } from './utils/freezelistProof.js'
 export type {
   FunctionNames, MappingNames,
   TypedContractInstance,
@@ -114,6 +118,7 @@ export {
   InvalidTransactionError,
   DuplicateTransactionError,
   RecordSpentError,
+  RecordReservationConflictError,
   OutputIdCollisionError,
   BroadcastError,
   TransactionTimeoutError,
@@ -210,6 +215,7 @@ export { getStatePaths } from './actions/public/getStatePaths.js'
 export { getBlockHeightByHash } from './actions/public/getBlockHeightByHash.js'
 export { getBlockTransactionsByHash } from './actions/public/getBlockTransactionsByHash.js'
 export { getTokenDetails } from './actions/public/getTokenDetails.js'
+export { getComplianceFreezeList, type GetComplianceFreezeListParameters, type GetComplianceFreezeListReturnType } from './actions/public/getComplianceFreezeList.js'
 export { getProgramMetricsByRange } from './actions/public/getProgramMetricsByRange.js'
 export { getCommittee } from './actions/public/getCommittee.js'
 export { getDelegators } from './actions/public/getDelegators.js'
@@ -259,3 +265,17 @@ export {
 } from './actions/public/checkArcConformance.js'
 export { isArc20, type IsArc20Parameters, type IsArc20ReturnType } from './actions/public/isArc20.js'
 export { isArc22, type IsArc22Parameters, type IsArc22ReturnType } from './actions/public/isArc22.js'
+
+// Record inventory management.
+export type * from './inventory/types.js'
+export { recordActions } from './inventory/recordActions.js'
+export { recordJoinPrograms } from './inventory/joinPrograms.js'
+export { memoryRecordInventoryStore } from './inventory/store.js'
+export { inventoryRecordId, reservedRecordIds } from './inventory/internal.js'
+export { getRecordInventory, type GetRecordInventoryParameters, type GetRecordInventoryReturnType } from './actions/records/getRecordInventory.js'
+export { planRecordInventory, type PlanRecordInventoryParameters } from './actions/records/planRecordInventory.js'
+export { rebalanceRecordInventory, type RebalanceRecordInventoryParameters } from './actions/records/rebalanceRecordInventory.js'
+export { reconcileRecordInventory, type ReconcileRecordInventoryParameters } from './actions/records/reconcileRecordInventory.js'
+export { joinRecords, type JoinRecordsParameters } from './actions/records/joinRecords.js'
+export { splitRecord, type SplitRecordParameters } from './actions/records/splitRecord.js'
+export { autoJoin, type AutoJoinParameters } from './actions/records/autoJoin.js'

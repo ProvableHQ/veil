@@ -1,0 +1,180 @@
+import type { Client } from '../../clients/createClient.js'
+import type { InventoryPlan, InventoryRecord, InventoryResult } from '../../inventory/types.js'
+import { management, positiveInteger, scopeOf } from '../../inventory/internal.js'
+import { buildInventoryPlan } from '../../inventory/planner.js'
+import { getConfirmedTransaction } from '../public/getConfirmedTransaction.js'
+import { requestRecords } from '../wallet/requestRecords.js'
+import { getRecordInventory } from './getRecordInventory.js'
+import { joinRecords } from './joinRecords.js'
+import { splitRecord } from './splitRecord.js'
+import { decodeRecord, validateAsset } from './internal.js'
+import type { ProvingProgressHandler } from '../../types/proving.js'
+import type { Transaction } from '../../types/transaction.js'
+import type { ConfirmedTransaction } from '../../types/block.js'
+import { inventoryOutputCommitments } from '../../inventory/tokenJoin.js'
+
+/**
+ * Configures bounded execution of a previously inspected plan.
+ * @property plan Plan from planRecordInventory, tied to its account and chain.
+ * @property timeoutMs Confirmation/output visibility timeout per step. Defaults to 120000.
+ * @property pollIntervalMs Poll interval, defaults to 1000 milliseconds.
+ * @property signal Optional cancellation signal; cancellation preserves submitted reservations.
+ * @property maxFeeMicrocredits Optional total network-fee budget for this run, excluding intrinsic split deductions.
+ *   Wallet RPC accounts cannot enforce this limit; nonempty plans reject it before scanning.
+ */
+export type RebalanceRecordInventoryParameters = {
+  plan: InventoryPlan; timeoutMs?: number; pollIntervalMs?: number; signal?: AbortSignal; maxFeeMicrocredits?: bigint
+}
+
+/**
+ * Executes a plan one confirmed transition at a time through existing write actions.
+ * Revalidates each input and matches scanner outputs to confirmed commitments.
+ * RPC execution requires commitment metadata on consumed records before submission.
+ * @param client Client with recordManagement.enabled for reservations and progress checkpoints.
+ * @param params Reviewed plan, timeouts, cancellation and optional fee budget.
+ * @returns Completion or interruption with all submitted transaction ids; never rolls back accepted steps.
+ * @throws On invalid/tampered plans, missing coordination, or a wallet fee ceiling on a nonempty plan, before submission.
+ * @example
+ * import type { WalletClient, InventoryPlan } from '@provablehq/veil-core'
+ *
+ * async function executeReviewedPlan(client: WalletClient, plan: InventoryPlan, signal?: AbortSignal) {
+ *   // Use the same account, chain, and shared store that produced the plan.
+ *   // Execution requires explicit recordManagement.enabled configuration.
+ *   const result = await client.rebalanceRecordInventory({
+ *     plan,
+ *     timeoutMs: 120_000, // Per step: confirmation plus scanner visibility.
+ *     pollIntervalMs: 2_000,
+ *     maxFeeMicrocredits: 10_000_000n, // Total network fees, excluding split deductions.
+ *     signal,
+ *   })
+ *   console.log('Confirmed steps:', result.completedSteps)
+ *   console.log('Submitted transactions:', result.transactionIds)
+ *   if (result.status === 'interrupted') {
+ *     await client.reconcileRecordInventory()
+ *     // Retain the journal: a timeout or cancellation does not release an
+ *     // uncertain submission. Resolve it before scanning and planning again.
+ *     console.error(result.reason)
+ *   }
+ *   return result
+ * }
+ */
+export async function rebalanceRecordInventory(client: Client, params: RebalanceRecordInventoryParameters): Promise<InventoryResult> {
+  const config = management(client)
+  if (!config) throw new Error('Inventory execution requires recordManagement.enabled')
+  // Rebuild instead of trusting caller-supplied transition amounts or dependencies.
+  const plan = buildInventoryPlan(params.plan)
+  const encode = (value: unknown) => JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item)
+  if (encode(plan) !== encode(params.plan)) throw new Error('Inventory plan was modified; plan again')
+  if (plan.scope !== scopeOf(client)) throw new Error('Inventory plan belongs to another account or chain')
+  const timeout = params.timeoutMs ?? 120_000
+  const interval = params.pollIntervalMs ?? 1000
+  positiveInteger(timeout, 'timeoutMs', 2_147_483_647)
+  positiveInteger(interval, 'pollIntervalMs', 2_147_483_647)
+  if (params.maxFeeMicrocredits !== undefined && params.maxFeeMicrocredits < 0n) throw new Error('Fee budget cannot be negative')
+  // Wallets submit before exposing the proved fee. Reject unsupported ceilings
+  // before scanning; an already satisfied plan has no fees to constrain.
+  if (plan.steps.length && client.account?.type === 'rpc' &&
+    (params.maxFeeMicrocredits !== undefined || config.maxFeeMicrocredits !== undefined)) {
+    throw new Error('Wallet accounts cannot enforce a fee ceiling before submission')
+  }
+  const result: InventoryResult = { status: 'complete', transactionIds: [], completedSteps: 0 }
+  // Initial inputs already use nonces; symbolic step outputs acquire their real
+  // nonces only after confirmation and scanner visibility.
+  const references = new Map(plan.inputs.map((input) => [input.id, input.id]))
+  const consumedInputs = new Set(plan.steps.flatMap((step) => step.inputs))
+  let fees = 0n
+  const check = () => {
+    params.signal?.throwIfAborted()
+    if (scopeOf(client) !== plan.scope) throw new Error('Account or chain changed during inventory execution')
+  }
+  const pause = () => new Promise<void>((resolve) => setTimeout(resolve, interval))
+  try {
+    // Apply the same declared-field eligibility checks to confirmed outputs as
+    // to scanned inputs, including wallet grants on recipient-bound records.
+    const capabilities = plan.steps.length ? await validateAsset(client, plan.asset) : undefined
+    for (const [index, step] of plan.steps.entries()) {
+      check()
+      // Rescan before every step so a competing spend or changed amount stops
+      // execution before any dependent transaction is proved.
+      const inventory = await getRecordInventory(client, { asset: plan.asset })
+      const inputs = step.inputs.map((id) => {
+        const record = inventory.available.find((item) => item.id === references.get(id))
+        const expected = plan.inputs.find((item) => item.id === id) ?? plan.steps.flatMap((item) => item.outputs).find((item) => item.id === id)
+        if (!record || record.amount !== expected?.amount) throw new Error('Inventory changed; reconcile and plan again')
+        return record
+      })
+      if (client.account?.type === 'rpc') {
+        // Check all initial records used by the plan before its first submission,
+        // then recheck each step's inputs if wallet grants change during execution.
+        const records = index === 0 ? inventory.available.filter((record) => consumedInputs.has(record.id)) : inputs
+        if (records.some(({ record }) => !(record.commitment ?? record.recordView?.fields['$commitment']))) {
+          throw new Error('Inventory rebalance requires a commitment or $commitment grant to identify confirmed outputs')
+        }
+      }
+      check()
+      // Apply the stricter of the remaining run budget and the per-transaction
+      // limit without changing the caller's client configuration.
+      const remaining = params.maxFeeMicrocredits === undefined ? undefined : params.maxFeeMicrocredits - fees
+      const perTransaction = config.maxFeeMicrocredits
+      const limit = remaining === undefined ? perTransaction : perTransaction === undefined || remaining < perTransaction ? remaining : perTransaction
+      const executionClient = Object.assign(Object.create(client), { recordManagement: { ...config, tokenJoin: plan.tokenJoin, maxFeeMicrocredits: limit } }) as Client
+      // Capture the id as soon as the transaction is prepared so an interrupted
+      // broadcast still returns enough information to reconcile the journal.
+      const onProgress: ProvingProgressHandler = (event) => {
+        if ('transactionId' in event && !result.transactionIds.includes(event.transactionId)) result.transactionIds.push(event.transactionId)
+      }
+      const transactionId = step.kind === 'join'
+        ? await joinRecords(executionClient, { asset: plan.asset, records: inputs, joinProgram: step.joinProgram ?? (plan.tokenJoin ? undefined : false), onProgress })
+        : await splitRecord(executionClient, { asset: plan.asset, record: inputs[0]!, amount: step.amount!, onProgress })
+      if (!result.transactionIds.includes(transactionId)) result.transactionIds.push(transactionId)
+      const journal = await config.store.list(plan.scope)
+      const entry = journal.find((item) => item.transactionId === transactionId)
+      if (!entry) throw new Error('Submitted transaction is missing its reservation')
+      fees += BigInt(entry.feeMicrocredits ?? '0')
+      const deadline = Date.now() + timeout
+      let confirmed: ConfirmedTransaction | undefined
+      // A missing transaction may still be propagating. Retain its reservation
+      // while polling and stop the plan if acceptance cannot be established.
+      while (!confirmed) {
+        check()
+        if (Date.now() >= deadline) throw new Error(`Timed out confirming ${transactionId}; reservation retained`)
+        try { confirmed = await getConfirmedTransaction(client, { id: transactionId }) }
+        catch (error) { if ((error as { status?: number }).status !== 404) throw error }
+        if (!confirmed) await pause()
+      }
+      if (confirmed.status !== 'accepted') {
+        if (confirmed.status === 'rejected') await config.store.update(plan.scope, entry.id, { status: 'rejected', transaction: undefined })
+        throw new Error(`Transaction ${transactionId} was not accepted`)
+      }
+      await config.store.update(plan.scope, entry.id, { status: 'confirmed', transaction: undefined })
+      const commitments = inventoryOutputCommitments(confirmed.transaction as Transaction, plan.asset, step, plan.tokenJoin)
+      if (commitments.length !== step.outputs.length) throw new Error('Unexpected confirmed inventory output count')
+      // The scanner must return these exact outputs, not an unrelated new deposit.
+      let outputs: InventoryRecord[] = []
+      while (outputs.length !== commitments.length) {
+        check()
+        if (Date.now() >= deadline) throw new Error(`Scanner has not indexed ${transactionId}; reconcile before continuing`)
+        const records = await requestRecords(client, { program: plan.asset.program, statusFilter: 'unspent',
+          ...(client.account?.type === 'rpc' ? {} : { filter: { commitments } }) })
+        outputs = commitments.flatMap((commitment) => {
+          const record = records.find((item) => (item.commitment ?? item.recordView?.fields['$commitment']) === commitment)
+          const decoded = record && decodeRecord(client, plan.asset, record, capabilities)
+          return decoded ? [decoded] : []
+        })
+        if (outputs.length !== commitments.length) await pause()
+      }
+      // Bind each planned output to the exact scanned nonce and amount before
+      // making it available to the next dependent step.
+      outputs.forEach((output, index) => {
+        if (output.amount !== step.outputs[index]!.amount) throw new Error('Confirmed output amount differs from the plan')
+        references.set(step.outputs[index]!.id, output.id)
+      })
+      result.completedSteps++
+    }
+  } catch (error) {
+    // Earlier accepted steps remain on-chain; return their progress and let
+    // reconciliation resolve any pending spend before a fresh plan is built.
+    return { ...result, status: 'interrupted', reason: error instanceof Error ? error.message : String(error) }
+  }
+  return result
+}

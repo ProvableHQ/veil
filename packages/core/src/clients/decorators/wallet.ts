@@ -11,6 +11,7 @@ import { transactionStatus, type TransactionStatusParameters, type TransactionSt
 import { switchChain, type SwitchChainParameters, type SwitchChainReturnType } from '../../actions/wallet/switchChain.js'
 import { requestTransactionHistory, type RequestTransactionHistoryParameters, type RequestTransactionHistoryReturnType } from '../../actions/wallet/requestTransactionHistory.js'
 import { getChainId, type GetChainIdReturnType } from '../../actions/wallet/getChainId.js'
+import { recordActionMethods } from '../../inventory/recordActions.js'
 import type { Client } from '../createClient.js'
 
 /**
@@ -21,7 +22,7 @@ import type { Client } from '../createClient.js'
  * Several names are aliases that match Aleo wallet adapter terminology. See each
  * action's own documentation for parameters, return value, and behavior.
  */
-export type WalletActions = {
+export type WalletActions = ReturnType<typeof recordActionMethods> & {
   sendTransaction: (params: SendTransactionParameters) => Promise<SendTransactionReturnType>
   writeContract: (params: WriteContractParameters) => Promise<WriteContractReturnType>
   /** Alias for writeContract — matches the Aleo wallet adapter spec (submit and return a transaction id). */
@@ -68,6 +69,8 @@ export type WalletActions = {
  */
 export function walletActions(client: Client): WalletActions {
   return {
+    // Include record methods on every wallet; client configuration controls reservations.
+    ...recordActionMethods(client),
     sendTransaction: (params) => sendTransaction(client, params),
     writeContract: (params) => writeContract(client, params),
     executeTransaction: (params) => writeContract(client, params),

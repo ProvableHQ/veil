@@ -1,3 +1,4 @@
+import { EMPTY_MERKLE_PROOFS as FIXTURE_PROOFS } from '../../../src/utils/proofs.js'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
 
@@ -114,6 +115,7 @@ describe('collect — local', () => {
   it('plain/plain: 7 positional inputs, no recipient, empty-witness proofs', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1col', transitions: [], outputs: ['record...'] })
     const res = await collect(fakeClient('local'), {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY,
       amount0Requested: 100n,
       amount1Requested: 200n,
@@ -132,7 +134,7 @@ describe('collect — local', () => {
   it('(wrapped, plain) → collect_to_wrapped_arc20 with the receiver proof appended', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1col', transitions: [], outputs: [] })
     const client = fakeClient('local', { token0: W0, token1: TOKEN1, wrapped: { [W0]: U0 } })
-    await collect(client, { poolKey: POOL_KEY, amount0Requested: 1n, amount1Requested: 1n })
+    await collect(client, { proofs: async () => FIXTURE_PROOFS, poolKey: POOL_KEY, amount0Requested: 1n, amount1Requested: 1n })
     const call = executeMock.mock.calls[0]![1]
     expect(call.program).toBe('shield_swap_lp_router.aleo')
     expect(call.function).toBe('collect_to_wrapped_arc20')
@@ -145,7 +147,7 @@ describe('collect — local', () => {
   it('(plain, wrapped) → collect_to_arc20_wrapped (8 inputs)', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1col', transitions: [], outputs: [] })
     const client = fakeClient('local', { token0: TOKEN0, token1: W1, wrapped: { [W1]: U1 } })
-    await collect(client, { poolKey: POOL_KEY, amount0Requested: 1n, amount1Requested: 1n })
+    await collect(client, { proofs: async () => FIXTURE_PROOFS, poolKey: POOL_KEY, amount0Requested: 1n, amount1Requested: 1n })
     const call = executeMock.mock.calls[0]![1]
     expect(call.function).toBe('collect_to_arc20_wrapped')
     expect(call.inputs).toHaveLength(8)
@@ -154,7 +156,7 @@ describe('collect — local', () => {
   it('(wrapped, wrapped) → collect_to_wrapped_wrapped with both receiver proofs (9 inputs)', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1col', transitions: [], outputs: [] })
     const client = fakeClient('local', { token0: W0, token1: W1, wrapped: { [W0]: U0, [W1]: U1 } })
-    await collect(client, { poolKey: POOL_KEY, amount0Requested: 1n, amount1Requested: 1n })
+    await collect(client, { proofs: async () => FIXTURE_PROOFS, poolKey: POOL_KEY, amount0Requested: 1n, amount1Requested: 1n })
     const call = executeMock.mock.calls[0]![1]
     expect(call.function).toBe('collect_to_wrapped_wrapped')
     expect(call.inputs).toHaveLength(9)
@@ -167,7 +169,7 @@ describe('collect — local', () => {
       request: async () => null,
     } as unknown as Client
     await expect(
-      collect(client, { poolKey: POOL_KEY, amount0Requested: 1n, amount1Requested: 1n }),
+      collect(client, { proofs: async () => FIXTURE_PROOFS, poolKey: POOL_KEY, amount0Requested: 1n, amount1Requested: 1n }),
     ).rejects.toThrow(/does not exist/)
   })
 })
@@ -175,7 +177,7 @@ describe('collect — local', () => {
 describe('collect — wallet', () => {
   it('requires positionRecord', async () => {
     await expect(
-      collect(fakeClient('rpc'), { poolKey: POOL_KEY, amount0Requested: 1n, amount1Requested: 1n }),
+      collect(fakeClient('rpc'), { proofs: async () => FIXTURE_PROOFS, poolKey: POOL_KEY, amount0Requested: 1n, amount1Requested: 1n }),
     ).rejects.toThrow(/must provide positionRecord/)
   })
 })

@@ -33,7 +33,8 @@ import {
 import { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR } from '@provablehq/veil-aleo-devnode'
 export { DEVNODE_PRIVATE_KEY, DEVNODE_ADDR }
 import type { LocalAccount } from '@provablehq/veil-core'
-import type { ProvingConfig, BuildTransactionOptions, BuildDeploymentOptions, SimulateOptions, ExecuteOptions, RawSimulateResult, RawExecuteResult, Transaction } from '@provablehq/veil-core'
+import type { RecordManagementConfig, ProvingConfig, EstimateExecutionFeeOptions, GenerateFreezelistProofParameters, BuildTransactionOptions, BuildDeploymentOptions, SimulateOptions, ExecuteOptions, RawSimulateResult, RawExecuteResult, Transaction } from '@provablehq/veil-core'
+import { generateFreezelistProof } from './freezelist.js'
 import type { OwnedRecord, RecordProvider, StandaloneRecordScanner, RequestRecordsParameters } from '@provablehq/veil-core'
 import type { Network, PublicClient, WalletClient } from '@provablehq/veil-core'
 import {
@@ -197,6 +198,15 @@ type SdkModule = Awaited<ReturnType<typeof loadSdk<'testnet'>>>
  * scanners) are network-bound.
  */
 export interface AleoSdk {
+  /**
+   * Generates and validates an exclusion witness without network access or signing.
+   * @param options Subject, published tree, and expected on-chain root.
+   * @returns An encoded `[MerkleProof; 2]` transaction input.
+   * @throws When the subject is frozen or the tree does not prove the expected root.
+   * @example
+   * const proof = await sdk.generateFreezelistProof({ address, tree, root })
+   */
+  generateFreezelistProof(options: GenerateFreezelistProofParameters): Promise<string>
   /** The network this handle is bound to. */
   readonly network: SupportedNetwork
 
@@ -314,6 +324,8 @@ export interface AleoSdk {
    *   shared with delegated proving. `createAleoClient` supplies its own
    *   session through `setSession` on the returned provider, so a caller who
    *   passes the scanner to that factory does not need this.
+   * @param options.waitForSync Waits for scanner synchronization before each page. Defaults to false.
+   * @param options.syncTimeoutMs Synchronization timeout in milliseconds. Defaults to 300000.
    * @param options.startBlock Optional block height to begin scanning from at
    *   registration. Defaults to 0 (full history).
    * @param options.auth Optional provisioned-key auth for the edge gateway.
@@ -326,6 +338,8 @@ export interface AleoSdk {
    *   can tell whether a legacy gateway is in play.
    */
   createRemoteScanner(options?: {
+    waitForSync?: boolean
+    syncTimeoutMs?: number
     url?: string
     consumerId?: string
     apiKey?: string
@@ -396,6 +410,9 @@ export interface AleoSdk {
    *   to true, so a faucet-funded account with no public credits can write.
    *   Pass false when the account funds its own fees. Only meaningful under
    *   delegated proving.
+   * @param options.recordManagement Optional shared record reservations and recovery.
+   *   Defaults to disabled. Set enabled: true to reserve inputs during writes
+   *   and track unfinished transactions.
    * @param options.records Record provider behind `requestRecords`. Defaults
    *   to `createRemoteScanner()` against the hosted scanner; pass a scanner
    *   built with a custom `url` or any `RecordProvider` to override.
@@ -437,6 +454,7 @@ export interface AleoSdk {
    * const txId = await walletClient.writeContract({ program, function: 'transfer_public', inputs })
    */
   createAleoClient(options: {
+    recordManagement?: RecordManagementConfig
     privateKey: string
     networkUrl?: string
     provingMode?: 'delegated' | 'local'
@@ -495,6 +513,31 @@ function silenceSdkLogs(sdk: SdkModule): void {
   // older pins, and a missing logger must not fail the load.
   const { setLogLevel } = sdk as unknown as { setLogLevel?: (level: 'silent') => void }
   setLogLevel?.('silent')
+}
+
+/**
+ * Estimates an execution's base fee after resolving dynamic program imports.
+ * Reads program sources through the configured SDK network client without proving or submitting.
+ * @param manager SDK manager bound to the selected network.
+ * @param params Function and optional sources or dynamic import names.
+ * @returns Base fee in microcredits, excluding the caller's priority fee.
+ * @throws When program discovery or fee estimation fails.
+ * @example
+ * const fee = await estimateBaseFee(manager, { programName: 'credits.aleo', functionName: 'join' })
+ */
+async function estimateBaseFee(manager: InstanceType<SdkModule['ProgramManager']>, params: EstimateExecutionFeeOptions): Promise<bigint> {
+  let imports: Awaited<ReturnType<typeof manager.networkClient.getProgramImports>> | undefined
+  if (Array.isArray(params.imports)) {
+    imports = {}
+    // Include each dynamic target and its static dependencies in the estimate,
+    // matching the sources later handed to execution or delegated proving.
+    for (const name of params.imports) {
+      const source = await manager.networkClient.getProgram(name)
+      Object.assign(imports, await manager.networkClient.getProgramImports(source), { [name]: source })
+    }
+  } else imports = params.imports
+  return manager.estimateExecutionFee({ programName: params.programName, functionName: params.functionName,
+    program: params.programSource, imports })
 }
 
 function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): AleoSdk {
@@ -635,6 +678,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       // already travel the same way.
       session,
       keyedAuth: options.auth,
+      generateFreezelistProof: (params) => generateFreezelistProof(currentSdk, params),
+
+      estimateExecutionFee: (params) => estimateBaseFee(new currentSdk.ProgramManager(networkUrl, keyProvider, undefined), params),
 
       buildTransaction: async (txOptions: BuildTransactionOptions) => {
         const programManager = new currentSdk.ProgramManager(
@@ -662,8 +708,12 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           const programSource = await programManager.networkClient.getProgram(txOptions.programName)
           const staticImports = await programManager.networkClient.getProgramImports(programSource)
           const merged: SdkProgramImports = { ...staticImports }
+          // Include the token program's own imports as well as its source;
+          // routed joins need both to produce a proof.
           for (const name of txOptions.imports) {
-            merged[name] = await programManager.networkClient.getProgram(name)
+            const dynamicSource = await programManager.networkClient.getProgram(name)
+            Object.assign(merged, await programManager.networkClient.getProgramImports(dynamicSource))
+            merged[name] = dynamicSource
           }
           resolvedImports = merged
         }
@@ -682,10 +732,11 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               functionName: txOptions.functionName,
               priorityFee: 0,
               privateFee: txOptions.privateFee ?? false,
+              ...(txOptions.feeRecord ? { feeRecord: txOptions.feeRecord } : {}),
               inputs: txOptions.inputs,
               ...(resolvedImports ? { programImports: resolvedImports } : {}),
               broadcast: false,
-              useFeeMaster: options.useFeeMaster ?? false,
+              useFeeMaster: txOptions.feeRecord ? false : options.useFeeMaster ?? false,
             })
             await txOptions.onProgress?.({ type: 'request-built' })
 
@@ -739,6 +790,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           functionName: txOptions.functionName,
           priorityFee: 0,
           privateFee: txOptions.privateFee ?? false,
+          ...(txOptions.feeRecord ? { feeRecord: txOptions.feeRecord } : {}),
           inputs: txOptions.inputs,
           ...(resolvedImports ? { imports: resolvedImports } : {}),
         })
@@ -855,8 +907,11 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               inputs: execOptions.inputs,
               priorityFee,
               privateFee: execOptions.privateFee ?? false,
-              broadcast: true,
-              useFeeMaster: options.useFeeMaster ?? false,
+              ...(execOptions.feeRecord ? { feeRecord: execOptions.feeRecord } : {}),
+              // Submit from this client when a progress callback is present,
+              // so it can save the proved transaction before broadcast.
+              broadcast: !execOptions.onProgress,
+              useFeeMaster: execOptions.feeRecord ? false : options.useFeeMaster ?? false,
             })
 
             const dpsClient = new AleoNetworkClient(proverUrl)
@@ -902,7 +957,14 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
           const txId = response.transaction?.id
           if (!txId) throw new ConfigurationError('DPS response did not contain a transaction ID — check prover service configuration.')
 
-          const broadcastResult = response.broadcast_result
+          // A journalled execution must return the proved transaction before any
+          // broadcast, including delegated proving. The awaited callback persists it.
+          if (execOptions.onProgress) {
+            await execOptions.onProgress({ type: 'transaction-prepared', transactionId: txId, transaction: response.transaction })
+            const submitted = await buildPollingClient().request({ method: 'sendTransaction', params: { transaction: JSON.stringify(response.transaction) } })
+            if (submitted !== txId) throw new ConfigurationError('Broadcast returned an unexpected transaction id')
+          }
+          const broadcastResult = execOptions.onProgress ? { status: 'Accepted' } : response.broadcast_result
           if (!broadcastResult || broadcastResult.status !== 'Accepted') {
             const message = broadcastResult?.status === 'Skipped'
               ? 'Delegated prover skipped transaction broadcast'
@@ -914,7 +976,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             throw classifyBroadcastError(error, txId)
           }
 
+          await execOptions.onProgress?.({ type: 'transaction-submitted', transactionId: txId })
           const confirmedTx = await waitForConfirmation(buildPollingClient(), txId, options.confirmationTimeout)
+          await execOptions.onProgress?.({ type: 'transaction-confirmed', transactionId: txId })
           const { transitions, outputs } = extractTransitions(confirmedTx, decryptor)
           return { transactionId: txId, transitions, outputs }
 
@@ -927,6 +991,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
               inputs: execOptions.inputs,
               priorityFee,
               privateFee: execOptions.privateFee ?? false,
+              ...(execOptions.feeRecord ? { feeRecord: execOptions.feeRecord } : {}),
               program: execOptions.programSource,
               imports: execOptions.programImports,
             })
@@ -935,6 +1000,10 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             throw new ProvingError({ message: e instanceof Error ? e.message : String(e), cause: e as Error })
           }
 
+          // Serialize the proved transaction so the callback can save it for
+          // recovery before it is submitted to the network.
+          const prepared = JSON.parse(tx.toString()) as Transaction
+          await execOptions.onProgress?.({ type: 'transaction-prepared', transactionId: prepared.id, transaction: prepared })
           let txId: string
           try {
             const submitClient = new AleoNetworkClient(networkUrl)
@@ -945,7 +1014,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
             throw classifyBroadcastError(e)
           }
 
+          await execOptions.onProgress?.({ type: 'transaction-submitted', transactionId: txId })
           const confirmedTx = await waitForConfirmation(buildPollingClient(), txId, options.confirmationTimeout)
+          await execOptions.onProgress?.({ type: 'transaction-confirmed', transactionId: txId })
           const { transitions, outputs } = extractTransitions(confirmedTx, decryptor)
           return { transactionId: txId, transitions, outputs }
         }
@@ -1117,6 +1188,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
   }
 
   function createRemoteScanner(options: {
+    waitForSync?: boolean
+    syncTimeoutMs?: number
     url?: string
     consumerId?: string
     apiKey?: string
@@ -1128,6 +1201,9 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     setSession: (session: ProvableSession) => void
     setAuth: (auth: ProvableKeyedAuth) => void
   } {
+    if (options.syncTimeoutMs !== undefined && (!Number.isSafeInteger(options.syncTimeoutMs) || options.syncTimeoutMs < 1)) {
+      throw new ConfigurationError('syncTimeoutMs must be a positive integer in milliseconds')
+    }
     assertKeyedAuthAlone(options.auth, {
       session: options.session,
       apiKey: options.apiKey,
@@ -1243,6 +1319,27 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
         // rides in the scanner, so there is no token to apply.
         if (activeSession) activeScanner.setJwtData(await activeSession.getJwt())
         await activeRegistration.ensure(activeScanner, activeViewKey)
+        if (options.waitForSync) {
+          // An incomplete scan could trigger needless joins or splits. Wait for
+          // the existing scanner registration to catch up before reading a page.
+          const deadline = Date.now() + (options.syncTimeoutMs ?? 300_000)
+          let reregistered = false
+          while (true) {
+            const status = await activeScanner.status()
+            // status() does not use owned()'s registration recovery. Retry one
+            // expired registration explicitly, then surface any further failure.
+            if (!status.ok && status.status === 422 && !reregistered) {
+              const registration = await activeScanner.registerEncrypted(activeViewKey, options.startBlock ?? 0)
+              if (!registration.ok) throw new Error(`Record scanner registration failed (HTTP ${registration.status})`)
+              reregistered = true
+              continue
+            }
+            if (!status.ok) throw new Error(`Record scanner status failed (HTTP ${status.status})`)
+            if (status.data.synced) break
+            if (Date.now() >= deadline) throw new Error('Record scanner synchronization timed out')
+            await new Promise((resolve) => setTimeout(resolve, 1000))
+          }
+        }
         return scanOwned(activeScanner, params, activeSession)
       },
 
@@ -1314,6 +1411,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
   }
 
   function createAleoClient(options: {
+    recordManagement?: RecordManagementConfig
     privateKey: string
     networkUrl?: string
     provingMode?: 'delegated' | 'local'
@@ -1420,6 +1518,8 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
       transport,
       proving,
       recordProvider: records,
+      // Pass record settings when creating the client so every wallet action uses them.
+      recordManagement: options.recordManagement,
     }).extend(provableApiActions())
 
     return { publicClient, walletClient, account }
@@ -1434,6 +1534,7 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
     decryptRecord,
     verifySignature,
     createNetworkClient,
+    generateFreezelistProof: (params) => generateFreezelistProof(currentSdk, params),
     createProvingConfig,
     createRemoteScanner,
     createStandaloneScanner,
@@ -1502,6 +1603,8 @@ export function generateAccount(): LocalAccount<'privateKey'> {
  * pending. Record outputs owned by the client's account are decrypted to
  * plaintext in the result; foreign records are dropped.
  *
+ * @param options.recordManagement Optional shared record reservations and recovery.
+ *   Defaults to disabled; local chains should supply a distinct chainId when enabled.
  * @example
  * ```ts
  * // Zero-config — uses seeded key and localhost:3030
@@ -1515,6 +1618,7 @@ export function generateAccount(): LocalAccount<'privateKey'> {
  * ```
  */
 export function createDevnodeClient(options?: {
+  recordManagement?: RecordManagementConfig
   privateKey?: string
   /** Socket address of the devnode, e.g. "127.0.0.1:3030" */
   socketAddr?: string
@@ -1546,6 +1650,7 @@ export function createDevnodeClient(options?: {
     functionName: string
     inputs: string[]
     privateFee?: boolean | undefined
+    feeRecord?: string | undefined
     imports?: Record<string, string> | undefined
   }) => {
     const programManager = new ProgramManager(url, keyProvider, undefined)
@@ -1555,6 +1660,7 @@ export function createDevnodeClient(options?: {
       functionName: opts.functionName,
       priorityFee: 0,
       privateFee: opts.privateFee ?? false,
+      ...(opts.feeRecord ? { feeRecord: opts.feeRecord } : {}),
       inputs: opts.inputs,
       ...(opts.imports ? { imports: opts.imports } : {}),
     })
@@ -1562,6 +1668,8 @@ export function createDevnodeClient(options?: {
 
   const proving: ProvingConfig = {
     mode: 'devnode',
+    estimateExecutionFee: (params) => estimateBaseFee(new ProgramManager(url, keyProvider, undefined), params),
+    generateFreezelistProof: async (params) => generateFreezelistProof(await loadSdk('testnet'), params),
     buildDeployment: async (deployOptions: BuildDeploymentOptions) => {
       const programManager = new ProgramManager(url, keyProvider, undefined)
       programManager.setAccount(sdkAccount)
@@ -1601,6 +1709,7 @@ export function createDevnodeClient(options?: {
         functionName: txOptions.functionName,
         inputs: txOptions.inputs,
         privateFee: txOptions.privateFee,
+        ...(txOptions.feeRecord ? { feeRecord: txOptions.feeRecord } : {}),
         imports,
       })
       return JSON.parse(tx.toString())
@@ -1611,8 +1720,14 @@ export function createDevnodeClient(options?: {
         functionName: execOptions.functionName,
         inputs: execOptions.inputs,
         privateFee: execOptions.privateFee,
+        ...(execOptions.feeRecord ? { feeRecord: execOptions.feeRecord } : {}),
         imports: execOptions.programImports,
       })
+
+      // Save the proved transaction through the progress callback before
+      // broadcasting to the devnode, as with local and delegated proving.
+      const prepared = JSON.parse(tx.toString()) as Transaction
+      await execOptions.onProgress?.({ type: 'transaction-prepared', transactionId: prepared.id, transaction: prepared })
 
       // Broadcast through the same transport-backed request writeContract uses.
       const txId = (await publicClient.request({
@@ -1620,9 +1735,13 @@ export function createDevnodeClient(options?: {
         params: { transaction: tx.toString() },
       })) as string
 
+      await execOptions.onProgress?.({ type: 'transaction-submitted', transactionId: txId })
+
       // The devnode auto-produces a block after broadcast by default; under
       // manualBlockCreation the caller must advance blocks for this to resolve.
       const confirmedTx = await waitForConfirmation(publicClient, txId)
+
+      await execOptions.onProgress?.({ type: 'transaction-confirmed', transactionId: txId })
 
       // Self-custody decryptor: records owned by the devnode account surface
       // as plaintext; records owned by someone else (e.g. a compliance record
@@ -1639,7 +1758,7 @@ export function createDevnodeClient(options?: {
     },
   }
 
-  const walletClient = createWalletClient({ account, transport, proving })
+  const walletClient = createWalletClient({ account, transport, proving, recordManagement: options?.recordManagement })
 
   return { publicClient, walletClient, account }
 }

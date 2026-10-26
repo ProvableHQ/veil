@@ -106,10 +106,23 @@ discovery, quoting, the `imports` map — and the wallet-signer variants.
   `ApiClient.createApiToken` / `listApiTokens` / `revokeApiToken` for
   long-lived `ss_…` keys passed as `api: { apiToken }`. Most API endpoints
   beyond discovery are bearer-gated —
-  see the [guide](/guides/shield-swap#authenticating-with-the-dex-api).
+  see the [guide](/guides/shield-swap#the-shield-swap-api).
 - **Wallet grants** — `SHIELD_SWAP_ALGORITHM_GRANTS`,
   `shieldSwapAlgorithmGrants` — the connect-time algorithm allowlist a
   wallet-signer setup passes so the wallet may derive blinded identities.
+
+## Concurrent swaps and record management
+
+Enable `recordManagement` when creating the wallet client, then attach
+`shieldSwapActions()`. Local swaps can select different records from shared
+inventory when several trades sell the same token. A separate persistent blinded
+identity store retains the handles needed to claim their outputs.
+
+The [concurrent swaps walkthrough](/guides/shield-swap#concurrent-swaps) covers
+client configuration, six-record preparation, submission, claims, and partial
+failures. The [record management guide](/guides/record-inventory) documents
+storage, defaults, fee limits, helper programs, and recovery. Coordination is
+off by default and does not start automatic maintenance.
 
 ## Subpaths
 

@@ -43,6 +43,10 @@ export const COMMANDS: Record<string, Command> = {
     summary: 'Private and public holdings per token.',
     load: () => import('./commands/balances.js'),
   },
+  inventory: {
+    summary: 'Inspect, plan, and maintain spendable record inventories.',
+    load: () => import('./commands/inventory.js'),
+  },
   positions: {
     summary: 'Liquidity positions held + their ranges and fees earned (with option to collect).',
     load: () => import('./commands/positions.js'),

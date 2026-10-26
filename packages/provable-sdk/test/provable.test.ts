@@ -1,4 +1,5 @@
 import { beforeAll, describe, it, expect, vi } from 'vitest'
+import { memoryRecordInventoryStore, reservedRecordIds } from '@provablehq/veil-core'
 import * as testnetSdk from '@provablehq/sdk/testnet.js'
 import {
   loadNetwork,
@@ -376,6 +377,26 @@ describe('@provablehq/veil-aleo-sdk', () => {
 
     it('DEVNODE_PRIVATE_KEY has correct format', () => {
       expect(DEVNODE_PRIVATE_KEY).toMatch(/^APrivateKey1/)
+    })
+  })
+
+  describe('record management configuration', () => {
+    it.each(['aleo', 'devnode'] as const)('preserves explicit opt-in through the %s client factory', async (factory) => {
+      const store = memoryRecordInventoryStore()
+      const account = aleo.generateAccount()
+      const scope = JSON.stringify(['aleo:isolated-test', account.address])
+      await store.acquire({ scope, program: 'credits.aleo', function: 'split', records: ['1group'],
+        status: 'reserved', createdAt: Date.now(), accountType: 'local' })
+      // The journal is observable through selection only after the factory forwards opt-in.
+      for (const enabled of [undefined, false, true]) {
+        const options = { privateKey: account.privateKey,
+          ...(enabled === undefined ? {} : { recordManagement: { enabled, store, chainId: 'aleo:isolated-test' } }),
+        }
+        const { walletClient, publicClient } = factory === 'aleo'
+          ? aleo.createAleoClient(options) : createDevnodeClient(options)
+        expect(await reservedRecordIds(walletClient)).toEqual(new Set(enabled === true ? ['1group'] : []))
+        expect(await reservedRecordIds(publicClient)).toEqual(new Set())
+      }
     })
   })
 

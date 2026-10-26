@@ -86,11 +86,17 @@ describe.runIf(RUN)('ApiClient against the live DEX API (public surface)', () =>
     expect(tokens.data.filter((token) => token.address === first.address)).toHaveLength(1)
   }, 30_000)
 
-  it('gated endpoints reject a bad credential (server-side 401)', async () => {
+  it('fee tiers are available without authentication', async () => {
+    const tiers = await api.getFeeTiers()
+    expect(tiers.data.length).toBeGreaterThan(0)
+    expect(tiers.data[0]!.fee_tier).toBeTypeOf('number')
+    expect(tiers.data[0]!.tick_spacing).toBeTypeOf('number')
+  }, 30_000)
+
+  it('WebSocket tickets reject a bad credential (server-side 401)', async () => {
     // An invalid token passes the client-side fail-fast, proving the server
-    // itself gates. Fee tiers are public; faucet job status remains protected.
-    const err = await new ApiClient({ ...API_OPTS, apiToken: 'ss_invalid' })
-      .getAirdropStatus('00000000-0000-0000-0000-000000000000').catch((e: unknown) => e)
+    // itself gates — one request, both assertions on the captured error.
+    const err = await new ApiClient({ ...API_OPTS, apiToken: 'ss_invalid' }).getWebSocketTicket().catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ApiError)
     expect((err as ApiError).status).toBe(401)
   }, 30_000)
@@ -116,7 +122,9 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     activeTokens = await sweepTestTokens(api)
   }, 60_000)
 
-  it('session JWT covers the gated read surface', async () => {
+  it('session JWT obtains a WebSocket ticket alongside market reads', async () => {
+    const ticket = await api.getWebSocketTicket()
+    expect(ticket.token.length).toBeGreaterThan(0)
     const pools = await api.getPools({ limit: 1 })
     const key = pools.data[0]!.key
 
@@ -169,12 +177,10 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     expect(created.token.startsWith(created.token_prefix)).toBe(true)
 
     try {
-      // The ss_ token alone covers data endpoints on a fresh client.
+      // A fresh client uses the ss_ token on an authenticated endpoint.
       const tokenClient = new ApiClient({ ...API_OPTS, apiToken: created.token })
-      const tiers = await tokenClient.getFeeTiers()
-      expect(tiers.data.length).toBeGreaterThan(0)
-      const positions = await tokenClient.getPositions({ user: address, limit: 1 })
-      expect(Array.isArray(positions.data)).toBe(true)
+      const ticket = await tokenClient.getWebSocketTicket()
+      expect(ticket.token.length).toBeGreaterThan(0)
 
       // …but not token management, client-side or server-side.
       await expect(tokenClient.listApiTokens()).rejects.toThrow(/session JWT/)
@@ -188,7 +194,7 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
 
     // The revoked secret stops authenticating immediately.
     const revokedClient = new ApiClient({ ...API_OPTS, apiToken: created.token })
-    const err = await revokedClient.getPositions({ user: address, limit: 1 }).catch((e: unknown) => e)
+    const err = await revokedClient.getWebSocketTicket().catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ApiError)
     expect((err as ApiError).status).toBe(401)
   }, 60_000)
@@ -221,13 +227,13 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     await authenticateWithAccount(freshApi, fresh)
 
     const status = await freshApi.getReferralStatus()
-    const gated = await freshApi.getPositions({ user: fresh.address, limit: 1 }).catch((e: unknown) => e)
+    const gated = await freshApi.getWebSocketTicket().catch((e: unknown) => e)
     if (status.has_access) {
       expect(gated).not.toBeInstanceOf(ApiError)
     } else {
       expect(gated).toBeInstanceOf(ApiError)
       expect((gated as ApiError).status).toBe(403)
-      expect((gated as ApiError).message).toMatch(/invite code/i)
+      expect((gated as ApiError).message).toMatch(/terms|invite code/i)
     }
 
     const redeem = await freshApi.redeemReferralCode('not-a-real-invite-code').catch((e: unknown) => e)
@@ -239,10 +245,12 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     // Send one invalid bearer to the real API. setToken() explicitly adopts
     // another session and must discard the previous account's signer.
     let poison = true
+    let ticketRequests = 0
     const recoveringApi = new ApiClient({
       ...API_OPTS,
       fetch: async (input, init) => {
-        if (poison && new URL(String(input)).pathname === '/positions') {
+        if (String(input).endsWith('/auth/ws-ticket')) ticketRequests++
+        if (poison && String(input).endsWith('/auth/ws-ticket')) {
           poison = false
           const headers = new Headers(init?.headers)
           headers.set('authorization', 'Bearer expired-garbage')
@@ -253,9 +261,10 @@ describe.runIf(RUN_AUTHED)('ApiClient auth flows against the live DEX API', () =
     })
     await authenticateWithAccount(recoveringApi, account)
     try {
-      const positions = await recoveringApi.getPositions({ user: address, limit: 1 })
-      expect(Array.isArray(positions.data)).toBe(true)
+      const ticket = await recoveringApi.getWebSocketTicket()
+      expect(ticket.token.length).toBeGreaterThan(0)
       expect(poison).toBe(false)
+      expect(ticketRequests).toBe(2)
     } finally {
       await recoveringApi.logout()
     }

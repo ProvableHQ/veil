@@ -87,9 +87,14 @@ describe.skipIf(!enabled)('mainnet Aleo to Arc xReserve', () => {
       console.table({ route: routeId, amount: '2', estimatedDelivery: quote.amountOut, recipient })
       if (!mainnetExecutionEnabled()) return
       const records = await aleo.walletClient.requestRecords({ program: 'usdcx_stablecoin.aleo', statusFilter: 'unspent' })
-      const record = records.find(value => 'recordPlaintext' in value && typeof value.recordPlaintext === 'string'
-        && BigInt(value.recordPlaintext.match(/\bamount:\s*(\d+)u128/)?.[1] ?? '0') === 2_000_000n)
-      if (!record || !('recordPlaintext' in record) || typeof record.recordPlaintext !== 'string') throw new Error('No unspent two-USDCx private record; no burn submitted')
+      // The burn amount stays fixed at two USDCx; the token program returns change.
+      const candidates = records.flatMap(record => {
+        if (!('recordPlaintext' in record) || typeof record.recordPlaintext !== 'string') return []
+        const amount = BigInt(record.recordPlaintext.match(/\bamount:\s*(\d+)u128/)?.[1] ?? '0')
+        return amount >= 2_000_000n ? [{ amount, plaintext: record.recordPlaintext }] : []
+      }).sort((left, right) => left.amount < right.amount ? -1 : left.amount > right.amount ? 1 : 0)
+      const record = candidates[0]
+      if (!record) throw new Error('No unspent private record covers two USDCx; no burn submitted')
       const merkleProof = await exclusionProof(String(aleo.account.address))
       saved.destinationBalanceBefore = (await arc.readContract({ address: TOKEN, abi: ABI, functionName: 'balanceOf', args: [recipient] })).toString()
       saved.startBlock = (await arc.getBlockNumber()).toString()
@@ -97,7 +102,7 @@ describe.skipIf(!enabled)('mainnet Aleo to Arc xReserve', () => {
       saved.startedAt = Date.now()
       saveLiveState(path, saved)
       const result = await bridge.execute({
-        plan: quote.plan, userRecord: record.recordPlaintext, merkleProof,
+        plan: quote.plan, userRecord: record.plaintext, merkleProof,
         onCheckpoint: persist, onProgress(event) { benchmark.mark(event.type) },
       })
       if (result.kind !== 'aleo-xreserve') throw new Error('Unexpected execution kind')

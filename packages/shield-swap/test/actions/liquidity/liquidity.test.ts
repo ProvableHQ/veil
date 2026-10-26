@@ -1,3 +1,4 @@
+import { EMPTY_MERKLE_PROOFS as FIXTURE_PROOFS } from '../../../src/utils/proofs.js'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Client } from '@provablehq/veil-core'
 
@@ -166,10 +167,10 @@ describe('mint — payout address validation', () => {
 
   it('rejects the zero address and the stack program accounts', async () => {
     await expect(
-      mint(fakeClient('local'), { ...base, recipient: ZERO_ADDRESS, withdrawal: WITHDRAWAL }),
+      mint(fakeClient('local'), { proofs: async () => FIXTURE_PROOFS, ...base, recipient: ZERO_ADDRESS, withdrawal: WITHDRAWAL }),
     ).rejects.toThrow(/recipient must not be the zero address/)
     await expect(
-      mint(fakeClient('local'), { ...base, recipient: RECIPIENT, withdrawal: ROUTER_ADDRESSES.lpRouter }),
+      mint(fakeClient('local'), { proofs: async () => FIXTURE_PROOFS, ...base, recipient: RECIPIENT, withdrawal: ROUTER_ADDRESSES.lpRouter }),
     ).rejects.toThrow(/withdrawal must not be a program account/)
     expect(executeMock).not.toHaveBeenCalled()
   })
@@ -179,6 +180,7 @@ describe('mint — local, plain/plain (direct core call)', () => {
   it('rounds ticks, derives hints, auto-selects records, exact 11 positional inputs', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1mint', transitions: [], outputs: ['555field'] })
     const res = await mint(fakeClient('local'), {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY,
       tickLower: -64350,      // → rounded to -64400
       tickUpper: -60050,      // → rounded to -60200
@@ -204,7 +206,7 @@ describe('mint — local, plain/plain (direct core call)', () => {
     expect(call.inputs[5]).toContain('tick_upper: -60200i32')
     expect(call.inputs[6]).toBe(TOKEN0)
     expect(call.inputs[7]).toBe(TOKEN1)
-    // Signer/recipient/withdrawal AMM proofs default to the empty witness.
+    // Signer/recipient/withdrawal AMM proofs use the supplied legacy provider.
     expect(call.inputs.slice(8)).toEqual([EMPTY_PROOFS, EMPTY_PROOFS, EMPTY_PROOFS])
     expect(res.positionTokenId).toBe('555field')
   })
@@ -212,6 +214,7 @@ describe('mint — local, plain/plain (direct core call)', () => {
   it('wallet path requires both records', async () => {
     await expect(
       mint(fakeClient('rpc'), {
+      proofs: async () => FIXTURE_PROOFS,
         poolKey: POOL_KEY, tickLower: -64400, tickUpper: -60000,
         amount0Desired: 1n, amount1Desired: 1n,
         recipient: RECIPIENT, withdrawal: WITHDRAWAL,
@@ -223,6 +226,7 @@ describe('mint — local, plain/plain (direct core call)', () => {
     writeMock.mockResolvedValue('at1walletmint')
     const recipient = 'aleo1t08epjqqv8h7jpuy2m2cxm80zy2pcy5c4f3m82hnac4sjmdrjyysvx3s2h'
     const res = await mint(fakeClient('rpc'), {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY,
       tickLower: -64400,
       tickUpper: -60200,
@@ -280,7 +284,7 @@ describe('mint — router dispatch by wrapped-ness', () => {
       outputs: ['change0...', '555field'],
     })
     const client = fakeClient('local', { token0: W0, token1: TOKEN1, wrapped: { [W0]: U0 } })
-    const res = await mint(client, { ...base, token1Program: 'usdc.aleo' })
+    const res = await mint(client, { proofs: async () => FIXTURE_PROOFS, ...base, token1Program: 'usdc.aleo' })
     const call = executeMock.mock.calls[0]![1]
     expect(call.program).toBe('shield_swap_lp_router.aleo')
     expect(call.function).toBe('mint_from_wrapped_arc20')
@@ -304,7 +308,7 @@ describe('mint — router dispatch by wrapped-ness', () => {
       outputs: ['change1...', '555field'],
     })
     const client = fakeClient('local', { token0: TOKEN0, token1: W1, wrapped: { [W1]: U1 } })
-    const res = await mint(client, { ...base, token0Program: 'ethx.aleo' })
+    const res = await mint(client, { proofs: async () => FIXTURE_PROOFS, ...base, token0Program: 'ethx.aleo' })
     const call = executeMock.mock.calls[0]![1]
     expect(call.function).toBe('mint_from_arc20_wrapped')
     expect(call.inputs).toHaveLength(12)
@@ -320,7 +324,7 @@ describe('mint — router dispatch by wrapped-ness', () => {
       outputs: ['change0...', 'change1...', '555field'],
     })
     const client = fakeClient('local', { token0: W0, token1: W1, wrapped: { [W0]: U0, [W1]: U1 } })
-    const res = await mint(client, base)
+    const res = await mint(client, { ...base, proofs: async () => FIXTURE_PROOFS })
     const call = executeMock.mock.calls[0]![1]
     expect(call.function).toBe('mint_from_wrapped_wrapped')
     expect(call.inputs).toHaveLength(13)
@@ -336,6 +340,7 @@ describe('increaseLiquidity — local', () => {
   it('plain/plain: selects the position by pool, exact 11 positional inputs', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1inc', transitions: [], outputs: ['555field'] })
     const res = await increaseLiquidity(fakeClient('local'), {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY,
       amount0Desired: 10n ** 17n,
       amount1Desired: 200_000n,
@@ -365,6 +370,7 @@ describe('increaseLiquidity — local', () => {
     })
     const client = fakeClient('local', { token0: TOKEN0, token1: W1, wrapped: { [W1]: U1 } })
     const res = await increaseLiquidity(client, {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY,
       amount0Desired: 10n ** 17n,
       amount1Desired: 200_000n,
@@ -391,6 +397,7 @@ describe('increaseLiquidity — local', () => {
     })
     const client = fakeClient('local', { token0: W0, token1: W1, wrapped: { [W0]: U0, [W1]: U1 } })
     const res = await increaseLiquidity(client, {
+      proofs: async () => FIXTURE_PROOFS,
       poolKey: POOL_KEY,
       amount0Desired: 1n,
       amount1Desired: 1n,
@@ -404,6 +411,7 @@ describe('increaseLiquidity — local', () => {
   it('wallet path requires all records + hints', async () => {
     await expect(
       increaseLiquidity(fakeClient('rpc'), {
+      proofs: async () => FIXTURE_PROOFS,
         poolKey: POOL_KEY, amount0Desired: 1n, amount1Desired: 1n,
       }),
     ).rejects.toThrow(/must provide positionRecord/)

@@ -6,6 +6,7 @@
 export const KNOWN_ALGORITHMS = [
   'program-scoped-blinding-factor',
   'program-scoped-blinded-address',
+  'program-freezelist-exclusion-proof',
 ] as const
 
 /** A known derivation algorithm name. */

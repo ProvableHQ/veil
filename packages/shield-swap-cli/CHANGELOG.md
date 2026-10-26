@@ -1,5 +1,60 @@
 # @provablehq/shield-swap-cli
 
+## 0.14.0
+
+### Minor Changes
+
+- a978150: Add scanner-backed ARC20, ARC22, and native credits inventory actions, shared record reservations, and Shield Swap inventory wrappers. Add shield-swap inventory commands with bounded maintenance policies and a CLI-only SQLite recovery journal exported from @provablehq/shield-swap-cli/storage. SDK packages retain their existing runtime requirements.
+
+  Allow inventory assets to specify only a program, with optional record-name and amount-field overrides. Resolve amount before microcredits for custom records and use the deployed unsigned integer width.
+
+  Prefer available batch join helpers for more than two records: up to 16 credits or dedicated stablecoin records, and 15 dynamic ARC records. Validate helper interfaces, capture them in plans, and match their confirmed outputs before dependent steps. Explicit dynamic routers remain supported; tokenJoin: false selects native pairwise joins. Reservations and recovery remain off unless recordManagement.enabled is true.
+
+  Support private fees on managed local-account writes. Prefer an eligible supplied fee record, otherwise reserve a sufficient unreserved credits record alongside the execution inputs. Pass that record through local, delegated, and devnode proving, verify it before broadcast, and retain charged private fee records after rejected executions.
+
+  Retry automatic local Shield Swap record selection on pre-proving reservation conflicts. Keep swap terms fixed, bound retries to one scan, and preserve explicit inputs and execution errors. Export RecordReservationConflictError for input acquisition failures.
+
+  Record per-entry rebroadcast attempts and errors without releasing uncertain inputs or preventing later entries from being reconciled. Show recovery diagnostics in CLI status and waiting results. Reject unsupported wallet fee ceilings before scanning nonempty inventory plans while allowing no-op plans.
+
+### Patch Changes
+
+- Updated dependencies [a978150]
+  - @provablehq/veil-core@0.14.0
+  - @provablehq/veil-aleo-sdk@0.14.0
+  - @provablehq/shield-swap-sdk@0.14.0
+
+## 0.13.0
+
+### Patch Changes
+
+- 9a98a2f: Generate Shield Swap freezelist witnesses automatically by default, validate local witnesses against current chain roots, and cache them while roots remain unchanged. Add a compliance-tree read action and SDK witness generator. Accept per-action literal tuples and annotated proofs alongside existing provider callbacks. Include wallet freezelist grants by default.
+
+  Omitted proofs now resolve automatically instead of using unchecked empty witnesses. Undefined per-call proofs inherit a configured provider; null selects automatic resolution. Custom wrappers need explicit freezelist mappings. For opaque collect and rebalance records, automatic proofs and providers marked `requiresSubject` require `withdrawalAddress`. Supplied proof tuples and existing custom providers can omit it.
+
+  Resolve Bridge ARC-22 unshield and private xReserve burn compliance proofs automatically. Local accounts generate and cache verified witnesses against current roots; wallet accounts receive signer-only derived requests. Preserve `merkleProof` strings and wallet requests, and accept single-element tuples, annotated proofs, and providers. Public burns remain independent of compliance proofs.
+
+- Updated dependencies [9a98a2f]
+- Updated dependencies [1b3e5c0]
+- Updated dependencies [9a0e6eb]
+  - @provablehq/veil-aleo-sdk@0.13.0
+  - @provablehq/shield-swap-sdk@0.13.0
+
+## 0.13.0-rc.0
+
+### Patch Changes
+
+- 9a98a2f: Generate Shield Swap freezelist witnesses automatically by default, validate local witnesses against current chain roots, and cache them while roots remain unchanged. Add a compliance-tree read action and SDK witness generator. Accept per-action literal tuples and annotated proofs alongside existing provider callbacks. Include wallet freezelist grants by default.
+
+  Omitted proofs now resolve automatically instead of using unchecked empty witnesses. Undefined per-call proofs inherit a configured provider; null selects automatic resolution. Custom wrappers need explicit freezelist mappings. For opaque collect and rebalance records, automatic proofs and providers marked `requiresSubject` require `withdrawalAddress`. Supplied proof tuples and existing custom providers can omit it.
+
+  Resolve Bridge ARC-22 unshield and private xReserve burn compliance proofs automatically. Local accounts generate and cache verified witnesses against current roots; wallet accounts receive signer-only derived requests. Preserve `merkleProof` strings and wallet requests, and accept single-element tuples, annotated proofs, and providers. Public burns remain independent of compliance proofs.
+
+- Updated dependencies [9a98a2f]
+- Updated dependencies [1b3e5c0]
+- Updated dependencies [9a0e6eb]
+  - @provablehq/veil-aleo-sdk@0.13.0-rc.0
+  - @provablehq/shield-swap-sdk@0.13.0-rc.0
+
 ## 0.12.1
 
 ### Patch Changes

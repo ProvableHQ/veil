@@ -4,6 +4,9 @@ import type { AgentToolHandler } from './types.js'
 import type { ArcStandard } from '../contract/arcConformance.js'
 import type { CheckArcConformanceParameters } from '../actions/public/checkArcConformance.js'
 import { parseProgram } from '../contract/parseProgram.js'
+import type { TransactionInput } from '../types/inputRequest.js'
+import type { TransferParameters } from '../actions/wallet/transfer.js'
+import { isFreezelistProofRequest } from '../utils/freezelistProof.js'
 
 // ---------------------------------------------------------------------------
 // Public (read-only) handlers
@@ -126,7 +129,7 @@ export function createWalletHandlers(walletClient: WalletClient): Record<string,
       const txId = await walletClient.writeContract({
         program: input.program as string,
         function: input.function as string,
-        inputs: input.inputs as string[],
+        inputs: input.inputs as TransactionInput[],
         privateFee: input.privateFee as boolean | undefined,
         imports: input.imports as string[] | undefined,
       })
@@ -134,9 +137,24 @@ export function createWalletHandlers(walletClient: WalletClient): Record<string,
     },
 
     aleo_transfer: async (input) => {
+      // Decimal strings preserve u128 token amounts across the JSON boundary.
+      if ((typeof input.amount === 'number' && (!Number.isSafeInteger(input.amount) || input.amount < 0)) ||
+        (typeof input.amount === 'string' && !/^\d+$/.test(input.amount)) ||
+        (typeof input.amount !== 'number' && typeof input.amount !== 'string')) {
+        throw new Error('Transfer amount must be a non-negative safe integer or decimal string.')
+      }
+      const proof = input.merkleProof
+      if (proof !== undefined && typeof proof !== 'string' && !isFreezelistProofRequest(proof)) {
+        throw new Error('Expected an encoded proof string or a wallet freezelist proof request.')
+      }
       const txId = await walletClient.transfer({
         to: input.to as string,
-        amount: BigInt(input.amount as number),
+        amount: BigInt(input.amount),
+        asset: input.asset as string | undefined,
+        visibility: input.visibility as TransferParameters['visibility'],
+        amountWidth: input.amountWidth as TransferParameters['amountWidth'],
+        record: input.record as TransactionInput | undefined,
+        merkleProof: proof,
       })
       return { transactionId: txId }
     },

@@ -24,7 +24,9 @@ const chains: ProtocolBridgeChain[] = [
 
 const assets: ProtocolBridgeAsset[] = [
   { id: 'aleo/aleo', key: 'aleo', chainId: 'aleo', symbol: 'ALEO', name: 'Aleo', decimals: 6, kind: 'native', locator: { kind: 'aleo-program', value: 'credits.aleo' }, addressValidationRegex: ALEO_ADDRESS },
-  { id: 'aleo/usdcx', key: 'usdcx', chainId: 'aleo', symbol: 'USDCx', name: 'USDCx', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'usdcx_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc22', program: 'usdcx_stablecoin.aleo' } },
+  // Reviewed against packages/bridge/examples/usdcx-to-usdc.ts at
+  // 2851e8bb97c8821bee016eb33a25608e1a1b9753; other ARC-22 lists remain unspecified.
+  { id: 'aleo/usdcx', key: 'usdcx', chainId: 'aleo', symbol: 'USDCx', name: 'USDCx', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'usdcx_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc22', program: 'usdcx_stablecoin.aleo', freezelistProgram: 'usdcx_freezelist.aleo' } },
   { id: 'aleo/eth', key: 'eth', chainId: 'aleo', symbol: 'ETH', name: 'Hyperlane ETH', decimals: 18, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_eth_v2.aleo', tokenId: 'aleo1t7f29tq9qng2lfvrkpcuvu59jn24hrmzqdyqfn6p0u5p80npfvqqecmkj8' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc20', program: 'arc20_eth.aleo' } },
   { id: 'aleo/wbtc', key: 'wbtc', chainId: 'aleo', symbol: 'WBTC', name: 'Hyperlane WBTC', decimals: 8, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_wbtc_v2.aleo', tokenId: 'aleo1240fsvz2dhmj0cdtt8mc0yc8um9fmu236rqcl2qnlj9703hd2vpsdwyrtf' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc20', program: 'arc20_wbtc.aleo' } },
   { id: 'aleo/usdt', key: 'usdt', chainId: 'aleo', symbol: 'USDT', name: 'Hyperlane USDT', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'hyp_warp_token_usdt_v2.aleo', tokenId: 'aleo18yynfz0lrfx0tund540vy2z7gju7ekgqsueg5jgu28mpm2z42ufq7qua8y' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc20', program: 'arc20_usdt.aleo' } },
@@ -51,7 +53,9 @@ const assets: ProtocolBridgeAsset[] = [
   { id: 'solana/aleo', key: 'aleo', chainId: 'solana', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: SOLANA_ADDRESS },
   { id: 'base/aleo', key: 'aleo', chainId: 'base', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
   { id: 'hyperevm/aleo', key: 'aleo', chainId: 'hyperevm', symbol: 'ALEO', name: 'Hyperlane ALEO', decimals: 6, kind: 'token', addressValidationRegex: EVM_ADDRESS },
-  { id: 'aleo-testnet/usdcx', key: 'usdcx', chainId: 'aleo-testnet', symbol: 'USDCx', name: 'Testnet USDCx', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'test_usdcx_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc22', program: 'test_usdcx_stablecoin.aleo' } },
+  // Reviewed import and root reads in packages/core/test/fixtures/programs/test_usdcx_stablecoin.aleo
+  // at 2851e8bb97c8821bee016eb33a25608e1a1b9753.
+  { id: 'aleo-testnet/usdcx', key: 'usdcx', chainId: 'aleo-testnet', symbol: 'USDCx', name: 'Testnet USDCx', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'test_usdcx_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc22', program: 'test_usdcx_stablecoin.aleo', freezelistProgram: 'test_usdcx_freezelist.aleo' } },
   { id: 'sepolia/usdc', key: 'usdc', chainId: 'sepolia', symbol: 'USDC', name: 'Testnet USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' }, addressValidationRegex: EVM_ADDRESS },
 ]
 
@@ -354,10 +358,9 @@ function newWarpRouteAleoAppMetadata(
     aleoAppMetadataVerified: true,
     aleoProgramSource: `https://explorer.provable.com/program/${program}`,
     aleoAppMetadataSource: `https://api.explorer.provable.com/v2/mainnet/program/${program}/mapping/app_metadata/true`,
-    aleoAppMetadataReviewedAt: '2026-09-30',
+    aleoAppMetadataReviewedAt: '2026-10-21',
     aleoProgramEdition: 0,
     aleoTokenType: '1',
-    aleoTokenOwner: 'aleo1mx0tldt5qsqymn5a3whnmf9rx2whp837jjn0tvqgxqf86zg6dvyqnc8spm',
     aleoIsm: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
     aleoHook: 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc',
     aleoTokenId: tokenId,
@@ -367,29 +370,38 @@ function newWarpRouteAleoAppMetadata(
   } as const
 }
 
-const ALEO_BAT_APP_METADATA = newWarpRouteAleoAppMetadata(
-  'hyp_warp_token_bat_v2.aleo',
-  '8193754087214450113583165652573869677861364321518267024225788045720787201438field',
-  18,
-  18,
-  BAT_HYPERLANE_CONFIG_SOURCE,
-)
+const ALEO_BAT_APP_METADATA = {
+  ...newWarpRouteAleoAppMetadata(
+    'hyp_warp_token_bat_v2.aleo',
+    '8193754087214450113583165652573869677861364321518267024225788045720787201438field',
+    18,
+    18,
+    BAT_HYPERLANE_CONFIG_SOURCE,
+  ),
+  aleoTokenOwner: 'aleo1x7gswtgsj4hj9ntckt39wmfrnvr60eje5feyak2pnpfghuxh8v9qmxv5da',
+} as const
 
-const ALEO_USDG_APP_METADATA = newWarpRouteAleoAppMetadata(
-  'hyp_warp_token_usdg_v2.aleo',
-  '4364459415416156846201796031612641041087412365006702457109915656601258641029field',
-  6,
-  6,
-  USDG_HYPERLANE_CONFIG_SOURCE,
-)
+const ALEO_USDG_APP_METADATA = {
+  ...newWarpRouteAleoAppMetadata(
+    'hyp_warp_token_usdg_v2.aleo',
+    '4364459415416156846201796031612641041087412365006702457109915656601258641029field',
+    6,
+    6,
+    USDG_HYPERLANE_CONFIG_SOURCE,
+  ),
+  aleoTokenOwner: 'aleo1lad36r82wn80fs9vzmyykfgkne6045auy9dy50rppck98rvuk58s70xyfh',
+} as const
 
-const ALEO_ZEC_APP_METADATA = newWarpRouteAleoAppMetadata(
-  'hyp_warp_token_zec_v2.aleo',
-  '220414605002186903241059728372192608429362177759171998609092499027319866844field',
-  8,
-  8,
-  ZEC_HYPERLANE_CONFIG_SOURCE,
-)
+const ALEO_ZEC_APP_METADATA = {
+  ...newWarpRouteAleoAppMetadata(
+    'hyp_warp_token_zec_v2.aleo',
+    '220414605002186903241059728372192608429362177759171998609092499027319866844field',
+    8,
+    8,
+    ZEC_HYPERLANE_CONFIG_SOURCE,
+  ),
+  aleoTokenOwner: 'aleo1yv5gy4l5g82dcu47260t6lpls4xvg29zpg2m06jdwvdtm8m06gzsysx6dy',
+} as const
 
 function newWarpRouteAleoRemoteRouter(
   program: string,

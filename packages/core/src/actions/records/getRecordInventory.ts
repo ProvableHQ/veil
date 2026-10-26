@@ -1,0 +1,84 @@
+import type { Client } from '../../clients/createClient.js'
+import type { InventoryRecord, RecordAsset, ResolvedRecordAsset } from '../../inventory/types.js'
+import { reservedRecordIds } from '../../inventory/internal.js'
+import { requestRecords } from '../wallet/requestRecords.js'
+import { decodeRecord, recordName, validateAsset } from './internal.js'
+
+/**
+ * Scopes an inventory scan to one supported asset.
+ * @property asset Program with optional record-name and amount-field overrides.
+ */
+export type GetRecordInventoryParameters = { asset: RecordAsset }
+
+/**
+ * Reports spendable records separately from records held by other operations.
+ * @property asset Resolved record name, amount field, and integer width.
+ * @property available Eligible, unreserved records.
+ * @property reserved Eligible records excluded by the shared journal.
+ * @property balance Unreserved balance in integer base units.
+ */
+export type GetRecordInventoryReturnType = { asset: ResolvedRecordAsset; available: InventoryRecord[]; reserved: InventoryRecord[]; balance: bigint }
+
+/**
+ * Scans all pages through the client's existing record provider or wallet.
+ * Verifies the asset interface and excludes non-token, bound and reserved records.
+ * @param client Account client; enabled record management excludes shared reservations.
+ * @param params Program and optional record/amount field selections to inspect.
+ * @returns Eligible records and their available balance; hits the network.
+ * @throws On missing wallet grants, unsupported assets, or a non-terminating scan.
+ * @example
+ * import type { WalletClient, RecordAsset } from '@provablehq/veil-core'
+ *
+ * async function inspectCredits(client: WalletClient) {
+ *   // Amounts are integer microcredits. An enabled shared journal excludes
+ *   // records held by concurrent operations from available and balance.
+ *   const inventory = await client.getRecordInventory({
+ *     asset: { program: 'credits.aleo' },
+ *   })
+ *   console.log('Available microcredits:', inventory.balance.toString())
+ *   console.log('Available records:', inventory.available.length)
+ *   console.log('Reserved records:', inventory.reserved.length)
+ *   return inventory.available
+ * }
+ *
+ * // For a custom token, override the record and numeric field explicitly.
+ * // The deployed interface still has to support the selected record.
+ * const customAsset: RecordAsset = {
+ *   program: 'custom_token.aleo', recordName: 'Balance', amountField: 'value',
+ * }
+ */
+export async function getRecordInventory(client: Client, params: GetRecordInventoryParameters): Promise<GetRecordInventoryReturnType> {
+  // Verify the token interface before interpreting record fields, then read the
+  // shared reservations that must be excluded from available balances.
+  const capabilities = await validateAsset(client, params.asset)
+  const excluded = await reservedRecordIds(client)
+  const seen = new Map<string, InventoryRecord>()
+  let previousPage: string | undefined
+  for (let page = 0; ; page++) {
+    if (page >= 10_000) throw new Error('Record scan exceeded its page limit')
+    const records = await requestRecords(client, {
+      program: params.asset.program, statusFilter: 'unspent',
+      // Wallets return the program's complete result. Filter locally below so
+      // withheld record-name grants cannot silently turn into empty inventory.
+      ...(client.account?.type === 'rpc' ? {} : { filter: { records: [recordName(capabilities.asset)], resultsPerPage: 1000, page } }),
+    })
+    if (client.account?.type !== 'rpc' && records.length > 1000) throw new Error('Record provider ignored pagination; inventory is incomplete')
+    // Detect providers that repeat a full page instead of advancing; silently
+    // stopping would make a partial inventory look complete.
+    const pageKey = JSON.stringify(records.map((record) => record.commitment ?? record.tag ?? record.uid))
+    if (records.length === 1000 && pageKey === previousPage) throw new Error('Record provider did not advance pagination; inventory is incomplete')
+    previousPage = pageKey
+    // Pages can overlap while the scanner advances. Deduplicate by nonce after
+    // checking ownership, amount, and whether the record can be used as a token.
+    for (const record of records) {
+      const parsed = decodeRecord(client, params.asset, record, capabilities)
+      if (parsed && !seen.has(parsed.id)) { seen.set(parsed.id, parsed) }
+    }
+    if (client.account?.type === 'rpc' || records.length < 1000) break
+  }
+  // Report held records separately so callers can distinguish a low available
+  // balance from funds already committed to another participating operation.
+  const available = [...seen.values()].filter((record) => !excluded.has(record.id))
+  const reserved = [...seen.values()].filter((record) => excluded.has(record.id))
+  return { asset: capabilities.asset, available, reserved, balance: available.reduce((sum, record) => sum + record.amount, 0n) }
+}

@@ -150,6 +150,68 @@ Wallet clients also carry `simulateContract`, `deployContract`, `transfer`,
 write action is available standalone (tree-shakeable) or as a method on the
 client via the `extend()` pattern.
 
+### Reading freezelists
+
+`publicClient.getComplianceFreezeList({ programId })` reads the published
+compliance tree as decimal node strings through the configured transport. Pair
+it with `readContract({ programId, mapping: 'freeze_list_root', key: '1u8' })`
+to validate witnesses against the current root. Core does not load WASM;
+`@provablehq/veil-aleo-sdk` supplies `sdk.generateFreezelistProof({ address, tree, root })`
+for Node and browser callers. Shield Swap uses this generator automatically on
+SDK-backed clients and caches witnesses while the current root is unchanged.
+
+### Wallet-generated freezelist proofs
+
+`freezelistProofRequest` asks a connected wallet to fill one `[MerkleProof; 2]`
+input using `program-freezelist-exclusion-proof`. Omit `address` to prove the
+signer, or set it for a recipient or withdrawal address. `freezelistProgram`
+MUST identify the program owning the root checked by the contract; it is not
+necessarily the token program. The helpers construct inputs without network
+access. The wallet fetches the list and computes the proof during execution.
+
+```ts
+import { freezelistProofRequest, freezelistProofGrant } from '@provablehq/veil-core'
+
+// Supply this grant in the wallet connection's algorithmsAllowed array.
+// Position 3 applies to the ARC-22 (recipient, amount, record, proof) shape.
+const grant = freezelistProofGrant({
+  program: 'token.aleo',
+  function: 'transfer_private',
+  inputPosition: 3,
+  freezelistProgram: 'compliance.aleo',
+})
+
+const transactionId = await walletClient.transfer({
+  asset: 'token.aleo',
+  to: 'aleo1...',
+  amount: 100n,
+  amountWidth: 'u128',
+  visibility: 'private',
+  record: { type: 'record', program: 'token.aleo', recordname: 'Token', uid: 'token-record-id' },
+  merkleProof: freezelistProofRequest({ freezelistProgram: 'compliance.aleo' }),
+})
+```
+
+The program names above are illustrative; use the deployed token's actual
+freezelist. Create a grant for each executed program, function, and zero-based
+proof position. Check the connected wallet's `algorithmsSupported()` before
+enabling this flow, and surface wallet rejection errors. The known-algorithm
+catalog describes the protocol and does not establish a wallet's support.
+
+`writeContract`, `executeTransaction`, and ABI-backed `getContract` also accept
+the request as one complete array input. `transfer` accepts an optional `record`
+input after the recipient and amount for ARC-22 private and unshield transfers;
+omitting it retains the previous input shape. Local accounts MUST supply encoded
+proof strings. Existing encoded proofs remain supported on both account paths.
+Use `writeContract` for ARC-20 transfers whose record precedes the recipient.
+
+The agent and MCP `aleo_execute` tool schemas accept encoded strings, wallet
+record requests, and freezelist requests. `aleo_transfer` exposes `asset`,
+`visibility`, `amountWidth`, `record`, and `merkleProof` with the same behavior
+as the client action. Supply amounts above the JavaScript safe-integer limit
+as decimal strings to retain every base unit. Wallet grants must already be
+configured by the host application; tools do not change connection permissions.
+
 ## What's in the box
 
 - **Clients** — `createPublicClient`, `createWalletClient`, `createTestClient`,
@@ -183,3 +245,78 @@ const client = createPublicClient({
   },
 }))
 ```
+
+## Record management
+
+Wallet clients include methods to inspect private records, join or split them,
+and prepare a target inventory. Record management also coordinates spends:
+it reserves explicit inputs before proving and records transaction progress
+for recovery. Reservations and recovery are off by default.
+
+Configure the wallet client once, then call its methods. The application
+supplies the account, transport, and any local prover/scanner bindings:
+
+```ts
+import {
+  createWalletClient, memoryRecordInventoryStore,
+  type WalletClientConfig, type RecordInventoryStore,
+} from '@provablehq/veil-core'
+
+const sharedStore = memoryRecordInventoryStore()
+
+function createManagedWallet(config: WalletClientConfig, store: RecordInventoryStore = sharedStore) {
+  return createWalletClient({
+    ...config,
+    recordManagement: { enabled: true, store, chainId: 'aleo:testnet' },
+  })
+}
+
+async function previewCredits(config: WalletClientConfig) {
+  const client = createManagedWallet(config)
+  const inventory = await client.getRecordInventory({ asset: { program: 'credits.aleo' } })
+  const plan = await client.planRecordInventory({
+    asset: inventory.asset,
+    target: { records: 6, minRecordAmount: 1_000_000n, distribution: 'balanced' },
+    maxTransactions: 24,
+  })
+  return { client, inventory, plan } // Read-only; no transaction submitted.
+}
+```
+
+After inspecting the plan, call `client.rebalanceRecordInventory({ plan })` and
+check whether the result is `complete` or `interrupted`. For one join or split,
+use `client.joinRecords` or `client.splitRecord`; these return before confirmation.
+`client.autoJoin({ asset, minAmount })` selects and joins enough records for one
+spend. `client.reconcileRecordInventory()` checks pending transactions after an
+interruption without rebuilding them.
+With `{ rebroadcast: true }`, a failed resubmission records
+`lastRebroadcastError` and `rebroadcastAttempts` on its journal entry while
+reconciliation continues for other entries. Uncertain spends keep their
+reservations. See [recovery examples](../../site/docs/guides/record-inventory.md#recover-interrupted-work)
+for inspection and retry steps.
+
+Every participating client must share the same store and `chainId`. The memory
+store lasts for one process; pass a durable `RecordInventoryStore` for restart
+recovery. Core has no database or Node dependency. A read or plan does not lock
+records, and coordination does not start background maintenance.
+
+An asset requires only `program`. Optional `recordName` and `amountField`
+override the selected record balance. Native credits use `credits.microcredits`;
+other compatible records default to `amount`, then `microcredits`. More than two
+records use a compatible batch join helper when available. Set `tokenJoin: false`
+for native pairwise joins.
+
+Local managed writes support `privateFee: true`: an available credits record is
+reserved with the execution inputs. A supplied reserved or insufficient fee
+record is replaced when another eligible record exists. Failure to find one
+stops the call before proving. The current wallet RPC protocol cannot pin a
+managed private fee record.
+
+`recordActions()` adds these methods to custom clients. It does not enable
+coordination, and its `store` and `maxFeeMicrocredits` options are ignored; put
+those settings in the client's enabled `recordManagement` configuration.
+
+See the [record management guide](../../site/docs/guides/record-inventory.md)
+for all defaults, durable storage, fee limits, helper selection, wallet grants,
+and recovery examples. For concurrent trades, see
+[Shield Swap setup](../shield-swap/README.md#concurrent-swaps).

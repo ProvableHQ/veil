@@ -1,3 +1,6 @@
+import { management } from '../../inventory/internal.js'
+import { manageRecordSpend, withoutManagement } from '../../inventory/spending.js'
+import type { ProvingProgressHandler } from '../../types/proving.js'
 import { AccountNotFoundError, ProvingNotConfiguredError } from '../../errors/errors.js'
 import type { Client } from '../../clients/createClient.js'
 import type { RawExecuteResult } from '../../types/proving.js'
@@ -19,9 +22,12 @@ import { extractTransitions } from '../../utils/extractTransitions.js'
  *   the RPC path.
  * @property privateFee Pay the fee from a private record instead of the public
  *   credits balance. Defaults to `false`. The fee record is resolved via the wallet
- *   client's record provider; callers do not supply one.
+ *   client's record provider unless feeRecord is supplied.
  * @property programSource Optional program source to prove against instead of
  *   fetching it from the chain. Local-proving path only.
+ * @property onProgress Optional awaited proving/submission checkpoints. Defaults to no reporting.
+ * @property feeRecord Optional private credits record plaintext; used only with privateFee.
+ *   Managed local writes replace reserved, insufficient, or unavailable records with an eligible one.
  * @property imports Program id → source for programs reached via dynamic dispatch
  *   that can't be discovered statically. Static imports are auto-discovered. The RPC
  *   path forwards only the ids; the wallet resolves the sources itself.
@@ -32,8 +38,10 @@ export type ExecuteContractParameters = {
   inputs: TransactionInput[]
   fee?: bigint
   privateFee?: boolean
+  feeRecord?: string
   programSource?: string
   imports?: Record<string, string>
+  onProgress?: ProvingProgressHandler
 }
 
 /** Transaction id plus per-transition outputs of the confirmed execution. */
@@ -60,6 +68,7 @@ export type ExecuteContractReturnType = RawExecuteResult
  * @param client Wallet client with an account attached.
  * @param params Program, function, inputs, and fee/source/import options.
  * @returns The transaction id with the outputs of every transition, once the transaction is accepted.
+ * @throws RecordReservationConflictError if enabled management cannot acquire an execution input before proving.
  * @throws AccountNotFoundError if the client has no signing account.
  * @throws ProvingNotConfiguredError if the account is local and the proving config lacks `execute`.
  * @throws If confirmation polling times out or the transaction is rejected.
@@ -75,12 +84,20 @@ export async function executeContract(
   client: Client,
   params: ExecuteContractParameters,
 ): Promise<ExecuteContractReturnType> {
+  if (management(client)) {
+    // Copy the input list and its request objects before awaiting reservations.
+    // The inner call journals progress without reserving the inputs again.
+    const snapshot = { ...params, inputs: params.inputs.map((input) => typeof input === 'string' ? input : { ...input }) }
+    return manageRecordSpend(client, snapshot, (onProgress, feeRecord) =>
+      executeContract(withoutManagement(client, feeRecord), { ...snapshot, onProgress }))
+  }
   const account = client.account
   if (!account || !('sign' in account)) {
     throw new AccountNotFoundError()
   }
 
   if (account.type === 'rpc') {
+    if (params.feeRecord) throw new Error('This wallet protocol cannot pin a supplied fee record')
     // 1. Submit via wallet — adapter transport returns the tx id. Param shape mirrors
     //    writeContract: the wallet handles fee + program-source resolution internally, so
     //    `fee` and `programSource` on this action don't translate to the wire call.
@@ -95,8 +112,12 @@ export async function executeContract(
       },
     }) as string
 
+    await params.onProgress?.({ type: 'transaction-submitted', transactionId: txId })
+
     // 2. Wait for chain confirmation via the same transport.
     const confirmedTx = await waitForConfirmation(client, txId)
+
+    await params.onProgress?.({ type: 'transaction-confirmed', transactionId: txId })
 
     // 3. Walk transitions; no decryptor (see docstring).
     const { transitions, outputs } = extractTransitions(confirmedTx)
@@ -108,6 +129,8 @@ export async function executeContract(
     // Local proving resolves no wallet-side inputs — only encoded strings.
     assertNoInputRequests(params.inputs)
 
+    // The prover builds, submits, and confirms this transaction. Forward the
+    // callback so it can save progress before continuing to the next stage.
     if (client.proving?.execute) {
       return client.proving.execute({
         programName: params.program,
@@ -115,8 +138,10 @@ export async function executeContract(
         inputs: params.inputs,
         fee: params.fee ?? 0n,
         privateFee: params.privateFee,
+        ...(params.feeRecord ? { feeRecord: params.feeRecord } : {}),
         programSource: params.programSource,
         programImports: params.imports,
+        ...(params.onProgress ? { onProgress: params.onProgress } : {}),
       })
     }
 

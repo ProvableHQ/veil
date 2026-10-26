@@ -246,6 +246,23 @@ const tools = aleoAgentTools({
 // Each tool has { schema, handler } — plug into LangChain, Vercel AI SDK, etc.
 ```
 
+## Record inventory management
+
+Core reads records from a scanner and joins or splits them to prepare an
+ARC20, ARC22, native credits, or compatible custom balance for spending. An asset
+needs only its program; optional `recordName` and `amountField` select a custom
+balance. Joins of more than two records prefer available batch helper programs.
+Shield Swap applies these operations to each DEX token's underlying program.
+[`shield-swap inventory`](packages/shield-swap-cli/INVENTORY.md) runs background
+maintenance and stores recovery data in SQLite.
+
+Record reservations and recovery are off by default. Follow the
+[record management guide](site/docs/guides/record-inventory.md) to enable them,
+configure storage, select private fee records, and recover interrupted work.
+The [concurrent swaps walkthrough](site/docs/guides/shield-swap.md#concurrent-swaps)
+shows how to prepare records, share both stores, and claim successful swaps
+when another trade fails.
+
 ## License
 
 MIT

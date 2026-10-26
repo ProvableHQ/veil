@@ -1,5 +1,19 @@
 # @provablehq/veil-aleo-wallet-adapter
 
+## 0.14.0
+
+## 0.13.0
+
+### Minor Changes
+
+- 1b3e5c0: Add opt-in wallet-derived freezelist exclusion proofs, typed request and grant builders, and proof input support for private token transfers, bridge actions, and Shield Swap swaps and liquidity. Preserve existing encoded proofs and providers, and require explicit freezelist configuration and subjects when wallet-held records hide them.
+
+## 0.13.0-rc.0
+
+### Minor Changes
+
+- 1b3e5c0: Add opt-in wallet-derived freezelist exclusion proofs, typed request and grant builders, and proof input support for private token transfers, bridge actions, and Shield Swap swaps and liquidity. Preserve existing encoded proofs and providers, and require explicit freezelist configuration and subjects when wallet-held records hide them.
+
 ## 0.12.1
 
 ## 0.12.0

@@ -60,6 +60,7 @@ import { getStatePaths, type GetStatePathsParameters, type GetStatePathsReturnTy
 import { getBlockHeightByHash, type GetBlockHeightByHashParameters, type GetBlockHeightByHashReturnType } from '../../actions/public/getBlockHeightByHash.js'
 import { getBlockTransactionsByHash, type GetBlockTransactionsByHashParameters, type GetBlockTransactionsByHashReturnType } from '../../actions/public/getBlockTransactionsByHash.js'
 import { getTokenDetails, type GetTokenDetailsParameters, type GetTokenDetailsReturnType } from '../../actions/public/getTokenDetails.js'
+import { getComplianceFreezeList, type GetComplianceFreezeListParameters, type GetComplianceFreezeListReturnType } from '../../actions/public/getComplianceFreezeList.js'
 import { getProgramMetricsByRange, type GetProgramMetricsByRangeParameters, type GetProgramMetricsByRangeReturnType } from '../../actions/public/getProgramMetricsByRange.js'
 import type { Client } from '../createClient.js'
 
@@ -128,6 +129,7 @@ export type PublicActions = {
   getBlockHeightByHash: (params: GetBlockHeightByHashParameters) => Promise<GetBlockHeightByHashReturnType>
   getBlockTransactionsByHash: (params: GetBlockTransactionsByHashParameters) => Promise<GetBlockTransactionsByHashReturnType>
   getTokenDetails: (params: GetTokenDetailsParameters) => Promise<GetTokenDetailsReturnType>
+  getComplianceFreezeList: (params: GetComplianceFreezeListParameters) => Promise<GetComplianceFreezeListReturnType>
   getProgramMetricsByRange: (params: GetProgramMetricsByRangeParameters) => Promise<GetProgramMetricsByRangeReturnType>
 }
 
@@ -205,6 +207,7 @@ export function publicActions(client: Client): PublicActions {
     getBlockHeightByHash: (params) => getBlockHeightByHash(client, params),
     getBlockTransactionsByHash: (params) => getBlockTransactionsByHash(client, params),
     getTokenDetails: (params) => getTokenDetails(client, params),
+    getComplianceFreezeList: (params) => getComplianceFreezeList(client, params),
     getProgramMetricsByRange: (params) => getProgramMetricsByRange(client, params),
   }
 }

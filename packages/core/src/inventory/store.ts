@@ -1,0 +1,49 @@
+import type { RecordInventoryStore, RecordSpend } from './types.js'
+
+/**
+ * Builds an atomic, process-local reservation store.
+ * Data disappears when the process exits; use a durable implementation for bots.
+ * @returns A store shared by every client given the returned instance.
+ * @example
+ * const store = memoryRecordInventoryStore()
+ */
+export function memoryRecordInventoryStore(): RecordInventoryStore {
+  const entries: RecordSpend[] = []
+  // Journal values are wire-format JSON, so cloning needs no runtime-specific API.
+  const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+  return {
+    list: async (scope) => copy(entries.filter((entry) => entry.scope === scope)),
+    acquire: async (entry) => {
+      // Check contention and insert without awaiting so another caller in this
+      // process cannot reserve an input between the check and the insertion.
+      if (new Set(entry.records).size !== entry.records.length) throw new Error('Duplicate record inputs')
+      if (entries.some((old) => old.scope === entry.scope && holdsRecords(old) &&
+        heldRecordIds(old).some((id) => entry.records.includes(id)))) return undefined
+      const saved = copy({ ...entry, id: String(entries.length + 1) })
+      entries.push(saved)
+      return copy(saved)
+    },
+    update: async (scope, id, patch) => {
+      const entry = entries.find((item) => item.scope === scope && item.id === id)
+      if (!entry) throw new Error('Unknown record reservation')
+      Object.assign(entry, copy(patch))
+      // JSON cloning omits undefined; explicitly remove fields cleared after
+      // a successful rebroadcast or confirmed transaction.
+      for (const key of ['transaction', 'lastRebroadcastError'] as const) {
+        if (key in patch && patch[key] === undefined) delete entry[key]
+      }
+    },
+  }
+}
+
+/** Returns whether a journal entry excludes its inputs from record selection. */
+export function holdsRecords(entry: RecordSpend): boolean {
+  // Confirmed inputs remain excluded while a scanner still reports them unspent.
+  return entry.status !== 'cancelled' && (entry.status !== 'rejected' || !!entry.feeRecordId)
+}
+
+/** Returns the consumed fee record alone after rejection; other held states retain every input. @internal */
+export function heldRecordIds(entry: RecordSpend): string[] {
+  if (!holdsRecords(entry)) return []
+  return entry.status === 'rejected' ? [entry.feeRecordId!] : entry.records
+}

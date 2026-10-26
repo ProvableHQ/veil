@@ -66,6 +66,9 @@ pnpm --filter @provablehq/shield-swap-cli build
 node packages/shield-swap-cli/dist/index.js pools
 ```
 
+`pnpm --filter @provablehq/shield-swap-cli test:package` builds the CLI and
+checks its command help and SQLite storage export. Requires Node 22.13+.
+
 State lands in `./.shield-swap/<network>/` relative to the working directory, so
 running from the repo root keeps a session there. Set `SHIELD_SWAP_STATE_DIR` to
 point somewhere else — worth doing if you want a scratch account separate from
@@ -77,6 +80,12 @@ writes, import the session helpers:
 ```ts
 import { loadSession, formatAmount } from '@provablehq/shield-swap-cli/session'
 ```
+
+Freezelist witnesses are generated automatically when a write executes. The
+session's SDK generator checks the current on-chain root and reuses witnesses
+while that root is unchanged. Dry runs do not generate proofs or submit. Custom
+deployments can configure `shieldSwapActions({ freezelists })` in the session;
+see the [proof configuration](../shield-swap/README.md#freezelist-proofs).
 
 ## Two rules that hold everywhere
 
@@ -112,6 +121,7 @@ FeeMaster account by default, so a faucet-funded account needs no public credits
 | `redeem` | Redeems a referral code, or gets/creates the account's shareable code with `--generate`. | Session; referral code when redeeming |
 | `pools` | Lists pools from the API and joins each with chain state, so the tradeable flag and the depth come from the mappings rather than the index. | Session |
 | `balances` | Private and public holdings per token, reconciled against the registry. | Session, record access |
+| `inventory` | Inspect, plan, rebalance, or maintain spendable records; report pending operations. | Account, record access, Node 22.13+ |
 | `positions` | Every liquidity position the account holds, with its range, its backing amounts, and the fees earned that a collect would pay. | Session, record access |
 | `swap` | Sells one token for another, single hop or routed, then claims the output. | Funds in the token being sold |
 | `swap-concurrent` | Makes multiple swaps concurrently, one per token sold, planned before any is submitted. | Funds in each token being sold |
@@ -216,3 +226,48 @@ meaningful against the chain they were checked on.
 execution. The printed minimum is the submitted minimum, for 1–3-hop routes.
 Missing output estimates and expired quotes fail before submission; rerun to
 obtain fresh terms. Quote lifetime is 60 seconds from the request start.
+
+### Freezelist proofs
+
+The CLI signs locally and cannot resolve wallet-derived freezelist requests.
+SDK applications using a connected wallet can opt in with
+[`walletFreezelistProofProvider`](../shield-swap/README.md#wallet-derived-freezelist-proofs).
+Existing CLI commands keep literal proof behavior. Populated compliance lists
+require a concrete proof provider in a customized SDK client; the all-zero
+legacy witness is not a general exclusion proof. Collection forwards the
+position's withdrawal address as the proof subject.
+
+## Record inventory management
+
+`shield-swap inventory` inspects records, plans joins and splits, and maintains
+record counts and amounts for native credits, ARC20, ARC22, or custom assets.
+It uses the configured Shield Swap account or a key supplied through the
+environment. These commands require Node 22.13+ and do not need DEX authentication.
+
+```sh
+shield-swap inventory inspect --asset credits.aleo
+shield-swap inventory plan --asset credits.aleo --records 4 --json
+shield-swap inventory rebalance --asset credits.aleo --records 4 --execute
+shield-swap inventory run --config inventory.json --execute
+shield-swap inventory status --json
+```
+
+`rebalance` and `run` only print plans without `--execute`. See the
+[inventory configuration and recovery reference](INVENTORY.md) for policies,
+fee limits, and continuous operation, and the
+[record inventory guide](../../site/docs/guides/record-inventory.md) for SDK use.
+
+Set `VEIL_INVENTORY_DB` to the journal path used by `shield-swap inventory run`
+so trading and maintenance cannot reserve the same explicit record inputs.
+The trading session enables `recordManagement: { enabled: true, store, chainId }`
+when it creates the client. The SQLite store is also available to applications
+from `@provablehq/shield-swap-cli/storage`. Automatic swap selection then tries
+another covering record if maintenance reserves its first choice before proving.
+The `swap-concurrent` command retains its one-leg-per-input-token limit; SDK
+scripts can submit same-token swaps with enough covering records and a shared
+blinded identity store.
+
+Without the environment variable, trading commands keep record coordination
+disabled and open no inventory journal. Inventory commands explicitly enable
+coordination and default to `.veil/inventory.sqlite`. Keep this file across
+restarts so pending transactions can be reconciled.

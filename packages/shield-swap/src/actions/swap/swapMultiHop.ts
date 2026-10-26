@@ -1,4 +1,4 @@
-import { assertExecutionQuote } from './internal.js'
+import { assertExecutionQuote, swapContextGuard, executeWithTokenRecord } from './internal.js'
 import {
   executeContract,
   writeContract,
@@ -10,7 +10,6 @@ import { reserveBlindedIdentity } from '../blinding/reserveBlindedIdentity.js'
 import { recordSwapOrThrow } from '../../utils/blinding/tracking.js'
 import type { BlindedIdentityStore } from '../../utils/blinding/store.js'
 import { nextBlindedIdentity, viewKeyToScalar } from '../../utils/blinding/identity.js'
-import { resolveTokenRecord } from '../../utils/records.js'
 import { requireAccount, requirePool, requireSlot } from '../../utils/guards.js'
 import {
   resolveMultiHopParams,
@@ -21,7 +20,8 @@ import {
 } from '../../utils/params.js'
 import { blindingFactorIssueRequest, blindedAddressIssueRequest } from '../../utils/blinding/requests.js'
 import { resolveTokenRoute, tokenIdToProgram, type TokenRoute } from '../../utils/routing.js'
-import { resolveProofPair, formatMerkleProofPair, type ProofProvider } from '../../utils/proofs.js'
+import type { SwapProofs, FreezelistConfig } from '../../utils/proofs.js'
+import { resolveComplianceProofs, wrapperProofContext } from '../../utils/resolveProofs.js'
 import { tryLoadSdk } from '../../utils/sdk.js'
 import { deriveMultiHopSwapId } from '../../utils/keys.js'
 import { requireFieldOutput } from '../../utils/outputs.js'
@@ -63,8 +63,10 @@ import { SHIELD_SWAP, SHIELD_SWAP_ROUTER } from '../../constants.js'
  * @property route Pre-resolved input-token route — the offline/override
  *   escape hatch. Defaults to reading `from_wrapper_token_id` on chain
  *   (cached per process).
- * @property proofs Freezelist witness provider for populated freezelists.
- *   Defaults to the empty-tree witness.
+ * @property proofs Supplies a {@link SwapProofs} literal tuple in ABI order, an annotated
+ *   collection, or a provider. Omission or null enables automatic resolution.
+ * @property freezelists Overrides deployment lists for automatic or annotated proofs;
+ *   defaults to the known AMM, USDCx and credits lists.
  * @property imports Program sources for dynamic-dispatch dependencies
  *   (`{ 'token.aleo': source }`) — pass the involved token programs' sources
  *   when proving locally or via a service that requires them.
@@ -86,7 +88,8 @@ export type SwapMultiHopParameters = {
   blindedIdentity?: { blindingFactor: string; blindedAddress: string }
   blindedIdentities?: BlindedIdentityStore
   route?: TokenRoute
-  proofs?: ProofProvider
+  proofs?: SwapProofs
+  freezelists?: FreezelistConfig
   imports?: Record<string, string>
   program?: string
   routerProgram?: string
@@ -174,6 +177,10 @@ export type SwapMultiHopReturnType = MultiHopSwapHandle
  * deadline read, a record scan (local), and the transaction itself. Signs,
  * and on the local path proves locally.
  *
+ * Enabled record management retries automatic local record selection when
+ * another operation reserves the selected input before proving. Each candidate
+ * is tried once; explicit tokenRecord inputs and execution failures are not retried.
+ *
  * @param client A Veil wallet client (local or wallet account).
  * @param params The route intent and optional overrides.
  * @returns The multi-hop handle — persist it; the claim consumes it.
@@ -194,6 +201,10 @@ export type SwapMultiHopReturnType = MultiHopSwapHandle
  * // const res = await claimSwapOutput(client, { handle })
  */
 export async function swapMultiHop(client: Client, params: SwapMultiHopParameters): Promise<SwapMultiHopReturnType> {
+  // Snapshot caller-owned terms before asynchronous preparation or retries.
+  params = { ...params, imports: params.imports && { ...params.imports },
+    blindedIdentity: params.blindedIdentity && { ...params.blindedIdentity }, poolKeys: [...params.poolKeys] }
+  const assertContext = swapContextGuard(client)
   const program = params.program ?? SHIELD_SWAP
   const routerProgram = params.routerProgram ?? SHIELD_SWAP_ROUTER
 
@@ -247,16 +258,10 @@ export async function swapMultiHop(client: Client, params: SwapMultiHopParameter
   ]
 
   // Wrapped input: the deposit rides the wrapper's freezelist check, so the
-  // sender proves non-inclusion (empty-tree witness while lists are empty).
-  const senderProof = route.wrapped
-    ? formatMerkleProofPair(
-        await resolveProofPair(params.proofs, {
-          list: 'wrapper',
-          program: route.wrapperProgram,
-          subject: account.address,
-        }),
-      )
-    : undefined
+  // sender proves non-inclusion against its current freezelist.
+  const [senderProof] = await resolveComplianceProofs(client, params.proofs, [
+    wrapperProofContext(route, account.address),
+  ], params.freezelists)
 
   const handleBase = {
     tokenInId: params.tokenInId,
@@ -290,27 +295,28 @@ export async function swapMultiHop(client: Client, params: SwapMultiHopParameter
 
     // Wrapped inputs spend the UNDERLYING asset's records; plain inputs
     // spend the token program's own records (the id decodes to the program).
-    const recordInput = await resolveTokenRecord(client, {
+    const result = await executeWithTokenRecord(client, {
       tokenRecord: params.tokenRecord,
       tokenInProgram: route.wrapped ? route.underlyingProgram : tokenIdToProgram(route.tokenId),
       tokenId: route.wrapped ? route.underlyingId : params.tokenInId,
       minAmount: params.amountIn,
+    }, recordInput => {
+      assertContext()
+      assertExecutionQuote(client, params)
+      return route.wrapped
+        ? executeContract(client, {
+            program: routerProgram,
+            function: 'swap_mh_from_wrapped',
+            imports: params.imports,
+            inputs: [recordInput, senderProof!, identity.blindingFactor, identity.blindedAddress, ...tail],
+          })
+        : executeContract(client, {
+            program,
+            function: 'swap_multi_hop',
+            imports: params.imports,
+            inputs: [identity.blindingFactor, identity.blindedAddress, recordInput, ...tail],
+          })
     })
-
-    assertExecutionQuote(client, params)
-    const result = route.wrapped
-      ? await executeContract(client, {
-          program: routerProgram,
-          function: 'swap_mh_from_wrapped',
-          imports: params.imports,
-          inputs: [recordInput, senderProof!, identity.blindingFactor, identity.blindedAddress, ...tail],
-        })
-      : await executeContract(client, {
-          program,
-          function: 'swap_multi_hop',
-          imports: params.imports,
-          inputs: [identity.blindingFactor, identity.blindedAddress, recordInput, ...tail],
-        })
 
     const swapId = requireFieldOutput(result.outputs, 'swap_multi_hop')
     const handle = {
@@ -355,6 +361,7 @@ export async function swapMultiHop(client: Client, params: SwapMultiHopParameter
     }).catch(() => undefined)
   }
 
+  assertContext()
   assertExecutionQuote(client, params)
   const transactionId = await writeContract(client, {
     program: route.wrapped ? routerProgram : program,

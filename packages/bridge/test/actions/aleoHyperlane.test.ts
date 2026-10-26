@@ -8,6 +8,7 @@ import {
 import { prepare } from '../../src/actions/prepare.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import type { AleoWalletClient } from '../../src/types/aleo.js'
+import warpMetadata from '../fixtures/warp-route-app-metadata.json'
 
 const ROUTES = [
   ['hyperlane:aleo/eth->ethereum/eth', 'hyp_warp_token_eth_v2.aleo', '0x0000000000000000000000000000000000000001', false],
@@ -42,6 +43,13 @@ function plan(routeId: string = ROUTES[0][0], recipient: string = ROUTES[0][2]) 
 }
 
 describe('Aleo Hyperlane transfer_remote', () => {
+  it.each([ROUTES[5], ROUTES[6], ROUTES[7], ROUTES[8], ROUTES[9]] as const)(
+    'matches the reviewed on-chain app metadata for %s', (routeId, program, recipient) => {
+      const call = buildAleoHyperlaneTransferRemoteCall(DEFAULT_BRIDGE_REGISTRY, { plan: plan(routeId, recipient) })
+      expect((call.inputs[0] as string).replace(/\s/g, '')).toBe(warpMetadata[program].metadata.replace(/\s/g, ''))
+    },
+  )
+
   it.each(ROUTES)('constructs all seven inputs for %s', (routeId, program, recipient, placeholder) => {
     const call = buildAleoHyperlaneTransferRemoteCall(DEFAULT_BRIDGE_REGISTRY, {
       plan: plan(routeId, recipient),

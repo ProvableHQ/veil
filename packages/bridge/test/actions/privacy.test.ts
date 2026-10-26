@@ -76,7 +76,7 @@ describe('Aleo asset privacy actions', () => {
     }))
   })
 
-  it('unshields USDCx with a wallet-selected record and the empty-tree proof', async () => {
+  it('unshields USDCx with wallet-selected record and compliance proof requests', async () => {
     const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>()
       .mockResolvedValue('at1usdcxunshield')
 
@@ -100,8 +100,10 @@ describe('Aleo asset privacy actions', () => {
         filters: { amount: { gte: '2500000u128' } },
       },
     ])
-    expect(call.inputs?.[3]).toContain('leaf_index: 1u32')
-    expect(call.inputs?.[3]?.match(/0field/g)).toHaveLength(32)
+    expect(call.inputs?.[3]).toEqual({
+      type: 'derived', algorithm: 'program-freezelist-exclusion-proof',
+      args: { freezelistProgram: { type: 'string', value: 'usdcx_freezelist.aleo' } },
+    })
   })
 
   it('accepts explicit USDCx recipient, record, and proof inputs', async () => {

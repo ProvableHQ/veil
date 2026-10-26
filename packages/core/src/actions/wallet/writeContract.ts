@@ -1,3 +1,5 @@
+import { management } from '../../inventory/internal.js'
+import { manageRecordSpend, withoutManagement } from '../../inventory/spending.js'
 import { AccountNotFoundError, ProvingNotConfiguredError } from '../../errors/errors.js'
 import type { Client } from '../../clients/createClient.js'
 import { assertNoInputRequests } from '../../types/inputRequest.js'
@@ -14,7 +16,9 @@ import type { ProvingProgressHandler } from '../../types/proving.js'
  *   InputRequests require a wallet (RPC) account — the local-proving path rejects them.
  * @property privateFee Pay the fee from a private record instead of the public credits
  *   balance. Defaults to `false`. The fee record is resolved via the wallet client's
- *   record provider; callers do not supply one.
+ *   record provider unless feeRecord is supplied.
+ * @property feeRecord Optional private credits record plaintext; used only with privateFee.
+ *   Managed local writes replace reserved, insufficient, or unavailable records with an eligible one.
  * @property imports Names of programs reached via dynamic dispatch that the prover or
  *   wallet can't discover statically. Static imports in the program's `import` block are
  *   auto-discovered.
@@ -25,6 +29,7 @@ export type WriteContractParameters = {
   function: string
   inputs: TransactionInput[]
   privateFee?: boolean
+  feeRecord?: string
   imports?: string[]
   onProgress?: ProvingProgressHandler | undefined
 }
@@ -52,6 +57,7 @@ export type WriteContractReturnType = string
  * @param client Wallet client with an account attached.
  * @param params Program, function, inputs, and fee/import options.
  * @returns The transaction id to poll with `transactionStatus`.
+ * @throws RecordReservationConflictError if enabled management cannot acquire an execution input before proving.
  * @throws AccountNotFoundError if the client has no signing account.
  * @throws ProvingNotConfiguredError if the account is local and the client has no proving config.
  * @throws If `inputs` contains InputRequest objects on the local-proving path.
@@ -67,12 +73,20 @@ export async function writeContract(
   client: Client,
   params: WriteContractParameters,
 ): Promise<WriteContractReturnType> {
+  if (management(client)) {
+    // Copy the input list and its request objects before awaiting reservations.
+    // The inner call journals progress without reserving the inputs again.
+    const snapshot = { ...params, inputs: params.inputs.map((input) => typeof input === 'string' ? input : { ...input }) }
+    return manageRecordSpend(client, snapshot, (onProgress, feeRecord) =>
+      writeContract(withoutManagement(client, feeRecord), { ...snapshot, onProgress }))
+  }
   const account = client.account
   if (!account || !('sign' in account)) {
     throw new AccountNotFoundError()
   }
 
   if (account.type === 'rpc') {
+    if (params.feeRecord) throw new Error('This wallet protocol cannot pin a supplied fee record')
     // RPC account — wallet handles proving, signing, and broadcasting
     const transactionId = await client.request({
       method: 'executeTransaction',
@@ -102,10 +116,13 @@ export async function writeContract(
       functionName: params.function,
       inputs: params.inputs,
       privateFee: params.privateFee,
+      ...(params.feeRecord ? { feeRecord: params.feeRecord } : {}),
       imports: params.imports,
       ...(params.onProgress ? { onProgress: params.onProgress } : {}),
     })
 
+    // Await the checkpoint before broadcast so a persistent store can save the
+    // proved transaction, or reject the write if its fee exceeds the limit.
     await params.onProgress?.({ type: 'transaction-prepared', transactionId: tx.id, transaction: tx })
 
     const transactionId = await client.request({

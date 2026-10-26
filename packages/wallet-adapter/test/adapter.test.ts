@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { createWalletClient, freezelistProofRequest, FREEZELIST_PROOF_ALGORITHM } from '@provablehq/veil-core'
 import {
   rpcAccountFromAdapter,
   transportFromAdapter,
@@ -67,6 +68,22 @@ describe('rpcAccountFromAdapter', () => {
 })
 
 describe('transportFromAdapter', () => {
+  it('executes a complete ARC-22 transfer with a wallet-resolved freezelist proof', async () => {
+    const adapter = createMockAdapter({ algorithmsSupported: vi.fn().mockResolvedValue([FREEZELIST_PROOF_ALGORITHM]) })
+    const client = createWalletClient(fromWalletAdapter(adapter))
+    expect(await client.request({ method: 'algorithmsSupported', params: {} })).toContain(FREEZELIST_PROOF_ALGORITHM)
+    const proof = freezelistProofRequest({ freezelistProgram: 'compliance.aleo', address: 'aleo1subject' })
+    const record = { type: 'record' as const, program: 'token.aleo', recordname: 'Token', uid: 'token-1' }
+    await client.transfer({ asset: 'token.aleo', to: 'aleo1dest', amount: 100n, amountWidth: 'u128', visibility: 'private', record, merkleProof: proof })
+    expect(adapter.executeTransaction).toHaveBeenCalledWith({ program: 'token.aleo', function: 'transfer_private', inputs: ['aleo1dest', '100u128', record, proof], privateFee: true })
+  })
+
+  it.each(['Unsupported algorithm', 'Missing algorithm grant', 'Subject is frozen'])('propagates wallet freezelist failure: %s', async (message) => {
+    const failure = new Error(message)
+    const adapter = createMockAdapter({ executeTransaction: vi.fn().mockRejectedValue(failure) })
+    const client = createWalletClient(fromWalletAdapter(adapter))
+    await expect(client.writeContract({ program: 'token.aleo', function: 'prove', inputs: [freezelistProofRequest({ freezelistProgram: 'compliance.aleo' })] })).rejects.toBe(failure)
+  })
   it('routes executeTransaction to adapter.executeTransaction', async () => {
     const adapter = createMockAdapter()
     const transport = transportFromAdapter(adapter)

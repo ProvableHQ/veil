@@ -1,4 +1,5 @@
-import type { Client } from '@provablehq/veil-core'
+import { RecordReservationConflictError, inventoryRecordId, type Client } from '@provablehq/veil-core'
+import { resolveTokenRecord, tokenRecordCandidates } from '../../utils/records.js'
 import { getSlot } from '../reads/getSlot.js'
 import { getTradeControls } from '../reads/getTradeControls.js'
 import { resolveDexImports } from '../../utils/imports.js'
@@ -108,4 +109,57 @@ export async function prepareQuote(client: Client, q: SwapQuote, imports?: Recor
     if (route.wrapped) programs.add(route.underlyingProgram)
   }))
   return resolveDexImports(client, { tokenPrograms: [...programs], program: q.program })
+}
+
+/** Captures the signing account and reservation namespace before preparing a swap. @internal */
+export function swapContextGuard(client: Client): () => void {
+  const account = client.account
+  const address = account?.address
+  const network = client.transport?.config.network
+  const management = client.recordManagement
+  const enabled = management?.enabled
+  const store = management?.store
+  const chainId = management?.chainId
+  return () => {
+    // A replacement record must never carry an old identity or quote into a
+    // different account, network, or coordination store.
+    if (client.account !== account || client.account?.address !== address || client.transport?.config.network !== network ||
+      client.recordManagement !== management || management?.enabled !== enabled || management?.store !== store || management?.chainId !== chainId) {
+      throw new Error('Account, chain, or record management changed during swap preparation')
+    }
+  }
+}
+
+/** Retries only unacquired automatic inputs; keeps the original swap terms and identity in the callback. @internal */
+export async function executeWithTokenRecord<T>(
+  client: Client,
+  params: Parameters<typeof resolveTokenRecord>[1],
+  execute: (record: string) => Promise<T>,
+): Promise<T> {
+  // Explicit inputs, wallet requests, and disabled management retain their
+  // existing single-attempt behavior. Only local automatic selection retries.
+  if (params.tokenRecord !== undefined || client.recordManagement?.enabled !== true || !params.tokenInProgram) {
+    return execute(await resolveTokenRecord(client, params))
+  }
+  const candidates = await tokenRecordCandidates(client, {
+    program: params.tokenInProgram, minAmount: params.minAmount, tokenId: params.tokenId,
+  })
+  const attempted = new Set<string>()
+  let conflict: RecordReservationConflictError | undefined
+  for (const candidate of candidates) {
+    const id = inventoryRecordId(candidate.record)
+    if (attempted.has(id)) continue
+    attempted.add(id)
+    try {
+      // The callback rechecks scope and quote expiry, then rebuilds only the
+      // record-dependent input list. Core remains the atomic reservation owner.
+      return await execute(candidate.record.recordPlaintext)
+    } catch (error) {
+      if (!(error instanceof RecordReservationConflictError) || !error.recordIds.includes(id)) throw error
+      conflict = error
+    }
+  }
+  // One fixed scan bounds the work even when another process repeatedly wins
+  // reservations or the scanner continues returning spent inputs.
+  throw conflict!
 }

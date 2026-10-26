@@ -63,6 +63,11 @@ account bootstrap, pool reads, quoting, balances, swap history, swaps, minting a
 position, rebalancing it to a new range, and taking liquidity back out. Each one
 is a single file that reads top to bottom.
 
+For concurrent trades, run the [concurrent-swaps example](../../examples/shield-swap/concurrent-swaps.ts).
+It previews a six-record inventory, then submits six swaps and claims their
+outputs when called with `--execute`. The [example guide](../../examples/shield-swap/README.md)
+covers setup, shared reservations, and recovery after an interruption.
+
 [Open them in StackBlitz](https://stackblitz.com/github/ProvableHQ/veil/tree/main/examples/shield-swap)
 to browse the set in an editor. The pool and token reads run there as they are;
 anything that signs needs credentials, and a private key does not belong in a
@@ -196,7 +201,7 @@ The [API action reference](./API.md) maps every non-admin application endpoint
 to its SDK method, including session management, referrals, analytics, and
 discovery. These methods are also exposed through agent tools and MCP.
 
-Public market data needs no credential. Account data, routing, and referral
+Public market data, including `getFeeTiers()`, needs no credential. Account data, routing, and referral
 activity require authentication. Two credentials work:
 
 - **A session JWT** (about 15 minutes), issued by a challenge/verify handshake:
@@ -560,45 +565,126 @@ node never had from one it simply had not confirmed yet.
 
 ### Concurrent swaps
 
-Every swap is bound to a blinded identity — a one-time address derived from your
-view key and a counter — and the program asserts each blinded address is used only
-once. Derived on demand, that is safe in sequence and unsafe in parallel: two
-swaps started together scan the chain, both see the same counter unused, and the
-second reverts on finalize after the first consumes it. Nothing surfaces locally,
-because at proving time the address genuinely was unused.
+Private swaps can sell the same token concurrently when each trade has a
+separate sufficient input record and a separate blinded identity. Enable record
+management on the wallet client, then attach `shieldSwapActions`. Use persistent
+stores to retain reservations and claim handles after a restart.
 
-The swap actions handle this for you. `swap` and `swapMultiHop` reserve the
-identity before submitting and record the resulting handle after, and
-`claimSwapOutput` marks it claimed. A composed client gets an in-memory store by
-default, so the two swaps below cannot collide even with no configuration — but
-that store dies with the process, so name a file one for anything long-running:
+The following setup is for one Node process and a funded testnet account with
+DEX access. The optional SQLite adapter comes from `@provablehq/shield-swap-cli`
+and requires Node 22.13+. Install it separately from the SDK, or provide a custom
+`RecordInventoryStore` as described in the
+[record management guide](../../site/docs/guides/record-inventory.md).
 
 ```ts
+import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+import { shieldSwapActions, parseUnits } from '@provablehq/shield-swap-sdk'
 import { swapFileStore } from '@provablehq/shield-swap-sdk/node'
+import { sqliteRecordInventoryStore } from '@provablehq/shield-swap-cli/storage'
 
-const client = walletClient.extend(
-  shieldSwapActions({ api: {}, blindedIdentities: swapFileStore('.veil/blinded.json') }),
-)
-
-// Nothing else to do — these two cannot collide on an identity.
-const [a, b] = await Promise.all([
-  client.swap({ poolKey: poolA, tokenInId: usdc, amountIn, imports }),
-  client.swap({ poolKey: poolB, tokenInId: eth, amountIn, imports }),
-])
+const privateKey = process.env.ALEO_PRIVATE_KEY
+if (!privateKey) throw new Error('Set ALEO_PRIVATE_KEY')
+const aleo = await loadNetwork('testnet')
+const address = aleo.privateKeyToAccount(privateKey).address
+const directory = `.veil/testnet/${address}`
+const store = await sqliteRecordInventoryStore(`${directory}/inventory.sqlite`)
+const identities = swapFileStore(`${directory}/blinded.json`)
+const { walletClient } = aleo.createAleoClient({
+  privateKey,
+  records: aleo.createRemoteScanner({ waitForSync: true }),
+  provingMode: 'delegated', useFeeMaster: true, confirmationTimeout: 600_000,
+  recordManagement: { enabled: true, store, chainId: 'aleo:testnet' },
+})
+const client = walletClient.extend(shieldSwapActions({
+  api: {}, blindedIdentities: identities,
+}))
+await client.authenticateShieldSwap()
 ```
 
-`swapFileStore` is an alias of `fileBlindedIdentityStore`; the existing export
-and saved file format remain supported.
+Before each batch, reconcile unfinished transactions and prepare enough records:
 
-Reservations serialize, so each swap gets its own counter, and each is written
-before its transaction is submitted — which is what keeps an unconfirmed swap from
-having its counter handed out again.
+```ts
+const journal = await client.reconcileRecordInventory()
+if (journal.some((entry) => !['confirmed', 'rejected', 'cancelled'].includes(entry.status))) {
+  throw new Error('Resolve pending transactions before starting another batch')
+}
+const pending = await client.getUnclaimedSwaps()
+if (pending.swaps.length || pending.unresolvable.length) {
+  throw new Error('Recover previous swaps before starting another batch')
+}
+const token = await client.tokenData('USDCx')
+const plan = await client.planInventory({
+  token: token.id,
+  target: {
+    records: 6, minRecordAmount: parseUnits('0.1', token.decimals),
+    distribution: 'balanced', toleranceBps: 0,
+  },
+  maxTransactions: 24,
+})
+console.table(plan.steps) // Inspect the joins and splits before execution.
+```
 
-What the default in-memory store does not give you is persistence: a restart
-rescans the chain for its next counter, and forgets any swap it had not yet
-claimed. The on-disk store keeps both. Two processes sharing one account need one
-store between them either way — the chain read alone cannot close that window,
-because the check and the submission are not atomic.
+The plan covers the entire available USDCx inventory. Inspect it before running
+the following writes. `rebalanceRecordInventory` waits for each confirmed output
+to appear in the scanner; an interruption stops the batch before trading.
+
+```ts
+const maintenance = await client.rebalanceRecordInventory({
+  plan, timeoutMs: 600_000, pollIntervalMs: 3_000,
+})
+if (maintenance.status !== 'complete') {
+  throw new Error(`Inventory preparation interrupted: ${maintenance.reason}`)
+}
+
+// Fetch a fresh quote after the maintenance transactions have finished.
+const quote = await client.quote({ from: 'USDCx', to: 'ETH', amountIn: '0.1', slippageBps: 50 })
+const swaps = await Promise.allSettled(
+  Array.from({ length: 6 }, () => client.swap({ quote })),
+)
+const handles = swaps.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+
+// Attempt every successful swap's claim even when another trade failed.
+const claims = await Promise.allSettled(handles.map(async (handle) => {
+  await client.waitForSwapOutput({ handle, timeout: 600_000, pollingInterval: 3_000 })
+  return client.claimSwapOutput({ handle })
+}))
+console.log('Swap results:', swaps.map((result) => result.status))
+console.table(claims.map((result, index) => ({
+  swap: handles[index]!.transactionId,
+  status: result.status,
+  amountOut: result.status === 'fulfilled' ? result.value.amountOut.toString() : undefined,
+  refund: result.status === 'fulfilled' ? result.value.amountRemaining.toString() : undefined,
+})))
+// Retain both stores after failures. Close SQLite after all calls have settled.
+store.close()
+```
+
+The main constraints are:
+
+- With enabled coordination, local automatic selection tries another sufficient
+  record after a reservation conflict, once per candidate. It preserves the
+  quote and never retries proving or an uncertain submission. An explicit
+  `tokenRecord` stays fixed; swaps do not auto-join insufficient records.
+- Every participating client must share the record store and chain identity.
+  Blinded identities need the same store object within one process. SQLite
+  reservations are safe across processes, but sharing `blinded.json` does not
+  coordinate identity counters. Use one process with the bundled identity store.
+- Each trade enforces its own output floor. Pool prices can move during the
+  batch, so inspect every swap and claim result. `claims[i]` corresponds to
+  `handles[i]`; keep failed claims for recovery and account for input refunds.
+- A timeout does not prove rejection. Reopen both stores, call
+  `client.reconcileRecordInventory()` and `client.getUnclaimedSwaps()`, and resolve
+  uncertain work before starting another batch. Wallet signers must supply
+  pinned token records; automatic reselection applies to local signers.
+
+The [concurrent swaps walkthrough](../../site/docs/guides/shield-swap.md#concurrent-swaps)
+explains setup and failure handling in detail. The
+[runnable example](../../examples/shield-swap/concurrent-swaps.ts) defaults to a
+preview and adds restart guards; see its [usage guide](../../examples/shield-swap/README.md).
+The CLI's `swap-concurrent` command still requires a different input token in
+each leg. The SDK example supports repeated trades of the same token.
+
+#### Track and recover swap identities
 
 To opt a single call out of tracking, pass `blindedIdentities: undefined`; the
 identity is then derived by scanning the chain and nothing is written. The
@@ -1134,7 +1220,7 @@ VEIL_E2E_PRIVATE_KEY=...    # testnet account — signs DEX API auth; write tier
 | --- | --- | --- |
 | [`traders.integration.test.ts`](./test/integration/traders.integration.test.ts) | read-only | The analyses a trader runs before trading — spot price, price impact and output size from live liquidity, route quoting with slippage sizing, in-range LP position selection, and fee-APR from OHLCV volume. Asserts math invariants, not exact live figures. The OHLCV test needs `VEIL_E2E_PRIVATE_KEY` (bearer-gated endpoint). |
 | [`reads.integration.test.ts`](./test/integration/reads.integration.test.ts) | read-only | Chain-direct reads (pools, slots, fee tiers, validation) against live state. |
-| [`api.integration.test.ts`](./test/integration/api.integration.test.ts) | read-only | The off-chain `ApiClient` — the public surface credential-less, then with `VEIL_E2E_PRIVATE_KEY` both auth flows end-to-end: the session handshake over the gated reads (routes, balances, OHLCV, fee tiers), auto re-auth after expiry, and the API-token lifecycle (mint, use, list, revoke — self-cleaning). |
+| [`api.integration.test.ts`](./test/integration/api.integration.test.ts) | read-only | The off-chain `ApiClient` — public pool, token, and fee-tier discovery without credentials, plus invalid-credential rejection on WebSocket tickets. With `VEIL_E2E_PRIVATE_KEY`, exercises authenticated reads, auto re-auth after expiry, and the API-token lifecycle (mint, use, list, revoke — self-cleaning). |
 | [`balances.integration.test.ts`](./test/integration/balances.integration.test.ts) | write | The composed balance view — public balances from the API joined with private balances decoded from the account's records. Needs the account because private balances live in its records. |
 | [`e2e.test.ts`](./test/integration/e2e.test.ts) | write | The full private-swap lifecycle — airdrop, privatize records, ensure a pool, `swap`, read the output, `claimSwapOutput`. |
 
@@ -1156,6 +1242,41 @@ write tier spends real testnet funds on each run. Optional overrides:
 `VEIL_DEX_PROGRAM` (defaults to `shield_swap.aleo`), `ALEO_DPS_URL`, and
 `ALEO_RSS_URL`.
 
+## Frozen-signer tests
+
+The offline [`frozenSigners.test.ts`](./test/actions/frozenSigners.test.ts) uses
+real SDK Merkle proofs against populated fixture trees. It checks rejection in
+single-hop and multi-hop wrapped swaps, AMM claims, wrapped outputs, and wrapped
+refunds, plus an unfrozen-signer control. Chain state and transaction submission
+are fixtures in this file.
+
+The live [`frozenSigners.integration.test.ts`](./test/integration/frozenSigners.integration.test.ts)
+reads the current **testnet** lists and discovers pools from the DEX API. Export
+`FROZEN_ADDRESS_1` and `FROZEN_ADDRESS_2`, then run:
+
+```sh
+VEIL_FROZEN_TESTS=1 pnpm exec vitest run packages/shield-swap/test/integration/frozenSigners.integration.test.ts
+```
+
+Each variable accepts an Aleo address or its private key. For a private key, the
+test derives the address locally and discards the signing account; it never logs
+the key or installs a transaction prover. These tests make real SDK swap calls
+through automatic proof generation, but do not sign, broadcast, or spend funds.
+
+Each account MUST be frozen on `test_usdcx_freezelist.aleo` or
+`shield_swap_freezelist.aleo`; otherwise its fixture check fails. Token-list
+membership enables the wrapped single-hop and two-hop rejection checks. AMM-list
+membership enables rejection of the claim's signer proof against the current
+root, without opening an unclaimable swap. Checks for lists that do not contain
+the account report as skipped. The swap checks use omitted and `null` proofs;
+only `Address is frozen` counts as the expected rejection. RPC failures, stale
+trees, or invalid roots fail the test.
+
+Core swap submission has no AMM freezelist check: that check occurs when claiming.
+These tests verify SDK proof rejection, not consensus rejection of a submitted
+transaction or wallet-side proof generation. `VEIL_FROZEN_TESTS` is separate from
+`VEIL_INTEGRATION`, so the ordinary live suites do not require frozen accounts.
+
 ## Quote integration test
 
 `test/integration/quote.e2e.test.ts` verifies quotes, successful swap finalization,
@@ -1166,3 +1287,170 @@ tokens, raw input amounts and expected hop counts. See the test's header for the
 fixture format. Both route shapes are validated before any funds are spent.
 A deployment whose API always selects direct routes needs a separate multi-hop
 fixture topology; the test fails rather than silently skipping that coverage.
+
+## Record management
+
+The inventory wrappers pass each token's underlying program to core, which
+resolves its record and amount field. For more than two records, core prefers
+available batch helpers: dedicated credits and stablecoin helpers accept up to
+16 records; dynamic ARC helpers accept up to 15. Set
+`recordManagement.tokenJoin: false` for native pairwise joins, or supply
+`{ program, maxRecords? }` to override the dynamic ARC router.
+
+Reservations and recovery are off by default. Set
+`recordManagement: { enabled: true, store, chainId }` when creating the wallet
+client, then apply `shieldSwapActions` to prevent maintenance and trading from
+spending the same records. Adding `recordActions()` alone leaves these features
+disabled. `planInventory({ token, target })` and
+`rebalanceInventory({ token, target })` use the DEX token's underlying program
+with core's ARC-20/ARC-22/credits actions. Participating clients MUST share the
+same store and chain identity. The SDK has no database dependency.
+
+Follow the [record management guide](../../site/docs/guides/record-inventory.md)
+for configuration, shared storage, and recovery after an interruption.
+
+<a id="freezelist-proofs"></a>
+
+## Compliance
+
+Swaps and liquidity actions on Shield Swap use Merkle exclusion proofs to prove
+in zero knowledge that participating private addresses are not on a known
+freezelist.
+
+Callers construct these Merkle exclusion proofs locally, through the SDK or
+connected wallet, and supply them as private inputs to Aleo's zk-SNARKs. The
+Merkle checks run during transaction proving; the network verifies the resulting
+zero-knowledge proof. This establishes that participating addresses are absent
+from the freezelist without publicly revealing those addresses or the Merkle
+paths. These compliance checks preserve the privacy of the addresses making
+swaps or managing liquidity.
+
+Compliance proof generation is enabled by default in the Shield Swap SDK.
+With a local SDK client or a compatible wallet connected with the required
+algorithm grants, callers need no manual proof generation, provider, or cache.
+Omit `proofs` to use the default. Wallets need the algorithm support and
+connection grants described below, and opaque position records need the
+withdrawal address for automatic proofs.
+
+### Functions that require compliance proof inputs
+
+The following public SDK functions resolve Merkle exclusion proofs. Each bundle
+is an encoded `[MerkleProof; 2]`: two Merkle paths proving that one address is
+absent from one freezelist. Counts below are transaction input slots, including
+wrapper placeholders, rather than the number of distinct bundles to generate.
+
+| Function | Bundle slots | Subjects in transaction input order |
+| --- | --- | --- |
+| `swap()` | 0 to 1 | Input-token sender, only for a wrapped input |
+| `swapMultiHop()` | 0 to 1 | Input-token sender, only for a wrapped input |
+| `claimSwapOutput()` | 1 to 3 | Shield Swap signer, then wrapped output receiver and wrapped refund receiver if refunded |
+| `mint()` | 3 to 5 | Wrapped token senders, then Shield Swap signer, position recipient, and withdrawal address |
+| `increaseLiquidity()` | 0 to 2 | Wrapped token senders |
+| `collect()` | 2 to 4 | Shield Swap position owner and withdrawal address, then wrapped token receivers |
+| `rebalancePosition()` | 2 to 6 | Funded wrapped token senders, wrapped token receivers, then Shield Swap position owner and withdrawal address |
+
+Shield Swap proofs use the AMM freezelist; wrapped-token proofs use the
+underlying token's freezelist. Senders are the signer. Claim receivers are also
+the signer; collect and rebalance receivers are the PositionNFT's withdrawal
+address. These lists and subjects determine which bundles can be reused.
+
+Within each wrapper group, side 0 precedes side 1. Plain sides consume no wrapper
+proof slot. A credits wrapper has a placeholder slot but no exclusion check.
+Rebalance receiver slots remain present even when a side has no refund.
+Intermediate hops in `swapMultiHop()` add no caller-supplied proof slots.
+`decreaseLiquidity()` and `burn()` require no exclusion proofs; withdrawing
+proceeds through `collect()` does. Plain-input swaps and increases involving
+only plain tokens also require none.
+
+### Automatic generation
+
+Proofs are generated automatically when `proofs` is omitted or `null`. Local
+accounts use the generator supplied by `@provablehq/veil-aleo-sdk`, including
+when transaction proving is delegated. Wallet accounts emit
+`program-freezelist-exclusion-proof` requests; connect with
+`shieldSwapAlgorithmGrants()` to grant both blinding and freezelist slots.
+The wallet must implement the algorithm. Older wallets can use caller-supplied
+literal proofs or an existing provider.
+
+Automatic local resolution reads `freeze_list_root[1u8]` once per list per
+action. It downloads `/programs/:programID/compliance/freeze-list` when the
+current tree is missing, checks each witness against the chain root, and caches
+trees and proofs in memory per client, network, list, root and subject. Each
+later action checks the root again; unchanged roots reuse cached proofs, changed
+roots cause a fresh download. Concurrent subjects share the download. The known
+empty root uses a verified empty witness without downloading a tree. Frozen
+subjects, missing roots and stale indexer trees fail before execution; errors do
+not fall back to empty proofs. A root change during transaction proving may
+still require retrying the action. Caches disappear on restart and retain at most
+16 lists and 256 subjects per list.
+
+### Optional configuration
+
+Defaults recognize `shield_swap_freezelist.aleo`, credits (no compliance proof),
+and the mainnet/testnet USDCx underlying programs. Custom deployments supply a
+complete wrapper-to-list map on the client or action. Wrapper and freezelist
+program names are distinct:
+
+```ts
+const freezelists = {
+  ammFreezelistProgram: 'shield_swap_freezelist.aleo',
+  wrapperFreezelists: {
+    'custom_usdcx_wrapper.aleo': 'usdcx_freezelist.aleo',
+    'custom_credits_wrapper.aleo': null,
+  },
+}
+const client = walletClient.extend(shieldSwapActions({ freezelists }))
+// Wallet connection: algorithmsAllowed: shieldSwapAlgorithmGrants({ freezelists })
+```
+
+Each grant restricts its call site and allowed freezelists.
+`shieldSwapFreezelistGrants()` returns only freezelist grants for callers that
+compose their own grant set. Unknown wrapper mappings fail before submission.
+
+`proofs` also accepts existing `ProofProvider`/`ProofInputProvider` callbacks,
+raw Aleo strings, or `{ freezelistProgram, address, proof }[]` for lookup by subject.
+Multiple literal bundles use fixed-length tuples in transaction input order;
+the selected route's exact count
+is checked before execution. The same literal may fill several slots when the
+list and address match.
+
+```ts
+await client.swap({ ...swapParams, proofs: cachedSenderProof }) // one wrapped input
+await client.mint({ ...plainMintParams, proofs: [signerProof, recipientProof, withdrawalProof] })
+await client.collect({ ...collectParams, proofs: null }) // force automatic resolution
+```
+
+`shieldSwapActions({ proofs: provider })` sets a client default. Per-call
+literals or callbacks override it; `undefined` inherits it and `null` selects
+automatic resolution. Caller-supplied proofs bypass automatic freshness checks;
+the caller is responsible for their subjects, roots and validity. Local accounts
+reject wallet-derived requests returned by providers.
+
+Automatic proofs for `collect` and `rebalancePosition` need the actual withdrawal
+address. Granted plaintext supplies it; for an opaque wallet-selected PositionNFT,
+pass `withdrawalAddress`. The built-in wallet provider also requires it. If both
+plaintext and an explicit address are available, they must match. This parameter
+identifies a proof subject and cannot change the payout fixed in the NFT.
+
+Supplied proof tuples and custom providers do not require `withdrawalAddress`.
+Custom providers retain the legacy signer fallback in their context when the
+withdrawal address is unknown, and own responsibility for selecting the correct
+subject. A provider can declare `requiresSubject: true` to reject that fallback;
+the built-in wallet provider does so. Annotated proofs can identify a single
+withdrawal address distinct from the signer, or reuse the signer when no distinct
+address is supplied. Collections naming multiple possible withdrawal addresses
+must use an ABI-ordered tuple or a provider instead.
+
+```ts
+await client.collect({
+  poolKey,
+  positionRecord: { type: 'record', program: 'shield_swap.aleo', recordname: 'PositionNFT' },
+  withdrawalAddress: positionWithdrawalAddress,
+  amount0Requested: 100n,
+  amount1Requested: 100n,
+})
+```
+
+The CLI and agent/MCP write handlers use the SDK default generator. Existing
+providers remain compatible, including explicit legacy empty-witness providers
+for deployments that accept them. Omission now checks the actual current list.

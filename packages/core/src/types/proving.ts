@@ -37,13 +37,14 @@ export type ProvingProgressHandler = (event: ProvingProgressEvent) => void | Pro
  * source.
  *
  * When `privateFee` is true, the proving implementation resolves the fee
- * record via the wallet client's `recordProvider` — callers don't pick
- * the record themselves.
+ * record unless record management supplies a reserved `feeRecord`.
  *
  * @property {string} programName - Program id, e.g. `token.aleo`.
  * @property {string} functionName - Function/transition name to invoke within the program.
  * @property {string[]} inputs - Function inputs as Aleo-encoded strings (e.g. `'100u64'`, `'aleo1...'`).
- * @property {boolean} [privateFee] - If true, pay the fee from a private record instead of the public credits balance. Defaults to `false`. The fee record is resolved via the record provider; callers do not supply one.
+ * @property {boolean} [privateFee] - If true, pay the fee from a private record instead of the public credits balance. Defaults to `false`. Uses feeRecord when supplied; otherwise the adapter selects the record.
+ * @property feeRecord Optional credits record plaintext pinned by record management. Absent by default;
+ *   adapters MUST use this exact record when supplied with privateFee.
  * @property {string[]} [imports] - Names of programs reached via dynamic dispatch that the prover can't discover statically.
  * @property onProgress Optional awaited callback for proving lifecycle boundaries. Defaults to no reporting.
  */
@@ -52,6 +53,7 @@ export type BuildTransactionOptions = {
   functionName: string
   inputs: string[]
   privateFee?: boolean | undefined
+  feeRecord?: string | undefined
   imports?: string[] | undefined
   onProgress?: ProvingProgressHandler | undefined
 }
@@ -80,16 +82,23 @@ export type SimulateOptions = {
  * @property inputs Function inputs as Aleo-encoded strings (e.g. '100u64').
  * @property privateFee If true, pay the fee from a private record instead of
  *   the public credits balance. Defaults to false.
+ * @property feeRecord Optional credits record plaintext pinned by record management. Absent by default;
+ *   adapters MUST use this exact record when supplied with privateFee.
  * @property programSource Program source, when the caller already has it; fetched otherwise.
  * @property programImports Import program name → source, for imports the prover cannot fetch.
+ * @property onProgress Optional awaited checkpoint callback, absent by default. Implementations MUST
+ *   emit transaction-prepared with the full proved transaction before broadcasting when supplied.
  */
 export type ExecuteOptions = {
+  onProgress?: ProvingProgressHandler
+
   programName: string
   functionName: string
   inputs: string[]
   /** Priority fee in microcredits (1 credit = 1_000_000 microcredits) */
   fee: bigint
   privateFee?: boolean | undefined
+  feeRecord?: string | undefined
   programSource?: string | undefined
   programImports?: Record<string, string> | undefined
 }
@@ -138,6 +147,20 @@ export type BuildDeploymentOptions = {
 }
 
 /**
+ * Identifies an execution for a base-fee estimate without proving or submitting.
+ * @property programName Deployed program identifier.
+ * @property functionName Function to estimate, including its nested calls.
+ * @property programSource Optional program source; omission fetches it from the configured node.
+ * @property imports Optional dynamic program names or program-to-source map; omission resolves static imports only.
+ */
+export type EstimateExecutionFeeOptions = {
+  programName: string
+  functionName: string
+  programSource?: string
+  imports?: string[] | Record<string, string>
+}
+
+/**
  * SDK-backed adapter for wallet-side operations that need network binaries.
  *
  * Hosts proving (`buildTransaction`/`buildDeployment`), execution
@@ -148,12 +171,18 @@ export type BuildDeploymentOptions = {
  * @property {string} [url] - Prover service URL. Required for `mode: 'delegated'`, ignored otherwise.
  * @property {string} [apiKey] - API key for the prover service, if it requires one.
  * @property {boolean} [useFeeMaster] - If true, requests that the delegated prover pay transaction fees from its FeeMaster account. Defaults to `false`; enable only when the prover service has granted that capability.
+ * @property estimateExecutionFee Optional base-fee estimate in microcredits, excluding priority fees.
+ *   Required for managed private fees; may read programs, but MUST NOT prove or submit.
+ * @property generateFreezelistProof Generates and validates an exclusion witness
+ *   without signing or network access. Optional; SDK-backed configs supply it.
  */
 export type ProvingConfig = {
   mode: 'delegated' | 'local' | 'devnode'
   url?: string | undefined
   apiKey?: string | undefined
   useFeeMaster?: boolean | undefined
+  estimateExecutionFee?: (options: EstimateExecutionFeeOptions) => Promise<bigint>
+  generateFreezelistProof?: (options: GenerateFreezelistProofParameters) => Promise<string>
   buildTransaction?: (options: BuildTransactionOptions) => Promise<Transaction>
   buildDeployment?: (options: BuildDeploymentOptions) => Promise<Transaction>
   decrypt?: (
@@ -168,4 +197,16 @@ export type ProvingConfig = {
   simulate?: (options: SimulateOptions) => Promise<RawSimulateResult>
   /** Build, broadcast, wait for confirmation, and return raw output strings */
   execute?: (options: ExecuteOptions) => Promise<RawExecuteResult>
+}
+
+/**
+ * Supplies the data needed to generate a freezelist exclusion witness.
+ * @property address Address whose exclusion is proved.
+ * @property tree Published decimal tree nodes; an empty array selects the canonical empty tree.
+ * @property root Expected on-chain root as an Aleo field literal.
+ */
+export type GenerateFreezelistProofParameters = {
+  address: string
+  tree: readonly string[]
+  root: string
 }

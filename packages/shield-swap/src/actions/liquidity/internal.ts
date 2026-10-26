@@ -8,15 +8,11 @@
 // table, record-program defaulting, and proof assembly so the three actions
 // stay positional-input-exact without repeating the table.
 
-import type { Client, TransactionInput } from '@provablehq/veil-core'
+import { parseRecord, type Client, type TransactionInput, type FreezelistProofInput } from '@provablehq/veil-core'
+import type { ComplianceProofs } from '../../utils/proofs.js'
 import { resolveTokenRoute, tokenIdToProgram, type TokenRoute } from '../../utils/routing.js'
-import {
-  formatMerkleProofPair,
-  resolveProofPair,
-  type ProofProvider,
-} from '../../utils/proofs.js'
 import { selectTokenRecord } from '../../utils/records.js'
-import { ROUTER_ADDRESSES, SHIELD_SWAP_FREEZELIST, SHIELD_SWAP_LP_ROUTER } from '../../constants.js'
+import { ROUTER_ADDRESSES, SHIELD_SWAP_LP_ROUTER } from '../../constants.js'
 
 /** The Aleo zero address — the burn sink no payout slot may name. */
 const ZERO_ADDRESS = 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc'
@@ -127,45 +123,6 @@ export async function autoSelectSideRecord(
 }
 
 /**
- * Resolves and formats a wrapped side's freezelist sender proof.
- *
- * Returns the `[MerkleProof; 2]` literal that must immediately follow the
- * side's underlying record in a router call, or `undefined` for a plain
- * side (no proof slot exists). Pure unless a provider is configured.
- *
- * @param provider The configured proof provider, or undefined while
- *   freezelists are empty.
- * @param route The side's resolved route.
- * @param subject The address whose non-inclusion is proved (the sender).
- */
-export async function wrapperSenderProof(
-  provider: ProofProvider | undefined,
-  route: TokenRoute,
-  subject: string,
-): Promise<string | undefined> {
-  if (!route.wrapped) return undefined
-  const pair = await resolveProofPair(provider, { list: 'wrapper', program: route.wrapperProgram, subject })
-  return formatMerkleProofPair(pair)
-}
-
-/**
- * Resolves and formats one AMM-freezelist proof pair for a subject.
- *
- * Applies to `mint`'s signer/recipient/withdrawal proofs and `collect`'s
- * owner/withdrawal proofs, all proved against the AMM's own freezelist.
- * Pure unless a provider is configured.
- *
- * @param provider The configured proof provider, or undefined while
- *   freezelists are empty.
- * @param subject The address whose non-inclusion is proved.
- * @returns The `[MerkleProof; 2]` literal.
- */
-export async function ammProofPair(provider: ProofProvider | undefined, subject: string): Promise<string> {
-  const pair = await resolveProofPair(provider, { list: 'amm', program: SHIELD_SWAP_FREEZELIST, subject })
-  return formatMerkleProofPair(pair)
-}
-
-/**
  * A resolved liquidity dispatch: which program and transition to call and the
  * record slots (with wrapper sender proofs interleaved).
  *
@@ -205,8 +162,8 @@ export function dispatchLiquidityCall(params: {
   route1: TokenRoute
   record0: TransactionInput
   record1: TransactionInput
-  senderProof0?: string
-  senderProof1?: string
+  senderProof0?: FreezelistProofInput
+  senderProof1?: FreezelistProofInput
 }): LiquidityDispatch {
   const { route0, route1, record0, record1, senderProof0, senderProof1 } = params
   if (route0.wrapped && !senderProof0) throw new Error('Missing sender proof for wrapped token0')
@@ -238,4 +195,63 @@ export function dispatchLiquidityCall(params: {
     functionName: `${params.routerPrefix}_wrapped_wrapped`,
     recordInputs: [record0, senderProof0!, record1, senderProof1!],
   }
+}
+
+/**
+ * Resolves the position's withdrawal subject before requesting real proofs.
+ *
+ * Reads granted plaintext locally and verifies any explicit address against it.
+ * Automatic generation and providers declaring requiresSubject need a known
+ * address. Supplied proofs and other providers own their subject selection.
+ *
+ * @property positionInput Plaintext or wallet-selected position record.
+ * @property withdrawalAddress Optional explicit proof subject; defaults to the
+ *   plaintext withdrawal field.
+ * @property proofs Optional supplied proofs or provider; omission enables automatic generation.
+ * @property signerAddress Legacy provider fallback when the withdrawal subject is unknown.
+ * @param params The record, explicit address, proof source, and signer fallback.
+ * @returns The known or annotated withdrawal subject, or the legacy signer fallback for caller-owned proofs.
+ * @throws When addresses conflict, supplied annotations are ambiguous, or proof construction needs an unavailable subject.
+ *
+ * @example
+ * const subject = resolveWithdrawalSubject({
+ *   positionInput: '{ ... }', withdrawalAddress: 'aleo1...', signerAddress: 'aleo1...',
+ * })
+ */
+export function resolveWithdrawalSubject(params: {
+  positionInput: TransactionInput
+  withdrawalAddress?: string | undefined
+  proofs?: ComplianceProofs<readonly string[]> | undefined
+  signerAddress: string
+}): string {
+  let fromRecord: string | undefined
+  if (typeof params.positionInput === 'string') {
+    try {
+      const value = parseRecord(params.positionInput).fields.withdrawal?.value
+      if (typeof value === 'string' && value.startsWith('aleo1')) fromRecord = value
+    } catch {
+      // A record ciphertext or opaque literal cannot reveal the withdrawal subject.
+    }
+  }
+  if (fromRecord && params.withdrawalAddress !== undefined && params.withdrawalAddress !== fromRecord) {
+    throw new Error('withdrawalAddress must match the position record withdrawal address')
+  }
+  const subject = fromRecord ?? params.withdrawalAddress
+  if (subject) return subject
+  const { proofs, signerAddress } = params
+  if (proofs == null || (typeof proofs === 'function' && proofs.requiresSubject)) {
+    throw new Error('withdrawalAddress must be provided to construct compliance proofs when the position record is opaque')
+  }
+  // Annotated proofs name the payout subject themselves; literals need no lookup.
+  if (Array.isArray(proofs)) {
+    const addresses = new Set(proofs.flatMap(proof =>
+      typeof proof === 'string' || proof.address === signerAddress ? [] : [proof.address],
+    ))
+    if (addresses.size > 1) {
+      throw new Error('Supplied compliance proofs name multiple withdrawal addresses; supply an ABI-ordered proof tuple or a provider')
+    }
+    if (addresses.size === 1) return addresses.values().next().value!
+  }
+  // Preserve the context passed to custom providers before automatic generation.
+  return signerAddress
 }

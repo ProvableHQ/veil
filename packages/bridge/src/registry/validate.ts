@@ -117,6 +117,11 @@ export function validateBridgeRegistry(registry: BridgeRegistry): BridgeRegistry
       if (asset.privacy.kind !== 'arc20' && asset.privacy.kind !== 'arc22') {
         throw new BridgeError(`Bridge asset ${asset.id} has an unsupported privacy capability kind`)
       }
+      if (asset.privacy.freezelistProgram !== undefined && (asset.privacy.kind !== 'arc22'
+        || typeof asset.privacy.freezelistProgram !== 'string'
+        || !/^[a-zA-Z][a-zA-Z0-9_]*\.aleo$/.test(asset.privacy.freezelistProgram))) {
+        throw new BridgeError(`Bridge asset ${asset.id} has invalid ARC-22 freezelist program metadata`)
+      }
     }
     assetIds.add(asset.id)
     assetKeys.add(scopedKey)

@@ -18,16 +18,14 @@ import { isPairPaused } from '../../src/actions/reads/isPairPaused.js'
 import { getFrozenPosition } from '../../src/actions/reads/getFrozenPosition.js'
 import { getTradeControls } from '../../src/actions/reads/getTradeControls.js'
 import { getSqrtPriceAtTickX128, MAX_TICK_SENTINEL } from '../../src/utils/q128.js'
-import { ApiClient, authenticateWithAccount, SHIELD_SWAP_API_URLS } from '../../src/api/client.js'
+import { ApiClient, SHIELD_SWAP_API_URLS } from '../../src/api/client.js'
 import { PROGRAM_ID } from '../../src/generated/shield_swap.js'
 
 // Real-API integration: hits the live testnet node and the migrated DEX API.
 // Never mocked — these tests exist to catch drift between this client and the
 // deployed contract/API. Gated so the default offline suite stays fast.
-// The fee-tier registry endpoint is bearer-gated, so that one test
-// additionally needs VEIL_E2E_PRIVATE_KEY to sign the API challenge.
+// The fee-tier registry is public, so all reads run without a signing account.
 const RUN = process.env.VEIL_INTEGRATION === '1'
-const PRIVATE_KEY = process.env.VEIL_E2E_PRIVATE_KEY
 
 const API_BASE = 'https://edge.provable.com/api/v2'
 const NODE_URL = `${API_BASE}/testnet`
@@ -90,11 +88,8 @@ describe.runIf(RUN)('reads against the real API', () => {
     expect(await getSwapOutput(client, { swapId: absent })).toBeNull()
   }, 30_000)
 
-  it.runIf(!!PRIVATE_KEY)('validation reads agree with the API fee-tier registry', async () => {
-    const { loadNetwork } = await import('@provablehq/veil-aleo-sdk')
+  it('validation reads agree with the public API fee-tier registry', async () => {
     const api = new ApiClient({ baseUrl: INDEXER_URL })
-    const aleo = await loadNetwork('testnet')
-    await authenticateWithAccount(api, aleo.privateKeyToAccount(PRIVATE_KEY!))
     const tiers = await api.getFeeTiers()
     expect(tiers.data.length).toBeGreaterThan(0)
     const fee = tiers.data[0]!.fee_tier
