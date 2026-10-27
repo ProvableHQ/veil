@@ -104,6 +104,12 @@ export function fileXReservePrivateMintIdentityStore(
           // owner file write. Treat that short window as an active lock.
           if (code !== 'ENOENT') throw new Error(`Private mint identity lock ${lockPath} failed.`, { cause })
         }
+        // A regular file at the lock path can never become a lock directory.
+        // Name the cause instead of spinning until the deadline.
+        const occupant = await stat(lockPath).catch(() => undefined)
+        if (occupant !== undefined && !occupant.isDirectory()) {
+          throw new Error(`Private mint identity lock ${lockPath} is occupied by a file that is not a lock directory. Remove it before reserving identities.`)
+        }
         if (await lockIsAbandoned(lockPath)) {
           const abandoned = `${lockPath}.abandoned.${randomUUID()}`
           try {

@@ -286,6 +286,49 @@ describe('Ethereum xReserve actions', () => {
       .toBe(`0x02${identities[0]!.addressCommitment}${'00'.repeat(32)}`)
   })
 
+  it('executes the identity reserved by its quote without a forwarded commitment', async () => {
+    const { executor, sent } = mockExecutor()
+    const privateMintIdentities = memoryXReservePrivateMintIdentityStore()
+    const bridge = createBridgeClient({
+      environment: 'testnet',
+      privateMintIdentities,
+      clients: {
+        sepolia: executor,
+        'aleo-testnet': createAleoClient({
+          publicClient: {} as never,
+          account: {
+            executeTransaction: async () => 'at1unused',
+            account: { type: 'local', address: RECIPIENT, viewKey: 'AViewKey1sqm952gJj1tmAWySYDQvSv2NmfnyEMvU6a9ZBCuyG7PN' },
+          } as never,
+        }),
+      },
+    })
+    const quote = await bridge.quote({
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+      amount: '2', recipient: RECIPIENT, sender: ACCOUNT, mintMode: 'private',
+    })
+    if (quote.kind !== 'evm-xreserve') throw new Error(`Expected evm-xreserve, received ${quote.kind}`)
+    expect(quote.plan.privateMintAddressCommitment).toBe(quote.privateMintAddressCommitment)
+
+    const execution = await bridge.execute({ plan: quote.plan })
+
+    expect(await privateMintIdentities.load()).toHaveLength(1)
+    expect(execution.receipt.protocolState).toMatchObject({
+      hookData: quote.hookData,
+      privateMintAddressCommitment: quote.privateMintAddressCommitment,
+    })
+    expect(decodeFunctionData({ abi: ABI, data: sent[1]!.data })).toMatchObject({
+      functionName: 'depositToRemote',
+      args: [2_000_000n, 10_002, quote.remoteRecipientBytes32, TOKEN, 100_000n, quote.hookData],
+    })
+    await expect(bridge.execute({ plan: quote.plan, privateMintAddressCommitment: '33'.repeat(32) }))
+      .rejects.toThrow(/does not match the quoted plan/)
+    await expect(bridge.execute({ plan: quote.plan, privateMintSecretNonce: '7scalar' }))
+      .rejects.toThrow(/reserved a local private mint identity/)
+    expect(await privateMintIdentities.load()).toHaveLength(1)
+  })
+
   it('shares one memory identity store for legacy bridgeActions callers', async () => {
     const { executor } = mockExecutor()
     const bridge = bridgeActions({

@@ -289,11 +289,13 @@ export type PrepareParameters = {
  * @property sender Optional source-chain sender.
  * @property mintMode Aleo destination transition selected by the caller.
  * @property privateRecipient Whether the destination requests private Aleo delivery.
+ * @property privateMintAddressCommitment Public 32-byte commitment reserved while quoting a locally derived private xReserve mint. Execution deposits against this identity instead of reserving another. Absent from recovered plans.
  * @property fees Known fee categories; amounts remain absent until protocol quoting is implemented.
  * @property steps Ordered operations required to complete the transfer.
  */
 export type BridgePlan = {
   cctp?: CctpOptions | undefined
+  privateMintAddressCommitment?: string | undefined
   registryVersion: string
   protocol: BridgeProtocol
   route: ProtocolBridgeRoute

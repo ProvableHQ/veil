@@ -425,7 +425,13 @@ const quote = await bridge.quote({
 ```
 
 The store records the counter, derived scalar, recipient, and public commitment
-before the quote returns. The default in-memory store serializes concurrent
+before the quote returns. `quote.plan` carries that commitment, so passing the
+plan to `execute` deposits against the quoted identity without reserving a
+second one. Execution rejects a different `privateMintAddressCommitment`, a
+`walletPreparedDeposit`, or a `privateMintSecretNonce` combined with such a plan;
+quote again with the intended nonce source instead. Every quote reserves a new
+counter, so quote once per intended deposit rather than on every price refresh.
+The default in-memory store serializes concurrent
 deposits but does not survive a restart. Treat a durable store like a view key:
 its scalars can link and authorize the corresponding private mints. The supplied
 Node file store uses atomic `0600` replacements and locks reservations across
@@ -519,9 +525,6 @@ receipt and every transaction identifier already submitted.
 ```ts
 const execution = await bridge.execute({
   plan: quote.plan,
-  privateMintAddressCommitment: quote.kind === 'evm-xreserve'
-    ? quote.privateMintAddressCommitment
-    : undefined,
   onCheckpoint(checkpoint) {
     saveCheckpoint(checkpoint)
   },

@@ -72,6 +72,20 @@ describe('Node private-mint identity store', () => {
     expect((await stat(`${path}.counter`)).mode & 0o777).toBe(0o600)
   })
 
+  it('fails immediately when a regular file occupies the lock path', async () => {
+    const path = await temporaryStorePath()
+    await writeFile(`${path}.lock`, '')
+    const store = fileXReservePrivateMintIdentityStore(path)
+
+    await expect(reserveXReservePrivateMintIdentity({
+      store,
+      viewKeyScalar: await xReserveViewKeyToScalar(VIEW_KEY, 'testnet'),
+      recipient: RECIPIENT,
+      environment: 'testnet',
+    })).rejects.toThrow(/is not a lock directory/)
+    expect((await stat(`${path}.lock`)).isFile()).toBe(true)
+  })
+
   it('retains consumed counters across restarts after derivation and persistence failures', async () => {
     const path = await temporaryStorePath()
     const viewKeyScalar = await xReserveViewKeyToScalar(VIEW_KEY, 'testnet')

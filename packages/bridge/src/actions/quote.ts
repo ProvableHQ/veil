@@ -54,15 +54,20 @@ export async function quote(
 ): Promise<BridgeQuote> {
   // Build the canonical plan before reading live prices. The returned plan is
   // the exact value the caller passes to execution and stores in progress.
-  const plan = prepare(registry, params)
-  if (plan.protocol === 'cctp') return cctp.quote(registry, clients, fetcher, { plan })
+  const prepared = prepare(registry, params)
+  if (prepared.protocol === 'cctp') return cctp.quote(registry, clients, fetcher, { plan: prepared })
   // Wallet preparations already reserve their nonce inside the wallet.
   const privateMintAddressCommitment = params.walletPreparedDeposit === undefined
     ? await resolvePrivateMintAddressCommitment(
-        registry, clients, privateMintIdentities, plan,
+        registry, clients, privateMintIdentities, prepared,
         params.privateMintAddressCommitment, params.privateMintSecretNonce,
       )
     : params.privateMintAddressCommitment
+  // A reserved identity travels with the plan so execution deposits against
+  // the quoted commitment instead of reserving a second one.
+  const plan = privateMintAddressCommitment === undefined
+    ? prepared
+    : { ...prepared, privateMintAddressCommitment }
   const protocolParams = {
     plan,
     walletPreparedDeposit: params.walletPreparedDeposit,
