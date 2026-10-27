@@ -104,6 +104,12 @@ export function fileXReservePrivateMintIdentityStore(
           // owner file write. Treat that short window as an active lock.
           if (code !== 'ENOENT') throw new Error(`Private mint identity lock ${lockPath} failed.`, { cause })
         }
+        // A regular file at the lock path can never become a lock directory.
+        // Name the cause instead of spinning until the deadline.
+        const occupant = await stat(lockPath).catch(() => undefined)
+        if (occupant !== undefined && !occupant.isDirectory()) {
+          throw new Error(`Private mint identity lock ${lockPath} is occupied by a file that is not a lock directory. Remove it before reserving identities.`)
+        }
         if (await lockIsAbandoned(lockPath)) {
           const abandoned = `${lockPath}.abandoned.${randomUUID()}`
           try {
@@ -143,13 +149,30 @@ async function atomicWrite(path: string, serialized: string): Promise<void> {
     handle = undefined
     await rename(temporary, path)
     // Persist the rename before returning a consumed counter to the caller.
-    handle = await open(directory, 'r')
-    await handle.sync()
-    await handle.close()
-    handle = undefined
+    await syncDirectory(directory)
   } finally {
     await handle?.close().catch(() => {})
     await rm(temporary, { force: true })
+  }
+}
+
+/**
+ * Flushes a directory entry so a completed rename survives a crash.
+ *
+ * Windows cannot fsync a directory handle and some filesystems reject it;
+ * those platforms provide no stronger guarantee, so the failure is ignored
+ * rather than making the store unusable.
+ */
+async function syncDirectory(directory: string): Promise<void> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined
+  try {
+    handle = await open(directory, 'r')
+    await handle.sync()
+  } catch (cause) {
+    const code = (cause as { code?: string } | undefined)?.code
+    if (code !== 'EPERM' && code !== 'EISDIR' && code !== 'EINVAL' && code !== 'ENOTSUP') throw cause
+  } finally {
+    await handle?.close().catch(() => {})
   }
 }
 

@@ -194,13 +194,25 @@ export async function execute(
     }
   }
   if (params.plan.protocol === 'xreserve' && chain.family === 'evm') {
+    // A quoted plan carries the identity reserved while quoting. Reject any
+    // conflicting nonce source so the deposit never diverges from the quote.
+    const quotedCommitment = params.plan.privateMintAddressCommitment
+    if (quotedCommitment !== undefined && params.privateMintAddressCommitment !== undefined
+      && params.privateMintAddressCommitment !== quotedCommitment) {
+      throw new BridgeError('Private mint address commitment does not match the quoted plan')
+    }
+    if (quotedCommitment !== undefined
+      && (params.walletPreparedDeposit !== undefined || params.privateMintSecretNonce !== undefined)) {
+      throw new BridgeError('The quoted plan reserved a local private mint identity. Quote again with the wallet preparation or legacy secret nonce.')
+    }
+    const suppliedCommitment = params.privateMintAddressCommitment ?? quotedCommitment
     // Preserve the wallet's saved identity without allocating a local nonce.
     const privateMintAddressCommitment = params.walletPreparedDeposit === undefined
       ? await resolvePrivateMintAddressCommitment(
           registry, clients, privateMintIdentities, params.plan,
-          params.privateMintAddressCommitment, params.privateMintSecretNonce,
+          suppliedCommitment, params.privateMintSecretNonce,
         )
-      : params.privateMintAddressCommitment
+      : suppliedCommitment
     const execution = await evmToAleoXReserve.execute(
       registry,
       requireEvmClientWithWallet(registry, clients, chainId, 'execute xReserve transfer'),

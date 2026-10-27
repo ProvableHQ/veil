@@ -96,7 +96,7 @@ export type BridgeQuote = ({ plan: BridgePlan }) & (
  * @property merkleProof Optional single compliance bundle, annotated proofs, provider, or signer-only wallet request for a private Aleo xReserve burn. Null or omission enables local generation or wallet derivation; wallets require a matching grant.
  * @property privateFee Whether an Aleo wallet pays its execution fee privately. Defaults to false.
  * @property gasPaymentMicrocredits Optional exact Aleo Hyperlane hook payment override. Defaults to a fresh live quote.
- * @property privateMintAddressCommitment Public 32-byte recipient commitment reserved by the bridge identity store. Safe to checkpoint.
+ * @property privateMintAddressCommitment Public 32-byte recipient commitment reserved by the bridge identity store. Defaults to the commitment carried by a quoted plan and must match it when both are present. Safe to checkpoint.
  * @property privateMintSecretNonce Legacy secret Aleo scalar committed by a private xReserve deposit. Defaults to `0scalar` and is never persisted in a checkpoint.
  * @property walletPreparedDeposit Optional durably saved public wallet preparation. Replaces local commitment derivation; do not combine with a commitment or scalar nonce.
  * @property privateMintNonceInput Optional wallet-derived nonce request bound to the preparation. Omit until completion when depositing.

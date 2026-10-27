@@ -7,8 +7,14 @@ SDK now reserves persistent counters, derives the scalar and BHP256 address
 commitment locally, checkpoints only the public commitment, and retrieves the
 scalar from its identity store when submitting `private_mint`.
 
+A quoted plan carries its reserved commitment, so `execute({ plan: quote.plan })`
+deposits against the quoted identity instead of reserving a second one, and
+rejects a conflicting commitment, wallet preparation, or legacy nonce.
+
 The Node identity store atomically replaces files with `0600` permissions and
-locks reservations across processes sharing the same path.
+locks reservations across processes sharing the same path. A regular file left
+at the lock path fails the reservation immediately with its cause instead of
+waiting out the lock deadline.
 
 Align new nonce derivations with shield-core cc29a60's mainnet/testnet domain
 separation, release temporary WASM handles, and persist allocation watermarks
