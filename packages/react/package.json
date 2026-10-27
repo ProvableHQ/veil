@@ -38,13 +38,13 @@
   "dependencies": {
     "@provablehq/veil-core": "workspace:*",
     "@provablehq/veil-aleo-wallet-adapter": "workspace:*",
-    "@provablehq/aleo-wallet-adapter-react": "1.3.0",
-    "@provablehq/aleo-wallet-adapter-shield": "1.2.1",
-    "@provablehq/aleo-wallet-adapter-leo": "1.1.1",
-    "@provablehq/aleo-wallet-adapter-puzzle": "1.1.1",
-    "@provablehq/aleo-wallet-adapter-fox": "1.1.1",
-    "@provablehq/aleo-types": "1.0.1",
-    "@provablehq/aleo-wallet-standard": "1.3.0"
+    "@provablehq/aleo-wallet-adapter-react": "1.4.0",
+    "@provablehq/aleo-wallet-adapter-shield": "1.4.0",
+    "@provablehq/aleo-wallet-adapter-leo": "1.1.3",
+    "@provablehq/aleo-wallet-adapter-puzzle": "1.1.3",
+    "@provablehq/aleo-wallet-adapter-fox": "1.1.3",
+    "@provablehq/aleo-types": "1.2.0",
+    "@provablehq/aleo-wallet-standard": "1.5.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

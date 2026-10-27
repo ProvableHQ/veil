@@ -1550,17 +1550,17 @@ function buildSdk(initialNetwork: SupportedNetwork, initialSdk: SdkModule): Aleo
 
 // Consensus version activation heights the WASM layer assumes when building
 // devnode transactions. MUST mirror the CONSENSUS_VERSION_HEIGHTS default that
-// @provablehq/veil-aleo-devnode passes to the aleo-devnode process, so the transaction builder
-// and the node agree on which consensus version is active at each height. The
-// entry count must also equal the WASM SDK's consensus-version count exactly —
-// a shorter list panics with an opaque `unreachable` inside the WASM. SDK
-// 0.12.0 and aleo-devnode 0.3.0 (both on snarkVM 4.11.0) carry 22 consensus
-// versions. V1–V21 all activate at genesis so the node runs the latest live
-// consensus version (V21, Varuna V3) from the first block: the SDK builds every
-// deployment and execution against the latest Varuna version, and a node still
-// on an earlier version rejects them. V22 is a placeholder pinned to u32::MAX,
-// as on mainnet and testnet.
-const DEVNODE_CONSENSUS_HEIGHTS = '0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4294967295'
+// @provablehq/veil-aleo-devnode passes to the aleo-devnode process, so the
+// transaction builder and the node agree on which consensus version is active
+// at each height. The values equal snarkVM 4.12's built-in
+// TEST_CONSENSUS_VERSION_HEIGHTS (@provablehq/sdk 0.13.0, aleo-devnode 0.4.0):
+// 22 entries, V1 at genesis and V2–V22 one block apart from height 5.
+// aleo-devnode auto-advances to height 25 at startup, so a ready node runs the
+// latest consensus version (V22) before the first caller transaction. snarkVM
+// 4.12 validates the list — exactly one entry per consensus version, first
+// height 0, scheduled heights strictly increasing, only a u32::MAX tail may
+// repeat — and a bad list panics inside the WASM with an opaque `unreachable`.
+const DEVNODE_CONSENSUS_HEIGHTS = '0,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25'
 
 function privateKeyToAccount(privateKey: string): LocalAccount<'privateKey'> {
   const sdkAccount = new Account({ privateKey })

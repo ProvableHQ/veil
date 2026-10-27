@@ -251,6 +251,19 @@ function runDevnode(devnodePath: string, args: string[]): Promise<void> {
   })
 }
 
+// Consensus version activation heights passed to the aleo-devnode process when
+// the caller has not set CONSENSUS_VERSION_HEIGHTS. MUST mirror
+// DEVNODE_CONSENSUS_HEIGHTS in @provablehq/veil-aleo-sdk, which initialises the
+// WASM transaction builder with the same list, so both sides agree on which
+// consensus version is active at each height. The values equal snarkVM 4.12's
+// built-in TEST_CONSENSUS_VERSION_HEIGHTS: 22 entries, V1 at genesis and
+// V2–V22 one block apart from height 5. aleo-devnode auto-advances to the last
+// built-in height (25) at startup, so by the time the node is ready it runs
+// the latest consensus version (V22). snarkVM 4.12 validates the list — first
+// height 0, scheduled heights strictly increasing, only a u32::MAX tail may
+// repeat — and both the node and the WASM panic on a list that breaks it.
+const DEFAULT_CONSENSUS_VERSION_HEIGHTS = '0,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25'
+
 async function spawnDevnode(
   devnodePath: string,
   args: string[],
@@ -262,7 +275,7 @@ async function spawnDevnode(
     stdio: 'pipe',
     // MUST mirror DEVNODE_CONSENSUS_HEIGHTS in @provablehq/veil-aleo-sdk so the
     // transaction builder and the node agree on active consensus versions.
-    env: { ...process.env, CONSENSUS_VERSION_HEIGHTS: process.env.CONSENSUS_VERSION_HEIGHTS || '0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4294967295' },
+    env: { ...process.env, CONSENSUS_VERSION_HEIGHTS: process.env.CONSENSUS_VERSION_HEIGHTS || DEFAULT_CONSENSUS_VERSION_HEIGHTS },
   })
 
   if (verbose) {

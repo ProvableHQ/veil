@@ -55,12 +55,19 @@ VEIL_INTEGRATION=1 pnpm vitest run --retry=2 \
 2. Bump the range, `pnpm install`, then run `pnpm vitest run` (unit) and the
    devnode verification command.
 3. Known breakage patterns:
-   - **Consensus version count.** `DEVNODE_CONSENSUS_HEIGHTS` in
+   - **Consensus heights list.** `DEVNODE_CONSENSUS_HEIGHTS` in
      `packages/provable-sdk/src/index.ts` MUST have exactly as many entries as
-     the new SDK's consensus-version count AND mirror the
-     `CONSENSUS_VERSION_HEIGHTS` default in `packages/devnode/src/index.ts`.
-     A short list panics with an opaque wasm `unreachable` inside
-     `getOrInitConsensusVersionTestHeights`. Update both files together.
+     the new SDK's consensus-version count AND mirror
+     `DEFAULT_CONSENSUS_VERSION_HEIGHTS` in `packages/devnode/src/index.ts`.
+     Since snarkVM 4.12 the list is also validated: first height 0, scheduled
+     heights strictly increasing, and only a `u32::MAX` tail may repeat. Keep
+     both equal to snarkVM's `TEST_CONSENSUS_VERSION_HEIGHTS` for the new
+     version (`console/network/src/consensus_heights.rs` in the snarkVM tag
+     the SDK release notes name) — that is the list aleo-devnode auto-advances
+     through at startup. A short, repeated, or non-increasing list panics with
+     an opaque wasm `unreachable` inside `getOrInitConsensusVersionTestHeights`
+     (unit tests in `packages/provable-sdk/test/provable.test.ts` catch it).
+     Update both files together.
    - Renamed/removed SDK exports surface as type errors in
      `packages/provable-sdk/src/index.ts` — fix the imports, then re-run.
 4. Finish with the live-API verification command (the SDK builds transactions
