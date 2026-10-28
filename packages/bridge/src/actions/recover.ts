@@ -12,6 +12,7 @@ import { getStatus } from './getStatus.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { prepare } from './prepare.js'
 import { toBridgeProgress } from './internal/toBridgeProgress.js'
+import { resolveCircleOptions } from './internal/circleOptions.js'
 
 /**
  * Reconstructs an interrupted cross-chain transfer from a saved checkpoint.
@@ -50,11 +51,14 @@ export async function recover(
     || !isRegistryVersionCompatible(registry, checkpoint.route.registryVersion, checkpoint.route.id)) {
     throw new BridgeError('Bridge checkpoint does not match the prepared route')
   }
+  const { approvalReplacement } = resolveCircleOptions(params, { approvalReplacement: params.cctp?.approvalReplacement })
   if (plan.protocol === 'cctp') {
-    const receipt = await cctp.recover(registry, clients, client, { checkpoint, plan, signal: params.signal, cctp: params.cctp })
+    const receipt = await cctp.recover(registry, clients, client, {
+      checkpoint, plan, signal: params.signal, cctp: approvalReplacement ? { approvalReplacement } : undefined,
+    })
     return toBridgeProgress(plan, receipt)
   }
-  if (params.cctp) throw new BridgeError('CCTP recovery options require a CCTP route')
+  if (approvalReplacement) throw new BridgeError('CCTP recovery options require a CCTP route')
   let receipt: BridgeReceipt
   if (route.sourceChain.family === 'aleo') {
     // Aleo can checkpoint after proving but before broadcast. This state needs

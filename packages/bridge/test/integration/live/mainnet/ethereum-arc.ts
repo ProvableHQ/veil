@@ -74,7 +74,7 @@ export async function fundArcFromEthereum(): Promise<boolean> {
   if (progress.next === 'wait' && progress.receipt.status === 'DELIVERY_PENDING'
     && process.env.BRIDGE_LIVE_CCTP_MANUAL_MINT === '1') {
     if (!mainnetExecutionEnabled()) return false
-    const minted = await bridge.complete({ progress, cctp: { manualMint: true }, onCheckpoint: persist })
+    const minted = await bridge.complete({ progress, circle: { manualMint: true }, onCheckpoint: persist })
     progress = { next: 'wait', plan: progress.plan, receipt: minted.receipt }
   }
   if (progress.next === 'wait') progress = await recovery.wait({ progress })

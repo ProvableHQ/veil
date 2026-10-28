@@ -187,7 +187,7 @@ move Arc USDC to Aleo USDCx. Persist each leg's checkpoint independently and
 recover it before retrying; never repeat a submitted burn after a timeout.
 
 If forwarding stalls after attestation, an application can call
-`bridge.complete({ progress, cctp: { manualMint: true }, onCheckpoint })`
+`bridge.complete({ progress, circle: { manualMint: true }, onCheckpoint })`
 with a funded Arc signer. The SDK verifies the original burn and checks that
 its nonce is unused; the original recipient and forwarding hook remain fixed.
 This never repeats the source burn. Normal `wait` polling does not trigger
@@ -411,7 +411,9 @@ import { fileXReservePrivateMintIdentityStore } from '@provablehq/aleo-bridge-sd
 const bridge = createBridgeClient({
   environment: 'mainnet',
   clients,
-  privateMintIdentities: fileXReservePrivateMintIdentityStore('.veil/xreserve-private-mints.json'),
+  circle: {
+    privateMintIdentities: fileXReservePrivateMintIdentityStore('.veil/xreserve-private-mints.json'),
+  },
 })
 
 const quote = await bridge.quote({
@@ -427,10 +429,17 @@ const quote = await bridge.quote({
 The store records the counter, derived scalar, recipient, and public commitment
 before the quote returns. `quote.plan` carries that commitment, so passing the
 plan to `execute` deposits against the quoted identity without reserving a
-second one. Execution rejects a different `privateMintAddressCommitment`, a
-`walletPreparedDeposit`, or a `privateMintSecretNonce` combined with such a plan;
-quote again with the intended nonce source instead. Every quote reserves a new
-counter, so quote once per intended deposit rather than on every price refresh.
+second one. Execution rejects a different `circle.privateMintAddressCommitment`,
+a `circle.walletPreparedDeposit`, or a `circle.privateMintSecretNonce` combined
+with such a plan; quote again with the intended nonce source instead. Every
+quote reserves a new counter, so quote once per intended deposit rather than on
+every price refresh.
+
+Every Circle-specific option lives under the `circle` key of quote, execute,
+resume, complete, and recover, and the identity store under `circle` of the
+client config. The flat `privateMintSecretNonce` and `cctp` call options from
+earlier releases still work and are deprecated; supplying a field in both forms
+with different values is rejected.
 The default in-memory store serializes concurrent
 deposits but does not survive a restart. Treat a durable store like a view key:
 its scalars can link and authorize the corresponding private mints. The supplied
@@ -456,9 +465,10 @@ for compatibility; new identities use the network-specific domains above.
 
 A connected wallet can prepare the public deposit commitment and retain the
 secret nonce. The SDK accepts the same `walletPreparedDeposit` and
-`privateMintNonceInput` options used by the bridge SDK patch in
-[AMM PR #920](https://github.com/ProvableHQ/amm-v3-monorepo/pull/920).
-This path does not allocate or read a local private-mint identity.
+`privateMintNonceInput` values used by the bridge SDK patch in
+[AMM PR #920](https://github.com/ProvableHQ/amm-v3-monorepo/pull/920), under
+the `circle` option. This path does not allocate or read a local private-mint
+identity.
 
 Before depositing, the application MUST validate the wallet's full preparation
 against the reviewed route, amount, source account, recipient, and network, and
@@ -480,10 +490,10 @@ const quote = await bridge.quote({
   source: { chain: 'ethereum', asset: 'usdc' },
   destination: { chain: 'aleo', asset: 'usdcx' },
   amount: '10', sender: ethereumAddress, recipient: aleoAddress,
-  mintMode: 'private', walletPreparedDeposit,
+  mintMode: 'private', circle: { walletPreparedDeposit },
 })
 const execution = await bridge.execute({
-  plan: quote.plan, walletPreparedDeposit, onCheckpoint: saveCheckpoint,
+  plan: quote.plan, circle: { walletPreparedDeposit }, onCheckpoint: saveCheckpoint,
 })
 let progress = await bridge.wait({
   progress: { next: 'wait', plan: quote.plan, receipt: execution.receipt },
@@ -497,7 +507,7 @@ if (progress.next === 'complete') {
       recipient: { type: 'address', value: quote.plan.recipient },
     },
   }
-  await bridge.complete({ progress, walletPreparedDeposit, privateMintNonceInput })
+  await bridge.complete({ progress, circle: { walletPreparedDeposit, privateMintNonceInput } })
 }
 ```
 
@@ -505,7 +515,8 @@ The wallet must support `shielded-usdcx-secret-nonce` and authorize that
 algorithm for input position 3 of the reviewed wrapper's `private_mint` call.
 The SDK rejects a derived request with a different algorithm, commitment, or
 recipient, and rejects local accounts on this path. Do not combine a wallet
-preparation with `privateMintSecretNonce` or `privateMintAddressCommitment`.
+preparation with `circle.privateMintSecretNonce` or
+`circle.privateMintAddressCommitment`.
 
 After a reload, recover the bridge checkpoint and restore the saved wallet
 preparation. Pass that preparation to `resume` if an approval remains unfinished,
@@ -651,7 +662,7 @@ wallet and confirming a replacement approval, explicitly select it:
 ```ts
 const recovered = await bridge.recover({
   checkpoint,
-  cctp: {
+  circle: {
     approvalReplacement: {
       originalTransactionId: originalApprovalHash,
       replacementTransactionId: confirmedApprovalHash,
