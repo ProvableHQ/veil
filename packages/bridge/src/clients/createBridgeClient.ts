@@ -3,6 +3,7 @@ import type { BridgeChainClients } from '../connections/resolve.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../registry/default.js'
 import { validateBridgeRegistry } from '../registry/validate.js'
 import type { BridgeEnvironment, BridgeRegistry } from '../types/protocol.js'
+import type { CircleBridgeConfig } from './decorators/bridge.js'
 
 /**
  * Configures the chains, wallets, providers, and route catalog available to a bridge client.
@@ -13,6 +14,7 @@ import type { BridgeEnvironment, BridgeRegistry } from '../types/protocol.js'
  * @property fetch Optional Fetch API implementation used for provider status requests. Defaults to `globalThis.fetch`.
  * @property key Stable client key. Defaults to `bridge`.
  * @property name Display name. Defaults to `Bridge Client`.
+ * @property circle Circle-specific client configuration, such as the persistence for locally derived private USDCx mint identities. Defaults to a memory store.
  */
 export type BridgeClientConfig = {
   environment?: BridgeEnvironment | undefined
@@ -21,6 +23,7 @@ export type BridgeClientConfig = {
   fetch?: typeof globalThis.fetch | undefined
   key?: string | undefined
   name?: string | undefined
+  circle?: CircleBridgeConfig | undefined
 }
 
 /**
@@ -65,6 +68,6 @@ export function createBridgeClient(config: BridgeClientConfig = {}): BridgeClien
     name: config.name ?? 'Bridge Client',
     environment,
     registry,
-    ...bridgeActions({ registry, clients, fetch }),
+    ...bridgeActions({ registry, clients, fetch, circle: config.circle }),
   }
 }

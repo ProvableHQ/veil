@@ -18,7 +18,52 @@ import type {
   PrepareParameters,
 } from './protocol.js'
 import type { SolanaHyperlaneTransferExecution, SolanaHyperlaneTransferQuote } from './solana.js'
-import type { EvmXReserveTransferExecution, EvmXReserveTransferQuote } from './xreserve.js'
+import type { EvmXReserveTransferExecution, EvmXReserveTransferQuote, WalletPreparedXReserveDeposit } from './xreserve.js'
+import type { XReservePrivateMintIdentityStore } from '../utils/xreservePrivateMintStore.js'
+
+/**
+ * Groups the options specific to Circle's protocols: CCTP for native USDC and
+ * xReserve for USDCx on Aleo.
+ *
+ * Each action accepts the subset that applies to it under its `circle` key.
+ * A private xReserve mint takes exactly one nonce source: the identity store,
+ * a wallet preparation, or the legacy secret scalar.
+ *
+ * @property manualMint Mints an attested, unused CCTP message directly when forwarding stalls. Defaults to waiting for forwarding.
+ * @property approvalReplacement Confirmed CCTP approval that superseded a missing original. Recovery verifies the replacement without signing.
+ * @property privateMintIdentities Store that reserves and resolves locally derived xReserve private mint identities. Defaults to the store configured on the bridge client. Standalone actions require an explicit shared store before deriving an identity or looking up its scalar.
+ * @property privateMintAddressCommitment Public 32-byte commitment as lowercase hex. Defaults to the quoted commitment and must match it when both are present. A caller-supplied commitment is caller-managed: no store needs to contain it, and the caller supplies its scalar at completion. A store that does hold it must name the transfer recipient. Safe to checkpoint.
+ * @property privateMintSecretNonce Legacy caller-managed Aleo scalar committed by a private xReserve deposit. Never persisted in a checkpoint.
+ * @property walletPreparedDeposit Durably saved public wallet preparation. Replaces local commitment derivation.
+ * @property privateMintNonceInput Wallet-derived nonce request bound to the preparation. Required with `walletPreparedDeposit` on completion; accepted earlier only for validation.
+ */
+export type CircleOptions = {
+  manualMint?: boolean | undefined
+  approvalReplacement?: { originalTransactionId: string; replacementTransactionId: string } | undefined
+  privateMintIdentities?: XReservePrivateMintIdentityStore | undefined
+  privateMintAddressCommitment?: string | undefined
+  privateMintSecretNonce?: string | undefined
+  walletPreparedDeposit?: WalletPreparedXReserveDeposit | undefined
+  privateMintNonceInput?: TransactionInput | undefined
+}
+
+/** Circle options accepted while quoting a transfer. */
+export type QuoteCircleOptions = Pick<CircleOptions,
+  'privateMintIdentities' | 'privateMintAddressCommitment' | 'privateMintSecretNonce' | 'walletPreparedDeposit' | 'privateMintNonceInput'>
+
+/** Circle options accepted while executing a transfer. */
+export type ExecuteCircleOptions = QuoteCircleOptions
+
+/** Circle options accepted while resuming an unfinished source transaction. */
+export type ResumeCircleOptions = Pick<CircleOptions,
+  'privateMintSecretNonce' | 'walletPreparedDeposit' | 'privateMintNonceInput'>
+
+/** Circle options accepted while completing a transfer on its destination. */
+export type CompleteCircleOptions = Pick<CircleOptions,
+  'manualMint' | 'privateMintIdentities' | 'privateMintSecretNonce' | 'walletPreparedDeposit' | 'privateMintNonceInput'>
+
+/** Circle options accepted while recovering a transfer from a checkpoint. */
+export type CircleRecoveryOptions = Pick<CircleOptions, 'approvalReplacement'>
 
 /**
  * Describes the cross-chain transfer whose current cost is calculated.
@@ -26,9 +71,12 @@ import type { EvmXReserveTransferExecution, EvmXReserveTransferQuote } from './x
  * The same source, destination, amount, and recipient become the plan returned
  * with the quote, so the caller can execute exactly what was priced.
  *
- * @property privateMintSecretNonce Secret Aleo scalar committed by a private xReserve deposit. Defaults to `0scalar` and is never persisted in a checkpoint.
+ * @property circle Circle-specific options: the identity store, a reserved commitment, a wallet preparation, or the legacy secret nonce for a private xReserve mint.
+ * @property privateMintSecretNonce Legacy secret Aleo scalar committed by a private xReserve deposit.
  */
 export type QuoteParameters = PrepareParameters & {
+  circle?: QuoteCircleOptions | undefined
+  /** @deprecated Use `circle.privateMintSecretNonce`. Removed in the next major release. */
   privateMintSecretNonce?: string | undefined
 }
 
@@ -90,11 +138,13 @@ export type BridgeQuote = ({ plan: BridgePlan }) & (
  * @property merkleProof Optional single compliance bundle, annotated proofs, provider, or signer-only wallet request for a private Aleo xReserve burn. Null or omission enables local generation or wallet derivation; wallets require a matching grant.
  * @property privateFee Whether an Aleo wallet pays its execution fee privately. Defaults to false.
  * @property gasPaymentMicrocredits Optional exact Aleo Hyperlane hook payment override. Defaults to a fresh live quote.
- * @property privateMintSecretNonce Secret Aleo scalar committed by a private xReserve deposit. Defaults to `0scalar` and is never persisted in a checkpoint.
+ * @property circle Circle-specific options: the identity store, a reserved commitment, a wallet preparation, or the legacy secret nonce for a private xReserve mint. A quoted plan already carries its reserved commitment.
+ * @property privateMintSecretNonce Legacy secret Aleo scalar committed by a private xReserve deposit.
  * @property onProgress Optional awaited callback for Aleo proving and submission boundaries. Non-Aleo routes emit no events.
  */
 export type ExecuteParameters = {
   plan: BridgePlan
+  circle?: ExecuteCircleOptions | undefined
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined
   onCheckpoint?: ((checkpoint: BridgeCheckpoint) => void | Promise<void>) | undefined
@@ -103,6 +153,7 @@ export type ExecuteParameters = {
   merkleProof?: ComplianceProofs | undefined
   privateFee?: boolean | undefined
   gasPaymentMicrocredits?: bigint | undefined
+  /** @deprecated Use `circle.privateMintSecretNonce`. Removed in the next major release. */
   privateMintSecretNonce?: string | undefined
   onProgress?: ProvingProgressHandler | undefined
 }
@@ -141,14 +192,18 @@ export type GetStatusParameters = {
 /**
  * Controls the destination wallet transaction for xReserve private delivery or CCTP minting.
  *
- * @property cctp Optional manual-mint override for an attested, unused CCTP message when forwarding stalls. Defaults to waiting for forwarding.
- * @property privateMintSecretNonce Secret Aleo scalar required by a private xReserve mint. Defaults to `0scalar`.
+ * @property circle Circle-specific options: the CCTP manual-mint override, or the identity store, wallet preparation and nonce input, or legacy secret nonce for a private xReserve mint.
+ * @property cctp Manual-mint override for an attested, unused CCTP message when forwarding stalls.
+ * @property privateMintSecretNonce Legacy caller-managed secret Aleo scalar for a private xReserve mint.
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
  * @property onCheckpoint Durable hook called before supported local Aleo broadcast and again after destination submission.
  * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
  */
 type CompleteOptions = {
+  circle?: CompleteCircleOptions | undefined
+  /** @deprecated Use `circle.manualMint`. Removed in the next major release. */
   cctp?: { manualMint: boolean } | undefined
+  /** @deprecated Use `circle.privateMintSecretNonce`. Removed in the next major release. */
   privateMintSecretNonce?: string | undefined
   privateFee?: boolean | undefined
   onCheckpoint?: ((checkpoint: BridgeCheckpoint) => void | Promise<void>) | undefined
@@ -160,18 +215,23 @@ type CompleteOptions = {
  *
  * An application returning after an interruption passes recovered progress. An
  * application that stayed open passes the original transfer details and latest
- * receipt.
+ * receipt. A CCTP transfer still waiting for forwarding may be completed early
+ * only with `circle.manualMint` set to true.
  *
- * @property progress Recovered progress whose next operation is `complete`.
+ * @property progress Recovered progress whose next operation is `complete`, or `wait` when manually minting CCTP.
  * @property plan Route, assets, amount, and recipient retained while the application stayed open.
  * @property receipt Circle-attested transfer state retained while the application stayed open.
- * @property cctp Optional manual-mint override for an attested, unused CCTP message when forwarding stalls. Defaults to waiting for forwarding.
- * @property privateMintSecretNonce Secret Aleo scalar required by a private xReserve mint. Defaults to `0scalar` and must match the source deposit.
+ * @property circle Circle-specific options: the CCTP manual-mint override, or the identity store, wallet preparation and nonce input, or legacy secret nonce for a private xReserve mint.
+ * @property cctp Manual-mint override for an attested, unused CCTP message when forwarding stalls.
+ * @property privateMintSecretNonce Legacy caller-managed secret Aleo scalar for a private xReserve mint.
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
  * @property onCheckpoint Optional durable hook called before supported local Aleo broadcast and again after destination submission.
+ * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
  */
 export type CompleteParameters = CompleteOptions & (
   | { progress: Extract<BridgeProgress, { next: 'complete' }>, plan?: never, receipt?: never }
+  | { progress: Extract<BridgeProgress, { next: 'wait' }>, circle: CompleteCircleOptions & { manualMint: true }, plan?: never, receipt?: never }
+  /** @deprecated Use `circle: { manualMint: true }`. Removed in the next major release. */
   | { progress: Extract<BridgeProgress, { next: 'wait' }>, cctp: { manualMint: true }, plan?: never, receipt?: never }
   | { progress?: never, plan: BridgePlan, receipt: BridgeReceipt }
 )
@@ -180,14 +240,15 @@ export type CompleteParameters = CompleteOptions & (
  * Supplies saved public transfer information for recovery after an interruption.
  *
  * @property checkpoint Compact checkpoint emitted at a wallet submission boundary.
- * @property cctp.approvalReplacement.originalTransactionId Saved approval hash that the caller has reconciled as superseded.
- * @property cctp.approvalReplacement.replacementTransactionId Confirmed replacement approval hash matching the saved intent.
- * @property cctp Optional explicit approval replacement for a missing original transaction; recovery verifies the confirmed replacement without signing. Defaults to no replacement.
+ * @property circle Circle-specific options: an explicit CCTP approval replacement for a missing original transaction, verified without signing. Defaults to no replacement.
+ * @property cctp Explicit CCTP approval replacement for a missing original transaction.
  * @property signal Optional cancellation signal. Defaults to no cancellation.
  */
 export type RecoverParameters = {
-  cctp?: { approvalReplacement: { originalTransactionId: string; replacementTransactionId: string } } | undefined
   checkpoint: BridgeCheckpoint
+  circle?: CircleRecoveryOptions | undefined
+  /** @deprecated Use `circle.approvalReplacement`. Removed in the next major release. */
+  cctp?: { approvalReplacement: { originalTransactionId: string; replacementTransactionId: string } } | undefined
   signal?: AbortSignal | undefined
 }
 
@@ -195,13 +256,16 @@ export type RecoverParameters = {
  * Controls submission of a source-chain transaction left unfinished after an interruption.
  *
  * @property progress Recovery result whose next operation is `resume`.
- * @property privateMintSecretNonce Secret Aleo scalar required to resume a private xReserve deposit. Defaults to `0scalar` and must match the checkpointed hook.
+ * @property circle Circle-specific options: the wallet preparation used by the original deposit, or the legacy secret nonce. Store-derived commitments resume from the checkpoint without either.
+ * @property privateMintSecretNonce Legacy caller-managed Aleo scalar for resuming a legacy private xReserve deposit.
  * @property pollingIntervalMs Delay between source confirmation reads. Defaults to 1,000 milliseconds.
  * @property confirmationTimeoutMs Maximum source confirmation wait. Defaults to 120,000 milliseconds.
  * @property onCheckpoint Optional durable hook called immediately after a new transaction is broadcast.
  */
 export type ResumeParameters = {
   progress: Extract<BridgeProgress, { next: 'resume' }>
+  circle?: ResumeCircleOptions | undefined
+  /** @deprecated Use `circle.privateMintSecretNonce`. Removed in the next major release. */
   privateMintSecretNonce?: string | undefined
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined

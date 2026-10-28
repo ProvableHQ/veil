@@ -9,6 +9,7 @@ import type { BridgeRegistry, BridgeReceipt } from '../types/protocol.js'
 import { aleoAddressToBytes32 } from '../utils/xreserve.js'
 import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
+import { resolveCircleOptions } from './internal/circleOptions.js'
 
 /**
  * Submits the source-chain transaction left unfinished after an interruption.
@@ -41,6 +42,7 @@ export async function resume(
     throw new BridgeError('Bridge progress has no source submission to resume')
   }
   if (plan.protocol === 'cctp') return cctp.execute(registry, clients, fetcher, { ...params, plan, resume: receipt })
+  const circleOptions = resolveCircleOptions(params)
   const route = resolveTransferRoute(registry, plan)
   const onSubmitted = params.onCheckpoint
     ? async (value: BridgeReceipt) => params.onCheckpoint?.(createBridgeCheckpoint(plan, value))
@@ -121,7 +123,9 @@ export async function resume(
         pollingIntervalMs: params.pollingIntervalMs,
         confirmationTimeoutMs: params.confirmationTimeoutMs,
         onSubmitted,
-        privateMintSecretNonce: params.privateMintSecretNonce,
+        walletPreparedDeposit: circleOptions.walletPreparedDeposit,
+        privateMintNonceInput: circleOptions.privateMintNonceInput,
+        privateMintSecretNonce: circleOptions.privateMintSecretNonce,
       },
     )
     return { kind: 'evm-xreserve', ...execution }

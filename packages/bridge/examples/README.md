@@ -17,6 +17,16 @@ For Privy or Dynamic server wallets, start with the
 [server-wallet configuration guide](./remote-wallets/README.md). Its examples
 configure EVM and Solana clients without signing or submitting.
 
+For inbound private USDCx with a connected wallet, use
+[`wallet-private-mint.ts`](./wallet-private-mint.ts) to build the derived nonce
+input from a saved wallet preparation. Validate the full preparation against
+the reviewed route, amount, source account, recipient, and network, then persist
+it durably before calling `bridge.execute`. Pass `circle.walletPreparedDeposit`
+through quote, execute, and source resumption; completion additionally requires
+`circle.privateMintNonceInput`. The wallet retains the scalar. Configure the wallet's
+`shielded-usdcx-secret-nonce` grant for the reviewed wrapper's `private_mint`
+input at position 3. See the [private USDCx mint guide](../docs/private-usdcx-mints.md).
+
 For a connected Aleo wallet that implements
 `program-freezelist-exclusion-proof`, use
 [`wallet-freezelist.ts`](./wallet-freezelist.ts) to prepare the private USDCx burn
@@ -331,7 +341,7 @@ private-mint transaction:
 if (progress.next === 'complete') {
   const destination = await bridge.complete({
     progress,
-    privateMintSecretNonce,
+    circle: { privateMintSecretNonce },
     privateFee: false,
   })
 

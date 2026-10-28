@@ -7,6 +7,7 @@ export {
   bridgeActions,
   type BridgeActions,
   type BridgeActionsConfig,
+  type CircleBridgeConfig,
 } from './clients/decorators/bridge.js'
 export {
   createEvmClient,
@@ -111,6 +112,12 @@ export type {
   ProtocolBridgeRoute,
 } from './types/protocol.js'
 export type {
+  CircleOptions,
+  CompleteCircleOptions,
+  ExecuteCircleOptions,
+  QuoteCircleOptions,
+  CircleRecoveryOptions,
+  ResumeCircleOptions,
   ExecuteParameters,
   CompleteParameters,
   GetStatusParameters,
@@ -133,6 +140,7 @@ export type {
   EvmXReserveRouteMetadata,
   EvmXReserveTransferExecution,
   EvmXReserveTransferQuote,
+  WalletPreparedXReserveDeposit,
   GetXReserveAttestationParameters,
   XReserveAttestationResult,
   XReserveHttpResponse,
@@ -168,12 +176,27 @@ export {
   aleoProgramAddress,
   buildXReserveDepositPayload,
   buildXReserveHookData,
+  buildXReservePrivateMintHookData,
   calculateXReserveDepositNonce,
   calculateXReserveMessageHash,
+  deriveXReservePrivateMintAddressCommitment,
+  deriveXReservePrivateMintSecretNonce,
   evmAddressToXReserveBytes32,
+  SHIELDED_USDCX_DOMAIN,
+  SHIELDED_USDCX_DOMAIN_MAINNET,
+  SHIELDED_USDCX_DOMAIN_TESTNET,
+  xReserveViewKeyToScalar,
   xReserveDepositNonceFromPayload,
   xReserveHexToAleoBytes,
+  xReservePrivateMintCommitmentFromHookData,
 } from './utils/xreserve.js'
+export {
+  findXReservePrivateMintIdentity,
+  memoryXReservePrivateMintIdentityStore,
+  reserveXReservePrivateMintIdentity,
+  type XReservePrivateMintIdentity,
+  type XReservePrivateMintIdentityStore,
+} from './utils/xreservePrivateMintStore.js'
 export {
   evmAddressToAleoHyperlaneRecipient,
   solanaAddressToAleoHyperlaneRecipient,

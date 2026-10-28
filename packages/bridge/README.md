@@ -10,9 +10,8 @@ The package supports browser wallets, local keys, and Privy or Dynamic server wa
 wallet, store transfer progress, or submit a second transaction after an
 interruption without caller authorization.
 
-> This package is published as a preview. It versions in lockstep with the
-> `@provablehq/veil-*` packages, but its API is subject to breaking changes
-> between minor releases.
+The package versions in lockstep with the `@provablehq/veil-*` packages.
+Deprecated options stay supported until the next major release.
 
 ## Upgrading existing bridge integrations
 
@@ -25,7 +24,7 @@ deployments still require an explicit migration; do not rewrite a checkpoint's
 registry version to bypass validation.
 
 **TypeScript consumers with exhaustive switches or complete lookup tables must
-handle the new variants when upgrading this preview minor release:**
+handle the new variants when upgrading to this minor release:**
 
 | Public type | Additional value |
 | --- | --- |
@@ -187,7 +186,7 @@ move Arc USDC to Aleo USDCx. Persist each leg's checkpoint independently and
 recover it before retrying; never repeat a submitted burn after a timeout.
 
 If forwarding stalls after attestation, an application can call
-`bridge.complete({ progress, cctp: { manualMint: true }, onCheckpoint })`
+`bridge.complete({ progress, circle: { manualMint: true }, onCheckpoint })`
 with a funded Arc signer. The SDK verifies the original burn and checks that
 its nonce is unused; the original recipient and forwarding hook remain fixed.
 This never repeats the source burn. Normal `wait` polling does not trigger
@@ -394,6 +393,21 @@ console.log(quote.nativeFeeAtomic)
 `quote.plan` identifies the exact route, amount, recipient, and reviewed
 deployment that produced the quote. Keep this value unchanged for execution.
 
+A private USDCx mint (`mintMode: 'private'`) also needs a nonce source. A local
+Aleo account derives one through the client's identity store, a connected
+wallet prepares one, or a legacy caller supplies a scalar. Each is passed under
+the `circle` option; see [Private USDCx mints](./docs/private-usdcx-mints.md).
+
+```ts
+import { fileXReservePrivateMintIdentityStore } from '@provablehq/aleo-bridge-sdk/node'
+
+const bridge = createBridgeClient({
+  environment: 'mainnet',
+  clients,
+  circle: { privateMintIdentities: fileXReservePrivateMintIdentityStore('.veil/xreserve-private-mints.json') },
+})
+```
+
 ### 2. Authorize the source transfer
 
 Execution may request more than one wallet transaction. An ERC-20 route can
@@ -464,7 +478,6 @@ one destination transaction that creates the private record.
 if (progress.next === 'complete') {
   const destination = await bridge.complete({
     progress,
-    privateMintSecretNonce,
   })
   progress = await bridge.wait({
     progress: {
@@ -481,6 +494,10 @@ if (progress.next === 'complete') {
 A checkpoint contains the public transfer intent and transaction identifiers
 needed to find the transfer again. It excludes private keys, Aleo record
 plaintext, proofs, and private-mint secret nonces.
+
+A locally derived private mint checkpoints only its public commitment; restore
+the same identity store with the checkpoint. See
+[recovering a private mint](./docs/private-usdcx-mints.md#recover-after-a-restart).
 
 The SDK calls `onCheckpoint` at supported submission boundaries. The callback
 does not imply a storage system. A browser can use IndexedDB or local storage;
@@ -514,9 +531,9 @@ if (progress.next === 'wait') {
 }
 ```
 
-The application then handles `progress.next` by the same table above. A private
-mint nonce must be stored separately because it is intentionally absent from
-the checkpoint.
+The application then handles `progress.next` by the same table above. Legacy
+callers that supply `privateMintSecretNonce` must store it separately because it
+is intentionally absent from the checkpoint.
 
 For CCTP, an unavailable approval stays pending: an RPC returning `null` does
 not prove that a transaction was dropped. After reconciling the original in the
@@ -525,7 +542,7 @@ wallet and confirming a replacement approval, explicitly select it:
 ```ts
 const recovered = await bridge.recover({
   checkpoint,
-  cctp: {
+  circle: {
     approvalReplacement: {
       originalTransactionId: originalApprovalHash,
       replacementTransactionId: confirmedApprovalHash,

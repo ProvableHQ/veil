@@ -17,6 +17,8 @@ import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { formatDecimalAmount, parseDecimalAmount } from '../utils/units.js'
 import { prepare } from './prepare.js'
+import { resolvePrivateMintAddressCommitment } from './internal/privateMintIdentity.js'
+import { resolveCircleOptions } from './internal/circleOptions.js'
 
 /**
  * Calculates the funds and fees required to begin a cross-chain transfer.
@@ -36,7 +38,7 @@ import { prepare } from './prepare.js'
  * @param params Transfer details whose current cost and requirements are calculated.
  * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
  * @returns The amount expected at the destination and the known bridge, network, and approval costs.
- * @throws BridgeError When the selected provider cannot quote the transfer or required network access is unavailable.
+ * @throws BridgeError When the selected provider cannot quote the transfer, required network access is unavailable, or a standalone local private mint omits `circle.privateMintIdentities`.
  * @example const result = await quote(registry, clients, { source, destination, amount: '1', recipient })
  */
 export async function quote(
@@ -47,11 +49,34 @@ export async function quote(
 ): Promise<BridgeQuote> {
   // Build the canonical plan before reading live prices. The returned plan is
   // the exact value the caller passes to execution and stores in progress.
-  const plan = prepare(registry, params)
-  if (plan.protocol === 'cctp') return cctp.quote(registry, clients, fetcher, { plan })
+  const prepared = prepare(registry, params)
+  if (prepared.protocol === 'cctp') return cctp.quote(registry, clients, fetcher, { plan: prepared })
+  const circleOptions = resolveCircleOptions(params)
+  const privateMintIdentities = circleOptions.privateMintIdentities
+  // Wallet preparations already reserve their nonce inside the wallet.
+  const privateMintAddressCommitment = circleOptions.walletPreparedDeposit === undefined
+    ? await resolvePrivateMintAddressCommitment(
+        registry, clients, privateMintIdentities, prepared,
+        circleOptions.privateMintAddressCommitment, circleOptions.privateMintSecretNonce,
+      )
+    : circleOptions.privateMintAddressCommitment
+  // Carry the commitment and its source so execution can validate local store
+  // ownership without treating an external commitment as a new reservation.
+  const plan = privateMintAddressCommitment === undefined
+    ? prepared
+    : {
+        ...prepared,
+        circle: {
+          privateMintAddressCommitment,
+          privateMintIdentitySource: circleOptions.privateMintAddressCommitment === undefined ? 'store' as const : 'external' as const,
+        },
+      }
   const protocolParams = {
     plan,
-    privateMintSecretNonce: params.privateMintSecretNonce,
+    walletPreparedDeposit: circleOptions.walletPreparedDeposit,
+    privateMintNonceInput: circleOptions.privateMintNonceInput,
+    privateMintAddressCommitment,
+    privateMintSecretNonce: circleOptions.privateMintSecretNonce,
   }
   // Quote from the source side because that is where funds, approvals, and the
   // first network fee are paid. The validated route selects the protocol helper.

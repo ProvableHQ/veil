@@ -289,11 +289,18 @@ export type PrepareParameters = {
  * @property sender Optional source-chain sender.
  * @property mintMode Aleo destination transition selected by the caller.
  * @property privateRecipient Whether the destination requests private Aleo delivery.
+ * @property circle Circle-specific values produced while quoting. Carries the public commitment and its source so execution reuses the identity and validates store-managed identities before depositing. Absent from recovered plans.
+ * @property circle.privateMintAddressCommitment Public 32-byte commitment reused by execution.
+ * @property circle.privateMintIdentitySource Whether the quote reserved a store-managed identity or used an externally managed commitment. Store-managed identities must resolve in the store before execution; external ones need no store entry. Older plans without a source are treated as store-managed.
  * @property fees Known fee categories; amounts remain absent until protocol quoting is implemented.
  * @property steps Ordered operations required to complete the transfer.
  */
 export type BridgePlan = {
   cctp?: CctpOptions | undefined
+  circle?: {
+    privateMintAddressCommitment?: string | undefined
+    privateMintIdentitySource?: 'store' | 'external' | undefined
+  } | undefined
   registryVersion: string
   protocol: BridgeProtocol
   route: ProtocolBridgeRoute
@@ -398,6 +405,7 @@ export type BridgeReceipt = {
  * @property source.transactionId Irreversible source transfer transaction when submitted.
  * @property source.preparedTransaction Fully proved Aleo transaction retained before broadcast for idempotent recovery.
  * @property source.hookData Public xReserve hook committed by a submitted approval sequence.
+ * @property source.privateMintAddressCommitment Public locally derived commitment carried by a private xReserve hook.
  * @property source.blockhash Solana blockhash that bounded the submitted source transaction.
  * @property source.lastValidBlockHeight Final Solana block height at which the source transaction can land.
  * @property destination Caller-authorized destination transaction when submitted.
@@ -418,6 +426,7 @@ export type BridgeCheckpoint = {
     replacedApprovalTransactionIds?: readonly string[] | undefined
     transactionId?: string | undefined
     hookData?: string | undefined
+    privateMintAddressCommitment?: string | undefined
     blockhash?: string | undefined
     lastValidBlockHeight?: string | undefined
     preparedTransaction?: { transactionId: string; serializedTransaction: string } | undefined

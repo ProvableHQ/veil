@@ -1,5 +1,27 @@
 import type { Address, Hash, Hex } from 'viem'
+import type { TransactionInput } from '@provablehq/veil-core'
 import type { BridgePlan, BridgeReceipt } from './protocol.js'
+
+/**
+ * Carries the public deposit instruction prepared by an Aleo wallet.
+ *
+ * The application validates and durably saves the full wallet preparation
+ * before authorizing the EVM deposit. The wallet retains the secret nonce.
+ *
+ * @property remoteRecipientBytes32 Reviewed wrapper program address encoded as 32 EVM bytes.
+ * @property hookData Canonical 65-byte private-mint hook: `0x02`, a lowercase 32-byte commitment, and 32 zero bytes.
+ * @example
+ * import type { WalletPreparedXReserveDeposit } from '@provablehq/aleo-bridge-sdk'
+ * const commitmentHex = '11'.repeat(32)
+ * const prepared: WalletPreparedXReserveDeposit = {
+ *   remoteRecipientBytes32: `0x${'22'.repeat(32)}`,
+ *   hookData: `0x02${commitmentHex}${'00'.repeat(32)}`,
+ * }
+ */
+export type WalletPreparedXReserveDeposit = {
+  remoteRecipientBytes32: Hex
+  hookData: Hex
+}
 
 /**
  * Supplies a fetch-compatible HTTP response for Circle attestation requests.
@@ -48,10 +70,16 @@ export type EvmXReserveRouteMetadata = {
  * Supplies an Ethereum-to-Aleo xReserve transfer for current balance and allowance checks.
  *
  * @property plan Route, amount, Aleo recipient, and privacy preference selected for the transfer.
- * @property privateMintSecretNonce Secret Aleo scalar committed by private hook data. Defaults to `0scalar`.
+ * @property privateMintAddressCommitment Public 32-byte recipient commitment reserved by the bridge identity store.
+ * @property privateMintSecretNonce Legacy secret Aleo scalar committed by private hook data. Defaults to `0scalar`; do not combine with `privateMintAddressCommitment`.
+ * @property walletPreparedDeposit Optional public wallet preparation. Replaces local commitment derivation; do not combine with a commitment or scalar nonce.
+ * @property privateMintNonceInput Optional wallet-derived nonce request bound to the preparation. Omit until completion when quoting or depositing.
  */
 export type QuoteEvmXReserveTransferParameters = {
   plan: BridgePlan
+  walletPreparedDeposit?: WalletPreparedXReserveDeposit | undefined
+  privateMintNonceInput?: TransactionInput | undefined
+  privateMintAddressCommitment?: string | undefined
   privateMintSecretNonce?: string | undefined
 }
 
@@ -67,6 +95,7 @@ export type QuoteEvmXReserveTransferParameters = {
  * @property amountAtomic Deposit amount in USDC base units.
  * @property maxFeeAtomic Maximum Circle fee in USDC base units.
  * @property hookData Fixed 65-byte Aleo mint instruction.
+ * @property privateMintAddressCommitment Public locally derived commitment carried by a private hook. Omitted for public, record, and legacy scalar-based deposits.
  * @property balanceAtomic Connected account balance in USDC base units.
  * @property allowanceAtomic Current xReserve allowance in USDC base units.
  * @property approvalRequired Whether execution must submit an approval first.
@@ -81,6 +110,7 @@ export type EvmXReserveTransferQuote = {
   amountAtomic: bigint
   maxFeeAtomic: bigint
   hookData: Hex
+  privateMintAddressCommitment?: string | undefined
   balanceAtomic: bigint
   allowanceAtomic: bigint
   approvalRequired: boolean
@@ -90,7 +120,10 @@ export type EvmXReserveTransferQuote = {
  * Configures an EVM-to-Aleo xReserve deposit submission.
  *
  * @property plan Route, amount, Aleo recipient, and privacy preference selected for the transfer.
- * @property privateMintSecretNonce Secret Aleo scalar committed by private hook data. Defaults to `0scalar`.
+ * @property privateMintAddressCommitment Public 32-byte recipient commitment reserved by the bridge identity store.
+ * @property privateMintSecretNonce Legacy secret Aleo scalar committed by private hook data. Defaults to `0scalar`; do not combine with `privateMintAddressCommitment`.
+ * @property walletPreparedDeposit Optional durably saved public wallet preparation. Replaces local commitment derivation; do not combine with a commitment or scalar nonce.
+ * @property privateMintNonceInput Optional wallet-derived nonce request bound to the preparation. Omit until completion when depositing.
  * @property pollingIntervalMs Delay between receipt checks. Defaults to 1,000 milliseconds.
  * @property confirmationTimeoutMs Maximum receipt wait per transaction. Defaults to 120,000 milliseconds.
  * @property resume Previously checkpointed source receipt. When supplied, execution
@@ -100,6 +133,9 @@ export type EvmXReserveTransferQuote = {
  */
 export type ExecuteEvmXReserveTransferParameters = {
   plan: BridgePlan
+  walletPreparedDeposit?: WalletPreparedXReserveDeposit | undefined
+  privateMintNonceInput?: TransactionInput | undefined
+  privateMintAddressCommitment?: string | undefined
   privateMintSecretNonce?: string | undefined
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined

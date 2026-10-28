@@ -1,6 +1,6 @@
 import type { Client, ProvingProgressHandler, Transaction, TransactionInput, WalletClient } from '@provablehq/veil-core'
 import type { BridgeEndpoint, BridgePlan, BridgeReceipt } from './protocol.js'
-import type { XReserveAttestationResult } from './xreserve.js'
+import type { WalletPreparedXReserveDeposit, XReserveAttestationResult } from './xreserve.js'
 import type { ComplianceProofs } from './compliance.js'
 
 /**
@@ -76,7 +76,9 @@ export type AleoPrivacyExecution = {
  * Configures submission of the user-authorized USDCx wrapper mint.
  *
  * @property plan Original private-mint transfer plan.
- * @property privateMintSecretNonce Secret Aleo scalar committed by the source deposit. Defaults to `0scalar`.
+ * @property privateMintSecretNonce Secret Aleo scalar committed by the source deposit. The bridge client resolves locally derived identities from its configured store.
+ * @property walletPreparedDeposit Optional saved public wallet preparation matching the attested deposit. Do not combine with a scalar nonce.
+ * @property privateMintNonceInput Wallet-derived `shielded-usdcx-secret-nonce` request bound to the preparation commitment and plan recipient. Required with `walletPreparedDeposit`; local accounts cannot resolve it.
  * @property deposit Confirmed EVM deposit receipt carrying the canonical payload.
  * @property attestation Completed Circle payload and signature response.
  * @property privateFee Whether the Aleo wallet should pay its fee privately. Defaults to false.
@@ -86,6 +88,8 @@ export type AleoPrivacyExecution = {
  */
 export type ExecuteXReservePrivateMintParameters = {
   plan: BridgePlan
+  walletPreparedDeposit?: WalletPreparedXReserveDeposit | undefined
+  privateMintNonceInput?: TransactionInput | undefined
   privateMintSecretNonce?: string | undefined
   deposit: BridgeReceipt
   attestation: XReserveAttestationResult
