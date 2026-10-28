@@ -116,7 +116,7 @@ export type {
   CompleteCircleOptions,
   ExecuteCircleOptions,
   QuoteCircleOptions,
-  RecoverCircleOptions,
+  CircleRecoveryOptions,
   ResumeCircleOptions,
   ExecuteParameters,
   CompleteParameters,

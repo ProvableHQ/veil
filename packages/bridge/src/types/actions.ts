@@ -63,7 +63,7 @@ export type CompleteCircleOptions = Pick<CircleOptions,
   'manualMint' | 'privateMintIdentities' | 'privateMintSecretNonce' | 'walletPreparedDeposit' | 'privateMintNonceInput'>
 
 /** Circle options accepted while recovering a transfer from a checkpoint. */
-export type RecoverCircleOptions = Pick<CircleOptions, 'approvalReplacement'>
+export type CircleRecoveryOptions = Pick<CircleOptions, 'approvalReplacement'>
 
 /**
  * Describes the cross-chain transfer whose current cost is calculated.
@@ -246,7 +246,7 @@ export type CompleteParameters = CompleteOptions & (
  */
 export type RecoverParameters = {
   checkpoint: BridgeCheckpoint
-  circle?: RecoverCircleOptions | undefined
+  circle?: CircleRecoveryOptions | undefined
   /** @deprecated Use `circle.approvalReplacement`. Removed in the next major release. */
   cctp?: { approvalReplacement: { originalTransactionId: string; replacementTransactionId: string } } | undefined
   signal?: AbortSignal | undefined
