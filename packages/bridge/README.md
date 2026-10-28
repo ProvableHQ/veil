@@ -10,9 +10,8 @@ The package supports browser wallets, local keys, and Privy or Dynamic server wa
 wallet, store transfer progress, or submit a second transaction after an
 interruption without caller authorization.
 
-> This package is published as a preview. It versions in lockstep with the
-> `@provablehq/veil-*` packages, but its API is subject to breaking changes
-> between minor releases.
+The package versions in lockstep with the `@provablehq/veil-*` packages.
+Deprecated options stay supported until the next major release.
 
 ## Upgrading existing bridge integrations
 
@@ -25,7 +24,7 @@ deployments still require an explicit migration; do not rewrite a checkpoint's
 registry version to bypass validation.
 
 **TypeScript consumers with exhaustive switches or complete lookup tables must
-handle the new variants when upgrading this preview minor release:**
+handle the new variants when upgrading to this minor release:**
 
 | Public type | Additional value |
 | --- | --- |

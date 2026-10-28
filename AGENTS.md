@@ -35,9 +35,9 @@ signing keys live and what you are integrating.
 | `@provablehq/veil-codegen` | You want typed TypeScript bindings generated from a program ABI. Ships the `veil-codegen` CLI; use it as a build-time dev dependency. | [README](./packages/codegen/README.md) |
 | `@provablehq/veil-aleo-devnode` | You run a local Aleo node in tests or local development. Spawns the `aleo-devnode` binary, which installs from npm as `@provablehq/aleo-devnode` (or point `devnodePath` at your own build). | [README](./packages/devnode/README.md) |
 
-`@provablehq/aleo-bridge-sdk` (cross-chain bridge client) is published as a
-preview. It versions in lockstep with the `veil-*` packages, but its API is
-subject to breaking changes between minor releases.
+`@provablehq/aleo-bridge-sdk` (cross-chain bridge client) versions in lockstep
+with the `veil-*` packages and follows the same compatibility rules: deprecated
+options stay supported until the next major release.
 
 ### Common setups
 
