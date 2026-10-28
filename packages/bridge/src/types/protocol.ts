@@ -291,7 +291,7 @@ export type PrepareParameters = {
  * @property privateRecipient Whether the destination requests private Aleo delivery.
  * @property circle Circle-specific values produced while quoting. Carries the public commitment and its source so execution reuses the identity and validates store-managed identities before depositing. Absent from recovered plans.
  * @property circle.privateMintAddressCommitment Public 32-byte commitment reused by execution.
- * @property circle.privateMintIdentitySource Whether the quote reserved a store-managed identity or used an externally managed commitment. Older plans without a source are treated as store-managed.
+ * @property circle.privateMintIdentitySource Whether the quote reserved a store-managed identity or used an externally managed commitment. Store-managed identities must resolve in the store before execution; external ones need no store entry. Older plans without a source are treated as store-managed.
  * @property fees Known fee categories; amounts remain absent until protocol quoting is implemented.
  * @property steps Ordered operations required to complete the transfer.
  */

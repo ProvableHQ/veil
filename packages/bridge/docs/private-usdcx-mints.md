@@ -196,10 +196,13 @@ commitment into execution. The client's implicit memory store does not claim
 ownership of that identity. The caller MUST retain the scalar and supply it at
 completion through `circle.privateMintSecretNonce`.
 
-Supplying an explicit store on the client or action requests validation against
-that store, including for external commitments. The identity must be present
-and its recipient must match before funds move. Quotes that reserve identities
-locally are marked `store`; older plans without a source are also treated as
+A caller-supplied commitment is caller-managed whether or not a store is
+configured. Execution does not require the store to contain it, so an
+application may keep a store for its own derived identities and still bring its
+own scalar for a particular deposit. If the store does hold a matching identity,
+its recipient must match the plan before funds move. Quotes that reserve
+identities locally are marked `store`, and those MUST resolve in the store
+before execution; older plans without a source are also treated as
 store-managed. Connected wallets should use the preparation flow below.
 
 ## Connected wallet
