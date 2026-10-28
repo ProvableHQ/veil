@@ -5,6 +5,7 @@ import {
   memoryXReservePrivateMintIdentityStore,
   quote,
   DEFAULT_BRIDGE_REGISTRY,
+  type AleoMintMode,
   type BridgeClient,
   type QuoteParameters,
   type WalletPreparedXReserveDeposit,
@@ -41,6 +42,12 @@ test('a private mint quote names a nonce source unless the client carries a stor
   plain.quote({ ...intent, mintMode: 'private', circle: { privateMintAddressCommitment: '33'.repeat(32) } })
   // The deprecated flat field still counts as a source.
   plain.quote({ ...intent, mintMode: 'private', privateMintSecretNonce: '7scalar' })
+
+  // A mode decided at runtime compiles with a source and fails without one.
+  const mode = 'record' as AleoMintMode
+  plain.quote({ ...intent, mintMode: mode, circle: { privateMintSecretNonce: '7scalar' } })
+  // @ts-expect-error the mode may be private and no source is named
+  plain.quote({ ...intent, mintMode: mode })
 
   // A client built with a store satisfies the requirement for every private quote.
   const stored = createBridgeClient({ environment: 'testnet', circle: { privateMintIdentities: store } })

@@ -10,6 +10,7 @@ import {
   type BridgeCheckpoint,
   type BridgeProgress,
 } from '../../../../src/index.js'
+import { fileXReservePrivateMintIdentityStore } from '../../../../src/node.js'
 import { createLiveBenchmark, loadLiveState, quoteParametersFromPlan, saveLiveState } from '../helpers.js'
 import { liveStatePath, mainnetCaseEnabled, mainnetExecutionEnabled, required, requiredEvmPrivateKey } from '../config.js'
 
@@ -51,12 +52,16 @@ describe.each(cases)('mainnet $chain xReserve bridge', (scenario) => {
     )
     benchmark.mark('clients-ready')
     const sender = await evm.walletClient!.getAddress()
+    // The derived private mint identity must outlive this process so a later
+    // run can complete a deposit it recovered from the saved checkpoint.
+    const privateMintIdentities = fileXReservePrivateMintIdentityStore(path.replace(/\.json$/, '') + '-identities.json')
     const bridge = createBridgeClient({
       environment: 'mainnet',
       clients: {
         [scenario.chain]: evm,
         aleo: createAleoClient({ publicClient: aleo.publicClient, account: aleo.walletClient }),
       },
+      circle: { privateMintIdentities },
     })
     const plan = prepare(bridge.registry, {
       source: { chain: scenario.chain, asset: 'usdc' },
@@ -70,7 +75,7 @@ describe.each(cases)('mainnet $chain xReserve bridge', (scenario) => {
 
     let progress: BridgeProgress
     if (!state.checkpoint) {
-      const quote = await bridge.quote(quoteParametersFromPlan(plan))
+      const quote = await bridge.quote(quoteParametersFromPlan(plan, { privateMintIdentities }))
       benchmark.mark('quote-ready')
       if (quote.kind !== 'evm-xreserve') throw new Error(`Unexpected quote kind: ${quote.kind}`)
       expect(quote.amountAtomic).toBe(2_000_000n)

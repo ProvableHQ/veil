@@ -95,22 +95,28 @@ type QuoteOptions = {
   privateMintSecretNonce?: string | undefined
 }
 
-/** A private quote whose nonce source is named on the call, in the `circle` or deprecated flat form. */
+/**
+ * A quote whose nonce source is named on the call, in the deprecated flat form
+ * or under `circle`. The `circle` member is last so a missing source reports
+ * `circle` rather than the deprecated field.
+ */
 type PrivateMintSourced =
-  | { circle: QuoteCircleOptions & PrivateMintNonceSource }
   | { privateMintSecretNonce: string; circle?: QuoteCircleOptions | undefined }
+  | { circle: QuoteCircleOptions & PrivateMintNonceSource; privateMintSecretNonce?: string | undefined }
 
 /**
  * Describes the cross-chain transfer whose current cost is calculated.
  *
  * The same source, destination, amount, and recipient become the plan returned
- * with the quote, so the caller can execute exactly what was priced. A private
- * mint MUST name a nonce source under `circle`, unless the bridge client was
- * created with `circle.privateMintIdentities`, which `HasStore` records.
+ * with the quote, so the caller can execute exactly what was priced. A quote
+ * either mints publicly or into a record, or names a nonce source under
+ * `circle` for a private mint. A client created with
+ * `circle.privateMintIdentities` records that in `HasStore` and lifts the
+ * requirement. A `mintMode` that may be `'private'` needs a source too.
  */
 export type QuoteParameters<HasStore extends boolean = false> =
   | (PrepareParameters & { mintMode?: 'public' | 'record' | undefined } & QuoteOptions)
-  | (PrepareParameters & { mintMode: 'private' } & (HasStore extends true ? QuoteOptions : PrivateMintSourced))
+  | (PrepareParameters & (HasStore extends true ? QuoteOptions : PrivateMintSourced))
 
 /** Identifies the route implementation that produced a transfer quote. */
 export type BridgeQuoteKind =

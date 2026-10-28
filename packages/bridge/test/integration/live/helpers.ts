@@ -1,20 +1,28 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import bs58 from 'bs58'
-import type { QuoteParameters } from '../../../src/types/actions.js'
+import type { PrivateMintNonceSource, QuoteCircleOptions, QuoteParameters } from '../../../src/types/actions.js'
 import type { BridgePlan } from '../../../src/types/protocol.js'
 
-export function quoteParametersFromPlan(plan: BridgePlan): QuoteParameters {
-  return {
+/** Rebuilds quote parameters from a prepared plan; a private plan must name its nonce source. */
+export function quoteParametersFromPlan(
+  plan: BridgePlan,
+  circle?: QuoteCircleOptions & PrivateMintNonceSource,
+): QuoteParameters {
+  const base = {
     source: { chain: plan.sourceAsset.chainId, asset: plan.sourceAsset.key },
     destination: { chain: plan.destinationAsset.chainId, asset: plan.destinationAsset.key },
     bridgeProtocol: plan.protocol,
     amount: plan.amountIn,
     recipient: plan.recipient,
     ...(plan.sender ? { sender: plan.sender } : {}),
-    // Public is the default; an explicit Aleo mint mode is invalid for EVM delivery.
-    ...(plan.mintMode !== 'public' ? { mintMode: plan.mintMode } : {}),
   }
+  if (plan.mintMode === 'private') {
+    if (!circle) throw new Error('A private mint plan needs a nonce source; pass circle with the store, scalar, or wallet preparation')
+    return { ...base, mintMode: 'private', circle }
+  }
+  // Public is the default; an explicit Aleo mint mode is invalid for EVM delivery.
+  return { ...base, ...(plan.mintMode === 'record' ? { mintMode: 'record' } : {}) }
 }
 
 export type LiveState = {

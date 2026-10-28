@@ -31,7 +31,19 @@ describe('live bridge quote parameters', () => {
       recipient: `aleo1${'a'.repeat(58)}`,
       mintMode,
     })
-    expect(prepare(DEFAULT_BRIDGE_REGISTRY, quoteParametersFromPlan(plan))).toEqual(plan)
+    const circle = mintMode === 'private' ? { privateMintSecretNonce: '0scalar' } : undefined
+    expect(prepare(DEFAULT_BRIDGE_REGISTRY, quoteParametersFromPlan(plan, circle))).toEqual(plan)
+  })
+
+  it('refuses to rebuild a private mint quote without a nonce source', () => {
+    const plan = prepare(DEFAULT_BRIDGE_REGISTRY, {
+      source: { chain: 'ethereum', asset: 'usdc' },
+      destination: { chain: 'aleo', asset: 'usdcx' },
+      amount: '2',
+      recipient: `aleo1${'a'.repeat(58)}`,
+      mintMode: 'private',
+    })
+    expect(() => quoteParametersFromPlan(plan)).toThrow(/needs a nonce source/)
   })
 })
 
