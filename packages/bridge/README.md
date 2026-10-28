@@ -394,16 +394,10 @@ console.log(quote.nativeFeeAtomic)
 `quote.plan` identifies the exact route, amount, recipient, and reviewed
 deployment that produced the quote. Keep this value unchanged for execution.
 
-For a private USDCx mint with a local Aleo account, the bridge client reserves a
-counter and derives the scalar and address commitment itself. The derivation is
-compatible with Shield's network-specific derivation, but neither quoting nor
-completion connects to Shield. The nonce is
-`Poseidon8.hashToScalar([wrapper_address_field, network_domain, view_key_field, counter_field])`;
-the domain is the little-endian ASCII field for `shielded_usdcx_mainnet` or
-`shielded_usdcx_testnet`. The hook contains selector `2`, the 32 little-endian
-BHP256 commitment bytes, and 32 reserved zero bytes. This follows
-[shield-core master at cc29a60](https://github.com/ProvableHQ/shield-core/blob/cc29a60dad12bbd31fea4552ba01f9606dc6f53f/src/domains/dapp/fulfillment/derivedInput/algorithms.ts).
-Persist the identity store for any long-running process:
+A private USDCx mint (`mintMode: 'private'`) also needs a nonce source. A local
+Aleo account derives one through the client's identity store, a connected
+wallet prepares one, or a legacy caller supplies a scalar. Each is passed under
+the `circle` option; see [Private USDCx mints](./docs/private-usdcx-mints.md).
 
 ```ts
 import { fileXReservePrivateMintIdentityStore } from '@provablehq/aleo-bridge-sdk/node'
@@ -411,121 +405,9 @@ import { fileXReservePrivateMintIdentityStore } from '@provablehq/aleo-bridge-sd
 const bridge = createBridgeClient({
   environment: 'mainnet',
   clients,
-  circle: {
-    privateMintIdentities: fileXReservePrivateMintIdentityStore('.veil/xreserve-private-mints.json'),
-  },
-})
-
-const quote = await bridge.quote({
-  source: { chain: 'ethereum', asset: 'usdc' },
-  destination: { chain: 'aleo', asset: 'usdcx' },
-  amount: '10',
-  sender: ethereumAddress,
-  recipient: aleoAddress,
-  mintMode: 'private',
+  circle: { privateMintIdentities: fileXReservePrivateMintIdentityStore('.veil/xreserve-private-mints.json') },
 })
 ```
-
-The store records the counter, derived scalar, recipient, and public commitment
-before the quote returns. `quote.plan` carries that commitment, so passing the
-plan to `execute` deposits against the quoted identity without reserving a
-second one. Execution rejects a different `circle.privateMintAddressCommitment`,
-a `circle.walletPreparedDeposit`, or a `circle.privateMintSecretNonce` combined
-with such a plan; quote again with the intended nonce source instead. Every
-quote reserves a new counter, so quote once per intended deposit rather than on
-every price refresh.
-
-Every Circle-specific option lives under the `circle` key of quote, execute,
-resume, complete, and recover, and the identity store under `circle` of the
-client config. The flat `privateMintSecretNonce` and `cctp` call options from
-earlier releases still work and are deprecated; supplying a field in both forms
-with different values is rejected.
-The default in-memory store serializes concurrent
-deposits but does not survive a restart. Treat a durable store like a view key:
-its scalars can link and authorize the corresponding private mints. The supplied
-Node file store uses atomic `0600` replacements and locks reservations across
-processes sharing the same path. A companion `.counter` file consumes each
-allocation before derivation; failed derivation, failed identity persistence,
-cancelled transfers, and rejected transactions never recycle that counter.
-Back up and restore both files together before issuing further identities.
-Use a dedicated store per signing account, network, and wrapper deployment.
-Custom production stores MUST implement `allocateCounter` with a durable
-watermark and `runExclusive` with a transaction or distributed lock when shared
-by multiple workers. Legacy stores without `allocateCounter` infer the next
-counter from saved identities and cannot retain allocations after a failed save.
-
-Shield's wallet store persists public counter associations and derives secrets
-inside the wallet. This programmatic store retains derived scalars for completion
-without a wallet connection. Existing stored identities remain usable after a
-derivation update because completion uses their original scalar. The older
-network-independent `shielded_usdcx` domain is retained as an exported constant
-for compatibility; new identities use the network-specific domains above.
-
-#### Wallet-prepared private USDCx mints
-
-A connected wallet can prepare the public deposit commitment and retain the
-secret nonce. The SDK accepts the same `walletPreparedDeposit` and
-`privateMintNonceInput` values used by the bridge SDK patch in
-[AMM PR #920](https://github.com/ProvableHQ/amm-v3-monorepo/pull/920), under
-the `circle` option. This path does not allocate or read a local private-mint
-identity.
-
-Before depositing, the application MUST validate the wallet's full preparation
-against the reviewed route, amount, source account, recipient, and network, and
-durably save it. A failed save MUST stop execution. The SDK accepts only the
-public hook and wrapper recipient; it cannot check fields excluded from that
-pair. It validates the canonical private hook and the reviewed wrapper address,
-and builds the actual EVM deposit from the transfer plan and registry.
-
-```ts
-import type { WalletPreparedXReserveDeposit } from '@provablehq/aleo-bridge-sdk'
-import type { TransactionInput } from '@provablehq/veil-core'
-
-// `preparation` has been validated and durably saved by the application.
-const walletPreparedDeposit: WalletPreparedXReserveDeposit = {
-  remoteRecipientBytes32: preparation.deposit.remoteRecipient,
-  hookData: preparation.deposit.hookData,
-}
-const quote = await bridge.quote({
-  source: { chain: 'ethereum', asset: 'usdc' },
-  destination: { chain: 'aleo', asset: 'usdcx' },
-  amount: '10', sender: ethereumAddress, recipient: aleoAddress,
-  mintMode: 'private', circle: { walletPreparedDeposit },
-})
-const execution = await bridge.execute({
-  plan: quote.plan, circle: { walletPreparedDeposit }, onCheckpoint: saveCheckpoint,
-})
-let progress = await bridge.wait({
-  progress: { next: 'wait', plan: quote.plan, receipt: execution.receipt },
-})
-if (progress.next === 'complete') {
-  const privateMintNonceInput: TransactionInput = {
-    type: 'derived',
-    algorithm: 'shielded-usdcx-secret-nonce',
-    args: {
-      commitment: { type: 'string', value: preparation.commitmentHex },
-      recipient: { type: 'address', value: quote.plan.recipient },
-    },
-  }
-  await bridge.complete({ progress, circle: { walletPreparedDeposit, privateMintNonceInput } })
-}
-```
-
-The wallet must support `shielded-usdcx-secret-nonce` and authorize that
-algorithm for input position 3 of the reviewed wrapper's `private_mint` call.
-The SDK rejects a derived request with a different algorithm, commitment, or
-recipient, and rejects local accounts on this path. Do not combine a wallet
-preparation with `circle.privateMintSecretNonce` or
-`circle.privateMintAddressCommitment`.
-
-After a reload, recover the bridge checkpoint and restore the saved wallet
-preparation. Pass that preparation to `resume` if an approval remains unfinished,
-or pass it together with the derived nonce request to `complete` after Circle
-attestation. The SDK checks the preparation against the checkpointed approval
-hook or attested deposit hook before submission. Checkpoints retain the public
-hook; the application retains the full preparation, and the wallet retains its
-secret. The [wallet example](./examples/wallet-private-mint.ts) builds the two
-options without requesting a signature or contacting a network.
 
 ### 2. Authorize the source transfer
 
@@ -614,10 +496,9 @@ A checkpoint contains the public transfer intent and transaction identifiers
 needed to find the transfer again. It excludes private keys, Aleo record
 plaintext, proofs, and private-mint secret nonces.
 
-Locally derived private mints checkpoint only the public address commitment.
-During `complete`, the SDK retrieves the matching scalar from its identity store
-and supplies it directly to `private_mint`. Restore the same durable identity
-store alongside a bridge checkpoint after a process restart.
+A locally derived private mint checkpoints only its public commitment; restore
+the same identity store with the checkpoint. See
+[recovering a private mint](./docs/private-usdcx-mints.md#recover-after-a-restart).
 
 The SDK calls `onCheckpoint` at supported submission boundaries. The callback
 does not imply a storage system. A browser can use IndexedDB or local storage;
