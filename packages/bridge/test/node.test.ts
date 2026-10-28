@@ -139,7 +139,7 @@ describe('Node private-mint identity store', () => {
     const inputs: unknown[] = []
     const bridge = createBridgeClient({
       environment: 'testnet',
-      privateMintIdentities: fileXReservePrivateMintIdentityStore(path),
+      circle: { privateMintIdentities: fileXReservePrivateMintIdentityStore(path) },
       clients: {
         'aleo-testnet': createAleoClient({
           publicClient: {} as never,

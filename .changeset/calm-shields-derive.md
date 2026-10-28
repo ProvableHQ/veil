@@ -7,9 +7,19 @@ SDK now reserves persistent counters, derives the scalar and BHP256 address
 commitment locally, checkpoints only the public commitment, and retrieves the
 scalar from its identity store when submitting `private_mint`.
 
-A quoted plan carries its reserved commitment, so `execute({ plan: quote.plan })`
-deposits against the quoted identity instead of reserving a second one, and
-rejects a conflicting commitment, wallet preparation, or legacy nonce.
+A quoted plan carries its reserved commitment under `plan.circle`, so
+`execute({ plan: quote.plan })` deposits against the quoted identity instead of
+reserving a second one, and rejects a conflicting commitment, wallet
+preparation, or legacy nonce.
+
+Group every Circle-specific option under a `circle` key: the identity store,
+reserved commitment, wallet preparation, nonce input, and legacy secret nonce
+for xReserve private mints, and the manual-mint and approval-replacement
+overrides for CCTP. The bridge client takes the identity store as
+`circle.privateMintIdentities` and supplies it to quote, execute, and complete.
+The flat `privateMintSecretNonce` and `cctp` call options are deprecated and
+still accepted; a field supplied in both forms with different values is
+rejected.
 
 The Node identity store atomically replaces files with `0600` permissions and
 locks reservations across processes sharing the same path. A regular file left

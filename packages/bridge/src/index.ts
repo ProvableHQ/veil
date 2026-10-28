@@ -7,6 +7,7 @@ export {
   bridgeActions,
   type BridgeActions,
   type BridgeActionsConfig,
+  type BridgeCircleConfig,
 } from './clients/decorators/bridge.js'
 export {
   createEvmClient,
@@ -111,6 +112,12 @@ export type {
   ProtocolBridgeRoute,
 } from './types/protocol.js'
 export type {
+  CircleOptions,
+  CompleteCircleOptions,
+  ExecuteCircleOptions,
+  QuoteCircleOptions,
+  RecoverCircleOptions,
+  ResumeCircleOptions,
   ExecuteParameters,
   CompleteParameters,
   GetStatusParameters,

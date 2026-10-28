@@ -17,11 +17,9 @@ import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { formatDecimalAmount, parseDecimalAmount } from '../utils/units.js'
 import { prepare } from './prepare.js'
-import {
-  memoryXReservePrivateMintIdentityStore,
-  type XReservePrivateMintIdentityStore,
-} from '../utils/xreservePrivateMintStore.js'
+import { memoryXReservePrivateMintIdentityStore } from '../utils/xreservePrivateMintStore.js'
 import { resolvePrivateMintAddressCommitment } from './internal/privateMintIdentity.js'
+import { resolveCircleOptions } from './internal/circleOptions.js'
 
 /**
  * Calculates the funds and fees required to begin a cross-chain transfer.
@@ -40,7 +38,6 @@ import { resolvePrivateMintAddressCommitment } from './internal/privateMintIdent
  * @param clients Network access for the chains involved in the transfer.
  * @param params Transfer details whose current cost and requirements are calculated.
  * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
- * @param privateMintIdentities Counter and scalar persistence for locally derived private mints.
  * @returns The amount expected at the destination and the known bridge, network, and approval costs.
  * @throws BridgeError When the selected provider cannot quote the transfer or required network access is unavailable.
  * @example const result = await quote(registry, clients, { source, destination, amount: '1', recipient })
@@ -50,30 +47,31 @@ export async function quote(
   clients: BridgeChainClients,
   params: QuoteParameters,
   fetcher: typeof fetch = globalThis.fetch,
-  privateMintIdentities: XReservePrivateMintIdentityStore = memoryXReservePrivateMintIdentityStore(),
 ): Promise<BridgeQuote> {
   // Build the canonical plan before reading live prices. The returned plan is
   // the exact value the caller passes to execution and stores in progress.
   const prepared = prepare(registry, params)
   if (prepared.protocol === 'cctp') return cctp.quote(registry, clients, fetcher, { plan: prepared })
+  const circleOptions = resolveCircleOptions(params)
+  const privateMintIdentities = circleOptions.privateMintIdentities ?? memoryXReservePrivateMintIdentityStore()
   // Wallet preparations already reserve their nonce inside the wallet.
-  const privateMintAddressCommitment = params.walletPreparedDeposit === undefined
+  const privateMintAddressCommitment = circleOptions.walletPreparedDeposit === undefined
     ? await resolvePrivateMintAddressCommitment(
         registry, clients, privateMintIdentities, prepared,
-        params.privateMintAddressCommitment, params.privateMintSecretNonce,
+        circleOptions.privateMintAddressCommitment, circleOptions.privateMintSecretNonce,
       )
-    : params.privateMintAddressCommitment
+    : circleOptions.privateMintAddressCommitment
   // A reserved identity travels with the plan so execution deposits against
   // the quoted commitment instead of reserving a second one.
   const plan = privateMintAddressCommitment === undefined
     ? prepared
-    : { ...prepared, privateMintAddressCommitment }
+    : { ...prepared, circle: { privateMintAddressCommitment } }
   const protocolParams = {
     plan,
-    walletPreparedDeposit: params.walletPreparedDeposit,
-    privateMintNonceInput: params.privateMintNonceInput,
+    walletPreparedDeposit: circleOptions.walletPreparedDeposit,
+    privateMintNonceInput: circleOptions.privateMintNonceInput,
     privateMintAddressCommitment,
-    privateMintSecretNonce: params.privateMintSecretNonce,
+    privateMintSecretNonce: circleOptions.privateMintSecretNonce,
   }
   // Quote from the source side because that is where funds, approvals, and the
   // first network fee are paid. The validated route selects the protocol helper.

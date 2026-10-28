@@ -123,7 +123,7 @@ describe('Ethereum xReserve actions', () => {
           } as never,
         }),
       },
-      privateMintIdentities: { load, save },
+      circle: { privateMintIdentities: { load, save } },
     })
     const prepared = {
       remoteRecipientBytes32: aleoAddressToBytes32(await aleoProgramAddress('shielded_usdcx_wrapper.aleo', 'testnet')),
@@ -133,13 +133,13 @@ describe('Ethereum xReserve actions', () => {
       source: { chain: 'sepolia', asset: 'usdc' },
       destination: { chain: 'aleo-testnet', asset: 'usdcx' },
       amount: '2', recipient: RECIPIENT, sender: ACCOUNT, mintMode: 'private',
-      walletPreparedDeposit: prepared,
+      circle: { walletPreparedDeposit: prepared },
     })
     expect(quote).toMatchObject({ kind: 'evm-xreserve', ...prepared })
     const checkpoints: unknown[] = []
     const result = await bridge.execute({
       plan: quote.plan,
-      walletPreparedDeposit: prepared,
+      circle: { walletPreparedDeposit: prepared },
       onCheckpoint(checkpoint) { checkpoints.push(checkpoint) },
     })
     expect(result.receipt.status).toBe('ATTESTATION_PENDING')
@@ -164,7 +164,7 @@ describe('Ethereum xReserve actions', () => {
       remoteRecipientBytes32: aleoAddressToBytes32(await aleoProgramAddress('shielded_usdcx_wrapper.aleo', 'testnet')),
       hookData: `0x02${'33'.repeat(32)}${'00'.repeat(32)}` as Hex,
     }
-    const execution = await bridge.execute({ plan, walletPreparedDeposit: prepared, confirmationTimeoutMs: 0 })
+    const execution = await bridge.execute({ plan, circle: { walletPreparedDeposit: prepared }, confirmationTimeoutMs: 0 })
     expect(execution.receipt.status).toBe('SOURCE_APPROVAL_PENDING')
     confirmApproval.value = true
     const progress = await bridge.recover({ checkpoint: createBridgeCheckpoint(plan, execution.receipt) })
@@ -172,10 +172,10 @@ describe('Ethereum xReserve actions', () => {
     if (progress.next !== 'resume') throw new Error('Expected the approval to be resumable')
     await expect(bridge.resume({
       progress,
-      walletPreparedDeposit: { ...prepared, hookData: `0x02${'44'.repeat(32)}${'00'.repeat(32)}` },
+      circle: { walletPreparedDeposit: { ...prepared, hookData: `0x02${'44'.repeat(32)}${'00'.repeat(32)}` } },
     })).rejects.toThrow(/checkpointed approval/)
     expect(sent).toHaveLength(1)
-    const result = await bridge.resume({ progress, walletPreparedDeposit: prepared })
+    const result = await bridge.resume({ progress, circle: { walletPreparedDeposit: prepared } })
     expect(result.receipt.status).toBe('ATTESTATION_PENDING')
     expect(sent).toHaveLength(2)
     expect(result.receipt.protocolState.hookData).toBe(prepared.hookData)
@@ -252,7 +252,7 @@ describe('Ethereum xReserve actions', () => {
     const privateMintIdentities = memoryXReservePrivateMintIdentityStore()
     const bridge = createBridgeClient({
       environment: 'testnet',
-      privateMintIdentities,
+      circle: { privateMintIdentities },
       clients: {
         sepolia: { family: 'evm', publicClient: executor.publicClient },
         'aleo-testnet': createAleoClient({
@@ -291,7 +291,7 @@ describe('Ethereum xReserve actions', () => {
     const privateMintIdentities = memoryXReservePrivateMintIdentityStore()
     const bridge = createBridgeClient({
       environment: 'testnet',
-      privateMintIdentities,
+      circle: { privateMintIdentities },
       clients: {
         sepolia: executor,
         'aleo-testnet': createAleoClient({
@@ -309,7 +309,7 @@ describe('Ethereum xReserve actions', () => {
       amount: '2', recipient: RECIPIENT, sender: ACCOUNT, mintMode: 'private',
     })
     if (quote.kind !== 'evm-xreserve') throw new Error(`Expected evm-xreserve, received ${quote.kind}`)
-    expect(quote.plan.privateMintAddressCommitment).toBe(quote.privateMintAddressCommitment)
+    expect(quote.plan.circle?.privateMintAddressCommitment).toBe(quote.privateMintAddressCommitment)
 
     const execution = await bridge.execute({ plan: quote.plan })
 
@@ -322,9 +322,9 @@ describe('Ethereum xReserve actions', () => {
       functionName: 'depositToRemote',
       args: [2_000_000n, 10_002, quote.remoteRecipientBytes32, TOKEN, 100_000n, quote.hookData],
     })
-    await expect(bridge.execute({ plan: quote.plan, privateMintAddressCommitment: '33'.repeat(32) }))
+    await expect(bridge.execute({ plan: quote.plan, circle: { privateMintAddressCommitment: '33'.repeat(32) } }))
       .rejects.toThrow(/does not match the quoted plan/)
-    await expect(bridge.execute({ plan: quote.plan, privateMintSecretNonce: '7scalar' }))
+    await expect(bridge.execute({ plan: quote.plan, circle: { privateMintSecretNonce: '7scalar' } }))
       .rejects.toThrow(/reserved a local private mint identity/)
     expect(await privateMintIdentities.load()).toHaveLength(1)
   })
@@ -626,7 +626,7 @@ describe('Ethereum xReserve actions', () => {
 
     await execute(DEFAULT_BRIDGE_REGISTRY, { sepolia: executor }, {
       plan: transfer,
-      privateMintAddressCommitment: commitment,
+      circle: { privateMintAddressCommitment: commitment },
       confirmationTimeoutMs: 0,
       onCheckpoint(value) { checkpoint = value },
     })
