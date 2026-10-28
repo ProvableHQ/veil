@@ -21,7 +21,7 @@ import {
  *
  * @property privateMintIdentities Counter and scalar persistence for locally derived private USDCx identities. Supplied as the default `circle.privateMintIdentities` of quote, execute, and complete. Defaults to memory.
  */
-export type BridgeCircleConfig = {
+export type CircleBridgeConfig = {
   privateMintIdentities?: XReservePrivateMintIdentityStore | undefined
 }
 
@@ -36,7 +36,7 @@ export type BridgeActionsConfig = {
   registry: BridgeRegistry
   clients: BridgeChainClients
   fetch: typeof globalThis.fetch
-  circle?: BridgeCircleConfig | undefined
+  circle?: CircleBridgeConfig | undefined
 }
 
 /**

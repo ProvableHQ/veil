@@ -7,7 +7,7 @@ export {
   bridgeActions,
   type BridgeActions,
   type BridgeActionsConfig,
-  type BridgeCircleConfig,
+  type CircleBridgeConfig,
 } from './clients/decorators/bridge.js'
 export {
   createEvmClient,

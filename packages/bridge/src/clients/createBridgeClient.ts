@@ -4,7 +4,7 @@ import { DEFAULT_BRIDGE_REGISTRY } from '../registry/default.js'
 import { validateBridgeRegistry } from '../registry/validate.js'
 import type { BridgeEnvironment, BridgeRegistry } from '../types/protocol.js'
 import { memoryXReservePrivateMintIdentityStore } from '../utils/xreservePrivateMintStore.js'
-import type { BridgeCircleConfig } from './decorators/bridge.js'
+import type { CircleBridgeConfig } from './decorators/bridge.js'
 
 /**
  * Configures the chains, wallets, providers, and route catalog available to a bridge client.
@@ -24,7 +24,7 @@ export type BridgeClientConfig = {
   fetch?: typeof globalThis.fetch | undefined
   key?: string | undefined
   name?: string | undefined
-  circle?: BridgeCircleConfig | undefined
+  circle?: CircleBridgeConfig | undefined
 }
 
 /**
