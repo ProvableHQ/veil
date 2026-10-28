@@ -17,7 +17,6 @@ import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { formatDecimalAmount, parseDecimalAmount } from '../utils/units.js'
 import { prepare } from './prepare.js'
-import { memoryXReservePrivateMintIdentityStore } from '../utils/xreservePrivateMintStore.js'
 import { resolvePrivateMintAddressCommitment } from './internal/privateMintIdentity.js'
 import { resolveCircleOptions } from './internal/circleOptions.js'
 
@@ -39,7 +38,7 @@ import { resolveCircleOptions } from './internal/circleOptions.js'
  * @param params Transfer details whose current cost and requirements are calculated.
  * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
  * @returns The amount expected at the destination and the known bridge, network, and approval costs.
- * @throws BridgeError When the selected provider cannot quote the transfer or required network access is unavailable.
+ * @throws BridgeError When the selected provider cannot quote the transfer, required network access is unavailable, or a standalone local private mint omits `circle.privateMintIdentities`.
  * @example const result = await quote(registry, clients, { source, destination, amount: '1', recipient })
  */
 export async function quote(
@@ -53,7 +52,7 @@ export async function quote(
   const prepared = prepare(registry, params)
   if (prepared.protocol === 'cctp') return cctp.quote(registry, clients, fetcher, { plan: prepared })
   const circleOptions = resolveCircleOptions(params)
-  const privateMintIdentities = circleOptions.privateMintIdentities ?? memoryXReservePrivateMintIdentityStore()
+  const privateMintIdentities = circleOptions.privateMintIdentities
   // Wallet preparations already reserve their nonce inside the wallet.
   const privateMintAddressCommitment = circleOptions.walletPreparedDeposit === undefined
     ? await resolvePrivateMintAddressCommitment(

@@ -43,6 +43,22 @@ Treat the store file like a view key: its scalars can link and authorize the
 corresponding private mints. Use one store per signing account, network, and
 wrapper deployment.
 
+The exported standalone `quote`, `execute`, and `complete` functions do not own
+a client lifetime. Pass the same store explicitly when deriving a local
+identity or looking up its scalar; omission fails before automatic derivation
+or source submission. Client-bound actions supply their configured store.
+
+```ts
+import { quote, execute, complete } from '@provablehq/aleo-bridge-sdk'
+import { fileXReservePrivateMintIdentityStore } from '@provablehq/aleo-bridge-sdk/node'
+
+const circle = { privateMintIdentities: fileXReservePrivateMintIdentityStore('.veil/mints.json') }
+const quoted = await quote(registry, clients, { ...intent, mintMode: 'private', circle })
+const execution = await execute(registry, clients, { plan: quoted.plan, circle, onCheckpoint: saveCheckpoint })
+// After status polling returns progress whose next operation is `complete`:
+await complete(registry, clients, { progress: readyProgress, circle, onCheckpoint: saveCheckpoint })
+```
+
 ### Quote once per deposit
 
 Quoting reserves an identity and returns its commitment on the plan. Every
@@ -120,7 +136,17 @@ to the identity file.
 - Each save replaces the file atomically with `0600` permissions.
 - Reservations lock across store instances and Node processes that share the
   path. A regular file left at the lock path fails the reservation immediately.
+- A lock is published with its complete, uniquely named owner file. Cleanup
+  removes only that owner's file and an empty directory, so a stale contender
+  cannot delete a replacement owner's lock.
 - Back up and restore the identity file and its `.counter` together.
+
+The store automatically reclaims only locks belonging to confirmed dead
+processes on the same host. A foreign-host owner is not declared dead because
+of elapsed time. Malformed lock metadata and locks from older builds using
+`owner.json` fail closed. Stop all users of the store and verify that no owner
+is active before manually removing such a `.lock` directory. The identity and
+counter file formats are unchanged.
 
 A custom store for a shared backend MUST implement the two optional methods:
 

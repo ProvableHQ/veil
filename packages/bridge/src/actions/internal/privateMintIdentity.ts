@@ -6,11 +6,27 @@ import { reserveXReservePrivateMintIdentity } from '../../utils/xreservePrivateM
 import { xReserveViewKeyToScalar } from '../../utils/xreserve.js'
 import { resolveTransferRoute } from './resolveTransferRoute.js'
 
-/** Resolves or reserves the public commitment used by a private EVM-to-Aleo deposit. */
+/**
+ * Resolves or reserves the public commitment used by a private EVM-to-Aleo deposit.
+ *
+ * Local derivation saves the scalar before returning its public commitment.
+ * Explicit nonce sources skip allocation. This helper makes no network calls.
+ *
+ * @param registry Reviewed route and wrapper deployment configuration.
+ * @param clients Chain capabilities containing the local recipient's view key.
+ * @param store Shared identity persistence. Required before local derivation; bound actions supply their client store.
+ * @param plan Private transfer identifying the recipient, network, and wrapper.
+ * @param suppliedCommitment Optional canonical 32-byte lowercase hexadecimal commitment. Skips local derivation when present.
+ * @param suppliedSecretNonce Optional caller-managed scalar. Skips local derivation when present.
+ * @returns The supplied or persisted public commitment, or `undefined` when local derivation does not apply.
+ * @throws BridgeError When local derivation lacks a store, wrapper metadata is invalid, or identity allocation fails.
+ * @example
+ * const commitment = await resolvePrivateMintAddressCommitment(registry, clients, store, plan)
+ */
 export async function resolvePrivateMintAddressCommitment(
   registry: BridgeRegistry,
   clients: BridgeChainClients,
-  store: XReservePrivateMintIdentityStore,
+  store: XReservePrivateMintIdentityStore | undefined,
   plan: BridgePlan,
   suppliedCommitment?: string,
   suppliedSecretNonce?: string,
@@ -25,6 +41,11 @@ export async function resolvePrivateMintAddressCommitment(
   // RPC wallets do not expose their view key. Preserve the existing explicit
   // secret path for those clients; local clients derive and reserve by default.
   if (account?.type !== 'local' || !account.viewKey) return undefined
+  if (!store) {
+    throw new BridgeError(
+      'Standalone local private mints require circle.privateMintIdentities. Supply a shared identity store or use createBridgeClient.',
+    )
+  }
   const wrapperProgram = route.route.metadata?.wrapperProgram
   if (typeof wrapperProgram !== 'string' || !wrapperProgram.endsWith('.aleo')) {
     throw new BridgeError(`xReserve wrapper program is invalid: ${route.route.id}`)

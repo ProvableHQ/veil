@@ -15,6 +15,8 @@ import {
   getAttestation as getXReserveAttestation,
 } from '../../src/protocols/xreserve/evmToAleo.js'
 import { execute } from '../../src/actions/execute.js'
+import { quote as quoteBridge } from '../../src/actions/quote.js'
+import { complete } from '../../src/actions/complete.js'
 import { wait } from '../../src/actions/wait.js'
 import { createBridgeCheckpoint } from '../../src/actions/createBridgeCheckpoint.js'
 import { createBridgeClient } from '../../src/clients/createBridgeClient.js'
@@ -107,6 +109,70 @@ function mockExecutor(
 }
 
 describe('Ethereum xReserve actions', () => {
+  it('rejects standalone automatic derivation without a shared store before submitting funds', async () => {
+    const { executor, sent } = mockExecutor()
+    const clients = {
+      sepolia: executor,
+      'aleo-testnet': createAleoClient({
+        publicClient: {} as never,
+        account: {
+          executeTransaction: vi.fn(),
+          account: { type: 'local', address: RECIPIENT, viewKey: 'AViewKey1sqm952gJj1tmAWySYDQvSv2NmfnyEMvU6a9ZBCuyG7PN' },
+        } as never,
+      }),
+    }
+    await expect(quoteBridge(DEFAULT_BRIDGE_REGISTRY, clients, {
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+      amount: '2', recipient: RECIPIENT, sender: ACCOUNT, mintMode: 'private',
+    })).rejects.toThrow(/require circle\.privateMintIdentities/)
+    await expect(execute(DEFAULT_BRIDGE_REGISTRY, clients, { plan: transferPlan('private') }))
+      .rejects.toThrow(/require circle\.privateMintIdentities/)
+    expect(sent).toHaveLength(0)
+  })
+
+  it('completes a standalone local private mint using the same explicitly supplied store', async () => {
+    const { executor, sent } = mockExecutor()
+    const privateMintIdentities = memoryXReservePrivateMintIdentityStore()
+    const circle = { privateMintIdentities }
+    const executeTransaction = vi.fn(async () => 'at1standalonemint')
+    const clients = {
+      sepolia: executor,
+      'aleo-testnet': createAleoClient({
+        publicClient: {} as never,
+        account: {
+          executeTransaction,
+          account: { type: 'local', address: RECIPIENT, viewKey: 'AViewKey1sqm952gJj1tmAWySYDQvSv2NmfnyEMvU6a9ZBCuyG7PN' },
+        } as never,
+      }),
+    }
+    const quote = await quoteBridge(DEFAULT_BRIDGE_REGISTRY, clients, {
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+      amount: '2', recipient: RECIPIENT, sender: ACCOUNT, mintMode: 'private', circle,
+    })
+    await expect(execute(DEFAULT_BRIDGE_REGISTRY, clients, { plan: quote.plan }))
+      .rejects.toThrow(/requires circle\.privateMintIdentities/)
+    expect(sent).toHaveLength(0)
+    const execution = await execute(DEFAULT_BRIDGE_REGISTRY, clients, { plan: quote.plan, circle })
+    expect(sent).toHaveLength(2)
+    const receipt: BridgeReceipt = {
+      ...execution.receipt, status: 'DESTINATION_ACTION_REQUIRED',
+      nextAction: { kind: 'xreserve-private-mint', chainId: 'aleo-testnet' },
+      protocolState: { ...execution.receipt.protocolState, attestation: `0x${'11'.repeat(65)}` },
+    }
+    await expect(complete(DEFAULT_BRIDGE_REGISTRY, clients, { plan: quote.plan, receipt }))
+      .rejects.toThrow(/completion requires circle\.privateMintIdentities/)
+    expect(executeTransaction).not.toHaveBeenCalled()
+    const completed = await complete(DEFAULT_BRIDGE_REGISTRY, clients, { plan: quote.plan, receipt, circle })
+    expect(completed).toMatchObject({ kind: 'aleo-xreserve', transactionId: 'at1standalonemint' })
+    const identities = await privateMintIdentities.load()
+    expect(identities).toHaveLength(1)
+    expect(executeTransaction).toHaveBeenCalledWith(expect.objectContaining({
+      inputs: expect.arrayContaining([identities[0]!.secretNonce, RECIPIENT]),
+    }))
+  })
+
   it('quotes and executes the AMM wallet preparation without allocating a local identity', async () => {
     const { executor, sent } = mockExecutor()
     const load = vi.fn(async () => { throw new Error('A wallet deposit must not load local identities') })

@@ -21,7 +21,6 @@ import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
 import type { Transaction } from '@provablehq/veil-core'
 import { readDestinationBalance } from './internal/readDestinationBalance.js'
 import { parseDecimalAmount } from '../utils/units.js'
-import { memoryXReservePrivateMintIdentityStore } from '../utils/xreservePrivateMintStore.js'
 import { resolvePrivateMintAddressCommitment } from './internal/privateMintIdentity.js'
 import { resolveCircleOptions } from './internal/circleOptions.js'
 
@@ -100,7 +99,7 @@ function xReserveBurnMode(mode: ExecuteParameters['mode']): XReserveBurnMode | u
  * @param params Transfer details, source wallet preferences, and an optional callback for saving recovery information.
  * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
  * @returns The submitted transaction identifier and the initial state of the in-progress transfer.
- * @throws BridgeError When the transfer is unsupported, the connected wallet cannot authorize it, current funds or fees are insufficient, or submission fails.
+ * @throws BridgeError When the transfer is unsupported, the connected wallet cannot authorize it, funds or fees are insufficient, a standalone local private mint omits its identity store, or submission fails.
  * @example const execution = await execute(registry, clients, { plan, onCheckpoint: saveCheckpoint })
  */
 export async function execute(
@@ -202,11 +201,16 @@ export async function execute(
       && (circleOptions.walletPreparedDeposit !== undefined || circleOptions.privateMintSecretNonce !== undefined)) {
       throw new BridgeError('The quoted plan reserved a local private mint identity. Quote again with the wallet preparation or legacy secret nonce.')
     }
+    if (quotedCommitment !== undefined && !circleOptions.privateMintIdentities) {
+      throw new BridgeError(
+        'Executing a quoted local private mint requires circle.privateMintIdentities. Supply the store that reserved the quoted identity.',
+      )
+    }
     const suppliedCommitment = circleOptions.privateMintAddressCommitment ?? quotedCommitment
     // Preserve the wallet's saved identity without allocating a local nonce.
     const privateMintAddressCommitment = circleOptions.walletPreparedDeposit === undefined
       ? await resolvePrivateMintAddressCommitment(
-          registry, clients, circleOptions.privateMintIdentities ?? memoryXReservePrivateMintIdentityStore(), params.plan,
+          registry, clients, circleOptions.privateMintIdentities, params.plan,
           suppliedCommitment, circleOptions.privateMintSecretNonce,
         )
       : suppliedCommitment

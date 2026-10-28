@@ -31,7 +31,7 @@ import type { XReservePrivateMintIdentityStore } from '../utils/xreservePrivateM
  *
  * @property manualMint Mints an attested, unused CCTP message directly when forwarding stalls. Defaults to waiting for forwarding.
  * @property approvalReplacement Confirmed CCTP approval that superseded a missing original. Recovery verifies the replacement without signing.
- * @property privateMintIdentities Store that reserves and resolves locally derived xReserve private mint identities. Defaults to the store configured on the bridge client, or memory for a standalone action.
+ * @property privateMintIdentities Store that reserves and resolves locally derived xReserve private mint identities. Defaults to the store configured on the bridge client. Standalone actions require an explicit shared store before deriving an identity or looking up its scalar.
  * @property privateMintAddressCommitment Public 32-byte commitment of a reserved identity, as lowercase hex. Defaults to the commitment carried by a quoted plan and must match it when both are present. Safe to checkpoint.
  * @property privateMintSecretNonce Legacy caller-managed Aleo scalar committed by a private xReserve deposit. Never persisted in a checkpoint.
  * @property walletPreparedDeposit Durably saved public wallet preparation. Replaces local commitment derivation.
