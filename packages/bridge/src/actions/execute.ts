@@ -21,9 +21,9 @@ import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
 import type { Transaction } from '@provablehq/veil-core'
 import { readDestinationBalance } from './internal/readDestinationBalance.js'
 import { parseDecimalAmount } from '../utils/units.js'
-import { memoryXReservePrivateMintIdentityStore } from '../utils/xreservePrivateMintStore.js'
 import { resolvePrivateMintAddressCommitment } from './internal/privateMintIdentity.js'
 import { resolveCircleOptions } from './internal/circleOptions.js'
+import { findXReservePrivateMintIdentity } from '../utils/xreservePrivateMintStore.js'
 
 type DeliveryVerification = {
   destinationBalanceBeforeAtomic: string
@@ -100,7 +100,7 @@ function xReserveBurnMode(mode: ExecuteParameters['mode']): XReserveBurnMode | u
  * @param params Transfer details, source wallet preferences, and an optional callback for saving recovery information.
  * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
  * @returns The submitted transaction identifier and the initial state of the in-progress transfer.
- * @throws BridgeError When the transfer is unsupported, the connected wallet cannot authorize it, current funds or fees are insufficient, or submission fails.
+ * @throws BridgeError When the transfer is unsupported, the connected wallet cannot authorize it, funds or fees are insufficient, a standalone local private mint omits its identity store, or submission fails.
  * @example const execution = await execute(registry, clients, { plan, onCheckpoint: saveCheckpoint })
  */
 export async function execute(
@@ -203,10 +203,29 @@ export async function execute(
       throw new BridgeError('The quoted plan reserved a local private mint identity. Quote again with the wallet preparation or legacy secret nonce.')
     }
     const suppliedCommitment = circleOptions.privateMintAddressCommitment ?? quotedCommitment
+    // A commitment the caller supplied, on this call or while quoting, is
+    // caller-managed: the caller retains its scalar, so no store needs to hold
+    // it. A store-managed commitment must resolve before the first source
+    // signature. Either way, a stored identity must name the plan's recipient.
+    if (params.plan.mintMode === 'private' && suppliedCommitment !== undefined
+      && circleOptions.walletPreparedDeposit === undefined && circleOptions.privateMintSecretNonce === undefined) {
+      const callerManaged = quotedCommitment === undefined || params.plan.circle?.privateMintIdentitySource === 'external'
+      const identity = circleOptions.privateMintIdentities === undefined
+        ? undefined
+        : await findXReservePrivateMintIdentity(circleOptions.privateMintIdentities, suppliedCommitment)
+      if (identity === undefined && !callerManaged) {
+        throw new BridgeError(circleOptions.privateMintIdentities === undefined
+          ? 'Executing a quoted local private mint requires circle.privateMintIdentities. Supply the store that reserved the quoted identity.'
+          : 'Private mint identity is not present in the supplied store. Supply the store that reserved this commitment before depositing.')
+      }
+      if (identity !== undefined && identity.recipient !== params.plan.recipient) {
+        throw new BridgeError('Stored private mint identity does not match the transfer recipient')
+      }
+    }
     // Preserve the wallet's saved identity without allocating a local nonce.
     const privateMintAddressCommitment = circleOptions.walletPreparedDeposit === undefined
       ? await resolvePrivateMintAddressCommitment(
-          registry, clients, circleOptions.privateMintIdentities ?? memoryXReservePrivateMintIdentityStore(), params.plan,
+          registry, clients, circleOptions.privateMintIdentities, params.plan,
           suppliedCommitment, circleOptions.privateMintSecretNonce,
         )
       : suppliedCommitment

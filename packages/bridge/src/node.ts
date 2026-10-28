@@ -1,4 +1,4 @@
-import { mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises'
+import { mkdir, open, readFile, readdir, rename, rm, rmdir, stat, unlink } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -17,9 +17,18 @@ import type {
  * a filesystem lock across store instances and Node processes. A companion
  * `.counter` file permanently consumes allocations before derivation. Both files
  * MUST be backed up and restored together before issuing further identities.
+ * Locks belonging to a confirmed dead process on this host are reclaimed by
+ * removing its unique owner file. Foreign-host and unrecognized locks require
+ * operator verification; elapsed time alone never authorizes their removal.
  *
  * @param path File that persists the monotonically allocated identities.
- * @returns A store suitable for `createBridgeClient({ privateMintIdentities })`.
+ * @returns A store suitable for `createBridgeClient({ circle: { privateMintIdentities } })`.
+ * @example
+ * import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'
+ * import { fileXReservePrivateMintIdentityStore } from '@provablehq/aleo-bridge-sdk/node'
+ * const bridge = createBridgeClient({
+ *   circle: { privateMintIdentities: fileXReservePrivateMintIdentityStore('.veil/mints.json') },
+ * })
  */
 export function fileXReservePrivateMintIdentityStore(
   path: string,
@@ -78,54 +87,59 @@ export function fileXReservePrivateMintIdentityStore(
   store.runExclusive = async <T>(action: () => Promise<T>): Promise<T> => {
     await mkdir(directory, { recursive: true })
     const owner = { token: randomUUID(), pid: process.pid, hostname: hostname(), createdAt: Date.now() }
+    const candidate = `${lockPath}.${owner.token}.tmp`
     const deadline = Date.now() + 30_000
-    while (true) {
-      let createdLock = false
+    await mkdir(candidate, { mode: 0o700 })
+    let published = false
+    let lastOwner: LockOwner | undefined
+    try {
+      // Publish the directory only after its unique owner file is complete.
+      // An empty shared lock directory can then only belong to a released or
+      // interrupted cleanup, never a live owner still initializing its lock.
+      const handle = await open(join(candidate, ownerFilename(owner.token)), 'wx', 0o600)
       try {
-        await mkdir(lockPath, { mode: 0o700 })
-        createdLock = true
-        const ownerFile = join(lockPath, 'owner.json')
-        const handle = await open(ownerFile, 'wx', 0o600)
-        try {
-          await handle.writeFile(JSON.stringify(owner), 'utf8')
-          await handle.sync()
-        } finally {
-          await handle.close()
-        }
-        break
-      } catch (cause) {
-        if (createdLock) {
-          await rm(lockPath, { recursive: true, force: true }).catch(() => {})
-          throw new Error(`Private mint identity lock ${lockPath} could not be initialized.`, { cause })
-        }
-        const code = (cause as { code?: string } | undefined)?.code
-        if (code !== 'EEXIST') {
-          // A contender may observe the directory between its creation and the
-          // owner file write. Treat that short window as an active lock.
-          if (code !== 'ENOENT') throw new Error(`Private mint identity lock ${lockPath} failed.`, { cause })
-        }
-        // A regular file at the lock path can never become a lock directory.
-        // Name the cause instead of spinning until the deadline.
-        const occupant = await stat(lockPath).catch(() => undefined)
-        if (occupant !== undefined && !occupant.isDirectory()) {
-          throw new Error(`Private mint identity lock ${lockPath} is occupied by a file that is not a lock directory. Remove it before reserving identities.`)
-        }
-        if (await lockIsAbandoned(lockPath)) {
-          const abandoned = `${lockPath}.abandoned.${randomUUID()}`
-          try {
-            await rename(lockPath, abandoned)
-            await rm(abandoned, { recursive: true, force: true })
-          } catch (reclaimCause) {
-            const reclaimCode = (reclaimCause as { code?: string } | undefined)?.code
-            if (reclaimCode !== 'ENOENT') throw reclaimCause
-          }
-          continue
-        }
-        if (Date.now() >= deadline) {
-          throw new Error(`Timed out waiting for private mint identity lock ${lockPath}.`)
-        }
-        await new Promise<void>((resolve) => setTimeout(resolve, 25))
+        await handle.writeFile(JSON.stringify(owner), 'utf8')
+        await handle.sync()
+      } finally {
+        await handle.close()
       }
+      while (true) {
+        if (Date.now() >= deadline) {
+          throw new Error(lastOwner
+            ? `Timed out waiting for private mint identity lock ${lockPath}; last observed owner: pid ${lastOwner.pid} on ${lastOwner.hostname}. Stop all users of this store and verify that no owner is active before removing the lock directory.`
+            : `Timed out waiting for private mint identity lock ${lockPath}.`)
+        }
+        try {
+          await rename(candidate, lockPath)
+          published = true
+          break
+        } catch (cause) {
+          const code = (cause as { code?: string } | undefined)?.code
+          if (!['EEXIST', 'ENOTEMPTY', 'ENOTDIR', 'EISDIR', 'EPERM'].includes(code ?? '')) {
+            throw new Error(`Private mint identity lock ${lockPath} failed.`, { cause })
+          }
+          const occupant = await stat(lockPath).catch((error) => {
+            if ((error as { code?: string }).code === 'ENOENT') return undefined
+            throw error
+          })
+          if (occupant === undefined) {
+            lastOwner = undefined
+            if (code === 'EPERM') throw cause
+            continue
+          }
+          if (!occupant.isDirectory()) {
+            throw new Error(`Private mint identity lock ${lockPath} is occupied by a file that is not a lock directory. Remove it before reserving identities.`)
+          }
+          const reclaimed = await reclaimAbandonedLock(lockPath)
+          lastOwner = reclaimed.reclaimed ? undefined : reclaimed.owner
+          if (reclaimed.reclaimed) continue
+          await new Promise<void>((resolve) => setTimeout(resolve, 25))
+        }
+      }
+    } finally {
+      // This path is private to this contender, so recursive cleanup cannot
+      // remove a different owner's published lock.
+      if (!published) await rm(candidate, { recursive: true, force: true })
     }
     try {
       return await action()
@@ -176,38 +190,75 @@ async function syncDirectory(directory: string): Promise<void> {
   }
 }
 
-const STALE_LOCK_MS = 5 * 60_000
-
 type LockOwner = { token: string, pid: number, hostname: string, createdAt: number }
 
-async function lockIsAbandoned(lockPath: string): Promise<boolean> {
+/**
+ * Reports whether acquisition can retry or must wait on an observed owner.
+ * @property reclaimed Whether inspection permits an immediate retry without caching an owner.
+ * @property owner Last validated owner when safe reclamation could not be established.
+ */
+type ReclaimResult = { reclaimed: true } | { reclaimed: false; owner: LockOwner }
+
+function ownerFilename(token: string): string {
+  return `owner.${token}.json`
+}
+
+/** Removes only a positively identified dead owner's file, leaving replacement owners intact. */
+async function reclaimAbandonedLock(lockPath: string): Promise<ReclaimResult> {
+  let files: string[]
+  try {
+    files = await readdir(lockPath)
+  } catch (cause) {
+    if ((cause as { code?: string }).code === 'ENOENT') return { reclaimed: true }
+    throw cause
+  }
+  if (files.length === 0) {
+    await removeEmptyLock(lockPath)
+    return { reclaimed: true }
+  }
+  const match = files.length === 1 ? /^owner\.([0-9a-f-]{36})\.json$/.exec(files[0]!) : null
+  const invalidOwner = () => new Error(`Private mint identity lock ${lockPath} has an unrecognized owner. Stop all users of this store before removing the lock directory.`)
+  if (!match) throw invalidOwner()
   let owner: LockOwner
   try {
-    owner = JSON.parse(await readFile(join(lockPath, 'owner.json'), 'utf8')) as LockOwner
-  } catch {
-    try {
-      return Date.now() - (await stat(lockPath)).mtimeMs > STALE_LOCK_MS
-    } catch {
-      return false
-    }
+    owner = JSON.parse(await readFile(join(lockPath, files[0]!), 'utf8')) as LockOwner
+  } catch (cause) {
+    if ((cause as { code?: string }).code === 'ENOENT') return { reclaimed: true }
+    throw invalidOwner()
   }
-  if (owner.hostname === hostname() && Number.isSafeInteger(owner.pid) && owner.pid > 0) {
-    try {
-      process.kill(owner.pid, 0)
-      return false
-    } catch (cause) {
-      return (cause as { code?: string } | undefined)?.code === 'ESRCH'
-    }
+  if (!owner || owner.token !== match[1] || typeof owner.hostname !== 'string'
+    || !Number.isSafeInteger(owner.pid) || owner.pid <= 0) throw invalidOwner()
+  // An elapsed timeout cannot prove that a process on another host is dead.
+  if (owner.hostname !== hostname()) return { reclaimed: false, owner }
+  try {
+    process.kill(owner.pid, 0)
+    return { reclaimed: false, owner }
+  } catch (cause) {
+    if ((cause as { code?: string }).code !== 'ESRCH') return { reclaimed: false, owner }
   }
-  return Number.isFinite(owner.createdAt) && Date.now() - owner.createdAt > STALE_LOCK_MS
+  await releaseOwnedLock(lockPath, owner.token)
+  return { reclaimed: true }
 }
 
 async function releaseOwnedLock(lockPath: string, token: string): Promise<void> {
+  // Unlinking a token-specific name is the ownership check: a stale contender
+  // cannot unlink a newer owner's file, even after the shared path is reused.
   try {
-    const owner = JSON.parse(await readFile(join(lockPath, 'owner.json'), 'utf8')) as LockOwner
-    if (owner.token === token) await rm(lockPath, { recursive: true, force: true })
+    await unlink(join(lockPath, ownerFilename(token)))
   } catch (cause) {
-    if ((cause as { code?: string } | undefined)?.code !== 'ENOENT') throw cause
+    if ((cause as { code?: string }).code === 'ENOENT') return
+    throw cause
+  }
+  await removeEmptyLock(lockPath)
+}
+
+async function removeEmptyLock(lockPath: string): Promise<void> {
+  try {
+    await rmdir(lockPath)
+  } catch (cause) {
+    // A replacement lock is nonempty and MUST remain in place. An absent path
+    // means another contender already finished the same empty-lock cleanup.
+    if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes((cause as { code?: string }).code ?? '')) throw cause
   }
 }
 

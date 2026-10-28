@@ -3,7 +3,6 @@ import type { BridgeChainClients } from '../connections/resolve.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../registry/default.js'
 import { validateBridgeRegistry } from '../registry/validate.js'
 import type { BridgeEnvironment, BridgeRegistry } from '../types/protocol.js'
-import { memoryXReservePrivateMintIdentityStore } from '../utils/xreservePrivateMintStore.js'
 import type { CircleBridgeConfig } from './decorators/bridge.js'
 
 /**
@@ -64,15 +63,11 @@ export function createBridgeClient(config: BridgeClientConfig = {}): BridgeClien
   const registry = validateBridgeRegistry(config.registry ?? DEFAULT_BRIDGE_REGISTRY)
   const fetch = config.fetch ?? globalThis.fetch
   const clients = config.clients ?? {}
-  const circle = {
-    ...config.circle,
-    privateMintIdentities: config.circle?.privateMintIdentities ?? memoryXReservePrivateMintIdentityStore(),
-  }
   return {
     key: config.key ?? 'bridge',
     name: config.name ?? 'Bridge Client',
     environment,
     registry,
-    ...bridgeActions({ registry, clients, fetch, circle }),
+    ...bridgeActions({ registry, clients, fetch, circle: config.circle }),
   }
 }

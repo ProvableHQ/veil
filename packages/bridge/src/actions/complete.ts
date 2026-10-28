@@ -8,10 +8,7 @@ import type { BridgeReceipt, BridgeRegistry } from '../types/protocol.js'
 import { complete as completePrivateMint } from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
-import {
-  findXReservePrivateMintIdentity,
-  memoryXReservePrivateMintIdentityStore,
-} from '../utils/xreservePrivateMintStore.js'
+import { findXReservePrivateMintIdentity } from '../utils/xreservePrivateMintStore.js'
 import { resolveCircleOptions } from './internal/circleOptions.js'
 
 /**
@@ -29,7 +26,7 @@ import { resolveCircleOptions } from './internal/circleOptions.js'
  * @param params Transfer state ready for private delivery, fee preference, Circle options such as the nonce source or manual-mint override, and optional callback for saving recovery information.
  * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
  * @returns The destination transaction identifier and its confirmation state.
- * @throws BridgeError When no destination transaction is required, the Circle attestation is invalid, required wallet access is unavailable, or submission fails.
+ * @throws BridgeError When no destination transaction is required, the Circle attestation is invalid, a local identity's store or required wallet access is unavailable, or submission fails.
  * @example const execution = await complete(registry, clients, { plan, receipt: ready, onCheckpoint: save })
  */
 export async function complete(
@@ -139,8 +136,13 @@ export async function complete(
     if (typeof storedCommitment !== 'string' || !/^[0-9a-f]{64}$/.test(storedCommitment)) {
       throw new BridgeError('Ready xReserve receipt contains an invalid private mint address commitment')
     }
+    if (!circleOptions.privateMintIdentities) {
+      throw new BridgeError(
+        'Local private mint completion requires circle.privateMintIdentities. Supply the store that reserved the deposit identity.',
+      )
+    }
     const identity = await findXReservePrivateMintIdentity(
-      circleOptions.privateMintIdentities ?? memoryXReservePrivateMintIdentityStore(),
+      circleOptions.privateMintIdentities,
       storedCommitment,
     )
     if (!identity) {

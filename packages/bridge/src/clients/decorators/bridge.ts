@@ -19,7 +19,7 @@ import {
 /**
  * Circle-specific configuration shared by every bound action.
  *
- * @property privateMintIdentities Counter and scalar persistence for locally derived private USDCx identities. Supplied as the default `circle.privateMintIdentities` of quote, execute, and complete. Defaults to memory.
+ * @property privateMintIdentities Counter and scalar persistence for locally derived private USDCx identities. Supplied as the default `circle.privateMintIdentities` of quote, execute, and complete. Defaults to memory. Neither a configured nor a memory store claims an externally managed commitment.
  */
 export type CircleBridgeConfig = {
   privateMintIdentities?: XReservePrivateMintIdentityStore | undefined

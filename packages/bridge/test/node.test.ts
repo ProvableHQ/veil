@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -84,6 +84,29 @@ describe('Node private-mint identity store', () => {
       environment: 'testnet',
     })).rejects.toThrow(/is not a lock directory/)
     expect((await stat(`${path}.lock`)).isFile()).toBe(true)
+  })
+
+  it('acquires an empty lock left by interrupted owner cleanup', async () => {
+    const path = await temporaryStorePath()
+    await mkdir(`${path}.lock`)
+    const store = fileXReservePrivateMintIdentityStore(path)
+    await expect(store.runExclusive!(async () => {
+      expect(await readdir(`${path}.lock`)).toHaveLength(1)
+      return store.allocateCounter!(0)
+    })).resolves.toBe(0)
+    await expect(stat(`${path}.lock`)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('fails closed on legacy lock metadata without deleting it or leaking a candidate directory', async () => {
+    const path = await temporaryStorePath()
+    await mkdir(`${path}.lock`)
+    const owner = JSON.stringify({ token: 'legacy-owner', pid: 0, hostname: 'unknown-host' })
+    await writeFile(join(`${path}.lock`, 'owner.json'), owner)
+    const store = fileXReservePrivateMintIdentityStore(path)
+    await expect(store.runExclusive!(async () => { throw new Error('The action must not run') }))
+      .rejects.toThrow(/unrecognized owner/)
+    expect(await readFile(join(`${path}.lock`, 'owner.json'), 'utf8')).toBe(owner)
+    expect(await readdir(join(path, '..'))).toEqual(['identities.json.lock'])
   })
 
   it('retains consumed counters across restarts after derivation and persistence failures', async () => {

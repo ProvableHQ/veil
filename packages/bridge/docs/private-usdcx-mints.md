@@ -43,6 +43,22 @@ Treat the store file like a view key: its scalars can link and authorize the
 corresponding private mints. Use one store per signing account, network, and
 wrapper deployment.
 
+The exported standalone `quote`, `execute`, and `complete` functions do not own
+a client lifetime. Pass the same store explicitly when deriving a local
+identity or looking up its scalar; omission fails before automatic derivation
+or source submission. Client-bound actions supply their configured store.
+
+```ts
+import { quote, execute, complete } from '@provablehq/aleo-bridge-sdk'
+import { fileXReservePrivateMintIdentityStore } from '@provablehq/aleo-bridge-sdk/node'
+
+const circle = { privateMintIdentities: fileXReservePrivateMintIdentityStore('.veil/mints.json') }
+const quoted = await quote(registry, clients, { ...intent, mintMode: 'private', circle })
+const execution = await execute(registry, clients, { plan: quoted.plan, circle, onCheckpoint: saveCheckpoint })
+// After status polling returns progress whose next operation is `complete`:
+await complete(registry, clients, { progress: readyProgress, circle, onCheckpoint: saveCheckpoint })
+```
+
 ### Quote once per deposit
 
 Quoting reserves an identity and returns its commitment on the plan. Every
@@ -67,6 +83,11 @@ quote.plan.circle?.privateMintAddressCommitment // reserved 32-byte commitment, 
 The plan carries the reserved commitment, so `execute` deposits against it
 without reserving another. Completion looks the commitment up in the configured
 store and supplies the scalar to `private_mint` itself.
+
+Before requesting a source signature, execution also checks that the store
+contains the quoted identity and that its recipient matches the plan. Passing
+a fresh or incorrect store fails before approval or deposit submission, while
+the caller can still restore the original store.
 
 ```ts
 const execution = await bridge.execute({ plan: quote.plan, onCheckpoint: saveCheckpoint })
@@ -120,7 +141,18 @@ to the identity file.
 - Each save replaces the file atomically with `0600` permissions.
 - Reservations lock across store instances and Node processes that share the
   path. A regular file left at the lock path fails the reservation immediately.
+- A lock is published with its complete, uniquely named owner file. Cleanup
+  removes only that owner's file and an empty directory, so a stale contender
+  cannot delete a replacement owner's lock.
 - Back up and restore the identity file and its `.counter` together.
+
+The store automatically reclaims only locks belonging to confirmed dead
+processes on the same host. A foreign-host owner is not declared dead because
+of elapsed time. A timeout names the last observed owner's process ID and host;
+the owner may have changed since that observation. Malformed lock metadata and
+locks from older builds using `owner.json` fail closed. Stop all users of the
+store and verify that no owner is active before manually removing such a
+`.lock` directory. The identity and counter file formats are unchanged.
 
 A custom store for a shared backend MUST implement the two optional methods:
 
@@ -154,6 +186,24 @@ The derivation matches Shield's network-specific algorithm at
 Identities stored under an earlier derivation keep completing with their saved
 scalar. The network-independent `shielded_usdcx` domain stays exported for
 compatibility; new identities use the network-specific domains.
+
+## Externally managed commitments
+
+An application that already manages a private-mint scalar may supply its public
+commitment as `circle.privateMintAddressCommitment`. A quote marks this source
+as `quote.plan.circle.privateMintIdentitySource: 'external'` and carries the
+commitment into execution. The client's implicit memory store does not claim
+ownership of that identity. The caller MUST retain the scalar and supply it at
+completion through `circle.privateMintSecretNonce`.
+
+A caller-supplied commitment is caller-managed whether or not a store is
+configured. Execution does not require the store to contain it, so an
+application may keep a store for its own derived identities and still bring its
+own scalar for a particular deposit. If the store does hold a matching identity,
+its recipient must match the plan before funds move. Quotes that reserve
+identities locally are marked `store`, and those MUST resolve in the store
+before execution; older plans without a source are also treated as
+store-managed. Connected wallets should use the preparation flow below.
 
 ## Connected wallet
 

@@ -38,3 +38,19 @@ accepts the matching `privateMintNonceInput` derived request while the wallet
 retains the scalar. Validate the reviewed wrapper, canonical hook, attested
 commitment, recipient, and nonce-source exclusivity before submission, and
 preserve the original hook when an approval confirms after a timeout.
+
+Require an explicit shared identity store for automatic local derivation in
+standalone actions, rather than discarding the only scalar in a temporary store.
+Client-bound actions retain their configured default. Publish initialized locks
+with unique owner files and reclaim only a confirmed dead owner's file, so
+concurrent stale-lock recovery cannot delete a replacement live lock. Foreign
+and unrecognized owners fail closed and require operator verification.
+
+Validate quoted store-managed identities before source approval or deposit
+submission. Reject absent identities and recipient mismatches before funds
+move. Retain external commitment provenance on quoted plans so a configured
+store, implicit or explicit, never claims a caller-managed nonce: a
+caller-supplied commitment executes without a matching store entry, while a
+stored identity for it must still name the plan's recipient. Lock timeout
+errors identify the last observed process and host without claiming that the
+observation still represents the current owner.
