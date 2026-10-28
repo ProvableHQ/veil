@@ -21,6 +21,16 @@ The flat `privateMintSecretNonce` and `cctp` call options are deprecated and
 still accepted; a field supplied in both forms with different values is
 rejected.
 
+A private mint quote must name a nonce source. `QuoteParameters` rejects
+`mintMode: 'private'` at compile time unless the client was created with
+`circle.privateMintIdentities` (recorded by the new `BridgeClient<HasStore>`
+type parameter) or the call carries `circle.privateMintIdentities`,
+`circle.privateMintSecretNonce`, or `circle.walletPreparedDeposit`. The same
+rule throws a `BridgeError` at runtime with the fix spelled out, before any
+network or wallet call. There is no default in-memory store any more; a caller
+who relied on the implicit `0scalar` passes
+`circle: { privateMintSecretNonce: '0scalar' }` to keep the same commitment.
+
 The Node identity store atomically replaces files with `0600` permissions and
 locks reservations across processes sharing the same path. A regular file left
 at the lock path fails the reservation immediately with its cause instead of

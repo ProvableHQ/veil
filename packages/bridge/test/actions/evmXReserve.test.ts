@@ -329,7 +329,7 @@ describe('Ethereum xReserve actions', () => {
     expect(await privateMintIdentities.load()).toHaveLength(1)
   })
 
-  it('shares one memory identity store for legacy bridgeActions callers', async () => {
+  it('shares one configured identity store across bridgeActions quotes', async () => {
     const { executor } = mockExecutor()
     const bridge = bridgeActions({
       registry: DEFAULT_BRIDGE_REGISTRY,
@@ -348,6 +348,7 @@ describe('Ethereum xReserve actions', () => {
         }),
       },
       fetch: globalThis.fetch,
+      circle: { privateMintIdentities: memoryXReservePrivateMintIdentityStore() },
     })
     const intent = {
       source: { chain: 'sepolia', asset: 'usdc' },
@@ -365,6 +366,60 @@ describe('Ethereum xReserve actions', () => {
     expect(second).toMatchObject({ kind: 'evm-xreserve', privateMintAddressCommitment: expect.any(String) })
     expect(first.kind === 'evm-xreserve' && first.privateMintAddressCommitment)
       .not.toBe(second.kind === 'evm-xreserve' && second.privateMintAddressCommitment)
+  })
+
+  it('rejects a private mint with no nonce source before any network or wallet call', async () => {
+    const { executor, sent } = mockExecutor()
+    const localAccount = createAleoClient({
+      publicClient: {} as never,
+      account: {
+        executeTransaction: async () => 'at1unused',
+        account: { type: 'local', address: RECIPIENT, viewKey: 'AViewKey1sqm952gJj1tmAWySYDQvSv2NmfnyEMvU6a9ZBCuyG7PN' },
+      } as never,
+    })
+    const bridge = createBridgeClient({ environment: 'testnet', clients: { sepolia: executor, 'aleo-testnet': localAccount } })
+    const intent = {
+      source: { chain: 'sepolia', asset: 'usdc' },
+      destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+      amount: '2', recipient: RECIPIENT, sender: ACCOUNT, mintMode: 'private' as const,
+    }
+
+    // The types require a source; the runtime guard protects JavaScript callers.
+    await expect(bridge.quote({ ...intent, circle: {} } as never)).rejects.toThrow(/Configure circle: \{ privateMintIdentities \} on createBridgeClient/)
+    await expect(bridge.quote({ ...intent, privateRecipient: true, mintMode: undefined } as never)).rejects.toThrow(/needs a nonce source/)
+    await expect(bridge.execute({ plan: transferPlan('private') })).rejects.toThrow(/needs a nonce source/)
+    expect(sent).toHaveLength(0)
+
+    // Public and record mints never need one.
+    await expect(bridge.quote({ ...intent, mintMode: 'record' })).resolves.toMatchObject({ kind: 'evm-xreserve' })
+
+    // A configured store that cannot derive explains what to pass instead.
+    const noAleo = createBridgeClient({
+      environment: 'testnet', clients: { sepolia: executor },
+      circle: { privateMintIdentities: memoryXReservePrivateMintIdentityStore() },
+    })
+    await expect(noAleo.quote(intent)).rejects.toThrow(/clients has no entry for aleo-testnet/)
+    const rpcWallet = createBridgeClient({
+      environment: 'testnet',
+      clients: { sepolia: executor, 'aleo-testnet': createAleoClient({ publicClient: {} as never, account: { executeTransaction: async () => 'at1' } }) },
+      circle: { privateMintIdentities: memoryXReservePrivateMintIdentityStore() },
+    })
+    await expect(rpcWallet.quote(intent)).rejects.toThrow(/needs a local Aleo account with a view key/)
+
+    // A deposit made against a derived identity cannot complete without the store.
+    const commitment = '3c47112203a792e5a2d46f059016c06d83bdad32ada95d15ad66e2bc26f7fc0b'
+    await expect(bridge.complete({
+      plan: transferPlan('private'),
+      receipt: {
+        id: `0x${'11'.repeat(32)}`, protocol: 'xreserve', status: 'DESTINATION_ACTION_REQUIRED',
+        nextAction: { kind: 'xreserve-private-mint', chainId: 'aleo-testnet' },
+        protocolState: {
+          routeId: transferPlan('private').route.id, payload: `0x${'00'.repeat(305)}`,
+          messageHash: `0x${'44'.repeat(32)}`, attestation: `0x${'11'.repeat(65)}`,
+          privateMintAddressCommitment: commitment,
+        },
+      },
+    })).rejects.toThrow(/no identity store is configured/)
   })
 
   it('approves USDC, deposits without msg.value, and returns resumable attestation state', async () => {

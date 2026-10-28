@@ -66,19 +66,51 @@ export type CompleteCircleOptions = Pick<CircleOptions,
 export type CircleRecoveryOptions = Pick<CircleOptions, 'approvalReplacement'>
 
 /**
- * Describes the cross-chain transfer whose current cost is calculated.
+ * Names the one place a private USDCx mint's secret scalar lives.
  *
- * The same source, destination, amount, and recipient become the plan returned
- * with the quote, so the caller can execute exactly what was priced.
+ * A private xReserve deposit commits to a scalar that only its holder can later
+ * reveal to `private_mint`. A deposit whose scalar is lost cannot be minted, so
+ * exactly one source MUST be chosen before quoting.
+ *
+ * @property privateMintIdentities Store that derives and keeps the scalar for a local Aleo account. A durable store survives restarts; the memory store does not.
+ * @property privateMintSecretNonce Caller-managed Aleo scalar, supplied again at completion.
+ * @property walletPreparedDeposit Public preparation from a connected wallet that keeps the scalar itself.
+ * @property privateMintAddressCommitment Commitment of an identity the caller reserved through the store utilities directly; the caller keeps that store for completion.
+ */
+export type PrivateMintNonceSource =
+  | { privateMintIdentities: XReservePrivateMintIdentityStore }
+  | { privateMintSecretNonce: string }
+  | { walletPreparedDeposit: WalletPreparedXReserveDeposit }
+  | { privateMintAddressCommitment: string }
+
+/**
+ * Options every quote accepts.
  *
  * @property circle Circle-specific options: the identity store, a reserved commitment, a wallet preparation, or the legacy secret nonce for a private xReserve mint.
  * @property privateMintSecretNonce Legacy secret Aleo scalar committed by a private xReserve deposit.
  */
-export type QuoteParameters = PrepareParameters & {
+type QuoteOptions = {
   circle?: QuoteCircleOptions | undefined
   /** @deprecated Use `circle.privateMintSecretNonce`. Removed in the next major release. */
   privateMintSecretNonce?: string | undefined
 }
+
+/** A private quote whose nonce source is named on the call, in the `circle` or deprecated flat form. */
+type PrivateMintSourced =
+  | { circle: QuoteCircleOptions & PrivateMintNonceSource }
+  | { privateMintSecretNonce: string; circle?: QuoteCircleOptions | undefined }
+
+/**
+ * Describes the cross-chain transfer whose current cost is calculated.
+ *
+ * The same source, destination, amount, and recipient become the plan returned
+ * with the quote, so the caller can execute exactly what was priced. A private
+ * mint MUST name a nonce source under `circle`, unless the bridge client was
+ * created with `circle.privateMintIdentities`, which `HasStore` records.
+ */
+export type QuoteParameters<HasStore extends boolean = false> =
+  | (PrepareParameters & { mintMode?: 'public' | 'record' | undefined } & QuoteOptions)
+  | (PrepareParameters & { mintMode: 'private' } & (HasStore extends true ? QuoteOptions : PrivateMintSourced))
 
 /** Identifies the route implementation that produced a transfer quote. */
 export type BridgeQuoteKind =
@@ -189,16 +221,7 @@ export type GetStatusParameters = {
   signal?: AbortSignal | undefined
 }
 
-/**
- * Controls the destination wallet transaction for xReserve private delivery or CCTP minting.
- *
- * @property circle Circle-specific options: the CCTP manual-mint override, or the identity store, wallet preparation and nonce input, or legacy secret nonce for a private xReserve mint.
- * @property cctp Manual-mint override for an attested, unused CCTP message when forwarding stalls.
- * @property privateMintSecretNonce Legacy caller-managed secret Aleo scalar for a private xReserve mint.
- * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
- * @property onCheckpoint Durable hook called before supported local Aleo broadcast and again after destination submission.
- * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
- */
+/** Options shared by every `CompleteParameters` variant; documented there. */
 type CompleteOptions = {
   circle?: CompleteCircleOptions | undefined
   /** @deprecated Use `circle.manualMint`. Removed in the next major release. */

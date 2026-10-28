@@ -12,7 +12,20 @@ in this guide lives under the `circle` key of the bridge client config and of
 | [Connected wallet](#connected-wallet) | The user's wallet | Browser dApps where the wallet signs and proves |
 | [Legacy secret nonce](#legacy-secret-nonce) | The application | Existing integrations that already manage a scalar; deprecated |
 
-Pick exactly one. Combining two sources in a single call is rejected.
+Pick exactly one. A private quote with no source is a compile error on a
+client built without a store, and a `BridgeError` at runtime that names the
+three options, because a deposit whose scalar is lost cannot be minted.
+Combining two sources in a single call is also rejected.
+
+```ts
+// Compile error: Property 'circle' is missing ... required in type
+// '{ circle: QuoteCircleOptions & PrivateMintNonceSource }'
+await createBridgeClient({ clients }).quote({ ...intent, mintMode: 'private' })
+
+// Either of these compiles.
+await createBridgeClient({ clients, circle: { privateMintIdentities } }).quote({ ...intent, mintMode: 'private' })
+await createBridgeClient({ clients }).quote({ ...intent, mintMode: 'private', circle: { privateMintSecretNonce } })
+```
 
 ## Local Aleo account
 
@@ -22,9 +35,11 @@ a wallet.
 
 ### Configure the identity store
 
-Any long-running process MUST use a durable store. The default in-memory store
-does not survive a restart, and an identity that is lost after its deposit
-cannot complete the mint.
+There is no default store. Configure one on the client, and make it durable
+for any process that may restart between deposit and completion, because an
+identity that is lost after its deposit cannot complete the mint. The
+in-memory store exported as `memoryXReservePrivateMintIdentityStore` suits
+tests and single-run scripts only.
 
 ```ts
 import { createBridgeClient } from '@provablehq/aleo-bridge-sdk'

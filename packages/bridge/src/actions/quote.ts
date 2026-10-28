@@ -17,7 +17,6 @@ import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { formatDecimalAmount, parseDecimalAmount } from '../utils/units.js'
 import { prepare } from './prepare.js'
-import { memoryXReservePrivateMintIdentityStore } from '../utils/xreservePrivateMintStore.js'
 import { resolvePrivateMintAddressCommitment } from './internal/privateMintIdentity.js'
 import { resolveCircleOptions } from './internal/circleOptions.js'
 
@@ -53,11 +52,11 @@ export async function quote(
   const prepared = prepare(registry, params)
   if (prepared.protocol === 'cctp') return cctp.quote(registry, clients, fetcher, { plan: prepared })
   const circleOptions = resolveCircleOptions(params)
-  const privateMintIdentities = circleOptions.privateMintIdentities ?? memoryXReservePrivateMintIdentityStore()
-  // Wallet preparations already reserve their nonce inside the wallet.
+  // Wallet preparations already reserve their nonce inside the wallet. Any
+  // other private mint resolves a commitment here or is rejected.
   const privateMintAddressCommitment = circleOptions.walletPreparedDeposit === undefined
     ? await resolvePrivateMintAddressCommitment(
-        registry, clients, privateMintIdentities, prepared,
+        registry, clients, circleOptions.privateMintIdentities, prepared,
         circleOptions.privateMintAddressCommitment, circleOptions.privateMintSecretNonce,
       )
     : circleOptions.privateMintAddressCommitment

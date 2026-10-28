@@ -66,12 +66,11 @@ function checkpoint(label: string, value: BridgeCheckpoint): void {
  */
 export async function runArcToAleoExample(options: ExampleOptions = {}): Promise<void> {
   const mode = mintMode()
-  // The protocol defaults to 0scalar. A custom value adds caller-managed
-  // entropy to the private commitment and must be stored separately because
-  // recovery checkpoints intentionally omit it.
-  const privateMintSecretNonce = mode === 'private'
-    ? `${process.env.USDCX_SECRET_NONCE?.replace(/scalar$/, '') || '0'}scalar`
-    : undefined
+  // A private mint must name its nonce source. This example manages the scalar
+  // itself: 0scalar reproduces the historical commitment, and a custom value
+  // adds caller-managed entropy. Store it separately because recovery
+  // checkpoints intentionally omit it. Other mint modes ignore it.
+  const privateMintSecretNonce = `${process.env.USDCX_SECRET_NONCE?.replace(/scalar$/, '') || '0'}scalar`
   const recipient = required('ALEO_RECIPIENT')
   const evmAccount = evmPrivateKey(evmPrivateKeyFromEnvironment())
   if (evmAccount.type !== 'local') throw new Error('Expected a private-key EVM account')

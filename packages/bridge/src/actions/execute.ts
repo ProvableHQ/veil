@@ -21,7 +21,6 @@ import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
 import type { Transaction } from '@provablehq/veil-core'
 import { readDestinationBalance } from './internal/readDestinationBalance.js'
 import { parseDecimalAmount } from '../utils/units.js'
-import { memoryXReservePrivateMintIdentityStore } from '../utils/xreservePrivateMintStore.js'
 import { resolvePrivateMintAddressCommitment } from './internal/privateMintIdentity.js'
 import { resolveCircleOptions } from './internal/circleOptions.js'
 
@@ -206,7 +205,7 @@ export async function execute(
     // Preserve the wallet's saved identity without allocating a local nonce.
     const privateMintAddressCommitment = circleOptions.walletPreparedDeposit === undefined
       ? await resolvePrivateMintAddressCommitment(
-          registry, clients, circleOptions.privateMintIdentities ?? memoryXReservePrivateMintIdentityStore(), params.plan,
+          registry, clients, circleOptions.privateMintIdentities, params.plan,
           suppliedCommitment, circleOptions.privateMintSecretNonce,
         )
       : suppliedCommitment

@@ -23,6 +23,15 @@ It does not repeat a submitted source transaction. Unknown versions or changed
 deployments still require an explicit migration; do not rewrite a checkpoint's
 registry version to bypass validation.
 
+**A private USDCx mint now requires a nonce source.** A quote with
+`mintMode: 'private'` no longer falls back to the `0scalar` default. It is a
+compile error unless the bridge client was created with
+`circle: { privateMintIdentities }` or the call passes
+`circle.privateMintIdentities`, `circle.privateMintSecretNonce`, or
+`circle.walletPreparedDeposit`; the same check throws at runtime. To keep the
+previous commitment exactly, pass `circle: { privateMintSecretNonce: '0scalar' }`.
+See [Private USDCx mints](./docs/private-usdcx-mints.md).
+
 **TypeScript consumers with exhaustive switches or complete lookup tables must
 handle the new variants when upgrading to this minor release:**
 

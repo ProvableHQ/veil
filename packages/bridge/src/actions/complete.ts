@@ -8,10 +8,7 @@ import type { BridgeReceipt, BridgeRegistry } from '../types/protocol.js'
 import { complete as completePrivateMint } from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
-import {
-  findXReservePrivateMintIdentity,
-  memoryXReservePrivateMintIdentityStore,
-} from '../utils/xreservePrivateMintStore.js'
+import { findXReservePrivateMintIdentity } from '../utils/xreservePrivateMintStore.js'
 import { resolveCircleOptions } from './internal/circleOptions.js'
 
 /**
@@ -139,13 +136,16 @@ export async function complete(
     if (typeof storedCommitment !== 'string' || !/^[0-9a-f]{64}$/.test(storedCommitment)) {
       throw new BridgeError('Ready xReserve receipt contains an invalid private mint address commitment')
     }
-    const identity = await findXReservePrivateMintIdentity(
-      circleOptions.privateMintIdentities ?? memoryXReservePrivateMintIdentityStore(),
-      storedCommitment,
-    )
+    if (circleOptions.privateMintIdentities === undefined) {
+      throw new BridgeError(
+        'This deposit committed to a locally derived private mint identity, but no identity store is configured. '
+        + 'Configure circle: { privateMintIdentities } with the store that reserved it at quote time, then complete again.',
+      )
+    }
+    const identity = await findXReservePrivateMintIdentity(circleOptions.privateMintIdentities, storedCommitment)
     if (!identity) {
       throw new BridgeError(
-        'Private mint identity is not present in the configured store. Restore the original store before completing the mint.',
+        'Private mint identity is not present in the configured store. Restore the store that reserved it at quote time before completing the mint.',
       )
     }
     if (identity.recipient !== plan.recipient) {

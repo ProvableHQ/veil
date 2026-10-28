@@ -8,6 +8,7 @@ export {
   type BridgeActions,
   type BridgeActionsConfig,
   type CircleBridgeConfig,
+  type HasPrivateMintStore,
 } from './clients/decorators/bridge.js'
 export {
   createEvmClient,
@@ -113,6 +114,7 @@ export type {
 } from './types/protocol.js'
 export type {
   CircleOptions,
+  PrivateMintNonceSource,
   CompleteCircleOptions,
   ExecuteCircleOptions,
   QuoteCircleOptions,
