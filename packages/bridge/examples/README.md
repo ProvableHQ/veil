@@ -25,7 +25,7 @@ it durably before calling `bridge.execute`. Pass `circle.walletPreparedDeposit`
 through quote, execute, and source resumption; completion additionally requires
 `circle.privateMintNonceInput`. The wallet retains the scalar. Configure the wallet's
 `shielded-usdcx-secret-nonce` grant for the reviewed wrapper's `private_mint`
-input at position 3. See the package README's wallet-prepared mint example.
+input at position 3. See the [private USDCx mint guide](../docs/private-usdcx-mints.md).
 
 For a connected Aleo wallet that implements
 `program-freezelist-exclusion-proof`, use
