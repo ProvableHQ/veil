@@ -289,13 +289,18 @@ export type PrepareParameters = {
  * @property sender Optional source-chain sender.
  * @property mintMode Aleo destination transition selected by the caller.
  * @property privateRecipient Whether the destination requests private Aleo delivery.
- * @property circle Circle-specific values produced while quoting. Carries the public commitment reserved for a locally derived private xReserve mint, so execution deposits against that identity instead of reserving another. Absent from recovered plans.
+ * @property circle Circle-specific values produced while quoting. Carries the public commitment and its source so execution reuses the identity and validates store-managed identities before depositing. Absent from recovered plans.
+ * @property circle.privateMintAddressCommitment Public 32-byte commitment reused by execution.
+ * @property circle.privateMintIdentitySource Whether the quote reserved a store-managed identity or used an externally managed commitment. Older plans without a source are treated as store-managed.
  * @property fees Known fee categories; amounts remain absent until protocol quoting is implemented.
  * @property steps Ordered operations required to complete the transfer.
  */
 export type BridgePlan = {
   cctp?: CctpOptions | undefined
-  circle?: { privateMintAddressCommitment?: string | undefined } | undefined
+  circle?: {
+    privateMintAddressCommitment?: string | undefined
+    privateMintIdentitySource?: 'store' | 'external' | undefined
+  } | undefined
   registryVersion: string
   protocol: BridgeProtocol
   route: ProtocolBridgeRoute

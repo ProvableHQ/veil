@@ -60,11 +60,17 @@ export async function quote(
         circleOptions.privateMintAddressCommitment, circleOptions.privateMintSecretNonce,
       )
     : circleOptions.privateMintAddressCommitment
-  // A reserved identity travels with the plan so execution deposits against
-  // the quoted commitment instead of reserving a second one.
+  // Carry the commitment and its source so execution can validate local store
+  // ownership without treating an external commitment as a new reservation.
   const plan = privateMintAddressCommitment === undefined
     ? prepared
-    : { ...prepared, circle: { privateMintAddressCommitment } }
+    : {
+        ...prepared,
+        circle: {
+          privateMintAddressCommitment,
+          privateMintIdentitySource: circleOptions.privateMintAddressCommitment === undefined ? 'store' as const : 'external' as const,
+        },
+      }
   const protocolParams = {
     plan,
     walletPreparedDeposit: circleOptions.walletPreparedDeposit,

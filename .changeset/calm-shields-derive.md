@@ -45,3 +45,10 @@ Client-bound actions retain their configured default. Publish initialized locks
 with unique owner files and reclaim only a confirmed dead owner's file, so
 concurrent stale-lock recovery cannot delete a replacement live lock. Foreign
 and unrecognized owners fail closed and require operator verification.
+
+Validate quoted store-managed identities and explicitly supplied stores before
+source approval or deposit submission. Reject absent identities and recipient
+mismatches before funds move. Retain external commitment provenance on quoted
+plans so an implicit client memory store does not override caller-managed
+nonces. Lock timeout errors identify the last observed process and host without
+claiming that the observation still represents the current owner.

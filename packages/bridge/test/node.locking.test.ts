@@ -12,6 +12,7 @@ const race = vi.hoisted(() => {
   }
   return {
     token: '', reads: 0, unlinks: 0,
+    observeToken: '', onOwnerRead: undefined as (() => void) | undefined,
     bothRead: deferred(), firstEntered: deferred(), secondUnlinked: deferred(),
   }
 })
@@ -24,6 +25,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     ...fs,
     readFile: async (...args: Parameters<typeof fs.readFile>) => {
       const value = await fs.readFile(...args)
+      if (race.observeToken && String(value).includes(race.observeToken)) race.onOwnerRead?.()
       if (race.token && String(value).includes(race.token)) {
         if (++race.reads === 2) race.bothRead.resolve()
         await race.bothRead.promise
@@ -84,3 +86,37 @@ it('preserves a replacement lock when concurrent contenders reclaim the same dea
     await rm(directory, { recursive: true, force: true })
   }
 }, 10_000)
+
+it('names the last observed foreign owner on timeout without removing its lock', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'veil-foreign-lock-'))
+  const path = join(directory, 'identities.json')
+  const token = randomUUID()
+  const owner = { token, pid: 424242, hostname: 'foreign-worker.example', createdAt: Date.now() }
+  const ownerPath = join(`${path}.lock`, `owner.${token}.json`)
+  await mkdir(`${path}.lock`)
+  await writeFile(ownerPath, JSON.stringify(owner))
+  let observed!: () => void
+  const observedOwner = new Promise<void>((resolve) => { observed = resolve })
+  race.observeToken = token
+  race.onOwnerRead = observed
+  const action = vi.fn()
+  let restoreClock = () => {}
+  try {
+    const pending = fileXReservePrivateMintIdentityStore(path).runExclusive!(action)
+    const timedOut = expect(pending).rejects.toThrow(/last observed owner: pid 424242 on foreign-worker\.example/)
+    // Wait for real filesystem initialization and owner observation before
+    // advancing only the deadline clock. The retry timer still runs normally.
+    await observedOwner
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 30_001)
+    restoreClock = () => { clock.mockRestore() }
+    await timedOut
+    expect(action).not.toHaveBeenCalled()
+    expect(JSON.parse(await readFile(ownerPath, 'utf8'))).toEqual(owner)
+    expect((await stat(`${path}.lock`)).isDirectory()).toBe(true)
+  } finally {
+    restoreClock()
+    race.observeToken = ''
+    race.onOwnerRead = undefined
+    await rm(directory, { recursive: true, force: true })
+  }
+})

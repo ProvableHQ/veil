@@ -91,6 +91,7 @@ export function fileXReservePrivateMintIdentityStore(
     const deadline = Date.now() + 30_000
     await mkdir(candidate, { mode: 0o700 })
     let published = false
+    let lastOwner: LockOwner | undefined
     try {
       // Publish the directory only after its unique owner file is complete.
       // An empty shared lock directory can then only belong to a released or
@@ -104,7 +105,9 @@ export function fileXReservePrivateMintIdentityStore(
       }
       while (true) {
         if (Date.now() >= deadline) {
-          throw new Error(`Timed out waiting for private mint identity lock ${lockPath}.`)
+          throw new Error(lastOwner
+            ? `Timed out waiting for private mint identity lock ${lockPath}; last observed owner: pid ${lastOwner.pid} on ${lastOwner.hostname}. Stop all users of this store and verify that no owner is active before removing the lock directory.`
+            : `Timed out waiting for private mint identity lock ${lockPath}.`)
         }
         try {
           await rename(candidate, lockPath)
@@ -120,13 +123,16 @@ export function fileXReservePrivateMintIdentityStore(
             throw error
           })
           if (occupant === undefined) {
+            lastOwner = undefined
             if (code === 'EPERM') throw cause
             continue
           }
           if (!occupant.isDirectory()) {
             throw new Error(`Private mint identity lock ${lockPath} is occupied by a file that is not a lock directory. Remove it before reserving identities.`)
           }
-          if (await reclaimAbandonedLock(lockPath)) continue
+          const reclaimed = await reclaimAbandonedLock(lockPath)
+          lastOwner = reclaimed.reclaimed ? undefined : reclaimed.owner
+          if (reclaimed.reclaimed) continue
           await new Promise<void>((resolve) => setTimeout(resolve, 25))
         }
       }
@@ -186,22 +192,29 @@ async function syncDirectory(directory: string): Promise<void> {
 
 type LockOwner = { token: string, pid: number, hostname: string, createdAt: number }
 
+/**
+ * Reports whether acquisition can retry or must wait on an observed owner.
+ * @property reclaimed Whether inspection permits an immediate retry without caching an owner.
+ * @property owner Last validated owner when safe reclamation could not be established.
+ */
+type ReclaimResult = { reclaimed: true } | { reclaimed: false; owner: LockOwner }
+
 function ownerFilename(token: string): string {
   return `owner.${token}.json`
 }
 
 /** Removes only a positively identified dead owner's file, leaving replacement owners intact. */
-async function reclaimAbandonedLock(lockPath: string): Promise<boolean> {
+async function reclaimAbandonedLock(lockPath: string): Promise<ReclaimResult> {
   let files: string[]
   try {
     files = await readdir(lockPath)
   } catch (cause) {
-    if ((cause as { code?: string }).code === 'ENOENT') return true
+    if ((cause as { code?: string }).code === 'ENOENT') return { reclaimed: true }
     throw cause
   }
   if (files.length === 0) {
     await removeEmptyLock(lockPath)
-    return true
+    return { reclaimed: true }
   }
   const match = files.length === 1 ? /^owner\.([0-9a-f-]{36})\.json$/.exec(files[0]!) : null
   const invalidOwner = () => new Error(`Private mint identity lock ${lockPath} has an unrecognized owner. Stop all users of this store before removing the lock directory.`)
@@ -210,21 +223,21 @@ async function reclaimAbandonedLock(lockPath: string): Promise<boolean> {
   try {
     owner = JSON.parse(await readFile(join(lockPath, files[0]!), 'utf8')) as LockOwner
   } catch (cause) {
-    if ((cause as { code?: string }).code === 'ENOENT') return true
+    if ((cause as { code?: string }).code === 'ENOENT') return { reclaimed: true }
     throw invalidOwner()
   }
   if (!owner || owner.token !== match[1] || typeof owner.hostname !== 'string'
     || !Number.isSafeInteger(owner.pid) || owner.pid <= 0) throw invalidOwner()
   // An elapsed timeout cannot prove that a process on another host is dead.
-  if (owner.hostname !== hostname()) return false
+  if (owner.hostname !== hostname()) return { reclaimed: false, owner }
   try {
     process.kill(owner.pid, 0)
-    return false
+    return { reclaimed: false, owner }
   } catch (cause) {
-    if ((cause as { code?: string }).code !== 'ESRCH') return false
+    if ((cause as { code?: string }).code !== 'ESRCH') return { reclaimed: false, owner }
   }
   await releaseOwnedLock(lockPath, owner.token)
-  return true
+  return { reclaimed: true }
 }
 
 async function releaseOwnedLock(lockPath: string, token: string): Promise<void> {

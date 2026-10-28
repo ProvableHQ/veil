@@ -26,7 +26,7 @@ import { DEFAULT_BRIDGE_REGISTRY } from '../../src/registry/default.js'
 import { createEvmClient, evmCustom, evmProvider } from '../../src/connections/evm.js'
 import { createAleoClient } from '../../src/connections/aleo.js'
 import type { BridgeReceipt } from '../../src/types/protocol.js'
-import { aleoAddressToBytes32, aleoProgramAddress } from '../../src/utils/xreserve.js'
+import { aleoAddressToBytes32, aleoProgramAddress, buildXReserveHookData } from '../../src/utils/xreserve.js'
 import { memoryXReservePrivateMintIdentityStore } from '../../src/utils/xreservePrivateMintStore.js'
 
 const ACCOUNT = getAddress('0x0000000000000000000000000000000000000001')
@@ -153,6 +153,20 @@ describe('Ethereum xReserve actions', () => {
     })
     await expect(execute(DEFAULT_BRIDGE_REGISTRY, clients, { plan: quote.plan }))
       .rejects.toThrow(/requires circle\.privateMintIdentities/)
+    await expect(execute(DEFAULT_BRIDGE_REGISTRY, clients, {
+      plan: quote.plan, circle: { privateMintIdentities: memoryXReservePrivateMintIdentityStore() },
+    })).rejects.toThrow(/not present in the supplied store/)
+    await expect(execute(DEFAULT_BRIDGE_REGISTRY, clients, {
+      plan: { ...quote.plan, circle: { privateMintAddressCommitment: quote.plan.circle!.privateMintAddressCommitment } },
+      circle: { privateMintIdentities: memoryXReservePrivateMintIdentityStore() },
+    })).rejects.toThrow(/not present in the supplied store/)
+    const identity = (await privateMintIdentities.load())[0]!
+    await expect(execute(DEFAULT_BRIDGE_REGISTRY, clients, {
+      plan: quote.plan,
+      circle: { privateMintIdentities: memoryXReservePrivateMintIdentityStore([{ ...identity, recipient: 'aleo1anotherrecipient' }]) },
+    })).rejects.toThrow(/does not match the transfer recipient/)
+    const freshClient = createBridgeClient({ environment: 'testnet', clients })
+    await expect(freshClient.execute({ plan: quote.plan })).rejects.toThrow(/not present in the supplied store/)
     expect(sent).toHaveLength(0)
     const execution = await execute(DEFAULT_BRIDGE_REGISTRY, clients, { plan: quote.plan, circle })
     expect(sent).toHaveLength(2)
@@ -171,6 +185,64 @@ describe('Ethereum xReserve actions', () => {
     expect(executeTransaction).toHaveBeenCalledWith(expect.objectContaining({
       inputs: expect.arrayContaining([identities[0]!.secretNonce, RECIPIENT]),
     }))
+  })
+
+  it.each(['quoted', 'explicit'])('preserves a caller-managed %s commitment with the implicit client store', async (mode) => {
+    const { executor, sent } = mockExecutor()
+    const hookData = await buildXReserveHookData('private', RECIPIENT, 'testnet', '7scalar')
+    const privateMintAddressCommitment = hookData.slice(4, 68)
+    const executeTransaction = vi.fn(async () => 'at1externalmint')
+    const bridge = createBridgeClient({
+      environment: 'testnet',
+      clients: {
+        sepolia: executor,
+        'aleo-testnet': createAleoClient({ publicClient: {} as never, account: { executeTransaction } }),
+      },
+    })
+    let plan = transferPlan('private')
+    if (mode === 'quoted') {
+      const quote = await bridge.quote({
+        source: { chain: 'sepolia', asset: 'usdc' },
+        destination: { chain: 'aleo-testnet', asset: 'usdcx' },
+        amount: '2', recipient: RECIPIENT, sender: ACCOUNT, mintMode: 'private',
+        circle: { privateMintAddressCommitment },
+      })
+      // External provenance must survive a serialized quote, not just object identity.
+      plan = JSON.parse(JSON.stringify(quote.plan))
+      expect(plan.circle?.privateMintIdentitySource).toBe('external')
+    }
+    const execution = await bridge.execute({
+      plan, ...(mode === 'explicit' ? { circle: { privateMintAddressCommitment } } : {}),
+    })
+    expect(sent).toHaveLength(2)
+    expect(execution.receipt.protocolState.hookData).toBe(hookData)
+    const completed = await bridge.complete({
+      plan,
+      receipt: {
+        ...execution.receipt, status: 'DESTINATION_ACTION_REQUIRED',
+        nextAction: { kind: 'xreserve-private-mint', chainId: 'aleo-testnet' },
+        protocolState: { ...execution.receipt.protocolState, attestation: `0x${'11'.repeat(65)}` },
+      },
+      circle: { privateMintSecretNonce: '7scalar' },
+    })
+    expect(completed).toMatchObject({ transactionId: 'at1externalmint' })
+  })
+
+  it.each(['client', 'call'])('validates an explicit commitment against an explicitly supplied %s store', async (scope) => {
+    const { executor, sent } = mockExecutor()
+    const privateMintIdentities = memoryXReservePrivateMintIdentityStore()
+    const bridge = createBridgeClient({
+      environment: 'testnet', clients: { sepolia: executor },
+      ...(scope === 'client' ? { circle: { privateMintIdentities } } : {}),
+    })
+    await expect(bridge.execute({
+      plan: transferPlan('private'),
+      circle: {
+        privateMintAddressCommitment: '33'.repeat(32),
+        ...(scope === 'call' ? { privateMintIdentities } : {}),
+      },
+    })).rejects.toThrow(/not present in the supplied store/)
+    expect(sent).toHaveLength(0)
   })
 
   it('quotes and executes the AMM wallet preparation without allocating a local identity', async () => {

@@ -84,6 +84,11 @@ The plan carries the reserved commitment, so `execute` deposits against it
 without reserving another. Completion looks the commitment up in the configured
 store and supplies the scalar to `private_mint` itself.
 
+Before requesting a source signature, execution also checks that the store
+contains the quoted identity and that its recipient matches the plan. Passing
+a fresh or incorrect store fails before approval or deposit submission, while
+the caller can still restore the original store.
+
 ```ts
 const execution = await bridge.execute({ plan: quote.plan, onCheckpoint: saveCheckpoint })
 
@@ -143,10 +148,11 @@ to the identity file.
 
 The store automatically reclaims only locks belonging to confirmed dead
 processes on the same host. A foreign-host owner is not declared dead because
-of elapsed time. Malformed lock metadata and locks from older builds using
-`owner.json` fail closed. Stop all users of the store and verify that no owner
-is active before manually removing such a `.lock` directory. The identity and
-counter file formats are unchanged.
+of elapsed time. A timeout names the last observed owner's process ID and host;
+the owner may have changed since that observation. Malformed lock metadata and
+locks from older builds using `owner.json` fail closed. Stop all users of the
+store and verify that no owner is active before manually removing such a
+`.lock` directory. The identity and counter file formats are unchanged.
 
 A custom store for a shared backend MUST implement the two optional methods:
 
@@ -180,6 +186,21 @@ The derivation matches Shield's network-specific algorithm at
 Identities stored under an earlier derivation keep completing with their saved
 scalar. The network-independent `shielded_usdcx` domain stays exported for
 compatibility; new identities use the network-specific domains.
+
+## Externally managed commitments
+
+An application that already manages a private-mint scalar may supply its public
+commitment as `circle.privateMintAddressCommitment`. A quote marks this source
+as `quote.plan.circle.privateMintIdentitySource: 'external'` and carries the
+commitment into execution. The client's implicit memory store does not claim
+ownership of that identity. The caller MUST retain the scalar and supply it at
+completion through `circle.privateMintSecretNonce`.
+
+Supplying an explicit store on the client or action requests validation against
+that store, including for external commitments. The identity must be present
+and its recipient must match before funds move. Quotes that reserve identities
+locally are marked `store`; older plans without a source are also treated as
+store-managed. Connected wallets should use the preparation flow below.
 
 ## Connected wallet
 

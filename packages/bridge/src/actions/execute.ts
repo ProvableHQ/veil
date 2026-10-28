@@ -23,6 +23,7 @@ import { readDestinationBalance } from './internal/readDestinationBalance.js'
 import { parseDecimalAmount } from '../utils/units.js'
 import { resolvePrivateMintAddressCommitment } from './internal/privateMintIdentity.js'
 import { resolveCircleOptions } from './internal/circleOptions.js'
+import { findXReservePrivateMintIdentity } from '../utils/xreservePrivateMintStore.js'
 
 type DeliveryVerification = {
   destinationBalanceBeforeAtomic: string
@@ -201,12 +202,28 @@ export async function execute(
       && (circleOptions.walletPreparedDeposit !== undefined || circleOptions.privateMintSecretNonce !== undefined)) {
       throw new BridgeError('The quoted plan reserved a local private mint identity. Quote again with the wallet preparation or legacy secret nonce.')
     }
-    if (quotedCommitment !== undefined && !circleOptions.privateMintIdentities) {
-      throw new BridgeError(
-        'Executing a quoted local private mint requires circle.privateMintIdentities. Supply the store that reserved the quoted identity.',
-      )
-    }
     const suppliedCommitment = circleOptions.privateMintAddressCommitment ?? quotedCommitment
+    // Store-managed commitments must resolve before the first source signature.
+    // An external commitment without an explicit store remains caller-managed.
+    if (params.plan.mintMode === 'private' && suppliedCommitment !== undefined
+      && circleOptions.walletPreparedDeposit === undefined && circleOptions.privateMintSecretNonce === undefined) {
+      const storeManaged = quotedCommitment !== undefined && params.plan.circle?.privateMintIdentitySource !== 'external'
+      if (!circleOptions.privateMintIdentities) {
+        if (storeManaged) {
+          throw new BridgeError(
+            'Executing a quoted local private mint requires circle.privateMintIdentities. Supply the store that reserved the quoted identity.',
+          )
+        }
+      } else {
+        const identity = await findXReservePrivateMintIdentity(circleOptions.privateMintIdentities, suppliedCommitment)
+        if (!identity) {
+          throw new BridgeError('Private mint identity is not present in the supplied store. Supply the store that reserved this commitment before depositing.')
+        }
+        if (identity.recipient !== params.plan.recipient) {
+          throw new BridgeError('Stored private mint identity does not match the transfer recipient')
+        }
+      }
+    }
     // Preserve the wallet's saved identity without allocating a local nonce.
     const privateMintAddressCommitment = circleOptions.walletPreparedDeposit === undefined
       ? await resolvePrivateMintAddressCommitment(
