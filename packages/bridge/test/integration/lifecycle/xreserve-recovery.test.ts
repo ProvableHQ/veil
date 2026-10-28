@@ -157,10 +157,9 @@ describe('xReserve lifecycle', () => {
       { 'aleo-testnet': createAleoClient({ publicClient: {} as never, account: { executeTransaction } }) },
       {
         progress: { next: 'complete', plan, receipt: ready },
+        circle: { privateMintIdentities },
         onCheckpoint(value) { checkpoints.push(value) },
       },
-      globalThis.fetch,
-      privateMintIdentities,
     )
 
     expect(result.kind).toBe('aleo-xreserve')

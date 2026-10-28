@@ -3,10 +3,8 @@ import type { BridgeChainClients } from '../connections/resolve.js'
 import { DEFAULT_BRIDGE_REGISTRY } from '../registry/default.js'
 import { validateBridgeRegistry } from '../registry/validate.js'
 import type { BridgeEnvironment, BridgeRegistry } from '../types/protocol.js'
-import {
-  memoryXReservePrivateMintIdentityStore,
-  type XReservePrivateMintIdentityStore,
-} from '../utils/xreservePrivateMintStore.js'
+import { memoryXReservePrivateMintIdentityStore } from '../utils/xreservePrivateMintStore.js'
+import type { CircleBridgeConfig } from './decorators/bridge.js'
 
 /**
  * Configures the chains, wallets, providers, and route catalog available to a bridge client.
@@ -17,7 +15,7 @@ import {
  * @property fetch Optional Fetch API implementation used for provider status requests. Defaults to `globalThis.fetch`.
  * @property key Stable client key. Defaults to `bridge`.
  * @property name Display name. Defaults to `Bridge Client`.
- * @property privateMintIdentities Persistence for locally derived private USDCx mint identities. Defaults to memory.
+ * @property circle Circle-specific client configuration, such as the persistence for locally derived private USDCx mint identities. Defaults to a memory store.
  */
 export type BridgeClientConfig = {
   environment?: BridgeEnvironment | undefined
@@ -26,7 +24,7 @@ export type BridgeClientConfig = {
   fetch?: typeof globalThis.fetch | undefined
   key?: string | undefined
   name?: string | undefined
-  privateMintIdentities?: XReservePrivateMintIdentityStore | undefined
+  circle?: CircleBridgeConfig | undefined
 }
 
 /**
@@ -66,12 +64,15 @@ export function createBridgeClient(config: BridgeClientConfig = {}): BridgeClien
   const registry = validateBridgeRegistry(config.registry ?? DEFAULT_BRIDGE_REGISTRY)
   const fetch = config.fetch ?? globalThis.fetch
   const clients = config.clients ?? {}
-  const privateMintIdentities = config.privateMintIdentities ?? memoryXReservePrivateMintIdentityStore()
+  const circle = {
+    ...config.circle,
+    privateMintIdentities: config.circle?.privateMintIdentities ?? memoryXReservePrivateMintIdentityStore(),
+  }
   return {
     key: config.key ?? 'bridge',
     name: config.name ?? 'Bridge Client',
     environment,
     registry,
-    ...bridgeActions({ registry, clients, fetch, privateMintIdentities }),
+    ...bridgeActions({ registry, clients, fetch, circle }),
   }
 }

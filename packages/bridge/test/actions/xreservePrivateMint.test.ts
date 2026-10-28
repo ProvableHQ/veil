@@ -67,7 +67,7 @@ describe('xReserve private mint', () => {
     const load = vi.fn(async () => { throw new Error('Wallet preparations must not load local secrets') })
     const bridge = createBridgeClient({
       environment: 'testnet',
-      privateMintIdentities: { load, save: vi.fn() },
+      circle: { privateMintIdentities: { load, save: vi.fn() } },
       clients: { 'aleo-testnet': createAleoClient({ publicClient: {} as never, account: { executeTransaction } }) },
     })
     const checkpoint = vi.fn()
@@ -80,8 +80,10 @@ describe('xReserve private mint', () => {
       ...(mode === 'progress'
         ? { progress: { next: 'complete' as const, plan: params.plan, receipt } }
         : { plan: params.plan, receipt }),
-      walletPreparedDeposit: params.walletPreparedDeposit,
-      privateMintNonceInput: params.privateMintNonceInput,
+      circle: {
+        walletPreparedDeposit: params.walletPreparedDeposit,
+        privateMintNonceInput: params.privateMintNonceInput,
+      },
       onCheckpoint: checkpoint,
     })
     expect(result.kind).toBe('aleo-xreserve')

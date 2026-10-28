@@ -126,7 +126,7 @@ export async function runArcToAleoExample(options: ExampleOptions = {}): Promise
     recipient,
     sender: evmAccount.account.address,
     mintMode: mode,
-    privateMintSecretNonce,
+    circle: { privateMintSecretNonce },
   })
   if (transferQuote.kind !== 'evm-xreserve') throw new Error(`Unexpected quote kind: ${transferQuote.kind}`)
   const plan = transferQuote.plan
@@ -157,7 +157,7 @@ export async function runArcToAleoExample(options: ExampleOptions = {}): Promise
   // transaction is broadcast, retry by recovery state rather than redepositing.
   let source = await bridge.execute({
     plan,
-    privateMintSecretNonce,
+    circle: { privateMintSecretNonce },
     onCheckpoint(value) { checkpoint('source checkpoint', value) },
   })
   if (source.kind !== 'evm-xreserve') throw new Error(`Unexpected execution kind: ${source.kind}`)
@@ -181,7 +181,7 @@ export async function runArcToAleoExample(options: ExampleOptions = {}): Promise
       // never repeats the confirmed approval.
       source = await bridge.resume({
         progress,
-        privateMintSecretNonce,
+        circle: { privateMintSecretNonce },
         onCheckpoint(value) { checkpoint('source checkpoint', value) },
       })
       progress = await bridge.wait({
@@ -207,7 +207,7 @@ export async function runArcToAleoExample(options: ExampleOptions = {}): Promise
     // repeats the confirmed approval.
     source = await bridge.resume({
       progress,
-      privateMintSecretNonce,
+      circle: { privateMintSecretNonce },
       onCheckpoint(value) { checkpoint('source checkpoint', value) },
     })
     progress = await bridge.wait({ progress: { next: 'wait', plan, receipt: source.receipt } })
@@ -222,7 +222,7 @@ export async function runArcToAleoExample(options: ExampleOptions = {}): Promise
   // deposit is never repeated, even if destination proving or confirmation fails.
   const destination = await bridge.complete({
     progress,
-    privateMintSecretNonce,
+    circle: { privateMintSecretNonce },
     privateFee: false,
     onCheckpoint(value) { checkpoint('destination checkpoint', value) },
   })

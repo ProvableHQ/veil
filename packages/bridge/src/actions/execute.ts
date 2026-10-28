@@ -21,11 +21,9 @@ import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
 import type { Transaction } from '@provablehq/veil-core'
 import { readDestinationBalance } from './internal/readDestinationBalance.js'
 import { parseDecimalAmount } from '../utils/units.js'
-import {
-  memoryXReservePrivateMintIdentityStore,
-  type XReservePrivateMintIdentityStore,
-} from '../utils/xreservePrivateMintStore.js'
+import { memoryXReservePrivateMintIdentityStore } from '../utils/xreservePrivateMintStore.js'
 import { resolvePrivateMintAddressCommitment } from './internal/privateMintIdentity.js'
+import { resolveCircleOptions } from './internal/circleOptions.js'
 
 type DeliveryVerification = {
   destinationBalanceBeforeAtomic: string
@@ -101,7 +99,6 @@ function xReserveBurnMode(mode: ExecuteParameters['mode']): XReserveBurnMode | u
  * @param clients Network and wallet access for the source and destination chains.
  * @param params Transfer details, source wallet preferences, and an optional callback for saving recovery information.
  * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
- * @param privateMintIdentities Counter and scalar persistence for locally derived private mints.
  * @returns The submitted transaction identifier and the initial state of the in-progress transfer.
  * @throws BridgeError When the transfer is unsupported, the connected wallet cannot authorize it, current funds or fees are insufficient, or submission fails.
  * @example const execution = await execute(registry, clients, { plan, onCheckpoint: saveCheckpoint })
@@ -111,7 +108,6 @@ export async function execute(
   clients: BridgeChainClients,
   params: ExecuteParameters,
   fetcher: typeof fetch = globalThis.fetch,
-  privateMintIdentities: XReservePrivateMintIdentityStore = memoryXReservePrivateMintIdentityStore(),
 ): Promise<BridgeExecution> {
   // The selected route, not caller-supplied chain branching, determines which
   // protocol implementation and wallet capability may commit the funds.
@@ -194,23 +190,24 @@ export async function execute(
     }
   }
   if (params.plan.protocol === 'xreserve' && chain.family === 'evm') {
+    const circleOptions = resolveCircleOptions(params)
     // A quoted plan carries the identity reserved while quoting. Reject any
     // conflicting nonce source so the deposit never diverges from the quote.
-    const quotedCommitment = params.plan.privateMintAddressCommitment
-    if (quotedCommitment !== undefined && params.privateMintAddressCommitment !== undefined
-      && params.privateMintAddressCommitment !== quotedCommitment) {
+    const quotedCommitment = params.plan.circle?.privateMintAddressCommitment
+    if (quotedCommitment !== undefined && circleOptions.privateMintAddressCommitment !== undefined
+      && circleOptions.privateMintAddressCommitment !== quotedCommitment) {
       throw new BridgeError('Private mint address commitment does not match the quoted plan')
     }
     if (quotedCommitment !== undefined
-      && (params.walletPreparedDeposit !== undefined || params.privateMintSecretNonce !== undefined)) {
+      && (circleOptions.walletPreparedDeposit !== undefined || circleOptions.privateMintSecretNonce !== undefined)) {
       throw new BridgeError('The quoted plan reserved a local private mint identity. Quote again with the wallet preparation or legacy secret nonce.')
     }
-    const suppliedCommitment = params.privateMintAddressCommitment ?? quotedCommitment
+    const suppliedCommitment = circleOptions.privateMintAddressCommitment ?? quotedCommitment
     // Preserve the wallet's saved identity without allocating a local nonce.
-    const privateMintAddressCommitment = params.walletPreparedDeposit === undefined
+    const privateMintAddressCommitment = circleOptions.walletPreparedDeposit === undefined
       ? await resolvePrivateMintAddressCommitment(
-          registry, clients, privateMintIdentities, params.plan,
-          suppliedCommitment, params.privateMintSecretNonce,
+          registry, clients, circleOptions.privateMintIdentities ?? memoryXReservePrivateMintIdentityStore(), params.plan,
+          suppliedCommitment, circleOptions.privateMintSecretNonce,
         )
       : suppliedCommitment
     const execution = await evmToAleoXReserve.execute(
@@ -221,10 +218,10 @@ export async function execute(
         pollingIntervalMs: params.pollingIntervalMs,
         confirmationTimeoutMs: params.confirmationTimeoutMs,
         onSubmitted,
-        walletPreparedDeposit: params.walletPreparedDeposit,
-        privateMintNonceInput: params.privateMintNonceInput,
+        walletPreparedDeposit: circleOptions.walletPreparedDeposit,
+        privateMintNonceInput: circleOptions.privateMintNonceInput,
         privateMintAddressCommitment,
-        privateMintSecretNonce: params.privateMintSecretNonce,
+        privateMintSecretNonce: circleOptions.privateMintSecretNonce,
       },
     )
     return { kind: 'evm-xreserve', ...execution }
