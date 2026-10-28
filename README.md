@@ -70,7 +70,7 @@ and transport interfaces.
 | 📜 [`@provablehq/veil-codegen`](./packages/codegen/README.md) | Generate typed bindings from an Aleo program ABI (library + `veil-codegen` CLI). | Generating JS/TS contracts from Aleo smart contract ABIs |
 | 🧪 [`@provablehq/veil-aleo-devnode`](./packages/devnode/README.md) | Run and drive a local Aleo devnode for tests. | Testing and local development with a local Aleo node |
 | 🦁 [`@provablehq/veil-leo`](./packages/leo/README.md) | Typed wrapper around the `leo` CLI (build, deploy, …). | Compiling or deploying Leo programs — including during testing with Aleo Devnode (`@provablehq/veil-aleo-devnode`) |
-| 💸 [`@provablehq/aleo-bridge-sdk`](./packages/bridge/README.md) | Cross-chain bridge client (preview). Versions in lockstep with the Veil packages; expect breaking changes between minor releases. | Bridging tokens to and from Aleo via EVM Chains (Circle ARC, Base, Arbitrum, etc.)  or Solana |
+| 💸 [`@provablehq/aleo-bridge-sdk`](./packages/bridge/README.md) | Cross-chain bridge client for moving funds to and from Aleo confidentially. | Bridging tokens to and from Aleo via EVM Chains (Circle ARC, Base, Arbitrum, etc.)  or Solana |
 
 ## Quick Start
 
@@ -180,8 +180,8 @@ const account = viewOnlyAccount({
 `@provablehq/aleo-bridge-sdk` supports cross-chain transfers through Circle
 xReserve, Circle CCTP, and Hyperlane. It connects Aleo assets to Ethereum and
 Solana, and moves native USDC between Arc and Ethereum, Base, or Arbitrum.
-The package is in preview; supported operations depend on the route's reviewed
-deployment metadata. See the [bridge package guide](./packages/bridge/README.md)
+Supported operations depend on the route's reviewed deployment metadata. See
+the [bridge package guide](./packages/bridge/README.md)
 for supported routes, wallet integrations, execution, and recovery.
 
 ```ts
