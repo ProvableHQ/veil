@@ -1,5 +1,20 @@
 # @provablehq/veil-aleo-react-hooks
 
+## 0.15.0
+
+### Minor Changes
+
+- b00f561: Move to the current aleo-dev-toolkit adapter releases:
+  `@provablehq/aleo-wallet-adapter-core` 1.2.0, `-react` 1.4.0, `-shield` 1.4.0,
+  and `-leo`, `-puzzle`, `-fox` 1.1.3, with their companions
+  `@provablehq/aleo-types` 1.2.0 and `@provablehq/aleo-wallet-standard` 1.5.0.
+
+### Patch Changes
+
+- Updated dependencies [b00f561]
+  - @provablehq/veil-aleo-wallet-adapter@0.15.0
+  - @provablehq/veil-core@0.15.0
+
 ## 0.14.0
 
 ### Patch Changes
