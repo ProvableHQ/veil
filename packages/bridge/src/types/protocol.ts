@@ -89,6 +89,42 @@ export type ProtocolBridgeAsset = {
 export type BridgeRouteAvailability = 'active' | 'metadata-required' | 'disabled'
 
 /**
+ * Locates an Aleo program mapping whose boolean value halts a route when true.
+ *
+ * Every Aleo program in a bridge route asserts its pause flag inside `finalize`,
+ * so a true value makes the transfer transaction fail on chain.
+ *
+ * @property chainId Registry chain identifier whose Aleo client reads the mapping.
+ * @property kind Discriminator for an Aleo mapping probe.
+ * @property program Program that owns the mapping, such as `usdcx_bridge_v2.aleo`.
+ * @property mapping Mapping name. Older programs use `pause` or `paused`; programs built from the current Leo template use `pause__`.
+ * @property key Literal mapping key. Older programs key the flag under `true`; `pause__` mappings key it under `false`.
+ */
+export type AleoMappingPauseSource = {
+  chainId: string
+  kind: 'aleo-mapping'
+  program: string
+  mapping: string
+  key: string
+}
+
+/**
+ * Locates an EVM contract exposing an OpenZeppelin-style `paused()` view.
+ *
+ * @property chainId Registry chain identifier whose EVM client performs the call.
+ * @property kind Discriminator for an EVM `paused()` probe.
+ * @property address Contract address answering `paused()`.
+ */
+export type EvmPausedSource = {
+  chainId: string
+  kind: 'evm-paused'
+  address: string
+}
+
+/** Identifies one on-chain pause flag a route depends on. */
+export type BridgePauseSource = AleoMappingPauseSource | EvmPausedSource
+
+/**
  * Describes one directional protocol route.
  *
  * @property id Stable route identifier.
@@ -100,6 +136,7 @@ export type BridgeRouteAvailability = 'active' | 'metadata-required' | 'disabled
  * @property deploymentId Upstream protocol deployment identifier when known.
  * @property source Reference used to audit the route metadata.
  * @property metadata Protocol-specific non-secret configuration.
+ * @property pauseSources On-chain pause flags that halt the route when set. Omitted when the route has no reviewed pause flags; `getRouteStatus` then reports no sources.
  */
 export type ProtocolBridgeRoute = {
   id: string
@@ -111,6 +148,7 @@ export type ProtocolBridgeRoute = {
   deploymentId?: string | undefined
   source?: string | undefined
   metadata?: Readonly<Record<string, string | number | boolean>> | undefined
+  pauseSources?: readonly BridgePauseSource[] | undefined
 }
 
 /**

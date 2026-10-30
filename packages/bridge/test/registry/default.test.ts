@@ -390,6 +390,96 @@ describe('validateBridgeRegistry', () => {
   })
 })
 
+describe('route pause sources', () => {
+  const active = DEFAULT_BRIDGE_REGISTRY.routes.filter((route) => route.availability === 'active')
+
+  it('declares at least one on-chain pause flag on every active route', () => {
+    expect(active.length).toBeGreaterThan(0)
+    for (const route of active) {
+      expect(route.pauseSources?.length, route.id).toBeGreaterThan(0)
+    }
+  })
+
+  it('leaves placeholder routes without pause flags', () => {
+    const placeholders = DEFAULT_BRIDGE_REGISTRY.routes.filter((route) => route.availability !== 'active')
+    expect(placeholders.length).toBeGreaterThan(0)
+    expect(placeholders.every((route) => route.pauseSources === undefined)).toBe(true)
+  })
+
+  it('keys every pause__ mapping under false and every pause or paused mapping under true', () => {
+    for (const route of active) {
+      for (const source of route.pauseSources ?? []) {
+        if (source.kind !== 'aleo-mapping') continue
+        expect(source.key, `${route.id} ${source.program}`).toBe(source.mapping === 'pause__' ? 'false' : 'true')
+        expect(['pause', 'paused', 'pause__']).toContain(source.mapping)
+      }
+    }
+  })
+
+  it('points each chain-scoped flag at a chain in the route environment', () => {
+    for (const route of DEFAULT_BRIDGE_REGISTRY.routes) {
+      for (const source of route.pauseSources ?? []) {
+        const chain = DEFAULT_BRIDGE_REGISTRY.chains.find((entry) => entry.id === source.chainId)
+        expect(chain?.environment, `${route.id} ${source.chainId}`).toBe(route.environment)
+        expect(chain?.family).toBe(source.kind === 'aleo-mapping' ? 'aleo' : 'evm')
+      }
+    }
+  })
+
+  it('guards every Ethereum Hyperlane route with the Mailbox pausable for its direction', () => {
+    const PAUSABLE_HOOK = '0x3A66Dc852e56d3748838b3C27CF381105b83705b'
+    const PAUSABLE_ISM = '0x2D3F4dd71811c1bF27DD42f2003eC9dA2E43D770'
+    const hyperlane = active.filter((route) => route.protocol === 'hyperlane')
+    const ethereum = hyperlane.filter((route) => route.sourceAssetId.startsWith('ethereum/') || route.destinationAssetId.startsWith('ethereum/'))
+    expect(ethereum.length).toBeGreaterThan(0)
+    for (const route of ethereum) {
+      const evm = (route.pauseSources ?? []).filter((source) => source.kind === 'evm-paused')
+      // Outbound dispatch runs the PausableHook; inbound delivery runs the PausableIsm.
+      const expected = route.sourceAssetId.startsWith('ethereum/') ? PAUSABLE_HOOK : PAUSABLE_ISM
+      expect(evm, route.id).toEqual([{ chainId: 'ethereum', kind: 'evm-paused', address: expected }])
+    }
+    // Solana legs have no EVM contract to probe.
+    for (const route of hyperlane.filter((route) => !ethereum.includes(route))) {
+      expect((route.pauseSources ?? []).every((source) => source.kind === 'aleo-mapping'), route.id).toBe(true)
+    }
+  })
+
+  it('pins the reviewed xReserve, Hyperlane, and CCTP flag locations', () => {
+    const byId = (id: string) => DEFAULT_BRIDGE_REGISTRY.routes.find((route) => route.id === id)!.pauseSources
+    expect(byId('xreserve:ethereum/usdc->aleo/usdcx')).toEqual([
+      { chainId: 'ethereum', kind: 'evm-paused', address: '0x8888888199b2Df864bf678259607d6D5EBb4e3Ce' },
+      { chainId: 'aleo', kind: 'aleo-mapping', program: 'usdcx_bridge_v2.aleo', mapping: 'paused', key: 'true' },
+      { chainId: 'aleo', kind: 'aleo-mapping', program: 'usdcx_stablecoin.aleo', mapping: 'pause', key: 'true' },
+    ])
+    expect(byId('xreserve:aleo/usdcx->arc/usdc')?.[0]).toEqual(
+      { chainId: 'arc', kind: 'evm-paused', address: '0x8888888199b2Df864bf678259607d6D5EBb4e3Ce' },
+    )
+    expect(byId('hyperlane:aleo/eth->ethereum/eth')).toEqual([
+      { chainId: 'aleo', kind: 'aleo-mapping', program: 'hyp_warp_token_eth_v2.aleo', mapping: 'pause', key: 'true' },
+      { chainId: 'aleo', kind: 'aleo-mapping', program: 'arc20_eth.aleo', mapping: 'pause__', key: 'false' },
+      { chainId: 'ethereum', kind: 'evm-paused', address: '0x2D3F4dd71811c1bF27DD42f2003eC9dA2E43D770' },
+    ])
+    expect(byId('hyperlane:ethereum/eth->aleo/eth')).toEqual([
+      { chainId: 'aleo', kind: 'aleo-mapping', program: 'hyp_warp_token_eth_v2.aleo', mapping: 'pause', key: 'true' },
+      { chainId: 'aleo', kind: 'aleo-mapping', program: 'arc20_eth.aleo', mapping: 'pause__', key: 'false' },
+      { chainId: 'ethereum', kind: 'evm-paused', address: '0x3A66Dc852e56d3748838b3C27CF381105b83705b' },
+    ])
+    expect(byId('hyperlane:solana/zec->aleo/zec')).toEqual([
+      { chainId: 'aleo', kind: 'aleo-mapping', program: 'hyp_warp_token_zec_v2.aleo', mapping: 'pause__', key: 'false' },
+      { chainId: 'aleo', kind: 'aleo-mapping', program: 'shield_arc22_zec.aleo', mapping: 'pause__', key: 'false' },
+    ])
+    expect(byId('cctp:base/usdc->arc/usdc')).toEqual([
+      { chainId: 'base', kind: 'evm-paused', address: '0x81D40F21F12A8F0E3252Bccb954D722d4c464B64' },
+      { chainId: 'arc', kind: 'evm-paused', address: '0x81D40F21F12A8F0E3252Bccb954D722d4c464B64' },
+    ])
+    expect(byId('xreserve:sepolia/usdc->aleo-testnet/usdcx')).toEqual([
+      { chainId: 'sepolia', kind: 'evm-paused', address: '0x008888878f94C0d87defdf0B07f46B93C1934442' },
+      { chainId: 'aleo-testnet', kind: 'aleo-mapping', program: 'test_usdcx_bridge_v2.aleo', mapping: 'paused', key: 'true' },
+      { chainId: 'aleo-testnet', kind: 'aleo-mapping', program: 'test_usdcx_stablecoin.aleo', mapping: 'pause', key: 'true' },
+    ])
+  })
+})
+
 it.each([undefined, 99])('rejects absent or mismatched CCTP chain domains (%s)', domain => {
   const registry = { ...DEFAULT_BRIDGE_REGISTRY, chains: DEFAULT_BRIDGE_REGISTRY.chains.map(chain =>
     chain.id === 'arc' ? { ...chain, protocolDomains: { ...chain.protocolDomains, cctp: domain } } : chain) }

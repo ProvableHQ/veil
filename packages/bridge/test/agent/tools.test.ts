@@ -9,8 +9,19 @@ describe('createBridgeAgentTools', () => {
     expect(tools.map((tool) => tool.schema.name)).toEqual([
       'bridge_list_assets',
       'bridge_list_routes',
+      'bridge_get_route_status',
       'bridge_quote_transfer',
     ])
+  })
+
+  it('reports route pause flags through the bound client', async () => {
+    const request = vi.fn(async () => 'true')
+    const client = createBridgeClient({ clients: { aleo: { family: 'aleo', publicClient: { request } as never } } })
+    const tool = createBridgeAgentTools(client).find((entry) => entry.schema.name === 'bridge_get_route_status')!
+
+    const status = await tool.handler({ routeId: 'hyperlane:aleo/eth->ethereum/eth' })
+
+    expect(status).toMatchObject({ routeId: 'hyperlane:aleo/eth->ethereum/eth', paused: true })
   })
 
   it('quotes a transfer through the bound client', async () => {

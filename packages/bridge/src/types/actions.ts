@@ -11,6 +11,7 @@ import type { EvmHyperlaneTransferExecution, EvmHyperlaneTransferQuote } from '.
 import type {
   BridgeFee,
   BridgeCheckpoint,
+  BridgePauseSource,
   BridgePlan,
   BridgeProgress,
   BridgeReceipt,
@@ -80,6 +81,48 @@ export type QuoteParameters = PrepareParameters & {
   privateMintSecretNonce?: string | undefined
 }
 
+/**
+ * Selects the route whose on-chain pause flags are read.
+ *
+ * @property routeId Directional registry route identifier, as listed by `listRoutes` or carried in `plan.route.id`.
+ */
+export type GetRouteStatusParameters = {
+  routeId: string
+}
+
+/**
+ * Outcome of reading one pause flag.
+ *
+ * `active` and `paused` are read results. `unknown` means the read was
+ * attempted and failed, and `skipped` means no client is configured for the
+ * flag's chain.
+ */
+export type BridgeRouteStatusSourceState = 'active' | 'paused' | 'unknown' | 'skipped'
+
+/**
+ * Reports one pause flag together with its read outcome.
+ *
+ * @property state Read outcome for this flag.
+ * @property reason Failure detail when the state is `unknown` or `skipped`.
+ */
+export type BridgeRouteStatusSource = BridgePauseSource & {
+  state: BridgeRouteStatusSourceState
+  reason?: string | undefined
+}
+
+/**
+ * Reports whether a route is halted by any of its on-chain pause flags.
+ *
+ * @property routeId Directional route that was probed.
+ * @property paused True when at least one flag read as paused. Unreadable or skipped flags do not set it.
+ * @property sources Every declared flag with its read outcome, in registry order.
+ */
+export type BridgeRouteStatus = {
+  routeId: string
+  paused: boolean
+  sources: readonly BridgeRouteStatusSource[]
+}
+
 /** Identifies the route implementation that produced a transfer quote. */
 export type BridgeQuoteKind =
   | 'aleo-hyperlane'
@@ -113,8 +156,12 @@ type AleoXReserveQuote = {
   status: 'not-queried' | 'quoted'
 }
 
-/** Captures every quote returned by the protocol-neutral transfer action. */
-export type BridgeQuote = ({ plan: BridgePlan }) & (
+/**
+ * Route-specific pricing for a prepared plan, before pause flags are attached.
+ *
+ * @property plan Validated transfer plan to pass unchanged to execution.
+ */
+export type BridgeQuotePricing = ({ plan: BridgePlan }) & (
   | ({ kind: 'aleo-hyperlane' } & AleoHyperlaneGasQuote)
   | AleoXReserveQuote
   | ({ kind: 'evm-hyperlane' } & EvmHyperlaneTransferQuote)
@@ -122,6 +169,14 @@ export type BridgeQuote = ({ plan: BridgePlan }) & (
   | ({ kind: 'evm-xreserve' } & EvmXReserveTransferQuote)
   | ({ kind: 'solana-hyperlane' } & SolanaHyperlaneTransferQuote)
 )
+
+/**
+ * Captures every quote returned by the protocol-neutral transfer action.
+ *
+ * @property paused True when any on-chain pause flag on the route read as paused. Execution refuses such a route.
+ * @property routeStatus Every pause flag on the route with its read outcome, for display or diagnostics.
+ */
+export type BridgeQuote = BridgeQuotePricing & { paused: boolean; routeStatus: BridgeRouteStatus }
 
 /**
  * Controls how the source wallet begins a cross-chain transfer.
@@ -141,9 +196,11 @@ export type BridgeQuote = ({ plan: BridgePlan }) & (
  * @property circle Circle-specific options: the identity store, a reserved commitment, a wallet preparation, or the legacy secret nonce for a private xReserve mint. A quoted plan already carries its reserved commitment.
  * @property privateMintSecretNonce Legacy secret Aleo scalar committed by a private xReserve deposit.
  * @property onProgress Optional awaited callback for Aleo proving and submission boundaries. Non-Aleo routes emit no events.
+ * @property skipRouteStatus Skips the on-chain pause reads that otherwise run before any wallet interaction. Defaults to false. Set it when the caller already checked `getRouteStatus`; the chain still enforces the pause.
  */
 export type ExecuteParameters = {
   plan: BridgePlan
+  skipRouteStatus?: boolean | undefined
   circle?: ExecuteCircleOptions | undefined
   pollingIntervalMs?: number | undefined
   confirmationTimeoutMs?: number | undefined
@@ -200,6 +257,7 @@ export type GetStatusParameters = {
  * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
  */
 type CompleteOptions = {
+  skipRouteStatus?: boolean | undefined
   circle?: CompleteCircleOptions | undefined
   /** @deprecated Use `circle.manualMint`. Removed in the next major release. */
   cctp?: { manualMint: boolean } | undefined
@@ -227,6 +285,7 @@ type CompleteOptions = {
  * @property privateFee Whether the Aleo wallet pays its fee privately. Defaults to false.
  * @property onCheckpoint Optional durable hook called before supported local Aleo broadcast and again after destination submission.
  * @property onProgress Optional awaited callback for Aleo proving and submission boundaries.
+ * @property skipRouteStatus Skips the on-chain pause reads that otherwise run before the destination action. Defaults to false. The chain still enforces the pause.
  */
 export type CompleteParameters = CompleteOptions & (
   | { progress: Extract<BridgeProgress, { next: 'complete' }>, plan?: never, receipt?: never }
@@ -261,9 +320,11 @@ export type RecoverParameters = {
  * @property pollingIntervalMs Delay between source confirmation reads. Defaults to 1,000 milliseconds.
  * @property confirmationTimeoutMs Maximum source confirmation wait. Defaults to 120,000 milliseconds.
  * @property onCheckpoint Optional durable hook called immediately after a new transaction is broadcast.
+ * @property skipRouteStatus Skips the on-chain pause reads that otherwise run before rebroadcast. Defaults to false. The chain still enforces the pause.
  */
 export type ResumeParameters = {
   progress: Extract<BridgeProgress, { next: 'resume' }>
+  skipRouteStatus?: boolean | undefined
   circle?: ResumeCircleOptions | undefined
   /** @deprecated Use `circle.privateMintSecretNonce`. Removed in the next major release. */
   privateMintSecretNonce?: string | undefined

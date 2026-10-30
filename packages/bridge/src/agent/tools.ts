@@ -64,6 +64,20 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
     },
     {
       schema: {
+        name: 'bridge_get_route_status',
+        description: 'Read every on-chain pause flag a bridge route depends on and report whether the route is currently halted. Use before quoting or executing to explain why a transfer would be refused. This tool reads chain state through the configured public clients but does not sign or move funds.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            routeId: { type: 'string', description: 'Directional route id from bridge_list_routes, such as hyperlane:aleo/eth->ethereum/eth.' },
+          },
+          required: ['routeId'],
+        },
+      },
+      handler: async (params) => client.getRouteStatus(params as Parameters<BridgeClient['getRouteStatus']>[0]),
+    },
+    {
+      schema: {
         name: 'bridge_quote_transfer',
         description: 'Validate and price an intended transfer between two chains through xReserve, Hyperlane, or CCTP. This tool reads current chain or provider state where the selected route exposes live costs, but does not request a wallet signature or move funds.',
         inputSchema: {

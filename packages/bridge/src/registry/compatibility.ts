@@ -85,8 +85,11 @@ function routeFingerprint(
     const { freezelistProgram: _freezelistProgram, ...privacy } = entry.privacy
     return { ...entry, privacy }
   }
+  // Pause flag locations are read-only probes added after the pinned snapshots
+  // and never change what a transaction submits, so they stay out of the hash.
+  const { pauseSources: _pauseSources, ...comparableRoute } = route
   // Sort object keys recursively so serialization order cannot affect compatibility.
-  const canonical = JSON.stringify({ route, sourceAsset: asset(sourceAsset), destinationAsset: asset(destinationAsset),
+  const canonical = JSON.stringify({ route: comparableRoute, sourceAsset: asset(sourceAsset), destinationAsset: asset(destinationAsset),
     sourceChain: chain(sourceChain), destinationChain: chain(destinationChain),
   }, (_key, value) => value && typeof value === 'object' && !Array.isArray(value)
     ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) : value)

@@ -352,6 +352,30 @@ encoded route strings or copy contract addresses into transfer requests.
 `getRoutes` can also return `metadata-required` entries; check `availability`
 before presenting a route as executable.
 
+`availability` is a static review flag. Whether a route is actually open right
+now is decided on chain: each Aleo program in a route keeps a pause mapping that
+its `finalize` asserts is false, the xReserve contract and CCTP
+MessageTransmitter expose `paused()`, and the Ethereum Hyperlane Mailbox runs a
+pausable hook on every dispatch to Aleo and a pausable ISM on every delivery
+from it. The registry records where each of those flags lives, and
+`getRouteStatus` reads them through the configured public clients.
+
+```ts
+const status = await bridge.getRouteStatus({ routeId: 'hyperlane:aleo/eth->ethereum/eth' })
+
+if (status.paused) {
+  for (const source of status.sources) {
+    if (source.state === 'paused') console.log(source)
+  }
+}
+```
+
+Each entry in `sources` reports `active`, `paused`, `unknown` (the read failed),
+or `skipped` (no client is configured for that chain). `paused` is true only
+when a flag actually read as paused. The same reads run inside `quote`, whose
+result carries `paused` and `routeStatus`, and inside `execute`, `resume`, and
+`complete`, which refuse a paused route before any wallet interaction.
+
 ## Move an asset across chains
 
 Every transfer follows the same caller lifecycle:
@@ -393,6 +417,11 @@ console.log(quote.nativeFeeAtomic)
 `quote.plan` identifies the exact route, amount, recipient, and reviewed
 deployment that produced the quote. Keep this value unchanged for execution.
 
+`quote.paused` reports whether any on-chain pause flag on the route read as
+paused, with the per-flag detail in `quote.routeStatus`. A UI can still show
+the price but should disable submission, because `execute` refuses a paused
+route.
+
 A private USDCx mint (`mintMode: 'private'`) also needs a nonce source. A local
 Aleo account derives one through the client's identity store, a connected
 wallet prepares one, or a legacy caller supplies a scalar. Each is passed under
@@ -426,6 +455,28 @@ const execution = await bridge.execute({
 Once a source transaction has been submitted, do not call `execute` again for
 the same transfer. Use the returned receipt while the application remains open,
 or recover from the latest checkpoint after an interruption.
+
+Before asking the wallet for anything, `execute`, `resume`, and `complete`
+read the route's on-chain pause flags and throw `BridgeRoutePausedError` when
+one is set. The
+error extends `BridgeError`, names the paused program or contract in its
+message, and carries the full `status`. A flag that cannot be read does not
+block, since the chain enforces the pause either way. Pass
+`skipRouteStatus: true` to skip the reads when the application already checked
+`getRouteStatus`.
+
+```ts
+import { BridgeRoutePausedError } from '@provablehq/aleo-bridge-sdk'
+
+try {
+  await bridge.execute({ plan: quote.plan })
+} catch (error) {
+  if (error instanceof BridgeRoutePausedError) {
+    console.error(error.message)
+    // Bridge route hyperlane:aleo/eth->ethereum/eth is paused on chain: hyp_warp_token_eth_v2.aleo/pause[true]
+  }
+}
+```
 
 ### 3. Follow the transfer
 

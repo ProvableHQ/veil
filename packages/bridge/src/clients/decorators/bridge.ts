@@ -1,4 +1,5 @@
 import { execute } from '../../actions/execute.js'
+import { getRouteStatus } from '../../actions/getRouteStatus.js'
 import { quote } from '../../actions/quote.js'
 import { complete } from '../../actions/complete.js'
 import { getStatus } from '../../actions/getStatus.js'
@@ -9,7 +10,7 @@ import { shield } from '../../actions/shield.js'
 import { unshield } from '../../actions/unshield.js'
 import type { BridgeChainClients } from '../../connections/resolve.js'
 import type { BridgeProgress, BridgeReceipt, BridgeRegistry } from '../../types/protocol.js'
-import type { CompleteParameters, ExecuteParameters, GetStatusParameters, QuoteParameters, RecoverParameters, ResumeParameters, WaitParameters, BridgeExecution, BridgeQuote } from '../../types/actions.js'
+import type { CompleteParameters, ExecuteParameters, GetRouteStatusParameters, GetStatusParameters, QuoteParameters, RecoverParameters, ResumeParameters, WaitParameters, BridgeExecution, BridgeQuote, BridgeRouteStatus } from '../../types/actions.js'
 import type { AleoPrivacyExecution, ShieldParameters, UnshieldParameters } from '../../types/aleo.js'
 import {
   memoryXReservePrivateMintIdentityStore,
@@ -47,6 +48,7 @@ export type BridgeActionsConfig = {
  * unshielding can request wallet authorization and move funds.
  */
 export type BridgeActions = {
+  getRouteStatus: (params: GetRouteStatusParameters) => Promise<BridgeRouteStatus>
   quote: (params: QuoteParameters) => Promise<BridgeQuote>
   execute: (params: ExecuteParameters) => Promise<BridgeExecution>
   getStatus: (params: GetStatusParameters) => Promise<BridgeReceipt>
@@ -78,6 +80,7 @@ export function bridgeActions(config: BridgeActionsConfig): BridgeActions {
   return {
     // Every closure injects the same validated route catalog and
     // registry-keyed clients, preventing per-action configuration drift.
+    getRouteStatus: async (params) => getRouteStatus(config.registry, config.clients, params),
     quote: async (params) => quote(config.registry, config.clients, withStore(params), config.fetch),
     execute: async (params) => execute(config.registry, config.clients, withStore(params), config.fetch),
     getStatus: async (params) => getStatus(config.registry, config.clients, config.fetch, params),

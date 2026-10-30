@@ -10,6 +10,7 @@ import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
 import { findXReservePrivateMintIdentity } from '../utils/xreservePrivateMintStore.js'
 import { resolveCircleOptions } from './internal/circleOptions.js'
+import { assertRouteNotPaused } from './internal/routePauseGuard.js'
 
 /**
  * Submits the destination-chain transaction required to receive bridged funds.
@@ -53,6 +54,9 @@ export async function complete(
   } else {
     throw new BridgeError('Bridge completion requires recovered progress')
   }
+  // The destination mint asserts the same pause flags, so refuse before any
+  // wallet interaction when the route has been halted since the deposit.
+  if (!params.skipRouteStatus) await assertRouteNotPaused(registry, clients, plan.route.id)
   if (plan.protocol === 'cctp') {
     return cctp.complete(registry, clients, fetcher, {
       plan, receipt, cctp: { manualMint: circleOptions.manualMint === true }, onCheckpoint: params.onCheckpoint,

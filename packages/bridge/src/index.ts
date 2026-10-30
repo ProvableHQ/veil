@@ -56,6 +56,7 @@ export {
 export type { BridgeChainClient, BridgeChainClients } from './connections/resolve.js'
 
 export { execute } from './actions/execute.js'
+export { getRouteStatus } from './actions/getRouteStatus.js'
 export { quote } from './actions/quote.js'
 export { complete } from './actions/complete.js'
 export { getStatus } from './actions/getStatus.js'
@@ -110,6 +111,9 @@ export type {
   ProtocolBridgeAsset,
   ProtocolBridgeChain,
   ProtocolBridgeRoute,
+  AleoMappingPauseSource,
+  BridgePauseSource,
+  EvmPausedSource,
 } from './types/protocol.js'
 export type {
   CircleOptions,
@@ -120,6 +124,7 @@ export type {
   ResumeCircleOptions,
   ExecuteParameters,
   CompleteParameters,
+  GetRouteStatusParameters,
   GetStatusParameters,
   QuoteParameters,
   RecoverParameters,
@@ -129,6 +134,10 @@ export type {
   BridgeExecutionKind,
   BridgeQuote,
   BridgeQuoteKind,
+  BridgeQuotePricing,
+  BridgeRouteStatus,
+  BridgeRouteStatusSource,
+  BridgeRouteStatusSourceState,
 } from './types/actions.js'
 export type {
   EvmHyperlaneRouteMetadata,
@@ -210,7 +219,7 @@ export {
   type ReadXReserveDeliveryParameters,
 } from './utils/xreserveDelivery.js'
 
-export { BridgeError } from './errors/bridgeErrors.js'
+export { BridgeError, BridgeRoutePausedError } from './errors/bridgeErrors.js'
 export { formatDecimalAmount, parseDecimalAmount } from './utils/units.js'
 
 export type { EvmCctpTransferQuote, EvmCctpTransferExecution } from './types/cctp.js'

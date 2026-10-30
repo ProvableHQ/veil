@@ -15,7 +15,10 @@ function client(chainId = '0x13b2') {
   const bridge = createBridgeClient({
     environment: 'mainnet',
     clients: {
-      arc: createEvmClient({ transport: evmCustom(async ({ method }) => {
+      arc: createEvmClient({ transport: evmCustom(async ({ method, params }) => {
+        // The route pause guard reads xReserve `paused()` alongside the quote;
+        // answer it as unpaused without counting it as a token read.
+        if (method === 'eth_call' && (params as readonly [{ data?: string }])[0]?.data === '0x5c975abb') return `0x${'0'.repeat(64)}`
         calls.push(method)
         if (method === 'eth_chainId') return chainId
         if (method === 'eth_call') return `0x${(10_000_000n).toString(16).padStart(64, '0')}`

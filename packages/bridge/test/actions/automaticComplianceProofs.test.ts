@@ -26,9 +26,13 @@ function local() {
   let root = '123field'
   const request = vi.fn(async ({ method }: { method: string }) =>
     method === 'getMappingValue' ? root : ['0', '1', root.slice(0, -5)])
+  // The route pause guard reads program pause mappings before execution; keep
+  // those reads out of the compliance request log so its assertions stay exact.
+  const transportRequest = async (args: { method: string; params?: { mapping?: string } }) =>
+    args.method === 'getMappingValue' && args.params?.mapping !== 'freeze_list_root' ? 'false' : request(args)
   const generate = vi.fn(async ({ address, root }: { address: string; root: string }) => `[${address}:${root}]`)
   const publicClient = createClient({
-    transport: { request, config: { key: 'test', name: 'test', type: 'test', request, network: 'mainnet' } },
+    transport: { request: transportRequest, config: { key: 'test', name: 'test', type: 'test', request: transportRequest, network: 'mainnet' } },
   })
   const executeTransaction = vi.fn<AleoWalletClient['executeTransaction']>().mockResolvedValue('at1test')
   const wallet: AleoWalletClient = {
