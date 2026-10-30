@@ -60,6 +60,8 @@ function mockExecutor(
       if (method === 'eth_chainId') return '0xaa36a7'
       if (method === 'eth_call') {
         const transaction = (params as readonly [{ data: Hex }])[0]
+        // The route pause guard reads xReserve `paused()`; report unpaused.
+        if (transaction.data === '0x5c975abb') return `0x${'0'.repeat(64)}`
         const decoded = decodeFunctionData({ abi: ABI, data: transaction.data })
         if (decoded.functionName === 'balanceOf') return encodeFunctionResult({ abi: ABI, functionName: 'balanceOf', result: 3_000_000n })
         if (decoded.functionName === 'allowance') {

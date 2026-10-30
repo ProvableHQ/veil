@@ -17,6 +17,7 @@ import * as solanaHyperlane from '../protocols/hyperlane/solana.js'
 import * as aleoToEvmXReserve from '../protocols/xreserve/aleoToEvm.js'
 import * as evmToAleoXReserve from '../protocols/xreserve/evmToAleo.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
+import { assertRouteNotPaused } from './internal/routePauseGuard.js'
 import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
 import type { Transaction } from '@provablehq/veil-core'
 import { readDestinationBalance } from './internal/readDestinationBalance.js'
@@ -109,6 +110,9 @@ export async function execute(
   params: ExecuteParameters,
   fetcher: typeof fetch = globalThis.fetch,
 ): Promise<BridgeExecution> {
+  // Refuse a halted route before any wallet interaction so a pause costs the
+  // caller no proving time or fees.
+  if (!params.skipRouteStatus) await assertRouteNotPaused(registry, clients, params.plan.route.id)
   // The selected route, not caller-supplied chain branching, determines which
   // protocol implementation and wallet capability may commit the funds.
   if (params.plan.protocol === 'cctp') return cctp.execute(registry, clients, fetcher, params)

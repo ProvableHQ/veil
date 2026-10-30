@@ -7,8 +7,9 @@ import {
   requireSolanaClient,
   type BridgeChainClients,
 } from '../connections/resolve.js'
-import type { BridgeRegistry } from '../types/protocol.js'
-import type { QuoteParameters, BridgeQuote } from '../types/actions.js'
+import type { BridgePlan, BridgeRegistry } from '../types/protocol.js'
+import type { QuoteParameters, BridgeQuote, BridgeQuotePricing } from '../types/actions.js'
+import { getRouteStatus } from './getRouteStatus.js'
 import { aleoAddressToBytes32 } from '../utils/xreserve.js'
 import * as aleoHyperlane from '../protocols/hyperlane/aleo.js'
 import * as evmHyperlane from '../protocols/hyperlane/evm.js'
@@ -50,6 +51,23 @@ export async function quote(
   // Build the canonical plan before reading live prices. The returned plan is
   // the exact value the caller passes to execution and stores in progress.
   const prepared = prepare(registry, params)
+  // Pause flags are read alongside the price so a halted route is reported
+  // with the quote rather than discovered at execution.
+  const [routeStatus, priced] = await Promise.all([
+    getRouteStatus(registry, clients, { routeId: prepared.route.id }),
+    quoteRoute(registry, clients, params, fetcher, prepared),
+  ])
+  return { ...priced, paused: routeStatus.paused, routeStatus }
+}
+
+/** Prices a prepared plan through its protocol helper without reading pause flags. */
+async function quoteRoute(
+  registry: BridgeRegistry,
+  clients: BridgeChainClients,
+  params: QuoteParameters,
+  fetcher: typeof fetch,
+  prepared: BridgePlan,
+): Promise<BridgeQuotePricing> {
   if (prepared.protocol === 'cctp') return cctp.quote(registry, clients, fetcher, { plan: prepared })
   const circleOptions = resolveCircleOptions(params)
   const privateMintIdentities = circleOptions.privateMintIdentities

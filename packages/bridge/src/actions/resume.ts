@@ -10,6 +10,7 @@ import { aleoAddressToBytes32 } from '../utils/xreserve.js'
 import { createBridgeCheckpoint } from './createBridgeCheckpoint.js'
 import { resolveTransferRoute } from './internal/resolveTransferRoute.js'
 import { resolveCircleOptions } from './internal/circleOptions.js'
+import { assertRouteNotPaused } from './internal/routePauseGuard.js'
 
 /**
  * Submits the source-chain transaction left unfinished after an interruption.
@@ -41,6 +42,9 @@ export async function resume(
   if (params.progress.next !== 'resume' || receipt.status !== 'SOURCE_SUBMISSION_PENDING') {
     throw new BridgeError('Bridge progress has no source submission to resume')
   }
+  // A route paused since the checkpoint was written would reject the
+  // rebroadcast on chain, so refuse before touching the wallet or node.
+  if (!params.skipRouteStatus) await assertRouteNotPaused(registry, clients, plan.route.id)
   if (plan.protocol === 'cctp') return cctp.execute(registry, clients, fetcher, { ...params, plan, resume: receipt })
   const circleOptions = resolveCircleOptions(params)
   const route = resolveTransferRoute(registry, plan)

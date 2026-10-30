@@ -8,6 +8,7 @@ describe('createBridgeMcpServer', () => {
     expect(server.tools.map((tool) => tool.name)).toEqual([
       'bridge_list_assets',
       'bridge_list_routes',
+      'bridge_get_route_status',
       'bridge_quote_transfer',
     ])
     const routes = await server.handleToolCall('bridge_list_routes', { protocol: 'xreserve' })

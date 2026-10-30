@@ -81,6 +81,22 @@ Hyperlane routes marked `metadata-required` are known route families whose
 complete execution deployment has not been pinned yet. Applications MUST NOT
 execute them until a reviewed registry marks them active.
 
+An active route can still be halted on chain. Every Aleo program in a route
+asserts a pause mapping inside `finalize`, and the xReserve contract and CCTP
+MessageTransmitter expose `paused()`. The registry records where each flag
+lives, and `getRouteStatus({ routeId })` reads them all, reporting `active`,
+`paused`, `unknown`, or `skipped` per flag. `quote` results carry `paused` and
+`routeStatus`, and `execute`, `resume`, and `complete` throw
+`BridgeRoutePausedError` before asking the wallet for anything when a flag is
+set. A flag that cannot be read
+does not block, since the chain enforces the pause either way; pass
+`skipRouteStatus: true` to skip the reads.
+
+```ts
+const status = await bridge.getRouteStatus({ routeId: plan.route.id })
+if (status.paused) throw new Error(`Route halted: ${status.sources.filter((s) => s.state === 'paused').map((s) => s.kind).join(', ')}`)
+```
+
 BAT, USDG, and ZEC are active in both directions between Aleo and Solana. BAT
 and ZEC use classic SPL Token accounts, while USDG uses Token-2022.
 The SDK tracks Aleo-to-Solana delivery through the recipient's associated token account.

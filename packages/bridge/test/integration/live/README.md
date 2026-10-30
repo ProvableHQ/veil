@@ -2,6 +2,20 @@
 
 These tests use the SDK directly. No bridge CLI is involved.
 
+## Mainnet route pause flags (read-only)
+
+```sh
+BRIDGE_ROUTE_STATUS_READ_ONLY=1 pnpm vitest run packages/bridge/test/integration/live/mainnet/route-status.live.test.ts
+```
+
+This reads every pause flag declared on the active mainnet routes through
+public Aleo and Ethereum endpoints and checks that each configured chain
+answers with a definite value. When an Aleo-to-Ethereum route is paused, it
+also confirms that `execute` refuses it with `BridgeRoutePausedError` before
+asking for a wallet. It creates no signer and submits nothing.
+`BRIDGE_LIVE_ALEO_API_URL` and `BRIDGE_LIVE_ETHEREUM_RPC_URL` optionally
+override the public endpoints.
+
 ## Arc mainnet read-only verification
 
 ```sh

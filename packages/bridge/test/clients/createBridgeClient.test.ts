@@ -124,6 +124,8 @@ describe('createBridgeClient', () => {
     expect(result).toEqual({
       kind: 'aleo-xreserve',
       plan: result.plan,
+      paused: false,
+      routeStatus: { routeId: result.plan.route.id, paused: false, sources: expect.any(Array) },
       routeId: result.plan.route.id,
       protocol: 'xreserve',
       amountIn: '2.000001',
