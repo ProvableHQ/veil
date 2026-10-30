@@ -426,6 +426,24 @@ describe('route pause sources', () => {
     }
   })
 
+  it('guards every Ethereum Hyperlane route with the Mailbox pausable for its direction', () => {
+    const PAUSABLE_HOOK = '0x3A66Dc852e56d3748838b3C27CF381105b83705b'
+    const PAUSABLE_ISM = '0x2D3F4dd71811c1bF27DD42f2003eC9dA2E43D770'
+    const hyperlane = active.filter((route) => route.protocol === 'hyperlane')
+    const ethereum = hyperlane.filter((route) => route.sourceAssetId.startsWith('ethereum/') || route.destinationAssetId.startsWith('ethereum/'))
+    expect(ethereum.length).toBeGreaterThan(0)
+    for (const route of ethereum) {
+      const evm = (route.pauseSources ?? []).filter((source) => source.kind === 'evm-paused')
+      // Outbound dispatch runs the PausableHook; inbound delivery runs the PausableIsm.
+      const expected = route.sourceAssetId.startsWith('ethereum/') ? PAUSABLE_HOOK : PAUSABLE_ISM
+      expect(evm, route.id).toEqual([{ chainId: 'ethereum', kind: 'evm-paused', address: expected }])
+    }
+    // Solana legs have no EVM contract to probe.
+    for (const route of hyperlane.filter((route) => !ethereum.includes(route))) {
+      expect((route.pauseSources ?? []).every((source) => source.kind === 'aleo-mapping'), route.id).toBe(true)
+    }
+  })
+
   it('pins the reviewed xReserve, Hyperlane, and CCTP flag locations', () => {
     const byId = (id: string) => DEFAULT_BRIDGE_REGISTRY.routes.find((route) => route.id === id)!.pauseSources
     expect(byId('xreserve:ethereum/usdc->aleo/usdcx')).toEqual([
@@ -439,6 +457,12 @@ describe('route pause sources', () => {
     expect(byId('hyperlane:aleo/eth->ethereum/eth')).toEqual([
       { chainId: 'aleo', kind: 'aleo-mapping', program: 'hyp_warp_token_eth_v2.aleo', mapping: 'pause', key: 'true' },
       { chainId: 'aleo', kind: 'aleo-mapping', program: 'arc20_eth.aleo', mapping: 'pause__', key: 'false' },
+      { chainId: 'ethereum', kind: 'evm-paused', address: '0x2D3F4dd71811c1bF27DD42f2003eC9dA2E43D770' },
+    ])
+    expect(byId('hyperlane:ethereum/eth->aleo/eth')).toEqual([
+      { chainId: 'aleo', kind: 'aleo-mapping', program: 'hyp_warp_token_eth_v2.aleo', mapping: 'pause', key: 'true' },
+      { chainId: 'aleo', kind: 'aleo-mapping', program: 'arc20_eth.aleo', mapping: 'pause__', key: 'false' },
+      { chainId: 'ethereum', kind: 'evm-paused', address: '0x3A66Dc852e56d3748838b3C27CF381105b83705b' },
     ])
     expect(byId('hyperlane:solana/zec->aleo/zec')).toEqual([
       { chainId: 'aleo', kind: 'aleo-mapping', program: 'hyp_warp_token_zec_v2.aleo', mapping: 'pause__', key: 'false' },

@@ -4,8 +4,10 @@
 
 Refuse to bridge over a paused route. Every active route in the registry now
 declares the on-chain pause flags it depends on: the `pause`, `paused`, or
-`pause__` mapping of each Aleo program in the route and the OpenZeppelin
-`paused()` view of the xReserve contract and CCTP MessageTransmitter. The new
+`pause__` mapping of each Aleo program in the route, the OpenZeppelin
+`paused()` view of the xReserve contract and CCTP MessageTransmitter, and the
+pausable hook and ISM the Ethereum Hyperlane Mailbox runs on dispatch to and
+delivery from Aleo. The new
 `getRouteStatus` action (also `client.getRouteStatus` and the
 `bridge_get_route_status` agent and MCP tool) reads them all and reports each
 flag's outcome. `quote` results carry `paused` and `routeStatus`, and `execute`,

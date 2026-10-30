@@ -30,14 +30,30 @@ describe('getRouteStatus', () => {
       'hyp_warp_token_eth_v2.aleo/pause/true': 'true',
       'arc20_eth.aleo/pause__/false': null,
     })
+    // The Mailbox PausableIsm that gates delivery to Ethereum reads open.
+    const ethereum = evmClient({ '0x2d3f4dd71811c1bf27dd42f2003ec9da2e43d770': false })
 
-    const status = await getRouteStatus(DEFAULT_BRIDGE_REGISTRY, { aleo }, { routeId: 'hyperlane:aleo/eth->ethereum/eth' })
+    const status = await getRouteStatus(DEFAULT_BRIDGE_REGISTRY, { aleo, ethereum }, { routeId: 'hyperlane:aleo/eth->ethereum/eth' })
 
     expect(status.paused).toBe(true)
     expect(status.sources).toEqual([
       { chainId: 'aleo', kind: 'aleo-mapping', program: 'hyp_warp_token_eth_v2.aleo', mapping: 'pause', key: 'true', state: 'paused' },
       { chainId: 'aleo', kind: 'aleo-mapping', program: 'arc20_eth.aleo', mapping: 'pause__', key: 'false', state: 'active' },
+      { chainId: 'ethereum', kind: 'evm-paused', address: '0x2D3F4dd71811c1bF27DD42f2003eC9dA2E43D770', state: 'active' },
     ])
+  })
+
+  it('reports a paused Mailbox hook on an Ethereum-to-Aleo route when every Aleo flag is open', async () => {
+    const aleo = aleoClient({
+      'hyp_warp_token_eth_v2.aleo/pause/true': 'false',
+      'arc20_eth.aleo/pause__/false': 'false',
+    })
+    const ethereum = evmClient({ '0x3a66dc852e56d3748838b3c27cf381105b83705b': true })
+
+    const status = await getRouteStatus(DEFAULT_BRIDGE_REGISTRY, { aleo, ethereum }, { routeId: 'hyperlane:ethereum/eth->aleo/eth' })
+
+    expect(status.paused).toBe(true)
+    expect(status.sources.map((source) => source.state)).toEqual(['active', 'active', 'paused'])
   })
 
   it('reads the new-template pause__ mapping under its false key', async () => {
@@ -49,7 +65,8 @@ describe('getRouteStatus', () => {
     const status = await getRouteStatus(DEFAULT_BRIDGE_REGISTRY, { aleo }, { routeId: 'hyperlane:aleo/bat->ethereum/bat' })
 
     expect(status.paused).toBe(false)
-    expect(status.sources.map((source) => source.state)).toEqual(['active', 'active'])
+    // No Ethereum client is configured, so the Mailbox ISM read is skipped rather than failed.
+    expect(status.sources.map((source) => source.state)).toEqual(['active', 'active', 'skipped'])
   })
 
   it('reads paused() on the xReserve contract alongside the Aleo bridge and token programs', async () => {

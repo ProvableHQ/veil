@@ -354,10 +354,11 @@ before presenting a route as executable.
 
 `availability` is a static review flag. Whether a route is actually open right
 now is decided on chain: each Aleo program in a route keeps a pause mapping that
-its `finalize` asserts is false, and the xReserve contract and CCTP
-MessageTransmitter expose `paused()`. The registry records where each of those
-flags lives, and `getRouteStatus` reads them through the configured public
-clients.
+its `finalize` asserts is false, the xReserve contract and CCTP
+MessageTransmitter expose `paused()`, and the Ethereum Hyperlane Mailbox runs a
+pausable hook on every dispatch to Aleo and a pausable ISM on every delivery
+from it. The registry records where each of those flags lives, and
+`getRouteStatus` reads them through the configured public clients.
 
 ```ts
 const status = await bridge.getRouteStatus({ routeId: 'hyperlane:aleo/eth->ethereum/eth' })

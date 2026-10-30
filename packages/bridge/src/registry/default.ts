@@ -623,6 +623,30 @@ function hyperlanePauseSources(warpProgram: string, warpMapping: 'pause' | 'paus
   return [aleoPause(warpProgram, warpMapping), aleoPause(tokenProgram, 'pause__')]
 }
 
+// Ethereum warp routers expose no pause flag of their own and defer to the
+// Mailbox, whose hook and ISM trees each hold one OpenZeppelin Pausable
+// member. Walked on mainnet on 2026-10-30:
+// - defaultHook (FallbackRouting 0x571f…7cb7) routes the Aleo domain to an
+//   Aggregation hook (0xFB5E…EAE9) whose members are a PausableHook, the
+//   MerkleTree hook, and the IGP. Aggregation runs every member, so pausing
+//   the hook reverts every dispatch to Aleo.
+// - defaultIsm (Aggregation 0xDD09…AE82, threshold 2 of 2) pairs a
+//   PausableIsm with the routing ISM. The threshold makes it mandatory, so
+//   pausing it blocks delivery of every inbound message.
+// Either address changes if the Mailbox owner rewires the tree; re-walk it
+// when a Hyperlane deployment is reviewed.
+const HYPERLANE_ETHEREUM_PAUSABLE_HOOK = '0x3A66Dc852e56d3748838b3C27CF381105b83705b'
+const HYPERLANE_ETHEREUM_PAUSABLE_ISM = '0x2D3F4dd71811c1bF27DD42f2003eC9dA2E43D770'
+
+// Dispatch from Ethereum runs the PausableHook; delivery to Ethereum runs the PausableIsm.
+function hyperlaneFromEthereum(aleoSources: readonly BridgePauseSource[]): BridgePauseSource[] {
+  return [...aleoSources, evmPaused('ethereum', HYPERLANE_ETHEREUM_PAUSABLE_HOOK)]
+}
+
+function hyperlaneToEthereum(aleoSources: readonly BridgePauseSource[]): BridgePauseSource[] {
+  return [...aleoSources, evmPaused('ethereum', HYPERLANE_ETHEREUM_PAUSABLE_ISM)]
+}
+
 const ETH_PAUSE_SOURCES = hyperlanePauseSources('hyp_warp_token_eth_v2.aleo', 'pause', 'arc20_eth.aleo')
 const WBTC_PAUSE_SOURCES = hyperlanePauseSources('hyp_warp_token_wbtc_v2.aleo', 'pause', 'arc20_wbtc.aleo')
 const USDT_PAUSE_SOURCES = hyperlanePauseSources('hyp_warp_token_usdt_v2.aleo', 'pause', 'arc20_usdt.aleo')
@@ -751,16 +775,16 @@ const routes: ProtocolBridgeRoute[] = [
     wrapperProgram: 'shielded_usdcx_wrapper.aleo',
     attestationBaseUrl: 'https://xreserve-api-testnet.circle.com/v1/attestations',
   }, 'active', xReservePauseSources('sepolia', '0x008888878f94C0d87defdf0B07f46B93C1934442', 'aleo-testnet', 'test_usdcx_bridge_v2.aleo', 'test_usdcx_stablecoin.aleo')),
-  route('hyperlane:ethereum/eth->aleo/eth', 'hyperlane', 'mainnet', 'ethereum/eth', 'aleo/eth', 'active', 'ETH/aleo', { ...ETH_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }, undefined, ETH_PAUSE_SOURCES),
-  route('hyperlane:aleo/eth->ethereum/eth', 'hyperlane', 'mainnet', 'aleo/eth', 'ethereum/eth', 'active', 'ETH/aleo', { ...ETH_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_eth_v2.aleo', 1), ...ALEO_ETH_APP_METADATA, ...ALEO_ETH_REMOTE_ROUTER, ...ALEO_WITHDRAWAL_ACTIVATION }, undefined, ETH_PAUSE_SOURCES),
-  route('hyperlane:ethereum/wbtc->aleo/wbtc', 'hyperlane', 'mainnet', 'ethereum/wbtc', 'aleo/wbtc', 'active', 'WBTC/aleo', { ...WBTC_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }, undefined, WBTC_PAUSE_SOURCES),
-  route('hyperlane:aleo/wbtc->ethereum/wbtc', 'hyperlane', 'mainnet', 'aleo/wbtc', 'ethereum/wbtc', 'active', 'WBTC/aleo', { ...WBTC_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_wbtc_v2.aleo', 1), ...ALEO_WBTC_APP_METADATA, ...ALEO_WBTC_REMOTE_ROUTER, ...ALEO_WITHDRAWAL_ACTIVATION }, undefined, WBTC_PAUSE_SOURCES),
-  route('hyperlane:ethereum/usdt->aleo/usdt', 'hyperlane', 'mainnet', 'ethereum/usdt', 'aleo/usdt', 'active', 'USDT/aleo', { ...USDT_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }, undefined, USDT_PAUSE_SOURCES),
-  route('hyperlane:aleo/usdt->ethereum/usdt', 'hyperlane', 'mainnet', 'aleo/usdt', 'ethereum/usdt', 'active', 'USDT/aleo', { ...USDT_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_usdt_v2.aleo', 1), ...ALEO_USDT_APP_METADATA, ...ALEO_USDT_ETHEREUM_REMOTE_ROUTER, ...ALEO_WITHDRAWAL_ACTIVATION }, undefined, USDT_PAUSE_SOURCES),
-  route('hyperlane:ethereum/bat->aleo/bat', 'hyperlane', 'mainnet', 'ethereum/bat', 'aleo/bat', 'active', 'BAT/aleo', { ...BAT_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }, BAT_HYPERLANE_CONFIG_SOURCE, BAT_PAUSE_SOURCES),
-  route('hyperlane:aleo/bat->ethereum/bat', 'hyperlane', 'mainnet', 'aleo/bat', 'ethereum/bat', 'active', 'BAT/aleo', { ...BAT_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_bat_v2.aleo', 1), ...ALEO_BAT_APP_METADATA, ...ALEO_BAT_ETHEREUM_REMOTE_ROUTER, ...NEW_WARP_ROUTE_ALEO_ACTIVATION, hyperlaneConfigSource: BAT_HYPERLANE_CONFIG_SOURCE }, BAT_HYPERLANE_CONFIG_SOURCE, BAT_PAUSE_SOURCES),
-  route('hyperlane:ethereum/usdg->aleo/usdg', 'hyperlane', 'mainnet', 'ethereum/usdg', 'aleo/usdg', 'active', 'USDG/aleo', { ...USDG_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }, USDG_HYPERLANE_CONFIG_SOURCE, USDG_PAUSE_SOURCES),
-  route('hyperlane:aleo/usdg->ethereum/usdg', 'hyperlane', 'mainnet', 'aleo/usdg', 'ethereum/usdg', 'active', 'USDG/aleo', { ...USDG_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_usdg_v2.aleo', 1), ...ALEO_USDG_APP_METADATA, ...ALEO_USDG_ETHEREUM_REMOTE_ROUTER, ...NEW_WARP_ROUTE_ALEO_ACTIVATION, hyperlaneConfigSource: USDG_HYPERLANE_CONFIG_SOURCE }, USDG_HYPERLANE_CONFIG_SOURCE, USDG_PAUSE_SOURCES),
+  route('hyperlane:ethereum/eth->aleo/eth', 'hyperlane', 'mainnet', 'ethereum/eth', 'aleo/eth', 'active', 'ETH/aleo', { ...ETH_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }, undefined, hyperlaneFromEthereum(ETH_PAUSE_SOURCES)),
+  route('hyperlane:aleo/eth->ethereum/eth', 'hyperlane', 'mainnet', 'aleo/eth', 'ethereum/eth', 'active', 'ETH/aleo', { ...ETH_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_eth_v2.aleo', 1), ...ALEO_ETH_APP_METADATA, ...ALEO_ETH_REMOTE_ROUTER, ...ALEO_WITHDRAWAL_ACTIVATION }, undefined, hyperlaneToEthereum(ETH_PAUSE_SOURCES)),
+  route('hyperlane:ethereum/wbtc->aleo/wbtc', 'hyperlane', 'mainnet', 'ethereum/wbtc', 'aleo/wbtc', 'active', 'WBTC/aleo', { ...WBTC_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }, undefined, hyperlaneFromEthereum(WBTC_PAUSE_SOURCES)),
+  route('hyperlane:aleo/wbtc->ethereum/wbtc', 'hyperlane', 'mainnet', 'aleo/wbtc', 'ethereum/wbtc', 'active', 'WBTC/aleo', { ...WBTC_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_wbtc_v2.aleo', 1), ...ALEO_WBTC_APP_METADATA, ...ALEO_WBTC_REMOTE_ROUTER, ...ALEO_WITHDRAWAL_ACTIVATION }, undefined, hyperlaneToEthereum(WBTC_PAUSE_SOURCES)),
+  route('hyperlane:ethereum/usdt->aleo/usdt', 'hyperlane', 'mainnet', 'ethereum/usdt', 'aleo/usdt', 'active', 'USDT/aleo', { ...USDT_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }, undefined, hyperlaneFromEthereum(USDT_PAUSE_SOURCES)),
+  route('hyperlane:aleo/usdt->ethereum/usdt', 'hyperlane', 'mainnet', 'aleo/usdt', 'ethereum/usdt', 'active', 'USDT/aleo', { ...USDT_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_usdt_v2.aleo', 1), ...ALEO_USDT_APP_METADATA, ...ALEO_USDT_ETHEREUM_REMOTE_ROUTER, ...ALEO_WITHDRAWAL_ACTIVATION }, undefined, hyperlaneToEthereum(USDT_PAUSE_SOURCES)),
+  route('hyperlane:ethereum/bat->aleo/bat', 'hyperlane', 'mainnet', 'ethereum/bat', 'aleo/bat', 'active', 'BAT/aleo', { ...BAT_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }, BAT_HYPERLANE_CONFIG_SOURCE, hyperlaneFromEthereum(BAT_PAUSE_SOURCES)),
+  route('hyperlane:aleo/bat->ethereum/bat', 'hyperlane', 'mainnet', 'aleo/bat', 'ethereum/bat', 'active', 'BAT/aleo', { ...BAT_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_bat_v2.aleo', 1), ...ALEO_BAT_APP_METADATA, ...ALEO_BAT_ETHEREUM_REMOTE_ROUTER, ...NEW_WARP_ROUTE_ALEO_ACTIVATION, hyperlaneConfigSource: BAT_HYPERLANE_CONFIG_SOURCE }, BAT_HYPERLANE_CONFIG_SOURCE, hyperlaneToEthereum(BAT_PAUSE_SOURCES)),
+  route('hyperlane:ethereum/usdg->aleo/usdg', 'hyperlane', 'mainnet', 'ethereum/usdg', 'aleo/usdg', 'active', 'USDG/aleo', { ...USDG_HYPERLANE_METADATA, ...ALEO_MAILBOX_METADATA }, USDG_HYPERLANE_CONFIG_SOURCE, hyperlaneFromEthereum(USDG_PAUSE_SOURCES)),
+  route('hyperlane:aleo/usdg->ethereum/usdg', 'hyperlane', 'mainnet', 'aleo/usdg', 'ethereum/usdg', 'active', 'USDG/aleo', { ...USDG_HYPERLANE_METADATA, ...aleoHyperlanePlaceholders('hyp_warp_token_usdg_v2.aleo', 1), ...ALEO_USDG_APP_METADATA, ...ALEO_USDG_ETHEREUM_REMOTE_ROUTER, ...NEW_WARP_ROUTE_ALEO_ACTIVATION, hyperlaneConfigSource: USDG_HYPERLANE_CONFIG_SOURCE }, USDG_HYPERLANE_CONFIG_SOURCE, hyperlaneToEthereum(USDG_PAUSE_SOURCES)),
   route('hyperlane:solana/sol->aleo/sol', 'hyperlane', 'mainnet', 'solana/sol', 'aleo/sol', 'active', 'SOL/aleo', { ...SOLANA_SOL_DEPOSIT_METADATA, ...ALEO_MAILBOX_METADATA }, undefined, SOL_PAUSE_SOURCES),
   route('hyperlane:aleo/sol->solana/sol', 'hyperlane', 'mainnet', 'aleo/sol', 'solana/sol', 'active', 'SOL/aleo', { ...aleoHyperlanePlaceholders('hyp_warp_token_sol_v2.aleo', 1399811149), ...ALEO_SOL_APP_METADATA, ...ALEO_SOL_REMOTE_ROUTER, ...ALEO_WITHDRAWAL_ACTIVATION }, undefined, SOL_PAUSE_SOURCES),
   route('hyperlane:solana/bat->aleo/bat', 'hyperlane', 'mainnet', 'solana/bat', 'aleo/bat', 'active', 'BAT/aleo', { ...SOLANA_BAT_METADATA, ...ALEO_MAILBOX_METADATA }, BAT_HYPERLANE_CONFIG_SOURCE, BAT_PAUSE_SOURCES),

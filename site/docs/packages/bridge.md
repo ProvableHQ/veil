@@ -82,8 +82,10 @@ complete execution deployment has not been pinned yet. Applications MUST NOT
 execute them until a reviewed registry marks them active.
 
 An active route can still be halted on chain. Every Aleo program in a route
-asserts a pause mapping inside `finalize`, and the xReserve contract and CCTP
-MessageTransmitter expose `paused()`. The registry records where each flag
+asserts a pause mapping inside `finalize`, the xReserve contract and CCTP
+MessageTransmitter expose `paused()`, and the Ethereum Hyperlane Mailbox runs a
+pausable hook on dispatch to Aleo and a pausable ISM on delivery from it. The
+registry records where each flag
 lives, and `getRouteStatus({ routeId })` reads them all, reporting `active`,
 `paused`, `unknown`, or `skipped` per flag. `quote` results carry `paused` and
 `routeStatus`, and `execute`, `resume`, and `complete` throw
