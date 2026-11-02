@@ -36,7 +36,7 @@ describe.runIf(RUN_INVENTORY).sequential('live inventory execution guards', () =
   it('rejects modified plans, cancellation, and newly reserved inputs before submission', step(async () => {
     const token = h.tokens[0]!
     const before = await h.scan(token)
-    const plan = await h.client.planRecordInventory({ asset: token.asset, target: { records: 1 } })
+    const plan = await h.client.planRecordInventory({ asset: token.asset, target: { records: 1, distribution: 'preserve' } })
     const count = (await h.store.list(h.scope)).length
     expect(plan.steps.length).toBeGreaterThan(0)
     const modified = structuredClone(plan)
