@@ -78,7 +78,7 @@ function world(amounts: bigint[], asset = credits, tokenJoin?: TokenJoinRouter) 
 }
 
 describe('inventory planning', () => {
-  const plan = (amounts: bigint[], count: number, asset = arc20, distribution: 'balanced' | 'preserve' = 'balanced') => buildInventoryPlan({
+  const plan = (amounts: bigint[], count: number, asset = arc20, distribution: 'balanced' | 'preserve' | 'floor' = 'balanced') => buildInventoryPlan({
     scope, asset, target: { records: count, distribution }, inputs: amounts.map((amount, i) => ({ id: `${i}group`, amount })),
   })
   it('splits one ARC token record into exact balanced lots', () => {
@@ -142,6 +142,49 @@ describe('inventory planning', () => {
       target: { records: 3, minRecordAmount: 2n } })
     expect(result.steps.map((step) => step.kind)).toEqual(['join', 'split', 'split'])
     expect(result.steps.at(-1)!.outputs.map((record) => record.amount)).toEqual([2n, 2n])
+  })
+  it('floor targets leave surplus records alone and never join', () => {
+    expect(plan([10n, 15n, 25n, 50n], 3, arc20, 'floor').steps).toEqual([])
+    expect(plan([10n, 15n, 25n, 50n], 4, arc20, 'floor').steps).toEqual([])
+    // Two records cover the floor; preserve would join down to the exact count instead.
+    expect(plan([10n, 15n, 25n, 50n], 2, arc20, 'preserve').steps.map((step) => step.kind)).toEqual(['join', 'join'])
+  })
+  it('floor targets ignore records below the minimum instead of repacking everything', () => {
+    const dust = [{ id: 'dust1group', amount: 1n }, { id: 'dust2group', amount: 2_510n }, { id: 'dust3group', amount: 10_000n }]
+    const inputs = [...dust, { id: 'biggroup', amount: 4_844_112_191n }, { id: 'midgroup', amount: 502_710_102n }]
+    const target = { records: 4, minRecordAmount: 5_000_000n }
+    const floor = buildInventoryPlan({ scope, asset: credits, inputs, target: { ...target, distribution: 'floor' } })
+    expect(floor.steps.map((step) => step.kind)).toEqual(['split', 'split'])
+    expect(floor.steps.flatMap((step) => step.inputs)).not.toContain('dust1group')
+    expect(floor.steps.flatMap((step) => step.inputs)).not.toContain('midgroup')
+    expect(floor.steps.flatMap((step) => step.outputs.map((output) => output.amount)).every((amount) => amount >= 5_000_000n)).toBe(true)
+    expect(floor.deduction).toBe(20_000n)
+    // The same inventory under preserve repacks every record because dust is present.
+    const preserve = buildInventoryPlan({ scope, asset: credits, inputs, target: { ...target, distribution: 'preserve' } })
+    expect(preserve.steps[0]?.kind).toBe('join')
+  })
+  it('floor targets count only qualifying records toward the shortfall', () => {
+    const result = buildInventoryPlan({ scope, asset: arc20, target: { records: 3, minRecordAmount: 10n, distribution: 'floor' },
+      inputs: [{ id: 'biggroup', amount: 100n }, { id: 'dustgroup', amount: 1n }] })
+    expect(result.steps).toHaveLength(2)
+    expect(result.steps.every((step) => step.kind === 'split' && !step.inputs.includes('dustgroup'))).toBe(true)
+    const remaining = new Map(result.inputs.map((record) => [record.id, record.amount]))
+    for (const step of result.steps) {
+      for (const input of step.inputs) remaining.delete(input)
+      for (const output of step.outputs) remaining.set(output.id, output.amount)
+    }
+    expect([...remaining.values()].filter((amount) => amount >= 10n)).toHaveLength(3)
+    expect(remaining.get('dustgroup')).toBe(1n)
+  })
+  it('floor targets that need joins fail before planning instead of consolidating', () => {
+    expect(() => buildInventoryPlan({ scope, asset: arc20, target: { records: 3, minRecordAmount: 2n, distribution: 'floor' },
+      inputs: [{ id: '1group', amount: 3n }, { id: '2group', amount: 3n }] })).toThrow('without joins')
+    // Too little value for any policy is reported as such, not as a missing join.
+    expect(() => buildInventoryPlan({ scope, asset: arc20, target: { records: 2, minRecordAmount: 2n, distribution: 'floor' },
+      inputs: [{ id: '1group', amount: 3n }] })).toThrow('Insufficient available inventory for target')
+    expect(() => buildInventoryPlan({ scope, asset: arc20, target: { records: 2, minRecordAmount: 2n, distribution: 'floor' },
+      inputs: [{ id: '1group', amount: 3n }] })).not.toThrow('without joins')
+    expect(() => plan([10n], 2, arc20, 'bogus' as never)).toThrow('distribution')
   })
   it('rejects impossible counts, deductions, overflow, and operation limits', () => {
     expect(() => plan([10_001n], 2, credits)).toThrow('infeasible')

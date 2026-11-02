@@ -65,13 +65,15 @@ export type InventoryRecord = { id: string; amount: bigint; record: OwnedRecordE
  * Defines the desired spendable inventory.
  * @property records Positive target count, at most 1000.
  * @property minRecordAmount Minimum positive output in base units. Defaults to 1n.
- * @property distribution Defaults to preserve; balanced reshapes skewed inventory.
+ * @property distribution Defaults to preserve, which keeps sufficient records and joins or splits to the exact count;
+ * balanced reshapes skewed inventory into equal lots; floor treats the count as a minimum, splitting the largest record
+ * for any shortfall, leaving surplus and sub-minimum records alone, and never joining.
  * @property toleranceBps Allowed deviation from equal amounts, 0–10000. Defaults to 1000 (10%).
  */
 export type InventoryTarget = {
   records: number
   minRecordAmount?: bigint
-  distribution?: 'preserve' | 'balanced'
+  distribution?: 'preserve' | 'balanced' | 'floor'
   toleranceBps?: number
 }
 

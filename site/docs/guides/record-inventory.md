@@ -338,7 +338,7 @@ The target describes the desired inventory after those operations:
 | --- | --- | --- |
 | `target.records` | Required | Desired count, from 1 to 1,000. |
 | `target.minRecordAmount` | `1n` | Minimum base-unit amount in each record. |
-| `target.distribution` | `'preserve'` | Retain suitable existing records. Choose `'balanced'` to aim for equal amounts. |
+| `target.distribution` | `'preserve'` | Retain suitable existing records and join or split to the exact count. Choose `'balanced'` to aim for equal amounts, or `'floor'` to treat the count as a minimum: the largest record is split for any shortfall, surplus and sub-minimum records are left alone, and nothing is joined. |
 | `target.toleranceBps` | `1000` (10%) | Allowed deviation from equal amounts when balancing, from 0 to 10,000. Use 0 for equal amounts, allowing integer rounding. |
 | `maxTransactions` | `100` | Maximum joins and splits in the plan, up to 10,000. |
 

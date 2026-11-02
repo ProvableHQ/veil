@@ -104,7 +104,7 @@ export function parseInventoryConfig(value: unknown): InventoryConfig {
     const minRecordAmount = amount(target.minRecordAmount, 1n)
     if (!minRecordAmount) throw new Error('Minimum record amount must be positive')
     const distribution = target.distribution ?? 'preserve'
-    if (distribution !== 'preserve' && distribution !== 'balanced') throw new Error('Invalid inventory distribution')
+    if (distribution !== 'preserve' && distribution !== 'balanced' && distribution !== 'floor') throw new Error('Invalid inventory distribution')
     const range = policy.countRange as number[] | undefined
     if (range && (!Array.isArray(range) || range.length !== 2 || range.some((n) => !Number.isSafeInteger(n) || n < 1 || n > 1000) || range[0]! > records || range[1]! < records)) throw new Error('countRange must contain the target count')
     return { asset: { ...asset }, target: { records, minRecordAmount, distribution,
