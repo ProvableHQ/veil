@@ -34,9 +34,10 @@ export function buildInventoryPlan(params: {
   if (typeof min !== 'bigint' || min < 1n || min > maxAmount(asset)) throw new Error('Invalid minimum record amount')
   if (!Number.isInteger(tolerance) || tolerance < 0 || tolerance > 10_000) throw new Error('Invalid balance tolerance')
   if (target.distribution && !['preserve', 'balanced', 'floor'].includes(target.distribution)) throw new Error('Invalid inventory distribution')
-  // A floor counts only records that already meet the minimum, so dust never
-  // forces a repack and extra records are never joined away.
-  const floor = target.distribution === 'floor'
+  // The default is a floor: it counts only records that already meet the
+  // minimum, so dust never forces a repack and extra records are never joined
+  // away. Exact layouts are opt-in through preserve or balanced.
+  const floor = (target.distribution ?? 'floor') === 'floor'
   const inputs = params.inputs.map((record) => ({ ...record }))
   if (new Set(inputs.map((record) => record.id)).size !== inputs.length) throw new Error('Duplicate inventory records')
   if (inputs.some((record) => record.amount <= 0n || record.amount > maxAmount(asset))) throw new Error('Invalid record amount')

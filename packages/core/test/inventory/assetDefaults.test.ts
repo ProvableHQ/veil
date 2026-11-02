@@ -64,7 +64,7 @@ describe('record asset defaults and overrides', () => {
     const asset: RecordAsset = { program: 'custom.aleo', recordName: 'Balance', amountField: 'value' }
     const inventory = await client.getRecordInventory({ asset })
     expect(inventory.balance).toBe(200n)
-    const plan = await client.planRecordInventory({ asset, target: { records: 4 } })
+    const plan = await client.planRecordInventory({ asset, target: { records: 4, distribution: 'preserve' } })
     expect(plan.asset).toMatchObject(asset)
     expect(plan.steps.map(step => step.amount)).toEqual([50n, 50n])
     await client.splitRecord({ asset, record: inventory.available[0]!, amount: 25n })

@@ -68,11 +68,11 @@ MUST use the same identity (default `aleo:testnet` or `aleo:mainnet`). Do not
 reuse the default identity across independent local chains.
 
 - `records`: target count, 1–1000. `minRecordAmount` defaults to `"1"`.
-- `distribution`: `preserve` keeps sufficient records and joins or splits to the
-  exact count; `balanced` requests approximately equal lots, within
-  `toleranceBps` (default 1000, or 10%); `floor` treats `records` as a minimum,
-  splits the largest record for any shortfall, leaves surplus and sub-minimum
-  records alone, and never joins.
+- `distribution`: `floor` (the default) treats `records` as a minimum, splits
+  the largest record for any shortfall, leaves surplus and sub-minimum records
+  alone, and never joins; `preserve` keeps sufficient records and joins or
+  splits to the exact count; `balanced` requests approximately equal lots,
+  within `toleranceBps` (default 1000, or 10%).
 - `countRange`: optional inclusive range containing the target. While the count
   is in range and every record meets the minimum, maintenance does nothing,
   including for a balanced policy. Omit it to enforce the target distribution.
