@@ -33,7 +33,11 @@ export function buildInventoryPlan(params: {
   const tolerance = target.toleranceBps ?? 1000
   if (typeof min !== 'bigint' || min < 1n || min > maxAmount(asset)) throw new Error('Invalid minimum record amount')
   if (!Number.isInteger(tolerance) || tolerance < 0 || tolerance > 10_000) throw new Error('Invalid balance tolerance')
-  if (target.distribution && !['preserve', 'balanced'].includes(target.distribution)) throw new Error('Invalid inventory distribution')
+  if (target.distribution && !['preserve', 'balanced', 'floor'].includes(target.distribution)) throw new Error('Invalid inventory distribution')
+  // The default is a floor: it counts only records that already meet the
+  // minimum, so dust never forces a repack and extra records are never joined
+  // away. Exact layouts are opt-in through preserve or balanced.
+  const floor = (target.distribution ?? 'floor') === 'floor'
   const inputs = params.inputs.map((record) => ({ ...record }))
   if (new Set(inputs.map((record) => record.id)).size !== inputs.length) throw new Error('Duplicate inventory records')
   if (inputs.some((record) => record.amount <= 0n || record.amount > maxAmount(asset))) throw new Error('Invalid record amount')
@@ -48,7 +52,9 @@ export function buildInventoryPlan(params: {
     // One base unit of rounding never warrants another transaction.
     return absolute <= BigInt(target.records) || absolute * 10_000n <= total * BigInt(tolerance)
   })
-  const satisfied = working.length === target.records && working.every((record) => record.amount >= min) &&
+  const qualifying = () => working.filter((record) => record.amount >= min).length
+  const satisfied = floor ? qualifying() >= target.records :
+    working.length === target.records && working.every((record) => record.amount >= min) &&
     (target.distribution !== 'balanced' || balanced())
   // Replace consumed records with symbolic outputs that later steps can reference.
   // These ids describe dependencies; execution resolves them to confirmed records.
@@ -86,8 +92,11 @@ export function buildInventoryPlan(params: {
     if (!working.length || total < BigInt(target.records) * min) throw new Error('Insufficient available inventory for target')
     // Repack only when existing records cannot be preserved: balanced layouts or undersized records.
     const capacity = working.reduce((sum, record) => sum + (record.amount + splitDeduction(asset)) / (min + splitDeduction(asset)), 0n)
-    const repack = target.distribution === 'balanced' || working.some((record) => record.amount < min) || capacity < BigInt(target.records)
-    const reduceTo = repack ? 1 : target.records
+    // A floor only splits. The total check above means no policy could reach the
+    // target; this one means the value exists but only joins would unlock it.
+    if (floor && capacity < BigInt(target.records)) throw new Error('Insufficient available inventory for target without joins')
+    const repack = !floor && (target.distribution === 'balanced' || working.some((record) => record.amount < min) || capacity < BigInt(target.records))
+    const reduceTo = floor ? working.length : repack ? 1 : target.records
     // Join the smallest records first, with record ids breaking equal-amount
     // ties so rebuilding the same plan produces the same dependency sequence.
     while (working.length > reduceTo) {
@@ -113,11 +122,12 @@ export function buildInventoryPlan(params: {
     }
     // Split the largest remaining record and leave enough value in its remainder
     // for any dependent splits, including their intrinsic credits deductions.
-    while (working.length < target.records) {
+    const counted = () => floor ? qualifying() : working.length
+    while (counted() < target.records) {
       working.sort((a, b) => a.amount > b.amount ? -1 : a.amount < b.amount ? 1 : a.id.localeCompare(b.id))
       const record = working[0]!
       const deduction = splitDeduction(asset)
-      let outputsNeeded = BigInt(target.records - working.length + 1)
+      let outputsNeeded = BigInt(target.records - counted() + 1)
       if (!repack) {
         // Keep halving when its outputs can still reach the target. Otherwise,
         // leave enough in the remainder for later splits: 9 needs 3 + 6, not 4 + 5,
@@ -133,7 +143,9 @@ export function buildInventoryPlan(params: {
       const amount = usable / outputsNeeded
       push('split', [record], [amount, record.amount - amount - deduction], amount)
     }
-    if (working.some((record) => record.amount < min)) throw new Error('Insufficient balance after split deductions')
+    // push() already rejects any split output below the minimum, so this only
+    // reports pre-existing records; a floor leaves those untouched by design.
+    if (!floor && working.some((record) => record.amount < min)) throw new Error('Insufficient balance after split deductions')
   }
   return { scope: params.scope, asset: { ...asset }, target, inputs, steps, ...routing,
     deduction: steps.reduce((sum, step) => sum + step.deduction, 0n), maxTransactions }

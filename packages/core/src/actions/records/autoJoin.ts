@@ -66,7 +66,8 @@ export async function autoJoin(client: Client, params: AutoJoinParameters): Prom
   // Use the same planner and sequential executor as a rebalance so consolidation
   // also waits for each dependent output and retains interrupted progress.
   const joinPrograms = records.length > 2 ? await getRecordJoinPrograms(client, inventory.asset) : []
-  const plan = buildInventoryPlan({ scope: scopeOf(client), asset: inventory.asset, joinPrograms, tokenJoin: recordSettings(client).tokenJoin, target: { records: 1 },
+  // Consolidation is an exact single-record layout, so it opts out of the floor default.
+  const plan = buildInventoryPlan({ scope: scopeOf(client), asset: inventory.asset, joinPrograms, tokenJoin: recordSettings(client).tokenJoin, target: { records: 1, distribution: 'preserve' },
     inputs: records.map(({ id, amount }) => ({ id, amount })), maxTransactions: params.maxTransactions })
   return rebalanceRecordInventory(client, { ...params, plan })
 }

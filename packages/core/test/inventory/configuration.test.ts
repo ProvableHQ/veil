@@ -51,7 +51,7 @@ describe('explicit record management configuration', () => {
     const client = createWalletClient({ account, transport: rpc,
       recordManagement: { enabled: true, store, chainId: 'aleo:testnet',
         ...(source === 'client' ? { maxFeeMicrocredits: 0n } : {}) } })
-    const plan = await client.planRecordInventory({ asset, target: { records: 1 } })
+    const plan = await client.planRecordInventory({ asset, target: { records: 1, distribution: 'preserve' } })
     expect(plan.steps).not.toHaveLength(0)
     rpc.request.mockClear()
     await expect(client.rebalanceRecordInventory({ plan,
@@ -67,7 +67,7 @@ describe('explicit record management configuration', () => {
     const client = createWalletClient({ account, transport: rpc,
       recordManagement: { enabled: true, store, chainId: 'aleo:testnet',
         ...(source === 'client' ? { maxFeeMicrocredits: 0n } : {}) } })
-    const plan = await client.planRecordInventory({ asset, target: { records: 2 } })
+    const plan = await client.planRecordInventory({ asset, target: { records: 2, distribution: 'preserve' } })
     expect(plan.steps).toEqual([])
     rpc.request.mockClear()
     await expect(client.rebalanceRecordInventory({ plan,
@@ -92,7 +92,7 @@ describe('explicit record management configuration', () => {
     const inventory = await client.getRecordInventory({ asset })
     expect(inventory.available).toHaveLength(2)
     expect(inventory.reserved).toEqual([])
-    const plan = await client.planRecordInventory({ asset, target: { records: 1 } })
+    const plan = await client.planRecordInventory({ asset, target: { records: 1, distribution: 'preserve' } })
     expect(plan.scope).toBe(scope)
     expect(plan.steps).toHaveLength(1)
     await expect(client.joinRecords({ asset, records: inventory.available })).resolves.toBe('at1wallet')

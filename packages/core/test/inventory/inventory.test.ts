@@ -78,7 +78,7 @@ function world(amounts: bigint[], asset = credits, tokenJoin?: TokenJoinRouter) 
 }
 
 describe('inventory planning', () => {
-  const plan = (amounts: bigint[], count: number, asset = arc20, distribution: 'balanced' | 'preserve' = 'balanced') => buildInventoryPlan({
+  const plan = (amounts: bigint[], count: number, asset = arc20, distribution: 'balanced' | 'preserve' | 'floor' = 'balanced') => buildInventoryPlan({
     scope, asset, target: { records: count, distribution }, inputs: amounts.map((amount, i) => ({ id: `${i}group`, amount })),
   })
   it('splits one ARC token record into exact balanced lots', () => {
@@ -139,15 +139,60 @@ describe('inventory planning', () => {
     expect(plan([250_000n, 250_000n, 510_000n], 4, credits).steps).toHaveLength(1)
     const result = buildInventoryPlan({ scope, asset: arc20,
       inputs: [{ id: '1group', amount: 3n }, { id: '2group', amount: 3n }],
-      target: { records: 3, minRecordAmount: 2n } })
+      target: { records: 3, minRecordAmount: 2n, distribution: 'preserve' } })
     expect(result.steps.map((step) => step.kind)).toEqual(['join', 'split', 'split'])
     expect(result.steps.at(-1)!.outputs.map((record) => record.amount)).toEqual([2n, 2n])
+  })
+  it('floor targets leave surplus records alone and never join', () => {
+    expect(plan([10n, 15n, 25n, 50n], 3, arc20, 'floor').steps).toEqual([])
+    expect(plan([10n, 15n, 25n, 50n], 4, arc20, 'floor').steps).toEqual([])
+    // The floor is the default: an omitted distribution never consolidates.
+    expect(buildInventoryPlan({ scope, asset: arc20, target: { records: 3 }, inputs: [{ id: '0group', amount: 10n }, { id: '1group', amount: 15n }, { id: '2group', amount: 25n }, { id: '3group', amount: 50n }] }).steps).toEqual([])
+    // Two records cover the floor; preserve would join down to the exact count instead.
+    expect(plan([10n, 15n, 25n, 50n], 2, arc20, 'preserve').steps.map((step) => step.kind)).toEqual(['join', 'join'])
+  })
+  it('floor targets ignore records below the minimum instead of repacking everything', () => {
+    const dust = [{ id: 'dust1group', amount: 1n }, { id: 'dust2group', amount: 2_510n }, { id: 'dust3group', amount: 10_000n }]
+    const inputs = [...dust, { id: 'biggroup', amount: 4_844_112_191n }, { id: 'midgroup', amount: 502_710_102n }]
+    const target = { records: 4, minRecordAmount: 5_000_000n }
+    const floor = buildInventoryPlan({ scope, asset: credits, inputs, target: { ...target, distribution: 'floor' } })
+    expect(floor.steps.map((step) => step.kind)).toEqual(['split', 'split'])
+    expect(floor.steps.flatMap((step) => step.inputs)).not.toContain('dust1group')
+    expect(floor.steps.flatMap((step) => step.inputs)).not.toContain('midgroup')
+    expect(floor.steps.flatMap((step) => step.outputs.map((output) => output.amount)).every((amount) => amount >= 5_000_000n)).toBe(true)
+    expect(floor.deduction).toBe(20_000n)
+    // The same inventory under preserve repacks every record because dust is present.
+    const preserve = buildInventoryPlan({ scope, asset: credits, inputs, target: { ...target, distribution: 'preserve' } })
+    expect(preserve.steps[0]?.kind).toBe('join')
+  })
+  it('floor targets count only qualifying records toward the shortfall', () => {
+    const result = buildInventoryPlan({ scope, asset: arc20, target: { records: 3, minRecordAmount: 10n, distribution: 'floor' },
+      inputs: [{ id: 'biggroup', amount: 100n }, { id: 'dustgroup', amount: 1n }] })
+    expect(result.steps).toHaveLength(2)
+    expect(result.steps.every((step) => step.kind === 'split' && !step.inputs.includes('dustgroup'))).toBe(true)
+    const remaining = new Map(result.inputs.map((record) => [record.id, record.amount]))
+    for (const step of result.steps) {
+      for (const input of step.inputs) remaining.delete(input)
+      for (const output of step.outputs) remaining.set(output.id, output.amount)
+    }
+    expect([...remaining.values()].filter((amount) => amount >= 10n)).toHaveLength(3)
+    expect(remaining.get('dustgroup')).toBe(1n)
+  })
+  it('floor targets that need joins fail before planning instead of consolidating', () => {
+    expect(() => buildInventoryPlan({ scope, asset: arc20, target: { records: 3, minRecordAmount: 2n, distribution: 'floor' },
+      inputs: [{ id: '1group', amount: 3n }, { id: '2group', amount: 3n }] })).toThrow('without joins')
+    // Too little value for any policy is reported as such, not as a missing join.
+    expect(() => buildInventoryPlan({ scope, asset: arc20, target: { records: 2, minRecordAmount: 2n, distribution: 'floor' },
+      inputs: [{ id: '1group', amount: 3n }] })).toThrow('Insufficient available inventory for target')
+    expect(() => buildInventoryPlan({ scope, asset: arc20, target: { records: 2, minRecordAmount: 2n, distribution: 'floor' },
+      inputs: [{ id: '1group', amount: 3n }] })).not.toThrow('without joins')
+    expect(() => plan([10n], 2, arc20, 'bogus' as never)).toThrow('distribution')
   })
   it('rejects impossible counts, deductions, overflow, and operation limits', () => {
     expect(() => plan([10_001n], 2, credits)).toThrow('infeasible')
     expect(() => plan([10n], 0)).toThrow('records')
     expect(() => plan([(1n << 128n) - 1n, 1n], 1)).toThrow('overflow')
-    expect(() => buildInventoryPlan({ scope, asset: arc20, inputs: [{ id: '1group', amount: 100n }], target: { records: 4 }, maxTransactions: 2 })).toThrow('maxTransactions')
+    expect(() => buildInventoryPlan({ scope, asset: arc20, inputs: [{ id: '1group', amount: 100n }], target: { records: 4, distribution: 'preserve' }, maxTransactions: 2 })).toThrow('maxTransactions')
   })
 })
 
@@ -201,7 +246,7 @@ describe('inventory execution and recovery', () => {
       const request = vi.fn(async (params: any) => params.method === 'requestRecords' ? records : w.send(params))
       const client = createWalletClient({ account: { ...w.client.account!, type: 'rpc' } as any,
         transport: { ...w.client.transport, request } as any, recordManagement: { enabled: true, store: w.store } })
-      const plan = await client.planRecordInventory({ asset, target: { records: kind === 'join' ? 1 : 3 } })
+      const plan = await client.planRecordInventory({ asset, target: { records: kind === 'join' ? 1 : 3, distribution: 'preserve' } })
       expect(plan.steps.length).toBeGreaterThan(0)
       expect(await client.rebalanceRecordInventory({ plan })).toMatchObject({
         status: 'interrupted', completedSteps: 0, transactionIds: [], reason: expect.stringContaining('$commitment grant'),
@@ -243,11 +288,11 @@ describe('inventory execution and recovery', () => {
     })
     const client = createWalletClient({ account: { ...w.client.account!, type: 'rpc' } as any,
       transport: { ...w.client.transport, request } as any, recordManagement: { enabled: true, store: w.store } })
-    const plan = await client.planRecordInventory({ asset: credits, target: { records: 3 } })
+    const plan = await client.planRecordInventory({ asset: credits, target: { records: 3, distribution: 'preserve' } })
     expect(await client.rebalanceRecordInventory({ plan, pollIntervalMs: 1 })).toMatchObject({
       status: 'complete', completedSteps: 2, transactionIds: ['at1wallet1', 'at1wallet2'],
     })
-    expect((await client.planRecordInventory({ asset: credits, target: { records: 3 } })).steps).toEqual([])
+    expect((await client.planRecordInventory({ asset: credits, target: { records: 3, distribution: 'preserve' } })).steps).toEqual([])
   })
   it('preflights later RPC inputs and permits no-op plans without commitment metadata', async () => {
     const w = world([])
@@ -259,12 +304,12 @@ describe('inventory execution and recovery', () => {
     const request = vi.fn(async (params: any) => params.method === 'requestRecords' ? records : w.send(params))
     const client = createWalletClient({ account: { ...w.client.account!, type: 'rpc' } as any,
       transport: { ...w.client.transport, request } as any, recordManagement: { enabled: true, store: w.store } })
-    const plan = await client.planRecordInventory({ asset: credits, target: { records: 1 } })
+    const plan = await client.planRecordInventory({ asset: credits, target: { records: 1, distribution: 'preserve' } })
     expect(plan.steps[0]!.inputs).not.toContain('3group')
     expect(await client.rebalanceRecordInventory({ plan })).toMatchObject({ status: 'interrupted', transactionIds: [] })
     expect(request.mock.calls.some(([params]) => params.method === 'executeTransaction')).toBe(false)
     expect(await w.store.list(scope)).toEqual([])
-    const noOp = await client.planRecordInventory({ asset: credits, target: { records: 3 } })
+    const noOp = await client.planRecordInventory({ asset: credits, target: { records: 3, distribution: 'preserve' } })
     expect(noOp.steps).toEqual([])
     expect(await client.rebalanceRecordInventory({ plan: noOp })).toEqual({ status: 'complete', completedSteps: 0, transactionIds: [] })
   })
@@ -292,7 +337,7 @@ describe('inventory execution and recovery', () => {
   })
   it('enforces fees before broadcast and releases a build rejected by its budget', async () => {
     const w = world([1_000_000n])
-    const plan = await w.client.planRecordInventory({ asset: credits, target: { records: 2 } })
+    const plan = await w.client.planRecordInventory({ asset: credits, target: { records: 2, distribution: 'preserve' } })
     const result = await w.client.rebalanceRecordInventory({ plan, maxFeeMicrocredits: 99n })
     expect(result.status).toBe('interrupted')
     expect(result.reason).toContain('maxFeeMicrocredits')
@@ -303,7 +348,7 @@ describe('inventory execution and recovery', () => {
     const w = world([1_000_000n])
     const original = w.send.getMockImplementation()!
     w.send.mockImplementation(async (request) => { const result = await original(request); if (request.method === 'sendTransaction') throw new Error('response lost'); return result })
-    const plan = await w.client.planRecordInventory({ asset: credits, target: { records: 2 } })
+    const plan = await w.client.planRecordInventory({ asset: credits, target: { records: 2, distribution: 'preserve' } })
     const result = await w.client.rebalanceRecordInventory({ plan })
     expect(result).toMatchObject({ status: 'interrupted', transactionIds: ['at1tx1'] })
     expect((await w.store.list(scope))[0]).toMatchObject({ status: 'prepared', transactionId: 'at1tx1' })
@@ -317,7 +362,7 @@ describe('inventory execution and recovery', () => {
       if (request.method === 'sendTransaction') throw new Error('offline before acceptance')
       return original(request)
     })
-    const plan = await w.client.planRecordInventory({ asset: credits, target: { records: 2 } })
+    const plan = await w.client.planRecordInventory({ asset: credits, target: { records: 2, distribution: 'preserve' } })
     await w.client.rebalanceRecordInventory({ plan })
     const saved = (await w.store.list(scope))[0]!
     await w.client.reconcileRecordInventory() // A 404 must retain the reservation.
@@ -338,14 +383,14 @@ describe('inventory execution and recovery', () => {
       if (request.method === 'sendTransaction') return JSON.parse(request.params.transaction).id
       return original(request)
     })
-    const plan = await w.client.planRecordInventory({ asset: credits, target: { records: 2 } })
+    const plan = await w.client.planRecordInventory({ asset: credits, target: { records: 2, distribution: 'preserve' } })
     expect((await w.client.rebalanceRecordInventory({ plan })).status).toBe('interrupted')
     expect((await w.store.list(scope))[0]?.status).toBe('rejected')
     expect((await w.client.getRecordInventory({ asset: credits })).available).toHaveLength(1)
   })
   it('does not confuse a new deposit with the expected scanner outputs', async () => {
     const w = world([1_000_000n])
-    const plan = await w.client.planRecordInventory({ asset: credits, target: { records: 2 } })
+    const plan = await w.client.planRecordInventory({ asset: credits, target: { records: 2, distribution: 'preserve' } })
     const original = w.scan.getMockImplementation()!
     w.scan.mockImplementation(async (params) => params.filter?.commitments ? [makeRecord(1_000_000n, 9999)] : original(params))
     const result = await w.client.rebalanceRecordInventory({ plan, timeoutMs: 15, pollIntervalMs: 1 })
@@ -355,7 +400,7 @@ describe('inventory execution and recovery', () => {
   })
   it('retains uncertain inputs on a confirmation outage', async () => {
     const w = world([1_000_000n])
-    const plan = await w.client.planRecordInventory({ asset: credits, target: { records: 2 } })
+    const plan = await w.client.planRecordInventory({ asset: credits, target: { records: 2, distribution: 'preserve' } })
     const original = w.send.getMockImplementation()!
     w.send.mockImplementation(async (request) => { if (request.method === 'getConfirmedTransaction') throw new Error('network offline'); return original(request) })
     const result = await w.client.rebalanceRecordInventory({ plan })
@@ -365,7 +410,7 @@ describe('inventory execution and recovery', () => {
   })
   it('rejects stale inputs, modified plans, cancellation and unsupported private-fee adapters', async () => {
     const w = world([1_000_000n])
-    const plan = await w.client.planRecordInventory({ asset: credits, target: { records: 2 } })
+    const plan = await w.client.planRecordInventory({ asset: credits, target: { records: 2, distribution: 'preserve' } })
     const altered = { ...plan, steps: plan.steps.map((step) => ({ ...step, amount: 1n })) }
     await expect(w.client.rebalanceRecordInventory({ plan: altered })).rejects.toThrow('modified')
     const cancelled = await w.client.rebalanceRecordInventory({ plan, signal: AbortSignal.abort() })
@@ -401,7 +446,7 @@ describe('configured token batch joins', () => {
   })
   it.each([2, 15, 16, 30])('consolidates %i records in bounded router transactions', async (count) => {
     const w = world(Array.from({ length: count }, () => 100n), arc20, router)
-    const plan = await w.client.planRecordInventory({ asset: arc20, target: { records: 1 }, maxTransactions: 3 })
+    const plan = await w.client.planRecordInventory({ asset: arc20, target: { records: 1, distribution: 'preserve' }, maxTransactions: 3 })
     expect(plan.tokenJoin).toEqual(router)
     expect(plan.steps).toHaveLength(Math.ceil((count - 1) / 14))
     expect(plan.steps.every((step) => step.inputs.length >= 2 && step.inputs.length <= 15)).toBe(true)
@@ -417,7 +462,7 @@ describe('configured token batch joins', () => {
   })
   it.each([arc20, arc22])('preserves $standard target lots and executes batch joins followed by native splits', async (asset) => {
     const w = world(Array.from({ length: 16 }, () => 100n), asset, router)
-    const preserve = await w.client.planRecordInventory({ asset, target: { records: 4 } })
+    const preserve = await w.client.planRecordInventory({ asset, target: { records: 4, distribution: 'preserve' } })
     expect(preserve.steps).toHaveLength(1)
     expect(preserve.steps[0]?.inputs).toHaveLength(13)
     const plan = await w.client.planRecordInventory({ asset, target: { records: 4, distribution: 'balanced' } })
@@ -432,7 +477,7 @@ describe('configured token batch joins', () => {
     expect(w.build.mock.calls[0]![0].functionName).toBe('join_3')
     expect((await w.client.getRecordInventory({ asset: arc20 })).available.map((record) => record.amount)).toEqual([10n, 90n])
     const native = world([100n, 100n, 100n], credits, router)
-    const plan = await native.client.planRecordInventory({ asset: credits, target: { records: 1 } })
+    const plan = await native.client.planRecordInventory({ asset: credits, target: { records: 1, distribution: 'preserve' } })
     expect(plan.tokenJoin).toBeUndefined()
     expect(plan.steps.map((step) => step.inputs.length)).toEqual([2, 2])
     expect(await native.client.rebalanceRecordInventory({ plan })).toMatchObject({ status: 'complete' })
@@ -445,7 +490,7 @@ describe('configured token batch joins', () => {
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
     expect(w.build).toHaveBeenCalledTimes(1)
     const limited = world([100n, 100n, 100n], arc20, router)
-    const plan = await limited.client.planRecordInventory({ asset: arc20, target: { records: 1 } })
+    const plan = await limited.client.planRecordInventory({ asset: arc20, target: { records: 1, distribution: 'preserve' } })
     expect(await limited.client.rebalanceRecordInventory({ plan, maxFeeMicrocredits: 99n })).toMatchObject({ status: 'interrupted', reason: expect.stringContaining('maxFeeMicrocredits') })
     expect(limited.send.mock.calls.some(([request]) => request.method === 'sendTransaction')).toBe(false)
     expect((await limited.store.list(scope))[0]).toMatchObject({ status: 'cancelled', records: ['1group', '2group', '3group'] })
@@ -454,7 +499,7 @@ describe('configured token batch joins', () => {
     const w = world(Array.from({ length: 16 }, () => 100n), arc22, router)
     const original = w.send.getMockImplementation()!
     w.send.mockImplementation(async (request) => { if (request.method === 'sendTransaction') throw new Error('offline'); return original(request) })
-    const plan = await w.client.planRecordInventory({ asset: arc22, target: { records: 1 } })
+    const plan = await w.client.planRecordInventory({ asset: arc22, target: { records: 1, distribution: 'preserve' } })
     expect(await w.client.rebalanceRecordInventory({ plan })).toMatchObject({ status: 'interrupted', completedSteps: 0 })
     const saved = (await w.store.list(scope))[0]!
     expect(saved.records).toHaveLength(15)
@@ -488,14 +533,14 @@ describe('configured token batch joins', () => {
       if (request.method === 'getConfirmedTransaction') result.transaction.execution.transitions.at(-2).program = 'unrelated.aleo'
       return result
     })
-    const plan = await w.client.planRecordInventory({ asset: arc20, target: { records: 1 } })
+    const plan = await w.client.planRecordInventory({ asset: arc20, target: { records: 1, distribution: 'preserve' } })
     expect(await w.client.rebalanceRecordInventory({ plan })).toMatchObject({ status: 'interrupted', reason: expect.stringContaining('underlying token commitment') })
     expect((await w.store.list(scope))[0]?.status).toBe('confirmed')
     expect(w.build).toHaveBeenCalledTimes(1)
   })
   it('honors custom batch ceilings and retains native plans created without a router', async () => {
     const w = world([100n, 100n, 100n, 100n], arc20, { ...router, maxRecords: 3 })
-    const plan = await w.client.planRecordInventory({ asset: arc20, target: { records: 1 } })
+    const plan = await w.client.planRecordInventory({ asset: arc20, target: { records: 1, distribution: 'preserve' } })
     expect(plan.steps.map((step) => step.inputs.length)).toEqual([3, 2])
     expect(() => recordActions({ tokenJoin: { ...router, maxRecords: 16 } })(w.client)).toThrow('2 to 15')
     const native = buildInventoryPlan({ scope, asset: arc20, inputs: plan.inputs, target: plan.target })

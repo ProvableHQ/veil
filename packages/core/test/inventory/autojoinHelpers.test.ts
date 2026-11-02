@@ -79,7 +79,7 @@ describe('automatic join helper selection', () => {
     [15, 'autojoin_credits_15_16.aleo'], [16, 'autojoin_credits_15_16.aleo'],
   ])('uses one helper transaction for %i credits records', async (count, helper) => {
     const w = world(); w.setAmounts(Array.from({ length: count as number }, () => 100n))
-    const plan = await w.client.planRecordInventory({ asset: { program: 'credits.aleo' }, target: { records: 1 }, maxTransactions: 1 })
+    const plan = await w.client.planRecordInventory({ asset: { program: 'credits.aleo' }, target: { records: 1, distribution: 'preserve' }, maxTransactions: 1 })
     expect(plan.steps).toHaveLength(1)
     expect(await w.client.rebalanceRecordInventory({ plan })).toMatchObject({ status: 'complete', completedSteps: 1 })
     expect(w.calls[0]).toMatchObject({ programName: helper, functionName: `join_${count}` })
@@ -122,7 +122,7 @@ describe('automatic join helper selection', () => {
   it('rejects a mismatched external record ABI before choosing a helper', async () => {
     const w = world(); w.setAmounts([100n, 100n, 100n])
     w.sources.set('autojoin_credits_2_10.aleo', staticHelper('autojoin_credits_2_10.aleo', 'other.aleo', 'credits', 2, 10))
-    const plan = await w.client.planRecordInventory({ asset: { program: 'credits.aleo' }, target: { records: 1 } })
+    const plan = await w.client.planRecordInventory({ asset: { program: 'credits.aleo' }, target: { records: 1, distribution: 'preserve' } })
     expect(plan.steps.map(step => step.inputs.length)).toEqual([2, 2])
   })
 
@@ -141,7 +141,7 @@ describe('automatic join helper selection', () => {
 
   it('keeps the helper chosen during planning and rejects a changed helper ABI before submission', async () => {
     const w = world(); w.setAmounts([100n, 100n, 100n])
-    const plan = await w.client.planRecordInventory({ asset: { program: 'credits.aleo' }, target: { records: 1 } })
+    const plan = await w.client.planRecordInventory({ asset: { program: 'credits.aleo' }, target: { records: 1, distribution: 'preserve' } })
     w.sources.set('autojoin_credits_2_10.aleo', staticHelper('autojoin_credits_2_10.aleo', 'other.aleo', 'credits', 2, 10))
     expect(await w.client.rebalanceRecordInventory({ plan })).toMatchObject({ status: 'interrupted', completedSteps: 0, reason: expect.stringContaining('incompatible') })
     expect(w.calls).toHaveLength(0)

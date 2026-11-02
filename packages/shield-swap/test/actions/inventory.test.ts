@@ -46,7 +46,7 @@ describe('Shield Swap inventory', () => {
     } } as unknown as Client
     const tokenJoin = { program: 'test_aj_arc20_2_15.aleo' }
     const client = Object.assign(base, recordActions({ tokenJoin })(base))
-    const plan = await planInventory(client, { api, token: 'ASSET', target: { records: 1 }, maxTransactions: 2 })
+    const plan = await planInventory(client, { api, token: 'ASSET', target: { records: 1, distribution: 'preserve' }, maxTransactions: 2 })
     expect(plan.asset.program).toBe(program)
     expect(plan.tokenJoin).toEqual(tokenJoin)
     expect(plan.steps.map((step) => step.inputs.length)).toEqual([15, 2])
