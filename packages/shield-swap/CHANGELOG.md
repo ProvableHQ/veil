@@ -1,5 +1,12 @@
 # @provablehq/shield-swap-sdk
 
+## 0.16.1
+
+### Patch Changes
+
+- Updated dependencies [cad6081]
+  - @provablehq/veil-core@0.16.1
+
 ## 0.16.0
 
 ### Patch Changes
