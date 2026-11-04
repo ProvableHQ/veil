@@ -30,6 +30,9 @@ Copy the whole examples directory: route entrypoints import sibling helpers.
 - Aleo to Ethereum through Hyperlane: `eth-to-ethereum.ts`,
   `wbtc-to-ethereum.ts`, and `usdt-to-ethereum.ts`.
 - Solana through Hyperlane: `sol-to-aleo.ts` and `sol-to-solana.ts`.
+- USDG through Hyperlane in both directions: `usdg-ethereum.ts` for
+  Ethereum ↔ Aleo and `usdg-solana.ts` for Solana ↔ Aleo. Pass `to-aleo` or
+  `from-aleo`; the tutorial documents quote-only runs and checkpoint recovery.
 
 Read the selected script and its helper before executing. These examples target
 mainnet. They quote without submitting by default; submission requires the
