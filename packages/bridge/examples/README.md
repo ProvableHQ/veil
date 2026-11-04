@@ -9,9 +9,9 @@ routes. Every transfer follows the same lifecycle:
 4. Wait for destination delivery.
 5. Resume or complete a transfer only when the returned progress requests it.
 
-The scripts in this directory run against mainnet. They use minimum transfer
-amounts and remain read-only unless `EXECUTE_BRIDGE` contains the exact
-acknowledgement shown below.
+The scripts in this directory run against mainnet. Their default transfer
+amounts are listed below, and they remain read-only unless `EXECUTE_BRIDGE`
+contains the exact acknowledgement shown below.
 
 For Privy or Dynamic server wallets, start with the
 [server-wallet configuration guide](./remote-wallets/README.md). Its examples
@@ -48,6 +48,8 @@ automatic proof generation through the configured Provable SDK client.
 | [`usdt-to-ethereum.ts`](./usdt-to-ethereum.ts) | Aleo USDT → Ethereum USDT | Hyperlane | 3 USDT |
 | [`sol-to-aleo.ts`](./sol-to-aleo.ts) | Solana SOL → Aleo SOL | Hyperlane | 1 lamport |
 | [`sol-to-solana.ts`](./sol-to-solana.ts) | Aleo SOL → Solana SOL | Hyperlane | 1 lamport |
+| [`usdg-ethereum.ts`](./usdg-ethereum.ts) | Ethereum USDG ↔ Aleo USDG | Hyperlane | 1 USDG |
+| [`usdg-solana.ts`](./usdg-solana.ts) | Solana USDG ↔ Aleo USDG | Hyperlane | 1 USDG |
 | [`usdc-to-usdcx.ts`](./usdc-to-usdcx.ts) | Ethereum USDC → Aleo USDCx | Circle xReserve | 2 USDC |
 | [`usdcx-to-usdc.ts`](./usdcx-to-usdc.ts) | Aleo USDCx → Ethereum USDC | Circle xReserve | 2.000001 USDCx |
 
@@ -75,6 +77,10 @@ In this repository, use `cd packages/bridge/examples` instead. Run the commands
 below from the example directory. Private keys stay in the local process and
 are passed through the bridge package's account adapters.
 
+For USDG, skip the key setup below and follow the
+[USDG configuration](#send-usdg-between-ethereum-solana-and-aleo); quotes need
+no private key, and execution uses the source key variables listed there.
+
 ```sh
 read -rs EVM_PRIVATE_KEY && export EVM_PRIVATE_KEY
 read -rs SOLANA_PRIVATE_KEY && export SOLANA_PRIVATE_KEY
@@ -89,8 +95,8 @@ export ETHEREUM_RECIPIENT='0x...'
 export SOLANA_RECIPIENT='...'
 ```
 
-`ETHEREUM_RPC_URL` is required for Ethereum routes. `SOLANA_RPC_URL` defaults
-to `DEFAULT_SOLANA_RPC_URL`, and `ALEO_RPC_URL` defaults to the Provable mainnet
+For the other single-asset examples, `ETHEREUM_RPC_URL` is required for Ethereum
+routes. `SOLANA_RPC_URL` defaults to `DEFAULT_SOLANA_RPC_URL`, and `ALEO_RPC_URL` defaults to the Provable mainnet
 API. Aleo transactions use delegated proving, public fee payment, a five-minute
 confirmation timeout, and FeeMaster disabled.
 
@@ -506,6 +512,98 @@ invalidate it, so keep these accounts idle and inspect transaction history if
 delivery is ambiguous. The withdrawal estimate is capped at 0.10 USDC before
 submission, but the deployed Aleo burn has no on-chain fee cap. Unexpected fees
 or partial delivery leave the leg pending rather than spending other balances.
+
+## Send USDG between Ethereum, Solana, and Aleo
+
+[`usdg-ethereum.ts`](./usdg-ethereum.ts) covers Ethereum ↔ Aleo, and
+[`usdg-solana.ts`](./usdg-solana.ts) covers Solana ↔ Aleo. Each invocation selects
+one transfer direction through Hyperlane on mainnet. USDG has
+6 decimals on all three chains: `USDG_AMOUNT=1` means **1 USDG**, not one atomic
+unit. Ethereum uses ERC-20 USDG; Solana uses Token-2022 USDG.
+
+Both scripts call [`runArc22Example`](./arc22-hyperlane.ts), which demonstrates
+the public SDK lifecycle: `bridge.quote`, `bridge.execute`, `bridge.recover`,
+and `bridge.wait`. It saves execution checkpoints and refuses to repeat an
+attempted submission whose outcome is unknown.
+
+### Quote either direction
+
+After the [installation steps](#install-and-configure), run these commands from
+the example directory. Quotes read live fees without signing or submitting and
+need only public addresses. Replace the address placeholders before running.
+
+```sh
+# Ethereum USDG → Aleo USDG
+USDG_SENDER='0x...' USDG_RECIPIENT='aleo1...' \
+  npx tsx usdg-ethereum.ts to-aleo
+
+# Aleo USDG → Ethereum USDG
+USDG_SENDER='aleo1...' USDG_RECIPIENT='0x...' \
+  npx tsx usdg-ethereum.ts from-aleo
+
+# Solana USDG → Aleo USDG
+USDG_SENDER='<Solana wallet address>' USDG_RECIPIENT='aleo1...' \
+  npx tsx usdg-solana.ts to-aleo
+
+# Aleo USDG → Solana USDG
+USDG_SENDER='aleo1...' USDG_RECIPIENT='<Solana wallet address>' \
+  npx tsx usdg-solana.ts from-aleo
+```
+
+Set `USDG_AMOUNT` to override the 1 USDG default, using at most six fractional
+digits. For Solana, supply the wallet address; the SDK derives its USDG token
+account. Aleo deposits mint a public balance. Aleo withdrawals spend public
+USDG in `hyp_warp_token_usdg_v2.aleo`; unshield private USDG records separately
+before withdrawing.
+
+RPC overrides are `BRIDGE_LIVE_ETHEREUM_RPC_URL`,
+`BRIDGE_LIVE_SOLANA_RPC_URL`, and `ALEO_RPC_URL`. Defaults target public mainnet
+RPCs. Neither script uses `ETHEREUM_RPC_URL` or `SOLANA_RPC_URL`.
+
+### Send and retain recovery state
+
+Execution needs USDG plus the source chain's native asset for transaction and
+Hyperlane delivery fees. Supply only the source key through a secure local
+environment; no destination private key is needed.
+
+| Direction | Source key environment variable | Fee asset |
+| --- | --- | --- |
+| Ethereum → Aleo | `BRIDGE_EVM_PRIVATE_KEY` (32-byte hex, optional `0x`) | ETH |
+| Solana → Aleo | `BRIDGE_SOLANA_PRIVATE_KEY` (64-byte base58 keypair or JSON byte array) | SOL |
+| Aleo → Ethereum or Solana | `BRIDGE_PRIVATE_KEY` (Aleo private key) | Public Aleo credits |
+
+The source key MUST match `USDG_SENDER`. Aleo sources use the proving settings
+described in the [shared ARC-22 example](#bat-usdg-and-zec-live-quotes-transfers-and-recovery).
+Ethereum deposits may submit an ERC-20 approval before dispatching USDG.
+
+For example, after configuring the source key, send from Ethereum to Aleo:
+
+```sh
+export USDG_SENDER='0x...'
+export USDG_RECIPIENT='aleo1...'
+export USDG_AMOUNT='1'
+export USDG_STATE_PATH='/absolute/private/path/usdg-ethereum-to-aleo.json'
+
+# Inspect the quote first.
+npx tsx usdg-ethereum.ts to-aleo
+
+# Sign and submit the transfer, saving checkpoints to USDG_STATE_PATH.
+EXECUTE_BRIDGE=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS \
+  npx tsx usdg-ethereum.ts to-aleo
+
+# After interruption, inspect the same transfer without a new submission.
+npx tsx usdg-ethereum.ts to-aleo
+```
+
+Use the corresponding script and direction above for the other three routes.
+Give each new transfer a distinct state path. To recover an existing transfer,
+keep its original state path, direction, amount, sender, and recipient. A timeout
+does not prove failure; do not delete state or start a second transfer to retry.
+Recovery may request `resume` after an approval; re-enable execution with the
+same state only when authorizing the remaining source submission. Keep state
+files private and follow the shared helper's
+[recovery notes](#bat-usdg-and-zec-live-quotes-transfers-and-recovery) for stale
+locks and destination-balance verification limits.
 
 ## BAT, USDG, and ZEC: live quotes, transfers, and recovery
 
