@@ -95,6 +95,11 @@ export async function runVerulinkRoundtrip(): Promise<void> {
         const quoted = await writable.quote({ source: { chain: index === 0 ? 'aleo' : 'bsc', asset: 'aleo' },
           destination: { chain: index === 0 ? 'bsc' : 'aleo', asset: 'aleo' }, amount: leg.amount,
           sender: index === 0 ? aleo : bsc, recipient: index === 0 ? bsc : aleo })
+        if (index === 0) {
+          // Verify the estimated return clears its fees and minimum before committing ALEO.
+          await writable.quote({ source: { chain: 'bsc', asset: 'aleo' }, destination: { chain: 'aleo', asset: 'aleo' },
+            amount: quoted.plan.amountOut!, sender: bsc, recipient: aleo })
+        }
         leg.sourceAttempted = true
         await save()
         await writable.execute({ plan: quoted.plan, onCheckpoint })
