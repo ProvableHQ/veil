@@ -10,6 +10,8 @@ import { addressLiteral, context } from '../../src/protocols/verulink/common.js'
 import { sourcePacket, incoming, packetHash, validateAleoSource, validateAleoClaim, type Packet } from '../../src/protocols/verulink/packets.js'
 import { complete, getStatus } from '../../src/protocols/verulink/lifecycle.js'
 import { fetchSignatures, verifiedSignatures } from '../../src/protocols/verulink/attestation.js'
+import { createBridgeClient } from '../../src/clients/createBridgeClient.js'
+import { createBridgeCheckpoint } from '../../src/actions/createBridgeCheckpoint.js'
 
 // Public mainnet evidence: Aleo block 10461039 and BSC block 58692064.
 // Signatures were retrieved from Verulink's public collector on 2026-11-04.
@@ -29,7 +31,10 @@ function setup(outbound: boolean) {
   })
   const clients: BridgeChainClients = {
     aleo: { family: 'aleo', publicClient: { request: vi.fn(async ({ method, params }) => {
-      if (method === 'getConfirmedTransaction') return fixture.aleoSource
+      if (method === 'getConfirmedTransaction') {
+        if (params.id === fixture.aleoSource.transaction.id) return fixture.aleoSource
+        throw new Error('Transaction not found')
+      }
       if (method === 'findBlockHash') return 'ab1historical'
       if (method === 'getBlockHeightByHash') return 10461039
       if (params.mapping === 'sequences') return '2u64'
@@ -83,6 +88,65 @@ describe('Verulink real mainnet wire fixtures', () => {
 })
 
 describe('Verulink recovery and delivery safety', () => {
+  it.each([false, true])('preserves and follows a prepared Aleo claim while consumed=%s', async initiallyConsumed => {
+    const { c, clients, plan, packet, row } = setup(false)
+    const input = (value: string) => ({ type: 'public', value })
+    const signers = row.status.signatures.map(value => value.signer)
+    const signed = row.status.signatures.map(value => value.sign)
+    while (signers.length < 5) {
+      signers.push('aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc')
+      signed.push(signed[0]!)
+    }
+    const claim = { id: 'at1prepared', execution: { transitions: [
+      { program: 'credits.aleo', function: 'transfer_public', inputs: [packet.recipient, packet.amount + 'u64'].map(input) },
+      { program: c.aleoTokenService, function: 'token_receive_public', outputs: [{ type: 'public', value: 'true' }],
+        inputs: [addressLiteral(packet.sender), packet.recipient, packet.amount + 'u64', packet.sequence + 'u64', packet.height + 'u64',
+          '[' + signers.join(', ') + ']', '[' + signed.join(', ') + ']', packet.sourceChain + 'u128', addressLiteral(packet.sourceAddress)].map(input) },
+    ] } }
+    const prepared = { transactionId: claim.id, serializedTransaction: JSON.stringify(claim) }
+    let accepted = false, signaturesAvailable = false
+    const request = c.aleo.publicClient.request
+    const submitted: unknown[] = []
+    c.aleo.publicClient.request = (async args => {
+      if (args.method === 'getConfirmedTransaction') {
+        if (!accepted) throw new Error('Claim is not indexed yet')
+        return { status: 'accepted', transaction: claim }
+      }
+      if (args.method === 'getUnconfirmedTransaction') return claim
+      if (args.method === 'getMappingValue' && args.params.mapping === 'in_packet_consumed') return String(initiallyConsumed || accepted)
+      if (args.method === 'sendTransaction') { submitted.push(args.params.transaction); return claim.id }
+      return request(args)
+    }) as typeof request
+    const fetcher = async () => Response.json({ data: { currentPage: 1, totalPages: 1, data: signaturesAvailable ? [row] : [] } })
+    // Recovery and rebroadcast must work without a wallet capable of proving again.
+    const bridge = createBridgeClient({ clients, fetch: fetcher })
+    const checkpoint = createBridgeCheckpoint(plan, { id: claim.id, protocol: 'verulink', status: 'DESTINATION_ACTION_REQUIRED',
+      sourceTxId: fixture.bscSource.tx.hash, protocolState: { routeId: plan.route.id, preparedDestinationTransaction: prepared.serializedTransaction } })
+    let progress = await bridge.recover({ checkpoint })
+    expect(progress.receipt.status).toBe(initiallyConsumed ? 'DELIVERY_PENDING' : 'ATTESTATION_PENDING')
+    const saved = JSON.parse(JSON.stringify(createBridgeCheckpoint(progress.plan, progress.receipt)))
+    expect(saved.destination?.preparedTransaction).toEqual(prepared)
+    progress = await bridge.recover({ checkpoint: saved })
+    expect(createBridgeCheckpoint(progress.plan, progress.receipt).destination?.preparedTransaction).toEqual(prepared)
+
+    if (initiallyConsumed) {
+      // Once indexing catches up, ordinary polling must verify the saved claim.
+      accepted = true
+      progress = await bridge.wait({ progress, timeoutMs: 0 })
+      expect(progress.next).toBe('done')
+      expect(createBridgeCheckpoint(progress.plan, progress.receipt).destination).toEqual({ transactionId: claim.id })
+      expect(submitted).toEqual([])
+    } else {
+      signaturesAvailable = true
+      progress = await bridge.wait({ progress, timeoutMs: 0 })
+      expect(progress.next).toBe('complete')
+      const execution = await bridge.complete({ progress })
+      expect(execution.transactionId).toBe(claim.id)
+      expect(submitted).toEqual([prepared.serializedTransaction])
+      expect(createBridgeCheckpoint(progress.plan, execution.receipt).destination).toEqual({ transactionId: claim.id })
+    }
+  })
+
   it('rejects substituted prepared source recipients and unrelated root calls', () => {
     const { c, plan } = setup(true)
     const original = fixture.aleoSource.transaction as unknown as Transaction

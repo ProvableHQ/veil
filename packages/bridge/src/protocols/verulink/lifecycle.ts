@@ -113,6 +113,18 @@ export async function getStatus(registry: BridgeRegistry, clients: BridgeChainCl
   if (packet === 'rejected') return update(receipt, 'FAILED', { sourceError: 'Verulink source transaction was rejected' })
   const verified = update(receipt, 'ATTESTATION_PENDING', { packet, sourceSender: packet.sender })
   if (receipt.destinationTxId) return destinationStatus(c, packet, verified)
+  const preparedDestination = receipt.protocolState.preparedDestinationTransaction
+  if (preparedDestination !== undefined) {
+    if (c.outbound || typeof preparedDestination !== 'string') throw new BridgeError('Invalid Verulink prepared destination transaction')
+    const tx = preparedTransaction(preparedDestination, receipt.id)
+    validateAleoClaim(c, packet, tx)
+    // A broadcast may have succeeded before its checkpoint was saved. Follow
+    // that exact claim on every poll, retaining its bytes until it is observed.
+    if (await aleoTransaction(c, tx.id) !== 'pending') {
+      return destinationStatus(c, packet, update({ ...verified, destinationTxId: tx.id }, 'DESTINATION_CONFIRMING',
+        { preparedDestinationTransaction: undefined }))
+    }
+  }
   if (await consumed(c, packet)) return update(verified, 'DELIVERY_PENDING', { consumed: true,
     destinationVerificationRequired: 'Packet consumed; a destination transaction id is required to distinguish public delivery from holding' })
   const signatures = await verifiedSignatures(c, packet, await fetchSignatures(c, fetcher, packet, params.signal))
@@ -145,23 +157,11 @@ export async function recover(registry: BridgeRegistry, clients: BridgeChainClie
   if (!id || (!source.transactionId && checkpoint.destination) || (c.outbound && source.approvalTransactionIds?.length)) throw new BridgeError('Invalid Verulink checkpoint source identifiers')
   const pendingDestination = checkpoint.destination?.preparedTransaction
   if (pendingDestination && (c.outbound || checkpoint.destination?.transactionId)) throw new BridgeError('Invalid Verulink prepared destination checkpoint')
-  const receipt: BridgeReceipt = { id, protocol: 'verulink', status: source.transactionId ? 'SOURCE_CONFIRMING' : 'SOURCE_APPROVAL_PENDING',
+  const receipt: BridgeReceipt = { id: pendingDestination?.transactionId ?? id, protocol: 'verulink', status: source.transactionId ? 'SOURCE_CONFIRMING' : 'SOURCE_APPROVAL_PENDING',
     sourceTxId: source.transactionId, destinationTxId: checkpoint.destination?.transactionId,
-    protocolState: { routeId: c.route.id, sourceSender: plan.sender, approvalTxIds: source.approvalTransactionIds ?? [] } }
-  const result = await getStatus(registry, clients, fetcher, { plan, receipt, signal: params.signal })
-  if (pendingDestination) {
-    const packet = result.protocolState.packet as Packet | undefined
-    if (!packet) throw new BridgeError('Cannot validate a prepared claim until its source is confirmed')
-    validateAleoClaim(c, packet, preparedTransaction(pendingDestination.serializedTransaction, pendingDestination.transactionId))
-    // Preserve the prepared bytes even when a prior broadcast consumed the packet.
-    // The next read can verify that exact transaction instead of requesting another proof.
-    const observed = await aleoTransaction(c, pendingDestination.transactionId)
-    if (observed !== 'pending') return getStatus(registry, clients, fetcher, { plan, receipt: { ...result, destinationTxId: pendingDestination.transactionId }, signal: params.signal })
-    if (result.status !== 'DESTINATION_ACTION_REQUIRED') return result
-    return { ...result, id: pendingDestination.transactionId,
-      protocolState: { ...result.protocolState, preparedDestinationTransaction: pendingDestination.serializedTransaction } }
-  }
-  return result
+    protocolState: { routeId: c.route.id, sourceSender: plan.sender, approvalTxIds: source.approvalTransactionIds ?? [],
+      ...(pendingDestination ? { preparedDestinationTransaction: pendingDestination.serializedTransaction } : {}) } }
+  return getStatus(registry, clients, fetcher, { plan, receipt, signal: params.signal })
 }
 
 /** Claims a positively attested public packet, with replay checks and durable destination checkpoints. */
