@@ -1,4 +1,5 @@
 import * as cctp from '../protocols/cctp/evm.js'
+import * as verulink from '../protocols/verulink/lifecycle.js'
 import { classifyBroadcastError, DuplicateTransactionError } from '@provablehq/veil-core'
 import { isHash, isHex } from 'viem'
 import { requireAleoClient, requireAleoClientWithWallet, type BridgeChainClients } from '../connections/resolve.js'
@@ -15,9 +16,9 @@ import { assertRouteNotPaused } from './internal/routePauseGuard.js'
 /**
  * Submits the destination-chain transaction required to receive bridged funds.
  *
- * Completes an attested xReserve private mint on Aleo or a manual CCTP mint
- * on an EVM destination. The destination wallet signs and submits; Aleo
- * private delivery also proves the mint.
+ * Completes an attested xReserve private mint, manual CCTP mint, or public
+ * Verulink claim. The destination wallet signs and submits; Aleo claims also
+ * require proving.
  *
  * The source transaction is never repeated. The destination transaction incurs
  * a destination network fee even if it fails.
@@ -27,7 +28,7 @@ import { assertRouteNotPaused } from './internal/routePauseGuard.js'
  * @param params Transfer state ready for private delivery, fee preference, Circle options such as the nonce source or manual-mint override, and optional callback for saving recovery information.
  * @param fetcher Optional provider HTTP implementation. Defaults to global fetch.
  * @returns The destination transaction identifier and its confirmation state.
- * @throws BridgeError When no destination transaction is required, the Circle attestation is invalid, a local identity's store or required wallet access is unavailable, or submission fails.
+ * @throws BridgeError When no destination transaction is required, the protocol attestation is invalid, a local identity's store or required wallet access is unavailable, or submission fails.
  * @example const execution = await complete(registry, clients, { plan, receipt: ready, onCheckpoint: save })
  */
 export async function complete(
@@ -63,6 +64,7 @@ export async function complete(
     })
   }
   const route = resolveTransferRoute(registry, plan)
+  if (plan.protocol === 'verulink') return verulink.complete(registry, clients, fetcher, { ...params, progress: undefined, plan, receipt })
   if (receipt.status !== 'DESTINATION_ACTION_REQUIRED'
     || receipt.nextAction?.kind !== 'xreserve-private-mint'
     || receipt.nextAction.chainId !== route.destinationChain.id) {

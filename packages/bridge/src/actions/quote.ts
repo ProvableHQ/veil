@@ -1,4 +1,5 @@
 import { readWithdrawalFee } from '../protocols/xreserve/aleoToEvm.js'
+import { quote as quoteVerulink } from '../protocols/verulink/quote.js'
 import * as cctp from '../protocols/cctp/evm.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import {
@@ -68,6 +69,7 @@ async function quoteRoute(
   fetcher: typeof fetch,
   prepared: BridgePlan,
 ): Promise<BridgeQuotePricing> {
+  if (prepared.protocol === 'verulink') return quoteVerulink(registry, clients, prepared)
   if (prepared.protocol === 'cctp') return cctp.quote(registry, clients, fetcher, { plan: prepared })
   const circleOptions = resolveCircleOptions(params)
   const privateMintIdentities = circleOptions.privateMintIdentities

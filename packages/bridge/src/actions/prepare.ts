@@ -161,6 +161,14 @@ export function prepare(
       ]
     : route.protocol === 'xreserve'
     ? xreserveSteps(route, sourceAsset, destinationAsset, sourceChain, destinationChain, mintMode)
+    : route.protocol === 'verulink'
+    ? [
+        ...(sourceChain.family === 'evm' ? [{ key: 'source-approval', kind: 'approve' as const, chainId: sourceChain.id, executor: 'evm-wallet' as const, description: 'Approve the Verulink token service to spend wrapped ALEO.', irreversible: false }] : []),
+        { key: 'source-dispatch', kind: 'dispatch', chainId: sourceChain.id, executor: executor(sourceChain), description: 'Commit public ALEO to a Verulink packet.', irreversible: true },
+        { key: 'packet-attestation', kind: 'wait-attestation', executor: 'protocol', description: 'Retrieve attestor signatures for the confirmed packet.', irreversible: false },
+        { key: 'destination-claim', kind: 'mint', chainId: destinationChain.id, executor: executor(destinationChain), description: 'Submit the signed packet and pay destination gas to claim public ALEO.', irreversible: false },
+        { key: 'destination-confirmation', kind: 'confirm-delivery', chainId: destinationChain.id, executor: 'protocol', description: 'Verify delivery to the recipient; screened funds may enter holding.', irreversible: false },
+      ]
     : hyperlaneSteps(sourceAsset, destinationAsset, sourceChain, destinationChain)
   const fees: BridgePlan['fees'] = []
 

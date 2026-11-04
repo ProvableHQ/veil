@@ -1,5 +1,6 @@
 import { isRegistryVersionCompatible } from '../registry/compatibility.js'
 import * as cctp from '../protocols/cctp/evm.js'
+import * as verulink from '../protocols/verulink/lifecycle.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import { requireEvmClient, type BridgeChainClients } from '../connections/resolve.js'
 import type { RecoverParameters } from '../types/actions.js'
@@ -59,6 +60,7 @@ export async function recover(
     return toBridgeProgress(plan, receipt)
   }
   if (approvalReplacement) throw new BridgeError('CCTP recovery options require a CCTP route')
+  if (plan.protocol === 'verulink') return toBridgeProgress(plan, await verulink.recover(registry, clients, client, { checkpoint, plan, signal: params.signal }))
   let receipt: BridgeReceipt
   if (route.sourceChain.family === 'aleo') {
     // Aleo can checkpoint after proving but before broadcast. This state needs

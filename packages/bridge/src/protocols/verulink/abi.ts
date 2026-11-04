@@ -1,0 +1,31 @@
+import { parseAbi } from 'viem'
+
+/** Describes the public wrapped-ALEO service, bridge, and ERC-20 calls. */
+export const ABI = parseAbi([
+  'struct EvmService { uint256 chainId; address addr; }',
+  'struct AleoService { uint256 chainId; string addr; }',
+  'struct InMessage { string senderAddress; address destTokenAddress; uint256 amount; address receiverAddress; }',
+  'struct OutMessage { address senderAddress; string destTokenAddress; uint256 amount; string receiverAddress; }',
+  'struct InPacket { uint256 version; uint256 sequence; AleoService sourceTokenService; EvmService destTokenService; InMessage message; uint256 height; }',
+  'struct OutPacket { uint256 version; uint256 sequence; EvmService sourceTokenService; AleoService destTokenService; OutMessage message; uint256 height; }',
+  'function publicTokenSend(address tokenAddress,uint256 amount,string receiver)',
+  'function tokenReceive(InPacket packet,bytes signatures)',
+  'function paused() view returns (bool)',
+  'function self() view returns (uint256 chainId,address addr)',
+  'function destChainId() view returns (uint256)',
+  'function erc20Bridge() view returns (address)',
+  'function supportedTokens(address) view returns (address tokenAddress,address vault,string destTokenAddress,string destTokenService,uint256 minValue,uint256 maxValue,bool enabled)',
+  'function holding() view returns (address)',
+  'function feeCollector() view returns (address)',
+  'function platformFees(address) view returns (uint256)',
+  'function decimals() view returns (uint8)',
+  'function balanceOf(address) view returns (uint256)',
+  'function allowance(address,address) view returns (uint256)',
+  'function approve(address,uint256) returns (bool)',
+  'function quorumRequired() view returns (uint256)',
+  'function isAttestor(address) view returns (bool)',
+  'function consumedPackets(uint256) view returns (bytes32)',
+  'event PacketDispatched(OutPacket packet,bytes data)',
+  'event Consumed(uint256 chainId,uint256 sequence,bytes32 packetHash,uint8 quorum)',
+  'event Transfer(address indexed from,address indexed to,uint256 value)',
+])

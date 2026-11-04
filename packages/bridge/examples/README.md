@@ -563,3 +563,26 @@ The example reports completion only when SDK delivery verification succeeds.
 Aleo-to-EVM/Solana currently uses the SDK's recipient
 balance-increase fallback, which can be confused by unrelated incoming transfers;
 use an isolated recipient for a live probe.
+
+## Public ALEO ↔ BSC through Verulink
+
+`verulink-roundtrip.ts` previews both legs by default. It requires public
+`ALEO_ADDRESS` and `BSC_ADDRESS`; `AMOUNT` defaults to 20 ALEO. Optional RPC
+overrides are `ALEO_RPC_URL` and `BSC_RPC_URL`.
+
+```sh
+node --import tsx packages/bridge/examples/verulink-roundtrip.ts
+```
+
+Execution additionally requires `ALEO_PRIVATE_KEY`, `EVM_PRIVATE_KEY`, and
+`EXECUTE_BRIDGE=I_UNDERSTAND_THIS_MOVES_REAL_FUNDS`. Supply credentials through
+the environment, never command arguments or committed files. Fund public ALEO
+plus Aleo transaction fees and at least 0.001 BNB before execution. BNB is a
+conservative example reserve, not a fixed bridge fee.
+
+State defaults to `~/.local/state/veil/examples/verulink.json`; override with
+`ROUNDTRIP_STATE_FILE`. Reuse the same accounts, amount, and state file after
+an interruption. Do not delete submission-attempt markers to force a retry.
+A stale lock requires checking that the original process has stopped first.
+The second leg uses the first leg's verified net amount, and completes only
+after an accepted public ALEO transfer to the original account.

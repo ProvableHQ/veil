@@ -1,4 +1,5 @@
 import * as cctp from '../protocols/cctp/evm.js'
+import { execute as executeVerulink } from '../protocols/verulink/source.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
 import {
   requireAleoClient,
@@ -116,6 +117,7 @@ export async function execute(
   // The selected route, not caller-supplied chain branching, determines which
   // protocol implementation and wallet capability may commit the funds.
   if (params.plan.protocol === 'cctp') return cctp.execute(registry, clients, fetcher, params)
+  if (params.plan.protocol === 'verulink') return executeVerulink(registry, clients, params)
   const chain = resolveTransferRoute(registry, params.plan).sourceChain
   const chainId = chain.id
   const onSubmitted = submissionCheckpoint(params)

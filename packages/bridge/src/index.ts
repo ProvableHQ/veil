@@ -223,3 +223,5 @@ export { BridgeError, BridgeRoutePausedError } from './errors/bridgeErrors.js'
 export { formatDecimalAmount, parseDecimalAmount } from './utils/units.js'
 
 export type { EvmCctpTransferQuote, EvmCctpTransferExecution } from './types/cctp.js'
+
+export type { VerulinkQuote, VerulinkExecution } from './types/verulink.js'

@@ -125,6 +125,8 @@ export type BridgeRouteStatus = {
 
 /** Identifies the route implementation that produced a transfer quote. */
 export type BridgeQuoteKind =
+  | 'aleo-verulink'
+  | 'evm-verulink'
   | 'aleo-hyperlane'
   | 'aleo-xreserve'
   | 'evm-hyperlane'
@@ -162,6 +164,7 @@ type AleoXReserveQuote = {
  * @property plan Validated transfer plan to pass unchanged to execution.
  */
 export type BridgeQuotePricing = ({ plan: BridgePlan }) & (
+  | import('./verulink.js').VerulinkQuote
   | ({ kind: 'aleo-hyperlane' } & AleoHyperlaneGasQuote)
   | AleoXReserveQuote
   | ({ kind: 'evm-hyperlane' } & EvmHyperlaneTransferQuote)
@@ -217,6 +220,8 @@ export type ExecuteParameters = {
 
 /** Identifies the route implementation that submitted a transfer. */
 export type BridgeExecutionKind =
+  | 'aleo-verulink'
+  | 'evm-verulink'
   | 'aleo-hyperlane'
   | 'aleo-xreserve'
   | 'evm-hyperlane'
@@ -226,6 +231,7 @@ export type BridgeExecutionKind =
 
 /** Captures every result returned by the protocol-neutral execution action. */
 export type BridgeExecution =
+  | import('./verulink.js').VerulinkExecution
   | ({ kind: 'aleo-hyperlane' } & AleoHyperlaneTransferRemoteExecution)
   | ({ kind: 'aleo-xreserve' } & XReserveBurnExecution)
   | ({ kind: 'evm-hyperlane' } & EvmHyperlaneTransferExecution)

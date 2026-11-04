@@ -1,3 +1,4 @@
+import { VERULINK_METADATA, VERULINK_SOURCE } from './verulink.js'
 import type {
   AleoMappingPauseSource,
   BridgeEnvironment,
@@ -14,7 +15,7 @@ const SOLANA_ADDRESS = '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
 const ALEO_ADDRESS = '^aleo1[0-9a-z]{58}$'
 
 const chains: ProtocolBridgeChain[] = [
-  { id: 'aleo', displayName: 'Aleo', family: 'aleo', environment: 'mainnet', nativeCurrencySymbol: 'ALEO', protocolDomains: { xreserve: 10002, hyperlane: 1634493807 } },
+  { id: 'aleo', displayName: 'Aleo', family: 'aleo', environment: 'mainnet', nativeCurrencySymbol: 'ALEO', protocolDomains: { xreserve: 10002, hyperlane: 1634493807, verulink: '6694886634401' } },
   { id: 'ethereum', displayName: 'Ethereum', family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'ETH', protocolDomains: { xreserve: 0, hyperlane: 1, cctp: 0 } },
   { id: 'arc', displayName: 'Arc', family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'USDC', protocolDomains: { xreserve: 26, cctp: 26 } },
   { id: 'solana', displayName: 'Solana', family: 'solana', environment: 'mainnet', nativeCurrencySymbol: 'SOL', protocolDomains: { hyperlane: 1399811149 } },
@@ -23,6 +24,7 @@ const chains: ProtocolBridgeChain[] = [
   { id: 'hyperevm', displayName: 'HyperEVM', family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'HYPE' },
   { id: 'aleo-testnet', displayName: 'Aleo Testnet', family: 'aleo', environment: 'testnet', nativeCurrencySymbol: 'ALEO', protocolDomains: { xreserve: 10002, hyperlane: 1617853565 } },
   { id: 'sepolia', displayName: 'Ethereum Sepolia', family: 'evm', environment: 'testnet', nativeCurrencySymbol: 'ETH', protocolDomains: { xreserve: 0, hyperlane: 11155111 } },
+  { id: 'bsc', displayName: 'BNB Smart Chain', family: 'evm', environment: 'mainnet', nativeCurrencySymbol: 'BNB', protocolDomains: { verulink: '422842677816' } },
 ]
 
 const assets: ProtocolBridgeAsset[] = [
@@ -60,6 +62,7 @@ const assets: ProtocolBridgeAsset[] = [
   // at 2851e8bb97c8821bee016eb33a25608e1a1b9753.
   { id: 'aleo-testnet/usdcx', key: 'usdcx', chainId: 'aleo-testnet', symbol: 'USDCx', name: 'Testnet USDCx', decimals: 6, kind: 'token', locator: { kind: 'aleo-program', value: 'test_usdcx_stablecoin.aleo' }, addressValidationRegex: ALEO_ADDRESS, privacy: { kind: 'arc22', program: 'test_usdcx_stablecoin.aleo', freezelistProgram: 'test_usdcx_freezelist.aleo' } },
   { id: 'sepolia/usdc', key: 'usdc', chainId: 'sepolia', symbol: 'USDC', name: 'Testnet USD Coin', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' }, addressValidationRegex: EVM_ADDRESS },
+  { id: 'bsc/aleo', key: 'aleo', chainId: 'bsc', symbol: 'ALEO', name: 'Verulink Wrapped ALEO', decimals: 6, kind: 'token', locator: { kind: 'evm-contract', value: VERULINK_METADATA.evmToken }, addressValidationRegex: EVM_ADDRESS },
 ]
 
 const CCTP_SOURCE = 'https://developers.circle.com/cctp/references/contract-addresses'
@@ -799,6 +802,17 @@ const routes: ProtocolBridgeRoute[] = [
   ...pair('hyperlane', 'mainnet', 'aleo/aleo', 'hyperevm/aleo', 'metadata-required', 'ALEO/aleo', ALEO_MAILBOX_METADATA),
   route('hyperlane:ethereum/usad->aleo/usad', 'hyperlane', 'mainnet', 'ethereum/usad', 'aleo/usad', 'metadata-required', 'USAD/aleo', ALEO_MAILBOX_METADATA),
   route('hyperlane:aleo/usad->ethereum/usad', 'hyperlane', 'mainnet', 'aleo/usad', 'ethereum/usad', 'metadata-required', 'USAD/aleo', aleoHyperlanePlaceholders('hyp_warp_token_usad_v2.aleo', 1)),
+  ...(['aleo', 'bsc'] as const).map((source): ProtocolBridgeRoute => ({
+    id: `verulink:${source}/aleo->${source === 'aleo' ? 'bsc' : 'aleo'}/aleo`,
+    protocol: 'verulink', environment: 'mainnet', availability: 'active',
+    sourceAssetId: `${source}/aleo`, destinationAssetId: `${source === 'aleo' ? 'bsc' : 'aleo'}/aleo`,
+    deploymentId: 'verulink-bsc-public-aleo-v3', source: VERULINK_SOURCE, metadata: VERULINK_METADATA,
+    pauseSources: [
+      { chainId: 'bsc', kind: 'evm-paused', address: VERULINK_METADATA.evmTokenService },
+      { chainId: 'bsc', kind: 'evm-paused', address: VERULINK_METADATA.evmBridge },
+      { chainId: 'aleo', kind: 'aleo-mapping', program: VERULINK_METADATA.aleoTokenService, mapping: 'status', key: `{ chain_id: ${VERULINK_METADATA.evmDomain}u128, token_id: ${VERULINK_METADATA.aleoTokenId} }` },
+    ],
+  })),
 ]
 
 /**
@@ -814,11 +828,11 @@ const routes: ProtocolBridgeRoute[] = [
  * const bridge = createBridgeClient({ registry: DEFAULT_BRIDGE_REGISTRY })
  */
 export const DEFAULT_BRIDGE_REGISTRY: BridgeRegistry = Object.freeze({
-  version: '2026-09-30.hyperlane-bat-usdg-zec.1',
+  version: '2026-11-04.verulink-bsc.1',
   chains: Object.freeze(chains),
   assets: Object.freeze(assets),
   routes: Object.freeze(routes),
-  sources: Object.freeze([XRESERVE_SOURCE, ALEO_XRESERVE_SOURCE, HYPERLANE_SOURCE, CCTP_SOURCE, USDC_SOURCE]),
+  sources: Object.freeze([XRESERVE_SOURCE, ALEO_XRESERVE_SOURCE, HYPERLANE_SOURCE, CCTP_SOURCE, USDC_SOURCE, VERULINK_SOURCE]),
   getAssets(this: BridgeRegistry, params = {}) {
     const chains = new Map(this.chains.map((chain) => [chain.id, chain]))
     const chainId = params.chainId?.toLowerCase()

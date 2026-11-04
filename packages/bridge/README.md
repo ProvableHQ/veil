@@ -2,7 +2,8 @@
 
 [All Veil packages](../../README.md#packages) · [Documentation](https://provablehq.github.io/veil/packages/bridge) · [npm](https://www.npmjs.com/package/@provablehq/aleo-bridge-sdk) · [LLM index](../../llms.txt)
 
-Moves assets through reviewed Hyperlane, Circle xReserve, and Circle CCTP deployments.
+Moves assets through reviewed Hyperlane, Circle xReserve, Circle CCTP, and Verulink deployments.
+Verulink moves public ALEO between Aleo and BNB Smart Chain (BSC).
 CCTP moves native USDC between Arc and Ethereum, Base, or Arbitrum; xReserve brings
 Arc USDC to Aleo as USDCx and redeems Aleo USDCx back to Arc USDC.
 
@@ -16,7 +17,7 @@ Deprecated options stay supported until the next major release.
 ## Upgrading existing bridge integrations
 
 Existing method signatures remain supported. Plans and checkpoints saved with
-registry `2026-08-31.solana-deposits.1` work with this release when the route,
+registries `2026-08-31.solana-deposits.1` and `2026-09-30.hyperlane-bat-usdg-zec.1` work with this release when the route,
 assets, and protocol-specific chain details match the reviewed previous
 snapshot. Recovery validates that match before reading a network or signing.
 It does not repeat a submitted source transaction. Unknown versions or changed
@@ -28,9 +29,9 @@ handle the new variants when upgrading to this minor release:**
 
 | Public type | Additional value |
 | --- | --- |
-| `BridgeProtocol` | `cctp` |
-| `BridgeQuoteKind`, `BridgeQuote`, `BridgeExecutionKind`, `BridgeExecution` | `evm-cctp` discriminator |
-| `BridgeNextAction.kind` | `cctp-mint` |
+| `BridgeProtocol` | `cctp`, `verulink` |
+| `BridgeQuoteKind`, `BridgeQuote`, `BridgeExecutionKind`, `BridgeExecution` | `evm-cctp`, `aleo-verulink`, `evm-verulink` discriminators |
+| `BridgeNextAction.kind` | `cctp-mint`, `verulink-claim` |
 | `aleo-xreserve` quote `status` | `quoted` for routes with live fee estimates; fixed-fee routes retain `not-queried` |
 
 For example, extend a protocol label map rather than casting away the new type:
@@ -42,10 +43,11 @@ const protocolLabels = {
   xreserve: 'Circle xReserve',
   hyperlane: 'Hyperlane',
   cctp: 'Circle CCTP',
+  verulink: 'Verulink',
 } satisfies Record<BridgeProtocol, string>
 ```
 
-Add an `evm-cctp` case when branching on quotes or executions. Route discovery
+Add `evm-cctp`, `aleo-verulink`, and `evm-verulink` cases when branching on quotes or executions. Route discovery
 now includes additional chains and routes; filter by protocol or endpoints if
 an application only supports the existing integrations. Filtering limits
 runtime discovery but does not narrow the exported TypeScript unions.
@@ -54,6 +56,8 @@ runtime discovery but does not narrow the exported TypeScript unions.
 
 | Source | Destination | Asset received | Provider |
 | --- | --- | --- | --- |
+| Aleo public ALEO | BSC | Wrapped ALEO | Verulink |
+| BSC wrapped ALEO | Aleo | Public ALEO | Verulink |
 | Ethereum ETH | Aleo | ETH | Hyperlane |
 | Aleo ETH | Ethereum | ETH | Hyperlane |
 | Ethereum WBTC | Aleo | WBTC | Hyperlane |
@@ -696,6 +700,56 @@ Each script quotes mainnet state and exits without submitting by default. The
 script prints the exact acknowledgement required to authorize real funds.
 
 <a id="automatic-compliance-proofs"></a>
+
+## Verulink ALEO and BSC
+
+The two public routes use native Aleo credits and Verulink wrapped ALEO on BSC.
+They require read access to **both** chains. Aleo → BSC requires an Aleo source
+wallet and a BSC claim wallet; BSC → Aleo requires a BSC source wallet and an
+Aleo claim wallet. A compatible Veil Aleo wallet adapter and any EVM adapter
+supported by this package can provide these capabilities. The BSC wallet needs
+**BNB** for gas: wrapped ALEO cannot pay for the claim, approval, or return burn.
+
+`quote` reads the deployed peer configuration, active flags, fee rate, and
+minimum/maximum amounts. Fees use integer microcredits:
+`fee = floor(gross * rate / 100000)`. Minimums apply to the amount after that
+fee. Source and destination network fees remain unpriced. Execution rereads
+the fee before submission and refuses an increase over the quoted output.
+The BSC contract has no caller-supplied fee ceiling; a change between the last
+read and mining cannot be bounded by this SDK.
+
+`execute` submits `token_send_public` on Aleo, or approves the full gross
+wrapped amount and calls `publicTokenSend` on BSC. Aleo publishes packets in
+the bridge program's `out_packets` mapping; BSC emits `PacketDispatched`.
+The SDK reconstructs the packet from that source evidence, then retrieves
+attestor signatures from Verulink's public collector. The collector is still
+an availability dependency even though quotes and submissions use contracts
+directly. Its claimed status and signature count are never trusted.
+
+`getStatus` and `wait` verify the current destination attestor membership,
+quorum, and signatures before returning `next: 'complete'`. `complete`
+submits the destination claim. BSC → Aleo signature verification loads the
+optional `@provablehq/sdk` package; install it for this direction, including
+read-only status calls once signatures are available. Only positive screening
+quorums are submitted. Destination consumption alone does not prove delivery:
+completion verifies the actual recipient transfer, and reports screening
+holding separately as a failed public delivery.
+
+Persist every `onCheckpoint` callback before returning. Recovery from a source
+transaction hash does not repeat the transfer. Prepared Aleo source/claim
+transactions can be rebroadcast with their original identifiers after their
+inputs have been checked. **Approval-only BSC recovery refuses automatic
+resubmission**, because an approval hash cannot establish whether a later burn
+is pending. Reconcile the wallet's source transaction hash first. If an EVM
+wallet submission throws before returning a hash, do not call it again until
+the wallet history is reconciled. The runnable example saves an attempt marker
+before each wallet boundary to retain this uncertainty after a crash.
+
+See [the round-trip example](./examples/verulink-roundtrip.ts) for a preview-first
+20-ALEO journey with durable state, gas checks, and return of the actual amount
+received. Mainnet metadata is pinned to the
+[reviewed BSC deployment revision](https://github.com/venture23-aleo/verulink/tree/4307bfbdf414a84205ec426d5bddc1dff0a2ebfc).
+
 
 ## Compliance
 
