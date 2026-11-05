@@ -1,5 +1,13 @@
 # @provablehq/shield-swap-cli
 
+## 0.16.2
+
+### Patch Changes
+
+- @provablehq/veil-core@0.16.2
+- @provablehq/veil-aleo-sdk@0.16.2
+- @provablehq/shield-swap-sdk@0.16.2
+
 ## 0.16.1
 
 ### Patch Changes
