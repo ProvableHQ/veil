@@ -1,4 +1,5 @@
 import { sha256, stringToHex } from 'viem'
+import { SEPTEMBER_ROUTE_HASHES } from './previousRoutes.js'
 import type { BridgeRegistry, ProtocolBridgeAsset, ProtocolBridgeChain } from '../types/protocol.js'
 
 // SHA-256 of canonical route, asset, and chain data from main commit
@@ -108,6 +109,13 @@ function routeFingerprint(
  */
 export function isRegistryVersionCompatible(registry: BridgeRegistry, version: string, routeId: string): boolean {
   if (version === registry.version) return true
+  if (registry.version === '2026-11-04.verulink-bsc.1') {
+    if (version === CURRENT_REGISTRY_VERSION) {
+      const expected = SEPTEMBER_ROUTE_HASHES[routeId]
+      return expected !== undefined && routeFingerprint(registry, routeId, false) === expected
+    }
+    return isRegistryVersionCompatible({ ...registry, version: CURRENT_REGISTRY_VERSION }, version, routeId)
+  }
   const legacy = version === LEGACY_REGISTRY_VERSION
   // Preserve the previously supported legacy-to-September path for callers
   // that pin that reviewed registry instead of adopting the latest snapshot.

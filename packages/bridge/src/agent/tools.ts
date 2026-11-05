@@ -46,7 +46,7 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
           type: 'object',
           properties: {
             environment: { type: 'string', enum: ['mainnet', 'testnet'] },
-            protocol: { type: 'string', enum: ['xreserve', 'hyperlane', 'cctp'] },
+            protocol: { type: 'string', enum: ['xreserve', 'hyperlane', 'cctp', 'verulink'] },
             sourceChainId: { type: 'string' },
             destinationChainId: { type: 'string' },
             symbol: { type: 'string' },
@@ -79,7 +79,7 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
     {
       schema: {
         name: 'bridge_quote_transfer',
-        description: 'Validate and price an intended transfer between two chains through xReserve, Hyperlane, or CCTP. This tool reads current chain or provider state where the selected route exposes live costs, but does not request a wallet signature or move funds.',
+        description: 'Validate and price an intended transfer between two chains through xReserve, Hyperlane, CCTP, or Verulink. This tool reads current chain or provider state where the selected route exposes live costs, but does not request a wallet signature or move funds.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -94,7 +94,7 @@ export function createBridgeAgentTools(client: BridgeClient): AgentTool[] {
               required: ['chain', 'asset'],
             },
             cctp: { type: 'object', properties: { speed: { type: 'string', enum: ['fast', 'standard'] }, forwarding: { type: 'boolean' }, maxFee: { type: 'string' } } },
-            bridgeProtocol: { type: 'string', enum: ['xreserve', 'hyperlane', 'cctp'] },
+            bridgeProtocol: { type: 'string', enum: ['xreserve', 'hyperlane', 'cctp', 'verulink'] },
             amount: { type: 'string', description: 'Positive decimal amount in source-asset display units.' },
             recipient: { type: 'string' },
             sender: { type: 'string' },

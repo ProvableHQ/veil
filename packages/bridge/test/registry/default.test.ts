@@ -5,7 +5,7 @@ import { BridgeError } from '../../src/errors/bridgeErrors.js'
 
 describe('DEFAULT_BRIDGE_REGISTRY', () => {
   it('uses a distinct version for the BAT, USDG, and ZEC topology', () => {
-    expect(DEFAULT_BRIDGE_REGISTRY.version).toBe('2026-09-30.hyperlane-bat-usdg-zec.1')
+    expect(DEFAULT_BRIDGE_REGISTRY.version).toBe('2026-11-04.verulink-bsc.1')
   })
 
   it.each([
@@ -71,7 +71,7 @@ describe('DEFAULT_BRIDGE_REGISTRY', () => {
       const routes = DEFAULT_BRIDGE_REGISTRY.routes.filter((route) =>
         assetIds.has(route.sourceAssetId) || assetIds.has(route.destinationAssetId))
       expect(routes.length, symbol).toBeGreaterThan(0)
-      expect(routes.every((route) => route.protocol === 'hyperlane'), symbol).toBe(true)
+      expect(routes.every((route) => route.protocol === (route.sourceAssetId === 'bsc/aleo' || route.destinationAssetId === 'bsc/aleo' ? 'verulink' : 'hyperlane')), symbol).toBe(true)
     }
   })
 
@@ -410,6 +410,11 @@ describe('route pause sources', () => {
     for (const route of active) {
       for (const source of route.pauseSources ?? []) {
         if (source.kind !== 'aleo-mapping') continue
+        if (route.protocol === 'verulink') {
+          expect(source.mapping).toBe('status')
+          expect(source.key).toContain('chain_id: 422842677816u128')
+          continue
+        }
         expect(source.key, `${route.id} ${source.program}`).toBe(source.mapping === 'pause__' ? 'false' : 'true')
         expect(['pause', 'paused', 'pause__']).toContain(source.mapping)
       }

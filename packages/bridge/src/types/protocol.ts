@@ -1,5 +1,5 @@
 /** Identifies the protocol that carries a bridge transfer. */
-export type BridgeProtocol = 'xreserve' | 'hyperlane' | 'cctp'
+export type BridgeProtocol = 'xreserve' | 'hyperlane' | 'cctp' | 'verulink'
 
 /** Identifies the deployment environment selected by a bridge client. */
 export type BridgeEnvironment = 'mainnet' | 'testnet'
@@ -401,7 +401,7 @@ export type BridgeStatus =
  * @property chainId Registry chain on which the wallet will submit it.
  */
 export type BridgeNextAction = {
-  kind: 'xreserve-private-mint' | 'cctp-mint'
+  kind: 'xreserve-private-mint' | 'cctp-mint' | 'verulink-claim'
   chainId: string
 }
 

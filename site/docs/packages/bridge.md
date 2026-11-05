@@ -1,6 +1,6 @@
 ---
 title: "@provablehq/aleo-bridge-sdk"
-description: Cross-chain bridge SDK for Aleo, EVM, and Solana using Circle xReserve, Circle CCTP, and Hyperlane.
+description: Cross-chain bridge SDK for Aleo, EVM, and Solana using Circle xReserve, Circle CCTP, Hyperlane, and Verulink.
 sidebar_position: 10
 ---
 
@@ -12,7 +12,8 @@ The bridge client assigns each asset family to its canonical protocol:
 
 - Circle xReserve moves USDC into and out of Aleo as USDCx.
 - Circle CCTP moves native USDC between Arc and Ethereum, Base, or Arbitrum.
-- Hyperlane Warp Routes move ETH, WBTC, USDT, SOL, BAT, USDG, and ZEC. ALEO and USAD entries remain available for deployment discovery and require complete metadata before quoting or execution.
+- Verulink moves public native ALEO to wrapped ALEO on BNB Smart Chain (BSC) and back. Both directions require a destination claim and BNB for BSC gas.
+- Hyperlane Warp Routes move ETH, WBTC, USDT, SOL, BAT, USDG, and ZEC. Hyperlane ALEO and USAD entries remain available for deployment discovery and require complete metadata before quoting or execution.
 
 The current API provides a versioned route registry, discovery, and transfer
 quotes that return the validated execution plan:
@@ -150,3 +151,27 @@ See the [server-wallet setup guide and runnable examples](https://github.com/Pro
 for installation, tested dependency versions, provisioning, and credential
 configuration. Use the regular quote, execute, wait, and recovery lifecycle after
 creating the clients.
+
+## Verulink public ALEO
+
+Configure both Aleo and BSC readers, and provide a wallet for each chain when
+executing both legs. The normalized chain key is `bsc` and the protocol is
+`verulink`. Quotes read current onchain fees and net minimums; gas remains
+unpriced. Source submission calls the deployed token service directly.
+
+The SDK retrieves offchain signatures from Verulink's collector after checking
+the source packet onchain. It verifies current attestors and cryptographic
+signatures before `complete` submits the destination claim. Install the
+optional `@provablehq/sdk` peer for BSC → Aleo signature verification.
+Wrapped ALEO does not pay BSC gas; the account needs BNB separately.
+
+Keep every checkpoint and record an attempt before invoking a wallet.
+Approval-only BSC recovery refuses automatic resubmission because a later burn
+may already be pending. Recover with the wallet's source transaction hash.
+Prepared Aleo transactions reuse the same bytes and identifier. Packet
+consumption alone is not completion; the SDK verifies recipient delivery and
+distinguishes funds sent to screening holding.
+
+The [round-trip example](https://github.com/ProvableHQ/veil/blob/main/packages/bridge/examples/verulink-roundtrip.ts)
+previews 20 ALEO by default and requires an explicit environment opt-in to
+move funds. Its second leg returns the amount actually received.

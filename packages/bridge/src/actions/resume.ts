@@ -1,4 +1,8 @@
 import * as cctp from '../protocols/cctp/evm.js'
+import { context as verulinkContext } from '../protocols/verulink/common.js'
+import { validateAleoSource } from '../protocols/verulink/packets.js'
+import type { Transaction } from '@provablehq/veil-core'
+import { execute as executeVerulink } from '../protocols/verulink/source.js'
 import { classifyBroadcastError, DuplicateTransactionError } from '@provablehq/veil-core'
 import { requireAleoClient, requireEvmClientWithWallet, type BridgeChainClients } from '../connections/resolve.js'
 import { BridgeError } from '../errors/bridgeErrors.js'
@@ -19,7 +23,8 @@ import { assertRouteNotPaused } from './internal/routePauseGuard.js'
  * or an Aleo transaction was fully proved before the application stopped. Only
  * the pending submission continues. A proved Aleo transaction may be
  * rebroadcast byte-for-byte with the same transaction identifier, so recovery
- * cannot create a second transfer.
+ * cannot create a second transfer. Verulink approval-only EVM recovery refuses
+ * automatic resubmission until the wallet's source transaction is reconciled.
  *
  * The action may request authorization from the source wallet. A submitted
  * transaction can commit funds and incur a network fee.
@@ -72,6 +77,7 @@ export async function resume(
     if (typeof transactionId !== 'string' || transactionId !== receipt.id) {
       throw new BridgeError('Prepared Aleo recovery transaction id does not match its payload')
     }
+    if (plan.protocol === 'verulink') validateAleoSource(verulinkContext(registry, clients, plan), plan, decoded as Transaction)
     try {
       const submittedId = await requireAleoClient(
         registry,
@@ -110,11 +116,13 @@ export async function resume(
       },
     }
     await onSubmitted?.(submitted)
+    if (plan.protocol === 'verulink') return { kind: 'aleo-verulink', transactionId, receipt: submitted }
     return plan.protocol === 'hyperlane'
       ? { kind: 'aleo-hyperlane', transactionId, receipt: submitted }
       : { kind: 'aleo-xreserve', transactionId, receipt: submitted }
   }
 
+  if (plan.protocol === 'verulink') return executeVerulink(registry, clients, { ...params, plan, resume: receipt })
   if (route.route.protocol === 'xreserve' && route.sourceChain.family === 'evm') {
     // The EVM protocol helper accepts only approval-complete state here and
     // requotes allowance, fees, and private hook data before depositing.

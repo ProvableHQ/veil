@@ -164,3 +164,10 @@ Validation on 2026-10-01 against PR head `ac7f718` plus these tests: **16 read-o
 live checks passed**, including historical ZEC recovery. **No new fund-moving
 transfer was run**; the ten new execution cases were skipped. The original PR's
 reported 403 passing tests/16 skipped live tests is distinct from this validation.
+
+### Verulink read-only deployment verification
+
+`BRIDGE_VERULINK_READ_ONLY=1 pnpm vitest run packages/bridge/test/integration/live/mainnet/verulink-readonly.live.test.ts`
+checks both peers and quotes 20 ALEO in each direction without constructing
+signers. Override `BRIDGE_LIVE_ALEO_RPC_URL` and `BRIDGE_LIVE_BSC_RPC_URL` if needed.
+The funded journey is the explicitly gated `examples/verulink-roundtrip.ts`.
