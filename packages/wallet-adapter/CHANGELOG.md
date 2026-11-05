@@ -1,5 +1,7 @@
 # @provablehq/veil-aleo-wallet-adapter
 
+## 0.16.2
+
 ## 0.16.1
 
 ## 0.16.0

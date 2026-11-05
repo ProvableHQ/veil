@@ -1,5 +1,23 @@
 # @provablehq/aleo-bridge-sdk
 
+## 0.16.2
+
+### Patch Changes
+
+- Add public ALEO ↔ BSC transfers through Verulink. The default registry
+  declares both routes, pinned to the reviewed upstream deployment (BSC
+  contracts, Aleo programs, domains, and token metadata). `quote` reads the
+  bridge fee from contract state, `execute` submits the source transaction,
+  and `complete` retrieves the attestor signatures, verifies quorum and
+  membership against the current attestor set, and claims on the destination
+  chain. Screening that redirects funds to holding is reported separately from
+  delivery. Prepared Aleo transactions survive in the checkpoint for recovery,
+  and an approval-only EVM checkpoint is never resubmitted automatically.
+  Previously supported registry checkpoints still resume. Runnable examples
+  cover a checkpointed Verulink round trip and bidirectional USDG transfers on
+  Ethereum and Solana.
+  - @provablehq/veil-core@0.16.2
+
 ## 0.16.1
 
 ### Patch Changes
