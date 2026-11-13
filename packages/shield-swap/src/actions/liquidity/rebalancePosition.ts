@@ -27,6 +27,7 @@ import {
   resolveWithdrawalSubject,
   autoSelectSideRecord,
   resolveSideRoutes,
+  validateRebalanceAmounts,
 } from './internal.js'
 import {
   planRebalance,
@@ -34,13 +35,12 @@ import {
   type RebalancePlan,
   type RebalancePoolState,
   type RebalancePositionState,
+  type RebalanceAmountParameters,
   type RebalanceSlotState,
   type RebalanceTickState,
 } from './planRebalance.js'
 
-// The plan is only valid at the pool price it was built against, so a stale
-// transaction almost certainly reverts anyway — a short deadline fails it
-// cheaply instead.
+// A short deadline limits exposure to state changes while proving.
 const REBALANCE_DEADLINE_OFFSET_BLOCKS = 20
 
 /**
@@ -66,20 +66,25 @@ const REBALANCE_DEADLINE_OFFSET_BLOCKS = 20
  *   Optional on the local path when `positionRecord` (or the pool's first
  *   unspent position) identifies it; REQUIRED for wallet accounts, whose
  *   record inputs are opaque.
- * @property liquidityTarget Exact successor liquidity (u128). One of the two
- *   sizing modes; also carried by a spread plan.
+ * @property liquidityTarget Positive exact successor liquidity, or zero for execution-time sizing (u128).
+ *   Zero requires explicit desired amounts when planning in this call.
  * @property maxFunding0 Token0 funding budget (u128) — the other sizing mode.
  * @property maxFunding1 Token1 funding budget (u128).
+ * @property amount0Desired Optional token0 consumption cap; supplied with amount1Desired.
+ * @property amount1Desired Optional token1 consumption cap (u128 raw units).
+ * @property amount0Min Token0 minimum; defaults to its desired cap.
+ * @property amount1Min Token1 minimum; defaults to its desired cap.
+ * @property estimatedLiquidity Advisory preview for a zero target; never submitted as the target.
  * @property oldLiquidity Derived: the position's full liquidity. Spread from
  *   a plan, or computed here.
- * @property recovered0 Derived: exact token0 the close returns.
- * @property recovered1 Derived: exact token1 the close returns.
- * @property required0 Derived: exact token0 the successor range needs.
- * @property required1 Derived: exact token1 the successor range needs.
- * @property funded0 Derived: token0 the caller supplies.
- * @property funded1 Derived: token1 the caller supplies.
- * @property refund0 Derived: token0 surplus paid to the withdrawal address.
- * @property refund1 Derived: token1 surplus paid back.
+ * @property recovered0 Quoted token0 recovery; ignored by the contract with flexible recovery.
+ * @property recovered1 Quoted token1 recovery; ignored by the contract with flexible recovery.
+ * @property required0 Quoted token0 consumption; used as the cap when explicit bounds are omitted.
+ * @property required1 Quoted token1 consumption; used as the cap when explicit bounds are omitted.
+ * @property funded0 Fixed token0 funding; defaults to zero with flexible bounds, otherwise quote-derived.
+ * @property funded1 Fixed token1 funding; defaults to zero with flexible bounds, otherwise quote-derived.
+ * @property refund0 Fixed token0 payout; defaults to zero with flexible bounds, otherwise quote-derived.
+ * @property refund1 Fixed token1 payout; defaults to zero with flexible bounds, otherwise quote-derived.
  * @property functionName Derived: the router transition to call. Optional
  *   even with the other derived amounts — computed from the token routes and
  *   funded sides when absent.
@@ -117,9 +122,7 @@ const REBALANCE_DEADLINE_OFFSET_BLOCKS = 20
  * @property tickUpperHint Explicit insert hint for the upper bound.
  * @property initializedTicks The pool's initialized ticks, or a supplier for
  *   them, forwarded to `pickInsertHint` like {@link mint}.
- * @property deadlineOffsetBlocks Blocks until the request expires. Defaults
- *   to 20 — keep it short: a stale transaction almost certainly reverts on
- *   price mismatch anyway, and the deadline fails it cheaply.
+ * @property deadlineOffsetBlocks Blocks until the request expires. Defaults to 20.
  * @property nonce Explicit field nonce. Defaults to crypto-random.
  * @property imports Program sources for dynamic-dispatch dependencies, as in
  *   {@link mint}.
@@ -127,7 +130,7 @@ const REBALANCE_DEADLINE_OFFSET_BLOCKS = 20
  *   Defaults to `shield_swap.aleo`. The call always targets
  *   `shield_swap_rebalance_router.aleo`.
  */
-export type RebalancePositionParameters = {
+export type RebalancePositionParameters = RebalanceAmountParameters & {
   poolKey: string
   tickLower: number
   tickUpper: number
@@ -147,6 +150,7 @@ export type RebalancePositionParameters = {
   functionName?: string
   feesAccrued0?: bigint
   feesAccrued1?: bigint
+  estimatedLiquidity?: bigint
   pool?: RebalancePoolState
   slot?: RebalanceSlotState
   position?: RebalancePositionState
@@ -192,7 +196,7 @@ const DERIVED_PLAN_FIELDS = [
  *   output). Known immediately on the local path; `undefined` on the wallet
  *   path — recover it from the confirmed transaction or `getOwnedPositions`.
  * @property transactionId The rebalance transaction's id.
- * @property plan The exact accounting the transaction submitted.
+ * @property plan Submitted constraints and advisory consumption/liquidity estimates.
  */
 export type RebalancePositionReturnType = {
   positionTokenId?: string
@@ -201,30 +205,18 @@ export type RebalancePositionReturnType = {
 }
 
 /**
- * Rebalances token positions in a pool in a single transaction.
+ * Rebalances a complete position atomically through the rebalance router.
  *
- * If a transaction is successful, this function burns the old position,
- * collects the principal and accrued fees, optionally adds funds from the
- * caller's private balance, and mints the new position with the same owner
- * and withdrawal address; any surplus arrives as private records for the
- * withdrawal address. The operation is atomic, so failed transactions abort
- * all operations, leaving the pool in the same state before the call.
- * Callers specify one sizing mode ({@link RebalanceSizing}): an exact
- * `liquidityTarget`, or a `maxFunding` budget per token that the planner
- * solves for the largest liquidity it supports — or spread a prebuilt
- * {@link RebalancePlan} into the call to skip the derivation entirely.
+ * Closes the old position and creates a replacement in the same pool, keeping
+ * its owner and withdrawal address. Positive targets with equal token bounds
+ * require exact quote accounting. Widened bounds enable actual recovery; a zero
+ * target also sizes liquidity at execution. Funding and immediate refunds are
+ * fixed, and any flexible surplus stays collectible on the successor.
  *
- * Note every derived amount is a function of the pool price at the block
- * where a transaction executes. If any trade moves the pool price between
- * building and execution, the on-chain assertions fail and the whole
- * transaction reverts — no funds move, but the caller pays the transaction
- * fee. Expect rebalances on active pools to occasionally revert and in those
- * cases, simply rebuild and resubmit. Ensure to set `deadlineOffsetBlocks`
- * low to minimize this risk (the default is 20 blocks).
- *
- * A local account auto-selects the position and funding records; a wallet
- * account must supply `positionTokenId`, `positionRecord`, and a record for
- * each funded side (the plan's `funded0`/`funded1` say which and how much).
+ * Calls planRebalance when complete derived accounting is absent. A complete
+ * spread plan is submitted without recomputing its amounts. Reads chain state,
+ * resolves records and proofs, and signs, proves, and submits through the account.
+ * Local accounts use record literals; wallet accounts supply InputRequests.
  *
  * @param client A Veil wallet client (local or wallet account).
  * @param params The position, range, and sizing — or a spread plan — plus
@@ -248,8 +240,12 @@ export async function rebalancePosition(
 ): Promise<RebalancePositionReturnType> {
   const program = params.program ?? SHIELD_SWAP
   const poolKey = params.poolKey
+  validateRebalanceAmounts(params)
 
-  const suppliedDerived = DERIVED_PLAN_FIELDS.filter((field) => params[field] !== undefined)
+  const hasAccounting = ['oldLiquidity', 'recovered0', 'recovered1', 'required0', 'required1']
+    .some(field => params[field as keyof RebalancePositionParameters] !== undefined)
+  const suppliedDerived = params.amount0Desired !== undefined && !hasAccounting
+    ? [] : DERIVED_PLAN_FIELDS.filter((field) => params[field] !== undefined)
   if (suppliedDerived.length > 0 && suppliedDerived.length < DERIVED_PLAN_FIELDS.length) {
     const missing = DERIVED_PLAN_FIELDS.filter((field) => params[field] === undefined)
     throw new Error(`The derived plan amounts travel together — missing ${missing.join(', ')}`)
@@ -302,6 +298,12 @@ export async function rebalancePosition(
         refund0: params.refund0!,
         refund1: params.refund1!,
         liquidityTarget: params.liquidityTarget!,
+        ...(params.amount0Desired !== undefined ? {
+          amount0Desired: params.amount0Desired, amount1Desired: params.amount1Desired!,
+          amount0Min: params.amount0Min ?? params.amount0Desired,
+          amount1Min: params.amount1Min ?? params.amount1Desired!,
+        } : {}),
+        ...(params.estimatedLiquidity !== undefined ? { estimatedLiquidity: params.estimatedLiquidity } : {}),
         ...(params.functionName === undefined ? {} : { functionName: params.functionName }),
       }
     : await planRebalance(client, {
@@ -312,6 +314,15 @@ export async function rebalancePosition(
         ...(params.liquidityTarget !== undefined
           ? { liquidityTarget: params.liquidityTarget }
           : { maxFunding0: params.maxFunding0!, maxFunding1: params.maxFunding1! }),
+        ...(params.amount0Desired !== undefined ? {
+          amount0Desired: params.amount0Desired, amount1Desired: params.amount1Desired!,
+          amount0Min: params.amount0Min ?? params.amount0Desired,
+          amount1Min: params.amount1Min ?? params.amount1Desired!,
+          ...(params.funded0 !== undefined ? { funded0: params.funded0 } : {}),
+          ...(params.funded1 !== undefined ? { funded1: params.funded1 } : {}),
+          ...(params.refund0 !== undefined ? { refund0: params.refund0 } : {}),
+          ...(params.refund1 !== undefined ? { refund1: params.refund1 } : {}),
+        } : {}),
         ...(params.pool ? { pool: params.pool } : {}),
         ...(params.slot ? { slot: params.slot } : {}),
         ...(params.position ? { position: params.position } : {}),
@@ -384,10 +395,10 @@ export async function rebalancePosition(
       pool: poolKey,
       tickLower: plan.tickLower,
       tickUpper: plan.tickUpper,
-      amount0Desired: plan.required0,
-      amount1Desired: plan.required1,
-      amount0Min: plan.required0,
-      amount1Min: plan.required1,
+      amount0Desired: plan.amount0Desired ?? plan.required0,
+      amount1Desired: plan.amount1Desired ?? plan.required1,
+      amount0Min: plan.amount0Min ?? plan.amount0Desired ?? plan.required0,
+      amount1Min: plan.amount1Min ?? plan.amount1Desired ?? plan.required1,
       tickLowerHint,
       tickUpperHint,
     },

@@ -971,74 +971,119 @@ await client.increaseLiquidity({
 
 ### Rebalance a position
 
-`rebalancePosition` moves a position to a new tick range atomically through
-`shield_swap_rebalance_router.aleo`: close the old range, collect its
-principal and all accrued fees, optionally add funds from private records,
-and remint at the successor range — in one transaction that lands whole or
-not at all. The successor NFT keeps the position's owner and withdrawal
-address; any surplus returns to the withdrawal address as private records.
+`rebalancePosition` closes an entire position and mints a replacement in the
+same pool through `shield_swap_rebalance_router.aleo`. The replacement keeps
+the owner and immutable withdrawal address. The operation is atomic and does
+not swap tokens to change their ratio.
 
-Sizing takes exactly one of two modes: an exact `liquidityTarget`, or a
-`maxFunding0`/`maxFunding1` budget of additional funds — the planner solves
-for the largest liquidity the budget supports. `{ maxFunding0: 0n,
-maxFunding1: 0n }` rebalances using only what the old position returns.
+Choose a helper by the guarantee the transaction must enforce:
 
-The contract re-derives and asserts every amount at execution, so a price
-move between building and execution reverts the transaction — no funds move,
-but the fee is paid. Expect occasional reverts on active pools; rebuild and
-resubmit. Keep `deadlineOffsetBlocks` short (default 20) and do not cache
-plans.
+| Method | Guarantee | Planner |
+| --- | --- | --- |
+| `rebalancePositionExactAmounts` | Exact quoted recovery and deposits, with a positive liquidity target. Price or fee changes can cause rejection. | `planRebalanceExactAmounts` |
+| `rebalancePositionToLiquidity` | Exact successor liquidity, using actual recovery and bounded token consumption. Insufficient funds reject instead of minting less. | `planRebalanceToLiquidity` |
+| `rebalancePositionFromAmounts` | Liquidity determined at execution from available tokens, subject to deposit caps and minimums. | `planRebalanceFromAmounts` |
 
-#### One call
+All three call `rebalancePosition`, which also accepts the full request directly.
+Flexible recovery and execution-time sizing require a contract deployment with
+[flexible rebalance support](https://github.com/ProvableHQ/amm-v3/pull/110).
+
+#### Exact amounts
+
+Existing calls retain their behavior. A positive `liquidityTarget` quotes an
+exact replacement. Alternatively, `maxFunding0` and `maxFunding1` bound extra
+wallet funds while the planner calculates an exact target **before submission**.
+Those funding budgets do not select execution-time sizing.
 
 ```ts
-const { positionTokenId: successorId } = await client.rebalancePosition({
-  poolKey,
-  positionTokenId,
-  tickLower: -1200,
-  tickUpper: -600,
-  maxFunding0: 0n,
-  maxFunding1: 0n,
+const plan = await client.planRebalanceExactAmounts({
+  poolKey, positionTokenId, tickLower, tickUpper,
+  maxFunding0: 0n, maxFunding1: 0n,
+})
+await client.rebalancePositionExactAmounts({ ...plan, imports })
+```
+
+The plan includes all recovered principal, previously owed tokens, and accrued
+fees. Any surplus is included in the fixed refund to the withdrawal address.
+Rebuild a strict plan after a delay; it depends on the quoted price and fee state.
+
+#### Exact liquidity with flexible recovery
+
+```ts
+await client.rebalancePositionToLiquidity({
+  poolKey, positionTokenId, tickLower, tickUpper,
+  liquidityTarget: 1_000_000n,
+  amount0Desired: 50_000n, amount1Desired: 50_000n,
+  amount0Min: 10_000n, amount1Min: 10_000n,
+  funded0: 0n, funded1: 0n,
   imports,
 })
 ```
 
-Wallet accounts also supply the position record and, when the plan funds a
-side, that side's record (a wrapped side funds with the UNDERLYING asset's
-record):
+All token amounts are raw base units (`bigint`, u128). Desired amounts cap tokens
+consumed by the successor; they are not additional wallet funding. Minimums bound
+consumption on each side. The helper defaults omitted minimums to zero and
+requires at least one minimum below its cap, so recovery is flexible. Raising a
+cap permits higher token costs only when sufficient recovered or funded tokens
+are available; lowering a minimum alone does not permit higher costs.
+
+#### Liquidity from available amounts
 
 ```ts
-const plan = await client.planRebalance({ poolKey, positionTokenId, tickLower, tickUpper, liquidityTarget })
-await client.rebalancePosition({
-  poolKey,
-  positionTokenId,
-  tickLower,
-  tickUpper,
-  liquidityTarget,
-  imports,
-  positionRecord: { type: 'record', program: 'shield_swap.aleo', recordname: 'PositionNFT', filters: { pool: { eq: poolKey } } },
-  token0Record: { type: 'record', program: token0Program, recordname: 'Token', filters: { amount: { gte: `${plan.funded0}u128` } } },
+const plan = await client.planRebalanceFromAmounts({
+  poolKey, positionTokenId, tickLower, tickUpper,
+  amount0Desired: 50_000n, amount1Desired: 50_000n,
+  amount0Min: 10_000n, amount1Min: 10_000n,
+  funded0: 0n, funded1: 0n,
 })
+console.log(plan.estimatedLiquidity) // advisory; not a guaranteed target
+await client.rebalancePositionFromAmounts({ ...plan, imports })
 ```
 
-#### Bring your own state, math, or plan
+The helper sets the contract's target to zero. Each execution-time token budget
+is `min(actual recovery + funded - refund, amountDesired)`. The contract derives
+liquidity from these budgets, the new range, and the execution price. Minimum
+consumption bounds still apply, even when both minima equal their caps. The
+result must have positive liquidity and satisfy the pool's liquidity rules.
+There is no caller-specified minimum-liquidity guarantee in this interface.
 
-`planRebalance` is a convenience, never a requirement. Both it and the
-one-call form accept pre-read chain state (`pool`, `slot`, `position`,
-`lowerTick`, `upperTick`, the token routes) from a caller's own indexer,
-skipping the corresponding node reads. A caller that computes the accounting
-itself builds the same fields directly — the exported `feeGrowthInside`,
-`feeOwed`, `amountsForLiquidity`, `liquidityForAmounts`, and
-`selectRebalanceEntry` are the same building blocks the planner uses — and
-spreads them into the call, where they are submitted verbatim:
+For both flexible helpers, `funded0/1` and `refund0/1` are **fixed amounts** chosen
+before proving, and default to zero. A token cannot be both funded and refunded.
+They are not dynamically adjusted at execution. Every unused token remains in
+the successor's `tokens_owed0/1`, including amounts above a deposit cap. These
+tokens earn no LP fees and can be collected later to the withdrawal address.
+
+#### Direct requests and pre-read state
+
+`planRebalance` and `rebalancePosition` accept `amount0Desired`, `amount1Desired`,
+`amount0Min`, `amount1Min`, fixed funding, and fixed refunds. In these general
+methods, omitted minima equal the desired caps, preserving exact behavior for
+positive targets. A zero target always selects flexible recovery. Without
+explicit bounds, the existing exact quote calculation remains unchanged.
+
+Planning is optional. Both general actions accept pre-read chain state (`pool`,
+`slot`, `position`, `lowerTick`, `upperTick`, and token routes). A caller can also
+build a complete `RebalancePlan` and spread it into execution:
 
 ```ts
 await client.rebalancePosition({ ...plan, imports })
 ```
 
-Only chain *state* is accepted piecemeal; the derived assertion set
-(`recovered`, `funded`, `refund`, the deposit) travels together as a plan,
-which succeeds or reverts as a unit.
+Complete derived accounting travels together: `oldLiquidity`, `recovered0/1`,
+`required0/1`, `funded0/1`, `refund0/1`, and `liquidityTarget`. Supplying only part
+of that accounting is an error. With flexible bounds, recovery and required
+amounts describe the preview; the explicit bounds and fixed transfers govern
+execution. Spreading a plan preserves its bounds and zero target without
+replacing them with estimates.
+
+Wallet accounts also supply `positionRecord` and `positionTokenId`, plus a
+`token0Record` or `token1Record` for each funded side. A wrapped side supplies its
+underlying asset record. Local accounts can select records automatically.
+`deadlineOffsetBlocks` defaults to 20 for every helper.
+
+The CLI offers the same guarantees through `shield-swap rebalance exact-amounts`,
+`to-liquidity`, and `from-amounts`. Without `--execute`, each prints a plan and
+stops. See `shield-swap rebalance --help` for the raw-unit flags.
 
 ### Create a pool
 

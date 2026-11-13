@@ -1,3 +1,9 @@
+import { rebalancePositionFromAmounts, type RebalancePositionFromAmountsParameters, type RebalancePositionFromAmountsReturnType } from '../actions/liquidity/rebalancePositionFromAmounts.js'
+import { planRebalanceFromAmounts, type PlanRebalanceFromAmountsParameters, type PlanRebalanceFromAmountsReturnType } from '../actions/liquidity/planRebalanceFromAmounts.js'
+import { rebalancePositionToLiquidity, type RebalancePositionToLiquidityParameters, type RebalancePositionToLiquidityReturnType } from '../actions/liquidity/rebalancePositionToLiquidity.js'
+import { planRebalanceToLiquidity, type PlanRebalanceToLiquidityParameters, type PlanRebalanceToLiquidityReturnType } from '../actions/liquidity/planRebalanceToLiquidity.js'
+import { rebalancePositionExactAmounts, type RebalancePositionExactAmountsParameters, type RebalancePositionExactAmountsReturnType } from '../actions/liquidity/rebalancePositionExactAmounts.js'
+import { planRebalanceExactAmounts, type PlanRebalanceExactAmountsParameters, type PlanRebalanceExactAmountsReturnType } from '../actions/liquidity/planRebalanceExactAmounts.js'
 import { planInventory, type PlanInventoryParameters } from '../actions/inventory/planInventory.js'
 import { rebalanceInventory, type RebalanceInventoryParameters } from '../actions/inventory/rebalanceInventory.js'
 import type { InventoryPlan, InventoryResult } from '@provablehq/veil-core'
@@ -269,6 +275,12 @@ export type ShieldSwapActions = {
   increaseLiquidity: (params: IncreaseLiquidityParameters) => Promise<IncreaseLiquidityReturnType>
   decreaseLiquidity: (params: DecreaseLiquidityParameters) => Promise<DecreaseLiquidityReturnType>
   collect: (params: CollectParameters) => Promise<CollectReturnType>
+  planRebalanceExactAmounts: (params: PlanRebalanceExactAmountsParameters) => Promise<PlanRebalanceExactAmountsReturnType>
+  rebalancePositionExactAmounts: (params: RebalancePositionExactAmountsParameters) => Promise<RebalancePositionExactAmountsReturnType>
+  planRebalanceToLiquidity: (params: PlanRebalanceToLiquidityParameters) => Promise<PlanRebalanceToLiquidityReturnType>
+  rebalancePositionToLiquidity: (params: RebalancePositionToLiquidityParameters) => Promise<RebalancePositionToLiquidityReturnType>
+  planRebalanceFromAmounts: (params: PlanRebalanceFromAmountsParameters) => Promise<PlanRebalanceFromAmountsReturnType>
+  rebalancePositionFromAmounts: (params: RebalancePositionFromAmountsParameters) => Promise<RebalancePositionFromAmountsReturnType>
   planRebalance: (params: PlanRebalanceParameters) => Promise<RebalancePlan>
   rebalancePosition: (params: RebalancePositionParameters) => Promise<RebalancePositionReturnType>
   burn: (params: BurnParameters) => Promise<BurnReturnType>
@@ -444,6 +456,12 @@ export function shieldSwapActions(config: ShieldSwapActionsConfig = {}) {
       increaseLiquidity: (p) => increaseLiquidity(client, withProofs(withTicks(withProgram(p)))),
       decreaseLiquidity: (p) => decreaseLiquidity(client, withProgram(p)),
       collect: (p) => collect(client, withProofs(withProgram(p))),
+      planRebalanceExactAmounts: (p) => planRebalanceExactAmounts(client, withProgram(p)),
+      rebalancePositionExactAmounts: (p) => rebalancePositionExactAmounts(client, withProofs(withTicks(withProgram(p)))),
+      planRebalanceToLiquidity: (p) => planRebalanceToLiquidity(client, withProgram(p)),
+      rebalancePositionToLiquidity: (p) => rebalancePositionToLiquidity(client, withProofs(withTicks(withProgram(p)))),
+      planRebalanceFromAmounts: (p) => planRebalanceFromAmounts(client, withProgram(p)),
+      rebalancePositionFromAmounts: (p) => rebalancePositionFromAmounts(client, withProofs(withTicks(withProgram(p)))),
       planRebalance: (p) => planRebalance(client, withProgram(p)),
       rebalancePosition: (p) => rebalancePosition(client, withProofs(withTicks(withProgram(p)))),
       burn: (p) => burn(client, withProgram(p)),

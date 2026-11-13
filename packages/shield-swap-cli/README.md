@@ -128,6 +128,7 @@ FeeMaster account by default, so a faucet-funded account needs no public credits
 | `history` | Swap history and the status of each swap, claiming what is still waiting; rebuilds a lost identity store from chain history. | Session (claiming needs the prover) |
 | `mint` | Opens a position: aligns a percentage range to the pool's tick spacing and deposits what the range consumes. | Funds on **both** sides of the pool |
 | `liquidity` | Adds to an open position, or removes liquidity and books it as owed. | A position; funds on both sides to add |
+| `rebalance` | Move a whole position to a new range with exact amounts, exact liquidity, or execution-time token budgets. | Account, position, raw token bounds |
 | `collect` | Sweeps what a position is owed into records, and with `--close` burns the drained position. | A position with something owed |
 | `liquidity-e2e` | The whole lifecycle in one run — mint, increase, decrease, collect, burn — with the waits each step needs. | Funds on both sides of the pool |
 
@@ -271,3 +272,24 @@ Without the environment variable, trading commands keep record coordination
 disabled and open no inventory journal. Inventory commands explicitly enable
 coordination and default to `.veil/inventory.sqlite`. Keep this file across
 restarts so pending transactions can be reconciled.
+
+### Rebalance a position
+
+Choose `exact-amounts`, `to-liquidity`, or `from-amounts`. The first quotes exact
+recovery, deposits, funding, and refunds for `--liquidity-target`; the second fixes
+liquidity while allowing bounded token costs; the third determines liquidity at
+execution. Flexible calls require a deployment supporting flexible rebalance.
+
+```sh
+shield-swap rebalance exact-amounts --pool <poolKey> --position <tokenId> --tick-lower=-400 --tick-upper=400 --liquidity-target 1000000
+shield-swap rebalance to-liquidity --pool <poolKey> --position <tokenId> --tick-lower=-400 --tick-upper=400 --liquidity-target 1000000 --amount0-desired 50000 --amount1-desired 50000
+shield-swap rebalance from-amounts --pool <poolKey> --position <tokenId> --tick-lower=-400 --tick-upper=400 --amount0-desired 50000 --amount1-desired 50000 --amount0-min 10000 --amount1-min 10000 --json
+```
+
+These commands only print plans. Add `--execute` to submit. All amounts are raw
+integer token units in the pool's on-chain token0/token1 order; the plan names
+both tokens. For flexible calls, `--funded0/1` and `--refund0/1` specify fixed
+transfers and default to zero. Unused tokens remain collectible on the successor.
+Omitted token minimums default to zero; supply minimums to constrain consumption.
+The entire old position closes, its owner and withdrawal address carry over,
+and no token swap occurs. The from-amounts liquidity preview is an estimate.

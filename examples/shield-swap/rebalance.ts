@@ -7,12 +7,10 @@
  * withdrawal address carry over, and any surplus returns to the withdrawal
  * address as private records.
  *
- * The part that surprises people: there is no slippage tolerance. The contract
- * re-derives every amount at execution and demands an exact match, so a trade
- * that moves the pool price after the plan is built reverts the whole
- * transaction. That is by design — exactness replaces tolerance. The cost of a
- * revert is the transaction fee, never funds, so the working loop on an active
- * pool is: build late, keep the deadline short, resubmit on revert.
+ * This example requests exact amounts. Price or fee changes can reject the
+ * quoted transaction. For execution-time recovery, use rebalancePositionToLiquidity
+ * with token bounds, or rebalancePositionFromAmounts to size liquidity at execution.
+ * Flexible surplus remains collectible on the successor rather than being refunded.
  *
  * SPENDS REAL FUNDS. Needs an existing position — run mint.ts first.
  */
@@ -48,7 +46,7 @@ export async function rebalance() {
   // principal at the current price plus all fees (including those not yet
   // checkpointed on chain), then solves for the largest liquidity the new
   // range supports from that alone. Nothing is spent by planning.
-  const plan = await client.planRebalance({
+  const plan = await client.planRebalanceExactAmounts({
     poolKey: position.poolKey,
     positionTokenId: position.positionTokenId,
     tickLower,
@@ -73,7 +71,7 @@ export async function rebalance() {
   const imports = await client.resolveDexImports({
     tokenPrograms: [token0.ammTokenProgram!, token1.ammTokenProgram!],
   })
-  const result = await client.rebalancePosition({ ...plan, imports })
+  const result = await client.rebalancePositionExactAmounts({ ...plan, imports })
   console.log(`rebalanced (tx ${result.transactionId})`)
   console.log(`successor position ${result.positionTokenId}`)
 

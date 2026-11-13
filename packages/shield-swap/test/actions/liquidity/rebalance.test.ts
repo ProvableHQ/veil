@@ -19,6 +19,7 @@ import { amountsForLiquidity, getSqrtPriceAtTickX128, formatU256Literal } from '
 import { EMPTY_MERKLE_PROOFS, formatMerkleProofPair } from '../../../src/utils/proofs.js'
 import { clearRouteCache, programToTokenId } from '../../../src/utils/routing.js'
 import { SHIELD_SWAP_REBALANCE_ROUTER } from '../../../src/constants.js'
+import * as sdk from '../../../src/index.js'
 
 const executeMock = vi.mocked(executeContract)
 const writeMock = vi.mocked(writeContract)
@@ -302,6 +303,26 @@ describe('planRebalance', () => {
     } as never)).rejects.toThrow(/exactly one sizing mode/)
   })
 
+  it('derives strict quote transfers when explicit exact amounts omit funding and refunds', async () => {
+    const plan = await planRebalance(offlineClient(), {
+      poolKey: POOL_KEY, positionTokenId: POSITION_ID,
+      tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: 500_000n,
+      amount0Desired: 9_901n, amount1Desired: 9_901n,
+      ...OVERRIDE_STATE,
+    })
+    expect(plan.funded0).toBe(0n)
+    expect(plan.refund0).toBe(10_010n)
+    expect(plan.refund1).toBe(10_121n)
+  })
+
+  it('rejects an executor call that mixes a target and quote-time funding budgets', async () => {
+    await expect(rebalancePosition(offlineClient(), {
+      poolKey: POOL_KEY, positionTokenId: POSITION_ID,
+      tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: 500_000n,
+      maxFunding0: 0n, maxFunding1: 0n,
+    })).rejects.toThrow(/exactly one sizing/)
+  })
+
   it('rejects a missing position', async () => {
     await expect(planRebalance(fakeClient('local'), {
       poolKey: POOL_KEY, positionTokenId: '999field',
@@ -311,6 +332,139 @@ describe('planRebalance', () => {
 })
 
 describe('rebalancePosition', () => {
+  it('exposes exact, liquidity-target, and amount-driven helpers through the client', async () => {
+    const actions = sdk.shieldSwapActions()(fakeClient('local'))
+    for (const name of ['rebalancePositionExactAmounts', 'rebalancePositionToLiquidity', 'rebalancePositionFromAmounts',
+      'planRebalanceExactAmounts', 'planRebalanceToLiquidity', 'planRebalanceFromAmounts']) {
+      expect(typeof actions[name as keyof typeof actions]).toBe('function')
+    }
+  })
+
+  it('keeps exact-amount helpers strict and rejects a zero target or widened bounds', async () => {
+    const params = { poolKey: POOL_KEY, positionTokenId: POSITION_ID, tickLower: OLD_LOWER, tickUpper: OLD_UPPER,
+      liquidityTarget: 500_000n, ...OVERRIDE_STATE }
+    const plan = await sdk.planRebalanceExactAmounts(offlineClient(), params)
+    executeMock.mockResolvedValue({ transactionId: 'at1exact', outputs: ['777field'] } as never)
+    await sdk.rebalancePositionExactAmounts(fakeClient('local'), { ...plan, proofs: async () => FIXTURE_PROOFS })
+    expect(executeMock.mock.calls[0]![1].inputs![2]).toContain(`amount0_min: ${plan.required0}u128`)
+    await expect(sdk.planRebalanceExactAmounts(offlineClient(), { ...params, liquidityTarget: 0n })).rejects.toThrow(/positive/)
+    await expect(sdk.rebalancePositionExactAmounts(fakeClient('local'), {
+      ...plan, amount0Desired: plan.required0, amount1Desired: plan.required1, amount0Min: 0n,
+    })).rejects.toThrow(/equal|exact/)
+  })
+
+  it('enforces a positive target and genuinely flexible bounds for the liquidity helper', async () => {
+    const params = { poolKey: POOL_KEY, positionTokenId: POSITION_ID, tickLower: OLD_LOWER, tickUpper: OLD_UPPER,
+      liquidityTarget: 500_000n, amount0Desired: 15_000n, amount1Desired: 15_000n, ...OVERRIDE_STATE }
+    const plan = await sdk.planRebalanceToLiquidity(offlineClient(), params)
+    expect(plan.amount0Min).toBe(0n)
+    executeMock.mockResolvedValue({ transactionId: 'at1target', outputs: ['777field'] } as never)
+    await sdk.rebalancePositionToLiquidity(fakeClient('local'), { ...plan, proofs: async () => FIXTURE_PROOFS })
+    const request = executeMock.mock.calls[0]![1].inputs![2]
+    expect(request).toContain('liquidity_target: 500000u128')
+    expect(request).toContain('amount0_desired: 15000u128')
+    expect(request).toContain('amount0_min: 0u128')
+    await expect(sdk.planRebalanceToLiquidity(offlineClient(), { ...params, liquidityTarget: 0n })).rejects.toThrow(/positive/)
+    await expect(sdk.planRebalanceToLiquidity(offlineClient(), {
+      ...params, amount0Min: 15_000n, amount1Min: 15_000n,
+    })).rejects.toThrow(/wider|flexible/)
+  })
+
+  it('uses amount sizing on the wallet path and rejects target or budget overrides', async () => {
+    const params = { poolKey: POOL_KEY, positionTokenId: POSITION_ID, tickLower: OLD_LOWER, tickUpper: OLD_UPPER,
+      amount0Desired: 10_000n, amount1Desired: 10_000n, ...OVERRIDE_STATE }
+    const plan = await sdk.planRebalanceFromAmounts(offlineClient(), params)
+    writeMock.mockResolvedValue('at1wallet')
+    const record = { type: 'record', program: 'shield_swap.aleo', recordname: 'PositionNFT' } as const
+    const result = await sdk.rebalancePositionFromAmounts(fakeClient('rpc'), {
+      ...plan, positionRecord: record, withdrawalAddress: 'aleo1payout', proofs: async () => FIXTURE_PROOFS,
+    })
+    expect(result.transactionId).toBe('at1wallet')
+    expect(writeMock.mock.calls[0]![1].inputs![0]).toBe(record)
+    expect(writeMock.mock.calls[0]![1].inputs![2]).toContain('liquidity_target: 0u128')
+    await expect(sdk.rebalancePositionFromAmounts(fakeClient('local'), {
+      ...plan, liquidityTarget: 1n,
+    } as never)).rejects.toThrow(/zero|0n/)
+    await expect(sdk.planRebalanceFromAmounts(offlineClient(), {
+      ...params, maxFunding0: 1n,
+    } as never)).rejects.toThrow(/maxFunding|fixed funding/)
+  })
+
+  it('preserves flexible caps, minima, and fixed transfers in a spread plan', async () => {
+    const plan = await planRebalance(offlineClient(), {
+      poolKey: POOL_KEY, positionTokenId: POSITION_ID,
+      tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: 500_000n,
+      amount0Desired: 15_000n, amount1Desired: 16_000n,
+      amount0Min: 9_000n, amount1Min: 8_000n,
+      funded0: 123n, refund1: 456n,
+      ...OVERRIDE_STATE,
+    })
+    expect(plan.funded0).toBe(123n)
+    expect(plan.refund0).toBe(0n)
+    expect(plan.refund1).toBe(456n)
+    executeMock.mockResolvedValue({ transactionId: 'at1flex', outputs: ['777field'] } as never)
+    await rebalancePosition(fakeClient('local'), {
+      ...plan, token0Record: TOKEN0_RECORD, proofs: async () => FIXTURE_PROOFS,
+    })
+    const request = executeMock.mock.calls[0]![1].inputs!.find(input =>
+      typeof input === 'string' && input.startsWith('{ old_liquidity:'),
+    )
+    expect(request).toContain('liquidity_target: 500000u128')
+    expect(request).toContain('amount0_desired: 15000u128')
+    expect(request).toContain('amount1_desired: 16000u128')
+    expect(request).toContain('amount0_min: 9000u128')
+    expect(request).toContain('amount1_min: 8000u128')
+    expect(request).toContain('funded0: 123u128')
+    expect(request).toContain('refund1: 456u128')
+  })
+
+  it('keeps the zero target separate from estimated liquidity even with equal bounds', async () => {
+    const plan = await planRebalance(offlineClient(), {
+      poolKey: POOL_KEY, positionTokenId: POSITION_ID,
+      tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: 0n,
+      amount0Desired: 10_000n, amount1Desired: 10_000n,
+      amount0Min: 10_000n, amount1Min: 10_000n,
+      ...OVERRIDE_STATE,
+    })
+    expect(plan.liquidityTarget).toBe(0n)
+    expect(plan.estimatedLiquidity).toBeGreaterThan(0n)
+    expect(plan.refund0).toBe(0n)
+    expect(plan.refund1).toBe(0n)
+    executeMock.mockResolvedValue({ transactionId: 'at1amounts', outputs: ['777field'] } as never)
+    await rebalancePosition(fakeClient('local'), { ...plan, proofs: async () => FIXTURE_PROOFS })
+    expect(executeMock.mock.calls[0]![1].inputs![2]).toContain('liquidity_target: 0u128')
+  })
+
+  it('supports one-sided amount budgets without taking a funding record', async () => {
+    const plan = await planRebalance(offlineClient(), {
+      poolKey: POOL_KEY, positionTokenId: POSITION_ID,
+      tickLower: 200, tickUpper: 400, liquidityTarget: 0n,
+      amount0Desired: 5_000n, amount1Desired: 0n,
+      amount0Min: 0n, amount1Min: 0n,
+      ...OVERRIDE_STATE,
+    })
+    expect(plan.required1).toBe(0n)
+    expect(plan.required0).toBeLessThanOrEqual(5_000n)
+    expect(plan.estimatedLiquidity).toBeGreaterThan(0n)
+    expect(plan.functionName).toBe('rebalance_plain_plain_none')
+  })
+
+  it.each([
+    { amount0Desired: -1n },
+    { amount0Desired: 1n << 128n },
+    { amount0Min: 10_001n },
+    { funded0: 1n, refund0: 1n },
+  ])('rejects invalid flexible bounds or transfers before signing: %#', async overrides => {
+    await expect(rebalancePosition(fakeClient('local'), {
+      poolKey: POOL_KEY, positionTokenId: POSITION_ID,
+      tickLower: OLD_LOWER, tickUpper: OLD_UPPER, liquidityTarget: 500_000n,
+      amount0Desired: 10_000n, amount1Desired: 10_000n,
+      amount0Min: 0n, amount1Min: 0n, ...overrides,
+      proofs: async () => FIXTURE_PROOFS,
+    })).rejects.toThrow(/u128|minimum|funding.*refund/)
+    expect(executeMock).not.toHaveBeenCalled()
+  })
+
   it('submits a no-funding plain pair through the router with the exact slots', async () => {
     executeMock.mockResolvedValue({ transactionId: 'at1tx', outputs: ['777field'] } as never)
     const client = fakeClient('local')
