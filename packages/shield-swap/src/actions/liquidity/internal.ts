@@ -13,6 +13,135 @@ import type { ComplianceProofs } from '../../utils/proofs.js'
 import { resolveTokenRoute, tokenIdToProgram, type TokenRoute } from '../../utils/routing.js'
 import { selectTokenRecord } from '../../utils/records.js'
 import { ROUTER_ADDRESSES, SHIELD_SWAP_LP_ROUTER } from '../../constants.js'
+import type { RebalanceAmountParameters } from './planRebalance.js'
+
+type RebalanceHelperInput = RebalanceAmountParameters & {
+  liquidityTarget?: bigint; maxFunding0?: bigint; maxFunding1?: bigint; required0?: bigint; required1?: bigint
+}
+
+/**
+ * Preserves exact quote semantics for the exact-amount helper.
+ * @param params Caller constraints, optionally including a complete plan.
+ * @returns The unchanged constraints after validation.
+ * @throws When a zero target or unequal token bounds would enable flexible recovery.
+ * @example
+ * exactRebalanceParameters({ liquidityTarget: 100n })
+ */
+export function exactRebalanceParameters<T extends RebalanceHelperInput>(params: T): T {
+  validateRebalanceAmounts(params)
+  if (params.liquidityTarget !== undefined && params.liquidityTarget <= 0n) {
+    throw new Error('Exact amounts require a positive liquidityTarget')
+  }
+  if ((params.amount0Min !== undefined && params.amount0Min !== (params.amount0Desired ?? params.required0)) ||
+      (params.amount1Min !== undefined && params.amount1Min !== (params.amount1Desired ?? params.required1))) {
+    throw new Error('Exact amounts require minimum and desired amounts to be equal')
+  }
+  return params
+}
+
+/**
+ * Defaults flexible token minimums to zero and requires explicit caps.
+ * @param params Fixed transfers and token bounds.
+ * @returns Constraints with both minimums and desired amounts specified.
+ * @throws When caps are absent or quote-time funding budgets are supplied.
+ * @example
+ * boundedRebalanceParameters({ amount0Desired: 100n, amount1Desired: 100n })
+ */
+export function boundedRebalanceParameters<T extends RebalanceHelperInput>(params: T) {
+  if (params.maxFunding0 !== undefined || params.maxFunding1 !== undefined) {
+    throw new Error('Use fixed funding (funded0/funded1), not maxFunding, with explicit token bounds')
+  }
+  if (params.amount0Desired === undefined || params.amount1Desired === undefined) {
+    throw new Error('Supply amount0Desired and amount1Desired for bounded rebalancing')
+  }
+  const result = { ...params, amount0Desired: params.amount0Desired, amount1Desired: params.amount1Desired,
+    amount0Min: params.amount0Min ?? 0n, amount1Min: params.amount1Min ?? 0n }
+  validateRebalanceAmounts(result)
+  return result
+}
+
+/**
+ * Requires exact successor liquidity with flexible recovery.
+ * @param params Positive target, token caps, and optional token minimums.
+ * @returns Constraints with zero minimums where omitted.
+ * @throws When the target is not positive or both bounds are exact.
+ * @example
+ * liquidityRebalanceParameters({ liquidityTarget: 100n, amount0Desired: 10n, amount1Desired: 10n })
+ */
+export function liquidityRebalanceParameters<T extends RebalanceHelperInput>(params: T) {
+  if (params.liquidityTarget === undefined || params.liquidityTarget <= 0n) {
+    throw new Error('Exact liquidity requires a positive liquidityTarget')
+  }
+  const result = boundedRebalanceParameters(params)
+  if (result.amount0Min === result.amount0Desired && result.amount1Min === result.amount1Desired) {
+    throw new Error('Flexible recovery requires a wider bound on at least one token; use rebalancePositionExactAmounts for exact bounds')
+  }
+  return { ...result, liquidityTarget: params.liquidityTarget }
+}
+
+/**
+ * Selects execution-time liquidity sizing without accepting a fixed target.
+ * @param params Token caps, minimums, and fixed transfers.
+ * @returns Constraints with a zero liquidity target.
+ * @throws When a positive target or quote-time funding budget is supplied.
+ * @example
+ * amountRebalanceParameters({ amount0Desired: 100n, amount1Desired: 100n })
+ */
+export function amountRebalanceParameters<T extends RebalanceHelperInput>(params: T) {
+  if (params.liquidityTarget !== undefined && params.liquidityTarget !== 0n) {
+    throw new Error('Amount-driven rebalancing requires a zero liquidityTarget')
+  }
+  return { ...boundedRebalanceParameters({ ...params, liquidityTarget: 0n }), liquidityTarget: 0n as const }
+}
+
+/**
+ * Validates rebalance bounds and accounting without contacting a network.
+ *
+ * @param params Token constraints and optional complete quote accounting.
+ * @throws When values exceed u128, bounds conflict, transfers conflict, or exact accounting does not balance.
+ * @example
+ * validateRebalanceAmounts({ liquidityTarget: 0n, amount0Desired: 100n, amount1Desired: 100n })
+ */
+export function validateRebalanceAmounts(params: RebalanceAmountParameters & {
+  liquidityTarget?: bigint; oldLiquidity?: bigint; recovered0?: bigint; recovered1?: bigint
+  required0?: bigint; required1?: bigint; maxFunding0?: bigint; maxFunding1?: bigint
+}): void {
+  if (params.liquidityTarget !== undefined && (params.maxFunding0 !== undefined || params.maxFunding1 !== undefined)) {
+    throw new Error('Pass exactly one sizing mode: liquidityTarget, or maxFunding0 and maxFunding1 together')
+  }
+  const fields = ['liquidityTarget', 'oldLiquidity', 'recovered0', 'recovered1', 'required0', 'required1',
+    'maxFunding0', 'maxFunding1', 'amount0Desired', 'amount1Desired', 'amount0Min', 'amount1Min',
+    'funded0', 'funded1', 'refund0', 'refund1'] as const
+  for (const key of fields) {
+    const value = params[key]
+    if (value !== undefined && (typeof value !== 'bigint' || value < 0n || value >= 1n << 128n)) {
+      throw new Error(`${key} must be a u128 bigint`)
+    }
+  }
+  if ((params.amount0Desired === undefined) !== (params.amount1Desired === undefined)) {
+    throw new Error('Supply amount0Desired and amount1Desired together')
+  }
+  if ((params.amount0Min !== undefined || params.amount1Min !== undefined) && params.amount0Desired === undefined) {
+    throw new Error('Token minimums require amount0Desired and amount1Desired')
+  }
+  const desired = [params.amount0Desired ?? params.required0, params.amount1Desired ?? params.required1]
+  const minimum = [params.amount0Min ?? desired[0], params.amount1Min ?? desired[1]]
+  const flexible = params.liquidityTarget === 0n || minimum.some((min, i) => min !== undefined && desired[i] !== undefined && min < desired[i]!)
+  for (const [i, cap] of desired.entries()) {
+    if (cap !== undefined && minimum[i]! > cap) throw new Error(`Token${i} minimum exceeds its desired amount`)
+    const funded = i === 0 ? params.funded0 : params.funded1
+    const refund = i === 0 ? params.refund0 : params.refund1
+    if ((funded ?? 0n) > 0n && (refund ?? 0n) > 0n) throw new Error(`Token${i} cannot have both funding and a refund`)
+    const recovered = i === 0 ? params.recovered0 : params.recovered1
+    const required = i === 0 ? params.required0 : params.required1
+    if (!flexible && cap !== undefined && required !== undefined && cap !== required) {
+      throw new Error(`Exact token${i} amount must match the liquidity target's quoted deposit`)
+    }
+    if (!flexible && cap !== undefined && recovered !== undefined && funded !== undefined && refund !== undefined && recovered + funded !== cap + refund) {
+      throw new Error(`Exact token${i} recovery and funding must equal its desired amount and refund`)
+    }
+  }
+}
 
 /** The Aleo zero address — the burn sink no payout slot may name. */
 const ZERO_ADDRESS = 'aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc'

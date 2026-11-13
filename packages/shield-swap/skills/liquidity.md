@@ -151,6 +151,31 @@ saveState(latest)
 
 `burn` requires an empty position — zero liquidity AND zero owed.
 
+## Rebalance the full position into a new range
+
+The old position closes completely and the successor stays in the same pool,
+with the same owner and withdrawal address. No token swap occurs. Choose the
+required guarantee, then inspect the plan before adding `--execute`:
+
+```sh
+shield-swap rebalance exact-amounts --pool <poolKey> --position <tokenId> --tick-lower=-400 --tick-upper=400 --liquidity-target 1000000
+shield-swap rebalance to-liquidity --pool <poolKey> --position <tokenId> --tick-lower=-400 --tick-upper=400 --liquidity-target 1000000 --amount0-desired 50000 --amount1-desired 50000
+shield-swap rebalance from-amounts --pool <poolKey> --position <tokenId> --tick-lower=-400 --tick-upper=400 --amount0-desired 50000 --amount1-desired 50000 --amount0-min 10000 --amount1-min 10000 --json
+```
+
+Amounts are raw integer token units in on-chain token0/token1 order. Replace the
+example caps, minima, target, and range with the intended constraints. The SDK
+methods are `rebalancePositionExactAmounts`, `rebalancePositionToLiquidity`, and
+`rebalancePositionFromAmounts`; corresponding `planRebalance*` methods only read.
+All execution helpers call the general `rebalancePosition` action.
+
+Exact amounts enforce the quote, so price or fee changes may reject it. Flexible
+calls require a deployment with flexible rebalance support. Funding and immediate
+refunds are fixed by `--funded0/1` and `--refund0/1` (default zero). Remaining tokens
+stay collectible on the successor and earn no fees. Token minimums default to
+zero; they constrain consumption, not a minimum liquidity result. From-amounts
+liquidity is determined at execution, and its preview is only an estimate.
+
 ## Failure modes
 
 | Symptom | Cause | Remedy |

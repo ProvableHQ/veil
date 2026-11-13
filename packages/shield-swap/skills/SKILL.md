@@ -175,7 +175,7 @@ not just its name:
 | --- | --- | --- |
 | Account setup, registration, airdrop | [startup.md](./startup.md) | "set up a shield-swap account and get tokens" |
 | Discover pools and swap privately (incl. several at once) | [swapping.md](./swapping.md) | "find pools and start swapping" |
-| Mint positions, add/remove liquidity | [liquidity.md](./liquidity.md) | "create a position", "add/remove liquidity" |
+| Mint positions, add/remove liquidity, rebalance ranges | [liquidity.md](./liquidity.md) | "create a position", "add/remove liquidity" |
 | Claim swap outputs, collect LP earnings | [collecting.md](./collecting.md) | "collect my earnings" |
 | Develop a trading application or agent on Shield Swap | [developing.md](./developing.md) | "I'm building a dApp / trading bot / agent on shield swap" |
 

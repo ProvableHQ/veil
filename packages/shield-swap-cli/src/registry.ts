@@ -71,6 +71,10 @@ export const COMMANDS: Record<string, Command> = {
     summary: 'Add to an open position, or remove liquidity and book it as owed.',
     load: () => import('./commands/liquidity.js'),
   },
+  rebalance: {
+    summary: 'Move a position to a new range with exact amounts, exact liquidity, or token budgets.',
+    load: () => import('./commands/rebalance.js'),
+  },
   collect: {
     summary: 'Sweep what a position is owed into records, optionally closing it.',
     load: () => import('./commands/collect.js'),
