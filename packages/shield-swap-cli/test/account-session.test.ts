@@ -230,6 +230,24 @@ describe('ensureKeyMaterial', () => {
     expect(stderr().filter((line) => line.includes('shield-swap account migrate'))).toHaveLength(1)
   })
 
+  it('preserves a key-only legacy state when an environment key belongs to another account', async () => {
+    const owner = newAccount()
+    const original = { network: 'testnet', privateKey: owner.privateKey, dexApiToken: 'ss_test' }
+    session.saveState(original)
+    const before = readFileSync(statePath())
+    process.env.ALEO_PRIVATE_KEY = newAccount().privateKey
+
+    const state = session.loadState('testnet')
+    expect(await codeOf(session.ensureKeyMaterial(state))).toBe('ADDRESS_MISMATCH')
+    expect(state).toEqual(original)
+    expect(readFileSync(statePath()).equals(before)).toBe(true)
+
+    // Retrying with the original key fills in the address without replacing credentials.
+    delete process.env.ALEO_PRIVATE_KEY
+    await session.ensureKeyMaterial(session.loadState('testnet'))
+    expect(readState()).toEqual({ ...original, address: owner.address })
+  })
+
   it('reads the account file once the legacy key is migrated, without a notice', async () => {
     const owner = newAccount()
     legacyState(owner)
@@ -294,6 +312,36 @@ describe('account lookup', () => {
     expect(await codeOf(lookup.resolveAccount({ state: { network: 'testnet', address: other.address } }))).toBe(
       'ADDRESS_MISMATCH',
     )
+  })
+
+  it.each(['environment', 'argument'] as const)(
+    'checks a key from the %s against a key-only legacy state',
+    async (source) => {
+      const owner = newAccount()
+      const other = newAccount()
+      const state = { network: 'testnet', privateKey: owner.privateKey }
+      const resolve = (privateKey: string) => {
+        if (source === 'environment') process.env.ALEO_PRIVATE_KEY = privateKey
+        return lookup.resolveAccount({ state, privateKey: source === 'argument' ? privateKey : undefined })
+      }
+
+      expect(await codeOf(resolve(other.privateKey))).toBe('ADDRESS_MISMATCH')
+      expect((await resolve(owner.privateKey)).account.address).toBe(owner.address)
+    },
+  )
+
+  it('checks a cached signer against the legacy key when the recorded address is omitted', async () => {
+    const owner = newAccount()
+    const other = newAccount()
+    const state = { network: 'testnet', privateKey: owner.privateKey }
+    process.env.ALEO_PRIVATE_KEY = other.privateKey
+
+    // An explicit address takes precedence over the fallback key's address.
+    const loaded = await lookup.resolveAccount({ state: { ...state, address: other.address } })
+    expect(loaded.account.address).toBe(other.address)
+
+    // Omitting that address must validate the legacy identity even after a successful lookup.
+    expect(await codeOf(lookup.resolveAccount({ state }))).toBe('ADDRESS_MISMATCH')
   })
 
   it('prefers a key in the environment to the account file, and never stores it', async () => {

@@ -55,6 +55,8 @@ export function accountName(state: Pick<ShieldSwapState, 'account'>, name?: stri
  * Checks the explicit key, key environment variables, account file, and key
  * in the state file, in that order. Environment keys are not saved. Reading
  * stored keys may access the macOS Keychain or prompt for a password.
+ * When no address is recorded, derives the expected address from the key
+ * in the state file before checking any signing source.
  *
  * Caches successful lookups for the process. Changes to the lookup options
  * or environment trigger another lookup; changes to files alone do not.
@@ -81,6 +83,10 @@ export async function resolveAccount(options: {
 }): Promise<LoadedAccount> {
   const { state } = options
   const name = accountName(state, options.name)
+  // A legacy state with only a key still identifies the account that must sign.
+  const expectedAddress =
+    state.address ??
+    (state.privateKey === undefined ? undefined : accountOfKey(state.privateKey, 'The key in the state file').address)
 
   // Hash lookup inputs so the cache index does not contain plaintext keys.
   // Use the resolved name so saving it in the state does not change the index.
@@ -99,13 +105,13 @@ export async function resolveAccount(options: {
     const loaded = await known
     // Check the expected address on every call, including cached lookups.
     // Let the keystore report a mismatch if the expected address has changed.
-    if (state.address === undefined || loaded.account.address === state.address) return loaded
+    if (expectedAddress === undefined || loaded.account.address === expectedAddress) return loaded
   }
 
   const lookup = loadAccount({
     ...(name === undefined ? {} : { name }),
     privateKey: options.privateKey,
-    expectedAddress: state.address,
+    expectedAddress,
     legacyKey: state.privateKey,
   }).then((loaded) => {
     if (loaded.source === 'legacy') {
