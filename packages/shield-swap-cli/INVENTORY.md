@@ -8,11 +8,14 @@ runtime requirements.
 
 ## Start
 
-Install `@provablehq/shield-swap-cli`. Inventory commands use the account saved
-by `shield-swap setup` for the selected network. To select another account, set
-`ALEO_PRIVATE_KEY` through the environment or a service manager's secret facility;
-`privateKeyEnv` changes the variable name. Inventory does not require DEX
-authentication. Amounts are integer token base units; credits use microcredits.
+Install `@provablehq/shield-swap-cli`. Inventory commands use the account of
+the selected network, found the way every command finds it: a key in the
+environment, then the stored [account file](README.md#accounts). To select
+another account, set `ALEO_PRIVATE_KEY` through the environment or a service
+manager's secret facility; `privateKeyEnv` changes the variable name. A key in
+that variable is used as given and is not checked against the account the
+network's state records. Inventory does not require DEX authentication.
+Amounts are integer token base units; credits use microcredits.
 
 ```sh
 shield-swap inventory inspect --asset credits.aleo

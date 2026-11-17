@@ -4,8 +4,9 @@
  * Run it as many times as needed; every step is check-then-act, so a failed
  * or interrupted run resumes where it stopped:
  *
- *   1. Key material        — reuse the stored account, import the user's
- *                            existing key, or (only with --new) generate one
+ *   1. Account             — find the key through the account keystore,
+ *                            import the user's existing key into an account
+ *                            file, or (only with --new) generate one there
  *   2. DEX authentication  — challenge/verify session with the account
  *   3. Provable gateway    — needs no credentials; a legacy consumer pair on
  *                            file is kept but unused on the default gateway
@@ -18,22 +19,27 @@
  *   shield-swap setup --new                            # brand-new account
  *   shield-swap setup --network mainnet --private-key-file <path>   # mainnet
  *   shield-swap setup --private-key-file <path>        # returning user (key in a file)
+ *   shield-swap setup --new --name trading             # a named account file
  *   shield-swap setup --invite-code CODE               # when access is locked
  *   shield-swap setup --api-url <origin>               # pin a DEX API deployment
  *
  * A private key is NEVER pasted into a conversation or command history: a
  * returning user either writes it to a file and passes the path, or exports
- * SHIELD_SWAP_PRIVATE_KEY (or SHIELD_SWAP_PRIVATE_KEY_FILE) in their own
- * shell. Other environment fallbacks: SHIELD_SWAP_INVITE_CODE,
- * SHIELD_SWAP_API_URL.
+ * ALEO_PRIVATE_KEY (or ALEO_PRIVATE_KEY_FILE) in their own shell. A key
+ * passed with --private-key-file, or generated with --new, is stored in the
+ * account file (~/.aleo/accounts/<name>.json by default). A key from the
+ * environment is used for the run and written nowhere. Other environment
+ * fallbacks: SHIELD_SWAP_INVITE_CODE, SHIELD_SWAP_API_URL.
  *
  * Exit codes: 0 ready · 2 needs input from the user (message says what) ·
  * 3 airdrop still pending · 1 anything else.
  *
- * State lands in ./.shield-swap/<network>/state.json (private key —
- * gitignore it, treat it like a wallet file). Nothing is shared
- * between networks, including the blinded identity store, whose reservations
- * are only meaningful against the chain they were checked on.
+ * State lands in ./.shield-swap/<network>/state.json: the address, the
+ * account name and the DEX credentials — gitignore it. This command never
+ * writes a private key there; a state file from an earlier version still
+ * holds one until `shield-swap account migrate` moves it. The state is not
+ * shared between networks, including the blinded identity store, whose
+ * reservations are only meaningful against the chain they were checked on.
  *
  * Mainnet moves real value, so it is never the default: pass
  * `--network mainnet` explicitly. The airdrop step is testnet-only and refuses
@@ -42,6 +48,7 @@
 import { readFileSync } from 'node:fs'
 import { help } from '../color.js'
 import { ApiError, DEFAULT_API_URL } from '@provablehq/shield-swap-sdk'
+import { KeystoreError } from '@provablehq/veil-aleo-sdk/node'
 import {
   loadState,
   saveState,
@@ -56,8 +63,9 @@ import {
 
 const USAGE = `shield-swap setup — bootstrap an account and get it funded
 
-  --new                         generate a brand-new account
+  --new                         generate a brand-new account and store it
   --private-key-file <path>     import an existing key, read from this file
+  --name <name>                 account name; default ALEO_ACCOUNT, then default
   --invite-code <code>          redeem an invite code when access is locked
   --api-url <origin>            pin a DEX API deployment
   --network <testnet|mainnet>   default testnet
@@ -65,9 +73,11 @@ const USAGE = `shield-swap setup — bootstrap an account and get it funded
 Every step is check-then-act, so re-running resumes where a failed run stopped.
 
 A private key is NEVER pasted into a conversation or command history: write it
-to a file and pass --private-key-file, or export SHIELD_SWAP_PRIVATE_KEY in your
-own shell. Other environment fallbacks: SHIELD_SWAP_PRIVATE_KEY_FILE,
-SHIELD_SWAP_INVITE_CODE, SHIELD_SWAP_API_URL.
+to a file and pass --private-key-file, or export ALEO_PRIVATE_KEY or
+ALEO_PRIVATE_KEY_FILE in your own shell. A generated or imported key is stored
+in the account file (~/.aleo/accounts/<name>.json); a key from the environment
+is used for the run and never stored. shield-swap account manages the account
+file. Other environment fallbacks: SHIELD_SWAP_INVITE_CODE, SHIELD_SWAP_API_URL.
 
 Exit codes: 0 ready · 2 needs input from the user · 3 airdrop still pending ·
 1 anything else.`
@@ -89,25 +99,28 @@ function argValue(argv: string[], flag: string): string | undefined {
   return i >= 0 ? argv[i + 1] : undefined
 }
 
+/** Keystore failures that need the user, not a retry. */
+const NEEDS_PERSON = new Set(['ACCOUNT_NOT_FOUND', 'KEY_NOT_STORED', 'PASSWORD_REQUIRED'])
+
 /**
- * Resolves the private key to import, when the caller is restoring an account.
+ * Reads the private key to import from the file named by `--private-key-file`.
  *
  * The key itself never travels through a conversation or the command line: it
- * is read from a file the user wrote, or from an env var the user exported in
- * their own shell.
+ * is read from a file the user wrote. A key the user exported in their own
+ * shell is not an import: the account lookup uses it for the run and it is
+ * never stored.
  *
  * @param argv Arguments after the subcommand name.
- * @returns The key to import, or undefined when this is a fresh account.
- * @throws If the named key file exists but is empty.
+ * @returns The key to store in the account file, or undefined when the flag
+ *   is absent.
+ * @throws If the named key file is empty.
  */
 function resolveImportKey(argv: string[]): string | undefined {
-  const keyFile = argValue(argv, '--private-key-file') ?? process.env.SHIELD_SWAP_PRIVATE_KEY_FILE
-  if (keyFile) {
-    const key = readFileSync(keyFile, 'utf8').trim()
-    if (!key) throw new Error(`private key file ${keyFile} is empty`)
-    return key
-  }
-  return process.env.SHIELD_SWAP_PRIVATE_KEY
+  const keyFile = argValue(argv, '--private-key-file')
+  if (!keyFile) return undefined
+  const key = readFileSync(keyFile, 'utf8').trim()
+  if (!key) throw new Error(`private key file ${keyFile} is empty`)
+  return key
 }
 
 /**
@@ -124,16 +137,17 @@ async function setup(argv: string[]): Promise<void> {
   const apiUrl = argValue(argv, '--api-url')?.replace(/\/$/, '')
   const allowGenerate = argv.includes('--new')
   const importKey = resolveImportKey(argv)
+  const name = argValue(argv, '--name')
 
-  // ── 1 + 2: key material ─────────────────────────────────────────────
+  // ── 1 + 2: account ──────────────────────────────────────────────────
   let state = loadState(network)
   console.log(`network: ${network}  ·  state: ${stateDir(network)}`)
 
   // Pin the DEX API deployment. The access grant, API token, and airdrop
   // job all live in one deployment's database — switching deployments
   // invalidates them, so clear them and let the later steps re-derive.
-  // Account key material and Provable API credentials are NOT touched
-  // (chain- and prover-scoped, not DEX-scoped).
+  // The account and Provable API credentials are NOT touched (chain- and
+  // prover-scoped, not DEX-scoped).
   if (apiUrl && apiUrl !== (state.apiUrl ?? DEFAULT_API_URL)) {
     state.apiUrl = apiUrl
     state.dexApiToken = undefined
@@ -143,22 +157,30 @@ async function setup(argv: string[]): Promise<void> {
     console.log(`✓ DEX API pinned to ${state.apiUrl} (deployment-scoped state reset)`)
   }
   try {
-    state = await ensureKeyMaterial(state, { importKey, allowGenerate })
+    state = await ensureKeyMaterial(state, { importKey, allowGenerate, name })
   } catch (err) {
     if (err instanceof NeedsConfigDecisionError) {
       console.error(
-        '\nNEEDS_CONFIG_DECISION: no shield-swap account is configured here. Ask the user ' +
-          'whether they already have one before creating anything. NEVER ask them to paste ' +
+        '\nNEEDS_CONFIG_DECISION: no Aleo account was found for this state directory. Ask the ' +
+          'user whether they already have one before creating anything. NEVER ask them to paste ' +
           'a private key into the conversation:\n' +
           '  - existing account → the user saves their key to a file themselves, then re-run\n' +
-          '    with --private-key-file <path> (or they export SHIELD_SWAP_PRIVATE_KEY in\n' +
+          '    with --private-key-file <path>, which stores it in the account file (or they\n' +
+          '    export ALEO_PRIVATE_KEY in their own shell, which is used for the run and\n' +
+          '    never stored)\n' +
           '  - brand new       → re-run with --new\n',
       )
       process.exit(2)
     }
+    if (err instanceof KeystoreError && NEEDS_PERSON.has(err.code)) {
+      // The account exists but its key cannot be reached without the user: no
+      // key in the environment, no stored key, or no password.
+      console.error(`\n${err.code}: ${err.message}\n`)
+      process.exit(2)
+    }
     throw err
   }
-  console.log(`✓ account: ${state.address}`)
+  console.log(`✓ account: ${state.address}${state.account ? ` (account file "${state.account}")` : ''}`)
 
   // Legacy Provable API credentials used to live in the state file. The
   // gateway needs none, so drop them rather than carry them forward.
@@ -172,7 +194,8 @@ async function setup(argv: string[]): Promise<void> {
   // The network must be passed explicitly: loadSession defaults to testnet, so
   // omitting it would authenticate and redeem against testnet while writing
   // the results into the network-scoped state this script resolved.
-  const { client, account } = await loadSession({ network })
+  // The name is passed again so an explicit --name also beats ALEO_ACCOUNT here.
+  const { client, account } = await loadSession({ network, name })
   console.log('✓ DEX API session established (challenge/verify)')
 
   // ── 4: invite-code access gate ───────────────────────────────────────

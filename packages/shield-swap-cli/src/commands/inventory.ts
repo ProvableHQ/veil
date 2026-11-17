@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+import { KeystoreError } from '@provablehq/veil-aleo-sdk/node'
+import { resolveAccount } from '../account-lookup.js'
 import { sqliteRecordInventoryStore } from '../storage.js'
 import { parseInventoryConfig } from '../inventory/config.js'
 import { runInventoryCycle, type InventoryCycleResult } from '../inventory/runner.js'
@@ -23,7 +25,7 @@ const HELP = `shield-swap inventory <inspect|plan|rebalance|run|status>
   -h, --help           Show this help
 
 Amounts in configuration are decimal strings in token base units.
-Uses ALEO_PRIVATE_KEY (or config.privateKeyEnv), then the Shield Swap account.
+Uses ALEO_PRIVATE_KEY (or config.privateKeyEnv), then the stored Aleo account.
 run stays in the foreground for a service manager; Ctrl-C preserves pending work.
 Node 22.13 or newer is required. No DEX authentication is needed.`
 
@@ -32,7 +34,8 @@ const print = (value: unknown) => output(value, data => console.log(JSON.stringi
 
 /**
  * Dispatches record inspection, planning, maintenance, and journal status.
- * Reads the configured account without DEX authentication. Only explicit
+ * Resolves the account through the keystore lookup, with the configured key
+ * variable as the first source, and needs no DEX authentication. Only explicit
  * --execute on rebalance or run may prove and submit transactions.
  * @param argv Arguments following `shield-swap inventory`.
  * @returns Resolves after output or shutdown; failures set the process exit code.
@@ -61,8 +64,19 @@ export async function main(argv: string[]): Promise<void> {
     if (values.asset) raw.policies = [{ asset: { program: values.asset, standard: values.standard, recordName: values['record-name'], amountField: values['amount-field'] }, target: { records: Number(values.records ?? '1') } }]
     const config = parseInventoryConfig(raw)
     if (command !== 'status' && !config.policies.length) throw new Error('Supply --asset or configure at least one inventory policy')
-    const privateKey = process.env[config.privateKeyEnv] || loadState(config.network).privateKey
-    if (!privateKey) throw new Error(`Set ${config.privateKeyEnv} or run shield-swap setup --network ${config.network} to configure an account`)
+    // The configured variable selects the signing key outright, as it always
+    // has: an inventory run may use another account than the one the network's
+    // state records. Without it the lookup is the one every command uses: the
+    // key variables, the account file, then a key still held by a legacy state
+    // file, checked against the address the state records.
+    const privateKey =
+      process.env[config.privateKeyEnv] ||
+      (
+        await resolveAccount({ state: loadState(config.network) }).catch((error: unknown) => {
+          if (!(error instanceof KeystoreError) || error.code !== 'ACCOUNT_NOT_FOUND') throw error
+          throw new Error(`Set ${config.privateKeyEnv} or run shield-swap setup --network ${config.network} to configure an account`, { cause: error })
+        })
+      ).account.privateKey
     const aleo = await loadNetwork(config.network)
     const store = await sqliteRecordInventoryStore(config.database)
     let scope: string | undefined
@@ -74,6 +88,7 @@ export async function main(argv: string[]): Promise<void> {
     try {
       // Inventory opts into coordination explicitly. Ordinary trading remains
       // unmanaged unless its session is configured with VEIL_INVENTORY_DB.
+      // The constructor derives its own account from the key.
       const { walletClient: client, account } = aleo.createAleoClient({ privateKey, networkUrl: config.networkUrl, useFeeMaster: config.useFeeMaster,
         records: aleo.createRemoteScanner({ waitForSync: true }),
         recordManagement: { enabled: true, store, chainId: config.chainId, maxFeeMicrocredits: config.maxFeeMicrocredits, tokenJoin: config.tokenJoin } })

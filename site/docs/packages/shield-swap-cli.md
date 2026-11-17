@@ -26,6 +26,40 @@ See the [CLI reference and examples](https://github.com/ProvableHQ/veil/blob/mai
 for commands and configuration. For an application that embeds trading,
 use the [Shield Swap SDK](./shield-swap) instead.
 
+## Accounts
+
+The command line does not keep the private key in its own state. It finds the
+key through the [account keystore](../api/provable-sdk/accountKeystore.md) of
+`@provablehq/veil-aleo-sdk/node`, in this order: `ALEO_PRIVATE_KEY`,
+`ALEO_PRIVATE_KEY_FILE` (with `SHIELD_SWAP_PRIVATE_KEY` and
+`SHIELD_SWAP_PRIVATE_KEY_FILE` as aliases), the account file
+`~/.aleo/accounts/<name>.json`, then a key still held by a `state.json` that an
+earlier version wrote. A key from the environment is used for that run and is
+never written to disk. The state file records the address and the account name,
+and the resolved key MUST derive that address.
+
+`shield-swap setup --new` generates an account and stores it in the account
+file; `--private-key-file <path>` stores an existing key there; `--name <name>`
+selects the account file. `shield-swap account` manages the file without
+contacting a network:
+
+```sh
+shield-swap account create                        # generate a key and store it
+shield-swap account import --key-file key.txt     # store an existing key
+shield-swap account show --json                   # address, name, storage; never the key
+shield-swap account protect --storage encrypted   # or keychain (macOS), or plaintext
+shield-swap account export                        # print the key; terminal only
+shield-swap account migrate --remove-legacy-key   # move a key out of state.json
+```
+
+Every account command takes `--name`, `--dir` and `--json`. Exit 0 means done,
+1 failed, 2 that a person is needed (no account, no stored key, no password, or
+no terminal), and 64 a usage error. `export`, `create --storage none` and
+`create --mnemonic` show a secret, so they run only at a terminal and refuse
+`--json`. See the
+[account reference](https://github.com/ProvableHQ/veil/blob/main/packages/shield-swap-cli/README.md#accounts)
+for every flag, the output shapes and the migration from earlier state files.
+
 ## Record inventory
 
 Private balances consist of individually spendable records. A trade needs a
@@ -35,8 +69,9 @@ splits before trading. It supports native credits, ARC20, ARC22, and compatible
 custom assets, and requires Node 22.13+ for its SQLite journal. SDK packages
 retain their existing runtime support.
 
-Inventory commands use the saved Shield Swap account or a key supplied through
-the environment. They do not require DEX authentication. Start by inspecting
+Inventory commands find the key as every command does (see
+[Accounts](#accounts)), after the variable named by `privateKeyEnv`. They do
+not require DEX authentication. Start by inspecting
 the account's credits and previewing a plan for four records:
 
 ```sh
