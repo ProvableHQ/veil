@@ -172,14 +172,14 @@ plaintext storage: a file only its owner can read. `setup` stops with
 ### `shield-swap account`
 
 ```sh
-shield-swap account create                        # generate a key and store it
-shield-swap account create --mnemonic             # from a new recovery phrase, shown once
-shield-swap account import --key-file key.txt     # store an existing key
+shield-swap account create                        # Generate and store an account.
+shield-swap account create --mnemonic             # Generate an account and display its recovery phrase.
+shield-swap account import --key-file key.txt     # Import a private key.
 shield-swap account import --mnemonic-file phrase.txt --index 0
-shield-swap account show --json                   # address, name, storage; never the key
-shield-swap account protect --storage encrypted   # or keychain, or plaintext
-shield-swap account export                        # print the key; terminal only
-shield-swap account migrate --remove-legacy-key   # move a key out of state.json
+shield-swap account show --json                   # Inspect account details without displaying the key.
+shield-swap account protect --storage encrypted   # Encrypt the stored key with a password.
+shield-swap account export                        # Display the key after terminal confirmation.
+shield-swap account migrate --remove-legacy-key   # Migrate the key and remove it from state.json.
 ```
 
 | Command | Effect |

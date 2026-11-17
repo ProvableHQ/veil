@@ -33,12 +33,17 @@ Node 22.13 or newer is required. No DEX authentication is needed.`
 const print = (value: unknown) => output(value, data => console.log(JSON.stringify(data, (_, item) => typeof item === 'bigint' ? item.toString() : item, 2)))
 
 /**
- * Dispatches record inspection, planning, maintenance, and journal status.
- * Signs with the key in the configured variable when it is set, and otherwise
- * with the account every command resolves. Needs no DEX authentication. Only
- * explicit --execute on rebalance or run may prove and submit transactions.
- * @param argv Arguments following `shield-swap inventory`.
- * @returns Resolves after output or shutdown; failures set the process exit code.
+ * Inspects private records, plans joins and splits, or runs record maintenance.
+ *
+ * Uses the key in the configured environment variable when nonempty;
+ * otherwise resolves the account from the session settings. Does not require
+ * DEX authentication. Only `rebalance` or `run` with `--execute` can prove
+ * and submit transactions.
+ *
+ * @param argv Subcommand and flags following `shield-swap inventory`.
+ * @returns Resolves after printing results or stopping the foreground runner.
+ *   Failures set the process exit code.
+ *
  * @example
  * await main(['plan', '--asset', 'credits.aleo', '--records', '4', '--json'])
  */
@@ -64,11 +69,8 @@ export async function main(argv: string[]): Promise<void> {
     if (values.asset) raw.policies = [{ asset: { program: values.asset, standard: values.standard, recordName: values['record-name'], amountField: values['amount-field'] }, target: { records: Number(values.records ?? '1') } }]
     const config = parseInventoryConfig(raw)
     if (command !== 'status' && !config.policies.length) throw new Error('Supply --asset or configure at least one inventory policy')
-    // The configured variable selects the signing key outright, so an
-    // inventory run may use another account than the one the network's state
-    // records. Without it the lookup is the one every command uses: the key
-    // variables, the account file, then a key held by the state file, checked
-    // against the address the state records.
+    // A nonempty configured key bypasses the saved account and address check.
+    // Otherwise, use the session's account lookup and address validation.
     const privateKey =
       process.env[config.privateKeyEnv] ||
       (
@@ -88,7 +90,6 @@ export async function main(argv: string[]): Promise<void> {
     try {
       // Inventory opts into coordination explicitly. Ordinary trading remains
       // unmanaged unless its session is configured with VEIL_INVENTORY_DB.
-      // The constructor derives its own account from the key.
       const { walletClient: client, account } = aleo.createAleoClient({ privateKey, networkUrl: config.networkUrl, useFeeMaster: config.useFeeMaster,
         records: aleo.createRemoteScanner({ waitForSync: true }),
         recordManagement: { enabled: true, store, chainId: config.chainId, maxFeeMicrocredits: config.maxFeeMicrocredits, tokenJoin: config.tokenJoin } })

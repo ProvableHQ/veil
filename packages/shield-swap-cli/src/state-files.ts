@@ -1,50 +1,63 @@
 /**
- * Names the `shield-swap` state files and writes them atomically.
+ * Locates Shield Swap state files and saves updates atomically.
  *
- * Internal to the package: `session.ts` re-exports what scripts need, and the
- * `account` command uses the rest to find a key held in the state directory.
+ * Each network has a separate state file. Testnet also supports a state file
+ * directly under the state root.
  */
 import { existsSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-/** Networks that each have a state directory of their own. */
+/**
+ * Identifies the network whose session state is being read or written.
+ */
 type StateNetwork = 'testnet' | 'mainnet'
 
-/** Root of the state directory: `SHIELD_SWAP_STATE_DIR`, or `./.shield-swap`. */
+/**
+ * Sets the root directory for session state.
+ *
+ * Uses `SHIELD_SWAP_STATE_DIR`, or `.shield-swap` in the working directory,
+ * when this module is loaded.
+ *
+ * @example
+ * const testnetDir = join(STATE_ROOT, 'testnet')
+ */
 export const STATE_ROOT = process.env.SHIELD_SWAP_STATE_DIR ?? join(process.cwd(), '.shield-swap')
 
-/** State file directly under the state root. Read for testnet when `testnet/state.json` does not exist. */
+/**
+ * Identifies the fallback testnet state file at `<state root>/state.json`.
+ *
+ * Used only when `<state root>/testnet/state.json` does not exist.
+ *
+ * @example
+ * const hasFallback = existsSync(LEGACY_STATE_PATH)
+ */
 export const LEGACY_STATE_PATH = join(STATE_ROOT, 'state.json')
 
 /**
- * Names the state file of one network.
+ * Builds the path to a network's state file without checking whether it exists.
  *
- * Builds the path without checking the disk.
- *
- * @param network Network the state belongs to.
- * @returns `<state root>/<network>/state.json`, whether or not it exists.
+ * @param network Network whose state file is needed.
+ * @returns `<state root>/<network>/state.json`.
  *
  * @example
- * const path = statePath('mainnet') // <state root>/mainnet/state.json
+ * const path = statePath('mainnet')
  */
 export function statePath(network: StateNetwork): string {
   return join(STATE_ROOT, network, 'state.json')
 }
 
 /**
- * Finds the state file a network's session is read from.
+ * Finds an existing state file for the selected network.
  *
- * For testnet, falls back to `state.json` directly under the state root when
- * `testnet/state.json` does not exist. Checks which files exist and reads
- * neither.
+ * Checks `<state root>/<network>/state.json` first. For testnet, also checks
+ * `<state root>/state.json`. Does not read file contents.
  *
- * @param network Network the state belongs to.
- * @returns The path of the file that exists, or `undefined` when the network
- *   has no state yet.
+ * @param network Network whose saved session is needed.
+ * @returns The first existing path, or `undefined` if neither file exists.
  *
  * @example
  * const path = existingStatePath('testnet')
- * if (path === undefined) console.error('run shield-swap setup first')
+ * if (path === undefined) console.error('Run shield-swap setup first.')
  */
 export function existingStatePath(network: StateNetwork): string | undefined {
   if (existsSync(statePath(network))) return statePath(network)
@@ -52,12 +65,11 @@ export function existingStatePath(network: StateNetwork): string | undefined {
 }
 
 /**
- * Lists every state file the state directory can hold.
+ * Lists the paths where Shield Swap reads session state.
  *
- * Builds the paths without checking the disk.
+ * Does not check whether the files exist.
  *
- * @returns The testnet and mainnet state files and the one directly under the
- *   state root, whether or not they exist.
+ * @returns The testnet, mainnet, and fallback testnet state paths.
  *
  * @example
  * const present = stateFiles().filter((path) => existsSync(path))
@@ -67,25 +79,23 @@ export function stateFiles(): string[] {
 }
 
 /**
- * Writes a state file atomically, readable by its owner only.
+ * Saves state as JSON without exposing a partially written target file.
  *
- * The content goes to a temporary file created at mode 0600 and is then
- * renamed over the target, so a crash mid-write cannot truncate the state and
- * the content is never readable by others, even briefly. The directory MUST
- * exist.
+ * Creates a temporary file with mode 0600, then renames it over the target.
+ * The parent directory MUST exist. On POSIX systems, only the owner can
+ * read or write the file.
  *
- * @param target Path of the state file.
- * @param state Content, written as JSON with two-space indentation.
- * @throws When the directory does not exist or the file cannot be written. The
- *   target is then left as it was.
+ * @param target State file to create or replace.
+ * @param state Data to serialize as JSON with two-space indentation.
+ * @throws If serialization, the temporary write, or the rename fails.
+ *   The existing target file remains unchanged.
  *
  * @example
- * writeStateFile(statePath('testnet'), { network: 'testnet', address })
+ * writeStateFile(statePath('testnet'), { network: 'testnet' })
  */
 export function writeStateFile(target: string, state: object): void {
   const tmp = `${target}.tmp`
-  // A leftover temporary file keeps its own mode, so it is removed and the
-  // new one is created at 0600 from the start.
+  // Remove any previous temporary file so its permissions cannot be reused.
   rmSync(tmp, { force: true })
   writeFileSync(tmp, JSON.stringify(state, null, 2), { mode: 0o600 })
   renameSync(tmp, target)

@@ -18,8 +18,7 @@ test('built binary lists inventory and loads its help', async () => {
 })
 
 test('built binary runs the account commands against an empty accounts directory', async () => {
-  // A sealed environment: no key, account or password variable of the caller
-  // reaches the child, and its home is a temporary directory.
+  // Run with a temporary home and no inherited account or credential settings.
   const directory = await mkdtemp(join(tmpdir(), 'shield-account-package-'))
   const env = { PATH: process.env.PATH, HOME: directory, USERPROFILE: directory, NO_COLOR: '1',
     ALEO_ACCOUNTS_DIR: join(directory, 'accounts'), SHIELD_SWAP_STATE_DIR: join(directory, 'state') }
@@ -29,7 +28,7 @@ test('built binary runs the account commands against an empty accounts directory
     assert.match((await exec(process.execPath, [binary, '--help'])).stdout, /account/)
     assert.match((await account('--help')).stdout, /create[\s\S]*import[\s\S]*show[\s\S]*protect[\s\S]*export[\s\S]*migrate/)
 
-    // No account yet: a person is needed, and the error is one JSON object.
+    // A missing account must produce exit code 2 and a JSON error.
     const missing = await account('show', '--json')
     assert.equal(missing.code, 2)
     assert.equal(JSON.parse(missing.stdout).error.code, 'ACCOUNT_NOT_FOUND')
@@ -42,7 +41,7 @@ test('built binary runs the account commands against an empty accounts directory
     assert.doesNotMatch(created.stdout + created.stderr, /APrivateKey1/)
     assert.deepEqual(JSON.parse((await account('show', '--json')).stdout), stored)
 
-    // Not a terminal: the key is not printed.
+    // Refuse key export when output is captured instead of sent to a terminal.
     const exported = await account('export')
     assert.equal(exported.code, 2)
     assert.match(exported.stderr, /^TERMINAL_REQUIRED: /)

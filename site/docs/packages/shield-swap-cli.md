@@ -44,12 +44,12 @@ selects the account file. `shield-swap account` manages the file without
 contacting a network:
 
 ```sh
-shield-swap account create                        # generate a key and store it
-shield-swap account import --key-file key.txt     # store an existing key
-shield-swap account show --json                   # address, name, storage; never the key
-shield-swap account protect --storage encrypted   # or keychain (macOS), or plaintext
-shield-swap account export                        # print the key; terminal only
-shield-swap account migrate --remove-legacy-key   # move a key out of state.json
+shield-swap account create                        # Generate and store an account.
+shield-swap account import --key-file key.txt     # Import a private key.
+shield-swap account show --json                   # Inspect account details without displaying the key.
+shield-swap account protect --storage encrypted   # Encrypt the stored key with a password.
+shield-swap account export                        # Display the key after terminal confirmation.
+shield-swap account migrate --remove-legacy-key   # Migrate the key and remove it from state.json.
 ```
 
 Every account command takes `--name`, `--dir` and `--json`. Exit 0 means done,

@@ -4,13 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PASSWORD, mode, openSandbox, posix, type Sandbox } from './account-sandbox.js'
 
 /**
- * Covers how the command line finds its account: the lookup behind
- * `loadSession`, `ensureKeyMaterial`, `setup` and `inventory`, and what the
- * state file holds.
+ * Tests account lookup, setup, and saved session state.
  *
- * Runs in a sealed environment (see `account-sandbox.ts`). The DEX API and the
- * chain are never contacted: the session's actions are replaced where a test
- * builds one.
+ * Uses temporary files and mocked terminal and Keychain access from
+ * `account-sandbox.ts`. Replaces DEX authentication to keep session tests
+ * independent of the network.
  */
 
 vi.setConfig({ testTimeout: 60_000 })
@@ -21,8 +19,7 @@ let lookup: typeof import('../src/account-lookup.js')
 
 beforeEach(async () => {
   sandbox = await openSandbox()
-  // The session authenticates with the DEX API as it is built. Replace that
-  // boundary; the key lookup and the client construction stay real.
+  // Mock DEX authentication while exercising account lookup and client creation.
   vi.doMock('@provablehq/shield-swap-sdk', async () => ({
     ...(await vi.importActual<object>('@provablehq/shield-swap-sdk')),
     shieldSwapActions: () => () => ({ authenticateShieldSwap: async () => undefined }),
@@ -49,7 +46,7 @@ function readState(network = 'testnet'): Record<string, unknown> {
   return JSON.parse(readFileSync(statePath(network), 'utf8'))
 }
 
-/** Writes a state file that holds its private key, which the lookup reads as the last source. */
+/** Writes a state file containing the fallback key for account lookup. */
 function legacyState(owner: { address: string; privateKey: string }, network = 'testnet'): void {
   mkdirSync(dirname(statePath(network)), { recursive: true })
   writeFileSync(
@@ -59,7 +56,7 @@ function legacyState(owner: { address: string; privateKey: string }, network = '
   )
 }
 
-/** Reports whether any file under a directory contains a secret. */
+/** Searches test files recursively for secret text without printing it. */
 function onDisk(directory: string, secret: string): boolean {
   if (!existsSync(directory)) return false
   return readdirSync(directory, { recursive: true, withFileTypes: true }).some(
@@ -67,7 +64,7 @@ function onDisk(directory: string, secret: string): boolean {
   )
 }
 
-/** The lines the command wrote to standard error through `console.error`. */
+/** Collects captured console.error calls as lines of text. */
 function stderr(): string[] {
   return vi.mocked(console.error).mock.calls.map((parts) => parts.map(String).join(' '))
 }
@@ -85,7 +82,7 @@ async function codeOf(call: Promise<unknown>): Promise<string> {
 describe('saveState', () => {
   it('writes the state for its owner only, through a temporary file created at that mode', () => {
     mkdirSync(dirname(statePath()), { recursive: true })
-    // A temporary file left behind by an interrupted write, readable by others.
+    // Simulate an interrupted write that left a temporary file with mode 0644.
     writeFileSync(`${statePath()}.tmp`, 'stale', { mode: 0o644 })
     session.saveState({ network: 'testnet', address: 'aleo1example', account: 'default', dexApiToken: 'ss_test' })
     expect(readState()).toEqual({ network: 'testnet', address: 'aleo1example', account: 'default', dexApiToken: 'ss_test' })
@@ -115,7 +112,7 @@ describe('ensureKeyMaterial', () => {
       expect(mode(statePath())).toBe(0o600)
     }
 
-    // A second run finds the stored account and changes nothing.
+    // Repeated setup must reuse the stored account.
     const before = readFileSync(stored!.path)
     const again = await session.ensureKeyMaterial(session.loadState('testnet'), { allowGenerate: true })
     expect(again.address).toBe(state.address)
@@ -192,12 +189,12 @@ describe('ensureKeyMaterial', () => {
     process.env.ALEO_PRIVATE_KEY = owner.privateKey
     const state = await session.ensureKeyMaterial(session.loadState('testnet'))
     expect(state.address).toBe(owner.address)
-    // No account file exists, so there is no name to record.
+    // An environment key without an account file supplies no saved account name.
     expect(readState()).toEqual({ network: 'testnet', address: owner.address })
     expect(existsSync(sandbox.dir)).toBe(false)
     expect(onDisk(sandbox.root, owner.privateKey)).toBe(false)
 
-    // Without the variable the key is gone, and nothing is generated in its place.
+    // Removing the environment key must not generate a replacement account.
     delete process.env.ALEO_PRIVATE_KEY
     expect(await codeOf(session.ensureKeyMaterial(session.loadState('testnet'), { allowGenerate: true }))).toBe(
       'ACCOUNT_NOT_FOUND',
@@ -219,7 +216,7 @@ describe('ensureKeyMaterial', () => {
     legacyState(owner)
     const state = await session.ensureKeyMaterial(session.loadState('testnet'))
     expect(state.address).toBe(owner.address)
-    // Nothing is moved without being asked: the key stays where it was.
+    // Account lookup preserves keys already stored in session state.
     expect(readState().privateKey === owner.privateKey).toBe(true)
     expect(readState().account).toBeUndefined()
     expect(existsSync(sandbox.dir)).toBe(false)
@@ -228,7 +225,7 @@ describe('ensureKeyMaterial', () => {
     expect(notices[0]).toContain('--network testnet')
     expect(notices[0]!.includes(owner.privateKey)).toBe(false)
 
-    // The same lookup again in this process says nothing more.
+    // Cached lookups must not repeat the migration notice.
     await lookup.resolveAccount({ state: session.loadState('testnet') })
     expect(stderr().filter((line) => line.includes('shield-swap account migrate'))).toHaveLength(1)
   })
@@ -241,7 +238,7 @@ describe('ensureKeyMaterial', () => {
     expect(loaded.source).toBe('account-file')
     expect(stderr()).toEqual([])
 
-    // A legacy key that belongs to another account than the file is an error.
+    // Reject a state key that conflicts with the selected account file.
     legacyState(newAccount(), 'mainnet')
     expect(await codeOf(lookup.resolveAccount({ state: session.loadState('mainnet') }))).toBe('ADDRESS_MISMATCH')
   })
@@ -254,7 +251,7 @@ describe('ensureKeyMaterial', () => {
     process.env.ALEO_ACCOUNT = 'second'
     const state = await session.ensureKeyMaterial(session.loadState('testnet'))
     expect(state.account).toBe('first')
-    // An explicit name is a decision, and is recorded.
+    // Save an explicitly selected account name in session state.
     expect((await session.ensureKeyMaterial(session.loadState('testnet'), { name: 'second' })).account).toBe('second')
   })
 })
@@ -274,7 +271,7 @@ describe('account lookup', () => {
     process.env.ALEO_ACCOUNT = 'from-env'
     expect(await selected({ account: 'recorded' })).toBe(accounts['from-env']!.address)
     expect(await selected({ account: 'recorded' }, 'flag')).toBe(accounts.flag!.address)
-    // An empty variable counts as unset.
+    // Ignore an empty ALEO_ACCOUNT when selecting the account name.
     process.env.ALEO_ACCOUNT = ''
     expect(await selected({ account: 'recorded' })).toBe(accounts.recorded!.address)
   })
@@ -289,10 +286,10 @@ describe('account lookup', () => {
     await expect(failure).rejects.toThrow(owner.address)
     await expect(failure).rejects.toThrow(other.address)
 
-    // The address check also catches a wrong selection after a correct one.
+    // Validate the expected address even after a successful cached lookup.
     await lookup.resolveAccount({ state: { network: 'testnet', address: owner.address } })
     expect(await codeOf(lookup.resolveAccount({ state }))).toBe('ADDRESS_MISMATCH')
-    // A key from the environment is held to the same check.
+    // Validate environment keys against the saved address.
     process.env.ALEO_PRIVATE_KEY = other.privateKey
     expect(await codeOf(lookup.resolveAccount({ state: { network: 'testnet', address: other.address } }))).toBe(
       'ADDRESS_MISMATCH',
@@ -313,7 +310,7 @@ describe('account lookup', () => {
     expect(loaded.account.address).toBe(owner.address)
     expect(onDisk(sandbox.dir, owner.privateKey)).toBe(false)
 
-    // An empty variable is an error, not a fall-through.
+    // Reject an empty key variable before considering other sources.
     process.env.ALEO_PRIVATE_KEY = ''
     expect(await codeOf(lookup.resolveAccount({ state }))).toBe('EMPTY_KEY_SOURCE')
   })
@@ -324,7 +321,7 @@ describe('account lookup', () => {
     const loaded = await lookup.resolveAccount({ state: { network: 'testnet' }, privateKey: owner.privateKey })
     expect(loaded.source).toBe('argument')
     expect(loaded.account.address).toBe(owner.address)
-    // It is still held to the address the state records.
+    // Validate an explicitly supplied key against the saved address.
     expect(
       await codeOf(
         lookup.resolveAccount({ state: { network: 'testnet', address: newAccount().address }, privateKey: owner.privateKey }),
@@ -335,12 +332,12 @@ describe('account lookup', () => {
   it('unlocks an encrypted account once per process', async () => {
     const owner = newAccount()
     await sandbox.keystore.saveAccount(owner, { storage: 'encrypted', password: PASSWORD })
-    // The stand-in Keychain holds no saved password, so the prompt is asked.
+    // Prompt when the mock Keychain has no saved password.
     sandbox.flags.terminal = true
     sandbox.answers.push(PASSWORD)
     const state = await session.ensureKeyMaterial(session.loadState('testnet'))
     expect(state).toMatchObject({ address: owner.address, account: 'default' })
-    // Setup then builds the session from the state it has just written.
+    // Load the saved session to check that setup and session reuse the lookup.
     const loaded = await lookup.resolveAccount({ state: session.loadState('testnet') })
     expect(loaded.account.address).toBe(owner.address)
     expect(sandbox.prompts).toHaveLength(1)
@@ -394,8 +391,7 @@ describe('setup', () => {
   let loadSession: ReturnType<typeof vi.fn>
 
   beforeEach(async () => {
-    // The steps after the account need the DEX API. Stop there: what is under
-    // test is how setup finds, creates and records the account.
+    // Stop setup before DEX authentication; this test covers account storage.
     loadSession = vi.fn(async () => {
       throw new Error('stopped before the network')
     })
@@ -414,7 +410,7 @@ describe('setup', () => {
 
   it('generates and stores an account with --new', async () => {
     const outcome = await sandbox.run(setup, ['--new'])
-    // The account step is done; the run stops where the network would begin.
+    // Confirm setup reaches the mocked authentication step after saving the account.
     expect(outcome.status).toBe(1)
     expect(outcome.err).toContain('stopped before the network')
     expect(loadSession).toHaveBeenCalledWith({ network: 'testnet', name: undefined })

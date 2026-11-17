@@ -3,13 +3,12 @@ import { describe, expect, it } from 'vitest'
 import { readHiddenLine, type HiddenInput } from '../src/terminal.js'
 
 /**
- * Covers the hidden prompt a key or a recovery phrase is pasted into.
+ * Tests hidden input, line editing, cancellation, and terminal mode restoration.
  *
- * A stand-in stream takes the place of the terminal, so nothing is read from
- * the developer's own.
+ * Simulated streams supply input and capture prompt output.
  */
 
-/** A stand-in for a terminal input stream that records its mode changes. */
+/** Simulates terminal input and records raw mode and flow changes. */
 function fakeInput() {
   const emitter = new EventEmitter()
   const modes: boolean[] = []
@@ -25,7 +24,7 @@ function fakeInput() {
   return { input, emitter, modes, isFlowing: () => flowing }
 }
 
-/** Collects what a prompt writes to the terminal. */
+/** Captures writes to a simulated terminal output stream. */
 function fakeOutput() {
   const written: string[] = []
   return { written, write: (text: string) => void written.push(text) }
@@ -40,7 +39,7 @@ describe('readHiddenLine', () => {
     emitter.emit('data', Buffer.from('not shown'))
     emitter.emit('data', '\r')
     expect(await line).toBe('not shown')
-    // Only the prompt and the line break that Enter did not produce.
+    // Prompt output must contain no typed characters.
     expect(output.written).toEqual(['Secret: ', '\n'])
     expect(modes).toEqual([true, false])
     expect(isFlowing()).toBe(false)

@@ -1,16 +1,17 @@
 /**
- * Resolves the signing account for every `shield-swap` command.
+ * Loads signing accounts for Shield Swap sessions.
  *
- * Internal to the package. Every command that signs calls
- * {@link resolveAccount}, so they all apply the same lookup order and the same
- * checks against the state file.
+ * Checks the resolved address against the session state and caches successful
+ * lookups to avoid repeated password prompts.
  */
 import { createHash } from 'node:crypto'
 import { privateKeyToAccount } from '@provablehq/veil-aleo-sdk'
 import { KeystoreError, loadAccount, type LoadedAccount } from '@provablehq/veil-aleo-sdk/node'
 import type { ShieldSwapState } from './session.js'
 
-/** Environment variables that change what a lookup returns. A changed value makes a new lookup. */
+/**
+ * Lists environment variables whose values affect account lookup.
+ */
 const LOOKUP_VARIABLES = [
   'ALEO_PRIVATE_KEY',
   'SHIELD_SWAP_PRIVATE_KEY',
@@ -23,27 +24,25 @@ const LOOKUP_VARIABLES = [
   'USERPROFILE',
 ] as const
 
-/** Lookups this process has made, keyed by the digest of their inputs. */
+/**
+ * Caches account lookups by a hash of their inputs.
+ */
 const lookups = new Map<string, Promise<LoadedAccount>>()
 
 /**
- * Picks the account name to pass to the keystore.
+ * Selects the account name supplied to the keystore.
  *
- * The order is an explicit name, then `ALEO_ACCOUNT`, then the name recorded
- * in the state file, then `default`. The keystore applies the variable and the
- * default itself, and its `name` option takes precedence over the variable.
- * The recorded name is therefore returned only when no name was given and the
- * variable is unset. Reads the environment and nothing else.
+ * An explicit name takes precedence over `ALEO_ACCOUNT` and the name in the
+ * state file. When `ALEO_ACCOUNT` is set, the keystore reads it directly.
  *
- * @param state State of the selected network. Its `account` is the recorded
- *   name.
- * @param name Optional explicit account name, such as a `--name` flag.
- *   Defaults to the order above.
- * @returns The `name` option for a keystore call, or `undefined` to leave the
- *   choice to `ALEO_ACCOUNT` and the default.
+ * @param state Session state containing the saved account name, if any.
+ * @param name Optional account name that overrides the environment and state.
+ *   When omitted, uses the state name only if `ALEO_ACCOUNT` is unset or empty.
+ * @returns The selected name, or `undefined` to let the keystore use
+ *   `ALEO_ACCOUNT` or `default`.
  *
  * @example
- * const name = accountName(loadState('testnet'), 'trading') // 'trading'
+ * const name = accountName({ account: 'trading' }, 'savings') // 'savings'
  */
 export function accountName(state: Pick<ShieldSwapState, 'account'>, name?: string): string | undefined {
   if (name !== undefined) return name
@@ -51,37 +50,29 @@ export function accountName(state: Pick<ShieldSwapState, 'account'>, name?: stri
 }
 
 /**
- * Resolves the signing account of a state directory through the keystore.
+ * Loads a signing account that matches the session's saved address.
  *
- * Sources, first match wins: the `privateKey` option, `ALEO_PRIVATE_KEY` and
- * `ALEO_PRIVATE_KEY_FILE` (with their `SHIELD_SWAP_` aliases), the selected
- * account file, then a `privateKey` held by the state file itself. The
- * resolved key MUST derive the address the state records.
- * A key from the environment is used for the process and written nowhere.
+ * Checks the explicit key, key environment variables, account file, and key
+ * in the state file, in that order. Environment keys are not saved. Reading
+ * stored keys may access the macOS Keychain or prompt for a password.
  *
- * Reads the environment and the account file, and may run the macOS
- * `security` tool or ask for a password on the terminal. Does not contact a
- * network. A process resolves each account once: a repeated call with the same
- * inputs returns the first result without reading or asking again. When the
- * key comes from the state file, one line on standard error points at
- * `shield-swap account migrate`.
+ * Caches successful lookups for the process. Changes to the lookup options
+ * or environment trigger another lookup; changes to files alone do not.
+ * Using a key from the state file prints a migration notice to standard error.
  *
- * @param options.state State of the selected network: its `address` is the
- *   expected address, its `account` the recorded account name and its
- *   `privateKey` the last source.
- * @param options.name Optional explicit account name. Defaults to
- *   `ALEO_ACCOUNT`, then the recorded name, then `default`.
- * @param options.privateKey Optional key supplied by the caller. Takes
- *   precedence over every other source, and the key variables are then not
- *   read. Defaults to the lookup above.
- * @returns The signing account, the source of its key and the account file
- *   when one exists.
- * @throws KeystoreError With the code the keystore reports, such as
- *   `ACCOUNT_NOT_FOUND`, `ADDRESS_MISMATCH`, `KEY_NOT_STORED` or
- *   `PASSWORD_REQUIRED`.
+ * @param options Account sources and expected address.
+ * @param options.state Session state containing the expected address, saved
+ *   account name, and fallback private key.
+ * @param options.name Optional account name. Defaults to `ALEO_ACCOUNT`,
+ *   then the name in the state file, then `default`.
+ * @param options.privateKey Optional private key that overrides other sources.
+ *   When omitted, reads the environment, account file, or state file.
+ * @returns The signing account, key source, and stored account details, if any.
+ * @throws KeystoreError If no key is available, key sources conflict, the key
+ *   does not match the saved address, or stored keys cannot be unlocked.
  *
  * @example
- * const { account } = await resolveAccount({ state: loadState('testnet') })
+ * const { account } = await resolveAccount({ state: { network: 'testnet' } })
  */
 export async function resolveAccount(options: {
   state: ShieldSwapState
@@ -91,10 +82,8 @@ export async function resolveAccount(options: {
   const { state } = options
   const name = accountName(state, options.name)
 
-  // Everything that selects a key goes into the digest, so a changed variable
-  // or state is a new lookup. Keys are hashed, never kept as text. The name is
-  // the one the keystore ends up with, so recording it in the state between
-  // two lookups does not make the second one a new lookup.
+  // Hash lookup inputs so the cache index does not contain plaintext keys.
+  // Use the resolved name so saving it in the state does not change the index.
   const identity = createHash('sha256')
     .update(
       JSON.stringify([
@@ -108,9 +97,8 @@ export async function resolveAccount(options: {
   const known = lookups.get(identity)
   if (known) {
     const loaded = await known
-    // The recorded address is not part of the digest, because setup records it
-    // between two lookups of the same account. A remembered account that does
-    // not match it goes through the keystore again, which reports the mismatch.
+    // Check the expected address on every call, including cached lookups.
+    // Let the keystore report a mismatch if the expected address has changed.
     if (state.address === undefined || loaded.account.address === state.address) return loaded
   }
 
@@ -129,8 +117,7 @@ export async function resolveAccount(options: {
     return loaded
   })
   lookups.set(identity, lookup)
-  // A failed lookup is not remembered: the next call may follow a fix, such as
-  // an account created in between.
+  // Remove failed lookups so a later call can retry after configuration changes.
   lookup.catch(() => {
     if (lookups.get(identity) === lookup) lookups.delete(identity)
   })
@@ -138,26 +125,25 @@ export async function resolveAccount(options: {
 }
 
 /**
- * Derives the account of a private key string.
+ * Validates an Aleo private key and derives its address.
  *
- * Computes the address without reading a file or contacting a network.
+ * Invalid input produces an error that identifies the source without
+ * including the key or the underlying parser error.
  *
- * @param privateKey Candidate private key, as text starting with
- *   `APrivateKey1`.
- * @param origin Where the string came from, named in the error message.
- * @returns The address and the key.
- * @throws KeystoreError `INVALID_KEY` when the string is not a private key.
- *   The message names the origin and never the string.
+ * @param privateKey Aleo private key encoded with the `APrivateKey1` prefix.
+ * @param origin Description of the key source to include in error messages.
+ * @returns The derived address and supplied private key.
+ * @throws KeystoreError With code `INVALID_KEY` if the key cannot be parsed.
  *
  * @example
- * const { address } = accountOfKey(text, 'The key in the key file')
+ * const key = process.env.ALEO_PRIVATE_KEY ?? ''
+ * const { address } = accountOfKey(key, 'ALEO_PRIVATE_KEY')
  */
 export function accountOfKey(privateKey: string, origin: string): { address: string; privateKey: string } {
   try {
     return { address: privateKeyToAccount(privateKey).address, privateKey }
   } catch {
-    // The underlying error is dropped so nothing derived from the input can
-    // reach a log or the terminal through the error chain.
+    // Parser errors may include the key; omit the original error and cause.
     throw new KeystoreError('INVALID_KEY', `${origin} is not a valid Aleo private key.`)
   }
 }

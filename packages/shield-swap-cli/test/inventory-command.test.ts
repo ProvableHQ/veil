@@ -13,8 +13,8 @@ import { loadState } from '../src/session.js'
 // configuration, JSON output, and SQLite reservations remain real.
 vi.mock('@provablehq/veil-aleo-sdk', () => ({ loadNetwork: vi.fn(), generateAccount: vi.fn() }))
 vi.mock('../src/session.js', async original => ({ ...await original<object>(), loadState: vi.fn() }))
-// The account lookup reads the environment, account files and the Keychain;
-// account-session.test.ts covers it. Here it only hands over what it is given.
+// Mock account lookup to isolate command tests from files and the Keychain.
+// account-session.test.ts covers lookup behavior.
 vi.mock('../src/account-lookup.js', () => ({ resolveAccount: vi.fn() }))
 vi.mock('../src/inventory/runner.js', () => ({ runInventoryCycle: vi.fn() }))
 
@@ -90,7 +90,7 @@ describe('shield-swap inventory command', () => {
     expect(result.plans[0].inputs[0].amount).toBe('100')
     expect(result.network).toBe('testnet')
     expect(options[0].privateKey).toBe('state-key-testnet')
-    // An empty key variable is not an explicit key: the shared lookup decides.
+    // An empty configured key must invoke the session account lookup.
     expect(vi.mocked(resolveAccount).mock.calls[0]![0]).toEqual({ state: { network: 'testnet', privateKey: 'state-key-testnet' } })
     expect(options[0].recordManagement).toMatchObject({ enabled: true, chainId: 'aleo:testnet' })
     expect(executions).toBe(0)
@@ -108,7 +108,7 @@ describe('shield-swap inventory command', () => {
     const config = join(directory, 'policies.json')
     await writeFile(config, JSON.stringify({ privateKeyEnv: 'INVENTORY_TEST_KEY', policies: [{ asset: { program: 'credits.aleo' }, target: { records: 2 } }] }))
     await inventory(['plan', '--config', config, '--json'])
-    // The configured variable selects the key outright; the shared lookup is not consulted.
+    // A nonempty configured key bypasses session account lookup.
     expect(vi.mocked(resolveAccount)).not.toHaveBeenCalled()
     expect(options[0].privateKey).toBe('configured-variable-key')
   })
@@ -116,7 +116,7 @@ describe('shield-swap inventory command', () => {
     vi.stubEnv('ALEO_PRIVATE_KEY', 'environment-key')
     await inventory(['plan', '--asset', 'points.aleo', '--record-name', 'Balance', '--amount-field', 'points', '--network', 'mainnet', '--database', join(directory, 'other.sqlite'), '--json'])
     expect(options[0]).toMatchObject({ network: 'mainnet', privateKey: 'environment-key', recordManagement: { chainId: 'aleo:mainnet' } })
-    // The configured variable selects the key outright; the shared lookup is not consulted.
+    // A nonempty configured key bypasses session account lookup.
     expect(vi.mocked(resolveAccount)).not.toHaveBeenCalled()
     expect(JSON.parse(stdout.join('\n')).plans[0].asset).toMatchObject({ program: 'points.aleo', recordName: 'Balance', amountField: 'points' })
   })

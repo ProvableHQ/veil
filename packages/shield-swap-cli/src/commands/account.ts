@@ -1,28 +1,24 @@
 /**
- * `shield-swap account` — store an Aleo account on this machine and inspect it.
+ * Manages Aleo accounts with `shield-swap account`.
  *
- * Six commands over the account keystore of `@provablehq/veil-aleo-sdk/node`:
+ * Use `create` or `import` to save an account, `show` to inspect its address
+ * and storage, `protect` to change storage, `export` to display the private
+ * key, and `migrate` to copy a key from a state or profile file. These commands
+ * do not contact the network or move funds.
  *
- *   create    generate a key and store it
- *   import    store an existing key, or the account of a recovery phrase
- *   show      print the address, account name and storage type; never the key
- *   protect   change how the key is stored
- *   export    print the key for a person at a terminal
- *   migrate   copy a key out of a state file or profile into an account file
+ * Account files default to `~/.aleo/accounts/<name>.json`. Passwords come
+ * from `ALEO_ACCOUNT_PASSWORD`, the macOS Keychain, or a hidden prompt.
  *
- * None of them contacts a network, authenticates or requests funds. A password
- * is never taken from the command line: it comes from `ALEO_ACCOUNT_PASSWORD`,
- * the macOS Keychain or a hidden prompt.
+ * `export`, `create --storage none`, and `create --mnemonic` display secrets.
+ * They require a terminal and reject `--json`. Other results contain the
+ * account name, address, storage type, and file path.
  *
- * Results go to standard output; notes, prompts and errors go to standard
- * error as `<CODE>: <message>`. With `--json`, a result is one object with
- * `name`, `address`, `storage` and `path`, and an error is
- * `{"error":{"code":…,"message":…}}` on standard output. A private key appears
- * only in the output of `export` and of `create --storage none`, a recovery
- * phrase only in the output of `create --mnemonic`, and neither with `--json`.
+ * Keystore errors use `<CODE>: <message>` on standard error. With `--json`,
+ * results and keystore errors are JSON objects on standard output. Prompts,
+ * notices, usage errors, and other failures go to standard error.
  *
- * Exit codes: 0 done · 1 failed · 2 needs a person (no account, no stored key,
- * no password, no terminal) · 64 usage error.
+ * Exit codes: 0 for success, 1 for failure, 2 for missing account credentials
+ * or a required terminal, and 64 for invalid arguments.
  */
 import { readFileSync, realpathSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -47,7 +43,7 @@ import { resolveNetwork } from '../session.js'
 import { existingStatePath, statePath, stateFiles, writeStateFile } from '../state-files.js'
 import { terminal } from '../terminal.js'
 
-/** Usage text printed by `--help` and after a usage error. */
+/** Describes account commands and options for help and usage errors. */
 const USAGE = `shield-swap account — store an Aleo account on this machine and inspect it
 
 Usage: shield-swap account <command> [options]
@@ -94,22 +90,23 @@ ALEO_ACCOUNT_PASSWORD, the macOS Keychain or a hidden prompt.
 Exit codes: 0 done · 1 failed · 2 needs a person (no account, no stored key,
 no password, no terminal) · 64 usage error.`
 
-/** Exit status when the command did what was asked. */
+/** Indicates successful completion. */
 const EXIT_DONE = 0
-/** Exit status when the command failed and a person is not what it lacks. */
+/** Indicates a command failure or declined key export. */
 const EXIT_FAILED = 1
-/** Exit status when only a person can supply what the command lacks. */
+/** Indicates missing account credentials or a required terminal. */
 const EXIT_NEEDS_PERSON = 2
-/** Exit status for a malformed invocation. */
+/** Indicates invalid command arguments. */
 const EXIT_USAGE = 64
 
 /**
- * Keystore error codes a person has to resolve. The command exits 2 on them,
- * so an agent or a script stops and asks instead of retrying.
+ * Maps missing account credentials and terminal requirements to exit code 2.
+ *
+ * These errors require configuration or input before the command can succeed.
  */
 const NEEDS_PERSON = new Set(['ACCOUNT_NOT_FOUND', 'KEY_NOT_STORED', 'PASSWORD_REQUIRED', 'TERMINAL_REQUIRED'])
 
-/** Variables that supply a key to import, as the keystore reads them. */
+/** Lists environment variables that select a private key for import. */
 const KEY_VARIABLES = [
   'ALEO_PRIVATE_KEY',
   'SHIELD_SWAP_PRIVATE_KEY',
@@ -117,16 +114,16 @@ const KEY_VARIABLES = [
   'SHIELD_SWAP_PRIVATE_KEY_FILE',
 ] as const
 
-/** Text every Aleo private key starts with. Input at the import prompt that starts with it is read as a key. */
+/** Identifies private keys entered at the key-or-phrase prompt. */
 const KEY_PREFIX = 'APrivateKey1'
-/** Largest account index of a recovery phrase: 2^31 - 1, the limit of a hardened path segment. */
+/** Limits mnemonic account indexes to 2^31 - 1 for hardened derivation. */
 const MAX_INDEX = 2 ** 31 - 1
-/** The account commands, in the order the usage text lists them. */
+/** Lists the supported account subcommands in help order. */
 const COMMANDS = ['create', 'import', 'show', 'protect', 'export', 'migrate'] as const
-/** Name of one account command. */
+/** Identifies a supported account subcommand. */
 type CommandName = (typeof COMMANDS)[number]
 
-/** Every flag any account command takes, in `parseArgs` option form. */
+/** Defines accepted flag types and aliases for argument parsing. */
 const OPTIONS = {
   name: { type: 'string' },
   dir: { type: 'string' },
@@ -146,10 +143,10 @@ const OPTIONS = {
   network: { type: 'string' },
 } as const
 
-/** Flags every account command accepts. */
+/** Lists flags accepted by every account subcommand. */
 const COMMON_FLAGS = ['name', 'dir', 'json', 'help', 'no-color']
 
-/** The flags each command accepts on top of the common ones. */
+/** Lists additional flags accepted by each subcommand. */
 const COMMAND_FLAGS: Record<CommandName, readonly string[]> = {
   create: ['storage', 'save-password', 'mnemonic'],
   import: ['storage', 'save-password', 'key-file', 'mnemonic-file', 'index', 'derivation'],
@@ -159,7 +156,7 @@ const COMMAND_FLAGS: Record<CommandName, readonly string[]> = {
   migrate: ['storage', 'save-password', 'from', 'remove-legacy-key', 'network'],
 }
 
-/** The storage types each command accepts. */
+/** Lists storage types supported by each subcommand that writes an account. */
 const COMMAND_STORAGE: Partial<Record<CommandName, readonly AccountStorage[]>> = {
   create: ['plaintext', 'keychain', 'encrypted', 'none'],
   import: ['plaintext', 'keychain', 'encrypted', 'none'],
@@ -168,39 +165,37 @@ const COMMAND_STORAGE: Partial<Record<CommandName, readonly AccountStorage[]>> =
 }
 
 /**
- * One parsed `shield-swap account` invocation.
+ * Describes a validated account command and its options.
  *
- * @property command The account command to run.
- * @property name Optional account name from `--name`. Defaults to
- *   `ALEO_ACCOUNT`, then `default`.
- * @property dir Optional accounts directory from `--dir`. Defaults to
- *   `ALEO_ACCOUNTS_DIR`, then `~/.aleo/accounts`.
- * @property json Whether the outcome is printed as one JSON object on standard
- *   output instead of a sentence. Commands that show a secret refuse it.
- * @property storage Optional storage type from `--storage`. Defaults to
- *   `plaintext` on `create`, `import` and `migrate`; `protect` has no default.
- * @property savePassword Whether the password of an encrypted account is also
- *   saved in the macOS Keychain, so later runs need no password.
- * @property forgetPassword Whether `protect` removes a saved password from the
- *   macOS Keychain.
- * @property mnemonic Whether `create` derives the key from a new recovery
- *   phrase and shows that phrase once.
- * @property keyFile Optional path of a text file holding the private key to
- *   import.
- * @property mnemonicFile Optional path of a text file holding the recovery
- *   phrase to import.
- * @property index Account index of a recovery phrase: a whole number from 0
- *   through 2^31 - 1. Defaults to 0.
- * @property derivation Path convention of a recovery phrase. Defaults to
- *   `'standard'` (`m/44'/683'`, the SLIP-0044 Aleo coin type); `'legacy'`
- *   selects `m/44'/0'` for a phrase whose accounts were derived on that
- *   path.
- * @property from Optional path of the file `migrate` copies the key from.
- *   Defaults to the state file of the selected network.
- * @property removeLegacyKey Whether `migrate` strips the key from the source
- *   file once the account file is confirmed to hold it.
- * @property network Optional network whose state file `migrate` reads when
- *   `from` is absent. Defaults to `SHIELD_SWAP_NETWORK`, then testnet.
+ * @property command Subcommand to execute.
+ * @property name Optional account name. Defaults to `ALEO_ACCOUNT`, then `default`.
+ * @property dir Optional accounts directory. Defaults to `ALEO_ACCOUNTS_DIR`,
+ *   then `~/.aleo/accounts`.
+ * @property json Prints results and keystore errors as JSON. Defaults to false.
+ *   Commands that display secrets reject this option.
+ * @property storage Optional key storage. Defaults to `plaintext` for `create`,
+ *   `import`, and `migrate`. Required for `protect` unless only removing a
+ *   saved password.
+ * @property savePassword Saves an encrypted account's password in the macOS
+ *   Keychain for subsequent runs. Defaults to false.
+ * @property forgetPassword Removes the password saved in the macOS Keychain.
+ *   Applies to `protect` and defaults to false.
+ * @property mnemonic Generates a recovery phrase and displays it once during
+ *   `create`. Defaults to false.
+ * @property keyFile Optional file containing the private key to import. When
+ *   neither file option is supplied, import checks the environment, then prompts.
+ * @property mnemonicFile Optional file containing the recovery phrase to import.
+ *   Cannot be combined with `keyFile`.
+ * @property index Mnemonic account index, an integer from 0 to 2^31 - 1.
+ *   Defaults to 0.
+ * @property derivation Mnemonic path convention. Defaults to `standard`, which
+ *   uses the Aleo coin type at `m/44'/683'`; `legacy` uses `m/44'/0'`.
+ * @property from Optional migration source. Defaults to the selected network's
+ *   Shield Swap state file.
+ * @property removeLegacyKey Removes the source key after verifying the stored
+ *   account can be read. Applies to `migrate` and defaults to false.
+ * @property network Optional network for the default migration source. Defaults
+ *   to `SHIELD_SWAP_NETWORK`, then `testnet`. Ignored when `from` is supplied.
  */
 type Args = {
   command: CommandName
@@ -221,9 +216,9 @@ type Args = {
 }
 
 /**
- * Reports a malformed invocation on standard error and exits 64.
+ * Prints an argument error and command usage, then exits with code 64.
  *
- * @param message What is wrong with the invocation.
+ * @param message Explanation of the invalid or missing argument.
  */
 function usageError(message: string): never {
   console.error(`${red(message, 'stderr')}\n\n${help(USAGE)}`)
@@ -231,20 +226,18 @@ function usageError(message: string): never {
 }
 
 /**
- * Parses and validates the arguments of an account command.
+ * Validates an account subcommand and its flags.
  *
- * The common flags may come before or after the command name. A flag that
- * belongs to another account command is rejected, so a mistyped invocation
- * never runs with a silently dropped option.
+ * Accepts flags before or after the subcommand name. Invalid arguments print
+ * usage and exit with code 64, including flags that belong to another command.
  *
- * @param argv Arguments after `shield-swap account`.
- * @returns The parsed invocation, or `undefined` when `--help` was asked for.
+ * @param argv Arguments following `shield-swap account`.
+ * @returns Validated options, or `undefined` when help was requested.
  */
 function parse(argv: string[]): Args | undefined {
   let values: Record<string, string | boolean | undefined>
   let positionals: string[]
-  // Only the parse is guarded: a wider try would report later failures as
-  // usage errors.
+  // Convert argument parsing failures to usage errors.
   try {
     ;({ values, positionals } = parseArgs({ options: OPTIONS, args: argv, allowPositionals: true, strict: true }) as {
       values: Record<string, string | boolean | undefined>
@@ -315,18 +308,17 @@ function parse(argv: string[]): Args | undefined {
   }
 }
 
-/** Prints one line on standard output. */
+/** Writes command output followed by a newline. */
 function out(text: string): void {
   console.log(text)
 }
 
 /**
- * Prints the outcome of a command that leaves an account file in place.
+ * Prints account details as JSON or a supplied text message.
  *
- * @param stored The account as stored.
- * @param json Whether `--json` was given: the outcome is then one object with
- *   `name`, `address`, `storage` and `path`, in that order.
- * @param sentence Text printed when `--json` was not given.
+ * @param stored Saved account details to include in JSON output.
+ * @param json Selects a JSON object with `name`, `address`, `storage`, and `path`.
+ * @param sentence Message to print when JSON output is disabled.
  */
 function report(stored: StoredAccount, json: boolean, sentence: string): void {
   out(
@@ -337,25 +329,25 @@ function report(stored: StoredAccount, json: boolean, sentence: string): void {
 }
 
 /**
- * Builds the sentence that reports where an account is stored.
+ * Formats a message describing the saved account and its location.
  *
- * @param stored The account as stored.
- * @param verb Past-tense verb that opens the sentence, such as `Created`.
- * @returns One sentence naming the account, its address, storage and path.
+ * @param stored Account name, address, storage type, and file path.
+ * @param verb Completed action to name in the message, such as `Created`.
+ * @returns A sentence suitable for command output.
  */
 function summary(stored: StoredAccount, verb: string): string {
   return `${verb} Aleo account ${stored.name} (${stored.address}) with ${stored.storage} storage in ${stored.path}.`
 }
 
 /**
- * Stops a command that shows a secret unless a person is at a terminal.
+ * Requires terminal input and output before a command displays a secret.
  *
- * @param what The command, as the person typed it.
- * @param json Whether `--json` was given.
- * @param secret What the command shows, named in the message. Defaults to
+ * @param what Command name to include in an error message.
+ * @param json Whether JSON output was requested; secret output rejects it.
+ * @param secret Description of the secret being displayed. Defaults to
  *   `the private key`.
- * @throws KeystoreError `TERMINAL_REQUIRED` when `--json` was given, or when
- *   standard input, output or error is not a terminal.
+ * @throws KeystoreError With code `TERMINAL_REQUIRED` if JSON output is
+ *   requested or standard input, output, or error is not a terminal.
  */
 function requireTerminal(what: string, json: boolean, secret = 'the private key'): void {
   if (json) {
@@ -373,12 +365,13 @@ function requireTerminal(what: string, json: boolean, secret = 'the private key'
 }
 
 /**
- * Notes on standard error what the chosen storage does not provide on this
- * system: `--save-password` saves nothing outside encrypted storage on macOS,
- * and a plaintext file on Windows has no owner-only mode.
+ * Reports storage options or protections unavailable on the current system.
  *
- * @param stored The account as stored.
- * @param savePassword Whether `--save-password` was given.
+ * Warns when password saving does not apply or Windows file permissions
+ * cannot enforce owner-only access. Writes notices to standard error.
+ *
+ * @param stored Saved account's storage type and path.
+ * @param savePassword Whether password saving was requested.
  */
 function storageNotes(stored: StoredAccount, savePassword: boolean): void {
   if (savePassword && !(stored.storage === 'encrypted' && terminal.platform === 'darwin')) {
@@ -393,14 +386,14 @@ function storageNotes(stored: StoredAccount, savePassword: boolean): void {
 }
 
 /**
- * Names the account file a command refers to, for a message.
+ * Builds the selected account file path for diagnostic messages.
  *
- * Follows the keystore's own order: `--name`, then `ALEO_ACCOUNT`, then
- * `default`; `--dir`, then `ALEO_ACCOUNTS_DIR`, then `~/.aleo/accounts`, with
- * a leading `~` expanded. Reads the environment and does not touch the disk.
+ * Reads account settings from the options and environment. Expands a leading
+ * `~` to the home directory without checking whether the file exists.
  *
- * @param args The parsed invocation.
- * @returns The absolute path of the account file.
+ * @param args Account name and directory overrides. Uses the keystore's
+ *   environment settings and defaults when omitted.
+ * @returns The absolute path to `<name>.json`.
  */
 function accountFilePath(args: Pick<Args, 'name' | 'dir'>): string {
   const home = homedir()
@@ -411,12 +404,14 @@ function accountFilePath(args: Pick<Args, 'name' | 'dir'>): string {
 }
 
 /**
- * Describes the selected account file, failing when there is none.
+ * Reads the selected account's address and storage details.
  *
- * @param args The parsed invocation.
- * @returns The account's name, path, address and storage type.
- * @throws KeystoreError `ACCOUNT_NOT_FOUND` when no account file exists, plus
- *   the failures of reading one.
+ * Does not decrypt the private key or request a password.
+ *
+ * @param args Account name and directory to inspect.
+ * @returns The account name, address, storage type, and file path.
+ * @throws KeystoreError With code `ACCOUNT_NOT_FOUND` if the file is missing.
+ *   Also propagates account file validation and read errors.
  */
 async function existingAccount(args: Args): Promise<StoredAccount> {
   const stored = await accountInfo({ name: args.name, dir: args.dir })
@@ -425,14 +420,14 @@ async function existingAccount(args: Args): Promise<StoredAccount> {
 }
 
 /**
- * Reads a text file that holds only a key or a recovery phrase.
+ * Reads a private key or recovery phrase from a UTF-8 file.
  *
- * @param path Path of the file. Not expanded.
- * @param origin Phrase naming the file in messages.
- * @returns The content with surrounding white space, and a byte-order mark,
- *   removed.
- * @throws KeystoreError `EMPTY_KEY_SOURCE` when the file cannot be read or
- *   holds nothing.
+ * @param path File path, used without expanding `~`.
+ * @param origin Description of the source to include in error messages.
+ * @returns File contents with surrounding whitespace and a leading byte-order
+ *   mark removed.
+ * @throws KeystoreError With code `EMPTY_KEY_SOURCE` if the file cannot be
+ *   read or contains no non-whitespace characters.
  */
 async function readKeyText(path: string, origin: string): Promise<string> {
   let content: string
@@ -448,18 +443,18 @@ async function readKeyText(path: string, origin: string): Promise<string> {
 }
 
 /**
- * Derives the account of a recovery phrase after tidying it.
+ * Validates a BIP-39 recovery phrase and derives an Aleo account.
  *
- * The phrase is trimmed, runs of white space are collapsed to single spaces
- * and letters are lower-cased before it is checked against the BIP-39 English
- * word list, word count and checksum.
+ * Converts the phrase to lowercase and replaces repeated whitespace with
+ * single spaces before checking its English words, word count, and checksum.
+ * Does not contact the network or store the phrase.
  *
- * @param text Phrase as typed or pasted.
- * @param index Account index, from 0 through 2^31 - 1.
- * @param derivation Path convention: `'standard'` or `'legacy'`.
- * @returns The address and private key of the derived account.
- * @throws KeystoreError `INVALID_MNEMONIC` when the phrase is not valid. The
- *   message never repeats a word of the phrase.
+ * @param text Recovery phrase to validate.
+ * @param index Account index, an integer from 0 to 2^31 - 1.
+ * @param derivation Uses the standard Aleo derivation path or the legacy path.
+ * @returns The derived account address and private key.
+ * @throws KeystoreError With code `INVALID_MNEMONIC` if validation fails.
+ *   The error message does not include the phrase.
  */
 async function accountOfPhrase(
   text: string,
@@ -473,34 +468,31 @@ async function accountOfPhrase(
       'Not a valid recovery phrase: it fails the BIP-39 English word list, the word count or the checksum.',
     )
   }
-  // Keys do not depend on the network; the handle only supplies the derivation.
+  // Account derivation is the same on testnet and mainnet.
   const aleo = await loadNetwork('testnet')
   const { address, privateKey } = aleo.mnemonicToAccount(phrase, { index, derivation })
   return { address, privateKey }
 }
 
 /**
- * Reads the key supplied through the key variables.
+ * Loads an import key from the configured environment variables.
  *
- * Goes through the keystore's own lookup, so the variables follow its rules:
- * an empty one is an error, and two that hold different keys are an error.
+ * Uses the keystore's validation for empty, invalid, or conflicting sources.
+ * Reads a key file when a file variable is set; does not prompt for a password.
  *
- * @param args The parsed invocation.
- * @returns The address and private key the variables supply.
- * @throws KeystoreError `EMPTY_KEY_SOURCE`, `INVALID_KEY` or `KEY_CONFLICT`
- *   for unusable variables, and `ACCOUNT_EXISTS` when the selected account
- *   file already holds another account.
+ * @param args Account name and directory to check for an existing account.
+ * @returns The private key and its derived address.
+ * @throws KeystoreError If key sources are empty, invalid, or conflicting.
+ *   Uses `ACCOUNT_EXISTS` if the key conflicts with the selected account file.
  */
 async function accountFromEnvironment(args: Args): Promise<{ address: string; privateKey: string }> {
   try {
-    // A key in the environment is found before the account file is opened, so
-    // no stored key is read and no password is asked for.
+    // Resolve the environment key without unlocking stored keys or prompting.
     const { account } = await loadAccount({ name: args.name, dir: args.dir, prompt: false })
     return { address: account.address, privateKey: account.privateKey }
   } catch (error) {
     if (!(error instanceof KeystoreError) || error.code !== 'ADDRESS_MISMATCH') throw error
-    // The lookup reports a key that differs from the account file as a
-    // mismatch. For an import that is a refusal to replace the file.
+    // Report a conflicting import as ACCOUNT_EXISTS to preserve the saved account.
     const existing = await accountInfo({ name: args.name, dir: args.dir })
     if (!existing) throw error
     throw new KeystoreError(
@@ -512,13 +504,15 @@ async function accountFromEnvironment(args: Args): Promise<{ address: string; pr
 }
 
 /**
- * Finds the account to import: a file flag, the key variables, then a prompt.
+ * Reads or prompts for the account key to import.
  *
- * @param args The parsed invocation.
- * @returns The address and private key to store.
- * @throws KeystoreError `ACCOUNT_NOT_FOUND` when nothing supplies a key and no
- *   terminal is attached, `EMPTY_KEY_SOURCE` when a source is empty, and
- *   `INVALID_KEY` or `INVALID_MNEMONIC` for unusable input.
+ * Checks `--key-file` or `--mnemonic-file`, then environment variables, then
+ * a hidden terminal prompt. Recovery phrases are converted to private keys.
+ *
+ * @param args Import source and mnemonic derivation options.
+ * @returns The private key and its derived address.
+ * @throws KeystoreError If no source is available, input is empty or invalid,
+ *   or environment key sources conflict with each other or a saved account.
  */
 async function accountToImport(args: Args): Promise<{ address: string; privateKey: string }> {
   if (args.keyFile !== undefined) {
@@ -539,37 +533,34 @@ async function accountToImport(args: Args): Promise<{ address: string; privateKe
   }
   const typed = (await terminal.promptHidden('Private key or recovery phrase to import: ')).trim()
   if (!typed) throw new KeystoreError('EMPTY_KEY_SOURCE', 'No key or recovery phrase was entered.')
-  // Text that starts like a key is a key; anything else is taken as a phrase.
+  // The private key prefix selects key validation; other input uses BIP-39.
   if (typed.startsWith(KEY_PREFIX)) return accountOfKey(typed, 'The key entered at the prompt')
   return accountOfPhrase(typed, args.index, args.derivation)
 }
 
 /**
- * Generates an account, stores it and prints what a person must keep.
+ * Generates an Aleo account and saves it using the selected storage.
  *
- * Writes the account file, and for Keychain or encrypted storage also runs the
- * macOS `security` tool or asks for a password. With `--mnemonic` the recovery
- * phrase is printed once, and with `--storage none` the private key is. Both
- * are stored nowhere and require a terminal. Does not contact a network.
+ * Defaults to plaintext storage. `--mnemonic` displays a new recovery phrase;
+ * `--storage none` saves only the address and displays the private key. Both
+ * require a terminal and reject JSON output. Encrypted storage may prompt
+ * for a password; Keychain storage accesses the macOS Keychain.
  *
- * @param args The parsed invocation.
- * @returns The exit status: 0 once the account is stored.
- * @throws KeystoreError `TERMINAL_REQUIRED` when a secret would be shown with
- *   no person to receive it, `ACCOUNT_EXISTS` when the account file already
- *   exists, plus the failures of the chosen storage.
+ * @param args Account location, storage, and recovery phrase options.
+ * @returns Exit code 0 after saving the account and printing its details.
+ * @throws KeystoreError If the account file exists, required terminal access
+ *   is unavailable, or the selected storage cannot save the account.
  */
 async function create(args: Args): Promise<number> {
   const storage = args.storage ?? 'plaintext'
-  // A phrase, or a key that is stored nowhere, is shown once, so a person must
-  // be there to receive it. Checked before anything is generated or written.
+  // Check terminal requirements before generating secrets or writing files.
   if (args.mnemonic) requireTerminal('create --mnemonic', args.json, 'the recovery phrase')
   if (storage === 'none') requireTerminal('create --storage none', args.json)
 
   let phrase: string | undefined
   let account: { address: string; privateKey: string }
   if (args.mnemonic) {
-    // Twelve words, and the first account on the standard path: what a wallet
-    // derives when the phrase is imported there.
+    // Generate a 12-word phrase and derive account 0 on the standard Aleo path.
     const generated = (await loadNetwork('testnet')).generateMnemonicAccount()
     phrase = generated.mnemonic
     account = generated.account
@@ -586,8 +577,7 @@ async function create(args: Args): Promise<number> {
   report(stored, args.json, summary(stored, 'Created'))
   storageNotes(stored, args.savePassword)
 
-  // Secrets are printed only after the account is stored, so a refused save
-  // shows nothing.
+  // Print recovery details only after the account file has been saved.
   if (phrase !== undefined) {
     out(`Recovery phrase: ${phrase}`)
     terminal.notify(
@@ -612,16 +602,16 @@ async function create(args: Args): Promise<number> {
 }
 
 /**
- * Stores an existing key, or the account of a recovery phrase.
+ * Saves an existing private key or an account derived from a recovery phrase.
  *
- * Takes the key from `--key-file` or `--mnemonic-file`, then the key
- * variables, then a hidden prompt. Writes the account file and prints the
- * address, never the key. Does not contact a network.
+ * Reads a file, environment variables, or hidden terminal input. Prints the
+ * saved account details without displaying the key or phrase. Saving the same
+ * account with the same storage succeeds without replacing it.
  *
- * @param args The parsed invocation.
- * @returns The exit status: 0 once the account is stored.
- * @throws KeystoreError `ACCOUNT_EXISTS` when the account file already exists,
- *   plus the failures of {@link accountToImport} and of the chosen storage.
+ * @param args Import source, account location, derivation, and storage options.
+ * @returns Exit code 0 after saving the account and printing its details.
+ * @throws KeystoreError If the input cannot be read or validated, the account
+ *   file contains a different account or storage type, or saving fails.
  */
 async function importAccount(args: Args): Promise<number> {
   const account = await accountToImport(args)
@@ -637,14 +627,13 @@ async function importAccount(args: Args): Promise<number> {
 }
 
 /**
- * Prints the name, address, storage type and path of an account file.
+ * Prints an account's name, address, storage type, and file path.
  *
- * Reads the account file only. The key is neither read nor unlocked, so no
- * password is asked for.
+ * Reads the account file without decrypting its key or asking for a password.
  *
- * @param args The parsed invocation.
- * @returns The exit status: 0 once the account is printed.
- * @throws KeystoreError `ACCOUNT_NOT_FOUND` when no account file exists.
+ * @param args Account location and text or JSON output selection.
+ * @returns Exit code 0 after printing the account details.
+ * @throws KeystoreError If the account file is missing or invalid.
  */
 async function show(args: Args): Promise<number> {
   const stored = await existingAccount(args)
@@ -657,14 +646,12 @@ async function show(args: Args): Promise<number> {
 }
 
 /**
- * Reports whether a file holds a plaintext key of an address.
+ * Checks whether a JSON file contains a private key for the given address.
  *
- * Reads the file only. A file that is absent, unreadable, not JSON or holds no
- * key of the address counts as not holding one.
- *
- * @param path JSON file with a top-level `privateKey` or `private_key` field.
- * @param address Address to look for.
- * @returns True when one of the fields holds a key that derives the address.
+ * @param path File to check for a `privateKey` or `private_key` field.
+ * @param address Address the key must derive.
+ * @returns True if a matching key is found. Returns false for missing,
+ *   unreadable, or invalid files.
  */
 function holdsKeyOf(path: string, address: string): boolean {
   try {
@@ -674,22 +661,20 @@ function holdsKeyOf(path: string, address: string): boolean {
       if (typeof key === 'string' && key && privateKeyToAccount(key).address === address) return true
     }
   } catch {
-    // Absent, unreadable, not JSON or not a key: no copy to warn about.
+    // Ignore files whose contents cannot be read or validated as a private key.
   }
   return false
 }
 
 /**
- * Warns when a plaintext copy of an account's key remains in a state file or
- * a profile.
+ * Warns about plaintext copies of a protected account's key.
  *
- * Checks the state files of the current Shield Swap state directory and the
- * profile of the default Python SDK home (`~/.shield-swap/profile.json`).
- * State kept in other directories is not seen. Reads those files, changes
- * none, and writes one line per copy to standard error.
+ * Checks the current Shield Swap state directory and
+ * `~/.shield-swap/profile.json`. Prints a migration command to standard error
+ * for each matching key. Does not modify files or search other directories.
  *
- * @param stored The account as stored after a change of storage.
- * @param args The parsed invocation, repeated in the suggested command.
+ * @param stored Account address and storage type after protection changes.
+ * @param args Account directory override to include in migration instructions.
  */
 function warnLegacyCopies(stored: StoredAccount, args: Args): void {
   const candidates = [...stateFiles(), join(homedir(), '.shield-swap', 'profile.json')]
@@ -705,28 +690,26 @@ function warnLegacyCopies(stored: StoredAccount, args: Args): void {
 }
 
 /**
- * Changes how the key is stored, or removes a saved password.
+ * Changes account storage or removes a password saved in the macOS Keychain.
  *
- * With `--storage`, moves the key to plaintext, Keychain or encrypted storage
- * and removes the previous copy once the new one is read back. With
- * `--forget-password` alone, removes the saved password of an encrypted
- * account from the macOS Keychain and keeps the password itself: the account
- * is encrypted again under its current password, taken from
- * `ALEO_ACCOUNT_PASSWORD` or a hidden prompt. Does not contact a network.
+ * `--storage` selects plaintext, Keychain, or encrypted storage. Stored data
+ * is verified before the previous copy is removed. Selecting encrypted storage
+ * for an encrypted account changes its password.
  *
- * @param args The parsed invocation.
- * @returns The exit status: 0 once the storage is changed, or when there was
- *   no saved password to remove.
- * @throws KeystoreError `ACCOUNT_NOT_FOUND` when no account file exists,
- *   `KEYCHAIN_UNAVAILABLE` for `--forget-password` outside macOS,
- *   `PASSWORD_REQUIRED` when a password is needed and nothing supplies it,
- *   plus the failures of the chosen storage.
+ * `--forget-password` alone removes the saved password without changing it.
+ * The current password must come from `ALEO_ACCOUNT_PASSWORD` or a hidden
+ * prompt. Plaintext copies in state or profile files remain unchanged.
+ *
+ * @param args Account location, storage, and password saving options.
+ * @returns Exit code 0 after the update, or if the account uses storage that
+ *   has no saved password to remove.
+ * @throws KeystoreError If the account is missing, cannot be unlocked or
+ *   saved, or `--forget-password` without `--storage` is used outside macOS.
  */
 async function protect(args: Args): Promise<number> {
   const storage = args.storage
   if (storage === undefined) {
-    // --forget-password alone. A saved password belongs to an encrypted
-    // account on macOS; anything else has none to remove.
+    // Without --storage, remove only the saved password of an encrypted account.
     const existing = await existingAccount(args)
     if (terminal.platform !== 'darwin') {
       throw new KeystoreError('KEYCHAIN_UNAVAILABLE', 'A saved password exists only in the macOS Keychain.')
@@ -739,9 +722,8 @@ async function protect(args: Args): Promise<number> {
       )
       return EXIT_DONE
     }
-    // The keystore drops a saved password by encrypting the account again
-    // without saving one. The password stays the same, so the person supplies
-    // the current one: the variable, or a hidden prompt at a terminal.
+    // Re-encrypt with the current password and disable password saving.
+    // Request the password explicitly because it will be needed on later runs.
     let password = process.env.ALEO_ACCOUNT_PASSWORD || undefined
     if (password === undefined) {
       if (!terminal.attached()) {
@@ -765,31 +747,26 @@ async function protect(args: Args): Promise<number> {
     report(kept, args.json, `Removed the saved password of Aleo account ${kept.name} (${kept.address}) from the Keychain.`)
     return EXIT_DONE
   }
-  // The parser admits no other storage for this command.
+  // Reject address-only storage even if this handler is called without parsing.
   if (storage === 'none') throw new KeystoreError('UNSUPPORTED_STORAGE', 'An account cannot be moved to "none" storage.')
   const stored = await protectAccount({ name: args.name, dir: args.dir, storage, savePassword: args.savePassword })
   report(stored, args.json, summary(stored, 'Stored'))
   storageNotes(stored, args.savePassword)
-  // Keychain or encrypted storage gives nothing while the key is still
-  // readable in another tool's state file.
+  // Report plaintext copies that remain outside the protected account file.
   if (stored.storage === 'keychain' || stored.storage === 'encrypted') warnLegacyCopies(stored, args)
   return EXIT_DONE
 }
 
 /**
- * Prints the private key for a person who confirms at a terminal.
+ * Displays a stored private key after terminal confirmation.
  *
- * Asks a yes-or-no question first and prints the key on standard output only
- * after a yes. Reading the key may run the macOS `security` tool or ask for a
- * password. Does not contact a network.
+ * Requires terminal input and output and rejects JSON output. Unlocking the
+ * account may access the macOS Keychain or prompt for a password.
  *
- * @param args The parsed invocation.
- * @returns The exit status: 0 once the key is shown, 1 when the person did not
- *   confirm.
- * @throws KeystoreError `TERMINAL_REQUIRED` with `--json` or without a
- *   terminal, `ACCOUNT_NOT_FOUND` when no account file exists,
- *   `KEY_NOT_STORED` for an address-only account, plus the failures of
- *   reading the key.
+ * @param args Account location and output options.
+ * @returns Exit code 0 after printing the key, or 1 if confirmation is declined.
+ * @throws KeystoreError If terminal requirements are not met, the account is
+ *   missing, no key is stored, or the stored key cannot be unlocked.
  */
 async function exportKey(args: Args): Promise<number> {
   requireTerminal('export', args.json)
@@ -806,11 +783,10 @@ async function exportKey(args: Args): Promise<number> {
 }
 
 /**
- * Resolves a path through its symbolic links, so two spellings of one file
- * compare equal.
+ * Resolves a file path for comparison, following symbolic links when possible.
  *
- * @param path Path to resolve.
- * @returns The real path, or the absolute path when the file does not exist.
+ * @param path File path to normalize.
+ * @returns The resolved filesystem path, or an absolute path if resolution fails.
  */
 function canonical(path: string): string {
   try {
@@ -821,16 +797,15 @@ function canonical(path: string): string {
 }
 
 /**
- * Records the account in a Shield Swap state file.
+ * Saves the account name in a Shield Swap state file for subsequent sessions.
  *
- * Later runs then read the key from that account file. The address is added
- * when the file lacks one: a state file may hold a key without an address,
- * and once the key is stripped the address is what marks the state as set up.
- * The other fields are kept, and the file is rewritten atomically at mode
- * 0600.
+ * Adds the address if missing so the session remains configured after its
+ * private key is removed. Preserves other fields and writes with mode 0600.
  *
- * @param path Path of the state file.
- * @param account Name and address of the account file that now holds the key.
+ * @param path State file to read and update.
+ * @param account Name and address of the account containing the migrated key.
+ * @returns Resolves after saving, or without writing if both fields are set.
+ * @throws If the state file cannot be read, parsed, or written.
  */
 async function recordAccount(path: string, account: { name: string; address: string }): Promise<void> {
   const state = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
@@ -841,12 +816,12 @@ async function recordAccount(path: string, account: { name: string; address: str
 }
 
 /**
- * Names the state file `migrate` reads when no `--from` is given.
+ * Finds the Shield Swap state path used as the default migration source.
  *
- * @param network `--network`, when given. Defaults to `SHIELD_SWAP_NETWORK`,
- *   then testnet.
- * @returns The state file the network's session is read from, or the path it
- *   would have when the network has no state yet.
+ * @param network Optional network selection. Defaults to `SHIELD_SWAP_NETWORK`,
+ *   then `testnet`.
+ * @returns An existing state path, or the network's expected path if none exists.
+ * @throws If the selected network is neither `testnet` nor `mainnet`.
  */
 function ownStatePath(network: string | undefined): string {
   const selected = resolveNetwork(network)
@@ -854,22 +829,21 @@ function ownStatePath(network: string | undefined): string {
 }
 
 /**
- * Copies the key held by a state file or a profile into an account file.
+ * Copies a private key from a state or profile file into an account file.
  *
- * Reads `--from`, or the state file of the selected network. The source keeps
- * its key unless `--remove-legacy-key` is given, and is then stripped only
- * after the account file is confirmed to hold the key. When the source is a
- * state file of this command, the account name is recorded there, and the
- * address when it is missing. Does not contact a network.
+ * Reads `--from`, or the selected network's Shield Swap state file. Removes
+ * the source key only with `--remove-legacy-key`, after verifying the stored
+ * account. Recognized Shield Swap state files also receive the account name
+ * and any missing address for subsequent sessions.
  *
- * @param args The parsed invocation.
- * @returns The exit status: 0 once the account is stored.
- * @throws KeystoreError `LEGACY_KEY_NOT_FOUND` when the source holds no key,
- *   `ACCOUNT_EXISTS` when the account file holds another account, plus the
- *   failures of the chosen storage.
+ * @param args Source file, destination account, storage, and key removal options.
+ * @returns Exit code 0 after saving the account and reporting the source key status.
+ * @throws KeystoreError If the source has no key, the destination conflicts
+ *   with another account, or the selected storage fails. File read, parse,
+ *   and write errors are also propagated.
  */
 async function migrate(args: Args): Promise<number> {
-  // Without --from, the file is this command line's own state for the network.
+  // Default to the selected network's Shield Swap state file.
   const from = args.from ?? ownStatePath(args.network)
   const { legacyKeyRemoved, ...stored } = await migrateAccount({
     from,
@@ -879,8 +853,7 @@ async function migrate(args: Args): Promise<number> {
     savePassword: args.savePassword,
     removeLegacyKey: args.removeLegacyKey,
   })
-  // A state file of this command line also records which account file now
-  // holds its key, so later runs select it.
+  // Save the account name in recognized state files for subsequent sessions.
   if (stateFiles().some((path) => canonical(path) === canonical(from))) await recordAccount(from, stored)
 
   report(stored, args.json, summary(stored, 'Migrated'))
@@ -896,7 +869,7 @@ async function migrate(args: Args): Promise<number> {
   return EXIT_DONE
 }
 
-/** The function that runs each account command. */
+/** Maps each account subcommand to its handler. */
 const HANDLERS: Record<CommandName, (args: Args) => Promise<number>> = {
   create,
   import: importAccount,
@@ -907,21 +880,21 @@ const HANDLERS: Record<CommandName, (args: Args) => Promise<number>> = {
 }
 
 /**
- * Runs one `shield-swap account` command and reports its outcome.
+ * Runs an account command and prints its result.
  *
- * Reads and writes account files, and depending on the storage runs the macOS
- * `security` tool or asks for a password on the terminal. Does not contact a
- * network. The exit status is left in `process.exitCode`: 0 when done, 1 when
- * the command failed and 2 when it needs a person (`ACCOUNT_NOT_FOUND`,
- * `KEY_NOT_STORED`, `PASSWORD_REQUIRED` or `TERMINAL_REQUIRED`).
+ * Commands can read or write account files, access the macOS Keychain, and
+ * prompt for input. Commands that display secrets require a terminal and
+ * reject JSON output. No network requests are made.
  *
- * @param argv Arguments after `shield-swap account`, as the dispatcher
- *   supplies them.
- * @returns Resolves after the outcome is printed. A usage error prints the
- *   usage on standard error and exits the process with status 64.
+ * Sets `process.exitCode` to 1 on failure or 2 when account credentials or a
+ * required terminal are missing. Invalid arguments print usage and exit
+ * with code 64.
+ *
+ * @param argv Subcommand and flags following `shield-swap account`.
+ * @returns Resolves after printing help, account details, or an error.
  *
  * @example
- * await main(['show', '--name', 'testnet', '--json'])
+ * await main(['show', '--name', 'trading', '--json'])
  */
 export async function main(argv: string[]): Promise<void> {
   const args = parse(argv)
@@ -939,8 +912,7 @@ export async function main(argv: string[]): Promise<void> {
       process.exitCode = NEEDS_PERSON.has(error.code) ? EXIT_NEEDS_PERSON : EXIT_FAILED
       return
     }
-    // Anything else is a failure of the system underneath, such as a file
-    // that cannot be read: one line, no stack.
+    // Report other failures as a single message on standard error.
     terminal.notify(`shield-swap account: ${error instanceof Error ? error.message : String(error)}`)
     process.exitCode = EXIT_FAILED
   }

@@ -5,22 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OTHER_PASSWORD, PASSWORD, mode, openSandbox, posix, type Outcome, type Sandbox } from './account-sandbox.js'
 
 /**
- * Covers `shield-swap account`: the six commands, their flags, the text and
- * JSON they print, and their exit codes.
+ * Tests account commands, arguments, output, and exit codes.
  *
- * Each command runs in-process against a temporary accounts directory, with
- * the environment, the home directory, the Keychain tool and the terminal
- * replaced (see `account-sandbox.ts`). Output is captured, so the keys and
- * phrases that `export`, `create --storage none` and `create --mnemonic` print
- * by design never reach the test log. Secrets are compared with boolean
- * checks, so a failing assertion cannot print one either.
+ * Uses temporary account files and the environment, Keychain, and terminal
+ * replacements in `account-sandbox.ts`. Captures secret output and compares
+ * keys and phrases with boolean assertions to keep them out of failure logs.
  */
 
 vi.setConfig({ testTimeout: 60_000 })
 
 const here = dirname(fileURLToPath(import.meta.url))
-// The sample phrase and the accounts it derives, shared with the keystore's
-// own tests: the standard BIP-39 test phrase, which holds no funds.
+// Use the keystore's shared BIP-39 phrase and expected account derivations.
 const vectors = JSON.parse(
   readFileSync(join(here, '../../provable-sdk/test/fixtures/keystore-vectors/vectors.json'), 'utf8'),
 ) as {
@@ -43,7 +38,7 @@ afterEach(() => {
   sandbox.close()
 })
 
-/** Runs `shield-swap account` with the given arguments. */
+/** Runs an account command and captures its output and exit code. */
 function account(...argv: string[]): Promise<Outcome> {
   return sandbox.run(main, argv)
 }
@@ -52,12 +47,12 @@ function newAccount(): { address: string; privateKey: string } {
   return sandbox.sdk.generateAccount()
 }
 
-/** The key an account file returns, read through the keystore. */
+/** Reads a stored test key without prompting for a password. */
 function storedKey(name = 'default', password?: string): Promise<string> {
   return sandbox.keystore.exportAccount({ dir: sandbox.dir, name, password, prompt: false })
 }
 
-/** Reports whether text contains a secret, without echoing either. */
+/** Checks for secret text without exposing it in assertion output. */
 function shows(text: string, secret: string): boolean {
   return text.includes(secret)
 }
@@ -66,25 +61,25 @@ function accountFile(name = 'default'): string {
   return join(sandbox.dir, `${name}.json`)
 }
 
-/** The stand-in Keychain's key for the key entry of one Keychain account file. */
+/** Finds the mock Keychain entry identifier recorded in an account file. */
 function keyEntry(path: string): string {
   return `aleo-account-key ${(JSON.parse(readFileSync(path, 'utf8')) as { key: { account: string } }).key.account}`
 }
 
-/** The stand-in Keychain's key for the saved password of one encrypted account file. */
+/** Builds the mock Keychain entry identifier for an account's saved password. */
 function savedPasswordEntry(path: string): string {
   const file = JSON.parse(readFileSync(path, 'utf8')) as { address: string; key: { kdfParams: { salt: string } } }
   return `aleo-account-password ${file.address}-${Buffer.from(file.key.kdfParams.salt, 'base64').toString('hex')}`
 }
 
-/** The recovery phrase a command printed, without its label. */
+/** Extracts the recovery phrase from captured command output. */
 function phraseShown(out: string): string {
   const lines = out.split('\n').filter((line) => line.startsWith('Recovery phrase: '))
   expect(lines).toHaveLength(1)
   return lines[0]!.slice('Recovery phrase: '.length)
 }
 
-/** The private keys a command printed. */
+/** Extracts private keys from captured command output. */
 function keysShown(out: string): string[] {
   return out.split(/\s+/).filter((word) => word.startsWith('APrivateKey1'))
 }
@@ -214,20 +209,20 @@ describe('output and exit status', () => {
 
   it('exits 2 when a person is needed and 1 for other failures', async () => {
     const owner = newAccount()
-    // ACCOUNT_NOT_FOUND
+    // A missing account requires configuration.
     expect((await account('show')).status).toBe(2)
-    // KEY_NOT_STORED
+    // An address-only account requires an external key.
     await sandbox.keystore.saveAccount(owner, { dir: sandbox.dir, name: 'address-only', storage: 'none' })
     let outcome = await account('protect', '--storage', 'plaintext', '--name', 'address-only', '--json')
     expect([outcome.status, outcome.json.error.code]).toEqual([2, 'KEY_NOT_STORED'])
-    // PASSWORD_REQUIRED
+    // Encrypted storage requires a password source.
     outcome = await account('create', '--storage', 'encrypted', '--json')
     expect([outcome.status, outcome.json.error.code]).toEqual([2, 'PASSWORD_REQUIRED'])
-    // TERMINAL_REQUIRED
+    // Key export requires terminal input and output.
     outcome = await account('export', '--name', 'address-only')
     expect(outcome.status).toBe(2)
     expect(outcome.err.startsWith('TERMINAL_REQUIRED: ')).toBe(true)
-    // Everything else is a plain failure.
+    // Other keystore errors use exit code 1.
     await sandbox.keystore.saveAccount(owner, { dir: sandbox.dir })
     outcome = await account('create', '--json')
     expect([outcome.status, outcome.json.error.code]).toEqual([1, 'ACCOUNT_EXISTS'])
@@ -263,7 +258,7 @@ describe('create', () => {
       expect(mode(sandbox.dir)).toBe(0o700)
     }
 
-    // A second account under another name gets another key.
+    // A distinct account name creates an independent key.
     const other = await account('create', '--name', 'second')
     expect(other.status).toBe(0)
     expect(other.out).toContain('second')
@@ -289,19 +284,19 @@ describe('create', () => {
   })
 
   it('needs a terminal to create an account without a stored key, and shows the key once', async () => {
-    // No terminal: nothing is generated or written.
+    // Reject secret output before creating files when no terminal is attached.
     let outcome = await account('create', '--storage', 'none')
     expect(outcome.status).toBe(2)
     expect(outcome.err.startsWith('TERMINAL_REQUIRED: ')).toBe(true)
     expect(keysShown(outcome.out + outcome.err)).toEqual([])
     expect(existsSync(sandbox.dir)).toBe(false)
 
-    // Standard output redirected: the key would land in a pipe or a file.
+    // Reject private key output redirected to a pipe or file.
     sandbox.flags.terminal = true
     expect((await account('create', '--storage', 'none')).status).toBe(2)
     expect(existsSync(sandbox.dir)).toBe(false)
 
-    // A key never appears with --json, even at a terminal.
+    // Reject JSON private key output even with a terminal attached.
     sandbox.flags.outputTerminal = true
     outcome = await account('create', '--storage', 'none', '--json')
     expect(outcome.status).toBe(2)
@@ -321,7 +316,7 @@ describe('create', () => {
   })
 
   it('needs a terminal to create an account from a new phrase, and shows the phrase once', async () => {
-    // No terminal: nothing is generated or written.
+    // Reject secret output before creating files when no terminal is attached.
     let outcome = await account('create', '--mnemonic')
     expect(outcome.status).toBe(2)
     expect(outcome.err.startsWith('TERMINAL_REQUIRED: ')).toBe(true)
@@ -329,12 +324,12 @@ describe('create', () => {
     expect((outcome.out + outcome.err).includes('Recovery phrase:')).toBe(false)
     expect(existsSync(sandbox.dir)).toBe(false)
 
-    // Standard output redirected: the phrase would land in a pipe or a file.
+    // Reject recovery phrase output redirected to a pipe or file.
     sandbox.flags.terminal = true
     expect((await account('create', '--mnemonic')).status).toBe(2)
     expect(existsSync(sandbox.dir)).toBe(false)
 
-    // A phrase never appears with --json, even at a terminal.
+    // Reject JSON recovery phrase output even with a terminal attached.
     sandbox.flags.outputTerminal = true
     outcome = await account('create', '--mnemonic', '--json')
     expect(outcome.status).toBe(2)
@@ -347,16 +342,16 @@ describe('create', () => {
     expect(phrase.split(' ')).toHaveLength(12)
     expect(outcome.err.includes('Recovery phrase:')).toBe(false)
     expect(outcome.err).toContain('stored nowhere')
-    // No key is printed: the account is stored, and the phrase is the backup.
+    // Print the recovery phrase without also printing the stored private key.
     expect(keysShown(outcome.out + outcome.err)).toEqual([])
 
-    // The stored account is the first account of the phrase, as a wallet derives it.
+    // Derive account 0 on the standard Aleo path from the displayed phrase.
     const stored = await sandbox.keystore.accountInfo({ dir: sandbox.dir })
     expect(stored?.storage).toBe('plaintext')
     const derived = await accountOfPhrase(phrase)
     expect(derived.address === stored?.address).toBe(true)
     expect(derived.privateKey === (await storedKey())).toBe(true)
-    // The phrase is in no file.
+    // Keep the recovery phrase out of files in the test directory.
     for (const file of readdirSync(sandbox.dir)) {
       const text = readFileSync(join(sandbox.dir, file), 'utf8')
       expect(shows(text, phrase)).toBe(false)
@@ -396,7 +391,7 @@ describe('create', () => {
     const key = sandbox.security.entries.get(keyEntry(stored!.path))!
     expect((await accountOfPhrase(phrase)).privateKey === key).toBe(true)
     expect(shows(outcome.out + outcome.err, key)).toBe(false)
-    // The export hint is for accounts with no phrase.
+    // Show the export reminder only when no recovery phrase was generated.
     expect(outcome.err.includes('export')).toBe(false)
   })
 
@@ -432,7 +427,7 @@ describe('create', () => {
   })
 
   it('takes the password of an encrypted account from the variable or the prompt', async () => {
-    // No password source and no terminal: needs a person.
+    // Report PASSWORD_REQUIRED when no password source is available.
     expect((await account('create', '--storage', 'encrypted')).status).toBe(2)
     expect(existsSync(sandbox.dir)).toBe(false)
 
@@ -446,7 +441,7 @@ describe('create', () => {
     expect(shows(outcome.out + outcome.err, key)).toBe(false)
     expect(shows(outcome.out + outcome.err, PASSWORD)).toBe(false)
 
-    // At a terminal the password is asked for twice.
+    // Prompt for the password and confirmation.
     sandbox.flags.terminal = true
     sandbox.answers.push(OTHER_PASSWORD, OTHER_PASSWORD)
     outcome = await account('create', '--storage', 'encrypted', '--name', 'typed')
@@ -464,7 +459,7 @@ describe('create', () => {
     ])
     expect(outcome.err.includes('--save-password')).toBe(false)
 
-    // Where it cannot apply, the flag is reported as having had no effect.
+    // Report when --save-password does not apply to the selected storage.
     const plain = await account('create', '--name', 'plain', '--save-password')
     expect(plain.status).toBe(0)
     expect(plain.err).toContain('--save-password')
@@ -494,7 +489,7 @@ describe('import', () => {
     const owner = newAccount()
     const keyFile = join(sandbox.root, 'key.txt')
     writeFileSync(keyFile, `\n  ${owner.privateKey}\n`)
-    // The flag comes first: the variables are not consulted.
+    // An explicit key file takes precedence over environment keys.
     process.env.ALEO_PRIVATE_KEY = ''
     const outcome = await account('import', '--key-file', keyFile, '--json')
     expect(outcome.status).toBe(0)
@@ -502,9 +497,9 @@ describe('import', () => {
     expect((await storedKey()) === owner.privateKey).toBe(true)
     expect(shows(outcome.out + outcome.err, owner.privateKey)).toBe(false)
 
-    // Importing the same key again changes nothing and succeeds.
+    // Repeated imports preserve the existing account file.
     expect((await account('import', '--key-file', keyFile)).status).toBe(0)
-    // Another key under the same name is refused.
+    // Reject a different key for an existing account name.
     writeFileSync(keyFile, newAccount().privateKey)
     const again = await account('import', '--key-file', keyFile, '--json')
     expect([again.status, again.json.error.code]).toEqual([1, 'ACCOUNT_EXISTS'])
@@ -563,7 +558,7 @@ describe('import', () => {
     expect([outcome.status, outcome.json.error.code]).toEqual([1, 'ACCOUNT_EXISTS'])
     expect(readFileSync(existing.path).equals(before)).toBe(true)
 
-    // The same account stored another way points at protect, as a key file does.
+    // A storage mismatch directs the caller to account protect.
     process.env.ALEO_PRIVATE_KEY = await storedKey()
     process.env.ALEO_ACCOUNT_PASSWORD = PASSWORD
     const other = await account('import', '--storage', 'encrypted', '--json')
@@ -575,7 +570,7 @@ describe('import', () => {
     'stores the derived key of a recovery phrase file and not the phrase (%s)',
     async (_label, expected) => {
       const phraseFile = join(sandbox.root, 'phrase.txt')
-      // Pasted phrases arrive with stray white space and capitals.
+      // Test normalization of uppercase words and repeated whitespace.
       writeFileSync(phraseFile, `  ${PHRASE.toUpperCase().replaceAll(' ', ' \n\t ')}\n\n`)
       const outcome = await account(
         'import', '--mnemonic-file', phraseFile,
@@ -602,9 +597,9 @@ describe('import', () => {
     const phraseFile = join(sandbox.root, 'phrase.txt')
     const words = PHRASE.split(' ')
     for (const phrase of [
-      [...words.slice(0, -1), 'abandon'].join(' '), // checksum
-      words.slice(0, -1).join(' '), // word count
-      [...words.slice(0, -1), 'zzzzzz'].join(' '), // word list
+      [...words.slice(0, -1), 'abandon'].join(' '), // Invalid checksum.
+      words.slice(0, -1).join(' '), // Invalid word count.
+      [...words.slice(0, -1), 'zzzzzz'].join(' '), // Word outside the BIP-39 English list.
     ]) {
       writeFileSync(phraseFile, phrase)
       const outcome = await account('import', '--mnemonic-file', phraseFile, '--json')
@@ -615,13 +610,13 @@ describe('import', () => {
   })
 
   it('asks at a hidden prompt when nothing else supplies a key', async () => {
-    // No source and no terminal: needs a person.
+    // Report ACCOUNT_NOT_FOUND when no key source or prompt is available.
     let outcome = await account('import', '--json')
     expect([outcome.status, outcome.json.error.code]).toEqual([2, 'ACCOUNT_NOT_FOUND'])
     expect(sandbox.prompts).toEqual([])
 
     sandbox.flags.terminal = true
-    // Text that starts with APrivateKey1 is a key.
+    // Use private key validation for input with the APrivateKey1 prefix.
     const owner = newAccount()
     sandbox.answers.push(` ${owner.privateKey}\n`)
     outcome = await account('import', '--json')
@@ -630,7 +625,7 @@ describe('import', () => {
     expect(sandbox.prompts).toHaveLength(1)
     expect(shows(outcome.out + outcome.err, owner.privateKey)).toBe(false)
 
-    // Anything else is a recovery phrase, tidied before it is checked.
+    // Normalize and validate other input as a recovery phrase.
     const second = vectors.mnemonic.accounts.find((entry) => entry.derivation === 'legacy' && entry.index === 1)!
     const titled = PHRASE.split(' ').map((word) => word[0]!.toUpperCase() + word.slice(1)).join('   ')
     sandbox.answers.push(`  ${titled} `)
@@ -645,7 +640,7 @@ describe('import', () => {
     sandbox.answers.push('not a recovery phrase')
     outcome = await account('import', '--name', 'bad-phrase', '--json')
     expect([outcome.status, outcome.json.error.code]).toEqual([1, 'INVALID_MNEMONIC'])
-    // An empty or cancelled prompt enters nothing.
+    // Reject whitespace-only input as an empty key source.
     sandbox.answers.push('   ')
     outcome = await account('import', '--name', 'nothing', '--json')
     expect([outcome.status, outcome.json.error.code]).toEqual([1, 'EMPTY_KEY_SOURCE'])
@@ -713,14 +708,14 @@ describe('protect', () => {
     const before = readFileSync(accountFile())
     expect(sandbox.security.entries.size).toBe(1)
 
-    // Dropping the saved copy encrypts the account again, which needs the
-    // current password from a person; without one nothing changes.
+    // Removing a saved password requires the current password.
+    // Preserve the account and Keychain entry when it is unavailable.
     let outcome = await account('protect', '--forget-password', '--json')
     expect([outcome.status, outcome.json.error.code]).toEqual([2, 'PASSWORD_REQUIRED'])
     expect(readFileSync(accountFile()).equals(before)).toBe(true)
     expect(sandbox.security.entries.size).toBe(1)
 
-    // A wrong current password changes nothing either.
+    // Preserve the account and Keychain entry when the password is incorrect.
     sandbox.flags.terminal = true
     sandbox.answers.push(OTHER_PASSWORD)
     outcome = await account('protect', '--forget-password', '--json')
@@ -728,7 +723,7 @@ describe('protect', () => {
     expect(readFileSync(accountFile()).equals(before)).toBe(true)
     expect(sandbox.security.entries.size).toBe(1)
 
-    // The current password, typed once: the saved copy goes, the password stays.
+    // Remove the saved password while retaining it as the encryption password.
     sandbox.prompts.length = 0
     sandbox.answers.push(PASSWORD)
     outcome = await account('protect', '--forget-password', '--json')
@@ -796,7 +791,7 @@ describe('protect', () => {
     for (const [path, content] of [
       [state, { network: 'mainnet', privateKey: owner.privateKey, address: owner.address }],
       [profile, { address: owner.address, private_key: owner.privateKey, network: 'testnet' }],
-      // Another account's key is not this account's concern.
+      // Exclude keys belonging to other addresses from the warning.
       [unrelated, { network: 'testnet', privateKey: newAccount().privateKey }],
     ] as const) {
       mkdirSync(dirname(path), { recursive: true })
@@ -804,7 +799,7 @@ describe('protect', () => {
     }
     const before = [state, profile, unrelated].map((path) => readFileSync(path, 'utf8'))
 
-    // Plaintext storage promises nothing, so there is nothing to warn about.
+    // Plaintext storage does not trigger the duplicate-key warning.
     expect((await account('protect', '--storage', 'plaintext')).err).toBe('')
 
     process.env.ALEO_ACCOUNT_PASSWORD = PASSWORD
@@ -815,10 +810,10 @@ describe('protect', () => {
     expect(outcome.err.includes(unrelated)).toBe(false)
     expect(outcome.err).toContain('--storage encrypted --remove-legacy-key')
     expect(shows(outcome.out + outcome.err, owner.privateKey)).toBe(false)
-    // The files are read, never changed.
+    // Warning about plaintext copies must not modify the source files.
     expect([state, profile, unrelated].map((path) => readFileSync(path, 'utf8'))).toEqual(before)
 
-    // The suggested command strips the copy and keeps the protected account.
+    // The suggested migration removes the plaintext copy and preserves encryption.
     expect((await account('migrate', '--from', state, '--storage', 'encrypted', '--remove-legacy-key')).status).toBe(0)
     expect(JSON.parse(readFileSync(state, 'utf8')).privateKey).toBeUndefined()
     const again = await account('protect', '--storage', 'keychain')
@@ -831,10 +826,10 @@ describe('export', () => {
   it('prints the key only for a person who confirms', async () => {
     const owner = newAccount()
     await sandbox.keystore.saveAccount(owner, { dir: sandbox.dir })
-    // A key in the environment is never what export prints.
+    // Export must read the stored key even when an environment key is set.
     process.env.ALEO_PRIVATE_KEY = newAccount().privateKey
 
-    // No terminal: refused before anything is read or asked.
+    // Reject export before prompting when no terminal is attached.
     let outcome = await account('export')
     expect(outcome.status).toBe(2)
     expect(outcome.err.startsWith('TERMINAL_REQUIRED: ')).toBe(true)
@@ -846,7 +841,7 @@ describe('export', () => {
     expect([outcome.status, outcome.json.error.code]).toEqual([2, 'TERMINAL_REQUIRED'])
     expect(sandbox.prompts).toEqual([])
 
-    // Declined, or answered with anything but yes: nothing is shown.
+    // Responses other than y or yes must not reveal the key.
     for (const answer of ['n', '', 'maybe']) {
       sandbox.answers.push(answer)
       outcome = await account('export')
@@ -897,7 +892,7 @@ describe('export', () => {
 })
 
 describe('migrate', () => {
-  /** Writes a Shield Swap state file that holds its private key. */
+  /** Creates a state file containing a private key for migration tests. */
   function legacyState(path: string, owner: { address: string; privateKey: string }, network = 'testnet'): string {
     mkdirSync(dirname(path), { recursive: true })
     const text = JSON.stringify({ network, privateKey: owner.privateKey, address: owner.address, dexApiToken: 'ss_test' }, null, 2)
@@ -914,7 +909,7 @@ describe('migrate', () => {
     const outcome = await account('migrate', '--from', source, '--json')
     expect(outcome.status).toBe(0)
     expect(outcome.json).toEqual({ name: 'default', address: owner.address, storage: 'plaintext', path: accountFile() })
-    // A file of another tool is left exactly as it was.
+    // Preserve an external source file unless key removal is requested.
     expect(readFileSync(source, 'utf8') === text).toBe(true)
     expect(outcome.err).toContain(source)
     expect(outcome.err).toContain('--remove-legacy-key')
@@ -950,12 +945,12 @@ describe('migrate', () => {
     legacyState(testnetState, testnet)
     legacyState(mainnetState, mainnet, 'mainnet')
 
-    // Testnet is the default network.
+    // Use testnet when no network is selected.
     let outcome = await account('migrate', '--json')
     expect(outcome.status).toBe(0)
     expect(outcome.json.address).toBe(testnet.address)
     expect(outcome.err).toContain(testnetState)
-    // The key stays until it is stripped; the account name is recorded.
+    // Record the account name while preserving the source key by default.
     let state = JSON.parse(readFileSync(testnetState, 'utf8'))
     expect(state.privateKey === testnet.privateKey).toBe(true)
     expect(state).toMatchObject({ network: 'testnet', address: testnet.address, account: 'default', dexApiToken: 'ss_test' })
@@ -969,7 +964,7 @@ describe('migrate', () => {
     expect(state).toEqual({ network: 'mainnet', address: mainnet.address, dexApiToken: 'ss_test', account: 'main' })
     expect((await storedKey('main')) === mainnet.privateKey).toBe(true)
 
-    // SHIELD_SWAP_NETWORK selects the network too, and a stripped file has no key left.
+    // Honor SHIELD_SWAP_NETWORK and reject a source whose key was already removed.
     process.env.SHIELD_SWAP_NETWORK = 'mainnet'
     outcome = await account('migrate', '--json')
     expect([outcome.status, outcome.json.error.code]).toEqual([1, 'LEGACY_KEY_NOT_FOUND'])
@@ -999,7 +994,7 @@ describe('migrate', () => {
 
     const outcome = await account('migrate', '--remove-legacy-key', '--json')
     expect(outcome.status).toBe(0)
-    // A state file with neither a key nor an address does not count as set up.
+    // Save the address so the session remains configured after key removal.
     expect(JSON.parse(readFileSync(state, 'utf8'))).toEqual({ network: 'testnet', account: 'default', address: owner.address })
     expect((await storedKey()) === owner.privateKey).toBe(true)
   })

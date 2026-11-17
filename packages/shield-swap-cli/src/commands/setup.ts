@@ -1,49 +1,33 @@
 /**
- * Shield Swap account bootstrap — the startup gauntlet, idempotent.
+ * Configures a Shield Swap account, authenticates with the DEX API, and requests testnet funds.
  *
- * Run it as many times as needed; every step is check-then-act, so a failed
- * or interrupted run resumes where it stopped:
+ * Reuses completed setup steps when run again. Use `--private-key-file` to
+ * import an account or `--new` to generate one. Both save the key in an account
+ * file, normally `~/.aleo/accounts/<name>.json`. Keys supplied through
+ * `ALEO_PRIVATE_KEY` or `ALEO_PRIVATE_KEY_FILE` are used without being saved.
+ * Do not put private keys in command arguments or conversations.
  *
- *   1. Account             — find the key through the account keystore,
- *                            import the user's existing key into an account
- *                            file, or (only with --new) generate one there
- *   2. DEX authentication  — challenge/verify session with the account
- *   3. Provable gateway    — needs no credentials; a legacy consumer pair on
- *                            file is kept but unused on the default gateway
- *   4. Invite code         — check access; redeem a code when one is provided
- *   5. API token           — mint a long-lived ss_ token for later sessions
- *   6. Airdrop             — request testnet tokens when holdings are empty,
- *                            then poll until the PRIVATE records land
+ * After loading the account, setup authenticates, redeems an invite code if
+ * required, creates a long-lived API token, and requests an airdrop on testnet
+ * when balances are empty. It polls for the funds before reporting readiness.
  *
- * Usage:
- *   shield-swap setup --new                            # brand-new account
- *   shield-swap setup --network mainnet --private-key-file <path>   # mainnet
- *   shield-swap setup --private-key-file <path>        # returning user (key in a file)
- *   shield-swap setup --new --name trading             # a named account file
- *   shield-swap setup --invite-code CODE               # when access is locked
- *   shield-swap setup --api-url <origin>               # pin a DEX API deployment
+ * Saves the address, account name, and DEX credentials in
+ * `./.shield-swap/<network>/state.json`. Preserves any private key already
+ * there; `shield-swap account migrate --remove-legacy-key` removes that copy.
+ * Keep the state directory out of version control.
  *
- * A private key is NEVER pasted into a conversation or command history: a
- * returning user either writes it to a file and passes the path, or exports
- * ALEO_PRIVATE_KEY (or ALEO_PRIVATE_KEY_FILE) in their own shell. A key
- * passed with --private-key-file, or generated with --new, is stored in the
- * account file (~/.aleo/accounts/<name>.json by default). A key from the
- * environment is used for the run and written nowhere. Other environment
- * fallbacks: SHIELD_SWAP_INVITE_CODE, SHIELD_SWAP_API_URL.
+ * The network comes from `--network`, then `SHIELD_SWAP_NETWORK`, then `testnet`.
+ * Mainnet requires an already funded account and never requests an airdrop.
+ * Session state is separate for each network.
  *
- * Exit codes: 0 ready · 2 needs input from the user (message says what) ·
- * 3 airdrop still pending · 1 anything else.
+ * Exit codes: 0 when ready, 2 when account configuration or input is needed,
+ * 3 while an airdrop is pending, and 1 for other failures.
  *
- * State lands in ./.shield-swap/<network>/state.json: the address, the
- * account name and the DEX credentials — gitignore it. This command never
- * writes a private key there; a state file that already holds one keeps it
- * until `shield-swap account migrate` moves it. The state is not
- * shared between networks, including the blinded identity store, whose
- * reservations are only meaningful against the chain they were checked on.
- *
- * Mainnet moves real value, so it is never the default: pass
- * `--network mainnet` explicitly. The airdrop step is testnet-only and refuses
- * to run on mainnet rather than pretending a faucet exists.
+ * @example
+ * shield-swap setup --new --name trading
+ * shield-swap setup --private-key-file /path/to/key.txt
+ * shield-swap setup --network mainnet
+ * shield-swap setup --invite-code CODE
  */
 import { readFileSync } from 'node:fs'
 import { help } from '../color.js'
@@ -99,21 +83,19 @@ function argValue(argv: string[], flag: string): string | undefined {
   return i >= 0 ? argv[i + 1] : undefined
 }
 
-/** Keystore error codes the user has to resolve. Setup exits 2 on them, and a retry does not help. */
+/**
+ * Identifies missing account credentials that cause setup to exit with code 2.
+ */
 const NEEDS_PERSON = new Set(['ACCOUNT_NOT_FOUND', 'KEY_NOT_STORED', 'PASSWORD_REQUIRED'])
 
 /**
- * Reads the private key to import from the file named by `--private-key-file`.
+ * Reads the private key file selected for import into account storage.
  *
- * The key itself never travels through a conversation or the command line: it
- * is read from a file the user wrote. A key the user exported in their own
- * shell is not an import: the account lookup uses it for the run and it is
- * never stored.
+ * Environment keys are resolved separately and are not imported by setup.
  *
- * @param argv Arguments after the subcommand name.
- * @returns The key to store in the account file, or undefined when the flag
- *   is absent.
- * @throws If the named key file is empty.
+ * @param argv Setup arguments containing an optional `--private-key-file` path.
+ * @returns The trimmed key, or `undefined` if no key file was selected.
+ * @throws If the file cannot be read or contains no non-whitespace characters.
  */
 function resolveImportKey(argv: string[]): string | undefined {
   const keyFile = argValue(argv, '--private-key-file')
@@ -139,15 +121,12 @@ async function setup(argv: string[]): Promise<void> {
   const importKey = resolveImportKey(argv)
   const name = argValue(argv, '--name')
 
-  // ── 1 + 2: account ──────────────────────────────────────────────────
+  // Load or create the account for the selected network.
   let state = loadState(network)
   console.log(`network: ${network}  ·  state: ${stateDir(network)}`)
 
-  // Pin the DEX API deployment. The access grant, API token, and airdrop
-  // job all live in one deployment's database — switching deployments
-  // invalidates them, so clear them and let the later steps re-derive.
-  // The account and Provable API credentials are NOT touched (chain- and
-  // prover-scoped, not DEX-scoped).
+  // Changing the DEX API origin requires a new access check, token, and
+  // airdrop lookup. Preserve the account and separate Provable credentials.
   if (apiUrl && apiUrl !== (state.apiUrl ?? DEFAULT_API_URL)) {
     state.apiUrl = apiUrl
     state.dexApiToken = undefined
@@ -173,8 +152,7 @@ async function setup(argv: string[]): Promise<void> {
       process.exit(2)
     }
     if (err instanceof KeystoreError && NEEDS_PERSON.has(err.code)) {
-      // The account exists but its key cannot be reached without the user: no
-      // key in the environment, no stored key, or no password.
+      // Report the missing account, key, or password before stopping setup.
       console.error(`\n${err.code}: ${err.message}\n`)
       process.exit(2)
     }
@@ -191,11 +169,8 @@ async function setup(argv: string[]): Promise<void> {
   }
 
   // ── 3: wire the client and authenticate with the DEX API ────────────
-  // The network must be passed explicitly: loadSession defaults to testnet, so
-  // omitting it would authenticate and redeem against testnet while writing
-  // the results into the network-scoped state this script resolved.
-  // The name is passed again so an explicit --name also takes precedence
-  // over ALEO_ACCOUNT here.
+  // Authenticate with the network and account selected for this setup run.
+  // Passing the explicit name preserves its precedence over ALEO_ACCOUNT.
   const { client, account } = await loadSession({ network, name })
   console.log('✓ DEX API session established (challenge/verify)')
 

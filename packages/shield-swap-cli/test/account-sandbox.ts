@@ -4,16 +4,13 @@ import { join } from 'node:path'
 import { vi } from 'vitest'
 
 /**
- * A sealed environment for tests that store or look up an Aleo account.
+ * Isolates account tests from the developer's credentials and files.
  *
- * Every test gets a fresh temporary directory holding the accounts directory,
- * the Shield Swap state directory and the home directory. The key, account
- * and password variables a developer's shell may carry are cleared first, and
- * the Keychain tool and the terminal are replaced, so nothing reads or writes
- * the developer's own accounts, state or Keychain.
+ * Uses temporary home, account, and session directories. Clears credential
+ * variables and replaces Keychain and terminal access for each test.
  */
 
-/** Variables a developer's shell could leak into a test. */
+/** Lists environment settings to clear before each account test. */
 const VARIABLES = [
   'ALEO_PRIVATE_KEY',
   'ALEO_PRIVATE_KEY_FILE',
@@ -30,13 +27,15 @@ const VARIABLES = [
   'USERPROFILE',
 ] as const
 
-/** Test-only passwords. Never used for a funded account. */
+/** Supplies a password for encrypted test accounts. */
 export const PASSWORD = 'correct horse battery staple'
+/** Supplies a different password for rejection and password-change tests. */
 export const OTHER_PASSWORD = 'another test password'
 
+/** Indicates whether to assert POSIX file permission bits. */
 export const posix = process.platform !== 'win32'
 
-/** An in-memory stand-in for the macOS `security` tool. */
+/** Simulates Keychain reads and writes in memory and records command calls. */
 function fakeSecurity() {
   const entries = new Map<string, string>()
   const calls: Array<{ args: string[]; stdin?: string }> = []
@@ -60,16 +59,53 @@ function fakeSecurity() {
   return { entries, calls, run }
 }
 
-/** What one command left behind: exit status, standard output, standard error. */
+/**
+ * Captures a command's exit status and output for assertions.
+ *
+ * @property status First requested exit code, or the final process exit code.
+ * @property out Captured standard output joined with newlines.
+ * @property err Captured errors and terminal notices joined with newlines.
+ * @property json Parses standard output as JSON when accessed; throws for
+ *   output that is not valid JSON.
+ *
+ * @example
+ * const sandbox = await openSandbox()
+ * const { main } = await import('../src/commands/account.js')
+ * const outcome: Outcome = await sandbox.run(main, ['show', '--json'])
+ * sandbox.close()
+ */
 export type Outcome = { status: number; out: string; err: string; json: any }
 
+/**
+ * Provides temporary account files, mocked system access, and command capture.
+ *
+ * Call `close()` after each test to restore process settings and remove files.
+ *
+ * @example
+ * const sandbox: Sandbox = await openSandbox()
+ * sandbox.close()
+ */
 export type Sandbox = Awaited<ReturnType<typeof openSandbox>>
 
 /**
- * Opens a sealed environment and loads fresh copies of the modules under test.
+ * Creates an isolated environment for account tests.
  *
- * The modules are loaded after the environment is in place, because the state
- * directory is read when the session module is first evaluated.
+ * Clears credential variables, creates temporary directories, and replaces
+ * terminal and Keychain access. Loads fresh modules after setting the paths
+ * because state paths are read during module initialization.
+ *
+ * @returns Test paths, mocked services, captured input and output, a command
+ *   runner, and `close()` to restore the environment and remove test files.
+ * @throws If setup fails or the keystore does not use the replaced runtime.
+ *
+ * @example
+ * const sandbox = await openSandbox()
+ * try {
+ *   const { main } = await import('../src/commands/account.js')
+ *   const outcome = await sandbox.run(main, ['show', '--json'])
+ * } finally {
+ *   sandbox.close()
+ * }
  */
 export async function openSandbox() {
   const savedEnv: Record<string, string | undefined> = {}
@@ -102,8 +138,7 @@ export async function openSandbox() {
   }
 
   vi.resetModules()
-  // The keystore's process-level facilities. Not part of the SDK's public
-  // entry points; reached by path so the Keychain tool can be replaced.
+  // Import the internal runtime to replace Keychain and terminal access.
   const { runtime } = await import('../../provable-sdk/src/keystore/runtime.js')
   runtime.platform = 'darwin'
   runtime.homedir = () => home
@@ -114,9 +149,7 @@ export async function openSandbox() {
 
   const sdk = await import('@provablehq/veil-aleo-sdk')
   const keystore = await import('@provablehq/veil-aleo-sdk/node')
-  // Proof that the facilities replaced above are the ones the keystore uses:
-  // a lookup under "~" must land in the temporary home. Nothing below runs
-  // otherwise, so the real Keychain is never reached.
+  // Verify that the keystore uses the temporary home before running commands.
   const probe = await keystore.loadAccount({ dir: '~/probe', prompt: false }).catch((error: Error) => error.message)
   if (typeof probe !== 'string' || !probe.includes(join(home, 'probe'))) {
     throw new Error('the keystore under test does not use the replaced runtime')
@@ -134,15 +167,14 @@ export async function openSandbox() {
   process.exitCode = undefined
   vi.spyOn(console, 'log').mockImplementation((line: unknown) => void out.push(String(line)))
   vi.spyOn(console, 'error').mockImplementation((...parts: unknown[]) => void err.push(parts.map(String).join(' ')))
-  // A real exit ends the process at once. The stand-in throws to stop the
-  // command, and records the code, because a command may catch what is thrown.
+  // Record exit attempts separately because command code may catch the mock error.
   const exits: number[] = []
   vi.spyOn(process, 'exit').mockImplementation((code) => {
     exits.push(Number(code ?? 0))
     throw new Error(`EXIT:${code}`)
   })
 
-  /** Runs a command's `main` and collects its exit status and output. */
+  /** Runs a command with captured output and records its first attempted exit. */
   const run = async (main: (argv: string[]) => Promise<void>, argv: string[]): Promise<Outcome> => {
     out.length = 0
     err.length = 0
@@ -154,15 +186,14 @@ export async function openSandbox() {
     } catch (error) {
       if (!/^EXIT:\d+$/.test((error as Error).message)) throw error
     }
-    // The first exit is the one a real process would have taken.
+    // A real process would stop at the first exit call.
     const status = exits[0] ?? Number(process.exitCode ?? 0)
     process.exitCode = undefined
     const text = out.join('\n')
     return {
       status,
       out: text,
-      // Notes and errors of the keystore and the command go through the
-      // replaced terminal; usage text goes to console.error.
+      // Combine captured console errors with notices from the mocked terminal.
       err: [...err, ...notes].join('\n'),
       get json() {
         return JSON.parse(text)
@@ -185,7 +216,7 @@ export async function openSandbox() {
     sdk,
     keystore,
     run,
-    /** Restores the environment and removes the temporary directory. */
+    /** Restores mocks, environment, and exit status, then removes test files. */
     close() {
       vi.restoreAllMocks()
       process.exitCode = previousExitCode
@@ -198,7 +229,16 @@ export async function openSandbox() {
   }
 }
 
-/** The permission bits of a file or directory. */
+/**
+ * Reads a file or directory's POSIX permission bits.
+ *
+ * @param path File or directory to inspect.
+ * @returns Permission bits masked to 0o777.
+ * @throws If the path cannot be inspected.
+ *
+ * @example
+ * const permissions = mode(tmpdir())
+ */
 export function mode(path: string): number {
   return statSync(path).mode & 0o777
 }
