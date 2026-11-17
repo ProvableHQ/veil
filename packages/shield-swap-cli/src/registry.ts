@@ -27,6 +27,10 @@ export type Command = {
  * reachable, listed in `--help`, and covered by the registry test.
  */
 export const COMMANDS: Record<string, Command> = {
+  account: {
+    summary: 'Create, import, show, protect, export, or migrate the stored Aleo account.',
+    load: () => import('./commands/account.js'),
+  },
   setup: {
     summary: 'Set up all credentials required for Shield Swap.',
     load: () => import('./commands/setup.js'),
@@ -105,5 +109,6 @@ Common to every command below setup:
   -h, --help                    this text, or a command's own when it follows one
 
 setup takes --network and its own options, but neither --execute nor --json:
-it is check-then-act throughout and reports progress as text.`
+it is check-then-act throughout and reports progress as text. account takes
+its own options and --json, and never contacts the network.`
 }

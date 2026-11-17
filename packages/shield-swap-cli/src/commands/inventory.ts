@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
+import { KeystoreError } from '@provablehq/veil-aleo-sdk/node'
+import { resolveAccount } from '../account-lookup.js'
 import { sqliteRecordInventoryStore } from '../storage.js'
 import { parseInventoryConfig } from '../inventory/config.js'
 import { runInventoryCycle, type InventoryCycleResult } from '../inventory/runner.js'
@@ -23,7 +25,7 @@ const HELP = `shield-swap inventory <inspect|plan|rebalance|run|status>
   -h, --help           Show this help
 
 Amounts in configuration are decimal strings in token base units.
-Uses ALEO_PRIVATE_KEY (or config.privateKeyEnv), then the Shield Swap account.
+Uses ALEO_PRIVATE_KEY (or config.privateKeyEnv), then the stored Aleo account.
 run stays in the foreground for a service manager; Ctrl-C preserves pending work.
 Node 22.13 or newer is required. No DEX authentication is needed.`
 
@@ -31,11 +33,17 @@ Node 22.13 or newer is required. No DEX authentication is needed.`
 const print = (value: unknown) => output(value, data => console.log(JSON.stringify(data, (_, item) => typeof item === 'bigint' ? item.toString() : item, 2)))
 
 /**
- * Dispatches record inspection, planning, maintenance, and journal status.
- * Reads the configured account without DEX authentication. Only explicit
- * --execute on rebalance or run may prove and submit transactions.
- * @param argv Arguments following `shield-swap inventory`.
- * @returns Resolves after output or shutdown; failures set the process exit code.
+ * Inspects private records, plans joins and splits, or runs record maintenance.
+ *
+ * Uses the key in the configured environment variable when nonempty;
+ * otherwise resolves the account from the session settings. Does not require
+ * DEX authentication. Only `rebalance` or `run` with `--execute` can prove
+ * and submit transactions.
+ *
+ * @param argv Subcommand and flags following `shield-swap inventory`.
+ * @returns Resolves after printing results or stopping the foreground runner.
+ *   Failures set the process exit code.
+ *
  * @example
  * await main(['plan', '--asset', 'credits.aleo', '--records', '4', '--json'])
  */
@@ -61,8 +69,16 @@ export async function main(argv: string[]): Promise<void> {
     if (values.asset) raw.policies = [{ asset: { program: values.asset, standard: values.standard, recordName: values['record-name'], amountField: values['amount-field'] }, target: { records: Number(values.records ?? '1') } }]
     const config = parseInventoryConfig(raw)
     if (command !== 'status' && !config.policies.length) throw new Error('Supply --asset or configure at least one inventory policy')
-    const privateKey = process.env[config.privateKeyEnv] || loadState(config.network).privateKey
-    if (!privateKey) throw new Error(`Set ${config.privateKeyEnv} or run shield-swap setup --network ${config.network} to configure an account`)
+    // A nonempty configured key bypasses the saved account and address check.
+    // Otherwise, use the session's account lookup and address validation.
+    const privateKey =
+      process.env[config.privateKeyEnv] ||
+      (
+        await resolveAccount({ state: loadState(config.network) }).catch((error: unknown) => {
+          if (!(error instanceof KeystoreError) || error.code !== 'ACCOUNT_NOT_FOUND') throw error
+          throw new Error(`Set ${config.privateKeyEnv} or run shield-swap setup --network ${config.network} to configure an account`, { cause: error })
+        })
+      ).account.privateKey
     const aleo = await loadNetwork(config.network)
     const store = await sqliteRecordInventoryStore(config.database)
     let scope: string | undefined

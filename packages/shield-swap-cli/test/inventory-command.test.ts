@@ -5,12 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadNetwork } from '@provablehq/veil-aleo-sdk'
 import { COMMANDS } from '../src/registry.js'
 import { setJsonMode } from '../src/shared.js'
+import { KeystoreError } from '@provablehq/veil-aleo-sdk/node'
+import { resolveAccount } from '../src/account-lookup.js'
 import { loadState } from '../src/session.js'
 
 // Replace the external signer/scanner boundary; parsing, command dispatch,
 // configuration, JSON output, and SQLite reservations remain real.
 vi.mock('@provablehq/veil-aleo-sdk', () => ({ loadNetwork: vi.fn(), generateAccount: vi.fn() }))
 vi.mock('../src/session.js', async original => ({ ...await original<object>(), loadState: vi.fn() }))
+// Mock account lookup to isolate command tests from files and the Keychain.
+// account-session.test.ts covers lookup behavior.
+vi.mock('../src/account-lookup.js', () => ({ resolveAccount: vi.fn() }))
 vi.mock('../src/inventory/runner.js', () => ({ runInventoryCycle: vi.fn() }))
 
 let directory: string, database: string, stdout: string[], options: any[], executions: number
@@ -24,6 +29,11 @@ beforeEach(async () => {
   vi.stubEnv('SHIELD_SWAP_NETWORK', 'testnet')
   vi.stubEnv('VEIL_INVENTORY_DB', database)
   vi.mocked(loadState).mockImplementation(network => ({ network, privateKey: `state-key-${network}` }))
+  vi.mocked(resolveAccount).mockImplementation(async ({ state, privateKey }) => {
+    const key = privateKey ?? state.privateKey
+    if (!key) throw new KeystoreError('ACCOUNT_NOT_FOUND', 'No Aleo account found.')
+    return { account: { privateKey: key, address: 'aleo1fixture' }, source: privateKey ? 'argument' : 'legacy' } as any
+  })
   vi.spyOn(console, 'log').mockImplementation(value => { stdout.push(String(value)) })
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(process, 'exit').mockImplementation(code => { throw new Error(`EXIT:${code}`) })
@@ -80,6 +90,8 @@ describe('shield-swap inventory command', () => {
     expect(result.plans[0].inputs[0].amount).toBe('100')
     expect(result.network).toBe('testnet')
     expect(options[0].privateKey).toBe('state-key-testnet')
+    // An empty configured key must invoke the session account lookup.
+    expect(vi.mocked(resolveAccount).mock.calls[0]![0]).toEqual({ state: { network: 'testnet', privateKey: 'state-key-testnet' } })
     expect(options[0].recordManagement).toMatchObject({ enabled: true, chainId: 'aleo:testnet' })
     expect(executions).toBe(0)
     expect(await entries()).toEqual([])
@@ -91,10 +103,21 @@ describe('shield-swap inventory command', () => {
     expect(JSON.parse(stdout.join('\n')).inventories.map((item: any) => item.asset.program)).toEqual(['first.aleo', 'second.aleo'])
     expect(stdout.join('\n')).not.toContain('private-record-content')
   })
+  it('reads the key from the variable named by privateKeyEnv', async () => {
+    vi.stubEnv('INVENTORY_TEST_KEY', 'configured-variable-key')
+    const config = join(directory, 'policies.json')
+    await writeFile(config, JSON.stringify({ privateKeyEnv: 'INVENTORY_TEST_KEY', policies: [{ asset: { program: 'credits.aleo' }, target: { records: 2 } }] }))
+    await inventory(['plan', '--config', config, '--json'])
+    // A nonempty configured key bypasses session account lookup.
+    expect(vi.mocked(resolveAccount)).not.toHaveBeenCalled()
+    expect(options[0].privateKey).toBe('configured-variable-key')
+  })
   it('honors explicit network, database, field, and environment-key overrides', async () => {
     vi.stubEnv('ALEO_PRIVATE_KEY', 'environment-key')
     await inventory(['plan', '--asset', 'points.aleo', '--record-name', 'Balance', '--amount-field', 'points', '--network', 'mainnet', '--database', join(directory, 'other.sqlite'), '--json'])
     expect(options[0]).toMatchObject({ network: 'mainnet', privateKey: 'environment-key', recordManagement: { chainId: 'aleo:mainnet' } })
+    // A nonempty configured key bypasses session account lookup.
+    expect(vi.mocked(resolveAccount)).not.toHaveBeenCalled()
     expect(JSON.parse(stdout.join('\n')).plans[0].asset).toMatchObject({ program: 'points.aleo', recordName: 'Balance', amountField: 'points' })
   })
   it('executes maintenance only with --execute and releases only the manager lease', async () => {

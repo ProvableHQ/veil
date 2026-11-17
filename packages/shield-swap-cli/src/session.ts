@@ -1,36 +1,29 @@
 /**
- * Shared session plumbing for the `shield-swap` command.
+ * Creates authenticated Shield Swap sessions for CLI commands and scripts.
  *
- * Owns the state file (`./.shield-swap/<network>/state.json` by default) and
- * the client wiring, so every command starts from `loadSession()` and gets a
- * fully authenticated client plus persistent storage for the one thing that
- * must survive a crash and cannot be rediscovered: the private key, plus the
- * DEX grants tied to it.
+ * Import `@provablehq/shield-swap-cli/session` to share the CLI's saved account
+ * selection, DEX credentials, and blinded identity store.
  *
- * Exported as `@provablehq/shield-swap-cli/session` so a script driving the SDK
- * directly can share the same state file the command line writes.
+ * Session state is saved in `./.shield-swap/<network>/state.json` by default.
+ * Signing keys come from the environment, an account file, or a private key
+ * already present in the state file. Generated and imported keys are saved
+ * in account files, normally under `~/.aleo/accounts`.
  *
- * Nothing else is stored. Swap handles belong to the SDK's blinded identity
- * store, and positions are discovered from records with
- * `client.getOwnedPositions()` — a local list of either could only ever be a
- * stale copy of what the chain already knows.
+ * Testnet and mainnet use separate session state and blinded identity files.
+ * Account files can be used on either network. Swap recovery data belongs to
+ * the blinded identity store; positions are read with `getOwnedPositions()`.
  *
- * Everything is scoped by network. Nothing is shared between testnet and
- * mainnet: not the key, not the API grant, and above all not the identity
- * store, whose reservations are only meaningful against one chain.
- *
- * The state file holds a private key and API credentials — keep it out of
- * version control (`.shield-swap/` belongs in .gitignore) and treat it like
- * a wallet file.
+ * Keep `.shield-swap/` out of version control. State files contain API
+ * credentials and may also contain private keys.
  */
-import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync, renameSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  loadNetwork,
-  generateAccount,
-} from '@provablehq/veil-aleo-sdk'
+import { loadNetwork, generateAccount } from '@provablehq/veil-aleo-sdk'
+import { KeystoreError, accountInfo, saveAccount, type LoadedAccount } from '@provablehq/veil-aleo-sdk/node'
 import { shieldSwapActions, getPrivateBalances, parseUnits, DEFAULT_PROGRAM } from '@provablehq/shield-swap-sdk'
 import { fileBlindedIdentityStore } from '@provablehq/shield-swap-sdk/node'
+import { accountName, accountOfKey, resolveAccount } from './account-lookup.js'
+import { STATE_ROOT, existingStatePath, statePath, writeStateFile } from './state-files.js'
 
 /** The networks these scripts run against. */
 export type Network = 'testnet' | 'mainnet'
@@ -56,25 +49,38 @@ export function resolveNetwork(explicit?: string): Network {
 
 export const NETWORK_URL = 'https://edge.provable.com/api/v2'
 
-/** Everything that must survive between agent sessions. */
+/**
+ * Stores the account selection and DEX credentials for a network's session.
+ *
+ * @property network Network associated with the session state.
+ * @property apiUrl Optional DEX API origin. Defaults to the SDK's hosted API.
+ *   Setup clears access, API token, and airdrop state when this origin changes.
+ * @property privateKey Optional fallback key, used when the environment and
+ *   account file supply none. Setup preserves existing values but stores new
+ *   keys in account files. Use `account migrate --remove-legacy-key` to remove it.
+ * @property address Optional account address checked against the resolved key.
+ *   Setup records it; a session requires this address or a stored private key.
+ * @property account Optional saved account name. Used unless an explicit name
+ *   or `ALEO_ACCOUNT` overrides it; otherwise the name defaults to `default`.
+ * @property dexApiToken Optional long-lived DEX API token created during setup.
+ * @property accessRedeemed Records whether setup confirmed invite-code access.
+ *   Absent until access has been checked.
+ * @property airdropJobId Optional faucet job to resume checking on subsequent
+ *   setup runs instead of requesting another airdrop.
+ *
+ * @example
+ * const state: ShieldSwapState = { network: 'testnet', account: 'trading' }
+ */
 export type ShieldSwapState = {
   network: string
-  /**
-   * DEX API origin this session targets. Unset means the SDK's default
-   * hosted deployment. Set by `shield-swap setup` (`--api-url` / SHIELD_SWAP_API_URL);
-   * the access grant, API token, and airdrop job are scoped to one
-   * deployment, so setup clears them when this changes.
-   */
   apiUrl?: string
   privateKey?: string
   address?: string
+  account?: string
   dexApiToken?: string
   accessRedeemed?: boolean
-  /** Faucet job already requested for this account — prevents double-drawing on re-runs. */
   airdropJobId?: string
 }
-
-const STATE_ROOT = process.env.SHIELD_SWAP_STATE_DIR ?? join(process.cwd(), '.shield-swap')
 
 /** Per-network state directory. Nothing is shared between networks. */
 export function stateDir(network: Network): string {
@@ -93,13 +99,6 @@ export function blindedStorePath(network: Network): string {
   return join(stateDir(network), 'blinded.json')
 }
 
-function statePath(network: Network): string {
-  return join(stateDir(network), 'state.json')
-}
-
-/** The pre-network layout, still read for testnet so existing keys survive. */
-const LEGACY_STATE_PATH = join(STATE_ROOT, 'state.json')
-
 /**
  * Reads a network's state file, or returns a fresh empty state.
  *
@@ -108,32 +107,30 @@ const LEGACY_STATE_PATH = join(STATE_ROOT, 'state.json')
  * network-scoped path.
  */
 export function loadState(network: Network): ShieldSwapState {
-  const path = existsSync(statePath(network))
-    ? statePath(network)
-    : network === 'testnet' && existsSync(LEGACY_STATE_PATH)
-      ? LEGACY_STATE_PATH
-      : undefined
+  const path = existingStatePath(network)
   if (!path) return { network }
   const parsed = JSON.parse(readFileSync(path, 'utf8')) as ShieldSwapState
-  // A state file that names a different network is a wrong-chain hazard: its
-  // key is fine but its access grant, API token, and airdrop job are not.
+  // Use the requested network even if the file contains a different network name.
   parsed.network = network
   return parsed
 }
 
 /**
- * Writes the state file atomically (temp file + rename, 0600 — it holds the
- * private key). A crash mid-write can never truncate the only copy of the
- * key and the open swap handles.
+ * Saves session state for its selected network.
+ *
+ * Creates the network directory if needed and replaces the state file
+ * atomically. Writes with mode 0600 for owner-only access on POSIX systems.
+ *
+ * @param state Session data to write, including the network that selects its path.
+ * @throws If the network is invalid or the state cannot be serialized or written.
+ *
+ * @example
+ * saveState({ network: 'testnet', account: 'trading' })
  */
 export function saveState(state: ShieldSwapState): void {
   const network = resolveNetwork(state.network)
   mkdirSync(stateDir(network), { recursive: true })
-  const target = statePath(network)
-  const tmp = `${target}.tmp`
-  writeFileSync(tmp, JSON.stringify(state, null, 2))
-  chmodSync(tmp, 0o600)
-  renameSync(tmp, target)
+  writeStateFile(statePath(network), state)
 }
 
 
@@ -223,23 +220,42 @@ export function namedAmounts(params: {
 }
 
 /**
- * Builds the fully wired, authenticated session from the state file.
+ * Opens the CLI's trading account for use in a Veil script.
  *
- * Requires `shield-swap setup` to have run (key material in the state file).
- * Authenticates with the DEX API on every call — the session JWT covers
- * everything including access/token management, and auto-renews on expiry.
+ * Run `shield-swap setup` first, then call this helper to trade with the same
+ * address and retain swap recovery data between the CLI and the script.
+ * The saved address is checked against the resolved key to prevent signing
+ * with a different account. An encrypted account may prompt for its password;
+ * unattended scripts need a password source such as `ALEO_ACCOUNT_PASSWORD`
+ * or a password saved in the macOS Keychain.
  *
- * The Provable gateway needs no credentials: proving and record scanning work
- * from the private key alone, so nothing is registered or minted.
+ * Authenticates with the DEX API on each call and opens the network's blinded
+ * identity store for swap reservations and recovery. If `VEIL_INVENTORY_DB`
+ * is set, also opens that database for record reservations.
+ *
+ * @param options Optional network and account selection. Defaults to `{}`.
+ * @param options.network Optional network. Defaults to `SHIELD_SWAP_NETWORK`,
+ *   then `testnet`.
+ * @param options.name Optional account name. Defaults to `ALEO_ACCOUNT`, then
+ *   the name in the state file, then `default`.
+ * @returns The authenticated client, signing account, session state, network
+ *   name and SDK, and blinded identity store.
+ * @throws If session state is missing, the key does not match the saved address,
+ *   the account cannot be unlocked, storage cannot be opened, or authentication fails.
+ *
+ * @example
+ * const { client, account } = await loadSession({ network: 'testnet' })
  */
-export async function loadSession(options: { network?: string } = {}) {
+export async function loadSession(options: { network?: string; name?: string } = {}) {
   const network = resolveNetwork(options.network)
   const state = loadState(network)
-  if (!state.privateKey) {
+  // Accept either a saved address or a key from which the address can be derived.
+  if (!state.address && !state.privateKey) {
     throw new Error(
       `No shield-swap session found for ${network} — run \`shield-swap setup --network ${network}\` first (see startup.md).`,
     )
   }
+  const { account: signer } = await resolveAccount({ state, name: options.name })
 
   const aleo = await loadNetwork(network)
   // Open the shared journal only when the caller explicitly selects a database.
@@ -250,7 +266,7 @@ export async function loadSession(options: { network?: string } = {}) {
   // No prover or scanner URL: both default to the Provable gateway and take the
   // network from the client, so naming them here would only risk drift.
   const { walletClient, account } = aleo.createAleoClient({
-    privateKey: state.privateKey,
+    privateKey: signer.privateKey,
     networkUrl: NETWORK_URL,
     // Apply the shared reservations to wallet writes and Shield Swap actions.
     recordManagement: inventoryStore ? {
@@ -306,36 +322,98 @@ export async function pollUntil(fn: () => Promise<boolean>, attempts: number, in
 }
 
 /**
- * Resolves key material and stores it. Priority: existing state → imported
- * key (`importKey`) → fresh generation, but only when `allowGenerate` is
- * true. Returning users keep their account; a fresh key is never created
- * silently.
+ * Sets up a Shield Swap session to use an existing or newly created account.
+ *
+ * Use `importKey` to save an existing key or `allowGenerate` to create an
+ * account when no key is available. Otherwise, uses the environment, account
+ * file, or key in the state file. An existing session cannot switch addresses.
+ *
+ * Prefer creating or importing a protected account with `shield-swap account`
+ * before calling this helper. New account files written here use plaintext:
+ * anyone who can read the file can use its key. Use `account protect --storage
+ * keychain` on macOS or `--storage encrypted` to protect an existing file.
+ * Environment keys are not copied to disk, and keys already in the state file
+ * are preserved. Loading an encrypted account may prompt for a password.
+ *
+ * @param state Session state to update in place and save.
+ * @param options Optional key import, generation, and account selection.
+ *   Defaults to `{}`.
+ * @param options.importKey Optional private key to save before account lookup.
+ *   Must match the saved address, if present. When omitted, imports no key.
+ * @param options.allowGenerate Creates an account only if no key is found and
+ *   the state has no address. Defaults to false.
+ * @param options.name Optional account name. Defaults to `ALEO_ACCOUNT`, then
+ *   the name in the state file, then `default`.
+ * @returns The updated and saved state.
+ * @throws NeedsConfigDecisionError If no account is available and generation
+ *   is not allowed.
+ * @throws If the imported or resolved key conflicts with the saved account,
+ *   an address-only file cannot store the imported key, a configured account
+ *   has no available key, or account or state storage fails.
+ *
+ * @example
+ * const state = await ensureKeyMaterial(loadState('testnet'), { allowGenerate: true })
  */
 export async function ensureKeyMaterial(
   state: ShieldSwapState,
-  options: { importKey?: string; allowGenerate?: boolean } = {},
+  options: { importKey?: string; allowGenerate?: boolean; name?: string } = {},
 ): Promise<ShieldSwapState> {
-  const network = resolveNetwork(state.network)
-  await loadNetwork(network) // initializes the WASM the account helpers use
-  if (state.privateKey && options.importKey && options.importKey !== state.privateKey) {
-    throw new Error(
-      `a DIFFERENT account is already configured here (${state.address ?? 'address unknown'}). ` +
-        'Refusing to switch silently — its funds and access live on that key. To use the imported ' +
-        `key instead, move or delete the state directory first, then re-run with --private-key-file.`,
-    )
-  }
-  if (!state.privateKey) {
-    if (options.importKey) {
-      state.privateKey = options.importKey
-    } else if (options.allowGenerate) {
-      state.privateKey = generateAccount().privateKey
-    } else {
-      throw new NeedsConfigDecisionError()
+  // Validate the network before writing an account file.
+  resolveNetwork(state.network)
+  const name = accountName(state, options.name)
+  const selected = name === undefined ? {} : { name }
+
+  if (options.importKey !== undefined) {
+    const imported = accountOfKey(options.importKey, 'The key to import')
+    // Derive the expected address if the state contains only a key.
+    const recorded =
+      state.address ??
+      (state.privateKey ? accountOfKey(state.privateKey, 'The key in the state file').address : undefined)
+    if (recorded !== undefined && recorded !== imported.address) {
+      throw new Error(
+        `a DIFFERENT account is already configured here (${recorded}). ` +
+          'Refusing to switch silently — its funds and access live on that key. To use the imported ' +
+          `key instead, move or delete the state directory first, then re-run with --private-key-file.`,
+      )
     }
+    // Preserve the existing storage when the same account is already saved.
+    const existing = await accountInfo(selected)
+    if (existing?.address === imported.address && existing.storage === 'none') {
+      // Address-only storage cannot accept an imported key. Explain how to
+      // supply the key or replace the file before attempting a lookup.
+      throw new KeystoreError(
+        'KEY_NOT_STORED',
+        `Account file ${existing.path} records the address ${existing.address} without a key, so the imported ` +
+          'key cannot be stored in it. Supply the key through ALEO_PRIVATE_KEY or ALEO_PRIVATE_KEY_FILE on ' +
+          'every run, or remove that file and import again.',
+      )
+    }
+    if (existing?.address !== imported.address) await saveAccount(imported, selected)
   }
-  // Derive the address from the key so imported/seeded states are complete.
-  const aleo = await loadNetwork(network)
-  state.address = aleo.privateKeyToAccount(state.privateKey).address
+
+  let loaded: LoadedAccount
+  try {
+    loaded = await resolveAccount({ state, name: options.name })
+  } catch (error) {
+    if (!(error instanceof KeystoreError) || error.code !== 'ACCOUNT_NOT_FOUND') throw error
+    // Require the existing account's key; a generated account cannot access its funds.
+    if (state.address) {
+      throw new KeystoreError(
+        'ACCOUNT_NOT_FOUND',
+        `This state directory is set up for ${state.address}, and the key of that account was not found. ${error.message}`,
+      )
+    }
+    if (!options.allowGenerate) throw new NeedsConfigDecisionError()
+    await saveAccount(generateAccount(), selected)
+    loaded = await resolveAccount({ state, name: options.name })
+  }
+
+  state.address = loaded.account.address
+  // Save an explicit name even before its account file exists: a key from the
+  // environment may be imported under that name later. Preserve the saved name
+  // for environment overrides.
+  if (options.name !== undefined) state.account = options.name
+  else if (loaded.stored) state.account ??= loaded.stored.name
   saveState(state)
   return state
 }

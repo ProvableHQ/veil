@@ -54,8 +54,10 @@ shield-swap setup --api-url <origin>
 **Private keys never transit the conversation.** When the user has an
 existing key, ask them to write it to a file (e.g. `~/.aleo-key`, any
 location they choose) and tell you the path — or to export
-`SHIELD_SWAP_PRIVATE_KEY` / `SHIELD_SWAP_PRIVATE_KEY_FILE` in their own
-shell before you re-run setup. Do not accept a pasted key, and do not echo
+`ALEO_PRIVATE_KEY` / `ALEO_PRIVATE_KEY_FILE` in their own shell before you
+re-run setup. A key from a file passed to `--private-key-file` is stored in
+the account file; a key from the environment is used for the run and never
+stored, so it has to be set on every run. Do not accept a pasted key, and do not echo
 one if pasted anyway.
 
 Environment variables work as fallbacks for the other flags too:
@@ -130,8 +132,12 @@ what they want to do next. Three paths, in this order:
 
 ## Security notes
 
-- `state.json` holds the private key and API credentials (mode 0600).
-  Never commit it, print it, or paste its contents anywhere.
+- `state.json` holds API credentials (mode 0600), and one from an earlier
+  version also holds the private key. The account file
+  (`~/.aleo/accounts/<name>.json`) holds the key unless it is kept in the
+  macOS Keychain or encrypted. Never commit, print, or paste the contents of
+  either. Never run `shield-swap account export` or `create --mnemonic`: they
+  show a secret and are for the user at their own terminal.
 - The invite code is one-time; after redemption it has no further value.
 - The `ss_…` API token covers data/trading endpoints for this account —
   treat it like a password.

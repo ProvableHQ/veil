@@ -26,6 +26,59 @@ See the [CLI reference and examples](https://github.com/ProvableHQ/veil/blob/mai
 for commands and configuration. For an application that embeds trading,
 use the [Shield Swap SDK](./shield-swap) instead.
 
+## Accounts
+
+A saved Aleo account lets Shield Swap commands and Veil scripts use the same
+address without supplying its private key on every run. Import an existing key
+or recovery phrase to keep using the same account and funds; create a new
+account when a separate address is needed.
+
+**Prefer Keychain storage on macOS or encrypted storage.** Keychain keeps the
+private key in the macOS Keychain, outside the account file. Encrypted storage
+keeps the key in the file but requires a password to unlock it. The default is
+plaintext: the file contains a readable private key, and anyone who can read
+it can use the account. File permissions do not encrypt copies or backups.
+
+Create a protected account and prepare it for trading:
+
+```sh
+shield-swap account create --name trading --storage encrypted
+shield-swap setup --name trading
+```
+
+For an existing account, use
+`shield-swap account import --name trading --key-file key.txt --storage encrypted`
+in place of the create command. On macOS, `--storage keychain` is an alternative
+to `--storage encrypted`. An import leaves its source file unchanged, so a
+readable key in that file still needs protection.
+
+The [account keystore](../api/provable-sdk/accountKeystore.md) saves each account
+under `~/.aleo/accounts/<name>.json` by default. An encrypted account can be
+restored from that file and its password; a Keychain account also needs a
+separate backup of the key or recovery phrase to move to another machine.
+Use `shield-swap account show --name trading` to confirm the address and storage.
+
+If the account is already stored in plaintext, change its storage without
+changing its address or moving funds:
+
+```sh
+shield-swap account protect --name trading --storage encrypted
+```
+
+Setup's `--new` and `--private-key-file` options create plaintext account files,
+so prefer the protected account workflow above. For a key still in
+`state.json`, use `shield-swap account migrate --storage encrypted --remove-legacy-key`
+to save it in an encrypted account file and remove the readable source copy.
+
+Encrypted accounts need a password from a hidden prompt, `ALEO_ACCOUNT_PASSWORD`,
+or a password saved in the macOS Keychain. Unattended scripts need the variable
+or saved password. Commands that display a key or recovery phrase require a
+terminal and reject `--json`.
+
+See the
+[account reference](https://github.com/ProvableHQ/veil/blob/main/packages/shield-swap-cli/README.md#accounts)
+for account selection, key lookup order, password changes, and JSON output.
+
 ## Record inventory
 
 Private balances consist of individually spendable records. A trade needs a
@@ -35,8 +88,9 @@ splits before trading. It supports native credits, ARC20, ARC22, and compatible
 custom assets, and requires Node 22.13+ for its SQLite journal. SDK packages
 retain their existing runtime support.
 
-Inventory commands use the saved Shield Swap account or a key supplied through
-the environment. They do not require DEX authentication. Start by inspecting
+Inventory commands find the key as every command does (see
+[Accounts](#accounts)), after the variable named by `privateKeyEnv`. They do
+not require DEX authentication. Start by inspecting
 the account's credits and previewing a plan for four records:
 
 ```sh

@@ -41,10 +41,12 @@ history. That is a recovery path, not a substitute for keeping the file.
 
 ## Session model
 
-All long-lived material lives in `./.shield-swap/<network>/state.json`
-(private key, DEX API token). It is created by
-`shield-swap setup` with mode 0600. NEVER commit it — add `.shield-swap/` to
-`.gitignore`. Swap handles and position ids are NOT stored there: handles
+The account key lives in an account file, `~/.aleo/accounts/<name>.json` by
+default, managed with `shield-swap account`. The DEX material lives in
+`./.shield-swap/<network>/state.json` (address, account name, DEX API token),
+created by `shield-swap setup` with mode 0600. A state file from an earlier
+version still holds its private key until `shield-swap account migrate` moves
+it. NEVER commit either file — add `.shield-swap/` to `.gitignore`. Swap handles and position ids are NOT stored there: handles
 live in the SDK's blinded identity store, and positions are discovered from
 records with `client.getOwnedPositions()`.
 
@@ -115,8 +117,10 @@ for the middle path. In the Veil repo, `pnpm install && pnpm shield-swap
    already have one — their funds and access live on the old account.
    **NEVER ask the user to paste a private key into the conversation.**
    They supply it out-of-band: saved to a file whose path goes to
-   `--private-key-file`, or exported as `SHIELD_SWAP_PRIVATE_KEY` (or
-   `SHIELD_SWAP_PRIVATE_KEY_FILE`) in their own shell.
+   `--private-key-file`, which stores it in the account file, or exported as
+   `ALEO_PRIVATE_KEY` (or `ALEO_PRIVATE_KEY_FILE`) in their own shell, which
+   is used for the run and never stored. The `SHIELD_SWAP_PRIVATE_KEY` and
+   `SHIELD_SWAP_PRIVATE_KEY_FILE` names still work.
 2. **Invite code.** Access to the DEX API is invite-gated per account. When
    setup exits with `NEEDS_INVITE_CODE`, ask the user for their code and
    re-run with `--invite-code <code>`. Do not guess or reuse codes; they are
